@@ -94,6 +94,12 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- Setup (#423): «MWST-Methode» and «Abrechnungsart» say where the owner finds her answer herself:
+  in the ESTV portal, under «Neue Geschäfte» her firm, then «Anpassen» on the card «Abrechnungsmodalitäten», changing nothing; the Treuhand
+  only when she has no access. «Abrechnungsart» no longer says that vereinbart applies unless the
+  firm asked for vereinnahmt, and the setup's AI is given the same line, in her language, so it no
+  longer names a basis as the one that applies. In Italian the basis question is «Sistema di rendiconto», the
+  ESTV's word, no longer the name of the portal's card.
 - Setup: the form marks what its kind of firm answered and she did not touch «angenommen», with one
   line why at the top of the questions («Diese Antworten sind angenommen, weil es bei Handwerk, Bau
   (GmbH) üblich ist: ändere, was nicht stimmt»); a touched answer loses the mark. Form and setup
@@ -335,6 +341,14 @@ Two markers flag an entry you must read before you update:
   kept beside the receipts, never paid, and says so in its row and in Belege; the one of the last day
   of the year before the open year is offered for the opening («Eröffnung erfassen» to Firma ›
   Eröffnung). The opening stays the person's: nothing is written to it.
+- A payment provider's payouts list dropped before the firm has that provider is named as the
+  provider's other export, with the reports to bring instead, at the first drop too (#425); before,
+  it became a bank statement's column question; the dialog's head says it was set aside, not
+  «schon in den Büchern». For a provider the firm does not have yet, its file
+  must name four columns or more and the CSV have all of them, so a bank's CSV is never taken for
+  one. A CSV whose table does not add up after its columns were answered ends with what to do and
+  «Andere Spalten wählen» and «Weglegen»; one a camt.053 covers says to set it aside, not to keep a
+  PDF, and offers «Weglegen».
 - Keeping rules (#396, #392): «Rückgängig» on a second kept rule took back the first rule's bookings
   and the second rule's file. Each keep now has a line of its own above Aufgaben and Firma › Regeln
   («4 Zahlungen gebucht · Rückgängig»), true to its own numbers and still there after a reload; the

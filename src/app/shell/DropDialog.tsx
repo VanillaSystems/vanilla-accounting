@@ -358,13 +358,16 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
   const [password, setPassword] = useState('');
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  // A CSV's table that does not add up: its column question shown again, as answered (#425).
+  const [remap, setRemap] = useState(false);
   const there = accountThere(r, useWorkspace()?.bankAccounts);
   const asked = r.state === 'duplicate' && r.reason === 'possible-duplicate';
   const chip = r.state === 'take' ? t('drop.taking') : asked ? t('drop.state.possible') : r.otherExport && r.state === 'duplicate' ? t('drop.state.otherExport') : r.readAs ? t('drop.state.read') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
   const details = r.state === 'asks' ? r.details : undefined;
   // A statement read without a bank export (#217): its table, unless it asks for its account first; a bank CSV: its columns.
-  const table = r.state === 'asks' && r.read && !r.chooseAccount && !r.unknownAccount;
-  const columns = r.state === 'asks' && r.reason === 'csv-columns' && r.csv;
+  const csvAgain = remap && r.state === 'asks' && r.kind === 'statement-csv' && !!r.csv;
+  const table = r.state === 'asks' && r.read && !r.chooseAccount && !r.unknownAccount && !csvAgain;
+  const columns = (r.state === 'asks' && r.reason === 'csv-columns' && r.csv) || csvAgain;
   return (
     <>
       <div className={`droprow s-${r.state}${details && open ? ' open' : ''}`} data-testid="drop-row" data-file={r.name} data-state={r.state}>
@@ -418,8 +421,10 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
       </div>
       {details && open ? <FileDetails d={details} name={r.from ? `${r.from} › ${r.name}` : r.name} /> : null}
       {table ? <StatementRead key={`${r.read!.by}-${r.read!.statement.movements.length}-${r.read!.statement.closing.amount}`} read={r.read!} pdf={r.kind === 'statement-pdf'} act={(a) => act(session, r, a)} go={go}
-        asReceipt={r.kind === 'statement-pdf' ? () => void act(session, r, { kind: 'as', as: 'receipt' }) : undefined} /> : null}
-      {columns ? <CsvColumnsForm r={r} act={(a) => act(session, r, a)} /> : null}
+        asReceipt={r.kind === 'statement-pdf' ? () => void act(session, r, { kind: 'as', as: 'receipt' }) : undefined}
+        columns={r.kind === 'statement-csv' && r.csv ? () => setRemap(true) : undefined}
+        aside={r.kind === 'statement-csv' ? () => void act(session, r, { kind: 'remove' }) : undefined} /> : null}
+      {columns ? <CsvColumnsForm r={r} act={(a) => api.dropRow(session.id, r.key, a).then((next) => { drop.answered(next); setRemap(false); }, (e) => set({ error: errorText(e) }))} /> : null}
     </>
   );
 }
@@ -738,7 +743,7 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const stateOf = new Map(taken.map((r, i) => [r, states[i]]));
   const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
   // Only files the books hold already (#341): the window says that nothing new came in.
-  const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate') || !!r.readAs);
+  const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate' && r.reason !== 'provider-export') || !!r.readAs);
   // What waits for her, named where it is (#398): the receipts of this drop under Belege, every open task under Automatisierung › Aufgaben, as the dock counts them.
   const left = waitsAfterDrop(states, tasksWaiting(view, forMe(questions, me).length));
   const receiptsWait = working ? 0 : left.receipts;

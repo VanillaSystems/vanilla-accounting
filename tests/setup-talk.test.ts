@@ -408,17 +408,56 @@ test('the questions that need accounting knowledge say where the answer stands a
   }
   const de = (await import('../src/app/i18n/locales/de.js') as { default: Locale }).default.messages as unknown as Record<string, string>;
   for (const k of ['vatMethod', 'basis']) {
-    assert.match(de[`desktop.q.${k}.where`], /beantragt/, `${k}: only what the repo confirms: approved on the firm's request`);
+    if (k === 'vatMethod') assert.match(de[`desktop.q.${k}.where`], /beantragt/, `${k}: only what the repo confirms: approved on the firm's request`);
     assert.doesNotMatch(de[`desktop.q.${k}.where`], /ist es (die effektive Methode|vereinbart)|nie beantragt|nie darum gebeten/, `${k}: the fact, not a conclusion about her`);
     assert.match(de[`desktop.q.${k}.where`], /Treuhand/, `${k}: who knows`);
     assert.match(de[`desktop.q.${k}.where`], /Firma › MWST änderst du es, solange dieses Jahr keine Buchungen hat/, `${k}: what a wrong pick costs (vatMethodHeld)`);
   }
   assert.match(de['desktop.q.vatMethod.where'], /beantragt hat und der die ESTV einen Satz bewilligt hat.*Formular 0553/s);
-  assert.match(de['desktop.q.basis.where'], /Vereinbart sieht das Gesetz vor; vereinnahmt gilt, wenn die Firma es beantragt hat, bei der Eintragung oder später, und die ESTV es bewilligt hat/);
+  assert.match(de['desktop.q.basis.where'], /vereinbart oder vereinnahmt/, 'the basis: both named, side by side');
   assert.doesNotMatch(de['desktop.q.vatMethod.why'], /Übliche/, 'no method called the usual one');
   assert.match(de['desktop.q.start.where'], /kann .* abweichen/, 'a firm with nothing on 1 January sees no difference');
   assert.doesNotMatch(de['desktop.q.start.why'], /einbezahlte Kapital/, 'capital paid in during the year arrives as a payment: never told to enter it as an opening');
   assert.match(de['desktop.q.start.why'], /Beides legt dieselben Bücher an/, 'what each answer changes');
+});
+
+test('the basis and the method say where she finds them herself, the ESTV portal\'s own words in each language, and the basis names none as the likely one (#423)', async () => {
+  // Where the ESTV says the firm's current basis and method stand: the portal, «Neue Geschäfte», the firm, its «Abrechnungsmodalitäten»
+  // (estv.admin.ch «MWST Abrechnungsmodalitäten anpassen», in fr «Nouvelles opérations», in it «Nuove operazioni»).
+  const portal: Record<string, RegExp> = {
+    de: /ESTV-Portal.*«Neue Geschäfte».*«Abrechnungsmodalitäten».*«Anpassen».*du musst nichts ändern/s,
+    en: /ESTV portal.*«Neue Geschäfte».*«Abrechnungsmodalitäten».*«Anpassen».*you need not change anything/s,
+    fr: /portail de l’AFC.*«Nouvelles opérations».*«Modalités de décompte».*«Adapter».*tu n’as rien à changer/s,
+    it: /portale dell’AFC.*«Nuove operazioni».*«Modalità di rendiconto».*«Riprendere».*non devi cambiare nulla/s,
+  };
+  // The ESTV calls the whole card «Modalità di rendiconto» and the basis «sistema di rendiconto»: the question is not named after the card it sends her to.
+  const it = (await import('../src/app/i18n/locales/it.js') as { default: Locale }).default.messages as unknown as Record<string, string>;
+  assert.equal(it['desktop.q.basis.ask'], 'Sistema di rendiconto');
+  for (const [k, v] of Object.entries(it)) if (typeof v === 'string' && k !== 'desktop.q.vatMethod.where' && k !== 'desktop.q.basis.where') assert.doesNotMatch(v, /modalità di rendiconto/i, `it ${k}: the basis is the «sistema di rendiconto»`);
+  // A basis named as the one that applies unless …: the hint that steered an unsure owner to «vereinbart» (round 4, webshop-ai-r2-2).
+  const steers = /Gesetz|sieht .* vor|gilt, (wenn|ausser)|law|applies (when|unless)|loi|prévoit|vaut si|legge|prevede|vale se/i;
+  for (const lang of ['de', 'en', 'fr', 'it']) {
+    const m = (await import(`../src/app/i18n/locales/${lang}.js`) as { default: Locale }).default.messages as unknown as Record<string, string>;
+    for (const k of ['vatMethod', 'basis']) assert.match(m[`desktop.q.${k}.where`], portal[lang], `${lang} ${k}: where she looks it up herself`);
+    assert.doesNotMatch(m['desktop.q.basis.where'], steers, `${lang}: no basis named as the one that applies`);
+  }
+  // What the AI is given to explain the basis: the same place, and no default.
+  let d = withPatch(newDraft('de', NOW), { step: 'firm', value: { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' } });
+  d = withPatch(d, { step: 'preset', value: 'trades' });
+  d = withPatch(d, { step: 'question', key: 'vatRegistered', value: 'yes' });
+  d = withPatch(d, { step: 'question', key: 'vatMethod', value: 'effective' });
+  const open = draftSteps(d).at(-1)!;
+  assert.ok(open.id === 'question' && open.key === 'basis', 'the basis waits');
+  const prompt = talkPrompt(d, 'weiss nöd, was heisst das? ich verchaufe Tee im Webshop', [], 'CHF');
+  const facts = prompt.split('explain in her words from these facts only:')[1].split('\n')[0];
+  assert.match(facts, portal.de, 'the model is told where she looks it up');
+  assert.doesNotMatch(facts, steers, 'and no basis as the one that applies');
+  // Asked before those questions (at «Im MWST-Register?»), the model has the same path, and no other.
+  const de = (await import('../src/app/i18n/locales/de.js') as { default: Locale }).default.messages as unknown as Record<string, string>;
+  const early = talkPrompt(withPatch(withPatch(newDraft('de', NOW), { step: 'firm', value: { name: 'Malerei Huber GmbH', uid: UID, owner: 'Thomas Huber' } }), { step: 'preset', value: 'trades' }), 'wo finde ich die Abrechnungsart?', [], 'CHF');
+  const rule = /does not know its method or basis finds both as these lines say[^\n]*/.exec(early)?.[0] ?? '';
+  for (const k of ['vatMethod', 'basis']) assert.ok(rule.includes(de[`desktop.q.${k}.where`]), `${k}: its line handed to the model before it is asked`);
+  assert.match(rule, /name no other menu, screen or document/);
 });
 
 test('the words never make a registered firm unregistered: her «ja», her method and her rates stay, the question keeps its buttons (#347)', () => {
