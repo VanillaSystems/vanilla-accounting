@@ -203,7 +203,9 @@ same way (src/booking/receipt-wait.ts), by a rule under
 
 - `apply: { receipt: none }` in a business file: that business's payments need
   no receipt (an authority whose notice is filed apart). The business is the
-  condition.
+  condition. It frees them from the wait only: a bill of the business that
+  matches a payment (the compensation fund's Akonto bill, its number in the
+  payment's text) is still paired with it.
 - `apply: { receipt: none, text: "<pattern>" }` in a guide: a payment whose
   text or counterparty matches the pattern (ignoring case) needs no receipt and
   has none of its own, so none is ever paired with it (a cash withdrawal).

@@ -420,6 +420,13 @@ Two markers flag an entry you must read before you update:
   number; a payslip («Lohnabrechnung»), annual accounts («Erfolgsrechnung 2025») or a calculation are
   not, a reminder or an order confirmation below such a title stays what it is, and a compound
   credit note («Warengutschrift WG-…») pays in.
+- Pairing (#456): the compensation fund's Akonto bill is now paired with its payment in the drop.
+  The fund's payments are booked without waiting for a receipt, and that had also kept them from
+  ever being paired, so the bill stayed «gelesen, noch keine Zahlung» beside a payment booked «ohne
+  Beleg». A business whose payments need no receipt (the compensation fund, the ESTV, the tax office)
+  is now freed from the wait only: its own bill is still paired, as a wage's payslip is. In «Zahlung
+  verknüpfen» a payment of the same amount that names the receipt's own number comes first, above a
+  «Skonto?» or a rounding guess.
 - Social insurance (#426): with wages booked gross, the AI is told what the deductions account
   (2270) holds on the payment's day, deducted on the payslips and not paid on yet, for a payment to
   the compensation fund or to a business booked on the contribution accounts before, so a bill that
