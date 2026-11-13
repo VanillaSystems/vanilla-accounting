@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CLOSING_GROUPS, closingGroupOf, waitsAfterDrop, type ClosingGroup, type FileState } from '../src/app/shell/drop-summary.js';
+import { CLOSING_GROUPS, closingGroupOf, overStoppedRun, waitsAfterDrop, type ClosingGroup, type FileState } from '../src/app/shell/drop-summary.js';
 import { STAGES, STAGE_OF, doingOf, doingsIn, overviewOf, stagesIn } from '../src/app/shell/drop-overview.js';
 import { needsYou } from '../src/app/shell/drop-tabs.js';
 import type { DropRow, DropState } from '../src/types/drop.js';
@@ -50,6 +50,13 @@ test('what needs her in the overview is what the closing lines and the tabs say 
   }
   assert.equal(STAGE_OF[closingGroupOf(row('duplicate', { reason: 'possible-duplicate' }), undefined)], 'needs', '«schon da?» asks her');
   assert.equal(STAGE_OF[closingGroupOf(row('duplicate', { reason: 'duplicate' }), undefined)], 'out');
+});
+
+test('#483: a file whose run stopped says what the books made of it: a balance sheet, no receipt, a document beside an invoice, a copy stay so; only a receipt still waiting says the run stopped', () => {
+  const settled: FileState[] = [{ kind: 'balanceSheet' }, { kind: 'none', why: 'ein Produktfoto' }, { kind: 'supporting' }, { kind: 'twin', of: 'x', name: 'x', why: 'same-text' }, { kind: 'orderPage', provider: 'p' }];
+  for (const x of settled) assert.deepEqual(overStoppedRun(x, 'run-1'), x, `${x.kind}: the books' word stands`);
+  for (const x of [{ kind: 'waits' }, { kind: 'read' }, { kind: 'unread' }] as FileState[]) assert.deepEqual(overStoppedRun(x, 'run-1'), { kind: 'stuck', run: 'run-1' }, `${x.kind}: its run stopped`);
+  assert.equal(waitsAfterDrop([overStoppedRun({ kind: 'balanceSheet' }, 'r'), overStoppedRun({ kind: 'none', why: '' }, 'r')], 0).receipts, 0, 'neither is counted as waiting for her');
 });
 
 test('every closing group has its stage', () => {
