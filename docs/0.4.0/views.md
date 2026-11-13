@@ -414,7 +414,7 @@ indicator for all workflows; search is in the top bar (⌘K):
 | State | Shows |
 |---|---|
 | something runs | a spinner and "2 laufen" |
-| nothing runs, something waits for a person (a task or a question to the viewer) | an amber dot and "3 für dich" |
+| nothing runs, something waits for a person (a task or a question to the viewer) | an amber dot and "3 Aufgaben für dich" |
 | all quiet | nothing |
 
 A click opens a panel below it that updates while it is open: each running run with its bar and

@@ -199,7 +199,8 @@ books it the moment you add the receipt. Money you received, the bank's own fees
 between your accounts need none. The bank's own fee for the account (Kontoführung) the app books
 by itself, on Bankspesen without VAT, with or without an AI; a rule of yours for it wins.
 
-**«Braucht dich»** is the group at the top of Belege with what only you can decide:
+**«Ohne Zahlung»** is the group at the top of Belege: the receipts that wait for their payment.
+What only you can decide:
 
 - a receipt without a payment: «Zahlung verknüpfen» (`L`) links one, or books it as paid
   privately or in cash;
@@ -209,7 +210,7 @@ by itself, on Bankspesen without VAT, with or without an AI; a rule of yours for
   … bezahlt, ohne Rechnung in den Büchern. War das ein Verkauf mit MWST?». One click answers it
   and books the payment.
 
-The dock shows how many points wait «für dich»; a click leads to them. They are also listed as
+The dock shows how many «Aufgaben» wait for you (tasks and questions); a click leads to them. They are also listed as
 «Aufgaben» in **Automatisierung** (`G W`). Two weeks before a return is due, a payment still
 without its receipt becomes a task «Beleg fehlt» with three ways on: «Beleg zuordnen», «Mit
 anderem Nachweis» and «Ohne Vorsteuer buchen».

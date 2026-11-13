@@ -45,6 +45,13 @@ Two markers flag an entry you must read before you update:
   balance sheet, not «Eine neue Firma …». After «Buchhaltung anlegen» with a question open the focus
   goes to that question, which says «bitte wählen», not to its first answer. Kontoauszüge without a
   single payment names no quarter and says what to drop: «Noch kein Kontoauszug.» (#385)
+- One count per word (#385): the dock, Automatisierung and Belege put a receipt in one period, its
+  payment's once it has one, else its date's; one without a date, or from before the books and not
+  paid, is the working period's. So an undated till slip paid in Q3 counts in Q3 everywhere, and
+  «gesammelt», «gelesen» and «zugeordnet» match Belege's «alle» and «zugeordnet» and the drop's
+  sentence. When more payments are booked than receipts (bookings by hand, wages, the bank's fee),
+  the dock says «11 von 23 Zahlungen gebucht» in place of «0 gelesen · 0 gebucht». Its third figure
+  says «Aufgaben» (as the corner «n Aufgaben für dich»), and Belege's first group «Ohne Zahlung».
 - The bank's own fee (#359): a row of a bank's camt.053 export that the bank itself coded as its
   charge for the account or for payments («Kontoführung», a card's annual fee) is booked by the
   app, with or without an AI, on Bankspesen (6940) without a VAT code; a fee paid back the other
