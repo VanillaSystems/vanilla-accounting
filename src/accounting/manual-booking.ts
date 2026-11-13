@@ -36,9 +36,7 @@ export interface BookingLine { accountDebit: string; accountCredit: string; amou
  * account, the app's proposal for a sale without an invoice (saleProposal), a supplier's refund.
  */
 export interface DraftSource {
-  account?: { from: 'rule'; rule: string } | { from: 'precedent'; date: string; yours?: true; name?: string } | { from: 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' | 'wage' } | { from: 'invoice' | 'receivable'; number: string }
-    /** The one purchase account the linked receipt's words name by the chart's hints (#397), with the word. */
-    | { from: 'receiptWords'; word: string };
+  account?: { from: 'rule'; rule: string } | { from: 'precedent'; date: string; yours?: true; name?: string } | { from: 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' | 'wage' } | { from: 'invoice' | 'receivable'; number: string };
   /** `abroad`: the firm's own invoice says its service is supplied abroad (invoicing placeAbroad). `noReceipt`: the last booking's code claimed input tax, which a payment without a receipt does not (#397). */
   vat?: { from: 'rule' | 'precedent' | 'receipt' | 'invoice' | 'netRate' | 'refund' | 'abroad' | 'noReceipt' } | { from: 'sale'; choice: SaleChoice };
 }
@@ -90,8 +88,8 @@ export interface DraftKnowledge {
   firmName?: string;
   /** A receipt she said is not the invoice this payment pays: the form proposes without it. */
   notOwnInvoice?: string;
-  /** The one purchase account of the firm's chart a receipt's words name by its hints, with the word (src/app/lib/account-filter.ts accountOfWords, #397). */
-  byWords?(words: readonly string[]): { account: string; word: string } | undefined;
+  /** Whether a receipt's words name an account of the chart by a hint, as a whole word: the account list then stands in their order, and the form says so (#397). */
+  ranks?(words: readonly string[]): boolean;
   /** A receipt that may be this payment's but is not linked (src/intake/near-pairs.ts, #397): its name, the rate it shows, what differs. */
   near?: { name: string; rate?: number; why: string };
 }
@@ -131,11 +129,17 @@ export type DraftNote =
   | { kind: 'ask'; question: string }
   | { kind: 'taxPoint'; date: string }
   /** A receipt may be this payment's (DraftKnowledge.near): linked, its rate would apply (#397). */
-  | { kind: 'nearReceipt'; name: string; rate?: number; why: string }
+  | { kind: 'nearReceipt'; name: string; rate?: number; why: string; vat: boolean }
+  /** No account proposed, and the account list stands in the order of what the linked receipt names (#397). */
+  | { kind: 'rankedByReceipt' }
   /** Money out with no proposal at all: why, in one line (#397). */
   | { kind: 'noProposal'; name: string; linked: boolean }
-  /** The linked receipt was paid less a cash discount: what is booked is what was paid (guide spl-skonto, #397). */
-  | { kind: 'discount'; percent: number; amount: number };
+  /**
+   * The linked receipt was paid less a cash discount: what is booked is what was paid (guide
+   * spl-skonto, #397). `vat`: its input tax counts on the paid amount; `none`: the firm claims none;
+   * `rates`: the receipt states several rates, which the paid amount does not split by itself.
+   */
+  | { kind: 'discount'; percent: number; amount: number; vat: 'paid' | 'none' | 'rates' };
 
 export interface BookingDraft {
   ref: string;
@@ -558,21 +562,18 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   } else if (proposes && known.account && chart().typeOf(known.account)) {
     other = { account: known.account, vat: rate, source: { account: { from: 'business' }, ...(rate && { vat: { from: 'receipt' } }) } };
   }
-  // Money out with a purchase document and no account yet: the one purchase account its words name (#397, «Dispersionsfarbe» → material).
+  // No account is guessed from a receipt's words (#356, #389): they only rank the list (DraftKnowledge words below).
   const aside = notes.some((n) => n.kind === 'ownTransfer' || n.kind === 'authority' || n.kind === 'owner');
-  if (proposes && !moneyIn && !aside && !other.account && docs.length && known.byWords) {
-    const hit = known.byWords(wordsOf(docs) ?? []);
-    if (hit && chart().typeOf(hit.account)) other = { account: hit.account, vat: other.vat, source: { account: { from: 'receiptWords', word: hit.word }, ...(other.source?.vat && { vat: other.source.vat }) } };
-  }
   if (!moneyIn && rate && !other.account) notes.push({ kind: 'chooseAccount' });
   // No proposal at all on money out: say why in one line (#397).
   if (proposes && !moneyIn && !aside && !other.account && !other.vat && !notes.length) notes.push({ kind: 'noProposal', name: tx.counterparty?.trim() || tx.description, linked: receipts.length > 0 });
   // Paid less a cash discount the payment states or the receipt offers: booked is what was paid, its VAT on that (guide spl-skonto).
   const gap = !moneyIn && docs.length === 1 ? gapOf(docs[0], tx) : undefined;
-  if (gap?.kind === 'discount') notes.push({ kind: 'discount', percent: gap.percent, amount: gap.discount });
+  if (gap?.kind === 'discount') notes.push({ kind: 'discount', percent: gap.percent, amount: gap.discount, vat: !claims ? 'none' : rates.size > 1 ? 'rates' : 'paid' });
   // A receipt that may be this payment's, not linked: linking it would bring its rate (#397).
-  if (!moneyIn && !receipts.length && known.near && proposes) notes.push({ kind: 'nearReceipt', ...known.near });
+  if (!moneyIn && !receipts.length && known.near && proposes) notes.push({ kind: 'nearReceipt', name: known.near.name, why: known.near.why, vat: claims, ...(claims && known.near.rate !== undefined && { rate: known.near.rate }) });
   const words = !moneyIn && !other.account ? wordsOf(docs) : undefined;
+  if (words && known.ranks?.(words)) notes.push({ kind: 'rankedByReceipt' });
 
   // A receipt that states several rates adding up to the payment: a line per rate, each with its rate.
   const groups = docs.length === 1 && docs[0].currency === tx.currency && claims && other.vat === rate ? vatRates(docs[0]) : [];

@@ -79,7 +79,8 @@ export function rankAccounts<T extends string>(accounts: readonly Account[], que
   if (/^\d+$/.test(q)) return filterAccounts(accounts, query);
   // Nothing typed: the accounts the receipt's words name by their hints first (each word folded, as a typed one is).
   const said = !q && ctx.suggest?.length ? ctx.suggest.map(foldAll) : undefined;
-  const saidBy = (a: Account) => (said ? -said.filter((w) => hinted([w], ctx.hints?.(a.number) ?? a.hints)).length : 0);
+  // A receipt's word names a hint only as the whole word: «Preise» is no «Reise», «Gerüstmiete» no «Miete» (#397).
+  const saidBy = (a: Account) => { if (!said) return 0; const hs = (ctx.hints?.(a.number) ?? a.hints ?? []).map(foldAll); return -said.filter((w) => hs.includes(w)).length; };
   const classes = new Set<T>();
   const parts = q.split(/\s+/).filter((x) => x.length >= 3);
   // Each typed word may name a class («Einnahme von Kunde»): the word itself, the word with an ending, or its start of five letters
@@ -114,22 +115,8 @@ export function rankAccounts<T extends string>(accounts: readonly Account[], que
     .map((x) => x.m);
 }
 
-/**
- * The one purchase account (an expense of the chart) a receipt's words name by its hints (#397):
- * a word that is the hint, or ends in a hint of five letters or more, the head of a compound
- * («Dispersionsfarbe» names «Farbe», «Gerüstmiete» names «Miete»). Undefined when no account or
- * several are named: the person chooses, from the list ranked by those words.
- */
-export function accountOfWords<T extends string>(accounts: readonly Account[], words: readonly string[], ctx: Pick<AccountContext<T>, 'typeOf' | 'hints'> & { expense: T }): { account: string; word: string } | undefined {
-  const said = words.map((w) => ({ w, f: foldAll(w) }));
-  const hits = new Map<string, string>();
-  for (const a of accounts) {
-    if (ctx.typeOf(a.number) !== ctx.expense) continue;
-    const hints = (ctx.hints?.(a.number) ?? a.hints ?? []).map(foldAll);
-    const word = said.find(({ f }) => hints.some((h) => f === h || (h.length >= 5 && f.endsWith(h))));
-    if (word) hits.set(a.number, word.w);
-  }
-  if (hits.size !== 1) return undefined;
-  const [[account, word]] = [...hits];
-  return { account, word };
+/** Whether a receipt's words name a hint of one of these accounts as a whole word: then the list stands in the order of what the receipt names (#397). */
+export function ranksByWords(accounts: readonly Account[], words: readonly string[], hints?: (number: string) => readonly string[] | undefined): boolean {
+  const said = new Set(words.map(foldAll));
+  return accounts.some((a) => (hints?.(a.number) ?? a.hints ?? []).some((h) => said.has(foldAll(h))));
 }

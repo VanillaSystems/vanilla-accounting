@@ -22,8 +22,8 @@ import { answerSaleOnForm } from '../../questions/store.js';
 import { codeLabel, codeText } from '../codes/names.js';
 import { isVatAmountCode } from '../../../accounting/validate.js';
 import { getAccountMap, getAccounts, hintsOf } from '../../lib/accounts.js';
-import { accountOfWords } from '../../lib/account-filter.js';
-import { nearOffers } from '../../../intake/near-pairs.js';
+import { ranksByWords } from '../../lib/account-filter.js';
+import { offersInBooks } from '../../../intake/near-pairs.js';
 import { nearWhy } from '../receipts/FindPair.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
@@ -82,7 +82,7 @@ export function PaymentBooking(props: Props) {
     defaults: ws.defaults, rule: start?.rule, nature: start?.nature, account: start?.account,
     invoiceRevenue: ws.invoicing?.revenueAccount, chart: getAccounts().map((a) => a.number), ownUid: ws.company.uid, firmName: ws.company.name,
     ...(notOwn && { notOwnInvoice: notOwn }),
-    byWords: (words) => accountOfWords(getAccounts(), words, { typeOf: (n) => chart().typeOf(n), hints: hintsOf, expense: 'expense' }),
+    ranks: (words) => ranksByWords(getAccounts().filter((a) => chart().typeOf(a.number) === 'expense'), words, hintsOf),
     ...nearOf(props.books, props.payment, ws.company),
   })) : undefined), [ws, known, start, props.books, props.payment, invoices, notOwn]);
   // The form as it stands: the way to a rule starts with what it holds (#383).
@@ -100,9 +100,8 @@ export function PaymentBooking(props: Props) {
 }
 
 /** The closest receipt that may be this payment's but is not linked (#397): its name, the one Swiss rate it shows, what differs. */
-function nearOf(books: Index, ref: string, company: { uid?: string; name?: string }): { near?: { name: string; rate?: number; why: string } } {
-  const closed = books.config?.closedThrough;
-  const [o] = nearOffers(books, { payment: ref }, { isClosed: (d) => !!closed && d <= closed, firm: { uid: company.uid, name: company.name } }).filter((x) => !x.filed);
+function nearOf(books: Index, ref: string, company: { uid?: string; name?: string; owner?: string }): { near?: { name: string; rate?: number; why: string } } {
+  const [o] = offersInBooks(books, { payment: ref }, { uid: company.uid, name: company.name, owner: company.owner }).filter((x) => !x.filed);
   const r = o && books.receipts.find((x) => x.id === o.receipt);
   if (!o || !r) return {};
   const rates = r.hasSwissVat ? [...new Set((r.vatSummary ?? []).filter((g) => g.ratePercent > 0).map((g) => g.ratePercent))] : [];
@@ -120,7 +119,6 @@ function sourceText(s: DraftSource, account: string | undefined, vat: string | u
   const from = !a ? '' : a.from === 'rule' ? t('journal.byHand.from.rule', { rule: a.rule })
     : a.from === 'precedent' ? (a.yours && a.name ? t('journal.byHand.from.precedentYours', { name: a.name, date: formatDate(a.date) }) : t('journal.byHand.from.precedent', { date: formatDate(a.date) }))
       : a.from === 'refund' ? t('journal.byHand.from.refund', { date: formatDate(a.date) })
-        : a.from === 'receiptWords' ? t('journal.byHand.from.receiptWords', { word: a.word })
         : a.from === 'invoice' || a.from === 'receivable' ? t(`journal.byHand.from.${a.from}`, { number: a.number })
           : t(`journal.byHand.from.${a.from}`);
   const v = vat ? s.vat : undefined;
@@ -144,9 +142,9 @@ function noteText(n: DraftNote): string {
     case 'bankChargesMissing': return t('journal.byHand.note.bankChargesMissing', { account: n.account, name: n.name });
     case 'ownInvoiceSurplus': return t('journal.byHand.note.ownInvoiceSurplus', { number: n.number, amount: fmt(n.surplus) });
     case 'wageDeductions': return t('journal.byHand.note.wageDeductions', { account: n.account });
-    case 'nearReceipt': return n.rate !== undefined ? t('journal.byHand.note.nearReceipt', { name: n.name, why: n.why, rate: String(n.rate) }) : t('journal.byHand.note.nearReceiptNoRate', { name: n.name, why: n.why });
+    case 'nearReceipt': return !n.vat ? t('journal.byHand.note.nearReceiptPlain', { name: n.name, why: n.why }) : n.rate !== undefined ? t('journal.byHand.note.nearReceipt', { name: n.name, why: n.why, rate: String(n.rate) }) : t('journal.byHand.note.nearReceiptNoRate', { name: n.name, why: n.why });
     case 'noProposal': return t(n.linked ? 'journal.byHand.note.noProposal.receipt' : 'journal.byHand.note.noProposal.none', { name: n.name });
-    case 'discount': return t('journal.byHand.note.discount', { percent: String(n.percent), amount: fmt(n.amount) });
+    case 'discount': return t(n.vat === 'paid' ? 'journal.byHand.note.discount' : n.vat === 'rates' ? 'journal.byHand.note.discountRates' : 'journal.byHand.note.discountNoVat', { percent: String(n.percent), amount: fmt(n.amount) });
     default: return t(`journal.byHand.note.${n.kind}`);
   }
 }
