@@ -6,7 +6,8 @@
  */
 import { useState } from 'react';
 import type { BankTransaction, Index, Mapping, Receipt } from '../../../types/index.js';
-import { BOUNDS, WEIGHTS, makerOf, signalsOf, type Found, type LinkMaker, type Signal } from '../../../intake/pairing.js';
+import { BOUNDS, WEIGHTS, makerOf, signalsOf, type Found, type LinkMaker, type NearOffer, type Signal } from '../../../intake/pairing.js';
+import { OFFERED, writtenNumber } from '../../../intake/near-pairs.js';
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -83,11 +84,14 @@ export function FindPair({ on, books, nav, compact }: { on: On; books: Index; na
       </div>
     );
   }
+  const offers = state.outcome === 'none' || state.outcome === 'candidates' ? state.near : undefined;
+  const near = offers?.length ? <NearList offers={offers} from={forReceipt ? 'receipt' : 'payment'} books={books} nav={nav} onPick={(o) => void pick(o.receipt, o.payment)} /> : null;
   if (state.outcome === 'none') {
     const vars = { share: String(BOUNDS.crossCurrency * 100), before: String(BOUNDS.daysBefore), after: String(BOUNDS.daysAfter) };
     return (
       <div className={cls} data-testid="find-result" data-outcome="none" role="status">
-        <span>{t(forReceipt ? 'pair.none.payment' : 'pair.none.receipt', vars)}</span>{noModel}
+        <span>{t(near ? (forReceipt ? 'near.none.payment' : 'near.none.receipt') : forReceipt ? 'pair.none.payment' : 'pair.none.receipt', vars)}</span>{noModel}
+        {near}
         {button}
       </div>
     );
@@ -95,6 +99,7 @@ export function FindPair({ on, books, nav, compact }: { on: On; books: Index; na
   if (state.outcome !== 'candidates') return null;
   return (
     <div className={cls} data-testid="find-result" data-outcome="candidates" role="status">
+      {near}
       <span>{t(forReceipt ? 'pair.candidates.payment' : 'pair.candidates.receipt')}</span>
       {state.total > state.candidates.length ? <span className="findpair-note" data-testid="find-cut">{t('pair.cut', { shown: state.candidates.length, total: state.total })}</span> : null}
       {noModel}
@@ -116,5 +121,50 @@ export function FindPair({ on, books, nav, compact }: { on: On; books: Index; na
         })}
       </ul>
     </div>
+  );
+}
+
+/**
+ * What makes a near pair a maybe (#397), seen from the receipt or from the payment: the number the
+ * payment names, the same firm, the amount that differs or the discount taken, no date, how far apart.
+ */
+export function nearWhy(o: NearOffer, from: 'receipt' | 'payment', tx: BankTransaction | undefined, r: Receipt | undefined): string {
+  const money = (n: number) => `${tx?.currency ?? baseCurrency()} ${fmt(Math.abs(n))}`;
+  const paid = tx ? Math.abs(tx.amount) : 0;
+  const owed = Math.abs(r?.amount ?? 0);
+  const amount = o.gap.kind === 'discount' ? t('near.discount', { percent: String(o.gap.percent), amount: money(o.gap.discount) })
+    : o.gap.kind === 'rounded' || o.gap.kind === 'franc' ? t('near.amount', from === 'payment' ? { mine: money(owed), theirs: money(paid) } : { mine: money(paid), theirs: money(owed) })
+      : t('receipts.whySameAmount');
+  // The other one's day against this one's: a receipt «13 Tage früher» than its payment, a payment «13 Tage später» than its receipt.
+  const other = o.days === undefined ? undefined : from === 'payment' ? -o.days : o.days;
+  const day = o.days === undefined ? t('near.undated') : other === 0 ? t('near.sameDay') : t(other! < 0 ? (other === -1 ? 'near.dayEarlier' : 'near.earlier') : other === 1 ? 'near.dayLater' : 'near.later', { n: String(Math.abs(other!)) });
+  return [o.number && tx ? t('near.number', { number: writtenNumber(tx, o.number) }) : '', o.supplier ? t('near.supplier') : '', amount, day].filter(Boolean).join(' · ');
+}
+
+/** The near pairs offered (#397): each with what differs and one click to link; a filed payment is only named. At most OFFERED, the rest counted. */
+export function NearList({ offers, from, books, nav, onPick }: { offers: readonly NearOffer[]; from: 'receipt' | 'payment'; books: Index; nav: Nav; onPick(o: NearOffer): void }) {
+  const shown = offers.slice(0, OFFERED);
+  return (
+    <>
+      <span data-testid="near-title">{t(from === 'payment' ? 'near.title.receipt' : 'near.title.payment')}</span>
+      {offers.length > shown.length ? <span className="findpair-note" data-testid="near-cut">{t('pair.cut', { shown: shown.length, total: offers.length })}</span> : null}
+      <ul className="findpair-list" data-testid="near-list">
+        {shown.map((o) => {
+          const tx = books.transactions.find((x) => x.ref === o.payment);
+          const r = books.receipts.find((x) => x.id === o.receipt);
+          const text = from === 'receipt' ? (tx ? paymentText(tx) : o.payment) : (r ? receiptText(r) : o.receipt);
+          const open = () => (from === 'receipt' ? tx && nav.go(at({ area: 'bank', payment: tx.ref }, tx.date)) : r && nav.go(at({ area: 'receipts', id: r.id }, r.date)));
+          return (
+            <li key={`${o.receipt}|${o.payment}`} className="near" data-testid="near-offer">
+              <button type="button" className="golink" onClick={open}>{text}</button>
+              <span className="findpair-note" data-testid="near-why">{nearWhy(o, from, tx, r)}</span>
+              {o.filed
+                ? <span className="findpair-note">{t('pair.filedMark')}</span>
+                : <button type="button" className="btn ghost" data-testid="near-pick" onClick={() => onPick(o)}>{t('pair.pick')}</button>}
+            </li>
+          );
+        })}
+      </ul>
+    </>
   );
 }
