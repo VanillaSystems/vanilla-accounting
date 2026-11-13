@@ -6,6 +6,7 @@ import type { OrderPage } from '../../../booking/order-pages.js';
 import type { VatCorrection } from '../../../booking/vat-corrections.js';
 import { byStatement } from '../../../workspace/money-accounts.js';
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
 import { EvidenceFix, evidenceText } from '../journal/Detail.js';
 import { journalOf } from '../journal/model.js';
@@ -582,14 +583,16 @@ function Datei(props: Props & { v: ReceiptView; edit: boolean }) {
 }
 
 function Quick({ src, file }: { src: string; file: string }) {
-  return (
+  // On the body, not in the detail: a column's animation or stacking never puts the dock or the bar above it (#387 review).
+  return createPortal(
     <div className="quick" role="dialog" aria-label={t('receipts.previewOf', { file })} onClick={() => setUi({ overlay: null })}>
       <span className="cap mono" onClick={(e) => e.stopPropagation()}>
         {t('receipts.quickCap', { file })}
         <a className="dl inline" href={src} download={file}>{I.dl}<span>{t('receipts.download')}</span></a>
       </span>
       <div className="paper real" style={{ width: '70vw' }}><Paper key={src} src={src} maxWidth={1100} /></div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

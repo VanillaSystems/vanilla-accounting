@@ -371,13 +371,11 @@ body:has(.topbar.open) :is(.list, .detail, main.full) { padding-top: 76px; }
 /* Folded too, on a wide window: the pill stands where a heading would start (at the list's left edge while the AI sidebar
    is open, over the detail's heading when not), and a hover that opens it moves nothing (issue #363). */
 html:not(.phone) body:has(.topbar) :is(.list, .detail, main.full) { padding-top: 76px; }
-/* What a column scrolls up ends at that line, not under the floating bar (#385): the band above it shows the page's
-   background only. Only the band is cut: a menu or popover of the column that reaches past its sides or foot stays
-   whole. `--bar-clear` is where a sticky row of a column stands. */
-html:not(.phone) body:has(.topbar) { --bar-clear: 76px; }
-html:not(.phone) body:has(.topbar) :is(.list, .detail, main.full) {
-  clip-path: polygon(-100vw var(--bar-clear), 200vw var(--bar-clear), 200vw 200vh, -100vw 200vh);
-}
+/* What a column scrolls up ends at that line, not under the floating bar (#385): on a wide window each column's scroll box
+   itself starts below the bar (a margin, not a padding), so the band above shows the page's background only. Nothing is
+   clipped and no stacking context is made, so Quick Look, a dialog's scrim and the palette (fixed, inside a column) still
+   cover the whole window. */
+html:not(.phone) body:has(.topbar) :is(.list, .detail, main.full) { margin-top: 76px; padding-top: 0; }
 
 /* Automatisierung at the foot of the bar (Dock.tsx, src/app/automation/widget.ts): the open period's figures, what waits, the summary card. */
 :root { --abw-wide: 212px; }

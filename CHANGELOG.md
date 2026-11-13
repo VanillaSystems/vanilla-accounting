@@ -21,7 +21,8 @@ Two markers flag an entry you must read before you update:
   then comes back and the app notices the sign-in by itself. After «… installieren» the vendor's
   command stays folded under «Befehl zeigen» (#385).
 - Layout: a list or detail scrolled up ends below the floating top bar; nothing of it stands under
-  the bar any more (#385).
+  the bar any more (#385). Quick Look of a receipt or a statement covers the whole window, above the
+  dock and the bar.
 
 - AI sidebar: «was muss ich noch machen?» is answered from the books. Before the first message the
   sidebar shows where the oldest period not filed stands (payments without a booking and how many

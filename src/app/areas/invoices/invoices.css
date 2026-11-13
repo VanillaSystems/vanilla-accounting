@@ -73,7 +73,7 @@
 .lkfoot { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; }
 .lkpage { display: grid; grid-template-columns: minmax(240px, .85fr) minmax(0, 1fr); gap: 24px; align-items: start; }
 @container (max-width: 560px) { .lkpage { grid-template-columns: minmax(0, 1fr); } }
-.lkprevw { position: sticky; top: var(--bar-clear, 0); }
+.lkprevw { position: sticky; top: 0; }
 .ivhint { font-size: 12px; margin: 6px 0 0; }
 .ivsent { display: grid; gap: 2px; }
 .sdoc { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; text-align: left; padding: 6px 8px; border-radius: 7px; font-size: 12.5px; }
