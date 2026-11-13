@@ -61,12 +61,25 @@ test('after «installieren» the command stays folded; before the sign-in a pers
     assert.match(said, /Noch kein Konto bei Anthropic\?/, 'before «Anmelden» the app says what a person without an account does');
     assert.match(said, /auf Englisch/);
     assert.match(said, /legst du ein Konto an/);
-    assert.match(said, /Claude Pro/, 'with the plan the card named');
+    // Nothing in the repo says the plan is picked on the sign-in page (#387 review): the subscription is taken out with the vendor, by its plans page.
+    assert.doesNotMatch(said, /wählst/, 'no promise that the plan is picked there');
+    assert.match(said, /Abo \(Claude Pro, etwa 20 USD im Monat\) schliesst du bei Anthropic ab/, 'the subscription is taken out with the vendor');
+    assert.equal(await page.$eval('[data-no-account] a', (a) => (a as HTMLAnchorElement).href), 'https://claude.com/pricing', 'with the vendor\'s plans page');
     assert.match(said, /merkt die Anmeldung von selbst/);
     assert.equal(await page.$$eval('[data-no-account]', (els) => els.length), 1, 'said once');
     if (process.env.SHOTS) await page.screenshot({ path: join(process.env.SHOTS, 'ai-signin.png') });
   } finally {
     await closeChrome(browser);
     server.close();
+  }
+});
+
+test('no language promises that the plan is picked on the sign-in page, in the app or in Terminal (#387 review)', async () => {
+  for (const code of ['de', 'fr', 'it', 'en']) {
+    const { messages } = ((await import(`../src/app/i18n/locales/${code}.ts`)) as { default: { messages: Record<string, string> } }).default;
+    for (const key of ['aiSetup.noAccount', 'aiSetup.script.loginStep2']) {
+      assert.match(messages[key], /\{vendor\}/, `${code} ${key}: the subscription is taken out with the vendor`);
+      assert.doesNotMatch(messages[key], /wählst|pick \{plan\}|choisis|scegli/, `${code} ${key}: no plan picked on the sign-in page`);
+    }
   }
 });

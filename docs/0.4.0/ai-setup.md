@@ -77,9 +77,10 @@ What changed:
   app cannot open Terminal the command is the way and stays open. With one program ready, the
   other's card is not shown in the first run.
 - **Before the browser opens for the sign-in** (#385), the app says what a person without an
-  account will see: the vendor's page in English, where she creates the account and picks the plan
-  the card named (`minPlan`, `minPlanUsd`), then comes back and the app notices the sign-in by
-  itself (`aiSetup.noAccount`, `NoAccount` in src/app/ai/CliCard.tsx: in the first run's
+  account will see: the vendor's page in English, where she creates the account; the subscription
+  the card named (`minPlan`, `minPlanUsd`) is taken out with the vendor, by its plans page (`plans`,
+  linked beside the line; nothing in the repo says the sign-in page offers it); then she comes back
+  and the app notices the sign-in by itself (`aiSetup.noAccount`, `NoAccount` in src/app/ai/CliCard.tsx: in the first run's
   conversation under «… ist da», on Firma › KI's card while signed out). The Terminal's sign-in
   screen says the same in one line. Nothing names how the account is made (e-mail, Google,
   Apple): the facts table does not know it.

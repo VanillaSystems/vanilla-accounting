@@ -74,8 +74,8 @@ function Needs({ cli, opens }: { cli: TerminalCli; opens: boolean }) {
  * the sign-in by itself. Facts from AI_CLIS only.
  */
 export function NoAccount({ cli }: { cli: TerminalCli }) {
-  const { vendor, minPlan, minPlanUsd } = AI_CLIS[cli];
-  return <p className="m" data-no-account={cli}>{t('aiSetup.noAccount', { vendor, plan: minPlan, usd: minPlanUsd })}</p>;
+  const { vendor, minPlan, minPlanUsd, plans } = AI_CLIS[cli];
+  return <p className="m" data-no-account={cli}>{t('aiSetup.noAccount', { vendor, plan: minPlan, usd: minPlanUsd })} <a className="linkbtn" href={plans} target="_blank" rel="noopener noreferrer">{t('aiSetup.plans', { vendor })}{ICONS.external}</a></p>;
 }
 
 const Facts = ({ state }: { state: Extract<CardState, { version: string }> }) => (

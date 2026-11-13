@@ -17,8 +17,9 @@ Two markers flag an entry you must read before you update:
 ### Added
 
 - AI step: before the browser opens for the sign-in, the app says what a person without an account
-  will see: the page in English, where she creates the account and picks the plan the card named,
-  then comes back and the app notices the sign-in by itself. After «… installieren» the vendor's
+  will see: the page in English, where she creates the account; the subscription the card named is
+  taken out with the vendor (its plans page linked beside the line); then she comes back and the app
+  notices the sign-in by itself. After «… installieren» the vendor's
   command stays folded under «Befehl zeigen» (#385).
 - Layout: a list or detail scrolled up ends below the floating top bar; nothing of it stands under
   the bar any more (#385). Quick Look of a receipt or a statement covers the whole window, above the
