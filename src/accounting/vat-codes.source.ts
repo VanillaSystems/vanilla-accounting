@@ -617,15 +617,6 @@ export const VAT_CODE_EXAMPLES: Readonly<Record<string, readonly VatCodeExample[
       "description": "Papeterie Seeblick, Büromaterial"
     },
     {
-      "caseId": "bank-fees",
-      "title": "Bank account and card fees",
-      "debit": "6940",
-      "credit": "1020",
-      "amount": 15,
-      "vatCode": "I0",
-      "description": "Musterbank, Kontoführung Q3 2026"
-    },
-    {
       "caseId": "sammelzahlung",
       "title": "One bank payment for several invoices (Sammelzahlung)",
       "debit": "6300",
