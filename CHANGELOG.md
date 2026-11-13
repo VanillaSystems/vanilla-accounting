@@ -458,8 +458,8 @@ Two markers flag an entry you must read before you update:
   «… (Schweiz) AG», «… Holding»), the firm as consignee beside another importer, its name on the
   courier's page of the same file, a name of one word or the owner's name alone. The deduction
   (– / 4030 M81-2) is then booked and the assessment linked as before; a UID on the assessment is
-  never kept on its own. With a UID in the settings, the UID decides, now also only in the
-  importer's block when the assessment has one. An assessment on file that does not name the firm
+  never kept on its own. With a UID in the settings, the UID decides anywhere in the
+  assessment, as before. An assessment on file that does not name the firm
   stays under «Veranlagungsverfügung fehlt», which now says so and offers «UID eintragen». A firm
   that updates with filed quarters gets the deduction for those quarters as a correction in the
   open period (`corrects`), declared on that quarter's Korrekturabrechnung (form 0535); the open

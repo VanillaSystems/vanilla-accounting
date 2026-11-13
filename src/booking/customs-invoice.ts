@@ -317,6 +317,11 @@ const IMPORTER_LINES = 8;
  * The lines of the importer's blocks (documents.yaml customs.assessment.importer): the rest of a
  * line that begins with the label, or, with nothing after the label, the lines of text below it on
  * its page (IMPORTER_LINES). Undefined when the text has no line that begins with the label.
+ * In a header printed as a column of labels and then one of values, those lines hold the values of
+ * the other labels too (the forwarder's, the consignee's): which value stands at the importer's
+ * position is not read, as the text does not say whether a value below a label is its own or the
+ * column's. So a firm named as another party there is taken by its name; the tax must still be an
+ * import VAT line of its courier's bill (proves).
  */
 function importerLines(text: string, words: CustomsWords): string[] | undefined {
   const labels = words.assessment.importer ?? [];
@@ -335,18 +340,18 @@ function importerLines(text: string, words: CustomsWords): string[] | undefined 
 }
 
 /**
- * Whether `text` names the firm as the importer, in the importer's block (importerLines): by its UID
- * when Firma › Firma has one (anywhere in the text when it has no importer label); without one
- * (#452: the setup asks none) by its whole name at the start of a line of the block, after the
+ * Whether `text` names the firm as the importer: by its UID, anywhere in the text, when Firma › Firma
+ * has one (a UID is the firm's alone, whatever the layout put where); without one (#452: the setup
+ * asks none) by its whole name at the start of a line of the importer's block (importerLines), after the
  * label or «c/o», with the end of the line or an address after a comma after it: never a longer
  * name («Zürcher Beispiel GmbH», «Beispiel GmbH (Schweiz) AG», «Beispiel GmbH Treuhand»), never a
  * name of one word (a word of a goods description) or the owner's name alone. A UID the text shows
  * beside the name is not the firm's for that: only the person keeps a UID.
  */
 function namesFirm(text: string, firm: Importer | undefined, words: CustomsWords): boolean {
-  const block = importerLines(text, words);
   const digits = firm?.uid?.replace(/\D/g, '');
-  if (digits) return [...(block ? block.join('\n') : text).matchAll(UID)].some((m) => m.slice(1).join('') === digits);
+  if (digits) return [...text.matchAll(UID)].some((m) => m.slice(1).join('') === digits);
+  const block = importerLines(text, words);
   const parts = wordsOf(firm?.name ?? '');
   if (!block || parts.length < 2 || parts.join(' ') === wordsOf(firm?.owner ?? '').join(' ')) return false;
   const name = new RegExp(`^[ \\t]*(?:c[ \\t]*/[ \\t]*o[ \\t]+)?${parts.join('[^\\p{L}\\p{N}\\n]+')}(?=[ \\t]*$|[ \\t]*[,;·|–—])`, 'u');

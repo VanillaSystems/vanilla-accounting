@@ -738,7 +738,23 @@ test('without a UID the firm is named by its whole name in the importer\'s block
   assert.equal(named('Importeur:\nAnna Muster\nMusterstrasse 1', { name: 'Anna Muster', owner: 'Anna Muster' }), undefined, 'the owner\'s name alone names a person, not the firm');
   assert.equal(named('Importeur:\nMuster Kaffee GmbH', {}), undefined, 'a firm without UID and name is named by none');
   assert.equal(named('Importeur:\nMUSTER KAFFEE GMBH', { uid: 'CHE-111.222.333', ...FIRM }), undefined, 'a firm with a UID is named by its UID, never by its name alone');
-  assert.equal(named('Importeur: Andere Handels AG, CHE-999.888.777\nSpediteur: Muster Kaffee GmbH, CHE-123.456.789', { uid: 'CHE-123.456.789' }), undefined, 'the UID too counts in the importer\'s block only');
+});
+
+test('with a UID in the settings the UID decides wherever the assessment prints it, whatever its layout, as before the name was read', () => {
+  const words = documents().customs;
+  const uid = { uid: 'CHE-123.456.789', ...FIRM };
+  for (const header of [
+    'Importeur: Muster Optik AG, Musterweg 1, 8000 Zürich\nUID: CHE-123.456.789',
+    'Importatore: Muster Optik SA, Via Muster 1, 6900 Lugano\nIDI: CHE-123.456.789',
+    'Importeur / Empfänger:\nMuster Optik AG\nCHE-123.456.789',
+    'Importeur (Name, Adresse)\nMuster Optik AG\nCHE-123.456.789',
+    'UID Importeur: CHE-123.456.789\nImporteur:\nMuster Optik AG',
+    '26CHEI000000004711\n10.07.2026\nMuster Optik AG\nCHE-123.456.789\n\nZollanmeldung\nDatum der Annahme\nImporteur\nUID Importeur',
+    'Versender:\nBeispiel GmbH\nImporteur:\f\nMuster Optik AG\nCHE-123.456.789',
+    'Importeur:\nMuster Optik AG\nzu Handen Einkauf\nMusterweg 1\nPostfach\n8000 Zürich\nSchweiz\nTel. 044 000 00 00\nCHE-123.456.789',
+    'Importeur gemäss Veranlagungsverfügung: siehe unten\nMuster Optik AG, CHE-123.456.789',
+    'Importeur: Andere Handels AG, CHE-999.888.777\nSpediteur: Muster Kaffee GmbH, CHE-123.456.789',
+  ]) assert.equal(readAssessment(evvOf(header), words, uid)?.amount, 129.46, header);
 });
 
 test('an assessment on file that does not name the firm stays «Veranlagungsverfügung fehlt», and says why', async () => {
