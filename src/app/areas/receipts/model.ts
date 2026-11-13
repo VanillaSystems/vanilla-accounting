@@ -14,7 +14,7 @@ import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
 import { documentKind } from '../../../intake/document-kind.js';
 import { isNoReceipt } from '../../../books/discard.js';
 import { accountOfStatement, isCardStatement, statementFacts, type StatementFacts } from '../../../books/statement-facts.js';
-import { lineOffers, lineOfReceipt, type LineOffer } from '../../../books/card-lines.js';
+import { lineOffers, lineOfReceipt, readCardLines, type CardLinesWhy, type LineOffer } from '../../../books/card-lines.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { isManualRef } from '../../../books/refs.js';
 import { paidCards, type PaidCards } from '../../../accounting/paid-how.js';
@@ -539,9 +539,12 @@ export function balanceSheetOf(r: Receipt, books: Pick<Index, 'config' | 'transa
   return { ...(date ? { date } : {}), year, opens: date === `${Number(year) - 1}-12-31` };
 }
 
-export function cardStatementOf(r: Pick<Receipt, 'id' | 'extractedText'>, books: Pick<Index, 'mappings' | 'transactions' | 'journalEntries'>): { debit?: string; lines: number } | undefined {
+export function cardStatementOf(r: Pick<Receipt, 'id' | 'extractedText' | 'cardLines'>, books: Pick<Index, 'mappings' | 'transactions' | 'journalEntries'>): { debit?: string; lines: number; unread?: CardLinesWhy } | undefined {
   if (!isCardStatement(r.extractedText ?? '', documents())) return undefined;
   const refs = new Set(books.mappings.filter((m) => m.receiptId === r.id).map((m) => m.transactionRef));
   const debit = books.transactions.filter((t) => refs.has(t.ref)).map((t) => t.date).sort()[0];
-  return { ...(debit ? { debit } : {}), lines: (books.journalEntries ?? []).filter((e) => refs.has(e.transactionRef)).length };
+  // Lines code cannot read (#409): said, so she knows the settlement is booked whole and no bill is offered for a line.
+  const read = r.cardLines ? undefined : readCardLines(r.extractedText ?? '', documents());
+  const unread = read && 'why' in read ? read.why : undefined;
+  return { ...(debit ? { debit } : {}), lines: (books.journalEntries ?? []).filter((e) => refs.has(e.transactionRef)).length, ...(unread ? { unread } : {}) };
 }

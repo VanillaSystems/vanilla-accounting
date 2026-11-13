@@ -242,7 +242,8 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     const cards = books.update((index) => {
       const lock = periodLock(index);
       const done = linkCardLines(index, (d) => !lock.isClosed(d));
-      if (done.linked.length) unbookPayments(index, done.linked.map((l) => l.payment), 'links');
+      // Without a model the booking stays: never taken away for a rebooking nobody can make (r8f-41).
+      if (done.linked.length && ask) unbookPayments(index, done.linked.map((l) => l.payment), 'links');
       return done;
     });
     if (cards.read.length) log(`read the lines of ${cards.read.length} card statement(s)`);

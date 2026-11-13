@@ -108,7 +108,7 @@ test('books schema 7 (#254): books of schema 6 load and verify their seals, npm 
   assert.throws(() => climb<Record<string, unknown>>({}, 7, 6, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
 });
 
-test('books schema 8 (#409): books of schema 7 load with their seals whole and no receipt given lines, npm run update writes 8 with a backup and no record changed; card lines and a line\'s link survive a save; an app of schema 7 refuses books of 8', async () => {
+test('books schema 8 (#409): books of schema 7 load with their seals whole and no receipt given lines, the step adds nothing and a save writes 8 with no record changed; card lines and a line\'s link survive a save; an app of schema 7 refuses books of 8', async () => {
   assert.equal(BOOKS_SCHEMA, 8);
   const dir = mkdtempSync(join(tmpdir(), 'schema-8-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
@@ -122,10 +122,11 @@ test('books schema 8 (#409): books of schema 7 load with their seals whole and n
   assert.ok(sealsOf(loaded).checks.every((c) => c.status !== 'broken'), 'every seal still verifies');
   assert.ok(loaded.receipts.every((r) => !('cardLines' in r)) && loaded.mappings.every((m) => !('line' in m)), 'the step adds no field, not even an empty one');
 
-  const { done } = await upgradeWorkspace(ws);
-  const books = done.find((d) => d.file === ws.paths.ledger);
-  assert.deepEqual(books && { from: books.from, to: books.to }, { from: 7, to: 8 });
-  assert.equal(JSON.parse(readFileSync(books!.backup, 'utf8')).schema, 7);
+  // npm run update itself is the schema 7 test's (6 → current, with its backup); here the step from 7: pure, nothing added.
+  const clone = (d: Record<string, unknown>) => structuredClone(d);
+  const raw = { schema: 7, receipts: [{ id: 'r' }], mappings: [{ transactionRef: 't', receiptId: 'r' }] };
+  assert.deepEqual(climb<Record<string, unknown>>(raw, 7, 8, BOOKS_MIGRATIONS, 'ledger.json', clone), raw);
+  saveBooks(ws, loaded);
   assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, 8);
   assert.deepEqual(booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]), before, 'no record of the books changed');
 
@@ -141,7 +142,6 @@ test('books schema 8 (#409): books of schema 7 load with their seals whole and n
   assert.deepEqual(after.receipts.find((r) => r.id === card.id)?.cardLines, card.cardLines);
   assert.deepEqual(after.mappings.find((m) => m.receiptId === bill.id), { transactionRef: open.ref, receiptId: bill.id, by: 'human', line: 0 });
 
-  const clone = (d: Record<string, unknown>) => structuredClone(d);
   assert.throws(() => climb<Record<string, unknown>>({}, 8, 7, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
 });
 

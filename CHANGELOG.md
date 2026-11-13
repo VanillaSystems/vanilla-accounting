@@ -27,7 +27,14 @@ Two markers flag an entry you must read before you update:
   a bill is booked by its lines: a line with its bill takes that bill's VAT (a rate only when the
   bill shows Swiss VAT, Bezugsteuer for a foreign service as the guide says), the other lines the
   zero code as before; the hand form proposes no rate for the whole settlement from a bill of one
-  line. Why the figures move: a hotel's input tax at 3.8 % that was lost while its bill stayed
+  line; a bill smaller than its line (a tip) takes its rate on the bill's gross only, the rest of the
+  line the zero code. A credit line keeps its minus; a balance carried and the card's own payment
+  («Saldo Vormonat», «Ihre Zahlung») are no lines. Days as «07/08/2026» and amounts as «1.234,50» are
+  read; a statement whose lines cannot be read says so («Zeilen nicht gelesen: …») and its
+  settlement is booked whole. When the statement leaves the payment («Lösen», deleted, set aside),
+  its lines' bills go with it («Rückgängig» puts them back), and a bill of a line is never evidence
+  of the whole settlement. Without an AI, linking a bill by code leaves the settlement's booking as
+  it is. Why the figures move: a hotel's input tax at 3.8 % that was lost while its bill stayed
   «Beleg ohne Zahlung» is now claimed in the open quarter (Ziffer 405); books without card
   statements do not change. Never in a filed period: a filed card statement gains no lines and no
   bill is linked to a filed settlement. The books' schema goes from 7 to 8 (`Receipt.cardLines`,

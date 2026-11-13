@@ -15,7 +15,7 @@ import type { RunSummary } from '../../../workflows/model.js';
 import type { OrderPage } from '../../../booking/order-pages.js';
 import { orderPagesNow, vatCorrectionsNow } from '../../lib/order-pages.js';
 import type { VatCorrection } from '../../../booking/vat-corrections.js';
-import type { LineOffer } from '../../../books/card-lines.js';
+import type { CardLinesWhy, LineOffer } from '../../../books/card-lines.js';
 
 let memo: { books: Index; runs: RunSummary[] | undefined; pages: ReadonlyMap<string, OrderPage>; corrections: ReadonlyMap<string, VatCorrection>; company: unknown; ledger: Ledger } | undefined;
 
@@ -89,5 +89,6 @@ export const balanceSheetLine = (b: BalanceSheet): string => {
 };
 
 /** What the app did with a card statement (cardStatementOf), in one sentence: whose receipt it is, whether its lines were booked one by one, and that card statements are not read as statements (#401). */
-export const cardStatementLine = (c: { debit?: string; lines: number }): string =>
-  c.debit ? t(c.lines > 1 ? 'receipts.cardStatement.split' : 'receipts.cardStatement.linked', { date: formatDate(c.debit) }) : t('receipts.cardStatement.open');
+export const cardStatementLine = (c: { debit?: string; lines: number; unread?: CardLinesWhy }): string =>
+  [c.debit ? t(c.lines > 1 ? 'receipts.cardStatement.split' : 'receipts.cardStatement.linked', { date: formatDate(c.debit) }) : t('receipts.cardStatement.open'),
+    c.unread && t(`receipts.cardStatement.unread.${c.unread}`)].filter(Boolean).join(' ');
