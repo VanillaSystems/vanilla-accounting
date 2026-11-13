@@ -580,3 +580,42 @@ test('the courier\'s bill and the assessment no one linked: the import VAT is de
   assert.deepEqual(missingAssessments(books, documents().customs, true), [], 'nothing is left unclaimed');
   assert.equal(bookImportVatDeductions(books, loadClassifyContext(ws)).booked, 0, 'idempotent at the reduced rate too');
 });
+
+/**
+ * Issue #483: a courier's invoice that prints its own VAT on its fee as a line of its own, read as
+ * «MWST» at no rate (the VAT step's reading differs from run to run: «MWST 8.1% auf 25.00» or «MWST»),
+ * beside the import VAT it advanced and duty of 0.00, with the assessment that proves the import VAT
+ * linked. Invented, of the shape of the webshop persona's courier bill.
+ */
+const F_TEXT = 'Muster Express AG\nRechnung Zoll und Steuern 5310000001\nDatum: 13.07.2026\nZollanmeldung Nr. 26CHEI000000004711, Zugangscode: K7Q2M9XA\n\nPosition\nZoll\nEinfuhrsteuer\nVorlageprovision\nMWST 8.1% auf 25.00\nTotal CHF\nMWST-Nr. CHE-999.888.777 MWST\n\nMWST-Code\nZ 0%\nZ 0%\nE 8.1%\nE\n\nBetrag CHF\n0.00\n129.46\n25.00\n2.03\n156.49';
+const F_LINES = (tax: string): ReceiptLine[] => [
+  { description: 'Zoll', gross: 0, ratePercent: 0 },
+  { description: 'Einfuhrsteuer', gross: 129.46, ratePercent: 0 },
+  { description: 'Vorlageprovision', gross: 25, ratePercent: 8.1 },
+  { description: tax, gross: 2.03, ratePercent: 0 },
+];
+const F_PAYMENT: BankTransaction = { ...PAYMENT, ref: 'P-F', date: '2026-07-29', amount: 156.49, description: 'Muster Express AG' };
+const fInvoice = (tax: string) => invoice({ id: 'invf', filename: '20260713-muster-express-zoll.pdf', extractedText: F_TEXT, date: '2026-07-13', amount: 156.49, hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, net: 25, vat: 2.03 }], lineItems: F_LINES(tax) });
+const fAssessment = () => assessment({ id: 'evvf', filename: '20260710-bazg-veranlagungsverfuegung-mwst.pdf', extractedText: ASSESSMENT_TEXT.replace('57.55', '129.46').replace('710.50', '1598.32'), date: '2026-07-10', amount: 129.46 });
+
+for (const tax of ['MWST', 'MWST 8.1% auf 25.00']) {
+  test(`#483: the courier's own VAT on its fee, read as «${tax}» at no rate, is the fee's VAT on its line (4040 M81), never import VAT; only the assessment's tax is import VAT, and no assessment is asked for`, async () => {
+    const words = documents().customs;
+    const ws = company();
+    const books = booksOf([fInvoice(tax), fAssessment()], undefined, { tx: F_PAYMENT, closedThrough: '2026-06-30' });
+    const out = await classifyTransactions(books, [F_PAYMENT], { fx, context: loadClassifyContext(ws), ask: noModel });
+    assert.deepEqual(out.classified, ['P-F']);
+    assert.deepEqual(lines(books, 'P-F'), [['4030', '1021', 129.46, 'M0'], ['4040', '1021', 27.03, 'M81'], ['', '4030', 129.46, 'M81-2']],
+      'the 2.03 is 8.1 % of the fee of 25.00: on the fee\'s line, claimed as input tax');
+    assert.doesNotMatch(books.journalEntries[0].reason ?? '', /131\.49/, 'the import VAT is the assessment\'s 129.46, not with the fee\'s VAT');
+    assert.deepEqual(missingAssessments(books, words, true), [], 'no «Veranlagungsverfügung fehlt» for the fee\'s VAT');
+  });
+}
+
+test('#483: a tax line at no rate that is not the tax on the courier\'s taxed lines stays the import VAT it advanced', () => {
+  const other = fInvoice('MWST');
+  other.lineItems = [F_LINES('')[0], F_LINES('')[2], { description: 'MWST', gross: 131.49, ratePercent: 0 }];
+  const split = customsSplit(F_PAYMENT, [other], splitContext());
+  assert.ok(split && !('hold' in split));
+  assert.equal(split.importVat, 131.49);
+});

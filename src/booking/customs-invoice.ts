@@ -134,7 +134,10 @@ interface LineReading { position: CustomsPosition; rate?: number; carrierTax?: b
  * The position of a line on a customs invoice whose words name none:
  *  - a line that names only the tax and the domestic rate it is charged at («8,10 % VAT») is the
  *    carrier's VAT on its services: fees at that rate, added to the fees it is charged on;
- *  - a line that names only the tax at no rate is the import VAT the carrier advanced (the carrier's own
+ *  - a line at no rate that names the tax and is as much as the tax on the invoice's lines at one
+ *    domestic rate (carrierVat: «VAT», «VAT 8.1% on 25.00» of 2.03 beside a fee of 25.00 at 8.1 %)
+ *    is that VAT too, whatever else its words say (#483);
+ *  - any other line that names only the tax at no rate is the import VAT the carrier advanced (the carrier's own
  *    VAT is charged at a rate on its services, never a line of 0 %); at a rate of the line's own, without
  *    the words saying which, it is none;
  *  - a line at the domestic rate is the carrier's own service, fees (duty and import VAT never carry
@@ -143,7 +146,9 @@ interface LineReading { position: CustomsPosition; rate?: number; carrierTax?: b
  *    (`cites`), is the import VAT.
  * Else none.
  */
-function unnamedPosition(l: ReceiptLine, words: CustomsWords, cites: boolean): LineReading | undefined {
+function unnamedPosition(l: ReceiptLine, words: CustomsWords, cites: boolean, lines: readonly ReceiptLine[]): LineReading | undefined {
+  const own = !l.ratePercent && !!words.tax?.length && wordsRe(words.tax).test(l.description) && !namesUntaxed(l, words) ? carrierVat(l, lines) : undefined;
+  if (own !== undefined && (rateIn(l.description) ?? own) === own) return { position: 'fees', rate: own, carrierTax: true };
   if (namesOnlyTax(l.description, words)) {
     const stated = rateIn(l.description);
     if (stated !== undefined) return vat().isDomesticRate(stated) ? { position: 'fees', rate: stated, carrierTax: true } : undefined;
@@ -154,12 +159,12 @@ function unnamedPosition(l: ReceiptLine, words: CustomsWords, cites: boolean): L
 }
 
 /**
- * Whether `line` is as much as the domestic tax on the lines at one domestic rate (within 0.05):
- * the carrier's own VAT printed as a line, not import VAT it advanced.
+ * The domestic rate whose tax on the lines at that rate `line` is as much as (within 0.05): the
+ * carrier's own VAT printed as a line, not import VAT it advanced. Undefined when it is none.
  */
-function carrierVat(line: ReceiptLine, lines: readonly ReceiptLine[]): boolean {
+function carrierVat(line: ReceiptLine, lines: readonly ReceiptLine[]): number | undefined {
   const rates = new Set(lines.map((l) => l.ratePercent ?? 0).filter((rate) => rate > 0 && vat().isDomesticRate(rate)));
-  return [...rates].some((rate) => Math.abs(toRappen(lines.filter((l) => l.ratePercent === rate).reduce((s, l) => s + l.gross, 0) * rate / 100) - toRappen(line.gross)) <= 5);
+  return [...rates].find((rate) => Math.abs(toRappen(lines.filter((l) => l.ratePercent === rate).reduce((s, l) => s + l.gross, 0) * rate / 100) - toRappen(line.gross)) <= 5);
 }
 
 /**
@@ -174,11 +179,12 @@ function carrierVat(line: ReceiptLine, lines: readonly ReceiptLine[]): boolean {
  */
 export function readCustomsInvoice(r: Receipt, words: CustomsWords): { invoice: CustomsInvoice } | { hold: CustomsHold } | undefined {
   const numbers = assessmentNumbers(r.extractedText ?? '', words);
-  const all = (r.lineItems ?? []).map((l) => ({ l, position: positionOf(l.description, words) }));
+  const items = r.lineItems ?? [];
+  const all = items.map((l) => ({ l, position: positionOf(l.description, words) }));
   const customs = all.some((n) => n.position === 'importVat' || n.position === 'duty')
-    || (numbers.length > 0 && all.some((n) => !n.position && unnamedPosition(n.l, words, true)?.position === 'importVat' && (namesUntaxed(n.l, words) || !carrierVat(n.l, r.lineItems!))));
+    || (numbers.length > 0 && all.some((n) => !n.position && unnamedPosition(n.l, words, true, items)?.position === 'importVat'));
   if (!customs) return undefined;
-  const named = all.filter((n) => toRappen(n.l.gross) !== 0).map((n) => ({ l: n.l, reading: n.position ? { position: n.position } as LineReading : unnamedPosition(n.l, words, numbers.length > 0) }));
+  const named = all.filter((n) => toRappen(n.l.gross) !== 0).map((n) => ({ l: n.l, reading: n.position ? { position: n.position } as LineReading : unnamedPosition(n.l, words, numbers.length > 0, items) }));
   const rateOf = (l: ReceiptLine, reading: LineReading) => reading.position === 'fees' || reading.position === 'freight' ? reading.rate ?? l.ratePercent : undefined;
   // The carrier's VAT is added to the fees it is charged on: without a fee at its rate, it is a line no position names.
   const loose = named.find(({ l, reading }) => !reading || l.gross < 0
