@@ -149,7 +149,7 @@ export function providerIssuesIn(ws: Pick<Workspace, 'paths'>, books: Parameters
   const businessOf = (t: BankTransaction) => { const r = identify(signalsOfTransaction(t, linkedTo(t)), counterparties); return r.kind === 'known' ? r.counterparty : undefined; };
   const withheldPayees = withheldPayeesOf(books.transactions, businessOf);
   if (withheldPayees.length) out.withheldPayees = withheldPayees;
-  // What of 2270 each such payment clears, where the payslips tell (#476): the task and «2270 ausgleichen» ask for that, never for all of it.
+  // What of 2270 each such payment clears, where the payslips tell (#476): the task and «Arbeitnehmeranteil abziehen» ask for that, never for all of it.
   const shares = withheldSharesOf(books as Parameters<typeof withheldSharesOf>[0], businessOf);
   if (Object.keys(shares).length) out.withheldShares = shares;
   if (!providers.length) return out;

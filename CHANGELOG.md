@@ -466,6 +466,19 @@ Two markers flag an entry you must read before you update:
   booking was then taken back. In books where this happened, the open
   period's input tax (Ziffer 400/405) falls by what those bookings claimed. The demo figures do
   not change.
+- The compensation fund's Akonto payment is booked net of the employees' share also when the
+  payslips come in the same drop as the bank statement (#489). The drop hands each file to its own
+  run: the statement's run booked the fund's payment (it waits for no receipt) while the wages were
+  still net, and the payslips' run booked the wages again gross but never asked about the payment
+  again, so the employees' AHV/IV/EO and ALV stayed in the employer's cost. Now every run books a
+  contribution payment the app booked to the share the payslips withheld for that fund, whenever
+  that share changes, one line per account, marked as decided by code with its own reason; a payment
+  she booked or changed herself, or whose proposal she took back («Rückgängig» makes the lines it
+  puts back hers, as a change by hand), stays as it is. Books format: the check `withheldShare` of
+  `JournalEntry.by` is part of books schema 9 (#450, not released before), no step of its own. Where a proposal is
+  still offered, it says what it does in her words: «Vorschlag: Den Arbeitnehmeranteil (CHF …) aus
+  den Lohnabrechnungen von den Sozialversicherungskosten abziehen», the button «Arbeitnehmeranteil
+  abziehen» (before: «von 5700 auf 2270 umbuchen», «2270 ausgleichen»), in all four languages.
 - A run no longer offers «Als Eröffnungssaldo übernehmen» for a bank balance from inside the year
   (#487): the books open on 1 January, so a first statement of Q3 with the balance of 30.06. is no
   opening, and taking it would have left out the first half year on every balance sheet. The
@@ -605,6 +618,19 @@ Two markers flag an entry you must read before you update:
   names by its tax alone against the lines at the gross that tax proves (allowing for the tax's
   rounding to the cent), leaves a receipt in another currency out of the sum, and tells a line at 0 %
   beside a line at the receipt's rate nothing when no receipt in the line's currency can be compared.
+- «Buchung passt nicht zu ihrem Beleg» now also names an over-claim of input tax (#469): a line at a
+  rate above the receipt's (I81 on a bill at 2.6 %), and a rate on more than the receipt taxes
+  (I81 on a whole bill whose tax covers only part of it, a tip on top of a bill, a Kurtaxe booked
+  at 3.8 % beside the room, also on the whole card settlement). The task says «Der Beleg zeigt
+  8.1 % MWST nur auf …, gebucht sind … auf I81», and «Nach Beleg buchen» books the receipt's rate on what it taxes and the rest at the zero code. A line at 0 %
+  alone on a receipt that names its tax only is offered the rate only on what that tax covers. A
+  hotel bill read as the room's group and «0 %» without an amount, booked room I38 and Kurtaxe I0,
+  is no longer told «Der Beleg zeigt 3.8 % MWST» on the Kurtaxe (whose click booked it at 3.8 %); a
+  group's gross read above what its tax proves counts as what the tax proves. The
+  app's own runs book no such line where the receipt's VAT is known: a rule's or the model's rate
+  goes on what the receipt taxes at it, the rest to another rate the receipt shows, then to the
+  zero code, with the reason on the line. An under-claim and a line without a receipt are told as
+  before; a person's booking is never changed.
 - The fields of Firma's forms stand in line at every width (#454): a hint under one input («kein
   Konto», the account's name) or a label on two lines no longer pushes the field beside it down
   (Eröffnung, Regeln and the others). Firma › Eröffnung names its amount fields «Saldo per 1.1.2026

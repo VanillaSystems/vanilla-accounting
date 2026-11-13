@@ -49,14 +49,14 @@ import { cardLinesOf, cardPart, cardParts, lineReceiptsOf } from '../books/card-
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
-import { businessVat, capAtBills, settlesVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
+import { businessVat, capAtBills, capAtReceipts, settlesVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { bankChargesOf, isOwnBankFee, type BankCharges } from './bank-fee.js';
 import { bankCodedFee } from '../books/bank-import.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { withReceiptTax } from './receipt-tax.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
-import { atWithheld, fundShare, overWithheld, takenOff, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor, withinWithheld } from './withheld.js';
+import { atWithheld, fundShare, mergedLines, overWithheld, takenOff, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor, withinWithheld } from './withheld.js';
 import { splitByReceipts } from './receipt-lines.js';
 import { CUSTOMS_BY, customsSplit, importVatDeductions, ratesImportVat, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
@@ -582,6 +582,52 @@ export function bookBillCorrections(books: Books, context: Pick<ClassifyContext,
   }, only);
 }
 
+/**
+ * The contribution payments the app booked whose share of the deductions account the payslips now tell otherwise (#489),
+ * booked to that share by code, as the classifier books it (fundShare, atWithheld). A drop hands each file to the inbox's
+ * run as it takes it: the statement's run books the fund's payment (it waits for no receipt) while the wages are net, the
+ * payslips' run books the wages again gross from them, and the payment, never asked again, kept the employees' share as
+ * the employer's. Only a payment of the open period whose every line the model booked, or this code before (a later
+ * payslip changes the share again): never a person's booking, nor a rule's, nor one she took back to as it was
+ * (undoClearWithheld marks it hers). After the move the payment's lines are merged per account, one line each, all of
+ * them decided by code (`by` the check `withheldShare`, `run` the run's), with the code's reason in place of the
+ * model's, which said otherwise. One code cannot book so stays, and the open list offers the rest. Returns the refs booked anew.
+ */
+export function bookWithheldShares(books: Books, context: Pick<ClassifyContext, 'counterparties' | 'chartOfAccounts' | 'wageDeductions'>, run?: string): string[] {
+  const deductions = context.wageDeductions;
+  const wages = wageAccounts();
+  if (!deductions || !wages || !setup().wages?.withholds) return [];
+  const lock = periodLock(books);
+  const chartAccounts = new Set(chartNames(context.chartOfAccounts).keys());
+  const businessOf = (t: BankTransaction): string | undefined => {
+    const routing = identify(signalsOfTransaction(t, mappedReceipts(books, t)), context.counterparties ?? []);
+    return routing.kind === 'known' ? routing.counterparty : undefined;
+  };
+  const byRef = new Map<string, JournalEntry[]>();
+  for (const e of books.journalEntries) (byRef.get(e.transactionRef) ?? byRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
+  const app = (e: JournalEntry) => e.origin === 'classify' && !e.vatCode && (e.by?.kind === 'model' || (e.by?.kind === 'code' && e.by.check === 'withheldShare'));
+  const done: string[] = [];
+  // Oldest first: what an earlier payment to the fund takes off the account is booked before a later one's share is read.
+  for (const tx of [...books.transactions].sort((a, b) => a.date.localeCompare(b.date))) {
+    const lines = byRef.get(tx.ref);
+    if (tx.direction !== 'DBIT' || lock.isClosed(tx.date) || !lines?.length || !lines.every(app)) continue;
+    if (!lines.some((e) => wages.contributions.has(e.accountDebit) || e.accountDebit === deductions)) continue;
+    const share = fundShare(books, tx, businessOf(tx), businessOf);
+    if (share === undefined || Math.abs(takenOff(lines, deductions) - share) < 0.005) continue;
+    const toEmployer = { named: wages.contributions, shared: wages.shared, fallback: payeeContributionAccount(books, tx, businessOf) ?? [...wages.contributions].find((a) => !chartAccounts.size || chartAccounts.has(a)) };
+    const exact = atWithheld(lines, deductions, share, toEmployer, newEntryId);
+    if (!exact) continue;
+    const reason = wordsIn('de').t('rules.say.withheldShare', { currency: baseCurrency(), share: share.toFixed(2) });
+    const booked = mergedLines(exact.entries).map(({ rule: _rule, run: _run, ...e }): JournalEntry => ({ ...e, reason, by: { kind: 'code', check: 'withheldShare' }, ...(run && { run }) }));
+    const at = books.journalEntries.findIndex((e) => e.transactionRef === tx.ref);
+    const rest = books.journalEntries.filter((e) => e.transactionRef !== tx.ref);
+    books.journalEntries = [...rest.slice(0, at), ...booked, ...rest.slice(at)];
+    byRef.set(tx.ref, booked);
+    done.push(tx.ref);
+  }
+  return done;
+}
+
 /** Why a provider's payout waits for the person (PayoutWait), in the books' language: what the run's note and the payment say. */
 export function payoutWaitReason(w: PayoutWait): string {
   // A provider without a sales report books its sales from its payout reports: no order export to wait for.
@@ -656,7 +702,8 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
   const lock = periodLock(books);
   const booked = entriesFor(tx, entries, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: `Regel: ${ruleLine(placed, { ...context, payers: payerNames([tx]) })}${zero}`, by: { kind: 'rule', rule: placed.rule.id }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) })
     .map((e) => stampRule(e, placed.rule.id, booking));
-  return receiptTaxOf(books, tx, booked, mapped);
+  // The rule's rate claims no more input tax than the receipts show (#469); an own-use correction is the rule's whole line's, so it stays as booked.
+  return receiptTaxOf(books, tx, booking.ownUse ? booked : capAtReceipts(booked, mapped, newEntryId), mapped);
 }
 
 const newEntryId = () => randomBytes(8).toString('hex');
@@ -1108,8 +1155,11 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const noted = [reason, fee?.note, customsNotes.get(tx)].filter(Boolean).join(' ') || undefined;
         const coded = withPurchaseVat(tx, withRefundCodes(own, tx, withCreditNoteCodes(own, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), bankAccount), mapped, context.purchaseVat, context.counterparties);
         const taxed = withoutSettlementCodes(withoutZeroOnNoCode(receiptTaxOf(own, tx, coded, mapped), bankAccount, context), noted, { kind: 'model', model });
-        // A card line's bill that shows less than the line (a tip): its rate on no more than the bill taxes at it (#409).
-        const answered = views.get(tx)?.cap ? capAtBills(taxed, mapped, tx.currency, newEntryId) : taxed;
+        // A card line's bill that shows less than the line (a tip): its rate on no more than the bill taxes at it (#409);
+        // any other payment's lines claim no more input tax than its receipts show, where their VAT is known (#469). A leg of a split
+        // charge pays a share of receipts the other legs hold too: its share is held against them all below (inputTaxOverReceipts).
+        const answered = views.get(tx)?.cap ? capAtBills(taxed, mapped, tx.currency, newEntryId)
+          : sharedReceipts(own, tx, legsOf(tx)) ? taxed : capAtReceipts(taxed, mapped, newEntryId);
         const twice = inputTaxOverReceipts(own, tx, legsOf(tx), answered, (c, d) => fx.daily(c, d));
         if (twice) {
           const others = twice.others.map((t) => t.ref).join(', ');
@@ -1150,7 +1200,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         }
         // The booking's reason says what code moved, beside the model's.
         const movedSaid = !capped.moved ? undefined
-          : share !== undefined ? wordsIn('de').t('rules.say.withheldShare', { account: deductions!, currency: baseCurrency(), share: share.toFixed(2) })
+          : share !== undefined ? wordsIn('de').t('rules.say.withheldShare', { currency: baseCurrency(), share: share.toFixed(2) })
             : wordsIn('de').t('rules.say.withheldCapped', { account: deductions!, currency: baseCurrency(), open: (heldOn ?? 0).toFixed(2), moved: capped.moved.toFixed(2), to: capped.to });
         const entries = movedSaid ? capped.entries.map((e) => ({ ...e, reason: [e.reason, movedSaid].filter(Boolean).join(' ') })) : capped.entries;
         if (capped.moved) log(`  [Batch ${batchNum}]  ${tx.ref}  ${'onto' in capped && capped.onto ? `${capped.moved} under the payslips' share moved onto ${deductions}` : `${capped.moved} over what ${deductions} ${share !== undefined ? 'holds for this payee' : 'held'} booked on ${capped.to}`}`);

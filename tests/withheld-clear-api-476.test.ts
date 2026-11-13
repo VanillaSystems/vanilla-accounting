@@ -1,7 +1,7 @@
 /**
  * «2270 ausgleichen» (#476) through the real API server: one write that makes the proposal from the books (the open
  * item, never the request), books it as the person's change, and an undo that puts the payment's lines back as they
- * were, with who booked them and why. Where the payslips tell the fund's share, the click asks for that and no more:
+ * were, with why, now hers (#489: the app does not book the share on it again). Where the payslips tell the fund's share, the click asks for that and no more:
  * a later payment to the fund whose share is nothing has nothing to clear.
  */
 import { test, before, after } from 'node:test';
@@ -54,7 +54,9 @@ test('#476 the click books what 2270 holds from 5700 onto 2270 as hers in one wr
   const undo = await api.send('POST', '/api/journal-entries/by-receipt/undo', { undo: done.json.undo });
   assert.equal(undo.status, 200, String(undo.json.error));
   const back = linesOf('AK');
-  assert.deepEqual(back.map((e) => [e.id, e.accountDebit, e.amount, e.origin, e.reason, e.by]).sort(), was.map((e) => [e.id, e.accountDebit, e.amount, e.origin, e.reason, e.by]).sort());
+  assert.deepEqual(back.map((e) => [e.id, e.accountDebit, e.amount, e.reason]).sort(), was.map((e) => [e.id, e.accountDebit, e.amount, e.reason]).sort());
+  // #489: she took the proposal back, so the line the undo put back is hers, as a change by hand makes it: no run books the share on it again.
+  assert.deepEqual(back.map((e) => [e.accountDebit, e.origin, e.by?.kind]).sort(), [['5700', 'manual', 'person'], ['5710', 'classify', 'model']]);
 });
 
 test('#476 with the payslips read, a later payment to the fund whose share is nothing has nothing to clear: the pension fund\'s withheld stays on 2270', async () => {

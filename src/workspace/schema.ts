@@ -50,6 +50,10 @@ import { roleBefore } from './banks.js';
  * count: the step adds nothing (absent means 0), so no sealed record and no filed receipt changes.
  * An app of schema 8 would not see the count, read such a receipt on every run and leave its payment
  * waiting with no task, so it must refuse these books.
+ *    Also in 9 (unreleased until 0.4.2, so no step of its own): a contribution payment code books to the share the
+ *    payslips withheld carries `JournalEntry.by: { kind: 'code', check: 'withheldShare' }` (#489,
+ *    src/booking/classify.ts bookWithheldShares). Books of schema 8 hold none, so the step adds nothing; an app of
+ *    schema 8 would read the unknown check as no `by` and drop who decided the booking on its next save.
  */
 export const BOOKS_SCHEMA = 9;
 /**

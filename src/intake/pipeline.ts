@@ -104,6 +104,8 @@ export interface StepContext {
   hold?(refs: string[]): void;
   /** Payments booked now: a question that held one of them (its report was missing, a rule asked) is closed (r7h-21). */
   release?(refs: string[]): void;
+  /** The live workflow run the step runs in (src/workflows/actions.ts): what code books on its own carries it, so the run's history explains it (#489). */
+  run?: string;
   /** Stems of inbox files a run waiting behind this one came in with: left for it (src/workflows/actions.ts). */
   later?: () => ReadonlySet<string>;
   /**

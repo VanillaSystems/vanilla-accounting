@@ -230,3 +230,36 @@ test('#455 second review: A1 and A2 are still told when the card statement is fi
     assert.deepEqual(findings(b), [[313.19, 'I81', 'vatWithoutReceipt']], `A2, ${kind}`);
   }
 });
+
+// ─── #469: over-claims on a card's settlement ────────────────────────────────────────────────────
+
+test('#493 review: the hotel bill as read in round 7 («0 %» without an amount beside the room): room I38 and Kurtaxe I0 fit, the Kurtaxe at I38 is told', () => {
+  const b = persona();
+  b.receipts = b.receipts.map((x) => (x.id === 'hotel' ? { ...x, vatSummary: [{ ratePercent: 3.8, vat: 5.78, gross: 158 }, { ratePercent: 0, vat: 0 }] } : x));
+  b.journalEntries = [booked('linkly', 146.62, 'B81-1', ['linkly']), booked('fee', 2.57, undefined, ['card']), booked('room', 158, 'I38', ['hotel']), booked('kurtaxe', 6, 'I0', ['hotel'])] as unknown as Books['journalEntries'];
+  assert.deepEqual(findings(b).filter((f) => f[2]), [], 'no «Nach Beleg buchen» that would book the Kurtaxe at 3.8 %');
+  b.journalEntries[3] = { ...b.journalEntries[3], vatCode: 'I38' };
+  assert.deepEqual(findings(b).filter((f) => f[2]), [[158, 'I38', 'receiptGroups']]);
+});
+
+test('#469: the Kurtaxe booked at 3.8 % with the hotel bill is told the bill taxes only 158, and «Nach Beleg buchen» books it at 0', () => {
+  const b = persona();
+  b.journalEntries = [booked('linkly', 146.62, 'B81-1', ['linkly']), booked('fee', 2.57, undefined, ['card']), booked('room', 158, 'I38', ['hotel']), booked('kurtaxe', 6, 'I38', ['hotel'])] as unknown as Books['journalEntries'];
+  const check = journalOf(b as unknown as Index).byId.get('room')!.evidence;
+  assert.deepEqual(check, { kind: 'receiptGroups', rate: 3.8, amount: 158, booked: 164, currency: 'CHF', lines: [{ amount: 158, code: 'I38' }, { amount: 6, code: 'I0' }], entries: ['room', 'kurtaxe'], receipts: ['hotel'] });
+  bookByReceipt(b, 'kurtaxe');
+  assert.deepEqual(b.journalEntries.filter((e) => e.receipts?.includes('hotel')).map((e) => [e.amount, e.vatCode]).sort(), [[158, 'I38'], [6, 'I0']]);
+  assert.deepEqual(findings(b).filter((f) => f[2]), [], 'the settlement now fits its bills');
+});
+
+test('#469: a Kurtaxe at 3.8 % on the whole settlement, beside the room on the hotel bill: the settlement\'s 3.8 % lines against what its receipts tax at it', () => {
+  const b = persona();
+  const person = { origin: 'manual', by: { kind: 'person', at: '2026-11-13T11:00:00.000Z' } };
+  b.journalEntries = [booked('linkly', 146.62, 'B81-1', ['linkly']), booked('fee', 2.57, undefined, ['card']), booked('room', 158, 'I38', ['hotel']), booked('kurtaxe', 6, 'I38', [], person)] as unknown as Books['journalEntries'];
+  const views = journalOf(b as unknown as Index);
+  assert.equal(views.byId.get('room')!.evidence, undefined, 'the room fits its bill');
+  assert.deepEqual(views.byId.get('kurtaxe')!.evidence, { kind: 'receiptGroups', rate: 3.8, amount: 158, booked: 164, currency: 'CHF', entries: ['kurtaxe'], receipts: ['card', 'linkly', 'hotel'] });
+  // Booked at 0 %, the whole settlement's line is no over-claim.
+  b.journalEntries[3] = { ...b.journalEntries[3], vatCode: 'I0' };
+  assert.deepEqual(findings(b).filter((f) => f[2]), []);
+});

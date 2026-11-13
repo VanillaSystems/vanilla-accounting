@@ -116,7 +116,7 @@ function batch(step: StepRun, took: (books: Books, ws: Workspace, later?: () => 
       renamed: (inbox, next) => arrivals((all) => all.map((a) => (a.kind === 'receipt' && a.inbox === inbox ? { ...a, ...next } : a))),
       refused: (inbox, reason) => arrivals((all) => all.map((a) => (a.kind === 'receipt' && a.inbox === inbox ? { kind: 'refused', file: a.file, reason } : a))),
     };
-    const r = await step({ ws, books: port, ask, progress, log: () => {}, ...(hold ? { hold } : {}), ...(release ? { release } : {}), ...(later ? { later } : {}), ...(arrived ? { arrived } : {}) }).finally(() => { if (run) clearProgress(run.id); });
+    const r = await step({ ws, books: port, ask, progress, log: () => {}, ...(run?.mode === 'live' ? { run: run.id } : {}), ...(hold ? { hold } : {}), ...(release ? { release } : {}), ...(later ? { later } : {}), ...(arrived ? { arrived } : {}) }).finally(() => { if (run) clearProgress(run.id); });
     if (r.stop) throw stopped(r.notes);
     // What it read and what it made, for the run view (src/workflows/summary.ts).
     return { outcome: 'ok', output: { took: todo, made: madeBetween(before, port.read()), notes: r.notes, ...(r.refused?.length && { refused: r.refused }) } };
