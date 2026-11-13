@@ -9,6 +9,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { classifyTransactions, type ClassifyDeps } from '../src/booking/classify.js';
 import { bookingDraft } from '../src/accounting/manual-booking.js';
+import { removeReceipt } from '../src/accounting/classify-force.js';
+import { link, unlink } from '../src/server/edits.js';
 import { journalOf } from '../src/app/areas/journal/model.js';
 import type { Index } from '../src/types/index.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
@@ -105,4 +107,58 @@ test('a booking of the whole settlement is not told its bill of one line shows V
 test('by hand: the form for the whole settlement proposes no rate from a bill of one line', () => {
   const draft = bookingDraft(books([card, lined('hotel', 2)]), tx.ref, bankAccounts)!;
   assert.ok(draft.lines.every((l) => !l.vat || !/38|3\.8/.test(l.vat)), `proposed ${draft.lines.map((l) => l.vat).join(', ')}`);
+});
+
+test('a credit line keeps its sign: the bank moves by what the settlement paid, never by the lines\' sum without signs', async () => {
+  const lines: CardLine[] = [
+    { day: '2026-08-19', merchant: 'HOTEL PILATUSBLICK LUZERN', amount: 164 },
+    { day: '2026-08-21', merchant: 'GUTSCHRIFT HOTEL PILATUSBLICK', amount: -20 },
+    { day: '2026-08-22', merchant: 'Bearbeitungsgebühr', amount: 2.57 },
+  ];
+  const b = books([card, lined('hotel', 0)]);
+  b.transactions[0] = { ...tx, amount: 146.57 };
+  b.receipts[0] = { ...b.receipts[0], amount: 146.57, cardLines: lines };
+  const { outcome } = await run(b, {
+    'P-30#1': [line('6640', 158, { vat: 'charged', vatRate: 3.8 }), line('6640', 6, { vat: 'none' })],
+    'P-30#2': [{ accountDebit: '', accountCredit: '6640', amount: 20, description: 'Gutschrift', vat: 'none' }],
+    'P-30': [line('6940', 2.57, { vat: 'none' })],
+  });
+  assert.deepEqual(outcome.failed, []);
+  const bank = b.journalEntries.reduce((s, e) => s + (e.accountCredit === '1020' ? e.amount : 0) - (e.accountDebit === '1020' ? e.amount : 0), 0);
+  assert.equal(Math.round(bank * 100) / 100, 146.57);
+});
+
+test('a bill smaller than its line (a tip on the card): the rate only on what the bill taxes at it, the rest of the line the zero code', async () => {
+  const lines: CardLine[] = [{ ...LINES[0] }, { ...LINES[1] }, { ...LINES[2], amount: 174 }];
+  const b = books([card, lined('hotel', 2)]);
+  b.transactions[0] = { ...tx, amount: 323.19 };
+  b.receipts[0] = { ...b.receipts[0], amount: 323.19, cardLines: lines };
+  const { lines: booked } = await run(b, {
+    'P-30#3': [line('6640', 174, { vat: 'charged', vatRate: 3.8 })],
+    'P-30': [line('6570', 146.62, { vat: 'acquisition' }), line('6940', 2.57, { vat: 'none' })],
+  });
+  assert.deepEqual(booked.filter((l) => l[0] === '6640').sort(), [['6640', 158, 'I38'], ['6640', 16, 'I0']]);
+});
+
+test('a line\'s bill whose line has no statement any more is no bill of the whole settlement: the model\'s rate on the whole becomes the zero code', async () => {
+  // The statement's link gone with the line link left behind (an older path), or a second receipt with lines on the same payment.
+  const second = r('card-2', { date: '2026-08-31', amount: 313.19, currency: 'CHF', hasSwissVat: false, cardLines: LINES });
+  const two = books([card, { transactionRef: tx.ref, receiptId: 'card-2' }, lined('hotel', 2)]);
+  two.receipts.push(second);
+  for (const [what, b] of [['statement gone', books([lined('hotel', 2)])], ['two statements', two]] as const) {
+    const { lines } = await run(b, { 'P-30': [line('6640', 313.19, { vat: 'charged', vatRate: 3.8 })] });
+    assert.deepEqual(lines, [['6640', 313.19, 'I0']], what);
+  }
+});
+
+test('the statement leaves the payment («Lösen», deleted): its lines\' bills go with it, and the undo of «Lösen» puts them back', () => {
+  const b = books([card, lined('hotel', 2), lined('linkly', 0)]);
+  const undo = unlink(b, 'card', tx.ref);
+  assert.deepEqual(b.mappings, [], 'no line bill stays without its statement');
+  assert.equal(undo?.kind, 'link');
+  link(b, 'card', tx.ref, undefined, undo?.kind === 'link' ? undo.bills : undefined);
+  assert.deepEqual((b.mappings as Mapping[]).map((m) => `${m.receiptId}:${m.line ?? ''}`).sort(), ['card:', 'hotel:2', 'linkly:0']);
+  const d = books([card, lined('hotel', 2)]);
+  removeReceipt(d, 'card');
+  assert.deepEqual(d.mappings, []);
 });

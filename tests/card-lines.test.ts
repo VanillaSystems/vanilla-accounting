@@ -6,7 +6,7 @@
 import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lineOffers, lineOfReceipt, linkCardLines, parseCardLines } from '../src/books/card-lines.js';
+import { lineOffers, lineOfReceipt, linkCardLines, parseCardLines, readCardLines } from '../src/books/card-lines.js';
 import { documents } from '../src/engines/index.js';
 import { link, unlink } from '../src/server/edits.js';
 import { matchStep } from '../src/intake/match.js';
@@ -37,6 +37,21 @@ const LINES = [
 test('the lines are read by code from the statement\'s text, in reading order and laid out by columns alike', () => {
   assert.deepEqual(parseCardLines(READING), LINES);
   assert.deepEqual(parseCardLines(LAYOUT), LINES);
+});
+
+test('a balance carried and the card\'s own payment are no merchant lines, in any of the four languages', () => {
+  const rows = (prev: string, paid: string, next: string) => `Kreditkartenabrechnung Visa ****3307\nAbrechnung 01.08.2026 – 31.08.2026\n01.08.2026 ${prev} 500.00\n05.08.2026 ${paid} 500.00-\n19.08.2026 HOTEL PILATUSBLICK LUZERN 144.00\n31.08.2026 ${next} 144.00`;
+  for (const [prev, paid, next] of [['Saldo Vormonat', 'Ihre Zahlung - Danke', 'Neuer Saldo'], ['Previous balance', 'Payment received - thank you', 'New balance'],
+    ['Solde précédent', 'Votre paiement - merci', 'Nouveau solde'], ['Saldo precedente', 'Il vostro pagamento - grazie', 'Nuovo saldo']]) {
+    assert.deepEqual(parseCardLines(rows(prev, paid, next), documents()), [{ day: '2026-08-19', merchant: 'HOTEL PILATUSBLICK LUZERN', amount: 144 }], prev);
+  }
+});
+
+test('days with slashes and amounts with a comma for the cents are read; what is not read says why', () => {
+  const text = 'Relevé de carte Visa ****3307\nPériode 01/08/2026 – 31/08/2026\n12/08/2026 HOTEL DU LAC GENEVE 1.234,50\n14/08/2026 TAXI GENEVE 32,00\nTotal 1.266,50';
+  assert.deepEqual(parseCardLines(text, documents()), [{ day: '2026-08-12', merchant: 'HOTEL DU LAC GENEVE', amount: 1234.5 }, { day: '2026-08-14', merchant: 'TAXI GENEVE', amount: 32 }]);
+  assert.deepEqual(readCardLines(text.replace('Total 1.266,50', 'Total 1.300,00'), documents()), { why: 'noTotal' });
+  assert.deepEqual(readCardLines('Kreditkartenabrechnung\nAbrechnung 01.08.2026 – 31.08.2026\nKeine Bewegungen', documents()), { why: 'noTable' });
 });
 
 test('lines that do not add up to a total the statement prints are not kept', () => {
@@ -124,18 +139,21 @@ test('a filed card statement keeps every byte: no lines read, no bill linked', (
   assert.deepEqual(b, before);
 });
 
-test('the inbox run reads the lines and links the bills without the model; the app\'s booking of the settlement that saw no bill goes, to be booked again by its lines; a person\'s stays', async () => {
-  const run = async (origin: 'classify' | 'manual') => {
+test('the inbox run reads the lines and links the bills by code; with a model the app\'s booking of the settlement that saw no bill goes, to be booked again by its lines; a person\'s stays, and without a model the app\'s too', async () => {
+  const run = async (origin: 'classify' | 'manual', model: boolean) => {
     const { books: b } = books();
     const full = { ...b, bankStatements: [], config: { closedThrough: '2026-06-30' }, journalEntries: [{ id: 'e1', transactionRef: settlement.ref, date: settlement.date, accountDebit: '6640', accountCredit: '1020', amount: 313.19, vatCode: 'I0', origin, receipts: ['card'] }] } as unknown as StoreBooks;
-    await matchStep({ ws: { paths: { inbox: '/nowhere' } } as Workspace, books: { read: () => full, update: <T>(fn: (x: StoreBooks) => T) => fn(full) }, progress: () => {}, log: () => {} });
+    await matchStep({ ws: { paths: { inbox: '/nowhere' } } as Workspace, books: { read: () => full, update: <T>(fn: (x: StoreBooks) => T) => fn(full) }, progress: () => {}, log: () => {}, ...(model ? { ask: async () => '{}' } : {}) });
     return full;
   };
-  const app = await run('classify');
+  const app = await run('classify', true);
   assert.deepEqual(app.receipts.find((r) => r.id === 'card')?.cardLines, LINES);
   assert.deepEqual(app.mappings.filter((m) => m.line !== undefined).map((m) => [m.receiptId, m.line]), [['linkly', 0], ['hotel', 2]]);
   assert.deepEqual(app.journalEntries, [], 'booked again by the booking step, by its lines');
-  assert.equal((await run('manual')).journalEntries.length, 1, 'a person\'s booking is hers');
+  assert.equal((await run('manual', true)).journalEntries.length, 1, 'a person\'s booking is hers');
+  const noModel = await run('classify', false);
+  assert.equal(noModel.mappings.filter((m) => m.line !== undefined).length, 2, 'linked all the same');
+  assert.equal(noModel.journalEntries.length, 1, 'never taken away for a booking nobody can make (r8f-41)');
 });
 
 test('by hand: a bill linked to a free line, refused on a taken or missing one; «Lösen» frees the line, its undo links it again, and code never links it back', () => {
