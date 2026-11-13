@@ -8,6 +8,9 @@ import type { StatementImport } from '../types/index.js';
 import type { Refusal } from '../types/refusal.js';
 import type { Made, Took } from './summary.js';
 
+/** The workflow whose approval every booking by the firm's rules or the model honours, wherever it starts (#413). */
+export const BOOKING_WORKFLOW = 'booking';
+
 /** Route segments of /automation/<x>: no workflow may take these ids (load.ts checks). */
 export const RESERVED_WORKFLOW_IDS = ['runs', 'map', 'queue', 'tasks'] as const;
 
@@ -514,6 +517,8 @@ export interface AutomationView {
   limits: { ai: number; other: number };
   /** Workflows whose company part changed since it was switched on, with the cases checked against it. */
   pending: PendingVersion[];
+  /** Providers' reports a closed drop kept while «Buchen» waited for «Einschalten» (#413): taken once it books again. */
+  reportsWaiting?: string[];
 }
 
 export interface PendingVersion {
@@ -521,6 +526,8 @@ export interface PendingVersion {
   /** The workspace files of the company's part. */
   files: string[];
   checks: CaseCheck[];
+  /** Its company overlay does not load (#413): `files` begins with it; it cannot be switched on until it is fixed or removed. */
+  broken?: string;
 }
 
 /** One case of a check: its original run, the dry run on the waiting version, and whether they agree. */
@@ -583,4 +590,4 @@ export type AutomationCommand =
 
 export type CommandResult =
   | { ok: true; run?: string; runs?: string[] }
-  | { ok: false; refusal: 'not-runnable' | 'not-found' | 'not-waiting' | 'unknown-outcome' | 'not-approved' | 'illegal' | 'no-cases' | 'period-filed'; detail?: string };
+  | { ok: false; refusal: 'not-runnable' | 'not-found' | 'not-loadable' | 'not-waiting' | 'unknown-outcome' | 'not-approved' | 'illegal' | 'no-cases' | 'period-filed'; detail?: string };

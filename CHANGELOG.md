@@ -132,6 +132,19 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- «Buchen» waiting for «Einschalten» holds every booking by the firm's rules or the AI (#413): a
+  rule or business file changed outside the app's own controls (by hand, by git, an AI's draft not
+  kept) no longer acts on the next drop or mail. The inbox still reads, matches and links, but books
+  nothing; a provider's report waits in its row, and is kept for «Einschalten» when the window
+  closes; «Automatisch buchen» for all, «Neu buchen», `npm run classify` and a rule kept meanwhile
+  book nothing either. A customer's or an authority's file and evidence.guide.yaml count as the
+  firm's rules too (files there at the update make nothing wait; one written after it waits).
+  `npm run classify` books nothing on a workspace the app has not opened on this computer yet. Wherever she tries, one
+  sentence says what changed, why the app waits and what ends it, with «Einschalten» right there;
+  switched on, the app books what only waited for it (the payments by an inbox run, the report taken
+  again). Her own answers and links, and a
+  merchant name the app learns from confirmed links, make nothing wait: a new firm starts switched
+  on and its first drop books as before.
 - **⚠ figures** A supplier's refund without a credit note takes the code of the purchase it refunds
   with a minus (#357, owner's decision 2026-11-13; MWSTG Art. 41 Abs. 2): -I81 for an I81 purchase,
   -I0 for one without input tax, a part at the purchase's rate. Before, a company rule booked and

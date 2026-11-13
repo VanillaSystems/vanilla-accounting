@@ -14,7 +14,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, rmSync, readdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { APP_FOLDER, appFolderIn } from '../workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT, appFolderIn } from '../workspace/workspace.js';
+import { loadWorkflows } from './load.js';
+import { BOOKING_WORKFLOW } from './model.js';
 import { demoHome, resetDemoCopy } from '../workspace/demo-copy.js';
 import { parse } from 'yaml';
 import type { Workspace } from '../workspace/workspace.js';
@@ -23,6 +25,9 @@ import type { ChangeEffect } from '../saving/model.js';
 import type { CaseCheck, Run, WorkflowDecl } from './model.js';
 
 type Ws = Pick<Workspace, 'paths'>;
+
+/** The booking's id, declared in ./model.js (#413), named here too for the callers of the switch. */
+export { BOOKING_WORKFLOW };
 
 /** Fields that apply at once: changing them never needs switching on. */
 const APPLIES_NOW: Record<'workflow' | 'step', readonly string[]> = {
@@ -67,6 +72,20 @@ export function companyFiles(w: WorkflowDecl, root: string): string[] {
   return [join(root, 'workflows', w.id), ...citations(w).map((c) => join(root, c))].flatMap(files).map((f) => relative(root, f)).sort();
 }
 
+/**
+ * A workflow whose company overlay does not load (#413): it is in the load's `problems`, not among
+ * its workflows. It waits, never runs as switched on: its files, the overlay's first, then what the
+ * app's declaration cites. Undefined when it loads, or when it has no overlay (the app's own
+ * declaration is the app's to fix).
+ */
+export function brokenPart(id: string, root: string, problems: ReadonlyArray<{ workflow: string }>): string[] | undefined {
+  if (!problems.some((p) => p.workflow === id)) return undefined;
+  const overlay = files(join(root, 'workflows', id)).map((f) => relative(root, f)).sort();
+  if (!overlay.length) return undefined;
+  const app = loadWorkflows(APP_ROOT).workflows.find((x) => x.id === id);
+  return [...overlay, ...(app ? companyFiles(app, root).filter((f) => !overlay.includes(f)) : [])];
+}
+
 /** The hash of the company's part and of each of its files, or undefined when it has none. */
 export function companyPart(w: WorkflowDecl, root: string): { hash: string; files: Record<string, string> } | undefined {
   // A file holding only what applies at once (a schedule) is no part of the behaviour.
@@ -76,7 +95,14 @@ export function companyPart(w: WorkflowDecl, root: string): { hash: string; file
   return { hash: createHash('sha256').update(JSON.stringify(files)).digest('hex').slice(0, 16), files };
 }
 
-interface Approved { part: string; files?: Record<string, string>; at: string; baseline?: boolean }
+/**
+ * `cited`: the paths the company part covered when it was switched on (its overlay and what its AI
+ * steps cite). When the app's update widens what a workflow cites (#413), the record is migrated
+ * once, at the first check that meets it: the files under the newly cited paths that exist then
+ * are taken as switched on, as the baseline takes a workspace's files, and `cited` is written. Every
+ * file under them written or changed after that waits, as any other.
+ */
+interface Approved { part: string; files?: Record<string, string>; at: string; baseline?: boolean; cited?: string[] }
 type Approvals = Record<string, Approved>;
 
 export function approvalsPath(ws: { paths: { root: string } }): string {
@@ -92,6 +118,27 @@ export function resetDemo(name: string): string {
   rmSync(approvalsPath({ paths: { root: appFolderIn(dir) ?? join(dir, APP_FOLDER) } }), { force: true });
   return resetDemoCopy(name);
 }
+
+/** What a workflow's company part covers: its overlay and what its AI steps cite. */
+const coverOf = (w: WorkflowDecl): string[] => [`workflows/${w.id}`, ...citations(w)];
+
+/** What the app's own declaration of a workflow covers, without any company overlay (which may itself wait to be switched on). */
+function appCoverOf(w: WorkflowDecl): string[] {
+  const app = loadWorkflows(APP_ROOT).workflows.find((x) => x.id === w.id);
+  return app ? coverOf(app) : [`workflows/${w.id}`];
+}
+
+/**
+ * What a record written before `cited` existed covered (before #413 the booking cited its guide and
+ * the suppliers' files only; it reads the customers', the authorities' and evidence.guide.yaml since).
+ * Every other workflow's coverage is as it was.
+ */
+const COVERED_BEFORE: Record<string, string[]> = {
+  [BOOKING_WORKFLOW]: [`workflows/${BOOKING_WORKFLOW}`, 'knowledge/rules/booking.guide.yaml', 'knowledge/suppliers'],
+};
+
+const hashOf = (files: Record<string, string>): string =>
+  createHash('sha256').update(JSON.stringify(Object.fromEntries(Object.keys(files).sort().map((p) => [p, files[p]])))).digest('hex').slice(0, 16);
 
 function read(ws: Ws): Approvals | undefined {
   try { return JSON.parse(readFileSync(approvalsPath(ws), 'utf8')) as Approvals; } catch { return undefined; }
@@ -109,9 +156,33 @@ export interface Switch {
 }
 
 export function openSwitch(ws: Ws, now = () => new Date()): Switch {
-  const pending = (w: WorkflowDecl) => {
+  /**
+   * The record as switched on, migrated once when the workflow cites more than it covered (see
+   * `cited`): written before anything else is compared. A file of an approvals record without a
+   * record for a workflow that cites more since is such a record too (before #413 a workflow without
+   * a company part got none).
+   */
+  const recordOf = (w: WorkflowDecl): Approved | undefined => {
+    const all = read(ws);
+    const was = all?.[w.id] ?? (all && COVERED_BEFORE[w.id] ? { part: '', files: {}, at: now().toISOString() } : undefined);
+    if (!was) return undefined;
+    // Widened only by what the app's own declaration cites: a path a company overlay adds is covered
+    // once she switches that overlay on (approve), and every file under it is listed until then.
+    const app = appCoverOf(w);
+    const covered = was.cited ?? COVERED_BEFORE[w.id] ?? app;
+    const fresh = app.filter((c) => !covered.includes(c));
+    if (was.cited && !fresh.length) return was;
     const part = companyPart(w, ws.paths.root);
-    const on = read(ws)?.[w.id];
+    const files = { ...was.files };
+    for (const [p, h] of Object.entries(part?.files ?? {})) if (!(p in files) && fresh.some((c) => within(p, c)) && !covered.some((c) => within(p, c))) files[p] = h;
+    const changed = Object.keys(files).length !== Object.keys(was.files ?? {}).length;
+    const next: Approved = { ...was, files, cited: [...new Set([...covered, ...app])], ...(changed || !was.part ? { part: Object.keys(files).length ? hashOf(files) : '' } : {}) };
+    write(ws, { ...all, [w.id]: next });
+    return next;
+  };
+  const pending = (w: WorkflowDecl) => {
+    const on = recordOf(w);
+    const part = companyPart(w, ws.paths.root);
     if (!part || on?.part === part.hash) return undefined;
     const was = on?.files ?? {};
     const changed = [...new Set([...Object.keys(part.files), ...Object.keys(was)])].filter((p) => part.files[p] !== was[p]).sort();
@@ -123,7 +194,7 @@ export function openSwitch(ws: Ws, now = () => new Date()): Switch {
     approve(w) {
       const part = companyPart(w, ws.paths.root);
       if (!part) return;
-      write(ws, { ...read(ws), [w.id]: { part: part.hash, files: part.files, at: now().toISOString() } });
+      write(ws, { ...read(ws), [w.id]: { part: part.hash, files: part.files, at: now().toISOString(), cited: coverOf(w) } });
     },
   };
 }
@@ -146,8 +217,9 @@ export function baseline(ws: Ws, workflows: WorkflowDecl[], now = () => new Date
   if (existsSync(approvalsPath(ws))) return false;
   const a: Approvals = {};
   for (const w of workflows) {
+    // Also a workflow without a company part yet: its record says what it covers, so a file added later waits.
     const part = companyPart(w, ws.paths.root);
-    if (part) a[w.id] = { part: part.hash, files: part.files, at: now().toISOString(), baseline: true };
+    a[w.id] = { part: part?.hash ?? '', files: part?.files ?? {}, at: now().toISOString(), baseline: true, cited: coverOf(w) };
   }
   write(ws, a);
   return true;
