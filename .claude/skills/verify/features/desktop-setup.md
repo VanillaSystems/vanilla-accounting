@@ -1,9 +1,9 @@
 # Desktop: set up new books
 
-`Neue Buchhaltung anlegen` asks about the company (preset, name, UID, owner, what it does,
-language, folder), how it works (legal form, VAT register, method, settlement, period, fiscal
-year, start, what it sells, foreign customers, imports, staff, private payments, private use,
-payouts) and its bank accounts, then writes the books folder
+`Neue Buchhaltung anlegen` asks about the company (preset, name, owner, language, folder; no UID
+since #452), how it works (legal form, VAT register, method, settlement, period, what it sells,
+imports, staff; the rest takes the preset's or its `later` answer, assumed in the books) and its
+bank accounts, with `[data-progress]` «n von m Fragen beantwortet» in the foot, then writes the books folder
 (`~/Documents/Buchhaltung <year>/`, made unique with ` 2`, a git repository with `vanilla-accounting/`, manifest
 `belege.workspace.yaml`) and opens it: Belege of the current quarter, with the AI sidebar open wide on
 the setup conversation (`Einrichtung`, `Hallo <owner>. …`, features/setup.md).
@@ -16,8 +16,8 @@ the setup conversation (`Einrichtung`, `Hallo <owner>. …`, features/setup.md).
   she clicks one, and submitting without them marks `.st-q[data-q=vatMethod|basis].err` with «Bitte jede Frage beantworten.»
   Each has a third button `[data-answer=no-vat]` «Wir rechnen keine MWST ab» with `[data-no-vat-hint]` under it (#347):
   it sets «Im MWST-Register eingetragen?» to `nein` and both questions disappear; the books get `company.vat: { registered: false }`.
-- `ds-validate`: UID (required) and IBAN check digits (`«…» ist keine gültige UID`, `ist keine IBAN`);
-  spaces in either are accepted. On submit the page jumps to the first error: `Bitte oben prüfen: …
+- `ds-validate`: name and owner required; IBAN check digits (`ist keine IBAN`), spaces accepted. No
+  UID field: Firma › Firma shows «nicht hinterlegt: …» with «Hinzufügen» until one is entered. On submit the page jumps to the first error: `Bitte oben prüfen: …
   Die App ist zur ersten Stelle gesprungen.`, or `Bitte jede Frage beantworten.` Bank refusals
   (currency, ledger account class, account or bank twice) come from the server.
 - `ds-unsupported`: answers the app cannot handle say so in place and disable the button: `monatlich`
@@ -44,14 +44,14 @@ the end.
 ```bash
 node $A 09-first "await clickText('Neue Buchhaltung erstellen')"   # no AI on the VM: the form; with one: clickText('Ohne KI einrichten')
 node $A 10-setup "await fill('Firmenname','Malerei Huber GmbH')" \
-  "await fill('UID', process.env.PERSONA_UID)" "await fill('Inhaber','Thomas Huber')" \
-  "await nth(5,'Raiffeisen')" "await nth(8, process.env.PERSONA_IBAN_SPACED)"
+  "await fill('Inhaber','Thomas Huber')" \
+  "await nth(3,'Raiffeisen')" "await nth(6, process.env.PERSONA_IBAN_SPACED)"
 node $A 11-created "await clickText('Buchhaltung anlegen','button')" "await wait(5000)"   # URL ends /receipts
 $V sh 'cat ~/Documents/"Buchhaltung 2026"/vanilla-accounting/belege.workspace.yaml'
 ```
 
-Inputs without labels (the bank row) go by index: 0 name, 1 UID, 2 owner, 3 what it does,
-4 folder, 5 bank, 6 currency, 7 account, 8 IBAN (with Saldosteuersatz chosen, six rate inputs come
+Inputs without labels (the bank row) go by index: 0 name, 1 owner, 2 folder, 3 bank, 4 currency,
+5 account, 6 IBAN (indexes since #452, not driven yet) (with Saldosteuersatz chosen, six rate inputs come
 before the bank row). Proof: the URL `/receipts`, the setup sidebar, the manifest's `company:` and
 `bankAccounts:`.
 

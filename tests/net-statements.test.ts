@@ -80,7 +80,7 @@ for (const [demo, kind] of [['demo', 'effective'], ['demo-consulting', 'effectiv
     const xml = (entries: JournalEntry[], key: QuarterKey) => {
       const { from, to } = derivePeriod(key)!;
       const { ziffern, payable } = vat().figures(entries, key, adjustments);
-      return ech0217Xml({ uid: ws.company.uid, organisationName: ws.company.name, period: { key, from, to }, ziffern, payable, form: vat().form, rateRows: vat().rateRows, method: filingMethod(), generationTime: '2026-10-16T00:00:00' }).xml;
+      return ech0217Xml({ uid: ws.company.uid!, organisationName: ws.company.name, period: { key, from, to }, ziffern, payable, form: vat().form, rateRows: vat().rateRows, method: filingMethod(), generationTime: '2026-10-16T00:00:00' }).xml;
     };
     for (const year of new Set(books.journalEntries.map((e) => e.date.slice(0, 4)))) {
       for (const key of [...filingKeys(year), year]) {

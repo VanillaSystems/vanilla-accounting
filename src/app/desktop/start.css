@@ -50,6 +50,7 @@
 .st-bank { display: grid; grid-template-columns: minmax(0, 1.4fr) 64px 90px minmax(0, 2fr) 32px; gap: 8px; align-items: end; margin: 10px 0; }
 .st-bankerr { grid-column: 1 / -1; font-size: 12px; margin: 0; }
 .st-foot { display: flex; justify-content: flex-end; gap: 8px; padding-top: 16px; border-top: 1px solid var(--line); }
+.st-foot [data-progress] { margin: 0 auto 0 0; align-self: center; }
 .st-rates { margin: 10px 0 4px 0; }
 .st-rates .st-row { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 8px; margin: 6px 0; }
 .st-rates.err .st-qhd b { color: var(--warn, inherit); }

@@ -9,7 +9,7 @@
  */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BANKS } from '../../workspace/banks.js';
-import { NO_VAT, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, hasWhere, noVatHint, offeredAnswers, offeredLabel, optionOf, unsteered, unusualPeriod, type QuestionKey } from '../../workspace/setup.js';
+import { NO_VAT, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, hasWhere, inSetup, noVatHint, offeredAnswers, offeredLabel, optionOf, unsteered, unusualPeriod, type QuestionKey } from '../../workspace/setup.js';
 import type { BankSpec } from '../../workspace/create.js';
 import type { NetRate } from '../../workspace/vat-setup.js';
 import { DRAFT_PHASES, assumedOf, draftProgress, kindOf, draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView, type StepMark } from '../../onboarding/draft.js';
@@ -36,7 +36,7 @@ const valueLabel = (key: QuestionKey, v: QuestionValue | undefined): string => {
   const values = list(v);
   return values.length ? values.map((x) => tData(`desktop.q.${key}.${x}`)).join(', ') : t('onboarding.draft.none');
 };
-const firmLine = (f: Firm) => `${f.name} · ${f.uid} · ${f.owner}`;
+const firmLine = (f: Firm) => [f.name, f.uid, f.owner].filter(Boolean).join(' · ');
 const ratesLine = (rates: readonly NetRate[]) => rates.map((r) => `${r.rate} %${r.label ? ` ${r.label}` : ''}${r.activityId ? ` (${r.activityId})` : ''}`).join(' · ');
 const banksLine = (banks: readonly BankSpec[]) => banks.map((b) => `${b.bank} ${b.currency}${b.iban ? ` · ${b.iban}` : ''}`).join(' · ');
 
@@ -323,14 +323,14 @@ function QuestionStep({ step, draft, busy, send, change, fromText, turns }: { st
 }
 
 function FirmCard({ initial, busy, send }: { initial?: Partial<Firm>; busy: boolean; send: Send }) {
-  const [f, setF] = useState<Firm>({ name: '', uid: '', owner: '', ...initial });
+  // Her name and her owner: the UID is not asked (#452); one her words gave stays with the firm.
+  const [f, setF] = useState<Firm>({ name: '', owner: '', ...initial });
   const set = (k: keyof Firm) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
   return (
     <form className="obcard obform" noValidate onSubmit={(e) => { e.preventDefault(); void send({ step: 'firm', value: f }); }}>
       <label><span>{t('desktop.name')}</span><input name="name" value={f.name} placeholder={t('desktop.namePh')} onChange={set('name')} autoFocus={!initial?.name} /></label>
-      <label><span>{t('desktop.uid')}</span><input name="uid" className="mono" value={f.uid} placeholder={t('desktop.uidPh')} onChange={set('uid')} /></label>
       <label><span>{t('desktop.owner')}</span><input name="owner" value={f.owner} onChange={set('owner')} /></label>
-      <div className="actions"><button type="submit" className="btn primary" data-act="firm-next" disabled={busy || !f.name.trim() || !f.uid.trim() || !f.owner.trim()}>{t('onboarding.draft.next')}</button></div>
+      <div className="actions"><button type="submit" className="btn primary" data-act="firm-next" disabled={busy || !f.name.trim() || !f.owner.trim()}>{t('onboarding.draft.next')}</button></div>
     </form>
   );
 }
@@ -384,9 +384,13 @@ function BanksCard({ initial, currency, busy, send }: { initial?: BankSpec[]; cu
   );
 }
 
-/** Everything the books are created with, each with «Ändern»; the answers a preset gave are changed here. */
+/**
+ * Everything the books are created with, each with «Ändern»; the answers a preset gave are changed here.
+ * A question the setup does not ask (#452) is not listed: the books show it as assumed, to check there;
+ * one her words answered stands, without «Ändern», which would take it back to its `later` answer unasked.
+ */
 function Review({ draft, root, busy, change, onCreate, turns }: { draft: SetupDraft; root: string; busy: boolean; change: StepProps['change']; onCreate(): void; turns: ReactNode }) {
-  const questions = QUESTION_ORDER.filter((k) => asked(k, draft.answers));
+  const questions = QUESTION_ORDER.filter((k) => asked(k, draft.answers) && (inSetup(k) || draft.fromText?.includes(k)));
   const lang = LOCALES.find((l) => l.code === draft.language)?.name ?? draft.language;
   const marked = (m: StepMark) => !!draft.fromText?.includes(m);
   return (
@@ -404,7 +408,7 @@ function Review({ draft, root, busy, change, onCreate, turns }: { draft: SetupDr
             {draft.firm ? <><dt>{t('onboarding.draft.firmLabel')}</dt><dd>{firmLine(draft.firm)} <FromText on={marked('firm')} /></dd><dd /></> : null}
             {draft.preset ? <><dt>{t('desktop.preset')}</dt><dd data-kind={kindOf(draft)?.kind}>{kindLine(draft)} <FromText on={marked('preset')} /></dd><dd /></> : null}
             {questions.map((k) => (
-              <ReviewRow key={k} label={tData(`desktop.q.${k}.ask`)} value={k === 'vatRegistered' && draft.answers[k] === 'no' ? t('onboarding.draft.noVat') : valueLabel(k, draft.answers[k])} fromText={marked(k)} assumed={<Assumed draft={draft} k={k} />} busy={busy} onChange={() => change(k, { step: 'question', key: k, value: null }, draft.answers[k])} />
+              <ReviewRow key={k} label={tData(`desktop.q.${k}.ask`)} value={k === 'vatRegistered' && draft.answers[k] === 'no' ? t('onboarding.draft.noVat') : valueLabel(k, draft.answers[k])} fromText={marked(k)} assumed={<Assumed draft={draft} k={k} />} busy={busy} onChange={inSetup(k) ? () => change(k, { step: 'question', key: k, value: null }, draft.answers[k]) : undefined} />
             ))}
             {draft.netRates?.length ? <><dt>{t('desktop.netRates')}</dt><dd>{ratesLine(draft.netRates)} <FromText on={marked('netRates')} /></dd><dd /></> : null}
             {draft.banks ? <><dt>{t('desktop.banks')}</dt><dd>{banksLine(draft.banks)} <FromText on={marked('banks')} /></dd><dd /></> : null}
@@ -418,6 +422,6 @@ function Review({ draft, root, busy, change, onCreate, turns }: { draft: SetupDr
   );
 }
 
-const ReviewRow = ({ label, value, fromText, assumed, busy, onChange }: { label: string; value: string; fromText: boolean; assumed: ReactNode; busy: boolean; onChange(): void }) => (
-  <><dt>{label}</dt><dd>{value} <FromText on={fromText} />{assumed}</dd><dd><button type="button" className="linkbtn" disabled={busy} onClick={onChange}>{t('onboarding.change')}</button></dd></>
+const ReviewRow = ({ label, value, fromText, assumed, busy, onChange }: { label: string; value: string; fromText: boolean; assumed: ReactNode; busy: boolean; onChange?: () => void }) => (
+  <><dt>{label}</dt><dd>{value} <FromText on={fromText} />{assumed}</dd><dd>{onChange ? <button type="button" className="linkbtn" disabled={busy} onClick={onChange}>{t('onboarding.change')}</button> : null}</dd></>
 );

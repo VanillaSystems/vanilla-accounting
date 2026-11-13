@@ -19,6 +19,8 @@ import { readManifest } from '../workspace/manifest.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, WorkspaceRefusal, appFolderIn, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
 import { bundledDemo, nameDemoCopy } from '../workspace/demo-copy.js';
 import { assumedOf, parseAssumed, stillAssumed } from '../onboarding/model.js';
+import { withLater } from '../workspace/setup.js';
+import { assumedLater } from '../onboarding/hand.js';
 import { seedAssumed } from '../onboarding/store.js';
 import { beginDraft, createFromDraft, draftView, patchDraft, readDraft } from '../onboarding/draft-store.js';
 import type { SetupBegun, SetupDraftView } from '../onboarding/draft.js';
@@ -350,11 +352,13 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
       }
       const created = await createWorkspace(body);
       // What the kind of firm answered and she never touched (#385): kept only where the books took it.
+      // The answers the setup does not ask (#452) took their `later` answer: assumed too, so the books show them to check.
       if (!created.existed) {
         // She created the workspace and its rules: switched on as it is (#413).
         switchOnCreated(workspaceAt(created.root));
         const said = parseAssumed(body.assumed);
-        seedAssumed(workspaceAt(created.root), said && assumedOf(stillAssumed(said, body.answers).map((a) => a.key), body.answers, said.by));
+        const { answers, filled } = withLater(body.answers);
+        seedAssumed(workspaceAt(created.root), assumedOf([...stillAssumed(said, answers).map((a) => a.key), ...assumedLater(filled)], answers, said?.by));
       }
       res.json(await openBooks(created.root));
     } catch (e) { refuse(res, e); }

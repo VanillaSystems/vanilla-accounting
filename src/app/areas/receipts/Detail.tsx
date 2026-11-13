@@ -38,6 +38,7 @@ import { FindPair, NearList, madeBy } from './FindPair.js';
 import { offersInBooks } from '../../../intake/near-pairs.js';
 import { ByHand, VatFields } from './VatFields.js';
 import { TwinNotice } from './TwinNotice.js';
+import { UidOffer } from './UidOffer.js';
 import { ReportCorrections } from './ReportCorrections.js';
 import { ReportHeld } from './ReportHeld.js';
 import { Paper } from './Paper.js';
@@ -211,6 +212,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
         </div>
       )}
       <TwinNotice {...props} />
+      {canEdit && <UidOffer v={v} l={l} nav={nav} />}
       {card && <div className="notice" data-testid="card-statement">{cardStatementLine(card)}</div>}
       {edit && !v.links.length && cardLineOffers(r, props.books).map((o) => (
         <div className="notice" key={`${o.payment}-${o.index}`} data-testid="card-line-offer">

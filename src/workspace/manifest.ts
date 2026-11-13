@@ -44,14 +44,15 @@ export function parseManifest(source: string, path: string): Manifest {
 
   const c = (raw.company ?? {}) as Record<string, unknown>;
   const text = (v: unknown, where: string): string => (typeof v === 'string' && v.trim() ? v : fail(`${where} must be a non-empty text`));
-  const uid = text(c.uid, 'company.uid');
-  if (!/^CHE-\d{3}\.\d{3}\.\d{3}$/.test(uid)) fail(`company.uid "${uid}" must look like CHE-###.###.###`);
+  // Absent until the person enters it (#452); one that stands is a UID.
+  const uid = c.uid === undefined ? undefined : text(c.uid, 'company.uid');
+  if (uid !== undefined && !/^CHE-\d{3}\.\d{3}\.\d{3}$/.test(uid)) fail(`company.uid "${uid}" must look like CHE-###.###.###`);
   const vat = parseVatSetup(c.vat, fail);
   if (c.language !== undefined && !appLanguages().includes(c.language as string)) fail(`company.language must be one of ${appLanguages().join(', ')}`);
   if (c.legalForm !== undefined && !LEGAL_FORMS.includes(c.legalForm as LegalForm)) fail(`company.legalForm must be one of ${LEGAL_FORMS.join(', ')}`);
   const company: Company = {
     name: text(c.name, 'company.name'),
-    uid: uid as Uid,
+    ...(uid === undefined ? {} : { uid: uid as Uid }),
     owner: text(c.owner, 'company.owner'),
     ...(c.business === undefined ? {} : { business: text(c.business, 'company.business') }),
     ...(c.legalForm === undefined ? {} : { legalForm: c.legalForm as LegalForm }),

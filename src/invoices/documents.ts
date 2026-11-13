@@ -18,7 +18,7 @@ export function senderFor(ctx: InvoicingContext, currency: InvoiceCurrency): Omi
   return {
     name: company.name,
     address: company.address ?? { postcode: '', town: '', country: 'CH' },
-    uid: company.uid,
+    uid: company.uid ?? '',
     ...(payTo ? { payTo } : {}),
   };
 }
