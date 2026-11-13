@@ -288,6 +288,32 @@ Two markers flag an entry you must read before you update:
   stays under her newest message, also when the words took a step back. In the books the rail shows
   the topics «n von 4 besprochen» counts («Partner und Wissen» comes with the first bookings), and
   the chip of the object open stands on the first message about it, not again on each next one.
+- Hand booking without an AI (#382): a payment whose text names the number of her own invoice in
+  the app («Rechnung 2026-031») opens with «Deine Rechnung 2026-031 gefunden» and proposes from
+  that invoice, even when its amount is not read. The form proposes a VAT code only for what the
+  invoice proves: a Swiss rate it shows gives that rate (a mixed invoice a line per rate), a place
+  of supply outside Switzerland and Liechtenstein after «Leistungsort», the country written out in
+  full as the place itself («Leistungsort Deutschland», «Konstanz, Deutschland»), gives V0-E; on
+  the net tax rate method F1 only where it proves a domestic sale. A bare label, a place at home,
+  a street or other words around a country, «inkl. MwSt.», a foreign VAT or a statement without a
+  place propose no code, and
+  the form asks «War das ein Verkauf mit MWST?»; her answer there books the lines and sets the
+  code exactly as the question card's answer does, with «Immer so?» after it. «Verknüpfen und
+  buchen» links the invoice and books in one click (also when the run linked it already and its VAT
+  is unclear: the answer is taken, the link kept; with several invoices only a line without a code
+  is asked about); across periods on the agreed basis it is only
+  linked. Revenue goes up to what is open of the invoice, the rest is a line of its own; an
+  instalment reads the VAT off the invoice the first payment holds. Before, such a payment opened
+  with V81 «keine Rechnung verknüpft» and a sale abroad was booked with Swiss VAT; it never does
+  now when the text names an invoice of hers. Money from a foreign IBAN or in a foreign currency
+  without a document is asked too. The amount field stays readable beside a proposal line (it had
+  shrunk to two characters). A wage follows her last booking of it, else the wage account without
+  a VAT code (setup.yaml `wages`; none where the books carry wages with deductions); «Spesen»
+  lists Bankspesen first and «Farbe» finds the material account; the account list puts first what
+  the linked receipt's lines name. A payment out with its receipt linked proposes the account of
+  her own last booking of that business (a rule's too) with the receipt's rate, and says so («wie
+  deine letzte Buchung bei … am …»); it is booked only by her click. A hand task says «keine Regel
+  der Firma passte auf diese Zahlung».
 - Files dropped on Kontoauszüge go through «Dateien hinzufügen» as on any page (#361): every file
   gets its row, the statement under «Kontoauszüge» with «Auszug öffnen» and the closing sentence on
   its payments, and closing the window opens that statement. Before, the statement was read in

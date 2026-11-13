@@ -123,7 +123,7 @@ accounts:
   - { number: "3901", name: Bestandesänderungen fertige Erzeugnisse, type: revenue, line: bestandesaenderungen, profiles: [goods] }
 
   # 4 Aufwand für Material, Handelswaren, Dienstleistungen und Energie
-  - { number: "4000", name: Materialaufwand Produktion, type: expense, line: materialaufwand, profiles: [goods], hints: [Material, Rohmaterial] }
+  - { number: "4000", name: Materialaufwand Produktion, type: expense, line: materialaufwand, profiles: [goods], hints: [Material, Rohmaterial, Farbe, Lack] }
   - { number: "4200", name: Handelswarenaufwand, type: expense, line: materialaufwand, profiles: [goods] }
   - { number: "4400", name: Aufwand für bezogene Dienstleistungen, type: expense, line: materialaufwand, hints: [Fremdarbeit, Subunternehmer, Fremdleistung] }
   - { number: "4500", name: Energieaufwand zur Leistungserstellung, type: expense, line: materialaufwand, profiles: [goods] }
@@ -171,7 +171,7 @@ accounts:
   - { number: "6800", name: Abschreibungen auf Sachanlagen, type: expense, line: abschreibungen }
   - { number: "6840", name: Zahlungsverkehrsgebühren, type: expense, line: finanzerfolg }
   - { number: "6900", name: Finanzaufwand, type: expense, line: finanzerfolg }
-  - { number: "6940", name: Bankspesen, type: expense, line: finanzerfolg, hints: [Kontoführung, Bankgebühr] }
+  - { number: "6940", name: Bankspesen, type: expense, line: finanzerfolg, hints: [Kontoführung, Bankgebühr, Spesen] }
   - { number: "6950", name: Finanzertrag, type: revenue, line: finanzerfolg }
   - { number: "6960", name: Kursdifferenzen, type: expense, line: finanzerfolg }
 

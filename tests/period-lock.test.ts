@@ -110,6 +110,9 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/journal-entries', body: { date: '2026-08-01', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'zur geschlossenen Zahlung', transactionRef: 'C1' }, status: 403 },
   { method: 'POST', path: '/api/journal-entries/classify/C1', status: 403 },
   { method: 'POST', path: '/api/transactions/C1/entries', body: { lines: [{ accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'von Hand' }] }, status: 403 },
+  // The hand form's booking that links her own invoice, and its sale question answered on the form (#382): never in a closed period.
+  { method: 'POST', path: '/api/transactions/C1/entries', body: { lines: [{ accountDebit: '1020', accountCredit: '3400', amount: 10, description: 'von Hand' }], links: ['ro'] }, status: 403 },
+  { method: 'POST', path: '/api/transactions/C1/sale', body: { by: 'Anna', choice: 'saleDomestic', lines: [{ accountDebit: '1020', accountCredit: '3400', amount: 10, description: 'von Hand' }], links: [] }, status: 403 },
   { method: 'POST', path: '/api/transactions/C1/attach', body: { ref: 'M2026-002' }, status: 403 },
   { method: 'PATCH', path: '/api/config', body: { closedThrough: '' }, status: 404 },
   { method: 'POST', path: '/api/year-close/2026/entries', body: { date: '2026-06-30', accountDebit: '6800', accountCredit: '1520', amount: 100, description: 'rückdatiert' }, status: 403 },

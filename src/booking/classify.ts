@@ -200,6 +200,10 @@ export interface ClassifyContext extends ClassifyPromptContext {
   bankCharges?: BankCharges;
   /** Whether a fee row is one the bank itself coded as its charge (src/books/bank-import.ts bankCodedFee); absent: none is. */
   bankCoded?: (tx: BankTransaction) => boolean;
+  /** The firm's wage account (setup.yaml `wages`) when its chart has it as an expense account: the hand form proposes it for a wage (#382). */
+  wageAccount?: string;
+  /** The account a wage's deductions are booked on (setup.yaml `wages.deductions`): books that carry entries on it book wages with their deductions. */
+  wageDeductions?: string;
 }
 
 /** At most this many casebook examples in one call: the best of each transaction first. */
@@ -259,12 +263,16 @@ export function chartOf(ws: Pick<Workspace, 'paths'>): string {
  * chart and its types (accounts.json; a prior-year export's numbers by their class), and which fee
  * rows the bank coded as its charges, read from its statement files.
  */
-function bankFeeContext(ws: Workspace, chartOfAccounts: string): Pick<ClassifyContext, 'bankCharges' | 'bankCoded'> {
+function bankFeeContext(ws: Workspace, chartOfAccounts: string): Pick<ClassifyContext, 'bankCharges' | 'bankCoded' | 'wageAccount' | 'wageDeductions'> {
   const accounts = existsSync(ws.paths.accounts)
     ? JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as Array<{ number: string; type?: string }>
     : [...chartNames(chartOfAccounts).keys()].map((number) => ({ number, type: chart().typeOf(number) }));
   const charges = bankChargesOf(accounts);
-  return { ...(charges && { bankCharges: charges }), bankCoded: bankCodedFee(ws) };
+  // The wage account by the same chart: the hand form's proposal for a wage (#382).
+  const wage = setup().wages?.account;
+  const wageAccount = wage && accounts.some((a) => a.number === wage && (a.type ?? chart().typeOf(a.number)) === 'expense') ? wage : undefined;
+  const wageDeductions = setup().wages?.deductions;
+  return { ...(charges && { bankCharges: charges }), bankCoded: bankCodedFee(ws), ...(wageAccount && { wageAccount }), ...(wageDeductions && { wageDeductions }) };
 }
 
 /**

@@ -44,6 +44,8 @@ export interface AccountContext<T extends string = string> {
   words?: Partial<Record<T, readonly string[]>>;
   /** The words the standard chart gives an account besides its name (modules/<country>/accounts.yaml `hints`), else the account's own. */
   hints?(number: string): readonly string[] | undefined;
+  /** What the linked receipt's lines say (#382): before anything is typed, the accounts whose hints those words name come first, the most named first. */
+  suggest?: readonly string[];
 }
 
 /**
@@ -75,6 +77,9 @@ export function rankAccounts<T extends string>(accounts: readonly Account[], que
   const preferred = (a: Account) => (ctx.prefer !== undefined && ctx.typeOf(a.number) === ctx.prefer ? 0 : 1);
   const standing = (a: Account) => { const i = ctx.defaults?.indexOf(a.number) ?? -1; return i < 0 ? Number.MAX_SAFE_INTEGER : i; };
   if (/^\d+$/.test(q)) return filterAccounts(accounts, query);
+  // Nothing typed: the accounts the receipt's words name by their hints first (each word folded, as a typed one is).
+  const said = !q && ctx.suggest?.length ? ctx.suggest.map(foldAll) : undefined;
+  const saidBy = (a: Account) => (said ? -said.filter((w) => hinted([w], ctx.hints?.(a.number) ?? a.hints)).length : 0);
   const classes = new Set<T>();
   const parts = q.split(/\s+/).filter((x) => x.length >= 3);
   // Each typed word may name a class («Einnahme von Kunde»): the word itself, the word with an ending, or its start of five letters
@@ -94,12 +99,16 @@ export function rankAccounts<T extends string>(accounts: readonly Account[], que
     const named = type !== undefined && classes.has(type);
     // A hint is as good as a word of the name that starts with the query; a class alone comes after.
     const hint = hinted(parts, ctx.hints?.(account.number) ?? account.hints);
-    if (at >= 0) out.push({ m: { account, highlight: [at, at + q.length] }, quality: named ? 3 : at === 0 || at === account.number.length + 1 ? 0 : /[^\p{L}\p{N}]/u.test(hay[at - 1]) || hint ? 1 : 2, i });
+    // A hint of the account names the word itself («Spesen» for Bankspesen): it counts before the class the word names.
+    if (at >= 0) out.push({ m: { account, highlight: [at, at + q.length] }, quality: named && !hint ? 3 : at === 0 || at === account.number.length + 1 ? 0 : /[^\p{L}\p{N}]/u.test(hay[at - 1]) || hint ? 1 : 2, i });
     else if (hint) out.push({ m: { account, highlight: null, hint: true }, quality: 1, i });
     else if (named) out.push({ m: { account, highlight: null }, quality: 3, i });
   });
   return out
     .sort((a, b) => preferred(a.m.account) - preferred(b.m.account)
+      || saidBy(a.m.account) - saidBy(b.m.account)
+      // A name or a hint that holds the word before an account listed only for the class the word names («Spesen»: Bankspesen before Materialaufwand, #382).
+      || (a.quality === 3 ? 1 : 0) - (b.quality === 3 ? 1 : 0)
       || (preferred(a.m.account) === 0 ? standing(a.m.account) - standing(b.m.account) : 0)
       || a.quality - b.quality || a.i - b.i)
     .map((x) => x.m);

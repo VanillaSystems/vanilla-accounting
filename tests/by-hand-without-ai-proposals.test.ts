@@ -72,13 +72,14 @@ const linked = (r: Receipt) => books({ transactions: [sale], receipts: [r], mapp
 const photo = receipt('ph', { extractedText: '', extractionMethod: 'tesseract' } as Partial<Receipt>);
 const readInvoice = receipt('rd', { hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, net: 499.54, vat: 40.46, gross: 540 }], vatId: 'CHE-111.222.333' });
 
-test('M2: money in with a linked document on the net tax rate method is gross with the firm\'s net-rate code, read or not', () => {
+test('M2: money in with a linked document on the net tax rate method is gross with the firm\'s net-rate code where the document proves a domestic sale; one not read asks (#382)', () => {
   on(NET_RATE, () => {
-    for (const r of [photo, readInvoice]) {
-      const d = firstLine(linked(r), 'IN');
-      assert.deepEqual(sideOf(d.lines[0]), ['1020', '3400', 'F1'], r.id);
-      assert.deepEqual(d.lines[0].source?.vat, { from: 'netRate' }, r.id);
-    }
+    const d = firstLine(linked(readInvoice), 'IN');
+    assert.deepEqual(sideOf(d.lines[0]), ['1020', '3400', 'F1']);
+    assert.deepEqual(d.lines[0].source?.vat, { from: 'netRate' });
+    const p = firstLine(linked(photo), 'IN');
+    assert.deepEqual(sideOf(p.lines[0]), ['1020', '3400', '']);
+    assert.ok(p.notes.some((n) => n.kind === 'saleVat'));
   });
 });
 

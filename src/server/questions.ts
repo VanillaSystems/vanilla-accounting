@@ -12,6 +12,7 @@
  * on (a filed quarter, a payment it cannot read, one with a receipt or an invoice), goes back to
  * the asker, who decides.
  */
+import { issuedByFirm } from '../intake/own-invoice.js';
 import { randomBytes } from 'node:crypto';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { ownerAccount, ownerAccountNumber } from '../accounting/bank-accounts.js';
@@ -30,7 +31,8 @@ import { wordsIn } from '../export/texts.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
 import type { BookChange } from '../types/assistant.js';
 import { WS, RequestError, assertOpen, readBooks, updateBooks } from './books.js';
-import { applyChange, assertPlaced, bookPayment, setEntry } from './edits.js';
+import { applyChange, assertOwnInvoice, assertPlaced, bookPayment, link, setEntry } from './edits.js';
+import type { BookingLine } from '../accounting/manual-booking.js';
 import { keepSwitchedOn } from '../workflows/switch-on.js';
 import { loadWorkflows } from '../workflows/load.js';
 import { APP_ROOT } from '../workspace/workspace.js';
@@ -167,6 +169,30 @@ function refusalOf(e: unknown): Acted {
 
 const isSaleChoice = (c: Choice): c is SaleChoice => (SALE_CHOICES as readonly string[]).includes(c);
 
+/** The hand form's lines and the receipts it links, answered with the sale question on the form (#382). */
+export interface FormSale { lines: BookingLine[]; links: string[]; /** The receipts linked already are the firm's own invoices: the answer is taken all the same. */ ownLinked?: true }
+
+/**
+ * The sale question answered on the hand form of a payment that has no booking yet (#382): the
+ * app's question about the payment (saleQuestionLine), asked now when none is open, and answered
+ * as on its card, so the same answer books the same and offers «Immer so?» after it; the form's
+ * lines are booked as hers, then the answer sets their code (bookSale).
+ */
+export function answerSaleOnForm(ref: string, { by, choice, foreignTax, lines, links }: { by: string; choice: SaleChoice; foreignTax?: ForeignTaxInput } & FormSale): Question {
+  const books = readBooks();
+  const tx = books.transactions.find((t) => t.ref === ref);
+  if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
+  // A payment of a filed period is refused before anything is asked (403), as its booking would be.
+  assertOpen(books, [tx.date], 'newEntry');
+  // A receipt linked already decides the VAT, unless it is her own invoice (the form asks because it proves nothing): refused before anything is asked.
+  const linked = books.mappings.filter((m) => m.transactionRef === ref).map((m) => books.receipts.find((r) => r.id === m.receiptId));
+  const firm = { ...(WS.company.uid && { uid: WS.company.uid }), ...(WS.company.name && { name: WS.company.name }) };
+  if (linked.some((r) => !r || !issuedByFirm(r, firm))) throw new RequestError(409, GONE.hasReceipt, { code: 'questionGone', params: { why: 'hasReceipt' } });
+  const open = readQuestions(WS).find((x) => x.topic === 'saleVat' && x.on.id === ref && x.status === 'open');
+  const id = open?.id ?? (() => { const line = saleQuestionLine(WS, tx, now()); append(line); return line.id; })();
+  return answerQuestion(id, { by, answer: { choice }, ...(foreignTax && { foreignTax }) }, undefined, { lines, links, ...(linked.length && { ownLinked: true as const }) });
+}
+
 /**
  * The sale `tx` as the owner said: its revenue entries at the normal rate or the export code
  * (booked by hand from now on, origin manual); or, «kein Umsatz», the revenue entries moved to the
@@ -179,15 +205,26 @@ const isSaleChoice = (c: Choice): c is SaleChoice => (SALE_CHOICES as readonly s
  * with nothing booked (r4c-28). «Kein Umsatz» on a payment without any booking (deleted since the
  * question was asked) books it bank against the owner's account, so the answer acts (r9n-21).
  */
-function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice, foreign?: ForeignTaxInput): { booked: string[]; undo: BookChange[]; vatCode: string; marked?: true; account?: string; foreignTax?: ForeignTax } {
-  if (books.mappings.some((m) => m.transactionRef === tx.ref)) throw new Unclear('hasReceipt', tx.description);
+function bookSale(books: Books, tx: BankTransaction, choice: SaleChoice, foreign?: ForeignTaxInput, onForm?: FormSale, only?: ReadonlySet<string>): { booked: string[]; undo: BookChange[]; vatCode: string; marked?: true; account?: string; foreignTax?: ForeignTax } {
+  // A receipt decides a sale's VAT, unless it is the firm's own invoice that says nothing of it, answered on the hand form (#382, answerSaleOnForm checked it).
+  if (!only && !onForm?.ownLinked && books.mappings.some((m) => m.transactionRef === tx.ref)) throw new Unclear('hasReceipt', tx.description);
+  // Answered on the hand form (#382): its lines are booked first as hers, and the answer sets the code of those she left without one (a code the document proved stays); the receipts it links come last.
+  if (onForm) {
+    if (books.journalEntries.some((e) => e.transactionRef === tx.ref)) throw new RequestError(409, 'Die Zahlung ist gebucht: zuerst ihre Buchung in Buchungen löschen.', { code: 'hasEntries' });
+    const made = bookPayment(books, tx.ref, onForm.lines, WS.bankAccounts, loadFxResolver());
+    const open = new Set(made.filter((e) => !e.vatCode).map((e) => e.id));
+    const sale = bookSale(books, tx, choice, foreign, undefined, open);
+    const links = onForm.links.flatMap((id) => { assertOwnInvoice(books, id, WS.company); const c = link(books, id, tx.ref); return c ? [c] : []; });
+    for (const e of books.journalEntries) if (e.transactionRef === tx.ref && onForm.links.length) e.receipts = [...new Set([...(e.receipts ?? []), ...onForm.links])].sort();
+    return { ...sale, booked: [...new Set([...made.map((e) => e.id), ...sale.booked])], undo: [...links, ...books.journalEntries.filter((e) => e.transactionRef === tx.ref).map((e): BookChange => ({ kind: 'deleteEntry', id: e.id }))] };
+  }
   const own = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
   if (own.some((e) => e.origin === 'invoice')) throw new Unclear('hasInvoice', tx.description);
   assertOpen(books, [tx.date, ...own.map((e) => e.date)], 'editEntry');
   const sales = own.filter((e) => !e.corrects && chart().typeOf(e.accountCredit) === 'revenue');
   const hers = sales.length && sales.every((e) => e.origin === 'manual') ? sales : [];
   const classified = salesWithoutInvoice({ ...books, transactions: [tx] }, true)[0]?.entries ?? [];
-  const entries = classified.length ? classified : hers;
+  const entries = (classified.length ? classified : hers).filter((e) => !only || only.has(e.id));
   const account = entries[0]?.accountCredit;
   if (!entries.length && choice !== 'notSale') throw new Unclear('noSaleEntry', tx.description);
   if (choice === 'notSale') {
@@ -246,7 +283,7 @@ function bookForeignTax(books: Books, tx: BankTransaction, entries: readonly Jou
 }
 
 /** What the answer does in the books and the knowledge, or why it does nothing. `from`: the precedent that answers, kept already. */
-function act(q: Question, answer: Answer, by: string, at: string, from: string | undefined, foreign?: ForeignTaxInput): Acted | undefined {
+function act(q: Question, answer: Answer, by: string, at: string, from: string | undefined, foreign?: ForeignTaxInput, onForm?: FormSale): Acted | undefined {
   if (!('choice' in answer)) return undefined;
   const books = readBooks();
   const { tx, entry, why } = paymentOf(books, q.on);
@@ -255,10 +292,10 @@ function act(q: Question, answer: Answer, by: string, at: string, from: string |
   if (isSaleChoice(choice)) {
     let sale: ReturnType<typeof bookSale>;
     try {
-      sale = updateBooks((b) => bookSale(b, b.transactions.find((t) => t.ref === tx.ref)!, choice, foreign));
+      sale = updateBooks((b) => bookSale(b, b.transactions.find((t) => t.ref === tx.ref)!, choice, foreign, onForm));
     } catch (e) {
-      // A foreign VAT the payment cannot take is the person's to correct: nothing is recorded, the question stays open.
-      if (foreign && e instanceof RequestError) throw e;
+      // A foreign VAT the payment cannot take is the person's to correct: nothing is recorded, the question stays open. So is a refusal of the form's lines.
+      if ((foreign || onForm) && e instanceof RequestError) throw e;
       return refusalOf(e);
     }
     return { booked: sale.booked, undo: sale.undo, vatCode: sale.vatCode, ...(sale.marked ? { marked: true as const, ...(sale.account ? { account: sale.account } : {}) } : {}), ...(sale.foreignTax ? { foreignTax: sale.foreignTax } : {}) };
@@ -337,18 +374,20 @@ const GONE: Record<SaleGone, string> = {
   ruleHolds: 'Eine Regel der Firma entscheidet diese Zahlung jetzt, oder fragt dich dazu unter Aufgaben: die Frage ist geschlossen.',
 };
 
-export function answerQuestion(id: string, { by, answer, foreignTax }: { by: string; answer: Answer; foreignTax?: ForeignTaxInput }, from?: string): Question {
+export function answerQuestion(id: string, { by, answer, foreignTax }: { by: string; answer: Answer; foreignTax?: ForeignTaxInput }, from?: string, onForm?: FormSale): Question {
   const q = find(id);
   if (q.status !== 'open') throw new RequestError(409, 'Diese Frage ist schon beantwortet.', { code: 'questionAnswered' });
   if ('choice' in answer && !q.choices.includes(answer.choice)) throw new RequestError(400, `Diese Frage hat die Wahl ${answer.choice} nicht.`);
   // The app's question whose reason went away is closed, and the person told why, not answered with nothing done (r4c-29).
-  const gone = q.topic === 'saleVat' ? saleQuestionGone(readBooks(), q.on.id) : undefined;
+  const found = q.topic === 'saleVat' ? saleQuestionGone(readBooks(), q.on.id) : undefined;
+  // Her own invoice linked, answered on the hand form: the question stands (answerSaleOnForm).
+  const gone = found === 'hasReceipt' && onForm?.ownLinked ? undefined : found;
   if (gone) {
     append({ v: 1, event: 'closed', id, at: now(), by: APP_ASKER, how: 'withdrawn', why: gone });
     throw new RequestError(409, GONE[gone], { code: 'questionGone', params: { why: gone } });
   }
   const at = now();
-  const acted = asSwitchedOn(() => act(q, answer, by, at, from, foreignTax));
+  const acted = asSwitchedOn(() => act(q, answer, by, at, from, foreignTax, onForm));
   // The answer keeps the foreign VAT as booked: its rate and amount, both, whichever the person typed.
   const said: Answer = 'choice' in answer && acted && 'foreignTax' in acted && acted.foreignTax ? { ...answer, foreignTax: acted.foreignTax } : answer;
   append({ v: 1, event: 'answered', id, at, by, answer: said, ...(acted ? { acted } : {}), ...(from ? { from } : {}) });

@@ -36,7 +36,7 @@ export function unknownAccountText(number: string): string {
 /** The words a person types for a class, from the dictionary (one line of words per class). */
 const classWords = (): AccountContext<AccountType>['words'] => ({ revenue: t('accounts.words.revenue').split(/\s+/), expense: t('accounts.words.expense').split(/\s+/) });
 
-export function AccountField({ name, label, defaultValue, readOnly, onPick, offer, prefer, defaults }: { name: string; label: string; defaultValue: string; readOnly?: boolean; onPick?(): void; offer?: Account; prefer?: AccountType; defaults?: readonly string[] }) {
+export function AccountField({ name, label, defaultValue, readOnly, onPick, offer, prefer, defaults, suggest }: { name: string; label: string; defaultValue: string; readOnly?: boolean; onPick?(): void; offer?: Account; prefer?: AccountType; defaults?: readonly string[]; suggest?: readonly string[] }) {
   const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
   // null: the row of the value the field holds (focused and not typed in yet), so ↵ keeps it; a number once she types or moves.
@@ -45,7 +45,7 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick, offe
   const listId = useId();
   const list = useRef<HTMLUListElement>(null);
   const offered = offer && !getAccounts().some((a) => a.number === offer.number) ? offer : undefined;
-  const ctx: AccountContext<AccountType> = useMemo(() => ({ typeOf: (n) => chart().typeOf(n), prefer, defaults, words: classWords(), hints: hintsOf }), [prefer, defaults]);
+  const ctx: AccountContext<AccountType> = useMemo(() => ({ typeOf: (n) => chart().typeOf(n), prefer, defaults, words: classWords(), hints: hintsOf, ...(suggest && { suggest }) }), [prefer, defaults, suggest]);
   const all = useMemo((): Option[] => {
     if (!open) return [];
     const query = value === defaultValue && !/\D/.test(value) ? '' : value;

@@ -67,7 +67,7 @@ test('the business\'s last booking comes before the defaults, and a company rule
   });
   const [byPrecedent] = bookingDraft(b, 'IN', BANK, undefined, { defaults: DEFAULTS })!.lines;
   assert.deepEqual([byPrecedent.accountCredit, byPrecedent.vat], ['3000', 'V81']);
-  assert.deepEqual(byPrecedent.source, { account: { from: 'precedent', date: '2026-07-01' }, vat: { from: 'precedent' } });
+  assert.deepEqual(byPrecedent.source, { account: { from: 'precedent', date: '2026-07-01', name: 'Immo Verwaltung AG' }, vat: { from: 'precedent' } });
 
   const ruled = bookingDraft(b, 'IN', BANK, undefined, { defaults: DEFAULTS, rule: { id: 'immo', lines: [{ account: '3200', vat: 'V81', amount: 12450 }] } })!.lines;
   assert.deepEqual(ruled.map((l) => [l.accountDebit, l.accountCredit, l.vat, l.amount]), [['1020', '3200', 'V81', 12450]]);

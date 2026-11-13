@@ -67,36 +67,4 @@ export function languageFor(country: string, postcode: string): InvoiceLanguage 
   return country === 'IT' || country === 'SM' ? 'it' : 'en';
 }
 
-const regionName = (code: string, lang: string) => {
-  try { return new Intl.DisplayNames([lang], { type: 'region', fallback: 'none' }).of(code); } catch { return undefined; }
-};
-
-/** Every country the browser knows by its ISO code (not the groups and the codes ISO only reserves), the common ones first. */
-export const COUNTRIES: readonly string[] = (() => {
-  const all: string[] = [];
-  for (let a = 65; a <= 90; a++) for (let b = 65; b <= 90; b++) {
-    const k = String.fromCharCode(a, b);
-    const n = regionName(k, 'en');
-    if (n && n !== k && !/^(EU|EZ|UN|QO|XA|XB|ZZ|UK|EA|IC|DG|CP|TA|AC)$/.test(k)) all.push(k);
-  }
-  const common = ['CH', 'LI', 'DE', 'AT', 'FR', 'IT'];
-  return [...common, ...all.filter((k) => !common.includes(k))];
-})();
-
-export const countryName = (code: string, lang: string): string => regionName(code, lang) ?? code;
-
-const norm = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z]/g, '');
-let byName: Map<string, string> | undefined;
-
-/** The ISO code of a country typed by its code or its name in German, French, Italian or English. */
-export function countryOf(text: string): string | undefined {
-  if (!byName) {
-    byName = new Map();
-    for (const k of COUNTRIES) {
-      byName.set(norm(k), k);
-      for (const l of ['de', 'fr', 'it', 'en']) { const n = regionName(k, l); if (n && !byName.has(norm(n))) byName.set(norm(n), k); }
-    }
-    for (const [alias, k] of Object.entries({ usa: 'US', uk: 'GB', england: 'GB', suisse: 'CH', svizzera: 'CH', holland: 'NL' })) byName.set(alias, k);
-  }
-  return byName.get(norm(text));
-}
+export { COUNTRIES, countryName, countryOf } from '../../../core/countries.js';

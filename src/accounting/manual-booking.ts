@@ -8,17 +8,22 @@ import { partsOf, partText } from './batch-parts.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import { paymentSides, type PaymentSide } from './payment-entries.js';
 import { codeOnAccount, formTakes, lookupVatCode } from './vat-codes.js';
-import { agreedBasis, chart, filing, vatSetup, withoutInputTax } from '../engines/index.js';
+import { agreedBasis, chart, filing, invoicing, vat, vatSetup, withoutInputTax } from '../engines/index.js';
+import { methodOf } from '../workspace/vat-setup.js';
+import { saleProofOf } from './sale-document.js';
 import { fromRappen, toRappen } from './rappen.js';
 import { hasEvent, isManualRef } from '../books/refs.js';
 import type { Tags } from '../books/tags.js';
 import type { Invoice } from '../invoices/model.js';
 import { namedInvoice, namesNumber, openAmount, revenueSplit } from '../invoices/rules.js';
-import { saleCodeOf, saleProposal, saleVatCode } from './sales-without-vat.js';
+import { saleProposal, saleVatCode } from './sales-without-vat.js';
 import type { SaleChoice } from '../questions/model.js';
 import { isPurchaseDocument } from './evidence-check.js';
 import { openItemAccounts, sideOf } from './tax-point.js';
 import { filingKeyOf } from './periods.js';
+import { issuedByFirm, ownNumbers } from '../intake/own-invoice.js';
+import { paymentText, paysIn } from '../intake/pairing.js';
+import { squash, tokensIn } from './document-numbers.js';
 
 /** One line of the booking, in the payment's currency. */
 export interface BookingLine { accountDebit: string; accountCredit: string; amount: number; vatCode?: string; description: string; tags?: Tags }
@@ -30,8 +35,9 @@ export interface BookingLine { accountDebit: string; accountCredit: string; amou
  * account, the app's proposal for a sale without an invoice (saleProposal), a supplier's refund.
  */
 export interface DraftSource {
-  account?: { from: 'rule'; rule: string } | { from: 'precedent' | 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' } | { from: 'invoice' | 'receivable'; number: string };
-  vat?: { from: 'rule' | 'precedent' | 'receipt' | 'invoice' | 'netRate' | 'refund' } | { from: 'sale'; choice: SaleChoice };
+  account?: { from: 'rule'; rule: string } | { from: 'precedent'; date: string; yours?: true; name?: string } | { from: 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' | 'wage' } | { from: 'invoice' | 'receivable'; number: string };
+  /** `abroad`: the firm's own invoice says its service is supplied abroad (invoicing placeAbroad). */
+  vat?: { from: 'rule' | 'precedent' | 'receipt' | 'invoice' | 'netRate' | 'refund' | 'abroad' } | { from: 'sale'; choice: SaleChoice };
 }
 
 /**
@@ -55,7 +61,11 @@ export type PaymentNature =
   | { kind: 'authority'; name: string }
   | { kind: 'payoutWaits'; key: string; params: Record<string, string> }
   /** The bank's own fee row (src/booking/bank-fee.ts): its account, or the one the firm's chart lacks. */
-  | { kind: 'bankFee'; account: string } | { kind: 'bankFee'; missing: { account: string; name: string } };
+  | { kind: 'bankFee'; account: string } | { kind: 'bankFee'; missing: { account: string; name: string } }
+  /** A wage on a firm that pays wages (src/booking/receipt-wait.ts `wage`): the firm's wage account (setup.yaml `wages`), booked without a VAT code (guide cls-salary). */
+  | { kind: 'wage'; account: string }
+  /** A wage on a firm whose books carry wages with their deductions (on `deductions`): no account is proposed. */
+  | { kind: 'wage'; deductions: string };
 
 /** What code knows beside the books when the form opens. */
 export interface DraftKnowledge {
@@ -73,6 +83,10 @@ export interface DraftKnowledge {
   chart?: readonly string[];
   /** The firm's own UID: a linked document with another is a business's, not the firm's own invoice. */
   ownUid?: string;
+  /** The firm's name: without a UID it tells the firm's own invoice (src/intake/own-invoice.ts issuedByFirm). */
+  firmName?: string;
+  /** A receipt she said is not the invoice this payment pays: the form proposes without it. */
+  notOwnInvoice?: string;
 }
 
 /**
@@ -94,7 +108,19 @@ export type DraftNote =
   | { kind: 'payoutWaits'; key: string; params: Record<string, string> }
   | { kind: 'bankChargesMissing'; account: string; name: string }
   | { kind: 'chooseAccount' }
-  | { kind: 'saleVat'; why: 'notRead' | 'noVat' }
+  /**
+   * No sale code proposed, and the form asks the sale question: the document's VAT is not read or
+   * shows neither a Swiss rate nor a place of supply abroad, it shows a foreign VAT, its groups do
+   * not add up to the payment, the payment names an invoice of hers the form cannot take, or (no
+   * document) the money came from abroad.
+   */
+  | { kind: 'saleVat'; why: 'notRead' | 'noVat' | 'payerAbroad' | 'foreignVat' | 'mixed' | 'namedInvoice' }
+  /** A mixed invoice's part without Swiss VAT that it does not prove abroad: that line has no code. */
+  | { kind: 'saleZeroPart' }
+  /** More than what is open of her invoice: the rest is a line without an account. */
+  | { kind: 'ownInvoiceSurplus'; number: string; surplus: number }
+  /** Wages here are booked with their deductions (the deductions account carries them): the form proposes no account. */
+  | { kind: 'wageDeductions'; account: string }
   | { kind: 'ask'; question: string }
   | { kind: 'taxPoint'; date: string };
 
@@ -118,6 +144,16 @@ export interface BookingDraft {
    * payment only settles the receivable; else the invoice's own lines and codes are the proposal.
    */
   invoice?: { id: string; number: string; settles: boolean };
+  /**
+   * The firm's own invoices among the receipts whose numbers the payment names (#382, ownInvoicesOf).
+   * `from`: the proposal is read off them ('invoice'), comes from elsewhere (a rule, the owner:
+   * 'other'), or none is made because their tax point is in another period on the agreed basis
+   * ('taxPoint'). `links`: what booking (or, on 'taxPoint', the link alone) links. `earlier`: the
+   * day of the payment the invoice is linked to already (an instalment).
+   */
+  ownInvoice?: { id: string; number: string; file: string; links: string[]; from: 'invoice' | 'other' | 'taxPoint'; earlier?: string };
+  /** What the linked purchase document's lines say, for the account list to rank by (the standard chart's hints). */
+  words?: string[];
   notes: DraftNote[];
 }
 
@@ -143,6 +179,11 @@ function vendorKeys(books: Books, tx: BankTransaction): Set<string> {
   return new Set([...uids, ...vendors, norm(tx.counterparty)].filter((k): k is string => !!k));
 }
 
+/** A booking the model decided (#382): a person's or a rule's booking of the same business comes before it, and only those are said to be hers. */
+const byModel = (e: JournalEntry): boolean => e.by?.kind === 'model' || (!e.by && (e.origin === undefined || e.origin === 'classify') && !e.rule);
+/** A booking a person or a rule decided: «deine letzte Buchung» (never one code booked by itself, a sales report's or an invoice's event). */
+const decided = (e: JournalEntry): boolean => e.origin === 'manual' || !!e.rule || e.by?.kind === 'person' || e.by?.kind === 'rule' || e.by?.kind === 'assistant';
+
 /**
  * The newest booking of the same vendor's other payments whose bank stands on `side` and whose other
  * account is not a bank (`only`: of that class), with that entry. Its account on the side opposite
@@ -162,8 +203,9 @@ function newestOf(books: Books, tx: BankTransaction, side: 'accountDebit' | 'acc
   const onResult = (e: JournalEntry) => { const t = chart().typeOf(e[other]!); return t === 'expense' || t === 'revenue' ? 1 : 0; };
   const hit = (books.journalEntries ?? [])
     .filter((e) => e.transactionRef !== tx.ref && e.origin !== 'year-close' && bankAccounts.has(e[side]) && e[other] && !bankAccounts.has(e[other]) && (!only || chart().typeOf(e[other]!) === only) && isSame(e.transactionRef))
-    .sort((a, b) => b.date.localeCompare(a.date) || onResult(b) - onResult(a) || Number(b.amount) - Number(a.amount))[0];
-  return hit && { account: hit[other], vatCode: hit.vatCode, entry: { id: hit.id, transactionRef: hit.transactionRef, date: hit.date } };
+    .sort((a, b) => Number(byModel(a)) - Number(byModel(b)) || b.date.localeCompare(a.date) || onResult(b) - onResult(a) || Number(b.amount) - Number(a.amount))[0];
+  const name = hit && (byRef.get(hit.transactionRef)?.counterparty?.trim() || undefined);
+  return hit && { account: hit[other], vatCode: hit.vatCode, entry: { id: hit.id, transactionRef: hit.transactionRef, date: hit.date }, ...(decided(hit) && { yours: true as const }), ...(name && { name }) };
 }
 
 /**
@@ -212,27 +254,108 @@ function withoutReceipt(code: string | undefined): string {
 /** A code the firm's form takes, else nothing: a proposal never offers a code the booking would refuse. */
 const taken = (code: string | null | undefined): string => (code && formTakes(code) ? code : '');
 
+/** A sale's code, or for a mixed document a line per VAT group, with where it comes from. */
+interface SaleVat { vat: string; source?: DraftSource['vat']; note?: DraftNote; parts?: Array<{ amount: number; vat: string; source?: DraftSource['vat'] }> }
+
 /**
- * The VAT of a sale on the revenue account `account`, as the classifier sets it (saleCodeOf): none
- * for a firm not registered; on the net tax rate method the firm's approved rate's code (abroad by
- * the document); without a document the app's proposal (saleProposal); with one that shows the VAT
- * its rate, which the form turns into the code; with one whose VAT is not read, or that shows none,
- * no code, and the form says why.
+ * The VAT of a sale of `amount`, proposed only for what its documents PROVE (#382, saleProofOf): none
+ * for a firm not registered; on the net tax rate method the firm's approved rate's code, or the
+ * abroad code where the document proves the supply abroad; without a document the app's proposal for
+ * a domestic sale (saleProposal), while money from abroad (a foreign IBAN, a foreign currency)
+ * proposes no code and the form asks; with documents that show Swiss rates their rate (a mixed one:
+ * a line per group, the zero group at the abroad code where the document proves it, else without a
+ * code); with documents that prove the supply abroad the abroad code; in every other case (not read,
+ * no VAT and no place abroad, a foreign VAT, a VAT wording included) no code, and the form asks the
+ * sale question.
  */
-function saleVat(tx: BankTransaction, account: string, docs: readonly Receipt[]): { vat: string; source?: DraftSource['vat']; note?: DraftNote } {
+function saleVat(tx: BankTransaction, docs: readonly Receipt[], amount: number): SaleVat {
   const setup = vatSetup();
   if (!setup.registered) return { vat: '' };
   if (!docs.length) {
     const sale = saleProposal(tx);
+    if (sale.choice !== 'saleDomestic') return { vat: '', note: { kind: 'saleVat', why: 'payerAbroad' } };
     const code = taken(saleVatCode(sale.choice));
     return code ? { vat: code, source: { from: 'sale', choice: sale.choice } } : { vat: '' };
   }
-  const decided = saleCodeOf(saleVatCode('saleDomestic') ?? undefined, account, tx, docs, setup);
-  if (decided) { const code = taken(decided.code); return code ? { vat: code, source: { from: decided.why === 'netRate' ? 'netRate' : 'receipt' } } : { vat: '' }; }
-  const rates = new Set(docs.flatMap(vatRates).map((g) => g.ratePercent));
-  // Several rates on one document are a line each (the caller splits them).
-  if (rates.size) return { vat: rates.size === 1 ? String([...rates][0]) : '', source: { from: 'receipt' } };
-  return { vat: '', note: { kind: 'saleVat', why: docs.some((d) => d.hasSwissVat !== undefined || d.vatSummary?.length) ? 'noVat' : 'notRead' } };
+  const abroadCode = taken(vat().codes.deductedIn(invoicing().exemptions.abroad));
+  const abroad = (): SaleVat => (abroadCode ? { vat: abroadCode, source: { from: 'abroad' } } : { vat: '' });
+  const proofs = docs.map(saleProofOf);
+  // On the net tax rate method the same rule: the firm's rate for what the documents prove domestic (a Swiss rate), the abroad code for what they prove abroad, else asked.
+  if (methodOf(setup) === 'net-rate' && proofs.every((p) => p.kind === 'rates' || p.kind === 'abroad')) {
+    if (proofs.every((p) => p.kind === 'abroad')) return abroad();
+    const code = taken(saleVatCode('saleDomestic'));
+    if (proofs.every((p) => p.kind === 'rates')) return code ? { vat: code, source: { from: 'netRate' } } : { vat: '' };
+    return { vat: '', note: { kind: 'saleVat', why: 'mixed' } };
+  }
+  if (methodOf(setup) !== 'net-rate' && proofs.every((p) => p.kind === 'rates')) {
+    const groups = proofs.flatMap((p) => (p.kind === 'rates' ? p.groups : []));
+    if (groups.length === 1) return { vat: String(groups[0].rate), source: { from: 'receipt' } };
+    // A line per group when the groups add up to the sale; a zero group the document does not prove abroad stays without a code, and the form says so.
+    if (proofs.length === 1 && groups.every((g) => g.gross !== undefined) && toRappen(groups.reduce((a, g) => a + g.gross!, 0)) === toRappen(amount)) {
+      const lines = groups.map((g) => (g.rate > 0 ? { amount: g.gross!, vat: String(g.rate), source: { from: 'receipt' as const } } : g.abroad && abroadCode ? { amount: g.gross!, vat: abroadCode, source: { from: 'abroad' as const } } : { amount: g.gross!, vat: '' }));
+      return { vat: '', parts: lines, ...(lines.some((l) => !l.vat) && { note: { kind: 'saleZeroPart' } }) };
+    }
+    return { vat: '', note: { kind: 'saleVat', why: 'mixed' } };
+  }
+  if (proofs.every((p) => p.kind === 'abroad')) return abroad();
+  if (proofs.some((p) => p.kind === 'foreignVat')) return { vat: '', note: { kind: 'saleVat', why: 'foreignVat' } };
+  return { vat: '', note: { kind: 'saleVat', why: proofs.some((p) => p.kind === 'unclear' && p.why === 'noVat') ? 'noVat' : 'notRead' } };
+}
+
+/** What the payment in says of the firm's own invoices among the receipts (#382, ownInvoicesOf). */
+interface OwnNamed {
+  /** The invoices the proposal is read off. */
+  use: Receipt[];
+  /** Of those, the ones booking links (linked to no payment yet). */
+  link: Receipt[];
+  /** The numbers as the payment writes them. */
+  numbers: string[];
+  /** One invoice, linked to an earlier payment already (an instalment): what that payment paid of it, and its day. */
+  earlier?: { paid: number; date: string };
+  /** The text names an invoice of the firm's own the form cannot take (set aside, several not adding up): no default sale code. */
+  named: boolean;
+}
+
+/**
+ * The firm's own invoices (issuedByFirm, by its UID or its name; not a credit note) whose numbers the
+ * payment's text names as whole tokens (ownNumbers). One linked to no payment is taken and linked by
+ * the booking; one linked to an earlier payment is an instalment, read but not linked again; several
+ * are taken together only when each is free and read and their amounts add up to the payment.
+ */
+function ownInvoicesOf(books: Books, tx: BankTransaction, known: DraftKnowledge, paid: number): OwnNamed | undefined {
+  const firm = { ...(known.ownUid && { uid: known.ownUid }), ...(known.firmName && { name: known.firmName }) };
+  if (!firm.uid && !firm.name) return undefined;
+  const words = tokensIn(paymentText(tx));
+  const here = new Set(books.mappings.filter((m) => m.transactionRef === tx.ref).map((m) => m.receiptId));
+  const all = books.receipts.filter((r) => !here.has(r.id) && !r.filedPayment && (!r.kind || r.kind === 'invoice') && !paysIn(r) && issuedByFirm(r, firm)
+    && ownNumbers(r).some((n) => words.has(n)));
+  if (!all.length) return undefined;
+  const found = all.filter((r) => r.id !== known.notOwnInvoice);
+  const numbers = found.flatMap((r) => ownNumbers(r).filter((n) => words.has(n)).slice(0, 1)).map((n) => asWritten(tx, n));
+  const linkedTo = (r: Receipt) => books.mappings.filter((m) => m.receiptId === r.id && m.transactionRef !== tx.ref).map((m) => books.transactions.find((t) => t.ref === m.transactionRef)).filter((t): t is BankTransaction => !!t);
+  if (found.length === 1) {
+    const [r] = found;
+    const before = linkedTo(r);
+    if (!before.length) return { use: [r], link: [r], numbers, named: true };
+    const same = before.every((t) => t.currency === tx.currency);
+    return { use: [r], link: [], numbers, named: true, ...(same && { earlier: { paid: before.reduce((a, t) => a + Math.abs(t.amount), 0), date: before.map((t) => t.date).sort().at(-1)! } }) };
+  }
+  const sum = found.reduce((a, r) => a + (r.amount ?? Number.NaN), 0);
+  if (found.length > 1 && found.every((r) => !linkedTo(r).length && (r.currency ?? tx.currency) === tx.currency) && toRappen(sum) === toRappen(paid)) return { use: found, link: found, numbers, named: true };
+  return { use: [], link: [], numbers, named: true };
+}
+
+/** A number as the payment writes it («2026-031»), found by its squashed form («2026031»). */
+function asWritten(tx: BankTransaction, number: string): string {
+  const words = [tx.description, tx.reference ?? '', tx.remarks ?? ''].join(' ').split(/[\s,;:()[\]«»"']+/).map((w) => w.replace(/^[-/#]+|[-/#.]+$/g, ''));
+  return words.find((w) => squash(w) === number) ?? number;
+}
+
+/** The words a purchase document's lines say (its line items, else its text), for the account list to rank by: the first 300 distinct words, enough to rank by; nothing is cut from what is booked. */
+function wordsOf(docs: readonly Receipt[]): string[] | undefined {
+  const text = docs.flatMap((d) => (d.lineItems?.length ? d.lineItems.map((l) => l.description) : [d.extractedText ?? ''])).join(' ');
+  const words = [...new Set(text.split(/[^\p{L}]+/u).filter((w) => w.length >= 4))].slice(0, 300);
+  return words.length ? words : undefined;
 }
 
 /**
@@ -244,13 +367,15 @@ function saleVat(tx: BankTransaction, account: string, docs: readonly Receipt[])
  *   without a code (its revenue is booked), else the invoice's own accounts and codes; the form
  *   names the invoice and the way to confirm the payment on it;
  * - the company rule that decides the payment (also one that asks first, with its question);
- * - the account of the business's last booking;
+ * - the bank's own fee row, and a wage on a firm that pays wages: their account, without a code;
+ * - the account of the business's last booking (money in with a document: the VAT off the document);
  * - money from the owner: her account without a code; between own accounts, from an authority, or
  *   with a business's document linked: no account and no code, and the form says what it is;
  * - money back from a business the firm buys from: the account of its last purchase, with the rate
  *   of a linked document that shows it (the code inverts on that account), else the zero code inverted;
  * - other money in: the firm's default revenue account with the sale's VAT (saleVat), and the form
- *   says it took the payment for a sale;
+ *   says it took the payment for a sale; a payment that names the number of the firm's own invoice
+ *   among the receipts (ownInvoiceOf, #382) takes that invoice as its document, which booking links;
  * - money out: the business's own account (its file), else none, with the receipt's rate filled.
  * A rate comes from a purchase document alone (isPurchaseDocument): no input tax without a receipt
  * that shows it. On the agreed basis a document dated in another period than the payment proposes
@@ -271,13 +396,22 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   const receiptIds = [...new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId))].sort();
   const receipts = books.receipts.filter((r) => receiptIds.includes(r.id));
   const moneyIn = bank?.side === 'accountDebit';
+  // The firm's own invoices the payment names by their numbers (#382): the sale's VAT is read off them, and booking links those not linked yet.
+  const own = moneyIn && !named ? ownInvoicesOf(books, tx, known, paid) : undefined;
   // The documents a rate may be read off: on money out a purchase document only (never a delivery note or the firm's own credit note, #81).
-  const docs = receipts.filter(moneyIn ? isSaleDocument : isPurchaseDocument);
+  const docs = [...receipts.filter(moneyIn ? isSaleDocument : isPurchaseDocument), ...(own?.use ?? [])];
   const bankAccounts = new Set(accounts.map((a) => a.account));
   const text = receipts.find((r) => r.description)?.description ?? tx.description;
   const notes: DraftNote[] = [];
-  const result = (lines: DraftLine[], extra: Partial<BookingDraft> = {}): BookingDraft =>
-    ({ ref, date: tx.date, currency: tx.currency, ...(bank && { bank }), receipts: receiptIds, lines, ...(cancelled && { cancelledInvoice: cancelled }), ...extra, notes });
+  // Whether the proposal is read off her invoices: the banner says what is true (#382).
+  const ownAt: { from: 'invoice' | 'other' | 'taxPoint' } = { from: 'other' };
+  const ownInvoice = () => (own?.use.length
+    ? { id: own.use[0].id, number: own.numbers.join(', '), file: own.use.map((r) => r.filename).join(', '), links: own.link.map((r) => r.id), from: ownAt.from, ...(own.earlier && { earlier: own.earlier.date }) }
+    : undefined);
+  const result = (lines: DraftLine[], extra: Partial<BookingDraft> = {}): BookingDraft => {
+    const mine = ownInvoice();
+    return { ref, date: tx.date, currency: tx.currency, ...(bank && { bank }), receipts: receiptIds, lines, ...(cancelled && { cancelledInvoice: cancelled }), ...(mine && { ownInvoice: mine }), ...extra, notes };
+  };
   const place = (account: string, amount: number, vat: string, source?: DraftSource, description = text): DraftLine => ({
     accountDebit: bank?.side === 'accountDebit' ? bank.account : account,
     accountCredit: bank?.side === 'accountCredit' ? bank.account : account,
@@ -317,7 +451,7 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   // On the agreed basis a coded line of a document is dated by the document (atTaxPoint); the hand form books on the payment's day.
   const length = filing().length;
   const elsewhere = agreedBasis() ? docs.find((r) => r.date && filingKeyOf(r.date, length) !== filingKeyOf(tx.date, length)) : undefined;
-  if (elsewhere?.date) notes.push({ kind: 'taxPoint', date: elsewhere.date });
+  if (elsewhere?.date) { notes.push({ kind: 'taxPoint', date: elsewhere.date }); ownAt.from = 'taxPoint'; }
   const proposes = !elsewhere && !cancelled && !!bank;
 
   // A company rule decides the payment (it waits for its receipt, or asks first): its lines as it would book them, when they add up to what is open.
@@ -341,6 +475,12 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   // Money for a cancelled invoice is the customer's, not a sale: the earlier sale's account and code would mislead.
   const precedent = proposes ? newestOf(books, tx, bank!.side, bankAccounts) : undefined;
   const extra = precedent ? { precedent: precedent.entry } : {};
+  // A wage on a firm that pays wages, without a booking of hers to follow: the net paid on the wage account, without a VAT code (guide
+  // cls-salary); where the books carry wages with their deductions, no account, and the form says how wages are booked here.
+  if (!precedent && proposes && !moneyIn && nature?.kind === 'wage') {
+    if ('deductions' in nature) { notes.push({ kind: 'wageDeductions', account: nature.deductions }); return result([place('', paid, '')]); }
+    return result([place(nature.account, paid, '', { account: { from: 'wage' } })]);
+  }
   // A firm without input tax has no code for a receipt's rate (r8f-50): no rate is filled that nothing resolves.
   const claims = !withoutInputTax();
   const rates = new Set(docs.flatMap(vatRates).map((g) => g.ratePercent));
@@ -348,9 +488,27 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   // The other side and its VAT for a line without a rate of its own.
   let other: { account: string; vat: string; source?: DraftSource } = { account: '', vat: rate, ...(rate && { source: { vat: { from: 'receipt' } } }) };
   const fromReceipt = (vat: string): DraftSource['vat'] | undefined => (vat && vat === rate ? { from: 'receipt' } : undefined);
-  if (precedent) {
+  // The sale's VAT: off its documents, or asked where the payment names an invoice of hers the form cannot take (#382).
+  const ofSale = (): SaleVat => {
+    if (own?.named && !own.use.length && !docs.length) return vatSetup().registered ? { vat: '', note: { kind: 'saleVat', why: 'namedInvoice' } } : { vat: '' };
+    if (own?.use.length && ownAt.from !== 'taxPoint') ownAt.from = 'invoice';
+    // Several invoices of hers: a line each says its own VAT and asks only for a line without a code (perInvoice).
+    if (own && own.use.length > 1) return { vat: '' };
+    return saleVat(tx, docs, Math.min(paid, ownOpen ?? paid));
+  };
+  // What is open of her one invoice whose amount is read: its amount less what an earlier payment paid of it.
+  const ownOpen = own?.use.length === 1 && own.use[0].amount !== undefined && (own.use[0].currency ?? tx.currency) === tx.currency
+    ? fromRappen(toRappen(Math.abs(own.use[0].amount)) - toRappen(own.earlier?.paid ?? 0)) : undefined;
+  let saleParts: SaleVat['parts'];
+  if (precedent && moneyIn && (docs.length || own?.named) && chart().typeOf(precedent.account!) === 'revenue') {
+    // A sale with its document: the account as last time, the VAT off the document, never the last sale's code (#382).
+    const sale = ofSale();
+    saleParts = sale.parts;
+    if (sale.note) notes.push(sale.note);
+    other = { account: precedent.account!, vat: sale.vat, source: { account: { from: 'precedent', date: precedent.entry.date, ...(precedent.yours && { yours: true as const }), ...(precedent.name && { name: precedent.name }) }, ...(sale.source && { vat: sale.source }) } };
+  } else if (precedent) {
     const vat = rate || (receipts.length ? '' : withoutReceipt(precedent.vatCode));
-    other = { account: precedent.account!, vat, source: { account: { from: 'precedent', date: precedent.entry.date }, ...(vat && { vat: fromReceipt(vat) ?? { from: 'precedent' } }) } };
+    other = { account: precedent.account!, vat, source: { account: { from: 'precedent', date: precedent.entry.date, ...(precedent.yours && { yours: true as const }), ...(precedent.name && { name: precedent.name }) }, ...(vat && { vat: fromReceipt(vat) ?? { from: 'precedent' } }) } };
   } else if (proposes && nature?.kind === 'owner') {
     notes.push({ kind: 'owner' });
     other = { account: nature.account, vat: '', source: { account: { from: 'owner' } } };
@@ -360,7 +518,7 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   } else if (proposes && moneyIn) {
     // Money back from a business the firm buys from: a refund on the account of its last purchase, the code inverted on it.
     // Plausible only when it is no more than the firm paid that business, and the text names no invoice of the firm's own.
-    const bought = refundOf(books, tx, bankAccounts, paid, invoices);
+    const bought = own?.named ? undefined : refundOf(books, tx, bankAccounts, paid, invoices);
     const foreign = known.ownUid ? docs.some((d) => d.vatId && norm(d.vatId) !== norm(known.ownUid)) : false;
     if (bought) {
       const refundRate = new Set(claims ? receipts.filter(isPurchaseDocument).flatMap(vatRates).map((g) => g.ratePercent) : []);
@@ -375,8 +533,10 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
       notes.push({ kind: 'supplierDocument' });
       other = { account: '', vat: '' };
     } else if (known.defaults?.sales && chart().typeOf(known.defaults.sales) === 'revenue') {
-      const sale = saleVat(tx, known.defaults.sales, docs);
-      notes.push({ kind: 'sale' });
+      const sale = ofSale();
+      saleParts = sale.parts;
+      // Her own invoice says it is a sale: no assumption to name.
+      if (!own?.named) notes.push({ kind: 'sale' });
       if (sale.note) notes.push(sale.note);
       other = { account: known.defaults.sales, vat: sale.vat, source: { account: { from: 'sales' }, ...(sale.source && { vat: sale.source }) } };
     }
@@ -384,6 +544,7 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
     other = { account: known.account, vat: rate, source: { account: { from: 'business' }, ...(rate && { vat: { from: 'receipt' } }) } };
   }
   if (!moneyIn && rate && !other.account) notes.push({ kind: 'chooseAccount' });
+  const words = !moneyIn && !other.account ? wordsOf(docs) : undefined;
 
   // A receipt that states several rates adding up to the payment: a line per rate, each with its rate.
   const groups = docs.length === 1 && docs[0].currency === tx.currency && claims && other.vat === rate ? vatRates(docs[0]) : [];
@@ -394,10 +555,24 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   };
   // A collective payment (Sammelauftrag): one line per part, named by its payee and reference, when the parts add up to it (r9k-6).
   const parts = partsOf(tx, paid);
-  const lines = split ? groups.map((g) => place(other.account, gross(g)!, String(g.ratePercent), { ...(other.source?.account && { account: other.source.account }), vat: { from: 'receipt' } }))
+  const sold = !!other.account && chart().typeOf(other.account) === 'revenue';
+  // Several invoices of hers: a line each, with the VAT each proves (#382).
+  const perInvoice = sold && own && own.use.length > 1 && ownAt.from === 'invoice' ? own.use.map((r) => {
+    const v = saleVat(tx, [r], Math.abs(r.amount!));
+    if (v.note && !notes.some((n) => n.kind === v.note!.kind)) notes.push(v.note);
+    const code = v.parts ? '' : v.vat;
+    return place(other.account, Math.abs(r.amount!), code, { ...(other.source?.account && { account: other.source.account }), ...(code && v.source && { vat: v.source }) }, `${text} · ${r.filename}`);
+  }) : undefined;
+  // More than is open of her one invoice: revenue up to that, the rest a line without an account, as for an app invoice (#356).
+  const surplus = sold && ownOpen !== undefined && ownOpen >= 0 && toRappen(paid) > toRappen(ownOpen) ? fromRappen(toRappen(paid) - toRappen(ownOpen)) : 0;
+  if (surplus) notes.push({ kind: 'ownInvoiceSurplus', number: own!.numbers[0], surplus });
+  const due = surplus ? fromRappen(toRappen(paid) - toRappen(surplus)) : paid;
+  const fromParts = sold && saleParts?.length ? saleParts.map((x) => place(other.account, x.amount, x.vat, { ...(other.source?.account && { account: other.source.account }), ...(x.vat && x.source && { vat: x.source }) })) : undefined;
+  const ownLines = perInvoice ?? fromParts ?? (surplus ? [...(due > 0 ? [place(other.account, due, other.vat, sourced(other.vat))] : []), place('', surplus, '')] : undefined);
+  const lines = ownLines ?? (split ? groups.map((g) => place(other.account, gross(g)!, String(g.ratePercent), { ...(other.source?.account && { account: other.source.account }), vat: { from: 'receipt' } }))
     : parts ? parts.map((p) => place(other.account, Math.abs(p.amount), other.vat, sourced(other.vat), partText(p)))
-      : [place(other.account, paid, other.vat, sourced(other.vat))];
-  return result(lines, extra);
+      : [place(other.account, paid, other.vat, sourced(other.vat))]);
+  return result(lines, { ...extra, ...(words && { words }) });
 }
 
 /**

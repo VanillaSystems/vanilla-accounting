@@ -151,6 +151,7 @@ export function errorText(e: unknown): string {
     case 'manualOnly': return t('error.manualOnly');
     case 'booksChanged': return t('error.booksChanged');
     case 'hasEntries': return t('error.hasEntries');
+    case 'ownInvoiceTaken': return t('error.ownInvoiceTaken');
     case 'bookedSince': return t('error.bookedSince', { payment: b.params.payment, n: b.params.entries, by: t(`error.bookedSince.${b.params.by}`) });
     case 'receiptPaid': return t('error.receiptPaid', { payment: b.params.payment });
     case 'pointerLinked': return t('error.pointerLinked', { payment: b.params.payment });
@@ -386,8 +387,11 @@ export const api = {
   privatePayment: (receiptId: string, part: PrivatePart = {}) => request<{ ref: string; date: string; corrects?: string; exchangeRate?: number; replaced?: JournalEntry[] }>('POST', `/api/receipts/${receiptId}/private-payment`, part),
 
   /** `inputTaxProof`: the other proof of the input tax, named instead of a receipt (#134). */
-  bookPayment: (ref: string, lines: BookingLine[], inputTaxProof?: string) =>
-    request<{ entries: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/entries`, { lines, ...(inputTaxProof !== undefined && { inputTaxProof }) }).then((r) => r.entries),
+  /** The sale question answered on the hand form (#382): the lines booked as hers and the answer set as on the question card. */
+  saleOnForm: (ref: string, body: { by: string; choice: 'saleDomestic' | 'saleAbroad' | 'notSale'; foreignTax?: { rate: number; amount: number; account: string }; lines: BookingLine[]; links: string[] }) =>
+    request<Question>('POST', `/api/transactions/${encodeURIComponent(ref)}/sale`, body),
+  bookPayment: (ref: string, lines: BookingLine[], inputTaxProof?: string, links?: string[]) =>
+    request<{ entries: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/entries`, { lines, ...(inputTaxProof !== undefined && { inputTaxProof }), ...(links?.length && { links }) }).then((r) => r.entries),
 
   attachEntries: (ref: string, own: string) =>
     request<{ before: JournalEntry[] }>('POST', `/api/transactions/${encodeURIComponent(ref)}/attach`, { ref: own }).then((r) => r.before),

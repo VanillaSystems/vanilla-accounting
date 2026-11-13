@@ -232,6 +232,12 @@ export interface InvoicingData {
   territory: string[];
   /** Words with which an invoice without the jurisdiction's VAT says its service is supplied abroad. */
   placeAbroad: string[];
+  /** The labels before a place of supply on an invoice («Leistungsort»): the hand form's proof of a supply abroad is a place outside the territory after one (#382). */
+  placeOfSupply?: string[];
+  /** Wordings that a price includes the jurisdiction's VAT («inkl. MWST»): never a supply abroad. */
+  vatIncluded?: string[];
+  /** The words that label a VAT on an invoice: a percentage beside one that is no rate of the jurisdiction is a foreign VAT. */
+  vatLabels?: string[];
 }
 
 /** setup.yaml: the accounts a new workspace gets from the setup's answers. */
@@ -244,8 +250,8 @@ export interface SetupData {
   owner: Record<string, { account: string; label: string }> & { otherwise: { account: string; label: string } };
   /** The account the bank's own fee row is booked on by code, without a VAT code (src/booking/bank-fee.ts, #359); absent: such a row is left to a rule, the model or the person. */
   bankCharges?: { account: string };
-  /** The wage account: a booking on it carries no VAT code (src/booking/rule-vat.ts); absent: no rule for wages is offered. */
-  wages?: { account: string };
+  /** The wage account: a booking on it carries no VAT code (src/booking/rule-vat.ts); absent: no rule for wages is offered. The hand form proposes it (#382); `deductions`: where wages' deductions go, books carrying it get no proposal. */
+  wages?: { account: string; deductions?: string };
   answers: {
     /** «Auszahlungen eines Zahlungsanbieters: ja»: the accounts added, and the firm's own payout split when no rule names the provider. */
     payouts: { accounts: string[]; sales: { otherwise: string }; fees: { account: string; vat: string }; clearing: { account: string; name: string } };
