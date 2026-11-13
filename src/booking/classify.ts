@@ -668,12 +668,8 @@ const newEntryId = () => randomBytes(8).toString('hex');
  */
 function receiptTaxOf(books: Books, tx: BankTransaction, entries: JournalEntry[], mapped: Receipt[]): JournalEntry[] {
   const whole = books.transactions.find((t) => t.ref === tx.ref);
-  return whole && whole.amount !== tx.amount ? entries : withReceiptTax(tx, entries, mapped, newEntryId, receiptTaxReason);
+  return whole && whole.amount !== tx.amount ? entries : withReceiptTax(tx, entries, mapped, newEntryId);
 }
-
-/** Why the input tax of a foreign payment is the invoice's own (src/booking/receipt-tax.ts). */
-const receiptTaxReason = (tax: number, rate: number) =>
-  `Der Beleg weist die Steuer in ${baseCurrency()} aus: ${tax.toFixed(2)} zu ${rate} % als Vorsteuer, wie auf dem Beleg, nicht aus der umgerechneten Zahlung gerechnet.`;
 
 /** A part of a collective payment, or what is left of it, as the model is asked about it: the books with only its own receipts, and the key its answer comes under. */
 interface PartView { books: Books; key: string; note?: string; cap?: true }

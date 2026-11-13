@@ -29,6 +29,7 @@ import { accountsOf } from '../workspace/reads.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
 import { clearingAccounts } from '../booking/providers.js';
+import { withReceiptTax } from '../booking/receipt-tax.js';
 import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
 import { offSide, type BookingLine } from '../accounting/manual-booking.js';
 import { isVatAmountCode } from '../accounting/validate.js';
@@ -665,7 +666,9 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
     accountDebit: l.accountDebit, accountCredit: l.accountCredit, amount: l.amount,
     ...(l.vatCode && { vatCode: l.vatCode }), description: l.description.trim(), ...rate, origin: 'manual', receipts, ...(corrects && { corrects }), ...(l.tags && { tags: l.tags }), by: { kind: 'person', at },
   }));
-  const entries = handTaxPointOf(books, tx, typed, accounts, fx, point);
+  // The tax the linked invoice states, as the classifier books it (#478): a payment rounded to 5 Rappen claims the invoice's tax, not the code's on what was paid.
+  const linked = books.receipts.filter((r) => receipts.includes(r.id));
+  const entries = handTaxPointOf(books, tx, withReceiptTax(tx, typed, linked, () => randomBytes(8).toString('hex')), accounts, fx, point);
   books.journalEntries.push(...entries);
   if (proof !== undefined) tx.inputTaxProof = { text: proof, at };
   bookedAgain(books, ref);
