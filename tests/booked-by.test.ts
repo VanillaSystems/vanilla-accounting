@@ -143,4 +143,9 @@ test('the bank\'s fee row says it is the bank\'s fee in its «Erfasst» line, re
   const purchase = { ...fee, reason: 'Beleg zeigt 8.1 % MWST' } as JournalEntry;
   assert.match(bookedByText(purchase, say), /die Vorsteuer folgt dem Beleg/, 'a purchase keeps its words');
   for (const lang of ['en', 'fr', 'it']) assert.doesNotMatch(bookedByText(fee, wordsIn(lang).t), /journal\.check/, `${lang}: the words exist`);
+  // Entries stored with today's words keep their fee wording: a later edit of bankFee.reason fails here (#398 review).
+  const stored = { ...fee, reason: 'Gebühr der Bank laut Kontoauszug: auf 6940 Bankspesen, ohne MWST. Leistungen einer Bank sind von der MWST ausgenommen, es gibt keine Vorsteuer.' } as JournalEntry;
+  assert.match(bookedByText(stored, say), /Gebühr der Bank laut Kontoauszug, ohne MWST$/);
+  const storedRefund = { ...fee, reason: 'Gebühr, die die Bank laut Kontoauszug zurückzahlt: von 6940 Bankspesen zurück, ohne MWST, wie die Gebühr.' } as JournalEntry;
+  assert.match(bookedByText(storedRefund, say), /Gebühr der Bank laut Kontoauszug, ohne MWST$/);
 });
