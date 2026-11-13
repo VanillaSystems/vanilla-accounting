@@ -16,6 +16,9 @@ import { isPurchaseDocument } from './evidence-check.js';
  */
 export const ASK_DAYS_BEFORE_DUE = 14;
 
+/** How often the VAT step reads a receipt whose read fails (#450) before the receipt counts as unreadable. */
+export const VAT_READ_TRIES = 3;
+
 /** The day the return of the payment's filing period is due, and the day from which the person is asked about the missing receipt. */
 export function receiptDue(date: IsoDate): { due: IsoDate; askFrom: IsoDate } {
   const { length, dueDays } = filing();
@@ -25,18 +28,22 @@ export function receiptDue(date: IsoDate): { due: IsoDate; askFrom: IsoDate } {
 
 /**
  * A receipt whose VAT the app tried to read and could not (issue #57): a scan too poor for its text
- * (needsVisionReview), or a reading that named no Swiss VAT either way. A person's facts are read.
+ * (needsVisionReview), a reading that named no Swiss VAT either way, or a read that failed
+ * VAT_READ_TRIES times (vatGivenUp, #450). A person's facts are read.
  * Only a purchase document counts: a copy or a sales record decides no input tax.
  */
-export function isUnreadable(r: Pick<Receipt, 'kind' | 'vatBy' | 'hasSwissVat' | 'vatSummary' | 'needsVisionReview' | 'vatExtractedAt'>): boolean {
-  return isPurchaseDocument(r) && r.vatBy !== 'human' && r.hasSwissVat === undefined && !r.vatSummary?.length && (!!r.needsVisionReview || !!r.vatExtractedAt);
+export function isUnreadable(r: Pick<Receipt, 'kind' | 'vatBy' | 'hasSwissVat' | 'vatSummary' | 'needsVisionReview' | 'vatExtractedAt' | 'vatReadFailures'>): boolean {
+  return isPurchaseDocument(r) && r.vatBy !== 'human' && r.hasSwissVat === undefined && !r.vatSummary?.length && (!!r.needsVisionReview || !!r.vatExtractedAt || vatGivenUp(r));
 }
+
+/** The VAT step read it VAT_READ_TRIES times and every read failed (#450): it is not tried again until its text, a read or a person changes that. */
+export const vatGivenUp = (r: Pick<Receipt, 'vatReadFailures'>): boolean => (r.vatReadFailures ?? 0) >= VAT_READ_TRIES;
 
 /**
  * A purchase document whose VAT nobody has read yet (#391): no facts, and not one that could not be
  * read (isUnreadable). The VAT step takes it up on its next run; until then it shows no rate either way.
  */
-export function vatNotRead(r: Pick<Receipt, 'kind' | 'vatBy' | 'hasSwissVat' | 'vatSummary' | 'needsVisionReview' | 'vatExtractedAt'>): boolean {
+export function vatNotRead(r: Pick<Receipt, 'kind' | 'vatBy' | 'hasSwissVat' | 'vatSummary' | 'needsVisionReview' | 'vatExtractedAt' | 'vatReadFailures'>): boolean {
   return isPurchaseDocument(r) && r.vatBy !== 'human' && r.hasSwissVat === undefined && !r.vatSummary?.length && !isUnreadable(r);
 }
 
