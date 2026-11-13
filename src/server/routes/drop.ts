@@ -42,7 +42,7 @@ import { unzip } from '../../intake/unzip.js';
 import { freeName, putInQuarantine, release } from '../../intake/quarantine.js';
 import { twinFinder, type Comparable } from '../../intake/duplicates.js';
 import { textFacts } from '../../parsers/receipt-text.js';
-import { documents } from '../../engines/index.js';
+import { baseCurrency, documents } from '../../engines/index.js';
 import { periodLock } from '../../books/store.js';
 import type { DropAction, DropRow, DropSession, QuarantineReason } from '../../types/drop.js';
 
@@ -360,6 +360,12 @@ function takenBytes(row: DropRow): Buffer | undefined {
   return path && existsSync(path) ? readFileSync(path) : undefined;
 }
 
+/** Whether the CSV's rows, by these columns, hold a movement: a day and an amount other than zero. */
+function moves(table: NonNullable<ReturnType<typeof csvTable>>, columns: CsvColumns): boolean {
+  const read = csvStatement(table, columns, { currency: baseCurrency() });
+  return 'kind' in read ? read.kind !== 'empty' : read.movements.some((m) => m.amount !== 0);
+}
+
 /**
  * A statement without a bank export read into its table (#217): the PDF by the model when one answers
  * here, else the table to fill by hand; a CSV by the mapping kept for its header, else its
@@ -373,6 +379,10 @@ async function readInto(s: DropSession, row: DropRow, bytes: Buffer): Promise<vo
     const takers = WS.bankAccounts.filter((x) => x.statements);
     const accounts = takers.map((x) => ({ account: x.account, label: x.label, currency: x.currency }));
     const guessed = kept ? undefined : guessColumns(table.header);
+    // A statement only when it reads as one (#406): by the columns its header names, a day and an amount other than
+    // zero on its rows. One that yields no movement so (a provider's list whose «amount» column is all zero) is no
+    // statement, never a table of empty lines; a header naming no such columns is asked as before.
+    if (guessed && !moves(table, guessed)) { Object.assign(row, { state: 'refused', reason: 'bank-csv' }); return; }
     // A CSV whose every payment the books hold on one account already (its bank export of the same days, #384): nothing to ask, nothing to read in.
     // Only on the account the file names by its IBAN when it names one; without, only a file of three payments or more (one or two equal rows of
     // another account are no proof). «Trotzdem übernehmen» (`anyway`) asks the columns as before.

@@ -76,6 +76,16 @@ provider:
   # «#1001 Cancelled»), after the browser's two header lines when printed from the browser. A page read
   # before the app read order facts is known by it: never taken for the payout's proof (#249).
   orderPage: [ '^\s*(?:.*\n+){0,2}?#(\d+)(?=\s|$)' ]
+  # Where the two reports are exported, as the German admin names the menus (the comments above): the drop
+  # names them when a person brings another export of Shopify instead (#406).
+  exportedAt:
+    sales: "Shopify Admin › Bestellungen › Exportieren"
+    fees: "Shopify Admin › Finanzen › Shopify Payments › Transaktionen exportieren"
+  # Shopify's payouts list (one row per payout, no order): no report the app books from. Known by these
+  # headers of its first line, so the drop says what it is instead of reading it as a bank statement (#406).
+  # The headers are those of the payouts export the persona tests model; not checked against a live shop.
+  otherExports:
+    payouts: [ "Payout Date", "Charges", "Refunds", "Fees", "Total" ]
   payoutDays: 7
 
 facts:

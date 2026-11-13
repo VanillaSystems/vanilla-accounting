@@ -320,6 +320,20 @@ provider:
   order, refund and fee up to its day. Held rows wait for the person, named in the drop row and kept on
   the report's receipt (`report.held`, the latest taking's, at most 200 named).
   «Rückgängig» takes only the report's own entries and links.
+- Its other exports a person may drop by mistake are named in the app file
+  under `otherExports` (only `payouts`, the payouts list: one row per payout,
+  no order), each by headers its first line has, all of them, and
+  `exportedAt` says where each report is exported, in the admin's own menu
+  words (`sales`, `fees`; leave one out when no file or runbook states it). The
+  drop sets such a file aside and says what it is and which reports to bring,
+  with their menu paths; it is never read as a bank statement (#406):
+  ```yaml
+  exportedAt:
+    sales: "Shopify Admin › Bestellungen › Exportieren"
+    fees: "Shopify Admin › Finanzen › Shopify Payments › Transaktionen exportieren"
+  otherExports:
+    payouts: [ "Payout Date", "Charges", "Refunds", "Fees", "Total" ]
+  ```
 - One source of sales per provider: a provider with `reports.sales` takes none
   from a payout report (a card terminal's PDF), whose sales book only with its
   payout booked from the clearing account.

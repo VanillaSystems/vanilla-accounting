@@ -33,7 +33,7 @@ import { APP_ASKER } from './sale-questions.js';
 import { loadClassifyContext, chartOf, mappedReceipts, type ClassifyContext } from '../booking/classify.js';
 import { chartNames } from '../booking/rule-book.js';
 import { fromClearing, isProvider, orderOf, payoutDaysOf, providerOfMoneyIn, providerOfPayment, type Provider } from '../booking/providers.js';
-import { bookReport, collectedBy, isReportRef, linkOrdersToSales, paymentFacts, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, unpaidRow, type PaymentFacts, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
+import { bookReport, recognizeOtherExport, collectedBy, isReportRef, linkOrdersToSales, paymentFacts, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, unpaidRow, type PaymentFacts, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
 import { loadKnowledge, homeOf } from '../knowledge/layers.js';
 import { silentUids } from '../knowledge/counterparties.js';
 import { businessOfReceipt } from './batch-payers.js';
@@ -49,7 +49,7 @@ import { standardAccounts } from '../workspace/chart.js';
 import { findFile, APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { wordsIn } from '../export/texts.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../types/index.js';
-import type { PayoutUnseen, ProviderAsk, ProviderProposal, ReportSummary } from '../types/drop.js';
+import type { CsvOfProvider, PayoutUnseen, ProviderAsk, ProviderProposal, ReportSummary } from '../types/drop.js';
 import { accountOf } from '../workspace/money-accounts.js';
 
 const ACTOR = moduleActor('sales-report');
@@ -73,12 +73,19 @@ export function providersOf(ws: Pick<Workspace, 'paths'>): Provider[] {
   }
 }
 
-/** What the drop recognises a CSV as, by the providers' files: whose report and which kind. */
-export function recognizeCsv(ws: Pick<Workspace, 'paths'>, bytes: Buffer): { provider: string; name: string; kind: 'sales' | 'fees' } | undefined {
+/**
+ * What the drop recognises a CSV as, by the providers' files: whose report and which kind, or which
+ * other export of a provider it is, with where its reports are exported (#406).
+ */
+export function recognizeCsv(ws: Pick<Workspace, 'paths'>, bytes: Buffer): CsvOfProvider | undefined {
   const providers = providersOf(ws);
-  const hit = recognizeReport(bytes.subarray(0, 16384).toString('utf8'), providers);
+  const text = bytes.subarray(0, 16384).toString('utf8');
+  const hit = recognizeReport(text, providers);
   const p = hit && providers.find((x) => x.id === hit.provider);
-  return hit && p ? { ...hit, name: p.name } : undefined;
+  if (hit && p) return { ...hit, name: p.name };
+  const other = recognizeOtherExport(text, providers);
+  const q = other && providers.find((x) => x.id === other.provider);
+  return other && q ? { provider: q.id, name: q.name, other: other.what, where: { ...q.provider.exportedAt } } : undefined;
 }
 
 /** The booking texts, in the books' language (German, docs/i18n.md). */

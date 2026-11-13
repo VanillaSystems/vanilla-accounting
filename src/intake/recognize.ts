@@ -5,7 +5,7 @@
  * is, src/intake/document-kind.ts). No model: what stays unclear is asked in the row, and the
  * workflow reads it properly later.
  */
-import type { DropRow } from '../types/drop.js';
+import type { CsvOfProvider, DropRow } from '../types/drop.js';
 import type { DocumentsData, OtherWhy } from '../core/modules/schema.js';
 import { STATEMENT_FILES } from '../providers/statement-files.js';
 import { documents } from '../engines/index.js';
@@ -15,10 +15,10 @@ import { pdfRuns, textOf } from '../parsers/pdf-text.js';
 import { csvTable } from '../providers/statement-read/csv.js';
 
 /** What the file is, and a PDF's text of its first pages (for the duplicate check; never stored in the row). */
-type Recognized = Pick<DropRow, 'kind' | 'how' | 'facts' | 'state' | 'reason' | 'document' | 'provider'> & { text?: string };
+type Recognized = Pick<DropRow, 'kind' | 'how' | 'facts' | 'state' | 'reason' | 'document' | 'provider' | 'otherExport'> & { text?: string };
 
-/** Whose sales or fee report a CSV is, by the columns the providers' business files name (src/intake/sales-report-import.ts recognizeCsv). */
-export type ReportOf = (bytes: Buffer) => { provider: string; name: string; kind: 'sales' | 'fees' } | undefined;
+/** Whose sales or fee report a CSV is, or which other export of a provider, by the providers' business files (src/intake/sales-report-import.ts recognizeCsv). */
+export type ReportOf = (bytes: Buffer) => CsvOfProvider | undefined;
 
 const starts = (b: Buffer, ...bytes: number[]) => bytes.every((x, i) => b[i] === x);
 const head = (b: Buffer, n = 4096) => b.subarray(0, n).toString('latin1');
@@ -68,6 +68,8 @@ export async function recognize(bytes: Buffer, name: string, words?: DocumentsDa
   if (/^\s*(<\?xml|<Document)/.test(head(bytes))) return { state: 'refused', reason: 'not-statement' };
   // A payment provider's sales or fee report, by its columns (#203): booked onto the provider's clearing account.
   const report = reportOf?.(bytes);
+  // Another export of a provider (its payouts list, #406): set aside, named, with the reports to bring instead; never a bank statement.
+  if (report && 'other' in report) return { state: 'refused', reason: 'provider-export', otherExport: { provider: report.provider, name: report.name, what: report.other, where: report.where } };
   if (report) return { kind: 'sales-report', how: 'structure', state: 'take', provider: { id: report.provider, name: report.name, kind: report.kind } };
   if (/\.csv$/.test(lower) || /^[^\n]*(buchung|valuta|booking|date)[^\n]*[;,\t][^\n]*(saldo|betrag|belastung|gutschrift|amount|balance)/i.test(head(bytes, 1024))) {
     // A bank's CSV export: read by its columns into a statement (#217); one that reads as no table is refused.

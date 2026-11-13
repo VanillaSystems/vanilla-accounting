@@ -84,6 +84,8 @@ export interface DropRow {
   statement?: { file: string; refs: string[]; account?: string };
   /** A payment provider's sales or fee report (a CSV its file's columns recognise, #203): whose, and which kind. */
   provider?: { id: string; name: string; kind: 'sales' | 'fees' };
+  /** Another export of a provider (its payouts list, #406): whose, what it is, and where the provider's reports are exported. */
+  otherExport?: OtherExportOf;
   /** A report taken: what it booked onto the provider's clearing account and what it left. */
   report?: ReportSummary;
   /** A report the company's file of its provider cannot book yet: the account (or fee code) the row asks for, once. */
@@ -206,8 +208,16 @@ export type DropReason =
   | 'provider-account'
   /** Taking a provider's report failed on an error (`message`): nothing of it was booked, the session goes on. */
   | 'report-failed'
+  /** Another export of a provider than the reports the app books from (`otherExport`): set aside, never read as a statement (#406). */
+  | 'provider-export'
   /** A provider's report held: no payout of the provider is recognised among the bank's payments of its days (`payoutUnseen`). */
   | 'payout-unseen';
+
+/** A provider's export the app books nothing from, as the drop names it (#406). */
+export interface OtherExportOf { provider: string; name: string; what: 'payouts'; where: { sales?: string; fees?: string } }
+
+/** What a CSV is by the providers' files: a report of one of them, or another export of one (src/intake/sales-report-import.ts recognizeCsv). */
+export type CsvOfProvider = { provider: string; name: string; kind: 'sales' | 'fees' } | { provider: string; name: string; other: 'payouts'; where: { sales?: string; fees?: string } };
 
 export interface DropSession {
   id: string;

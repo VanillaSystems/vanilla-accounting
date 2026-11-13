@@ -29,7 +29,7 @@ import { textIn } from '../../workflows/model.js';
 import { tasksWaiting } from '../automation/widget.js';
 import { forMe } from '../../questions/model.js';
 import type { Index } from '../../types/index.js';
-import type { DropRow, DropSession } from '../../types/drop.js';
+import type { DropRow, DropSession, OtherExportOf } from '../../types/drop.js';
 import { FileDetails } from './FileDetails.js';
 import { AccountField } from '../areas/journal/AccountField.js';
 import { CsvColumnsForm, StatementRead } from './StatementRead.js';
@@ -102,7 +102,7 @@ const groupIban = (iban: string) => iban.replace(/(.{4})/g, '$1 ').trim();
 /** What a waiting row says about its file, the parts apart: its kind (when known), the ZIP it came out of, the statement's account and period. */
 function metaOf(r: DropRow): string {
   return [
-    r.provider ? t(`drop.report.${r.provider.kind}`, { provider: r.provider.name }) : r.kind && t(`drop.kind.${r.kind}` as 'drop.kind.receipt'),
+    r.provider ? t(`drop.report.${r.provider.kind}`, { provider: r.provider.name }) : r.otherExport ? t(`drop.otherExport.kind.${r.otherExport.what}`, { provider: r.otherExport.name }) : r.kind && t(`drop.kind.${r.kind}` as 'drop.kind.receipt'),
     r.from && t('drop.from', { name: r.from }),
     r.facts?.iban,
     r.facts?.from && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to!)}`,
@@ -236,6 +236,15 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
   ].filter(Boolean).join(' · ');
 }
 
+/** A provider's other export (its payouts list, #406): what it is, which reports the app books from, and where the provider's admin exports them when its file says. */
+function otherExportText(o: OtherExportOf): string {
+  return [
+    t(`drop.otherExport.text.${o.what}`, { provider: o.name }),
+    o.where.sales && t('drop.otherExport.where.sales', { where: o.where.sales }),
+    o.where.fees && t('drop.otherExport.where.fees', { where: o.where.fees }),
+  ].filter(Boolean).join(' ');
+}
+
 /** A row with an open question, or one not taken: what it is and its small action. */
 function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
   const [password, setPassword] = useState('');
@@ -273,6 +282,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
               {r.readAs.ref ? <button type="button" className="linkbtn" data-testid="drop-open-statement" onClick={() => go({ area: 'bank', payment: r.readAs!.ref })}>{t('drop.openStatement')}</button> : null}
             </>
           ) : r.asked ? <small data-testid="drop-asked">{t('drop.read.asked', { month: monthName(`${r.asked.month}-01`) })}</small>
+          : r.otherExport ? <small data-testid="drop-other-export">{otherExportText(r.otherExport)}</small>
           : r.message ? <small>{r.message}</small> : r.reason ? <small>{t(`drop.reason.${r.reason}` as 'drop.reason.duplicate')}</small> : null}
           {asked ? (
             <span className="dacts">
