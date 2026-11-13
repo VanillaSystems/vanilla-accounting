@@ -166,3 +166,58 @@ test('#417 a line of the tax itself (a one-legged deduction by its bill) is name
   assert.ok(loadBooks(ws).journalEntries.some((e) => e.id === 'e-tx'));
   assert.deepEqual(noteOf(job, 'inputTaxUnproven')?.payments.map((p) => p.ref), ['TX']);
 });
+
+/** The invoice corrected under the same name: the same day and total, other words and VAT. */
+const CORRECTED = ['Muster Druck AG', 'Korrigierte Rechnung 4711 vom 10.07.2026', 'Flyer, ohne Mehrwertsteuer', 'Total CHF 172.00'];
+
+test('#417 a corrected invoice under the same name (same day and total, other words), no model: the link goes along, the booking keeps naming what it saw and is counted to check, whichever its code', async () => {
+  for (const vatCode of ['I81', 'I0']) {
+    const { ws, rdir, old, run } = await booked({ vatCode });
+    writeFileSync(join(rdir, old.filename), await textPdf(CORRECTED));
+    const job = await run();
+    assert.deepEqual(job.steps.map((s) => s.state), ['done', 'done'], `${vatCode} ${JSON.stringify(notesOf(job))}`);
+    const after = loadBooks(ws);
+    const now = after.receipts.find((r) => r.filename === old.filename)!;
+    assert.notEqual(now.id, old.id, vatCode);
+    assert.deepEqual(after.mappings.filter((m) => m.transactionRef === 'TX').map((m) => m.receiptId), [now.id], `${vatCode}: the link goes along`);
+    const e = after.journalEntries.find((x) => x.id === 'e-tx');
+    assert.equal(e?.vatCode, vatCode, `${vatCode}: never taken back on a guess`);
+    assert.deepEqual(e?.receipts, [old.id], `${vatCode}: it names the document it was booked from, not one it never saw`);
+    assert.equal(now.hasSwissVat, undefined, `${vatCode}: no VAT carried over other words`);
+    assert.deepEqual(noteOf(job, 'rewritten')?.files.map((f) => f.check), [1], `${vatCode}: a person checks it`);
+  }
+});
+
+test('#417 a corrected invoice under the same name, with a model: the booking is booked again from the new read', async () => {
+  const { ws, rdir, old } = await booked({});
+  writeFileSync(join(rdir, old.filename), await textPdf(CORRECTED));
+  const ask = async () => '{}';
+  const job = await runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask, steps: [['read', readStep], ['classify', classifyStep()]] });
+  assert.deepEqual(job.steps.map((s) => s.state), ['done', 'done'], JSON.stringify(notesOf(job)));
+  assert.equal(loadBooks(ws).journalEntries.some((x) => x.id === 'e-tx'), false, 'the booking from the old read is taken back');
+  assert.deepEqual(noteOf(job, 'rewritten')?.files.map((f) => f.check), [0], 'the run books it again: nothing for a person');
+});
+
+const rcpt = (id: string, gross: number, extra: Partial<Receipt> = {}): Receipt => ({ id, filename: `${id}.pdf`, location: 'archived', amount: gross, currency: 'CHF', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: Math.round(gross * 8.1 / 108.1 * 100) / 100, gross }], ...extra }) as Receipt;
+const ln = (id: string, amount: number, extra: Partial<JournalEntry> = {}): JournalEntry => ({ id, transactionRef: 'TX', date: '2026-11-05', accountDebit: '6570', accountCredit: '1020', amount, vatCode: 'I81', origin: 'classify', receipts: ['A', 'B'], ...extra });
+
+test('#417 a line of no receipt\'s amount (another currency, a private share) is judged by what is linked: a linked receipt with VAT proves it', () => {
+  const linkA = [{ transactionRef: 'TX', receiptId: 'A', by: 'llm' as const }];
+  // A CHF 95 line on a EUR 100 invoice, beside a CHF invoice; the CHF invoice went.
+  const foreign = { journalEntries: [ln('eur', 95)], mappings: linkA, receipts: [rcpt('A', 100, { currency: 'EUR' }), rcpt('B', 40)], transactions: [{ ref: 'TX' }] };
+  assert.deepEqual(inputTaxWithoutItsReceipt(foreign).map((e) => e.id), []);
+  // Half of a CHF 100 invoice on the expense (the rest private); another receipt of CHF 72 went.
+  const share = { journalEntries: [ln('half', 50)], mappings: linkA, receipts: [rcpt('A', 100), rcpt('B', 72)], transactions: [{ ref: 'TX' }] };
+  assert.deepEqual(inputTaxWithoutItsReceipt(share).map((e) => e.id), []);
+});
+
+test('#417 an import VAT deduction is named when its assessment is linked no more, though the courier\'s invoice stays', () => {
+  const books = {
+    journalEntries: [ln('ded', 12.9, { vatCode: 'M81-2', accountDebit: '', accountCredit: '1176' })],
+    mappings: [{ transactionRef: 'TX', receiptId: 'A', by: 'llm' as const }],
+    receipts: [rcpt('A', 30), rcpt('B', 0, { importVatDeduction: 'ded' })],
+    transactions: [{ ref: 'TX' }],
+  };
+  assert.deepEqual(inputTaxWithoutItsReceipt(books).map((e) => e.id), ['ded']);
+  assert.deepEqual(inputTaxWithoutItsReceipt({ ...books, mappings: [...books.mappings, { transactionRef: 'TX', receiptId: 'B', by: 'rule' as const }] }).map((e) => e.id), [], 'linked, it proves it');
+});

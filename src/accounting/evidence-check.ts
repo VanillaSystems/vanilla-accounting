@@ -260,9 +260,11 @@ const ownBill = (e: Pick<JournalEntry, 'amount' | 'exchangeCurrency'>, r: Pick<R
  * - a line at a purchase rate (claimsInputTax) is unproven when what is linked now shows no Swiss
  *   VAT for it (evidenceCheck's `vatWithoutReceipt`). Of several receipts it recorded, its own is
  *   the one of its amount: a line whose own receipt went is unproven even while another of the
- *   payment's receipts, of another line, stays and shows VAT.
- * - a line that deducts the tax itself (deductsTaxAmount) is unproven when none of the receipts it
- *   recorded is linked any more: its bill or assessment is its only proof.
+ *   payment's receipts, of another line, stays and shows VAT. A line of no receipt's amount (another
+ *   currency, a private share, a customs position) is judged by what is linked, as a whole.
+ * - a line that deducts the tax itself (deductsTaxAmount) is unproven when its proving document is
+ *   linked no more: the receipt that says it booked it (an assessment's importVatDeduction), else
+ *   every receipt it recorded, or one of them gone from the books (it may have been the proof).
  * Filed quarters too: a filed line is never changed, but the caller may tell the person of it.
  */
 export function inputTaxWithoutItsReceipt(books: { journalEntries: readonly JournalEntry[]; mappings: readonly Mapping[]; receipts: readonly Receipt[]; transactions: ReadonlyArray<{ ref: string; inputTaxProof?: InputTaxProof }> }): JournalEntry[] {
@@ -275,14 +277,22 @@ export function inputTaxWithoutItsReceipt(books: { journalEntries: readonly Jour
   const proven = new Set(books.transactions.filter((t) => t.inputTaxProof).map((t) => t.ref));
   return lost.filter((e) => {
     if (proven.has(e.transactionRef)) return false;
-    if (!claimsInputTax(e)) return !e.receipts!.some((id) => isLinked(e, id));
+    if (!claimsInputTax(e)) {
+      // Its proving document: the one that says it booked this deduction (an assessment's importVatDeduction), else any it recorded.
+      const proof = books.receipts.find((r) => r.importVatDeduction === e.id);
+      if (proof) return !isLinked(e, proof.id);
+      return !e.receipts!.some((id) => isLinked(e, id)) || e.receipts!.some((id) => !byId.has(id));
+    }
     const receipts = [...(linked.get(e.transactionRef) ?? [])].map((id) => byId.get(id)).filter((r): r is Receipt => !!r);
     const lines = books.journalEntries.filter((l) => l.transactionRef === e.transactionRef);
     const unproven = (evidence: readonly Receipt[]) => evidenceCheck(e, evidence, undefined, undefined, lines, lineBillsOf(books.mappings, e.transactionRef))?.kind === 'vatWithoutReceipt';
-    // Of several receipts it recorded, the line's own is the one of its amount: when none linked now is, its own went.
+    // Of several receipts it recorded, the line's own is the one of its amount: a linked one of its amount decides; when the one of
+    // its amount is among those that went (its record still says so), its own went. A line of no receipt's amount (another currency,
+    // a share, a position) is judged by what is linked, as a whole.
     if (e.receipts!.length >= 2 && receipts.length) {
       const own = receipts.filter((r) => ownBill(e, r));
-      return own.length ? unproven(own) : true;
+      if (own.length) return unproven(own);
+      if (e.receipts!.some((id) => !isLinked(e, id) && !!byId.get(id) && ownBill(e, byId.get(id)!))) return true;
     }
     return unproven(receipts);
   });

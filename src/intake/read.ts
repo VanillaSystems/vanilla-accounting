@@ -407,18 +407,24 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
       for (const m of carry) if (!index.mappings.some((x) => x.receiptId === now.id && x.transactionRef === m.transactionRef)) index.mappings.push({ ...m, receiptId: now.id });
       index.mappings = index.mappings.filter((m) => !app.includes(m) && !carry.includes(m));
       Object.assign(now, { originalFilename: old.originalFilename });
-      if (agrees) {
-        if (words(old.extractedText) === words(now.extractedText)) carryReadFacts(old, now);
-        // The app's open bookings name the document they were booked from: now the new read of it.
-        for (const e of naming) if (!hers.includes(e) && !lockNow.isClosed(e.date) && e.origin !== 'manual') e.receipts = [...new Set(e.receipts!.map((id) => (id === old.id ? now.id : id)))].sort();
+      // The same words: the same document. Its VAT goes along, and the app's open bookings name the new read of what they were
+      // booked from. The same day and total in other words may be a corrected invoice (another VAT): the link goes along, but
+      // the bookings keep naming what they saw, so a run with a model books them again from the new read; without one they are
+      // counted to check, never taken back on a guess.
+      const sameWords = agrees && words(old.extractedText) === words(now.extractedText);
+      const appNaming = naming.filter((e) => !hers.includes(e) && !lockNow.isClosed(e.date) && e.origin !== 'manual');
+      if (sameWords) {
+        carryReadFacts(old, now);
+        for (const e of appNaming) e.receipts = [...new Set(e.receipts!.map((id) => (id === old.id ? now.id : id)))].sort();
       }
+      const reread = agrees && !sameWords && !ask ? new Set(appNaming.map((e) => e.transactionRef)).size : 0;
       const keepOld = filed.length > 0 || hers.length > 0 || index.journalEntries.some((e) => e.receipts?.includes(old.id) && lockNow.isClosed(e.date)) || (!agrees && human.length > 0);
       if (keepOld) receipts.push(old);
       else release(index, { receipts: [old.id] });
       // The payments of the app's links dropped whose booking claims input tax and is not the classifier's to book again (#417):
       // a person's booking that names no receipt, another writer's, while no receipt still linked to the payment shows the VAT it claims.
       // A person looks. (A receipt the match step links later in the run is not known here.)
-      const check = human.length + hers.length + filed.length + unprovenOn(index, dropped, hers, lockNow.closedThrough);
+      const check = human.length + hers.length + filed.length + reread + unprovenOn(index, dropped, hers, lockNow.closedThrough);
       rewritten.push({ file: old.filename, check, kept: keepOld });
       log(`  ${old.filename}: its file changed; read again. ${dropped.length} link(s) of the app dropped, ${carry.length} carried, ${check} to check${keepOld ? '; the old record kept beside it' : ''}`);
     }

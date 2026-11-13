@@ -459,8 +459,10 @@ Two markers flag an entry you must read before you update:
   «Zahlung zieht Vorsteuer ab auf einen Beleg, der nicht mehr mit ihr verknüpft ist». The
   rewritten file's note also counts such a payment among the links to check, unless another
   receipt still linked shows its VAT. The same document saved again (other bytes, the same
-  words, or the same day and total) now keeps the app's links and bookings too, on the new read,
-  with the VAT read off the same words. Before, the app's links went, and without an AI the
+  words) now keeps the app's links and bookings too, on the new read, with its VAT. With the
+  same day and total in other words (perhaps a corrected invoice), the link goes along. The
+  booking still names what it was booked from, so a run with an AI books it again. Without an AI
+  it is counted to check. Before, the app's links went, and without an AI the
   booking was then taken back. In books where this happened, the open
   period's input tax (Ziffer 400/405) falls by what those bookings claimed. The demo figures do
   not change.
