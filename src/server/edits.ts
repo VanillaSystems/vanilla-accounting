@@ -36,7 +36,7 @@ import { assertOpen, receiptDates, refDates, RequestError } from './books.js';
 import { outsideStatements } from '../accounting/placed-account.js';
 import { nameWords } from '../intake/pairing.js';
 import { bookedInFiled } from '../books/twins.js';
-import { cardLinesOf } from '../books/card-lines.js';
+import { cardLinesOf, dropLineBills, type LineBill } from '../books/card-lines.js';
 
 function receiptOf(books: Books, id: string): Receipt {
   const r = books.receipts.find((x) => x.id === id);
@@ -98,6 +98,7 @@ export function setReceiptKind(books: Books, c: Extract<BookChange, { kind: 'rec
   if (c.as && SET_ASIDE.has(c.as)) {
     const links = books.mappings.filter((m) => m.receiptId === c.id).map((m) => m.transactionRef);
     for (const ref of links) assertOpen(books, refDates(books, ref), 'mapping');
+    dropLineBills(books, c.id);
     books.mappings = books.mappings.filter((m) => m.receiptId !== c.id);
     for (const ref of links) carried(books, ref);
     if (links.length) before.links = links;
@@ -176,7 +177,7 @@ function carried(books: Books, ref: string): void {
  * A receipt linked to a payment, or to a booking without one (withoutPayment), of the open period.
  * A receipt the owner paid privately takes no other link (assertNotPaidPrivately).
  */
-export function link(books: Books, receipt: string, payment: string, line?: number): BookChange | undefined {
+export function link(books: Books, receipt: string, payment: string, line?: number, bills?: readonly LineBill[]): BookChange | undefined {
   receiptOf(books, receipt);
   assertNotPaidPrivately(books, receipt, payment);
   if (!books.transactions.some((t) => t.ref === payment) && !withoutPayment(books, payment)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
@@ -185,6 +186,10 @@ export function link(books: Books, receipt: string, payment: string, line?: numb
   if (line !== undefined) assertLineFree(books, receipt, payment, line);
   // A link by hand (or by the AI sidebar on the person's wish) says so: Änderungen lists it (r8k-7).
   books.mappings.push({ transactionRef: payment, receiptId: receipt, by: 'human', ...(line !== undefined && { line }) });
+  // The undo of «Lösen» on a card statement puts the bills of its lines back with it (#409).
+  for (const b of bills ?? []) {
+    if (books.receipts.some((r) => r.id === b.receipt) && !books.mappings.some((m) => m.receiptId === b.receipt && m.transactionRef === payment)) books.mappings.push({ transactionRef: payment, receiptId: b.receipt, by: 'human', line: b.line });
+  }
   apart(books, receipt, payment, false);
   carried(books, payment);
   return { kind: 'unlink', receipt, payment };
@@ -345,10 +350,12 @@ export function unlink(books: Books, receipt: string, payment: string): BookChan
   assertOpen(books, refDates(books, payment), 'mapping');
   const had = books.mappings.length;
   const line = books.mappings.find((m) => m.transactionRef === payment && m.receiptId === receipt)?.line;
+  // A card statement takes the bills of its lines with it (#409); the undo puts them back.
+  const bills = dropLineBills(books, receipt, payment).get(payment);
   books.mappings = books.mappings.filter((m) => !(m.transactionRef === payment && m.receiptId === receipt));
   if (books.mappings.length < had) apart(books, receipt, payment, true);
   carried(books, payment);
-  return books.mappings.length < had ? { kind: 'link', receipt, payment, ...(line !== undefined && { line }) } : undefined;
+  return books.mappings.length < had ? { kind: 'link', receipt, payment, ...(line !== undefined && { line }), ...(bills?.length && { bills }) } : undefined;
 }
 
 /**
@@ -825,7 +832,7 @@ export function deleteEntry(books: Books, id: string): JournalEntry {
 export function applyChange(books: Books, c: BookChange, author: Author = BY_HAND): BookChange | undefined {
   switch (c.kind) {
     case 'receipt': return setReceipt(books, c.id, c.set);
-    case 'link': return link(books, c.receipt, c.payment, c.line);
+    case 'link': return link(books, c.receipt, c.payment, c.line, c.bills);
     case 'unlink': return unlink(books, c.receipt, c.payment);
     case 'entry': return setEntry(books, c.id, c.set, author);
     // A new booking (not one an undo puts back, which keeps its id and author) is its author's decision.

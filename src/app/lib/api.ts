@@ -359,8 +359,8 @@ function invoiceRefusalText(code: InvoiceRefusal | 'noBrowser' | 'printFailed', 
 
 type Ok = { ok: true };
 /** `confirm`: a second bank payment of another payee for a receipt that has one, confirmed (r8h-21). */
-type Link = { receiptId: string; transactionRef: string; confirm?: true; line?: number };
-type Linked = Ok & { again: string[]; kept?: string[] };
+type Link = { receiptId: string; transactionRef: string; confirm?: true; line?: number; bills?: Array<{ receipt: string; line: number }> };
+type Linked = Ok & { again: string[]; kept?: string[]; bills?: Array<{ receipt: string; line: number }> };
 /** A change by hand; `origin`, `reason` and `by` only from its undo (null: the booking had none). */
 export type JournalEntryPatch = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'vatCode' | 'description' | 'amount' | 'receipts'>> & { tags?: JournalEntry['tags'] | null }
   & { origin?: JournalEntry['origin'] | null; reason?: string | null; by?: JournalEntry['by'] | null };

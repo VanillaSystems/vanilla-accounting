@@ -272,6 +272,11 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
   // A card statement linked by hand: its lines are read at once, and the one bill of a line goes with it (#409).
   { method: 'POST', path: '/api/mapping/add', body: { receiptId: 'rcs2', transactionRef: 'O4' },
     check: (i) => i.receipts.find((r) => r.id === 'rcs2')?.cardLines?.length === 2 && i.mappings.some((m) => m.receiptId === 'rbill2' && m.transactionRef === 'O4' && m.line === 1) },
+  // «Lösen» on the card statement takes its line's bill with it; the undo, with the bills the answer named, puts both back (#409).
+  { method: 'POST', path: '/api/mapping/remove', body: { receiptId: 'rcs2', transactionRef: 'O4' },
+    check: (i) => !i.mappings.some((m) => m.transactionRef === 'O4' && (m.receiptId === 'rcs2' || m.receiptId === 'rbill2')) },
+  { method: 'POST', path: '/api/mapping/add', body: { receiptId: 'rcs2', transactionRef: 'O4', confirm: true, bills: [{ receipt: 'rbill2', line: 1 }] },
+    check: (i) => i.mappings.some((m) => m.receiptId === 'rcs2' && m.transactionRef === 'O4') && i.mappings.some((m) => m.receiptId === 'rbill2' && m.transactionRef === 'O4' && m.line === 1) },
   { method: 'DELETE', path: '/api/receipts/ro',
     check: (i) => !i.receipts.some((r) => r.id === 'ro') && !i.mappings.some((m) => m.receiptId === 'ro') },
   { method: 'POST', path: '/api/receipts/discard', body: { ids: ['rn'] },

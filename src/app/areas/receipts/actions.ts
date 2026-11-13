@@ -62,8 +62,12 @@ export function correctFiled(nav: Nav, books: Index, l: Ledger, ref: string, fro
 }
 
 /** The undo puts a link back that the person had: a second payment of the receipt included, and the line of a card statement it was the bill of (#409). */
-export const unlinkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string, line?: number) =>
-  run(nav, () => api.removeMapping(pair(v.r.id, ref)), t('receipts.unlinked', { what }), () => api.addMapping({ ...pair(v.r.id, ref), confirm: true, ...(line !== undefined && { line }) }));
+export function unlinkPayment(nav: Nav, v: ReceiptView, ref: string, what: string, line?: number) {
+  // A card statement takes its lines' bills with it; the undo puts them back.
+  let bills: Array<{ receipt: string; line: number }> | undefined;
+  return run(nav, async () => { bills = (await api.removeMapping(pair(v.r.id, ref))).bills; }, t('receipts.unlinked', { what }),
+    () => api.addMapping({ ...pair(v.r.id, ref), confirm: true, ...(line !== undefined && { line }), ...(bills?.length && { bills }) }));
+}
 
 /** «Mit dieser Zeile verknüpfen» (#409): the receipt as the bill of one line of a card's settlement; the undo takes it apart again. */
 export const linkCardLine = (nav: Nav, v: ReceiptView, ref: string, line: number, what: string) =>
