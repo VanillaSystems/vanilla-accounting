@@ -275,6 +275,8 @@ export type ClassifyRefusal =
   | { code: 'classifyBalance'; params: { date: string; currency: string; paid: number; booked: number } }
   | { code: 'classifySeparateFee'; params: { fee: string; currency: string; amount: number } }
   | { code: 'classifyOpenInvoice'; params: { number: string; customer: string } }
+  /** The payment's purchase receipts are not read yet (#391): it waits for the VAT step's reading, never booked on the model's guess. */
+  | { code: 'classifyVatNotRead'; params: { receipt: string } }
   | { code: 'classifyInputTaxShared'; params: { payments: string; currency: string; booked: number; shown: number } }
   /** The answer takes more off the wages' deductions account than it held on the payment's day (#426). */
   | { code: 'classifyWithheldOver'; params: { account: string; currency: string; taken: number; open: number } };

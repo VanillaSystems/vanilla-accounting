@@ -18,6 +18,7 @@
  */
 import { evidenceCheck, isPurchaseDocument, lineReceipts } from '../accounting/evidence-check.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
+import { isUnreadable, vatNotRead } from '../accounting/receipt-due.js';
 import { vat } from '../engines/index.js';
 import { wordsIn } from '../export/texts.js';
 import { identify, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
@@ -88,7 +89,8 @@ export function businessVat(k: Pick<Knowledge, 'counterpartyFiles'>): BusinessVa
   return { facts, companyDecides };
 }
 
-const unread = (r: Receipt): boolean => r.hasSwissVat === undefined && !r.vatSummary?.length;
+/** A receipt the company's `unreadReceipt` speaks of: one that could not be read, never one not read yet (#391, receipt-wait's companyRate). */
+const unread = (r: Receipt): boolean => isUnreadable(r);
 const ratedCode = /^(-?)([MI])(\d+)$/;
 
 /** The gross a receipt's rate group taxes: as read, else from its net or its tax. */
@@ -198,6 +200,9 @@ export function withPurchaseVat(tx: BankTransaction, entries: JournalEntry[], do
     // Only a sales record or a supporting document linked: no purchase document, so no input tax (pv-no-receipt).
     const check = evidenceCheck(e, read, undefined, undefined, entries);
     if (check?.kind === 'vatWithoutReceipt') return decide(e, check.code, de().t('rules.say.zeroCode', { code: check.code }));
+    // Receipts nobody has read show no Swiss VAT yet: no input tax on the model's word alone (#391).
+    const mine = lineReceipts(e, read);
+    if (!sign && mine.length && mine.every(vatNotRead)) return decide(e, `${family}0`, de().t('rules.say.zeroCode', { code: `${family}0` }));
     const part = tx.businessPart && model.length === 1 ? partRate(read, tx.businessPart, e.amount, tx.currency) : undefined;
     if (part !== undefined) {
       const box = vat().codes.purchaseBoxes;

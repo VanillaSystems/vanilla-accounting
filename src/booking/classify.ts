@@ -18,6 +18,7 @@ import { isVatAmountCode } from '../accounting/validate.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
 import type { BankTransaction, BookedBy, JournalEntry, Receipt } from '../types/index.js';
 import { isPurchaseDocument } from '../accounting/evidence-check.js';
+import { vatNotRead } from '../accounting/receipt-due.js';
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
@@ -759,6 +760,17 @@ export function classifyInput(books: Books, tx: BankTransaction, legs: readonly 
 }
 
 /**
+ * The receipts whose VAT must be read before the model books `tx` (#391): a payment out of a firm
+ * that claims input tax, whose linked purchase documents are all not read yet (vatNotRead). Empty
+ * otherwise: no receipt, one read, one that could not be read (its own wait, #57), money in.
+ */
+export function vatToRead(books: Books, tx: BankTransaction): Receipt[] {
+  if (tx.direction !== 'DBIT' || withoutInputTax()) return [];
+  const purchase = mappedReceipts(books, tx).filter(isPurchaseDocument);
+  return purchase.length && purchase.every(vatNotRead) ? purchase : [];
+}
+
+/**
  * The receipts linked to a payment; a copy a person marked as such never claims its input tax a second time.
  * A bill of one line of a card's settlement (Mapping.line, #409) is none of the whole payment's: only its
  * line's part sees it (byParts), whether or not the line still has its statement.
@@ -863,6 +875,8 @@ export interface ClassifyOutcome {
   asked: Asked[];
   /** Payments no rule decided, left unbooked because there is no model. */
   unasked: string[];
+  /** Payments out left unbooked until the VAT of their receipts is read (vatToRead, #391): the model is not asked to guess it. */
+  vatNotRead: string[];
   /** Collective payments booked in part, one line per part a rule decided; the rest is the person's (r10h-14). Also in `classified`. */
   partly: string[];
 }
@@ -888,7 +902,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     accounts: items, bankAccount: bankAccountFor(tx, context.bankAccounts), clearing, lock, rateOn: (c, d) => fx.daily(c, d),
     documents: mappedReceipts(booksOf(tx), tx), length: filing().length, newId: () => randomBytes(8).toString('hex'),
   });
-  const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], partly: [] };
+  const outcome: ClassifyOutcome = { classified: [], failed: [], asked: [], unasked: [], vatNotRead: [], partly: [] };
   // The legs of a card charge split across balances share its receipts: each books its share, the input tax of all of them never more than the receipts show (#190).
   const charges = chargesOf(books.transactions, (amount, currency, date) => { if (currency === baseCurrency()) return amount; const rate = fx.daily(currency, date) ?? fx.flat(currency); return rate === undefined ? undefined : amount * rate; });
   const legsOf = (tx: BankTransaction) => charges.of(tx).legs;
@@ -994,6 +1008,14 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   }
   // The payments that repay the owner's outlays, each told what was open for it after the earlier ones (#402).
   const repayments = repaymentsOf(books, context, context.wageWordings ?? [], fx);
+  // A payment out whose purchase receipts nobody has read yet waits for the VAT step, not for the model's guess at its input tax (#391);
+  // a repayment of the owner's outlays books onto her account and claims none, a part of a collective payment keeps the backstop in withPurchaseVat.
+  for (const tx of [...toModel]) {
+    if (views.has(tx) || proposing.has(tx.ref) || repayments.has(tx.ref) || !vatToRead(books, tx).length) continue;
+    toModel.splice(toModel.indexOf(tx), 1);
+    log(`  ${tx.ref}  waits: the VAT of its receipt is not read yet`);
+    outcome.vatNotRead.push(tx.ref);
+  }
   // The payments of contributions (#426): to a business that collects them, or one booked on the wages' accounts before; never a wage
   // (its text or its payee's), nor a purchase whose receipt shows the jurisdiction's VAT. Each is told what the wages withheld.
   const businessOf = (t: BankTransaction): string | undefined => {

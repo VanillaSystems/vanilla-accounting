@@ -39,6 +39,8 @@ export type IntakeNote =
   | { code: 'waitingReceipt'; count: number }
   /** Payments whose receipt's VAT could not be read (issue #57): not booked, each a question under Aufgaben. */
   | { code: 'receiptUnread'; count: number }
+  /** Payments out that wait until the VAT of their receipts is read (#391): booked by the next run, after the VAT step. */
+  | { code: 'vatNotRead'; count: number }
   /** The step threw. */
   | { code: 'error'; detail: string };
 
@@ -210,6 +212,7 @@ export function noteLines(notes: IntakeNote[]): string[] {
       case 'saleAsked': return `? ${n.count} customer payment(s) without an invoice wait for the owner: with VAT, abroad, or no sale?`;
       case 'waitingReceipt': return `${n.count} payment(s) wait for their receipt: booked once it is linked`;
       case 'receiptUnread': return `? ${n.count} payment(s) have a receipt whose VAT could not be read: each waits for the person under Aufgaben`;
+      case 'vatNotRead': return `${n.count} payment(s) wait until the VAT of their receipt is read: booked by the next run`;
       case 'error': return `⛔ ${n.detail}`;
     }
   });

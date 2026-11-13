@@ -398,6 +398,17 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
+  Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
+  der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no
+  Swiss VAT; the next run with an AI reads it. Nothing claims input tax on such a receipt: with an
+  AI its payment waits until the receipt is read (the run says «… warten, bis die MWST ihrer Belege
+  gelesen ist»; «Buchen» on the payment reads it first, in the same click), a rate code the AI or a rule writes on it becomes the zero code, and the
+  company's «unlesbarer Beleg zählt als 8.1 %» counts only a receipt that could not be read. A rule
+  drafted on such receipts asks for the VAT instead of filling «keine», and Bezugsteuer is no longer
+  booked because a receipt said nothing. A VAT word counts only as a word: «August», «Muster» and
+  «Industrie» are no longer read as «USt». TVA, IVA and a UID written with spaces («CHE 111.222.333
+  TVA») count now.
 - Pairing (#426): a bill whose own number the payment names, with the same amount to the cent, is
   paired by code past its terms too, up to half a year after its date (a compensation fund's Akonto
   bill of early July paid at the end of September), so the payment is booked with it in the same
