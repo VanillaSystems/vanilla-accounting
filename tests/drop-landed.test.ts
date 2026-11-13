@@ -6,11 +6,15 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CLOSING_GROUPS, closingCounts, closingGroupOf, receiptStateOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, ownDate, type ClosingCounts, type ClosingGroup, type FileState } from '../src/app/shell/drop-summary.js';
+import { CLOSING_GROUPS, CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingCounts, closingGroupOf, receiptStateOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, ownDate, type ClosingCounts, type ClosingGroup, type FileState } from '../src/app/shell/drop-summary.js';
 import { parsePeriod } from '../src/accounting/periods.js';
 import type { DropRow } from '../src/types/drop.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 import type { Question } from '../src/questions/model.js';
+import de from '../src/app/i18n/locales/de.js';
+import en from '../src/app/i18n/locales/en.js';
+import fr from '../src/app/i18n/locales/fr.js';
+import it from '../src/app/i18n/locales/it.js';
 
 const TODAY = '2026-11-12';
 
@@ -85,7 +89,7 @@ test('the summary counts the drop\'s payments and receipts from the books', () =
   const s = dropSummary(rows, books, (t) => !booked.has(t.ref), held, questions, groupOf(books, receiptOf as never));
   assert.deepEqual(s.payments, { n: 23, from: '2026-07-15', to: '2026-09-15', booked: 12, waitReceipt: 8, asked: 1, unbooked: 2, openFrom: '2026-08-15' });
   assert.deepEqual(s.files, only({ statement: 1, matched: 2, read: 3, unread: 1, known: 1 }), 'the staged file without text waits for its reading; the copy not taken is counted too');
-  assert.deepEqual(dropSummary([row('dup', { state: 'duplicate' })], books, () => true, new Set(), [], groupOf(books, receiptOf as never)), {}, 'nothing taken: no counts');
+  assert.deepEqual(dropSummary([row('dup', { state: 'duplicate' })], books, () => true, new Set(), [], groupOf(books, receiptOf as never)), { files: only({ known: 1 }) }, 'nothing taken: no payments, the file still counted');
   // A photo without text, archived on a Mac without an AI: Belege says it waits for reading (#343), so the drop does not call it read.
   const photo = { id: 'photo', location: 'archived' as const, extractedText: '', extractionMethod: 'tesseract' as const };
   const withPhoto = (r: DropRow) => (r.id === 'photo' ? photo : receiptOf(r));
@@ -147,7 +151,7 @@ test('the closing lines count every dropped file once, for any mix of row states
     ...Array.from({ length: 4 }, (_, i) => ({ r: row(`r${i}`), x: { kind: 'read' } as FileState })),
     ...Array.from({ length: 3 }, (_, i) => ({ r: row(`w${i}`), x: { kind: 'waits' } as FileState })),
     ...Array.from({ length: 6 }, (_, i) => ({ r: row(`p${i}`), x: { kind: 'unread' } as FileState })),
-    { r: row('ab'), x: { kind: 'supporting', why: 'Auftragsbestätigung' } as FileState },
+    { r: row('ab'), x: { kind: 'supporting', why: 'Auftragsbestätigung', of: { id: 'fm', name: 'Farbmix FM-78230' } } as FileState },
     { r: row('docx', { state: 'refused' }), x: undefined }, { r: row('dup', { state: 'duplicate' }), x: undefined },
     { r: row('agb', { state: 'quarantine', reason: 'not-receipt' }), x: undefined }, { r: row('herbst', { state: 'quarantine', reason: 'not-receipt' }), x: undefined },
   ];
@@ -162,4 +166,20 @@ test('the bar moves with the part of the run that is done, not only with files a
   assert.equal(dropProgress([1, ...Array(16).fill(0)]), 6, 'the statement at rest, sixteen receipts queued');
   assert.equal(dropProgress([1, ...Array(16).fill((2 + 8 / 16) / 4)]), 65, 'their run is in its third step of four, half of them read');
   assert.equal(dropProgress(Array(17).fill(1)), 100);
+});
+
+test('every closing group has its sentence, said in each language, and in one of the lines (review of #384)', () => {
+  const rendered = new Set<ClosingGroup>(['statement', 'matched', 'read', ...RECEIPT_SENTENCES, ...OTHER_SENTENCES]);
+  assert.deepEqual(CLOSING_GROUPS.filter((g) => !rendered.has(g)), [], 'a group no line names');
+  assert.equal(RECEIPT_SENTENCES.length + OTHER_SENTENCES.length, Object.keys(CLOSING_SENTENCE).length, 'each sentence in one line');
+  for (const [lang, locale] of Object.entries({ de, en, fr, it })) {
+    for (const key of [...Object.values(CLOSING_SENTENCE), 'drop.sum.unreadNoAi']) assert.ok(key in locale.messages, `${lang}: ${key}`);
+  }
+});
+
+test('a drop of only refused or asking files still has its closing lines; a document beside an invoice not in the books is said so', () => {
+  const refused = [row('docx', { state: 'refused' }), row('csv', { state: 'asks', reason: 'csv-columns' })];
+  assert.deepEqual(dropSummary(refused, { transactions: [] }, () => true, new Set(), [], (r) => closingGroupOf(r, undefined)).files, only({ refused: 1, asks: 1 }));
+  assert.equal(closingGroupOf(row('ab'), { kind: 'supporting', why: 'Auftragsbestätigung' }), 'beside', 'no invoice of it in the books: «kommt neben ihre Rechnung»');
+  assert.equal(closingGroupOf(row('ab'), { kind: 'supporting', why: 'Auftragsbestätigung', of: { id: 'fm', name: 'FM-78230' } }), 'supporting');
 });

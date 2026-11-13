@@ -90,7 +90,7 @@ export interface DropRow {
   askProvider?: ProviderAsk;
   /** A report held because no payout of its provider is recognised: why, and what was looked at. */
   payoutUnseen?: PayoutUnseen;
-  /** The person took the report anyway («Trotzdem übernehmen»): the unseen-payout check is skipped. */
+  /** The person took the report anyway («Trotzdem übernehmen»): the unseen-payout check is skipped; a bank CSV «schon da» is read, its columns asked. */
   anyway?: true;
   /** What its text says it is, when it is no plain receipt (src/intake/document-kind.ts): kept beside an invoice, or no receipt at all. */
   document?: SupportingWhy | OtherWhy;

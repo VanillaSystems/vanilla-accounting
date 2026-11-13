@@ -57,9 +57,20 @@ export function filedReceipt(books: Pick<Books, 'config' | 'mappings' | 'transac
   return dates.length ? dates.every(lock.isClosed) : !!r.date && lock.isClosed(r.date);
 }
 
-/** The receipts the step takes up: what the run view lists as read is what the step works on. Facts a person set are never taken up, not even with `force`; a bank statement has no VAT facts. */
-export const vatCandidates = (books: Books, force = false): Receipt[] =>
-  books.receipts.filter((r) => r.vatBy !== 'human' && r.kind !== 'statement' && (force || ((!hasFacts(r) || unprovenNoVat(r)) && !r.needsVisionReview && !filedReceipt(books, r))));
+/**
+ * «No Swiss VAT» code read off the text's words without a model (textFacts `noSwissVat`, #384): a
+ * provisional fact, kept without `vatExtractedAt`, that a model's reading replaces when one comes.
+ */
+export const provisionalNoVat = (r: Receipt): boolean =>
+  r.vatBy !== 'human' && r.kindBy !== 'human' && r.kind !== 'sales-record' && r.hasSwissVat === false && r.vatExtractedAt == null
+  && !r.vatId && !r.vatSummary?.length && !!textFacts(r.extractedText ?? '').noSwissVat;
+
+/**
+ * The receipts the step takes up: what the run view lists as read is what the step works on. Facts a person set are never taken up,
+ * not even with `force`; a bank statement has no VAT facts. `withModel`: a model reads, so code's provisional facts are taken up too.
+ */
+export const vatCandidates = (books: Books, force = false, withModel = false): Receipt[] =>
+  books.receipts.filter((r) => r.vatBy !== 'human' && r.kind !== 'statement' && (force || ((!hasFacts(r) || unprovenNoVat(r) || (withModel && provisionalNoVat(r))) && !r.needsVisionReview && !filedReceipt(books, r))));
 
 export function vatStep({ force = false } = {}): StepRun {
   return async ({ books, ask, progress, log }) => {
@@ -67,7 +78,7 @@ export function vatStep({ force = false } = {}): StepRun {
       log('The firm is not registered for VAT: no VAT facts are read off its receipts.');
       return { notes: [] };
     }
-    const candidates = vatCandidates(books.read(), force);
+    const candidates = vatCandidates(books.read(), force, !!ask);
     if (candidates.length === 0) {
       log('All receipts already have VAT facts extracted (use --force to redo).');
       return { notes: [] };
@@ -88,7 +99,7 @@ export function vatStep({ force = false } = {}): StepRun {
       for (const [was, facts] of items) {
         const r = index.receipts.find((x) => x.id === was.id);
         // A person may have set the facts while the model read them.
-        if (r && r.vatBy !== 'human' && r.extractedText === was.extractedText && (replace || !hasFacts(r))) {
+        if (r && r.vatBy !== 'human' && r.extractedText === was.extractedText && (replace || !hasFacts(r) || (!!facts.vatExtractedAt && provisionalNoVat(r)))) {
           Object.assign(r, facts);
           r.amount = creditSigned(r);
         }
@@ -114,7 +125,8 @@ export function vatStep({ force = false } = {}): StepRun {
       const proven = needsLlm.flatMap((r): Array<[Receipt, Facts]> => {
         const f = textFacts(r.extractedText);
         if (f.vatId && f.vatSummary) return [[r, { vatId: f.vatId, hasSwissVat: true, vatSummary: f.vatSummary, lineItems: undefined, vatExtractedAt: new Date().toISOString() }]];
-        return f.noSwissVat ? [[r, { ...NO_VAT, vatExtractedAt: new Date().toISOString() }]] : [];
+        // Provisional: no vatExtractedAt, so a model's reading later replaces it (provisionalNoVat).
+        return f.noSwissVat ? [[r, { ...NO_VAT }]] : [];
       });
       apply(proven, false);
       for (const [r, f] of proven) log(`  ✓ ${r.filename}: from its text, ${f.hasSwissVat ? `${f.vatSummary!.map((g) => `${g.ratePercent}%`).join(', ')} ${f.vatId}` : 'no Swiss VAT, said in words'}`);

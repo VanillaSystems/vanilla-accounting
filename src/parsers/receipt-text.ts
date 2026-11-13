@@ -7,7 +7,7 @@
 import type { Receipt, VatRateGroup } from '../types/index.js';
 import type { DocumentsData } from '../core/modules/schema.js';
 import { documentWordsInUse } from '../books/statement-facts.js';
-import { wordsRe } from '../core/modules/words.js';
+import { HEAD, firstOf, namesStatement, wordsRe } from '../core/modules/words.js';
 
 // A Swiss UID survives text extraction in more shapes than one: extraction wraps it across
 // lines ("#CHE-\n153.004.184 MWST" on Shopify's bills, the same break after "CHE-" on some
@@ -70,13 +70,13 @@ const MONEY = /(?<![\d.,'’])(?:\d{1,3}(?:[.'’ ]\d{3})+|\d+)[.,]\d{2}(?![\d%]
 const UID_VAT = /CHE[-\s]*(\d{3})[.\s]*(\d{3})[.\s]*(\d{3})\s*(?:MWST|TVA|IVA|VAT)/;
 const NOT_TOTAL = /exkl|excl|netto|zwischen|sub/i;
 const CURRENCY = /\bCHF\b|\bFr\.|\bEUR\b|€|\bUSD\b|US\$/g;
-/** «Leistungsort Deutschland: nicht der schweizerischen MWST unterstellt», «not registered for VAT in Switzerland», «reverse charge»: no Swiss VAT, said in words. */
-const NO_SWISS_VAT = new RegExp([
-  String.raw`nicht der (?:schweizerischen )?(?:MWST|MwSt|Mehrwertsteuer) unterstellt`, String.raw`(?:von|nicht) der (?:MWST|MwSt|Mehrwertsteuer) (?:ausgenommen|befreit)`,
-  String.raw`unterlieg\w* nicht der (?:MWST|MwSt|Mehrwertsteuer)`, String.raw`keine (?:schweizerische )?(?:MWST|MwSt|Mehrwertsteuer)\b(?!-)`,
-  String.raw`not registered for VAT in Switzerland`, String.raw`no Swiss VAT`, String.raw`no (?:sales tax or )?VAT charged`, String.raw`reverse charge`,
-  String.raw`(?:exonérée?s?|exclue?s?) de la TVA`, String.raw`pas de TVA suisse`, String.raw`non soggett\w* (?:all')?IVA`, String.raw`esente (?:da )?IVA`, String.raw`senza IVA svizzera`,
-].join('|'), 'i');
+/** A Swiss rate as a percent anywhere in the text, with or without a VAT word beside it («8.1%», «2,6 %», «3.8 Prozent»). */
+const SWISS_PERCENT = new RegExp(String.raw`(?<![\d.,])(?:${RATES.map((r) => String(r).replace('.', '[.,]')).join('|')})\s*(?:%|Prozent|pour ?cent|per ?cento)`, 'i');
+/** A line that states an amount of VAT («MWST-Betrag 8.1% 81.00», «Total MWST», «Montant TVA»): no total of the document, unless it says the total includes the VAT. */
+const VAT_WORD = /MWST|MwSt|Mehrwertsteuer|TVA|IVA|\bVAT\b|\bUSt\b|Steuer/i;
+const VAT_INCLUDED = /inkl|incl|inclus|compris|enthalten|darin|davon|TTC/i;
+/** «auf 28'500.00», «on 1000.00»: a line that names a base the document computes on. */
+const ON_BASE = /(?:^|\s)(?:auf|on|sur|su)\s+(?:[\p{L} ]{0,30}\s)?(?:CHF\s*)?\d/iu;
 
 /** The Swiss VAT number a text names with its «MWST» (CHE-123.456.789): textFacts' vatId without the rest. */
 export function vatIdIn(text: string): string | undefined {
@@ -155,8 +155,8 @@ function statedGroups(text: string, lines: string[], all: number[], total: numbe
   return NONE_PART.test(text) ? [...groups, { ratePercent: 0, net: rest, vat: 0, gross: rest }] : undefined;
 }
 
-/** A part of a receipt said to carry no VAT: «0%», «0% (Export)», «Kurtaxe (ohne MWST)». */
-const NONE_PART = /(?<![\d.,])0(?:[.,]0)?\s*%|ohne (?:MWST|MwSt)|sans TVA|senza IVA|without VAT|no VAT/i;
+/** A part of a receipt said to carry no VAT: «0%», «0% (Export)», «Kurtaxe (ohne MWST)», «Kurs (von der MWST ausgenommen)». */
+const NONE_PART = /(?<![\d.,])0(?:[.,]0)?\s*%|ohne (?:MWST|MwSt)|keine (?:MWST|MwSt)|ausgenommen|exonér|sans TVA|esente|senza IVA|without VAT|no VAT|exempt/i;
 
 const cents = (x: number) => Math.round(x * 100) / 100;
 const currencyIn = (s: string) => (/\bCHF\b|\bFr\./.test(s) ? 'CHF' : /\bEUR\b|€/.test(s) ? 'EUR' : /\bUSD\b|US\$/.test(s) ? 'USD' : undefined);
@@ -164,37 +164,60 @@ const currencyIn = (s: string) => (/\bCHF\b|\bFr\./.test(s) ? 'CHF' : /\bEUR\b|�
 /** A line that is one amount and at most its currency («3200.00», «USD 48.00»): a cell of a column of amounts. */
 const isValueLine = (line: string) => amounts(line).length === 1 && !line.replace(DATE, ' ').replace(MONEY, '').replace(CURRENCY, '').trim();
 
-/** A statement's signs in a text: a balance, or four days or more (the dated movements of an account or a card). */
+/** A line that is a date and nothing else: a cell of a column of days, as a statement or a card's bill lists its movements. */
+const isDayLine = (line: string) => /^\s*\d{1,2}\.\d{1,2}\.20\d{2}\s*$/.test(line);
+
+/** A statement's signs in a text: a balance word, or a column of three days or more (the dated movements of an account or a card). */
 export function statementSigns(text: string): boolean {
-  return /(?<!\p{L})(?:Saldo|Saldovortrag|Schlusssaldo|Anfangssaldo|Solde|Saldo iniziale|Saldo finale|Opening balance|Closing balance)(?!\p{L})/iu.test(text)
-    || new Set([...text.matchAll(DATE)].map((m) => m[0])).size >= 4;
+  return /(?<!\p{L})(?:Saldovortrag|Schlusssaldo|Anfangssaldo|Endsaldo|Solde final|Saldo iniziale|Saldo finale|Opening balance|Closing balance)(?!\p{L})/iu.test(text)
+    || text.split('\n').filter(isDayLine).length >= 3;
 }
 
 /**
- * What tells that a text is no single receipt whose total can be read without a model: a statement
- * (it names itself so, shows a balance, or lists four days or more), or more than one page with a
- * total of its own (several invoices in one PDF).
+ * What tells that a text is no single receipt whose total can be read without a model: it names
+ * itself a statement in its head (namesStatement, before any receipt word), lists a column of days,
+ * or has more than one page with a total of its own (several invoices in one PDF).
  */
-function notOneReceipt(text: string, words: DocumentsData, totalRe: RegExp): boolean {
-  if (words.statement.length && wordsRe(words.statement).test(text)) return true;
-  if (statementSigns(text)) return true;
-  return text.split('\f').filter((page) => page.split('\n').some((l) => totalRe.test(l) && !NOT_TOTAL.test(l))).length > 1;
+function notOneReceipt(text: string, words: DocumentsData, isLabel: (l: string) => boolean): boolean {
+  if (namesStatement(text, words)) return true;
+  if (text.split('\n').filter(isDayLine).length >= 3) return true;
+  return text.split('\f').filter((page) => page.split('\n').some(isLabel)).length > 1;
 }
 
 /**
- * The total a text labels as its total (the jurisdiction's words, documents.yaml receipt.total:
- * Total, Betrag, Gesamtbetrag, Amount due, Montant total, Totale …), with the line its currency
- * stands on. On the label's own line: the last amount of the last such line. In a column of amounts
- * apart from its labels (a two-column invoice as pdf.js reads it): the largest amount, when it
- * closes the column. Without any label: the only amount an invoice shows. Undefined when the text is
- * unclear about it (notOneReceipt) or its largest amount does not close the column.
+ * A line that labels the document's total (the jurisdiction's words, documents.yaml receipt.total:
+ * Total, Gesamtbetrag, Rechnungsbetrag, zu bezahlen, Amount due, Montant total, Totale …, also inside
+ * a word: «Rechnungstotal»). Not: a sum before VAT or a part («exkl.», «netto», «Zwischentotal»), an
+ * amount of VAT («Total MWST»: unless it says the VAT is included, or `vatLines`), a base the document
+ * computes on («auf 28'500.00»), or what documents.yaml `notTotal` names (a payroll, a sum insured, a
+ * limit, hours).
+ */
+function totalLabel(words: DocumentsData, vatLines = false): (line: string) => boolean {
+  const total = words.receipt.total.map((w) => w.toLowerCase());
+  const not = words.notTotal?.length ? wordsRe(words.notTotal) : undefined;
+  return (l) => {
+    const low = l.toLowerCase();
+    return total.some((w) => low.includes(w)) && !NOT_TOTAL.test(l) && !not?.test(l)
+      && (vatLines || !(VAT_WORD.test(l) && !VAT_INCLUDED.test(l))) && !ON_BASE.test(l);
+  };
+}
+
+/**
+ * The total a text labels as its total, with the line its currency stands on. On the label's own
+ * line: the last amount of the last such line that is not 0.00 (a paid invoice's «Amount due 0.00»
+ * is no total). In a column of amounts apart from its labels (a two-column invoice as pdf.js reads
+ * it): the largest amount, when it closes the column (the VAT a «darin MWST» line names may stand
+ * below it). Without any label: the only amount an invoice shows (loneAmount). Undefined when the
+ * text is unclear about it.
  */
 function labelledTotal(text: string, lines: string[], words: DocumentsData): { amount: number; line?: string } | undefined {
   if (!words.receipt.total.length) return undefined;
-  const totalRe = wordsRe(words.receipt.total);
-  if (notOneReceipt(text, words, totalRe)) return undefined;
-  const labels = lines.filter((l) => totalRe.test(l) && !NOT_TOTAL.test(l));
-  const inline = labels.filter((l) => amounts(l).length && !isValueLine(l)).at(-1);
+  const isLabel = totalLabel(words);
+  if (notOneReceipt(text, words, isLabel)) return undefined;
+  const labels = lines.filter(isLabel);
+  const onLine = (l: string) => !isValueLine(l) && (amounts(l).at(-1) ?? 0) !== 0;
+  // A line of VAT only when no other: a customs assessment's «Gesamtbetrag MWST» is its total.
+  const inline = labels.filter(onLine).at(-1) ?? lines.filter(totalLabel(words, true)).filter(onLine).at(-1);
   if (inline) return { amount: amounts(inline).at(-1)!, line: inline };
   // The VAT a total holds may stand below it («Total CHF» then «darin MWST 8.1%»): one such amount per such label.
   const ownVat = (l: string) => amounts(l.replace(/(?:auf|on|sur|su)\s*(?:CHF\s*)?\d[\d'’.,]*\d/gi, ' ')).length > 0;
@@ -203,16 +226,34 @@ function labelledTotal(text: string, lines: string[], words: DocumentsData): { a
   const value = (l: string) => amounts(l)[0];
   const closing = values.slice(0, values.length - within).at(-1);
   const after = values.slice(values.length - within);
-  if (labels.length && closing !== undefined && values.every((v) => value(v) <= value(closing)) && after.every((v) => value(v) < value(closing))) {
+  if (labels.length && closing !== undefined && value(closing) > 0 && values.every((v) => value(v) <= value(closing)) && after.every((v) => value(v) < value(closing))) {
     return { amount: value(closing), line: currencyIn(closing) ? closing : labels.filter((l) => currencyIn(l)).at(-1) };
   }
-  const distinct = new Set(amounts(text));
-  return !labels.length && distinct.size === 1 && namesReceipt(text, words) ? { amount: [...distinct][0] } : undefined;
+  return labels.length ? undefined : loneAmount(text, lines, words);
 }
 
-/** A receipt's title anywhere, also as the end of a word («Prämienrechnung», «Akontorechnung»). */
-const namesReceipt = (text: string, words: DocumentsData) =>
-  words.receipt.title.some((w) => text.toLowerCase().includes(w.toLowerCase()));
+/** A unit price, not what the document totals: «à 89.00», «pro Stunde», «je», «per», «@», «/h». */
+const UNIT_PRICE = /(?:^|\s)(?:à|a|pro|je|per|@)\s|\/\s*(?:h|Std|Stunde|Monat|Stk)\b|\bx\s*\d/i;
+
+/**
+ * The only amount a document shows, when the document names itself an invoice: a line of its head
+ * starts with a receipt's title, also as the end of its first word («Rechnung 12», «Prämienrechnung
+ * Betriebshaftpflicht»), and no word of a document beside an invoice or of one that is none stands
+ * before it (a delivery note that says «Rechnung folgt», terms that name a fee). Never a unit price.
+ */
+function loneAmount(text: string, lines: string[], words: DocumentsData): { amount: number } | undefined {
+  const distinct = new Set(amounts(text));
+  if (distinct.size !== 1) return undefined;
+  const head = text.slice(0, HEAD);
+  const titles = words.receipt.title.map((w) => w.toLowerCase());
+  const at = head.split('\n').findIndex((l) => { const first = l.trim().split(/\s+/)[0]?.toLowerCase() ?? ''; return titles.some((w) => !w.includes(' ') && first.endsWith(w)); });
+  if (at < 0) return undefined;
+  const titleAt = head.split('\n').slice(0, at).join('\n').length;
+  const before = firstOf({ ...words.supporting, ...words.other }, head)[0];
+  if (before && before.at <= titleAt) return undefined;
+  if (lines.some((l) => amounts(l).length && UNIT_PRICE.test(l))) return undefined;
+  return { amount: [...distinct][0] };
+}
 
 const WORD = /\p{L}{3,}/gu;
 /** Shorter than this, even a PDF's own text says too little to read anything off. */
@@ -262,29 +303,24 @@ export const isReadReceipt = (r: Pick<Receipt, 'extractedText' | 'extractionMeth
 export const unprovenNoVat = (r: Pick<Receipt, 'vatBy' | 'vatExtractedAt' | 'hasSwissVat' | 'vatSummary' | 'extractedText' | 'extractionMethod'>): boolean =>
   r.vatBy !== 'human' && r.vatExtractedAt != null && r.hasSwissVat === false && !r.vatSummary?.length && !textProves(r);
 
-/** A rate of Swiss VAT named beside a VAT word («MWST 8.1%», «inkl. 2.6 % MWST»). */
-const SWISS_RATE = new RegExp(String.raw`(?:MWST|MwSt|TVA|IVA|VAT)[^\n]{0,20}?(?<![\d.,])(?:${RATES.map((r) => String(r).replace('.', '[.,]')).join('|')})\s*%|(?<![\d.,])(?:${RATES.map((r) => String(r).replace('.', '[.,]')).join('|')})\s*%[^\n]{0,20}?(?:MWST|MwSt|TVA|IVA|VAT)`, 'i');
-
-/**
- * The facts a person reads off a receipt's text. The total is what the text labels as its total
- * (labelledTotal), or the gross of a VAT group the arithmetic proves: the Swiss-rate arithmetic
- * proves the VAT, it is no condition for the amount, so an invoice without Swiss VAT has its total
- * too. `words`: the jurisdiction's document words; without them only the arithmetic reads a total.
- */
 export function textFacts(text: string, words: DocumentsData | undefined = documentWordsInUse()): TextFacts {
   const lines = text.split('\n');
   const all = amounts(text);
   const labelled = words ? labelledTotal(text, lines, words) : undefined;
-  // What a line states (a rate on its base) first, then the arithmetic: a tourist tax of 6.00 beside a base of 158.00 is no 3.8 % group.
+  // What lines state (a rate on its base) and that covers the labelled total first: a tourist tax of 6.00 beside a base of 158.00 is no 3.8 % group.
   const stated = statedGroups(text, lines, all, labelled?.amount);
-  const one = stated ? undefined : inclusive(lines, all) ?? exclusive(all);
-  // A group whose gross falls short of the labelled total covers only part of the receipt: no proof of its VAT.
-  const groups = stated ?? (one && (!labelled || near(labelled.amount, one.gross!, 0.011)) ? [one] : undefined);
-  const amount = labelled?.amount ?? one?.gross;
+  // Then the arithmetic, as before: a gross it proves wins over a label line that says otherwise (a «Restbetrag», a line read wrongly).
+  const one = stated ? undefined : exclusive(all) ?? inclusive(lines, all);
+  const groups = stated ?? (one ? [one] : undefined);
+  const amount = stated ? labelled!.amount : one?.gross ?? labelled?.amount;
   const vatId = vatIdIn(text);
   const date = dateOf(text);
-  const currency = amount === undefined ? undefined : currencyIn(labelled?.line ?? '') ?? currencyIn(text);
-  const noSwissVat = !groups && NO_SWISS_VAT.test(text) && !SWISS_RATE.test(text);
+  const line = labelled?.line;
+  const currency = amount === undefined ? undefined : currencyIn(line ?? '') ?? currencyIn(text);
+  // «No Swiss VAT» only when said in words (documents.yaml noVat) and nothing on the receipt speaks of Swiss VAT: no rate group, no
+  // Swiss rate as a percent anywhere, no Swiss VAT number with its «MWST». Silence is never read as it.
+  const says = !!words?.noVat?.length && wordsRe(words.noVat).test(text);
+  const noSwissVat = says && !groups && !SWISS_PERCENT.test(text) && !vatId;
   return {
     ...(date ? { date } : {}),
     ...(amount !== undefined ? { amount } : {}),

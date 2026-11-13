@@ -635,6 +635,12 @@ test('a bank CSV whose payments the camt.053 of the same days brought already: �
     assert.deepEqual([row.kind, row.state, row.reason, row.csv], ['statement-csv', 'duplicate', 'csv-known', undefined]);
     const other = await post(`/api/drop/${s.id}/files?name=neu.csv`, Buffer.from('Buchungsdatum;Text;Betrag\n02.12.2026;Neu;-12.00'));
     assert.deepEqual([other.rows[1].state, other.rows[1].reason, other.rows[1].csv?.columns], ['asks', 'csv-columns', { date: 0, text: 1, amount: 2 }], 'a CSV with a payment the books lack is asked, its columns proposed');
+    // Two rows that happen to equal two payments of the books prove nothing: asked (review of #384).
+    const two = await post(`/api/drop/${s.id}/files?name=zwei.csv`, Buffer.from(csv.split('\n').slice(0, 3).join('\n')));
+    assert.deepEqual([two.rows[2].state, two.rows[2].reason], ['asks', 'csv-columns']);
+    // The way out: «Trotzdem übernehmen» on the row asks the columns as for any CSV.
+    const anyway = await post(`/api/drop/${s.id}/rows/${row.key}`, { kind: 'take' });
+    assert.deepEqual([anyway.rows[0].state, anyway.rows[0].reason, anyway.rows[0].csv?.columns], ['asks', 'csv-columns', { date: 0, text: 1, amount: 2 }]);
     await rest();
   } finally {
     await SESSION(api).rest().catch(() => {});

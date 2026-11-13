@@ -66,7 +66,7 @@ export type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | 
  * that waits for an answer in its row (columns, a password, «was ist das?», «schon da?»), one set
  * aside or not saved, one taken back, and one still worked on.
  */
-export const CLOSING_GROUPS = ['statement', 'report', 'matched', 'read', 'supporting', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
+export const CLOSING_GROUPS = ['statement', 'report', 'matched', 'read', 'supporting', 'beside', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
 export type ClosingGroup = typeof CLOSING_GROUPS[number];
 export type ClosingCounts = Record<ClosingGroup, number>;
 
@@ -95,7 +95,7 @@ export function closingGroupOf(r: DropRow, x: FileState | undefined): ClosingGro
     case 'stuck': return 'stuck';
     case 'none': return 'none';
     case 'twin': return 'copy';
-    case 'supporting': return 'supporting';
+    case 'supporting': return x!.kind === 'supporting' && x.of ? 'supporting' : 'beside';
   }
 }
 
@@ -104,6 +104,21 @@ export function closingGroupOf(r: DropRow, x: FileState | undefined): ClosingGro
  * without one, a possible copy and one that lacks its date or amount among the latter, said apart too.
  */
 export const readOf = (f: ClosingCounts) => ({ read: f.matched + f.read + f.copy + f.incomplete, matched: f.matched, unmatched: f.read + f.copy + f.incomplete });
+
+/**
+ * The closing lines' sentences (#384): the payments line holds the statements, the read line the
+ * receipts linked or read (`readOf`); every other group has its sentence, in this order, the
+ * receipts' first, then the files that brought nothing new or wait in their row. A record over the
+ * groups, so a new group without its sentence does not compile (tests/drop-landed.test.ts).
+ */
+export const CLOSING_SENTENCE = {
+  supporting: 'drop.sum.supporting', beside: 'drop.sum.beside', copy: 'drop.sum.copies', incomplete: 'drop.sum.incomplete', unread: 'drop.sum.unread',
+  orderPage: 'drop.sum.orderPages', stuck: 'drop.sum.stuck', report: 'drop.sum.reports',
+  none: 'drop.sum.none', known: 'drop.sum.known', asks: 'drop.sum.asks', aside: 'drop.sum.aside', refused: 'drop.sum.refused', undone: 'drop.sum.undone', working: 'drop.sum.working',
+} as const satisfies Record<Exclude<ClosingGroup, 'statement' | 'matched' | 'read'>, string>;
+/** The receipts' sentences after the read line, and the line of the files that are no receipt or brought nothing new. */
+export const RECEIPT_SENTENCES = ['supporting', 'beside', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'report'] as const;
+export const OTHER_SENTENCES = ['none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
 
 /** How many rows are in each group: their sum is the number of rows. */
 export function closingCounts(rows: readonly DropRow[], groupOf: (r: DropRow) => ClosingGroup): ClosingCounts {
@@ -189,7 +204,7 @@ export function dropSummary(
   const askedN = open.filter((t) => asked.has(t.ref)).length;
   return {
     ...(pays.length ? { payments: { n: pays.length, from: pays[0].date, to: pays[pays.length - 1].date, booked: pays.length - open.length, waitReceipt, asked: askedN, unbooked: open.length - waitReceipt - askedN, ...(open[0] ? { openFrom: open[0].date } : {}) } } : {}),
-    ...(taken.length ? { files: closingCounts(rows, groupOf) } : {}),
+    ...(rows.length ? { files: closingCounts(rows, groupOf) } : {}),
   };
 }
 

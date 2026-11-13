@@ -234,7 +234,7 @@ export const ACTIONS: Record<string, Action> = {
   ...COLLECT_ACTIONS,
   // The inbox, one run per arrival (src/intake/): every step takes up only what is still to do.
   'intake.read': { outcomes: ['ok'], effects: ['books.write'], run: batch(readStep, inboxFiles) },
-  'intake.extract-vat': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(vatStep(), (b) => { const todo = new Set(vatCandidates(b)); return receiptsWhere((r) => todo.has(r))(b); }) },
+  'intake.extract-vat': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(vatStep(), (b) => { const todo = new Set(vatCandidates(b, false, true)); return receiptsWhere((r) => todo.has(r))(b); }) },
   'intake.match': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: learning(batch(matchStep, receiptsWhere((r) => r.location === 'staged'))) },
   'intake.book': { outcomes: ['ok'], effects: ['books.write', 'runs.close'], ai: true, run: batch(classifyStep(), unbooked) },
   'parsers.statement': declared(['ok']),

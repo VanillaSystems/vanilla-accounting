@@ -69,7 +69,7 @@ function List(props: Props) {
   const chips = useMemo(() => knownChips(query.chips ?? [], fields), [query.chips, fields]);
   const setChips = (next: Chip[]) => nav.setQuery({ chips: next.length ? next : undefined });
   const states = statesOf(chips);
-  const { rows, counts, hidden, candidates, pool } = useMemo(() => visible(l, period, chips, query.q, accounts ?? [], fields), [l, period, chips, query.q, accounts, fields]);
+  const { rows, counts, beside, hidden, candidates, pool } = useMemo(() => visible(l, period, chips, query.q, accounts ?? [], fields), [l, period, chips, query.q, accounts, fields]);
   const suggestions = useMemo(() => {
     const out = new Map<string, Candidate>();
     for (const v of rows) { const c = suggestion(v, l, toChf); if (c) out.set(v.r.id, c); }
@@ -144,6 +144,7 @@ function List(props: Props) {
                   <span className="n">{counts[f]}</span>{t(COUNT_LABEL[f])}
                 </button>
               ))}
+              {beside > 0 && <span className="m" data-testid="beside-count">{t('receipts.besideCount', { n: beside })}</span>}
             </>
           ) : <span>{filed ? t('receipts.filedReadOnly') : t('receipts.stillEmpty')}</span>}
           {canEdit && <RunInbox />}

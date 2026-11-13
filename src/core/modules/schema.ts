@@ -262,6 +262,10 @@ export interface SetupData {
 export interface DocumentsData {
   /** Words of a receipt: its title, its total, its due date, a payment slip, the label of its number. */
   receipt: Record<'title' | 'total' | 'due' | 'slip' | 'number', string[]>;
+  /** Words on a line with a total's word that make it no total of the document: a payroll, a sum insured, a limit, hours. */
+  notTotal?: string[];
+  /** Phrases by which a document says it charges no VAT of the jurisdiction (a sale abroad, an exempt premium, a reverse charge). */
+  noVat?: string[];
   /** Documents kept as proof beside an invoice, never paid on their own. */
   supporting: Record<'order-confirmation' | 'delivery-note' | 'reminder' | 'customs-assessment', string[]>;
   /** Documents that are no receipt at all. */

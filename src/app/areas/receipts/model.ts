@@ -173,6 +173,8 @@ function haystack(v: ReceiptView): string {
 export interface Visible {
   rows: ReceiptView[];
   counts: Counts;
+  /** Documents beside an invoice the list shows (#384): said beside «alle», which counts receipts only. */
+  beside: number;
   /** Files of the period that are no receipt, but for the statements Kontoauszüge shows at their account. */
   hidden: ReceiptView[];
   /** What the chips choose from: the period's receipts (and, asked for, the files that are none), searched. */
@@ -214,6 +216,7 @@ export function visible(l: Ledger, period: Period, chips: readonly Chip[] | unde
   return {
     rows: applyChips(candidates, chips ?? [], fields),
     counts,
+    beside: beside.length,
     hidden: states.size ? [] : applyChips(set.filter(match), chips ?? [], fields),
     candidates,
     pool: pool.filter((v) => !v.none || !placedStatement(v, accounts)),

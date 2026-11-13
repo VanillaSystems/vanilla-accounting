@@ -164,7 +164,8 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
     case 'take':
       if (settled || row.state === 'refused' || row.state === 'asks' || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
       unquarantine(row);
-      Object.assign(row, { state: 'take', reason: undefined });
+      // A bank CSV whose payments seemed to be in the books: read anyway, its columns asked (#384).
+      Object.assign(row, { state: 'take', reason: undefined, ...(row.reason === 'csv-known' ? { anyway: true as const } : {}) });
       break;
     case 'as': {
       // A PDF its words took for a statement that no account read in, or whose table waits, may still be a receipt: the person says so (#25, #217).
@@ -373,7 +374,13 @@ async function readInto(s: DropSession, row: DropRow, bytes: Buffer): Promise<vo
     const accounts = takers.map((x) => ({ account: x.account, label: x.label, currency: x.currency }));
     const guessed = kept ? undefined : guessColumns(table.header);
     // A CSV whose every payment the books hold on one account already (its bank export of the same days, #384): nothing to ask, nothing to read in.
-    const holder = guessed && takers.find((a) => { const r = csvStatement(table, guessed, a); return !('kind' in r) && r.movements.length > 0 && heldOfRead(r, a).size === r.movements.length; });
+    // Only on the account the file names by its IBAN when it names one; without, only a file of three payments or more (one or two equal rows of
+    // another account are no proof). «Trotzdem übernehmen» (`anyway`) asks the columns as before.
+    const named = takers.filter((a) => a.iban && compactIban(bytes.toString('utf8')).includes(compactIban(a.iban)));
+    const holder = guessed && !row.anyway && (named.length ? named : takers).find((a) => {
+      const r = csvStatement(table, guessed, a);
+      return !('kind' in r) && (named.length > 0 || r.movements.length >= 3) && r.movements.length > 0 && heldOfRead(r, a).size === r.movements.length;
+    });
     if (holder) { Object.assign(row, { state: 'duplicate', reason: 'csv-known', account: holder.account }); return; }
     row.csv = { header: table.header, sample: table.rows.slice(0, 5), rows: table.rows.length, accounts, ...(kept ? { columns: kept.columns, account: kept.account } : guessed ? { columns: guessed } : {}) };
     // The columns code recognises from the header and the one account that takes statements: only the check is left to her.

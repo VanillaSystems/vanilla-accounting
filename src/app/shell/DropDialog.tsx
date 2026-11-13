@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
 import { language, t, tWith } from '../i18n/index.js';
 import { dropStore, failedLine } from './drop-upload.js';
-import { closingGroupOf, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
+import { CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingGroupOf, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
 import { isUnbooked } from '../areas/bank/model.js';
 import { receiptWaits } from '../areas/automation/period-issues.js';
 import { parsePeriod, filingKeyOf } from '../../accounting/periods.js';
@@ -278,7 +278,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
             </span>
           ) : r.kind === 'statement-pdf' && r.reason === 'not-imported' && !r.chooseAccount && !r.unknownAccount && !r.read
             ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'as', as: 'receipt' })}>{t('drop.isReceipt')}</button>
-          : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' && r.kind !== 'statement-csv' && r.reason !== 'unreadable'
+          : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' && (r.kind !== 'statement-csv' || r.reason === 'csv-known') && r.reason !== 'unreadable'
             ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'take' })}>{r.state === 'quarantine' && r.reason === 'not-receipt' ? t('drop.isReceipt') : t('drop.takeAnyway')}</button> : null}
           {r.state === 'locked' ? (
             <form className="dpw" onSubmit={(e) => { e.preventDefault(); if (password) void act(session, r, { kind: 'unlock', password }).then(() => setPassword('')); }}>
@@ -416,22 +416,8 @@ function Summary({ sum, rows, books, go, receiptOf }: { sum: DropSummary; rows: 
  * The sentence of each closing group, in the words its rows use (#384). A record over every group:
  * a new group without its sentence does not compile, so no row is left out of the closing lines.
  */
-const SENTENCE: Record<Exclude<ClosingGroup, 'statement' | 'matched' | 'read'>, (n: number, noAi: boolean) => string> = {
-  report: (n) => t('drop.sum.reports', { n }),
-  supporting: (n) => t('drop.sum.supporting', { n }),
-  copy: (n) => t('drop.sum.copies', { n }),
-  incomplete: (n) => t('drop.sum.incomplete', { n }),
-  unread: (n, noAi) => t(noAi ? 'drop.sum.unreadNoAi' : 'drop.sum.unread', { n }),
-  orderPage: (n) => t('drop.sum.orderPages', { n }),
-  stuck: (n) => t('drop.sum.stuck', { n }),
-  none: (n) => t('drop.sum.none', { n }),
-  known: (n) => t('drop.sum.known', { n }),
-  asks: (n) => t('drop.sum.asks', { n }),
-  aside: (n) => t('drop.sum.aside', { n }),
-  refused: (n) => t('drop.sum.refused', { n }),
-  undone: (n) => t('drop.sum.undone', { n }),
-  working: (n) => t('drop.sum.working', { n }),
-};
+/** A closing group's sentence (CLOSING_SENTENCE); a photo no AI read says why on a Mac without one. */
+const sentence = (g: keyof typeof CLOSING_SENTENCE, n: number, noAi: boolean) => t(g === 'unread' && noAi ? 'drop.sum.unreadNoAi' : CLOSING_SENTENCE[g], { n });
 
 /** The receipts' sentences: read (linked or not), beside an invoice, a possible copy, incomplete, waiting for their reading, order pages, stopped. */
 function receiptLines(f: ClosingCounts, noAi: boolean): string {
@@ -441,13 +427,13 @@ function receiptLines(f: ClosingCounts, noAi: boolean): string {
       head: t('drop.sum.receipts', { n: read }),
       parts: [matched ? t('drop.sum.matched', { n: matched }) : '', unmatched ? t('drop.sum.unmatched', { n: unmatched }) : ''].filter(Boolean).join(', '),
     }) : '',
-    ...(['supporting', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'report'] as const).map((g) => (f[g] ? SENTENCE[g](f[g], noAi) : '')),
+    ...RECEIPT_SENTENCES.map((g) => (f[g] ? sentence(g, f[g], noAi) : '')),
   ].filter(Boolean).join(' ');
 }
 
 /** The files that brought nothing new or wait in their row: no receipt, already there, a question, set aside, not saved, taken back, still worked on. */
 function otherLines(f: ClosingCounts): string {
-  return (['none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const).map((g) => (f[g] ? SENTENCE[g](f[g], false) : '')).filter(Boolean).join(' ');
+  return OTHER_SENTENCES.map((g) => (f[g] ? sentence(g, f[g], false) : '')).filter(Boolean).join(' ');
 }
 
 /** A reason the run gives as a code has words of its own; any other is shown as the run said it. */
@@ -601,7 +587,7 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const pct = dropProgress([...taken.map((r, i) => doneOf(r, states[i], view)), ...Array<number>(coming).fill(0)]);
   // Every row in one group of the closing lines, by the state its own row shows (#384).
   const stateOf = new Map(taken.map((r, i) => [r, states[i]]));
-  const sum = !working && taken.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
+  const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
   // Only files the books hold already (#341): the window says that nothing new came in.
   const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate') || !!r.readAs);
   const waits = !working && states.some((x) => x.kind === 'waits' || x.kind === 'stuck' || x.kind === 'unread' || x.kind === 'twin');
@@ -626,7 +612,7 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
           </div>
         ) : null}
         {nothingNew ? <div className="dsum" data-testid="drop-nothing-new"><p>{t('drop.sum.nothing')}</p></div> : null}
-        {sum ? <Summary sum={sum} rows={taken} books={books} receiptOf={receiptOf} go={(loc) => { closeDrop(); onGo(loc); }} /> : null}
+        {sum && !nothingNew ? <Summary sum={sum} rows={taken} books={books} receiptOf={receiptOf} go={(loc) => { closeDrop(); onGo(loc); }} /> : null}
         <div className="wftabs" role="tablist">
           {tabs.map((x) => {
             const of = x === 'all' ? rows : rows.filter((r) => tabOf(r) === x);
