@@ -94,6 +94,17 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- **⚠ figures** Agreed basis (#360): a payment booked by hand dates each line with a VAT code by its
+  receipt and books it over Kreditoren or Debitoren, the payment settling that account on its own
+  day (an exchange difference to 6960), as the app's own booking does; a receipt of a filed quarter
+  leaves the line on the payment's day, declared in that quarter's Korrekturabrechnung, and one
+  from before the year the basis began leaves it as it is. Before, a hand line always took the
+  payment's day. The same holds for a sale answered on the hand form, a booking typed without its
+  payment and then tied to it, and a batch booking (whose preview lists the lines it books). The
+  hand form now proposes the account across periods too and says where the line goes, by the
+  proposed code (a credit note or refund by its latest document); a payment naming the firm's own
+  invoice of another period is booked from it, not only linked. The cash basis is unchanged;
+  payments booked already stay as they are.
 - Demos (#374): the bundled demos are written again by today's generator, so their payments show
   the other party's name and their bank fee rows are marked as fees, as in books read from a
   statement now; no booking and no figure changed. A test now fails when a committed demo is not

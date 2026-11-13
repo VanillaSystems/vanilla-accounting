@@ -15,7 +15,7 @@ import { Router } from 'express';
 import { readBooks, RequestError, tagsField, updateBooks, WS } from '../books.js';
 import { forgetBatch, keepBatch, keptBatch, runBatch, undoBatch, type BatchStep } from '../batch.js';
 import { learnFromCorrection } from '../questions.js';
-import { relinked } from '../edits.js';
+import { handTaxPoint, relinked } from '../edits.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { BATCH_KINDS, BATCH_MAX, type BatchAction, type BatchAnswer } from '../../types/batch.js';
 import type { BookChange } from '../../types/assistant.js';
@@ -80,7 +80,7 @@ router.post('/api/batch', async (req, res) => {
   const b = (req.body ?? {}) as Record<string, unknown>;
   const action = actionOf(b.action);
   const ids = idsOf(b.ids);
-  const ctx = { bankAccounts: WS.bankAccounts, fx: loadFxResolver() };
+  const ctx = { bankAccounts: WS.bankAccounts, fx: loadFxResolver(), point: handTaxPoint(WS) };
   if (b.preview === true) {
     const { changes, left } = runBatch(readBooks(), action, ids, ctx);
     res.json({ changes, left } satisfies BatchAnswer);

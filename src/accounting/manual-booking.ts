@@ -7,7 +7,7 @@ import type { BankTransaction, Index, JournalEntry, Receipt } from '../types/ind
 import { partsOf, partText } from './batch-parts.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import { paymentSides, type PaymentSide } from './payment-entries.js';
-import { codeOnAccount, formTakes, lookupVatCode } from './vat-codes.js';
+import { codeOnAccount, formTakes, lookupVatCode, vatCodeOf } from './vat-codes.js';
 import { agreedBasis, chart, filing, invoicing, vat, vatSetup, withoutInputTax } from '../engines/index.js';
 import { methodOf } from '../workspace/vat-setup.js';
 import { saleProofOf } from './sale-document.js';
@@ -19,8 +19,8 @@ import { namedInvoice, namesNumber, openAmount, revenueSplit } from '../invoices
 import { saleProposal, saleVatCode } from './sales-without-vat.js';
 import type { SaleChoice } from '../questions/model.js';
 import { isPurchaseDocument } from './evidence-check.js';
-import { openItemAccounts, sideOf } from './tax-point.js';
-import { filingKeyOf } from './periods.js';
+import { documentDates, openItemAccounts, sideOf, taxPointOf } from './tax-point.js';
+import { dayLock } from '../books/lock-line.js';
 import { issuedByFirm, ownNumbers } from '../intake/own-invoice.js';
 import { paymentText, paysIn } from '../intake/pairing.js';
 import { squash, tokensIn } from './document-numbers.js';
@@ -145,7 +145,10 @@ export type DraftNote =
   /** Wages here are booked with their deductions (the deductions account carries them): the form proposes no account. */
   | { kind: 'wageDeductions'; account: string }
   | { kind: 'ask'; question: string }
-  | { kind: 'taxPoint'; date: string }
+  /** On the agreed basis a line with a VAT code is booked on its receipt's day over the open item `account`, which the payment settles (atTaxPoint, #360). */
+  | { kind: 'taxPoint'; date: string; account: string }
+  /** On the agreed basis the receipt is of a filed period: the line stays on the payment's day, declared in that period's correction. */
+  | { kind: 'taxPointCorrects'; date: string; corrects: string }
   /** A receipt may be this payment's (DraftKnowledge.near): linked, its rate would apply (#397). */
   | { kind: 'nearReceipt'; name: string; rate?: number; why: string; vat: boolean }
   /** No account proposed, and the account list stands in the order of what the linked receipt names (#397). */
@@ -181,18 +184,17 @@ export interface BookingDraft {
   invoice?: { id: string; number: string; settles: boolean };
   /**
    * The firm's own invoices among the receipts whose numbers the payment names (#382, ownInvoicesOf).
-   * `from`: the proposal is read off them ('invoice'), comes from elsewhere (a rule, the owner:
-   * 'other'), or none is made because their tax point is in another period on the agreed basis
-   * ('taxPoint'). `links`: what booking (or, on 'taxPoint', the link alone) links. `earlier`: the
-   * day of the payment the invoice is linked to already (an instalment).
+   * `from`: the proposal is read off them ('invoice') or comes from elsewhere (a rule, the owner:
+   * 'other'). `links`: what booking links. `earlier`: the day of the payment the invoice is linked
+   * to already (an instalment).
    */
-  ownInvoice?: { id: string; number: string; file: string; links: string[]; from: 'invoice' | 'other' | 'taxPoint'; earlier?: string };
+  ownInvoice?: { id: string; number: string; file: string; links: string[]; from: 'invoice' | 'other'; earlier?: string };
   /** What the linked purchase document's lines say, for the account list to rank by (the standard chart's hints). */
   words?: string[];
   notes: DraftNote[];
 }
 
-type Books = Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts'>;
+type Books = Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'receipts' | 'config'>;
 
 const vatRates = (r: Receipt) => (r.hasSwissVat ? (r.vatSummary ?? []).filter((g) => g.ratePercent > 0) : []);
 const gross = (g: NonNullable<Receipt['vatSummary']>[number]) => g.gross ?? (g.net !== undefined ? g.net + g.vat : undefined);
@@ -416,8 +418,8 @@ function wordsOf(docs: readonly Receipt[]): string[] | undefined {
  *   among the receipts (ownInvoiceOf, #382) takes that invoice as its document, which booking links;
  * - money out: the business's own account (its file), else none, with the receipt's rate filled.
  * A rate comes from a purchase document alone (isPurchaseDocument): no input tax without a receipt
- * that shows it. On the agreed basis a document dated in another period than the payment proposes
- * no account: the hand form books on the payment's day, which its tax point is not (the form says so).
+ * that shows it. On the agreed basis the form says where a line with a VAT code goes when its
+ * document is of another day (taxPointOf): booking dates it so (src/server/edits.ts bookPayment).
  * Undefined when no payment has the ref.
  */
 export function bookingDraft(books: Books, ref: string, accounts: readonly LedgerBankAccount[], invoices?: readonly Invoice[], known: DraftKnowledge = {}): BookingDraft | undefined {
@@ -442,13 +444,26 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   const text = receipts.find((r) => r.description)?.description ?? tx.description;
   const notes: DraftNote[] = [];
   // Whether the proposal is read off her invoices: the banner says what is true (#382).
-  const ownAt: { from: 'invoice' | 'other' | 'taxPoint' } = { from: 'other' };
+  const ownAt: { from: 'invoice' | 'other' } = { from: 'other' };
   const ownInvoice = () => (own?.use.length
     ? { id: own.use[0].id, number: own.numbers.join(', '), file: own.use.map((r) => r.filename).join(', '), links: own.link.map((r) => r.id), from: ownAt.from, ...(own.earlier && { earlier: own.earlier.date }) }
     : undefined);
+  // On the agreed basis a line with a VAT code is dated by its documents (atTaxPoint): the form says where booking puts the first
+  // proposed line whose code is known, by that code (a sale or a purchase, a minus code by the latest document); nothing while none is.
+  const pointNote = (lines: readonly DraftLine[]): DraftNote | undefined => {
+    if (!agreedBasis()) return undefined;
+    const coded = lines.map((l) => vatCodeOf(l.vat, l.accountDebit, l.accountCredit)?.code).find((c) => sideOf(c));
+    if (!coded) return undefined;
+    const side = sideOf(coded)!;
+    const point = taxPointOf(side, coded.startsWith(vat().codes.negativePrefix), tx.date, documentDates([...receipts, ...(own?.link ?? [])]), dayLock(books), filing().length);
+    if (point?.corrects) return { kind: 'taxPointCorrects', date: point.date, corrects: point.corrects };
+    const items = openItemAccounts(known.chart ?? []);
+    return point && { kind: 'taxPoint', date: point.date, account: side === 'sale' ? items.receivable : items.payable };
+  };
   const result = (lines: DraftLine[], extra: Partial<BookingDraft> = {}): BookingDraft => {
     const mine = ownInvoice();
-    return { ref, date: tx.date, currency: tx.currency, ...(bank && { bank }), receipts: receiptIds, lines, ...(cancelled && { cancelledInvoice: cancelled }), ...(mine && { ownInvoice: mine }), ...extra, notes };
+    const point = pointNote(lines);
+    return { ref, date: tx.date, currency: tx.currency, ...(bank && { bank }), receipts: receiptIds, lines, ...(cancelled && { cancelledInvoice: cancelled }), ...(mine && { ownInvoice: mine }), ...extra, notes: point ? [...notes, point] : notes };
   };
   const place = (account: string, amount: number, vat: string, source?: DraftSource, description = text): DraftLine => ({
     accountDebit: bank?.side === 'accountDebit' ? bank.account : account,
@@ -493,11 +508,7 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
     return result(lines.length || rest.length ? [...lines, ...rest] : [place('', paid, '')], { invoice: { ...invoice, settles: false } });
   }
 
-  // On the agreed basis a coded line of a document is dated by the document (atTaxPoint); the hand form books on the payment's day.
-  const length = filing().length;
-  const elsewhere = agreedBasis() ? docs.find((r) => r.date && filingKeyOf(r.date, length) !== filingKeyOf(tx.date, length)) : undefined;
-  if (elsewhere?.date) { notes.push({ kind: 'taxPoint', date: elsewhere.date }); ownAt.from = 'taxPoint'; }
-  const proposes = !elsewhere && !cancelled && !!bank;
+  const proposes = !cancelled && !!bank;
 
   // A company rule decides the payment (it waits for its receipt, or asks first): its lines as it would book them, when they add up to what is open.
   const rule = known.rule;
@@ -542,7 +553,7 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   // The sale's VAT: off its documents, or asked where the payment names an invoice of hers the form cannot take (#382).
   const ofSale = (): SaleVat => {
     if (own?.named && !own.use.length && !docs.length) return vatSetup().registered ? { vat: '', note: { kind: 'saleVat', why: 'namedInvoice' } } : { vat: '' };
-    if (own?.use.length && ownAt.from !== 'taxPoint') ownAt.from = 'invoice';
+    if (own?.use.length) ownAt.from = 'invoice';
     // Several invoices of hers: a line each says its own VAT and asks only for a line without a code (perInvoice).
     if (own && own.use.length > 1) return { vat: '' };
     return saleVat(tx, docs, Math.min(paid, ownOpen ?? paid));
