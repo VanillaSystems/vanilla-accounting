@@ -17,6 +17,7 @@ import { ApiError, api, errorText } from '../lib/api.js';
 import { DEMO_HOME, START_PATH, desktop, setupPath } from './bridge.js';
 import { FirstRun, freeName } from '../ai/FirstRun.js';
 import { DraftConversation } from '../onboarding/DraftConversation.js';
+import { assumedOf } from '../../onboarding/model.js';
 import './start.css';
 
 interface BankRow { bank: string; currency: string; account: string; iban: string }
@@ -35,7 +36,15 @@ interface Form {
   netRates: [string, string, string][];
   banks: BankRow[];
   exportTo: string;
+  /** The answers the kind of firm gave that she has not touched (#385): marked «angenommen», kept in the books. */
+  assumed: QuestionKey[];
+  /** The kind of firm that gave them; absent when «Etwas anderes» did. */
+  assumedBy?: Exclude<Preset, 'custom'>;
 }
+
+/** The answers a kind of firm gives on the form: what `assumed` starts as when it is picked. */
+const presetAnswers = (preset: Exclude<Preset, 'custom'>): Partial<Answers> => withoutUnsteered({ ...PRESETS[preset].answers });
+const keysOf = (a: Partial<Answers>) => QUESTION_ORDER.filter((k) => a[k] !== undefined);
 
 const NO_RATES: [string, string, string][] = [['', '', ''], ['', '', '']];
 /** The tax authority's activity code as the manifest takes it (src/workspace/vat-setup.ts). */
@@ -183,7 +192,8 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
 }) {
   const [f, setF] = useState<Form>(() => ({
     preset: 'consultant', name: '', uid: '', owner: '', business: '', language: LOCALES.some((l) => l.code === language) ? language : 'de', root: '',
-    answers: withoutUnsteered({ ...PRESETS.consultant.answers }), netRates: NO_RATES, banks: [{ ...NEW_BANK, bank: 'UBS' }], exportTo: '',
+    answers: presetAnswers('consultant'), netRates: NO_RATES, banks: [{ ...NEW_BANK, bank: 'UBS' }], exportTo: '',
+    assumed: keysOf(presetAnswers('consultant')), assumedBy: 'consultant',
   }));
   const [checked, setChecked] = useState(false);
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
@@ -193,6 +203,7 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
   const questions = QUESTION_ORDER.filter((k) => asked(k, f.answers));
   const netRate = f.answers.vatRegistered === 'yes' && f.answers.vatMethod === 'net-rate';
   const complete = firstMissing(f.answers) === undefined;
+  const shownAssumed = f.assumed.filter((k) => questions.includes(k));
   const stop = complete ? firstUnsupported(f.answers as Answers) : undefined;
   const errors = useMemo(() => {
     const uid = parseUid(f.uid);
@@ -212,16 +223,21 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
   const invalid = !!(errors.name || errors.uid || errors.owner || errors.netRate || errors.banks.some(Boolean) || f.banks.length === 0);
 
   // «Etwas anderes» keeps what is answered so far and takes its own defaults (not registered for VAT) on top.
-  const choosePreset = (preset: Preset) => setF((x) => ({ ...x, preset, answers: preset === 'custom' ? { ...x.answers, ...PRESETS.custom.answers } : withoutUnsteered({ ...PRESETS[preset].answers }) }));
+  // What it gives is assumed until she touches it; «Etwas anderes» adds its own (not registered) to what is assumed already, naming no kind of firm.
+  const choosePreset = (preset: Preset) => setF((x) => (preset === 'custom'
+    ? { ...x, preset, answers: { ...x.answers, ...PRESETS.custom.answers }, assumed: [...new Set([...x.assumed, ...keysOf(PRESETS.custom.answers)])], assumedBy: undefined }
+    : { ...x, preset, answers: presetAnswers(preset), assumed: keysOf(presetAnswers(preset)), assumedBy: preset }));
   const pick = (key: QuestionKey, value: string) => setF((x) => {
     const multi = 'multi' in QUESTIONS[key];
     const now = answerList(x.answers, key);
     const next = multi ? (now.includes(value) ? now.filter((v) => v !== value) : [...now, value]) : value;
     // The reporting period follows the method (r5f-14): half-yearly on the net tax rate, quarterly on the effective one; the person may still change it.
     const period: Partial<Answers> = key === 'vatMethod' ? { period: value === 'net-rate' ? 'half-yearly' : 'quarterly' } : {};
+    // A touched answer is hers (#385); the period that follows her method too, and «nein» to the registration.
+    const assumed = x.assumed.filter((k) => k !== key && !(k in period) && !(value === NO_VAT && k === 'vatRegistered'));
     // Not registered, by «nein» or by the answer «we file no VAT returns» (#347): the questions of a registered firm go.
-    if ((key === 'vatRegistered' && value === 'no') || value === NO_VAT) return { ...x, answers: notRegistered(x.answers), netRates: NO_RATES };
-    return { ...x, answers: { ...x.answers, [key]: next, ...period } };
+    if ((key === 'vatRegistered' && value === 'no') || value === NO_VAT) return { ...x, answers: notRegistered(x.answers), netRates: NO_RATES, assumed };
+    return { ...x, answers: { ...x.answers, [key]: next, ...period }, assumed };
   });
   const [folderError, setFolderError] = useState('');
   const chooseFolder = async () => {
@@ -237,15 +253,17 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
       requestAnimationFrame(() => {
         const first = document.querySelector<HTMLElement>('.st-form .err');
         first?.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        first?.querySelector<HTMLElement>('input, button')?.focus({ preventScroll: true });
+        // A question without an answer gets the focus as a whole, never its first answer, which would read as a proposal (#385); Tab goes on to its answers.
+        (first?.matches('.st-q') ? first : first?.querySelector<HTMLElement>('input, button'))?.focus({ preventScroll: true });
       });
       return;
     }
     if (stop) return;
     const netRates = netRate ? f.netRates.flatMap(([percent, label, activityId]) => (rateOf(percent) === undefined ? [] : [{ rate: rateOf(percent)!, ...(label.trim() ? { label: label.trim() } : {}), ...(activityId.trim() ? { activityId: activityId.trim().toUpperCase() } : {}) }])) : [];
+    const assumed = assumedOf(shownAssumed, f.answers, f.assumedBy);
     onCreate({
       root, preset: f.preset, name: f.name, uid: f.uid, owner: f.owner, business: f.business, language: f.language,
-      answers: f.answers as Answers, netRates, banks: f.banks, exportTo: f.exportTo,
+      answers: f.answers as Answers, netRates, banks: f.banks, exportTo: f.exportTo, ...(assumed ? { assumed } : {}),
     });
   };
   const setRate = (i: 0 | 1, part: 0 | 1 | 2, value: string) => set('netRates', f.netRates.map((r, j) => (j === i ? r.map((x, k) => (k === part ? value : x)) : r)) as [string, string, string][]);
@@ -297,12 +315,14 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
 
         <section>
           <h2>{t('desktop.questions')}</h2>
+          {shownAssumed.length ? <p className="st-note" data-assumed-note>{f.assumedBy ? t('desktop.assumedNote', { preset: tData(`desktop.q.preset.${f.assumedBy}`) }) : t('desktop.assumedNoteBare')}</p> : null}
           {questions.map((key) => {
             const chosen = answerList(f.answers, key);
             const notes = chosen.map((v) => optionOf(key, v)).filter((o) => o?.unsupported || o?.caveat);
+            const missing = checked && !chosen.length && !('multi' in QUESTIONS[key] && !('required' in QUESTIONS[key]));
             return (
-              <div key={key} className={checked && !answerList(f.answers, key).length && !('multi' in QUESTIONS[key] && !('required' in QUESTIONS[key])) ? 'st-q err' : 'st-q'} data-q={key}>
-                <div className="st-qhd"><b>{tData(`desktop.q.${key}.ask`)}</b><span>{tData(`desktop.q.${key}.why`)}</span>{hasWhere(key) ? <span data-where>{tData(`desktop.q.${key}.where`)}</span> : null}</div>
+              <div key={key} className={missing ? 'st-q err' : 'st-q'} data-q={key} tabIndex={missing ? -1 : undefined} role="group" aria-labelledby={`stq-${key}`}>
+                <div className="st-qhd"><b id={`stq-${key}`}>{tData(`desktop.q.${key}.ask`)}{shownAssumed.includes(key) ? <span className="st-assumed" data-assumed>{t('onboarding.draft.assumed')}</span> : null}{missing ? <em className="st-choose">{t('desktop.pleaseChoose')}</em> : null}</b><span>{tData(`desktop.q.${key}.why`)}</span>{hasWhere(key) ? <span data-where>{tData(`desktop.q.${key}.where`)}</span> : null}</div>
                 <div className="st-opts" role={'multi' in QUESTIONS[key] ? 'group' : 'radiogroup'} aria-label={tData(`desktop.q.${key}.ask`)}>
                   {QUESTIONS[key].options.map((o) => (
                     <button key={o.value} type="button" role={'multi' in QUESTIONS[key] ? 'checkbox' : 'radio'} aria-checked={chosen.includes(o.value)} className={chosen.includes(o.value) ? 'on' : ''} onClick={() => pick(key, o.value)}>

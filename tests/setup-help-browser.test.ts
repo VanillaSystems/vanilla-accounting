@@ -125,6 +125,18 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
       await page.waitForSelector('.st-form [data-q=vatMethod].err', { timeout: 10_000 });
       assert.ok(await page.$('.st-form [data-q=basis].err'), `${size}: both VAT questions wait for her click`);
       assert.match(await text(page, '.st-create'), /Bitte jede Frage beantworten/);
+      // The jump to the first missing question focuses the question, never its first answer, which would read as a proposal (#385).
+      await page.waitForFunction(() => document.activeElement?.matches('.st-form [data-q=vatMethod]'), { timeout: 10_000 });
+      assert.match(await text(page, '.st-form [data-q=vatMethod] .st-qhd'), /bitte wählen/, `${size}: the question says it waits for her`);
+      await page.keyboard.press('Tab');
+      assert.deepEqual(await page.evaluate(() => [document.activeElement?.closest('[data-q]')?.getAttribute('data-q'), document.activeElement?.getAttribute('aria-checked')]), ['vatMethod', 'false'], `${size}: Tab goes on to its first answer, not chosen`);
+      // What the kind of firm gave and she did not touch is marked where it stands, with one line why (#385); a touched answer loses its mark.
+      assert.match(await text(page, '.st-form [data-assumed-note]'), /angenommen, weil es bei Beratung, Dienstleistungen \(GmbH\) üblich ist/);
+      assert.ok(await page.$('.st-form [data-q=employees] [data-assumed]'), `${size}: «Angestellte» marked assumed`);
+      assert.equal(await page.$('.st-form [data-q=vatMethod] [data-assumed]'), null, `${size}: no mark on a VAT question she answers herself`);
+      await press(page, '.st-form [data-q=employees] button[role=radio]:nth-child(3)');
+      await page.waitForFunction(() => !document.querySelector('.st-form [data-q=employees] [data-assumed]'), { timeout: 10_000 });
+      assert.ok(await page.$('.st-form [data-q=imports] [data-assumed]'), `${size}: the others keep theirs`);
       await page.$eval('.st-form [data-q=vatMethod]', (e) => e.scrollIntoView({ block: 'start' }));
       await shot(page, `${size}-0-form`);
       if (size === '1440x900') t.diagnostic(`words: form ${await words(page, '.st-form')}`);
@@ -278,6 +290,13 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
         await firstInSight('when the setup opens again on the summary');
         await shot(page, `${size}-5-reopened`);
       }
+      // The first step leads to the statements, which stand in no quarter while the books hold no payment, and say what to drop (#385).
+      await press(page, '[data-testid=setup-statement]');
+      await page.waitForFunction(() => /Noch kein Kontoauszug/.test((document.querySelector('.page .empty') as HTMLElement | null)?.innerText ?? ''), { timeout: 20_000 });
+      assert.match(await text(page, '.page .empty'), /camt\.053-Datei \(XML\) oder das PDF deiner Bank/);
+      assert.doesNotMatch(await text(page, '.page .empty'), /Q\d \d{4}/, `${size}: the empty page names no quarter`);
+      assert.equal(await page.$('.page .lhead [data-testid=period-picker]'), null, `${size}: the page's head names no period yet`);
+      await shot(page, `${size}-6-statements`);
       await page.close();
     }
   } finally {

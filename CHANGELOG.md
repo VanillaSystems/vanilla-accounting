@@ -29,6 +29,15 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- Setup: the form marks what its kind of firm answered and she did not touch «angenommen», with one
+  line why at the top of the questions («Diese Antworten sind angenommen, weil es bei Handwerk, Bau
+  (GmbH) üblich ist: ändere, was nicht stimmt»); a touched answer loses the mark. Form and setup
+  conversation keep what is still assumed in the new books, and the conversation in the books shows
+  it on the firm's card and in the summary with «angenommen» and «Ändern» to the place by hand,
+  never as «deine Antwort». The opening's words follow «Ausgangslage»: a switch takes the old books'
+  balance sheet, not «Eine neue Firma …». After «Buchhaltung anlegen» with a question open the focus
+  goes to that question, which says «bitte wählen», not to its first answer. Kontoauszüge without a
+  single payment names no quarter and says what to drop: «Noch kein Kontoauszug.» (#385)
 - The bank's own fee (#359): a row of a bank's camt.053 export that the bank itself coded as its
   charge for the account or for payments («Kontoführung», a card's annual fee) is booked by the
   app, with or without an AI, on Bankspesen (6940) without a VAT code; a fee paid back the other

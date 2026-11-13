@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import type { Index } from '../types/index.js';
 import { writeAtomic } from '../invoices/store.js';
-import { emptyProgress, parseProgress, withAnswer, withTopic, type Answer, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
+import { emptyProgress, parseProgress, withAnswer, withTopic, type Answer, type Assumed, type QuestionId, type SetupProgress, type SetupTopic, type TopicState } from './model.js';
 import type { SetupView } from './facts.js';
 
 export const ONBOARDING_FILE = 'onboarding.json';
@@ -38,7 +38,8 @@ const emptyBooks = (books: Pick<Index, 'transactions' | 'receipts'> & { journalE
  */
 export function setupView(ws: Ws, books: Parameters<typeof emptyBooks>[0]): Pick<SetupView, 'progress' | 'opensItself'> {
   const progress = readProgress(ws);
-  const first = !existsSync(fileOf(ws)) && emptyBooks(books);
+  // Not opened yet: no file, or one the form wrote with what it assumed (seedAssumed), which opens nothing.
+  const first = (!existsSync(fileOf(ws)) || !progress.started) && emptyBooks(books);
   return { progress, opensItself: first || (!!progress.created && !progress.ready) };
 }
 
@@ -47,8 +48,17 @@ export function setupView(ws: Ws, books: Parameters<typeof emptyBooks>[0]): Pick
  * books existed is in the settings now, and the conversation in the books shows it from there without
  * asking (#345), so no answer is recorded: only that these books open into the setup until «Los geht's».
  */
-export function seedCreated(ws: Ws, seed: { started: string }, now: string): SetupProgress {
-  return write(ws, { ...emptyProgress(), started: seed.started, created: now });
+export function seedCreated(ws: Ws, seed: { started: string; assumed?: Assumed }, now: string): SetupProgress {
+  return write(ws, { ...emptyProgress(), started: seed.started, created: now, ...(seed.assumed ? { assumed: seed.assumed } : {}) });
+}
+
+/**
+ * Books the form just created (#385): what the kind of firm answered and the person never touched, so
+ * the conversation in the books marks it «angenommen». Not `started`: the setup still opens by itself.
+ */
+export function seedAssumed(ws: Ws, assumed: Assumed | undefined): void {
+  if (!assumed) return;
+  write(ws, { ...readProgress(ws), assumed });
 }
 
 /** «Los geht's»: the setup ends; the books open as books from now on. */

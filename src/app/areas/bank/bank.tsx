@@ -140,10 +140,12 @@ function List(props: Props) {
   const elsewhere = !!linked && (linked.file.toDate < period.from || linked.file.fromDate > period.to);
   useSelectionFollowsRows(byFile ? route.file : route.statement, keys, select, elsewhere);
 
+  // Books without a single payment (#385): the first statement decides which months the page shows, so it names no period yet.
+  const first = books.transactions.length === 0 && !query.q;
   return (
     <div className="page">
-      <ListHead period={period} books={books} canEdit={canEdit}>
-        <div className="counts stc">
+      <ListHead period={period} books={books} canEdit={canEdit} noPeriod={first}>
+        {first ? null : <div className="counts stc">
           <span>{t('bank.nStatements', { n: files })}</span>
           {missing > 0 && <span className="warn" data-testid="missing-count">{I.dot}{t('bank.nMissing', { n: missing })}</span>}
           {without > 0 && <span data-testid="without-count" data-tip={t('bank.withoutTip')}>{t('bank.nWithout', { n: without })}</span>}
@@ -182,7 +184,7 @@ function List(props: Props) {
             />
             <Kbd keys={['/']} tip={t('bank.searchTip')} />
           </label>
-        </div>
+        </div>}
       </ListHead>
       {notice && <div className="notice" role="status">{notice}</div>}
       {ws ? <StatementReads nav={nav} canEdit={canEdit} version={books} /> : null}
@@ -197,7 +199,7 @@ function List(props: Props) {
         </div>
       )}
 
-      {!ws ? null : byFile ? (fileGroups.length === 0 ? (
+      {!ws ? null : byFile && !first ? (fileGroups.length === 0 ? (
         <div className="empty"><h2>{query.q ? t('bank.nothingFound') : t('bank.filesEmpty', { period: periodName(period) })}</h2></div>
       ) : (
         <div className="rows" role="listbox" aria-label={t('area.bank')}>
@@ -215,8 +217,8 @@ function List(props: Props) {
         </div>
       )) : rows.length === 0 ? (
         <div className="empty">
-          <h2>{query.q ? t('bank.nothingFound') : t('bank.emptyTitle', { period: periodName(period) })}</h2>
-          <p>{t('bank.emptyText')}</p>
+          <h2>{query.q ? t('bank.nothingFound') : first ? t('bank.firstTitle') : t('bank.emptyTitle', { period: periodName(period) })}</h2>
+          <p>{t(first ? 'bank.firstText' : 'bank.emptyText')}</p>
           {canEdit && !query.q && (
             <button type="button" className="well" style={{ width: '100%' }} onClick={() => statementAdd.run(props as AreaProps)}>
               <span><b>{t('bank.well')}</b>{t('bank.wellAny')}</span>

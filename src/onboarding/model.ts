@@ -7,7 +7,7 @@
  */
 
 import { parseVatSetup, type VatSetup } from '../workspace/vat-setup.js';
-import { salesKinds, type SalesKind } from '../workspace/setup.js';
+import { PRESET_NAMES, QUESTIONS as SETUP_QUESTIONS, QUESTION_ORDER, optionOf, salesKinds, type Preset, type QuestionKey, type SalesKind } from '../workspace/setup.js';
 
 /**
  * In the order the conversation takes them. Only what the app can do something with (#345): when the
@@ -40,6 +40,41 @@ export interface SetupProgress {
   topics: Record<SetupTopic, TopicProgress>;
   /** The person's answers to the conversation's questions (src/onboarding/conversation.ts), by question. */
   answers: Answers;
+  /**
+   * The setup's answers the kind of firm gave and the person never touched (#385), by the form or the
+   * setup conversation that created the books: shown «angenommen» in the books, as before them. `by`:
+   * the kind of firm, absent when «Etwas anderes» assumed them.
+   */
+  assumed?: Assumed;
+}
+
+/** Each assumed answer as it was given (a list for a question of several answers), so one changed since is no longer marked. */
+export interface Assumed { answers: Partial<Record<QuestionKey, string | string[]>>; by?: Exclude<Preset, 'custom'> }
+
+/** An `assumed` as read from disk or a request: unknown questions, answers and kinds left out; undefined when none is left. */
+export function parseAssumed(raw: unknown): Assumed | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const given = r.answers && typeof r.answers === 'object' ? r.answers as Record<string, unknown> : {};
+  const answers: Assumed['answers'] = {};
+  for (const k of QUESTION_ORDER) {
+    const v = given[k];
+    const multi = 'multi' in SETUP_QUESTIONS[k];
+    if (multi ? Array.isArray(v) && v.every((x) => typeof x === 'string' && optionOf(k, x)) : typeof v === 'string' && optionOf(k, v)) answers[k] = v as string | string[];
+  }
+  const by = typeof r.by === 'string' && r.by !== 'custom' && PRESET_NAMES.includes(r.by as Preset) ? r.by as Assumed['by'] : undefined;
+  return Object.keys(answers).length ? { answers, ...(by ? { by } : {}) } : undefined;
+}
+
+/** The answers of `keys` as `answers` gives them, kept as assumed; undefined when none has an answer. */
+export const assumedOf = (keys: readonly QuestionKey[], answers: Partial<Record<QuestionKey, unknown>>, by?: Preset): Assumed | undefined =>
+  parseAssumed({ answers: Object.fromEntries(keys.map((k) => [k, answers[k]])), by });
+
+/** The assumed answers the firm still has: those equal to what is set up now (`now`, the manifest's answers), in question order. */
+export function stillAssumed(a: Assumed | undefined, now: Partial<Record<QuestionKey, unknown>>): Array<{ key: QuestionKey; value: string | string[] }> {
+  if (!a) return [];
+  const same = (x: unknown, y: unknown) => JSON.stringify(Array.isArray(x) ? [...x].sort() : x) === JSON.stringify(Array.isArray(y) ? [...y].sort() : y);
+  return QUESTION_ORDER.flatMap((key) => (a.answers[key] !== undefined && same(a.answers[key], now[key]) ? [{ key, value: a.answers[key]! }] : []));
 }
 
 /**
@@ -104,6 +139,8 @@ export function parseProgress(raw: unknown): SetupProgress {
   if (typeof r.conversation === 'string' && r.conversation) out.conversation = r.conversation;
   if (typeof r.created === 'string') out.created = r.created;
   if (typeof r.ready === 'string') out.ready = r.ready;
+  const assumed = parseAssumed(r.assumed);
+  if (assumed) out.assumed = assumed;
   const topics = r.topics && typeof r.topics === 'object' ? (r.topics as Record<string, unknown>) : {};
   for (const topic of SETUP_TOPICS) {
     const p = topics[topic] as Record<string, unknown> | undefined;

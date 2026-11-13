@@ -13,7 +13,8 @@
  */
 import { Router } from 'express';
 import { RequestError, WS, patchBody, readBooks } from '../books.js';
-import { QUESTIONS, SETUP_TOPICS, TOPIC_STATES, isAnswerOf, isQuestion, isSetupTopic, isTopicState, type Answer } from '../../onboarding/model.js';
+import { QUESTIONS, SETUP_TOPICS, TOPIC_STATES, isAnswerOf, isQuestion, isSetupTopic, isTopicState, stillAssumed, type Answer } from '../../onboarding/model.js';
+import type { QuestionKey } from '../../workspace/setup.js';
 import { answerQuestion, finishSetup, markTopic, readProgress, setupView, startSetup } from '../../onboarding/store.js';
 import { partnerBins, type SetupFacts, type SetupView } from '../../onboarding/facts.js';
 import { topicStates } from '../../onboarding/conversation.js';
@@ -46,8 +47,26 @@ export function setupFacts(): SetupFacts {
     books: { payments: books.transactions.length, receipts: books.receipts.length, entries: (books.journalEntries ?? []).length },
     partners: partnerBins({ partners: view.partners, entries: partnerBooks.journalEntries ?? [], bankAccounts: new Set(WS.bankAccounts.map((b) => b.account)), accountName: (n) => chart.get(n) ?? '' }),
     rules: view.partners.reduce((n, p) => n + p.rules, 0),
-    ...(WS.profile ? { sells: { kinds: WS.profile.sells, accounts: setup().sells } } : {}),
+    ...(WS.profile ? { sells: { kinds: WS.profile.sells, accounts: setup().sells }, start: WS.profile.start } : {}),
+    ...assumedFacts(),
   };
+}
+
+/** The answers the firm has now, as the setup's questions name them: what an assumed answer is compared with. */
+function answersNow(): Partial<Record<QuestionKey, unknown>> {
+  const { company: c, profile } = WS;
+  const v = c.vat;
+  const { preset: _p, exportTo: _e, ...given } = profile ?? ({} as Partial<NonNullable<typeof profile>>);
+  return {
+    ...given, ...(c.legalForm ? { legalForm: c.legalForm } : {}), vatRegistered: v.registered ? 'yes' : 'no',
+    ...(v.registered ? { vatMethod: v.method, basis: v.reporting, period: v.period } : {}),
+  };
+}
+
+function assumedFacts(): Pick<SetupFacts, 'assumed'> {
+  const a = readProgress(WS).assumed;
+  const answers = stillAssumed(a, answersNow());
+  return answers.length ? { assumed: { ...(a?.by ? { by: a.by } : {}), answers } } : {};
 }
 
 /** In read-only mode (an auditor's copy) the setup never opens by itself. */

@@ -6,7 +6,7 @@
  * first turn needs no AI. Pure.
  */
 import type { Address } from '../invoices/model.js';
-import type { LegalForm, SalesKind } from '../workspace/setup.js';
+import type { LegalForm, Preset, QuestionKey, SalesKind } from '../workspace/setup.js';
 import type { VatSetup } from '../workspace/vat-setup.js';
 import type { SetupProgress, TopicStates } from './model.js';
 
@@ -30,6 +30,13 @@ export interface SetupFacts {
    * (modules/ch/setup.yaml `sells`); absent for a workspace without a profile, which is not asked.
    */
   sells?: { kinds: SalesKind[]; accounts: Record<SalesKind, { purchase?: string; sales: string }> };
+  /** «Ausgangslage» as the setup answered it; absent for a workspace without a profile. */
+  start?: 'new' | 'switching';
+  /**
+   * The answers the kind of firm gave that the person never touched (#385, SetupProgress.assumed), as
+   * the firm still has them; `by`: the kind of firm, absent for «Etwas anderes». Absent when none.
+   */
+  assumed?: { by?: Preset; answers: Array<{ key: QuestionKey; value: string | string[] }> };
 }
 
 /** One partner always booked the same way: what a rule would book. */

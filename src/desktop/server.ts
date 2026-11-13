@@ -17,6 +17,8 @@ import { SetupError, createWorkspace, type SetupRequest } from '../workspace/cre
 import { readManifest } from '../workspace/manifest.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, WorkspaceRefusal, appFolderIn, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
 import { bundledDemo, nameDemoCopy } from '../workspace/demo-copy.js';
+import { assumedOf, parseAssumed, stillAssumed } from '../onboarding/model.js';
+import { seedAssumed } from '../onboarding/store.js';
 import { beginDraft, createFromDraft, draftView, patchDraft, readDraft } from '../onboarding/draft-store.js';
 import type { SetupBegun, SetupDraftView } from '../onboarding/draft.js';
 import { MAX_TEXT, parseTalkRequest, talkDraft, type Ask, type SetupTalked } from '../onboarding/draft-talk.js';
@@ -267,7 +269,13 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   });
   app.post('/api/desktop/create', async (req, res) => {
     try {
-      const created = await createWorkspace(req.body as SetupRequest);
+      const body = req.body as SetupRequest & { assumed?: unknown };
+      const created = await createWorkspace(body);
+      // What the kind of firm answered and she never touched (#385): kept only where the books took it.
+      if (!created.existed) {
+        const said = parseAssumed(body.assumed);
+        seedAssumed(workspaceAt(created.root), said && assumedOf(stillAssumed(said, body.answers).map((a) => a.key), body.answers, said.by));
+      }
       res.json(await openBooks(created.root));
     } catch (e) { refuse(res, e); }
   });

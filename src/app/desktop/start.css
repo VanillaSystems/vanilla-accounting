@@ -51,6 +51,12 @@
 .st-rates .st-row { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 8px; margin: 6px 0; }
 .st-rates.err .st-qhd b { color: var(--warn, inherit); }
 .st-q.err .st-qhd b { color: var(--warn); }
+/* What the kind of firm assumed (#385): the quiet mark of the setup conversation's review (.obbadge.assumed). */
+.st-qhd b .st-assumed { margin-left: 8px; padding: 0 6px; border: 1px dashed var(--line-2); border-radius: 999px; color: var(--muted); font-size: 11.5px; font-weight: 400; vertical-align: 1px; }
+/* A question left without an answer after «Anlegen»: the group takes the focus and says so, no answer is singled out. */
+.st-qhd b .st-choose { margin-left: 8px; font-style: normal; font-weight: 500; font-size: 12px; color: var(--warn); }
+.st-q:focus { outline: none; }
+.st-q.err:focus { outline: 2px solid var(--warn); outline-offset: 4px; border-radius: 6px; }
 .st-badge { flex: none; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--ink-2); }
 .st-noai { font-size: 13px; line-height: 1.5; margin: -16px 0 24px; padding: 10px 12px; border-left: 3px solid var(--warn); background: var(--warn-soft); border-radius: 0 8px 8px 0; color: var(--ink); }
 .st-byhand { margin-right: auto; font-size: 13px; color: var(--muted); }
