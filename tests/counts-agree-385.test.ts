@@ -14,7 +14,7 @@ import type { DropRow } from '../src/types/drop.js';
 import { parsePeriod } from '../src/accounting/periods.js';
 import { homeFigures } from '../src/app/automation/home.js';
 import { dockWidget } from '../src/app/automation/widget.js';
-import { dockLine, heroLine, stageLines } from '../src/app/automation/words.js';
+import { cardLine, heroLine, stageLines } from '../src/app/automation/words.js';
 import { ledgerOf, visible } from '../src/app/areas/receipts/model.js';
 import { dropSummary, readOf, receiptStateOf } from '../src/app/shell/drop-summary.js';
 import { formatIn } from '../src/app/i18n/core.js';
@@ -74,7 +74,8 @@ const t = (key: string, vars: Record<string, string | number> = {}) => formatIn(
 
 test('the dock, Automatisierung, Belege and the drop dialog say the same of one set of books (#385)', () => {
   const f = figuresOf(Q3);
-  const dock = dockLine(t, dockWidget(f, undefined, 0, new Date(2026, 10, 13)));
+  // The dock's card says the receipts on one line, with their unit (#398).
+  const dock = cardLine(t, dockWidget(f, undefined, 0, new Date(2026, 10, 13)).card[0]);
   const page = { hero: heroLine(t, f), ...stageLines(t, f, true) };
   const belege = visible(ledger, Q3, undefined, undefined).counts;
   // The drop that brought the files of Q3 in, its possible copies as the dialog finds them.
@@ -91,8 +92,7 @@ test('the dock, Automatisierung, Belege and the drop dialog say the same of one 
   assert.ok(ledger.byId.get('copy-b')?.twin?.relation === 'duplicate', 'the second download is a possible copy');
 
   // «gelesen»: all but the photo, the undated one and the possible copy among them.
-  const read = t('dock.card.read', { n: 6 });
-  assert.match(dock, new RegExp(`^6 ${read}`), `the dock: «6 ${read}»`);
+  assert.match(dock, /^Belege: 6 gelesen/, `the dock: «${dock}»`);
   assert.equal(page.read, t('automation.home.s.unread', { n: 1 }), 'the page: only the photo is not read');
   assert.equal(t('drop.sum.receipts', { n: drop.read }), t('drop.sum.receipts', { n: 6 }), 'the drop: «6 Belege gelesen»');
   assert.equal(drop.read, drop.matched + drop.unmatched, 'the drop\'s parts add up to what it read');
@@ -102,7 +102,7 @@ test('the dock, Automatisierung, Belege and the drop dialog say the same of one 
   assert.equal(belege.linked, 2, 'Belege «2 zugeordnet»');
   assert.equal(drop.matched, belege.linked, 'the drop «einer Zahlung zugeordnet»');
   assert.equal(page.matched, t('automation.home.s.unmatched', { n: 7 - 2 }));
-  assert.match(dock, new RegExp(`· ${f.booked} ${t('dock.card.booked', { n: f.booked })}`));
+  assert.match(dock, new RegExp(`· ${f.booked} verbucht$`));
   assert.equal(f.booked, 2, '«gebucht»: the receipts whose payment is booked');
 });
 
