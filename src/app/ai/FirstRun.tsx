@@ -12,10 +12,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { FIRST_RUN_CLIS, planName, type CardState, type SetupKey } from '../../platform/ai-setup.js';
 import { AI_CLIS, type TerminalCli } from '../../platform/terminal.js';
-import type { DesktopInfo, FolderLook } from '../../types/desktop.js';
+import type { DesktopInfo, FolderLook, HomeFolders } from '../../types/desktop.js';
 import { language, t } from '../i18n/index.js';
 import { api, errorText } from '../lib/api.js';
-import { DEMO_HOME, desktop } from '../desktop/bridge.js';
+import { DEMO_HOME, desktop, macAsksForFolders } from '../desktop/bridge.js';
 import { BotIcon } from '../areas/automation/Graph.js';
 import { ICONS } from '../areas/icons.js';
 import { CliCard, NoAccount } from './CliCard.js';
@@ -40,7 +40,7 @@ const Me = ({ text, onChange }: { text: string; onChange?: () => void }) => (
 const Answers = ({ children }: { children: ReactNode }) => <div className="obind"><div className="qacts" role="group">{children}</div></div>;
 
 /** `create`: the person chose new books already (the start page's «Neue Buchhaltung anlegen», the menu): that choice goes on by itself. */
-export function FirstRun({ info, create, onSetup, onForm, onLeave }: { info: DesktopInfo | null; create?: boolean; onSetup(root: string): void; onForm(): void; onLeave(): void }) {
+export function FirstRun({ info, create, onSetup, onForm, onLeave }: { info: DesktopInfo | null; create?: boolean; onSetup(root: string): void; onForm(root?: string): void; onLeave(): void }) {
   const ai = useAiSetup();
   const view = ai.view;
   /** `home`: what the person wants; `ai`: setting up the AI, which she asked for. */
@@ -98,7 +98,7 @@ export function FirstRun({ info, create, onSetup, onForm, onLeave }: { info: Des
       ? t('aiSetup.say.ready', { cli: name(readyCli), plan: planName(readyCard.plan) })
       : t('aiSetup.say.readyNoPlan', { cli: name(readyCli) })}</p>
   ) : keyId ? <p className="okline" data-ready={keyId}>{ICONS.check}{t('aiSetup.say.keyReady', { provider: t(`aiSetup.key.${keyId}`) })}</p> : null;
-  const ByHand = <button type="button" className="linkbtn" data-act="by-hand" onClick={onForm}>{t('desktop.flow.byHand')}</button>;
+  const ByHand = <button type="button" className="linkbtn" data-act="by-hand" onClick={() => onForm()}>{t('desktop.flow.byHand')}</button>;
   /**
    * Under the choices: the AI as this Mac has it, a fact and one way on. Nothing while the look runs,
    * nothing where it is switched off. A look that failed says so (the error line below) instead of
@@ -223,8 +223,11 @@ export function FirstRun({ info, create, onSetup, onForm, onLeave }: { info: Des
  * other choices never wait. With an AI the system's save panel asks where the books go
  * and the setup conversation starts there; without one the form opens, which asks the same and
  * proposes the folder itself. `foot` stands under the choices; `ask` puts the question above them.
+ * In the Mac app, before new books first go into the Documents folder, it says why macOS will now
+ * ask about that folder and that «Erlauben» is needed, with another folder as the way out (#373);
+ * the folder is read only on «Weiter», so macOS asks then, never over the first screen.
  */
-function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }: { info: DesktopInfo | null; ai: boolean | undefined; ask?: boolean; create?: boolean; foot?: ReactNode; onSetup(root: string): void; onForm(): void }) {
+function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }: { info: DesktopInfo | null; ai: boolean | undefined; ask?: boolean; create?: boolean; foot?: ReactNode; onSetup(root: string): void; onForm(root?: string): void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [switching, setSwitching] = useState(false);
@@ -234,7 +237,12 @@ function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }:
   /** «New books» was clicked before the look at this Mac's AI had its answer. */
   // Chosen before this step showed: it runs as soon as the look at the AI has its answer (one click, issue #363).
   const [waiting, setWaiting] = useState(!!chosenNew);
-  const name = freeName(t('desktop.folderName', { year: String(new Date().getFullYear()) }), info?.folders ?? []);
+  /** The Documents folder as read on «Weiter»: its folders (for a free name) and macOS's answer. */
+  const [home, setHome] = useState<HomeFolders>();
+  /** New books wait for her word on macOS's question: `ask` before it, `refused` after «Nicht erlauben». */
+  const [access, setAccess] = useState<'ask' | 'refused'>();
+  const known = home?.access ?? info?.homeAccess;
+  const name = freeName(t('desktop.folderName', { year: String(new Date().getFullYear()) }), home?.folders ?? info?.folders ?? []);
   const run = async (go: () => Promise<void>) => {
     setBusy(true);
     setError('');
@@ -247,10 +255,30 @@ function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }:
   };
   const create = async () => {
     if (ai === undefined) { setWaiting(true); return; }
-    if (!ai) { onForm(); return; }
+    // The Mac app reads the Documents folder only now, once she knows why macOS asks.
+    if (macAsksForFolders && known !== 'allowed') { setAccess(known === 'refused' ? 'refused' : 'ask'); return; }
+    await createIn(name);
+  };
+  /** «Weiter»: the Documents folder is read now, and macOS asks her over these words. */
+  const allow = () => run(async () => {
+    const read = await api.desktop.folders();
+    setHome(read);
+    setBusy(false);
+    if (read.access === 'refused') { setAccess('refused'); return; }
+    setAccess(undefined);
+    await createIn(freeName(t('desktop.folderName', { year: String(new Date().getFullYear()) }), read.folders));
+  });
+  /** New books in the Documents folder (`elsewhere`: in a folder she picks, Documents left alone). */
+  const createIn = async (free: string, elsewhere = false) => {
+    if (!ai) {
+      if (!elsewhere) { onForm(); return; }
+      const dir = await asked(desktop?.chooseFolder(t('desktop.chooseNew')));
+      if (dir) onForm(dir);
+      return;
+    }
     const root = desktop
-      ? await asked(desktop.chooseNewFolder({ title: t('aiSetup.folder.createTitle'), name, button: t('aiSetup.folder.createButton') }))
-      : info ? `${info.booksHome}/${name}` : null;
+      ? await asked(desktop.chooseNewFolder({ title: t('aiSetup.folder.createTitle'), name: free, button: t('aiSetup.folder.createButton'), ...(elsewhere ? { elsewhere } : {}) }))
+      : info ? `${info.booksHome}/${free}` : null;
     if (!root) return;
     setTaken(undefined);
     setChosen(root);
@@ -296,6 +324,20 @@ function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }:
         <div data-waiting="ai">
           <Ai><p className="aiwait"><span className="aispin" aria-hidden="true" />{t('aiSetup.checking')}</p></Ai>
           <Answers><button type="button" className="btn" data-act="by-hand" onClick={() => { setWaiting(false); onForm(); }}>{t('desktop.flow.byHand')}<small>{t('aiSetup.checkingSkip')}</small></button></Answers>
+        </div>
+      ) : null}
+      {access ? (
+        <div data-access={access}>
+          <Me text={t('aiSetup.folder.create')} />
+          <Ai>
+            {access === 'ask' ? <><p>{t('aiSetup.folder.access')}</p><p>{t('aiSetup.folder.accessNo')}</p></> : <p className="warnline" role="alert">{t('aiSetup.folder.accessRefused')}</p>}
+          </Ai>
+          <Answers>
+            <button type="button" className="btn primary" data-answer={access === 'ask' ? 'allow' : 'again'} disabled={busy} onClick={() => void allow()}>
+              {t(access === 'ask' ? 'aiSetup.folder.accessGo' : 'aiSetup.folder.accessAgain')}{access === 'ask' ? <small>{t('aiSetup.folder.accessGoHint')}</small> : null}
+            </button>
+            <button type="button" className="btn" data-answer="elsewhere" disabled={busy} onClick={() => { setAccess(undefined); void createIn(name, true); }}>{t('aiSetup.folder.elsewhere')}<small>{t('aiSetup.folder.elsewhereHint')}</small></button>
+          </Answers>
         </div>
       ) : null}
       {chosen ? <Ai><p>{t('aiSetup.folder.chosen')}</p><p className="obfolder mono">{chosen}</p></Ai> : null}

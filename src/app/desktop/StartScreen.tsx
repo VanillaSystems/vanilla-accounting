@@ -20,7 +20,7 @@ const say = (key: string, vars?: Record<string, string>) => (vars ? t(key as 'on
 /** The account numbers behind a help text, folded under «mehr» (#398): the line itself says it in plain words. */
 const More = ({ k }: { k: string }) => (isKey(k) ? <details className="st-more" data-more={k}><summary>{t('desktop.more')}</summary><span>{tData(k)}</span></details> : null);
 import { ApiError, api, errorText } from '../lib/api.js';
-import { DEMO_HOME, START_PATH, desktop, setupPath } from './bridge.js';
+import { DEMO_HOME, START_PATH, desktop, macAsksForFolders, setupPath } from './bridge.js';
 import { FirstRun, freeName } from '../ai/FirstRun.js';
 import { DraftConversation } from '../onboarding/DraftConversation.js';
 import { assumedOf } from '../../onboarding/model.js';
@@ -77,7 +77,8 @@ const answerList = (a: Partial<Answers>, key: QuestionKey): string[] => ([] as s
 
 /** What the start screen shows: the choices, «Einrichtung» from the AI to the folder, the setup conversation in a folder, or the form. */
 /** `first` with `create`: new books were chosen already (the start page, the menu's /start?new). */
-type Mode = { kind: 'home' } | { kind: 'first'; create?: boolean } | { kind: 'setup'; root: string } | { kind: 'form' };
+/** `form` with `root`: the folder she picked instead of the Documents folder (#373). */
+type Mode = { kind: 'home' } | { kind: 'first'; create?: boolean } | { kind: 'setup'; root: string } | { kind: 'form'; root?: string };
 
 const modeOfUrl = (): Mode => {
   const q = new URLSearchParams(location.search);
@@ -98,8 +99,6 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   useEffect(() => {
     void api.desktop.info().then((i) => {
       setInfo(i);
-      // macOS still asks about the Documents folder: the screen shows now, the folders follow.
-      if (i.foldersPending) void api.desktop.folders().then(({ folders }) => setInfo((was) => (was ? { ...was, folders, foldersPending: false } : was)), () => undefined);
       // A fresh install: no books open and none known. Once: «Zur Startseite» from there stays on the start screen.
       if (!looked.current && mode.kind === 'home' && !i.open && !i.recent.length && !location.search) setMode({ kind: 'first' });
       looked.current = true;
@@ -147,9 +146,9 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
         </span>
       </header>
       {mode.kind === 'setup' ? <DraftConversation root={mode.root} onLeave={() => setMode({ kind: 'home' })} />
-        : mode.kind === 'first' ? <FirstRun info={info} create={mode.create} onLeave={() => setMode({ kind: 'home' })} onSetup={(root) => setMode({ kind: 'setup', root })} onForm={() => setMode({ kind: 'form' })} />
+        : mode.kind === 'first' ? <FirstRun info={info} create={mode.create} onLeave={() => setMode({ kind: 'home' })} onSetup={(root) => setMode({ kind: 'setup', root })} onForm={(root) => setMode({ kind: 'form', ...(root ? { root } : {}) })} />
         : mode.kind === 'form'
-        ? <CreateForm info={info} language={language} busy={busy} error={error} onCancel={() => setMode({ kind: 'home' })} onCreate={(setup) => run(() => api.desktop.create(setup))} />
+        ? <CreateForm info={info} root={mode.root} language={language} busy={busy} error={error} onCancel={() => setMode({ kind: 'home' })} onCreate={(setup) => run(() => api.desktop.create(setup))} />
         : (
           <div className="st-main">
             <h1>Vanilla Accounting</h1>
@@ -177,8 +176,8 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
               <section className="st-recent">
                 <h2>{t('desktop.recent')}</h2>
                 {info.recent.map((b) => (
-                  <button key={b.root} type="button" className="st-book" data-tip={b.root} disabled={busy || (!b.name && !b.problem && !b.setup)} onClick={() => void run(() => api.desktop.open(b.root))}>
-                    <b>{b.demo ? t('desktop.demoName') : b.name ?? t(b.setup ? 'desktop.flow.unnamed' : b.problem ? 'desktop.unreadable' : 'desktop.missing')}</b>{b.setup ? <span className="st-badge">{t('desktop.flow.inProgress')}</span> : null}<span className="mono">{b.root}</span>
+                  <button key={b.root} type="button" className="st-book" data-tip={b.root} disabled={busy || (!b.name && !b.problem && !b.setup && !b.refused)} onClick={() => void run(() => api.desktop.open(b.root))}>
+                    <b>{b.demo ? t('desktop.demoName') : b.name ?? t(b.setup ? 'desktop.flow.unnamed' : b.refused ? 'desktop.access.refusedShort' : b.problem ? 'desktop.unreadable' : 'desktop.missing')}</b>{b.setup ? <span className="st-badge">{t('desktop.flow.inProgress')}</span> : null}<span className="mono">{b.root}</span>
                     {b.problem && <small className="st-problem">{b.problem}</small>}
                   </button>
                 ))}
@@ -191,13 +190,13 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   );
 }
 
-function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
-  /** The app's language now: the form is in it, and the new books' language starts as it. */
-  info: DesktopInfo | null; language: string; busy: boolean; error: string; onCancel(): void;
+function CreateForm({ info, root: picked, language, busy, error, onCancel, onCreate }: {
+  /** The app's language now: the form is in it, and the new books' language starts as it. `root`: a folder she picked already. */
+  info: DesktopInfo | null; root?: string; language: string; busy: boolean; error: string; onCancel(): void;
   onCreate(setup: Parameters<typeof api.desktop.create>[0]): void;
 }) {
   const [f, setF] = useState<Form>(() => ({
-    preset: 'consultant', name: '', uid: '', owner: '', business: '', language: LOCALES.some((l) => l.code === language) ? language : 'de', root: '',
+    preset: 'consultant', name: '', uid: '', owner: '', business: '', language: LOCALES.some((l) => l.code === language) ? language : 'de', root: picked ?? '',
     answers: presetAnswers('consultant'), netRates: NO_RATES, banks: [{ ...NEW_BANK, bank: 'UBS' }], exportTo: '',
     assumed: keysOf(presetAnswers('consultant')), assumedBy: 'consultant',
   }));
@@ -318,6 +317,10 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
             </span>
           </label>
           {folderError && <p className="st-stop" role="alert">{folderError}</p>}
+          {/* Books in the Documents folder: macOS asks on «Erstellen», unless it was asked already (#373). */}
+          {macAsksForFolders && info && info.homeAccess !== 'allowed' && (root === info.booksHome || root.startsWith(`${info.booksHome}/`))
+            ? <p className={`cf s4 ${info.homeAccess === 'refused' ? 'st-stop' : 'st-note'}`} data-access-note={info.homeAccess ?? 'ask'}>{info.homeAccess === 'refused' ? t('desktop.access.refused', { folder: t('desktop.access.folder.documents') }) : t('desktop.access.formNote')}</p>
+            : null}
         </section>
 
         <section>

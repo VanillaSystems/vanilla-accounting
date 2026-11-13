@@ -81,6 +81,22 @@ test('the first screen asks what the person wants; the AI is one line, its cards
     assert.equal(await page.$('.aicli'), null, 'without an AI the first screen still shows no card');
     assert.equal(await page.$('[data-act=by-hand]'), null, 'without an AI «new books» is the form itself, no small link beside it');
     await page.click('[data-answer=create]');
+    // The Mac app (#373): first the words on macOS's question about the Documents folder, which «Weiter» lets it ask; then the form.
+    await page.waitForSelector('[data-access=ask]', { timeout: 10_000 });
+    const why = await page.$eval('[data-access=ask]', (e) => (e as HTMLElement).innerText);
+    assert.match(why, /«Dokumente»/, 'it names the folder macOS will ask about');
+    assert.match(why, /«Erlauben»/, 'and the button she needs there');
+    assert.match(why, /anderen Ordner/, 'and the way out');
+    assert.ok(await page.$('[data-access=ask] [data-answer=elsewhere]'), 'another folder is one click');
+    assert.equal(await page.$('.st-form'), null, 'nothing goes on before her word');
+    await page.click('[data-answer=allow]');
+    await page.waitForSelector('.st-form input[name=name]', { timeout: 10_000 });
+    assert.equal(await page.$('[data-access-note]'), null, 'allowed: the form says no more about it');
+
+    // Allowed once: the next time «new books» goes on at once.
+    await page.goto(`http://${host}/start`, { waitUntil: 'networkidle0', timeout: 60_000 });
+    await page.waitForSelector('[data-ai=none]', { timeout: 60_000 });
+    await page.click('[data-answer=create]');
     await page.waitForSelector('.st-form input[name=name]', { timeout: 10_000 });
 
     await page.goto(`http://${host}/start`, { waitUntil: 'networkidle0', timeout: 60_000 });

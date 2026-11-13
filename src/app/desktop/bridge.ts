@@ -46,6 +46,9 @@ export const desktop: DesktopBridge | undefined = typeof window === 'undefined' 
 /** The Mac app has no title bar: the page reaches the window's top edge (src/desktop/main.ts). */
 export const noTitleBar = !!desktop && /Mac/.test(navigator.userAgent);
 
+/** The Mac app: macOS asks the person before the app may read the Documents folder (#373). */
+export const macAsksForFolders = noTitleBar;
+
 /** The start screen shows at /start, and whenever the desktop app has no books open. */
 export const START_PATH = '/start';
 

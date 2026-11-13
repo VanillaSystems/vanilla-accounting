@@ -16,12 +16,13 @@ import { sealedStore } from '../secrets/sealed-store.js';
 import { useSecretStore } from '../secrets/secrets.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { KnownBooks, MenuCommand } from '../types/desktop.js';
+import type { ApiRefusal } from '../types/api-error.js';
 import { setupPath } from '../app/desktop/bridge.js';
 import { freshLoginPath } from '../platform/ai-cli.js';
 import { ASK, PUSH, TELL } from './channels.js';
 import { chosenFolder, newFolderPanel } from './new-folder.js';
 import { sameOrigin, saveFile } from './save-file.js';
-import { bringUp, offerMove, windowLoader, type Waiting } from './start.js';
+import { bringUp, firstPage, offerMove, windowLoader, type Waiting } from './start.js';
 import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
@@ -104,6 +105,8 @@ async function start(): Promise<void> {
     stateFile,
     demoRoot: join(app.getPath('userData'), 'Demo'),
     booksHome: app.getPath('documents'),
+    // Names only: Electron reads none of them. The first read under one makes macOS ask the person (#373).
+    protectedFolders: { documents: app.getPath('documents'), desktop: app.getPath('desktop'), downloads: app.getPath('downloads') },
     dist: join(APP_ROOT, 'dist'),
     devUi: DEV?.ui,
     // The start screen opens books through the server; the menu's recent list follows.
@@ -124,7 +127,11 @@ async function start(): Promise<void> {
       show(pathOf(await open()));
     } catch (e) {
       const t = textsIn(language);
-      await dialog.showMessageBox({ type: 'warning', message: t('desktop.notWorkspace'), detail: (e as Error).message });
+      const refusal = (e as { refusal?: ApiRefusal }).refusal;
+      const folder = refusal?.code === 'folderRefused' ? refusal.params.folder : undefined;
+      const detail = !folder ? (e as Error).message
+        : folder === 'other' ? t('desktop.access.refusedOther') : t('desktop.access.refused', { folder: t(`desktop.access.folder.${folder}`) });
+      await dialog.showMessageBox({ type: 'warning', message: t('desktop.notWorkspace'), detail });
     }
   };
   const chooseFolder = async (title: string): Promise<string | null> => {
@@ -132,9 +139,13 @@ async function start(): Promise<void> {
     const r = win && !win.isDestroyed() ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
     return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
   };
-  /** The save panel that names the folder of new books, in the Documents folder (the server's booksHome). */
+  /**
+   * The save panel that names the folder of new books, in the Documents folder (the server's
+   * booksHome), or in the home folder when she chose another place (`elsewhere`: Documents refused).
+   */
   const chooseNewFolder = async (choice: unknown): Promise<string | null> => {
-    const options = newFolderPanel(choice, app.getPath('documents'));
+    const elsewhere = !!choice && typeof choice === 'object' && (choice as { elsewhere?: unknown }).elsewhere === true;
+    const options = newFolderPanel(choice, app.getPath(elsewhere ? 'home' : 'documents'));
     return chosenFolder(win && !win.isDestroyed() ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options));
   };
   function refreshMenu(): void {
@@ -176,13 +187,12 @@ async function start(): Promise<void> {
     const next = languageOf(typeof code === 'string' ? code : undefined);
     if (next !== language) { language = next; refreshMenu(); }
   });
-  const last = readState(stateFile).recent[0];
-  const first = last ? await server.open(last).catch(() => undefined) : undefined;
   refreshMenu();
   await pathKnown;
   server.startBackground();
   void server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); });
-  show(pathOf(first));
+  // The books opened last, read only after macOS answered for their folder; a first start reads none (#373).
+  void firstPage({ last: readState(stateFile).recent[0], reach: server.reach, open: server.open, current: server.current, pathOf, show });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   void checkForUpdates();
 }

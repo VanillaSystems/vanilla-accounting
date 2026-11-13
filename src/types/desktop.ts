@@ -11,10 +11,11 @@ export interface DesktopBridge {
   /** The folder the person picks in the system's dialog; null when cancelled. */
   chooseFolder(title: string): Promise<string | null>;
   /**
-   * Where new books go, in the system's save panel: `name` prefilled in the Documents folder, «Neuer
-   * Ordner» at hand, the button saying `button`. The path of the folder to create; null when cancelled.
+   * Where new books go, in the system's save panel: `name` prefilled in the Documents folder (in the
+   * home folder with `elsewhere`: she chose another folder than Documents), «Neuer Ordner» at hand,
+   * the button saying `button`. The path of the folder to create; null when cancelled.
    */
-  chooseNewFolder(choice: { title: string; name: string; button: string }): Promise<string | null>;
+  chooseNewFolder(choice: { title: string; name: string; button: string; elsewhere?: boolean }): Promise<string | null>;
   /** Calls `listener` for each menu command; returns the unsubscribe. */
   onMenu(listener: (command: MenuCommand) => void): () => void;
   /** The UI's language, so the native menu speaks it too. */
@@ -64,11 +65,24 @@ export interface SmokeBridge {
 /**
  * Books the app knows: their folder and, when it still holds a workspace, the company's name.
  * `problem`: the folder is there, but its manifest cannot be read (why, in the reader's words);
- * neither name nor problem: the folder is gone.
+ * neither name nor problem: the folder is gone; `refused`: macOS does not let the app read it (which protected folder it lies in).
  * `setup`: the folder holds a setup broken off before the books were created (src/onboarding/draft.ts);
  * opening it continues the setup conversation, and `name` is the firm's once it was answered.
  */
-export interface KnownBooks { root: string; name?: string; problem?: string; demo: boolean; setup?: true }
+export interface KnownBooks { root: string; name?: string; problem?: string; demo: boolean; setup?: true; refused?: ProtectedFolder }
+
+/**
+ * The folders macOS asks about before an app may read them (issue #373): the first read there holds
+ * until the person answers «Erlauben» or «Nicht erlauben». `other`: a folder macOS refuses that is
+ * none of the three (an iCloud Drive folder, a removable or network volume).
+ */
+export type ProtectedFolder = 'documents' | 'desktop' | 'downloads' | 'other';
+
+/**
+ * Whether the app may read the Documents folder, as macOS answered the step that first needed it
+ * (GET /api/desktop/folders); absent while macOS has not been asked by this app.
+ */
+export type HomeAccess = 'allowed' | 'refused';
 
 /**
  * GET /api/desktop/folder: what a folder holds before new books go into it. `nothing`: missing or
@@ -88,11 +102,17 @@ export interface DesktopInfo {
   recent: KnownBooks[];
   /** Where new books go unless the person picks another folder. */
   booksHome: string;
-  /** The folders already in booksHome, so a new default name steps aside from one that is taken. */
+  /**
+   * The folders in booksHome as last read by GET /api/desktop/folders, so a new default name steps
+   * aside from one that is taken; empty until then. GET /api/desktop never reads booksHome: macOS
+   * would ask about the Documents folder before the person chose anything (#373).
+   */
   folders: string[];
-  /** The listing waits (macOS asks about the folder): `folders` is the last known, GET /api/desktop/folders answers once it is read. */
-  foldersPending?: boolean;
+  homeAccess?: HomeAccess;
 }
+
+/** GET /api/desktop/folders: booksHome read, at the step that needs it (macOS may ask first). */
+export interface HomeFolders { folders: string[]; access: HomeAccess }
 
 /** GET and POST /api/desktop/phone: the phone's way in (Firma › Handy). */
 export interface PhoneInfo {

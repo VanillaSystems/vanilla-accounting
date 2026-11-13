@@ -12,6 +12,13 @@ export interface Bounds { x: number; y: number; width: number; height: number; m
 export interface DesktopState {
   /** Most recent first; the first one opens at the next start. */
   recent: string[];
+  /**
+   * The company's name of each recent folder as it was when last opened: the menu names them
+   * without reading the folders, which macOS may hold while it asks the person (#373).
+   */
+  names?: Record<string, string>;
+  /** How macOS answered the app's first read of the Documents folder (GET /api/desktop/folders). */
+  homeAccess?: 'allowed' | 'refused';
   bounds?: Bounds;
   port?: number;
   phone?: PhonePairing;
@@ -27,6 +34,8 @@ export function readState(file: string): DesktopState {
     const raw = JSON.parse(readFileSync(file, 'utf8')) as Partial<DesktopState>;
     return {
       recent: Array.isArray(raw.recent) ? raw.recent.filter((r): r is string => typeof r === 'string') : [],
+      ...(raw.names && typeof raw.names === 'object' ? { names: Object.fromEntries(Object.entries(raw.names).filter((e): e is [string, string] => typeof e[1] === 'string')) } : {}),
+      ...(raw.homeAccess === 'allowed' || raw.homeAccess === 'refused' ? { homeAccess: raw.homeAccess } : {}),
       ...(raw.bounds && typeof raw.bounds.width === 'number' ? { bounds: raw.bounds } : {}),
       ...(Number.isInteger(raw.port) ? { port: raw.port } : {}),
       ...(raw.phone && typeof raw.phone.token === 'string' && raw.phone.token
@@ -45,6 +54,13 @@ export function writeState(file: string, state: DesktopState): void {
   renameSync(`${file}.tmp`, file);
 }
 
-/** `root` first, once. */
-export const opened = (state: DesktopState, root: string): DesktopState =>
-  ({ ...state, recent: [root, ...state.recent.filter((r) => r !== root)].slice(0, RECENT) });
+/** `root` first, once, with the name it holds now (none: the name kept so far goes). */
+export function opened(state: DesktopState, root: string, name?: string): DesktopState {
+  const recent = [root, ...state.recent.filter((r) => r !== root)].slice(0, RECENT);
+  const names = Object.fromEntries(recent.flatMap((r) => {
+    const n = r === root ? name : state.names?.[r];
+    return n ? [[r, n] as const] : [];
+  }));
+  const { names: _was, ...rest } = state;
+  return { ...rest, recent, ...(Object.keys(names).length ? { names } : {}) };
+}

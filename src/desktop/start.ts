@@ -123,3 +123,40 @@ export function windowLoader(
     return r;
   };
 }
+
+/** How long the start waits for the folder of the books opened last before the window comes without them. */
+export const REACH_WAIT_MS = 400;
+
+export interface FirstPage<B> {
+  /** desktop.json's newest recent folder; none on a first start. */
+  last?: string;
+  /** DesktopServer.reach: asynchronous, held while macOS asks about the folder. */
+  reach(root: string): Promise<unknown>;
+  open(root: string): Promise<B>;
+  /** Books opened meanwhile (she chose on the start screen): the last ones then stay shut. */
+  current(): unknown;
+  pathOf(books: B | undefined): string;
+  show(path: string): void;
+  wait?: (ms: number) => Promise<void>;
+}
+
+/**
+ * The start's first window (issue #373). A first start shows it at once and reads no folder. A
+ * later start opens the books opened last before it shows them, as long as their folder answers
+ * at once; when macOS holds that look (it asks whether the app may read Documents, Desktop or
+ * Downloads, and waits for «Erlauben»), the window comes first with the start screen and the
+ * books follow once she answered: never a synchronous read macOS holds with the main process.
+ */
+export async function firstPage<B>(o: FirstPage<B>): Promise<void> {
+  if (!o.last) { o.show('/'); return; }
+  const last = o.last;
+  const wait = o.wait ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+  const open = () => o.open(last).catch(() => undefined);
+  const reached = o.reach(last).then(() => true, () => true);
+  if (await Promise.race([reached, wait(REACH_WAIT_MS).then(() => false)])) { o.show(o.pathOf(await open())); return; }
+  o.show('/start');
+  await reached;
+  if (o.current()) return;
+  const books = await open();
+  if (books !== undefined) o.show(o.pathOf(books));
+}

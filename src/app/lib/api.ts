@@ -33,7 +33,7 @@ import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminde
 import type { PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
-import type { AiAvailability, DesktopInfo, FolderLook, KnownBooks, PhoneInfo } from '../../types/desktop.js';
+import type { AiAvailability, DesktopInfo, FolderLook, HomeFolders, KnownBooks, PhoneInfo } from '../../types/desktop.js';
 import { DesktopCallError } from '../desktop/bridge.js';
 import { setAiOff } from '../ai/ai-off.js';
 import type { DraftPatch as SetupPatch, SetupBegun, SetupDraftView } from '../../onboarding/draft.js';
@@ -311,6 +311,7 @@ export function errorText(e: unknown): string {
     case 'noWorkspace': return t('desktop.noWorkspace');
     case 'notWorkspace': return t('desktop.notWorkspace');
     case 'oldLayout': return t('desktop.oldLayout', { root: b.params.root });
+    case 'folderRefused': return b.params.folder === 'other' ? t('desktop.access.refusedOther') : t('desktop.access.refused', { folder: t(`desktop.access.folder.${b.params.folder}`) });
     case 'setup': return setupText(b.params);
     case 'openingAccount': return t(`error.openingAccount.${b.params.reason}`, { account: b.params.account, currency: b.params.currency ?? '', base: baseCurrency() });
     case 'openingNotFirstYear': return t('error.openingNotFirstYear', { year: b.params.year });
@@ -641,8 +642,8 @@ export const api = {
   /** The desktop app's start screen (src/desktop/server.ts). */
   desktop: {
     info: () => request<DesktopInfo>('GET', '/api/desktop'),
-    /** The folders in booksHome once read (macOS may first ask the person). */
-    folders: () => request<{ folders: string[] }>('GET', '/api/desktop/folders'),
+    /** The folders in booksHome, read now: macOS asks the person first about the Documents folder (#373). */
+    folders: () => request<HomeFolders>('GET', '/api/desktop/folders'),
     open: (root: string) => request<KnownBooks>('POST', '/api/desktop/open', { root }),
     create: (setup: SetupRequest & { assumed?: Assumed }) => request<KnownBooks>('POST', '/api/desktop/create', setup),
     demo: () => request<KnownBooks>('POST', '/api/desktop/demo'),
