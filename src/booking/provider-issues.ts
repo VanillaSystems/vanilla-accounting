@@ -30,7 +30,13 @@ export interface HeldOrder { provider: string; name: string; receipt: string; or
 export interface MissingBill { provider: string; name: string; month: string; date: string; fees: number }
 
 /** `payouts`: the provider's name by the ref of each payment code takes for its payout (providerOfMoneyIn): a list names it so, not by the processor that paid it (#405). */
-export interface ProviderIssues { held: HeldOrder[]; bills: MissingBill[]; payouts: Record<string, string> }
+export interface ProviderIssues {
+  held: HeldOrder[]; bills: MissingBill[]; payouts: Record<string, string>;
+  /** The providers' clearing accounts (provider.clearing): «was muss ich noch machen?» names one below zero at the period's end (#428). */
+  clearing?: Array<{ provider: string; name: string; account: string }>;
+  /** Beside the providers', the refs of payments to a business that collects contributions with the employees' share (src/booking/withheld.ts withheldPayeesOf, #426): the business files are the server's. */
+  withheldPayees?: string[];
+}
 
 type Books = { receipts: readonly Receipt[]; journalEntries?: readonly JournalEntry[] };
 
@@ -59,7 +65,8 @@ export function providerIssuesOf(books: Books, providers: readonly Provider[], o
       };
     });
   });
-  if (!opts.inputTax) return { held, bills: [], payouts: {} };
+  const clearing = providers.flatMap((p) => (p.provider.clearing ? [{ provider: p.id, name: p.name, account: p.provider.clearing }] : []));
+  if (!opts.inputTax) return { held, bills: [], payouts: {}, clearing };
   const bills = providers.flatMap((p): MissingBill[] => {
     if (!p.documents.some((d) => d.proves === 'vat-correction')) return [];
     const prefix = `${feeRef(p.id, '')}`;
@@ -74,5 +81,5 @@ export function providerIssuesOf(books: Books, providers: readonly Provider[], o
     return [...fees].filter(([month]) => !covered.has(month) && lastDayOf(month) < opts.today && !filed(lastDayOf(month))).sort(([a], [b]) => a.localeCompare(b))
       .map(([month, rp]) => ({ provider: p.id, name: p.name, month, date: lastDayOf(month), fees: rp / 100 }));
   });
-  return { held, bills, payouts: {} };
+  return { held, bills, payouts: {}, clearing };
 }

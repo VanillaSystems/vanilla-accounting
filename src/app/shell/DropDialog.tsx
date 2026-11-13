@@ -7,6 +7,7 @@
  * rows until it closes; the work goes on when it does.
  */
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { outlayWaitsNow } from '../lib/order-pages.js';
 import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
 import { isKey, language, t, tWith } from '../i18n/index.js';
@@ -759,7 +760,7 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const pct = dropProgress([...taken.map((r, i) => doneOf(r, states[i], view)), ...Array<number>(coming).fill(0)]);
   // Every row in one group of the closing lines, by the state its own row shows (#384).
   const stateOf = new Map(taken.map((r, i) => [r, states[i]]));
-  const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
+  const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? [], undefined, outlayWaitsNow()), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
   // Only files the books hold already (#341): the window says that nothing new came in.
   const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate' && r.reason !== 'provider-export') || !!r.readAs);
   // What waits for her, named where it is (#398): the receipts of this drop under Belege, every open task under Automatisierung › Aufgaben, as the dock counts them.

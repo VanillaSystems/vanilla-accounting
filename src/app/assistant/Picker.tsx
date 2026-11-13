@@ -14,6 +14,7 @@ import type { Index } from '../../types/index.js';
 import type { ContextRef } from '../../types/assistant.js';
 import { bookCandidates, pickRows, sameRef, type Candidate, type PickKind, type PickLevel, type PickRow } from './attach.js';
 import { addContext, keepPage, removeContext } from './store.js';
+import { runContext } from './context.js';
 
 /** The workflows, then the latest runs: what «@» and the picker's «Ablauf oder Lauf» offer. */
 export function automationCandidates(): Candidate[] {
@@ -25,7 +26,7 @@ export function automationCandidates(): Candidate[] {
     ...view.workflows.map((w) => of({ kind: 'workflow', id: w.id, label: textIn(w.label, lang) }, w.id)),
     ...view.runs.slice(0, 20).map((r) => {
       const w = view.workflows.find((x) => x.id === r.workflow);
-      return of({ kind: 'run', id: r.id, label: t('automation.run', { id: r.id }) }, `${w ? textIn(w.label, lang) : r.workflow} · ${formatDate(r.startedAt.slice(0, 10))}`);
+      return of(runContext(r.id), `${w ? textIn(w.label, lang) : r.workflow} · ${formatDate(r.startedAt.slice(0, 10))}`);
     }),
   ];
 }

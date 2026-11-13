@@ -3,7 +3,7 @@
  * return is filed, under «Abrechnung prüfen» (r4c-38), and the bookings that contradict their
  * receipts with their one click (r4c-31). Each issue links to where it is settled; none blocks.
  */
-import { orderPagesNow, providerIssuesNow } from '../../lib/order-pages.js';
+import { orderPagesNow, outlayWaitsNow, providerIssuesNow } from '../../lib/order-pages.js';
 import { FindPair } from '../receipts/FindPair.js';
 import { isKey, t, tWith } from '../../i18n/index.js';
 import { heldReasonText } from '../../lib/held-reason.js';
@@ -26,7 +26,8 @@ import { UnreadRuleOffer, UnreadTask } from './UnreadReceipt.js';
 import type { UnreadOffer } from '../../../saving/unread-rule.js';
 import { useState } from 'react';
 import { monthName, periodName } from '../../lib/period-label.js';
-import { LACK_WORDS, periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue } from './period-issues.js';
+import { withheldIn } from './filing-summary.js';
+import { issuesLead, LACK_WORDS, periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue, type Say } from './period-issues.js';
 import { useAutomation } from '../../automation/store.js';
 import { processingOf } from '../../../workflows/processing.js';
 import { OPEN_ITEMS } from '../vat/model.js';
@@ -48,6 +49,7 @@ function goOf(books: Index, i: PeriodIssue): Location | undefined {
     // The report's receipt, where the order is named and booked (#405); the bill is dropped onto Belege of its month.
     case 'held': { const r = books.receipts.find((x) => x.id === i.held.receipt); return r ? at({ area: 'receipts', id: r.id }, r.date) : undefined; }
     case 'bill': return at({ area: 'receipts' }, i.bill.date);
+    case 'withheld': return at({ area: 'bank', payment: i.uncleared.tx.ref }, i.uncleared.tx.date);
   }
 }
 
@@ -68,6 +70,7 @@ function textOf(books: Index, i: PeriodIssue): string {
     case 'own': return t('issues.own', { text: i.name, lacks: i.lacks.map((k) => t(LACK_WORDS[k])).join(', ') });
     case 'held': return t(i.held.why === 'rate' || i.held.why === 'rateTooMany' ? 'issues.heldRate' : 'issues.heldOther', { what: heldReasonText(i.held, isKey, tWith), date: formatDate(i.held.date), provider: i.held.name, amount: i.held.gross !== undefined ? `, ${i.held.currency ?? baseCurrency()} ${fmt(i.held.gross)}` : '' });
     case 'bill': return t('issues.bill', { month: monthName(i.bill.date), provider: i.bill.name, amount: `${baseCurrency()} ${fmt(i.bill.fees)}` });
+    case 'withheld': { const u = i.uncleared; return t('issues.withheld', { date: formatDate(u.tx.date), text: payerName(u.tx), amount: `${u.tx.currency} ${fmt(u.tx.amount)}`, account: u.account, open: `${baseCurrency()} ${fmt(u.open)}` }); }
   }
 }
 
@@ -80,24 +83,36 @@ let lastIssues: { key: unknown[]; issues: PeriodIssue[] } | undefined;
  */
 export function usePeriodIssues(books: Index, from: string, to: string): PeriodIssue[] {
   const { questions } = useQuestions();
-  const accounts = useWorkspace()?.bankAccounts;
+  const ws = useWorkspace();
+  const accounts = ws?.bankAccounts;
   // A receipt a run still reads is not hers yet (#398): the runs as Belege reads them.
   const runs = useAutomation().view?.runs;
-  const key = [books, questions, accounts, orderPagesNow(), providerIssuesNow(), from, to, localToday(), runs];
-  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow(), localToday(), processingOf(runs ?? [], books.receipts), providerIssuesNow()) };
+  const key = [books, questions, accounts, orderPagesNow(), providerIssuesNow(), from, to, localToday(), runs, outlayWaitsNow()];
+  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow(), localToday(), processingOf(runs ?? [], books.receipts), providerIssuesNow(), outlayWaitsNow()) };
   return lastIssues.issues;
+}
+
+/** Of the unbooked payments, what those the app holds wait for: their receipt, or the owner's outlays they pay back (#428). */
+function waitWords(c: { unbooked: number; waitingReceipt: number; waitingOutlays?: number }): string {
+  const outlays = c.waitingOutlays ?? 0;
+  const parts = [
+    c.waitingReceipt ? t(c.waitingReceipt === c.unbooked ? 'issues.n.allWaitReceipt' : 'issues.n.waitReceipt', { n: c.waitingReceipt }) : '',
+    outlays ? t(outlays === c.unbooked ? 'issues.n.allWaitOutlays' : 'issues.n.waitOutlays', { n: outlays }) : '',
+  ].filter(Boolean);
+  return parts.length ? ` (${parts.join('; ')})` : '';
 }
 
 /** The counts in words, a part per kind that has any: «11 Zahlungen noch nicht gebucht (8 davon warten auf ihren Beleg)», «2 Fragen offen», … */
 export function issueWords(c: Pick<IssueCounts, 'unbooked' | 'waitingReceipt'> & Partial<IssueCounts>): string[] {
   return [
-    c.unbooked ? `${t('issues.n.unbooked', { n: c.unbooked })}${c.waitingReceipt ? ` (${t(c.waitingReceipt === c.unbooked ? 'issues.n.allWaitReceipt' : 'issues.n.waitReceipt', { n: c.waitingReceipt })})` : ''}` : '',
+    c.unbooked ? `${t('issues.n.unbooked', { n: c.unbooked })}${waitWords(c)}` : '',
     c.questions ? t('issues.n.questions', { n: c.questions }) : '',
     c.own ? t('issues.n.own', { n: c.own }) : '',
     c.unlinked ? t('issues.n.unlinked', { n: c.unlinked }) : '',
     c.evidence ? t('issues.evidenceTitle', { n: c.evidence }) : '',
     c.held ? t('issues.n.held', { n: c.held }) : '',
     c.bills ? t('issues.n.bills', { n: c.bills }) : '',
+    c.withheld ? t('issues.n.withheld', { n: c.withheld }) : '',
   ].filter(Boolean);
 }
 
@@ -109,7 +124,7 @@ export function issueWords(c: Pick<IssueCounts, 'unbooked' | 'waitingReceipt'> &
  * page for a firm that files one, else among the payments). Nothing when every payment is booked.
  */
 export function UnbookedFact({ books, nav, lead, className }: { books: Index; nav: Pick<Nav, 'go'>; lead?: string; className?: string }) {
-  const open = unbookedOpen(books, useWorkspace()?.bankAccounts ?? []);
+  const open = unbookedOpen(books, useWorkspace()?.bankAccounts ?? [], localToday(), outlayWaitsNow());
   if (!open.first) return null;
   const p = parsePeriod(filingKeyOf(open.first.date, filing().length), localToday());
   const to: Location = chargesVat() && p ? { route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: p } } : at({ area: 'bank', payment: open.first.ref }, open.first.date);
@@ -132,20 +147,21 @@ export function OpenFact({ books, nav, period, counts: c, lead, className }: { b
   const to: Location = chargesVat() ? { route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period } } : { route: c.unbooked ? { area: 'bank' } : { area: 'receipts' }, query: { period } };
   return (
     <span className={className} data-testid="open-fact">
-      {c.unbooked === c.waitingReceipt ? `${lead} ` : ''}{issueWords({ unbooked: c.unbooked, waitingReceipt: c.waitingReceipt, unlinked: c.unlinked }).join(', ')}.{' '}
+      {c.unbooked === c.waitingReceipt ? `${lead} ` : ''}{issueWords({ unbooked: c.unbooked, waitingReceipt: c.waitingReceipt, waitingOutlays: c.waitingOutlays, unlinked: c.unlinked }).join(', ')}.{' '}
       <button type="button" className="golink" onClick={() => nav.go(to)}>{t('issues.n.see', { period: periodName(period) })}</button>
     </span>
   );
 }
 
 /** «Noch offen in {period}»: under the return to review. An open VAT question withholds «Freigegeben» (r8h-24); the rest does not block the filing. */
-export function PeriodIssues({ books, nav, from, to, period, canEdit }: { books: Index; nav: Nav; from: string; to: string; period: string; canEdit: boolean }) {
+export function PeriodIssues({ books, nav, from, to, period, canEdit, figures }: { books: Index; nav: Nav; from: string; to: string; period: string; canEdit: boolean; figures?: Record<string, number> }) {
   const issues = usePeriodIssues(books, from, to);
+  const { questions } = useQuestions();
   if (!issues.length) return <p className="m" data-testid="period-issues-none">{t('issues.none', { period })}</p>;
   return (
     <section className="wfissues" data-testid="period-issues">
       <h3>{t('issues.title', { period, n: issues.length })}</h3>
-      <p className="m">{t('issues.lead')}</p>
+      <p className="m" data-testid="period-issues-lead">{issuesLead(withheldIn(figures, questions, books, from, to, providerIssuesNow()), issues.length, t as unknown as Say)}</p>
       <ul>
         {issues.map((i, k) => {
           const go = goOf(books, i);

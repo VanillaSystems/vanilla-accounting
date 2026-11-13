@@ -43,7 +43,7 @@ function ReturnDetail(props: Props) {
     return (
       <div className="detail-in" key={`${v.key}:open`} data-testid="vat-open-items">
         <div className="head"><h2 className="who">{t('vat.openItems')}<small>{periodName(v.period)}</small></h2></div>
-        <PeriodIssues books={props.books} nav={props.nav} from={v.period.from} to={v.period.to} period={periodName(v.period)} canEdit={props.canEdit} />
+        <PeriodIssues books={props.books} nav={props.nav} from={v.period.from} to={v.period.to} period={periodName(v.period)} canEdit={props.canEdit} {...(v.filed ? { figures: v.filed } : {})} />
       </div>
     );
   }

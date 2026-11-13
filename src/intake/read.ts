@@ -344,7 +344,12 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
       const { date: periodEnd, ...kind }: Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy' | 'date'> = existing?.kind || existing?.kindBy
         ? { kind: existing.kind, kindBy: existing.kindBy, kindRule: existing.kindRule, kindWhy: existing.kindWhy }
         : kindOfText(fresh, filename, originalFilename, modelKinds.get(id));
+      // A receipt read once more (a photo nothing could read yet) keeps what a person gave it: her VAT facts,
+      // her links' marks, her «verschieden» (#438). Facts read off a text it had are read again off this one.
+      const kept = existing ? { ...existing } : undefined;
+      if (kept) forgetReadFacts(kept);
       return [{
+        ...kept,
         id,
         filename,
         originalFilename,
