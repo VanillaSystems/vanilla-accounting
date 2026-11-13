@@ -68,6 +68,7 @@ test('a reply that keeps to the facts is not caught: a statement date beside the
     'L’ouverture du compte Wise date du 3 mars.',
     'Erfasse die Eröffnung bis zum 30.11., dann ist die Abrechnung fällig.',
     'Der Eröffnungssaldo, den die Bank vor dem Auszug vom 01.07.2026 nennt, ist kein Saldo per 1.1.',
+    'Die alten Kontoauszüge brauchst du nicht, nur die Bilanz per 31.12.2025.',
   ]) assert.deepEqual(strayOpening(right), [], right);
 });
 
@@ -127,10 +128,10 @@ test('the bank merge matches by IBAN first: a second account of the same bank is
   assert.deepEqual(reasons(both), ['bankTwice']);
   assert.equal(both.reply.kind === 'read' && both.reply.say, '', 'the model\'s claim is not shown beside the refusal');
   assert.deepEqual(banksOf(both.draft), [['UBS', 'CHF', IBAN]]);
-  // [UBS B] alone: A is not overwritten.
-  const alone = applyTalk(d, out({ banks: [{ bank: 'UBS', currency: 'CHF', iban: B }] }), [second], 'CHF', '2026');
+  // [UBS B] alone, B not in her words: A is not overwritten.
+  const alone = applyTalk(d, out({ banks: [{ bank: 'UBS', currency: 'CHF', iban: B }] }), ['noch ein UBS-Konto'], 'CHF', '2026');
   assert.deepEqual(banksOf(alone.draft), [['UBS', 'CHF', IBAN]], 'was: A replaced by B');
-  assert.deepEqual(reasons(alone), ['bankTwice']);
+  assert.deepEqual(reasons(alone), ['notStated']);
   // Wise EUR with the form's UBS IBAN: that IBAN is UBS's, not Wise's.
   const lent = applyTalk(d, out({ banks: [{ bank: 'UBS', currency: 'CHF', iban: IBAN }, { bank: 'Wise', currency: 'EUR', iban: IBAN }] }), ['und Wise in Euro'], 'CHF', '2026');
   assert.deepEqual(reasons(lent), ['notStated'], 'was: accepted because the form holds it for another account');
@@ -138,6 +139,31 @@ test('the bank merge matches by IBAN first: a second account of the same bank is
   // A second UBS account in another currency is added.
   const eur = applyTalk(d, out({ banks: [{ bank: 'UBS', currency: 'CHF', iban: IBAN }, { bank: 'UBS', currency: 'EUR' }] }), ['und ein UBS-Konto in Euro'], 'CHF', '2026');
   assert.deepEqual(banksOf(eur.draft), [['UBS', 'CHF', IBAN], ['UBS', 'EUR', undefined]]);
+});
+
+test('an IBAN her words state for the one account of a bank and currency corrects the one typed in the form; the other accounts are not touched', () => {
+  const B = testIban('00762011623852957');
+  const d = withPatch(newDraft('de', '2026-11-13T09:00:00.000Z'), checkPatch({ step: 'banks', value: [{ bank: 'UBS', currency: 'CHF', iban: IBAN }, { bank: 'UBS', currency: 'EUR' }, { bank: 'Wise', currency: 'USD' }] }));
+  const fixed = applyTalk(d, out({ banks: [{ bank: 'UBS', currency: 'CHF', iban: B }] }), [`die IBAN ist falsch, richtig ist ${B}`], 'CHF', '2026');
+  assert.deepEqual(reasons(fixed), [], 'was: refused as bankTwice');
+  assert.deepEqual(banksOf(fixed.draft), [['UBS', 'CHF', B], ['UBS', 'EUR', undefined], ['Wise', 'USD', undefined]]);
+  // A malformed IBAN in her words is refused by the click's check, and the form's stays.
+  const bad = applyTalk(d, out({ banks: [{ bank: 'UBS', currency: 'CHF', iban: 'CH12 3456' }] }), ['richtig ist CH12 3456'], 'CHF', '2026');
+  assert.deepEqual(reasons(bad), ['iban']);
+  assert.equal(bad.draft.banks?.[0].iban, IBAN);
+});
+
+test('in the books an IBAN is never required either: a bank account without one sets up the bank topic and counts in the summary', () => {
+  const noIban = [{ label: 'UBS', bank: 'UBS', currency: 'CHF', account: '1020' }, { label: 'Wise', bank: 'Wise', currency: 'EUR', account: '1021' }];
+  const f = facts({ banks: noIban });
+  assert.equal(topicStates(emptyProgress(), f).bank, 'done', 'was: open until «Später» while no account had an IBAN');
+  const steps = setupThread(answered([['opening', 'later'], ['receipts', 'later']]), f);
+  assert.ok(!ids(steps).includes('bank'), 'the bank step is not walked through');
+  const card = steps.at(-1)?.card;
+  assert.ok(card?.kind === 'summary' && card.items.some((i) => i.what.key === 'onboarding.sum.banks' && i.what.params?.n === 2), 'every bank account counts');
+  assert.equal(de('onboarding.sum.banks', { n: 2 }), '2 Bankkonten', 'no «mit IBAN»');
+  assert.equal(topicStates(emptyProgress(), facts()).bank, 'open', 'no bank account at all: asked');
+  assert.doesNotMatch(setupSpecialist(de), /bank accounts with their IBAN/);
 });
 
 test('an IBAN is never required: two banks without one complete the setup, and a sentence adds a bank without one', () => {

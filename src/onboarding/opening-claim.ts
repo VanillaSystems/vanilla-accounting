@@ -71,7 +71,8 @@ function stray(sentence: string): boolean {
   const clauses = clausesOf(sentence);
   if (clauses.some((c) => aboutOpening(c) && tiedDays(c).some((d) => !allowed(d)))) return true;
   if (clauses.some((c) => { const i = c.search(INTERIM); return i >= 0 && !NEGATION.test(c.slice(0, i)); })) return true;
-  return BALANCE_SHEET.test(sentence) && NOT_NEEDED.test(sentence);
+  // «Not needed» of the balance sheet itself, in one clause: «die Kontoauszüge brauchst du nicht, nur die Bilanz» says nothing of the kind.
+  return clauses.some((c) => BALANCE_SHEET.test(c) && NOT_NEEDED.test(c));
 }
 
 /**

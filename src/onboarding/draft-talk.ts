@@ -293,6 +293,10 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
       // Then by bank and currency, among the accounts not matched yet: an IBAN fills one that has none; without an IBAN any of them is meant.
       const open = banks.findIndex((b, i) => !used.has(i) && sameBank(b, r) && (!r.iban || !b.iban));
       if (claim(open)) { if (r.iban) banks[open].iban = r.iban; continue; }
+      // An IBAN her words state for a bank and currency the form holds once corrects the one typed there («die IBAN ist falsch, richtig ist …»):
+      // the books keep one account per bank and currency, so it can only be that account.
+      const one = banks.map((b, i) => [b, i] as const).filter(([b, i]) => !used.has(i) && sameBank(b, r));
+      if (r.iban && one.length === 1 && stated('iban', r.iban, words)) { claim(one[0][1]); banks[one[0][1]].iban = r.iban; continue; }
       // One more account of a bank in a currency the list holds: the books keep one per bank and currency (checkBank, the manifest),
       // so it is refused as the form refuses it and said why, never dropped silently; the rest of the list is saved.
       if (banks.some((b) => sameBank(b, r))) { refused.push({ step: 'banks', refusal: { reason: 'bankTwice', bank: r.bank, detail: r.currency } }); continue; }

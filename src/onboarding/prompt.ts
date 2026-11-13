@@ -20,7 +20,7 @@ export const SETUP_PURPOSE = 'This conversation\'s purpose: setting up the books
 const COVERS: { readonly [K in SetupTopic]: string } = {
   firm: 'the kind of firm (legal form), its VAT setup (registered or not, the effective or the net tax rate method with its approved rates, the filing period) and what it sells. The person answered all of it a minute ago when the books were created and the app shows it on a card: never ask it again; take it up only when the person says something of it is wrong',
   opening: 'the opening balances on 1 January of the books\' first year, from the balance sheet of 31 December of the year before, also when the books begin later in the year; the app proposes a bank account\'s from its first statement',
-  bank: 'the bank accounts with their IBAN, and how their statements come in',
+  bank: 'the bank accounts, and how their statements come in; an IBAN is optional, never ask for one as required',
   receipts: 'where receipts come from: mailboxes, web logins, the phone, files dragged in',
   knowledge: 'the business partners and the company\'s rules: what the person says about suppliers and customers, and the rules drafted from the history and kept by the person',
 };

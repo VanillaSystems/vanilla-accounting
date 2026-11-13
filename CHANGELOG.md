@@ -457,7 +457,10 @@ Two markers flag an entry you must read before you update:
   typed correction of the starting point («d Firma isch nöd neu») sets `profile.start` and shows
   as her answer, no longer «angenommen». After «Etwas ändern» it does not ask the VAT method or the
   sales again. A typed sentence before the books adds to the bank accounts of the form. It keeps
-  the IBAN typed there, never lends it to another account and never requires one.
+  the IBAN typed there, never lends it to another account and never requires one. An IBAN her words
+  state for an account of the form corrects the one typed there. In the books, a bank account
+  without an IBAN sets up the bank topic and counts in the summary («2 Bankkonten», no longer «mit
+  IBAN» only).
 - **⚠ figures** A booking no longer claims input tax on a receipt that is no longer linked to its
   payment (#417, point 1). That happened when a receipt file was rewritten under its name or its
   link was taken off, and the run said «0 Verknüpfungen prüfen». The app's own booking (by a rule

@@ -58,7 +58,7 @@ knowledge.
 | `sells` | firm | only after «Etwas ändern»: the three kinds as toggles | the default accounts |
 | `startingPoint` | firm | no step and no buttons: the AI records it when her words correct «Ausgangslage» («d Firma isch nöd neu», «wir wechseln von der Treuhand»; #496). It writes the profile's `start` (its undo puts the one before back), shows in the summary as her answer and no longer «angenommen». After «Etwas ändern» it is the change she meant: `vat` and `sells` are not asked again | none; the opening's words follow it |
 | `opening` | opening | «Weiter» / «Später»; «Später» says what it means (the balance differs from the bank's by the opening until it is entered) and where it comes back («Eröffnung erfassen» at the first statement, Firma › Eröffnung) | the opening balances, if entered |
-| `bank` | bank | only while no account has an IBAN: «Weiter» / «Später» | the bank accounts, «Bankkonto erfassen» |
+| `bank` | bank | only while the app knows no bank account (an IBAN is never required, #496): «Weiter» / «Später» | the bank accounts, «Bankkonto erfassen» |
 | `receipts` | receipts | «Weiter» / «Später» | the sources switched on, «Mit mir einrichten» (an AI turn) while an AI answers, otherwise a line that it needs one and «KI einrichten»; «Quellen ansehen» |
 | `partners` | knowledge | only in books that hold bookings: «Weiter» | the partner bins, a rule draft per clear partner |
 | summary | | «Kontoauszug einlesen» (ends the setup and opens Kontoauszüge), «Erst umsehen» | first the first step, one sentence with its buttons and the rest behind «Mehr dazu»; then what the app knows and where from, what is open with its place by hand |
@@ -96,7 +96,7 @@ Neither the AI nor the answer writes the setting.
 **Topics marked by what the app sees.** `topicStates(progress, facts)` derives each topic's state:
 firm done unless a change is under way (after «Etwas ändern», until the VAT answer matches the
 settings or was «Weiss nicht», and the sales answer is what the profile keeps); opening done with
-opening balances for the open year; bank done with a bank account that has an IBAN; receipts done
+opening balances for the open year; bank done with a bank account, with or without an IBAN; receipts done
 with a source switched on; knowledge done once the partners were seen, left for later while there
 are none or once the setup ended, so the count never goes backwards.
 «Später» leaves a topic for later. A topic the AI or a person marked keeps its mark unless the app
