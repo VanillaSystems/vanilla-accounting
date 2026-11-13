@@ -332,6 +332,13 @@ Two markers flag an entry you must read before you update:
   why (its receipt, the outlays, a receipt that cannot be read), and «Automatisch buchen» for all
   counts these payments as a group of their own. The inbox run that books an outlay of the owner's
   now books the repayment it covers in the same run: one of three repayments needed a second click.
+- «Was muss ich jetzt noch machen?» (#428): the AI started with the firm's own invoice that its
+  customer has not paid yet, where there is nothing to do, and left out a bank account without its
+  opening balance and the setup's proposal waiting on a payment. The facts it is handed and the
+  card under its answer now leave the firm's own unpaid invoices out of the work, name a missing
+  opening (Firma › Eröffnung), a payment provider's clearing account below zero and a proposal
+  that waits, and list everything most important first, as code ranks it. A run attached to a
+  message is named by its workflow and day, not by its id.
 - Keeping rules (#396, #392): «Rückgängig» on a second kept rule took back the first rule's bookings
   and the second rule's file. Each keep now has a line of its own above Aufgaben and Firma › Regeln
   («4 Zahlungen gebucht · Rückgängig»), true to its own numbers and still there after a reload; the

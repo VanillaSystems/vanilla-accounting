@@ -8,9 +8,20 @@ import type { ContextRef } from '../../types/assistant.js';
 import { automationNow } from '../automation/store.js';
 import { language, t } from '../i18n/index.js';
 import { textIn } from '../../workflows/model.js';
+import { formatDate } from '../lib/utils.js';
 import type { Selection } from '../selection/model.js';
 
 const PICKED = { receipt: 'selection.receipts', payment: 'selection.payments', entry: 'selection.entries' } as const;
+
+/**
+ * A run as the message's reference: its workflow and its day in words («Lauf «Buchen» vom 13.11.2026»), never its bare id above the person's message (#428). The id goes with the reference.
+ */
+export function runContext(id: string): ContextRef {
+  const view = automationNow();
+  const r = view?.runs.find((x) => x.id === id);
+  const w = r && view?.workflows.find((x) => x.id === r.workflow);
+  return { kind: 'run', id, label: r ? t('automation.runRef', { workflow: w ? textIn(w.label, language()) : r.workflow, date: formatDate(r.startedAt.slice(0, 10)) }) : t('automation.runRefAny') };
+}
 
 /** The picked rows as the message's reference (#216): their ids go with it, the chip says how many. */
 export const selectionContext = (sel: Selection): ContextRef => ({ kind: 'selection', id: sel.kind, ids: [...sel.ids], label: t(PICKED[sel.kind], { n: sel.ids.length }) });
@@ -33,7 +44,7 @@ export function pageContext(route: Route, books: Index): ContextRef | undefined 
       return { kind: 'receipt', id: route.id, label: r?.filename ?? route.id };
     }
     case 'automation': {
-      if (route.view === 'run' || (route.view === 'tasks' && route.run)) return { kind: 'run', id: route.run!, label: t('automation.run', { id: route.run! }) };
+      if (route.view === 'run' || (route.view === 'tasks' && route.run)) return runContext(route.run!);
       if (route.view === 'workflow' && route.workflow) {
         const w = automationNow()?.workflows.find((x) => x.id === route.workflow);
         return { kind: 'workflow', id: route.workflow, label: w ? textIn(w.label, language()) : route.workflow };

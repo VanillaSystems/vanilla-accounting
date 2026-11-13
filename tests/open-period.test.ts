@@ -59,7 +59,8 @@ test('the state of the oldest period not filed is the review\'s list, the paymen
   const issues = periodIssues(books, [question], s.period.from, s.period.to, []);
   assert.equal(s.unbooked.length + s.questions.length + s.evidence.length + s.unlinked.length, issues.length);
   assert.deepEqual(openLines(s).map((l) => [l.kind, l.kind === 'task' ? l.task.run : l.n, l.kind === 'unbooked' ? l.waiting : undefined]), [
-    ['unbooked', 4, 2], ['questions', 1, undefined], ['unlinked', 1, undefined], ['task', 'r-1', undefined],
+    // Most important first (#428): an open VAT question withholds the approval.
+    ['questions', 1, undefined], ['unbooked', 4, 2], ['unlinked', 1, undefined], ['task', 'r-1', undefined],
   ]);
   assert.deepEqual(waitingKinds(s), { waits: 2, asks: 0, unread: 0, outlays: 0 }, 'until two weeks before the 29.11. the missing receipts are the app\'s work');
   assert.deepEqual(waitingKinds(openPeriodState(books, [], [], [], { ...ctx, today: '2026-11-20' })), { waits: 0, asks: 2, unread: 0, outlays: 0 }, 'from then on they are the person\'s');

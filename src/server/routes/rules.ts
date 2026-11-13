@@ -6,6 +6,7 @@
  *   GET  /api/rules/draft?path=       the AI's draft of one rules file, rule by rule
  *   POST /api/rules/draft             { kind: keep, path, basis, confirm? } saves exactly that draft; { kind: discard, path }
  *   GET  /api/rules/share?ref=        the rule with a private share a split payment offers («Immer so?»), or null
+ *   GET  /api/rules/share-offers      the setup's shares offered as rules and not answered yet (#428)
  *   POST /api/rules/share             { ref }: that rule drafted into its file; the answer names the file for its card
  *   GET  /api/rules/grouped?ref=      the batch payer a person's links of several receipts to a payment offer («Immer so?», #190), or null
  *   POST /api/rules/grouped           { ref }: `grouped: true` drafted into the business's company file; the answer names the file for its card
@@ -52,7 +53,7 @@ import { join } from 'node:path';
 import { bookedState } from '../../accounting/payment-entries.js';
 import { wageOffer } from '../../saving/wage-rule.js';
 import { loadWorkflows } from '../../workflows/load.js';
-import { clearTakenShares, dismissSetupShare, draftShareRule, shareOffer } from '../../saving/share-rule.js';
+import { clearTakenShares, dismissSetupShare, draftShareRule, setupShareOffers, shareOffer } from '../../saving/share-rule.js';
 import { draftGroupedFlag, groupedOffer } from '../../saving/grouped-flag.js';
 import { draftUnreadRule, unreadOffer } from '../../saving/unread-rule.js';
 import { draftSaleRule } from '../../saving/sale-rule.js';
@@ -509,6 +510,11 @@ router.post('/api/rules/unread', (req, res) => {
   const path = draftUnreadRule(WS, ref, rate);
   if (!path) throw new RequestError(404, 'Diese Zahlung führt zu keinem Geschäftspartner, für den eine Regel stehen kann.');
   res.json({ path });
+});
+
+/** GET /api/rules/share-offers: the setup's shares offered as rules and not answered yet, for «was muss ich noch machen?» (#428). */
+router.get('/api/rules/share-offers', (_req, res) => {
+  res.json({ offers: setupShareOffers(WS, loadBooks(WS)) });
 });
 
 router.get('/api/rules/share', (req, res) => {

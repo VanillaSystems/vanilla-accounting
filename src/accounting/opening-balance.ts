@@ -98,6 +98,8 @@ export interface MissingOpening {
   amount: number;
   /** Whether Firma › Eröffnung takes it: not once the year is closed through 31.12., so no link leads into a refusal. */
   canType: boolean;
+  /** The account's currency when it is not the books' one: `amount` is in it. */
+  currency?: string;
 }
 
 /**
@@ -110,17 +112,19 @@ export function missingOpenings(
   books: Pick<Index, 'config' | 'transactions' | 'journalEntries' | 'statementBalances'>,
   accounts: ReadonlyArray<{ bank: string; currency: string; account: string; label: string }>,
   year: string,
+  /** `all`: a foreign-currency account too, its amount in its currency (what «was muss ich noch machen?» names, #428). */
+  currencies: 'base' | 'all' = 'base',
 ): MissingOpening[] {
   const lock = openingLock({ config: books.config, journalEntries: books.journalEntries }, year);
   if (lock === 'notFirstYear') return [];
   return accounts.flatMap((a): MissingOpening[] => {
-    if (a.currency !== baseCurrency() || books.config?.openingBalances?.[year]?.[a.account] !== undefined) return [];
+    if ((currencies === 'base' && a.currency !== baseCurrency()) || books.config?.openingBalances?.[year]?.[a.account] !== undefined) return [];
     const first = (books.statementBalances ?? []).filter((b) => b.account === a.account && b.date.startsWith(year)).sort((x, y) => x.date.localeCompare(y.date))[0];
     if (!first) return [];
     const moved = books.transactions.filter((t) => t.bank === a.bank && t.currency === a.currency && t.date >= `${year}-01-01` && t.date <= first.date)
       .reduce((sum, t) => sum + (t.direction === 'DBIT' ? -1 : 1) * toRappen(Math.abs(t.amount)), 0);
     const held = toRappen(first.amount) - moved;
-    return held === 0 ? [] : [{ account: a.account, label: a.label, year, amount: fromRappen(held), canType: !lock }];
+    return held === 0 ? [] : [{ account: a.account, label: a.label, year, amount: fromRappen(held), canType: !lock, ...(a.currency !== baseCurrency() ? { currency: a.currency } : {}) }];
   });
 }
 

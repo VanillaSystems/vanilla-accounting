@@ -27,6 +27,9 @@ import { thresholdPassed } from '../vat/model.js';
 import { countIssues, dateOn, periodIssues, receiptWaiting, type IssueCounts, type PeriodIssue } from './period-issues.js';
 import type { Processing } from '../../../workflows/processing.js';
 import type { HeldOrder, MissingBill, ProviderIssues } from '../../../booking/provider-issues.js';
+import { issuedByFirm, type Firm } from '../../../intake/own-invoice.js';
+import { missingOpenings, type MissingOpening } from '../../../accounting/opening-balance.js';
+import { balanceAt } from '../../../booking/providers.js';
 
 export interface OpenPeriodContext {
   today: IsoDate;
@@ -37,7 +40,16 @@ export interface OpenPeriodContext {
   dueDays: number;
   /** The owner's name (company.owner): a payment to her that waits, waits for her outlays (#428). */
   owner?: string;
+  /** The firm (company.uid, .name): an invoice it issued waits for its customer, not for the person (#428). */
+  firm?: Firm;
 }
+
+/** A share the setup named, offered as a rule and not answered yet (src/saving/share-rule.ts setupShareOffers, #428). */
+export type { PendingOffer } from '../../../saving/share-rule.js';
+import type { PendingOffer } from '../../../saving/share-rule.js';
+
+/** A provider's clearing account below zero at the period's end (#428): the provider paid out more than the account holds sales for. */
+export interface ClearingBelow { name: string; account: string; balance: number }
 
 export interface OpenPeriodState {
   period: Period;
@@ -56,8 +68,16 @@ export interface OpenPeriodState {
   questions: Array<{ q: Question; date: string }>;
   /** Bookings whose VAT code contradicts their receipts, each with what contradicts. */
   evidence: Array<{ entry: JournalEntry; check: EvidenceCheck }>;
-  /** Receipts without a payment. */
+  /** Receipts without a payment, the firm's own invoices not among them. */
   unlinked: Receipt[];
+  /** Invoices the firm issued that no payment has paid yet: they wait for the customer, nothing for the person to do (#428). */
+  issued: Receipt[];
+  /** The first year's bank accounts the books open at nothing while their statements say they held money (missingOpenings, any currency): Firma › Eröffnung (#428). */
+  openings: MissingOpening[];
+  /** The providers' clearing accounts below zero at the period's end (#428). */
+  clearing: ClearingBelow[];
+  /** The setup's shares offered as rules and not answered yet (#428). */
+  offers: PendingOffer[];
   /** Orders a provider's sales report holds: their turnover is not in the return yet (#405). */
   held: HeldOrder[];
   /** Months of a provider's fees whose bill is not in the books (#405). */
@@ -94,10 +114,12 @@ function taskDay(books: Index, item: Task['item'], openFrom: IsoDate): IsoDate |
 export function openPeriodState(
   books: Index, questions: readonly Question[], tasks: readonly Task[], accounts: readonly LedgerBankAccount[], ctx: OpenPeriodContext,
   orderPages: ReadonlyMap<string, OrderPage> = new Map(), processing: ReadonlyMap<string, Processing> = new Map(), provider?: ProviderIssues,
+  offers: readonly PendingOffer[] = [],
 ): OpenPeriodState {
   const period = booksOpenPeriod(books, ctx.today, ctx.length);
   const issues = periodIssues(books, questions, period.from, period.to, accounts, orderPages, ctx.today, processing, provider, ctx.owner);
   const unbooked = issues.flatMap((i) => (i.kind === 'unbooked' ? [i.tx] : []));
+  const unlinked = issues.flatMap((i) => (i.kind === 'unlinked' ? [i.receipt] : []));
   const refs = new Set(unbooked.map((t) => t.ref));
   const about = (x: Task) => { const d = taskDay(books, x.item, period.from); return d === 'period' ? x.item.id === period.token : !!d && d >= period.from && d <= period.to; };
   return {
@@ -109,7 +131,14 @@ export function openPeriodState(
     waiting: receiptWaiting(books, accounts, ctx.today, ctx.owner).filter((w) => refs.has(w.tx.ref)),
     questions: issues.flatMap((i) => (i.kind === 'question' ? [{ q: i.q, date: i.date }] : [])),
     evidence: issues.flatMap((i) => (i.kind === 'evidence' ? [{ entry: i.entry, check: i.check }] : [])),
-    unlinked: issues.flatMap((i) => (i.kind === 'unlinked' ? [i.receipt] : [])),
+    unlinked: unlinked.filter((r) => !issuedByFirm(r, ctx.firm)),
+    issued: unlinked.filter((r) => issuedByFirm(r, ctx.firm)),
+    openings: missingOpenings(books, accounts, period.to.slice(0, 4), 'all'),
+    clearing: (provider?.clearing ?? []).flatMap((c): ClearingBelow[] => {
+      const balance = balanceAt(books.journalEntries ?? [], c.account, period.to, books.config?.openingBalances);
+      return balance < 0 ? [{ name: c.name, account: c.account, balance }] : [];
+    }),
+    offers: [...offers],
     yours: issues.flatMap((i) => (i.kind === 'own' ? [i] : [])),
     held: issues.flatMap((i) => (i.kind === 'held' ? [i.held] : [])),
     bills: issues.flatMap((i) => (i.kind === 'bill' ? [i.bill] : [])),
@@ -167,7 +196,8 @@ export const elsewhereCount = (e: Elsewhere): number =>
 
 /** Whether anything of the period waits: a card with nothing on it says so in one line (and that nothing else does, only when `elsewhereOf` is empty too). */
 export const nothingOpen = (s: OpenPeriodState): boolean =>
-  !s.unbooked.length && !s.questions.length && !s.evidence.length && !s.unlinked.length && !s.yours.length && !s.held.length && !s.tasks.length;
+  !s.unbooked.length && !s.questions.length && !s.evidence.length && !s.unlinked.length && !s.yours.length && !s.held.length && !s.tasks.length
+  && !s.offers.length && !s.openings.length && !s.clearing.length;
 
 /** How many of the held payments are of each kind. */
 export const waitingKinds = (s: Pick<OpenPeriodState, 'waiting'>): Record<WaitingPayment['kind'] | 'outlays', number> => ({
@@ -195,6 +225,12 @@ export type OpenLine =
   | { kind: 'unlinked'; n: number; first: Receipt; items: Receipt[]; more: number }
   | { kind: 'held'; n: number; first: HeldOrder }
   | { kind: 'bills'; n: number; first: MissingBill }
+  /** The setup's shares offered as rules, each on its payment: one click there (#428). */
+  | { kind: 'offers'; n: number; first: PendingOffer; items: PendingOffer[]; more: number }
+  /** Bank accounts without their opening balance: Firma › Eröffnung (#428). */
+  | { kind: 'openings'; n: number; first: MissingOpening; items: MissingOpening[]; more: number }
+  /** A provider's clearing account below zero at the period's end (#428). */
+  | { kind: 'clearing'; n: number; first: ClearingBelow; items: ClearingBelow[]; more: number }
   | { kind: 'task'; task: Task }
   /** The tasks beyond TASKS_SHOWN. */
   | { kind: 'moreTasks'; n: number };
@@ -202,10 +238,14 @@ export type OpenLine =
 const shown = <T>(all: readonly T[]) => ({ n: all.length, items: all.slice(0, ITEMS_SHOWN), more: Math.max(0, all.length - ITEMS_SHOWN) });
 
 /**
- * The state as the lines of its card, in the order a person works them off: what only she can say
- * of a receipt first, the tasks last, the review among them. A task on a payment counted in the
- * payments' line is that payment, and a receipt of `yours` is not among those without a payment:
- * each object is named once. At most TASKS_SHOWN tasks are lines of their own.
+ * The state as the lines of its card, most important first, as code ranks them (#428): what holds
+ * the return's approval (an order a report could not split, an open VAT question), what only she can
+ * say of a receipt, the payments without a booking, the bookings against their receipts, an offer
+ * that waits for one click, a missing opening, a clearing account below zero, the receipts without a
+ * payment, the provider's missing bills, and the tasks last, the review among them. The AI's note
+ * lists its facts in the same order and the model starts with the first. A task on a payment counted
+ * in the payments' line is that payment, and a receipt of `yours` is not among those without a
+ * payment: each object is named once. At most TASKS_SHOWN tasks are lines of their own.
  */
 export function openLines(s: OpenPeriodState): OpenLine[] {
   const refs = new Set(s.unbooked.map((t) => t.ref));
@@ -213,11 +253,14 @@ export function openLines(s: OpenPeriodState): OpenLine[] {
   const kinds = waitingKinds(s);
   const unlinked = s.unlinked;
   return [
+    ...(s.held.length ? [{ kind: 'held' as const, n: s.held.length, first: s.held[0] }] : []),
+    ...(s.counts.questions ? [{ kind: 'questions' as const, n: s.counts.questions }] : []),
     ...(s.yours.length ? [{ kind: 'yours' as const, ...shown(s.yours) }] : []),
     ...(s.counts.unbooked ? [{ kind: 'unbooked' as const, ...shown(s.unbooked), n: s.counts.unbooked, waiting: s.counts.waitingReceipt, outlays: s.counts.waitingOutlays, unread: kinds.unread, first: s.unbooked[0] }] : []),
-    ...(s.counts.questions ? [{ kind: 'questions' as const, n: s.counts.questions }] : []),
-    ...(s.held.length ? [{ kind: 'held' as const, n: s.held.length, first: s.held[0] }] : []),
     ...(s.counts.evidence ? [{ kind: 'evidence' as const, n: s.counts.evidence, first: s.evidence[0].entry }] : []),
+    ...(s.offers.length ? [{ kind: 'offers' as const, ...shown(s.offers), first: s.offers[0] }] : []),
+    ...(s.openings.length ? [{ kind: 'openings' as const, ...shown(s.openings), first: s.openings[0] }] : []),
+    ...(s.clearing.length ? [{ kind: 'clearing' as const, ...shown(s.clearing), first: s.clearing[0] }] : []),
     ...(unlinked.length ? [{ kind: 'unlinked' as const, ...shown(unlinked), first: unlinked[0] }] : []),
     ...(s.bills.length ? [{ kind: 'bills' as const, n: s.bills.length, first: s.bills[0] }] : []),
     ...tasks.slice(0, TASKS_SHOWN).map((task) => ({ kind: 'task' as const, task })),
