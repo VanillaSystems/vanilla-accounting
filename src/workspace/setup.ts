@@ -321,6 +321,13 @@ export function offeredAnswers(key: QuestionKey): Offered[] {
   ];
 }
 
+/**
+ * The line that says whom «Wir rechnen keine MWST ab» is for, under every question that offers it
+ * (#398): whole under the first, short under the next, so the answer never stands without it.
+ */
+export const noVatHint = (key: QuestionKey): 'full' | 'short' | undefined =>
+  (!unsteered(key) ? undefined : key === UNSTEERED[0] ? 'full' : 'short');
+
 /** The words on an answer's button, through `say` (t() in the app, a dictionary's own on the server). */
 export function offeredLabel(say: (key: string, vars?: Record<string, string>) => string, key: QuestionKey, a: Offered): string {
   if (a.kind === 'noVat') return say('desktop.q.noVat');

@@ -239,6 +239,19 @@ test('the model is told the buttons of the step waiting word for word, the list 
   assert.doesNotMatch(ui, /QUESTIONS\[key\]\.options\.map/, 'no second list of buttons');
 });
 
+test('«Wir rechnen keine MWST ab» never stands without the line that says whom it is for: under every question that offers it, on the form and in the conversation (#398)', async () => {
+  const { offeredAnswers, noVatHint } = await import('../src/workspace/setup.js');
+  const offering = QUESTION_ORDER.filter((k) => offeredAnswers(k).some((a) => a.kind === 'noVat'));
+  assert.deepEqual(offering, ['vatMethod', 'basis']);
+  assert.deepEqual(QUESTION_ORDER.filter((k) => noVatHint(k)), offering, 'a line under each question that offers the answer, none elsewhere');
+  assert.deepEqual(offering.map(noVatHint), ['full', 'short'], 'whole the first time, short the second');
+  for (const f of ['src/app/onboarding/DraftConversation.tsx', 'src/app/desktop/StartScreen.tsx']) {
+    const src = readFileSync(f, 'utf8');
+    assert.match(src, /\{noVatHint\(key\) \? <p className="[^"]+" data-no-vat-hint=\{noVatHint\(key\)\}>/, `${f}: the line follows the answer`);
+    assert.doesNotMatch(src, /key === 'vatMethod' \? <p[^>]*data-no-vat-hint/, `${f}: not under the method only`);
+  }
+});
+
 test('a filing period the tax authority grants only on request is not taken from loose words: the reply says what is usual, the question keeps its buttons', () => {
   const d = newDraft('de', NOW);
   // «Mir rechned alli halb Jahr ab» on the effective method.

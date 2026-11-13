@@ -151,7 +151,8 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
         await page.$$eval('.st-form [data-q=period] button', (bs) => (bs[0] as HTMLButtonElement).click());
         // «Wir rechnen keine MWST ab» (#347) on the form: «nein» to the registration, the two questions gone, the books an unregistered GmbH.
         assert.match(await text(page, '.st-form [data-q=vatMethod] [data-no-vat-hint]'), /nicht im MWST-Register.*CHF 100’000.*Treuhand/s);
-        assert.equal(await page.$$eval('.st-form [data-no-vat-hint]', (e) => e.length), 1, `${size}: the hint once, under the method`);
+        assert.deepEqual(await page.$$eval('.st-form [data-no-vat-hint]', (e) => e.map((x) => x.getAttribute('data-no-vat-hint'))), ['full', 'short'], `${size}: the hint whole under the method, short under the basis (#398)`);
+        assert.match(await text(page, '.st-form [data-q=basis] [data-no-vat-hint]'), /«Wir rechnen keine MWST ab» nur, wenn die Firma nicht im MWST-Register steht/);
         // A rate typed for the Saldosteuersatz goes with the answer, as in the conversation.
         await press(page, '.st-form [data-q=vatMethod] button[role=radio]:nth-child(2)');
         await page.waitForSelector('.st-form input[name=netRate1]', { timeout: 10_000 });
@@ -212,7 +213,7 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
         await press(page, '[data-step=period] [data-answer=quarterly]');
       } else {
         // «Wir rechnen keine MWST ab» (#347) in the conversation: the same «nein», the basis and the period not asked.
-        assert.equal(await page.$('[data-step=basis] [data-no-vat-hint]'), null, `${size}: the hint stands once, under the method above`);
+        assert.match(await text(page, '[data-step=basis] [data-no-vat-hint=short]'), /nicht im MWST-Register/, `${size}: the answer never stands without its line (#398)`);
         await press(page, '[data-step=basis] [data-answer=no-vat]');
       }
       await seen('.obflow input[name=bank1]');

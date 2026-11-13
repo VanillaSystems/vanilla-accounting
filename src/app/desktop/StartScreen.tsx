@@ -9,7 +9,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BANKS, parseIban } from '../../workspace/banks.js';
-import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, hasWhere, firstUnsupported, notRegistered, optionOf, unsteered, withoutUnsteered, NO_VAT, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
+import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, hasWhere, noVatHint, firstUnsupported, notRegistered, optionOf, unsteered, withoutUnsteered, NO_VAT, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
 import { parseUid } from '../../workspace/uid.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
@@ -332,7 +332,7 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
                   ))}
                   {unsteered(key) ? <button type="button" role="radio" aria-checked={false} data-answer={NO_VAT} onClick={() => pick(key, NO_VAT)}>{t('desktop.q.noVat')}</button> : null}
                 </div>
-                {key === 'vatMethod' ? <p className="st-note" data-no-vat-hint>{t('desktop.q.noVat.hint')}</p> : null}
+                {noVatHint(key) ? <p className="st-note" data-no-vat-hint={noVatHint(key)}>{t(noVatHint(key) === 'full' ? 'desktop.q.noVat.hint' : 'desktop.q.noVat.hintShort')}</p> : null}
                 {notes.map((o) => (
                   <p key={o!.value} className={o!.unsupported ? 'st-stop' : 'st-note'}>{tData(`desktop.q.${key}.${o!.value}.${o!.unsupported ? 'unsupported' : 'caveat'}`)}</p>
                 ))}

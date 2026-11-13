@@ -9,7 +9,7 @@
  */
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BANKS } from '../../workspace/banks.js';
-import { NO_VAT, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, hasWhere, offeredAnswers, offeredLabel, optionOf, unsteered, unusualPeriod, type QuestionKey } from '../../workspace/setup.js';
+import { NO_VAT, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, hasWhere, noVatHint, offeredAnswers, offeredLabel, optionOf, unsteered, unusualPeriod, type QuestionKey } from '../../workspace/setup.js';
 import type { BankSpec } from '../../workspace/create.js';
 import type { NetRate } from '../../workspace/vat-setup.js';
 import { DRAFT_PHASES, assumedOf, draftProgress, draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView, type StepMark } from '../../onboarding/draft.js';
@@ -305,7 +305,7 @@ function QuestionStep({ step, draft, busy, send, change, fromText, turns }: { st
             })}
             {multi ? <button type="button" className="btn" disabled={busy || ('required' in QUESTIONS[key] && !on.length)} data-act="question-next" onClick={() => void send({ step: 'question', key, value: on })}>{t('onboarding.draft.next')}</button> : null}
           </div>
-          {key === 'vatMethod' ? <p className="obwhy" data-no-vat-hint>{t('desktop.q.noVat.hint')}</p> : null}
+          {noVatHint(key) ? <p className="obwhy" data-no-vat-hint={noVatHint(key)}>{t(noVatHint(key) === 'full' ? 'desktop.q.noVat.hint' : 'desktop.q.noVat.hintShort')}</p> : null}
         </div>
       )}
     </div>
