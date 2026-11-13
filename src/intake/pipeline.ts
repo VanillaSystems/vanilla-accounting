@@ -5,6 +5,7 @@
  * (POST /api/intake) all four as a job. Every step only takes up what is still to do, so a second
  * run changes nothing; one runs at a time per workspace (data/intake.lock), CLI and app alike.
  */
+import type { LeftPayment } from '../types/api-error.js';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import type { AskOptions } from '../llm/ask.js';
@@ -116,6 +117,8 @@ export const stemOf = (name: string): string => name.replace(/\.[^.]*$/, '');
 
 export interface StepResult {
   notes: IntakeNote[];
+  /** Payments the step tried to book and left unbooked, with why (#470): the run log keeps them for each payment's «Verlauf» and reason. */
+  refused?: LeftPayment[];
   /** The later steps would work on books this step could not bring up to date. */
   stop?: boolean;
 }

@@ -3,7 +3,7 @@
  * return is filed, under «Abrechnung prüfen» (r4c-38), and the bookings that contradict their
  * receipts with their one click (r4c-31). Each issue links to where it is settled; none blocks.
  */
-import { orderPagesNow, outlayWaitsNow, providerIssuesNow } from '../../lib/order-pages.js';
+import { orderPagesNow, outlayWaitsNow, providerIssuesNow, unbookedText } from '../../lib/order-pages.js';
 import { FindPair } from '../receipts/FindPair.js';
 import { isKey, t, tWith } from '../../i18n/index.js';
 import { heldReasonText } from '../../lib/held-reason.js';
@@ -65,7 +65,7 @@ function textOf(books: Index, i: PeriodIssue): string {
       return t('issues.question', { date: formatDate(i.date), text: tx ? `${tx.counterparty || tx.description} ${tx.currency} ${fmt(tx.amount)}` : i.q.text });
     }
     case 'evidence': return `${formatDate(i.entry.date)} ${i.entry.description ?? ''}: ${evidenceText(i.entry, i.check)}`;
-    case 'unbooked': return t('issues.unbooked', { date: formatDate(i.tx.date), text: payerName(i.tx), amount: `${i.tx.currency} ${fmt(i.tx.amount)}` });
+    case 'unbooked': return unbookedText(i.tx);
     case 'unlinked': return t('issues.unlinked', { date: formatDate(i.receipt.date ?? ''), text: i.receipt.description ? moneyInText(i.receipt.description) : i.receipt.filename });
     case 'own': return t('issues.own', { text: i.name, lacks: i.lacks.map((k) => t(LACK_WORDS[k])).join(', ') });
     case 'held': return t(i.held.why === 'rate' || i.held.why === 'rateTooMany' ? 'issues.heldRate' : 'issues.heldOther', { what: heldReasonText(i.held, isKey, tWith), date: formatDate(i.held.date), provider: i.held.name, amount: i.held.gross !== undefined ? `, ${i.held.currency ?? baseCurrency()} ${fmt(i.held.gross)}` : '' });

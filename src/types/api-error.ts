@@ -283,6 +283,9 @@ export type ClassifyRefusal =
   /** The answer takes more off the wages' deductions account than it held on the payment's day (#426). */
   | { code: 'classifyWithheldOver'; params: { account: string; currency: string; taken: number; open: number } };
 
+/** A payment a step tried to book and left unbooked (#470): by ref, with the refusal the screens have words for, when it has one. */
+export interface LeftPayment { ref: string; refusal?: ClassifyRefusal }
+
 /**
  * Why a statement upload (POST /api/statements) was refused: not XML or PDF, an XML that is no
  * camt.053, no bank account takes it (detail: the manifest's problem), a PDF whose name gives no

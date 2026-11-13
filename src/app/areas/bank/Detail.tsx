@@ -37,7 +37,7 @@ import { RunHistory } from '../../history/RunHistory.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { localToday } from '../../../accounting/periods.js';
 import { excessOfPayment, linkedOf, receiptState, type Linked } from '../../../accounting/receipt-due.js';
-import { outlayWaitsNow } from '../../lib/order-pages.js';
+import { outlayWaitsNow, refusedWhy } from '../../lib/order-pages.js';
 import { WorkflowButtons } from '../../automation/marks.js';
 import { useAutomation } from '../../automation/store.js';
 import { processingText } from '../../automation/processing.js';
@@ -533,6 +533,9 @@ function NotBooked({ tx, linked }: { tx: BankTransaction; linked: Linked }) {
   if (own) return <span className="m" data-testid="booking-now">{t('bank.bookingItNow')}</span>;
   const wait = receiptState(tx, linked, false, localToday());
   const yours = (view?.tasks ?? []).some((k) => k.item.kind === 'transaction' && k.item.id === tx.ref);
+  // A run tried it and left it unbooked (#470): why, in her words, from the run log.
+  const why = refusedWhy(tx.ref);
+  if (!wait && why) return <span className="wn" data-testid="refused-by-run">{t('bank.refusedByRun', { why })}</span>;
   if (!wait) return <span className="wn" data-testid={yours ? 'not-booked-yours' : 'not-booked'}>{t(yours ? 'bank.notBookedYours' : 'bank.notBooked')}</span>;
   if (wait.kind === 'unread') return <span className="wn" data-testid="waits-for-receipt">{t('bank.receiptUnread')}</span>;
   // A payment to the owner waits for the outlays it pays back, not for a receipt of its own (#428).

@@ -7,7 +7,7 @@
  * rows until it closes; the work goes on when it does.
  */
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { outlayWaitsNow } from '../lib/order-pages.js';
+import { outlayWaitsNow, refusedWhy, unbookedText } from '../lib/order-pages.js';
 import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
 import { isKey, language, t, tWith } from '../i18n/index.js';
@@ -543,6 +543,8 @@ function Summary({ sum, rows, books, go, receiptOf, feeBillsOf }: { sum: DropSum
   // What is open is listed in the period of the oldest payment not booked, which need not be the one most payments are in.
   const open = pays?.openFrom ? parsePeriod(filingKeyOf(pays.openFrom, filing().length), today) ?? undefined : undefined;
   if (!pays && !files) return null;
+  // A payment a run left unbooked says why, each with the way to it (#470).
+  const refused = (pays?.unbookedRefs ?? []).flatMap((ref) => { const tx = refusedWhy(ref) ? books.transactions.find((x) => x.ref === ref) : undefined; return tx ? [tx] : []; });
   const receipts = files ? receiptLines(files, noAi, feeBillsOf) : '';
   const others = files ? otherLines(files) : '';
   return (
@@ -561,6 +563,11 @@ function Summary({ sum, rows, books, go, receiptOf, feeBillsOf }: { sum: DropSum
           {paid ? <button type="button" className="linkbtn" data-testid="drop-to-payments" onClick={() => go({ route: { area: 'bank' }, query: { period: paid } })}>{t('drop.sum.toPayments', { period: periodName(paid) })}</button> : null}
           {open && chargesVat() ? <>{' · '}<button type="button" className="linkbtn" data-testid="drop-to-open" onClick={() => go({ route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: open } })}>{t('drop.sum.toOpen', { period: periodName(open) })}</button></> : null}
         </p>
+      ) : null}
+      {refused.length ? (
+        <ul className="dsum-refused" data-testid="drop-refused">
+          {refused.map((tx) => <li key={tx.ref}><button type="button" className="linkbtn" onClick={() => go({ route: { area: 'bank', payment: tx.ref }, query: { period: parsePeriod(filingKeyOf(tx.date, filing().length), today) ?? undefined } })}>{unbookedText(tx)}</button></li>)}
+        </ul>
       ) : null}
       {receipts ? (
         <p>

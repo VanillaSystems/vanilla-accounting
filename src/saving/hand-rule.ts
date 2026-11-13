@@ -18,6 +18,7 @@ import { judgedRepayments } from '../booking/owner-judged.js';
 import { payoutWaitOf, providerOfMoneyIn } from '../booking/providers.js';
 import { chartNames } from '../booking/rule-book.js';
 import { isOwnBankFee } from '../booking/bank-fee.js';
+import { paysContributions, wageAccounts, withheldFor } from '../booking/withheld.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
 import type { PaymentNature } from '../accounting/manual-booking.js';
 import type { BankTransaction } from '../types/index.js';
@@ -215,6 +216,21 @@ function oneKind(businesses: ReadonlyArray<string | undefined>, files: readonly 
 
 const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
 
+/**
+ * A payment of social insurance contributions (#470, src/booking/withheld.ts paysContributions): what
+ * the deductions account holds on its day stays its part, the rest is the employer's, on the
+ * contribution account the employees share in (setup.yaml `wages`), as code books an answer that
+ * claims more (#368's decision). None without a deductions account or a contribution account.
+ */
+function contributionsOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, context: ReturnType<typeof loadClassifyContext>, file: Counterparty | undefined): PaymentNature | undefined {
+  const w = wageAccounts();
+  if (!w || !context.wageDeductions || !paysContributions(books, tx, (t) => (t.ref === tx.ref ? file?.id : undefined))) return undefined;
+  const chart = chartNames(context.chartOfAccounts);
+  const fits = (a: string) => !chart.size || chart.has(a);
+  const account = [...w.shared].find((a) => w.contributions.has(a) && fits(a)) ?? [...w.contributions].find(fits);
+  return account ? { kind: 'contributions', account, deductions: w.deductions, open: withheldFor(books, tx, w.deductions) ?? 0 } : undefined;
+}
+
 /** What the payment is beside a sale or a purchase, from the firm's files (manual-booking.ts PaymentNature). */
 function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, context: ReturnType<typeof loadClassifyContext>, file: Counterparty | undefined, wages: () => ReadonlyArray<{ test(s: string): boolean }>, judged: () => boolean = () => false): PaymentNature | undefined {
   const linked = mappedReceipts(books, tx);
@@ -246,7 +262,7 @@ function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, cont
     if (f && outlaysOpen(books, f, tx.date) > 0) return { kind: 'ownerForeign', currency: tx.currency };
     // In the books' currency, not covered while outlays are open (or none booked yet, receipts of hers filed: open 0, #457), no rule deciding it: it waits for them, and the form says so (#428).
     if (toOwner && awaitsOutlays(books, tx, context, wages(), loadFxResolver())) return { kind: 'ownerWaits', account: context.ownerAccount!, open: outlaysOpen(books, ownerFactsOf(context)!, tx.date), owner: context.ownerName ?? '' };
-    if (!context.wageAccount || !wages().some((w) => w.test(tx.description))) return undefined;
+    if (!context.wageAccount || !wages().some((w) => w.test(tx.description))) return contributionsOf(books, tx, context, file);
     // Books that carry wages with their deductions (cls-salary): the payslip's lines are hers, no account is proposed.
     const deductions = context.wageDeductions;
     if (deductions && (books.journalEntries ?? []).some((e) => e.accountDebit === deductions || e.accountCredit === deductions)) return { kind: 'wage', deductions };

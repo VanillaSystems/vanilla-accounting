@@ -21,6 +21,7 @@ import type { QuestionId } from '../../onboarding/model.js';
 import type { SetupView } from '../../onboarding/facts.js';
 import type { VatSetup } from '../../workspace/vat-setup.js';
 import type { ApiErrorBody, ApiStatus, MailStatus } from '../../types/api-error.js';
+import type { PaymentRefusal } from '../../workflows/history.js';
 import type { MailMessage } from '../../invoices/mail.js';
 import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
@@ -138,6 +139,11 @@ export function aiRefusedText(r: AiRefusal): string {
   if (r.reason === 'modelRefused') return t('error.ai.modelRefused', { model: r.model });
   const cli = t(`terminal.cli.${r.cli}`);
   return r.reason === 'limit' ? t('error.ai.limit', { cli, said: r.said }) : t(`error.ai.${r.reason}`, { cli });
+}
+
+/** Why a run left a payment unbooked, in her words (#470): the refusal's words; undefined without one. */
+export function leftText(r: Pick<PaymentRefusal, 'refusal'>): string | undefined {
+  return r.refusal ? errorText(new ApiError({ ...r.refusal, error: '' } as ApiErrorBody)) : undefined;
 }
 
 export function errorText(e: unknown): string {
@@ -500,6 +506,7 @@ export const api = {
   draftRules: (path: string) => request<DraftView>('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`),
   draftCommand: (c: DraftCommand) => request<KeepResult | { ok: boolean }>('POST', '/api/rules/draft', c),
   outlayWaits: () => request<{ refs: string[] }>('GET', '/api/rules/outlay-waits'),
+  refusals: () => request<{ refusals: PaymentRefusal[] }>('GET', '/api/automation/refusals'),
   setupOffers: () => request<{ offers: PendingOffer[] }>('GET', '/api/rules/share-offers'),
   shareOffer: (ref: string) => request<{ offer: ShareOffer | null }>('GET', `/api/rules/share?ref=${encodeURIComponent(ref)}`),
   draftShare: (ref: string) => request<{ path: string }>('POST', '/api/rules/share', { ref }),

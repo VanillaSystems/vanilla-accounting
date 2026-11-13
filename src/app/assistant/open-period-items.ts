@@ -43,8 +43,9 @@ export const money = (currency: string | undefined, amount: number | undefined) 
 /** One object of a line (#398): who, how much and when, and for a receipt of hers what it lacks, as Belege's row says it. */
 export type Item = { key: string; text: string; go: Location };
 export interface Items { items: Item[]; more: number; all?: Location }
-export function itemsOf(l: OpenLine, s: OpenPeriodState, books: Index, say: Say): Items {
-  const pay = (x: BankTransaction): Item => ({ key: x.ref, go: at({ area: 'bank', payment: x.ref }, x.date), text: [formatDate(x.date), payText(x).name, money(x.currency, x.amount)].join(' · ') });
+export function itemsOf(l: OpenLine, s: OpenPeriodState, books: Index, say: Say, why: (ref: string) => string | undefined = () => undefined): Items {
+  // A payment a run left unbooked says why (#470), as its page does.
+  const pay = (x: BankTransaction): Item => ({ key: x.ref, go: at({ area: 'bank', payment: x.ref }, x.date), text: [formatDate(x.date), payText(x).name, money(x.currency, x.amount), why(x.ref)].filter(Boolean).join(' · ') });
   // A payment that may fit (#397's near offers, the receipt's page holds the click): said once, on the receipt's line (#398).
   const fits = (x: YourReceipt) => { const o = offersInBooks(books, { receipt: x.receipt.id })[0]; const tx = o && books.transactions.find((y) => y.ref === o.payment); return tx ? `${say('near.maybe')} ${formatDate(tx.date)} ${payText(tx).name} ${money(tx.currency, tx.amount)}` : ''; };
   const mine = (x: YourReceipt): Item => ({ key: x.receipt.id, go: receiptAt(x.receipt, s, books), text: [x.name, x.receipt.date && formatDate(x.receipt.date), money(x.receipt.currency, x.receipt.amount), x.lacks.map((k) => say(LACK_WORDS[k])).join(', '), fits(x)].filter(Boolean).join(' · ') });

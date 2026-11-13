@@ -6,6 +6,7 @@
  *   GET  /api/automation/runs/:id      one run with its step records
  *   GET  /api/automation/runs/:id/log  one run's run-log lines (its details may be gone from the run store)
  *   GET  /api/history/:kind/:id?all=1  the runs that worked on a receipt, payment or entry (#215)
+ *   GET  /api/automation/refusals      the open payments a run left unbooked, with why (#470)
  *   POST /api/automation               an AutomationCommand → CommandResult
  */
 import { progressOf } from '../../workflows/step-progress.js';
@@ -34,6 +35,7 @@ import type { JournalEntry } from '../../types/index.js';
 import type { RunWrote } from '../../saving/model.js';
 import { readLog } from '../../workflows/runlog.js';
 import { HISTORY_KINDS, HISTORY_LIMIT, historyOf, linesOfRun, type HistoryTarget } from '../../workflows/history.js';
+import { paymentRefusals } from '../refusals.js';
 
 export const router = Router();
 
@@ -162,6 +164,11 @@ router.get('/api/automation/runs/:id', (req, res) => {
 
 router.get('/api/automation/runs/:id/log', (req, res) => {
   res.json({ lines: linesOfRun(readLog(WS), req.params.id), stored: !!engine().run(req.params.id) });
+});
+
+/** Read only: the open payments a run left unbooked, with why (src/server/refusals.ts, #470). */
+router.get('/api/automation/refusals', (_req, res) => {
+  res.json({ refusals: paymentRefusals(WS, readBooks()) });
 });
 
 /** Read only: the run log and the books' facts that say what concerns the object (#233). */
