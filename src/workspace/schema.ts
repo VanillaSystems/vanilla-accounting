@@ -39,8 +39,14 @@ import { roleBefore } from './banks.js';
  * 'filedTwin'` with the `read` movement, a bank movement booked in a filed quarter as a movement read
  * from a PDF. An app of schema 6 would drop the questions and reconciliations on its next save and show
  * the mark nowhere, so it must refuse these books.
+ * 8: a card statement's lines as parts a receipt is linked to (#409): `Receipt.cardLines`, read by code
+ * (src/books/card-lines.ts), and `Mapping.line`, a bill linked to one line of its settlement. Books of
+ * schema 7 hold neither: the step adds nothing, so no sealed record and no filed receipt changes; a card
+ * statement of an open period gains its lines on the next run of the inbox (its match step; every drop
+ * starts one). An app of schema 7 would read a line's bill as a receipt of the whole
+ * settlement and could claim its VAT on every line, so it must refuse these books.
  */
-export const BOOKS_SCHEMA = 7;
+export const BOOKS_SCHEMA = 8;
 /**
  * 2: every money account names its `role` (#88).
  * 3: `company.vat.reportingSince`, the year the basis began (#143). An app of schema 2 would read
@@ -71,6 +77,8 @@ export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   5: (doc) => doc,
   // No books hold a statement's question or a reconciliation before; the number makes an older app refuse them.
   6: (doc) => doc,
+  // No receipt has card lines and no link a line before: nothing is added (an empty `cardLines` would read as «read, no lines»); the number makes an older app refuse them.
+  7: (doc) => doc,
 };
 /** On the YAML document, so the comments of the manifest survive the step. */
 export const MANIFEST_MIGRATIONS: Ladder<Document> = {

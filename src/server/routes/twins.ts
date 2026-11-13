@@ -12,6 +12,7 @@ import { Router } from 'express';
 import { RequestError, assertOpen, receiptDates, updateBooks } from '../books.js';
 import { unbookPayments } from '../../accounting/classify-force.js';
 import { periodLock } from '../../books/store.js';
+import { dropLineBills } from '../../books/card-lines.js';
 import { bookAgain } from './automation.js';
 
 export const router = Router();
@@ -37,6 +38,7 @@ router.post('/api/receipts/:id/twin', async (req, res) => {
     delete receipt.kindRule;
     delete receipt.kindWhy;
     const refs = books.mappings.filter((m) => m.receiptId === id).map((m) => m.transactionRef);
+    dropLineBills(books, id);
     books.mappings = books.mappings.filter((m) => m.receiptId !== id);
     return { again: unbookPayments(books, refs, 'links'), receipt };
   });

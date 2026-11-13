@@ -56,8 +56,8 @@ test('its row and detail name the debit it is the receipt of, and whether its li
     transactions: [{ ref: 'P-10', bank: 'ZKB', date: '2026-09-10', amount: 310.62, currency: 'CHF', direction: 'DBIT', description: 'LSV Alpencard' }],
     journalEntries: entries,
   });
-  assert.deepEqual(cardStatementOf(r, books([entry('a', 146.62), entry('b', 164)])), { debit: '2026-09-10', lines: 2 });
-  assert.deepEqual(cardStatementOf(r, books([], false)), { lines: 0 }, 'not linked yet');
+  assert.deepEqual(cardStatementOf(r, books([entry('a', 146.62), entry('b', 164)])), { debit: '2026-09-10', lines: 2, unread: 'noTable' }, 'its text here has no table code reads (#409): said');
+  assert.deepEqual(cardStatementOf(r, books([], false)), { lines: 0, unread: 'noTable' }, 'not linked yet');
   assert.equal(cardStatementOf({ id: 'hotel', extractedText: HOTEL }, books([])), undefined);
 });
 

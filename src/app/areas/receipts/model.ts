@@ -14,6 +14,7 @@ import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
 import { documentKind } from '../../../intake/document-kind.js';
 import { isNoReceipt } from '../../../books/discard.js';
 import { accountOfStatement, isCardStatement, statementFacts, type StatementFacts } from '../../../books/statement-facts.js';
+import { lineOffers, lineOfReceipt, readCardLines, type CardLinesWhy, type LineOffer } from '../../../books/card-lines.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { isManualRef } from '../../../books/refs.js';
 import { paidCards, type PaidCards } from '../../../accounting/paid-how.js';
@@ -503,6 +504,12 @@ export function vatChipOf(hasSwissVat: boolean | undefined, noInputTax: 'none' |
  * when the booking split it). Undefined for any other receipt. The app reads no card statement as a
  * bank statement (issue #94).
  */
+/** The line of a card's settlement this receipt is the bill of (#409), or undefined. */
+export const cardLineOf = (r: Pick<Receipt, 'id'>, books: Pick<Index, 'receipts' | 'mappings' | 'transactions'>): LineOffer | undefined => lineOfReceipt(books, r.id);
+
+/** The free lines of open card settlements this unlinked receipt fits (#409): offered to link by hand; two bills that fit one line are both offered, code links neither. */
+export const cardLineOffers = (r: Pick<Receipt, 'id'>, books: Pick<Index, 'receipts' | 'mappings' | 'transactions' | 'config'>): LineOffer[] =>
+  lineOffers(books, r.id, (d) => d > (books.config?.closedThrough ?? ''));
 export interface BalanceSheet {
   /** The day it is drawn up for, as read. */
   date?: string;
@@ -532,9 +539,12 @@ export function balanceSheetOf(r: Receipt, books: Pick<Index, 'config' | 'transa
   return { ...(date ? { date } : {}), year, opens: date === `${Number(year) - 1}-12-31` };
 }
 
-export function cardStatementOf(r: Pick<Receipt, 'id' | 'extractedText'>, books: Pick<Index, 'mappings' | 'transactions' | 'journalEntries'>): { debit?: string; lines: number } | undefined {
+export function cardStatementOf(r: Pick<Receipt, 'id' | 'extractedText' | 'cardLines'>, books: Pick<Index, 'mappings' | 'transactions' | 'journalEntries'>): { debit?: string; lines: number; unread?: CardLinesWhy } | undefined {
   if (!isCardStatement(r.extractedText ?? '', documents())) return undefined;
   const refs = new Set(books.mappings.filter((m) => m.receiptId === r.id).map((m) => m.transactionRef));
   const debit = books.transactions.filter((t) => refs.has(t.ref)).map((t) => t.date).sort()[0];
-  return { ...(debit ? { debit } : {}), lines: (books.journalEntries ?? []).filter((e) => refs.has(e.transactionRef)).length };
+  // Lines code cannot read (#409): said, so she knows the settlement is booked whole and no bill is offered for a line.
+  const read = r.cardLines ? undefined : readCardLines(r.extractedText ?? '', documents());
+  const unread = read && 'why' in read ? read.why : undefined;
+  return { ...(debit ? { debit } : {}), lines: (books.journalEntries ?? []).filter((e) => refs.has(e.transactionRef)).length, ...(unread ? { unread } : {}) };
 }

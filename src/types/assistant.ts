@@ -61,7 +61,8 @@ export type NewEntry = Omit<JournalEntry, 'id' | 'transactionRef'> & Partial<Pic
  */
 export type BookChange =
   | { kind: 'receipt'; id: string; set: ReceiptSet }
-  | { kind: 'link' | 'unlink'; receipt: string; payment: string }
+  /** `line`: the line of the payment's card statement the receipt is the bill of (Mapping.line, #409); `bills`: a card statement's line bills that go and come back with it. */
+  | { kind: 'link' | 'unlink'; receipt: string; payment: string; line?: number; bills?: Array<{ receipt: string; line: number }> }
   | { kind: 'entry'; id: string; set: EntrySet }
   | { kind: 'newEntry'; entry: NewEntry }
   | { kind: 'deleteEntry'; id: string }

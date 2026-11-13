@@ -52,6 +52,22 @@ before(async () => {
     b.statementAsks = [{ file: `Raiffeisen/${MAY_PDF}`, account: '1021', date: '2026-05-31', since: '2026-06-01', read: { by: 'hand', statement: MAY, check: { ok: true, gaps: [] }, known: [] } }];
     // A reconciliation whose read movement C1 lies in the filed quarter, booked there (#254), and an open bank movement of its amount.
     b.transactions.push({ ref: 'O2', bank: 'Raiffeisen', date: '2026-07-01', amount: 10, currency: 'CHF', direction: 'DBIT', description: 'Bank Juli' });
+    // A card's settlement of the open quarter, its statement with two lines, and a bill for one of them (#409).
+    b.transactions.push({ ref: 'O3', bank: 'Raiffeisen', date: '2026-08-20', amount: 20, currency: 'CHF', direction: 'DBIT', description: 'Kartenabrechnung' });
+    b.receipts.push(
+      { ...noise('rcs', 'karte-juli.pdf', '2026-07-31'), extractedText: 'Kreditkartenabrechnung', kind: undefined, kindBy: undefined, cardLines: [{ day: '2026-07-10', merchant: 'HOTEL', amount: 12 }, { day: '2026-07-12', merchant: 'TAXI', amount: 8 }] },
+      { ...noise('rbill', 'taxi.pdf', '2026-07-12'), extractedText: 'Taxi', kind: undefined, kindBy: undefined, amount: 8 },
+    );
+    b.mappings.push({ transactionRef: 'O3', receiptId: 'rcs' });
+    // Booked by hand: a link to it starts no booking run beside the rows.
+    b.journalEntries.push({ id: 'jo3', transactionRef: 'O3', date: '2026-08-20', accountDebit: '6640', accountCredit: '1020', amount: 20, description: 'Karte', origin: 'manual' });
+    // A second settlement whose card statement is not linked yet, and the bill of one of its lines (#409).
+    b.transactions.push({ ref: 'O4', bank: 'Raiffeisen', date: '2026-09-10', amount: 30, currency: 'CHF', direction: 'DBIT', description: 'Kartenabrechnung August' });
+    b.journalEntries.push({ id: 'jo4', transactionRef: 'O4', date: '2026-09-10', accountDebit: '6640', accountCredit: '1020', amount: 30, description: 'Karte', origin: 'manual' });
+    b.receipts.push(
+      { ...noise('rcs2', 'karte-august.pdf', '2026-08-31'), kind: undefined, kindBy: undefined, extractedText: 'Kreditkartenabrechnung Visa\nAbrechnung 01.08.2026 – 31.08.2026\nDatum Beschreibung Betrag\n12.08.2026 TAXI ZENTRALE ZUG 18.00\n14.08.2026 PARKHAUS METALLI 12.00\nTotal 30.00' },
+      { ...noise('rbill2', 'parkhaus.pdf', '2026-08-14'), kind: undefined, kindBy: undefined, extractedText: 'Parkhaus Metalli Zug, Quittung', amount: 12 },
+    );
     b.reconciliations = [{ account: '1021', from: '2026-05-10', to: '2026-07-01', since: '2026-07-02', covered: [], read: ['C1'], bank: ['O2'], pairs: [] }];
     // A VAT adjustment declared in the filed quarter.
     b.config.vatAdjustments = [{ id: 'adj-q2', period: '2026-Q2', ziffer: '405', amount: -1, reason: 'eingereicht', entryIds: ['jc'] }];
@@ -97,6 +113,7 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/vision/extract', body: { receiptId: 'rc' }, status: 403 },
   { method: 'POST', path: '/api/mapping/add', body: { receiptId: 'ro', transactionRef: 'C1' }, status: 403 },
   { method: 'POST', path: '/api/mapping/remove', body: { receiptId: 'rc', transactionRef: 'C1' }, status: 403 },
+  { method: 'POST', path: '/api/mapping/add', body: { receiptId: 'ro', transactionRef: 'C1', line: 0 }, status: 403 },
   // «Zahlung suchen» on a receipt a filed payment holds (#187).
   { method: 'POST', path: '/api/receipts/rc/find-payment', status: 403 },
   { method: 'POST', path: '/api/receipts/rc/filed-payment', body: { payment: null }, status: 403 },
@@ -247,6 +264,19 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
     check: (i) => !i.mappings.some((m) => m.receiptId === 'ro') && !!i.receipts.find((r) => r.id === 'ro')?.notPaidBy?.includes('O1') },
   { method: 'POST', path: '/api/mapping/add', body: { receiptId: 'ro', transactionRef: 'O1' },
     check: (i) => i.mappings.some((m) => m.receiptId === 'ro' && m.transactionRef === 'O1') },
+  // A bill linked by hand to a line of an open card settlement, and taken apart again (#409).
+  { method: 'POST', path: '/api/mapping/add', body: { receiptId: 'rbill', transactionRef: 'O3', line: 1 },
+    check: (i) => i.mappings.some((m) => m.receiptId === 'rbill' && m.transactionRef === 'O3' && m.line === 1 && m.by === 'human') },
+  { method: 'POST', path: '/api/mapping/remove', body: { receiptId: 'rbill', transactionRef: 'O3' },
+    check: (i) => !i.mappings.some((m) => m.receiptId === 'rbill') },
+  // A card statement linked by hand: its lines are read at once, and the one bill of a line goes with it (#409).
+  { method: 'POST', path: '/api/mapping/add', body: { receiptId: 'rcs2', transactionRef: 'O4' },
+    check: (i) => i.receipts.find((r) => r.id === 'rcs2')?.cardLines?.length === 2 && i.mappings.some((m) => m.receiptId === 'rbill2' && m.transactionRef === 'O4' && m.line === 1) },
+  // «Lösen» on the card statement takes its line's bill with it; the undo, with the bills the answer named, puts both back (#409).
+  { method: 'POST', path: '/api/mapping/remove', body: { receiptId: 'rcs2', transactionRef: 'O4' },
+    check: (i) => !i.mappings.some((m) => m.transactionRef === 'O4' && (m.receiptId === 'rcs2' || m.receiptId === 'rbill2')) },
+  { method: 'POST', path: '/api/mapping/add', body: { receiptId: 'rcs2', transactionRef: 'O4', confirm: true, bills: [{ receipt: 'rbill2', line: 1 }] },
+    check: (i) => i.mappings.some((m) => m.receiptId === 'rcs2' && m.transactionRef === 'O4') && i.mappings.some((m) => m.receiptId === 'rbill2' && m.transactionRef === 'O4' && m.line === 1) },
   { method: 'DELETE', path: '/api/receipts/ro',
     check: (i) => !i.receipts.some((r) => r.id === 'ro') && !i.mappings.some((m) => m.receiptId === 'ro') },
   { method: 'POST', path: '/api/receipts/discard', body: { ids: ['rn'] },

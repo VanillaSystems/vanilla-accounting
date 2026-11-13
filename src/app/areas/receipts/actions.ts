@@ -61,9 +61,17 @@ export function correctFiled(nav: Nav, books: Index, l: Ledger, ref: string, fro
   correct(books, entry, correctionKinds(entry)[0], from);
 }
 
-/** The undo puts a link back that the person had: a second payment of the receipt included. */
-export const unlinkPayment = (nav: Nav, v: ReceiptView, ref: string, what: string) =>
-  run(nav, () => api.removeMapping(pair(v.r.id, ref)), t('receipts.unlinked', { what }), () => api.addMapping({ ...pair(v.r.id, ref), confirm: true }));
+/** The undo puts a link back that the person had: a second payment of the receipt included, and the line of a card statement it was the bill of (#409). */
+export function unlinkPayment(nav: Nav, v: ReceiptView, ref: string, what: string, line?: number) {
+  // A card statement takes its lines' bills with it; the undo puts them back.
+  let bills: Array<{ receipt: string; line: number }> | undefined;
+  return run(nav, async () => { bills = (await api.removeMapping(pair(v.r.id, ref))).bills; }, t('receipts.unlinked', { what }),
+    () => api.addMapping({ ...pair(v.r.id, ref), confirm: true, ...(line !== undefined && { line }), ...(bills?.length && { bills }) }));
+}
+
+/** «Mit dieser Zeile verknüpfen» (#409): the receipt as the bill of one line of a card's settlement; the undo takes it apart again. */
+export const linkCardLine = (nav: Nav, v: ReceiptView, ref: string, line: number, what: string) =>
+  run(nav, () => api.addMapping({ ...pair(v.r.id, ref), line }), t('receipts.cardLine.linked', { what }), () => api.removeMapping(pair(v.r.id, ref)));
 
 /** A booking by hand that books the receipt already (409 bookedByHand): the dialog offers to replace it when it names the receipt. */
 export interface HeldByHand { entry: string; date: string; amount: number; currency: string; replaceable: boolean }

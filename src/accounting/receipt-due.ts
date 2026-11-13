@@ -100,7 +100,8 @@ export function excessOf(receipts: readonly Receipt[], tx: Pick<BankTransaction,
 export function excessOfPayment(books: Pick<Index, 'transactions' | 'mappings' | 'receipts'>, ref: string, adding?: string): number | undefined {
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx) return undefined;
-  const ids = new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId));
+  // A bill linked to a line of the payment's card statement (#409) is a part of the statement's amount, never more than the payment.
+  const ids = new Set(books.mappings.filter((m) => m.transactionRef === ref && m.line === undefined).map((m) => m.receiptId));
   if (adding) ids.add(adding);
   if (books.mappings.some((m) => ids.has(m.receiptId) && m.transactionRef !== ref)) return undefined;
   return excessOf(books.receipts.filter((r) => ids.has(r.id) && r.kind !== 'duplicate'), tx);

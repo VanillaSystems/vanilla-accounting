@@ -23,7 +23,7 @@ import { reloadWorkspace, useWorkspace } from '../hooks/use-workspace.js';
 import { periodName } from '../lib/period-label.js';
 import { OPEN_ITEMS } from '../areas/vat/model.js';
 import { localToday, type Period } from '../../accounting/periods.js';
-import { chargesVat, filing } from '../../engines/index.js';
+import { baseCurrency, chargesVat, filing } from '../../engines/index.js';
 import { needsYou, tabOf, type DropTab } from './drop-tabs.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { monthName } from '../lib/period-label.js';
@@ -46,8 +46,8 @@ import { startIntake } from '../automation/intake.js';
 import { emptyRefsLine } from '../areas/bank/empty-refs.js';
 import { draftForm } from '../areas/company/bank-draft.js';
 import { getAccountMap } from '../lib/accounts.js';
-import { balanceSheetOf, cardStatementOf, chfOf, markLabel, suggestion } from '../areas/receipts/model.js';
-import { balanceSheetLine, cardStatementLine, ledgerFor, noneText, txLine } from '../areas/receipts/view.js';
+import { balanceSheetOf, cardLineOf, cardLineOffers, cardStatementOf, chfOf, markLabel, suggestion } from '../areas/receipts/model.js';
+import { balanceSheetLine, cardLineText, cardStatementLine, ledgerFor, noneText, txLine } from '../areas/receipts/view.js';
 import { offersInBooks } from '../../intake/near-pairs.js';
 import { useFx } from '../hooks/use-fx.js';
 import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
@@ -671,6 +671,10 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   const statementAt = statementLocation(r, books);
   // A card statement taken as a receipt (#401): what the app did with it, in its row.
   const card = receipt && !r.report ? cardStatementOf(receipt, books) : undefined;
+  // The bill of one line of a card's settlement (#409): which line, or the lines it fits that a person may link it to.
+  const cardLine = receipt && !card ? cardLineOf(receipt, books) : undefined;
+  const lineFits = receipt && !card && !cardLine ? cardLineOffers(receipt, books) : [];
+  const currencyOf = (ref: string) => books.transactions.find((x) => x.ref === ref)?.currency ?? baseCurrency();
   // «Ist doch ein Beleg» (#361): the person's word, as Belege takes it; the run then reads the file again, never asking whether it is one.
   const isReceipt = () => {
     setBusy(true);
@@ -696,6 +700,8 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
             : x.kind === 'balanceSheet' && x.sheet ? <small className="dwhy" data-testid="drop-balance-sheet">{balanceSheetLine(x.sheet)}</small>
             : x.kind === 'twin' ? <small className="dwhy" data-testid="drop-twin">{t('drop.twin.duplicate', { name: x.name })} · {t(`drop.twin.why.${x.why}`)}</small> : null}
           {card ? <small className="dwhy" data-testid="drop-card-statement">{cardStatementLine(card)}</small> : null}
+          {cardLine ? <small className="dwhy" data-testid="drop-card-line">{t('receipts.cardLine.bill', { line: cardLineText(cardLine, currencyOf(cardLine.payment)) })}</small> : null}
+          {lineFits.map((o) => <small className="dwhy" key={`${o.payment}-${o.index}`} data-testid="drop-card-line-fits">{t('receipts.cardLine.fits', { line: cardLineText(o, currencyOf(o.payment)) })}</small>)}
           {emptyRefsLine(r.statement?.emptyRefs) ? <small className="dwhy" data-testid="drop-empty-refs">{emptyRefsLine(r.statement?.emptyRefs)}</small> : null}
           {byBank ? <small className="dwhy" data-testid="drop-by-bank">{t('drop.byBank', { label: byBank.label })}</small> : null}
           <span className="dacts">
