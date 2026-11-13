@@ -398,6 +398,15 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Mac app, first start: macOS no longer asks about the Documents folder over the first screen
+  before you chose anything (#373). The app reads nothing in Documents, Desktop or Downloads until
+  a step needs it. «Neue Buchhaltung erstellen» first says that your books go into «Dokumente»,
+  that macOS will now ask and that «Erlauben» is needed, with «Anderen Ordner wählen» beside
+  «Weiter»; after «Nicht erlauben» it says where to allow it in the System Settings and still
+  works with another folder. Once allowed, the step goes on at once. Books opened before in such a
+  folder are read only after macOS answered: when it asks at a later start, the window comes first
+  with the start screen and the books open after «Erlauben». The menu's «Zuletzt geöffnet» names
+  them without reading their folders. Books in a folder macOS refuses say how to allow it.
 - A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
   Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
   der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no

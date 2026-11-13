@@ -21,6 +21,33 @@ as `npm start`, with no terminal, Node.js or Homebrew needed. The code is in `sr
 | Mail app | `src/platform/sources/mac-mail.ts` | The `mac-mail` channel for a source over one account of the Mail app (none is set up by the app yet, ADR 0015): the app asks Mail through `/usr/bin/osascript` (JavaScript for Automation) for its accounts, new messages and their attachments; no Full Disk Access. macOS asks once whether the app may control Mail, with the text of `NSAppleEventsUsageDescription`; the hardened runtime needs the entitlement `com.apple.security.automation.apple-events`. The app's own source code runs in the app's process (`inProcessLauncher`), since the fenced child cannot start in the Mac app yet. Contract and limits: `docs/0.4.0/mail-channels.md`. |
 | Dictation | `src/desktop/dictation.swift`, `src/desktop/dictation.ts` | The chat's microphone (issue #150). The browser's Web Speech API fails in Electron, so the app ships its own recognizer: `Contents/MacOS/vanilla-dictation`, a Swift program built by `tools/desktop/build.mjs` with `swiftc` (Xcode command line tools) for Apple silicon and Intel. The main process starts one run per dictation and reads its JSON lines (`DictationEvent`); the page reaches it through `window.vanilla.dictate`, present only when the program was found. It captures the microphone with AVAudioEngine and recognizes on the Mac: from macOS 26 with SpeechAnalyzer (de-CH, fr-CH, it-CH, en-US; a language's model is fetched from Apple once, shown as «Lädt die Spracherkennung»), before that with SFSpeechRecognizer and `requiresOnDeviceRecognition`, only where Dictation has the language's model (de-CH, fr-CH, it-CH fall back to de-DE, fr-FR, it-IT); otherwise the button says why and nothing goes online. No audio and no text leave the Mac. macOS asks once for the microphone (`NSMicrophoneUsageDescription`) and, before macOS 26, for speech recognition (`NSSpeechRecognitionUsageDescription`); the program carries the same texts in its own `__info_plist`. Signed, the hardened runtime needs `com.apple.security.device.audio-input`. `vanilla-dictation --lang de-CH --file a.aiff` recognizes a file, for a check without a microphone (`say -v Anna -o a.aiff …`). |
 
+## Documents, Desktop, Downloads
+
+macOS asks the person before an app reads its Documents, Desktop or Downloads folder, and holds
+that first read until she answers «Erlauben» or «Nicht erlauben» (issue #373). So the app touches
+none of them until a step of hers needs it:
+
+- A first start reads nothing there. GET /api/desktop never lists the Documents folder; the menu's
+  «Zuletzt geöffnet» takes its names from `desktop.json` (`names`), not from the folders.
+- «Neue Buchhaltung erstellen» first says why macOS will ask and that «Erlauben» is needed
+  («Weiter», or «Anderen Ordner wählen»: the save panel or folder dialog in the home folder).
+  «Weiter» reads the folder (GET /api/desktop/folders), so macOS asks over those words. The answer
+  is kept as `homeAccess` in `desktop.json`; once `allowed` the step goes on at once, after
+  `refused` it names the way in System Settings and offers «Nochmals versuchen». The form says the
+  same under its folder while the folder lies in Documents and macOS was not asked yet.
+- Every look into a folder the person names or opened before starts with one asynchronous read
+  (`DesktopServer.reach`, fs/promises), so macOS's question holds a worker thread, never the main
+  process; the synchronous reads of opening books come after its answer. A folder macOS refuses is
+  refused as `folderRefused`, with the System Settings path, and marked «Kein Zugriff» in the start
+  screen's list.
+- At a later start `firstPage` (`src/desktop/start.ts`) opens the books opened last before the
+  window as before when their folder answers within `REACH_WAIT_MS`; when macOS asks instead, the
+  window comes first with the start screen, and the books open after «Erlauben».
+
+`tests/desktop-protected-folders.test.ts` records every `node:fs` call under these folders
+(`tests/support/protected-folders.ts`) while the server does what the start and the first screen
+do, and holds the asynchronous ones as macOS does while it asks.
+
 ## Receipts from the phone
 
 The receipt app on the iPhone (`ios/`) and the scan page (`/scan`) send photos into the open
