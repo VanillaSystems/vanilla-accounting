@@ -102,7 +102,7 @@ test('#476 the walk: the Akonto payment with its bill linked, the model books it
   assert.match(said, /Withheld from wages: account 2270 holds 1824 CHF; of it, the payslips booked so far withheld 1824 CHF for this payee's contributions/, 'the model is told the fund\'s share, with the bill');
   assert.match(said, /Receipt \(4078\.92 CHF/);
   assert.ok(lines.every((e) => !e.vatCode), 'contributions carry no code');
-  assert.match(lines.find((e) => e.accountDebit === '2270')!.reason ?? '', /Lohnabrechnungen haben für diese Kasse CHF 1824\.00 abgezogen/);
+  assert.match(lines.find((e) => e.accountDebit === '2270')!.reason ?? '', /Lohnabrechnungen haben für diese Kasse CHF 1824\.00 als Anteil der Arbeitnehmenden abgezogen/);
 });
 
 test('#476 an answer that takes all of 2270 (the pension fund\'s share too) is booked with the fund\'s share only', async () => {

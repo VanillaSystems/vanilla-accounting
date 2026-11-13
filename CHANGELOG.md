@@ -448,6 +448,19 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The compensation fund's Akonto payment is booked net of the employees' share also when the
+  payslips come in the same drop as the bank statement (#489). The drop hands each file to its own
+  run: the statement's run booked the fund's payment (it waits for no receipt) while the wages were
+  still net, and the payslips' run booked the wages again gross but never asked about the payment
+  again, so the employees' AHV/IV/EO and ALV stayed in the employer's cost. Now every run books a
+  contribution payment the app booked to the share the payslips withheld for that fund, whenever
+  that share changes, one line per account, marked as decided by code with its own reason; a payment
+  she booked or changed herself, or whose proposal she took back («Rückgängig» makes the lines it
+  puts back hers, as a change by hand), stays as it is. Books format: the check `withheldShare` of
+  `JournalEntry.by` is part of books schema 9 (#450, not released before), no step of its own. Where a proposal is
+  still offered, it says what it does in her words: «Vorschlag: Den Arbeitnehmeranteil (CHF …) aus
+  den Lohnabrechnungen von den Sozialversicherungskosten abziehen», the button «Arbeitnehmeranteil
+  abziehen» (before: «von 5700 auf 2270 umbuchen», «2270 ausgleichen»), in all four languages.
 - A run no longer offers «Als Eröffnungssaldo übernehmen» for a bank balance from inside the year
   (#487): the books open on 1 January, so a first statement of Q3 with the balance of 30.06. is no
   opening, and taking it would have left out the first half year on every balance sheet. The

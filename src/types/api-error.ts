@@ -44,7 +44,7 @@ export type ApiRefusal =
   /** A payment booked by hand is not booked twice. */
   | { code: 'hasEntries' }
   | { code: 'notByReceipt' }
-  /** «2270 ausgleichen» on a payment that has no employees' share open (#476). */
+  /** «Arbeitnehmeranteil abziehen» on a payment that has no employees' share open (#476). */
   | { code: 'withheldNone' }
   | { code: 'decidedByHand' }
   | { code: 'changedSince' }

@@ -1,5 +1,5 @@
 /**
- * «2270 ausgleichen» (#476): a contribution payment booked without the employees' share while the wages' deductions
+ * «Arbeitnehmeranteil abziehen» (#476): a contribution payment booked without the employees' share while the wages' deductions
  * account still holds it (the `withheld` item of «Noch offen», src/booking/withheld.ts) offers its fix as a proposal
  * in words, booked by her click as by hand: what the account holds, at most the payment's lines on a shared
  * contribution account, moved from them onto it. On the open list's item and on the payment itself.
@@ -19,8 +19,8 @@ export function WithheldFix({ books, u, nav }: { books: Index; u: Uncleared; nav
   if (!p) return null;
   return (
     <>
-      {' '}<span className="m" data-testid="withheld-proposal">{t('issues.withheldProposal', { amount: `${baseCurrency()} ${fmt(p.amount)}`, from: p.from.join(', '), account: p.account })}</span>
-      {' '}<button type="button" className="btn ghost" data-testid="withheld-clear" onClick={() => void clearWithheld(nav, u.tx.ref)}>{t('issues.withheldClear', { account: p.account })}</button>
+      {' '}<span className="m" data-testid="withheld-proposal">{t('issues.withheldProposal', { amount: `${baseCurrency()} ${fmt(p.amount)}` })}</span>
+      {' '}<button type="button" className="btn ghost" data-testid="withheld-clear" onClick={() => void clearWithheld(nav, u.tx.ref)}>{t('issues.withheldClear')}</button>
     </>
   );
 }
@@ -33,7 +33,7 @@ export function WithheldOnPayment({ books, tx, nav }: { books: Index; tx: BankTr
   if (!u) return null;
   return (
     <span data-testid="withheld-payment">
-      {' · '}<span className="wn">{t('issues.withheldHere', { account: u.account, open: `${baseCurrency()} ${fmt(u.open)}` })}</span>
+      {' · '}<span className="wn">{t('issues.withheldHere', { open: `${baseCurrency()} ${fmt(u.open)}` })}</span>
       <WithheldFix books={books} u={u} nav={nav} />
     </span>
   );

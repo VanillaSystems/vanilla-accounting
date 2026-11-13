@@ -766,7 +766,7 @@ export function bookByReceipt(books: Books, id: string): { before: JournalEntry[
 }
 
 /**
- * «2270 ausgleichen» (#476): a contribution payment booked without the employees' share, by the open item that names it
+ * «Arbeitnehmeranteil abziehen» (#476): a contribution payment booked without the employees' share, by the open item that names it
  * (`u`, unclearedContributions: what is still to move, the payment's share where the payslips tell it). Its lines on a
  * contribution account the employees share in are cut by that much, the last first, and the amount is booked on the
  * deductions account on the payment's ref, as the person's own change (clearingProposal, made here from the books,
@@ -809,6 +809,19 @@ export function undoByReceipt(books: Books, before: readonly JournalEntry[], aft
     || before.some((x) => !afterIds.has(x.id) && now.has(x.id));
   if (changed) throw new RequestError(409, 'Die Buchung hat sich seither geändert: nichts zurückgenommen.', { code: 'changedSince' });
   books.journalEntries = [...books.journalEntries.filter((x) => !afterIds.has(x.id)), ...before.map((x) => ({ ...x }))];
+}
+
+/**
+ * The undo of «Arbeitnehmeranteil abziehen» (#489): the lines as they were, as undoByReceipt puts them back, and then
+ * those lines are hers, as a change by hand makes them (`origin: 'manual'`, `by` the person, as setEntry does): she
+ * took the proposal back, so no run books the payment again (bookWithheldShares, a receipt linked later, --force) and
+ * Änderungen lists only them. The lines the click did not touch stay as they were. The open item still offers the share.
+ */
+export function undoClearWithheld(books: Books, before: readonly JournalEntry[], after: readonly JournalEntry[]): void {
+  undoByReceipt(books, before, after);
+  const back = new Set(before.map((e) => e.id));
+  const at = new Date().toISOString();
+  for (const e of books.journalEntries) if (back.has(e.id)) Object.assign(e, { origin: 'manual', by: { kind: 'person', at } });
 }
 
 /**

@@ -28,7 +28,7 @@ one place, `src/workspace/schema.ts`.
 
 | File | Version now | Migration ladder |
 |---|---|---|
-| The books (`ledger.json` with `transactional-data/<year>/books/*.jsonl`) | `BOOKS_SCHEMA = 6` (2: books split by fiscal year, ADR 0013; 3: money accounts as equals, #88, no record changes; 4: `JournalEntry.tags`, #127, no record changes; 5: bank statements among the receipts typed and dated on load, #151; 6: `Receipt.handSet`, #218, no record changes) | `BOOKS_MIGRATIONS` |
+| The books (`ledger.json` with `transactional-data/<year>/books/*.jsonl`) | `BOOKS_SCHEMA = 9` (2: books split by fiscal year, ADR 0013; 3: money accounts as equals, #88, no record changes; 4: `JournalEntry.tags`, #127, no record changes; 5: bank statements among the receipts typed and dated on load, #151; 6: `Receipt.handSet`, #218, no record changes; 7: `statementAsks` and `reconciliations`, #254; 8: `Receipt.cardLines` and `Mapping.line`, #409; 9: `Receipt.vatReadFailures`, #450, and the `by` check `withheldShare` of a contribution payment code books to the payslips' share, #489, no record changes) | `BOOKS_MIGRATIONS` |
 | `belege.workspace.yaml` | `WORKSPACE_SCHEMA = 4` (2: each money account names its `role`, #88; 3: `company.vat.reportingSince`, #143; 4: `company.uid` may be absent, #452) | `MANIFEST_MIGRATIONS` (on the YAML document, comments survive) |
 | `invoices.json` | `INVOICES_SCHEMA = 1` | `INVOICES_MIGRATIONS` |
 | `questions.jsonl` lines | `QUESTION_LINE_VERSION = 1` (`v` on each line) | none |

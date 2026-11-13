@@ -75,7 +75,7 @@ function textOf(books: Index, i: PeriodIssue): string {
     case 'held': return t(i.held.why === 'rate' || i.held.why === 'rateTooMany' ? 'issues.heldRate' : 'issues.heldOther', { what: heldReasonText(i.held, isKey, tWith), date: formatDate(i.held.date), provider: i.held.name, amount: i.held.gross !== undefined ? `, ${i.held.currency ?? baseCurrency()} ${fmt(i.held.gross)}` : '' });
     case 'bill': return billText(i.bill, monthName(i.bill.date), (n) => `${baseCurrency()} ${fmt(n)}`, t as unknown as Say);
     case 'issued': return t('issues.issued', { date: formatDate(i.receipt.date ?? ''), text: i.receipt.description ? moneyInText(i.receipt.description) : i.receipt.filename });
-    case 'withheld': { const u = i.uncleared; return t('issues.withheld', { date: formatDate(u.tx.date), text: payerName(u.tx), amount: `${u.tx.currency} ${fmt(u.tx.amount)}`, account: u.account, open: `${baseCurrency()} ${fmt(u.open)}` }); }
+    case 'withheld': { const u = i.uncleared; return t('issues.withheld', { date: formatDate(u.tx.date), text: payerName(u.tx), amount: `${u.tx.currency} ${fmt(u.tx.amount)}`, open: `${baseCurrency()} ${fmt(u.open)}` }); }
   }
 }
 

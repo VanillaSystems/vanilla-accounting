@@ -10,7 +10,7 @@
  */
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
-import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, classifyTransactions, loadClassifyContext, type ClassifyContext, type ClassifyOutcome } from '../booking/classify.js';
+import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, bookWithheldShares, classifyTransactions, loadClassifyContext, type ClassifyContext, type ClassifyOutcome } from '../booking/classify.js';
 import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
 import { judgedRepayments, markJudged } from '../booking/owner-judged.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -86,7 +86,7 @@ function markWaiting(books: BooksPort, waiting: ReadonlySet<string>, decided: Re
 }
 
 export function classifyStep({ force = false } = {}): StepRun {
-  return async ({ ws, books, ask, progress, log, hold, release }) => {
+  return async ({ ws, books, ask, progress, log, hold, release, run }) => {
     // Without a model nothing could be booked again: --force removes nothing then.
     if (force && ask) {
       const removed = books.update((index) => {
@@ -145,6 +145,9 @@ export function classifyStep({ force = false } = {}): StepRun {
       if (corrected.booked.length) log(`Fee bills : ${corrected.booked.length} provider bill(s): the input tax they show booked as ${corrected.booked.map((b) => b.ref).join(', ')}.`);
       if (corrected.linked.length) log(`Fee bills : ${corrected.linked.length} provider bill(s) linked to the correction that books their input tax: ${corrected.linked.map((b) => b.ref).join(', ')}.`);
       if (corrected.waiting.length) log(`Fee bills : ${corrected.waiting.length} provider bill(s) left to the person (${corrected.waiting.map((w) => `${w.receipt}: ${w.why}`).join(', ')}).`);
+      // A contribution payment the app booked before the payslips came (another run of the same drop) takes the share they withheld now (#489).
+      const shares = bookWithheldShares(structuredClone(books.read()), context).length ? books.update((index) => bookWithheldShares(index, context, run)) : [];
+      if (shares.length) log(`Withheld  : ${shares.length} contribution payment(s) booked again with the employees' share the payslips withheld: ${shares.join(', ')}.`);
       // A provider's payout report read at the match step books its sales and fees onto the provider's clearing account (#203).
       const reports = books.update((index) => bookPayoutReports(ws, index, fx));
       if (reports) log(`Reports   : ${reports} payout report(s) of a payment provider booked onto its clearing account.`);
