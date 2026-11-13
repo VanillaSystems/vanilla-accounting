@@ -151,6 +151,14 @@ function LineRow({ l, go, nav }: { l: Line; go(route: Route): void; nav: Nav }) 
             <button type="button" className="btn primary" onClick={() => void takeOpening(nav, o)}>{t('runs.line.openingTake')}</button>
           </td></tr>
       ) : null}
+      {l.startMissing ? (
+        <tr className="rline" data-testid="run-start-missing"><td /><td /><td />
+          <td className="res" colSpan={2}>
+            {t('runs.line.startMissing', { year: l.startMissing.year, date: swiss(l.startMissing.from) })}{' '}
+            <button type="button" className="linkbtn" onClick={() => go({ area: 'bank' })}>{t('runs.line.earlierStatements')}</button>
+            {l.startMissing.canType ? <>{' · '}<button type="button" className="linkbtn" data-testid="run-start-opening" onClick={() => go({ area: 'company', section: 'opening' })}>{t('reports.openingSet')}</button></> : null}
+          </td></tr>
+      ) : null}
       {l.withoutVat.length ? (
         <tr className="rline"><td /><td /><td />
           <td className="res" colSpan={2}>

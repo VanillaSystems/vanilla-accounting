@@ -4142,6 +4142,8 @@ export default {
     'runs.line.refused': 'non ripreso: {reason}',
     'runs.line.openingOffer': 'Prima di questo estratto la banca indica un saldo di {amount} ({date}). I tuoi libri non lo conoscono ancora.',
     'runs.line.openingTake': 'Riprendi come saldo di apertura',
+    'runs.line.startMissing': 'Gli estratti di questo conto iniziano il {date}. Il saldo all’1.1.{year} viene da estratti precedenti o dal bilancio di chiusura dell’anno scorso, nell’apertura:',
+    'runs.line.earlierStatements': 'Depositare estratti precedenti',
     'runs.kind.file': 'file',
     'runs.kind.camt': 'camt',
     'runs.kind.pdf': 'PDF',

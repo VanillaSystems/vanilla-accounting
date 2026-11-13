@@ -4142,6 +4142,8 @@ export default {
     'runs.line.refused': 'not taken: {reason}',
     'runs.line.openingOffer': 'Before this statement the bank shows a balance of {amount} ({date}). Your books do not know it yet.',
     'runs.line.openingTake': 'Take it as the opening balance',
+    'runs.line.startMissing': "This account's statements begin on {date}. The balance of 1.1.{year} comes from earlier statements or from last year's closing balance sheet in the opening:",
+    'runs.line.earlierStatements': 'Add earlier statements',
     'runs.kind.file': 'file',
     'runs.kind.camt': 'camt',
     'runs.kind.pdf': 'PDF',

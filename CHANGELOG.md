@@ -448,6 +448,16 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A run no longer offers «Als Eröffnungssaldo übernehmen» for a bank balance from inside the year
+  (#487): the books open on 1 January, so a first statement of Q3 with the balance of 30.06. is no
+  opening, and taking it would have left out the first half year on every balance sheet. The
+  offer stands only for a statement's opening balance of a day before 1.1. (31.12., or the last
+  day the bank booked before a first statement of 5.1.) or of 1.1., when the account moved on no
+  day before 1.1. A camt opening balance dated on a day the bank booked is read as the close of the
+  day before, so a 31.12. balance with fees of 31.12. is not offered. When an account's statements
+  begin later, the run says so («Die Auszüge dieses Kontos beginnen am 01.07.2026. Den Saldo per
+  1.1.2026 zeigen frühere Auszüge oder die Schlussbilanz des Vorjahres in der Eröffnung:») with
+  both ways out, «Frühere Auszüge ablegen» and «Eröffnung erfassen».
 - Mac app (#373): no question of macOS comes before the app said why. At the first start of
   another build (an unsigned build is a new app to macOS each time, rc to rc too), books in
   Documents, Desktop, Downloads, iCloud Drive, a cloud provider's folder or on a volume are no
