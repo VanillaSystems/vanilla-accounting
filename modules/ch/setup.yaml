@@ -21,9 +21,12 @@ owner:
 # that matches the row still decides it; a chart without this account leaves the row to the person.
 bankCharges: { account: "6940" }
 
-# The wage account: a wage is no supply, so a booking on it carries no VAT code. A rule for the wages
-# (src/saving/wage-rule.ts) books here, and a rule on it asks no rate (src/booking/rule-vat.ts).
-wages: { account: "5000" }
+# The wage account: a wage is no supply, so a booking on it carries no VAT code (MWSTG Art. 10
+# Abs. 1; processes/booking.guide.yaml cls-salary). A rule for the wages (src/saving/wage-rule.ts)
+# books here, and a rule on it asks no rate (src/booking/rule-vat.ts); the hand form proposes it for
+# a wage without a booking of hers to follow (#382). Books that carry wages with their deductions
+# (on `deductions`) get no proposal: the payslip's lines are the person's to book.
+wages: { account: "5000", deductions: "2270" }
 
 # Accounts an answer adds to the chart.
 answers:

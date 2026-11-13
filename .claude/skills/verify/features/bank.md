@@ -51,6 +51,21 @@ rows in tests/period-lock.test.ts).
   `6940 / 1020` without a code, «von der App gebucht» with the reason `Gebühr der Bank laut Kontoauszug: auf 6940
   Bankspesen, ohne MWST …` (#359); with 6940 missing from the chart it stays unbooked and its form shows
   `[data-testid=note-bankChargesMissing]` («… aber dieses Konto fehlt im Kontenplan …»).
+  Money in whose text names the number of the firm's own invoice among the receipts (issued by its UID or name,
+  its amount need not be read) shows `[data-testid=own-invoice]` (`data-receipt`, `data-from` invoice | other |
+  taxPoint; «Deine Rechnung 2026-031 gefunden …»; `[data-act=not-own-invoice]` drops it; across periods on the
+  agreed basis `[data-act=link-own-invoice]` only links). It proposes only what the invoice proves (a Swiss rate;
+  `V0-E` for a place of supply abroad after «Leistungsort», src/accounting/sale-document.ts), revenue up to what is
+  open of it (`[data-testid=note-ownInvoiceSurplus]`), and books with «Verknüpfen und buchen»
+  (`POST /api/transactions/<ref>/entries` `links`, checked again: 409 `ownInvoiceTaken`). Where it proves nothing
+  (and for money from a foreign IBAN or currency) `[data-testid=sale-question]` asks «War das ein Verkauf mit
+  MWST?»; `[data-choice=saleDomestic|saleAbroad|notSale]` books the lines and answers the app's question in one
+  call (`POST /api/transactions/<ref>/sale`, as the card's answer books), `saleAbroadForeignTax` opens the card's
+  foreign-tax form; the answered card with «Immer so?» then stands under the payment. A wage follows her last
+  booking of it, else `5000` without a code; `[data-testid=note-wageDeductions]` where the books carry wages with
+  deductions. A payment out with a linked read receipt proposes the account of the business's last booking by a
+  person or a rule (before a model's) with the receipt's rate, «wie deine letzte Buchung bei <Name> am <Datum>»;
+  nothing is booked without her click (#382). tests/hand-form-382.test.ts, tests/hand-form-382-ui.test.ts.
 - `bk-note`: `[data-testid=payment-note]` in `.paybar` (`Notiz`, or the note itself) opens `input.note`; ↵ or leaving
   the field saves (`PATCH /api/transactions/<ref>` remarks; an empty note removes it), Esc cancels. Toast `Notiz
   gespeichert` or `Notiz entfernt`, ⌘Z restores the old note. A payment of a filed quarter shows its note as text.

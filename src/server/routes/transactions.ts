@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { answerSaleOnForm, parseAnswer } from '../questions.js';
+import { SALE_CHOICES, type SaleChoice } from '../../questions/model.js';
 import type { BankTransaction } from '../../types/index.js';
 import type { LedgerBankAccount } from '../../workspace/workspace.js';
 import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
@@ -174,12 +176,24 @@ router.post('/api/transactions/:ref/attach', (req, res) => {
   return withBooks(res, (books) => ({ before: attachEntries(books, req.params.ref, own, WS.bankAccounts) }));
 });
 
+/** The sale question answered on the hand form (#382, src/server/questions.ts answerSaleOnForm): the form's lines and links, the answer as on the card. */
+router.post('/api/transactions/:ref/sale', (req, res) => {
+  const b = (req.body ?? {}) as { lines?: unknown; links?: unknown };
+  if (!Array.isArray(b.lines)) throw new RequestError(400, 'lines: eine Liste von Zeilen.');
+  const links = b.links ?? [];
+  if (!Array.isArray(links) || !links.every((l) => typeof l === 'string' && l)) throw new RequestError(400, 'links: die Belege, die mit der Buchung verknüpft werden.');
+  const answer = parseAnswer(req.body);
+  if (!('choice' in answer.answer) || !(SALE_CHOICES as readonly string[]).includes(answer.answer.choice)) throw new RequestError(400, 'choice: saleDomestic, saleAbroad oder notSale.');
+  res.json(answerSaleOnForm(req.params.ref, { by: answer.by, choice: answer.answer.choice as SaleChoice, ...(answer.foreignTax && { foreignTax: answer.foreignTax }), lines: b.lines.map(bookingLine), links: links as string[] }));
+});
+
 /** A payment booked by hand, in one or more lines that add up to it (src/server/edits.ts bookPayment). */
 router.post('/api/transactions/:ref/entries', (req, res) => {
-  const { lines, inputTaxProof } = (req.body ?? {}) as { lines?: unknown; inputTaxProof?: unknown };
+  const { lines, inputTaxProof, links } = (req.body ?? {}) as { lines?: unknown; inputTaxProof?: unknown; links?: unknown };
   if (!Array.isArray(lines)) throw new RequestError(400, 'lines: eine Liste von Zeilen.');
   const parsed = lines.map(bookingLine);
   const proof = inputTaxProof === undefined ? undefined : typeof inputTaxProof === 'string' ? inputTaxProof.trim() : '';
   if (proof === '') throw new RequestError(400, 'inputTaxProof: den anderen Nachweis der Vorsteuer nennen (Vertrag, Auftragsbestätigung, E-Mail).');
-  return withBooks(res, (books) => ({ entries: bookPayment(books, req.params.ref, parsed, WS.bankAccounts, loadFxResolver(), proof) }));
+  if (links !== undefined && !(Array.isArray(links) && links.every((l) => typeof l === 'string' && l))) throw new RequestError(400, 'links: die Belege, die mit der Buchung verknüpft werden.');
+  return withBooks(res, (books) => ({ entries: bookPayment(books, req.params.ref, parsed, WS.bankAccounts, loadFxResolver(), proof, links as string[] | undefined, WS.company) }));
 });

@@ -14,7 +14,11 @@ import type { HandStart } from '../../../saving/hand-rule.js';
 import { api } from '../../lib/api.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { firmCodes, formTakes, lookupVatCode, parseRate, vatCodeOf } from '../../../accounting/vat-codes.js';
-import { withoutInputTax } from '../../../engines/index.js';
+import { chart, withoutInputTax } from '../../../engines/index.js';
+import { domesticSale, saleVatCode } from '../../../accounting/sales-without-vat.js';
+import { ForeignTaxForm } from '../../questions/Questions.js';
+import { errorText } from '../../lib/api.js';
+import { answerSaleOnForm } from '../../questions/store.js';
 import { codeLabel, codeText } from '../codes/names.js';
 import { isVatAmountCode } from '../../../accounting/validate.js';
 import { getAccountMap, getAccounts } from '../../lib/accounts.js';
@@ -60,6 +64,8 @@ export function PaymentBooking(props: Props) {
   // The form's rows are set once from the draft, so it waits for the invoices too (formDraft, r9c-4).
   // What the server knows of the payment, and the books it answered for: a later answer is taken without emptying the form first.
   const [known, setKnown] = useState<{ start: HandStart | null; books: Index; failed?: true }>();
+  // A receipt she said is not the invoice this payment pays (#382): the form proposes without it.
+  const [notOwn, setNotOwn] = useState<string>();
   useEffect(() => {
     let live = true;
     const books = props.books;
@@ -71,8 +77,9 @@ export function PaymentBooking(props: Props) {
   const start = known?.start ?? undefined;
   const draft = useMemo(() => (ws && known ? (known.failed ? (d?: BookingDraft) => d && withoutProposal(d) : (d?: BookingDraft) => d)(formDraft(props.books, props.payment, ws.bankAccounts, invoices, {
     defaults: ws.defaults, rule: start?.rule, nature: start?.nature, account: start?.account,
-    invoiceRevenue: ws.invoicing?.revenueAccount, chart: getAccounts().map((a) => a.number), ownUid: ws.company.uid,
-  })) : undefined), [ws, known, start, props.books, props.payment, invoices]);
+    invoiceRevenue: ws.invoicing?.revenueAccount, chart: getAccounts().map((a) => a.number), ownUid: ws.company.uid, firmName: ws.company.name,
+    ...(notOwn && { notOwnInvoice: notOwn }),
+  })) : undefined), [ws, known, start, props.books, props.payment, invoices, notOwn]);
   // The form as it stands: the way to a rule starts with what it holds (#383).
   const formEl = useRef<HTMLFormElement | null>(null);
   const typed = useMemo(() => (ws ? unattachedFor(props.books, props.payment, ws.bankAccounts) : []), [ws, props.books, props.payment]);
@@ -81,7 +88,7 @@ export function PaymentBooking(props: Props) {
   return (
     <>
       {typed.length ? <Unattached {...props} typed={typed} /> : null}
-      <BookingForm {...props} onForm={(el) => { formEl.current = el; props.onForm?.(el); }} accounts={ws.bankAccounts} draft={draft} dimensions={ws.dimensions ?? []} defaults={defaults} pending={known!.books !== props.books} />
+      <BookingForm {...props} onForm={(el) => { formEl.current = el; props.onForm?.(el); }} accounts={ws.bankAccounts} draft={draft} dimensions={ws.dimensions ?? []} defaults={defaults} pending={known!.books !== props.books} onNotOwn={setNotOwn} />
       {props.canRule !== false && start ? <RuleWay nav={props.nav} payment={props.payment} start={start} form={() => formEl.current} lines={draft.lines} other={draft.bank && (draft.bank.side === 'accountDebit' ? 'accountCredit' : 'accountDebit')} /> : null}
     </>
   );
@@ -96,7 +103,7 @@ function sourceText(s: DraftSource, account: string | undefined, vat: string | u
   const name = account ? getAccountMap()[account] : undefined;
   const a = account ? s.account : undefined;
   const from = !a ? '' : a.from === 'rule' ? t('journal.byHand.from.rule', { rule: a.rule })
-    : a.from === 'precedent' ? t('journal.byHand.from.precedent', { date: formatDate(a.date) })
+    : a.from === 'precedent' ? (a.yours && a.name ? t('journal.byHand.from.precedentYours', { name: a.name, date: formatDate(a.date) }) : t('journal.byHand.from.precedent', { date: formatDate(a.date) }))
       : a.from === 'refund' ? t('journal.byHand.from.refund', { date: formatDate(a.date) })
         : a.from === 'invoice' || a.from === 'receivable' ? t(`journal.byHand.from.${a.from}`, { number: a.number })
           : t(`journal.byHand.from.${a.from}`);
@@ -119,6 +126,8 @@ function noteText(n: DraftNote): string {
     case 'invoicePaid': return t('journal.byHand.note.invoicePaid', { number: n.number, amount: fmt(n.surplus) });
     case 'prepayment': return t('journal.byHand.note.prepayment', { number: n.number });
     case 'bankChargesMissing': return t('journal.byHand.note.bankChargesMissing', { account: n.account, name: n.name });
+    case 'ownInvoiceSurplus': return t('journal.byHand.note.ownInvoiceSurplus', { number: n.number, amount: fmt(n.surplus) });
+    case 'wageDeductions': return t('journal.byHand.note.wageDeductions', { account: n.account });
     default: return t(`journal.byHand.note.${n.kind}`);
   }
 }
@@ -152,7 +161,21 @@ function Unattached({ nav, payment, typed, onBooked }: Props & { typed: Unattach
   );
 }
 
-function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, draft, dimensions, defaults, pending }: Props & { accounts: readonly LedgerBankAccount[]; draft: BookingDraft; dimensions: readonly Dimension[]; defaults: readonly string[]; pending?: boolean }) {
+/** The answers of the sale question the form takes (#382): as on the question card (src/app/questions/Questions.tsx). */
+const SALE_ANSWERS = ['saleDomestic', 'saleAbroad', 'saleAbroadForeignTax', 'notSale'] as const;
+type SaleAnswer = (typeof SALE_ANSWERS)[number];
+
+/** An answer's words, as the question card says them: the domestic sale names its rate, or the firm's net rate. */
+function saleAnswerText(a: SaleAnswer): string {
+  if (a !== 'saleDomestic') return t(`questions.choice.${a}`);
+  const d = domesticSale();
+  return d?.net ? t('questions.choice.saleDomesticNet', { code: d.code, rate: String(d.rate) }) : t('questions.choice.saleDomestic', { rate: String(d?.rate ?? '') });
+}
+
+/** Whether the firm's form takes the code an answer books (none for «kein Umsatz»). */
+const answerable = (a: SaleAnswer): boolean => a === 'notSale' || !!saleVatCode(a === 'saleDomestic' ? 'saleDomestic' : 'saleAbroad');
+
+function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, draft, dimensions, defaults, pending, onNotOwn }: Props & { accounts: readonly LedgerBankAccount[]; draft: BookingDraft; dimensions: readonly Dimension[]; defaults: readonly string[]; pending?: boolean; onNotOwn?(receipt: string): void }) {
   const [rows, setRows] = useState<Row[]>(() => draft.lines.map((init, key) => ({ key, init })));
   const [, redraw] = useState(0);
   // The lines follow the draft (the payment's own prefill, a receipt linked meanwhile) until the person typed or picked anything (r9k-7, #344).
@@ -164,6 +187,8 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
   // The lines whose VAT field she typed in or picked from, with the code the field showed then: their code is hers and follows no account.
   const [ownVat, setOwnVat] = useState<ReadonlyMap<number, string>>(new Map());
   const [err, setErr] = useState('');
+  // The answer «abroad with a foreign VAT» opens the question card's form for the foreign tax (#382).
+  const [foreign, setForeign] = useState(false);
   const form = useRef<HTMLFormElement | null>(null);
   const busy = useRef(false);
   const chose = () => { touched.current = true; redraw((n) => n + 1); };
@@ -201,10 +226,11 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
     setTimeout(() => form.current?.querySelector<HTMLInputElement>(`[name="${side === 'accountDebit' ? 'accountCredit' : 'accountDebit'}-${key}"]`)?.focus());
   }
 
-  async function book() {
-    if (busy.current || pending || seen.current !== rows) return;
+  /** What keeps the lines from being booked, in words; `sale`: the sale question's answer sets the code, so the code field is not checked. */
+  function problemOf(sale = false): string {
     const known = getAccountMap();
-    const problem = now.map(({ raw, vat }, i): string => {
+    return now.map(({ raw, vat: typedVat }, i): string => {
+      const vat = sale ? { code: '' } : typedVat;
       const unknown = [raw.accountDebit, raw.accountCredit].find((n) => n && !known[n]);
       if (unknown) return unknownAccountText(unknown);
       if (!raw.accountDebit && !raw.accountCredit) return t('journal.errNoAccount');
@@ -215,12 +241,44 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
       if (!raw.description) return t('journal.errText');
       return '';
     }).find(Boolean) ?? (rest ? t('journal.byHand.errRest', { currency: draft.currency, amount: fmt(rest) }) : '');
+  }
+
+  /** The receipts booking links: her own invoices the proposal is read off, never across periods on the agreed basis (they are linked alone there). */
+  const links = draft.ownInvoice && draft.ownInvoice.from !== 'taxPoint' ? draft.ownInvoice.links : [];
+
+  async function book() {
+    if (busy.current || pending || seen.current !== rows) return;
+    const problem = problemOf();
     if (problem) { setErr(problem); return; }
     setErr('');
     busy.current = true;
-    const entries = await bookPayment(nav, payment, now.map((x) => x.line), deducts ? proofText() : undefined);
+    const entries = await bookPayment(nav, payment, now.map((x) => x.line), deducts ? proofText() : undefined, links);
     busy.current = false;
     if (entries) onBooked?.(entries);
+  }
+
+  /**
+   * Her answer to the sale question on the form (#382): the lines as they stand are booked as hers,
+   * and the answer sets their code as the question card's does (src/server/questions.ts
+   * answerSaleOnForm), so both book the same, and the answered card offers «Immer so?».
+   */
+  async function answerSale(choice: 'saleDomestic' | 'saleAbroad' | 'notSale', foreignTax?: { rate: number; amount: number; account: string }) {
+    if (busy.current || pending || seen.current !== rows) return;
+    const problem = problemOf(true);
+    if (problem) { setErr(problem); return; }
+    setErr('');
+    busy.current = true;
+    try {
+      await answerSaleOnForm(payment, { choice, ...(foreignTax && { foreignTax }), lines: now.map((x) => x.line), links });
+      nav.toast(t('questions.answeredToast'));
+      nav.refresh();
+      onBooked?.([]);
+    } catch (e) { setErr(errorText(e)); } finally { busy.current = false; }
+  }
+
+  async function linkOnly() {
+    for (const id of draft.ownInvoice?.links ?? []) await api.addMapping({ receiptId: id, transactionRef: payment });
+    nav.refresh();
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -236,6 +294,9 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
   // «Die App nimmt einen Verkauf an» holds while the proposed revenue account stands; once she chose another, it is hers.
   const otherSide = draft.bank && (draft.bank.side === 'accountDebit' ? 'accountCredit' : 'accountDebit');
   const saleStands = !!otherSide && now.some((x, i) => x.raw[otherSide] === rows[i].init[otherSide]);
+  // The sale question (#382): asked where no code is proposed for a sale whose VAT the app cannot tell.
+  const asksSale = saleStands && draft.notes.some((n) => n.kind === 'saleVat');
+  const own = draft.ownInvoice;
 
   return (
     <form ref={setForm} className={`form pbook${narrow ? ' narrow' : ''}`} autoComplete="off" aria-label={t('journal.byHand.title')} data-testid="payment-booking"
@@ -257,6 +318,14 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
           <Go to={at({ area: 'invoices', view: 'list', id: inv.number }, draft.date)} nav={nav}>{t(paidAlready ? 'journal.byHand.showInvoice' : 'journal.byHand.invoice.confirm', { number: inv.number })}</Go>
         </p>
       ) : null}
+      {own ? (
+        <p className="pbw" data-testid="own-invoice" data-receipt={own.id} data-from={own.from}>
+          {/* What is true: the proposal is read off her invoice, comes from elsewhere, or is not made across periods (agreed basis, #360). */}
+          {t(`journal.byHand.ownInvoice.${own.earlier ? 'earlier' : own.from}`, { number: own.number, file: own.file, date: own.earlier ? formatDate(own.earlier) : '' })}{' '}
+          {own.from === 'taxPoint' && own.links.length ? <button type="button" className="btn" data-act="link-own-invoice" onClick={() => void linkOnly()}>{t('journal.byHand.linkOnly')}</button> : null}
+          {own.links.length ? <button type="button" className="golink" data-act="not-own-invoice" onClick={() => onNotOwn?.(own.id)}>{t('journal.byHand.notOwnInvoice')}</button> : null}
+        </p>
+      ) : null}
       {rows.map(({ key, init }, i) => {
         const x = now[i];
         const vat = x?.vat;
@@ -264,7 +333,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
         // The side opposite the bank is where the person chooses: money in lists revenue first, money out expenses, the firm's default accounts on top.
         const other = draft.bank && (draft.bank.side === 'accountDebit' ? 'accountCredit' : 'accountDebit');
         const prefer = draft.bank ? (draft.bank.side === 'accountDebit' ? 'revenue' as const : 'expense' as const) : undefined;
-        const side = (k: 'accountDebit' | 'accountCredit') => (k === other ? { prefer, defaults } : {});
+        const side = (k: 'accountDebit' | 'accountCredit') => (k === other ? { prefer, defaults, ...(draft.words && { suggest: draft.words }) } : {});
         // What still stands as proposed: the account while it is the proposal's, the code while she has not set one.
         const otherNow = other && x ? x.raw[other] : undefined;
         const accountStands = !!other && otherNow === init[other];
@@ -287,12 +356,13 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
                 onPick={chose}
                 onValue={() => { if (!ownVat.has(key)) setOwnVat(new Map([...ownVat, [key, followed]])); touched.current = true; }}
                 accounts={{ debit: x?.raw.accountDebit ?? init.accountDebit, credit: x?.raw.accountCredit ?? init.accountCredit }}
-                hint={vat?.code ? `${vat.fromRate !== undefined ? `${t('journal.byHand.vatIs', { code: vat.code })} · ` : ''}${codeText(vat.code)}` : vat === null ? '' : t('journal.byHand.noVat')}
+                hint={vat?.code ? `${vat.fromRate !== undefined ? `${t('journal.byHand.vatIs', { code: vat.code })} · ` : ''}${codeText(vat.code)}` : vat === null || asksSale ? '' : t('journal.byHand.noVat')}
               />
             ) : <span className="pbv" />}
+            {/* The amount before the lines under the fields: after them, the grid put it into the last, narrow column (#382). */}
+            <label className="pba">{t('journal.amountIn', { currency: draft.currency })}<input className="mono" name={`amount-${key}`} defaultValue={fmt(init.amount)} style={{ textAlign: 'right' }} /></label>
             {proposed ? <p className="pbs" data-testid="proposal">{t('journal.byHand.proposal', { what: proposed })}</p> : null}
             {zero ? <p className="pbw" data-testid="vat-no-receipt">{t('journal.byHand.noReceiptVat', { code: codeLabel(vat!.code), zero: codeLabel(zero) })}</p> : null}
-            <label className="pba">{t('journal.amountIn', { currency: draft.currency })}<input className="mono" name={`amount-${key}`} defaultValue={fmt(init.amount)} style={{ textAlign: 'right' }} /></label>
             <label className="pbt">{t('journal.field.description')}<input name={`description-${key}`} defaultValue={init.description} /></label>
             {dimensions.length ? <div className="pbg"><TagFields dimensions={dimensions} entries={books.journalEntries ?? []} tags={init.tags} suffix={`-${key}`} onPick={chose} /></div> : null}
             {rows.length > 1 ? <button type="button" className="rm" aria-label={t('journal.byHand.removeLine')} onClick={() => { touched.current = true; setRows(rows.filter((r) => r.key !== key)); }}>×</button> : null}
@@ -300,6 +370,17 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
         );
       })}
       {draft.notes.filter((n) => !(n.kind === 'sale' || n.kind === 'saleVat' || n.kind === 'refund' || n.kind === 'owner') || saleStands).map((n) => <p key={n.kind} className="pbn" data-testid={`note-${n.kind}`}>{noteText(n)}</p>)}
+      {asksSale ? (
+        <div className="pbq" data-testid="sale-question">
+          <span>{t('journal.byHand.saleAsk')}</span>
+          {SALE_ANSWERS.filter(answerable).map((a) => (
+            <button key={a} type="button" className="btn" aria-expanded={a === 'saleAbroadForeignTax' ? foreign : undefined} data-choice={a}
+              onClick={() => (a === 'saleAbroadForeignTax' ? setForeign(!foreign) : void answerSale(a))}>{saleAnswerText(a)}</button>
+          ))}
+          <p className="m">{t('journal.byHand.saleAskDoes')}</p>
+          {foreign ? <ForeignTaxForm payment={payment} books={books} onCancel={() => setForeign(false)} onAnswer={(a) => void answerSale('saleAbroad', a.foreignTax)} /> : null}
+        </div>
+      ) : null}
       {deducts ? (
         <label className="pbp" data-testid="input-tax-proof">{t('journal.byHand.proofLabel')}
           <input name="inputTaxProof" placeholder={t('journal.byHand.proofPlaceholder')} />
@@ -313,7 +394,7 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
             : rest < 0 ? t('journal.byHand.over', { currency: draft.currency, amount: fmt(-rest) })
               : t('journal.byHand.adds', { currency: draft.currency, amount: fmt(restOf(books, payment, [], accounts)) })}
         </span>
-        <button type="submit" className="btn primary">{t('journal.byHand.submit')} <span className="k">↵</span></button>
+        <button type="submit" className="btn primary">{t(links.length ? 'journal.byHand.submitLink' : 'journal.byHand.submit')} <span className="k">↵</span></button>
       </div>
       <div className="err" role="alert">{err}</div>
     </form>

@@ -77,9 +77,11 @@ export function reclassify(nav: Nav, ref: string, before: JournalEntry[], overwr
 }
 
 /** A payment booked by hand in one or more lines (src/server/edits.ts bookPayment), with the other proof of its input tax when one is named; undo deletes them again and takes the proof back. */
-export const bookPayment = (nav: Nav, ref: string, lines: BookingLine[], proof?: string) =>
-  run(nav, () => api.bookPayment(ref, lines, proof), (entries) => (entries.length > 1 ? t('journal.byHand.booked', { n: entries.length, ref }) : t('journal.created', { line: bookingLine(entries[0]) })), async (entries) => {
+export const bookPayment = (nav: Nav, ref: string, lines: BookingLine[], proof?: string, links: string[] = []) =>
+  run(nav, () => api.bookPayment(ref, lines, proof, links), (entries) => (entries.length > 1 ? t('journal.byHand.booked', { n: entries.length, ref }) : t('journal.created', { line: bookingLine(entries[0]) })), async (entries) => {
     for (const e of entries) await api.deleteJournalEntry(e.id);
+    // A receipt the same click linked (the firm's own invoice, #382) goes off the payment again.
+    for (const id of links) await api.removeMapping({ receiptId: id, transactionRef: ref });
     if (proof !== undefined) await api.patchTransaction(ref, { inputTaxProof: '' });
   });
 

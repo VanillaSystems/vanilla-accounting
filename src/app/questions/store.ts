@@ -67,5 +67,7 @@ async function after<T>(p: Promise<T>): Promise<T> {
 export const askQuestion = (on: QuestionTarget, text: string, choices: Choice[], to?: string) =>
   after(api.ask({ on, by: questionsNow().me, text, choices, ...(to ? { to } : {}) }));
 export const answerQuestion = (id: string, answer: Answer) => after(api.answerQuestion(id, questionsNow().me, answer));
+/** The sale question answered on the hand form (#382): asked and answered at once, the form's lines booked as hers. */
+export const answerSaleOnForm = (ref: string, body: Omit<Parameters<typeof api.saleOnForm>[1], 'by'>) => after(api.saleOnForm(ref, { by: questionsNow().me, ...body }));
 export const undoAnswer = (id: string) => after(api.undoAnswer(id, questionsNow().me));
 export const closeQuestion = (id: string, how: 'done' | 'withdrawn') => after(api.closeQuestion(id, questionsNow().me, how));

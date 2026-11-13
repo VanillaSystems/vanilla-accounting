@@ -3,6 +3,7 @@
  * (src/assistant/): each refuses a filed quarter as the write door would, and returns the change
  * that undoes it. Who made it (Author) is what the booking records as its `by`.
  */
+import { issuedByFirm } from '../intake/own-invoice.js';
 import { byStatement } from '../workspace/money-accounts.js';
 import { randomBytes } from 'node:crypto';
 import { periodLock, type Books } from '../books/store.js';
@@ -550,14 +551,28 @@ export function assertNotBookedInFiled(books: Books, tx: BankTransaction): void 
 }
 
 /**
+ * A receipt the hand form links with its booking (#382) is still the firm's own invoice and linked to
+ * no payment: what the form saw. Refused (409 `ownInvoiceTaken`) otherwise.
+ */
+export function assertOwnInvoice(books: Books, id: string, company: { uid?: string; name?: string }): void {
+  const r = books.receipts.find((x) => x.id === id);
+  const firm = { ...(company.uid && { uid: company.uid }), ...(company.name && { name: company.name }) };
+  if (!r || books.mappings.some((m) => m.receiptId === id) || !issuedByFirm(r, firm)) {
+    throw new RequestError(409, 'Diese Rechnung ist nicht mehr frei: die Seite neu laden.', { code: 'ownInvoiceTaken' });
+  }
+}
+
+/**
  * A payment booked by hand (src/accounting/manual-booking.ts): its lines as a person's entries,
  * each dated on the payment (cash basis), at the official rate of that day when it is foreign, with
  * the receipts linked now, so a later run sees nothing new and keeps them. Refused when the
  * payment is booked already or the lines do not add up to what the bank paid. `proof`: the other
  * proof of its input tax the person names instead of a receipt (BankTransaction.inputTaxProof, #134).
  * A bank movement booked in a filed quarter as a read one (#254) is refused until «Trotzdem buchen».
+ * `links`: receipts linked to the payment by the same click, before its entries record them (the
+ * firm's own invoice the payment names by its number, #382).
  */
-export function bookPayment(books: Books, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[], fx: FxResolver, proof?: string): JournalEntry[] {
+export function bookPayment(books: Books, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[], fx: FxResolver, proof?: string, links: readonly string[] = [], company: { uid?: string; name?: string } = {}): JournalEntry[] {
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, ref), 'newEntry');
@@ -577,6 +592,7 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
   }
   const off = offSide(books, ref, lines, accounts);
   if (off) throw unbalanced(off);
+  for (const id of links) { assertOwnInvoice(books, id, company); link(books, id, ref); }
   const rate = tx.currency === baseCurrency() ? {} : { exchangeCurrency: tx.currency, exchangeRate: fx.daily(tx.currency, tx.date) ?? fx.flat(tx.currency) ?? 1 };
   const receipts = [...new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId))].sort();
   // A private outlay for a receipt of a filed quarter is a correction of that quarter (r8k-10).

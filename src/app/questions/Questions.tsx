@@ -115,8 +115,8 @@ function AlwaysSo({ q, nav }: { q: Question; nav: Nav }) {
  * for it without a code. The rate or the amount, either one fills the other; the account as the
  * company said it last (QuestionsView.foreignTax), else typed once.
  */
-function ForeignTaxForm({ q, books, account: said, onAnswer, onCancel }: { q: Question; books: Index; account?: string; onAnswer(a: { choice: 'saleAbroad'; foreignTax: { rate: number; amount: number; account: string } }): void; onCancel(): void }) {
-  const tx = books.transactions.find((x) => x.ref === q.on.id);
+export function ForeignTaxForm({ payment, books, account: said, onAnswer, onCancel }: { payment: string; books: Index; account?: string; onAnswer(a: { choice: 'saleAbroad'; foreignTax: { rate: number; amount: number; account: string } }): void; onCancel(): void }) {
+  const tx = books.transactions.find((x) => x.ref === payment);
   const gross = Math.abs(tx?.amount ?? 0);
   const [rate, setRate] = useState('');
   const [amount, setAmount] = useState('');
@@ -210,7 +210,7 @@ export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question
             </div>
           ) : null}
           {canEdit && !mine && foreign ? (
-            <ForeignTaxForm q={q} books={books} account={view?.foreignTax} onCancel={() => setForeign(false)} onAnswer={(a) => void answer(a).then((ok) => ok && setForeign(false))} />
+            <ForeignTaxForm payment={q.on.id} books={books} account={view?.foreignTax} onCancel={() => setForeign(false)} onAnswer={(a) => void answer(a).then((ok) => ok && setForeign(false))} />
           ) : null}
         </>
       ) : q.answer ? (

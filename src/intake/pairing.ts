@@ -352,7 +352,7 @@ export function fitOf(r: Receipt, tx: BankTransaction, toChf: ToChf, isClosed: (
 }
 
 /** What a payment says of what it pays: its text, reference, remarks and its parts' references. */
-const paymentText = (tx: BankTransaction): string => [tx.description, tx.reference ?? '', tx.remarks ?? '', ...(tx.parts ?? []).map((p) => p.reference ?? '')].join(' ');
+export const paymentText = (tx: BankTransaction): string => [tx.description, tx.reference ?? '', tx.remarks ?? '', ...(tx.parts ?? []).map((p) => p.reference ?? '')].join(' ');
 
 /** How many payments of the books name a number (squashed) as a whole token of their text. */
 export type NamedBy = (number: string) => number;

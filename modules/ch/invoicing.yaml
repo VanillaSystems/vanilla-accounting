@@ -32,3 +32,32 @@ placeAbroad:
   - place of supply
   - not subject to Swiss VAT
   - reverse charge
+
+# What the hand form reads off the firm's own invoice before it proposes a sale's code (#382): it
+# proposes the abroad code only when the invoice names a place of supply outside the VAT territory
+# after one of these labels («Leistungsort Deutschland», «Ort der Leistung: Österreich»); a label
+# with a place at home or none, a statement alone, or a wording that the VAT is included asks the
+# sale question instead (src/accounting/sale-document.ts).
+placeOfSupply:
+  - Leistungsort
+  - Ort der Leistung
+  - Ort der Dienstleistung
+  - lieu de la prestation
+  - luogo della prestazione
+  - place of supply
+# Wordings that a price includes the VAT: no proof of a supply abroad, whatever else the text says.
+vatIncluded:
+  - inkl. MWST
+  - inkl. MwSt
+  - inkl. Mehrwertsteuer
+  - inklusive MWST
+  - inklusive MwSt
+  - inklusive Mehrwertsteuer
+  - TVA incluse
+  - TVA comprise
+  - IVA inclusa
+  - incl. VAT
+  - including VAT
+# The words that label a VAT on an invoice, in the four languages and the foreign ones a customer
+# abroad reads: a percentage beside one that is no rate of the jurisdiction is a foreign VAT.
+vatLabels: [MWST, MwSt, Mehrwertsteuer, USt, Umsatzsteuer, TVA, IVA, VAT]

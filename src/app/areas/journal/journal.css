@@ -103,6 +103,11 @@
   .form.pbook .pbl .pbt, .form.pbook .pbl .pbw, .form.pbook .pbl .pbs { grid-column: 1 / -1; }
   .form.pbook .pbl .rm { grid-column: 1 / -1; grid-row: auto; justify-self: end; margin-top: 0; }
 }
+/* The sale question on the form (#382): the question card's answers, the chosen one marked. */
+.form.pbook .pbq { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; margin: 8px 0 0; font-size: 12.5px; }
+.form.pbook .pbq .btn { white-space: normal; text-align: left; max-width: 100%; }
+.form.pbook .pbq .btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.form.pbook .pbq .m { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--muted); }
 .form.pbook .pbf { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
 .form.pbook .pbf .wn { color: var(--warn); font-size: 12px; }
 .form.pbook .pbf .ok { color: var(--muted); font-size: 12px; }

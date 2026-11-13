@@ -11,7 +11,7 @@ import { parseDocument, YAMLMap, YAMLSeq } from 'yaml';
 import { loadBooks } from '../books/store.js';
 import { loadClassifyContext, mappedReceipts, paymentFacts, ruleBookingLines, ruleOfPayment, type RuleLine } from '../booking/classify.js';
 import { stableWords } from '../knowledge/gaps.js';
-import { paysOwner } from '../booking/receipt-wait.js';
+import { paysOwner, receiptKnowledge } from '../booking/receipt-wait.js';
 import { payoutWaitOf } from '../booking/providers.js';
 import { isOwnBankFee } from '../booking/bank-fee.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
@@ -180,7 +180,7 @@ export function handStart(ws: Workspace, ref: string, by?: 'text'): HandStart | 
     id: placed.rule.id, lines: ruleBookingLines(tx, booking, mappedReceipts(books, tx), context.ownerAccount),
     ...(then?.kind === 'ask' && { ask: then.question }), ...(booking.tags && { tags: booking.tags }),
   } : undefined;
-  const nature = natureOf(books, tx, context, file);
+  const nature = natureOf(books, tx, context, file, () => receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws).wages);
   const account = file?.accounts?.length === 1 ? file.accounts[0] : undefined;
   return { match, direction, name, similar, ...(wider && { wider }), ...(rule && { rule }), ...(nature && { nature }), ...(account && { account }) };
 }
@@ -206,7 +206,7 @@ function oneKind(businesses: ReadonlyArray<string | undefined>, files: readonly 
 const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
 
 /** What the payment is beside a sale or a purchase, from the firm's files (manual-booking.ts PaymentNature). */
-function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, context: ReturnType<typeof loadClassifyContext>, file: Counterparty | undefined): PaymentNature | undefined {
+function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, context: ReturnType<typeof loadClassifyContext>, file: Counterparty | undefined, wages: () => ReadonlyArray<{ test(s: string): boolean }>): PaymentNature | undefined {
   const linked = mappedReceipts(books, tx);
   const waits = payoutWaitOf(tx, linked, context.counterparties ?? [], books.journalEntries);
   if (waits) {
@@ -220,7 +220,14 @@ function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, cont
   }
   const own = new Set(context.bankAccounts.flatMap((a) => (a.iban ? [ibanOf(a.iban)] : [])));
   if (tx.counterpartyIban && own.has(ibanOf(tx.counterpartyIban))) return { kind: 'ownTransfer' };
-  if (tx.direction !== 'CRDT') return undefined;
+  // A wage on a firm that pays wages (its wording, matched on the text only as receipt-wait.ts does): the wage account, without a code (#382).
+  if (tx.direction !== 'CRDT') {
+    if (!context.wageAccount || !wages().some((w) => w.test(tx.description))) return undefined;
+    // Books that carry wages with their deductions (cls-salary): the payslip's lines are hers, no account is proposed.
+    const deductions = context.wageDeductions;
+    if (deductions && (books.journalEntries ?? []).some((e) => e.accountDebit === deductions || e.accountCredit === deductions)) return { kind: 'wage', deductions };
+    return { kind: 'wage', account: context.wageAccount };
+  }
   // Her name as the payer, never in the text: a customer writes the firm's name in the message («Rg 12 Thomas Huber Malerei»).
   if (context.ownerAccount && paysOwner({ counterparty: tx.counterparty, description: '' }, context.ownerName)) return { kind: 'owner', account: context.ownerAccount };
   if (file && (file.role === 'authority' || file.roles.includes('authority'))) return { kind: 'authority', name: file.name };
