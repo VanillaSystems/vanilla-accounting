@@ -10,6 +10,7 @@ export const ASK = {
   chooseFolder: 'desktop:chooseFolder',
   chooseNewFolder: 'desktop:chooseNewFolder',
   saveFile: 'desktop:saveFile',
+  micAccess: 'dictation:micAccess',
   smokeMenu: 'smoke:menu',
   smokeClick: 'smoke:click',
 } as const;

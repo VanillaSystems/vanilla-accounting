@@ -81,7 +81,8 @@ export function PasswordField({ id, present, done, channel = 'mail' }: { id: str
 }
 
 /** «Verbindung prüfen» and its answer: what the source would read, or why it could not look. */
-export function Check({ id, auto = false }: { id: string; auto?: boolean }) {
+/** `macMail`: the source reads the Mac's Mail app, and macOS asks once whether the app may control it: said before the first «Prüfen» (#373). */
+export function Check({ id, auto = false, macMail = false }: { id: string; auto?: boolean; macMail?: boolean }) {
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<MailCheck>();
   const [err, setErr] = useState('');
@@ -92,6 +93,7 @@ export function Check({ id, auto = false }: { id: string; auto?: boolean }) {
   useEffect(() => { if (auto) void run(); }, [auto]);
   return (
     <div className="srccheck" data-testid={`check-${id}`}>
+      {macMail && !res ? <p className="m" data-testid="mac-mail-ask">{t('sources.macMail.ask')}</p> : null}
       <button type="button" className="btn ghost" disabled={busy} onClick={() => void run()}>{busy ? t('sources.checking') : t('sources.check')}</button>
       {err && <p className="warnline">{err}</p>}
       {res && !res.ok && <p className="warnline">{res.reason === 'mail-app' ? t(`sources.macMail.problem.${res.problem}`) : t(`sources.checkFail.${res.reason}`)}{res.detail ? ` (${res.detail})` : ''}</p>}
@@ -249,7 +251,7 @@ export function SourcesSection({ nav, canEdit }: { nav: Nav; canEdit: boolean })
                   ))}
                 </dl>
                 {(verdict.decl.reach.mail || verdict.decl.reach.macMail) && verdict.decl.code.kind === 'app'
-                  ? <Check id={verdict.decl.id} />
+                  ? <Check id={verdict.decl.id} macMail={!!verdict.decl.reach.macMail} />
                   : <Preview id={verdict.decl.id} {...(verdict.decl.reach.web && canEdit ? { signIn: () => { api.signInSource(verdict.decl.id).then(() => nav.toast(t('sources.signInOpened')), (e) => setError(errorText(e))); } } : {})} />}
               </>
             )}

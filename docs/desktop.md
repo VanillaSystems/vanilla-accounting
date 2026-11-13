@@ -23,17 +23,20 @@ as `npm start`, with no terminal, Node.js or Homebrew needed. The code is in `sr
 
 ## Documents, Desktop, Downloads
 
-macOS asks the person before an app reads its Documents, Desktop or Downloads folder, and holds
+macOS asks the person before an app reads its Documents, Desktop or Downloads folder, iCloud Drive
+(`~/Library/Mobile Documents`) or a volume (`/Volumes`: a USB stick, a network share), and holds
 that first read until she answers «Erlauben» or «Nicht erlauben» (issue #373). So the app touches
-none of them until a step of hers needs it:
+none of them until a step of hers needs it, and says just before why macOS will ask:
 
 - A first start reads nothing there. GET /api/desktop never lists the Documents folder; the menu's
   «Zuletzt geöffnet» takes its names from `desktop.json` (`names`), not from the folders.
 - «Neue Buchhaltung erstellen» first says why macOS will ask and that «Erlauben» is needed
   («Weiter», or «Anderen Ordner wählen»: the save panel or folder dialog in the home folder).
   «Weiter» reads the folder (GET /api/desktop/folders), so macOS asks over those words. The answer
-  is kept as `homeAccess` in `desktop.json` with the app's version: a hint only, since an update
-  (an unsigned build above all) may lose the permission, so another version says the words again.
+  is kept in `desktop.json` (`access.documents`; 0.4.1 wrote it as `homeAccess`) with the app's
+  version: a hint only, since an update (an unsigned build above all) may lose the permission, so
+  another version says the words again. Every asynchronous look (`reach`) keeps macOS's answer for
+  the folder it lies in the same way (`access.<folder>`; a folder's own rights are no answer).
   Once `allowed` the step reads the folder without a word, for a name not taken; after `refused`
   (EPERM) it names the way in System Settings and offers «Nochmals versuchen»; a folder whose own
   rights refuse the app (EACCES, `locked`) is said apart, with the Finder's «Informationen». The
@@ -46,11 +49,32 @@ none of them until a step of hers needs it:
   process; the synchronous reads of opening books come after its answer. A folder the app may not
   read is refused as `folderRefused` (`why`: `privacy` or `rights`), and shown in the start
   screen's list with its name from `desktop.json` and «Kein Zugriff».
-- At a later start `firstPage` (`src/desktop/start.ts`) opens the books opened last before the
-  window as before when their folder answers within `REACH_WAIT_MS`; when macOS asks instead, the
-  window comes first with the start screen, which says that macOS asks about that folder and names
-  the books (`askingPath`), and the books open after «Erlauben».
+- Books in such a folder that this version of the app has no answer for (`DesktopServer.answered`
+  false: the first start after an update) are not looked at. `firstPage` (`src/desktop/start.ts`)
+  shows the start screen with the words before macOS's question (`unaskedPath`: «Deine Buchhaltung
+  … liegt im Ordner «Dokumente». Gleich fragt macOS …», with «Weiter»), GET /api/desktop lists them
+  with `unasked` and their name from `desktop.json`, and a click on them in that list or in the
+  menu's «Zuletzt geöffnet» shows the same words first. Only «Weiter» opens them, and macOS asks then.
+- At a later start of a version macOS answered already, `firstPage` opens the books opened last
+  before the window as before when their folder answers within `REACH_WAIT_MS`; when macOS asks
+  anyway (a grant of the save panel that lasted one run), the window comes first with the start
+  screen, which says that macOS asks about that folder and names the books (`askingPath`), and the
+  books open after «Erlauben».
 - The look for the AI's programs (`placesOf`, `programOn`) skips PATH entries in these folders.
+
+Other questions of macOS, and when they come:
+
+- Microphone and speech recognition: only on the chat's microphone button. While macOS has not
+  asked about the microphone (`systemPreferences.getMediaAccessStatus`, through
+  `window.vanilla.micAccess`), the click first says that macOS will ask twice and what for;
+  «Weiter» starts the dictation.
+- Automation of Mail («… möchte Mail steuern»): only for a source that reads the Mac's Mail app,
+  at its «Prüfen» or its runs. Its «Prüfen» says before the first click that macOS will ask.
+- Incoming connections (the firewall, when it is on): only when the phone is switched on in
+  Firma › Handy, which says so (`phone.firewall`).
+- The keychain (`safeStorage`): read when a stored password or key is used. An unsigned build is
+  a new app to the keychain after each update, so macOS may ask for it again then; a build signed
+  with a Developer ID keeps every answer across updates (see «Signing, notarization, updates»).
 
 `tests/desktop-protected-folders.test.ts` records every `node:fs` call under these folders
 (`tests/support/protected-folders.ts`) while the server does what the start and the first screen

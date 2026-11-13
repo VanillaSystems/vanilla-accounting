@@ -9,7 +9,7 @@ import { EventEmitter } from 'node:events';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { PassThrough } from 'node:stream';
-import { dictated, dictationError, dictationLang, carried, fieldAt, follow, onDevice, recognizer, webHeard } from '../src/app/assistant/dictation.js';
+import { beforeDictation, dictated, dictationError, dictationLang, carried, fieldAt, follow, onDevice, recognizer, webHeard } from '../src/app/assistant/dictation.js';
 import { dictate, isLang, parseEvent } from '../src/desktop/dictation.js';
 import type { DesktopBridge, DictationEvent } from '../src/types/desktop.js';
 import type { Field } from '../src/app/assistant/dictation.js';
@@ -274,4 +274,12 @@ test('the packed app asks with German usage texts, carries the recognizer, and m
 
 test('the recording\'s clock reads minutes and two-digit seconds', () => {
   assert.deepEqual([0, 7, 59, 60, 90, 724].map(elapsed), ['0:00', '0:07', '0:59', '1:00', '1:30', '12:04']);
+});
+
+test('in the Mac app the page says why before macOS first asks about the microphone; once asked, or in a browser, it starts at once (#373)', async () => {
+  assert.equal(await beforeDictation({ micAccess: async () => 'not-determined' }), 'ask', 'macOS has not asked yet: the words come first');
+  for (const answer of ['granted', 'denied', 'restricted', 'unknown'] as const) assert.equal(await beforeDictation({ micAccess: async () => answer }), 'go', answer);
+  assert.equal(await beforeDictation({}), 'go', 'a bridge without the question (a browser, a build without the recognizer)');
+  assert.equal(await beforeDictation(undefined), 'go');
+  assert.equal(await beforeDictation({ micAccess: async () => { throw new Error('no handler'); } }), 'go', 'a failed look never blocks dictating');
 });

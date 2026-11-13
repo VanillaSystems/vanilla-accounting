@@ -165,6 +165,17 @@ test('the first screen asks what the person wants; the AI is one line, its cards
       await page.waitForSelector('[data-asking=documents]', { timeout: 20_000 });
       assert.equal(await page.$eval('[data-asking]', (e) => (e as HTMLElement).innerText),
         'macOS fragt, ob Vanilla Accounting den Ordner «Dokumente» lesen darf, in dem «Maler Huber GmbH» liegt. Nach «Erlauben» öffnet sich deine Buchhaltung.');
+      // After an update (src/desktop/start.ts unaskedPath): the words come first, and only «Weiter» opens the books (2026-11-13).
+      await page.goto(`http://${host2}/start?${new URLSearchParams({ unasked: join(dir, 'Documents', 'Maler Huber'), name: 'Maler Huber GmbH', folder: 'documents' })}`, { waitUntil: 'networkidle0', timeout: 60_000 });
+      await page.waitForSelector('[data-unasked=documents] [data-act=open-unasked]', { timeout: 20_000 });
+      const before = await page.$eval('[data-unasked]', (e) => (e as HTMLElement).innerText);
+      assert.match(before, /«Maler Huber GmbH» liegt im Ordner «Dokumente»/, 'it names the books and the folder macOS will ask about');
+      assert.match(before, /«Erlauben»/, 'and the button she needs there');
+      assert.match(before, /«Nicht erlauben», bleibt sie geschlossen/, 'and what «Nicht erlauben» means');
+      assert.equal(restarted.current(), null, 'nothing opened before her word');
+      await page.click('[data-act=open-unasked]');
+      await page.waitForSelector('.st-main .warnline', { timeout: 10_000 });
+      assert.equal(restarted.current(), null, 'her «Weiter» tried to open them (this folder holds none)');
       await page.goto(`http://${host2}/start`, { waitUntil: 'networkidle0', timeout: 60_000 });
       await page.waitForSelector('[data-ready=claude]', { timeout: 60_000 });
       await page.click('[data-act=by-hand]');

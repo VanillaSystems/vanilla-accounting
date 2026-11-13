@@ -28,6 +28,8 @@ export interface DesktopBridge {
    * returns the stop. Absent where the app has no recognizer (not a Mac, or a build without it).
    */
   dictate?(lang: string, listener: (event: DictationEvent) => void): () => void;
+  /** Whether macOS asked about the microphone yet; present with `dictate`, so the page can say why before macOS asks. */
+  micAccess?(): Promise<MicAccess>;
 }
 
 /** Why the Mac's recognizer stopped early (src/desktop/dictation.swift). */
@@ -70,7 +72,11 @@ export interface SmokeBridge {
  * `setup`: the folder holds a setup broken off before the books were created (src/onboarding/draft.ts);
  * opening it continues the setup conversation, and `name` is the firm's once it was answered.
  */
-export interface KnownBooks { root: string; name?: string; problem?: string; demo: boolean; setup?: true; noAccess?: NoAccess }
+/**
+ * `unasked`: the books lie in a folder macOS asks about, and this version of the app has not been
+ * answered there yet; the folder was not read, and opening them says first why macOS will ask (#373).
+ */
+export interface KnownBooks { root: string; name?: string; problem?: string; demo: boolean; setup?: true; noAccess?: NoAccess; unasked?: ProtectedFolder }
 
 /**
  * Why the app may not read a folder: `privacy`, macOS refused it («Nicht erlauben», EPERM: allowed
@@ -84,6 +90,16 @@ export interface NoAccess { folder: ProtectedFolder; why: 'privacy' | 'rights' }
  * none of the three (an iCloud Drive folder, a removable or network volume).
  */
 export type ProtectedFolder = 'documents' | 'desktop' | 'downloads' | 'other';
+
+/**
+ * Every folder macOS asks about before the app's first read there: the three named to the person,
+ * and iCloud Drive (~/Library/Mobile Documents) and the volumes (/Volumes: a USB stick, a network
+ * share), which the person reads as «other».
+ */
+export type GuardedFolder = Exclude<ProtectedFolder, 'other'> | 'icloud' | 'volumes';
+
+/** Electron's systemPreferences.getMediaAccessStatus('microphone'): `not-determined` until macOS asked the person. */
+export type MicAccess = 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown';
 
 /**
  * Whether the app may read the Documents folder, as macOS answered the step that first needed it

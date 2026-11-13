@@ -10,19 +10,19 @@ import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync, readFileSync } from 'node:fs';
 import { writeFile } from 'node:fs/promises';
-import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, safeStorage, screen, session, shell } from 'electron';
+import { BrowserWindow, Menu, app, dialog, ipcMain, nativeTheme, safeStorage, screen, session, shell, systemPreferences } from 'electron';
 import { usePrintPages } from '../invoices/pdf.js';
 import { sealedStore } from '../secrets/sealed-store.js';
 import { useSecretStore } from '../secrets/secrets.js';
 import { APP_ROOT } from '../workspace/workspace.js';
-import type { KnownBooks, MenuCommand } from '../types/desktop.js';
+import type { KnownBooks, MenuCommand, MicAccess } from '../types/desktop.js';
 import type { ApiRefusal } from '../types/api-error.js';
 import { setupPath } from '../app/desktop/bridge.js';
 import { freshLoginPath } from '../platform/ai-cli.js';
 import { ASK, PUSH, TELL } from './channels.js';
 import { chosenFolder, newFolderPanel } from './new-folder.js';
 import { sameOrigin, saveFile } from './save-file.js';
-import { askingPath, bringUp, firstPage, offerMove, windowLoader, type Waiting } from './start.js';
+import { askingPath, bringUp, firstPage, offerMove, unaskedPath, windowLoader, type Waiting } from './start.js';
 import { accessText } from '../app/desktop/access-text.js';
 import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
@@ -107,7 +107,10 @@ async function start(): Promise<void> {
     demoRoot: join(app.getPath('userData'), 'Demo'),
     booksHome: app.getPath('documents'),
     // Names only: Electron reads none of them. The first read under one makes macOS ask the person (#373).
-    protectedFolders: { documents: app.getPath('documents'), desktop: app.getPath('desktop'), downloads: app.getPath('downloads') },
+    protectedFolders: {
+      documents: app.getPath('documents'), desktop: app.getPath('desktop'), downloads: app.getPath('downloads'),
+      icloud: join(app.getPath('home'), 'Library', 'Mobile Documents'), volumes: '/Volumes',
+    },
     appVersion: app.getVersion(),
     dist: join(APP_ROOT, 'dist'),
     devUi: DEV?.ui,
@@ -149,6 +152,8 @@ async function start(): Promise<void> {
     const options = newFolderPanel(choice, app.getPath(elsewhere ? 'home' : 'documents'));
     return chosenFolder(win && !win.isDestroyed() ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options));
   };
+  /** The start screen with the words before macOS's question, for books whose folder this version has no answer for (#373). */
+  const unasked = (root: string) => unaskedPath(root, server.recent().find((b) => b.root === root)?.name ?? basename(root), server.folderOf(root));
   function refreshMenu(): void {
     Menu.setApplicationMenu(Menu.buildFromTemplate(menuTemplate(language, server.recent(), {
       openBooks: async () => {
@@ -157,7 +162,7 @@ async function start(): Promise<void> {
       },
       newBooks: () => show('/start?new'),
       demo: opening(() => server.openDemo()),
-      openRecent: (root) => void opening(() => server.open(root))(),
+      openRecent: (root) => (server.answered(root) ? void opening(() => server.open(root))() : show(unasked(root))),
       command: (command: MenuCommand) => win?.webContents.send(PUSH.menu, command),
       docs: homepage ? () => void shell.openExternal(homepage) : undefined,
     }, !app.isPackaged)));
@@ -194,7 +199,7 @@ async function start(): Promise<void> {
   void server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); });
   // The books opened last, read only after macOS answered for their folder; a first start reads none (#373).
   void firstPage({
-    last: readState(stateFile).recent[0], reach: server.reach, open: server.open, current: server.current, pathOf, show,
+    last: readState(stateFile).recent[0], reach: server.reach, answered: server.answered, unasked, open: server.open, current: server.current, pathOf, show,
     // While macOS asks, the start screen names the folder and the books as desktop.json keeps them.
     asking: (root) => askingPath(root, server.recent().find((b) => b.root === root)?.name ?? basename(root), server.folderOf(root)),
   });
@@ -239,6 +244,8 @@ function dictationHandles(): void {
     page.once('destroyed', gone).once('did-navigate', gone);
   });
   ipcMain.on(TELL.dictationStop, (e, id: unknown) => { running.get(`${e.sender.id}:${String(id)}`)?.(); });
+  // Read only, asks nothing: the page says why macOS will ask before the first dictation (#373).
+  ipcMain.handle(ASK.micAccess, (): MicAccess => systemPreferences.getMediaAccessStatus('microphone'));
 }
 
 function smokeHandles(): void {

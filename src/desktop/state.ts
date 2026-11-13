@@ -6,6 +6,7 @@
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import type { GuardedFolder } from '../types/desktop.js';
 
 export interface Bounds { x: number; y: number; width: number; height: number; maximized?: boolean }
 
@@ -18,14 +19,30 @@ export interface DesktopState {
    */
   names?: Record<string, string>;
   /**
-   * How macOS answered the app's first read of the Documents folder (GET /api/desktop/folders), and
-   * the app version that asked: a hint only, since an update (an unsigned build above all) may lose
-   * the permission, and macOS then asks again.
+   * How macOS answered the app's first read under each folder it guards (Documents, Desktop,
+   * Downloads, iCloud Drive, the volumes), and the app version that asked: a hint only, since an
+   * update (an unsigned build above all) may lose the permission, and macOS then asks again. Until
+   * this version has an answer for a folder, the app reads nothing there before the person was told
+   * why macOS will ask (#373).
    */
-  homeAccess?: { answer: 'allowed' | 'refused'; version: string };
+  access?: Partial<Record<GuardedFolder, FolderAnswer>>;
   bounds?: Bounds;
   port?: number;
   phone?: PhonePairing;
+}
+
+export interface FolderAnswer { answer: 'allowed' | 'refused'; version: string }
+
+const GUARDED: readonly GuardedFolder[] = ['documents', 'desktop', 'downloads', 'icloud', 'volumes'];
+const answerOf = (raw: unknown): FolderAnswer | undefined => {
+  const a = raw as Partial<FolderAnswer> | undefined;
+  return (a?.answer === 'allowed' || a?.answer === 'refused') && typeof a.version === 'string' ? { answer: a.answer, version: a.version } : undefined;
+};
+/** desktop.json's answers; one written before 0.4.2 kept only the Documents folder's, as `homeAccess`. */
+function accessOf(raw: { access?: unknown; homeAccess?: unknown }): DesktopState['access'] {
+  const kept = raw.access && typeof raw.access === 'object' ? raw.access as Record<string, unknown> : {};
+  const entries = GUARDED.flatMap((f) => { const a = answerOf(kept[f] ?? (f === 'documents' ? raw.homeAccess : undefined)); return a ? [[f, a] as const] : []; });
+  return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
 /** The token stays when the phone is switched off, so a paired phone works again once it is on; a new code replaces it. */
@@ -35,11 +52,12 @@ const RECENT = 8;
 
 export function readState(file: string): DesktopState {
   try {
-    const raw = JSON.parse(readFileSync(file, 'utf8')) as Partial<DesktopState>;
+    const raw = JSON.parse(readFileSync(file, 'utf8')) as Partial<DesktopState> & { homeAccess?: unknown };
+    const access = accessOf(raw);
     return {
       recent: Array.isArray(raw.recent) ? raw.recent.filter((r): r is string => typeof r === 'string') : [],
       ...(raw.names && typeof raw.names === 'object' ? { names: Object.fromEntries(Object.entries(raw.names).filter((e): e is [string, string] => typeof e[1] === 'string')) } : {}),
-      ...((raw.homeAccess?.answer === 'allowed' || raw.homeAccess?.answer === 'refused') && typeof raw.homeAccess.version === 'string' ? { homeAccess: { answer: raw.homeAccess.answer, version: raw.homeAccess.version } } : {}),
+      ...(access ? { access } : {}),
       ...(raw.bounds && typeof raw.bounds.width === 'number' ? { bounds: raw.bounds } : {}),
       ...(Number.isInteger(raw.port) ? { port: raw.port } : {}),
       ...(raw.phone && typeof raw.phone.token === 'string' && raw.phone.token
