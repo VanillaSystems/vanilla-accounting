@@ -696,7 +696,8 @@ export function classifyInput(books: Books, tx: BankTransaction, legs: readonly 
   const cp = routing.kind === 'known' ? counterparties.find((c) => c.id === routing.counterparty) : undefined;
   const guidance = cp ? businessGuidance(cp) : [];
   const receipts = linked
-    .filter((r) => r.extractedText && r.extractedText.length > 10)
+    // A photo nothing could read counts by what a person entered on it (#438).
+    .filter((r) => (r.extractedText && r.extractedText.length > 10) || r.vatBy === 'human')
     .map((r) => ({
       text: r.extractedText,
       amount: r.amount,

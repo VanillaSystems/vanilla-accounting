@@ -15,10 +15,10 @@ import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import { bookingDraft, inputTaxWithoutReceipt } from '../accounting/manual-booking.js';
 import { codeOnAccount, vatCodeOf } from '../accounting/vat-codes.js';
-import { assertCodeSign, assertCodeTaken, assertPlaced, assertTwoSides, bookPayment, setEntry, setReceiptKind } from './edits.js';
+import { assertCodeSign, assertCodeTaken, assertPlaced, assertTwoSides, bookPayment, setEntry, setReceiptKind, type HandTaxPoint } from './edits.js';
 import { assertOpen, refDates, refusalOf, RequestError } from './books.js';
 
-export interface BatchContext { bankAccounts: readonly LedgerBankAccount[]; fx: FxResolver }
+export interface BatchContext { bankAccounts: readonly LedgerBankAccount[]; fx: FxResolver; point?: HandTaxPoint }
 
 /** One object's undo and what the batch wrote there: an undo over a later change is refused, not written over it. */
 export interface BatchStep { id: string; undo: BatchUndo; wrote: string }
@@ -142,10 +142,13 @@ function bookOne(books: Books, tx: BankTransaction, action: Extract<BatchAction,
   const waits = tx.waitsForPerson;
   return guarded(books, [tx], () => {
     const description = draft.lines[0]?.description || tx.description;
-    const made = bookPayment(books, tx.ref, [{ accountDebit, accountCredit, amount: Math.round(amount * 100) / 100, ...(vat.code && { vatCode: vat.code }), description }], ctx.bankAccounts, ctx.fx);
+    const made = bookPayment(books, tx.ref, [{ accountDebit, accountCredit, amount: Math.round(amount * 100) / 100, ...(vat.code && { vatCode: vat.code }), description }], ctx.bankAccounts, ctx.fx, undefined, [], {}, ctx.point);
     const back: BatchUndo = { kind: 'unbook', ref: tx.ref, entries: made.map((e) => e.id), ...(waits ? { waits } : {}) };
     undo.push({ id: tx.ref, undo: back, wrote: stateOf(books, back) });
-    changes.push({ id: tx.ref, field: 'booking', from: '', to: `${accountDebit} / ${accountCredit}${vat.code ? ` ${vat.code}` : ''}` });
+    // What was booked: on the agreed basis a line may sit on its receipt's day over the open item, the payment settling it (#360).
+    const line = (e: JournalEntry) => `${e.accountDebit} / ${e.accountCredit}${e.vatCode ? ` ${e.vatCode}` : ''}`;
+    const to = made.length === 1 && made[0].date === tx.date ? line(made[0]) : made.map((e) => `${e.date.split('-').reverse().join('.')} ${line(e)}`).join(' · ');
+    changes.push({ id: tx.ref, field: 'booking', from: '', to });
   });
 }
 

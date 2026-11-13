@@ -97,9 +97,10 @@ export const bookPayment = (nav: Nav, ref: string, lines: BookingLine[], proof?:
     if (proof !== undefined) await api.patchTransaction(ref, { inputTaxProof: '' });
   });
 
-/** A booking typed without its payment tied to it (src/server/edits.ts attachEntries); undo puts its entries back as they were. */
+/** A booking typed without its payment tied to it (src/server/edits.ts attachEntries); undo deletes the lines it added and puts its entries back as they were. */
 export const attachEntries = (nav: Nav, ref: string, own: string) =>
-  run(nav, () => api.attachEntries(ref, own), () => t('journal.attached', { own, ref }), async (before) => {
+  run(nav, () => api.attachEntries(ref, own), () => t('journal.attached', { own, ref }), async ({ before, made }) => {
+    for (const id of made) await api.deleteJournalEntry(id);
     for (const e of before) await api.deleteJournalEntry(e.id);
     for (const e of before) await api.createJournalEntry(undoInput(e));
   });
