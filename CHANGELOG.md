@@ -132,6 +132,20 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- «Buchen» waiting for «Einschalten» holds every booking by the firm's rules or the AI (#413): a
+  rule or business file changed outside the app's own controls (by hand, by git, an AI's draft not
+  kept) no longer acts on the next drop or mail. The inbox still reads, matches and links, but books
+  nothing; a provider's report waits in its row, and is kept for «Einschalten» when the window
+  closes; «Automatisch buchen» for all, «Neu buchen», `npm run classify` and a rule kept meanwhile
+  book nothing either. A customer's or an authority's file and evidence.guide.yaml count as the
+  firm's rules too (files there at the update make nothing wait; one written after it waits).
+  `npm run classify` books nothing on a workspace the app has not opened on this computer yet; one
+  `npm run init` or the desktop's setup created counts as switched on as it was made. Wherever she tries, one
+  sentence says what changed, why the app waits and what ends it, with «Einschalten» right there;
+  switched on, the app books what only waited for it (the payments by an inbox run, the report taken
+  again). Her own answers and links, and a
+  merchant name the app learns from confirmed links, make nothing wait: a new firm starts switched
+  on and its first drop books as before.
 - **⚠ figures** A supplier's refund without a credit note takes the code of the purchase it refunds
   with a minus (#357, owner's decision 2026-11-13; MWSTG Art. 41 Abs. 2): -I81 for an I81 purchase,
   -I0 for one without input tax, a part at the purchase's rate. Before, a company rule booked and
@@ -417,6 +431,19 @@ Two markers flag an entry you must read before you update:
   payment «fehlt noch», the new button «Vorsteuer buchen» books it at once, also on a date and
   total she typed; it says why when it cannot («kein Datum», «eingereichte Periode», no fee
   account). Such a bill no longer offers «Mit Zahlung verknüpfen» as its main action.
+- The fields of Firma's forms stand in line at every width (#454): a hint under one input («kein
+  Konto», the account's name) or a label on two lines no longer pushes the field beside it down
+  (Eröffnung, Regeln and the others). Firma › Eröffnung names its amount fields «Saldo per 1.1.2026
+  (CHF)» and, for a foreign-currency account, «Saldo per 1.1.2026 (EUR)» beside it, and its table's
+  column (and Abschluss's) «Saldo per 1.1.2026», no longer «Eröffnung 1.1.2026», which read like a
+  date; an amount typed there is right-aligned and shown in the app's number format once left.
+- A repayment to the owner before any of her outlays is booked (#457): «Spesen Juli 2026» said
+  «wartet auf ihren Beleg; ist er verknüpft, bucht die App sie», though no receipt is ever linked to
+  it. While receipts that could be hers are filed (read, dated before it, paid by no payment of the
+  firm, not its own invoice) it now says it waits for her privately paid receipts to be booked as
+  outlays, in the period's list, the bank detail, the drop, «Automatisch buchen» and the hand form,
+  as it did once one was booked. Without such a receipt, and for a payment to her a rule decides, the
+  receipt wait stays.
 - A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
   Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
   der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no

@@ -142,3 +142,48 @@ test('the hand form of a repayment its outlays do not cover yet says what ends t
   const draft = bookingDraft(books, 'S7', ws.bankAccounts, [], { nature: start.nature! })!;
   assert.deepEqual(draft.notes.map((n) => n.kind), ['ownerWaits'], 'one note, and not «kein Vorschlag»');
 });
+
+/** The receipts he paid privately, read and filed, before he books any as his outlay (#457: the walk's state). */
+function filed(books: Books, which: number[] = [0, 1, 2, 3, 4, 5], over: Partial<Books['receipts'][number]> = {}): Books {
+  for (const i of which) {
+    const [ref, date, amount] = OUTLAYS[i];
+    books.receipts.push({ id: `r-${ref}`, filename: `${ref}.pdf`, originalFilename: `${ref}.pdf`, extractedText: `Billett Total CHF ${amount}`, extractionMethod: 'pdftotext', fileSize: 4000, indexedAt: '2026-09-30T08:00:00Z', location: 'archived', currency: 'CHF', date, amount, hasSwissVat: false, vatSummary: [], vatExtractedAt: '2026-09-30T08:00:00Z', ...over });
+  }
+  return books;
+}
+
+test('#457: before any outlay is booked, a repayment with her receipts filed waits for them as outlays everywhere; the rent a rule decides keeps its receipt wait', async () => {
+  const ws = firm();
+  mkdirSync(join(ws.paths.root, 'knowledge', 'rules'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'knowledge', 'rules', 'booking.guide.yaml'), 'process: booking\nsteps:\n  classify:\n    rules:\n      - id: miete-inhaber\n        when: { payer: "Lukas Beispiel", text: "Miete" }\n        then: { account: "6000", vat: 81 }\n        source: wish 2026-11-13\n');
+  const books = filed(loadBooks(ws));
+  books.transactions.push(pay('RENT', '2026-08-01', 1200, 'Miete Büro August'));
+  await intake(ws, books);
+  writeIndex(ws, books);
+  assert.deepEqual(onHers(books), ['', '', ''], 'nothing open on his account: none is booked');
+  const outlays = new Set(outlayWaitsOf(ws, books));
+  assert.deepEqual([...outlays], ['S7', 'S8', 'S9'], 'no outlay booked yet, his receipts filed: they wait for them');
+  const context = loadClassifyContext(ws);
+  assert.equal(awaitsOutlays(books, books.transactions.find((t) => t.ref === 'RENT')!, context, [], loadFxResolver()), false, 'the rent a rule decides');
+  const issues = periodIssues(books, [], '2026-07-01', '2026-09-30', ws.bankAccounts, undefined, '2026-10-05', undefined, undefined, outlays);
+  assert.deepEqual(issues.flatMap((i) => (i.kind === 'unbooked' ? [[i.tx.ref, !!i.waitsForReceipt, !!i.waitsForOutlays]] : [])), [['S7', false, true], ['RENT', true, false], ['S8', false, true], ['S9', false, true]]);
+  const t = books.transactions.find((x) => x.ref === 'S7')!;
+  assert.deepEqual(await ACTIONS['accounting.expenses.classification'].run!({ transaction: t, books }, {}, { ws, ask, now: () => '2026-11-13T08:00:00Z' } as never), { outcome: 'held', output: { why: 'waitsForOutlays' } });
+  assert.deepEqual(handStart(ws, 'S7')!.nature, { kind: 'ownerWaits', account: '2451', open: 0, owner: OWNER });
+});
+
+test('#457: without a receipt that could be her outlay (dated after it, paid by another payment, the firm\'s own invoice, not read) a repayment keeps «wartet auf ihren Beleg»', async () => {
+  const ws = firm();
+  const books = filed(loadBooks(ws), [2, 3]);
+  await intake(ws, books);
+  assert.deepEqual(outlayWaitsOf(ws, books), ['S8', 'S9'], 'August\'s receipts only: July\'s repayment is older than each');
+  books.receipts.length = 0;
+  filed(books, [0]);
+  books.transactions.push(pay('CARD', '2026-07-08', 72.4, 'Karte', { counterparty: 'SBB' }));
+  books.mappings.push({ transactionRef: 'CARD', receiptId: 'r-M2026-001' });
+  filed(books, [1], { extractedText: 'Muster Consulting GmbH\nRechnung 2026-031\nCHE-246.813.579 MWST\nTotal CHF 146.50' });
+  books.receipts.push({ ...books.receipts[0], id: 'r-unread', date: undefined, amount: undefined });
+  writeIndex(ws, books);
+  assert.deepEqual(outlayWaitsOf(ws, books), [], 'paid by the firm\'s card, its own invoice, not read: none is hers');
+  assert.equal(handStart(ws, 'S7')!.nature, undefined);
+});

@@ -14,6 +14,9 @@ import type { Location } from '../shell/route.js';
 import { api, errorText } from '../lib/api.js';
 import { automationCommand, automationNow, useAutomation } from './store.js';
 import { useState } from 'react';
+import { BOOKING_WORKFLOW, BookingWaits, bookingWaitsOf } from './booking-waits.js';
+import { bookingWaitsText } from '../lib/booking-waits.js';
+import type { BookOpen } from '../../saving/rules.js';
 
 const OPEN = new Set(['queued', 'running', 'waiting', 'parked', 'stuck']);
 const RESTING = new Set(['done', 'waiting', 'stuck', 'parked', 'discarded']);
@@ -27,6 +30,16 @@ async function rested(id: string): Promise<RunDetail> {
   }
 }
 
+/** The files a run's book step waited for «Einschalten» with (src/intake/pipeline.ts IntakeNote `bookingWaits`, #413), when it booked nothing so. */
+export function bookingWaitsNote(r: Pick<RunDetail, 'steps'>): string[] | undefined {
+  for (const s of r.steps) {
+    const notes = (s.output?.notes ?? []) as Array<{ code?: string; files?: string[]; waiting?: number }>;
+    // Only when it left payments: a run with nothing to book says it is done, not why it waits.
+    const n = Array.isArray(notes) ? notes.find((x) => x.code === 'bookingWaits' && (x.waiting ?? 0) > 0) : undefined;
+    if (n) return n.files ?? [];
+  }
+  return undefined;
+}
 /** Why a run that booked nothing left its payment, by the step's `why` (#428): «0 Buchungen gebucht» never stands without it. */
 const LEFT: Record<string, 'marks.left.waitsForReceipt' | 'marks.left.waitsForOutlays' | 'marks.left.receiptUnread' | 'marks.left.vatNotRead'> = {
   waitsForReceipt: 'marks.left.waitsForReceipt', waitsForOutlays: 'marks.left.waitsForOutlays', receiptUnread: 'marks.left.receiptUnread', vatNotRead: 'marks.left.vatNotRead',
@@ -66,8 +79,14 @@ export async function startAndSay(workflowId: string, item: { kind: ItemKind; id
  * books only what a rule of the firm or code decides, asks no model, and counts every payment it left
  * with why (POST /api/rules/book-open). The line says each group in its own words.
  */
-export async function bookOpenAndSay(workflowName: string): Promise<string> {
+export async function bookOpenAndSay(workflowName: string): Promise<{ text: string; waits?: string[] }> {
   const n = await api.bookOpen();
+  // «Buchen» waits for «Einschalten» (#413): nothing booked, the one sentence says why.
+  if (n.waits) return { text: bookingWaitsText(n.waits), waits: n.waits };
+  return { text: bookOpenLine(n, workflowName) };
+}
+
+function bookOpenLine(n: Omit<BookOpen, 'waits'>, workflowName: string): string {
   const { max, ...counts } = n;
   if (!Object.values(counts).some(Boolean)) return t('marks.all.none', { workflow: workflowName });
   const parts = [
@@ -94,12 +113,14 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit, confirm }:
   const { view } = useAutomation();
   // What the last click came to, beside the button as well as in the toast: a toast is gone in
   // seconds and easily missed (r4c-34, r5h-20: «Automatisch buchen» without Claude seemed to do nothing).
-  const [said, setSaid] = useState<{ item: string; text: string; go?: Location }>();
+  const [said, setSaid] = useState<{ item: string; text: string; go?: Location; waits?: boolean }>();
   const [asking, setAsking] = useState<{ item: string; workflow: WorkflowDecl }>();
   if (!view) return null;
   const buttons = buttonsFor(view.workflows, kind, facts).filter((b) => b.runnable);
   if (!buttons.length) return null;
   const say = (text: string, go?: Location) => { setSaid({ item: id, text, ...(go ? { go } : {}) }); nav.toast(text); };
+  // «Buchen» waits for «Einschalten» (#413): the one sentence, with «Einschalten» beside the button.
+  const sayWaits = (files: readonly string[]) => { setSaid({ item: id, text: bookingWaitsText(files), waits: true }); nav.toast(bookingWaitsText(files)); };
   // The button says what came of it, not only that something started: a run without the AI may only wait for a person.
   async function start(workflow: WorkflowDecl) {
     const name = textIn(workflow.label, language());
@@ -108,18 +129,23 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit, confirm }:
       const r = await automationCommand({ kind: 'start', workflow: workflow.id, item: { kind, id } });
       if (!r.ok) {
         // A refusal in words, never a code or a version hash (r6h-24): what waits, and where to act.
-        if (r.refusal === 'not-approved') say(t('marks.waitsSwitchOn', { workflow: name }), { route: { area: 'automation', view: 'workflow', workflow: workflow.id, tab: 'graph' }, query: {} });
+        if (r.refusal === 'not-approved' && workflow.id === BOOKING_WORKFLOW) sayWaits(bookingWaitsOf(automationNow()) ?? []);
+        else if (r.refusal === 'not-approved') say(t('marks.waitsSwitchOn', { workflow: name }), { route: { area: 'automation', view: 'workflow', workflow: workflow.id, tab: 'graph' }, query: {} });
         else say(t('marks.refused', { workflow: name, why: commandRefusalText(r) }));
         return;
       }
       if (!r.run) return;
-      say(runResultText(workflow, await rested(r.run)));
+      const run = await rested(r.run);
+      // An inbox run whose book step waited for «Einschalten» says so, not «fertig».
+      const waited = bookingWaitsNote(run);
+      if (waited) sayWaits(waited);
+      else say(runResultText(workflow, run));
       nav.refresh();
     } catch (e) { say(errorText(e)); }
   }
   return (
     <span className="wfbuttons">
-      {said?.item === id && (
+      {said?.item === id && said.waits ? <BookingWaits files={bookingWaitsOf(view) ?? []} go={(route) => nav.go({ route, query: {} })} onOn={() => nav.refresh()} /> : said?.item === id && (
         <span className="wfsaid" role="status" data-testid="workflow-said">
           {said.text}
           {said.go ? <> <button type="button" className="linkbtn" onClick={() => nav.go(said.go!)}>{t('marks.goSwitchOn')}</button></> : null}

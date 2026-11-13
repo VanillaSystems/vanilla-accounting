@@ -19,7 +19,9 @@ import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
 import { DropDialog, dropFiles, dropOpen, finishDrop } from './DropDialog.js';
 import { INTAKE, watchRuns, watchSteps } from '../automation/intake.js';
-import { STATIC_EXPORT } from '../lib/api.js';
+import { bookingWaitsNote } from '../automation/marks.js';
+import { bookingWaitsText } from '../lib/booking-waits.js';
+import { STATIC_EXPORT, api } from '../lib/api.js';
 import { noTitleBar } from '../desktop/bridge.js';
 import { Demo } from './Demo.js';
 import { ExportDialog } from '../areas/export/ExportDialog.js';
@@ -168,7 +170,9 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   useEffect(() => (STATIC_EXPORT ? undefined : watchRuns((run) => {
     reload.current();
     if (run.workflow !== INTAKE) return;
-    if (run.status === 'done') noteRef.current(t('intake.finished'));
+    // While «Buchen» waits for «Einschalten» the run read and linked but booked nothing (#413): it says why, not «fertig».
+    // The run's own note says whether its book step left payments while «Buchen» waited (#413), not the state now.
+    if (run.status === 'done') api.automationRun(run.id).then((d) => bookingWaitsNote(d), () => undefined).then((waits) => noteRef.current(waits ? bookingWaitsText(waits) : t('intake.finished')));
     else toast(t('intake.note.error', { detail: run.error ?? run.status }));
   })), [toast]);
   useEffect(() => (STATIC_EXPORT ? undefined : watchSteps(() => reload.current())), []);
