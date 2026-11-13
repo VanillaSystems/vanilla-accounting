@@ -643,7 +643,7 @@ function Opening({ books, nav, canEdit }: Props) {
         : account === equity ? t('error.openingAccount.equity', { account })
           : amount === null ? t('journal.errAmount')
             : cur && native === null && amount !== 0 ? t('error.openingAccount.foreign', { account, currency: cur })
-              : cur && native !== null && amount !== 0 && Math.sign(native!) !== Math.sign(amount) ? t('error.openingAccount.foreignMismatch', { account, currency: cur }) : '';
+              : cur && native !== null && amount !== 0 && Math.sign(native!) !== Math.sign(amount) ? t('error.openingAccount.foreignMismatch', { account, currency: cur, base: baseCurrency() }) : '';
     if (problem) { setErr(problem); return; }
     // Taken back, a foreign account's older opening without its balance in its currency comes back so (native: null).
     const nativeBefore = cur && openings[account] !== undefined ? natives[account]?.amount ?? null : natives[account]?.amount;

@@ -50,6 +50,14 @@ test('the fiduciary\'s invoice for making the balance sheet stays an invoice, wh
   for (const [name, text] of Object.entries(invoices)) assert.equal(documentKind(text, W).is, 'receipt', name);
 });
 
+test('a thin fiduciary invoice with Swiss VAT on it is no balance sheet: it stays unclear and goes to the model (second review)', () => {
+  const thin = {
+    'a VAT number, no title word': 'Treuhand Zugersee AG\nCHE-123.456.789 MWST\nJahresabschluss 2025: Bilanz und Erfolgsrechnung\nHonorar\nMWST 8.1 % 138.62\nTotal CHF 1\'850.00',
+    'a Swiss rate as a percent': 'Bilanz und Erfolgsrechnung 2025\nHonorar CHF 1\'711.38\nMWST 8.1 % CHF 138.62',
+  };
+  for (const [name, text] of Object.entries(thin)) assert.notDeepEqual(documentKind(text, W), { is: 'supporting', why: 'balance-sheet' }, name);
+});
+
 test('dropped as a PDF, its row names it a balance sheet', async () => {
   const r = await recognize(await textPdf(BILANZ.filter(Boolean)), 'Bilanz_31.12.2025_Treuhand.pdf');
   assert.deepEqual([r.kind, r.state, r.document], ['receipt', 'take', 'balance-sheet']);

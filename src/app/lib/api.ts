@@ -26,7 +26,7 @@ import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
 import { t, tData } from '../i18n/index.js';
 import { fmt, formatDate } from './utils.js';
-import { agreedBasis, vatSetup } from '../../engines/index.js';
+import { agreedBasis, baseCurrency, vatSetup } from '../../engines/index.js';
 import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
 import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminder, SentDocument } from '../../invoices/model.js';
@@ -307,7 +307,7 @@ export function errorText(e: unknown): string {
     case 'notWorkspace': return t('desktop.notWorkspace');
     case 'oldLayout': return t('desktop.oldLayout', { root: b.params.root });
     case 'setup': return setupText(b.params);
-    case 'openingAccount': return t(`error.openingAccount.${b.params.reason}`, { account: b.params.account, currency: b.params.currency ?? '' });
+    case 'openingAccount': return t(`error.openingAccount.${b.params.reason}`, { account: b.params.account, currency: b.params.currency ?? '', base: baseCurrency() });
     case 'openingNotFirstYear': return t('error.openingNotFirstYear', { year: b.params.year });
     case 'openingYearClosed': return t('company.openingClosed', { year: b.params.year });
     case 'mailSourceField': return t(`sources.field.${b.params.field}.invalid` as 'sources.field.address.invalid');
