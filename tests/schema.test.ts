@@ -109,7 +109,7 @@ test('books schema 7 (#254): books of schema 6 load and verify their seals, npm 
 });
 
 test('books schema 8 (#409): books of schema 7 load with their seals whole and no receipt given lines, the step adds nothing and a save writes 8 with no record changed; card lines and a line\'s link survive a save; an app of schema 7 refuses books of 8', async () => {
-  assert.equal(BOOKS_SCHEMA, 8);
+  assert.ok(BOOKS_SCHEMA >= 8);
   const dir = mkdtempSync(join(tmpdir(), 'schema-8-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const ws = workspaceAt(dir);
@@ -118,7 +118,7 @@ test('books schema 8 (#409): books of schema 7 load with their seals whole and n
   const before = booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]);
 
   const loaded = loadBooks(ws);
-  assert.equal(loaded.schema, 8);
+  assert.equal(loaded.schema, BOOKS_SCHEMA);
   assert.ok(sealsOf(loaded).checks.every((c) => c.status !== 'broken'), 'every seal still verifies');
   assert.ok(loaded.receipts.every((r) => !('cardLines' in r)) && loaded.mappings.every((m) => !('line' in m)), 'the step adds no field, not even an empty one');
 
@@ -127,7 +127,7 @@ test('books schema 8 (#409): books of schema 7 load with their seals whole and n
   const raw = { schema: 7, receipts: [{ id: 'r' }], mappings: [{ transactionRef: 't', receiptId: 'r' }] };
   assert.deepEqual(climb<Record<string, unknown>>(raw, 7, 8, BOOKS_MIGRATIONS, 'ledger.json', clone), raw);
   saveBooks(ws, loaded);
-  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, 8);
+  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, BOOKS_SCHEMA);
   assert.deepEqual(booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]), before, 'no record of the books changed');
 
   const again = loadBooks(ws);
@@ -143,6 +143,38 @@ test('books schema 8 (#409): books of schema 7 load with their seals whole and n
   assert.deepEqual(after.mappings.find((m) => m.receiptId === bill.id), { transactionRef: open.ref, receiptId: bill.id, by: 'human', line: 0 });
 
   assert.throws(() => climb<Record<string, unknown>>({}, 8, 7, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
+});
+
+test('books schema 9 (#450): books of schema 8 load with their seals whole and no receipt given a count, the step adds nothing and a second run changes nothing, a save writes 9 with no record changed; a count survives a save; an app of schema 8 refuses books of 9', () => {
+  assert.equal(BOOKS_SCHEMA, 9);
+  const dir = mkdtempSync(join(tmpdir(), 'schema-9-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const ws = workspaceAt(dir);
+  const ledger = JSON.parse(readFileSync(ws.paths.ledger, 'utf8'));
+  writeFileSync(ws.paths.ledger, JSON.stringify({ ...ledger, schema: 8 }, null, 2) + '\n');
+  const before = booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]);
+
+  const loaded = loadBooks(ws);
+  assert.equal(loaded.schema, 9);
+  assert.ok(sealsOf(loaded).checks.every((c) => c.status !== 'broken'), 'every seal still verifies');
+  assert.ok(loaded.receipts.every((r) => !('vatReadFailures' in r)), 'the step adds no count, not even 0');
+
+  const clone = (d: Record<string, unknown>) => structuredClone(d);
+  const raw = { schema: 8, receipts: [{ id: 'r', extractedText: 'Total 80.00' }] };
+  const once = climb<Record<string, unknown>>(raw, 8, 9, BOOKS_MIGRATIONS, 'ledger.json', clone);
+  assert.deepEqual(once, raw, 'old in, the same records out');
+  assert.deepEqual(climb<Record<string, unknown>>(once, 8, 9, BOOKS_MIGRATIONS, 'ledger.json', clone), once, 'a second run changes nothing');
+  saveBooks(ws, loaded);
+  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, 9);
+  assert.deepEqual(booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]), before, 'no record of the books changed');
+
+  const again = loadBooks(ws);
+  const open = again.receipts.find((r) => !!r.date && r.date > (again.config.closedThrough ?? ''))!;
+  open.vatReadFailures = 2;
+  saveBooks(ws, again);
+  assert.equal(loadBooks(ws).receipts.find((r) => r.id === open.id)?.vatReadFailures, 2);
+
+  assert.throws(() => climb<Record<string, unknown>>({}, 9, 8, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
 });
 
 function booksFiles(dir: string): string[] {

@@ -45,8 +45,13 @@ import { roleBefore } from './banks.js';
  * statement of an open period gains its lines on the next run of the inbox (its match step; every drop
  * starts one). An app of schema 7 would read a line's bill as a receipt of the whole
  * settlement and could claim its VAT on every line, so it must refuse these books.
+ * 9: a receipt counts its failed VAT reads (#450): `Receipt.vatReadFailures`, and from
+ * VAT_READ_TRIES on it is unreadable (src/accounting/receipt-due.ts). Books of schema 8 hold no
+ * count: the step adds nothing (absent means 0), so no sealed record and no filed receipt changes.
+ * An app of schema 8 would not see the count, read such a receipt on every run and leave its payment
+ * waiting with no task, so it must refuse these books.
  */
-export const BOOKS_SCHEMA = 8;
+export const BOOKS_SCHEMA = 9;
 /**
  * 2: every money account names its `role` (#88).
  * 3: `company.vat.reportingSince`, the year the basis began (#143). An app of schema 2 would read
@@ -79,6 +84,8 @@ export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   6: (doc) => doc,
   // No receipt has card lines and no link a line before: nothing is added (an empty `cardLines` would read as «read, no lines»); the number makes an older app refuse them.
   7: (doc) => doc,
+  // No receipt counts its failed VAT reads before; absent means none. The number makes an older app refuse the books.
+  8: (doc) => doc,
 };
 /** On the YAML document, so the comments of the manifest survive the step. */
 export const MANIFEST_MIGRATIONS: Ladder<Document> = {
