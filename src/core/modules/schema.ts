@@ -296,6 +296,8 @@ export interface DocumentsData {
   credit?: string[];
   /** The words of a payment's text that say only that it is a payment («Zahlung», «Auftrag», «Karte»): a rule on them alone is not offered (src/saving/hand-rule.ts, #383). */
   payment?: string[];
+  /** The words of a cash discount («Skonto», «escompte»): a percentage beside one is a discount a payment states or an invoice offers (src/intake/near-pairs.ts, #397). */
+  discount?: string[];
 }
 
 /** What a line of a customs invoice charges: the import VAT the carrier advanced, customs duty, the carrier's fees, freight. */

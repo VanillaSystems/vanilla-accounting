@@ -25,6 +25,8 @@ import { chargesOf } from './charges.js';
 import type { Businesses } from './batch-payers.js';
 import type { Firm } from './own-invoice.js';
 import { delaysOf } from './delays.js';
+import { nearPairs, type NearPair } from './near-pairs.js';
+import { partsOf } from '../accounting/batch-parts.js';
 import { appBooked, noReceiptOfItsOwn, receiptKnowledge } from '../booking/receipt-wait.js';
 import { loadClassifyContext } from '../booking/classify.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -285,6 +287,14 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
     });
   }
 
+  // Near pairs code may link (#397): the number named with a rounding or a stated discount, or the supplier with the exact amount within its terms; never past a link of this run or a candidate of the chain's own.
+  const sure = sureNearPairs(books, search, links.map((l) => l.c), doubts, lock.isClosed, opts, only);
+  if (sure.length) {
+    links.push(...sure.map((c) => ({ c, by: 'code' as const })));
+    const done = new Set(sure.map((c) => c.receipt));
+    result.left = result.left.filter((l) => !done.has(l.receipt));
+  }
+
   // «Beleg suchen» links only its own payment: what the model chose for its candidate receipts elsewhere waits for their own run.
   const asked = only && 'payment' in only ? links.filter((l) => l.c.payment === only.payment) : links;
   // A payment (or a collective payment's part) two receipts were linked to in this run goes to neither: the person decides.
@@ -302,6 +312,29 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
     log(l.filed ? `pays the filed payment ${l.payment} (${how}): receipt ${l.receipt}, not linked` : `linked ${how}: receipt ${l.receipt} → ${l.payment}${l.replaced ? ` in place of receipt ${l.replaced}, a whole period off the payment's day` : ''}`);
   }
   return result;
+}
+
+/**
+ * The near pairs code links (src/intake/near-pairs.ts), as candidates of the chain: those marked
+ * sure, not doubted by the model in this run, whose receipt and payment no link of this run takes and the chain's own search offers
+ * nothing else for (no other payment for the receipt, no other receipt for the payment), of one
+ * movement (no charge split across balances, no collective payment). With `only`, those of it.
+ */
+function sureNearPairs(books: Books, search: ReturnType<typeof searchPairs>, linking: readonly PairCandidate[], doubted: readonly PairCandidate[], isClosed: (date: string) => boolean, opts: ChainOptions, only?: { receipt: string } | { payment: string }): PairCandidate[] {
+  const charges = chargesOf(books.transactions, opts.toChf);
+  const byRef = new Map(books.transactions.map((t) => [t.ref, t]));
+  const busyReceipts = new Set(linking.map((c) => c.receipt));
+  const busyPayments = new Set(linking.flatMap((c) => c.charge));
+  const near = nearPairs(books, { isClosed, firm: opts.firm, businesses: opts.businesses, noReceipt: opts.noReceipt?.(books), noPayment: opts.noPayment?.(books) });
+  return near.flatMap((p: NearPair): PairCandidate[] => {
+    const t = byRef.get(p.payment);
+    if (!p.sure || !t || doubted.some((d) => d.receipt === p.receipt && d.payment === p.payment) || busyReceipts.has(p.receipt) || busyPayments.has(p.payment) || partsOf(t) || charges.of(t).refs.length > 1) return [];
+    if (only && ('receipt' in only ? only.receipt !== p.receipt : only.payment !== p.payment)) return [];
+    if ((search.byReceipt.get(p.receipt) ?? []).some((c) => c.payment !== p.payment) || (search.byPayment.get(p.payment) ?? []).some((c) => c.receipt !== p.receipt)) return [];
+    const days = p.days ?? 0;
+    return [{ receipt: p.receipt, payment: p.payment, leg: legOf(t), charge: [t.ref], filed: false, score: 0, amount: 'same', number: !!p.number, words: 0, business: p.supplier, days, offDays: days,
+      ...(p.gap.kind === 'rounded' || p.gap.kind === 'discount' ? { gap: p.gap.kind } : {}) }];
+  });
 }
 
 /**
