@@ -71,6 +71,12 @@ export function confirmAssumed(ws: Ws, key: QuestionKey): SetupProgress {
   return write(ws, Object.keys(answers).length ? { ...rest, assumed: { ...p.assumed, answers } } : rest);
 }
 
+/** The private shares of the setup as they stand now (#402): a share goes once a rule took it or she said «Nie». */
+export function setShares(ws: Ws, shares: PrivateShares | undefined): SetupProgress {
+  const { shares: _old, ...rest } = readProgress(ws);
+  return write(ws, shares && Object.keys(shares).length ? { ...rest, shares } : rest);
+}
+
 /** «Los geht's»: the setup ends; the books open as books from now on. */
 export function finishSetup(ws: Ws, now: string): SetupProgress {
   const p = readProgress(ws);

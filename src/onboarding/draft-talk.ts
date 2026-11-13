@@ -170,7 +170,7 @@ ${presets}
 - answers:
 ${QUESTION_ORDER.map(describe).join('\n')}
 - netRates: only with vatMethod "net-rate": the one or two net tax rates (Saldosteuersatz) the tax authority approved, in percent: [{"rate": 4.5, "label": "<activity>"}]
-- privateShares: only when the words name how much of the phone's or the car's use is private («öppe d Hälfti» of the phone: {"phone": 50}; «zu einem Drittel privat»: 33), in whole percent: {"phone": <percent>, "car": <percent>}. Give privateUse with it.
+- privateShares: only when the words name how much of the phone's or the car's use is private, in whole percent, with the person's own words that name it copied exactly («s Gschäftshandy bruuch ich au privat, öppe d Hälfti»: {"phone": {"percent": 50, "words": "öppe d Hälfti"}}; «zu einem Drittel privat»: 33). Give privateUse with it.
 - banks: the company's bank accounts, the whole list (those already given too): [{"bank": "<name>", "currency": "${baseCurrency}", "iban": "<only when written>"}]. Known names: ${Object.keys(BANKS).join(', ')}; another bank by its own name.
 
 The conversation so far:
@@ -193,7 +193,7 @@ Rules:
 - say: in the language of the person's message (when unclear: ${LANGUAGE[language as keyof typeof LANGUAGE] ?? 'German'}), addressing them informally, plain words, no markdown. When the person asks something, answer it in two or three sentences. Do not ask the next question and do not list what is still missing: the app asks the step waiting itself, with buttons, right below your words. Ask back only when the message tried to say something you could not read («welche Bank meinst du?»), once and briefly; otherwise end without a question. Do not greet the person by a name: who types need not be the owner. Never say that you took over, saved, noted or corrected anything, and never call a UID or an IBAN valid: the app checks every answer, saves it or refuses it, and shows which. When the words name a private share, do not explain what happens with it at the year end: the app says itself what it does with the share.
 
 Answer with only this JSON object and nothing else; leave out every key you have nothing for:
-{"say": "...", "firm": {"name": "...", "uid": "...", "owner": "..."}, "preset": "...", "answers": {"<key>": "<value>" or ["<value>"]}, "netRates": [{"rate": 0, "label": "..."}], "banks": [{"bank": "...", "currency": "...", "iban": "..."}], "privateShares": {"phone": 50}}`;
+{"say": "...", "firm": {"name": "...", "uid": "...", "owner": "..."}, "preset": "...", "answers": {"<key>": "<value>" or ["<value>"]}, "netRates": [{"rate": 0, "label": "..."}], "banks": [{"bank": "...", "currency": "...", "iban": "..."}], "privateShares": {"phone": {"percent": 50, "words": "..."}}}`;
 }
 
 const current = (d: SetupDraft, p: DraftPatch): unknown =>
@@ -276,7 +276,10 @@ export function applyTalk(d: SetupDraft, out: TalkOutput, words: readonly string
   if (said && Object.keys(said).length && !draft.firm && !same(d.said, said)) draft = { ...draft, said };
   // The private share her words named (#402), of what the setup says is used privately: kept with her words, offered later as a rule of the provider.
   const used = ([] as string[]).concat(draft.answers.privateUse ?? []);
-  const named = parseShares(Object.fromEntries(Object.entries(out.shares ?? {}).filter(([item]) => used.includes(item)).map(([item, percent]) => [item, { percent, said: words.at(-1) ?? '' }])));
+  // Her words that name the share, only as she wrote them (the model's quote checked against her message), never the whole message (#402).
+  const latest = words.at(-1) ?? '';
+  const shareOf = (v: unknown) => (isMap(v) ? { percent: v.percent, said: typeof v.words === 'string' && v.words.trim() && said_in(v.words, latest) ? v.words.trim() : '' } : { percent: v, said: '' });
+  const named = parseShares(Object.fromEntries(Object.entries(out.shares ?? {}).filter(([item]) => used.includes(item)).map(([item, v]) => [item, shareOf(v)])));
   if (named) draft = { ...draft, shares: { ...draft.shares, ...named } };
   // A firm not registered has no method, basis, period or rates: what the words gave of them is dropped with its marks, so a later «ja» asks them again (#347, #369).
   if (draft.answers.vatRegistered === 'no') {

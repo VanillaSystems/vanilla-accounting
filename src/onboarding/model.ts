@@ -51,16 +51,20 @@ export interface SetupProgress {
 }
 
 /** What may be used privately (the setup's privateUse), and the share of it the person named in her words: the percent, and her words as she said them. */
-export type PrivateShares = Partial<Record<'car' | 'phone', { percent: number; said: string }>>;
+export type PrivateShares = Partial<Record<'car' | 'phone', PrivateShare>>;
+
+/** One share: the percent, the words of hers that named it (empty when they could not be told apart), and the businesses she said «Nicht jetzt» to. */
+export interface PrivateShare { percent: number; said: string; dismissed?: string[] }
 
 /** Shares as read from disk or from the model: a whole percent between 1 and 99 for car or phone; her words cut to 300 characters. Undefined when none is left. */
 export function parseShares(raw: unknown): PrivateShares | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
   const out: PrivateShares = {};
   for (const item of ['car', 'phone'] as const) {
-    const v = (raw as Record<string, unknown>)[item] as { percent?: unknown; said?: unknown } | undefined;
+    const v = (raw as Record<string, unknown>)[item] as { percent?: unknown; said?: unknown; dismissed?: unknown } | undefined;
     const percent = typeof v?.percent === 'number' ? Math.round(v.percent) : NaN;
-    if (percent >= 1 && percent <= 99) out[item] = { percent, said: typeof v?.said === 'string' ? v.said.slice(0, 300) : '' };
+    const dismissed = Array.isArray(v?.dismissed) ? v.dismissed.filter((d): d is string => typeof d === 'string') : [];
+    if (percent >= 1 && percent <= 99) out[item] = { percent, said: typeof v?.said === 'string' ? v.said.slice(0, 300) : '', ...(dismissed.length && { dismissed }) };
   }
   return Object.keys(out).length ? out : undefined;
 }

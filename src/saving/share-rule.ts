@@ -20,7 +20,8 @@ import { homeOf, RULES_DIR } from '../knowledge/layers.js';
 import { payerKey, payerNames } from '../knowledge/payer.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { draftDir } from './changes.js';
-import { readProgress } from '../onboarding/store.js';
+import { readProgress, setShares } from '../onboarding/store.js';
+import { loadChart } from '../workspace/chart.js';
 import { setup } from '../engines/index.js';
 
 /** GET /api/rules/share: the rule a split payment offers, or none. */
@@ -62,16 +63,23 @@ interface Split { account: string; vat: string | undefined; share: number; ownUs
  * (setup.yaml `privateUse`: the phone's, the car's) whose share the person named in the setup
  * (onboarding.json `shares`, #402): that share, offered as the rule of its business on its card.
  */
+/** Whether the firm's own chart names `account` as the module's chart does: a firm that uses the number for something else gets no offer. */
+function sameAccount(ws: Workspace, account: string): boolean {
+  const norm = (s: string | undefined) => (s ?? '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  const theirs = existsSync(ws.paths.accounts) ? (JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as Array<{ number: string; name?: string }>).find((a) => a.number === account) : undefined;
+  const ours = loadChart().accounts.find((a) => a.number === account);
+  return !theirs || !ours || norm(theirs.name) === norm(ours.name);
+}
+
 function setupSplit(ws: Workspace, tx: BankTransaction, entries: readonly JournalEntry[], bank: string): Split | undefined {
   const shares = readProgress(ws).shares;
   const pays = entries.filter((e) => e.accountDebit === bank || e.accountCredit === bank);
   if (!shares || tx.direction !== 'DBIT' || pays.length !== 1 || entries.length !== 1) return undefined;
   const account = pays[0].accountDebit === bank ? pays[0].accountCredit : pays[0].accountDebit;
-  const uses = setup().privateUse ?? {};
-  const item = (['phone', 'car'] as const).find((k) => uses[k] === account && shares[k]);
-  if (!item) return undefined;
-  const { percent, said } = shares[item]!;
-  return { account, vat: pays[0].vatCode, share: (tx.amount * percent) / 100, ownUse: false, setup: { item, said } };
+  // The phone's only: a car's costs come from many businesses (each petrol station), so its share stays the year close's (#402).
+  if (setup().privateUse?.phone !== account || !shares.phone || !sameAccount(ws, account)) return undefined;
+  const { percent, said } = shares.phone;
+  return { account, vat: pays[0].vatCode, share: (tx.amount * percent) / 100, ownUse: false, setup: { item: 'phone', said } };
 }
 
 /**
@@ -141,6 +149,15 @@ export function shareOffer(ws: Workspace, books: Books, ref: string, context: Cl
   const setup = split.setup ? { setup: split.setup } : {};
   const id = paymentFacts(books, tx, context, fx).counterparty;
   const cp = id ? context.counterparties?.find((c) => c.id === id) : undefined;
+  if (split.setup) {
+    // Once per business: on its first payment booked on the account, never after «Nicht jetzt» (#402).
+    const key = cp?.id ?? payerKey(tx);
+    if (!key || readProgress(ws).shares?.phone?.dismissed?.includes(key)) return undefined;
+    const keyOf = (t: BankTransaction) => (cp ? paymentFacts(books, t, context, fx).counterparty : payerKey(t));
+    const onAccount = (t: BankTransaction) => books.journalEntries.some((e) => e.transactionRef === t.ref && (e.accountDebit === account || e.accountCredit === account));
+    const first = books.transactions.filter((t) => t.direction === 'DBIT' && onAccount(t) && keyOf(t) === key).sort((a, b) => a.date.localeCompare(b.date) || a.ref.localeCompare(b.ref))[0];
+    if (first?.ref !== tx.ref) return undefined;
+  }
   if (cp) return { ref: tx.ref, percent, booking, business: { id: cp.id, name: cp.name }, path: homeOf('workspace', cp.role, cp.id), ...setup };
   const payer = payerKey(tx);
   return payer ? { ref: tx.ref, percent, booking, payer, payerName: payerNames([tx])[payer] ?? payer, path: `${RULES_DIR}/booking.guide.yaml`, ...setup } : undefined;
@@ -181,4 +198,26 @@ export function draftShareRule(ws: Workspace, ref: string, today = new Date().to
   mkdirSync(dirname(draft), { recursive: true });
   writeFileSync(draft, withShareRule(text, offer, today));
   return offer.path;
+}
+
+/** «Nicht jetzt» on the setup's offer (#402): not offered again for this payment's business; `never`: the share goes, no business is offered it again. */
+export function dismissSetupShare(ws: Workspace, ref: string, never = false): boolean {
+  const offer = shareOffer(ws, loadBooks(ws), ref);
+  const shares = readProgress(ws).shares;
+  if (!offer?.setup || !shares?.phone) return false;
+  if (never) { const { phone: _p, ...rest } = shares; setShares(ws, rest); return true; }
+  const key = offer.business?.id ?? offer.payer!;
+  setShares(ws, { ...shares, phone: { ...shares.phone, dismissed: [...new Set([...(shares.phone.dismissed ?? []), key])] } });
+  return true;
+}
+
+/** After a keep (#402): the setup's phone share goes once a company rule books a private share on the phone's account; it did its job. */
+export function clearTakenShares(ws: Workspace, context: ClassifyContext = loadClassifyContext(ws)): void {
+  const shares = readProgress(ws).shares;
+  const account = setup().privateUse?.phone;
+  if (!shares?.phone || !account) return;
+  const taken = (context.rules ?? []).some((p) => p.rule.then.kind === 'book' && p.rule.then.booking.account === account && p.rule.then.booking.private !== undefined);
+  if (!taken) return;
+  const { phone: _p, ...rest } = shares;
+  setShares(ws, rest);
 }
