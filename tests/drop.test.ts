@@ -601,6 +601,40 @@ test('the row of a re-drop that only repaired cannot take the statement back (#4
   }
 });
 
+test('seven filed and one open payment on an empty ref, her correction entry on it: dropped again, nothing of hers moves to the open one (#419)', async () => {
+  const x = await emptyRefBooks();
+  try {
+    x.close('2026-09-30');
+    const oct = await x.drop('wise-oct.xml', x.oct);
+    assert.equal(oct.state, 'taken', oct.message);
+    // One October payment as a read before #401 left it, and her correction of the filed quarter on the empty ref.
+    const ref = [...oct.statement!.refs].sort()[0];
+    const dir = join(x.api.root, 'transactional-data/2026/books');
+    for (const [file, key] of [['transactions.jsonl', 'ref'], ['mappings.jsonl', 'transactionRef'], ['entries.jsonl', 'transactionRef']] as const) {
+      const lines = readFileSync(join(dir, file), 'utf8').split('\n').filter((l) => l.trim()).map((l) => { const j = JSON.parse(l); if (j[key] === ref) j[key] = ''; return JSON.stringify(j); });
+      if (file === 'entries.jsonl') lines.push(JSON.stringify({ id: 'hers-419', transactionRef: '', date: '2026-10-20', accountDebit: '6570', accountCredit: '1024', amount: 12, origin: 'manual', corrects: '2026-Q3', description: 'Korrektur' }));
+      writeFileSync(join(dir, file), `${lines.join('\n')}\n`);
+    }
+    const hersLine = () => readFileSync(join(dir, 'entries.jsonl'), 'utf8').split('\n').find((l) => l.includes('"hers-419"'));
+    const herBefore = hersLine();
+    const filed = (await x.wise()).filter((t) => t.date <= '2026-09-30');
+    assert.equal(filed.filter((t) => !t.ref).length, 7);
+    assert.equal((await x.wise()).filter((t) => !t.ref && t.date > '2026-09-30').length, 1, 'one open payment on the empty ref');
+
+    const row = await x.drop('wise-oct.xml', x.oct);
+    assert.deepEqual(row.statement?.emptyRefs, { left: 1, why: 'yours' }, 'her entry may belong to a filed payment: the repair stops');
+    assert.ok(herBefore);
+    assert.equal(hersLine(), herBefore, 'her entry byte for byte');
+    const after = await x.wise();
+    assert.deepEqual(after.filter((t) => t.date <= '2026-09-30'), filed, 'the filed seven as filed');
+    assert.equal(after.filter((t) => !t.ref && t.date > '2026-09-30').length, 1, 'the open one as it was');
+    assert.ok(!after.some((t) => t.ref === ref), 'none added beside it');
+  } finally {
+    await x.session.rest().catch(() => {});
+    await x.api.stop();
+  }
+});
+
 test('«Auszug entfernen» takes the payments its file left on an empty ref along; dropped again, it reads them afresh (#401)', async () => {
   const x = await emptyRefBooks();
   try {

@@ -440,7 +440,8 @@ Two markers flag an entry you must read before you update:
   an empty reference: none could be opened, linked or booked, and a receipt linked to one was linked
   to all. Books that hold them keep them as they are (a filed one as filed) and import again; the
   same file dropped again gives the open ones their bank's reference and says so («7 Zahlungen haben
-  jetzt ihre Referenz der Bank»), unless an entry or link of hers stands on several of them at once.
+  jetzt ihre Referenz der Bank»), unless an entry or link of hers stands on several of them at once,
+  filed ones among them (#419).
   No write can put a payment, a link or an entry on an empty reference any more. Such payments in a
   filed period no longer block every later statement; «Auszug entfernen» takes them along with their
   file; a second Wise account added in the drop row reads as a Wise account.
