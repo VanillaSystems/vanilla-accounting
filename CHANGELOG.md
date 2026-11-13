@@ -424,12 +424,15 @@ Two markers flag an entry you must read before you update:
 ### Fixed
 
 - The drop window with many files (#453): the line «Gesamt 51 % · 1 von 43 Dateien fertig» no
-  longer lies over the tabs (it shrank to nothing once the list was long); only the list gives way.
-  From 10 files the window shows an overview: one bar for the whole drop and where the files stand,
-  in counts («45 Dateien · 9 brauchen dich · 2 Kontoauszüge eingelesen · 12 einer Zahlung
-  zugeordnet · …»), each a filter of the list in place of the tabs. What needs her is listed first
-  under its count; the files still worked on or done are a line each with their count, opened by a
-  click. The counts come from the states the rows show and follow them live.
+  longer lies over the tabs (it shrank to nothing once the list was long), and «Schliessen» no
+  longer falls below a small window: between the head and the foot, what came of the drop, the
+  list and the lines below it scroll as one. From 10 files the window shows an overview: one bar
+  for the whole drop with what is done now («3 werden hochgeladen · 6 warten auf den Start · 1
+  sucht die Zahlung»), and where the files stand, in counts («45 Dateien · 9 brauchen dich · 2
+  Kontoauszüge eingelesen · 12 einer Zahlung zugeordnet · …»), each a filter of the list in place
+  of the tabs, kept for the whole drop. What needs her is listed first; the files still worked on
+  or done are a line each with their count, opened by a click. The counts come from the states the
+  rows show and follow them live; a filter whose last file left it shows the whole drop again.
 - A repayment to the owner before any of her outlays is booked (#457): «Spesen Juli 2026» said
   «wartet auf ihren Beleg; ist er verknüpft, bucht die App sie», though no receipt is ever linked to
   it. While receipts that could be hers are filed (read, dated before it, paid by no payment of the

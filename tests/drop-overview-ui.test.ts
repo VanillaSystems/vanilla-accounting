@@ -24,11 +24,20 @@ const locked: DropRow = { key: 'z', id: 'z', name: 'Belege_Q3.zip', size: 1, kin
 const known: DropRow = { key: 'k', id: 'k', name: 'Alpentel_Rechnung_2026-07.pdf', size: 1, kind: 'receipt', state: 'duplicate', reason: 'duplicate' };
 const ROWS = [locked, ...taking, ...working, known];
 
-/** A drop at its end: nothing worked on, files the books hold, a ZIP and two statements that ask, so the closing lines and the hints below the list are all there. */
+/**
+ * A drop at its end: nothing worked on; a ZIP and two statements that ask; files the books hold, no
+ * receipt, set aside, refused and taken back: each closing sentence and each hint below the list is
+ * there, as long as a real drop's end at the narrowest window.
+ */
 const END: DropRow[] = [
   locked,
   { key: 'a1', id: 'a1', name: 'Kontoauszug_Juli.pdf', size: 1, kind: 'statement-pdf', state: 'asks', asked: { file: 'Bank/Kontoauszug_Juli.pdf', month: '2026-07' } },
   { key: 'a2', id: 'a2', name: 'Kontoauszug_August.pdf', size: 1, kind: 'statement-pdf', state: 'asks', reason: 'not-imported' },
+  { key: 'q1', id: 'q1', name: 'Ferien.jpg', size: 1, kind: 'photo', state: 'quarantine', reason: 'not-receipt' },
+  { key: 'q2', id: 'q2', name: 'Kaputt.pdf', size: 1, kind: 'receipt', state: 'quarantine', reason: 'unreadable' },
+  { key: 'x1', id: 'x1', name: 'Offerte.docx', size: 1, state: 'refused', reason: 'office' },
+  { key: 'u1', id: 'u1', name: 'Zurueck.pdf', size: 1, kind: 'receipt', state: 'undone' },
+  { key: 'p1', id: 'p1', name: 'Vielleicht.pdf', size: 1, kind: 'receipt', state: 'duplicate', reason: 'possible-duplicate', twin: { of: 'orig', name: 'Original.pdf', relation: 'duplicate', why: 'same-text' } },
   ...Array.from({ length: 40 }, (_, i): DropRow => ({ ...known, key: `k${i}`, id: `k${i}`, name: `Alt_${i + 1}.pdf` })),
 ];
 
@@ -38,6 +47,8 @@ async function fakeDrop(page: Page, session: () => { id: string; rows: DropRow[]
   page.on('request', (r) => {
     const path = new URL(r.url()).pathname;
     if (!path.startsWith('/api/drop')) { void r.continue(); return; }
+    // A file the server cannot take (a lost connection): the window names it in a line of its own, one more line below the list.
+    if (new URL(r.url()).searchParams.get('name') === 'Kaputt.pdf') { void r.respond({ status: 500, contentType: 'application/json', body: '{"error":"Verbindung unterbrochen"}' }); return; }
     if (r.method() === 'DELETE') { void r.respond({ status: 200, contentType: 'application/json', body: '{"ok":true}' }); return; }
     void r.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(session()) });
   });
@@ -79,11 +90,11 @@ async function placedAtEveryWidth(page: Page, state: string): Promise<void> {
 
 const filters = (page: Page) => page.$$eval('[data-testid=drop-filter]', (bs) => bs.map((b) => ({ name: (b.getAttribute('aria-label') ?? (b as HTMLElement).innerText).replace(/\s+/g, ' ').trim(), stage: (b as HTMLElement).dataset.stage, pressed: b.getAttribute('aria-pressed') })));
 const listed = (page: Page) => page.$$eval('[data-testid=drop-row]', (rs) => rs.map((r) => (r as HTMLElement).dataset.file));
-const dropOne = (page: Page) => page.evaluate(() => {
+const dropOne = (page: Page, names = ['Rechnung_01.pdf']) => page.evaluate((names) => {
   const dt = new DataTransfer();
-  dt.items.add(new File(['%PDF-1.4'], 'Rechnung_01.pdf', { type: 'application/pdf' }));
+  for (const name of names) dt.items.add(new File(['%PDF-1.4'], name, { type: 'application/pdf' }));
   dispatchEvent(new DragEvent('drop', { dataTransfer: dt, clientX: 300, clientY: 300, bubbles: true, cancelable: true }));
-});
+}, names);
 
 test('a drop of many files: every part in its place, the overview counts and filters the rows, live, while worked on and at its end', { skip: noBrowser, timeout: 400_000 }, async () => {
   const app = await openApp();
@@ -138,8 +149,8 @@ test('a drop of many files: every part in its place, the overview counts and fil
     await page.click('[data-testid=drop-close]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=drop-dialog]'));
     session = { id: 'end', rows: END };
-    await dropOne(page);
-    await page.waitForFunction(() => document.querySelector('[data-testid=drop-dialog]')?.getAttribute('data-working') === 'false' && !!document.querySelector('[data-testid=close-hint]'), { timeout: 30_000 });
+    await dropOne(page, ['Rechnung_01.pdf', 'Kaputt.pdf']);
+    await page.waitForFunction(() => document.querySelector('[data-testid=drop-dialog]')?.getAttribute('data-working') === 'false' && !!document.querySelector('[data-testid=close-hint]') && document.querySelector('[data-testid=drop-dialog]')!.textContent!.includes('Kaputt.pdf'), { timeout: 30_000 });
     await placedAtEveryWidth(page, 'end');
     assert.ok(await page.$('[data-testid=drop-overview] [data-testid=drop-filter]'), 'the filters stay at the end');
     assert.deepEqual(app.errors, []);

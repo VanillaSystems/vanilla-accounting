@@ -48,8 +48,12 @@ page adds the dialog and how it hands over to the workflows of 0.4.0.
    the files counted by stage (braucht dich, in Arbeit, Kontoauszüge eingelesen, einer Zahlung
    zugeordnet, gelesen ohne Zahlung, abgelegt ohne eigene Zahlung, nicht übernommen), each a filter
    button. Each row's stage is a cut of its closing group (the state its row shows), so the counts,
-   the closing lines and the rows agree. Unfiltered, the rows that need the person are listed first
-   under their count; every other stage is one folded line with its count that opens its rows.
+   the closing lines and the rows agree. The bar's line says what is done now with the files worked
+   on (uploading, waiting to start, being read, looking for the payment, being booked: the run's
+   state of each row). Unfiltered, the rows that need the person are listed first; every other
+   stage is one folded heading with its count that opens its rows. Once shown, the overview stays
+   for the drop. Between the head (and overview) and the foot, the closing lines, the list and the
+   hints scroll as one, so «Schliessen» is always in the dialog.
 6. **Quick edits:** «Ändern» on a row edits its name and kind; × removes it. Nothing is written
    while the dialog is open.
 7. **«Hinzufügen»** moves the files into the inbox, which starts the workflows by their
