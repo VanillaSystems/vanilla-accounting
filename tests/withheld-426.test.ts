@@ -99,7 +99,7 @@ test('a payment booked again is told what was open before it, not after its own 
   assert.equal(withheldFor(books, { ...AKONTO, ref: 'later', date: '2026-09-30' }, '2270'), undefined, 'after the Akonto payment 2270 holds nothing');
 });
 
-test('only a contribution payment is told: not a wage (whatever its text), a supplier, a purchase with Swiss VAT, money in, nor anything when wages are booked net', async () => {
+test('only a contribution payment is told: not a wage (whatever its text), a supplier, a purchase with Swiss VAT, money in; with wages booked net, that 2270 holds nothing (#470)', async () => {
   const plain = { ...WAGES.find((w) => w.ref === 'LO-09')!, description: 'Überweisung' };
   const RENT = pay('RENT', '2026-09-01', 1800, 'Immobilien Muster AG', 'Miete September');
   const ws = firm([...gross.filter((e) => e.transactionRef !== 'LO-09'), ...pension], [RENT]);
@@ -110,7 +110,8 @@ test('only a contribution payment is told: not a wage (whatever its text), a sup
   for (const ref of ['LO-09', 'DR', 'RENT']) assert.equal(line(m.said[ref]), undefined, ref);
   const net = MONTHS.flatMap((mo) => [entry(`LO-${mo}`, `2026-${mo}-24`, '5000', '1020', 4200), entry(`LH-${mo}`, `2026-${mo}-24`, '5000', '1020', 1450.8)]);
   const none = await run(firm([...net, entry('PK', '2026-07-10', '5720', '1020', 1195.2)]), ['AK']);
-  assert.equal(line(none.said.AK), undefined, 'wages booked net: 2270 holds nothing');
+  assert.equal(line(none.said.AK), undefined, 'wages booked net: no amount');
+  assert.match(none.said.AK, /Withheld from wages: account 2270 holds nothing/, 'wages booked net: the whole contribution is the employer\'s (#470)');
   assert.equal(withheldFor({ journalEntries: gross }, { ...AKONTO, direction: 'CRDT' }, '2270'), undefined, 'money in');
 });
 
@@ -120,14 +121,16 @@ test('a payee booked on the contribution accounts before is told too: the pensio
   assert.equal(line(said.PK2), '1200');
 });
 
-test('code holds the cap: two contribution payments that each take the whole credit off 2270, the second is not booked', async () => {
+test('code holds the cap: two contribution payments that each take the whole credit off 2270, the second books what 2270 no longer holds on 5700 (#470)', async () => {
   const AK2 = pay('AK2', '2026-09-28', 2683.5, 'Ausgleichskasse Luzern', 'Akonto Nachtrag');
   const greedy = model((_ref, amount, said) => { const open = Number(line(said) ?? 0); return [{ accountDebit: '2270', accountCredit: '', amount: open, vat: 'none' }, { accountDebit: '5700', accountCredit: '', amount: Math.round((amount - open) * 100) / 100, vat: 'none' }]; });
   const { books, outcome } = await run(firm([...gross, ...pension], [AK2]), ['AK', 'AK2'], greedy);
-  assert.deepEqual(outcome.classified, ['AK']);
-  assert.equal(outcome.failed.length, 1);
-  assert.equal(outcome.failed[0].refusal?.code, 'classifyWithheldOver');
-  assert.equal(books.journalEntries.filter((e) => e.transactionRef === 'AK2').length, 0);
+  assert.deepEqual(outcome.classified, ['AK', 'AK2']);
+  assert.deepEqual(outcome.failed, []);
+  const on = (ref: string, account: string) => books.journalEntries.filter((e) => e.transactionRef === ref && e.accountDebit === account).reduce((s, e) => s + e.amount, 0);
+  assert.equal(on('AK', '2270'), 1200);
+  assert.equal(on('AK2', '2270'), 0, '2270 is cleared by the first');
+  assert.equal(on('AK2', '5700'), 2683.5);
 });
 
 const PAYEES = new Set(['AK']);

@@ -4287,6 +4287,7 @@ export default {
     'rules.say.customsDirect': 'IVA all’importazione pagata direttamente alla dogana: la decisione d’imposizione è il giustificativo',
     'rules.say.customsUnproven': 'IVA all’importazione {currency} {amount} senza deduzione dell’imposta precedente: la fattura del corriere non la prova, solo la decisione d’imposizione IVA della dogana che nomina l’impresa come importatrice. Una volta collegata, l’app contabilizza la deduzione',
     'rules.say.importVatRate': 'IVA all’importazione contabilizzata senza imposta precedente, {code} tolto: l’imposta precedente su {account} esiste solo con la decisione d’imposizione IVA della dogana, come deduzione senza contropartita, mai come aliquota sull’IVA all’importazione stessa',
+    'rules.say.withheldCapped': 'Il conto {account} delle trattenute salariali deteneva quel giorno solo {currency} {open}: i {currency} {moved} che vi sarebbero stati registrati in più come quota dei dipendenti sono registrati come contributo del datore di lavoro su {to}.',
     'rules.say.customsProven': 'imposta precedente sull’IVA all’importazione {currency} {amount} secondo la decisione d’imposizione {file}',
     'rules.say.customsDeduction': 'imposta precedente IVA all’importazione secondo la decisione d’imposizione {file}',
     'rules.say.customsCorrection': 'correzione della registrazione {id} ({period}): imposta precedente IVA all’importazione secondo la decisione d’imposizione {file}, arrivata dopo il rendiconto',
