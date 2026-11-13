@@ -428,11 +428,17 @@ Two markers flag an entry you must read before you update:
   bill states, not the code's on what was paid. A phone bill paid two Rappen above its total
   claimed two Rappen more in Ziffer 405 than the bill states; it now claims the bill's tax, booked
   as the payment on the expense account without a code and a one-legged line of the tax-amount
-  code (I81-2) for the bill's tax, the rounding without input tax. So for the AI, a rule and a booking by hand alike, only in
-  the books' currency, only when the linked bill states its total and its tax, the payment lies
+  code (I81-2) for the bill's tax, the rounding without input tax. So for the AI, a rule and a
+  booking by hand alike, only in the books' currency, only when the linked bill states its total and its tax, the payment lies
   within 0.025 of that total and the stated tax within 0.10 of the code's. A payment less a cash
   discount still books its tax on what was paid (#397). Only new bookings change; booked payments
   and filed quarters stay as they are. The demo books do not change.
+- The open list under a return (#477) no longer opens with «Nichts davon hält die Abrechnung auf»
+  while payments of the period are unbooked. Its first sentence names them, the money in and the
+  money out with their count and sum: «4 Zahlungseingänge über CHF … und ein Zahlungsausgang über
+  CHF … sind noch nicht gebucht: die Zahl ist noch nicht endgültig.» These
+  are the same payments the return's page counts beside «noch nicht endgültig». With every payment
+  booked and nothing withheld the sentence is as before. What withholds «Freigegeben» is unchanged.
 - The drop window with many files (#453): the line «Gesamt 51 % · 1 von 43 Dateien fertig» no
   longer lies over the tabs (it shrank to nothing once the list was long), and «Schliessen» no
   longer falls below a small window: between the head and the foot, what came of the drop, the
