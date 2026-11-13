@@ -184,7 +184,7 @@ export interface ProviderProposal { account: string; name?: string; vat?: string
 export interface PayoutUnseen { provider: string; name: string; since: string; through: string; banks: string[]; file: string; account?: string }
 
 /** Why an order of a report was not booked by code (src/booking/sales-report.ts ReportHold). */
-export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' }
+export interface ReportHeld { order: string; why: 'noTax' | 'rate' | 'abroadTax' | 'foreignTax' | 'country' | 'changed' | 'noRate' | 'refundDate' | 'refundMismatch' | 'noPayment' | 'legacy' | 'charges' | 'refundSplit' | 'rateTooMany'; rates?: number; most?: number }
 
 /**
  * What a report booked (src/intake/sales-report-import.ts): orders, refunds and fees booked; `known`
@@ -212,6 +212,8 @@ export interface ReportSummary {
   other: number; ways: string[]; waysMore: number; test: number; unpaid: number;
   held: ReportHeld[]; heldMore: number; unread: number; proofs: number;
   corrections: string[];
+  /** Orders of two VAT rates booked by their line items, a line per rate (#416): the first ones, `splitMore` the rest. */
+  split: string[]; splitMore: number;
 }
 
 /** `duplicate`: the same bytes; `possible-duplicate`: the same facts, asked; `same`: the person said it is the same; `not-receipt`: its words say so (`document` says what it is). */

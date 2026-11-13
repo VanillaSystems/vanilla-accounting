@@ -18,7 +18,9 @@ import { checkSeals, closedPart, type SealReport } from './seal.js';
 import { parseBookedBy } from './booked-by.js';
 import { documentWordsInUse, typeStatements } from './statement-facts.js';
 import { reconcilePendingThrough } from './reconcile.js';
-import { lockedThrough as lockLine } from './lock-line.js';
+import { dayLock } from './lock-line.js';
+
+export { booksOpen } from './lock-line.js';
 import { BOOK_FILES, PARTS, fromJsonl, isClosedYear, keyOf, placement, splitByYear, statementFile, toJsonl, type InClosedYear, type Part } from './years.js';
 
 export type Books = Index & { journalEntries: JournalEntry[]; config: AccountingConfig };
@@ -426,24 +428,11 @@ export function closeThroughSaved(ws: Workspace, books: Books, end: string): voi
   saveBooks(ws, books);
 }
 
-/**
- * The books' first day: 1 January of the first year with opening balances, else of the year of the
- * earliest payment; undefined for books with neither. The year before is the opening balances'
- * (#39): no entry is dated in it and no year folder is made for it.
- */
-export function booksOpen(books: { config?: Pick<AccountingConfig, 'openingBalances'>; transactions?: readonly { date: string }[] }): string | undefined {
-  const year = Object.keys(books.config?.openingBalances ?? {}).sort()[0]
-    ?? (books.transactions ?? []).reduce<string | undefined>((m, t) => (!m || t.date < m ? t.date : m), undefined)?.slice(0, 4);
-  return year && `${year}-01-01`;
-}
-
 export function periodLock(books: Pick<Index, 'config'> & { transactions?: readonly { date: string }[] }): PeriodLock {
-  let first: { day: string | undefined } | undefined;
-  const opens = () => (first ??= { day: booksOpen(books) }).day;
+  const days = dayLock(books);
   const closedThrough = books.config?.closedThrough;
   const approved = books.config?.approvedReturn;
-  const lockedThrough = lockLine(books.config);
-  const isClosed = (date: string | undefined) => !!lockedThrough && !!date && date <= lockedThrough;
+  const { lockedThrough, isClosed, beforeBooks } = days;
   const heldBy = (date: string | undefined) => (isClosed(date) && !(closedThrough && date! <= closedThrough) ? approved : undefined);
   const closedText = (date: string | undefined) => {
     const held = heldBy(date);
@@ -460,8 +449,8 @@ export function periodLock(books: Pick<Index, 'config'> & { transactions?: reado
     assertOpen(date, what) {
       if (isClosed(date)) throw new ClosedPeriodError(`${closedText(date)} ${what}`, closedThrough, undefined, heldBy(date)?.period);
     },
-    get opens() { return opens(); },
-    beforeBooks: (date) => { const day = opens(); return !!day && !!date && date < day; },
+    get opens() { return days.opens; },
+    beforeBooks,
   };
 }
 

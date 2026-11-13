@@ -8,6 +8,7 @@ import { aiIsOff } from '../../ai/ai-off.js';
 import { api, errorText } from '../../lib/api.js';
 import './automation.css';
 import { AskAi } from '../../assistant/AskAi.js';
+import { runContext } from '../../assistant/context.js';
 import { AUTOMATION_TABS, type Route, type RouteOf } from '../../shell/route.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { isKey, language, t, tData } from '../../i18n/index.js';
@@ -629,7 +630,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
         {data.status === 'waiting' ? <button type="button" className="btn" onClick={() => nav.select({ area: 'automation', view: 'tasks', run: id })}>{t('automation.openTask')}</button> : null}
         {data.status === 'stuck' || data.status === 'parked' ? <button type="button" className="btn" onClick={act({ kind: 'resume', run: id })}>{t('automation.resume')}</button> : null}
         {data.status === 'done' || data.status === 'stuck' ? <button type="button" className="btn ghost" onClick={act({ kind: 'replay', run: id })}>{t('automation.replay')}</button> : null}
-        <AskAi context={{ kind: 'run', id, label: t('automation.run', { id }) }} />
+        <AskAi context={runContext(id)} />
         {data.status !== 'done' && data.status !== 'discarded' && !discarding ? <button type="button" className="btn ghost" onClick={() => setDiscarding(true)}>{t('automation.discard')}</button> : null}
       </div>
       {discarding && data.status !== 'discarded' ? (
@@ -740,7 +741,7 @@ function ReturnIssues({ ret, books, nav, canEdit }: { ret: PeriodReturn; books: 
     <>
       {ret.reviewedBefore ? <p className="warnline" data-testid="reviewed-before">{t('automation.reviewedBefore', { was: money(ret.reviewedBefore.payable, baseCurrency()), now: money(ret.payable, baseCurrency()) })}</p> : null}
       {ret.clearing?.length ? <ClearingFacts checks={ret.clearing} /> : null}
-      {p ? <PeriodIssues books={books} nav={nav} from={p.from} to={p.to} period={periodName(p)} canEdit={canEdit} /> : null}
+      {p ? <PeriodIssues books={books} nav={nav} from={p.from} to={p.to} period={periodName(p)} canEdit={canEdit} figures={ret.figures} /> : null}
     </>
   );
 }

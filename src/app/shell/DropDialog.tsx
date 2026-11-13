@@ -7,9 +7,11 @@
  * rows until it closes; the work goes on when it does.
  */
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { outlayWaitsNow } from '../lib/order-pages.js';
 import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
-import { language, t, tWith } from '../i18n/index.js';
+import { isKey, language, t, tWith } from '../i18n/index.js';
+import { heldReasonText } from '../lib/held-reason.js';
 import { dropStore, failedLine } from './drop-upload.js';
 import { CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingGroupOf, linkedAs, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, waitsAfterDrop, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
 import { isUnbooked, unbookedPayments } from '../areas/bank/model.js';
@@ -341,7 +343,7 @@ function PayoutUnseenRow({ r, session, go }: { r: DropRow; session: DropSession;
 
 /** What a taken report booked and left, in one line (src/types/drop.ts ReportSummary). */
 function reportLine(s: NonNullable<DropRow['report']>): string {
-  const held = s.held.map((h) => t(`drop.held.${h.why}`, { order: h.order })).join(', ');
+  const held = s.held.map((h) => heldReasonText(h, isKey, tWith)).join(', ');
   return [
     s.from && s.to && `${formatDate(s.from)} – ${formatDate(s.to)}`,
     s.kind === 'sales' ? t('drop.booked.sales', { orders: s.orders, refunds: s.refunds }) : t('drop.booked.fees', { n: s.fees }),
@@ -359,6 +361,7 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
     s.unread ? t('drop.booked.unread', { n: s.unread }) : '',
     held ? t('drop.booked.held', { n: s.held.length + s.heldMore, orders: held, more: s.heldMore ? t('drop.booked.more', { n: s.heldMore }) : '' }) : '',
     s.proofs ? t('drop.booked.proofs', { n: s.proofs }) : '',
+    s.split?.length ? t('drop.booked.split', { n: s.split.length + s.splitMore, orders: s.split.map((o) => `#${o}`).join(', '), more: s.splitMore ? t('drop.booked.more', { n: s.splitMore }) : '' }) : '',
   ].filter(Boolean).join(' · ');
 }
 
@@ -767,7 +770,7 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const stateOf = new Map(taken.map((r, i) => [r, states[i]]));
   // A row of a report says it in its own line; the dialog says it for the payments the drop brought or left open.
   const waitsHere = !!bookingWaitsOf(view) && !rows.some((r) => r.reason === 'booking-waits') && taken.length > 0 && unbookedPayments(books, accounts ?? []).length > 0;
-  const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
+  const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? [], undefined, outlayWaitsNow()), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
   // Only files the books hold already (#341): the window says that nothing new came in.
   const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate' && r.reason !== 'provider-export') || !!r.readAs);
   // What waits for her, named where it is (#398): the receipts of this drop under Belege, every open task under Automatisierung › Aufgaben, as the dock counts them.

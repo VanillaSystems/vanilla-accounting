@@ -5,8 +5,8 @@
 import type { Receipt } from '../types/index.js';
 import type { DocumentsData } from '../core/modules/schema.js';
 import { documents } from '../engines/index.js';
-import { HEAD, wordsRe } from '../core/modules/words.js';
-import { documentKind } from './document-kind.js';
+import { HEAD, compoundLines } from '../core/modules/words.js';
+import { documentKind, titleIn } from './document-kind.js';
 import { labelledNumbers } from './duplicates.js';
 import { normUid, uidsIn } from '../parsers/receipt-text.js';
 
@@ -37,16 +37,19 @@ export function issuedByFirm(r: Pick<Receipt, 'vatId' | 'extractedText'>, firm: 
 /**
  * The numbers an invoice gives itself: those an invoice word labels («Rechnung 2026-029»,
  * «Invoice # 4471», documents.yaml receipt.number; squashed as tokensIn squashes, four characters at
- * least), never a customer, order, account, phone number, a date or a year alone («Rechnung 2026
- * Unterhalt»). None for a document whose text names it an offer, an
+ * least), also the number of its compound title, the first one of its head («Akontorechnung
+ * AK-26-Q3-30871», words.ts compoundLines), never a customer, order, account, phone number, a date
+ * or a year alone («Rechnung 2026 Unterhalt»). None for a document whose text names it an offer, an
  * order confirmation, a delivery note or a reminder (documentKind), or whose first lines have no
  * invoice title.
  */
 export function ownNumbers(r: Pick<Receipt, 'kind' | 'extractedText'>, words: DocumentsData = documents()): string[] {
   if (r.kind && r.kind !== 'invoice') return [];
   const text = r.extractedText ?? '';
-  if (documentKind(text, words).is !== 'receipt' || !wordsRe(words.receipt.title).test(text.slice(0, HEAD))) return [];
-  return [...labelledNumbers(text, words)].map((n) => n.replace(/\s/g, '')).filter((n) => !YEAR.test(n));
+  if (documentKind(text, words).is !== 'receipt' || titleIn(text.slice(0, HEAD), words) === Infinity) return [];
+  // The number of its compound title: the first such line of its head, never one below that names another bill («Akontorechnung AK-1 bezahlt» on a final invoice).
+  const compound = compoundLines(text.slice(0, HEAD), words.receipt.number, words.notCompound)[0]?.number;
+  return [...new Set([...labelledNumbers(text, words), ...(compound ? [compound] : [])])].map((n) => n.replace(/\s/g, '')).filter((n) => !YEAR.test(n));
 }
 
 /** A year alone (four digits, 19xx or 20xx) is no invoice number by itself. */

@@ -7,20 +7,23 @@
  * The AI sidebar shows it before the first message of a conversation, with or without an AI, and
  * under an answer that names it (the change `openPeriod`); the model only adds words.
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { api } from '../lib/api.js';
 import { t } from '../i18n/index.js';
 import { formatDate } from '../lib/utils.js';
-import { TASKS, itemsOf, openList, receiptAt, type Items as ItemList, type Say } from './open-period-items.js';
+import { OPENING, TASKS, clearingAt, itemsOf, openList, receiptAt, type Items as ItemList, type Say } from './open-period-items.js';
 import { periodName } from '../lib/period-label.js';
 import { hrefOf } from '../shell/history.js';
 import type { Location } from '../shell/route.js';
 import { useQuestions } from '../questions/store.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { useAutomation } from '../automation/store.js';
-import { orderPagesNow, providerIssuesNow } from '../lib/order-pages.js';
+import { orderPagesNow, outlayWaitsNow, providerIssuesNow } from '../lib/order-pages.js';
 import { at } from '../areas/receipts/view.js';
 import { taskLine } from '../areas/automation/words.js';
-import { elsewhereCount, elsewhereOf, nothingOpen, openLines, openPeriodState, type OpenLine, type OpenPeriodState } from '../areas/automation/open-period.js';
+import { elsewhereCount, elsewhereOf, nothingOpen, openLines, openPeriodState, type OpenLine, type OpenPeriodState, type PendingOffer } from '../areas/automation/open-period.js';
+
+const NO_OFFERS: PendingOffer[] = [];
 import { issueWords, UnbookedFact } from '../areas/automation/Issues.js';
 import { chargesVat, filing } from '../../engines/index.js';
 import { openCount } from '../../workflows/model.js';
@@ -42,21 +45,27 @@ function goOf(l: OpenLine, s: OpenPeriodState, books: Index): Location {
     // The report's receipt names the held order and books it (#405); a missing bill goes into Belege of its month.
     case 'held': { const r = books.receipts.find((x) => x.id === l.first.receipt); return r ? at({ area: 'receipts', id: r.id }, r.date) : openList(s) ?? TASKS; }
     case 'bills': return at({ area: 'receipts' }, l.first.date);
+    case 'offers': return at({ area: 'bank', payment: l.first.ref }, l.first.date);
+    case 'openings': return OPENING;
+    case 'clearing': return clearingAt(l.first.account, s);
     case 'task': return { route: { area: 'automation', view: 'tasks', run: l.task.run }, query: {} };
   }
 }
 
 /** A count line in the words the return's page uses for it (issueWords). */
-const NONE = { unbooked: 0, waitingReceipt: 0 };
+const NONE = { unbooked: 0, waitingReceipt: 0, waitingOutlays: 0 };
 function textOf(l: OpenLine): string {
   switch (l.kind) {
     case 'yours': return issueWords({ ...NONE, own: l.n })[0];
-    case 'unbooked': return issueWords({ unbooked: l.n, waitingReceipt: l.waiting })[0];
+    case 'unbooked': return issueWords({ unbooked: l.n, waitingReceipt: l.waiting, waitingOutlays: l.outlays })[0];
     case 'questions': return issueWords({ ...NONE, questions: l.n })[0];
     case 'evidence': return issueWords({ ...NONE, evidence: l.n })[0];
     case 'unlinked': return issueWords({ ...NONE, unlinked: l.n })[0];
     case 'held': return issueWords({ ...NONE, held: l.n })[0];
     case 'bills': return issueWords({ ...NONE, bills: l.n })[0];
+    case 'offers': return t('openPeriod.offers', { n: l.n });
+    case 'openings': return t('openPeriod.openings', { n: l.n });
+    case 'clearing': return t('openPeriod.clearing', { n: l.n });
     case 'task': return taskLine(l.task);
     case 'moreTasks': return t('openPeriod.moreTasks', { n: l.n });
   }
@@ -84,13 +93,21 @@ export function OpenPeriodCard({ books, onGo }: { books: Index; onGo(loc: Locati
   const pages = orderPagesNow();
   const provider = providerIssuesNow();
   const today = localToday();
+  // The setup's shares offered as rules and not answered yet (#428): the server reads them off the setup and the knowledge, once per books.
+  const [offers, setOffers] = useState<PendingOffer[]>(NO_OFFERS);
+  useEffect(() => {
+    let live = true;
+    api.setupOffers().then((r) => { if (live) setOffers(r.offers.length ? r.offers : NO_OFFERS); }, () => undefined);
+    return () => { live = false; };
+  }, [books]);
+  const c = ws?.company;
   // The sidebar renders again with every word of a streaming answer: the state is computed once per change of what it reads.
   const { s, lines, other, unbookedElsewhere } = useMemo(() => {
-    const s = openPeriodState(books, questions ?? [], tasks ?? [], accounts ?? [], { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays }, pages, processingOf(view?.runs ?? [], books.receipts), provider);
+    const s = openPeriodState(books, questions ?? [], tasks ?? [], accounts ?? [], { today, vatRegistered: chargesVat(), length: filing().length, dueDays: filing().dueDays, outlays: outlayWaitsNow(), ...(c ? { firm: { uid: c.uid, name: c.name, owner: c.owner } } : {}) }, pages, processingOf(view?.runs ?? [], books.receipts), provider, offers);
     const e = elsewhereOf(books, questions ?? [], tasks ?? [], accounts ?? [], s, filing().length, view ? openCount(view) - view.tasks.length : 0, registered, today);
     // UnbookedFact says the payments; the rest is counted as the tasks it is under Aufgaben.
     return { s, lines: openLines(s), other: elsewhereCount(e) - e.unbooked.length, unbookedElsewhere: e.unbooked.length };
-  }, [books, questions, tasks, view, accounts, registered, pages, provider, today]);
+  }, [books, questions, tasks, view, accounts, registered, pages, provider, today, c, offers]);
   const link = (to: Location, text: string) => (
     <a className="linkbtn" href={hrefOf(to)} onClick={(e) => { if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return; e.preventDefault(); onGo(to); }}>{text}</a>
   );

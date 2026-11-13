@@ -39,13 +39,17 @@ export function bookingWaitsNote(r: Pick<RunDetail, 'steps'>): string[] | undefi
   }
   return undefined;
 }
+/** Why a run that booked nothing left its payment, by the step's `why` (#428): «0 Buchungen gebucht» never stands without it. */
+const LEFT: Record<string, 'marks.left.waitsForReceipt' | 'marks.left.waitsForOutlays' | 'marks.left.receiptUnread'> = {
+  waitsForReceipt: 'marks.left.waitsForReceipt', waitsForOutlays: 'marks.left.waitsForOutlays', receiptUnread: 'marks.left.receiptUnread',
+};
 
 /** What a run started by a button did, in one line (r4c-34): booked, waiting for whom and why, or stuck. */
 function runResultText(w: WorkflowDecl, r: RunDetail): string {
   const workflow = textIn(w.label, language());
   const res = runResult(w, r);
   switch (res.kind) {
-    case 'done': return [t('marks.done', { workflow, n: res.entries }), ...(res.held ?? []).map((h) => `${t('reconcile.heldRun', { n: h.n, account: h.account })}.`)].join(' ');
+    case 'done': return [t('marks.done', { workflow, n: res.entries }), ...(res.left && LEFT[res.left] ? [t(LEFT[res.left])] : []), ...(res.held ?? []).map((h) => `${t('reconcile.heldRun', { n: h.n, account: h.account })}.`)].join(' ');
     case 'waiting': {
       const step = typeof res.step === 'string' ? res.step : textIn(res.step, language());
       // A workflow that books nothing (the VAT filing) does not say «nichts gebucht» (r7h-34).
@@ -88,6 +92,7 @@ function bookOpenLine(n: Omit<BookOpen, 'waits'>, workflowName: string): string 
     t('marks.all.booked', { n: n.booked }),
     n.model ? t('marks.all.model', { n: n.model }) : '',
     n.receipt ? t('marks.all.receipt', { n: n.receipt }) : '',
+    n.outlays ? t('marks.all.outlays', { n: n.outlays }) : '',
     n.question ? t('marks.all.question', { n: n.question }) : '',
     n.unread ? t('marks.all.unread', { n: n.unread }) : '',
     n.deleted ? t('marks.all.deleted', { n: n.deleted }) : '',
