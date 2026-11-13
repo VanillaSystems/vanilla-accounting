@@ -21,6 +21,10 @@ owner:
 # that matches the row still decides it; a chart without this account leaves the row to the person.
 bankCharges: { account: "6940" }
 
+# The wage account: a wage is no supply, so a booking on it carries no VAT code. A rule for the wages
+# (src/saving/wage-rule.ts) books here, and a rule on it asks no rate (src/booking/rule-vat.ts).
+wages: { account: "5000" }
+
 # Accounts an answer adds to the chart.
 answers:
   payouts:

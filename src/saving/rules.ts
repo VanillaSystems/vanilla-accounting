@@ -16,9 +16,11 @@ import { chartNames, companyRules, factsOf, holdsRules, rulesIn, type RuleRow } 
 import { chartOf, loadClassifyContext, mappedReceipts, paymentFacts, ruleLine } from '../booking/classify.js';
 import { loadKnowledge, KNOWLEDGE_DIR } from '../knowledge/layers.js';
 import { holds, loneWords, parseRule, type BookingRule, type RuleFacts } from '../booking/rules.js';
-import { ruleVatOf, type RateSeen } from '../booking/rule-vat.js';
+import { ruleVatOf, takesNoCode, type RateSeen } from '../booking/rule-vat.js';
+import { receiptKnowledge, receiptWaitOf, settlementAccount } from '../booking/receipt-wait.js';
+import type { BankTransaction } from '../types/index.js';
 import { rateOf } from '../accounting/vat-codes.js';
-import { previewRules, ruleKey, type PlacedRow, type RulePreview } from '../booking/rule-preview.js';
+import { previewRules, ruleKey, type OpenDecided, type PlacedRow, type RulePreview } from '../booking/rule-preview.js';
 import { noteOffer, type NoteOffer } from '../knowledge/note-rules.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { hasBooks, loadBooks } from '../books/store.js';
@@ -202,6 +204,7 @@ function settleVat(ws: Workspace, path: string, text: string): { text: string; a
   const k = knowledgeWith(ws, path, text);
   const context = { ...loadClassifyContext(ws), counterparties: 'error' in k ? [] : k.counterparties };
   const fx = loadFxResolver();
+  const { wages } = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws);
   const asks: VatAsk[] = [];
   for (const row of rows) {
     const node = ruleNode(doc, path, row.step, row.id);
@@ -212,8 +215,12 @@ function settleVat(ws: Workspace, path: string, text: string): { text: string; a
     const booking = probe.ok ? probe.rule.then.booking : undefined;
     if (!probe.ok || !booking) continue;
     const placed = { rule: probe.rule, ...(business ? { business } : {}) };
-    const receipts = books ? books.transactions.filter((tx) => holds(placed, paymentFacts(books, tx, context, fx))).flatMap((tx) => mappedReceipts(books, tx)) : [];
-    const vat = ruleVatOf(booking.account, receipts);
+    const payments = books ? books.transactions.filter((tx) => holds(placed, paymentFacts(books, tx, context, fx))) : [];
+    const receipts = payments.flatMap((tx) => mappedReceipts(books!, tx));
+    // Wages (the evidence rules' wording, on a firm that pays wages) and an account that takes no VAT code book without one, unasked (#383).
+    const wage = (tx: BankTransaction) => wages.some((w) => w.test(tx.description));
+    const noCode = takesNoCode(booking.account, settlementAccount(context)) || (payments.length > 0 && payments.every(wage));
+    const vat = ruleVatOf(booking.account, receipts, noCode);
     if (vat.kind === 'fill') node.then.set('vat', vat.vat);
     else asks.push({ step: row.step, id: row.id, seen: vat.seen, choices: vat.choices });
   }
@@ -266,12 +273,28 @@ function preview(ws: Workspace, path: string, after: string, targets: RuleRow[])
   const all = rulesWith(ws, path, rulesIn(path, after, ruleFactsOf(ws, path.startsWith(`${KNOWLEDGE_DIR}/rules/`) ? undefined : basename(path, '.yaml'))));
   const context = { ...loadClassifyContext(ws), counterparties: k.counterparties, rules: all.map((r) => r.placed) };
   const keys = new Set(rules.map(ruleKey));
-  return previewRules(all.filter((r) => keys.has(ruleKey(r.row))), all, loadBooks(ws), context, loadFxResolver());
+  const books = loadBooks(ws);
+  const fx = loadFxResolver();
+  // A payment that needs a receipt is not booked while none is linked, by a rule too: the card says it waits (#383).
+  const known = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws);
+  const waits = (tx: BankTransaction) => receiptWaitOf(books, tx, context, known, fx).wait;
+  return previewRules(all.filter((r) => keys.has(ruleKey(r.row))), all, books, context, fx, waits);
 }
 
 export type KeepResult =
-  | { ok: true; committed: boolean }
+  | {
+    ok: true; committed: boolean;
+    /** The open payments the kept rules decide: booked at once by the keep, or waiting for their receipt. */
+    open?: OpenDecided;
+    /** The rules file as it was: «Rückgängig» puts it back (RuleCommand restore). */
+    undo?: { file: string; before: string; after: string };
+    /** What the booking runs the keep started made of `open.book` (src/server/routes/rules.ts). */
+    booked?: KeptBookings;
+  }
   | { ok: false; refusal: 'gone' | 'stale' | 'rules' | 'wide' | 'not-rules' | 'changed' | 'note'; message: string };
+
+/** What keeping a rule booked: the payments now booked, their entries (the undo takes them back), and those its runs left unbooked. */
+export interface KeptBookings { refs: string[]; entries: string[]; notBooked: string[] }
 
 const CUSTOMIZING = ['Vanilla-Kind: customizing', "Vanilla-Person: the app's user"];
 
@@ -315,14 +338,17 @@ export async function keepDraft(ws: Workspace, path: string, basis: string, conf
   const why = rulesRefusal([d], confirmed);
   if (why) return { ok: false, refusal: (d.wide.length || d.spread.length || d.overrides.length) && !rulesRefusal([d], true) ? 'wide' : 'rules', message: why };
   const to = join(ws.paths.root, path);
-  const changes = ruleChanges(read(to), after);
+  const was = read(to);
+  const changes = ruleChanges(was, after);
   mkdirSync(dirname(to), { recursive: true });
   if (after.trim()) writeFileSync(to, after); else rmSync(to, { force: true });
   rmSync(draft);
   const committed = await commit(ws, subjectOf(ws, d), path);
   // What became of each rule, for the AI sidebar (#362): after the keep is done, and never failing it.
   recordSettled(ws, path, changes, 'kept');
-  return { ok: true, committed };
+  // The open payments the kept rules decide, as the card showed them: the keep books them at once (#383).
+  const open = preview.reduce<OpenDecided>((all, p) => ({ book: [...all.book, ...(p.open?.book ?? [])], waits: [...all.waits, ...(p.open?.waits ?? [])] }), { book: [], waits: [] });
+  return { ok: true, committed, open, undo: { file: path, before: was, after: hashOf(after) } };
 }
 
 /** «Verwerfen»: the draft of one file is gone; the file stays as it is. */

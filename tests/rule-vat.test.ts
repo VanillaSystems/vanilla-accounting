@@ -72,7 +72,7 @@ test('no receipt yet: the card asks once with the rates, and the answer makes th
   draft(ws, GUIDE, HEAD + rule('miete', 'Miete Ladenlokal', '6000'));
   const before = drafted(ws, GUIDE);
   const d = draftRules(ws, GUIDE)!;
-  assert.deepEqual(d.vatAsks, [{ step: 'booking.guide.yaml#classify', id: 'miete', seen: [], choices: [8.1, 3.8, 2.6, 0] }]);
+  assert.deepEqual(d.vatAsks, [{ step: 'booking.guide.yaml#classify', id: 'miete', seen: [], choices: [0, 8.1, 3.8, 2.6] }], "no Swiss VAT first, no rate as if recommended (#383)");
   assert.equal(d.keepable, false);
   assert.equal(drafted(ws, GUIDE), before, 'nothing written while the person has not answered');
   assert.equal(setDraftVat(ws, GUIDE, 'stale', 'booking.guide.yaml#classify', 'miete', 0).ok, false, 'only the draft as shown');

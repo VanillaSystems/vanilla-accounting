@@ -16,6 +16,9 @@ import { draftRules, keepDraft } from '../src/saving/rules.js';
 import type { JournalEntry, Receipt } from '../src/types/index.js';
 import { DEMO_ROOT } from './support/workspace.js';
 
+/** A keep's outcome without what it booked and its undo (#383). */
+const pick = (r: { ok: boolean; committed?: boolean }) => ({ ok: r.ok, committed: r.committed });
+
 process.env.GIT_AUTHOR_NAME = 'Erika Beispiel';
 process.env.GIT_AUTHOR_EMAIL = 'erika@example.com';
 process.env.GIT_COMMITTER_NAME = 'Erika Beispiel';
@@ -89,7 +92,7 @@ test('a rule booking a foreign ad platform without Bezugsteuer warns, names the 
   assert.deepEqual([refused.ok, (refused as { refusal: string }).refusal], [false, 'wide']);
   assert.match((refused as { message: string }).message, /adplatform.*Steuerregeln des Landes/);
   assert.equal(readFileSync(join(ws.paths.root, GUIDE), 'utf8'), BEFORE, 'nothing kept without the confirmation');
-  assert.deepEqual(await keepDraft(ws, GUIDE, d.basis, true), { ok: true, committed: true });
+  assert.deepEqual(pick(await keepDraft(ws, GUIDE, d.basis, true)), { ok: true, committed: true });
   assert.equal(readFileSync(join(ws.paths.root, GUIDE), 'utf8'), rule('6570', 'I0'), '«Trotzdem behalten»');
 });
 

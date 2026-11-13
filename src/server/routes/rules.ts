@@ -31,7 +31,8 @@ import { chartOf } from '../../booking/classify.js';
 import { chartNames, companyRules } from '../../booking/rule-book.js';
 import { loadKnowledge } from '../../knowledge/layers.js';
 import { baseCurrency } from '../../engines/index.js';
-import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, setDraftVat, type DraftCommand, type DraftView, type RuleCommand, type RulesView } from '../../saving/rules.js';
+import { discardDraft, draftRules, keepDraft, ruleCommand, ruleFactsOf, setDraftVat, type DraftCommand, type DraftView, type KeptBookings, type RuleCommand, type RulesView } from '../../saving/rules.js';
+import { bookedState } from '../../accounting/payment-entries.js';
 import { loadWorkflows } from '../../workflows/load.js';
 import { draftShareRule, shareOffer } from '../../saving/share-rule.js';
 import { draftGroupedFlag, groupedOffer } from '../../saving/grouped-flag.js';
@@ -140,8 +141,39 @@ router.post('/api/rules/draft', async (req, res) => {
     return;
   }
   if (typeof c.basis !== 'string') throw new RequestError(400, 'basis erwartet.');
-  res.json(await keepingSwitchedOn(() => keepDraft(WS, c.path, c.basis, c.confirm === true)));
+  const kept = await keepingSwitchedOn(() => keepDraft(WS, c.path, c.basis, c.confirm === true));
+  // A rule kept books the open payments it decides at once (#383): the card showed them, and its tasks close.
+  res.json(kept.ok && kept.open?.book.length ? { ...kept, booked: await bookKept(kept.open.book) } : kept);
 });
+
+const RESTING = new Set(['done', 'waiting', 'stuck', 'parked', 'discarded']);
+/** How long the keep waits for its booking runs: a rule books without the model, so far less is the rule. */
+const BOOK_WAIT_MS = 30_000;
+export const BOOKED_BY_RULE = 'Deine Regel hat diese Zahlung beim Behalten gebucht.';
+
+/**
+ * The booking run for each payment a kept rule decides (as «Braucht keinen Beleg» starts it, #340),
+ * awaited until each rests; then the questions and hand-booking tasks of the payments now booked close.
+ * A payment its run left unbooked (another booking came first, the run waits for a person) is named.
+ */
+async function bookKept(refs: string[]): Promise<KeptBookings> {
+  const e = engine();
+  const runs: string[] = [];
+  for (const id of refs) {
+    const r = await e.command({ kind: 'start', workflow: 'booking', item: { kind: 'transaction', id } });
+    if (r.ok && r.run) runs.push(r.run);
+  }
+  const until = Date.now() + BOOK_WAIT_MS;
+  while (Date.now() < until && runs.some((id) => !RESTING.has(e.run(id)?.state.status ?? 'done'))) await new Promise((r) => setTimeout(r, 100));
+  const books = loadBooks(WS);
+  const booked = new Set(refs.filter((ref) => bookedState(books, ref, WS.bankAccounts) === 'booked'));
+  for (const r of askRuns(e)) if (r.state.status === 'waiting' && r.item.kind === 'transaction' && booked.has(r.item.id)) await e.command({ kind: 'discard', run: r.id, reason: BOOKED_BY_RULE });
+  return {
+    refs: [...booked],
+    entries: books.journalEntries.filter((x) => booked.has(x.transactionRef) && runs.includes(x.run ?? '')).map((x) => x.id),
+    notBooked: refs.filter((ref) => !booked.has(ref)),
+  };
+}
 
 router.get('/api/rules/unread', (req, res) => {
   res.json({ offer: unreadOffer(WS, loadBooks(WS), String(req.query.ref ?? '')) ?? null });

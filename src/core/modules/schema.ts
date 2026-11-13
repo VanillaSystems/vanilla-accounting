@@ -244,6 +244,8 @@ export interface SetupData {
   owner: Record<string, { account: string; label: string }> & { otherwise: { account: string; label: string } };
   /** The account the bank's own fee row is booked on by code, without a VAT code (src/booking/bank-fee.ts, #359); absent: such a row is left to a rule, the model or the person. */
   bankCharges?: { account: string };
+  /** The wage account: a booking on it carries no VAT code (src/booking/rule-vat.ts); absent: no rule for wages is offered. */
+  wages?: { account: string };
   answers: {
     /** «Auszahlungen eines Zahlungsanbieters: ja»: the accounts added, and the firm's own payout split when no rule names the provider. */
     payouts: { accounts: string[]; sales: { otherwise: string }; fees: { account: string; vat: string }; clearing: { account: string; name: string } };

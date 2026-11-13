@@ -3,10 +3,12 @@
  * the rule holds for, never the model. Only a receipt shows a rate (AGENTS.md § VAT code rules), so
  * the receipts decide: all at one rate, the rule books at that rate (none with Swiss VAT: the zero
  * rate); receipts at different rates, or none, and the card asks the person once, with the rates
- * to choose from. A firm that claims no input tax books such a purchase without a code. Pure.
+ * to choose from, «no Swiss VAT» first and no rate as if it were the answer. A firm that claims no
+ * input tax books such a purchase without a code, and so does a rule on an account that takes no
+ * VAT code at all (takesNoCode) or for wages, unasked (#383). Pure.
  */
 import type { Receipt } from '../types/index.js';
-import { chart, invoiceRates, withoutInputTax } from '../engines/index.js';
+import { chart, invoiceRates, setup, withoutInputTax } from '../engines/index.js';
 import { receiptRate } from '../accounting/correction.js';
 import { isPurchaseDocument } from '../accounting/evidence-check.js';
 import { isUnreadable } from '../accounting/receipt-due.js';
@@ -28,14 +30,25 @@ export function rateShown(r: VatFacts): number | undefined {
   return r.hasSwissVat === false || r.vatSummary?.length ? 0 : undefined;
 }
 
-/** The rule's VAT, given the account it books on and the receipts linked to the payments it holds for. */
-export function ruleVatOf(account: string, receipts: readonly VatFacts[]): RuleVat {
+/**
+ * Whether a booking on `account` carries no VAT code whatever the receipts say: the jurisdiction's
+ * wage account (setup.yaml `wages`: a wage is no supply), a debt or the equity, or an account that
+ * only settles (`settles`: the owner's account, a money account; receipt-wait.ts settlementAccount).
+ */
+export function takesNoCode(account: string, settles: (account: string) => boolean = () => false): boolean {
+  const type = chart().typeOf(account);
+  return account === setup().wages?.account || type === 'liability' || type === 'equity' || settles(account);
+}
+
+/** The rule's VAT, given the account it books on and the receipts linked to the payments it holds for. `noCode`: the account takes none (takesNoCode), or every payment the rule holds for is a wage. */
+export function ruleVatOf(account: string, receipts: readonly VatFacts[], noCode = false): RuleVat {
   const without = withoutInputTax();
   const purchase = chart().typeOf(account) === 'expense' || chart().typeOf(account) === 'asset';
-  if (without === 'none' || (without === 'net-rate' && purchase)) return { kind: 'fill', vat: 'none' };
+  if (noCode || without === 'none' || (without === 'net-rate' && purchase)) return { kind: 'fill', vat: 'none' };
   const seen = new Map<number, number>();
   for (const r of receipts) { const rate = rateShown(r); if (rate !== undefined) seen.set(rate, (seen.get(rate) ?? 0) + 1); }
   if (seen.size === 1) return { kind: 'fill', vat: [...seen.keys()][0] };
-  const choices = [...new Set([...invoiceRates(), 0])].sort((a, b) => b - a);
+  // No Swiss VAT first, then the rates: no rate stands first as if it were the answer (#383).
+  const choices = [0, ...[...new Set(invoiceRates())].filter((r) => r > 0).sort((a, b) => b - a)];
   return { kind: 'ask', seen: [...seen].map(([rate, n]) => ({ rate, receipts: n })).sort((a, b) => b.receipts - a.receipts || b.rate - a.rate), choices };
 }
