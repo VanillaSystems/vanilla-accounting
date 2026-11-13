@@ -76,7 +76,7 @@ export function providersOf(ws: Pick<Workspace, 'paths'>): Provider[] {
 
 /**
  * What the drop recognises a CSV as, by the providers' files: whose report and which kind, or which
- * other export of a provider it is, with where its reports are exported (#406).
+ * other export of a provider the firm has it is, with its reports and where they are exported (#406).
  */
 export function recognizeCsv(ws: Pick<Workspace, 'paths'>, bytes: Buffer): CsvOfProvider | undefined {
   const providers = providersOf(ws);
@@ -84,9 +84,12 @@ export function recognizeCsv(ws: Pick<Workspace, 'paths'>, bytes: Buffer): CsvOf
   const hit = recognizeReport(text, providers);
   const p = hit && providers.find((x) => x.id === hit.provider);
   if (hit && p) return { ...hit, name: p.name };
-  const other = recognizeOtherExport(text, providers);
-  const q = other && providers.find((x) => x.id === other.provider);
-  return other && q ? { provider: q.id, name: q.name, other: other.what, where: { ...q.provider.exportedAt } } : undefined;
+  // Only a provider the firm's own knowledge names (a company file of it): a firm without one has no such export.
+  const own = providers.filter((x) => x.origin.binding);
+  const other = recognizeOtherExport(text, own);
+  const q = other && own.find((x) => x.id === other.provider);
+  const reports = q ? (['sales', 'fees'] as const).filter((k) => q.provider.reports[k]) : [];
+  return other && q ? { provider: q.id, name: q.name, other: other.what, reports, where: { ...q.provider.exportedAt } } : undefined;
 }
 
 /** The booking texts, in the books' language (German, docs/i18n.md). */

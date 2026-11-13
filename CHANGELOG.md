@@ -342,18 +342,22 @@ Two markers flag an entry you must read before you update:
   the reconciliation.
 - A bill of several VAT groups (8.1 % and «0 % (Export)») is compared with all lines of its
   payment (#406): two lines booked each at its group's rate raise no task any more; a rate booked
-  beyond what the bill shows at it does, naming the amount and rate the bill shows. «Nach Beleg
-  buchen» then books the payment's lines by the bill's groups, never one rate on a line the bill
-  shows at another.
-- The drop names a payment provider's payouts list as what it is and sets it aside, with the two
-  reports the app books from and where the provider's admin exports them (#406); it is never read
-  as a bank statement of empty lines. A CSV whose day and amount columns yield no movement is no
-  statement. A provider's file names such exports under `otherExports` and the report menus under
-  `exportedAt` (processes/README.md).
+  beyond what the bill shows at it does, naming the amount and rate the bill shows. What a bill's
+  total holds beyond the groups read only excuses a line at the zero code, never accuses a rate
+  line. «Nach Beleg buchen» then books the payment's lines by the bill's groups, never one rate on
+  a line the bill shows at another; it is offered only for lines on one account pair, of one code
+  family, with the same tags, and never rewrites a line a person booked. Its «Rückgängig» puts the
+  lines back in one step, unless one was changed since.
+- The drop names a payment provider's payouts list as what it is, with the reports the app books
+  from and, where the provider's file states it, where the admin exports them (#406); it is not
+  read as a bank statement of empty lines, and «trotzdem als Kontoauszug lesen» asks its columns.
+  Only for a firm whose own knowledge has that provider. A CSV whose day and amount columns yield
+  no movement asks its columns with nothing chosen. A provider's file names such exports under
+  `otherExports` and the report menus under `exportedAt` (processes/README.md).
 - A provider's monthly fee bills dropped read «3 Monatsrechnungen von Shopify: MWST der Gebühren
   gebucht», not «einer Zahlung zugeordnet»: they have no payment (#406).
-- The sale question for a transfer that names an order of a provider's order export, one the
-  provider did not collect, proposes from that order's tax and says so (#406).
+- The sale question for a transfer that names an order of a provider's order export by its name
+  («#1099»), one the provider did not collect, proposes from that order's tax and says so (#406).
 - MWST: a rate row's turnover (Ziffer 303 and the others) is the figure the return files, as the
   review and the XML show it; it was the nets rounded per entry plus the tax on the total, Rappen
   off (#406). No filed figure changes.

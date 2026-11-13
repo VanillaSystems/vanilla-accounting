@@ -81,14 +81,15 @@ export interface PaidElsewhere { provider: string; order: string; gross: number;
 
 /**
  * The proposal from the order the payment names (#406): an order of a provider's export the provider
- * did not collect, named in the payment's text («Bestellung #1099») with the payment's amount. Its
+ * did not collect, named in the payment's text by its «#» name («Bestellung #1099»), with the payment's amount. Its
  * tax shows its rate: the normal rate proposes a domestic sale, no tax on a delivery abroad an export.
  * Undefined when no such order is named, or its rate is one the sale question cannot book (a reduced
  * rate, several rates in one order): the question then proposes as without it.
  */
 export function orderProposal(tx: Pick<BankTransaction, 'amount' | 'currency' | 'description' | 'reference' | 'counterparty'>, orders: readonly PaidElsewhere[]): SaleProposal | undefined {
   const text = [tx.description, tx.reference, tx.counterparty].filter(Boolean).join(' ');
-  const named = (o: PaidElsewhere) => new RegExp(`(?:^|[^\\d])${o.order.replace(/^#/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|[^\\d])`).test(text);
+  // Only the order's name as an order export writes it, with its «#»: a number alone may be a date, an invoice or a customer number (#406 review).
+  const named = (o: PaidElsewhere) => new RegExp(`#\\s?${o.order.replace(/^#/, '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?:$|[^\\d])`).test(text);
   const o = orders.find((x) => (x.currency ?? baseCurrency()) === tx.currency && Math.abs(Math.abs(x.gross) - Math.abs(tx.amount)) <= 0.005 && named(x));
   if (!o) return undefined;
   const name = `#${o.order.replace(/^#/, '')}`;

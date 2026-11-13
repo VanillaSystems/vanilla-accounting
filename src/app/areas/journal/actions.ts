@@ -44,10 +44,7 @@ export function saveEntry(nav: Nav, e: JournalEntry, patch: JournalEntryPatch, c
 export function fixEvidence(nav: Nav, e: JournalEntry, c: EvidenceCheck) {
   if (c.kind !== 'receiptGroups') return saveEntry(nav, e, c.kind === 'receiptShowsVat' ? { vatCode: c.code, receipts: c.receipts } : { vatCode: c.code }, ['vatCode']);
   const lines = (c.lines ?? []).map((l) => `${l.code} ${fmt(l.amount)}`).join(' · ');
-  return run(nav, () => api.bookByReceipt(e.id), () => t('journal.evidence.rebooked', { lines }), async ({ before, after }) => {
-    for (const id of after) await api.deleteJournalEntry(id);
-    for (const x of before) await api.createJournalEntry(undoInput(x));
-  });
+  return run(nav, () => api.bookByReceipt(e.id), () => t('journal.evidence.rebooked', { lines }), ({ before, after }) => api.undoByReceipt(before, after));
 }
 
 /** A receipt hung on a booking without a payment (#89); the undo takes it off again. */

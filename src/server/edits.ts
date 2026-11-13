@@ -636,12 +636,16 @@ export function attachEntries(books: Books, ref: string, own: string, accounts: 
 /**
  * «Nach Beleg buchen» on a payment whose receipt shows several VAT groups (#406): its lines on that
  * receipt booked again by the groups, each its own line and code (evidenceCheck's proposal, made
- * here from the books, never taken from the request). A line whose amount is a group's keeps its id
- * and takes the group's code; a line of another amount takes a group left over; a group left
- * then is a new line on the entry's accounts; a line left then goes. Returns the lines as they were
- * and the ids of the lines now, of those it changed, for the undo.
+ * here from the books, never taken from the request). Refused when the check offers no rebooking
+ * (the lines fit, the receipt's groups do not cover its total, or the lines are on several accounts
+ * or code families) and when a person or the AI sidebar on her wish decided a line (`decidedByHand`):
+ * code never rewrites her booking. A line whose amount is a group's keeps its id and takes the
+ * group's code; a line of another amount takes a group left over; a group left then is a new line on
+ * the entry's accounts; a line left then goes. Every changed or new line goes through the guards of
+ * a hand booking. Returns the lines as they were and as they are now, of those it changed, for the
+ * undo (undoByReceipt).
  */
-export function bookByReceipt(books: Books, id: string): { before: JournalEntry[]; after: string[] } {
+export function bookByReceipt(books: Books, id: string): { before: JournalEntry[]; after: JournalEntry[] } {
   const e = entryOf(books, id);
   assertOpen(books, [e.date], 'editEntry');
   const ref = e.transactionRef;
@@ -651,6 +655,7 @@ export function bookByReceipt(books: Books, id: string): { before: JournalEntry[
   const lines = books.journalEntries.filter((x) => x.transactionRef === ref);
   // The finding sits on one line of the payment; the click on any of its lines books them all.
   const check = [e, ...lines].map((x) => evidenceCheck(x, linked, books.config.closedThrough, proof, lines)).find((c) => c?.kind === 'receiptGroups' && c.entries.includes(e.id));
+  if (check?.kind === 'receiptGroups' && check.decided) throw new RequestError(409, 'Eine Zeile dieser Zahlung hat eine Person so gebucht: die App bucht sie nicht um. Ändern unter Buchungen.', { code: 'decidedByHand' });
   if (check?.kind !== 'receiptGroups' || !check.lines) throw new RequestError(409, 'Die Buchung lässt sich nicht nach den Steuersätzen ihres Belegs buchen.', { code: 'notByReceipt' });
   const mates = check.entries.map((x) => entryOf(books, x));
   const was = new Map(mates.map((m) => [m.id, { ...m }]));
@@ -661,24 +666,48 @@ export function bookByReceipt(books: Books, id: string): { before: JournalEntry[
     const i = free.findIndex((l) => toRappen(l.amount) === toRappen(Math.abs(m.amount)));
     return i < 0 ? undefined : free.splice(i, 1)[0];
   };
+  // A line rebooked in place is no longer the rule's booking.
+  const rebook = (m: JournalEntry, set: EntrySet) => { setEntry(books, m.id, set); delete m.rule; touched.add(m.id); };
   const left: JournalEntry[] = [];
   for (const m of mates) {
     const l = take(m);
     if (!l) left.push(m);
-    else if (l.code !== m.vatCode) { setEntry(books, m.id, { vatCode: l.code, receipts: check.receipts }); touched.add(m.id); }
+    else if (l.code !== m.vatCode) rebook(m, { vatCode: l.code, receipts: check.receipts });
   }
   for (const m of left) {
     const l = free.shift();
-    touched.add(m.id);
-    if (l) setEntry(books, m.id, { amount: sign * l.amount, vatCode: l.code, receipts: check.receipts });
-    else books.journalEntries = books.journalEntries.filter((x) => x.id !== m.id);
+    if (l) rebook(m, { amount: sign * l.amount, vatCode: l.code, receipts: check.receipts });
+    else { touched.add(m.id); books.journalEntries = books.journalEntries.filter((x) => x.id !== m.id); }
   }
   const at = new Date().toISOString();
   const { reason: _reason, rule: _rule, run: _run, ...template } = e;
-  const made = free.map((l): JournalEntry => ({ ...template, id: randomBytes(8).toString('hex'), amount: sign * l.amount, vatCode: l.code, receipts: check.receipts, origin: 'manual', by: { kind: 'person', at } }));
+  const made = free.map((l): JournalEntry => {
+    assertPlaced(template.accountDebit, template.accountCredit);
+    assertCodeTaken(l.code);
+    assertCodeSign(l.code, template.accountDebit, template.accountCredit);
+    return { ...template, id: randomBytes(8).toString('hex'), amount: sign * l.amount, vatCode: l.code, receipts: check.receipts, origin: 'manual', by: { kind: 'person', at } };
+  });
   books.journalEntries.push(...made);
-  const after = books.journalEntries.filter((x) => touched.has(x.id) || made.includes(x)).map((x) => x.id);
+  const after = books.journalEntries.filter((x) => touched.has(x.id) || made.includes(x)).map((x) => ({ ...x }));
   return { before: [...touched].map((x) => was.get(x)!), after };
+}
+
+/**
+ * The undo of «Nach Beleg buchen» (#406 review): in one write, the lines it changed or made
+ * (`after`, as it returned them) go and the lines as they were (`before`) come back with their ids.
+ * Refused when a line changed since (`changedSince`): the person's later change stands.
+ */
+export function undoByReceipt(books: Books, before: readonly JournalEntry[], after: readonly JournalEntry[]): void {
+  const ref = after[0]?.transactionRef ?? before[0]?.transactionRef;
+  if (!ref || [...before, ...after].some((x) => x.transactionRef !== ref)) throw new RequestError(400, 'before und after: die Zeilen einer Zahlung.');
+  assertOpen(books, [...before, ...after].map((x) => x.date), 'editEntry');
+  const now = new Map(books.journalEntries.map((x) => [x.id, x]));
+  const afterIds = new Set(after.map((x) => x.id));
+  const key = (x: JournalEntry | undefined) => (x ? JSON.stringify(Object.entries(x).sort(([a], [b]) => a.localeCompare(b))) : '');
+  const changed = after.some((x) => key(now.get(x.id)) !== key(x))
+    || before.some((x) => !afterIds.has(x.id) && now.has(x.id));
+  if (changed) throw new RequestError(409, 'Die Buchung hat sich seither geändert: nichts zurückgenommen.', { code: 'changedSince' });
+  books.journalEntries = [...books.journalEntries.filter((x) => !afterIds.has(x.id)), ...before.map((x) => ({ ...x }))];
 }
 
 /**

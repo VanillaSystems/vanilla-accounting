@@ -324,13 +324,14 @@ provider:
   under `otherExports` (only `payouts`, the payouts list: one row per payout,
   no order), each by headers its first line has, all of them, and
   `exportedAt` says where each report is exported, in the admin's own menu
-  words (`sales`, `fees`; leave one out when no file or runbook states it). The
-  drop sets such a file aside and says what it is and which reports to bring,
-  with their menu paths; it is never read as a bank statement (#406):
+  words (`sales`, `fees`; only a path a file or runbook states and someone
+  checked: it is shown to a person as an instruction). Only for a firm whose
+  own knowledge has the provider (a company file of it), the drop names such a
+  file and the reports to bring, with their menu paths, and does not read it as
+  a bank statement; «trotzdem als Kontoauszug lesen» asks its columns (#406):
   ```yaml
   exportedAt:
     sales: "Shopify Admin › Bestellungen › Exportieren"
-    fees: "Shopify Admin › Finanzen › Shopify Payments › Transaktionen exportieren"
   otherExports:
     payouts: [ "Payout Date", "Charges", "Refunds", "Fees", "Total" ]
   ```

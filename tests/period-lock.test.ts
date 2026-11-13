@@ -108,6 +108,7 @@ const refused: Array<Call & { status: number }> = [
   { method: 'DELETE', path: '/api/journal-entries/jc', status: 403 },
   // «Nach Beleg buchen» on a receipt of several VAT groups (#406): never on a filed entry.
   { method: 'POST', path: '/api/journal-entries/jc/by-receipt', status: 403 },
+  { method: 'POST', path: '/api/journal-entries/by-receipt/undo', body: { before: [{ id: 'jc', transactionRef: 'C1', date: '2026-05-10', accountDebit: '6500', accountCredit: '1021', amount: 5, vatCode: 'I0' }], after: [{ id: 'jc', transactionRef: 'C1', date: '2026-05-10', accountDebit: '6500', accountCredit: '1021', amount: 10, vatCode: 'I81' }] }, status: 403 },
   { method: 'POST', path: '/api/journal-entries', body: { date: '2026-06-30', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'rückdatiert' }, status: 403 },
   { method: 'POST', path: '/api/journal-entries', body: { date: '2026-08-01', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'zur geschlossenen Zahlung', transactionRef: 'C1' }, status: 403 },
   { method: 'POST', path: '/api/journal-entries/classify/C1', status: 403 },

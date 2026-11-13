@@ -23,8 +23,8 @@ const tx = (description: string, amount: number, over: Partial<BankTransaction> 
 
 test('a transfer naming an order paid elsewhere proposes from the order: its rate, its provider, its name', () => {
   assert.deepEqual(orderProposal(tx('Bestellung #1099', 165), ORDERS), { choice: 'saleDomestic', why: 'order', order: { provider: 'Shopify', name: '#1099', rate: 8.1 } });
-  assert.deepEqual(orderProposal(tx('Zahlung', 165, { reference: 'Bestellung 1099' }), ORDERS)?.order?.name, '#1099', 'without the #, in the reference');
-  assert.deepEqual(orderProposal(tx('Order 1300', 60), ORDERS), { choice: 'saleAbroad', why: 'order', order: { provider: 'Shopify', name: '#1300', rate: 0 } }, 'no tax, delivered abroad: an export');
+  assert.deepEqual(orderProposal(tx('Zahlung', 165, { reference: 'Bestellung #1099' }), ORDERS)?.order?.name, '#1099', 'in the reference');
+  assert.deepEqual(orderProposal(tx('Order #1300', 60), ORDERS), { choice: 'saleAbroad', why: 'order', order: { provider: 'Shopify', name: '#1300', rate: 0 } }, 'no tax, delivered abroad: an export');
 });
 
 test('no proposal from an order when the amount differs, the number is part of another, or the rate is one the question cannot book', () => {
@@ -40,4 +40,10 @@ test('the question carries the order\'s proposal and reads back with it', () => 
   const back = parseLine(JSON.parse(JSON.stringify(line)));
   assert.deepEqual(back?.event === 'asked' ? back.proposal : undefined, line.proposal, 'kept in the questions file with its order');
   assert.deepEqual(saleQuestionLine({ company: { owner: 'Corinne' } } as never, tx('Bestellung #1099', 165), '2026-07-21T09:00:00.000Z').proposal, { choice: 'saleDomestic', why: 'domesticCurrency' }, 'without the export: as before');
+});
+
+test('a number alone is no order name: a date, an invoice or a customer number never claims the order (#406 review)', () => {
+  assert.equal(orderProposal(tx('Rechnung 1099 vom 20.07.2026', 165), ORDERS), undefined, 'an invoice number that happens to be an order\'s');
+  assert.equal(orderProposal(tx('Zahlung', 165, { reference: 'Bestellung 1099' }), ORDERS), undefined, 'without the #');
+  assert.equal(orderProposal(tx('Kunde 1300, Zahlung 2026-1300', 60), ORDERS), undefined);
 });

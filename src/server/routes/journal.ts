@@ -6,7 +6,7 @@ import { isIsoDate } from '../../accounting/periods.js';
 import { patchBody, stringField, tagsField, updateBooks, withBooks, RequestError, WS } from '../books.js';
 import { learnFromCorrection, undoAnswer } from '../questions.js';
 import type { EntrySet } from '../../types/assistant.js';
-import { addEntry, bookByReceipt, deleteEntry, link, restoreSaved, setEntry } from '../edits.js';
+import { addEntry, bookByReceipt, undoByReceipt, deleteEntry, link, restoreSaved, setEntry } from '../edits.js';
 import { handEdits, recordDeletion } from '../../saving/changes.js';
 import { parseBookedBy } from '../../books/booked-by.js';
 import { bookPaymentAgain } from './automation.js';
@@ -162,6 +162,14 @@ router.post('/api/journal-entries/:id/as-saved', async (req, res) => {
 });
 
 /** «Nach Beleg buchen» on a receipt of several VAT groups (#406): the payment's lines on it booked by the groups. */
+router.post('/api/journal-entries/by-receipt/undo', (req, res) => {
+  const { before, after } = (req.body ?? {}) as { before?: unknown; after?: unknown };
+  const entries = (v: unknown): v is JournalEntry[] => Array.isArray(v) && v.every((x) => !!x && typeof x === 'object' && typeof (x as JournalEntry).id === 'string' && typeof (x as JournalEntry).transactionRef === 'string' && typeof (x as JournalEntry).date === 'string');
+  if (!entries(before) || !entries(after) || !after.length) throw new RequestError(400, 'before und after: die Zeilen, wie «Nach Beleg buchen» sie zurückgab.');
+  updateBooks((books) => undoByReceipt(books, before, after));
+  res.json({ ok: true });
+});
+
 router.post('/api/journal-entries/:id/by-receipt', (req, res) => {
   res.json(updateBooks((books) => bookByReceipt(books, req.params.id)));
 });

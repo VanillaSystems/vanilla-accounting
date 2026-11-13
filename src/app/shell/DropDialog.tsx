@@ -240,8 +240,7 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
 function otherExportText(o: OtherExportOf): string {
   return [
     t(`drop.otherExport.text.${o.what}`, { provider: o.name }),
-    o.where.sales && t('drop.otherExport.where.sales', { where: o.where.sales }),
-    o.where.fees && t('drop.otherExport.where.fees', { where: o.where.fees }),
+    ...o.reports.map((k) => (o.where[k] ? t(`drop.otherExport.reportAt.${k}`, { where: o.where[k]! }) : t(`drop.otherExport.report.${k}`))),
   ].filter(Boolean).join(' ');
 }
 
@@ -250,7 +249,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
   const [password, setPassword] = useState('');
   const [open, setOpen] = useState(false);
   const asked = r.state === 'duplicate' && r.reason === 'possible-duplicate';
-  const chip = r.state === 'take' ? t('drop.taking') : asked ? t('drop.state.possible') : r.readAs ? t('drop.state.read') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
+  const chip = r.state === 'take' ? t('drop.taking') : asked ? t('drop.state.possible') : r.otherExport && r.state === 'duplicate' ? t('drop.state.otherExport') : r.readAs ? t('drop.state.read') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
   const details = r.state === 'asks' ? r.details : undefined;
   // A statement read without a bank export (#217): its table, unless it asks for its account first; a bank CSV: its columns.
   const table = r.state === 'asks' && r.read && !r.chooseAccount && !r.unknownAccount;
@@ -291,8 +290,8 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
             </span>
           ) : r.kind === 'statement-pdf' && r.reason === 'not-imported' && !r.chooseAccount && !r.unknownAccount && !r.read
             ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'as', as: 'receipt' })}>{t('drop.isReceipt')}</button>
-          : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' && (r.kind !== 'statement-csv' || r.reason === 'csv-known') && r.reason !== 'unreadable'
-            ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'take' })}>{r.state === 'quarantine' && r.reason === 'not-receipt' ? t('drop.isReceipt') : t('drop.takeAnyway')}</button> : null}
+          : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' && (r.kind !== 'statement-csv' || r.reason === 'csv-known' || r.reason === 'provider-export') && r.reason !== 'unreadable'
+            ? <button type="button" className="linkbtn" data-testid={r.otherExport ? 'drop-read-anyway' : undefined} onClick={() => void act(session, r, { kind: 'take' })}>{r.state === 'quarantine' && r.reason === 'not-receipt' ? t('drop.isReceipt') : r.otherExport ? t('drop.otherExport.readAnyway') : t('drop.takeAnyway')}</button> : null}
           {r.state === 'locked' ? (
             <form className="dpw" onSubmit={(e) => { e.preventDefault(); if (password) void act(session, r, { kind: 'unlock', password }).then(() => setPassword('')); }}>
               <input type="password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('drop.password')} aria-label={t('drop.password')} />
@@ -436,7 +435,8 @@ function Summary({ sum, rows, books, go, receiptOf, feeBillsOf }: { sum: DropSum
  * a new group without its sentence does not compile, so no row is left out of the closing lines.
  */
 /** A closing group's sentence (CLOSING_SENTENCE); a photo no AI read says why on a Mac without one. */
-const sentence = (g: keyof typeof CLOSING_SENTENCE, n: number, noAi: boolean, providers = '') => t(g === 'unread' && noAi ? 'drop.sum.unreadNoAi' : CLOSING_SENTENCE[g], { n, provider: providers });
+const sentence = (g: keyof typeof CLOSING_SENTENCE, n: number, noAi: boolean, providers = '') =>
+  t(g === 'unread' && noAi ? 'drop.sum.unreadNoAi' : g === 'feeBill' && !providers ? 'drop.sum.feeBillsUnnamed' : CLOSING_SENTENCE[g], { n, provider: providers });
 
 /** The receipts' sentences: read (linked or not), beside an invoice, a possible copy, incomplete, waiting for their reading, order pages, stopped. */
 function receiptLines(f: ClosingCounts, noAi: boolean, feeBillsOf: string): string {

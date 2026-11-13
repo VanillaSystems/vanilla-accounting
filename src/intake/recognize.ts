@@ -68,8 +68,9 @@ export async function recognize(bytes: Buffer, name: string, words?: DocumentsDa
   if (/^\s*(<\?xml|<Document)/.test(head(bytes))) return { state: 'refused', reason: 'not-statement' };
   // A payment provider's sales or fee report, by its columns (#203): booked onto the provider's clearing account.
   const report = reportOf?.(bytes);
-  // Another export of a provider (its payouts list, #406): set aside, named, with the reports to bring instead; never a bank statement.
-  if (report && 'other' in report) return { state: 'refused', reason: 'provider-export', otherExport: { provider: report.provider, name: report.name, what: report.other, where: report.where } };
+  // Another export of a provider the firm has (its payouts list, #406): named, with the reports to bring instead; not read as a bank statement.
+  // Kept in its row as a CSV, so «trotzdem als Kontoauszug lesen» can still ask its columns (the way by hand).
+  if (report && 'other' in report) return { kind: 'statement-csv', how: 'structure', state: 'duplicate', reason: 'provider-export', otherExport: { provider: report.provider, name: report.name, what: report.other, reports: report.reports, where: report.where } };
   if (report) return { kind: 'sales-report', how: 'structure', state: 'take', provider: { id: report.provider, name: report.name, kind: report.kind } };
   if (/\.csv$/.test(lower) || /^[^\n]*(buchung|valuta|booking|date)[^\n]*[;,\t][^\n]*(saldo|betrag|belastung|gutschrift|amount|balance)/i.test(head(bytes, 1024))) {
     // A bank's CSV export: read by its columns into a statement (#217); one that reads as no table is refused.

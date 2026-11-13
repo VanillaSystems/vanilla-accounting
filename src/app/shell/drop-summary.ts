@@ -87,7 +87,7 @@ export function closingGroupOf(r: DropRow, x: FileState | undefined): ClosingGro
     case 'refused': return 'refused';
     case 'locked': case 'unclear': case 'asks': return 'asks';
     case 'quarantine': return r.reason === 'not-receipt' ? 'none' : 'aside';
-    case 'duplicate': return r.reason === 'possible-duplicate' ? 'asks' : 'known';
+    case 'duplicate': return r.reason === 'possible-duplicate' ? 'asks' : r.reason === 'provider-export' ? 'aside' : 'known';
     case 'taken': break;
   }
   if (r.readAs) return 'known';

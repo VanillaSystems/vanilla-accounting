@@ -165,7 +165,9 @@ router.post('/api/drop/:id/rows/:key', (req, res) => inSession(req.params.id, as
       if (settled || row.state === 'refused' || row.state === 'asks' || row.state === 'locked') throw new RequestError(400, 'Diese Datei lässt sich so nicht übernehmen.');
       unquarantine(row);
       // A bank CSV whose payments seemed to be in the books: read anyway, its columns asked (#384).
-      Object.assign(row, { state: 'take', reason: undefined, ...(row.reason === 'csv-known' ? { anyway: true as const } : {}) });
+      // A provider's other export read as a statement anyway (#406): its columns asked, by hand.
+      if (row.reason === 'provider-export') delete row.otherExport;
+      Object.assign(row, { state: 'take', reason: undefined, ...(row.reason === 'csv-known' || row.reason === 'provider-export' ? { anyway: true as const } : {}) });
       break;
     case 'as': {
       // A PDF its words took for a statement that no account read in, or whose table waits, may still be a receipt: the person says so (#25, #217).
@@ -378,11 +380,11 @@ async function readInto(s: DropSession, row: DropRow, bytes: Buffer): Promise<vo
     const kept = keptCsv(WS, table.header);
     const takers = WS.bankAccounts.filter((x) => x.statements);
     const accounts = takers.map((x) => ({ account: x.account, label: x.label, currency: x.currency }));
-    const guessed = kept ? undefined : guessColumns(table.header);
-    // A statement only when it reads as one (#406): by the columns its header names, a day and an amount other than
-    // zero on its rows. One that yields no movement so (a provider's list whose «amount» column is all zero) is no
-    // statement, never a table of empty lines; a header naming no such columns is asked as before.
-    if (guessed && !moves(table, guessed)) { Object.assign(row, { state: 'refused', reason: 'bank-csv' }); return; }
+    // The columns its header names are a proposal only when they read as a statement (#406): a day and an amount other
+    // than zero on its rows. Columns that yield no movement (a list whose «amount» column is all zero) are no proposal
+    // and no table of empty lines: the columns are asked with nothing chosen, the way by hand.
+    const header = kept ? undefined : guessColumns(table.header);
+    const guessed = header && moves(table, header) ? header : undefined;
     // A CSV whose every payment the books hold on one account already (its bank export of the same days, #384): nothing to ask, nothing to read in.
     // Only on the account the file names by its IBAN when it names one; without, only a file of three payments or more (one or two equal rows of
     // another account are no proof). «Trotzdem übernehmen» (`anyway`) asks the columns as before.
