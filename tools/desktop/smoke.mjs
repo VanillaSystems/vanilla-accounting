@@ -69,12 +69,18 @@ const smtpPort = smtp.server.address().port;
 const keychainEntry = () => { try { return execFileSync('security', ['find-generic-password', '-s', 'vanilla-accounting Safe Storage'], { encoding: 'utf8' }); } catch { return undefined; } };
 const keychainBefore = keychainEntry();
 
-async function launch(port, shell) {
+async function launch(port, shell, env = {}) {
   const log = join(out, `app-${port}.log`);
+  // An app left on the port (a run that failed before it quit) would be driven in place of this one.
+  if (await fetch(`http://127.0.0.1:${port}/json/version`).then(() => true, () => false)) {
+    throw new Error(`port ${port} is taken: an app of an earlier run still running? (pkill -f "Vanilla Accounting.app/Contents/MacOS")`);
+  }
   const child = spawn(exe, [`--remote-debugging-port=${port}`, '--vanilla-smoke', `--user-data-dir=${userData}`, ...(keychainBefore ? ['--use-mock-keychain'] : [])], {
-    env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME, SHELL: shell, TMPDIR: process.env.TMPDIR ?? '/tmp', LANG: 'de_CH.UTF-8' },
+    env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME, SHELL: shell, TMPDIR: process.env.TMPDIR ?? '/tmp', LANG: 'de_CH.UTF-8', ...env },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  // A failed step ends the script: the app goes with it, so it neither stays open nor holds the port for the next run.
+  process.on('exit', () => { if (child.exitCode === null) child.kill(); });
   let text = '';
   child.stdout.on('data', (d) => { text += d; });
   child.stderr.on('data', (d) => { text += d; });
@@ -107,8 +113,9 @@ const clickText = (page, selector, text) => page.evaluate((selector, text) => {
   el?.click();
   return !!el;
 }, selector, text);
+// Opening books takes the x64 build under Rosetta about 40 s on an M3 (0.4.1 as 0.5.0), the arm64 build 2 s.
 async function settle(page, selector) {
-  await page.waitForSelector(selector, { timeout: 20000 });
+  await page.waitForSelector(selector, { timeout: 90000 });
   await sleep(600);
 }
 
@@ -120,10 +127,17 @@ const drop = (page, files) => page.evaluate((files) => {
   for (const f of files) dt.items.add(new File([Uint8Array.from(atob(f.b64), (c) => c.charCodeAt(0))], f.name, { type: f.type, lastModified: Date.now() }));
   for (const type of ['dragenter', 'dragover', 'drop']) window.dispatchEvent(new DragEvent(type, { dataTransfer: dt, bubbles: true, cancelable: true }));
 }, files.map((f) => ({ ...f, b64: f.bytes.toString('base64') })));
+/** The add-files dialog has come to rest: nothing worked on, «Schliessen» (at the end the bar gives way to the summary, #453). */
+const dropAtRest = (page) => page.waitForFunction(() => {
+  const dialog = document.querySelector('[data-testid=drop-dialog]');
+  return dialog?.dataset.working === 'false' && dialog.querySelector('[data-testid=drop-close]')?.textContent.trim() === 'Schliessen';
+}, { timeout: 180000 });
 /**
  * The add-files dialog takes each dropped file at once: wait until every one has its row there,
- * answer «verschieden» for the files in `distinct` (asked «schon da?»), wait until the dialog has
- * come to rest («Hinzugefügt», the bar at 100 %), then close it with «Schliessen».
+ * answer «verschieden» for the files in `distinct` (asked «schon da?» before they are taken), wait
+ * until the dialog has come to rest, then close it with «Schliessen». The stub reads every photo to
+ * the same text, so a read photo is asked «schon da? gleicher Text» about the other one (#361):
+ * answered «verschieden» too, as a person answers it for two different photos.
  * Returns the rows as the dialog showed them at rest.
  */
 async function takeDropped(page, names, { shot: shotName, distinct = [] } = {}) {
@@ -138,11 +152,15 @@ async function takeDropped(page, names, { shot: shotName, distinct = [] } = {}) 
     await page.click(`${row(name)} [data-testid=drop-twin-distinct]`);
     await page.waitForSelector(`${row(name)}[data-state]:not([data-state=duplicate])`, { timeout: 30000 });
   }
-  await page.waitForFunction(() => {
-    const dialog = document.querySelector('[data-testid=drop-dialog]');
-    return dialog?.dataset.working === 'false' && dialog.querySelector('[role=progressbar]')?.getAttribute('aria-valuenow') === '100'
-      && dialog.querySelector('[data-testid=drop-close]')?.textContent.trim() === 'Schliessen';
-  }, { timeout: 180000 });
+  await dropAtRest(page);
+  for (let i = 0; i < names.length; i++) {
+    const twin = await page.$('[data-testid=drop-dialog] [data-testid=drop-row][data-state=twin]');
+    if (!twin) break;
+    const name = await twin.evaluate((r) => r.dataset.file);
+    await page.click(`${row(name)} [data-testid=drop-twin-distinct]`);
+    await page.waitForSelector(`${row(name)}:not([data-state=twin])`, { timeout: 30000 });
+    await dropAtRest(page);
+  }
   const rows = await page.$$eval('[data-testid=drop-dialog] [data-testid=drop-row]', (rs) => rs.map((r) => ({ file: r.dataset.file, state: r.dataset.state })));
   await page.click('[data-testid=drop-close]');
   await page.waitForSelector('[data-testid=drop-dialog]', { hidden: true, timeout: 5000 });
@@ -174,6 +192,8 @@ await settle(page, '[data-ready=claude]');
 // German, as a Swiss user would pick it: the page remembers it and the native menu follows.
 await clickText(page, '.st-top .seg2 button', 'DE');
 await sleep(500);
+// Under Rosetta the busy start can let a look at claude time out (8 s): the line goes while its card is tested again, then comes back.
+await settle(page, '[data-ready=claude]');
 await shot(page, '01-start');
 check('a fresh install opens «Einrichtung»: the books\' choices, the AI ready, no AI card and no command', await page.$('[data-ready=claude]') && await page.$('[data-answer=create]') && !(await page.$('.aicli')) && !(await page.$('.aicmd')));
 check('the window is dragged by its top edge (no title bar on the Mac)', await page.evaluate(() => {
@@ -194,7 +214,7 @@ check('the app keeps its state in the given user data folder', existsSync(join(u
 check('PATH of the app process is /usr/bin:/bin', execFileSync('ps', ['eww', '-o', 'command=', String(first.child.pid)], { encoding: 'utf8' }).includes('PATH=/usr/bin:/bin'));
 
 // 2. Demo ansehen.
-await Promise.all([page.waitForNavigation(), page.click('[data-answer=demo]')]);
+await Promise.all([page.waitForNavigation({ timeout: 90000 }), page.click('[data-answer=demo]')]);
 await settle(page, 'nav.activity');
 await settle(page, '[data-testid=demo-bar]');
 await shot(page, '02-demo');
@@ -343,11 +363,15 @@ const camt = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:x
 await page.goto(`${base}/bank`);
 await settle(page, 'h1');
 const sinceCamt = new Date().toISOString();
-await drop(page, [{ name: `camt053-smoke-${day}.xml`, type: 'text/xml', bytes: Buffer.from(camt) }]);
+// Files dropped on Kontoauszüge go through «Dateien hinzufügen» as on any page (#361): closing the window opens the statement it read.
+const camtName = `camt053-smoke-${day}.xml`;
+await drop(page, [{ name: camtName, type: 'text/xml', bytes: Buffer.from(camt) }]);
+const camtRows = await takeDropped(page, [camtName], { shot: '04h-camt-dialog' });
 await page.waitForFunction((day) => location.pathname.startsWith('/bank/') && location.pathname.includes(day), { timeout: 30000 }, day).catch(() => undefined);
 await settle(page, 'h1');
-const shownStatement = await page.evaluate(() => ({ path: location.pathname, dialog: !!document.querySelector('[data-testid=drop-dialog]'), title: [...document.querySelectorAll('h1')].map((h) => h.textContent).join(' | ') }));
-check('Bank reads the dropped camt.053 itself (no add-files dialog) and opens the new statement', shownStatement.path.startsWith('/bank/') && shownStatement.path.includes(day) && !shownStatement.dialog, `${shownStatement.path}: ${shownStatement.title}`);
+const shownStatement = await page.evaluate(() => ({ path: location.pathname, title: [...document.querySelectorAll('h1')].map((h) => h.textContent).join(' | ') }));
+check('Bank takes the dropped camt.053 in «Dateien hinzufügen»; «Schliessen» opens the new statement', shownStatement.path.startsWith('/bank/') && shownStatement.path.includes(day),
+  `${camtRows.map((r) => `${r.file} ${r.state}`).join(', ')}; ${shownStatement.path}: ${shownStatement.title}`);
 await intakeDone(page, sinceCamt);
 await shot(page, '04h-camt-imported');
 const tx = (await api(page, '/books.json')).json.transactions?.find((t) => JSON.stringify(t).includes('SMOKE-PAY-1'));
@@ -379,11 +403,19 @@ const fill = async (name, value) => {
   if (!ok) throw new Error(`no field ${name}`);
 };
 await fill('name', 'Rauchtest GmbH');
-await fill('uid', 'CHE-153.004.184');
+// No UID: the setup asks only what the books need (#452). The VAT method and basis are never assumed, only clicked (#379).
+for (const answer of ['effektive Methode', 'vereinnahmt']) {
+  if (!(await clickText(page, '.st-form .st-q .st-opts button', answer))) throw new Error(`no answer «${answer}» in the form`);
+}
 await fill('owner', 'Erika Rauch');
 await fill('root', root);
 await shot(page, '05-new-books-form');
-await Promise.all([page.waitForNavigation({ timeout: 30000 }), page.click('[data-act=create]')]);
+const [createdNav] = await Promise.all([page.waitForNavigation({ timeout: 90000 }).then(() => true, () => false), page.click('[data-act=create]')]);
+if (!createdNav) {
+  await shot(page, '05b-create-stuck');
+  const said = await page.evaluate(() => [...document.querySelectorAll('[role=alert], .warnline, .st-stop, .err')].map((e) => e.textContent.trim()).join(' | '));
+  throw new Error(`«Erstellen» opened no books within 90 s at ${page.url()}: ${said || 'nothing said'}`);
+}
 await settle(page, 'nav.activity');
 const created = (await api(page, '/api/workspace')).json?.company?.name;
 check('new books are set up and opened', created === 'Rauchtest GmbH' && existsSync(join(root, 'vanilla-accounting', 'belege.workspace.yaml')), created);
@@ -401,7 +433,7 @@ const zoomed = await page.evaluate(() => document.documentElement.style.zoom);
 await clickMenu(page, 'zoomReset');
 await page.waitForFunction(() => !document.documentElement.style.zoom, { timeout: 10000 }).catch(() => undefined);
 check('View › Vergrössern steps the page\'s own zoom, Originalgrösse resets it', zoomed === '1.1' && !(await page.evaluate(() => document.documentElement.style.zoom)), `zoom ${zoomed}`);
-await Promise.all([page.waitForNavigation({ timeout: 20000 }), clickMenu(page, 'demo')]);
+await Promise.all([page.waitForNavigation({ timeout: 90000 }), clickMenu(page, 'demo')]);
 await settle(page, 'nav.activity');
 const back = (await api(page, '/api/workspace')).json?.company?.name;
 check('File menu switches back to the demo (menu clicked)', back === demoName, back);
@@ -412,7 +444,10 @@ await page.evaluate(() => window.vanillaSmoke.quit());
 await exited;
 
 // 6. Without claude (a shell that does not find it): a model feature names what to install, the rest works.
-const second = await launch(9334, '/bin/sh');
+// The app also looks in ~/.local/bin, where Claude Code's installer writes: an installed claude there would be
+// found and, under this environment, refuse as signed out. CLAUDE_BIN and CODEX_BIN pin a program that is not there.
+const none = join(stubBin, 'not-installed');
+const second = await launch(9334, '/bin/sh', { CLAUDE_BIN: none, CODEX_BIN: none });
 page = second.page;
 await settle(page, 'nav.activity');
 check('the next start opens the last books', (await api(page, '/api/workspace')).json?.company?.name === demoName);
