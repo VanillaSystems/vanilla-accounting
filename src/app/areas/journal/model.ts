@@ -6,7 +6,7 @@
 import type { BankTransaction, Index, JournalEntry, Receipt } from '../../../types/index.js';
 import { derivePeriod, filingKeyOf, type FilingLength, type Period } from '../../../accounting/periods.js';
 import { chfAmount } from '../../../accounting/index.js';
-import { evidenceCheck, type EvidenceCheck } from '../../../accounting/evidence-check.js';
+import { evidenceCheck, lineBillsOf, type EvidenceCheck, type LineBills } from '../../../accounting/evidence-check.js';
 import { bookedStates } from '../../../accounting/payment-entries.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { fmt, formatDate } from '../../lib/utils.js';
@@ -57,6 +57,8 @@ export interface Journal {
   views: EntryView[];
   byId: Map<string, EntryView>;
   byRef: Map<string, EntryView[]>;
+  /** Per payment, the bills of its card statement's lines (#409): evidence of their own lines only. */
+  bills: Map<string, LineBills>;
   closedThrough?: string;
 }
 
@@ -79,18 +81,20 @@ export function journalOf(books: Index): Journal {
     const r = receiptById.get(m.receiptId);
     if (r) (receiptsByRef.get(m.transactionRef) ?? receiptsByRef.set(m.transactionRef, []).get(m.transactionRef)!).push(r);
   }
+  const bills = new Map<string, LineBills>();
+  for (const ref of new Set(books.mappings.filter((m) => m.line !== undefined).map((m) => m.transactionRef))) bills.set(ref, lineBillsOf(books.mappings, ref));
   const linesByRef = new Map<string, JournalEntry[]>();
   for (const e of books.journalEntries ?? []) (linesByRef.get(e.transactionRef) ?? linesByRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
   const views = (books.journalEntries ?? []).map((e): EntryView => {
     const tx = txByRef.get(e.transactionRef);
     const receipts = receiptsByRef.get(e.transactionRef) ?? [];
     const [title, sub] = splitText(e.description || e.transactionRef);
-    const evidence = evidenceCheck(e, receipts, closedThrough, tx?.inputTaxProof, linesByRef.get(e.transactionRef));
+    const evidence = evidenceCheck(e, receipts, closedThrough, tx?.inputTaxProof, linesByRef.get(e.transactionRef), bills.get(e.transactionRef));
     return { e, tx, receipts, missing: !!tx && needsReceipt(tx, receipts.length), locked: !!closedThrough && e.date <= closedThrough, ...(evidence && { evidence }), title, sub };
   });
   const byRef = new Map<string, EntryView[]>();
   for (const v of views) (byRef.get(v.e.transactionRef) ?? byRef.set(v.e.transactionRef, []).get(v.e.transactionRef)!).push(v);
-  return { views, byId: new Map(views.map((v) => [v.e.id, v])), byRef, closedThrough };
+  return { views, byId: new Map(views.map((v) => [v.e.id, v])), byRef, bills, closedThrough };
 }
 
 /** A booking of a filed period whose code contradicts its receipts, with what the check proposes. */
@@ -110,7 +114,7 @@ export function unsettledAtFiling(j: Journal, length: FilingLength): { period: s
   const corrected = (ref: string) => j.views.some((x) => x.e.corrects === period && (x.e.description ?? '').includes(ref));
   const items = j.views.flatMap((v): Unsettled[] => {
     if (v.e.date < from || v.e.date > closed || v.e.corrects || corrected(v.e.transactionRef)) return [];
-    const check = evidenceCheck(v.e, v.receipts, undefined, v.tx?.inputTaxProof, (j.byRef.get(v.e.transactionRef) ?? []).map((x) => x.e));
+    const check = evidenceCheck(v.e, v.receipts, undefined, v.tx?.inputTaxProof, (j.byRef.get(v.e.transactionRef) ?? []).map((x) => x.e), j.bills.get(v.e.transactionRef));
     return check ? [{ v, check }] : [];
   });
   return { period, items };

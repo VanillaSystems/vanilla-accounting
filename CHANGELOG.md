@@ -434,6 +434,14 @@ Two markers flag an entry you must read before you update:
   such a bill with other bytes (the same invoice number in the same month, or a copy as Belege finds
   one), and one she marked as a copy, no longer books its input tax a second time: Belege names the
   bill it copies. The button is not offered on a firm without input tax.
+- «Buchung passt nicht zu ihrem Beleg» no longer names a line the receipt leaves untaxed (#455). A
+  hotel bill of a room at 3.8 % and a Kurtaxe without VAT, on a card settlement, booked room I38
+  and Kurtaxe I0, got the task «Der Beleg zeigt 3.8 % MWST, die Buchung steht auf … I0» for the
+  Kurtaxe, and «Nach Beleg buchen» claimed CHF 0.22 input tax on it. The check now takes the bill of
+  a card statement's line as evidence of that line's bookings only, sets a VAT group the receipt
+  names by its tax alone against the lines at the gross that tax proves (allowing for the tax's
+  rounding to the cent), leaves a receipt in another currency out of the sum, and tells a line at 0 %
+  beside a line at the receipt's rate nothing when no receipt in the line's currency can be compared.
 - The fields of Firma's forms stand in line at every width (#454): a hint under one input («kein
   Konto», the account's name) or a label on two lines no longer pushes the field beside it down
   (Eröffnung, Regeln and the others). Firma › Eröffnung names its amount fields «Saldo per 1.1.2026
