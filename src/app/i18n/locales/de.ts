@@ -1628,7 +1628,7 @@ export const messages = {
   'bank.noOpen': 'Der Anfangssaldo fehlt (Auszug des Vormonats nicht im Archiv).',
   'bank.noClose': 'Der Endsaldo ist aus dem PDF nicht gelesen.',
   'bank.bookDiff': 'Die Buchhaltung weicht um {diff} vom Endsaldo der Bank ab: eine Zahlung ist nicht oder falsch gebucht.',
-  'bank.bookDiffBefore': 'Die Buchhaltung weicht um {diff} vom Endsaldo der Bank ab, schon vor der ersten Zahlung der Kontoauszüge am {date}: die Bank hatte da {currency} {bank}, die Buchhaltung {currency} {books} (Eröffnung und Buchungen davor). Was die Bank vom 1.1. bis dahin bewegt hat, ist nicht in diesen Büchern.',
+  'bank.bookDiffBefore': 'Die Buchhaltung weicht um {diff} vom Endsaldo der Bank ab, schon vor der ersten Zahlung der Kontoauszüge am {date}: die Bank hatte da {currency} {bank}, Eröffnung und Buchungen davor ergeben {currency} {books}. Entweder weicht die Eröffnung von der Bilanz ab, oder Zahlungen vor dem {date} sind nicht in diesen Büchern.',
   'bank.openingShow': 'Eröffnung ansehen',
   'bank.bookDiffUnbooked': { one: 'Die Buchhaltung weicht um {diff} vom Endsaldo der Bank ab: so viel macht die Zahlung ohne Buchung aus.', other: 'Die Buchhaltung weicht um {diff} vom Endsaldo der Bank ab: so viel machen die {n} Zahlungen ohne Buchung aus.' },
   'bank.missingNotice': 'Dieser Auszug fehlt. Ohne ihn lässt sich der Saldo nicht prüfen.',

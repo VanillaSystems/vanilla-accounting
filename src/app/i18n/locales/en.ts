@@ -1631,7 +1631,7 @@ export default {
     'bank.noOpen': "The opening balance is missing (the previous month's statement is not in the archive).",
     'bank.noClose': 'The closing balance was not read from the PDF.',
     'bank.bookDiff': "The books differ from the bank's closing balance by {diff}: a payment is not booked, or booked wrong.",
-    'bank.bookDiffBefore': 'The books differ from the bank\'s closing balance by {diff}, already before the statements\' first payment on {date}: the bank then held {currency} {bank}, the books {currency} {books} (opening and earlier bookings). What the bank moved from 1 January until then is not in these books.',
+    'bank.bookDiffBefore': 'The books differ from the bank\'s closing balance by {diff}, already before the statements\' first payment on {date}: the bank then held {currency} {bank}, the opening and earlier bookings give {currency} {books}. Either the opening differs from the balance sheet, or payments before {date} are not in these books.',
     'bank.openingShow': 'View the opening',
     'bank.bookDiffUnbooked': { one: "The books differ from the bank's closing balance by {diff}: that is what the payment without an entry amounts to.", other: "The books differ from the bank's closing balance by {diff}: that is what the {n} payments without an entry amount to." },
     'bank.missingNotice': 'This statement is missing. Without it the balance cannot be checked.',

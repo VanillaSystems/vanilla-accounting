@@ -1631,7 +1631,7 @@ export default {
     'bank.noOpen': "Manca il saldo iniziale (l'estratto del mese precedente non è nell'archivio).",
     'bank.noClose': 'Il saldo finale non è stato letto dal PDF.',
     'bank.bookDiff': 'La contabilità differisce di {diff} dal saldo finale della banca: un pagamento non è registrato o è registrato male.',
-    'bank.bookDiffBefore': 'La contabilità differisce di {diff} dal saldo finale della banca, già prima del primo pagamento degli estratti il {date}: la banca aveva allora {currency} {bank}, la contabilità {currency} {books} (apertura e registrazioni precedenti). Ciò che la banca ha movimentato dal 1.1. fino ad allora non è in questi libri.',
+    'bank.bookDiffBefore': 'La contabilità differisce di {diff} dal saldo finale della banca, già prima del primo pagamento degli estratti il {date}: la banca aveva allora {currency} {bank}, apertura e registrazioni precedenti danno {currency} {books}. O l’apertura differisce dal bilancio, o pagamenti anteriori al {date} non sono in questi libri.',
     'bank.openingShow': 'Vedi l’apertura',
     'bank.bookDiffUnbooked': { one: 'La contabilità differisce di {diff} dal saldo finale della banca: è l’importo del pagamento senza registrazione.', other: 'La contabilità differisce di {diff} dal saldo finale della banca: è l’importo dei {n} pagamenti senza registrazione.' },
     'bank.missingNotice': 'Questo estratto manca. Senza di esso il saldo non si può verificare.',

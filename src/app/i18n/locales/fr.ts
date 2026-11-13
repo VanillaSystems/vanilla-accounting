@@ -1631,7 +1631,7 @@ export default {
     'bank.noOpen': "Le solde initial manque (le relevé du mois précédent n'est pas dans l'archive).",
     'bank.noClose': "Le solde final n'a pas été lu dans le PDF.",
     'bank.bookDiff': "La comptabilité diffère de {diff} du solde final de la banque : un paiement n'est pas comptabilisé ou mal.",
-    'bank.bookDiffBefore': 'La comptabilité diffère de {diff} du solde final de la banque, dès avant le premier paiement des relevés le {date} : la banque avait alors {currency} {bank}, la comptabilité {currency} {books} (ouverture et écritures antérieures). Ce que la banque a mouvementé du 1.1. jusque-là n’est pas dans ces livres.',
+    'bank.bookDiffBefore': 'La comptabilité diffère de {diff} du solde final de la banque, dès avant le premier paiement des relevés le {date} : la banque avait alors {currency} {bank}, l’ouverture et les écritures antérieures donnent {currency} {books}. Soit l’ouverture diffère du bilan, soit des paiements antérieurs au {date} ne sont pas dans ces livres.',
     'bank.openingShow': 'Voir l’ouverture',
     'bank.bookDiffUnbooked': { one: 'La comptabilité diffère de {diff} du solde final de la banque : c’est le montant du paiement sans écriture.', other: 'La comptabilité diffère de {diff} du solde final de la banque : c’est le montant des {n} paiements sans écriture.' },
     'bank.missingNotice': 'Ce relevé manque. Sans lui, le solde ne peut pas être vérifié.',
