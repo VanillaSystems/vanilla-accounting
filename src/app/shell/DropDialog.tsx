@@ -778,6 +778,8 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   useEffect(() => { setStage('all'); setUnfolded(new Set()); }, [s.session?.id]);
   // The session the overview was shown for: it stays for that session, never flipping back to the tabs under her hand.
   const overviewFor = useRef<string>();
+  // The highest the bar came to in this session: a run's step count may step back a little (75 → 73 %), the bar does not.
+  const highest = useRef<{ session?: string; pct: number }>({ pct: 0 });
   // A filter whose last file left it gives way to «alle»; the focus, lost with that file's row, goes to «alle».
   const allButton = useRef<HTMLButtonElement>(null);
   const refocus = useRef(false);
@@ -813,7 +815,10 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   if (ov.n >= OVERVIEW_FROM && s.session) overviewFor.current = s.session.id;
   const many = ov.n >= OVERVIEW_FROM || (!!s.session && overviewFor.current === s.session.id);
   // Files still uploading or being taken count as not begun, so the bar does not fall back when they join; a file at rest counts whole.
-  const pct = dropProgress([...rows.map((r) => (r.state === 'take' ? 0 : r.state === 'taken' ? doneOf(r, stateOf.get(r)!, view) : 1)), ...Array<number>(s.adding).fill(0)]);
+  const now = dropProgress([...rows.map((r) => (r.state === 'take' ? 0 : r.state === 'taken' ? doneOf(r, stateOf.get(r)!, view) : 1)), ...Array<number>(s.adding).fill(0)]);
+  if (highest.current.session !== s.session?.id) highest.current = { session: s.session?.id, pct: 0 };
+  const pct = Math.max(highest.current.pct, now);
+  highest.current.pct = pct;
   const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? [], undefined, outlayWaitsNow()), questions, groupOf) : undefined;
   // A filter whose stage has no file any more (its last one answered) shows the whole drop again, and stays so.
   if (stage !== 'all' && !ov.counts[stage]) { setStage('all'); refocus.current = true; }

@@ -437,7 +437,7 @@ Two markers flag an entry you must read before you update:
   file is judged by its own run only: a later file's run, which takes up the receipts still waiting
   for their payment again, no longer sets the files at rest back to «in Arbeit» and the bar back to
   0 %; and the window asks for the runs' steps at once when a file is taken, every 2 s while files
-  are worked on.
+  are worked on, in one loop of asks that returns to every 10 s; the bar never goes back.
 - A payment of social insurance contributions while the wage deductions account (2270) holds
   nothing is booked, and a payment a run leaves unbooked says why (#470). With wages booked net,
   the AI is told that 2270 holds nothing and the whole contribution is the firm's expense (only
