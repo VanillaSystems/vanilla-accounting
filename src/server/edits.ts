@@ -14,7 +14,7 @@ import { correctsFor } from '../accounting/correction.js';
 import { bookedState, paymentDates, paymentSides, type PaymentSide } from '../accounting/payment-entries.js';
 import { baseCurrency, chart, documents, filing, vat } from '../engines/index.js';
 import { toRappen } from '../accounting/rappen.js';
-import { evidenceCheck } from '../accounting/evidence-check.js';
+import { evidenceCheck, lineBillsOf } from '../accounting/evidence-check.js';
 import { ratesImportVat, readAssessment } from '../booking/customs-invoice.js';
 import { codeSignFor } from '../accounting/code-sign.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
@@ -723,7 +723,8 @@ export function bookByReceipt(books: Books, id: string): { before: JournalEntry[
   const proof = books.transactions.find((t) => t.ref === ref)?.inputTaxProof;
   const lines = books.journalEntries.filter((x) => x.transactionRef === ref);
   // The finding sits on one line of the payment; the click on any of its lines books them all.
-  const check = [e, ...lines].map((x) => evidenceCheck(x, linked, books.config.closedThrough, proof, lines)).find((c) => c?.kind === 'receiptGroups' && c.entries.includes(e.id));
+  const bills = lineBillsOf(books.mappings, ref);
+  const check = [e, ...lines].map((x) => evidenceCheck(x, linked, books.config.closedThrough, proof, lines, bills)).find((c) => c?.kind === 'receiptGroups' && c.entries.includes(e.id));
   if (check?.kind === 'receiptGroups' && check.decided) throw new RequestError(409, 'Eine Zeile dieser Zahlung hat eine Person so gebucht: die App bucht sie nicht um. Ändern unter Buchungen.', { code: 'decidedByHand' });
   if (check?.kind !== 'receiptGroups' || !check.lines) throw new RequestError(409, 'Die Buchung lässt sich nicht nach den Steuersätzen ihres Belegs buchen.', { code: 'notByReceipt' });
   const mates = check.entries.map((x) => entryOf(books, x));
