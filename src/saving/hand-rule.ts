@@ -12,7 +12,8 @@ import { loadBooks } from '../books/store.js';
 import { loadClassifyContext, mappedReceipts, paymentFacts, ruleBookingLines, ruleOfPayment, type RuleLine } from '../booking/classify.js';
 import { stableWords } from '../knowledge/gaps.js';
 import { paysOwner, receiptKnowledge } from '../booking/receipt-wait.js';
-import { payoutWaitOf } from '../booking/providers.js';
+import { payoutWaitOf, providerOfMoneyIn } from '../booking/providers.js';
+import { chartNames } from '../booking/rule-book.js';
 import { isOwnBankFee } from '../booking/bank-fee.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
 import type { PaymentNature } from '../accounting/manual-booking.js';
@@ -208,10 +209,14 @@ const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
 /** What the payment is beside a sale or a purchase, from the firm's files (manual-booking.ts PaymentNature). */
 function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, context: ReturnType<typeof loadClassifyContext>, file: Counterparty | undefined, wages: () => ReadonlyArray<{ test(s: string): boolean }>): PaymentNature | undefined {
   const linked = mappedReceipts(books, tx);
-  const waits = payoutWaitOf(tx, linked, context.counterparties ?? [], books.journalEntries);
-  if (waits) {
-    const key = waits.why === 'clearing' ? 'salesReport.noClearing' : waits.why === 'since' ? 'salesReport.noSince' : 'salesReport.gapPayout';
-    return { kind: 'payoutWaits', key, params: { provider: waits.provider.name, file: homeOf('workspace', waits.provider.role, waits.provider.id), since: waits.provider.provider.since ?? '', account: waits.provider.provider.clearing ?? '' } };
+  // A provider's payout, in every state: never a sale (#404).
+  const provider = providerOfMoneyIn(tx, linked, context.counterparties ?? []);
+  if (provider) {
+    const waits = payoutWaitOf(tx, linked, context.counterparties ?? [], books.journalEntries);
+    const { clearing, since } = provider.provider;
+    const inChart = !!clearing && chartNames(context.chartOfAccounts).has(clearing);
+    const why = waits ? waits.why : since && tx.date < since ? 'before' : inChart ? 'ready' : 'clearing';
+    return { kind: 'payout', provider: provider.name, why, ...(clearing ? { account: clearing } : {}), ...(since ? { since } : {}) };
   }
   // The bank's own fee row: on the bank-charges account, as code books it (#359), or what the chart lacks for it.
   if (isOwnBankFee(tx, context.bankCoded)) {

@@ -15,10 +15,13 @@ import { checkAnswers } from '../src/workspace/create.js';
 import { PRESETS, type Answers } from '../src/workspace/setup.js';
 import { applyPlan, planWorkspace } from '../src/workspace/scaffold.js';
 import { loadChart } from '../src/workspace/chart.js';
-import { APP_FOLDER, type Uid } from '../src/workspace/workspace.js';
+import { APP_FOLDER, workspaceAt, type Uid } from '../src/workspace/workspace.js';
 import type { Iban } from '../src/workspace/banks.js';
 import type { DropSession } from '../src/types/drop.js';
-import { loadBooks } from '../src/books/store.js';
+import { loadBooks, saveBooks } from '../src/books/store.js';
+import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
+import { handStart } from '../src/saving/hand-rule.js';
+import { bookingDraft } from '../src/accounting/manual-booking.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 import './support/jurisdiction.js';
 
@@ -96,6 +99,42 @@ test('her answers in the drop row book the 40 payouts bank / clearing account wi
   } finally {
     await api.stop();
   }
+});
+
+test('the hand form of a payout never proposes turnover: bank / the clearing account without a code when the company\'s file names it, else no account, and it says what a payout is', () => {
+  const ws = workspaceAt(shopBooks());
+  const txs = readCamt(FILES['camt053_LUKB_Q3-2026.xml']).statements.flatMap((s) => transactionsOf(s, { bank: 'LUKB', statements: 'camt053' }));
+  const b = loadBooks(ws);
+  b.transactions.push(...txs);
+  saveBooks(ws, b);
+  const file = join(ws.paths.root, 'knowledge', 'suppliers', 'shopify.yaml');
+  const july = txs.find((t) => t.description.includes('88124415'))!;
+  const first = txs.find((t) => t.description.includes('88124406'))!;
+  const form = (ref: string) => {
+    const start = handStart(ws, ref);
+    const draft = bookingDraft(loadBooks(ws), ref, ws.bankAccounts, undefined, { defaults: { sales: '3200' }, nature: start?.nature });
+    return { line: draft!.lines.map((l) => `${l.accountDebit}/${l.accountCredit} ${l.vat}`).join(), notes: draft!.notes };
+  };
+  const states: Array<[string, string, string]> = [
+    ['', '1020/ ', 'clearing'],
+    ['provider:\n  clearing: "1093"\n', '1020/ ', 'since'],
+    ['provider:\n  clearing: "1093"\n  since: 2026-07-01\n', '1020/1093 ', 'ready'],
+    ['provider:\n  clearing: "1093"\n  since: 2026-07-20\n', '1020/ ', 'before'],
+  ];
+  for (const [provider, line, why] of states) {
+    writeFileSync(file, `id: shopify\n${provider}`);
+    const f = form(why === 'before' ? first.ref : july.ref);
+    assert.equal(f.line, line, why);
+    assert.deepEqual(f.notes.map((n) => [n.kind, 'why' in n ? n.why : '']), [['payout', why]], why);
+  }
+  // Before the cut-over day beside sales a report booked onto the clearing account: hers to decide, no account.
+  writeFileSync(file, 'id: shopify\nprovider:\n  clearing: "1093"\n  since: 2026-07-05\n');
+  const s = loadBooks(ws);
+  s.journalEntries.push({ id: 'sr1', transactionRef: 'SR-shopify-1050', date: '2026-06-29', accountDebit: '1093', accountCredit: '3200', amount: 50, vatCode: 'V81', origin: 'classify' });
+  saveBooks(ws, s);
+  const gap = form(first.ref);
+  assert.equal(gap.line, '1020/ ');
+  assert.deepEqual(gap.notes.map((n) => [n.kind, 'why' in n ? n.why : '']), [['payout', 'gap']]);
 });
 
 test('«Einschalten» books what waited: the payouts a change by hand decided are booked once booking is switched on', async () => {
