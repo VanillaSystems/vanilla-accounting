@@ -134,9 +134,7 @@ interface LineReading { position: CustomsPosition; rate?: number; carrierTax?: b
  * The position of a line on a customs invoice whose words name none:
  *  - a line that names only the tax and the domestic rate it is charged at («8,10 % VAT») is the
  *    carrier's VAT on its services: fees at that rate, added to the fees it is charged on;
- *  - a line at no rate that names the tax and is as much as the tax on the invoice's lines at one
- *    domestic rate (carrierVat: «VAT», «VAT 8.1% on 25.00» of 2.03 beside a fee of 25.00 at 8.1 %)
- *    is that VAT too, whatever else its words say (#483);
+ *  - a line the invoice's carrier VAT lines name (carrierTaxLines, #483) is that VAT: fees at its rate;
  *  - any other line that names only the tax at no rate is the import VAT the carrier advanced (the carrier's own
  *    VAT is charged at a rate on its services, never a line of 0 %); at a rate of the line's own, without
  *    the words saying which, it is none;
@@ -146,9 +144,9 @@ interface LineReading { position: CustomsPosition; rate?: number; carrierTax?: b
  *    (`cites`), is the import VAT.
  * Else none.
  */
-function unnamedPosition(l: ReceiptLine, words: CustomsWords, cites: boolean, lines: readonly ReceiptLine[]): LineReading | undefined {
-  const own = !l.ratePercent && !!words.tax?.length && wordsRe(words.tax).test(l.description) && !namesUntaxed(l, words) ? carrierVat(l, lines) : undefined;
-  if (own !== undefined && (rateIn(l.description) ?? own) === own) return { position: 'fees', rate: own, carrierTax: true };
+function unnamedPosition(l: ReceiptLine, words: CustomsWords, cites: boolean, carrier: ReadonlyMap<ReceiptLine, number>): LineReading | undefined {
+  const own = carrier.get(l);
+  if (own !== undefined) return { position: 'fees', rate: own, carrierTax: true };
   if (namesOnlyTax(l.description, words)) {
     const stated = rateIn(l.description);
     if (stated !== undefined) return vat().isDomesticRate(stated) ? { position: 'fees', rate: stated, carrierTax: true } : undefined;
@@ -159,12 +157,53 @@ function unnamedPosition(l: ReceiptLine, words: CustomsWords, cites: boolean, li
 }
 
 /**
- * The domestic rate whose tax on the lines at that rate `line` is as much as (within 0.05): the
- * carrier's own VAT printed as a line, not import VAT it advanced. Undefined when it is none.
+ * Whether a line at no rate is worded as a tax line alone: the tax's name, maybe the rate and the
+ * base it is charged on («VAT 8.1% on 25.00»), and no other word of more than three letters (a
+ * connecting word or a currency code). «VAT on goods» names more than the tax.
  */
-function carrierVat(line: ReceiptLine, lines: readonly ReceiptLine[]): number | undefined {
+function taxWorded(l: ReceiptLine, words: CustomsWords): boolean {
+  if (l.ratePercent || !words.tax?.length || !wordsRe(words.tax).test(l.description) || namesUntaxed(l, words)) return false;
+  const rest = l.description.replace(new RegExp(wordsRe(words.tax).source, 'giu'), ' ').replace(/[^\p{L}]+/gu, ' ').trim();
+  return !rest || rest.split(' ').every((w) => w.length <= 3);
+}
+
+/** The tax on the lines at `rate`: on their net, or the share in them when they are read with the tax in. */
+function taxesAt(rate: number, lines: readonly ReceiptLine[]): number[] {
+  const gross = lines.filter((l) => l.ratePercent === rate).reduce((s, l) => s + l.gross, 0);
+  return [toRappen((gross * rate) / 100), toRappen((gross * rate) / (100 + rate))];
+}
+
+/**
+ * The carrier's own VAT lines of an invoice, each with its rate (#483): a line worded as the tax
+ * alone at no rate (taxWorded) that states a domestic rate is that rate's VAT. For a rate of the
+ * invoice's taxed lines without such a line, the one bare tax line as much as the tax on them
+ * (within 0.05, on their net or in them) is; two such lines, or one as much as an assessment linked
+ * beside the invoice (`assessed`), leave it as the import VAT the carrier advanced. One line per rate.
+ */
+function carrierTaxLines(lines: readonly ReceiptLine[], words: CustomsWords, assessed: readonly number[]): Map<ReceiptLine, number> {
+  const out = new Map<ReceiptLine, number>();
+  const worded = lines.filter((l) => taxWorded(l, words));
+  for (const l of worded) {
+    const stated = rateIn(l.description);
+    if (stated !== undefined && vat().isDomesticRate(stated) && ![...out.values()].includes(stated)) out.set(l, stated);
+  }
   const rates = new Set(lines.map((l) => l.ratePercent ?? 0).filter((rate) => rate > 0 && vat().isDomesticRate(rate)));
-  return [...rates].find((rate) => Math.abs(toRappen(lines.filter((l) => l.ratePercent === rate).reduce((s, l) => s + l.gross, 0) * rate / 100) - toRappen(line.gross)) <= 5);
+  for (const rate of rates) {
+    if ([...out.values()].includes(rate)) continue;
+    const taxes = taxesAt(rate, lines);
+    const bare = worded.filter((l) => rateIn(l.description) === undefined && taxes.some((x) => Math.abs(x - toRappen(l.gross)) <= 5));
+    if (bare.length === 1 && !assessed.some((a) => toRappen(a) === toRappen(bare[0].gross))) out.set(bare[0], rate);
+  }
+  return out;
+}
+
+/** The tax the assessments among `documents` state, by their words (namesAssessment), whoever they name. */
+export function assessedAmounts(documents: readonly Receipt[], words: CustomsWords): number[] {
+  return documents.flatMap((r) => {
+    const text = r.extractedText ?? '';
+    const tax = wordsRe(words.assessment.title).test(text) ? assessedTax(text, words) : undefined;
+    return tax ? [tax.amount] : [];
+  });
 }
 
 /**
@@ -177,14 +216,15 @@ function carrierVat(line: ReceiptLine, lines: readonly ReceiptLine[]): number | 
  * fees (unnamedPosition). Fees and freight are summed per rate; each import VAT line stays apart,
  * for an invoice of several shipments has one assessment each.
  */
-export function readCustomsInvoice(r: Receipt, words: CustomsWords): { invoice: CustomsInvoice } | { hold: CustomsHold } | undefined {
+export function readCustomsInvoice(r: Receipt, words: CustomsWords, assessed: readonly number[] = []): { invoice: CustomsInvoice } | { hold: CustomsHold } | undefined {
   const numbers = assessmentNumbers(r.extractedText ?? '', words);
   const items = r.lineItems ?? [];
+  const carrier = carrierTaxLines(items, words, assessed);
   const all = items.map((l) => ({ l, position: positionOf(l.description, words) }));
   const customs = all.some((n) => n.position === 'importVat' || n.position === 'duty')
-    || (numbers.length > 0 && all.some((n) => !n.position && unnamedPosition(n.l, words, true, items)?.position === 'importVat'));
+    || (numbers.length > 0 && all.some((n) => !n.position && unnamedPosition(n.l, words, true, carrier)?.position === 'importVat'));
   if (!customs) return undefined;
-  const named = all.filter((n) => toRappen(n.l.gross) !== 0).map((n) => ({ l: n.l, reading: n.position ? { position: n.position } as LineReading : unnamedPosition(n.l, words, numbers.length > 0, items) }));
+  const named = all.filter((n) => toRappen(n.l.gross) !== 0).map((n) => ({ l: n.l, reading: n.position ? { position: n.position } as LineReading : unnamedPosition(n.l, words, numbers.length > 0, carrier) }));
   const rateOf = (l: ReceiptLine, reading: LineReading) => reading.position === 'fees' || reading.position === 'freight' ? reading.rate ?? l.ratePercent : undefined;
   // The carrier's VAT is added to the fees it is charged on: without a fee at its rate, it is a line no position names.
   const loose = named.find(({ l, reading }) => !reading || l.gross < 0
@@ -352,7 +392,7 @@ export function customsSplit(tx: Pick<BankTransaction, 'amount' | 'currency' | '
   const others: Receipt[] = [];
   const assessments = distinct(documents.map((r) => readAssessment(r, ctx.words, ctx.uid)).filter((a): a is Assessment => !!a));
   for (const r of documents.filter(isPurchaseDocument)) {
-    const read = readCustomsInvoice(r, ctx.words);
+    const read = readCustomsInvoice(r, ctx.words, assessedAmounts(documents.filter((d) => d.id !== r.id), ctx.words));
     if (read && 'hold' in read) return read;
     if (read) invoices.push(read.invoice);
     else if (!assessments.some((a) => a.receipt === r.id)) others.push(r);
@@ -527,8 +567,10 @@ export function importVatDeductions(books: CustomsBooks, ctx: DeductionContext):
     const own = books.journalEntries.filter((e) => e.transactionRef === t.ref && e.origin === 'classify' && e.accountDebit === account && !!e.accountCredit && e.by?.kind !== 'person' && e.by?.kind !== 'assistant');
     const [original] = own;
     if (!original || !withoutInputTax(original)) return [];
-    const documents = books.mappings.filter((m) => m.transactionRef === t.ref).map((m) => byId.get(m.receiptId)).filter((r): r is Receipt => !!r && isPurchaseDocument(r));
-    const read = documents.map((r) => readCustomsInvoice(r, ctx.words));
+    const all = books.mappings.filter((m) => m.transactionRef === t.ref).map((m) => byId.get(m.receiptId)).filter((r): r is Receipt => !!r);
+    const documents = all.filter(isPurchaseDocument);
+    // Read as the split read them: beside the documents linked to the payment (carrierTaxLines).
+    const read = documents.map((r) => readCustomsInvoice(r, ctx.words, assessedAmounts(all.filter((d) => d.id !== r.id), ctx.words)));
     if (read.some((x) => x && 'invoice' in x)) {
       return read.flatMap((x) => x && 'invoice' in x ? x.invoice.lines.filter((l) => l.position === 'importVat').map((l) => ({ payment: t.ref, original, invoice: x.invoice, amount: l.gross })) : []);
     }
@@ -644,7 +686,8 @@ export function missingAssessments(books: Pick<CustomsBooks, 'transactions' | 'm
   const seen = new Set<string>();
   return books.transactions.filter((t) => t.direction === 'DBIT' && booked.has(t.ref)).flatMap((t) => books.mappings.filter((m) => m.transactionRef === t.ref).flatMap((m) => {
     const r = byId.get(m.receiptId);
-    const read = r && !seen.has(r.id) && isPurchaseDocument(r) ? readCustomsInvoice(r, words) : undefined;
+    const beside = books.mappings.filter((x) => x.transactionRef === t.ref && x.receiptId !== m.receiptId).map((x) => byId.get(x.receiptId)).filter((x): x is Receipt => !!x);
+    const read = r && !seen.has(r.id) && isPurchaseDocument(r) ? readCustomsInvoice(r, words, assessedAmounts(beside, words)) : undefined;
     if (!r || !read || !('invoice' in read)) return [];
     seen.add(r.id);
     const paidBy = books.mappings.filter((x) => x.receiptId === r.id).map((x) => x.transactionRef);

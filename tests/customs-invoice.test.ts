@@ -619,3 +619,56 @@ test('#483: a tax line at no rate that is not the tax on the courier\'s taxed li
   assert.ok(split && !('hold' in split));
   assert.equal(split.importVat, 131.49);
 });
+
+/** A courier's bill of `lines` at the #483 bill's text, its total their sum, paid at once. */
+const sBill = (lines: ReceiptLine[]) => {
+  const amount = lines.reduce((s, l) => s + Math.round(l.gross * 100), 0) / 100;
+  return { bill: invoice({ ...fInvoice('MWST'), amount, lineItems: lines }), tx: { ...F_PAYMENT, amount } };
+};
+const tax = (description: string, gross: number): ReceiptLine => ({ description, gross, ratePercent: 0 });
+const fee = (gross: number, description = 'Verzollungsgebühr'): ReceiptLine => ({ description, gross, ratePercent: 8.1 });
+const zero: ReceiptLine = { description: 'Zoll', gross: 0, ratePercent: 0 };
+const positions = (split: ReturnType<typeof customsSplit>) => {
+  assert.ok(split && !('hold' in split), JSON.stringify(split));
+  return split.lines.map((l) => [l.accountDebit, l.accountCredit, l.amount, l.vatCode ?? l.vatRate ?? l.vat]);
+};
+const evv = (amount: number) => fAssessment().extractedText!.replace('129.46', amount.toFixed(2));
+
+test('#483 review S1: import VAT as much as the fee\'s VAT, and the fee\'s VAT stating its rate: the stated line is the fee\'s, the other stays import VAT, and the assessment proves it', () => {
+  const { bill, tx } = sBill([zero, tax('MWST', 6.48), fee(80), tax('MWST 8.1%', 6.48)]);
+  assert.deepEqual(positions(customsSplit(tx, [bill], splitContext())), [['4030', '', 6.48, 'none'], ['4040', '', 86.48, 8.1]]);
+  const withEvv = customsSplit(tx, [bill, assessment({ id: 'evv6', extractedText: evv(6.48), amount: 6.48 })], splitContext());
+  assert.deepEqual(positions(withEvv), [['4030', '', 6.48, 'none'], ['4040', '', 86.48, 8.1], ['', '4030', 6.48, 'M81-2']]);
+});
+
+test('#483 review S1d: import VAT within the slack of the fee\'s VAT stays import VAT beside the stated fee VAT', () => {
+  const { bill, tx } = sBill([zero, tax('MWST', 6.52), fee(80), tax('MWST 8.1%', 6.48)]);
+  assert.deepEqual(positions(customsSplit(tx, [bill], splitContext())), [['4030', '', 6.52, 'none'], ['4040', '', 86.48, 8.1]]);
+});
+
+test('#483 review S9: several shipments: an import VAT line as much as the fee\'s VAT stays import VAT when the fee\'s VAT states its rate', () => {
+  const { bill, tx } = sBill([tax('MWST', 12), tax('MWST', 8.1), fee(100), tax('MWST 8.1%', 8.1)]);
+  const split = customsSplit(tx, [bill], splitContext());
+  assert.deepEqual(positions(split), [['4030', '', 12, 'none'], ['4030', '', 8.1, 'none'], ['4040', '', 108.1, 8.1]]);
+});
+
+test('#483 review: a bare tax line as much as the fee\'s VAT and as much as an assessment linked beside it stays import VAT; two bare lines that both could be, neither is the fee\'s', () => {
+  const { bill, tx } = sBill([zero, tax('MWST', 6.48), fee(80)]);
+  assert.deepEqual(positions(customsSplit(tx, [bill], splitContext())), [['4040', '', 86.48, 8.1]], 'alone: the fee\'s VAT');
+  const withEvv = customsSplit(tx, [bill, assessment({ id: 'evv6', extractedText: evv(6.48), amount: 6.48 })], splitContext());
+  assert.deepEqual(positions(withEvv), [['4030', '', 6.48, 'none'], ['4040', '', 80, 8.1], ['', '4030', 6.48, 'M81-2']]);
+  const two = sBill([zero, tax('MWST', 6.48), tax('MWST', 6.48), fee(80)]);
+  assert.deepEqual(positions(customsSplit(two.tx, [two.bill], splitContext())), [['4030', '', 6.48, 'none'], ['4030', '', 6.48, 'none'], ['4040', '', 80, 8.1]]);
+});
+
+test('#483 review S6: a line that names more than the tax («MWST auf Waren») is not the fee\'s VAT, whatever its amount', () => {
+  const { bill, tx } = sBill([zero, fee(80), tax('MWST auf Waren', 6.48)]);
+  const split = customsSplit(tx, [bill], splitContext());
+  assert.ok(!split || 'hold' in split || !split.lines.some((l) => l.accountDebit === '4040' && l.amount === 86.48), 'never added to the fee');
+});
+
+test('#483 review S1c: a fee read with its tax in: the tax line is as much as the share in it', () => {
+  const { bill, tx } = sBill([tax('MWST', 41.3), fee(28.65, 'Vorlageprovisionsgebühr'), tax('MWST', 2.15)]);
+  const split = customsSplit(tx, [bill], splitContext());
+  assert.deepEqual(positions(split), [['4030', '', 41.3, 'none'], ['4040', '', 30.8, 8.1]], 'the 2.15 is the courier\'s, not import VAT');
+});

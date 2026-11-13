@@ -427,8 +427,10 @@ Two markers flag an entry you must read before you update:
 - A courier's customs invoice whose own VAT on its fee is read as a tax line at no rate («MWST»
   beside a Vorlageprovision at 8.1 %, the line as much as 8.1 % of the fee) books that VAT on the
   fee's line (4040 M81), no longer as import VAT without input tax (4030 M0), and
-  «Veranlagungsverfügung fehlt» no longer asks an assessment for it (#483). Only a tax line that
-  is not the tax on the courier's taxed lines is the import VAT it advanced. «MWST 8.1% auf …» is
+  «Veranlagungsverfügung fehlt» no longer asks an assessment for it (#483). One tax line per rate
+  is the courier's: the one that states the rate, else the one bare «MWST» line as much as that
+  rate's tax on its fees (also read with the tax in), never one as much as an assessment linked
+  beside the bill or one that names more than the tax; every other is import VAT. «MWST 8.1% auf …» is
   now split in code the same way instead of going to the AI. Payments booked already stay as they are.
 - The drop window (#483): a file whose run stopped says what the books made of it, as Belege
   does: a balance sheet «Bilanz» with «Eröffnung erfassen», a product photo «kein Beleg»; only a
