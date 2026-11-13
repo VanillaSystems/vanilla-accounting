@@ -416,6 +416,13 @@ Two markers flag an entry you must read before you update:
   the fees at the bill's rate («geschätzt CHF 20.17 (8.1 % in CHF 269.23 Gebühren)»), no longer the
   fees as if they were the VAT. Its «Rechnung hinzufügen» opens the file dialog that drops it; the
   line no longer opens Belege on another receipt, and the sidebar's card leads to the list (#459).
+- What the sidebar's AI is told about an account without its opening and a provider's clearing
+  account carries days and states (#459). The bank's balance the statements imply is the one
+  before their first payment, on its day: books whose statements begin on 01.07. no longer hand
+  it over as the balance of 1.1., and the card says «laut Auszügen … vor der ersten Zahlung am
+  01.07.2026». A clearing account below zero names its provider's reports in the books with their
+  days and the bookings each made, and whether the account has its opening, instead of guessing
+  «a sales report not dropped yet».
 - A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
   Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
   der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no

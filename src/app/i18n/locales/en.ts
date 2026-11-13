@@ -3221,7 +3221,7 @@ export default {
     'openPeriod.offers': { one: '{n} proposal from the setup waits for your answer', other: '{n} proposals from the setup wait for your answer' },
     'openPeriod.offer': '{name}: always book {percent} % as private, the rest on account {account}?',
     'openPeriod.openings': { one: '{n} account without its opening balance', other: '{n} accounts without their opening balance' },
-    'openPeriod.opening': '{label}: {amount} on 1.1.{year} according to its statements',
+    'openPeriod.opening': '{label}: {amount} before the first payment on {date} according to its statements',
     'openPeriod.clearing': { one: '{n} clearing account below zero', other: '{n} clearing accounts below zero' },
     'openPeriod.clearingItem': '{account} {name} on {date}: {amount}, more paid out than the account holds sales for',
     'assistant.c.openPeriod': 'The open period as it stands',

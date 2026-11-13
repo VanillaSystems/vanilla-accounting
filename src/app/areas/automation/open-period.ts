@@ -49,8 +49,24 @@ export interface OpenPeriodContext {
 export type { PendingOffer } from '../../../saving/share-rule.js';
 import type { PendingOffer } from '../../../saving/share-rule.js';
 
-/** A provider's clearing account below zero at the period's end (#428): the provider paid out more than the account holds sales for. */
-export interface ClearingBelow { name: string; account: string; balance: number }
+/**
+ * A provider's clearing account below zero at the period's end (#428): the provider paid out more than the account holds sales for.
+ * `reports`: the provider's reports in the books, each with its days and how many bookings it made (#459), so nobody calls a
+ * booked report unread; `opened`: whether the account has an opening balance of the year.
+ */
+export interface ClearingBelow { name: string; account: string; balance: number; reports?: ClearingReport[]; opened?: boolean }
+/** A report of a provider in the books: sales or fees, its first and last day, the bookings it made and the orders it holds. */
+export interface ClearingReport { kind: 'sales' | 'fees'; from: string; to: string; booked: number; held: number }
+
+/** The reports of `provider` in the books (#459): a report here was read; `booked` counts the bookings it made. */
+function reportsOf(books: Pick<Index, 'receipts' | 'journalEntries'>, provider: string): ClearingReport[] {
+  return books.receipts.flatMap((r): ClearingReport[] => {
+    const rep = r.report;
+    if (!rep || rep.provider !== provider || r.kind === 'duplicate') return [];
+    const booked = new Set((books.journalEntries ?? []).filter((e) => e.receipts?.includes(r.id)).map((e) => e.transactionRef)).size;
+    return [{ kind: rep.kind, from: rep.from, to: rep.to, booked, held: rep.held?.length ?? 0 }];
+  }).sort((a, b) => a.from.localeCompare(b.from) || a.kind.localeCompare(b.kind));
+}
 
 export interface OpenPeriodState {
   period: Period;
@@ -163,7 +179,8 @@ export function openPeriodState(
     openings: missingOpenings(books, accounts, period.to.slice(0, 4)),
     clearing: (provider?.clearing ?? []).flatMap((c): ClearingBelow[] => {
       const balance = balanceAt(books.journalEntries ?? [], c.account, period.to, books.config?.openingBalances);
-      return balance < 0 ? [{ name: c.name, account: c.account, balance }] : [];
+      const opened = books.config?.openingBalances?.[period.to.slice(0, 4)]?.[c.account] !== undefined;
+      return balance < 0 ? [{ name: c.name, account: c.account, balance, reports: reportsOf(books, c.provider), opened }] : [];
     }),
     // Only the period's: its payment is dated in it, as everything the state counts.
     offers: offers.filter((o) => o.date >= period.from && o.date <= period.to),

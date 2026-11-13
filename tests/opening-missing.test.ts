@@ -25,7 +25,7 @@ const books = (over: Partial<Index> = {}): Index => ({
 });
 
 test('the first year without an opening: the statements imply what the account held before its first payment', () => {
-  assert.deepEqual(missingOpenings(books(), ACCOUNTS, '2026'), [{ account: '1020', label: 'Raiffeisen CHF', year: '2026', currency: 'CHF', amount: 18420.15, canType: true }]);
+  assert.deepEqual(missingOpenings(books(), ACCOUNTS, '2026'), [{ account: '1020', label: 'Raiffeisen CHF', year: '2026', currency: 'CHF', amount: 18420.15, from: '2026-07-03', canType: true }]);
 });
 
 test('after a quarter is filed the opening can still be entered, so the link leads to a form; a year closed through 31.12. names it without a link (r5h-30)', () => {
@@ -42,7 +42,7 @@ test('nothing is missing once an opening is entered, without a statement balance
 });
 
 test('Kontoauszüge splits the books\' gap to the bank into the missing opening balance and what a payment explains (r4c-33)', () => {
-  const missing = { account: '1020', label: 'Raiffeisen CHF', year: '2026', currency: 'CHF', amount: 18420.15, canType: true };
+  const missing = { account: '1020', label: 'Raiffeisen CHF', year: '2026', currency: 'CHF', amount: 18420.15, from: '2026-07-03', canType: true };
   assert.deepEqual(bookDiffParts(-18331.15, missing), { opening: missing, rest: 89 });
   assert.deepEqual(bookDiffParts(-18420.15, missing), { opening: missing, rest: 0 }, 'all of it the opening: no payment is blamed');
   assert.deepEqual(bookDiffParts(-89, undefined), { rest: -89 });
@@ -53,7 +53,7 @@ test('a foreign-currency account without its opening: named in its currency, as 
     transactions: [{ ref: 'w1', bank: 'Wise', date: '2026-07-03', amount: 640, currency: 'EUR', direction: 'DBIT', description: 'w1' }],
     statementBalances: [{ account: '1021', bank: 'Wise', currency: 'EUR', date: '2026-07-31', amount: 1200, source: 'camt', sourceFile: 'w.xml' }],
   });
-  assert.deepEqual(missingOpenings(wise, WISE, '2026'), [{ account: '1021', label: 'Wise EUR', year: '2026', currency: 'EUR', amount: 1840, canType: true }]);
+  assert.deepEqual(missingOpenings(wise, WISE, '2026'), [{ account: '1021', label: 'Wise EUR', year: '2026', currency: 'EUR', amount: 1840, from: '2026-07-03', canType: true }]);
   assert.deepEqual(missingOpenings(books({ ...wise, config: { openingBalances: { 2026: { 1021: 1126.01 } }, openingBalancesNative: { 2026: { 1021: { amount: 1200, currency: 'EUR' } } } } }), WISE, '2026').length, 0, 'entered with its balance in EUR');
 });
 

@@ -3221,7 +3221,7 @@ export default {
     'openPeriod.offers': { one: '{n} proposition de la configuration attend ta réponse', other: '{n} propositions de la configuration attendent ta réponse' },
     'openPeriod.offer': '{name} : toujours comptabiliser {percent} % en privé, le reste sur le compte {account} ?',
     'openPeriod.openings': { one: '{n} compte sans solde d’ouverture', other: '{n} comptes sans solde d’ouverture' },
-    'openPeriod.opening': '{label} : {amount} au 1.1.{year} selon ses relevés',
+    'openPeriod.opening': '{label} : {amount} avant le premier paiement du {date} selon ses relevés',
     'openPeriod.clearing': { one: '{n} compte de passage sous zéro', other: '{n} comptes de passage sous zéro' },
     'openPeriod.clearingItem': '{account} {name} au {date} : {amount}, plus versé que le compte ne porte de ventes',
     'assistant.c.openPeriod': 'État de la période ouverte',

@@ -114,6 +114,11 @@ export interface MissingOpening {
   currency: string;
   /** The bank's balance before the year's first payment, as its statements imply it, in `currency`. */
   amount: number;
+  /**
+   * The day of the year's first imported payment: `amount` is the balance before it, which is the balance of
+   * 1 January only when nothing moved before it; books whose statements begin in July never say 1.1. of it (#459).
+   */
+  from: string;
   /** Whether Firma › Eröffnung takes it: not once the year is closed through 31.12., so no link leads into a refusal. */
   canType: boolean;
 }
@@ -146,7 +151,7 @@ export function missingOpenings(books: StartBooks, accounts: ReadonlyArray<BankA
   return accounts.flatMap((a): MissingOpening[] => {
     if (openingIn(books, a, year) !== undefined) return [];
     const start = bankStart(books, a, year);
-    return !start || start.held === 0 ? [] : [{ account: a.account, label: a.label, year, currency: a.currency, amount: fromRappen(start.held), canType: !lock }];
+    return !start || start.held === 0 ? [] : [{ account: a.account, label: a.label, year, currency: a.currency, amount: fromRappen(start.held), from: start.from, canType: !lock }];
   });
 }
 

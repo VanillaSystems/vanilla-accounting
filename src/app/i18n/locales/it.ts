@@ -3221,7 +3221,7 @@ export default {
     'openPeriod.offers': { one: '{n} proposta della configurazione aspetta la tua risposta', other: '{n} proposte della configurazione aspettano la tua risposta' },
     'openPeriod.offer': '{name}: registrare sempre il {percent} % come privato, il resto sul conto {account}?',
     'openPeriod.openings': { one: '{n} conto senza saldo d’apertura', other: '{n} conti senza saldo d’apertura' },
-    'openPeriod.opening': '{label}: {amount} all’1.1.{year} secondo i suoi estratti',
+    'openPeriod.opening': '{label}: {amount} prima del primo pagamento del {date} secondo i suoi estratti',
     'openPeriod.clearing': { one: '{n} conto di transito sotto zero', other: '{n} conti di transito sotto zero' },
     'openPeriod.clearingItem': '{account} {name} al {date}: {amount}, versato più di quanto il conto porti in vendite',
     'assistant.c.openPeriod': 'Stato del periodo aperto',
