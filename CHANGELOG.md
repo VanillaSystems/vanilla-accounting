@@ -94,6 +94,10 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- Demos (#374): the bundled demos are written again by today's generator, so their payments show
+  the other party's name and their bank fee rows are marked as fees, as in books read from a
+  statement now; no booking and no figure changed. A test now fails when a committed demo is not
+  what `npm run demo:generate` writes.
 - Setup (#423): «MWST-Methode» and «Abrechnungsart» say where the owner finds her answer herself:
   in the ESTV portal, under «Neue Geschäfte» her firm, then «Anpassen» on the card «Abrechnungsmodalitäten», changing nothing; the Treuhand
   only when she has no access. «Abrechnungsart» no longer says that vereinbart applies unless the

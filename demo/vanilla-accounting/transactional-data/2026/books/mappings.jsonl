@@ -34,10 +34,10 @@
 {"transactionRef":"90000000045","receiptId":"0f02da59abc35344"}
 {"transactionRef":"90000000046","receiptId":"299d5d3e065f8e0f"}
 {"transactionRef":"90000000047","receiptId":"ce7b8e2415e04e61"}
-{"transactionRef":"90000000049","receiptId":"f97841477c1b8e95","by":"rule","rule":"invoice-reference"}
+{"transactionRef":"90000000049","receiptId":"38490a97818d71a9","by":"rule","rule":"invoice-reference"}
 {"transactionRef":"90000000050","receiptId":"eba3cec4abbd9ecf"}
 {"transactionRef":"90000000051","receiptId":"4cde51ad4fece427"}
-{"transactionRef":"90000000052","receiptId":"29069a28ed29cf30","by":"rule","rule":"invoice-reference"}
+{"transactionRef":"90000000052","receiptId":"01ef1c8392683ed2","by":"rule","rule":"invoice-reference"}
 {"transactionRef":"90000000053","receiptId":"f8dfc19340bf4fee"}
 {"transactionRef":"90000000054","receiptId":"4978a4c1a2ba92c6"}
 {"transactionRef":"90000000055","receiptId":"d6352bd6253610ac"}
