@@ -88,6 +88,8 @@ export interface DropRow {
   report?: ReportSummary;
   /** A report the company's file of its provider cannot book yet: the account (or fee code) the row asks for, once. */
   askProvider?: ProviderAsk;
+  /** Her answer in this row booked the provider's payouts it decided (#404): how many, and how many runs still book. */
+  payouts?: { provider: string; booked: number; running: number };
   /** A report held because no payout of its provider is recognised: why, and what was looked at. */
   payoutUnseen?: PayoutUnseen;
   /** The person took the report anyway («Trotzdem übernehmen»): the unseen-payout check is skipped; a bank CSV «schon da» is read, its columns asked. */
@@ -132,6 +134,14 @@ export interface StatementDetails {
 export interface StatementMovement { date: string; amount: number; counterparty?: string; text?: string }
 
 /** Why a provider's payout waits for the person, as its line in Kontoauszüge says it (GET /api/transactions/:ref/payout-wait, src/booking/providers.ts PayoutWait). */
+/**
+ * A provider's payouts of the open period without a booking, by what they wait for (#404,
+ * src/server/provider-payouts.ts): `ready` code books them now (bank / `account`, without VAT);
+ * `clearing` or `since` the company's file lacks it (the provider's report asks); `gap` before the
+ * cut-over day beside sales a report booked; `before` before the cut-over day, a payment like any other.
+ */
+export interface PayoutGroup { provider: string; name: string; why: 'ready' | 'clearing' | 'since' | 'gap' | 'before'; refs: string[]; account?: string; since?: string }
+
 export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: string; file: string; since?: string }
 
 /**
