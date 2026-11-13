@@ -94,6 +94,21 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- **⚠ figures** A webshop order of two VAT rates (tea at 2.6 %, a teapot at 8.1 %) is booked from
+  the order export by its line items, a line per rate at its sale code (V26, V81), under the order's
+  usual ref and linked to its report (#416). Code books it only when the items add up to what was
+  charged, shipping and discount are zero, nothing is refunded and exactly one way of putting the
+  items at the rates matches the tax the export shows per rate («Tax 1 Name», «Tax 1 Value»), within the rounding
+  a provider may do (half a Rappen per piece at that rate, the line's quantity counted, a Rappen at least). Every other such order waits for «Aufteilen» as before. Why the figures change: until now
+  each such order waited, and its turnover was missing from the open period's return. An order the
+  report holds for its rates in an open period is booked when that order export is dropped again or
+  a payments export of the provider is dropped; one of a filed period is never booked, and an order split by hand stays as she booked it.
+  The drop row names the orders split so («nach ihren Positionen auf die MWST-Sätze aufgeteilt»), and
+  each entry's reason says it. «Rückgängig» of the report takes these lines back with its other
+  sales. A later refund of such an order waits for her to book it by hand. An order with more
+  line items than code tries (twelve at two rates, seven at three) waits with its own reason that names
+  its rates and that limit. A held reason the app has no words for reads as «wartet auf dich».
+  A split booked on the order's day moves onto the day a payments export later says it was charged.
 - **⚠ figures** Agreed basis (#360): a payment booked by hand dates each line with a VAT code by its
   receipt and books it over Kreditoren or Debitoren, the payment settling that account on its own
   day (an exchange difference to 6960), as the app's own booking does; a receipt of a filed quarter

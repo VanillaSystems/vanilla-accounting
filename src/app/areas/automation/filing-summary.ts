@@ -54,7 +54,7 @@ export function withheldIn(figures: Record<string, number> | undefined, question
   return {
     rates: figures ? ratesWithoutActivityId(figures) : [],
     questions: openSaleQuestionsIn(questions, books, from, to).length,
-    held: (provider?.held ?? []).filter((h) => h.why === 'rate' && !h.filed && h.date >= from && h.date <= to).length,
+    held: (provider?.held ?? []).filter((h) => (h.why === 'rate' || h.why === 'rateTooMany') && !h.filed && h.date >= from && h.date <= to).length,
   };
 }
 
