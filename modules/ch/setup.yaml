@@ -33,7 +33,22 @@ bankCharges: { account: "6940" }
 # as is a payment to a business booked on these accounts before (src/booking/withheld.ts, #426).
 # `shared`: the contribution accounts the employees share in (AHV/IV/EO/ALV, BVG), not FAK (5710),
 # which the employer pays alone.
-wages: { account: "5000", deductions: "2270", contributions: ["5700", "5710", "5720"], payees: [ausgleichskasse], shared: ["5700", "5720"] }
+# `withholds`: the words a payslip names each deduction by, per kind; a kind named by a business file in
+# `payees` is what that business collects. When every payslip behind `deductions` reads so and its lines add
+# up to what its wage put there, code knows the employees' share a payment to that business clears (#476).
+wages:
+  account: "5000"
+  deductions: "2270"
+  contributions: ["5700", "5710", "5720"]
+  payees: [ausgleichskasse]
+  shared: ["5700", "5720"]
+  withholds:
+    ausgleichskasse: [AHV, IV, EO, ALV, AVS, AI, APG, AC]
+    pension: [BVG, Pensionskasse, LPP, "caisse de pension", "cassa pensione"]
+    accident: [UVG, NBU, NBUV, LAA, AANP]
+    sickness: [KTG, Krankentaggeld, IJM]
+    tax: [Quellensteuer, "impôt à la source", "imposta alla fonte"]
+
 
 # What the setup's «private use» names, by the account its costs are booked on: a share of it the person
 # named in the setup («öppe d Hälfti» of the phone) is offered as a rule with a private share on the first

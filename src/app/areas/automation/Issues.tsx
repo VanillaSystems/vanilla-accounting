@@ -24,6 +24,7 @@ import type { WaitingPayment } from '../../../accounting/receipt-due.js';
 import { payText, signed } from '../bank/model.js';
 import { bookWithoutInputTax } from '../bank/actions.js';
 import { UnreadRuleOffer, UnreadTask } from './UnreadReceipt.js';
+import { WithheldFix } from './WithheldFix.js';
 import type { UnreadOffer } from '../../../saving/unread-rule.js';
 import { useState } from 'react';
 import { monthName, periodName } from '../../lib/period-label.js';
@@ -171,6 +172,7 @@ export function PeriodIssues({ books, nav, from, to, period, canEdit, figures }:
             <li key={k} data-issue={i.kind}>
               {go ? <button type="button" className="linkbtn" onClick={() => nav.go(go)}>{textOf(books, i)}</button> : <span>{textOf(books, i)}</span>}
               {canEdit && i.kind === 'evidence' ? <EvidenceFix e={i.entry} check={i.check} nav={nav} /> : null}
+              {canEdit && i.kind === 'withheld' ? <WithheldFix books={books} u={i.uncleared} nav={nav} /> : null}
               {canEdit && i.kind === 'bill' ? <>{' '}<button type="button" className="golink" data-testid="bill-add" onClick={pickReceipts}>{t('issues.billAdd')}</button></> : null}
             </li>
           );

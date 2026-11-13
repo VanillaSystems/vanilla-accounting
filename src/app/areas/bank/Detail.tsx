@@ -53,6 +53,7 @@ import { openAmount } from '../../../invoices/rules.js';
 import { QuestionsOn } from '../../questions/Questions.js';
 import { bookDiffParts, missingOpenings, startGaps } from '../../../accounting/opening-balance.js';
 import { GroupedOffer, ShareOffers } from '../company/RulesSection.js';
+import { WithheldOnPayment } from '../automation/WithheldFix.js';
 import { Pick } from '../../selection/Pick.js';
 import { ActionsMenu } from '../../selection/ActionsMenu.js';
 import { paymentActions } from './actions-menu.js';
@@ -351,6 +352,8 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
       {edit ? <ReceiptSetOffer key={`rs-${tx.ref}`} {...props} tx={tx} /> : null}
       {/* A share of the phone or the car she named in the setup (#402): offered as this business's rule once a payment of it is booked. */}
       {edit && entry && tx.direction === 'DBIT' ? <ShareOffers key={`so-${tx.ref}`} refs={[tx.ref]} only="setup" onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
+      {/* A contribution payment booked without the employees' share while the deductions account holds it (#476): its fix, here too. */}
+      {edit && entry && tx.direction === 'DBIT' ? <WithheldOnPayment books={props.books} tx={tx} nav={nav} /> : null}
       {edit && receipts.length > 1 ? <GroupedOffer key={`go-${tx.ref}`} payment={tx.ref} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
       {edit && tx.direction === 'CRDT' ? <LinkInvoice key={`li-${tx.ref}`} tx={tx} nav={nav} /> : null}

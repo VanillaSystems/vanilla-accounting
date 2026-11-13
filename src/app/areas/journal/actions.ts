@@ -6,6 +6,7 @@
 import type { JournalEntry } from '../../../types/index.js';
 import type { BookingLine } from '../../../accounting/manual-booking.js';
 import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
+import type { ClearingProposal } from '../../../booking/withheld.js';
 import { api, errorText, type JournalEntryInput, type JournalEntryPatch } from '../../lib/api.js';
 import { undoInput } from '../../../books/entry-input.js';
 import { t } from '../../i18n/index.js';
@@ -45,6 +46,30 @@ export function fixEvidence(nav: Nav, e: JournalEntry, c: EvidenceCheck) {
   if (c.kind !== 'receiptGroups') return saveEntry(nav, e, c.kind === 'receiptShowsVat' ? { vatCode: c.code, receipts: c.receipts } : { vatCode: c.code }, ['vatCode']);
   const lines = (c.lines ?? []).map((l) => `${l.code} ${fmt(l.amount)}`).join(' · ');
   return run(nav, () => api.bookByReceipt(e.id), () => t('journal.evidence.rebooked', { lines }), ({ undo }) => api.undoByReceipt(undo));
+}
+
+/**
+ * «2270 ausgleichen» (#476, src/booking/withheld.ts clearingProposal): the payment's contribution lines cut by the
+ * amount and that much booked on the deductions account, as the person's own change. A step that fails puts the
+ * earlier ones back; the undo puts the lines back as they were.
+ */
+export function clearWithheld(nav: Pick<Nav, 'toast' | 'refresh'>, p: ClearingProposal) {
+  const back = async (patched: JournalEntry[], made: JournalEntry[]) => {
+    for (const e of made) await api.deleteJournalEntry(e.id);
+    for (const e of patched) await api.patchJournalEntry(e.id, { amount: e.amount, accountDebit: e.accountDebit });
+  };
+  return run(nav as Nav, async () => {
+    const patched: JournalEntry[] = [];
+    const made: JournalEntry[] = [];
+    try {
+      for (const { before, after } of p.changed) { await api.patchJournalEntry(before.id, { amount: after.amount, accountDebit: after.accountDebit }); patched.push(before); }
+      for (const a of p.added) made.push(await api.createJournalEntry({ transactionRef: a.transactionRef, date: a.date, accountDebit: a.accountDebit, accountCredit: a.accountCredit, amount: a.amount, description: a.description || a.transactionRef }));
+    } catch (e) {
+      await back(patched, made).catch(() => undefined);
+      throw e;
+    }
+    return { patched, made };
+  }, () => t('issues.withheldCleared', { amount: fmt(p.amount), account: p.account }), ({ patched, made }) => back(patched, made));
 }
 
 /** A receipt hung on a booking without a payment (#89); the undo takes it off again. */

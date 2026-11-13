@@ -56,7 +56,7 @@ import { bankCodedFee } from '../books/bank-import.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { withReceiptTax } from './receipt-tax.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
-import { overWithheld, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor, withinWithheld } from './withheld.js';
+import { atWithheld, fundShare, overWithheld, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor, withinWithheld } from './withheld.js';
 import { splitByReceipts } from './receipt-lines.js';
 import { CUSTOMS_BY, customsSplit, importVatDeductions, ratesImportVat, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
@@ -1040,13 +1040,15 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   // Where code books what an answer takes off the deductions account over what it holds (#470): the employer's contribution accounts.
   const wages = wageAccounts();
   const employer = { named: wages?.contributions ?? new Set<string>(), shared: wages?.shared ?? new Set<string>(), fallback: [...(wages?.contributions ?? [])].find((a) => !chartAccounts.size || chartAccounts.has(a)) };
-  const withheldOf = (own: Books, tx: BankTransaction): { account: string; open: number } | undefined => {
+  const withheldOf = (own: Books, tx: BankTransaction): { account: string; open: number; share?: number } | undefined => {
     if (!context.wageDeductions || !contributions.has(tx.ref)) return undefined;
     // Nothing held is said too (#470), where the books carry wages: the whole contribution is the employer's, not the bill's split.
     // Without a wage in the year it is no employer's contribution (an owner's own AHV, a fund's fee): no line, as before.
     const open = withheldFor(own, tx, context.wageDeductions);
     if (open === undefined && !wagesBooked(own, tx)) return undefined;
-    return { account: context.wageDeductions, open: open ?? 0 };
+    // What of it the payslips withheld for this payee, where code can tell (#476): booked so, whatever the bill or the model says.
+    const share = open ? fundShare(own, tx, businessOf(tx), businessOf) : undefined;
+    return { account: context.wageDeductions, open: open ?? 0, ...(share !== undefined && { share }) };
   };
   // The contribution payments go last, in waves of their own: what the wages of this run withhold is booked before they are asked.
   const batches: BankTransaction[][] = [];
@@ -1125,8 +1127,12 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         // what it holds stays there, the rest is the employer's expense, on the contribution account the answer names (#470, #368's decision).
         const deductions = context.wageDeductions;
         const heldOn = deductions && contributions.has(tx.ref) ? withheldFor(books, tx, deductions) : undefined;
+        // What the payslips withheld for this payee, where code can tell (#476): exactly that on the account, the rest the employer's.
+        const share = heldOn ? fundShare(books, tx, businessOf(tx), businessOf) : undefined;
         // Named by no line of the answer: where the payee's earlier contributions went (a pension fund's 5720), then the setup's first.
-        const capped = deductions && contributions.has(tx.ref) ? withinWithheld(answered, deductions, heldOn, { ...employer, fallback: payeeContributionAccount(books, tx, businessOf) ?? employer.fallback }, newEntryId) : { entries: answered, moved: 0, to: '' };
+        const toEmployer = { ...employer, fallback: payeeContributionAccount(books, tx, businessOf) ?? employer.fallback };
+        const exact = share !== undefined ? atWithheld(answered, deductions!, share, toEmployer, newEntryId) : undefined;
+        const capped = exact ?? (deductions && contributions.has(tx.ref) ? withinWithheld(answered, deductions, heldOn, toEmployer, newEntryId) : { entries: answered, moved: 0, to: '' });
         if (!capped) {
           const cur = baseCurrency();
           const over = overWithheld(answered, deductions!, heldOn)!;
@@ -1135,7 +1141,9 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           continue;
         }
         // The booking's reason says what code moved, beside the model's.
-        const movedSaid = capped.moved ? wordsIn('de').t('rules.say.withheldCapped', { account: deductions!, currency: baseCurrency(), open: (heldOn ?? 0).toFixed(2), moved: capped.moved.toFixed(2), to: capped.to }) : undefined;
+        const movedSaid = !capped.moved ? undefined
+          : share !== undefined ? wordsIn('de').t('rules.say.withheldShare', { account: deductions!, currency: baseCurrency(), share: share.toFixed(2) })
+            : wordsIn('de').t('rules.say.withheldCapped', { account: deductions!, currency: baseCurrency(), open: (heldOn ?? 0).toFixed(2), moved: capped.moved.toFixed(2), to: capped.to });
         const entries = movedSaid ? capped.entries.map((e) => ({ ...e, reason: [e.reason, movedSaid].filter(Boolean).join(' ') })) : capped.entries;
         if (capped.moved) log(`  [Batch ${batchNum}]  ${tx.ref}  ${capped.moved} over what ${deductions} held booked on ${capped.to}`);
         const held = proposing.get(tx.ref);
