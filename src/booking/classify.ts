@@ -31,6 +31,7 @@ import { correctsFor, privateUseCode } from '../accounting/correction.js';
 import { EFFECTIVE_QUARTERLY, type VatSetup } from '../workspace/vat-setup.js';
 import { foreignTaxIn, saleCodeOf, saleCodeReason } from '../accounting/sales-without-vat.js';
 import { codeOfFacts, formTakes, lookupVatCode } from '../accounting/vat-codes.js';
+import { takesNoCode } from './rule-vat.js';
 import { bookVatCorrections, type CorrectionsDone } from './vat-corrections.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
 import { acquisitionCodeOf, acquisitionReason, readSupplier, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
@@ -763,6 +764,23 @@ function withRefundCodes(books: Books, tx: BankTransaction, entries: JournalEntr
  * model's code stands as written; one the engine does not know is refused (paymentRefusal).
  */
 const permittedCode = (code: string | undefined): string | undefined => (code && formTakes(code) ? code : undefined);
+
+/**
+ * The model's lines without the zero input code (I0, M0, either sign) where the other account takes
+ * no VAT code at all (takesNoCode: a wage, a contribution, the bank charges, a debt, the owner's or a
+ * money account): the guide books those without a code, as the hand form and the rules do (#402). The
+ * zero code has no box, so no figure changes; a rate the receipt shows stays.
+ */
+function withoutZeroOnNoCode(entries: JournalEntry[], bankAccount: string, context: Pick<ClassifyContext, 'moneyAccounts' | 'ownerAccount'>): JournalEntry[] {
+  const settles = (a: string) => a === context.ownerAccount || !!context.moneyAccounts?.has(a);
+  return entries.map((e) => {
+    if (!e.vatCode || lookupVatCode(e.vatCode)?.entry.kind !== 'inputNoVat') return e;
+    const other = e.accountDebit === bankAccount ? e.accountCredit : e.accountDebit;
+    if (!other || !takesNoCode(other, settles)) return e;
+    const { vatCode: _, ...rest } = e;
+    return rest;
+  });
+}
 /** The model's code with the sign the accounts and the bank's side give it (r9h-11, #288): a credit note's M0 becomes -M0, money back on 1540 -I81, whatever the model wrote. */
 const signed = (code: string | undefined, accountDebit: string, accountCredit: string, amount: number, bank: string): string | undefined => codeSignFor(code, accountDebit, accountCredit, amount, bank) ?? code;
 
@@ -960,7 +978,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const lines = splitByReceipts(tx, fee?.lines ?? derived, mapped);
         const noted = [reason, fee?.note, customsNotes.get(tx)].filter(Boolean).join(' ') || undefined;
         const coded = withPurchaseVat(tx, withRefundCodes(own, tx, withCreditNoteCodes(own, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), bankAccount), mapped, context.purchaseVat, context.counterparties);
-        const entries = receiptTaxOf(own, tx, coded, mapped);
+        const entries = withoutZeroOnNoCode(receiptTaxOf(own, tx, coded, mapped), bankAccount, context);
         const twice = inputTaxOverReceipts(own, tx, legsOf(tx), entries, (c, d) => fx.daily(c, d));
         if (twice) {
           const others = twice.others.map((t) => t.ref).join(', ');

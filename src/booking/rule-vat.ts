@@ -32,13 +32,15 @@ export function rateShown(r: VatFacts): number | undefined {
 
 /**
  * Whether a booking on `account` carries no VAT code, unless a receipt shows Swiss VAT: the
- * jurisdiction's wage account (setup.yaml `wages`: a wage is no supply) while the firm's own account
- * of that number is an expense account (`typeOf`, the firm's chart), a debt, or an account that only
- * settles (`settles`: the owner's account, a money account; receipt-wait.ts settlementAccount).
+ * jurisdiction's wage account and the employer's contributions (setup.yaml `wages`: no supply), and
+ * its bank-charges account (setup.yaml `bankCharges`, #359), each while the firm's own account of that
+ * number is an expense account (`typeOf`, the firm's chart), a debt, or an account that only settles
+ * (`settles`: the owner's account, a money account; receipt-wait.ts settlementAccount).
  */
 export function takesNoCode(account: string, settles: (account: string) => boolean = () => false, typeOf: (account: string) => string | undefined = (a) => chart().typeOf(a)): boolean {
-  const wage = account === setup().wages?.account && typeOf(account) === 'expense';
-  return wage || typeOf(account) === 'liability' || settles(account);
+  const { wages, bankCharges } = setup();
+  const named = account === wages?.account || !!wages?.contributions?.includes(account) || account === bankCharges?.account;
+  return (named && typeOf(account) === 'expense') || typeOf(account) === 'liability' || settles(account);
 }
 
 /**
