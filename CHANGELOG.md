@@ -52,9 +52,14 @@ Two markers flag an entry you must read before you update:
   payment's once it has one, else its date's; one without a date, or from before the books and not
   paid, is the working period's. So an undated till slip paid in Q3 counts in Q3 everywhere, and
   «gesammelt», «gelesen» and «zugeordnet» match Belege's «alle» and «zugeordnet» and the drop's
-  sentence. When more payments are booked than receipts (bookings by hand, wages, the bank's fee),
-  the dock says «11 von 23 Zahlungen gebucht» in place of «0 gelesen · 0 gebucht». Its third figure
-  says «Aufgaben» (as the corner «n Aufgaben für dich»), and Belege's first group «Ohne Zahlung».
+  sentence. A receipt paid in a later period now lists only there. «gelesen» means its text was read:
+  one without a date or a possible copy is read, and said apart as before. Links and tasks about a
+  receipt lead to the period Belege lists it in. The export keeps its receipts as before (their own
+  date, and those of the period's payments). While no receipt is booked but payments are (bookings by
+  hand, wages, the bank's fee), the dock says «11 von 23 Zahlungen gebucht» in place of «0 gelesen ·
+  0 gebucht». Its third figure says «Aufgaben», counted as the corner's «n Aufgaben für dich» (open
+  tasks, stopped runs and questions for you). Belege's «Braucht dich» says under its head what it
+  counts.
 - The bank's own fee (#359): a row of a bank's camt.053 export that the bank itself coded as its
   charge for the account or for payments («Kontoführung», a card's annual fee) is booked by the
   app, with or without an AI, on Bankspesen (6940) without a VAT code; a fee paid back the other
