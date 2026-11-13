@@ -112,7 +112,7 @@ test('a drop of many files: every part in its place, the overview counts and fil
     assert.match(bar ?? '', /^\d+$/, 'the bar has a value');
     const line = await page.$eval('[data-testid=drop-overall]', (p) => ({ text: (p as HTMLElement).innerText, live: p.getAttribute('aria-live') }));
     assert.deepEqual(line, { text: 'Gesamt 4 % · 2 von 46 Dateien fertig · 3 werden hochgeladen · 41 in Arbeit', live: 'polite' }, 'what is done now, the parts at 0 left out');
-    assert.deepEqual((await filters(page)).map((f) => f.name), ['46 Dateien', '1 braucht dich', '44 in Arbeit', '1 nicht übernommen'], 'stages without files are not shown');
+    assert.deepEqual((await filters(page)).map((f) => f.name), ['46 Dateien', '1 braucht dich', '44 in Arbeit', '1 nicht in den Büchern'], 'stages without files are not shown');
     assert.equal(await page.$$eval('[data-testid=drop-dialog] .wftabs', (t) => t.length), 0, 'the tabs are folded into the overview\'s filters');
     assert.equal((await page.$eval('[data-testid=drop-dialog]', (d) => (d as HTMLElement).innerText.match(/Gesamt \d+ %/g) ?? [])).length, 1, 'one line says how far the drop is');
 
@@ -136,7 +136,7 @@ test('a drop of many files: every part in its place, the overview counts and fil
     session = { ...session, rows: ROWS.filter((r) => r !== locked) };
     await page.click('[data-testid=drop-row][data-file="Belege_Q3.zip"] .dx');
     await page.waitForFunction(() => !document.querySelector('[data-testid=drop-filter][data-stage=needs]'));
-    assert.deepEqual((await filters(page)).map((f) => f.name), ['45 Dateien', '44 in Arbeit', '1 nicht übernommen']);
+    assert.deepEqual((await filters(page)).map((f) => f.name), ['45 Dateien', '44 in Arbeit', '1 nicht in den Büchern']);
     assert.equal((await filters(page)).find((f) => f.stage === 'all')?.pressed, 'true');
     assert.equal(await page.evaluate(() => (document.activeElement as HTMLElement | null)?.dataset.stage), 'all', 'the focus is on «alle»');
     // Fewer than 10 files left: the overview stays for this drop, never back to the tabs under her hand.
@@ -153,6 +153,71 @@ test('a drop of many files: every part in its place, the overview counts and fil
     await page.waitForFunction(() => document.querySelector('[data-testid=drop-dialog]')?.getAttribute('data-working') === 'false' && !!document.querySelector('[data-testid=close-hint]') && document.querySelector('[data-testid=drop-dialog]')!.textContent!.includes('Kaputt.pdf'), { timeout: 30_000 });
     await placedAtEveryWidth(page, 'end');
     assert.ok(await page.$('[data-testid=drop-overview] [data-testid=drop-filter]'), 'the filters stay at the end');
+    assert.deepEqual(app.errors, []);
+  } finally {
+    await app.stop();
+  }
+});
+
+/**
+ * A real drop of 14 PDFs (#453 second review): each file taken starts another inbox run, and a
+ * later run takes up every receipt still waiting for its payment again. The window judges a row by
+ * its own run only: the receipts the first run read stay at rest while the second run works, the bar
+ * never goes back and the counts do not swing. Before, «Gesamt 50 % · 7 von 14» fell to «0 von 14».
+ */
+test('a second run of the same drop does not set the files at rest back to «in Arbeit»', { skip: noBrowser, timeout: 400_000 }, async () => {
+  const app = await openApp();
+  const { page, api } = app;
+  try {
+    const books = await (await api.fetch('/books.json')).json() as { receipts: Array<Record<string, unknown>> };
+    const view = (await api.send('GET', '/api/automation')).json;
+    // Seven receipts the first run read, staged, waiting for their payment.
+    const read = Array.from({ length: 7 }, (_, i) => ({ ...books.receipts[0], id: `r453read${i}`, filename: `Rechnung_${i + 1}.pdf`, originalFilename: `Rechnung_${i + 1}.pdf`, location: 'staged', kind: 'invoice', date: `2026-08-0${i + 1}`, amount: 100 + i, currency: 'CHF' }));
+    const run = (id: string, status: string, startedAt: string, files: string[], at?: string) => ({
+      id, workflow: 'receipt-intake', item: { kind: 'file', id }, mode: 'live', startedAt, status, path: at ? [at] : ['read', 'facts', 'match', 'book'], ...(at ? { at } : {}),
+      startedBy: { kind: 'outside', file: files[0] }, arrived: files.map((file, i) => ({ kind: 'receipt', file, id: id === 'run-1' ? `r453read${i}` : `r453new${i}` })),
+      digest: { files, receipts: files.length, links: 0, entries: 0, poorScans: [] },
+    });
+    const first = run('run-1', 'done', '2026-11-13T10:00:00Z', read.map((r) => r.filename));
+    const newer = Array.from({ length: 7 }, (_, i) => `Neu_${i + 1}.pdf`);
+    const second = run('run-2', 'running', '2026-11-13T10:01:00Z', newer, 'read');
+    let runs = [first];
+    let rows: DropRow[] = [
+      ...read.map((r): DropRow => ({ key: r.id, id: r.id, name: r.filename, size: 1, kind: 'receipt', state: 'taken', run: 'run-1' })),
+      ...newer.map((name, i): DropRow => ({ key: `n${i}`, id: `r453new${i}`, name, size: 1, kind: 'receipt', state: 'take' })),
+    ];
+    let rev = 0;
+    await page.setRequestInterception(true);
+    page.on('request', (r) => {
+      const path = new URL(r.url()).pathname;
+      const json = (body: unknown) => void r.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+      if (path === '/books.json') json({ ...books, receipts: [...books.receipts, ...read] });
+      else if (path === '/api/automation') json({ ...view, rev: `fake-${rev}`, runs });
+      else if (path.startsWith('/api/drop')) json(r.method() === 'DELETE' ? { ok: true } : { id: 'two-runs', rows });
+      else void r.continue();
+    });
+    await app.open('/receipts?period=2026-Q3', '#root > *');
+    await dropOne(page);
+    await page.waitForFunction(() => /Gesamt 50 %/.test(document.querySelector('[data-testid=drop-overall]')?.textContent ?? ''), { timeout: 30_000 });
+    const seen = async () => ({
+      line: await page.$eval('[data-testid=drop-overall]', (p) => (p as HTMLElement).innerText),
+      stages: await page.$$eval('[data-testid=drop-filter]', (bs) => bs.map((b) => (b as HTMLElement).innerText.trim())),
+    });
+    const before = await seen();
+    assert.deepEqual(before.stages, ['14 Dateien', '7 in Arbeit', '7 warten auf ihre Zahlung']);
+
+    // The newer files taken (the server's next answer), their run reads them; the first seven stay where they were.
+    runs = [first, second];
+    rev++;
+    rows = rows.map((r) => (r.state === 'take' ? { ...r, state: 'taken', run: 'run-2' } : r));
+    await dropOne(page, ['Neu_8.pdf']);
+    // No focus and no 10 s wait of a quiet app: taking files asks at once, and every 2 s while they are worked on.
+    await page.waitForFunction(() => /werden gelesen/.test(document.querySelector('[data-testid=drop-overall]')?.textContent ?? ''), { timeout: 5_000 });
+    const after = await seen();
+    assert.deepEqual(after.stages, ['14 Dateien', '7 in Arbeit', '7 warten auf ihre Zahlung'], 'the counts do not swing');
+    const pct = (line: string) => Number(/Gesamt (\d+) %/.exec(line)![1]);
+    assert.ok(pct(after.line) >= pct(before.line), `the bar never goes back: ${before.line} → ${after.line}`);
+    assert.match(after.line, /7 von 14 Dateien fertig · 7 werden gelesen/);
     assert.deepEqual(app.errors, []);
   } finally {
     await app.stop();

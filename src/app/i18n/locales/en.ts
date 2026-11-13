@@ -3713,7 +3713,7 @@ export default {
     'drop.ov.doing.matching': { one: '{n} looking for its payment', other: '{n} looking for their payment' },
     'drop.ov.doing.booking': { one: '{n} being booked', other: '{n} being booked' },
     'drop.ov.other': '{n} filed, no payment of their own',
-    'drop.ov.out': '{n} not taken',
+    'drop.ov.out': '{n} not in the books',
     // After a drop: what came of it, what is still open, and a figure that is not final (#341).
     'drop.sum.payments': { one: '{files} with {n} payment, {from} – {to}', other: '{files} with {n} payments, {from} – {to}' },
     'drop.sum.booked': { one: '{n} booked', other: '{n} booked' },

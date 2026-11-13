@@ -28,7 +28,7 @@ import { needsYou, tabOf, type DropTab } from './drop-tabs.js';
 import { DOING_TEXT, OVERVIEW_FROM, STAGE_OF, STAGE_TEXT, doingOf, doingsIn, overviewOf, stagesIn, type Doing, type Stage } from './drop-overview.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { monthName } from '../lib/period-label.js';
-import { useAutomation } from '../automation/store.js';
+import { hurryWhile, pollNow, useAutomation } from '../automation/store.js';
 import { textIn } from '../../workflows/model.js';
 import { tasksWaiting } from '../automation/widget.js';
 import { forMe } from '../../questions/model.js';
@@ -56,7 +56,7 @@ import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
 import { processingText } from '../automation/processing.js';
 import { useNoAi } from '../ai/no-ai.js';
 import { statementSigns } from '../../parsers/receipt-text.js';
-import { INTAKE_STEPS, INTAKE_WORKFLOW, inProcess, processingOf, runProcessing } from '../../workflows/processing.js';
+import { INTAKE_STEPS, INTAKE_WORKFLOW, inProcess, runProcessing } from '../../workflows/processing.js';
 
 const drop = dropStore(
   { open: api.dropOpen, add: api.dropAdd, close: api.dropClose },
@@ -451,6 +451,17 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
   );
 }
 
+/**
+ * The automation's answers while the window's files are worked on (#453): asked at once when a file
+ * is taken (its run shows its steps from the start, not 10 s later on a quiet app), every 2 s while
+ * any row is worked on.
+ */
+function Hurry({ working, taken }: { working: boolean; taken: number }) {
+  useEffect(() => { if (taken) pollNow(); }, [taken]);
+  useEffect(() => { hurryWhile(working); return () => hurryWhile(false); }, [working]);
+  return null;
+}
+
 const isWorking = (run?: { status: string }) => !!run && (run.status === 'queued' || run.status === 'running');
 
 type View = ReturnType<typeof useAutomation>['view'];
@@ -476,7 +487,10 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   const arrival = run?.arrived?.find((x) => x.file === r.name);
   if (arrival?.kind === 'refused') return { kind: 'refused', reason: arrival.reason };
   const id = receiptIdOf(r, view);
-  const proc = processingOf(view?.runs ?? [], books.receipts).get(id);
+  // Only the row's own run decides (#453): a later run of the same drop takes up every receipt still
+  // waiting for its payment again (processingOf, as Belege says it), which would set a file at rest
+  // back to «in Arbeit» with each new file and the bar back to 0 %. Its own state moves it, not theirs.
+  const proc = run ? runProcessing(run, view?.runs ?? []) : undefined;
   if (inProcess(proc)) return { kind: 'working', step: processingText(proc, view), doing: doingOf(proc) };
   const links = books.mappings.filter((m) => m.receiptId === id);
   // A provider's fee bill booked by code without a payment (src/booking/vat-corrections.ts): its VAT, no payment (#406).
@@ -818,6 +832,7 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
     <>
       <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 45%, transparent)' }} onClick={finishDrop} />
       <div className="palette dropdlg" role="dialog" aria-label={t('drop.dialog')} data-testid="drop-dialog" data-working={working}>
+        <Hurry working={working} taken={taken.length} />
         <div className="dhd">
           <b>{!taken.length ? t('drop.dialog') : working ? t('drop.titleWorking') : t('drop.titleDone')}</b>
           {s.adding ? <span className="wfpill st-running">{t('drop.reading', { n: s.adding })}</span> : null}

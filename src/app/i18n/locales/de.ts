@@ -3711,7 +3711,7 @@ export const messages = {
   'drop.ov.doing.matching': { one: '{n} sucht die Zahlung', other: '{n} suchen die Zahlung' },
   'drop.ov.doing.booking': { one: '{n} wird gebucht', other: '{n} werden gebucht' },
   'drop.ov.other': '{n} abgelegt, ohne eigene Zahlung',
-  'drop.ov.out': '{n} nicht übernommen',
+  'drop.ov.out': '{n} nicht in den Büchern',
   // After a drop: what came of it, what is still open, and a figure that is not final (#341).
   'drop.sum.payments': { one: '{files} mit {n} Zahlung, {from} – {to}', other: '{files} mit {n} Zahlungen, {from} – {to}' },
   'drop.sum.booked': { one: '{n} gebucht', other: '{n} gebucht' },

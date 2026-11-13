@@ -26,12 +26,23 @@ async function poll(): Promise<void> {
     state = { ...state, error: errorText(e) };
     emit();
   }
-  // Every 2 s while something runs, every 10 s when it is quiet.
-  const busy = state.view?.runs.some((r) => r.status === 'running' || r.status === 'queued');
+  // Every 2 s while something runs or a screen waits for runs to show (`hurry`), every 10 s when it is quiet.
+  const busy = hurry || state.view?.runs.some((r) => r.status === 'running' || r.status === 'queued');
   if (listeners.size) timer = setTimeout(poll, busy ? 2_000 : 10_000);
 }
 
 const onFocus = () => { clearTimeout(timer); void poll(); };
+
+/** Asks at once, as focus does: a screen that just started work (a drop's file taken, #453) shows its run's steps without waiting 10 s. */
+export const pollNow = (): void => { if (listeners.size) onFocus(); };
+
+let hurry = false;
+/** While on, the store asks every 2 s even when the last answer showed no run: the drop window while its files are worked on (#453). */
+export function hurryWhile(on: boolean): void {
+  const was = hurry;
+  hurry = on;
+  if (on && !was) pollNow();
+}
 
 export function subscribe(l: () => void): () => void {
   listeners.add(l);

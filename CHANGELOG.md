@@ -433,7 +433,11 @@ Two markers flag an entry you must read before you update:
   Kontoauszüge eingelesen · 12 einer Zahlung zugeordnet · …»), each a filter of the list in place
   of the tabs, kept for the whole drop. What needs her is listed first; the files still worked on
   or done are a line each with their count, opened by a click. The counts come from the states the
-  rows show and follow them live; a filter whose last file left it shows the whole drop again.
+  rows show and follow them live; a filter whose last file left it shows the whole drop again. A
+  file is judged by its own run only: a later file's run, which takes up the receipts still waiting
+  for their payment again, no longer sets the files at rest back to «in Arbeit» and the bar back to
+  0 %; and the window asks for the runs' steps at once when a file is taken, every 2 s while files
+  are worked on.
 - A provider's monthly Payments Invoice no longer waits for the AI (#458): no payment comes for it,
   so the inbox takes its date and total from its text by code and the booking step books its input
   tax, as for the other months. Before, one failed AI answer left the bill in the inbox with
