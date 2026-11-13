@@ -201,7 +201,7 @@ export function classifyStep({ force = false } = {}): StepRun {
         },
       });
     };
-    const { classified, failed, asked, unasked } = await pass(scratch, todo);
+    const { classified, failed, asked, unasked, vatNotRead } = await pass(scratch, todo);
     // An outlay of the owner's this run booked (her private payment of a receipt) makes a payment to her a repayment
     // that the run's start did not see covered (#428): it is asked now, not left for a second click.
     if (ask) {
@@ -217,6 +217,7 @@ export function classifyStep({ force = false } = {}): StepRun {
         failed.push(...second.failed);
         asked.push(...second.asked);
         unasked.push(...second.unasked);
+        vatNotRead.push(...second.vatNotRead);
       }
     }
     progress(todo.length, todo.length);
@@ -225,6 +226,7 @@ export function classifyStep({ force = false } = {}): StepRun {
     log(`  Classified: ${classified.length}`);
     log(`  Failed    : ${failed.length}`);
     log(`  Asked     : ${asked.length}`);
+    if (vatNotRead.length) log(`  VAT unread: ${vatNotRead.length} (wait until the VAT of their receipts is read)`);
     const held = [...asked.map((a) => a.ref), ...unasked];
     if (held.length) hold?.(held);
     const booked = classified.filter(keeps);
@@ -235,6 +237,7 @@ export function classifyStep({ force = false } = {}): StepRun {
       ...(unasked.length ? [{ code: 'noModel' as const, waiting: unasked.length }] : []),
       ...(failed.length ? [{ code: 'failed' as const, count: failed.length, detail: failed[0].reason.slice(0, 300) }] : []),
       ...(asked.length ? [{ code: 'asked' as const, count: asked.length }] : []),
+      ...(vatNotRead.length ? [{ code: 'vatNotRead' as const, count: vatNotRead.length }] : []),
     ];
     return done(notes);
   };

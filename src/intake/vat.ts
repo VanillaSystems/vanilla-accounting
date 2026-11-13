@@ -74,13 +74,14 @@ export const provisionalNoVat = (r: Receipt): boolean =>
 export const vatCandidates = (books: Books, force = false, withModel = false): Receipt[] =>
   books.receipts.filter((r) => r.vatBy !== 'human' && r.kind !== 'statement' && (force || ((!hasFacts(r) || unprovenNoVat(r) || (withModel && provisionalNoVat(r))) && !r.needsVisionReview && !filedReceipt(books, r))));
 
-export function vatStep({ force = false } = {}): StepRun {
+/** `only`: the ids of the receipts to read, as for one payment's «Buchen» (src/server/routes/classify.ts); absent, every candidate. */
+export function vatStep({ force = false, only }: { force?: boolean; only?: ReadonlySet<string> } = {}): StepRun {
   return async ({ books, ask, progress, log }) => {
     if (!vatSetup().registered) {
       log('The firm is not registered for VAT: no VAT facts are read off its receipts.');
       return { notes: [] };
     }
-    const candidates = vatCandidates(books.read(), force, !!ask);
+    const candidates = vatCandidates(books.read(), force, !!ask).filter((r) => !only || only.has(r.id));
     if (candidates.length === 0) {
       log('All receipts already have VAT facts extracted (use --force to redo).');
       return { notes: [] };

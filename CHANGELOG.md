@@ -362,8 +362,8 @@ Two markers flag an entry you must read before you update:
   Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
   der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no
   Swiss VAT; the next run with an AI reads it. Nothing claims input tax on such a receipt: with an
-  AI its payment waits until the receipt is read («Die MWST des Belegs … ist noch nicht gelesen:
-  nichts gebucht»), a rate code the AI or a rule writes on it becomes the zero code, and the
+  AI its payment waits until the receipt is read (the run says «… warten, bis die MWST ihrer Belege
+  gelesen ist»; «Buchen» on the payment reads it first, in the same click), a rate code the AI or a rule writes on it becomes the zero code, and the
   company's «unlesbarer Beleg zählt als 8.1 %» counts only a receipt that could not be read. A rule
   drafted on such receipts asks for the VAT instead of filling «keine», and Bezugsteuer is no longer
   booked because a receipt said nothing. A VAT word counts only as a word: «August», «Muster» and

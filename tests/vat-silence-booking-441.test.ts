@@ -18,7 +18,9 @@ import { loadFxResolver } from '../src/accounting/fx-rates.js';
 import { loadKnowledge } from '../src/knowledge/layers.js';
 import { vatStep } from '../src/intake/vat.js';
 import { textFacts } from '../src/parsers/receipt-text.js';
-import type { Books } from '../src/books/store.js';
+import { loadBooks, saveBooks, type Books } from '../src/books/store.js';
+import { workspaceAt } from '../src/workspace/workspace.js';
+import { startApi } from './support/api-server.js';
 import type { BooksPort } from '../src/intake/pipeline.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
 import './support/jurisdiction.js';
@@ -84,7 +86,7 @@ for (const [name, house, code] of [
     const { codes, outcome, receipt } = await run(house, 'fail', code);
     assert.equal(receipt.hasSwissVat, undefined, 'still not read');
     assert.deepEqual(codes, [], 'nothing booked: no I81 by code or by the model');
-    assert.deepEqual(outcome.failed.map((f) => [f.ref, f.refusal?.code]), [[tx.ref, 'classifyVatNotRead']]);
+    assert.deepEqual([outcome.vatNotRead, outcome.failed], [[tx.ref], []], 'counted as waiting, not as failed');
   });
 }
 
@@ -113,6 +115,25 @@ test('the rule card does not warn «ohne Vorsteuer, obwohl der Beleg Schweizer M
   assert.equal(overrideOf('I0', silent[0]), undefined, 'no departure to warn about');
   const unreadable = nationalCodes(tx, [{ accountDebit: '6200', accountCredit: '', amount: 80, vatCode: 'I0' }] as never, [UNREADABLE()], {} as never, ctx(true));
   assert.deepEqual(unreadable, ['I81'], 'the company\'s unreadReceipt for a receipt that could not be read');
+});
+
+test('«Buchen» on one payment whose receipt nobody has read reads its VAT first, in the same click, then books on it', async () => {
+  const api = await startApi('tests/fixtures/classify-index.json', { PATH: `${join(process.cwd(), 'tests/support/stub-bin')}:${process.env.PATH}` });
+  try {
+    const ws = workspaceAt(api.ws.paths.root);
+    const b = loadBooks(ws);
+    const rw = b.receipts.find((r) => r.id === 'rw')!;
+    for (const k of ['hasSwissVat', 'vatSummary', 'vatId', 'vatExtractedAt'] as const) delete rw[k];
+    saveBooks(ws, b);
+    const { status, json } = await api.send('POST', '/api/journal-entries/classify/W1');
+    assert.equal(status, 200, String(json.error));
+    const saved = loadBooks(ws);
+    const read = saved.receipts.find((r) => r.id === 'rw')!;
+    assert.deepEqual([read.hasSwissVat, !!read.vatExtractedAt], [false, true], 'the stub model read its VAT in the click');
+    assert.deepEqual(saved.journalEntries.filter((e) => e.transactionRef === 'W1').map((e) => e.vatCode), ['I0'], 'booked on what it read');
+  } finally {
+    await api.stop();
+  }
 });
 
 test('«no Swiss VAT» in words is no answer beside «inkl. MWST» or a superseded Swiss rate; alone it is', () => {

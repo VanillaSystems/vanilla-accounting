@@ -69,7 +69,9 @@ const intake = async (ws: Workspace, books: Books) => {
 function privately(books: Books, i: number): void {
   const [ref, date, amount] = OUTLAYS[i];
   books.transactions.push(pay(ref, date, amount, `Beleg ${ref}`, { bank: 'manual', source: 'manual', counterparty: undefined }));
-  books.receipts.push({ id: `r-${ref}`, filename: `${ref}.pdf`, originalFilename: `${ref}.pdf`, extractedText: `Billett Total CHF ${amount}`, extractionMethod: 'pdftotext', fileSize: 4000, indexedAt: '2026-09-30T08:00:00Z', location: 'archived', currency: 'CHF', date, amount });
+  books.receipts.push({ id: `r-${ref}`, filename: `${ref}.pdf`, originalFilename: `${ref}.pdf`, extractedText: `Billett Total CHF ${amount}`, extractionMethod: 'pdftotext', fileSize: 4000, indexedAt: '2026-09-30T08:00:00Z', location: 'archived', currency: 'CHF', date, amount,
+    // Read by the inbox run's VAT step before it books (#391): a ticket without Swiss VAT.
+    hasSwissVat: false, vatSummary: [], vatExtractedAt: '2026-09-30T08:00:00Z' });
   books.mappings.push({ transactionRef: ref, receiptId: `r-${ref}` });
 }
 

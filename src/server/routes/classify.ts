@@ -11,7 +11,8 @@
 import { Router } from 'express';
 import { ask } from '../../llm/ask.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
-import { classifyTransactions, loadClassifyContext } from '../../booking/classify.js';
+import { classifyTransactions, loadClassifyContext, vatToRead } from '../../booking/classify.js';
+import { vatStep } from '../../intake/vat.js';
 import type { Books } from '../../books/store.js';
 import { reconcileRefusal, reconciliationOf } from '../../books/reconcile.js';
 import { WS, assertOpen, readBooks, refDates, updateBooks, RequestError } from '../books.js';
@@ -47,11 +48,19 @@ router.post('/api/journal-entries/classify/:txRef', async (req, res) => {
   const overwrite = req.body?.overwrite === true;
   // Her correction of a sale is kept as a rule first, so the classifier books it as she set.
   if (overwrite) learnFromCorrection([txRef]);
-  const scratch = readBooks();
-  openTransaction(scratch, txRef, overwrite);
+  const first = readBooks();
+  openTransaction(first, txRef, overwrite);
+  // Her click reads the VAT of the payment's receipts nobody has read yet first (#391): the model books on what they show, never on a guess.
+  const toRead = new Set(first.transactions.filter((t) => t.ref === txRef).flatMap((t) => vatToRead(first, t)).map((r) => r.id));
+  if (toRead.size) await vatStep({ only: toRead })({ ws: WS, books: { read: readBooks, update: updateBooks }, ask, progress: () => {}, log: () => {} });
+  const scratch = toRead.size ? readBooks() : first;
   scratch.journalEntries = scratch.journalEntries.filter((je) => je.transactionRef !== txRef);
   // Every movement of the ref: the entries of all legs of a charge split across balances under one ref are replaced below (#287).
-  const { failed } = await classifyTransactions(scratch, scratch.transactions.filter((t) => t.ref === txRef), { ask, fx: loadFxResolver(), context: loadClassifyContext(WS) });
+  const { failed, vatNotRead } = await classifyTransactions(scratch, scratch.transactions.filter((t) => t.ref === txRef), { ask, fx: loadFxResolver(), context: loadClassifyContext(WS) });
+  if (vatNotRead.length) {
+    const receipt = scratch.transactions.filter((t) => t.ref === txRef).flatMap((t) => vatToRead(scratch, t)).map((r) => r.originalFilename ?? r.filename).join(', ');
+    throw new RequestError(422, `Die Steuer auf dem Beleg ${receipt} ist noch nicht gelesen: nichts gebucht. Die App liest sie beim nächsten Lauf und bucht die Zahlung dann; oder trage sie beim Beleg unter Angaben ein.`, { code: 'classifyVatNotRead', params: { receipt } });
+  }
   const refused = failed.find((f) => f.refusal);
   if (refused) throw new RequestError(422, refused.reason, refused.refusal);
   if (failed.length) throw new RequestError(500, failed.map((f) => f.reason).join('; '));

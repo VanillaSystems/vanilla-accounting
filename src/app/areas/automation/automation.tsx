@@ -563,6 +563,7 @@ function noteText(n: IntakeNote): string {
     case 'saleAsked': return t('automation.note.saleAsked', { n: n.count });
     case 'waitingReceipt': return t('automation.note.waitingReceipt', { n: n.count });
     case 'receiptUnread': return t('automation.note.receiptUnread', { n: n.count });
+    case 'vatNotRead': return t('automation.note.vatNotRead', { n: n.count });
     case 'error': return n.detail;
   }
 }
