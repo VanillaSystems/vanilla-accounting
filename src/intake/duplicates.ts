@@ -100,7 +100,8 @@ function same(a: Prepared, b: Prepared, df: Map<string, number>, companion: bool
     if (sharedRare()) return { why: 'same-number', score: 2 };
     // An order confirmation comes before its invoice, a delivery note with it; one carries no total.
     if (apart !== undefined && apart > COMPANION_DAYS) return undefined;
-    if (x !== undefined && y !== undefined && !near(x, y)) return undefined;
+    // A total of 0.00 is none (the model's reading of an order confirmation, #384): it does not keep the two apart.
+    if (x !== undefined && y !== undefined && Math.abs(x) >= 0.005 && Math.abs(y) >= 0.005 && !near(x, y)) return undefined;
     const o = overlap(a.words, b.words);
     return o >= COMPANION_WORDS ? { why: 'same-facts', score: o } : undefined;
   }

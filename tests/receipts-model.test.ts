@@ -3,6 +3,7 @@
  * needs you, what is locked by a filed quarter, and which payments rank first for a receipt.
  */
 import './support/jurisdiction.js';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
@@ -69,6 +70,22 @@ test('a period shows its receipts, counts them per filter, and hides what is no 
   assert.deepEqual(v.counts, { all: 4, linked: 1, open: 3, noDate: 1 });
   assert.deepEqual(v.hidden.map((x) => x.r.id), ['brochure']);
   assert.deepEqual(visible(l, q3, [{ field: 'state', value: 'open' }], 'druckerpapier', [], receiptFields(l, undefined, WORDS)).rows.map((x) => x.r.id), ['paper']);
+});
+
+test('an order confirmation beside its invoice is listed and named on the invoice, never hidden among files that are no receipt (#384)', () => {
+  const texts = JSON.parse(readFileSync(new URL('./fixtures/persona-receipt-texts.json', import.meta.url), 'utf8')).huber as Record<string, string>;
+  const ab = receipt('ab', { date: '2026-07-24', amount: 0, extractedText: texts['Farbmix_Auftragsbestaetigung_AB-5521.pdf'], kind: 'supporting', kindBy: 'rule', kindRule: 'document:order-confirmation' });
+  const inv = receipt('fm', { date: '2026-07-30', amount: 2410.85, extractedText: texts['Farbmix_Rechnung_FM-78230.pdf'] });
+  const lb = ledgerOf({ ...books, receipts: [ab, inv], mappings: [], transactions: [] }, '2026-07-01');
+  const v = visible(lb, q3, undefined, undefined);
+  assert.deepEqual([v.rows.map((x) => x.r.id).sort(), v.hidden, v.counts.all], [['ab', 'fm'], [], 1], 'listed, not hidden, and not counted as a receipt of its own');
+  assert.deepEqual(lb.byId.get('ab')!.twin, { of: 'fm', why: 'same-facts', relation: 'companion' }, 'it belongs to FM-78230, its 0.00 no total that keeps them apart');
+  // The customs assessment beside the courier's bill: tied by the declaration's number, whatever each totals.
+  const shop = JSON.parse(readFileSync(new URL('./fixtures/persona-receipt-texts.json', import.meta.url), 'utf8')).webshop as Record<string, string>;
+  const vv = receipt('vv', { date: '2026-07-10', amount: 129.46, extractedText: shop['Veranlagungsverfuegung_26CHWI000047118823.pdf'], kind: 'supporting', kindRule: 'document:customs-assessment' });
+  const dhl = receipt('dhl', { date: '2026-07-13', amount: 156.49, extractedText: shop['DHL_Zollrechnung_5310772941.pdf'] });
+  const lc = ledgerOf({ ...books, receipts: [vv, dhl], mappings: [], transactions: [] }, '2026-07-01');
+  assert.deepEqual([lc.byId.get('vv')!.twin?.of, visible(lc, q3, undefined, undefined).hidden], ['dhl', []]);
 });
 
 test('chips (#211): AND across fields, OR within one; a state chip «kein Beleg» lists what is none, any state chip hides the note', () => {

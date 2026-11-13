@@ -3782,6 +3782,7 @@ export default {
     'drop.readAs': 'Déjà dans la comptabilité : {file}',
     'drop.openStatement': 'Ouvrir le relevé',
     'drop.reason.statement-read': 'déjà importé',
+    'drop.reason.csv-known': 'déjà là : les paiements de ce fichier sont importés',
     'drop.reason.private': 'mis de côté : un compte privé n’a pas sa place dans la comptabilité de l’entreprise',
     'drop.reason.provider-account': 'attend un compte du prestataire de paiement',
     'drop.reason.report-failed': 'non comptabilisé : une erreur à la lecture du rapport',

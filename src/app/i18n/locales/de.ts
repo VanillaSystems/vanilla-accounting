@@ -3779,6 +3779,7 @@ export const messages = {
   'drop.readAs': 'Liegt schon in den Büchern: {file}',
   'drop.openStatement': 'Auszug öffnen',
   'drop.reason.statement-read': 'schon eingelesen',
+  'drop.reason.csv-known': 'schon da: die Zahlungen dieser Datei sind eingelesen',
   'drop.reason.private': 'beiseitegelegt: ein privates Konto gehört nicht in die Bücher der Firma',
   'drop.reason.provider-account': 'wartet auf ein Konto des Zahlungsanbieters',
   'drop.reason.report-failed': 'nicht gebucht: ein Fehler beim Lesen des Berichts',

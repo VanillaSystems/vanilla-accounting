@@ -26,7 +26,7 @@ import { removeReceipt } from '../../accounting/classify-force.js';
 import { importStatement, removeStatement } from './statements.js';
 import { statementDetails } from '../../providers/statement-files.js';
 import { accountOfRead, keepCsv, keptCsv, placeByText, readDays } from '../../intake/statement-read.js';
-import { askAbout, assertImportable, closeAsk, correctAsk, importAsk, keepAsk, readAsXml, readPdf, readRefusal, readView, structuredAccount } from '../statement-asks.js';
+import { askAbout, assertImportable, closeAsk, correctAsk, heldOfRead, importAsk, keepAsk, readAsXml, readPdf, readRefusal, readView, structuredAccount } from '../statement-asks.js';
 import { csvStatement, csvTable, guessColumns, MAX_CSV_ROWS } from '../../providers/statement-read/csv.js';
 import { parseReadStatement } from '../../books/statement-check.js';
 import { imageToPdf, isImageFile } from '../../parsers/image-pdf.js';
@@ -369,10 +369,17 @@ async function readInto(s: DropSession, row: DropRow, bytes: Buffer): Promise<vo
     const table = csvTable(bytes);
     if (!table) { Object.assign(row, { state: 'refused', reason: 'bank-csv' }); return; }
     const kept = keptCsv(WS, table.header);
-    const accounts = WS.bankAccounts.filter((x) => x.statements).map((x) => ({ account: x.account, label: x.label, currency: x.currency }));
-    row.csv = { header: table.header, sample: table.rows.slice(0, 5), rows: table.rows.length, accounts, ...(kept ? { columns: kept.columns, account: kept.account } : guessColumns(table.header) ? { columns: guessColumns(table.header) } : {}) };
-    const account = kept && WS.bankAccounts.find((x) => x.account === kept.account && x.statements);
-    const read = account ? csvStatement(table, kept.columns, account) : undefined;
+    const takers = WS.bankAccounts.filter((x) => x.statements);
+    const accounts = takers.map((x) => ({ account: x.account, label: x.label, currency: x.currency }));
+    const guessed = kept ? undefined : guessColumns(table.header);
+    // A CSV whose every payment the books hold on one account already (its camt.053 of the same days, #384): nothing to ask, nothing to read in.
+    const holder = guessed && takers.find((a) => { const r = csvStatement(table, guessed, a); return !('kind' in r) && r.movements.length > 0 && heldOfRead(r, a).size === r.movements.length; });
+    if (holder) { Object.assign(row, { state: 'duplicate', reason: 'csv-known', account: holder.account }); return; }
+    row.csv = { header: table.header, sample: table.rows.slice(0, 5), rows: table.rows.length, accounts, ...(kept ? { columns: kept.columns, account: kept.account } : guessed ? { columns: guessed } : {}) };
+    // The columns code recognises from the header and the one account that takes statements: only the check is left to her.
+    const only = guessed && takers.length === 1 ? takers[0] : undefined;
+    const account = kept ? WS.bankAccounts.find((x) => x.account === kept.account && x.statements) : only;
+    const read = account ? csvStatement(table, kept?.columns ?? guessed!, account) : undefined;
     if (account && read && !('kind' in read)) Object.assign(row, { account: account.account, read: readView(read, 'csv', account.account), state: 'asks', reason: 'check-read' });
     else Object.assign(row, { state: 'asks', reason: 'csv-columns', ...(read && 'kind' in read && read.kind === 'tooMany' ? { message: csvRefusal(read).message } : {}) });
     return;

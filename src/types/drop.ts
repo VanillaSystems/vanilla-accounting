@@ -194,6 +194,8 @@ export type DropReason =
   | 'unreadable'
   /** A statement whose file is read in already (`readAs`): its movements are in the books. */
   | 'statement-read'
+  /** A bank CSV whose every payment the books hold already on one account (#384): nothing asked, nothing read in. */
+  | 'csv-known'
   /** A statement without a bank export read into a table (`read`): the person checks it and says «Einlesen». */
   | 'check-read'
   /** A bank's CSV: the person says which column holds what (`csv`). */

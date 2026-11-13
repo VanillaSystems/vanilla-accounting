@@ -3782,6 +3782,7 @@ export default {
     'drop.readAs': 'Already in the books: {file}',
     'drop.openStatement': 'Open the statement',
     'drop.reason.statement-read': 'already read in',
+    'drop.reason.csv-known': 'already there: the payments of this file are read in',
     'drop.reason.private': 'set aside: a private account does not belong in the firm’s books',
     'drop.reason.provider-account': 'waits for an account of the payment provider',
     'drop.reason.report-failed': 'not booked: an error while reading the report',

@@ -3782,6 +3782,7 @@ export default {
     'drop.readAs': 'Già nella contabilità: {file}',
     'drop.openStatement': 'Apri l’estratto',
     'drop.reason.statement-read': 'già importato',
+    'drop.reason.csv-known': 'già qui: i pagamenti di questo file sono importati',
     'drop.reason.private': 'messo da parte: un conto privato non va nella contabilità della ditta',
     'drop.reason.provider-account': 'attende un conto del fornitore di pagamento',
     'drop.reason.report-failed': 'non registrato: un errore nella lettura del rapporto',

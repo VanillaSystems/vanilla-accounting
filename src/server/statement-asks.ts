@@ -85,7 +85,8 @@ export function readAsXml(read: StatementRead, account: LedgerBankAccount | unde
  * amount (heldOf). A line near a bank export's or CSV's days that the bank holds otherwise comes in, and
  * the account's reconciliation sets it against the bank's (#254, src/books/reconcile.ts).
  */
-const heldOfRead = (statement: ReadStatement, account: LedgerBankAccount | undefined): Map<number, BankTransaction> => heldOf(statement, account, readBooks().transactions);
+/** The lines of a statement the books hold already on its account (by day and amount), by their index. */
+export const heldOfRead = (statement: ReadStatement, account: LedgerBankAccount | undefined): Map<number, BankTransaction> => heldOf(statement, account, readBooks().transactions);
 
 /** The PDF read now: by the model when one answers here, else the hand form saying why (the AI switched off, or no provider). */
 export async function readPdf(path: string): Promise<PdfRead & { limit?: number }> {
