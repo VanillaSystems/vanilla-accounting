@@ -326,6 +326,8 @@ export interface DocumentsData {
   buyer?: string[];
   /** A title's vendor that names no business (the model's «Verkauf» for a till's slip): it tells no vendor apart (src/intake/own-invoice.ts buyerUids). */
   notVendor?: string[];
+  /** A title's vendor the model gives the firm's own sale («Verkauf»), never a word that only names a document: with the firm's name heading an invoice it is the firm's own (src/app/areas/automation/period-issues.ts ownByFirm). */
+  ownSale?: string[];
 }
 
 /** What a line of a customs invoice charges: the import VAT the carrier advanced, customs duty, the carrier's fees, freight. */

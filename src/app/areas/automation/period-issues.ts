@@ -22,8 +22,9 @@ import { waitingForReceipt, type WaitingPayment } from '../../../accounting/rece
 import { localToday, type IsoDate } from '../../../accounting/periods.js';
 import type { HeldOrder, MissingBill, ProviderIssues } from '../../../booking/provider-issues.js';
 import { unclearedContributions, type Uncleared } from '../../../booking/withheld.js';
-import { issuedByFirm, ownNumbers, type Firm } from '../../../intake/own-invoice.js';
-import { agreedBasis, baseCurrency } from '../../../engines/index.js';
+import { issuedByFirm, ownNumbers, vendorKey, type Firm } from '../../../intake/own-invoice.js';
+import type { DocumentsData } from '../../../core/modules/schema.js';
+import { agreedBasis, baseCurrency, documents } from '../../../engines/index.js';
 
 export type PeriodIssue =
   | { kind: 'question'; q: Question; date: string }
@@ -222,15 +223,32 @@ export function unbookedOpen(books: Pick<Index, 'transactions' | 'journalEntries
   return { unbooked: open.length, waitingReceipt: count(false), waitingOutlays: count(true), ...(open[0] ? { first: open[0] } : {}) };
 }
 
-const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+/** A name to compare whole: its letters and digits, without its legal forms («Kälin Advisory GmbH» is «kälinadvisory»). */
+function nameKey(name: string | undefined, words: DocumentsData): string {
+  const legal = new Set((words.legalForms ?? []).map((w) => vendorKey(w)));
+  return (name ?? '').split(/[\s,.]+/u).map((w) => vendorKey(w)).filter((w) => w && !legal.has(w)).join('');
+}
 
 /**
- * Whether a receipt without a payment is the firm's own invoice that only waits for its customer,
- * nothing for the person to do (#428). Only when that is sure: the receipt shows the firm's UID and
- * no other (a name alone is no proof), no money in may be its payment (one booked without the link
- * is hers to pair), and on the agreed basis its issue is booked as a
- * receivable (an invoice dropped, not issued in the app, has no event: its turnover is VAT work).
+ * The firm's own invoice by issuedByFirm: by its UID, or, while the settings have none (#466, #497), by its name heading
+ * the letterhead, and only with each of these: it is an invoice with its own number (ownNumbers), no credit note, and the
+ * vendor the model read on it is the firm's own sale (documents.yaml ownSale, «Verkauf») or the firm's name, whole and
+ * without its legal form («Meier» is not «Meier Tobler»). The name alone is no proof: a supplier whose logo is an image
+ * leaves the addressee on the first line, and the model names the supplier or only the document («Rechnung»), which
+ * says nothing. What is left: a supplier's invoice the model read as «Verkauf» or as the firm, with the firm's name
+ * on its first line and at most the one UID in its letterhead; the model is told «Verkauf» is the firm's own sale only.
  */
+function ownByFirm(r: Receipt, firm: Firm | undefined, words: DocumentsData = documents()): boolean {
+  const by = issuedByFirm(r, firm);
+  if (by !== 'name') return by === 'uid';
+  if ((r.amount ?? 0) < 0 || !ownNumbers(r, words).length) return false;
+  const read = nameKey(r.title?.vendor, words);
+  if (!read) return false;
+  return (words.ownSale ?? []).some((w) => vendorKey(w) === read) || read === nameKey(firm?.name, words);
+}
+
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
 /** Money in, on or after the invoice's day and linked to no receipt, of its amount or naming its number: it may be its payment, booked without the link. */
 function mayBePaid(books: Index, r: Receipt): boolean {
   const linked = new Set(books.mappings.map((m) => m.transactionRef));
@@ -240,8 +258,16 @@ function mayBePaid(books: Index, r: Receipt): boolean {
       || numbers.some((n) => n.length >= 4 && squash(`${t.description} ${t.reference ?? ''} ${t.remarks ?? ''}`).includes(n))));
 }
 
+/**
+ * Whether a receipt without a payment is the firm's own invoice that only waits for its customer,
+ * nothing for the person to do (#428): issued by the firm (ownByFirm, by its UID, or by its name, its number and its read vendor), no
+ * money in may be its payment (one booked without the link is hers to pair), and on the agreed basis its issue is
+ * booked as a receivable (an invoice dropped, not issued in the app, has no event: its turnover is VAT work). Which list
+ * names it is display, never a link. An invoice the app issued is never a receipt without a payment: its record is
+ * linked to its issue event (agreed basis) or filed with its payment (src/invoices/events.ts invoiceReceipt).
+ */
 export function waitsForCustomer(books: Index, r: Receipt, firm: Firm | undefined): boolean {
-  if (issuedByFirm(r, firm) !== 'uid') return false;
+  if (!ownByFirm(r, firm)) return false;
   if (mayBePaid(books, r)) return false;
   if (!agreedBasis()) return true;
   const events = new Set((books.journalEntries ?? []).filter((e) => /^(RE|GS)-/.test(e.transactionRef) && !e.transactionRef.endsWith('-storno')).map((e) => squash(e.transactionRef)));
