@@ -5,6 +5,7 @@
  */
 import type { JournalEntry } from '../../../types/index.js';
 import type { BookingLine } from '../../../accounting/manual-booking.js';
+import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
 import { api, errorText, type JournalEntryInput, type JournalEntryPatch } from '../../lib/api.js';
 import { undoInput } from '../../../books/entry-input.js';
 import { t } from '../../i18n/index.js';
@@ -33,6 +34,20 @@ export function saveEntry(nav: Nav, e: JournalEntry, patch: JournalEntryPatch, c
   for (const f of changed) Object.assign(back, { [f]: f === 'vatCode' || f === 'description' ? e[f] ?? '' : f === 'tags' ? e.tags ?? null : e[f] });
   const fields = changed.map((f) => t(`journal.field.${f}`)).join(', ');
   return run(nav, () => api.patchJournalEntry(e.id, patch), () => t('journal.saved', { fields }), () => api.patchJournalEntry(e.id, back));
+}
+
+/**
+ * The click of a contradiction with the receipts (src/accounting/evidence-check.ts): a receipt of
+ * several VAT groups books the payment's lines by them (#406); else the proposed code on this line.
+ * The undo puts the lines back as they were.
+ */
+export function fixEvidence(nav: Nav, e: JournalEntry, c: EvidenceCheck) {
+  if (c.kind !== 'receiptGroups') return saveEntry(nav, e, c.kind === 'receiptShowsVat' ? { vatCode: c.code, receipts: c.receipts } : { vatCode: c.code }, ['vatCode']);
+  const lines = (c.lines ?? []).map((l) => `${l.code} ${fmt(l.amount)}`).join(' · ');
+  return run(nav, () => api.bookByReceipt(e.id), () => t('journal.evidence.rebooked', { lines }), async ({ before, after }) => {
+    for (const id of after) await api.deleteJournalEntry(id);
+    for (const x of before) await api.createJournalEntry(undoInput(x));
+  });
 }
 
 /** A receipt hung on a booking without a payment (#89); the undo takes it off again. */

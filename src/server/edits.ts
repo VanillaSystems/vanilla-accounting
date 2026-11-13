@@ -14,6 +14,7 @@ import { correctsFor } from '../accounting/correction.js';
 import { bookedState, paymentDates, paymentSides, type PaymentSide } from '../accounting/payment-entries.js';
 import { baseCurrency, chart, documents, filing, vat } from '../engines/index.js';
 import { toRappen } from '../accounting/rappen.js';
+import { evidenceCheck } from '../accounting/evidence-check.js';
 import { ratesImportVat, readAssessment } from '../booking/customs-invoice.js';
 import { codeSignFor } from '../accounting/code-sign.js';
 import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
@@ -630,6 +631,54 @@ export function attachEntries(books: Books, ref: string, own: string, accounts: 
   const receipts = [...new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId))].sort();
   for (const e of entries) Object.assign(e, { transactionRef: ref, date: tx.date, receipts, origin: 'manual', by: { kind: 'person', at: new Date().toISOString() } });
   return before;
+}
+
+/**
+ * «Nach Beleg buchen» on a payment whose receipt shows several VAT groups (#406): its lines on that
+ * receipt booked again by the groups, each its own line and code (evidenceCheck's proposal, made
+ * here from the books, never taken from the request). A line whose amount is a group's keeps its id
+ * and takes the group's code; a line of another amount takes a group left over; a group left
+ * then is a new line on the entry's accounts; a line left then goes. Returns the lines as they were
+ * and the ids of the lines now, of those it changed, for the undo.
+ */
+export function bookByReceipt(books: Books, id: string): { before: JournalEntry[]; after: string[] } {
+  const e = entryOf(books, id);
+  assertOpen(books, [e.date], 'editEntry');
+  const ref = e.transactionRef;
+  const linkedIds = new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId));
+  const linked = books.receipts.filter((r) => linkedIds.has(r.id));
+  const proof = books.transactions.find((t) => t.ref === ref)?.inputTaxProof;
+  const lines = books.journalEntries.filter((x) => x.transactionRef === ref);
+  // The finding sits on one line of the payment; the click on any of its lines books them all.
+  const check = [e, ...lines].map((x) => evidenceCheck(x, linked, books.config.closedThrough, proof, lines)).find((c) => c?.kind === 'receiptGroups' && c.entries.includes(e.id));
+  if (check?.kind !== 'receiptGroups' || !check.lines) throw new RequestError(409, 'Die Buchung lässt sich nicht nach den Steuersätzen ihres Belegs buchen.', { code: 'notByReceipt' });
+  const mates = check.entries.map((x) => entryOf(books, x));
+  const was = new Map(mates.map((m) => [m.id, { ...m }]));
+  const touched = new Set<string>();
+  const sign = Math.sign(e.amount) || 1;
+  const free = [...check.lines];
+  const take = (m: JournalEntry) => {
+    const i = free.findIndex((l) => toRappen(l.amount) === toRappen(Math.abs(m.amount)));
+    return i < 0 ? undefined : free.splice(i, 1)[0];
+  };
+  const left: JournalEntry[] = [];
+  for (const m of mates) {
+    const l = take(m);
+    if (!l) left.push(m);
+    else if (l.code !== m.vatCode) { setEntry(books, m.id, { vatCode: l.code, receipts: check.receipts }); touched.add(m.id); }
+  }
+  for (const m of left) {
+    const l = free.shift();
+    touched.add(m.id);
+    if (l) setEntry(books, m.id, { amount: sign * l.amount, vatCode: l.code, receipts: check.receipts });
+    else books.journalEntries = books.journalEntries.filter((x) => x.id !== m.id);
+  }
+  const at = new Date().toISOString();
+  const { reason: _reason, rule: _rule, run: _run, ...template } = e;
+  const made = free.map((l): JournalEntry => ({ ...template, id: randomBytes(8).toString('hex'), amount: sign * l.amount, vatCode: l.code, receipts: check.receipts, origin: 'manual', by: { kind: 'person', at } }));
+  books.journalEntries.push(...made);
+  const after = books.journalEntries.filter((x) => touched.has(x.id) || made.includes(x)).map((x) => x.id);
+  return { before: [...touched].map((x) => was.get(x)!), after };
 }
 
 /**

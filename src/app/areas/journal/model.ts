@@ -79,11 +79,13 @@ export function journalOf(books: Index): Journal {
     const r = receiptById.get(m.receiptId);
     if (r) (receiptsByRef.get(m.transactionRef) ?? receiptsByRef.set(m.transactionRef, []).get(m.transactionRef)!).push(r);
   }
+  const linesByRef = new Map<string, JournalEntry[]>();
+  for (const e of books.journalEntries ?? []) (linesByRef.get(e.transactionRef) ?? linesByRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
   const views = (books.journalEntries ?? []).map((e): EntryView => {
     const tx = txByRef.get(e.transactionRef);
     const receipts = receiptsByRef.get(e.transactionRef) ?? [];
     const [title, sub] = splitText(e.description || e.transactionRef);
-    const evidence = evidenceCheck(e, receipts, closedThrough, tx?.inputTaxProof);
+    const evidence = evidenceCheck(e, receipts, closedThrough, tx?.inputTaxProof, linesByRef.get(e.transactionRef));
     return { e, tx, receipts, missing: !!tx && needsReceipt(tx, receipts.length), locked: !!closedThrough && e.date <= closedThrough, ...(evidence && { evidence }), title, sub };
   });
   const byRef = new Map<string, EntryView[]>();
@@ -108,7 +110,7 @@ export function unsettledAtFiling(j: Journal, length: FilingLength): { period: s
   const corrected = (ref: string) => j.views.some((x) => x.e.corrects === period && (x.e.description ?? '').includes(ref));
   const items = j.views.flatMap((v): Unsettled[] => {
     if (v.e.date < from || v.e.date > closed || v.e.corrects || corrected(v.e.transactionRef)) return [];
-    const check = evidenceCheck(v.e, v.receipts, undefined, v.tx?.inputTaxProof);
+    const check = evidenceCheck(v.e, v.receipts, undefined, v.tx?.inputTaxProof, (j.byRef.get(v.e.transactionRef) ?? []).map((x) => x.e));
     return check ? [{ v, check }] : [];
   });
   return { period, items };

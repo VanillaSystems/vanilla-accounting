@@ -6,7 +6,7 @@ import { isIsoDate } from '../../accounting/periods.js';
 import { patchBody, stringField, tagsField, updateBooks, withBooks, RequestError, WS } from '../books.js';
 import { learnFromCorrection, undoAnswer } from '../questions.js';
 import type { EntrySet } from '../../types/assistant.js';
-import { addEntry, deleteEntry, link, restoreSaved, setEntry } from '../edits.js';
+import { addEntry, bookByReceipt, deleteEntry, link, restoreSaved, setEntry } from '../edits.js';
 import { handEdits, recordDeletion } from '../../saving/changes.js';
 import { parseBookedBy } from '../../books/booked-by.js';
 import { bookPaymentAgain } from './automation.js';
@@ -159,6 +159,11 @@ router.post('/api/journal-entries/:id/as-saved', async (req, res) => {
   });
   if (unbooked) await bookPaymentAgain(edit.ref);
   res.json({ ok: true });
+});
+
+/** «Nach Beleg buchen» on a receipt of several VAT groups (#406): the payment's lines on it booked by the groups. */
+router.post('/api/journal-entries/:id/by-receipt', (req, res) => {
+  res.json(updateBooks((books) => bookByReceipt(books, req.params.id)));
 });
 
 /** A deletion by hand: the booking goes, and is recorded for Änderungen's «Rückgängig» also when no save held it (r7h-31). */
