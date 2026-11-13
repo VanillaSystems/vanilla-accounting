@@ -24,10 +24,10 @@ import { startIntake, useIntakeRunning } from '../../automation/intake.js';
 import { textIn, type RunSummary } from '../../../workflows/model.js';
 import { ICONS } from '../icons.js';
 import type { AreaProps } from '../index.js';
-import { cardStatementOf, ownAmount, chfOf, linkFit, markLabel, vatMisfit, type Ledger, type ReceiptView, vatChipOf } from './model.js';
+import { balanceSheetOf, cardStatementOf, ownAmount, chfOf, linkFit, markLabel, vatMisfit, type Ledger, type ReceiptView, vatChipOf } from './model.js';
 import { waitsForReading } from '../../../parsers/receipt-text.js';
 import { setUi, useUi, type Section } from './state.js';
-import { amountOf, at, bankOf, cardStatementLine, dayText, ledgerFor, listed, noneText, txLine } from './view.js';
+import { amountOf, at, balanceSheetLine, bankOf, cardStatementLine, dayText, ledgerFor, listed, noneText, txLine } from './view.js';
 import { Kbd, accept, runAct } from './commands.js';
 import { correctionPeriodName } from '../journal/commands.js';
 import { QuestionsOn } from '../../questions/Questions.js';
@@ -145,6 +145,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
   const proc = l.processing.get(r.id);
   // A card statement taken as a receipt (#401): what the app did with it.
   const card = cardStatementOf(r, props.books);
+  const sheet = balanceSheetOf(r, props.books, localToday());
   const busy = inProcess(proc) && !v.none;
   const unread = !v.date || r.amount == null || vatChipOf(r.hasSwissVat, withoutInputTax()) === 'unread';
 
@@ -211,7 +212,10 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       {card && <div className="notice" data-testid="card-statement">{cardStatementLine(card)}</div>}
       {r.report?.held?.length ? <ReportHeld receipt={r.id} report={r.report} canEdit={canEdit} closedThrough={props.books.config?.closedThrough} said={(message, ok) => { if (ok) nav.refresh(); nav.toast(message); }} /> : null}
       <ReportCorrections receipt={r.id} books={props.books} canEdit={canEdit} said={(message) => { nav.refresh(); nav.toast(message); }} />
-      {v.none && v.r.kind === 'supporting'
+      {sheet
+        ? <div className="notice" data-testid="balance-sheet-notice">{balanceSheetLine(sheet)}{' '}
+          {sheet.opens && <a href="#" data-testid="balance-sheet-to-opening" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'opening' }, query: {} }); }}>{t('reports.openingSet')}</a>}</div>
+        : v.none && v.r.kind === 'supporting'
         ? <div className="notice" data-testid="supporting-notice">{t('receipts.supportingNotice', { what: v.noneWhy ? t(`receipts.why.${v.noneWhy}`) : t('receipts.why.supporting') })} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t(markLabel(r))}</a>}</div>
         : v.none
         ? <div className="notice">{v.noneWhy ? t('receipts.noneNoticeWhy', { why: noneText(v) }) : t('receipts.noneNotice')} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>

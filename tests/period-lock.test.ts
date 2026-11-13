@@ -455,3 +455,19 @@ test('POST /api/payouts/book and «Einschalten» of the booking (#404): a provid
   assert.ok(!now.journalEntries.some((e) => e.transactionRef === 'PC'), 'the filed quarter\'s payout stays unbooked');
   assert.deepEqual(closedPart(now, '2026-06-30'), sealed);
 });
+
+test('refused: the opening of a year closed through 31.12., a foreign-currency account with its balance in its currency too (403, #427)', async () => {
+  const closed = await startApi('tests/fixtures/period-lock-index.json');
+  try {
+    // The year closed through its last day, as the year close leaves it (the write door moves no lock: set on disk).
+    const ledger = JSON.parse(readFileSync(closed.ws.paths.ledger, 'utf8'));
+    (ledger.config ?? ledger).closedThrough = '2026-12-31';
+    writeFileSync(closed.ws.paths.ledger, JSON.stringify(ledger, null, 2));
+    const before = booksOnDisk(closed.ws);
+    const r = await closed.send('PUT', '/api/opening-balances/2026/1023', { amount: 1126.01, native: 1200 });
+    assert.deepEqual([r.status, r.json.code], [403, 'openingYearClosed']);
+    assert.deepEqual(booksOnDisk(closed.ws), before, 'nothing written');
+  } finally {
+    await closed.stop();
+  }
+});

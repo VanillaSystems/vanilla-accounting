@@ -103,6 +103,10 @@ Two markers flag an entry you must read before you update:
   waited (the payments by an inbox run, the report taken again). Her own answers and links, and a
   merchant name the app learns from confirmed links, make nothing wait: a new firm starts switched
   on and its first drop books as before.
+- Demos (#374): the bundled demos are written again by today's generator, so their payments show
+  the other party's name and their bank fee rows are marked as fees, as in books read from a
+  statement now; no booking and no figure changed. A test now fails when a committed demo is not
+  what `npm run demo:generate` writes.
 - Setup (#423): «MWST-Methode» and «Abrechnungsart» say where the owner finds her answer herself:
   in the ESTV portal, under «Neue Geschäfte» her firm, then «Anpassen» on the card «Abrechnungsmodalitäten», changing nothing; the Treuhand
   only when she has no access. «Abrechnungsart» no longer says that vereinbart applies unless the
@@ -337,6 +341,35 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Firma › Eröffnung (#427): a foreign-currency bank account is no longer refused with a terminal
+  command. Typed, it shows a second field: its value in CHF and its balance in its own currency,
+  as the balance sheet shows both; the statements are checked against the latter. Beside them the
+  form names the balance's value at the ESTV rate of 31.12. and how far the typed value is off it,
+  with a click to take it; values of opposite signs, or one of them 0, are refused.
+- Kontoauszüge (#427): a difference to the bank that the opening explains is no longer blamed on «eine
+  Zahlung … nicht oder falsch gebucht». A foreign-currency account without its opening is named
+  «Anfangsbestand fehlt» in its currency, as a CHF account was; and books whose opening is entered
+  but that start later in the year say that the difference lies before the statements' first
+  payment, with the bank's and the books' balance on that day.
+- Drop and Belege (#427): a balance sheet («Bilanz», «Zwischenbilanz», «Balance sheet», «Bilan»,
+  «Bilancio») is no longer a receipt «gelesen, noch keine Zahlung» with its total as the amount. It is
+  kept beside the receipts, never paid, and says so in its row and in Belege; the one of the last day
+  of the year before the open year is offered for the opening («Eröffnung erfassen» to Firma ›
+  Eröffnung). The opening stays the person's: nothing is written to it.
+- After the drop she sees her data (#424): what «Dateien hinzufügen» reports as booked (a provider's
+  reports, the payouts her answer in a row booked, a statement read or kept, a file taken back) is on
+  every page at once, the MWST figure and the dock too; before, the page kept the figures of before
+  the drop until the window was reloaded. Closing the window after a bank's PDF statement opens that
+  statement in its own quarter; before, it opened a «Datei» view in today's quarter that said the
+  file was not read.
+- A payment provider's payouts list dropped before the firm has that provider is named as the
+  provider's other export, with the reports to bring instead, at the first drop too (#425); before,
+  it became a bank statement's column question; the dialog's head says it was set aside, not
+  «schon in den Büchern». For a provider the firm does not have yet, its file
+  must name four columns or more and the CSV have all of them, so a bank's CSV is never taken for
+  one. A CSV whose table does not add up after its columns were answered ends with what to do and
+  «Andere Spalten wählen» and «Weglegen»; one a camt.053 covers says to set it aside, not to keep a
+  PDF, and offers «Weglegen».
 - Keeping rules (#396, #392): «Rückgängig» on a second kept rule took back the first rule's bookings
   and the second rule's file. Each keep now has a line of its own above Aufgaben and Firma › Regeln
   («4 Zahlungen gebucht · Rückgängig»), true to its own numbers and still there after a reload; the
