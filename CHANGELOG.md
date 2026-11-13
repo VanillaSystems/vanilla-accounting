@@ -139,7 +139,8 @@ Two markers flag an entry you must read before you update:
   closes; «Automatisch buchen» for all, «Neu buchen», `npm run classify` and a rule kept meanwhile
   book nothing either. A customer's or an authority's file and evidence.guide.yaml count as the
   firm's rules too (files there at the update make nothing wait; one written after it waits).
-  `npm run classify` books nothing on a workspace the app has not opened on this computer yet. Wherever she tries, one
+  `npm run classify` books nothing on a workspace the app has not opened on this computer yet; one
+  `npm run init` or the desktop's setup created counts as switched on as it was made. Wherever she tries, one
   sentence says what changed, why the app waits and what ends it, with «Einschalten» right there;
   switched on, the app books what only waited for it (the payments by an inbox run, the report taken
   again). Her own answers and links, and a
@@ -430,6 +431,13 @@ Two markers flag an entry you must read before you update:
   a card statement's line as evidence of that line's bookings only, and a line at 0 % beside a line
   at the receipt's rate is not told the receipt shows VAT when the receipt's amounts per rate cannot
   be set against the lines (another currency on the payment, a rate named by its tax alone).
+- A repayment to the owner before any of her outlays is booked (#457): «Spesen Juli 2026» said
+  «wartet auf ihren Beleg; ist er verknüpft, bucht die App sie», though no receipt is ever linked to
+  it. While receipts that could be hers are filed (read, dated before it, paid by no payment of the
+  firm, not its own invoice) it now says it waits for her privately paid receipts to be booked as
+  outlays, in the period's list, the bank detail, the drop, «Automatisch buchen» and the hand form,
+  as it did once one was booked. Without such a receipt, and for a payment to her a rule decides, the
+  receipt wait stays.
 - A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
   Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
   der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no
