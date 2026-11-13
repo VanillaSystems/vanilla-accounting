@@ -48,6 +48,8 @@ export type IntakeNote =
   | { code: 'bookingWaits'; files: string[]; waiting: number }
   /** Payments out that wait until the VAT of their receipts is read (#391): booked by the next run, after the VAT step. */
   | { code: 'vatNotRead'; count: number }
+  /** Payments whose booking claims input tax on a receipt no longer linked to them (#417), left as they are (a person's, a filed quarter's): a fact to check. */
+  | { code: 'inputTaxUnproven'; refs: string[] }
   /** The step threw. */
   | { code: 'error'; detail: string };
 
@@ -225,6 +227,7 @@ export function noteLines(notes: IntakeNote[]): string[] {
       case 'receiptUnread': return `? ${n.count} payment(s) have a receipt whose VAT could not be read: each waits for the person under Aufgaben`;
       case 'bookingWaits': return `${n.waiting} payment(s) not booked: «Buchen» waits for «Einschalten» since ${n.files.join(', ')} changed`;
       case 'vatNotRead': return `${n.count} payment(s) wait until the VAT of their receipt is read: booked by the next run`;
+      case 'inputTaxUnproven': return `⚠ ${n.refs.length} payment(s) claim input tax on a receipt no longer linked to them, left as they are: ${n.refs.join(', ')}`;
       case 'error': return `⛔ ${n.detail}`;
     }
   });

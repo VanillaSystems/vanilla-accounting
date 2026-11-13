@@ -4518,6 +4518,7 @@ export default {
     'automation.note.saleAsked': { one: '{n} paiement client sans facture attend votre réponse : avec TVA, étranger ou pas de chiffre d’affaires ?', other: '{n} paiements clients sans facture attendent votre réponse : avec TVA, étranger ou pas de chiffre d’affaires ?' },
     'automation.note.waitingReceipt': {"one": "{n} paiement attend son justificatif : il sera comptabilisé dès qu’il sera là.", "other": "{n} paiements attendent leur justificatif : ils seront comptabilisés dès qu’il sera là."},
     'automation.note.vatNotRead': {"one": "{n} paiement attend que la TVA de son justificatif soit lue : il est comptabilisé lors de la prochaine exécution.", "other": "{n} paiements attendent que la TVA de leurs justificatifs soit lue : ils sont comptabilisés lors de la prochaine exécution."},
+    'automation.note.inputTaxUnproven': {"one": "{n} paiement déduit l’impôt préalable sur un justificatif qui ne lui est plus lié ; l’écriture reste telle quelle : {refs}", "other": "{n} paiements déduisent l’impôt préalable sur des justificatifs qui ne leur sont plus liés ; les écritures restent telles quelles : {refs}"},
     'automation.note.receiptUnread': {"one": "{n} paiement a un justificatif dont la TVA est illisible : la question figure sous Tâches.", "other": "{n} paiements ont un justificatif dont la TVA est illisible : les questions figurent sous Tâches."},
     'receiptDue.title': "Justificatif manquant : {name}, {amount}",
     'receiptDue.due': "Décompte {period} dû le {date}",

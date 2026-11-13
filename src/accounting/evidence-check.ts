@@ -237,6 +237,35 @@ function groupCheck(e: JournalEntry, own: readonly Receipt[], receipts: readonly
   return { kind: 'receiptGroups', rate: short.rate, amount: short.amount, currency, ...(proposal && { lines: proposal }), entries: mates.map((l) => l.id), receipts: receipts.map((r) => r.id), ...decided };
 }
 
+/** A line that claims input tax: a purchase code at a rate, without the minus of a credit note. */
+export function claimsInputTax(e: Pick<JournalEntry, 'vatCode'>): boolean {
+  const m = PURCHASE.exec(e.vatCode ?? '');
+  return !!m && !m[1] && (vat().codes.parse(e.vatCode!)?.rate ?? 0) > 0;
+}
+
+/**
+ * The lines that claim input tax on a receipt no longer linked to their payment (#417): the line
+ * recorded the receipts it was booked with, one of them is linked to the payment no more (its file
+ * rewritten under its name, the link taken off), and what is linked now shows no Swiss VAT
+ * (evidenceCheck's `vatWithoutReceipt`), nor did a person name other proof for it. Filed quarters
+ * too: a filed line is never changed, but the person is told of it.
+ */
+export function inputTaxWithoutItsReceipt(books: { journalEntries: readonly JournalEntry[]; mappings: readonly Mapping[]; receipts: readonly Receipt[]; transactions: ReadonlyArray<{ ref: string; inputTaxProof?: InputTaxProof }> }): JournalEntry[] {
+  const linked = new Map<string, Set<string>>();
+  for (const m of books.mappings) (linked.get(m.transactionRef) ?? linked.set(m.transactionRef, new Set()).get(m.transactionRef)!).add(m.receiptId);
+  const lost = books.journalEntries.filter((e) => claimsInputTax(e) && !!e.receipts?.some((id) => !linked.get(e.transactionRef)?.has(id)));
+  if (!lost.length) return [];
+  const byId = new Map(books.receipts.map((r) => [r.id, r]));
+  const tx = new Map(books.transactions.map((t) => [t.ref, t]));
+  return lost.filter((e) => {
+    const proof = tx.get(e.transactionRef)?.inputTaxProof;
+    if (proof) return false;
+    const receipts = [...(linked.get(e.transactionRef) ?? [])].map((id) => byId.get(id)).filter((r): r is Receipt => !!r);
+    const lines = books.journalEntries.filter((l) => l.transactionRef === e.transactionRef);
+    return evidenceCheck(e, receipts, undefined, undefined, lines, lineBillsOf(books.mappings, e.transactionRef))?.kind === 'vatWithoutReceipt';
+  });
+}
+
 /**
  * `linked` are the receipts of the entry's payment; each line is checked against its own of them
  * (lineReceipts); `closedThrough` the period lock. Undefined when

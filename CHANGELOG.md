@@ -448,6 +448,16 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- **⚠ figures** A booking no longer claims input tax on a receipt that is no longer linked to its
+  payment (#417, point 1). That happened when a receipt file was rewritten under its name or its
+  link was taken off, and the run said «0 Verknüpfungen prüfen». The app's own booking (by a rule
+  or the AI, with no other proof named for it) is now taken back even without an AI, and the
+  payment waits for its receipt as any payment out does. A booking the app may not take back stays
+  exactly as it is: a person's booking, a filed quarter's. The run names it as a fact: «Zahlung zieht
+  Vorsteuer ab auf einen Beleg, der nicht mehr mit ihr verknüpft ist». The rewritten file's note
+  also counts such a payment among the links to check. In books where this happened, the open
+  period's input tax (Ziffer 400/405) falls by what those bookings claimed. The demo figures do
+  not change.
 - A run no longer offers «Als Eröffnungssaldo übernehmen» for a bank balance from inside the year
   (#487): the books open on 1 January, so a first statement of Q3 with the balance of 30.06. is no
   opening, and taking it would have left out the first half year on every balance sheet. The

@@ -38,6 +38,8 @@ import { askKind, asksModel, kindOfModel, MODEL_RULE, MODEL_TEXT, NOT_A_RECEIPT,
 import { statementFacts } from '../books/statement-facts.js';
 import { documents } from '../engines/index.js';
 import { periodLock, release } from '../books/store.js';
+import { entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
+import { claimsInputTax } from '../accounting/evidence-check.js';
 import { restoreReportReceipts } from './sales-report-import.js';
 
 // ─── The PDF's own text, fallback to the model's vision for OCR ─────────────
@@ -405,7 +407,11 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
       const keepOld = filed.length > 0 || hers.length > 0 || naming.some((e) => lockNow.isClosed(e.date)) || (!agrees && human.length > 0);
       if (keepOld) receipts.push(old);
       else release(index, { receipts: [old.id] });
-      const check = human.length + hers.length + filed.length;
+      // The payments of the app's links dropped whose booking claims input tax and is not the classifier's to book again (#417):
+      // a person's booking that names no receipt, another writer's. Nothing proves their input tax now; a person looks.
+      const again = new Set(entriesWithoutTheirReceipts(index.journalEntries, index.mappings, new Set(app.map((m) => m.transactionRef)), lockNow.closedThrough));
+      const unproven = new Set(index.journalEntries.filter((e) => app.some((m) => m.transactionRef === e.transactionRef) && claimsInputTax(e) && !again.has(e) && !hers.includes(e)).map((e) => e.transactionRef));
+      const check = human.length + hers.length + filed.length + unproven.size;
       rewritten.push({ file: old.filename, check, kept: keepOld });
       log(`  ${old.filename}: its file changed; read again. ${app.length} link(s) of the app dropped, ${carry.length} of a person carried, ${check} to check${keepOld ? '; the old record kept beside it' : ''}`);
     }

@@ -4516,6 +4516,7 @@ export const messages = {
   'automation.note.saleAsked': { one: '{n} Kundenzahlung ohne Rechnung wartet auf deine Antwort: mit MWST, Ausland oder kein Umsatz?', other: '{n} Kundenzahlungen ohne Rechnung warten auf deine Antwort: mit MWST, Ausland oder kein Umsatz?' },
   'automation.note.waitingReceipt': {"one": "{n} Zahlung wartet auf ihren Beleg: gebucht wird sie, sobald er da ist.", "other": "{n} Zahlungen warten auf ihren Beleg: gebucht werden sie, sobald er da ist."},
   'automation.note.vatNotRead': {"one": "{n} Zahlung wartet, bis die MWST ihres Belegs gelesen ist: gebucht wird sie beim nächsten Lauf.", "other": "{n} Zahlungen warten, bis die MWST ihrer Belege gelesen ist: gebucht werden sie beim nächsten Lauf."},
+  'automation.note.inputTaxUnproven': {"one": "{n} Zahlung zieht Vorsteuer ab auf einen Beleg, der nicht mehr mit ihr verknüpft ist; die Buchung steht, wie sie ist: {refs}", "other": "{n} Zahlungen ziehen Vorsteuer ab auf Belege, die nicht mehr mit ihnen verknüpft sind; die Buchungen stehen, wie sie sind: {refs}"},
   'automation.note.receiptUnread': {"one": "{n} Zahlung hat einen Beleg, dessen MWST nicht lesbar ist: die Frage steht unter Aufgaben.", "other": "{n} Zahlungen haben einen Beleg, dessen MWST nicht lesbar ist: die Fragen stehen unter Aufgaben."},
   'receiptDue.title': "Beleg fehlt: {name}, {amount}",
   'receiptDue.due': "Abrechnung {period} fällig am {date}",
