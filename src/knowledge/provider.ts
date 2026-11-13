@@ -47,7 +47,10 @@
  * `foreignTax`: the account a foreign VAT an export order shows (IOSS, for example) goes onto, a pass-through
  * the firm pays abroad from; the net is the export. Without it such an order waits (#206).
  * `account`: the bank account (ledger account) the provider pays into, where the report's check for
- * a payout it does not recognise looks; absent: every account. Pure.
+ * a payout it does not recognise looks; absent: every account. `otherExports`: the provider's exports
+ * the app books nothing from (its payouts list), each by headers its first line has, and `exportedAt`
+ * where each report is exported (the admin's menu, in the admin's words): a mistaken export dropped
+ * is named, with the reports to bring instead (#406). Pure.
  */
 
 import { isIsoDate } from '../accounting/periods.js';
@@ -63,6 +66,9 @@ export const FEE_NEEDS: readonly FeeColumn[] = ['date', 'fee'];
 /** A column as the file names it: the headers it may have, the first found counts. */
 export type Headers = readonly string[];
 export type ReportKind = 'sales' | 'fees';
+/** A provider's export the app books nothing from: the payouts list (one row per payout, no order). */
+export const OTHER_EXPORTS = ['payouts'] as const;
+export type OtherExport = (typeof OTHER_EXPORTS)[number];
 export type Columns<C extends string> = Partial<Record<C, Headers>>;
 
 export interface ProviderFacts {
@@ -83,6 +89,14 @@ export interface ProviderFacts {
   orderPage?: RegExp[];
   /** At most this many days between a sale and the payout that pays it (the clearing check). */
   payoutDays?: number;
+  /**
+   * The provider's other exports a person may drop for a report (#406), each known by headers its
+   * first line has (all of them): the drop names it and the reports the app books from, and never
+   * reads it as a bank statement.
+   */
+  otherExports?: Partial<Record<OtherExport, string[]>>;
+  /** Where each report is exported, as the provider's admin names the menu: the drop names it beside a mistaken export. */
+  exportedAt?: Partial<Record<ReportKind, string>>;
   /** The bank account (its ledger account) the provider pays into; absent: any. The unseen-payout check looks only there. */
   account?: string;
   /** The company's clearing account: what the provider collected and has not paid out yet. */
@@ -100,7 +114,7 @@ export interface ProviderFacts {
 const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : typeof v === 'number' ? String(v) : undefined);
 const COMPANY_KEYS = ['clearing', 'since', 'revenue', 'fees', 'foreignTax', 'account'] as const;
-const APP_KEYS = ['reports', 'payoutDays', 'gateways', 'processors', 'orderPage'] as const;
+const APP_KEYS = ['reports', 'payoutDays', 'gateways', 'processors', 'orderPage', 'otherExports', 'exportedAt'] as const;
 
 function columnsOf<C extends string>(raw: unknown, names: readonly C[], needs: readonly C[], what: string): { columns: Columns<C> } | { problem: string } {
   if (!isMap(raw)) return { problem: `provider.reports.${what} must be a map of columns: { ${needs.map((n) => `${n}: <header>`).join(', ')} }` };
@@ -151,6 +165,26 @@ export function parseProvider(raw: unknown): { provider: ProviderFacts } | { pro
     const res = list.map((p) => { try { return p ? new RegExp(p) : undefined; } catch { return undefined; } });
     if (!res.length || res.some((re) => !re || (new RegExp(`${re.source}|`).exec('')?.length ?? 0) < 2)) return { problem: 'provider.orderPage must be a pattern, or a list, over an order page\'s text whose first group is the order number, e.g. \'^#(\\d+)\'' };
     out.orderPage = res as RegExp[];
+  }
+  if (raw.otherExports !== undefined) {
+    if (!isMap(raw.otherExports)) return { problem: `provider.otherExports must be a map: { ${OTHER_EXPORTS.join(', ')}: [ <headers its first line has> ] }` };
+    out.otherExports = {};
+    for (const [k, v] of Object.entries(raw.otherExports)) {
+      if (!(OTHER_EXPORTS as readonly string[]).includes(k)) return { problem: `provider.otherExports.${k} is unknown — use ${OTHER_EXPORTS.join(', ')}` };
+      const headers = (Array.isArray(v) ? v : [v]).map(text);
+      if (headers.length < 2 || headers.some((h) => !h)) return { problem: `provider.otherExports.${k} must name at least two headers its first line has` };
+      out.otherExports[k as OtherExport] = headers as string[];
+    }
+  }
+  if (raw.exportedAt !== undefined) {
+    if (!isMap(raw.exportedAt)) return { problem: 'provider.exportedAt must be a map: { sales: <menu path>, fees: <menu path> }' };
+    out.exportedAt = {};
+    for (const [k, v] of Object.entries(raw.exportedAt)) {
+      if (k !== 'sales' && k !== 'fees') return { problem: `provider.exportedAt.${k} is unknown — use sales, fees` };
+      const where = text(v);
+      if (!where) return { problem: `provider.exportedAt.${k} must name where the report is exported, as the provider's admin names the menu` };
+      out.exportedAt[k] = where;
+    }
   }
   if (raw.payoutDays !== undefined) {
     if (typeof raw.payoutDays !== 'number' || !Number.isInteger(raw.payoutDays) || raw.payoutDays < 1 || raw.payoutDays > 90) return { problem: 'provider.payoutDays must be a whole number of days, 1 to 90' };

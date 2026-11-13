@@ -30,6 +30,7 @@ import type { Arrival, ItemRef } from './model.js';
 import { ASK_WORKFLOW, CLOSED_REASON } from './held.js';
 import { askSalesWithoutVat, closeSaleQuestionsHeld } from '../intake/sale-questions.js';
 import { bookByRules } from './book-by-rules.js';
+import { ordersPaidElsewhere } from '../intake/sales-report-import.js';
 import { refuse, type Refused } from '../types/refusal.js';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -247,7 +248,7 @@ export const ACTIONS: Record<string, Action> = {
       const entries = input.entries as JournalEntry[];
       effects['ledger.book']!(entries);
       // A sale without an invoice booked here is the owner's to confirm, as after the intake's booking step: its reason says the question waits (r9n-23).
-      if (run?.mode === 'live') askSalesWithoutVat(ws, loadBooks(ws));
+      if (run?.mode === 'live') { const books = loadBooks(ws); askSalesWithoutVat(ws, books, undefined, ordersPaidElsewhere(ws, books)); }
       // What it made, for the run view and the digest («Buchen: fertig, 1 Buchung gebucht», r7f-34).
       return { outcome: 'booked', output: { made: entries.map(madeEntry) } };
     },

@@ -18,6 +18,7 @@ import { WS, assertOpen, readBooks, refDates, updateBooks, RequestError } from '
 import { assertNotBookedInFiled, bookedAgain } from '../edits.js';
 import { learnFromCorrection } from '../questions.js';
 import { askSalesWithoutVat } from '../../intake/sale-questions.js';
+import { ordersPaidElsewhere } from '../../intake/sales-report-import.js';
 
 export const router = Router();
 
@@ -64,6 +65,7 @@ router.post('/api/journal-entries/classify/:txRef', async (req, res) => {
     return { ok: true, count: entries.length, entries };
   });
   // A sale booked now without an invoice is asked about now, as its reason says, not at the next inbox run (r4c-36).
-  askSalesWithoutVat(WS, readBooks());
+  const books = readBooks();
+  askSalesWithoutVat(WS, books, undefined, ordersPaidElsewhere(WS, books));
   res.json(done);
 });

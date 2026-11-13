@@ -21,6 +21,7 @@ import { isVatAmountCode } from '../accounting/validate.js';
 import { ClosedPeriodError, periodLock, type Books } from '../books/store.js';
 import { appendQuestionLine, readQuestions } from '../questions/store.js';
 import { APP_ASKER, askSalesWithoutVat, saleQuestionLine } from '../intake/sale-questions.js';
+import { ordersPaidElsewhere } from '../intake/sales-report-import.js';
 import { chart } from '../engines/index.js';
 import { dropPrecedent, dropRule, keepPrecedent, precedentFor, precedentKey, type ChoicePrecedent, type PrecedentMatch } from '../knowledge/precedents.js';
 import { CHOICES, PRIVATE_CHOICES, SALE_CHOICES, type ForeignTax, type SaleChoice, TARGET_KINDS, type Acted, type NotActed, type Answer, type Choice, type PrivateChoice, type Question, type QuestionLine, type QuestionOrigin, type QuestionTarget, type SaleGone } from '../questions/model.js';
@@ -450,7 +451,7 @@ export function undoAnswer(id: string, by: string): Question {
     updateBooks((b) => { const tx = b.transactions.find((t) => t.ref === q.on.id); if (tx) { assertOpen(b, [tx.date], 'editTransaction'); delete tx.noReceiptNeeded; } });
   }
   append({ v: 1, event: 'undone', id, at: now(), by });
-  if (acted && 'rule' in acted && acted.rule) askSalesWithoutVat(WS, readBooks());
+  if (acted && 'rule' in acted && acted.rule) { const books = readBooks(); askSalesWithoutVat(WS, books, undefined, ordersPaidElsewhere(WS, books)); }
   return find(id);
 }
 

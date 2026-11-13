@@ -180,13 +180,13 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/vat/filed.ts` | ESTV 1 |
 | `src/app/areas/vat/form0535.ts` | ESTV 1, Ziffer 3, form 0535 1 |
 | `src/app/areas/vat/links.tsx` | MWST 1 |
-| `src/app/areas/vat/model.ts` | MWST 1, ESTV 2, Ziffer 12, form 0535 3, Rappen 3 |
+| `src/app/areas/vat/model.ts` | MWST 1, ESTV 2, Ziffer 12, form 0535 3, Rappen 4 |
 | `src/app/areas/vat/vat.tsx` | CHF 1, MWST 1, Ziffer 6, form 0535 2 |
 | `src/app/areas/vat/view.ts` | MWST 1, Ziffer 2, form 0535 1 |
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 45, MWST 390, ESTV 49, Ziffer 61, form 0535 1, UID 1, camt.053 23, QR-bill 1, Rappen 3 |
+| `src/app/i18n/locales/de.ts` | CHF 45, MWST 397, ESTV 49, Ziffer 61, form 0535 1, UID 1, camt.053 23, QR-bill 1, Rappen 3 |
 | `src/app/i18n/locales/en.ts` | CHF 45, MWST 5, ESTV 26, form 0535 1, UID 1, camt.053 23, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 45, MWST 1, form 0535 1, UID 1, camt.053 23, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 45, MWST 1, form 0535 1, UID 1, camt.053 23, QR-bill 1 |
