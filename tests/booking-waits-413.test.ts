@@ -9,7 +9,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
@@ -331,6 +331,51 @@ test('`npm run classify` while «Buchen» waits: books nothing, exits 1, and say
     const again = spawnSync(process.execPath, ['--import', 'tsx', 'src/cli/classify.ts'], { env, encoding: 'utf8' });
     assert.equal(again.status, 0, again.stdout + again.stderr);
     assert.deepEqual(entriesOf(api, studer(api).ref), ['1020/3200 V81']);
+  } finally {
+    await api.stop();
+  }
+});
+
+test('`npm run classify` on a workspace the app never opened here: books nothing, writes no record, says to open it in the app', () => {
+  const root = join(process.cwd(), shopBooks());
+  mkdirSync(join(root, 'knowledge', 'rules'), { recursive: true });
+  writeFileSync(join(root, GUIDE), RULE);
+  const approvals = mkdtempSync(join(tmpdir(), 'classify-unseen-'));
+  const env = { ...process.env, PATH: `${join(process.cwd(), 'tests/support/no-model-bin')}:${process.env.PATH}`, VANILLA_KEYCHAIN: 'off', VANILLA_WORKSPACE: root, VANILLA_APPROVALS_DIR: approvals };
+  const cli = spawnSync(process.execPath, ['--import', 'tsx', 'src/cli/classify.ts'], { env, encoding: 'utf8' });
+  assert.equal(cli.status, 1, cli.stdout + cli.stderr);
+  assert.match(cli.stderr, /Open it in the app once/);
+  assert.deepEqual(readdirSync(approvals), [], 'only the app takes a baseline');
+});
+
+test('a report kept while «Buchen» waited, then the change taken back without «Einschalten»: Automatisierung names it, and the next drop books it', async () => {
+  const api = await startApi(shopBooks(), {}, { whole: true });
+  try {
+    await view(api);
+    const one = await dropper(api);
+    await one.add('camt053_LUKB_Q3-2026.xml');
+    await api.rest();
+    writeFileSync(join(api.root, 'knowledge', 'suppliers', 'shopify.yaml'), 'id: shopify\nprovider:\n  clearing: "1093"\n  since: 2026-07-01\n  revenue: "3200"\n');
+    const accounts = join(api.root, 'master-data', 'accounts.json');
+    writeFileSync(accounts, JSON.stringify([...JSON.parse(readFileSync(accounts, 'utf8')), { number: '1093', name: 'Durchlaufkonto Shopify' }], null, 2));
+    api.switchedOn();
+    mkdirSync(join(api.root, 'knowledge', 'rules'), { recursive: true });
+    writeFileSync(join(api.root, GUIDE), RULE);
+    const res = await api.fetch('/api/drop', { method: 'POST' });
+    const s = (await res.json()) as Session;
+    await api.fetch(`/api/drop/${s.id}/files?name=orders_export_1.csv`, { method: 'POST', body: new Uint8Array(Buffer.from(FILES['orders_export_1.csv'])), headers: { 'Content-Type': 'application/octet-stream' } });
+    await api.fetch(`/api/drop/${s.id}`, { method: 'DELETE' });
+    assert.deepEqual(((await api.send('GET', '/api/automation')).json as { reportsWaiting?: string[] }).reportsWaiting, ['orders_export_1.csv'], 'named on Automatisierung while it waits');
+    // The change taken back: «Buchen» books again without «Einschalten».
+    rmSync(join(api.root, GUIDE));
+    assert.equal(await bookingPending(api), undefined);
+    const sales = () => loadBooks(api.ws).journalEntries.filter((e) => e.transactionRef?.startsWith('SR-')).length;
+    assert.equal(sales(), 0);
+    const two = await dropper(api);
+    await two.add('camt053_LUKB_Q3-2026.xml');
+    await api.rest();
+    assert.ok(sales() > 0, 'the next drop takes the kept report');
+    assert.equal(((await api.send('GET', '/api/automation')).json as { reportsWaiting?: string[] }).reportsWaiting, undefined);
   } finally {
     await api.stop();
   }

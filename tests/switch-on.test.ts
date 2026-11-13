@@ -173,3 +173,35 @@ test('#413: a record from before booking read the customers\' files takes such a
   writeFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'b.yaml'), 'id: b\n');
   assert.deepEqual(sw.pending(booking())?.files, ['knowledge/suppliers/b.yaml']);
 });
+
+/** A booking record as written before #413: the supplier's file switched on, no `cited`. */
+function oldBookingRecord(prefix: string) {
+  const ws = tempWorkspace(prefix);
+  const booking = () => loadWorkflows(APP_ROOT, ws.paths.root).workflows.find((w) => w.id === 'booking')!;
+  mkdirSync(join(ws.paths.root, 'knowledge', 'suppliers'), { recursive: true });
+  mkdirSync(join(ws.paths.root, 'knowledge', 'customers'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'a.yaml'), 'id: a\n');
+  const sw = openSwitch(ws);
+  sw.approve(booking());
+  const path = approvalsPath(ws);
+  const rec = JSON.parse(readFileSync(path, 'utf8'));
+  delete rec.booking.cited;
+  writeFileSync(path, JSON.stringify(rec));
+  return { ws, sw, booking, path };
+}
+
+test('#413: an old record is migrated at its first check; a customer\'s file written any time after it waits and is listed', () => {
+  const { ws, sw, booking, path } = oldBookingRecord('switch-413b-');
+  assert.equal(sw.pending(booking()), undefined, 'no customer file at the update');
+  assert.ok(JSON.parse(readFileSync(path, 'utf8')).booking.cited.includes('knowledge/customers'), 'migrated at the first check, though nothing changed');
+  writeFileSync(join(ws.paths.root, 'knowledge', 'customers', 'new.yaml'), 'id: new\n');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/customers/new.yaml'], 'a customer file written later waits');
+});
+
+test('#413: an old record with a supplier\'s change waiting, then a customer\'s file by hand: both are listed, and neither is taken as seen', () => {
+  const { ws, sw, booking } = oldBookingRecord('switch-413c-');
+  writeFileSync(join(ws.paths.root, 'knowledge', 'suppliers', 'a.yaml'), 'id: a\nname: A\n');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/suppliers/a.yaml']);
+  writeFileSync(join(ws.paths.root, 'knowledge', 'customers', 'studer.yaml'), 'id: studer\n');
+  assert.deepEqual(sw.pending(booking())?.files, ['knowledge/customers/studer.yaml', 'knowledge/suppliers/a.yaml']);
+});
