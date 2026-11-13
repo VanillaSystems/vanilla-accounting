@@ -5,9 +5,10 @@
  */
 import type { BankTransaction, BankTransactionPart, Index, JournalEntry, Receipt, ReceiptPatch } from '../../../types/index.js';
 import type { EstvRates } from '../../../accounting/fx-conversion.js';
-import type { Period } from '../../../accounting/periods.js';
+import { booksOpenPeriod, type Period } from '../../../accounting/periods.js';
+import { openingLock } from '../../../accounting/opening-balance.js';
 import { applyChips, type Chip, type Field } from '../../shell/chips.js';
-import { baseCurrency, documents } from '../../../engines/index.js';
+import { baseCurrency, documents, filing } from '../../../engines/index.js';
 import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
 import { documentKind } from '../../../intake/document-kind.js';
 import { isNoReceipt } from '../../../books/discard.js';
@@ -501,6 +502,27 @@ export function vatChipOf(hasSwissVat: boolean | undefined, noInputTax: 'none' |
  * when the booking split it). Undefined for any other receipt. The app reads no card statement as a
  * bank statement (issue #94).
  */
+export interface BalanceSheet {
+  /** The day it is drawn up for, as read. */
+  date?: string;
+  /** The year Firma › Eröffnung types (the books' open year), when it takes an opening by hand (openingLock). */
+  year?: string;
+  /** It is the balance sheet of the day before that year: offered for its opening. */
+  opens: boolean;
+}
+
+/**
+ * A balance sheet among the receipts (#427): no payment belongs to it, and the one of the last day
+ * of the year before the books' open year holds that year's opening, which the person types in
+ * Firma › Eröffnung (never written by the app). Undefined for any other receipt.
+ */
+export function balanceSheetOf(r: Receipt, books: Pick<Index, 'config' | 'transactions' | 'journalEntries'>, today: string): BalanceSheet | undefined {
+  if (r.kind !== 'supporting' || noneWhyOf(r) !== 'balance-sheet') return undefined;
+  const year = booksOpenPeriod(books, today, filing().length).from.slice(0, 4);
+  if (openingLock(books, year)) return { ...(r.date ? { date: r.date } : {}), opens: false };
+  return { ...(r.date ? { date: r.date } : {}), year, opens: r.date === `${Number(year) - 1}-12-31` };
+}
+
 export function cardStatementOf(r: Pick<Receipt, 'id' | 'extractedText'>, books: Pick<Index, 'mappings' | 'transactions' | 'journalEntries'>): { debit?: string; lines: number } | undefined {
   if (!isCardStatement(r.extractedText ?? '', documents())) return undefined;
   const refs = new Set(books.mappings.filter((m) => m.receiptId === r.id).map((m) => m.transactionRef));

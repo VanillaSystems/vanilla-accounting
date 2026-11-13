@@ -330,6 +330,11 @@ Two markers flag an entry you must read before you update:
   «Anfangsbestand fehlt» in its currency, as a CHF account was; and books whose opening is entered
   but that start later in the year say that the difference lies before the statements' first
   payment, with the bank's and the books' balance on that day.
+- Drop and Belege (#427): a balance sheet («Bilanz», «Zwischenbilanz», «Balance sheet», «Bilan»,
+  «Bilancio») is no longer a receipt «gelesen, noch keine Zahlung» with its total as the amount. It is
+  kept beside the receipts, never paid, and says so in its row and in Belege; the one of the last day
+  of the year before the open year is offered for the opening («Eröffnung erfassen» to Firma ›
+  Eröffnung). The opening stays the person's: nothing is written to it.
 - Keeping rules (#396, #392): «Rückgängig» on a second kept rule took back the first rule's bookings
   and the second rule's file. Each keep now has a line of its own above Aufgaben and Firma › Regeln
   («4 Zahlungen gebucht · Rückgängig»), true to its own numbers and still there after a reload; the

@@ -6,7 +6,7 @@ import { localToday, booksOpenPeriod, parsePeriod, periodContaining, type Period
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { Location, Route } from '../../shell/route.js';
-import { ledgerOf, type AmountFit, type Candidate, type Ledger, type ReceiptView } from './model.js';
+import { ledgerOf, type AmountFit, type BalanceSheet, type Candidate, type Ledger, type ReceiptView } from './model.js';
 import { baseCurrency, filing } from '../../../engines/index.js';
 import { MODEL_TEXT, modelCut } from '../../../intake/unclear.js';
 import { automationNow } from '../../automation/store.js';
@@ -75,6 +75,14 @@ export function noneText(v: ReceiptView): string {
   const why = v.noneWhy ? t(`receipts.why.${v.noneWhy}`) : '';
   return v.noneBy === 'person' ? `${why} · ${t('receipts.noneBy.personShort')}` : why;
 }
+
+/** What a balance sheet among the receipts is (balanceSheetOf, #427): no receipt of a payment, and whether its balances are the open year's opening. */
+export const balanceSheetLine = (b: BalanceSheet): string => {
+  const date = b.date ? formatDate(b.date) : '';
+  if (b.opens && b.year) return t('receipts.balanceSheet.opens', { date, year: b.year });
+  const what = date ? t('receipts.balanceSheet.dated', { date }) : t('receipts.why.balance-sheet');
+  return b.year ? t('receipts.balanceSheet.other', { what, year: b.year, last: `31.12.${Number(b.year) - 1}` }) : t('receipts.balanceSheet.plain', { what });
+};
 
 /** What the app did with a card statement (cardStatementOf), in one sentence: whose receipt it is, whether its lines were booked one by one, and that card statements are not read as statements (#401). */
 export const cardStatementLine = (c: { debit?: string; lines: number }): string =>

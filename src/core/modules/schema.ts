@@ -275,7 +275,7 @@ export interface DocumentsData {
   /** Phrases by which a document says it charges no VAT of the jurisdiction (a sale abroad, an exempt premium, a reverse charge). */
   noVat?: string[];
   /** Documents kept as proof beside an invoice, never paid on their own. */
-  supporting: Record<'order-confirmation' | 'delivery-note' | 'reminder' | 'customs-assessment', string[]>;
+  supporting: Record<'order-confirmation' | 'delivery-note' | 'reminder' | 'customs-assessment' | 'balance-sheet', string[]>;
   /** Documents that are no receipt at all. */
   other: Record<'newsletter' | 'terms' | 'price-list' | 'tracking' | 'no-receipt', string[]>;
   /** A courier's customs invoice: its positions by their words and accounts, and the customs office's assessment that proves import VAT (src/booking/customs-invoice.ts). */
