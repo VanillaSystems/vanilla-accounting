@@ -295,7 +295,8 @@ test('any bank: a payment whose fee is its own movement keeps no fee line, the f
   assert.deepEqual([classified.sort(), failed], [['FEE-KART-48151623', 'KART-48151623'], []]);
   assert.match(prompts[0], /Fee: 1\.3 CHF, debited separately as FEE-KART-48151623/, 'the model is told the fee is its own movement');
   const lines = (ref: string) => b.journalEntries.filter((e) => e.transactionRef === ref).map((e) => [e.accountDebit, e.amount, e.vatCode]);
-  assert.deepEqual(lines('KART-48151623'), [['6640', 86.4, 'I81']], 'the whole payment on the expense, at its code');
+  // The receipt taxes 85.10 at 8.1 %: the surcharge goes back to the expense without input tax, never more than the receipt shows (#469).
+  assert.deepEqual(lines('KART-48151623'), [['6640', 85.1, 'I81'], ['6640', 1.3, 'I0']], 'the whole payment on the expense, at its code on what the receipt taxes');
   assert.deepEqual(lines('FEE-KART-48151623'), [['6900', 1.3, undefined]], 'the fee once, on its own movement');
 });
 

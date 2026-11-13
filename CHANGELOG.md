@@ -600,6 +600,19 @@ Two markers flag an entry you must read before you update:
   names by its tax alone against the lines at the gross that tax proves (allowing for the tax's
   rounding to the cent), leaves a receipt in another currency out of the sum, and tells a line at 0 %
   beside a line at the receipt's rate nothing when no receipt in the line's currency can be compared.
+- «Buchung passt nicht zu ihrem Beleg» now also names an over-claim of input tax (#469): a line at a
+  rate above the receipt's (I81 on a bill at 2.6 %), and a rate on more than the receipt taxes
+  (I81 on a whole bill whose tax covers only part of it, a tip on top of a bill, a Kurtaxe booked
+  at 3.8 % beside the room, also on the whole card settlement). The task says «Der Beleg zeigt
+  8.1 % MWST nur auf …, gebucht sind … auf I81», and «Nach Beleg buchen» books the receipt's rate on what it taxes and the rest at the zero code. A line at 0 %
+  alone on a receipt that names its tax only is offered the rate only on what that tax covers. A
+  hotel bill read as the room's group and «0 %» without an amount, booked room I38 and Kurtaxe I0,
+  is no longer told «Der Beleg zeigt 3.8 % MWST» on the Kurtaxe (whose click booked it at 3.8 %); a
+  group's gross read above what its tax proves counts as what the tax proves. The
+  app's own runs book no such line where the receipt's VAT is known: a rule's or the model's rate
+  goes on what the receipt taxes at it, the rest to another rate the receipt shows, then to the
+  zero code, with the reason on the line. An under-claim and a line without a receipt are told as
+  before; a person's booking is never changed.
 - The fields of Firma's forms stand in line at every width (#454): a hint under one input («kein
   Konto», the account's name) or a label on two lines no longer pushes the field beside it down
   (Eröffnung, Regeln and the others). Firma › Eröffnung names its amount fields «Saldo per 1.1.2026

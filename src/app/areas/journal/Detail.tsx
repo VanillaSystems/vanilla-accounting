@@ -270,6 +270,7 @@ function LinkReceipt({ books, nav, entries }: Props & { entries: JournalEntry[] 
 /** What the booking page and the row say when an entry contradicts its receipts (src/accounting/evidence-check.ts). */
 export function evidenceText(e: JournalEntry, c: EvidenceCheck): string {
   const code = e.vatCode ? codeLabel(e.vatCode) : '';
+  if (c.kind === 'receiptGroups' && c.booked !== undefined) return t('journal.evidence.groupOver', { amount: `${c.currency} ${fmt(c.amount)}`, booked: `${c.currency} ${fmt(c.booked)}`, rate: String(c.rate), code });
   if (c.kind === 'receiptGroups') return t(c.rate ? 'journal.evidence.groupTaxed' : 'journal.evidence.groupUntaxed', { amount: `${c.currency} ${fmt(c.amount)}`, rate: String(c.rate), code });
   return c.kind === 'receiptShowsVat'
     ? t('journal.evidence.receiptShowsVat', { rate: String(c.rate), code: e.vatCode ? codeLabel(e.vatCode) : '' })

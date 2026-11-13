@@ -72,8 +72,8 @@ test('M1: the rest of a total beyond its groups read never accuses a rate line, 
   // A group read as net 100 for a gross: the 8.10 rest is no export part.
   assert.deepEqual(checks([line('a', 'T', 108.1, 'I81')], [bill(108.1, [{ ratePercent: 8.1, gross: 100, vat: 8.1 }])]), [undefined]);
   assert.deepEqual(checks([line('a', 'T', 108.1, 'I81')], [bill(108.1, [{ ratePercent: 8.1, net: 100, vat: 0 }])]), [undefined]);
-  // The July bill booked whole at 8.1 %: its rest is not read as 0 %, nothing to accuse.
-  assert.deepEqual(checks([line('w', 'T', 1086.42, 'I81')], [july]), [undefined]);
+  // The July bill booked whole at 8.1 % claims the tax of 1086.42 where the bill shows 63.42: an over-claim (#469), see below.
+  assert.equal(checks([line('w', 'T', 1086.42, 'I81')], [july])[0]?.kind, 'receiptGroups');
   // A zero line beyond the group and the rest is still a finding, without a click.
   assert.deepEqual(checks([line('z', 'T', 100, 'I0')], [missed])[0], { kind: 'receiptGroups', rate: 8.1, amount: 40, currency: 'CHF', entries: ['z'], receipts: ['r'] });
 });
