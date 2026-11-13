@@ -56,7 +56,6 @@ export function askedRuns(view: Pick<AutomationView, 'runs' | 'workflows'>): Set
   return new Set(view.runs.filter((r) => r.path.some((s) => personSteps.get(r.workflow)?.has(s))).map((r) => r.id));
 }
 
-export const receiptDay = (r: Receipt): IsoDate => r.date ?? r.indexedAt.slice(0, 10);
 
 /** A date in the file name the app gives a receipt (YYYYMMDD-…), Belege's date for one the reading left undated. */
 const FILE_DATE = /^(20\d\d)(\d\d)(\d\d)-/;
@@ -76,6 +75,16 @@ export function placeDay(paid: readonly IsoDate[], date: IsoDate | undefined, op
   if (paid.length) return [...paid].sort()[0];
   if (date && (date >= openFrom || (!!closedThrough && date <= closedThrough))) return date;
   return openFrom;
+}
+
+/**
+ * The day Belege lists a receipt under (placeDay), from the books: what a link into Belege takes, so it
+ * lands where the receipt stands (#385 review). `openFrom`: the working period's first day.
+ */
+export function placedReceiptDay(books: Pick<Index, 'mappings' | 'transactions' | 'config'>, r: Receipt, openFrom: IsoDate): IsoDate {
+  const links = books.mappings.filter((m) => m.receiptId === r.id).map((m) => m.transactionRef);
+  const dayOf = (ref: string) => books.transactions.find((t) => t.ref === ref)?.date;
+  return placeDay(paidDays(r, links, dayOf), receiptDate(r), openFrom, books.config?.closedThrough);
 }
 
 /** The days of the payments a receipt is linked to, or points to in a filed quarter: what `placeDay` takes first. */

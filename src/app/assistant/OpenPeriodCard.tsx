@@ -16,7 +16,7 @@ import type { Location } from '../shell/route.js';
 import { useQuestions } from '../questions/store.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { useAutomation } from '../automation/store.js';
-import { receiptDay } from '../automation/home.js';
+import { placedReceiptDay } from '../automation/home.js';
 import { orderPagesNow } from '../lib/order-pages.js';
 import { at } from '../areas/receipts/view.js';
 import { taskLine } from '../areas/automation/words.js';
@@ -35,14 +35,14 @@ const openList = (s: OpenPeriodState): Location | undefined =>
   (chargesVat() && s.filing.kind !== 'filed' ? { route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: s.period } } : undefined);
 
 /** Where a line leads: the first object of what it counts, in the period that holds it; the period's questions to the return's list of them. */
-function goOf(l: OpenLine, s: OpenPeriodState): Location {
+function goOf(l: OpenLine, s: OpenPeriodState, books: Index): Location {
   switch (l.kind) {
     case 'unbooked': return at({ area: 'bank', payment: l.first.ref }, l.first.date);
     case 'questions': return openList(s) ?? TASKS;
     case 'moreTasks': return TASKS;
     case 'evidence': return at({ area: 'journal', id: l.first.id }, l.first.date);
-    // The day the list filed the receipt under (its own, else the day it came in), as the review's list does.
-    case 'unlinked': return at({ area: 'receipts', id: l.first.id }, receiptDay(l.first));
+    // The day Belege lists the receipt under (#385 review), in the period the card is about.
+    case 'unlinked': return at({ area: 'receipts', id: l.first.id }, placedReceiptDay(books, l.first, s.period.from));
     case 'task': return { route: { area: 'automation', view: 'tasks', run: l.task.run }, query: {} };
   }
 }
@@ -101,7 +101,7 @@ export function OpenPeriodCard({ books, onGo }: { books: Index; onGo(loc: Locati
         <ul>
           {lines.map((l, i) => (
             <li key={i} data-line={l.kind}>
-              {link(goOf(l, s), textOf(l))}
+              {link(goOf(l, s, books), textOf(l))}
               {l.kind === 'unbooked' && l.unread ? <small data-held="unread">{t('openPeriod.unread', { n: l.unread })}</small> : null}
               {l.kind === 'task' && l.task.overdue ? <small>{t('automation.overdue')}</small> : null}
             </li>

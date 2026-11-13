@@ -19,7 +19,7 @@ import { addDays, booksOpenPeriod, localToday, type FilingLength, type IsoDate, 
 import type { WaitingPayment } from '../../../accounting/receipt-due.js';
 import { missingAssessments, type MissingAssessment } from '../../../booking/customs-invoice.js';
 import { documents, withoutInputTax } from '../../../engines/index.js';
-import { filingStage, receiptDay, type FilingStage } from '../../automation/home.js';
+import { filingStage, placedReceiptDay, type FilingStage } from '../../automation/home.js';
 import { unbookedPayments } from '../bank/model.js';
 import { journalOf, unsettledAtFiling, type EntryView, type Unsettled } from '../journal/model.js';
 import { ledgerOf, type ReceiptView } from '../receipts/model.js';
@@ -63,10 +63,11 @@ export interface OpenPeriodState {
 }
 
 /** The day of what a task is about, or `period` when it is about the period itself; undefined: about nothing dated. */
-function taskDay(books: Index, item: Task['item']): IsoDate | 'period' | undefined {
+function taskDay(books: Index, item: Task['item'], openFrom: IsoDate): IsoDate | 'period' | undefined {
   switch (item.kind) {
     case 'transaction': return books.transactions.find((t) => t.ref === item.id)?.date;
-    case 'receipt': { const r = books.receipts.find((x) => x.id === item.id); return r ? receiptDay(r) : undefined; }
+    // The day Belege lists it under (#385 review): an undated receipt is the working period's, one paid later its payment's.
+    case 'receipt': { const r = books.receipts.find((x) => x.id === item.id); return r ? placedReceiptDay(books, r, openFrom) : undefined; }
     case 'entry': return (books.journalEntries ?? []).find((e) => e.id === item.id)?.date;
     case 'period': return 'period';
     default: return undefined;
@@ -81,7 +82,7 @@ export function openPeriodState(
   const issues = periodIssues(books, questions, period.from, period.to, accounts, orderPages, ctx.today);
   const unbooked = issues.flatMap((i) => (i.kind === 'unbooked' ? [i.tx] : []));
   const refs = new Set(unbooked.map((t) => t.ref));
-  const about = (x: Task) => { const d = taskDay(books, x.item); return d === 'period' ? x.item.id === period.token : !!d && d >= period.from && d <= period.to; };
+  const about = (x: Task) => { const d = taskDay(books, x.item, period.from); return d === 'period' ? x.item.id === period.token : !!d && d >= period.from && d <= period.to; };
   return {
     period,
     filing: filingStage(books, period, ctx),

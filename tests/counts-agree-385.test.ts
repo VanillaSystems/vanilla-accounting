@@ -113,3 +113,13 @@ test('a receipt dated in Q3 and paid in October is October\'s in every place; th
   assert.deepEqual(visible(ledger, q2, undefined, undefined).rows.map((v) => v.r.id).sort(), ['filed-paid', 'invoice-june'], 'by its date, and by its filed payment');
   assert.equal(figuresOf(q2).collected, 2);
 });
+
+test('what leads into Belege lands where Belege lists the receipt (#385 review): a task on an undated receipt is the working period\'s', async () => {
+  const { openPeriodState } = await import('../src/app/areas/automation/open-period.js');
+  const { placedReceiptDay } = await import('../src/app/automation/home.js');
+  for (const r of books.receipts) if (!ledger.byId.get(r.id)!.none) assert.equal(placedReceiptDay(books, r, OPEN_FROM), ledger.byId.get(r.id)!.day, r.id);
+  const task = { run: 't', item: { kind: 'receipt', id: 'no-date' } } as never;
+  const s = openPeriodState(books, [], [task], [], { today: TODAY, vatRegistered: true, length: 'quarter', dueDays: 60 });
+  assert.equal(s.period.from, OPEN_FROM);
+  assert.equal(s.tasks.length, 1, 'read on 12.11. but listed in Q3: the task is Q3\'s');
+});
