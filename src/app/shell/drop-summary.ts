@@ -14,6 +14,7 @@ import { waitsForReading } from '../../parsers/receipt-text.js';
 import { isNoReceipt } from '../../books/discard.js';
 import type { TwinWhy } from '../../types/index.js';
 import type { BalanceSheet } from '../areas/receipts/model.js';
+import type { Doing } from './drop-overview.js';
 
 export interface DropSummary {
   /** The payments the drop's statements added to the books. */
@@ -67,7 +68,7 @@ export const linkedAs = (links: readonly Pick<Mapping, 'rule'>[]): 'feeBill' | '
  * it, #218: «Sucht die Zahlung …», «Wartet (3 vor diesem)»), read, matched, waiting for a person,
  * its run stopped, or set aside by the run with the reason.
  */
-export type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'unread' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'feeBill'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string }
+export type FileState = { kind: 'working'; step?: string; doing?: Doing } | { kind: 'read' } | { kind: 'unread' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'feeBill'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string }
   | { kind: 'none'; why: string } | { kind: 'twin'; of: string; name: string; why: TwinWhy } | { kind: 'supporting'; why?: string; of?: { id: string; name: string } }
   /** A balance sheet (#427): no payment belongs to it; the one of the year before's last day is offered for the opening. */
   | { kind: 'balanceSheet'; sheet?: BalanceSheet };

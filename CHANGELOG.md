@@ -424,6 +424,20 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The drop window with many files (#453): the line «Gesamt 51 % · 1 von 43 Dateien fertig» no
+  longer lies over the tabs (it shrank to nothing once the list was long), and «Schliessen» no
+  longer falls below a small window: between the head and the foot, what came of the drop, the
+  list and the lines below it scroll as one. From 10 files the window shows an overview: one bar
+  for the whole drop with what is done now («3 werden hochgeladen · 6 warten auf den Start · 1
+  sucht die Zahlung»), and where the files stand, in counts («45 Dateien · 9 brauchen dich · 2
+  Kontoauszüge eingelesen · 12 einer Zahlung zugeordnet · …»), each a filter of the list in place
+  of the tabs, kept for the whole drop. What needs her is listed first; the files still worked on
+  or done are a line each with their count, opened by a click. The counts come from the states the
+  rows show and follow them live; a filter whose last file left it shows the whole drop again. A
+  file is judged by its own run only: a later file's run, which takes up the receipts still waiting
+  for their payment again, no longer sets the files at rest back to «in Arbeit» and the bar back to
+  0 %; and the window asks for the runs' steps at once when a file is taken, every 2 s while files
+  are worked on, in one loop of asks that returns to every 10 s; the bar never goes back.
 - A payment of social insurance contributions while the wage deductions account (2270) holds
   nothing is booked, and a payment a run leaves unbooked says why (#470). With wages booked net,
   the AI is told that 2270 holds nothing and the whole contribution is the firm's expense (only
