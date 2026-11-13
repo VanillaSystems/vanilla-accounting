@@ -164,7 +164,7 @@ test('the first screen asks what the person wants; the AI is one line, its cards
       await page.goto(`http://${host2}/start?${new URLSearchParams({ asking: join(dir, 'Documents', 'Maler Huber'), name: 'Maler Huber GmbH', folder: 'documents' })}`, { waitUntil: 'networkidle0', timeout: 60_000 });
       await page.waitForSelector('[data-asking=documents]', { timeout: 20_000 });
       assert.equal(await page.$eval('[data-asking]', (e) => (e as HTMLElement).innerText),
-        'macOS fragt, ob Vanilla Accounting den Ordner «Dokumente» lesen darf, in dem «Maler Huber GmbH» liegt. Nach «Erlauben» öffnet sie sich.');
+        'macOS fragt, ob Vanilla Accounting den Ordner «Dokumente» lesen darf, in dem «Maler Huber GmbH» liegt. Nach «Erlauben» öffnet sich deine Buchhaltung.');
       await page.goto(`http://${host2}/start`, { waitUntil: 'networkidle0', timeout: 60_000 });
       await page.waitForSelector('[data-ready=claude]', { timeout: 60_000 });
       await page.click('[data-act=by-hand]');

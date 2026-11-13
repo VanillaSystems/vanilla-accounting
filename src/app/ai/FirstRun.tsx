@@ -257,7 +257,8 @@ function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }:
   const create = async () => {
     if (ai === undefined) { setWaiting(true); return; }
     // The Mac app reads the Documents folder only now, once she knows why macOS asks.
-    if (macAsksForFolders && known !== 'allowed') { setAccess(known === 'refused' ? 'refused' : 'ask'); return; }
+    // A refusal or locked rights are said at once; the words before macOS's question only while it may still ask.
+    if (macAsksForFolders && known !== 'allowed') { setAccess(known === 'refused' || known === 'locked' ? known : 'ask'); return; }
     // Allowed already (or no Mac): the folder is read without a word, for a name not taken (#373 review).
     await allow();
   };
