@@ -83,7 +83,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/workspace/migrate.ts` | ESTV 1 |
 | `src/workspace/reads.ts` | ESTV 1 |
 | `src/workspace/scaffold.ts` | MWST 1, ESTV 1 |
-| `src/workspace/setup.ts` | CHF 1, MWST 6, ESTV 2, camt.053 1 |
+| `src/workspace/setup.ts` | CHF 1, MWST 6, ESTV 4, camt.053 1 |
 | `src/workspace/terminal-agents.ts` | form 0535 1 |
 | `src/workspace/uid.ts` | MWST 2 |
 | `src/workspace/workspace.ts` | ESTV 1 |
@@ -187,7 +187,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
 | `src/app/i18n/locales/de.ts` | CHF 45, MWST 407, ESTV 50, Ziffer 61, form 0535 1, UID 1, camt.053 24, QR-bill 1, Rappen 3 |
-| `src/app/i18n/locales/en.ts` | CHF 45, MWST 5, ESTV 27, form 0535 1, UID 1, camt.053 24, QR-bill 4 |
+| `src/app/i18n/locales/en.ts` | CHF 45, MWST 5, ESTV 29, form 0535 1, UID 1, camt.053 24, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 45, MWST 1, form 0535 1, UID 1, camt.053 24, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 45, MWST 1, form 0535 1, UID 1, camt.053 24, QR-bill 1 |
 | `src/app/lib/api.ts` | MWST 1, camt.053 3 |
