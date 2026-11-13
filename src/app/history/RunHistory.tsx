@@ -9,7 +9,7 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { language, t } from '../i18n/index.js';
-import { api, errorText, STATIC_EXPORT } from '../lib/api.js';
+import { api, errorText, leftText, STATIC_EXPORT } from '../lib/api.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { useAutomation } from '../automation/store.js';
 import { refusalText } from '../automation/refusal.js';
@@ -26,7 +26,7 @@ import { stored, store } from '../shell/storage.js';
 import './history.css';
 
 /** What a log line or a history row says about one run. */
-export type RunEvent = Pick<HistoryRun, 'workflow' | 'event' | 'at' | 'step' | 'reason'> & { wrote?: Partial<HistoryRun['wrote']> };
+export type RunEvent = Pick<HistoryRun, 'workflow' | 'event' | 'at' | 'step' | 'reason' | 'why'> & { wrote?: Partial<HistoryRun['wrote']> };
 
 const OPEN_KEY = 'history.open';
 
@@ -47,7 +47,7 @@ function useWords() {
 /** Where the run stands, with its step and reason: «wartet bei «Prüfen»», «steckt bei «Buchen»: …». */
 export function eventText(r: RunEvent, step: (workflow: string, id: string) => string): string {
   const s = r.step ? step(r.workflow, r.step) : '';
-  const why = r.reason ? refusalText(r.reason) : '';
+  const why = r.reason ? refusalText(r.reason, r.why) : '';
   if (r.event === 'waiting' && s) return t('history.waitsAt', { step: s });
   if (r.event === 'stuck') return s ? t('history.stuckAt', { step: s, reason: why }) : why;
   if (r.event === 'discarded' && why) return t('history.discardedWhy', { reason: why });
@@ -107,6 +107,12 @@ function restText({ receipts, entries }: HistoryRun['rest']): string {
   return '';
 }
 
+/** What a run that left the payment unbooked says of it (#470): why, when the refusal has words. */
+function refusedText(r: NonNullable<HistoryRun['refused']>): string {
+  const why = leftText(r);
+  return why ? t('history.refused', { why }) : t('history.refusedPlain');
+}
+
 function Row({ r, books, nav, period, on }: { r: HistoryRun; books: Index; nav: Nav; period?: Period; on: HistoryObject }) {
   const words = useWords();
   const how = eventText(r, words.step);
@@ -122,6 +128,7 @@ function Row({ r, books, nav, period, on }: { r: HistoryRun; books: Index; nav: 
       </span>
       {how ? <span className={r.event === 'stuck' ? 'hhow hwarn' : 'hhow m'}>{how}</span> : null}
       {did ? <span className="hdid m" data-testid="history-did">{did}</span> : null}
+      {r.refused ? <span className="hhow hwarn" data-testid="history-refused">{refusedText(r.refused)}</span> : null}
       <Wrote wrote={r.wrote} books={books} nav={nav} period={period} skip={on} />
       {rest ? <span className="hrest m" data-testid="history-rest">{rest} · <Go to={runAt} nav={nav}>{t('history.openRun')}</Go></span> : null}
       {r.stored ? null : <span className="hgone m" data-testid="history-no-details" data-tip={t('history.noDetailsTip')}>{t('history.noDetails')}</span>}

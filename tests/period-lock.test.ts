@@ -121,12 +121,16 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/receipts/rc/report-correction', body: { order: '1001', date: '2026-05-04', on: '2026-06-30' }, status: 403 },
   // «Aufteilen» of an order a sales report holds (#405): never on a closed day.
   { method: 'POST', path: '/api/receipts/rr/held-order', body: { order: '1001', parts: [{ amount: 68, rate: 8.1 }, { amount: 33, rate: 2.6 }] }, status: 403 },
+  // «Vorsteuer buchen» on a bill of a VAT-only correction (#458): never on a closed day.
+  { method: 'POST', path: '/api/receipts/rf/vat-correction', status: 403 },
   { method: 'PATCH', path: '/api/journal-entries/jc', body: { description: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/journal-entries/jo', body: { date: '2026-06-15' }, status: 403 },
   { method: 'PATCH', path: '/api/journal-entries/jc', body: { amount: 5 }, status: 403 },
   { method: 'DELETE', path: '/api/journal-entries/jc', status: 403 },
   // «Nach Beleg buchen» on a receipt of several VAT groups (#406): never on a filed entry.
   { method: 'POST', path: '/api/journal-entries/jc/by-receipt', status: 403 },
+  // «2270 ausgleichen» on a contribution payment (#476): never on a filed payment.
+  { method: 'POST', path: '/api/payments/C1/clear-withheld', status: 403 },
   // Its undo takes only an id the click returned: lines sent in the body, of a filed quarter or any other, write nothing.
   { method: 'POST', path: '/api/journal-entries/by-receipt/undo', body: { before: [{ id: 'jc', transactionRef: 'C1', date: '2026-05-10', accountDebit: '6500', accountCredit: '1021', amount: 5, vatCode: 'I0' }], after: [{ id: 'jc', transactionRef: 'C1', date: '2026-05-10', accountDebit: '6500', accountCredit: '1021', amount: 10, vatCode: 'I81' }] }, status: 410 },
   { method: 'POST', path: '/api/journal-entries', body: { date: '2026-06-30', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'rückdatiert' }, status: 403 },

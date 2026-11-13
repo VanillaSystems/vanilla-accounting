@@ -43,8 +43,9 @@ export const money = (currency: string | undefined, amount: number | undefined) 
 /** One object of a line (#398): who, how much and when, and for a receipt of hers what it lacks, as Belege's row says it. */
 export type Item = { key: string; text: string; go: Location };
 export interface Items { items: Item[]; more: number; all?: Location }
-export function itemsOf(l: OpenLine, s: OpenPeriodState, books: Index, say: Say): Items {
-  const pay = (x: BankTransaction): Item => ({ key: x.ref, go: at({ area: 'bank', payment: x.ref }, x.date), text: [formatDate(x.date), payText(x).name, money(x.currency, x.amount)].join(' · ') });
+export function itemsOf(l: OpenLine, s: OpenPeriodState, books: Index, say: Say, why: (ref: string) => string | undefined = () => undefined): Items {
+  // A payment a run left unbooked says why (#470), as its page does.
+  const pay = (x: BankTransaction): Item => ({ key: x.ref, go: at({ area: 'bank', payment: x.ref }, x.date), text: [formatDate(x.date), payText(x).name, money(x.currency, x.amount), why(x.ref)].filter(Boolean).join(' · ') });
   // A payment that may fit (#397's near offers, the receipt's page holds the click): said once, on the receipt's line (#398).
   const fits = (x: YourReceipt) => { const o = offersInBooks(books, { receipt: x.receipt.id })[0]; const tx = o && books.transactions.find((y) => y.ref === o.payment); return tx ? `${say('near.maybe')} ${formatDate(tx.date)} ${payText(tx).name} ${money(tx.currency, tx.amount)}` : ''; };
   const mine = (x: YourReceipt): Item => ({ key: x.receipt.id, go: receiptAt(x.receipt, s, books), text: [x.name, x.receipt.date && formatDate(x.receipt.date), money(x.receipt.currency, x.receipt.amount), x.lacks.map((k) => say(LACK_WORDS[k])).join(', '), fits(x)].filter(Boolean).join(' · ') });
@@ -54,8 +55,10 @@ export function itemsOf(l: OpenLine, s: OpenPeriodState, books: Index, say: Say)
     case 'yours': return { items: l.items.map(mine), more: l.more, all: receipts };
     case 'unbooked': return { items: l.items.map(pay), more: l.more, all: openList(s) ?? at({ area: 'bank' }, s.period.from) };
     case 'unlinked': return { items: l.items.map(lone), more: l.more, all: receipts };
+    case 'issued': return { items: l.items.map(lone), more: l.more, all: receipts };
+    case 'withheld': return { items: l.items.map((u) => ({ key: u.tx.ref, go: at({ area: 'bank', payment: u.tx.ref }, u.tx.date), text: say('openPeriod.withheldItem', { date: formatDate(u.tx.date), name: payText(u.tx).name, amount: money(u.tx.currency, u.tx.amount), account: u.account, open: money(baseCurrency(), u.open) }) })), more: l.more, all: openList(s) ?? at({ area: 'bank' }, s.period.from) };
     case 'offers': return { items: l.items.map((o) => ({ key: o.ref, go: at({ area: 'bank', payment: o.ref }, o.date), text: say('openPeriod.offer', { name: o.name, percent: o.percent, account: o.account }) })), more: l.more, all: at({ area: 'bank', payment: l.first.ref }, l.first.date) };
-    case 'openings': return { items: l.items.map((o) => ({ key: o.account, go: OPENING, text: say('openPeriod.opening', { label: o.label, amount: money(o.currency ?? baseCurrency(), o.amount), year: o.year }) })), more: l.more, all: OPENING };
+    case 'openings': return { items: l.items.map((o) => ({ key: o.account, go: OPENING, text: say('openPeriod.opening', { label: o.label, amount: money(o.currency ?? baseCurrency(), o.amount), date: formatDate(o.from) }) })), more: l.more, all: OPENING };
     case 'clearing': return { items: l.items.map((c) => ({ key: c.account, go: clearingAt(c.account, s), text: say('openPeriod.clearingItem', { name: c.name, account: c.account, date: formatDate(s.period.to), amount: money(baseCurrency(), c.balance) }) })), more: l.more };
     default: return { items: [], more: 0 };
   }

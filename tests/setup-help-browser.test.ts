@@ -113,6 +113,8 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
       await page.goto(`http://${host}/start?new`, { waitUntil: 'networkidle0', timeout: 60_000 });
       // /start?new is new books chosen already (#363): without an AI it is the form; with one, «Ohne KI einrichten» leads there.
       if (ai) { await page.waitForSelector('[data-ready=claude]', { timeout: 60_000 }); await press(page, '[data-act=by-hand]'); }
+      // Without one, the Mac app first says why macOS asks about the Documents folder (#373).
+      else await press(page, '[data-answer=allow]');
       await page.waitForSelector('.st-form [data-q=vatMethod] [data-where]', { timeout: 20_000 });
       for (const q of ['vatMethod', 'basis']) assert.ok(await page.$(`.st-form [data-q=${q}] [data-where]`), `${size}: the form says where «${q}» stands`);
       // Only what the books need (#452): no UID, none of the answers that book nothing differently; how many are answered, in sight.

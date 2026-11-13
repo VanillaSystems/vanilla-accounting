@@ -150,7 +150,8 @@ Two markers flag an entry you must read before you update:
   closes; «Automatisch buchen» for all, «Neu buchen», `npm run classify` and a rule kept meanwhile
   book nothing either. A customer's or an authority's file and evidence.guide.yaml count as the
   firm's rules too (files there at the update make nothing wait; one written after it waits).
-  `npm run classify` books nothing on a workspace the app has not opened on this computer yet. Wherever she tries, one
+  `npm run classify` books nothing on a workspace the app has not opened on this computer yet; one
+  `npm run init` or the desktop's setup created counts as switched on as it was made. Wherever she tries, one
   sentence says what changed, why the app waits and what ends it, with «Einschalten» right there;
   switched on, the app books what only waited for it (the payments by an inbox run, the report taken
   again). Her own answers and links, and a
@@ -434,6 +435,139 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A drop in which the AI's booking of one payment was refused (#482) no longer leaves stuck runs
+  «Eingang verarbeiten: Lauf steckt» behind the task badge. The run finishes, and the payment says
+  why it waits, as #470 meant. «Automatisch buchen» on such a payment goes on to «Von Hand
+  buchen». A run that sticks on a fault of the app itself now says so in her words: «In der App
+  ist hier ein Fehler passiert: der Lauf ist angehalten und hat nichts Falsches geschrieben.» The
+  run's page adds «Weiter» versucht es noch einmal, beside that button. Before, it showed an
+  internal step name and file. A payment's and a statement's «Verlauf» show the same words. A
+  company's own step that lists what it hands on keeps every key its action hands on, so such a
+  workspace keeps booking.
+
+- A courier's customs invoice whose own VAT on its fee is read as a tax line at no rate («MWST»
+  beside a Vorlageprovision at 8.1 %, the line as much as 8.1 % of the fee) books that VAT on the
+  fee's line (4040 M81), no longer as import VAT without input tax (4030 M0), and
+  «Veranlagungsverfügung fehlt» no longer asks an assessment for it (#483). One tax line per rate
+  is the courier's: the one that states the rate, else the one bare «MWST» line as much as that
+  rate's tax on its fees (also read with the tax in), never one as much as an assessment linked
+  beside the bill or one that names more than the tax; every other is import VAT. «MWST 8.1% auf …» is
+  now split in code the same way instead of going to the AI. Payments booked already stay as they are.
+- The drop window (#483): a file whose run stopped says what the books made of it, as Belege
+  does: a balance sheet «Bilanz» with «Eröffnung erfassen», a product photo «kein Beleg»; only a
+  receipt still waiting for its payment, its reading or its date and amount says «stehen
+  geblieben», and only those count as waiting for her.
+- The compensation fund's payment with its bill linked (#476): it was booked whole as the
+  employer's expense while 2270 still held the employees' share the payslips had withheld, so that
+  share was an expense twice. Where every payslip behind 2270 is linked and its deductions read per
+  kind (AHV/IV/EO and ALV the fund's, BVG the pension fund's) and add up, the app books exactly the
+  fund's part on 2270, never more than 2270 holds, and the rest as the employer's contribution;
+  the booking says so. Where it cannot tell, the open item «Beitragszahlung ohne den Anteil der
+  Arbeitnehmenden» offers «2270 ausgleichen» on the return's list and on the payment: a proposal in
+  words, booked by her click in one write and undone in the toast, the lines back with who booked
+  them and why. Where the payslips tell the fund's share, the item and the click ask for what the
+  payment lacks of it, never for another fund's deductions on 2270. The payslips are read in the
+  layouts payroll programs and pdftotext give (a label with its amount, columns whose order the
+  rates prove, a minus after the amount, a correction row, a payment of several wages); a row
+  that is no deduction (an AHV number, a basis, a sentence) names no fund. No VAT figure changes.
+- «Was muss ich jetzt noch machen?» (#476): the card under the answer and the facts the AI is
+  handed list what the return's list «Noch offen» lists, in its order (a contribution payment
+  without the employees' share among them), and then what only the card adds (a proposal of the
+  setup, a missing opening). The firm's own invoice that only waits for its customer is a fact on
+  all three («eigene Rechnung, wartet auf die Zahlung der Kundschaft»), never a point to count.
+- The open list under a return (#477) no longer opens with «Nichts davon hält die Abrechnung auf»
+  while payments of the period are unbooked. Its first sentence names them, the money in and the
+  money out with their count and sum: «4 Zahlungseingänge über CHF … und ein Zahlungsausgang über
+  CHF … sind noch nicht gebucht: die Zahl ist noch nicht endgültig.» These
+  are the same payments the return's page counts beside «noch nicht endgültig». With every payment
+  booked and nothing withheld the sentence is as before. What withholds «Freigegeben» is unchanged.
+- The drop window with many files (#453): the line «Gesamt 51 % · 1 von 43 Dateien fertig» no
+  longer lies over the tabs (it shrank to nothing once the list was long), and «Schliessen» no
+  longer falls below a small window: between the head and the foot, what came of the drop, the
+  list and the lines below it scroll as one. From 10 files the window shows an overview: one bar
+  for the whole drop with what is done now («3 werden hochgeladen · 6 warten auf den Start · 1
+  sucht die Zahlung»), and where the files stand, in counts («45 Dateien · 9 brauchen dich · 2
+  Kontoauszüge eingelesen · 12 einer Zahlung zugeordnet · …»), each a filter of the list in place
+  of the tabs, kept for the whole drop. What needs her is listed first; the files still worked on
+  or done are a line each with their count, opened by a click. The counts come from the states the
+  rows show and follow them live; a filter whose last file left it shows the whole drop again. A
+  file is judged by its own run only: a later file's run, which takes up the receipts still waiting
+  for their payment again, no longer sets the files at rest back to «in Arbeit» and the bar back to
+  0 %; and the window asks for the runs' steps at once when a file is taken, every 2 s while files
+  are worked on, in one loop of asks that returns to every 10 s; the bar never goes back.
+- A payment of social insurance contributions while the wage deductions account (2270) holds
+  nothing is booked, and a payment a run leaves unbooked says why (#470). With wages booked net,
+  the AI is told that 2270 holds nothing and the whole contribution is the firm's expense (only
+  when the books carry a wage in the year: a firm without wages paying its owner's own AHV is told
+  nothing); an answer that still takes more off 2270 than it holds is booked in the same run with
+  what 2270 holds on it and the rest on the employer's contribution account the answer names
+  (else the payee's earlier one, else 5700),
+  and the booking's reason says so (before: nothing was booked and the reason stood only in the
+  run's detail). A payment a run tried and left unbooked keeps the run's reason in the run log:
+  its page says «nicht gebucht: …», the open list, the MWST page's list, the drop's summary and
+  the AI's card name it beside the payment, and its «Verlauf» names the run (before: «Bisher hat
+  kein Lauf hieran gearbeitet»). The hand form of a contribution payment proposes the payee's
+  earlier contribution account (else 5700) and, for a compensation fund, what 2270 holds on 2270;
+  for another payee it takes nothing off 2270 and says what 2270 holds. No VAT figure
+  changes: contributions carry no code.
+- «Noch offen»: a month of a payment provider's fees without its bill names the bill as the
+  provider's file names it and where the provider keeps it («Shopify Payments Invoice» …
+  «Shopify Admin › Settings › Billing › Bills»), and shows the VAT it would show, estimated from
+  the fees at the bill's rate («geschätzt CHF … (8.1 % in CHF … Gebühren)»), no longer the
+  fees as if they were the VAT. Its «Rechnung hinzufügen» opens the file dialog that drops it; the
+  line no longer opens Belege on another receipt, and the sidebar's card leads to the list (#459).
+- What the sidebar's AI is told about an account without its opening and a provider's clearing
+  account carries days and states (#459). The bank's balance the statements imply is the one
+  before their first payment, on its day: books whose statements begin on 01.07. no longer hand
+  it over as the balance of 1.1., and the card says «laut Auszügen … vor der ersten Zahlung am
+  01.07.2026». A clearing account below zero names its provider's reports in the books with their
+  days and the bookings each made, and whether the account has its opening, instead of guessing
+  «a sales report not dropped yet».
+- Mac app, first start: macOS no longer asks about the Documents folder over the first screen
+  before you chose anything (#373). The app reads nothing in Documents, Desktop or Downloads until
+  a step needs it. «Neue Buchhaltung erstellen» first says that your books go into «Dokumente»,
+  that macOS will now ask and that «Erlauben» is needed, with «Anderen Ordner wählen» beside
+  «Weiter»; after «Nicht erlauben» it says where to allow it in the System Settings and still
+  works with another folder. Once allowed, the step goes on at once. Books opened before in such a
+  folder are read only after macOS answered: when it asks at a later start, the window comes first
+  with the start screen and the books open after «Erlauben». The menu's «Zuletzt geöffnet» names
+  them without reading their folders, and the start screen says that macOS asks about the folder
+  of those books while it does. Books in a folder macOS refuses keep their name and say how to
+  allow it; a folder whose own rights refuse the app says so apart. New books never open books
+  already in the folder named for them: the form proposes a free name («Buchhaltung 2026 2»), also
+  after a restart. macOS's answer counts for this version of the app only: after an update the
+  words come again before macOS may ask again.
+- A provider's monthly Payments Invoice no longer waits for the AI (#458): no payment comes for it,
+  so the inbox takes its date and total from its text by code and the booking step books its input
+  tax, as for the other months. Before, one failed AI answer left the bill in the inbox with
+  «fehlt: Datum, Betrag» and its input tax unbooked. Where Belege says the booking without a
+  payment «fehlt noch», the new button «Vorsteuer buchen» books it at once, also on a date and
+  total she typed; it says why when it cannot («kein Datum», «eingereichte Periode», no fee
+  account). Such a bill no longer offers «Mit Zahlung verknüpfen» as its main action. A copy of
+  such a bill with other bytes (the same invoice number in the same month, or a copy as Belege finds
+  one), and one she marked as a copy, no longer books its input tax a second time: Belege names the
+  bill it copies. The button is not offered on a firm without input tax.
+- «Buchung passt nicht zu ihrem Beleg» no longer names a line the receipt leaves untaxed (#455). A
+  hotel bill of a room at 3.8 % and a Kurtaxe without VAT, on a card settlement, booked room I38
+  and Kurtaxe I0, got the task «Der Beleg zeigt 3.8 % MWST, die Buchung steht auf … I0» for the
+  Kurtaxe, and «Nach Beleg buchen» claimed CHF 0.22 input tax on it. The check now takes the bill of
+  a card statement's line as evidence of that line's bookings only, sets a VAT group the receipt
+  names by its tax alone against the lines at the gross that tax proves (allowing for the tax's
+  rounding to the cent), leaves a receipt in another currency out of the sum, and tells a line at 0 %
+  beside a line at the receipt's rate nothing when no receipt in the line's currency can be compared.
+- The fields of Firma's forms stand in line at every width (#454): a hint under one input («kein
+  Konto», the account's name) or a label on two lines no longer pushes the field beside it down
+  (Eröffnung, Regeln and the others). Firma › Eröffnung names its amount fields «Saldo per 1.1.2026
+  (CHF)» and, for a foreign-currency account, «Saldo per 1.1.2026 (EUR)» beside it, and its table's
+  column (and Abschluss's) «Saldo per 1.1.2026», no longer «Eröffnung 1.1.2026», which read like a
+  date; an amount typed there is right-aligned and shown in the app's number format once left.
+- A repayment to the owner before any of her outlays is booked (#457): «Spesen Juli 2026» said
+  «wartet auf ihren Beleg; ist er verknüpft, bucht die App sie», though no receipt is ever linked to
+  it. While receipts that could be hers are filed (read, dated before it, paid by no payment of the
+  firm, not its own invoice) it now says it waits for her privately paid receipts to be booked as
+  outlays, in the period's list, the bank detail, the drop, «Automatisch buchen» and the hand form,
+  as it did once one was booked. Without such a receipt, and for a payment to her a rule decides, the
+  receipt wait stays.
 - A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
   Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
   der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no
@@ -456,6 +590,15 @@ Two markers flag an entry you must read before you update:
   number; a payslip («Lohnabrechnung»), annual accounts («Erfolgsrechnung 2025») or a calculation are
   not, a reminder or an order confirmation below such a title stays what it is, and a compound
   credit note («Warengutschrift WG-…») pays in.
+- Pairing (#456): the compensation fund's Akonto bill is now paired with its payment in the drop.
+  The fund's payments are booked without waiting for a receipt, and that had also kept them from
+  ever being paired, so the bill stayed «gelesen, noch keine Zahlung» beside a payment booked «ohne
+  Beleg». Only the compensation fund's bills now pair (its file says `pairs: true`); the ESTV's and
+  the tax office's notices stay filed apart, never paired with their payment. A payment of the VAT
+  itself claims no input tax: the ESTV's and the tax office's files say so, and a line on the VAT
+  settlement account (2201, 2200) carries no VAT code whatever the AI answers, also where its answer
+  «the amount is the tax» had made an I81-2. In «Zahlung verknüpfen» a payment of the same amount
+  that names the receipt's own number comes first, above a «Skonto?» or a rounding guess.
 - Social insurance (#426): with wages booked gross, the AI is told what the deductions account
   (2270) holds on the payment's day, deducted on the payslips and not paid on yet, for a payment to
   the compensation fund or to a business booked on the contribution accounts before, so a bill that

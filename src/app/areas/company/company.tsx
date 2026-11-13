@@ -575,6 +575,8 @@ function Periods({ ws, books, nav }: Props & { ws: CompanyInfo }) {
 }
 
 const parseAmount = (s: string) => { const n = Number(s.replace(/['’\s]/g, '').replace(',', '.')); return s.trim() && Number.isFinite(n) ? n : null; };
+/** A typed amount, once left, in the app's number format («18420.5» reads «18’420.50»); what is no amount stays as typed. */
+const inAppFormat = (e: { currentTarget: HTMLInputElement }) => { const v = parseAmount(e.currentTarget.value); if (v !== null) e.currentTarget.value = fmt(v); };
 
 /**
  * The year's opening balances. For the books' first year a person types them per account (a firm
@@ -609,7 +611,7 @@ function Opening({ books, nav, canEdit }: Props) {
   const typedAmount = parseAmount(typed.amount);
   const setAmount = (v: number) => {
     const input = form.current?.querySelector<HTMLInputElement>('input[name=amount]');
-    if (input) { input.value = v.toFixed(2); readAccount(form.current); }
+    if (input) { input.value = fmt(v); readAccount(form.current); }
   };
   const typing = canEdit && !lock;
   const open = (a: string) => nav.go({ route: { area: 'reports', report: 'balance', account: a }, query: { period: parsePeriod(year, localToday())! } });
@@ -659,11 +661,11 @@ function Opening({ books, nav, canEdit }: Props) {
       {typing && (
         <form key={n} ref={form} className="form inline" autoComplete="off" onSubmit={save} onInput={(e) => readAccount(e.currentTarget)} data-testid="opening-form">
           <AccountField name="account" label={t('yearClose.colAccount')} defaultValue="" onPick={() => readAccount(form.current)} />
-          <label>{currency ? t('company.openingInBase', { date: `1.1.${year}`, currency: baseCurrency() }) : t('close.openingOn', { date: `1.1.${year}` })}<input className="mono" name="amount" inputMode="decimal" style={{ textAlign: 'right' }} /></label>
-          {currency ? <label>{t('company.openingNative', { currency })}<input className="mono" name="native" inputMode="decimal" style={{ textAlign: 'right' }} data-testid="opening-native" /></label> : null}
+          <label>{t('company.openingBalanceOn', { date: `1.1.${year}`, currency: baseCurrency() })}<input className="mono num" name="amount" inputMode="decimal" onBlur={inAppFormat} /></label>
+          {currency ? <label>{t('company.openingBalanceOn', { date: `1.1.${year}`, currency })}<input className="mono num" name="native" inputMode="decimal" onBlur={inAppFormat} data-testid="opening-native" /></label> : null}
           {/* The value in the base currency at the official rate of 31.12., as a fact beside what she typed; she decides (#427 review). */}
           {currency && rate && atRate !== undefined ? (
-            <p className="m" data-testid="opening-at-rate">
+            <p className="m wide" data-testid="opening-at-rate">
               {t('company.openingAtRate', { currency, native: fmt(typedNative!), date: `31.12.${Number(year) - 1}`, rate: String(rate.rate), base: baseCurrency(), amount: fmt(atRate) })}
               {typedAmount !== null && Math.round(typedAmount * 100) !== Math.round(atRate * 100) ? ` ${t('company.openingAtRateDiffers', { base: baseCurrency(), diff: fmt(Math.round((typedAmount - atRate) * 100) / 100) })}` : ''}{' '}
               {typedAmount === null || Math.round(typedAmount * 100) !== Math.round(atRate * 100) ? <button type="button" className="linkbtn" data-testid="opening-take-rate" onClick={() => setAmount(atRate)}>{t('company.openingTakeRate', { base: baseCurrency(), amount: fmt(atRate) })}</button> : null}

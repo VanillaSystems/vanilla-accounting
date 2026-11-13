@@ -37,7 +37,7 @@ import { RunHistory } from '../../history/RunHistory.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { localToday } from '../../../accounting/periods.js';
 import { excessOfPayment, linkedOf, receiptState, type Linked } from '../../../accounting/receipt-due.js';
-import { outlayWaitsNow } from '../../lib/order-pages.js';
+import { outlayWaitsNow, refusedWhy } from '../../lib/order-pages.js';
 import { WorkflowButtons } from '../../automation/marks.js';
 import { useAutomation } from '../../automation/store.js';
 import { processingText } from '../../automation/processing.js';
@@ -53,6 +53,7 @@ import { openAmount } from '../../../invoices/rules.js';
 import { QuestionsOn } from '../../questions/Questions.js';
 import { bookDiffParts, missingOpenings, startGaps } from '../../../accounting/opening-balance.js';
 import { GroupedOffer, ShareOffers } from '../company/RulesSection.js';
+import { WithheldOnPayment } from '../automation/WithheldFix.js';
 import { Pick } from '../../selection/Pick.js';
 import { ActionsMenu } from '../../selection/ActionsMenu.js';
 import { paymentActions } from './actions-menu.js';
@@ -351,6 +352,8 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
       {edit ? <ReceiptSetOffer key={`rs-${tx.ref}`} {...props} tx={tx} /> : null}
       {/* A share of the phone or the car she named in the setup (#402): offered as this business's rule once a payment of it is booked. */}
       {edit && entry && tx.direction === 'DBIT' ? <ShareOffers key={`so-${tx.ref}`} refs={[tx.ref]} only="setup" onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
+      {/* A contribution payment booked without the employees' share while the deductions account holds it (#476): its fix, here too. */}
+      {edit && entry && tx.direction === 'DBIT' ? <WithheldOnPayment books={props.books} tx={tx} nav={nav} /> : null}
       {edit && receipts.length > 1 ? <GroupedOffer key={`go-${tx.ref}`} payment={tx.ref} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
       {edit && tx.direction === 'CRDT' ? <LinkInvoice key={`li-${tx.ref}`} tx={tx} nav={nav} /> : null}
@@ -533,6 +536,9 @@ function NotBooked({ tx, linked }: { tx: BankTransaction; linked: Linked }) {
   if (own) return <span className="m" data-testid="booking-now">{t('bank.bookingItNow')}</span>;
   const wait = receiptState(tx, linked, false, localToday());
   const yours = (view?.tasks ?? []).some((k) => k.item.kind === 'transaction' && k.item.id === tx.ref);
+  // A run tried it and left it unbooked (#470): why, in her words, from the run log.
+  const why = refusedWhy(tx.ref);
+  if (!wait && why) return <span className="wn" data-testid="refused-by-run">{t('bank.refusedByRun', { why })}</span>;
   if (!wait) return <span className="wn" data-testid={yours ? 'not-booked-yours' : 'not-booked'}>{t(yours ? 'bank.notBookedYours' : 'bank.notBooked')}</span>;
   if (wait.kind === 'unread') return <span className="wn" data-testid="waits-for-receipt">{t('bank.receiptUnread')}</span>;
   // A payment to the owner waits for the outlays it pays back, not for a receipt of its own (#428).

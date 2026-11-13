@@ -22,6 +22,8 @@ import { waitingForReceipt, type WaitingPayment } from '../../../accounting/rece
 import { localToday, type IsoDate } from '../../../accounting/periods.js';
 import type { HeldOrder, MissingBill, ProviderIssues } from '../../../booking/provider-issues.js';
 import { unclearedContributions, type Uncleared } from '../../../booking/withheld.js';
+import { issuedByFirm, ownNumbers, type Firm } from '../../../intake/own-invoice.js';
+import { agreedBasis, baseCurrency } from '../../../engines/index.js';
 
 export type PeriodIssue =
   | { kind: 'question'; q: Question; date: string }
@@ -36,7 +38,9 @@ export type PeriodIssue =
   /** A month of a provider's fees without its bill: the VAT on them is not deducted yet (#405). */
   | { kind: 'bill'; bill: MissingBill }
   /** A contribution payment booked without the employees' share while the wages' deductions account held it (#426). */
-  | { kind: 'withheld'; uncleared: Uncleared };
+  | { kind: 'withheld'; uncleared: Uncleared }
+  /** The firm's own invoice that only waits for its customer's payment (waitsForCustomer, #428, #436): listed as a fact, not counted. */
+  | { kind: 'issued'; receipt: Receipt };
 
 /** What a receipt lacks for the app to go on without the person: its date, its amount, its reading, or her word that it is no copy. */
 export type Lack = 'date' | 'amount' | 'reading' | 'copy';
@@ -65,12 +69,13 @@ export function dateOn(books: Pick<Index, 'transactions' | 'receipts' | 'journal
 }
 
 /**
- * The open issues of the days `from`–`to`, in the order a person works them off: questions, held orders, contradicting codes,
- * unbooked payments, receipts that wait for her word, receipts without a payment, missing bills of a provider. `provider`:
+ * The open issues of the days `from`–`to`, in ISSUE_ORDER, the order a person works them off: held orders, questions,
+ * receipts that wait for her word, contradicting codes, contribution payments without the employees' share, unbooked
+ * payments, receipts without a payment, missing bills of a provider. `provider`:
  * what the providers' reports leave open (#405). `outlays`: the payments to the owner that wait for her outlays (outlayWaitsOf), told
  * apart from those that wait for their receipt (#428).
  */
-export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string, accounts: readonly LedgerBankAccount[], orderPages: ReadonlyMap<string, OrderPage> = new Map(), today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map(), provider?: ProviderIssues, outlays?: ReadonlySet<string>): PeriodIssue[] {
+export function periodIssues(books: Index, questions: readonly Question[], from: string, to: string, accounts: readonly LedgerBankAccount[], orderPages: ReadonlyMap<string, OrderPage> = new Map(), today: IsoDate = localToday(), processing: ReadonlyMap<string, Processing> = new Map(), provider?: ProviderIssues, outlays?: ReadonlySet<string>, firm?: Firm): PeriodIssue[] {
   const within = (d: string | undefined): d is string => !!d && d >= from && d <= to;
   const asked = questions.flatMap((q): PeriodIssue[] => {
     const date = q.status === 'open' ? dateOn(books, q) : undefined;
@@ -91,12 +96,23 @@ export function periodIssues(books: Index, questions: readonly Question[], from:
       ? [{ kind: 'own', receipt: v.r, name: v.vendor || v.r.filename, lacks, day: v.day!, ...(v.twin?.relation === 'duplicate' ? { copyOf: v.twin.of } : {}) }] : [];
   });
   const mine = new Set(own.map((i) => (i as { receipt: Receipt }).receipt.id));
-  const unlinked = l.views.filter((v) => needsYou(v, l) && within(v.date) && !v.r.filedPayment && !mine.has(v.r.id)).map((v): PeriodIssue => ({ kind: 'unlinked', receipt: v.r }));
+  // The firm's own invoice that only waits for its customer is a fact of the list, decided here once (#476).
+  const lone = l.views.filter((v) => needsYou(v, l) && within(v.date) && !v.r.filedPayment && !mine.has(v.r.id)).map((v) => v.r);
+  const unlinked = lone.filter((r) => !waitsForCustomer(books, r, firm)).map((receipt): PeriodIssue => ({ kind: 'unlinked', receipt }));
+  const issued = lone.filter((r) => waitsForCustomer(books, r, firm)).map((receipt): PeriodIssue => ({ kind: 'issued', receipt }));
   const orders = (provider?.held ?? []).filter((h) => !h.filed && within(h.date)).map((h): PeriodIssue => ({ kind: 'held', held: h }));
   const bills = (provider?.bills ?? []).filter((b) => within(b.date)).map((b): PeriodIssue => ({ kind: 'bill', bill: b }));
-  const withheld = unclearedContributions(books as Parameters<typeof unclearedContributions>[0], from, to, new Set(provider?.withheldPayees ?? [])).map((uncleared): PeriodIssue => ({ kind: 'withheld', uncleared }));
-  return [...asked, ...orders, ...evidence, ...withheld, ...unbooked, ...own, ...unlinked, ...bills];
+  const withheld = unclearedContributions(books as Parameters<typeof unclearedContributions>[0], from, to, new Set(provider?.withheldPayees ?? []), provider?.withheldShares).map((uncleared): PeriodIssue => ({ kind: 'withheld', uncleared }));
+  const of: Record<PeriodIssue['kind'], PeriodIssue[]> = { question: asked, held: orders, evidence, withheld, unbooked, own, unlinked, issued, bill: bills };
+  return ISSUE_ORDER.flatMap((k) => of[k]);
 }
+
+/**
+ * The order of the open list «Noch offen» (#476): the one order of a period's points, which the AI sidebar's card
+ * (openLines) and the facts handed to the AI (src/server/open-work.ts periodNote) follow too, so the three never
+ * disagree about what is open or what comes first.
+ */
+export const ISSUE_ORDER = ['held', 'question', 'own', 'evidence', 'withheld', 'unbooked', 'unlinked', 'issued', 'bill'] as const satisfies readonly PeriodIssue['kind'][];
 
 /**
  * The payments the app does not book because their receipt is not there or cannot be read
@@ -123,20 +139,59 @@ export function receiptWaiting(books: Pick<Index, 'transactions' | 'journalEntri
 export type Say = (key: string, vars?: Record<string, string | number>) => string;
 
 /**
+ * A month of a provider's fees without its bill, in words (#459): the bill as the provider's file names it,
+ * the VAT it would show as an estimate (never the fees as if they were the VAT), and where the provider keeps it.
+ * `month`: the month as the page names it; `money`: an amount in the books' currency.
+ */
+export function billText(b: MissingBill, month: string, money: (n: number) => string, say: Say): string {
+  const amount = b.vat !== undefined && b.rate !== undefined ? say('issues.billVat', { vat: money(b.vat), rate: String(b.rate), fees: money(b.fees) }) : say('issues.billFees', { fees: money(b.fees) });
+  const line = say(b.document ? 'issues.billNamed' : 'issues.bill', { month, provider: b.name, amount, ...(b.document ? { document: b.document } : {}) });
+  return b.where ? `${line}. ${say('issues.billWhere', { provider: b.name, where: b.where })}` : `${line}.`;
+}
+
+/** Joins two or more parts as «a, b und c». */
+const joined = (parts: readonly string[], say: Say) => (parts.length > 1 ? say('issues.lead.and', { a: parts.slice(0, -1).join(', '), b: parts.at(-1)! }) : parts[0]);
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * The payments of `issues` nobody booked, in words (#477): the money in and the money out, each with its
+ * count and its sum per currency, the books' first, «4 Zahlungseingänge über … und ein Zahlungsausgang über
+ * … sind noch nicht gebucht: die Zahl ist noch nicht endgültig.» The payments counted are the list's,
+ * which the return's page counts beside «noch nicht endgültig» (countIssues `unbooked`). Undefined when none.
+ */
+export function unbookedLead(issues: readonly PeriodIssue[], say: Say, money: (amount: number, currency: string) => string): string | undefined {
+  const txs = issues.flatMap((i) => (i.kind === 'unbooked' ? [i.tx] : []));
+  if (!txs.length) return undefined;
+  const side = (key: 'issues.lead.unbookedIn' | 'issues.lead.unbookedOut', of: BankTransaction[]) => {
+    if (!of.length) return '';
+    const sums = new Map<string, number>();
+    for (const t of of) sums.set(t.currency, (sums.get(t.currency) ?? 0) + Math.abs(t.amount));
+    const base = baseCurrency();
+    const order = [...sums].sort(([a], [b]) => Number(b === base) - Number(a === base) || a.localeCompare(b));
+    return say(key, { n: of.length, amount: order.map(([c, a]) => money(Math.round(a * 100) / 100, c)).join(' + ') });
+  };
+  const parts = [side('issues.lead.unbookedIn', txs.filter((t) => t.direction === 'CRDT')), side('issues.lead.unbookedOut', txs.filter((t) => t.direction !== 'CRDT'))].filter(Boolean);
+  return say('issues.lead.unbooked', { n: txs.length, what: capital(joined(parts, say)) });
+}
+
+/**
  * The list's lead (#428): what withholds the approval, as filing-summary.ts withheldIn counts it for
  * the review too (rates without their activity code, open VAT questions, orders held for their rates),
- * named only when it is there, and whether the rest of the list (`listed` items) blocks nothing.
+ * named only when it is there; then the payments of the list (`issues`) nobody booked, which keep the
+ * figure from being final (#477); and only when none is, whether the rest of the list blocks nothing.
+ * What withholds «Freigegeben» stays `withheldIn`'s alone: an unbooked payment is named, never withheld for.
  */
-export function issuesLead(w: { rates: readonly string[]; questions: number; held: number }, listed: number, say: Say): string {
+export function issuesLead(w: { rates: readonly string[]; questions: number; held: number }, issues: readonly PeriodIssue[], say: Say, money: (amount: number, currency: string) => string): string {
   const parts = [
     w.rates.length ? say('issues.lead.rates', { n: w.rates.length, rates: w.rates.join(', ') }) : '',
     w.questions ? say('issues.lead.question', { n: w.questions }) : '',
     w.held ? say('issues.lead.order', { n: w.held }) : '',
   ].filter(Boolean);
-  if (!parts.length) return say('issues.lead.nothing');
-  const what = parts.length > 1 ? say('issues.lead.and', { a: parts.slice(0, -1).join(', '), b: parts.at(-1)! }) : parts[0];
-  const held = say(w.rates.length + w.questions + w.held === 1 ? 'issues.lead.withholdsOne' : 'issues.lead.withholdsMany', { what: what.charAt(0).toUpperCase() + what.slice(1) });
-  return listed > w.questions + w.held ? `${held} ${say('issues.lead.rest')}` : held;
+  const unbooked = unbookedLead(issues, say, money);
+  const held = parts.length ? say(w.rates.length + w.questions + w.held === 1 ? 'issues.lead.withholdsOne' : 'issues.lead.withholdsMany', { what: capital(joined(parts, say)) }) : '';
+  if (unbooked) return held ? `${held} ${unbooked}` : unbooked;
+  if (!held) return say('issues.lead.nothing');
+  return issues.length > w.questions + w.held ? `${held} ${say('issues.lead.rest')}` : held;
 }
 
 /**
@@ -149,8 +204,8 @@ export interface IssueCounts { total: number; questions: number; evidence: numbe
 export function countIssues(issues: readonly PeriodIssue[]): IssueCounts {
   const of = (kind: PeriodIssue['kind']) => issues.filter((i) => i.kind === kind).length;
   return {
-    // A missing bill is information, not an open item: the period's figure is final without it.
-    total: issues.length - of('bill'), questions: of('question'), evidence: of('evidence'), unbooked: of('unbooked'), unlinked: of('unlinked'), own: of('own'), held: of('held'), bills: of('bill'), withheld: of('withheld'),
+    // A missing bill and the firm's own invoice that waits for its customer are information, not open items.
+    total: issues.length - of('bill') - of('issued'), questions: of('question'), evidence: of('evidence'), unbooked: of('unbooked'), unlinked: of('unlinked'), own: of('own'), held: of('held'), bills: of('bill'), withheld: of('withheld'),
     waitingReceipt: issues.filter((i) => i.kind === 'unbooked' && i.waitsForReceipt).length,
     waitingOutlays: issues.filter((i) => i.kind === 'unbooked' && i.waitsForOutlays).length,
   };
@@ -165,4 +220,30 @@ export function unbookedOpen(books: Pick<Index, 'transactions' | 'journalEntries
   const waits = new Map(receiptWaiting(books, accounts, today, outlays).map((w) => [w.tx.ref, w]));
   const count = (outlays: boolean) => open.filter((t) => waits.has(t.ref) && !!waits.get(t.ref)!.outlays === outlays).length;
   return { unbooked: open.length, waitingReceipt: count(false), waitingOutlays: count(true), ...(open[0] ? { first: open[0] } : {}) };
+}
+
+const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * Whether a receipt without a payment is the firm's own invoice that only waits for its customer,
+ * nothing for the person to do (#428). Only when that is sure: the receipt shows the firm's UID and
+ * no other (a name alone is no proof), no money in may be its payment (one booked without the link
+ * is hers to pair), and on the agreed basis its issue is booked as a
+ * receivable (an invoice dropped, not issued in the app, has no event: its turnover is VAT work).
+ */
+/** Money in, on or after the invoice's day and linked to no receipt, of its amount or naming its number: it may be its payment, booked without the link. */
+function mayBePaid(books: Index, r: Receipt): boolean {
+  const linked = new Set(books.mappings.map((m) => m.transactionRef));
+  const numbers = ownNumbers(r).map(squash);
+  return books.transactions.some((t) => t.direction === 'CRDT' && !linked.has(t.ref) && (!r.date || t.date >= r.date)
+    && ((r.amount != null && t.currency === (r.currency ?? t.currency) && Math.round(t.amount * 100) === Math.round(Math.abs(r.amount) * 100))
+      || numbers.some((n) => n.length >= 4 && squash(`${t.description} ${t.reference ?? ''} ${t.remarks ?? ''}`).includes(n))));
+}
+
+export function waitsForCustomer(books: Index, r: Receipt, firm: Firm | undefined): boolean {
+  if (issuedByFirm(r, firm) !== 'uid') return false;
+  if (mayBePaid(books, r)) return false;
+  if (!agreedBasis()) return true;
+  const events = new Set((books.journalEntries ?? []).filter((e) => /^(RE|GS)-/.test(e.transactionRef) && !e.transactionRef.endsWith('-storno')).map((e) => squash(e.transactionRef)));
+  return ownNumbers(r).some((n) => events.has(squash(n)) || events.has(`re${squash(n)}`));
 }

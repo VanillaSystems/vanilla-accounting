@@ -19,7 +19,7 @@
 import { evidenceCheck, isPurchaseDocument, lineReceipts } from '../accounting/evidence-check.js';
 import { formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { isUnreadable, vatNotRead } from '../accounting/receipt-due.js';
-import { vat } from '../engines/index.js';
+import { vat, yearEnd } from '../engines/index.js';
 import { wordsIn } from '../export/texts.js';
 import { identify, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import type { Knowledge, Layer } from '../knowledge/layers.js';
@@ -165,6 +165,9 @@ function asRead(r: Receipt, rate: number, amount: number): Receipt {
   return { ...r, hasSwissVat: true, vatSummary: [{ ratePercent: rate, gross, vat: (gross * rate) / (100 + rate) }] };
 }
 
+/** The VAT settlement accounts (year-end.yaml vatSettlement): a line on one pays or receives the tax itself and carries no VAT code, nor does code give it one (#456). */
+export const settlesVat = (account: string | undefined): boolean => !!account && yearEnd().accounts.vatSettlement.includes(account);
+
 /** Booking texts stay German (docs/i18n.md). */
 const de = () => wordsIn('de');
 
@@ -189,7 +192,7 @@ export function withPurchaseVat(tx: BankTransaction, entries: JournalEntry[], do
   const name = business?.name ?? '';
 
   return entries.map((e) => {
-    if (!model.includes(e)) return e;
+    if (!model.includes(e) || settlesVat(e.accountDebit) || settlesVat(e.accountCredit)) return e;
     const [, sign, family] = ratedCode.exec(e.vatCode!)!;
     if (none) {
       const code = `${sign}${family}0`;

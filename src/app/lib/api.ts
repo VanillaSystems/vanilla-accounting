@@ -21,6 +21,7 @@ import type { QuestionId } from '../../onboarding/model.js';
 import type { SetupView } from '../../onboarding/facts.js';
 import type { VatSetup } from '../../workspace/vat-setup.js';
 import type { ApiErrorBody, ApiStatus, MailStatus } from '../../types/api-error.js';
+import type { PaymentRefusal } from '../../workflows/history.js';
 import type { MailMessage } from '../../invoices/mail.js';
 import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
@@ -34,8 +35,9 @@ import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminde
 import type { PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
-import type { AiAvailability, DesktopInfo, FolderLook, KnownBooks, PhoneInfo } from '../../types/desktop.js';
+import type { AiAvailability, DesktopInfo, FolderLook, HomeFolders, KnownBooks, PhoneInfo } from '../../types/desktop.js';
 import { DesktopCallError } from '../desktop/bridge.js';
+import { accessText, type AccessKey } from '../desktop/access-text.js';
 import { setAiOff } from '../ai/ai-off.js';
 import type { DraftPatch as SetupPatch, SetupBegun, SetupDraftView } from '../../onboarding/draft.js';
 import type { SetupTalked } from '../../onboarding/draft-talk.js';
@@ -140,6 +142,13 @@ export function aiRefusedText(r: AiRefusal): string {
   return r.reason === 'limit' ? t('error.ai.limit', { cli, said: r.said }) : t(`error.ai.${r.reason}`, { cli });
 }
 
+/** Why a run left a payment unbooked, in her words (#470): the refusal's words; undefined without one. */
+export function leftText(r: Pick<PaymentRefusal, 'refusal'>): string | undefined {
+  return r.refusal ? errorText(new ApiError({ ...r.refusal, error: '' } as ApiErrorBody)) : undefined;
+}
+/** t() for accessText (src/app/desktop/access-text.ts), which the main process calls with textsIn too. */
+export const sayAccess = (key: AccessKey, vars: Record<string, string>): string => t(key as 'desktop.access.refused', vars as { folder: string });
+
 export function errorText(e: unknown): string {
   if (e instanceof DesktopCallError) return t(e.text);
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e);
@@ -156,6 +165,7 @@ export function errorText(e: unknown): string {
     case 'booksChanged': return t('error.booksChanged');
     case 'hasEntries': return t('error.hasEntries');
     case 'notByReceipt': return t('error.notByReceipt');
+    case 'withheldNone': return t('error.withheldNone');
     case 'decidedByHand': return t('error.decidedByHand');
     case 'changedSince': return t('error.changedSince');
     case 'undoGone': return t('error.undoGone');
@@ -168,6 +178,7 @@ export function errorText(e: unknown): string {
     case 'correctionBooked': return t('error.correctionBooked', { entry: b.params.entry });
     case 'reportCorrection': return t(`error.reportCorrection.${b.params.why}`);
     case 'heldOrder': return t(`error.heldOrder.${b.params.why}`);
+    case 'vatCorrection': return t(`error.vatCorrection.${b.params.why}`);
     case 'statementUndo': return t(`error.statementUndo.${b.params.why}`);
     case 'secondPayment': return t('error.secondPayment', { payment: b.params.payment });
     case 'paidPrivately': return t('error.paidPrivately', { payment: b.params.payment });
@@ -216,6 +227,7 @@ export function errorText(e: unknown): string {
     case 'classifyOpenInvoice': return t('error.classifyOpenInvoice', b.params);
     case 'classifyVatNotRead': return t('error.classifyVatNotRead', b.params);
     case 'classifyInputTaxShared': return t('error.classifyInputTaxShared', { payments: b.params.payments, booked: `${b.params.currency} ${fmt(b.params.booked)}`, shown: `${b.params.currency} ${fmt(b.params.shown)}` });
+    case 'classifyWithheldShare': return t('error.classifyWithheldShare', { account: b.params.account, taken: `${b.params.currency} ${fmt(b.params.taken)}`, share: `${b.params.currency} ${fmt(b.params.share)}` });
     case 'classifyWithheldOver': return t('error.classifyWithheldOver', { account: b.params.account, taken: `${b.params.currency} ${fmt(b.params.taken)}`, open: `${b.params.currency} ${fmt(b.params.open)}` });
     case 'personsBooking': return t('error.personsBooking', { n: b.params.entries });
     case 'fileExists': return t('error.fileExists', b.params);
@@ -313,6 +325,10 @@ export function errorText(e: unknown): string {
     case 'noWorkspace': return t('desktop.noWorkspace');
     case 'notWorkspace': return t('desktop.notWorkspace');
     case 'oldLayout': return t('desktop.oldLayout', { root: b.params.root });
+    case 'folderRefused': return accessText(sayAccess, b.params, b.params.root);
+    case 'folderTaken': return b.params.holds === 'books'
+      ? t('desktop.access.takenBooks', { root: b.params.root, name: b.params.name ?? '', free: b.params.free })
+      : t('desktop.access.takenSetup', { root: b.params.root, free: b.params.free });
     case 'setup': return setupText(b.params);
     case 'openingAccount': return t(`error.openingAccount.${b.params.reason}`, { account: b.params.account, currency: b.params.currency ?? '', base: baseCurrency() });
     case 'openingNotFirstYear': return t('error.openingNotFirstYear', { year: b.params.year });
@@ -420,6 +436,8 @@ export const api = {
   /** «Als Korrektur buchen» on a refund of a filed period a sales report offers (#231): booked in the open period with `corrects`. */
   heldOrder: (receipt: string, order: string, parts: Array<{ amount: number; rate: number }>) => request<{ ok: true; entries: JournalEntry[] }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/held-order`, { order, parts }),
   reportCorrection: (receipt: string, order: string, date: string) => request<{ ok: true; entries: JournalEntry[] }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/report-correction`, { order, date }),
+  /** «Vorsteuer buchen» on a bill of a VAT-only correction (#458): booked, or linked to the booking that books it already (`booked` false). */
+  bookVatCorrection: (receipt: string) => request<{ ok: true; ref: string; booked: boolean; entries: string[] }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/vat-correction`),
   setFiledPayment: (receipt: string, payment: string | null) => request<{ ok: true }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/filed-payment`, { payment }),
   findReceipt: (payment: string) => request<Found>('POST', `/api/transactions/${encodeURIComponent(payment)}/find-receipt`),
 
@@ -431,6 +449,7 @@ export const api = {
   /** «Nach Beleg buchen» on a receipt of several VAT groups (#406): the payment's lines as they were, and their ids now. */
   bookByReceipt: (id: string) => request<{ undo: string; before: JournalEntry[]; after: JournalEntry[] }>('POST', `/api/journal-entries/${encodeURIComponent(id)}/by-receipt`),
   /** Its undo by the id the click returned, in one write: refused when a line changed since. */
+  clearWithheld: (ref: string) => request<{ undo: string; before: JournalEntry[]; after: JournalEntry[]; amount: number; account: string }>('POST', `/api/payments/${encodeURIComponent(ref)}/clear-withheld`),
   undoByReceipt: (undo: string) => request<Ok>('POST', '/api/journal-entries/by-receipt/undo', { undo }),
   /** Änderungen › «Rückgängig» of a change by hand: the booking as the last save holds it, or gone when booked since. */
   restoreSavedEntry: (id: string) => request<Ok>('POST', `/api/journal-entries/${encodeURIComponent(id)}/as-saved`),
@@ -500,6 +519,7 @@ export const api = {
   draftRules: (path: string) => request<DraftView>('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`),
   draftCommand: (c: DraftCommand) => request<KeepResult | { ok: boolean }>('POST', '/api/rules/draft', c),
   outlayWaits: () => request<{ refs: string[] }>('GET', '/api/rules/outlay-waits'),
+  refusals: () => request<{ refusals: PaymentRefusal[] }>('GET', '/api/automation/refusals'),
   setupOffers: () => request<{ offers: PendingOffer[] }>('GET', '/api/rules/share-offers'),
   shareOffer: (ref: string) => request<{ offer: ShareOffer | null }>('GET', `/api/rules/share?ref=${encodeURIComponent(ref)}`),
   draftShare: (ref: string) => request<{ path: string }>('POST', '/api/rules/share', { ref }),
@@ -643,8 +663,8 @@ export const api = {
   /** The desktop app's start screen (src/desktop/server.ts). */
   desktop: {
     info: () => request<DesktopInfo>('GET', '/api/desktop'),
-    /** The folders in booksHome once read (macOS may first ask the person). */
-    folders: () => request<{ folders: string[] }>('GET', '/api/desktop/folders'),
+    /** The folders in booksHome, read now: macOS asks the person first about the Documents folder (#373). */
+    folders: () => request<HomeFolders>('GET', '/api/desktop/folders'),
     open: (root: string) => request<KnownBooks>('POST', '/api/desktop/open', { root }),
     create: (setup: SetupRequest & { assumed?: Assumed }) => request<KnownBooks>('POST', '/api/desktop/create', setup),
     demo: () => request<KnownBooks>('POST', '/api/desktop/demo'),

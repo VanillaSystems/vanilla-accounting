@@ -128,6 +128,7 @@ export const FILING_ACTIONS: Record<string, Action> = {
   'accounting.tax.vat-return': {
     outcomes: ['ok'],
     effects: [],
+    emits: ['return'],
     run(input, _fx, { ws, now, run }) {
       const key = periodOf(input);
       const books = loadBooks(ws);
@@ -159,6 +160,7 @@ export const FILING_ACTIONS: Record<string, Action> = {
   'providers.ech-0217': {
     outcomes: ['ok', 'changed'],
     effects: [],
+    emits: ['xml'],
     run(input, _fx, { ws, run }) {
       const ret = input.return as PeriodReturn;
       const key = periodOf(input);
@@ -195,6 +197,7 @@ export const FILING_ACTIONS: Record<string, Action> = {
   'books.seal': {
     outcomes: ['ok'],
     effects: ['files.filings', 'books.seal'],
+    emits: ['seal'],
     run(input, _fx, { ws }) {
       const key = periodOf(input);
       const books = loadBooks(ws);

@@ -28,6 +28,7 @@ import { NO_VAT, PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, SETUP_QUESTIO
 import type { NetRate } from '../workspace/vat-setup.js';
 import { parseUid } from '../workspace/uid.js';
 import { APP_ROOT, appFolderIn, appLanguages, workspaceAt } from '../workspace/workspace.js';
+import { switchOnCreated } from '../workflows/booking-waits.js';
 
 const { values: flags } = parseArgs({
   options: {
@@ -247,6 +248,8 @@ async function main(): Promise<string> {
     const exportTo = typeof flags['export-to'] === 'string' ? flags['export-to'].trim() : '';
 
     const applied = await createWorkspace({ root, preset, name, uid, owner, business: about, language, answers, netRates, banks, exportTo });
+    // She created the workspace and its rules: switched on as it is, so the CLI books from it (#413).
+    if (!applied.existed) switchOnCreated(workspaceAt(applied.root));
     message = [
       `Created ${applied.created.length} files and folders in ${root}.`,
       ...applied.differing.map((p) => `Kept your ${p}: it differs from what init would write.`),

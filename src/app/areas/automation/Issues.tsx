@@ -3,7 +3,7 @@
  * return is filed, under «Abrechnung prüfen» (r4c-38), and the bookings that contradict their
  * receipts with their one click (r4c-31). Each issue links to where it is settled; none blocks.
  */
-import { orderPagesNow, outlayWaitsNow, providerIssuesNow } from '../../lib/order-pages.js';
+import { orderPagesNow, outlayWaitsNow, providerIssuesNow, unbookedText } from '../../lib/order-pages.js';
 import { FindPair } from '../receipts/FindPair.js';
 import { isKey, t, tWith } from '../../i18n/index.js';
 import { heldReasonText } from '../../lib/held-reason.js';
@@ -11,6 +11,7 @@ import { fmt, formatDate, moneyInText } from '../../lib/utils.js';
 import { useQuestions } from '../../questions/store.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { at, ledgerFor } from '../receipts/view.js';
+import { pickReceipts } from '../receipts/intake.js';
 import { openTwins } from '../receipts/model.js';
 import { answerTwin } from '../receipts/actions.js';
 import { EvidenceFix, evidenceText } from '../journal/Detail.js';
@@ -23,11 +24,12 @@ import type { WaitingPayment } from '../../../accounting/receipt-due.js';
 import { payText, signed } from '../bank/model.js';
 import { bookWithoutInputTax } from '../bank/actions.js';
 import { UnreadRuleOffer, UnreadTask } from './UnreadReceipt.js';
+import { WithheldFix } from './WithheldFix.js';
 import type { UnreadOffer } from '../../../saving/unread-rule.js';
 import { useState } from 'react';
 import { monthName, periodName } from '../../lib/period-label.js';
 import { withheldIn } from './filing-summary.js';
-import { issuesLead, LACK_WORDS, periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue, type Say } from './period-issues.js';
+import { billText, issuesLead, LACK_WORDS, periodIssues, unbookedOpen, type IssueCounts, type PeriodIssue, type Say } from './period-issues.js';
 import { useAutomation } from '../../automation/store.js';
 import { processingOf } from '../../../workflows/processing.js';
 import { OPEN_ITEMS } from '../vat/model.js';
@@ -48,8 +50,10 @@ function goOf(books: Index, i: PeriodIssue): Location | undefined {
     case 'own': return at({ area: 'receipts', id: i.receipt.id }, i.day);
     // The report's receipt, where the order is named and booked (#405); the bill is dropped onto Belege of its month.
     case 'held': { const r = books.receipts.find((x) => x.id === i.held.receipt); return r ? at({ area: 'receipts', id: r.id }, r.date) : undefined; }
-    case 'bill': return at({ area: 'receipts' }, i.bill.date);
+    // A missing bill has no place in the books yet: its line offers the file dialog that drops it (#459), never another receipt.
+    case 'bill': return undefined;
     case 'withheld': return at({ area: 'bank', payment: i.uncleared.tx.ref }, i.uncleared.tx.date);
+    case 'issued': return at({ area: 'receipts', id: i.receipt.id }, i.receipt.date);
   }
 }
 
@@ -65,11 +69,12 @@ function textOf(books: Index, i: PeriodIssue): string {
       return t('issues.question', { date: formatDate(i.date), text: tx ? `${tx.counterparty || tx.description} ${tx.currency} ${fmt(tx.amount)}` : i.q.text });
     }
     case 'evidence': return `${formatDate(i.entry.date)} ${i.entry.description ?? ''}: ${evidenceText(i.entry, i.check)}`;
-    case 'unbooked': return t('issues.unbooked', { date: formatDate(i.tx.date), text: payerName(i.tx), amount: `${i.tx.currency} ${fmt(i.tx.amount)}` });
+    case 'unbooked': return unbookedText(i.tx);
     case 'unlinked': return t('issues.unlinked', { date: formatDate(i.receipt.date ?? ''), text: i.receipt.description ? moneyInText(i.receipt.description) : i.receipt.filename });
     case 'own': return t('issues.own', { text: i.name, lacks: i.lacks.map((k) => t(LACK_WORDS[k])).join(', ') });
     case 'held': return t(i.held.why === 'rate' || i.held.why === 'rateTooMany' ? 'issues.heldRate' : 'issues.heldOther', { what: heldReasonText(i.held, isKey, tWith), date: formatDate(i.held.date), provider: i.held.name, amount: i.held.gross !== undefined ? `, ${i.held.currency ?? baseCurrency()} ${fmt(i.held.gross)}` : '' });
-    case 'bill': return t('issues.bill', { month: monthName(i.bill.date), provider: i.bill.name, amount: `${baseCurrency()} ${fmt(i.bill.fees)}` });
+    case 'bill': return billText(i.bill, monthName(i.bill.date), (n) => `${baseCurrency()} ${fmt(n)}`, t as unknown as Say);
+    case 'issued': return t('issues.issued', { date: formatDate(i.receipt.date ?? ''), text: i.receipt.description ? moneyInText(i.receipt.description) : i.receipt.filename });
     case 'withheld': { const u = i.uncleared; return t('issues.withheld', { date: formatDate(u.tx.date), text: payerName(u.tx), amount: `${u.tx.currency} ${fmt(u.tx.amount)}`, account: u.account, open: `${baseCurrency()} ${fmt(u.open)}` }); }
   }
 }
@@ -87,8 +92,11 @@ export function usePeriodIssues(books: Index, from: string, to: string): PeriodI
   const accounts = ws?.bankAccounts;
   // A receipt a run still reads is not hers yet (#398): the runs as Belege reads them.
   const runs = useAutomation().view?.runs;
-  const key = [books, questions, accounts, orderPagesNow(), providerIssuesNow(), from, to, localToday(), runs, outlayWaitsNow()];
-  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow(), localToday(), processingOf(runs ?? [], books.receipts), providerIssuesNow(), outlayWaitsNow()) };
+  // The firm's own invoice that waits for its customer is told apart here, once (#476).
+  const c = ws?.company;
+  const firm = c ? { ...(c.uid ? { uid: c.uid } : {}), ...(c.name ? { name: c.name } : {}), ...(c.owner ? { owner: c.owner } : {}) } : undefined;
+  const key = [books, questions, accounts, orderPagesNow(), providerIssuesNow(), from, to, localToday(), runs, outlayWaitsNow(), c];
+  if (!lastIssues || key.some((k, i) => k !== lastIssues!.key[i])) lastIssues = { key, issues: periodIssues(books, questions, from, to, accounts ?? [], orderPagesNow(), localToday(), processingOf(runs ?? [], books.receipts), providerIssuesNow(), outlayWaitsNow(), firm) };
   return lastIssues.issues;
 }
 
@@ -157,11 +165,18 @@ export function OpenFact({ books, nav, period, counts: c, lead, className }: { b
 export function PeriodIssues({ books, nav, from, to, period, canEdit, figures }: { books: Index; nav: Nav; from: string; to: string; period: string; canEdit: boolean; figures?: Record<string, number> }) {
   const issues = usePeriodIssues(books, from, to);
   const { questions } = useQuestions();
-  if (!issues.length) return <p className="m" data-testid="period-issues-none">{t('issues.none', { period })}</p>;
+  // The firm's own invoice that waits for its customer is a fact under the list, never a point of it (#476, #436).
+  const counted = issues.filter((i) => i.kind !== 'issued').length;
+  if (!counted) return (
+    <>
+      <p className="m" data-testid="period-issues-none">{t('issues.none', { period })}</p>
+      {issues.map((i, k) => <p key={k} className="m" data-issue={i.kind}><button type="button" className="linkbtn" onClick={() => nav.go(goOf(books, i)!)}>{textOf(books, i)}</button></p>)}
+    </>
+  );
   return (
     <section className="wfissues" data-testid="period-issues">
-      <h3>{t('issues.title', { period, n: issues.length })}</h3>
-      <p className="m" data-testid="period-issues-lead">{issuesLead(withheldIn(figures, questions, books, from, to, providerIssuesNow()), issues.length, t as unknown as Say)}</p>
+      <h3>{t('issues.title', { period, n: counted })}</h3>
+      <p className="m" data-testid="period-issues-lead">{issuesLead(withheldIn(figures, questions, books, from, to, providerIssuesNow()), issues.filter((i) => i.kind !== 'issued'), t as unknown as Say, (amount, currency) => `${currency} ${fmt(amount)}`)}</p>
       <ul>
         {issues.map((i, k) => {
           const go = goOf(books, i);
@@ -169,6 +184,8 @@ export function PeriodIssues({ books, nav, from, to, period, canEdit, figures }:
             <li key={k} data-issue={i.kind}>
               {go ? <button type="button" className="linkbtn" onClick={() => nav.go(go)}>{textOf(books, i)}</button> : <span>{textOf(books, i)}</span>}
               {canEdit && i.kind === 'evidence' ? <EvidenceFix e={i.entry} check={i.check} nav={nav} /> : null}
+              {canEdit && i.kind === 'withheld' ? <WithheldFix books={books} u={i.uncleared} nav={nav} /> : null}
+              {canEdit && i.kind === 'bill' ? <>{' '}<button type="button" className="golink" data-testid="bill-add" onClick={pickReceipts}>{t('issues.billAdd')}</button></> : null}
             </li>
           );
         })}

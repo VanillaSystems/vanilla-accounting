@@ -46,7 +46,9 @@ Every process has two files, and every business with particulars has one:
   single-leg entry without a payment, a `-2` code, such as a platform's monthly
   bill of the fees it kept: it is never paired with a payment, and Belege names
   the correction booking it fits, issue #190; a payment provider's such bill is
-  booked by code, see «A payment provider»), which accounts it
+  booked by code, see «A payment provider»; its `name` and `where` are the
+  title the business prints and where it keeps the document, said when a
+  month's bill is missing, issue #459), which accounts it
   books to (`accounts:`), and its rules for each step it touches. Each step's
   rules sit under the step's exact address:
   `steps: { "booking.guide.yaml#classify": { rules: [...] } }`. An authority's
@@ -203,7 +205,10 @@ same way (src/booking/receipt-wait.ts), by a rule under
 
 - `apply: { receipt: none }` in a business file: that business's payments need
   no receipt (an authority whose notice is filed apart). The business is the
-  condition.
+  condition. None is paired with them either (the notice is filed apart).
+  `pairs: true` beside it frees them from the wait only: a bill of the
+  business that matches a payment (the compensation fund's Akonto bill, its
+  number in the payment's text) is still paired with it.
 - `apply: { receipt: none, text: "<pattern>" }` in a guide: a payment whose
   text or counterparty matches the pattern (ignoring case) needs no receipt and
   has none of its own, so none is ever paired with it (a cash withdrawal).

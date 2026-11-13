@@ -16,7 +16,8 @@ import type { Receipt, BankTransaction } from '../types/index.js';
 import { periodLock, release, type Books } from '../books/store.js';
 import type { Ask, BooksPort } from './pipeline.js';
 import { numbersIn } from '../accounting/document-numbers.js';
-import { baseCurrency, withoutInputTax } from '../engines/index.js';
+import { baseCurrency, documents, vat, withoutInputTax } from '../engines/index.js';
+import { normalRate } from '../accounting/sales-without-vat.js';
 import { providerIssuesOf, type ProviderIssues } from '../booking/provider-issues.js';
 import { localToday } from '../accounting/periods.js';
 import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
@@ -37,7 +38,7 @@ import { providersOf } from './sales-report-import.js';
 import { isProvider, providerOfMoneyIn } from '../booking/providers.js';
 import { vatCorrectionsOf, type VatCorrection } from '../booking/vat-corrections.js';
 import { identify, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
-import { withheldPayeesOf } from '../booking/withheld.js';
+import { withheldPayeesOf, withheldSharesOf } from '../booking/withheld.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 
 export type { Found, Maker } from './pairing.js';
@@ -127,7 +128,7 @@ function counterpartiesOf(ws: Pick<Workspace, 'paths'>): Counterparty[] {
 
 /** The bills of `books` that prove a VAT-only correction, by receipt id (src/booking/vat-corrections.ts, #190): Belege says what each is instead of a missing payment. */
 export function vatCorrectionsIn(ws: Pick<Workspace, 'paths'>, books: Parameters<typeof vatCorrectionsOf>[0]): Record<string, VatCorrection> {
-  return Object.fromEntries(vatCorrectionsOf(books, counterpartiesOf(ws)));
+  return Object.fromEntries(vatCorrectionsOf(books, counterpartiesOf(ws), documents()));
 }
 
 /** The order pages of the provider way nothing is linked to yet, by receipt id (src/booking/order-pages.ts, #253): Belege shows where each stands instead of a missing payment. */
@@ -140,11 +141,17 @@ export function providerIssuesIn(ws: Pick<Workspace, 'paths'>, books: Parameters
   const counterparties = counterpartiesOf(ws);
   const providers = counterparties.filter(isProvider);
   const lock = periodLock(books as Books);
-  const out = providerIssuesOf(books, providers, { inputTax: !withoutInputTax(), today, ...(lock.lockedThrough ? { lockedThrough: lock.lockedThrough } : {}) });
+  // The bill's rate: the code of its tax the company's file names (fees.billVat), else the normal rate (#459).
+  const rate = (p: Counterparty) => (p.provider?.fees?.billVat ? vat().codes.parse(p.provider.fees.billVat)?.rate : undefined) ?? normalRate();
+  const out = providerIssuesOf(books, providers, { inputTax: !withoutInputTax(), today, rate, ...(lock.lockedThrough ? { lockedThrough: lock.lockedThrough } : {}) });
   const byId = new Map(books.receipts.map((r) => [r.id, r]));
   const linkedTo = (t: BankTransaction) => books.mappings.flatMap((m) => (m.transactionRef === t.ref && byId.has(m.receiptId) ? [byId.get(m.receiptId)!] : []));
-  const withheldPayees = withheldPayeesOf(books.transactions, (t) => { const r = identify(signalsOfTransaction(t, linkedTo(t)), counterparties); return r.kind === 'known' ? r.counterparty : undefined; });
+  const businessOf = (t: BankTransaction) => { const r = identify(signalsOfTransaction(t, linkedTo(t)), counterparties); return r.kind === 'known' ? r.counterparty : undefined; };
+  const withheldPayees = withheldPayeesOf(books.transactions, businessOf);
   if (withheldPayees.length) out.withheldPayees = withheldPayees;
+  // What of 2270 each such payment clears, where the payslips tell (#476): the task and «2270 ausgleichen» ask for that, never for all of it.
+  const shares = withheldSharesOf(books as Parameters<typeof withheldSharesOf>[0], businessOf);
+  if (Object.keys(shares).length) out.withheldShares = shares;
   if (!providers.length) return out;
   for (const tx of books.transactions) {
     if (tx.direction !== 'CRDT' || lock.isClosed(tx.date)) continue;

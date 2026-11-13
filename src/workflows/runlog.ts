@@ -3,7 +3,7 @@
  * mattered, failures included, in git beside the books, so a cloud instance and the owner's Mac
  * see the same history. One file per fiscal year, transactional-data/<year>/runs.jsonl,
  * append-only, one line per event. Three rules keep it small:
- *   1. only a run that wrote something, waited for a person, got stuck or was discarded leaves lines;
+ *   1. only a run that wrote something, left a payment unbooked, waited for a person, got stuck or was discarded leaves lines;
  *   2. a line is appended, never rewritten;
  *   3. no detail: inputs, prompts and answers stay in the run store, with its retention.
  * A closed year's file is never written again: an event after the close goes to the open year.
@@ -12,6 +12,10 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { yearPaths, yearsOf, type Workspace } from '../workspace/workspace.js';
 import type { ItemRef, Run } from './model.js';
+import type { LeftPayment } from '../types/api-error.js';
+import type { Refusal } from '../types/refusal.js';
+
+export type { LeftPayment };
 
 export interface RunLogLine {
   run: string;
@@ -23,8 +27,12 @@ export interface RunLogLine {
   /** The step it waits at or stuck at. */
   step?: string;
   reason?: string;
+  /** A stuck run's refusal the screens have words for (#482); `reason` stays the log's own line. */
+  why?: Refusal;
   /** Record ids written since the run's previous line. */
   wrote?: { entries?: string[]; mappings?: string[]; receipts?: string[] };
+  /** Payments its steps tried to book since the previous line and left unbooked, with why (#470): their «Verlauf» names the run. */
+  refused?: LeftPayment[];
   host: 'local' | 'cloud';
 }
 
@@ -40,15 +48,19 @@ export function lineFor(run: Run, logged: number, host: RunLogLine['host'] = 'lo
     for (const [part, ids] of Object.entries(e.wrote)) wrote[part] = [...(wrote[part] ?? []), ...(ids ?? [])];
   }
   const wroteSomething = Object.values(wrote).some((ids) => ids.length);
+  // A payment left unbooked is left to the person: the run needed her (rule 1), and her payment's «Verlauf» names it (#470).
+  const refused = fresh.flatMap((step) => (Array.isArray(step.output?.refused) ? step.output.refused as LeftPayment[] : []));
   // Rule 1: a run that finished without writing, and never needed anyone before, leaves no line.
-  if (!wroteSomething && s.status === 'done' && logged === 0) return undefined;
+  if (!wroteSomething && !refused.length && s.status === 'done' && logged === 0) return undefined;
   return {
     run: run.id, workflow: run.workflow, version: run.version, item: run.item,
     at: s.status === 'done' ? s.finishedAt : s.status === 'discarded' ? s.at : s.since,
     event: s.status,
     ...(s.status === 'waiting' || s.status === 'stuck' ? { step: s.at } : {}),
     ...(s.status === 'stuck' || s.status === 'discarded' ? { reason: s.reason } : {}),
+    ...(s.status === 'stuck' && s.why ? { why: s.why } : {}),
     ...(wroteSomething ? { wrote: wrote as NonNullable<RunLogLine['wrote']> } : {}),
+    ...(refused.length ? { refused } : {}),
     host,
   };
 }

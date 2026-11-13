@@ -6,7 +6,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { approvalsPath } from '../src/workflows/switch-on.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { parse } from 'yaml';
@@ -28,6 +29,9 @@ function stubTools(): string {
   chmodSync(join(bin, 'claude'), 0o755);
   return bin;
 }
+
+// The switch-on records the CLI and init write stay in a folder of this test, never in the person's home.
+process.env.VANILLA_APPROVALS_DIR = mkdtempSync(join(tmpdir(), 'init-approvals-'));
 
 const GIT_ID = { GIT_AUTHOR_NAME: 'Test', GIT_AUTHOR_EMAIL: 'test@example.com', GIT_COMMITTER_NAME: 'Test', GIT_COMMITTER_EMAIL: 'test@example.com' };
 
@@ -304,5 +308,30 @@ test('a new workspace books its first transaction: no prior-year export, the cha
   const prompt = readFileSync(prompts, 'utf8');
   assert.match(prompt, /## Chart of Accounts[\s\S]*\n1020\tUBS CHF\n/);
   assert.match(prompt, /## Casebook: invented examples/);
+  rmSync(base, { recursive: true, force: true });
+});
+
+test('init switches on what it created, so `npm run classify` books; a workspace copied in by hand, no init and no app, books nothing', () => {
+  const base = tmp();
+  const dir = join(base, 'books');
+  assert.equal(cli('init.ts', consultant(dir, join(base, 'app.env'))).code, 0);
+  assert.ok(existsSync(approvalsPath(workspaceAt(dir))), 'init writes the switch-on record');
+  const copy = join(base, 'copied');
+  cpSync(dir, copy, { recursive: true });
+  for (const d of [dir, copy]) {
+    const ws = workspaceAt(d);
+    const books = loadBooks(ws);
+    books.transactions.push({ ref: 'TX-1', bank: 'UBS', date: '2026-08-14', amount: 50, currency: 'CHF', direction: 'DBIT', description: 'Software Abo', noReceiptNeeded: true });
+    saveBooks(ws, books);
+  }
+  assert.equal(existsSync(approvalsPath(workspaceAt(copy))), false, 'the copy has no record');
+  const booked = cli('classify.ts', [], join(APP_ROOT, 'tests/support/stub-bin'), { VANILLA_WORKSPACE: dir, CLAUDE_STUB_PROMPTS: join(base, 'p1.txt') });
+  assert.equal(booked.code, 0, booked.out);
+  assert.equal(loadBooks(workspaceAt(dir)).journalEntries.length, 1);
+  const refused = cli('classify.ts', [], join(APP_ROOT, 'tests/support/stub-bin'), { VANILLA_WORKSPACE: copy, CLAUDE_STUB_PROMPTS: join(base, 'p2.txt') });
+  assert.equal(refused.code, 1, refused.out);
+  assert.match(refused.out, /Open it in the app once/);
+  assert.equal(loadBooks(workspaceAt(copy)).journalEntries.length, 0);
+  assert.equal(existsSync(approvalsPath(workspaceAt(copy))), false, 'the CLI writes no record for it');
   rmSync(base, { recursive: true, force: true });
 });

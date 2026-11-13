@@ -40,3 +40,13 @@ steps:
         why: it carries no input tax, so no receipt changes its booking (issue #29)
         source: decision 2026-10-21, owner
     precedents: []
+
+  booking.guide.yaml#purchase_vat:
+    rules:
+      - id: pv-estv-no-input-tax
+        when: a payment to or from the ESTV
+        then: "no input tax: the payment settles the VAT owed or refunded (2201 / the bank, no VAT code). A return or a notice shows the VAT of the company's sales and purchases, never VAT charged on the payment"
+        why: "a VAT return linked to its payment read as a receipt with 8.1 % would claim input tax on the VAT payment itself (issue #456)"
+        apply: { inputTax: none }
+        source: MWSTG Art. 28 Abs. 1
+    precedents: []

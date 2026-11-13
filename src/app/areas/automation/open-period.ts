@@ -24,11 +24,11 @@ import { unbookedPayments } from '../bank/model.js';
 import { journalOf, unsettledAtFiling, type EntryView, type Unsettled } from '../journal/model.js';
 import { ledgerOf, type ReceiptView } from '../receipts/model.js';
 import { thresholdPassed } from '../vat/model.js';
-import { countIssues, dateOn, periodIssues, receiptWaiting, type IssueCounts, type PeriodIssue } from './period-issues.js';
+import { ISSUE_ORDER, countIssues, dateOn, periodIssues, receiptWaiting, type IssueCounts, type PeriodIssue } from './period-issues.js';
+import type { Uncleared } from '../../../booking/withheld.js';
 import type { Processing } from '../../../workflows/processing.js';
 import type { HeldOrder, MissingBill, ProviderIssues } from '../../../booking/provider-issues.js';
-import { issuedByFirm, ownNumbers, type Firm } from '../../../intake/own-invoice.js';
-import { agreedBasis } from '../../../engines/index.js';
+import type { Firm } from '../../../intake/own-invoice.js';
 import { missingOpenings, type MissingOpening } from '../../../accounting/opening-balance.js';
 import { balanceAt } from '../../../booking/providers.js';
 
@@ -49,8 +49,24 @@ export interface OpenPeriodContext {
 export type { PendingOffer } from '../../../saving/share-rule.js';
 import type { PendingOffer } from '../../../saving/share-rule.js';
 
-/** A provider's clearing account below zero at the period's end (#428): the provider paid out more than the account holds sales for. */
-export interface ClearingBelow { name: string; account: string; balance: number }
+/**
+ * A provider's clearing account below zero at the period's end (#428): the provider paid out more than the account holds sales for.
+ * `reports`: the provider's reports in the books, each with its days and how many bookings it made (#459), so nobody calls a
+ * booked report unread; `opened`: whether the account has an opening balance of the year.
+ */
+export interface ClearingBelow { name: string; account: string; balance: number; reports?: ClearingReport[]; opened?: boolean }
+/** A report of a provider in the books: sales or fees, its first and last day, the bookings it made and the orders it holds. */
+export interface ClearingReport { kind: 'sales' | 'fees'; from: string; to: string; booked: number; held: number }
+
+/** The reports of `provider` in the books (#459): a report here was read; `booked` counts the bookings it made. */
+function reportsOf(books: Pick<Index, 'receipts' | 'journalEntries'>, provider: string): ClearingReport[] {
+  return books.receipts.flatMap((r): ClearingReport[] => {
+    const rep = r.report;
+    if (!rep || rep.provider !== provider || r.kind === 'duplicate') return [];
+    const booked = new Set((books.journalEntries ?? []).filter((e) => e.receipts?.includes(r.id)).map((e) => e.transactionRef)).size;
+    return [{ kind: rep.kind, from: rep.from, to: rep.to, booked, held: rep.held?.length ?? 0 }];
+  }).sort((a, b) => a.from.localeCompare(b.from) || a.kind.localeCompare(b.kind));
+}
 
 export interface OpenPeriodState {
   period: Period;
@@ -71,8 +87,10 @@ export interface OpenPeriodState {
   evidence: Array<{ entry: JournalEntry; check: EvidenceCheck }>;
   /** Receipts without a payment, the firm's own invoices not among them. */
   unlinked: Receipt[];
-  /** The firm's own invoices that only wait for their customer (waitsForCustomer): nothing for the person to do (#428). */
+  /** The firm's own invoices that only wait for their customer (periodIssues' `issued`): a fact, nothing for the person to do (#428, #436); not in `nothingOpen`. */
   issued: Receipt[];
+  /** Contribution payments booked without the employees' share while the wages' deductions account holds it (#426, #476). */
+  withheld: Uncleared[];
   /** The first year's bank accounts the books open at nothing while their statements say they held money (missingOpenings, any currency): Firma › Eröffnung (#428). */
   openings: MissingOpening[];
   /** The providers' clearing accounts below zero at the period's end (#428). */
@@ -112,31 +130,7 @@ function taskDay(books: Index, item: Task['item'], openFrom: IsoDate): IsoDate |
   }
 }
 
-const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-
-/**
- * Whether a receipt without a payment is the firm's own invoice that only waits for its customer,
- * nothing for the person to do (#428). Only when that is sure: the receipt shows the firm's UID and
- * no other (a name alone is no proof), no money in may be its payment (one booked without the link
- * is hers to pair), and on the agreed basis its issue is booked as a
- * receivable (an invoice dropped, not issued in the app, has no event: its turnover is VAT work).
- */
-/** Money in, on or after the invoice's day and linked to no receipt, of its amount or naming its number: it may be its payment, booked without the link. */
-function mayBePaid(books: Index, r: Receipt): boolean {
-  const linked = new Set(books.mappings.map((m) => m.transactionRef));
-  const numbers = ownNumbers(r).map(squash);
-  return books.transactions.some((t) => t.direction === 'CRDT' && !linked.has(t.ref) && (!r.date || t.date >= r.date)
-    && ((r.amount != null && t.currency === (r.currency ?? t.currency) && Math.round(t.amount * 100) === Math.round(Math.abs(r.amount) * 100))
-      || numbers.some((n) => n.length >= 4 && squash(`${t.description} ${t.reference ?? ''} ${t.remarks ?? ''}`).includes(n))));
-}
-
-export function waitsForCustomer(books: Index, r: Receipt, firm: Firm | undefined): boolean {
-  if (issuedByFirm(r, firm) !== 'uid') return false;
-  if (mayBePaid(books, r)) return false;
-  if (!agreedBasis()) return true;
-  const events = new Set((books.journalEntries ?? []).filter((e) => /^(RE|GS)-/.test(e.transactionRef) && !e.transactionRef.endsWith('-storno')).map((e) => squash(e.transactionRef)));
-  return ownNumbers(r).some((n) => events.has(squash(n)) || events.has(`re${squash(n)}`));
-}
+export { waitsForCustomer } from './period-issues.js';
 
 export function openPeriodState(
   books: Index, questions: readonly Question[], tasks: readonly Task[], accounts: readonly LedgerBankAccount[], ctx: OpenPeriodContext,
@@ -144,7 +138,7 @@ export function openPeriodState(
   offers: readonly PendingOffer[] = [],
 ): OpenPeriodState {
   const period = booksOpenPeriod(books, ctx.today, ctx.length);
-  const issues = periodIssues(books, questions, period.from, period.to, accounts, orderPages, ctx.today, processing, provider, ctx.outlays);
+  const issues = periodIssues(books, questions, period.from, period.to, accounts, orderPages, ctx.today, processing, provider, ctx.outlays, ctx.firm);
   const unbooked = issues.flatMap((i) => (i.kind === 'unbooked' ? [i.tx] : []));
   const unlinked = issues.flatMap((i) => (i.kind === 'unlinked' ? [i.receipt] : []));
   const refs = new Set(unbooked.map((t) => t.ref));
@@ -158,12 +152,16 @@ export function openPeriodState(
     waiting: receiptWaiting(books, accounts, ctx.today, ctx.outlays).filter((w) => refs.has(w.tx.ref)),
     questions: issues.flatMap((i) => (i.kind === 'question' ? [{ q: i.q, date: i.date }] : [])),
     evidence: issues.flatMap((i) => (i.kind === 'evidence' ? [{ entry: i.entry, check: i.check }] : [])),
-    unlinked: unlinked.filter((r) => !waitsForCustomer(books, r, ctx.firm)),
-    issued: unlinked.filter((r) => waitsForCustomer(books, r, ctx.firm)),
+    unlinked,
+    issued: issues.flatMap((i) => (i.kind === 'issued' ? [i.receipt] : [])),
+    withheld: issues.flatMap((i) => (i.kind === 'withheld' ? [i.uncleared] : [])),
     openings: missingOpenings(books, accounts, period.to.slice(0, 4)),
     clearing: (provider?.clearing ?? []).flatMap((c): ClearingBelow[] => {
       const balance = balanceAt(books.journalEntries ?? [], c.account, period.to, books.config?.openingBalances);
-      return balance < 0 ? [{ name: c.name, account: c.account, balance }] : [];
+      const year = period.to.slice(0, 4);
+      // A foreign-currency clearing account's opening is its balance in its currency too (#471 review).
+      const opened = books.config?.openingBalances?.[year]?.[c.account] !== undefined || !!books.config?.openingBalancesNative?.[year]?.[c.account];
+      return balance < 0 ? [{ name: c.name, account: c.account, balance, reports: reportsOf(books, c.provider), opened }] : [];
     }),
     // Only the period's: its payment is dated in it, as everything the state counts.
     offers: offers.filter((o) => o.date >= period.from && o.date <= period.to),
@@ -225,7 +223,7 @@ export const elsewhereCount = (e: Elsewhere): number =>
 /** Whether anything of the period waits: a card with nothing on it says so in one line (and that nothing else does, only when `elsewhereOf` is empty too). */
 export const nothingOpen = (s: OpenPeriodState): boolean =>
   !s.unbooked.length && !s.questions.length && !s.evidence.length && !s.unlinked.length && !s.yours.length && !s.held.length && !s.tasks.length
-  && !s.offers.length && !s.openings.length && !s.clearing.length;
+  && !s.offers.length && !s.openings.length && !s.clearing.length && !s.withheld.length;
 
 /** How many of the held payments are of each kind. */
 export const waitingKinds = (s: Pick<OpenPeriodState, 'waiting'>): Record<WaitingPayment['kind'] | 'outlays', number> => ({
@@ -251,6 +249,10 @@ export type OpenLine =
   | { kind: 'evidence'; n: number; first: JournalEntry }
   /** The receipts without a payment (none of `yours` among them). */
   | { kind: 'unlinked'; n: number; first: Receipt; items: Receipt[]; more: number }
+  /** The firm's own invoices that wait for their customer: a fact, as the open list says it, nothing to do (#476). */
+  | { kind: 'issued'; n: number; first: Receipt; items: Receipt[]; more: number }
+  /** Contribution payments booked without the employees' share (#476). */
+  | { kind: 'withheld'; n: number; first: Uncleared; items: Uncleared[]; more: number }
   | { kind: 'held'; n: number; first: HeldOrder }
   | { kind: 'bills'; n: number; first: MissingBill }
   /** The setup's shares offered as rules, each on its payment: one click there (#428). */
@@ -265,33 +267,41 @@ export type OpenLine =
 
 const shown = <T>(all: readonly T[]) => ({ n: all.length, items: all.slice(0, ITEMS_SHOWN), more: Math.max(0, all.length - ITEMS_SHOWN) });
 
+/** A line's kind for each kind of the open list (period-issues.ts ISSUE_ORDER). */
+const LINE_OF = { question: 'questions', held: 'held', evidence: 'evidence', withheld: 'withheld', unbooked: 'unbooked', own: 'yours', unlinked: 'unlinked', issued: 'issued', bill: 'bills' } as const;
+
 /**
- * The state as the lines of its card, most important first, as code ranks them (#428): what holds
- * the return's approval (an order a report could not split, an open VAT question), what only she can
- * say of a receipt, the payments without a booking, the bookings against their receipts, an offer
- * that waits for one click, a missing opening, a clearing account below zero, the receipts without a
- * payment, the provider's missing bills, and the tasks last, the review among them. The AI's note
- * lists its facts in the same order and the model starts with the first. A task on a payment counted
- * in the payments' line is that payment, and a receipt of `yours` is not among those without a
+ * The order of the card's lines and of the facts the AI is handed (#476): the open list's points in its order
+ * (ISSUE_ORDER), then what only the card adds: an offer that waits for one click, a missing opening, a clearing
+ * account below zero, and the tasks last, the review among them.
+ */
+export const LINE_ORDER = [...ISSUE_ORDER.map((k) => LINE_OF[k]), 'offers', 'openings', 'clearing', 'task'] as const;
+type LineKey = (typeof LINE_OF)[keyof typeof LINE_OF] | 'offers' | 'openings' | 'clearing' | 'task';
+
+/**
+ * The state as the lines of its card, in LINE_ORDER (#476): what the return's list «Noch offen» names, as it names
+ * it, then the rest. The AI's note lists its facts in the same order and the model starts with the first. A task on a
+ * payment counted in the payments' line is that payment, and a receipt of `yours` is not among those without a
  * payment: each object is named once. At most TASKS_SHOWN tasks are lines of their own.
  */
 export function openLines(s: OpenPeriodState): OpenLine[] {
   const refs = new Set(s.unbooked.map((t) => t.ref));
   const tasks = s.tasks.filter((x) => !(x.item.kind === 'transaction' && refs.has(x.item.id)));
   const kinds = waitingKinds(s);
-  const unlinked = s.unlinked;
-  return [
-    ...(s.held.length ? [{ kind: 'held' as const, n: s.held.length, first: s.held[0] }] : []),
-    ...(s.counts.questions ? [{ kind: 'questions' as const, n: s.counts.questions }] : []),
-    ...(s.yours.length ? [{ kind: 'yours' as const, ...shown(s.yours) }] : []),
-    ...(s.counts.unbooked ? [{ kind: 'unbooked' as const, ...shown(s.unbooked), n: s.counts.unbooked, waiting: s.counts.waitingReceipt, outlays: s.counts.waitingOutlays, unread: kinds.unread, first: s.unbooked[0] }] : []),
-    ...(s.counts.evidence ? [{ kind: 'evidence' as const, n: s.counts.evidence, first: s.evidence[0].entry }] : []),
-    ...(s.offers.length ? [{ kind: 'offers' as const, ...shown(s.offers), first: s.offers[0] }] : []),
-    ...(s.openings.length ? [{ kind: 'openings' as const, ...shown(s.openings), first: s.openings[0] }] : []),
-    ...(s.clearing.length ? [{ kind: 'clearing' as const, ...shown(s.clearing), first: s.clearing[0] }] : []),
-    ...(unlinked.length ? [{ kind: 'unlinked' as const, ...shown(unlinked), first: unlinked[0] }] : []),
-    ...(s.bills.length ? [{ kind: 'bills' as const, n: s.bills.length, first: s.bills[0] }] : []),
-    ...tasks.slice(0, TASKS_SHOWN).map((task) => ({ kind: 'task' as const, task })),
-    ...(tasks.length > TASKS_SHOWN ? [{ kind: 'moreTasks' as const, n: tasks.length - TASKS_SHOWN }] : []),
-  ];
+  const of: Record<LineKey, OpenLine[]> = {
+    held: s.held.length ? [{ kind: 'held', n: s.held.length, first: s.held[0] }] : [],
+    questions: s.counts.questions ? [{ kind: 'questions', n: s.counts.questions }] : [],
+    yours: s.yours.length ? [{ kind: 'yours', ...shown(s.yours) }] : [],
+    unbooked: s.counts.unbooked ? [{ kind: 'unbooked', ...shown(s.unbooked), n: s.counts.unbooked, waiting: s.counts.waitingReceipt, outlays: s.counts.waitingOutlays, unread: kinds.unread, first: s.unbooked[0] }] : [],
+    evidence: s.counts.evidence ? [{ kind: 'evidence', n: s.counts.evidence, first: s.evidence[0].entry }] : [],
+    withheld: s.withheld.length ? [{ kind: 'withheld', ...shown(s.withheld), first: s.withheld[0] }] : [],
+    offers: s.offers.length ? [{ kind: 'offers', ...shown(s.offers), first: s.offers[0] }] : [],
+    openings: s.openings.length ? [{ kind: 'openings', ...shown(s.openings), first: s.openings[0] }] : [],
+    clearing: s.clearing.length ? [{ kind: 'clearing', ...shown(s.clearing), first: s.clearing[0] }] : [],
+    unlinked: s.unlinked.length ? [{ kind: 'unlinked', ...shown(s.unlinked), first: s.unlinked[0] }] : [],
+    issued: s.issued.length ? [{ kind: 'issued', ...shown(s.issued), first: s.issued[0] }] : [],
+    bills: s.bills.length ? [{ kind: 'bills', n: s.bills.length, first: s.bills[0] }] : [],
+    task: [...tasks.slice(0, TASKS_SHOWN).map((task) => ({ kind: 'task' as const, task })), ...(tasks.length > TASKS_SHOWN ? [{ kind: 'moreTasks' as const, n: tasks.length - TASKS_SHOWN }] : [])],
+  };
+  return LINE_ORDER.flatMap((k) => of[k]);
 }

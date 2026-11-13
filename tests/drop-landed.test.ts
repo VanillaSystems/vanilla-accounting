@@ -99,7 +99,7 @@ test('the summary counts the drop\'s payments and receipts from the books', () =
   const questions = [{ id: 'q1', status: 'open', on: { kind: 'payment', id: 'p20' } }, { id: 'q2', status: 'closed', on: { kind: 'payment', id: 'p21' } }] as unknown as Question[];
   const held = new Set(payments.filter((p) => p.waitsForReceipt).map((p) => p.ref));
   const s = dropSummary(rows, books, (t) => !booked.has(t.ref), held, questions, groupOf(books, receiptOf as never));
-  assert.deepEqual(s.payments, { n: 23, from: '2026-07-15', to: '2026-09-15', booked: 12, waitReceipt: 8, asked: 1, unbooked: 2, openFrom: '2026-08-15' });
+  assert.deepEqual(s.payments, { n: 23, from: '2026-07-15', to: '2026-09-15', booked: 12, waitReceipt: 8, asked: 1, unbooked: 2, unbookedRefs: ['p21', 'p22'], openFrom: '2026-08-15' });
   assert.deepEqual(s.files, only({ statement: 1, matched: 2, read: 3, unread: 1, known: 1 }), 'the staged file without text waits for its reading; the copy not taken is counted too');
   assert.deepEqual(dropSummary([row('dup', { state: 'duplicate' })], books, () => true, new Set(), [], groupOf(books, receiptOf as never)), { files: only({ known: 1 }) }, 'nothing taken: no payments, the file still counted');
   // A photo without text, archived on a Mac without an AI: Belege says it waits for reading (#343), so the drop does not call it read.

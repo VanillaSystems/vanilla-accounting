@@ -8,6 +8,8 @@
  * claims a question is missing that is open, or sends the person to answer one the app has closed.
  * The words are the UI's own, in the person's language; the frame is English, for the model.
  */
+import { paymentRefusals } from './refusals.js';
+import type { PaymentRefusal } from '../workflows/history.js';
 import type { Books } from '../books/store.js';
 import { readQuestions } from '../questions/store.js';
 import type { Question } from '../questions/model.js';
@@ -22,7 +24,8 @@ import { baseCurrency, chargesVat, filing, vatSetup } from '../engines/index.js'
 import { providerIssuesIn } from '../intake/pair-chain.js';
 import { localToday, type IsoDate, type Period } from '../accounting/periods.js';
 import type { Workspace } from '../workspace/workspace.js';
-import { elsewhereCount, elsewhereOf, nothingOpen, openPeriodState, waitingKinds, type Elsewhere, type OpenPeriodState, type YourReceipt } from '../app/areas/automation/open-period.js';
+import { LINE_ORDER, elsewhereCount, elsewhereOf, nothingOpen, openPeriodState, waitingKinds, type ClearingBelow, type Elsewhere, type OpenPeriodState, type YourReceipt } from '../app/areas/automation/open-period.js';
+import type { MissingOpening } from '../accounting/opening-balance.js';
 import { orderPagesOf } from '../booking/order-pages.js';
 import { LACK_WORDS } from '../app/areas/automation/period-issues.js';
 import { offersInBooks } from '../intake/near-pairs.js';
@@ -118,9 +121,41 @@ const firmOf = (ws: Ws, books: Books) => {
 export const elsewhereFor = <T extends Task>(ws: Ws, books: Books, tasks: readonly T[], s: OpenPeriodState, stuck = 0, today: IsoDate = localToday()): Elsewhere<T> =>
   elsewhereOf(books, readQuestions(ws), tasks, ws.bankAccounts, s, filing().length, stuck, vatSetup().registered, today);
 
+/**
+ * A bank account without its opening (#459): the balance the statements imply is the one before the year's first payment in
+ * these books, on its day; only when that day is 1 January is it the balance of 1.1., else the months before are not in them.
+ */
+const openingLine = (o: MissingOpening) => {
+  const amount = money(o.currency ?? baseCurrency(), o.amount);
+  const head = `- ${o.label} (${o.account}): ${amount} before its first payment in these books, on ${day(o.from)}, as its statements imply`;
+  // Whether the statements reach back to 1.1. is the statements' own first day, never the first payment's (#459 review).
+  if (o.statementsFrom && o.statementsFrom <= `${o.year}-01-01`) return `${head}; its statements begin on 1.1.${o.year}, so that is its balance on 1.1.${o.year}`;
+  const before = `the opening of 1.1.${o.year} is the balance of 31.12.${Number(o.year) - 1} (the balance sheet of the year before), and a difference to ${amount} is what moved from 1.1. until then, outside these books`;
+  return o.statementsFrom
+    ? `${head}. The statements in these books begin on ${day(o.statementsFrom)}: what the account held on 1.1.${o.year} they do not say, and ${amount} is not that balance; ${before}`
+    : `${head}. Whether the statements in these books reach back to 1.1.${o.year} they do not say, so ${amount} need not be the balance of 1.1.; ${before}`;
+};
+
+/** A clearing account below zero (#428) with its provider's reports in the books, their days and bookings, and its opening (#459). */
+const clearingLine = (c: ClearingBelow, year: string, t: T) => {
+  const reports = c.reports ?? [];
+  const kind = (k: 'sales' | 'fees') => t(k === 'sales' ? 'salesReport.kind.sales' : 'salesReport.kind.fees');
+  const said = reports.length
+    ? `its reports in the books, each read: ${reports.map((r) => `«${kind(r.kind)}» ${day(r.from)} to ${day(r.to)}, ${r.booked} bookings made${r.held ? `, ${r.held} orders held for the person` : ''}`).join('; ')}`
+    : 'no report of it is in the books yet';
+  return `- ${c.account} ${c.name}: ${money(baseCurrency(), c.balance)}; ${said}; ${c.opened ? `its opening of 1.1.${year} is entered` : `no opening balance of 1.1.${year} is entered for it (under «${t('area.company')} › ${t('company.opening')}»)`}`;
+};
+
 const taskLine = (x: Task & { rule?: string }, language: string) =>
   `- «${fillTask(textIn(x.title, language), x.item, x.reads)}» on the ${x.item.kind} ${x.item.id}, since ${day(x.since)}${x.rule ? `, held by the rule ${x.rule}` : ''}`;
 const paymentLine = (p: BankTransaction) => `- ${day(p.date)} ${payText(p).name} ${money(p.currency, p.amount)} (${p.ref})`;
+
+/** «: a run left it unbooked: …», the refusal in the person's words (#470); nothing for a payment no run refused. */
+const leftLine = (r: PaymentRefusal | undefined, t: ReturnType<typeof wordsIn>['t']): string => {
+  if (!r?.refusal) return '';
+  const vars = Object.fromEntries(Object.entries(r.refusal.params).map(([k, v]) => [k, typeof v === 'number' ? v.toFixed(2) : String(v)]));
+  return `: a run left it unbooked, and the payment says why: «${t(`error.${r.refusal.code}` as Parameters<typeof t>[0], vars)}»`;
+};
 
 /**
  * Where the oldest period not filed stands (src/app/areas/automation/open-period.ts, the state the
@@ -140,28 +175,36 @@ export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string,
   const label = periodWords(t, s.period);
   const unlinked = s.unlinked;
   const owner = ws.company?.owner ?? '';
-  // In the order of the card's lines (openLines): most important first, as code ranks them (#428).
-  const lines = [
-    ...(s.held.length ? [`Orders a provider's sales report did not book (${s.held.length}): their turnover is missing from the return, and the review withholds «Freigegeben» until each is booked (on the report's receipt under «${t('area.receipts')}»):`, ...capped(s.held.map((h) => `- ${t(`drop.held.${h.why}`, { order: h.order })}, ${day(h.date)}${h.gross !== undefined ? `, ${money(h.currency ?? baseCurrency(), h.gross)}` : ''} (${h.name})`))] : []),
-    `Open questions (${s.questions.length}):`, ...capped(s.questions.map((x) => questionLine(books, x.q, t))),
-    ...(s.yours.length ? [`Receipts that wait for the person's own word (${s.yours.length}), under «${t('area.receipts')}»: only she can add what each lacks, or answer whether it is a copy:`, ...capped(s.yours.map((x) => yourLine(books, x, t)))] : []),
-    `Payments without a booking (${s.unbooked.length})${s.unbooked.length ? `, under «${t('area.bank')}»` : ''}:`, ...capped(s.unbooked.map(paymentLine)),
-    ...(k.outlays ? [`  Of them, ${k.outlays} go to the owner and pay back business costs she paid privately: they wait until those receipts are booked as her outlays (on each receipt under «${t('area.receipts')}», «${t('actions.privateOne', { owner })}»); the app books them then. No receipt of their own is missing.`] : []),
-    ...(k.waits ? [`  Of them, ${k.waits} the app holds until their receipt is linked: it books them itself then and nobody is asked yet; the receipts go in under «${t('area.receipts')}».`] : []),
-    ...(k.asks ? [`  Of them, ${k.asks} wait for their receipt and their return is near: each is the person's task under ${tasksPlace} now (link the receipt, name another proof, or book without input tax).`] : []),
-    ...(k.unread ? [`  Of them, ${k.unread} have their receipt linked, but its VAT could not be read: each waits for the person's word at once, under ${tasksPlace}; no receipt is missing.`] : []),
-    `Bookings whose VAT code contradicts their receipts (${s.evidence.length}), each with its one click on the booking and under ${tasksPlace}:`, ...capped(s.evidence.map((x) => evidenceLine(x.entry, x.check, t))),
-    ...(s.offers.length ? [`Proposals from the setup that wait for the person's answer (${s.offers.length}), each a rule offered on its payment under «${t('area.bank')}», kept or declined with one click:`, ...capped(s.offers.map((o) => `- ${o.name}: ${o.percent} % private, the rest on ${o.account} (the payment of ${day(o.date)}, ${o.ref})`))] : []),
-    ...(s.openings.length ? [`Bank accounts the books open at nothing while their statements say they held money (${s.openings.length}): their opening balance goes in under «${t('area.company')} › ${t('company.opening')}»; without it the balance sheet shows them wrong:`, ...capped(s.openings.map((o) => `- ${o.label} (${o.account}): ${money(o.currency ?? baseCurrency(), o.amount)} on 1.1.${o.year}, as its statements imply`))] : []),
-    ...(s.clearing.length ? [`Clearing accounts of a payment provider below zero on ${day(s.period.to)} (${s.clearing.length}): the provider paid out more than the account holds sales for, most often a sales report not dropped yet:`, ...capped(s.clearing.map((c) => `- ${c.account} ${c.name}: ${money(baseCurrency(), c.balance)}`))] : []),
-    `Receipts without a payment (${unlinked.length})${unlinked.length ? `, under «${t('area.receipts')}»` : ''}:`, ...capped(unlinked.map((r) => `- «${name(r)}»${r.date ? ` of ${day(r.date)}` : ''}${r.amount != null ? `, ${money(r.currency ?? baseCurrency(), r.amount)}` : ''}`)),
-    ...(s.issued.length ? [`Invoices the firm issued, with its UID, that no payment in the books fits (${s.issued.length}): they wait for the customer's payment, nothing for the person to do, so never name them as work.`] : []),
-    ...(s.bills.length ? [`Monthly bills of a provider not in the books (${s.bills.length}): the VAT on its fees of that month is not deducted until the bill is dropped:`, ...capped(s.bills.map((b) => `- ${b.name}, ${b.month}: fees ${money(baseCurrency(), b.fees)}`))] : []),
-    `Tasks of the workflows (${s.tasks.length})${s.tasks.length ? `, under ${tasksPlace}; a task on a payment is one of the payments above, not one more` : ''}:`, ...capped(s.tasks.map((x) => taskLine(x, language))),
-  ];
+  // Why a run left a payment unbooked, as the payment says it (#470).
+  const refused = new Map(paymentRefusals(ws, books).map((r) => [r.ref, r]));
+  // The firm's own invoices that wait for their customer (#428, #436): a fact the list and the card show too, never work.
+  const issuedLines = s.issued.length ? [`Invoices the firm issued, with its UID, that no payment in the books fits (${s.issued.length}): they wait for the customer's payment, nothing for the person to do, so never name them as work (the list and the card show them as that fact):`, ...capped(s.issued.map((r) => `- «${name(r)}»${r.date ? ` of ${day(r.date)}` : ''}${r.amount != null ? `, ${money(r.currency ?? baseCurrency(), r.amount)}` : ''}`))] : [];
+  // In the order of the card's lines (LINE_ORDER, #476): the return's list «Noch offen» in its order, then what only the card adds.
+  const blocks: Record<(typeof LINE_ORDER)[number], string[]> = {
+    held: s.held.length ? [`Orders a provider's sales report did not book (${s.held.length}): their turnover is missing from the return, and the review withholds «Freigegeben» until each is booked (on the report's receipt under «${t('area.receipts')}»):`, ...capped(s.held.map((h) => `- ${t(`drop.held.${h.why}`, { order: h.order })}, ${day(h.date)}${h.gross !== undefined ? `, ${money(h.currency ?? baseCurrency(), h.gross)}` : ''} (${h.name})`))] : [],
+    questions: [`Open questions (${s.questions.length}):`, ...capped(s.questions.map((x) => questionLine(books, x.q, t)))],
+    evidence: [`Bookings whose VAT code contradicts their receipts (${s.evidence.length}), each with its one click on the booking and under ${tasksPlace}:`, ...capped(s.evidence.map((x) => evidenceLine(x.entry, x.check, t)))],
+    withheld: s.withheld.length ? [`Contribution payments booked without the employees' share (${s.withheld.length}): the wages' deductions account still holds what the payslips withheld, so the staff expense is that much too high. Each payment offers «${t('issues.withheldClear', { account: s.withheld[0].account })}» under «${t('area.bank')}» and on the return's list, a proposal the person books with one click:`, ...capped(s.withheld.map((u) => `${paymentLine(u.tx)}: account ${u.account} still holds ${money(baseCurrency(), u.open)} of wage deductions`))] : [],
+    unbooked: [
+      `Payments without a booking (${s.unbooked.length})${s.unbooked.length ? `, under «${t('area.bank')}»` : ''}:`, ...capped(s.unbooked.map((p) => paymentLine(p) + leftLine(refused.get(p.ref), t))),
+      ...(k.outlays ? [`  Of them, ${k.outlays} go to the owner and pay back business costs she paid privately: they wait until those receipts are booked as her outlays (on each receipt under «${t('area.receipts')}», «${t('actions.privateOne', { owner })}»); the app books them then. No receipt of their own is missing.`] : []),
+      ...(k.waits ? [`  Of them, ${k.waits} the app holds until their receipt is linked: it books them itself then and nobody is asked yet; the receipts go in under «${t('area.receipts')}».`] : []),
+      ...(k.asks ? [`  Of them, ${k.asks} wait for their receipt and their return is near: each is the person's task under ${tasksPlace} now (link the receipt, name another proof, or book without input tax).`] : []),
+      ...(k.unread ? [`  Of them, ${k.unread} have their receipt linked, but its VAT could not be read: each waits for the person's word at once, under ${tasksPlace}; no receipt is missing.`] : []),
+    ],
+    yours: s.yours.length ? [`Receipts that wait for the person's own word (${s.yours.length}), under «${t('area.receipts')}»: only she can add what each lacks, or answer whether it is a copy:`, ...capped(s.yours.map((x) => yourLine(books, x, t)))] : [],
+    unlinked: [`Receipts without a payment (${unlinked.length})${unlinked.length ? `, under «${t('area.receipts')}»` : ''}:`, ...capped(unlinked.map((r) => `- «${name(r)}»${r.date ? ` of ${day(r.date)}` : ''}${r.amount != null ? `, ${money(r.currency ?? baseCurrency(), r.amount)}` : ''}`))],
+    issued: issuedLines,
+    bills: s.bills.length ? [`Monthly bills of a provider not in the books (${s.bills.length}): the VAT on its fees of that month is not deducted until the bill is dropped:`, ...capped(s.bills.map((b) => `- ${b.name}, ${b.month}: ${b.document ? `«${b.document}»` : 'its monthly bill'}${b.where ? `, kept by ${b.name} under «${b.where}»` : ''}; the VAT on that month's fees of ${money(baseCurrency(), b.fees)} is ${b.vat !== undefined ? `about ${money(baseCurrency(), b.vat)} (estimated at ${b.rate} % within the fees; the bill's own figure is booked once it is dropped)` : 'not known until the bill is dropped'}`))] : [],
+    offers: s.offers.length ? [`Proposals from the setup that wait for the person's answer (${s.offers.length}), each a rule offered on its payment under «${t('area.bank')}», kept or declined with one click:`, ...capped(s.offers.map((o) => `- ${o.name}: ${o.percent} % private, the rest on ${o.account} (the payment of ${day(o.date)}, ${o.ref})`))] : [],
+    openings: s.openings.length ? [`Bank accounts the books open at nothing while their statements say they held money (${s.openings.length}): their opening balance goes in under «${t('area.company')} › ${t('company.opening')}»; without it the balance sheet shows them wrong:`, ...capped(s.openings.map(openingLine))] : [],
+    clearing: s.clearing.length ? [`Clearing accounts of a payment provider below zero on ${day(s.period.to)} (${s.clearing.length}): the provider paid out more than the account holds sales for in these books. Each line names the provider's reports in the books (each read, with its days and the bookings it made) and whether the account has an opening balance; a report named here is never «not read yet»:`, ...capped(s.clearing.map((c) => clearingLine(c, s.period.to.slice(0, 4), t)))] : [],
+    task: [`Tasks of the workflows (${s.tasks.length})${s.tasks.length ? `, under ${tasksPlace}; a task on a payment is one of the payments above, not one more` : ''}:`, ...capped(s.tasks.map((x) => taskLine(x, language)))],
+  };
+  const lines = LINE_ORDER.flatMap((key) => blocks[key]);
   return [
-    `Where the oldest period not filed stands, computed by the app when this message was sent: ${label} (${day(s.period.from)} to ${day(s.period.to)}); ${stage}. Only what is dated in ${label} is counted here, listed most important first as the app ranks it. Say a period as here («${label}»), never as a code like «${s.period.token}».`,
-    ...(nothingOpen(s) ? [`Nothing of ${label} is open: no payment without a booking, no question, no booking against its receipt, no receipt without a payment, no receipt waiting for the person's word, no task.${elsewhereCount(e) ? ` Other things wait for the person (${elsewhereCount(e)}, listed below under «What else waits»${e.unbooked.length ? `, ${e.unbooked.length} payments of later open days without a booking among them` : ''}): never say that nothing is open.` : ''}`] : lines),
+    `Where the oldest period not filed stands, computed by the app when this message was sent: ${label} (${day(s.period.from)} to ${day(s.period.to)}); ${stage}. Only what is dated in ${label} is counted here, listed in the order of the return's list «Noch offen», then what only the app's card adds. Say a period as here («${label}»), never as a code like «${s.period.token}».`,
+    ...(nothingOpen(s) ? [`Nothing of ${label} is open: no payment without a booking, no question, no booking against its receipt, no receipt without a payment, no receipt waiting for the person's word, no task.${elsewhereCount(e) ? ` Other things wait for the person (${elsewhereCount(e)}, listed below under «What else waits»${e.unbooked.length ? `, ${e.unbooked.length} payments of later open days without a booking among them` : ''}): never say that nothing is open.` : ''}`, ...issuedLines] : lines),
     'When the person asks what is left to do, what is open or what comes next («was muss ich noch machen?», «was fehlt noch?»), add {"kind":"openPeriod"} to your block: the app then shows this state under your answer as a card that names every item above one by one, each a link to its place, and the due day. Your own words are at most one short sentence before it, in her language (start with the first of them, or that nothing waits); never a count, never a list of the items, never the setup\'s topics, never a rule or setting already kept: the card says them, with the links your words cannot carry.',
   ].join('\n');
 }

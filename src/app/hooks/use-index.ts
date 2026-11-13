@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Index } from '../../types/index.js';
 import { setAccounts, setStandardAccounts } from '../lib/accounts.js';
-import { setOrderPages, setOutlayWaits, setProviderIssues, setVatCorrections } from '../lib/order-pages.js';
+import { setOrderPages, setOutlayWaits, setProviderIssues, setRefusals, setVatCorrections } from '../lib/order-pages.js';
 import { api } from '../lib/api.js';
 import { setJurisdiction } from '../../engines/index.js';
 import { latestLoad } from '../lib/latest-load.js';
@@ -27,7 +27,8 @@ export function useIndex() {
       api.standardAccounts().catch(() => []),
       api.providerIssues().catch(() => undefined),
       api.outlayWaits().then((r) => r.refs, () => []),
-    ]).then(([json, accounts, modules, orderPages, corrections, standard, providerIssues, outlayWaits]) => {
+      api.refusals().then((r) => r.refusals, () => []),
+    ]).then(([json, accounts, modules, orderPages, corrections, standard, providerIssues, outlayWaits, refusals]) => {
       if (!current()) return;
       setAccounts(accounts);
       setStandardAccounts(standard);
@@ -35,6 +36,7 @@ export function useIndex() {
       setVatCorrections(corrections);
       setProviderIssues(providerIssues);
       setOutlayWaits(outlayWaits);
+      setRefusals(refusals);
       setJurisdiction(modules.effective, modules.vat);
       setData(json);
       setLoading(false);

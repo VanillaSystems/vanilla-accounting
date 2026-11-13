@@ -26,8 +26,13 @@ export type HeldWhy = NonNullable<SalesReportFacts['held']>[number]['why'];
 /** `filed`: its day lies in a filed period: it stays named on the report, no open item of any period and no split (#405). */
 export interface HeldOrder { provider: string; name: string; receipt: string; order: string; why: HeldWhy; date: string; gross?: number; currency?: string; filed?: true; rates?: number; most?: number }
 
-/** A month of a provider's fees without its bill: whose, the month (YYYY-MM), its last day, the fees booked in it. */
-export interface MissingBill { provider: string; name: string; month: string; date: string; fees: number }
+/**
+ * A month of a provider's fees without its bill: whose, the month (YYYY-MM), its last day, the fees booked in it.
+ * `document`, `where`: the bill as the provider's file names it and where the provider keeps it (#459).
+ * `rate`, `vat`: the VAT the bill would show, estimated from the fees (which hold it) at the rate the provider
+ * charges: an estimate, never booked; the bill's own figure is booked once it is in the books.
+ */
+export interface MissingBill { provider: string; name: string; month: string; date: string; fees: number; document?: string; where?: string; rate?: number; vat?: number }
 
 /** `payouts`: the provider's name by the ref of each payment code takes for its payout (providerOfMoneyIn): a list names it so, not by the processor that paid it (#405). */
 export interface ProviderIssues {
@@ -36,6 +41,8 @@ export interface ProviderIssues {
   clearing?: Array<{ provider: string; name: string; account: string }>;
   /** Beside the providers', the refs of payments to a business that collects contributions with the employees' share (src/booking/withheld.ts withheldPayeesOf, #426): the business files are the server's. */
   withheldPayees?: string[];
+  /** The share of each payment to such a business that code can tell from the payslips (src/booking/withheld.ts withheldSharesOf, #476), by ref. */
+  withheldShares?: Record<string, number>;
 }
 
 type Books = { receipts: readonly Receipt[]; journalEntries?: readonly JournalEntry[] };
@@ -43,8 +50,11 @@ type Books = { receipts: readonly Receipt[]; journalEntries?: readonly JournalEn
 const lastDayOf = (month: string): string => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
 const monthBefore = (month: string): string => new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 2, 1)).toISOString().slice(0, 7);
 
-/** `lockedThrough`: the last day of the filed periods: a held order of them is `filed`, a month of them is no missing bill. */
-export function providerIssuesOf(books: Books, providers: readonly Provider[], opts: { inputTax: boolean; today: string; lockedThrough?: string }): ProviderIssues {
+/**
+ * `lockedThrough`: the last day of the filed periods: a held order of them is `filed`, a month of them is no missing bill.
+ * `rate`: the VAT rate a provider's bill charges on its fees (its company's `fees.billVat`, else the normal rate), for the estimate.
+ */
+export function providerIssuesOf(books: Books, providers: readonly Provider[], opts: { inputTax: boolean; today: string; lockedThrough?: string; rate?: (p: Provider) => number | undefined }): ProviderIssues {
   const filed = (d: string) => !!opts.lockedThrough && d <= opts.lockedThrough;
   const entries = books.journalEntries ?? [];
   const byId = new Map(providers.map((p) => [p.id, p]));
@@ -68,7 +78,11 @@ export function providerIssuesOf(books: Books, providers: readonly Provider[], o
   const clearing = providers.flatMap((p) => (p.provider.clearing ? [{ provider: p.id, name: p.name, account: p.provider.clearing }] : []));
   if (!opts.inputTax) return { held, bills: [], payouts: {}, clearing };
   const bills = providers.flatMap((p): MissingBill[] => {
-    if (!p.documents.some((d) => d.proves === 'vat-correction')) return [];
+    const doc = p.documents.find((d) => d.proves === 'vat-correction');
+    if (!doc) return [];
+    const rate = opts.rate?.(p);
+    // The fees hold the VAT the bill shows: its part of them at the rate.
+    const vatOf = (rp: number) => (rate ? Math.round((rp * rate) / (100 + rate)) / 100 : undefined);
     const prefix = `${feeRef(p.id, '')}`;
     const fees = new Map<string, number>();
     for (const e of entries) if (e.transactionRef.startsWith(prefix)) fees.set(e.date.slice(0, 7), (fees.get(e.date.slice(0, 7)) ?? 0) + Math.round(e.amount * 100));
@@ -79,7 +93,10 @@ export function providerIssuesOf(books: Books, providers: readonly Provider[], o
       return Number(r.date.slice(8, 10)) <= CORRECTION_DAYS.before ? [month, monthBefore(month)] : [month];
     }));
     return [...fees].filter(([month]) => !covered.has(month) && lastDayOf(month) < opts.today && !filed(lastDayOf(month))).sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, rp]) => ({ provider: p.id, name: p.name, month, date: lastDayOf(month), fees: rp / 100 }));
+      .map(([month, rp]) => {
+        const vat = vatOf(rp);
+        return { provider: p.id, name: p.name, month, date: lastDayOf(month), fees: rp / 100, ...(doc.name ? { document: doc.name } : {}), ...(doc.where ? { where: doc.where } : {}), ...(vat !== undefined ? { rate, vat } : {}) };
+      });
   });
   return { held, bills, payouts: {}, clearing };
 }

@@ -14,6 +14,7 @@ import { waitsForReading } from '../../parsers/receipt-text.js';
 import { isNoReceipt } from '../../books/discard.js';
 import type { TwinWhy } from '../../types/index.js';
 import type { BalanceSheet } from '../areas/receipts/model.js';
+import type { Doing } from './drop-overview.js';
 
 export interface DropSummary {
   /** The payments the drop's statements added to the books. */
@@ -25,6 +26,8 @@ export interface DropSummary {
     asked: number;
     /** Not booked for any other reason. */
     unbooked: number;
+    /** Those, by ref: one a run left unbooked says why below the line (#470). */
+    unbookedRefs: string[];
     /** The day of the oldest one not booked: its period holds what is open. */
     openFrom?: IsoDate;
   };
@@ -65,10 +68,20 @@ export const linkedAs = (links: readonly Pick<Mapping, 'rule'>[]): 'feeBill' | '
  * it, #218: «Sucht die Zahlung …», «Wartet (3 vor diesem)»), read, matched, waiting for a person,
  * its run stopped, or set aside by the run with the reason.
  */
-export type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'unread' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'feeBill'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string }
+export type FileState = { kind: 'working'; step?: string; doing?: Doing } | { kind: 'read' } | { kind: 'unread' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'feeBill'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string }
   | { kind: 'none'; why: string } | { kind: 'twin'; of: string; name: string; why: TwinWhy } | { kind: 'supporting'; why?: string; of?: { id: string; name: string } }
   /** A balance sheet (#427): no payment belongs to it; the one of the year before's last day is offered for the opening. */
   | { kind: 'balanceSheet'; sheet?: BalanceSheet };
+
+/**
+ * The row of a taken receipt whose own run stopped (#483): what the books made of it stands when
+ * they settled it (a balance sheet, a document beside an invoice, no receipt, a possible copy, an
+ * order page), as Belege says it; only a receipt the books still have waiting for its run (read
+ * without a payment, not read, lacking its date or amount) says the run stopped.
+ */
+export function overStoppedRun(books: FileState, run: string): FileState {
+  return books.kind === 'read' || books.kind === 'unread' || books.kind === 'waits' ? { kind: 'stuck', run } : books;
+}
 
 /**
  * The groups of a drop's closing lines (#384). Every row is in exactly one, in its own words: a
@@ -226,7 +239,7 @@ export function dropSummary(
   const waitReceipt = open.filter((t) => !asked.has(t.ref) && held.has(t.ref)).length;
   const askedN = open.filter((t) => asked.has(t.ref)).length;
   return {
-    ...(pays.length ? { payments: { n: pays.length, from: pays[0].date, to: pays[pays.length - 1].date, booked: pays.length - open.length, waitReceipt, asked: askedN, unbooked: open.length - waitReceipt - askedN, ...(open[0] ? { openFrom: open[0].date } : {}) } } : {}),
+    ...(pays.length ? { payments: { n: pays.length, from: pays[0].date, to: pays[pays.length - 1].date, booked: pays.length - open.length, waitReceipt, asked: askedN, unbooked: open.length - waitReceipt - askedN, ...(open[0] ? { openFrom: open[0].date } : {}), unbookedRefs: open.filter((t) => !asked.has(t.ref) && !held.has(t.ref)).map((t) => t.ref) } } : {}),
     ...(rows.length ? { files: closingCounts(rows, groupOf) } : {}),
   };
 }

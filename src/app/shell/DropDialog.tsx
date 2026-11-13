@@ -6,14 +6,14 @@
  * small action, «Rückgängig» for a taken one. Further drops, onto the window or the dialog, add
  * rows until it closes; the work goes on when it does.
  */
-import { useEffect, useState, useSyncExternalStore } from 'react';
-import { outlayWaitsNow } from '../lib/order-pages.js';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { outlayWaitsNow, refusedWhy, unbookedText } from '../lib/order-pages.js';
 import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
 import { isKey, language, t, tWith } from '../i18n/index.js';
 import { heldReasonText } from '../lib/held-reason.js';
 import { dropStore, failedLine } from './drop-upload.js';
-import { CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingGroupOf, linkedAs, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, waitsAfterDrop, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
+import { CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingGroupOf, linkedAs, overStoppedRun, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, waitsAfterDrop, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
 import { isUnbooked, unbookedPayments } from '../areas/bank/model.js';
 import { receiptWaits } from '../areas/automation/period-issues.js';
 import { parsePeriod, filingKeyOf, parseSwissDate } from '../../accounting/periods.js';
@@ -25,9 +25,10 @@ import { OPEN_ITEMS } from '../areas/vat/model.js';
 import { localToday, type Period } from '../../accounting/periods.js';
 import { baseCurrency, chargesVat, filing } from '../../engines/index.js';
 import { needsYou, tabOf, type DropTab } from './drop-tabs.js';
+import { DOING_TEXT, OVERVIEW_FROM, STAGE_OF, STAGE_TEXT, doingOf, doingsIn, overviewOf, stagesIn, type Doing, type Stage } from './drop-overview.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { monthName } from '../lib/period-label.js';
-import { useAutomation } from '../automation/store.js';
+import { hurryWhile, pollNow, useAutomation } from '../automation/store.js';
 import { textIn } from '../../workflows/model.js';
 import { tasksWaiting } from '../automation/widget.js';
 import { forMe } from '../../questions/model.js';
@@ -55,7 +56,7 @@ import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
 import { processingText } from '../automation/processing.js';
 import { useNoAi } from '../ai/no-ai.js';
 import { statementSigns } from '../../parsers/receipt-text.js';
-import { INTAKE_STEPS, INTAKE_WORKFLOW, inProcess, processingOf, runProcessing } from '../../workflows/processing.js';
+import { INTAKE_STEPS, INTAKE_WORKFLOW, inProcess, runProcessing } from '../../workflows/processing.js';
 
 const drop = dropStore(
   { open: api.dropOpen, add: api.dropAdd, close: api.dropClose },
@@ -450,6 +451,17 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
   );
 }
 
+/**
+ * The automation's answers while the window's files are worked on (#453): asked at once when a file
+ * is taken (its run shows its steps from the start, not 10 s later on a quiet app), every 2 s while
+ * any row is worked on.
+ */
+function Hurry({ working, taken }: { working: boolean; taken: number }) {
+  useEffect(() => { if (taken) pollNow(); }, [taken]);
+  useEffect(() => { hurryWhile(working); return () => hurryWhile(false); }, [working]);
+  return null;
+}
+
 const isWorking = (run?: { status: string }) => !!run && (run.status === 'queued' || run.status === 'running');
 
 type View = ReturnType<typeof useAutomation>['view'];
@@ -464,19 +476,22 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   const run = r.run ? view?.runs.find((x) => x.id === r.run) : undefined;
   const steps = view?.workflows.find((w) => w.id === run?.workflow)?.steps ?? [];
   const step = run?.at ? steps.find((x) => x.id === run.at) : undefined;
-  const working: FileState = { kind: 'working', ...(step ? { step: textIn(step.label, language()) } : {}) };
+  const working: FileState = { kind: 'working', doing: doingOf(run?.status === 'queued' ? { kind: 'queued' } : run?.status === 'running' && run.at ? { kind: 'running', step: run.at } : undefined), ...(step ? { step: textIn(step.label, language()) } : {}) };
   // Its run is not in the last poll yet: it has only just started.
   if (r.run && !run) return working;
   if (r.statement) {
     const p = run && runProcessing(run, view?.runs ?? []);
-    return inProcess(p) ? { kind: 'working', step: processingText(p, view) } : isWorking(run) ? working : { kind: 'statement' };
+    return inProcess(p) ? { kind: 'working', step: processingText(p, view), doing: doingOf(p) } : isWorking(run) ? working : { kind: 'statement' };
   }
   if (r.report) return { kind: 'report' };
   const arrival = run?.arrived?.find((x) => x.file === r.name);
   if (arrival?.kind === 'refused') return { kind: 'refused', reason: arrival.reason };
   const id = receiptIdOf(r, view);
-  const proc = processingOf(view?.runs ?? [], books.receipts).get(id);
-  if (inProcess(proc)) return { kind: 'working', step: processingText(proc, view) };
+  // Only the row's own run decides (#453): a later run of the same drop takes up every receipt still
+  // waiting for its payment again (processingOf, as Belege says it), which would set a file at rest
+  // back to «in Arbeit» with each new file and the bar back to 0 %. Its own state moves it, not theirs.
+  const proc = run ? runProcessing(run, view?.runs ?? []) : undefined;
+  if (inProcess(proc)) return { kind: 'working', step: processingText(proc, view), doing: doingOf(proc) };
   const links = books.mappings.filter((m) => m.receiptId === id);
   // A provider's fee bill booked by code without a payment (src/booking/vat-corrections.ts): its VAT, no payment (#406).
   if (linkedAs(links) === 'feeBill') {
@@ -485,10 +500,16 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   }
   if (links.length) return { kind: 'matched' };
   if (isWorking(run)) return working;
-  if (proc?.kind === 'stuck') return { kind: 'stuck', run: proc.run };
   const receipt = books.receipts.find((x) => x.id === id);
   // At rest but not in the books the page holds: they are being loaded again, unless the run stopped.
   if (!receipt) return run?.status === 'stuck' ? { kind: 'stuck', run: run.id } : working;
+  const kept = atRest(id, receipt, books);
+  // Its run stopped (#483): what the books made of the receipt stands; only one still waiting says the run stopped.
+  return proc?.kind === 'stuck' ? overStoppedRun(kept, proc.run) : kept;
+}
+
+/** A taken receipt at rest, as the books have it (what Belege says of it). */
+function atRest(id: string, receipt: Index['receipts'][number], books: Index): FileState {
   // An order page of the provider way (#253): the provider's order export brings its order, no payment comes for it.
   const ledger = ledgerFor(books);
   const v = ledger.byId.get(id);
@@ -543,6 +564,8 @@ function Summary({ sum, rows, books, go, receiptOf, feeBillsOf }: { sum: DropSum
   // What is open is listed in the period of the oldest payment not booked, which need not be the one most payments are in.
   const open = pays?.openFrom ? parsePeriod(filingKeyOf(pays.openFrom, filing().length), today) ?? undefined : undefined;
   if (!pays && !files) return null;
+  // A payment a run left unbooked says why, each with the way to it (#470).
+  const refused = (pays?.unbookedRefs ?? []).flatMap((ref) => { const tx = refusedWhy(ref) ? books.transactions.find((x) => x.ref === ref) : undefined; return tx ? [tx] : []; });
   const receipts = files ? receiptLines(files, noAi, feeBillsOf) : '';
   const others = files ? otherLines(files) : '';
   return (
@@ -561,6 +584,11 @@ function Summary({ sum, rows, books, go, receiptOf, feeBillsOf }: { sum: DropSum
           {paid ? <button type="button" className="linkbtn" data-testid="drop-to-payments" onClick={() => go({ route: { area: 'bank' }, query: { period: paid } })}>{t('drop.sum.toPayments', { period: periodName(paid) })}</button> : null}
           {open && chargesVat() ? <>{' · '}<button type="button" className="linkbtn" data-testid="drop-to-open" onClick={() => go({ route: { area: 'vat', ziffer: OPEN_ITEMS }, query: { period: open } })}>{t('drop.sum.toOpen', { period: periodName(open) })}</button></> : null}
         </p>
+      ) : null}
+      {refused.length ? (
+        <ul className="dsum-refused" data-testid="drop-refused">
+          {refused.map((tx) => <li key={tx.ref}><button type="button" className="linkbtn" onClick={() => go({ route: { area: 'bank', payment: tx.ref }, query: { period: parsePeriod(filingKeyOf(tx.date, filing().length), today) ?? undefined } })}>{unbookedText(tx)}</button></li>)}
+        </ul>
       ) : null}
       {receipts ? (
         <p>
@@ -750,6 +778,23 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const s = useDrop();
   const { view } = useAutomation();
   const [tab, setTab] = useState<DropTab>('all');
+  // A drop of many files (#453): the overview's filter, and the stages whose folded line is opened; a new drop starts with neither.
+  const [stage, setStage] = useState<Stage | 'all'>('all');
+  const [unfolded, setUnfolded] = useState<ReadonlySet<Stage>>(new Set());
+  useEffect(() => { setStage('all'); setUnfolded(new Set()); }, [s.session?.id]);
+  // The session the overview was shown for: it stays for that session, never flipping back to the tabs under her hand.
+  const overviewFor = useRef<string>();
+  // The highest the bar came to in this session: a run's step count may step back a little (75 → 73 %), the bar does not.
+  const highest = useRef<{ session?: string; pct: number }>({ pct: 0 });
+  // A filter whose last file left it gives way to «alle»; the focus, lost with that file's row, goes to «alle».
+  const allButton = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    const at = document.activeElement;
+    if (!at || at === document.body || !at.isConnected) allButton.current?.focus();
+  });
   const accounts = useWorkspace()?.bankAccounts;
   const { questions, me } = useQuestions();
   const receiptOf = (r: DropRow) => books.receipts.find((y) => y.id === receiptIdOf(r, view));
@@ -768,15 +813,25 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const taken = rows.filter((r) => r.state === 'taken');
   const states = taken.map((r) => fileState(r, books, view));
   const working = s.adding > 0 || rows.some((r) => r.state === 'take') || states.some((x) => x.kind === 'working');
-  const finished = states.filter((x) => x.kind !== 'working').length;
-  // Files still uploading or being taken count as not begun, so the bar does not fall back when they join.
-  const coming = s.adding + rows.filter((r) => r.state === 'take').length;
-  const pct = dropProgress([...taken.map((r, i) => doneOf(r, states[i], view)), ...Array<number>(coming).fill(0)]);
-  // Every row in one group of the closing lines, by the state its own row shows (#384).
+  // Every row in one group of the closing lines, by the state its own row shows (#384); the overview's stages and the bar's line count the same (#453).
   const stateOf = new Map(taken.map((r, i) => [r, states[i]]));
+  const groupOf = (r: DropRow) => closingGroupOf(r, stateOf.get(r));
+  // What is done now with a file worked on: uploading while it is taken, else its run's state (FileState.doing).
+  const ov = overviewOf(rows.map((r) => ({ group: groupOf(r), doing: r.state === 'take' ? 'uploading' : stateOf.get(r)?.kind === 'working' ? (stateOf.get(r) as { doing?: Doing }).doing : undefined })), s.adding);
+  if (ov.n >= OVERVIEW_FROM && s.session) overviewFor.current = s.session.id;
+  const many = ov.n >= OVERVIEW_FROM || (!!s.session && overviewFor.current === s.session.id);
+  // Files still uploading or being taken count as not begun, so the bar does not fall back when they join; a file at rest counts whole.
+  const now = dropProgress([...rows.map((r) => (r.state === 'take' ? 0 : r.state === 'taken' ? doneOf(r, stateOf.get(r)!, view) : 1)), ...Array<number>(s.adding).fill(0)]);
+  if (highest.current.session !== s.session?.id) highest.current = { session: s.session?.id, pct: 0 };
+  const pct = Math.max(highest.current.pct, now);
+  highest.current.pct = pct;
+  const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? [], undefined, outlayWaitsNow()), questions, groupOf) : undefined;
+  // A filter whose stage has no file any more (its last one answered) shows the whole drop again, and stays so.
+  if (stage !== 'all' && !ov.counts[stage]) { setStage('all'); refocus.current = true; }
+  const filter = stage !== 'all' && ov.counts[stage] ? stage : 'all';
+  const stageRows = (st: Stage) => rows.filter((r) => STAGE_OF[groupOf(r)] === st);
   // A row of a report says it in its own line; the dialog says it for the payments the drop brought or left open.
   const waitsHere = !!bookingWaitsOf(view) && !rows.some((r) => r.reason === 'booking-waits') && taken.length > 0 && unbookedPayments(books, accounts ?? []).length > 0;
-  const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? [], undefined, outlayWaitsNow()), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
   // Only files the books hold already (#341): the window says that nothing new came in.
   const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate' && r.reason !== 'provider-export') || !!r.readAs);
   // What waits for her, named where it is (#398): the receipts of this drop under Belege, every open task under Automatisierung › Aufgaben, as the dock counts them.
@@ -788,53 +843,95 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   // The last statement the drop read in: closing the window by hand opens it (Kontoauszüge does, #361).
   const statement = [...rows].reverse().map((r) => (r.state === 'taken' ? statementLocation(r, books) : undefined)).find(Boolean);
   finishing = () => { closeDrop(); if (statement) onStatement(statement); };
+  const rowOf = (r: DropRow) => (r.state === 'taken'
+    ? <Taken key={r.key} r={r} session={s.session!} books={books} go={go} onGo={onGo} refresh={refresh} />
+    : <Waiting key={r.key} r={r} session={s.session!} go={go} />);
   return (
     <>
       <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 45%, transparent)' }} onClick={finishDrop} />
       <div className="palette dropdlg" role="dialog" aria-label={t('drop.dialog')} data-testid="drop-dialog" data-working={working}>
+        <Hurry working={working} taken={taken.length} />
         <div className="dhd">
           <b>{!taken.length ? t('drop.dialog') : working ? t('drop.titleWorking') : t('drop.titleDone')}</b>
           {s.adding ? <span className="wfpill st-running">{t('drop.reading', { n: s.adding })}</span> : null}
           <button type="button" className="chip" aria-label={t('common.close')} onClick={finishDrop}>×</button>
         </div>
-        {taken.length && !sum ? (
-          <div className="dprog">
-            <div className="dbar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><i style={{ width: `${pct}%` }} /></div>
-            <p className="m">{t('drop.overall', { pct, done: finished, n: taken.length + coming })}</p>
+        {many || (taken.length && !sum) ? (
+          <div className={many ? 'dprog dov' : 'dprog'} {...(many && { 'data-testid': 'drop-overview' })}>
+            {/* At the end the bar and its line give way to what came of the drop (Summary); the filters stay. */}
+            {!sum ? (
+              <>
+                <div className="dbar" role="progressbar" aria-label={t('drop.ov.bar')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><i style={{ width: `${pct}%` }} /></div>
+                <p className="m" aria-live="polite" data-testid="drop-overall">{[t('drop.overall', { pct, done: ov.done, n: ov.n }), ...(many ? doingsIn(ov).map((d) => t(DOING_TEXT[d], { n: ov.doing[d] })) : [])].join(' · ')}</p>
+              </>
+            ) : null}
+            {many ? (
+              <div className="dfilters" role="group" aria-label={t('drop.ov.filters')}>
+                {(['all', ...stagesIn(ov)] as const).map((st) => (
+                  <button key={st} ref={st === 'all' ? allButton : undefined} type="button" className={`dfilter f-${st}`} data-testid="drop-filter" data-stage={st} aria-pressed={filter === st}
+                    onClick={() => setStage(st === 'all' || filter === st ? 'all' : st)}>
+                    {st === 'all' ? t('drop.ov.all', { n: ov.n }) : t(STAGE_TEXT[st], { n: ov.counts[st] })}
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
-        {nothingNew ? <div className="dsum" data-testid="drop-nothing-new"><p>{t('drop.sum.nothing')}</p></div> : null}
-        {/* «Buchen» waits for «Einschalten» (#413): what the drop took is read and linked, not booked; said once, with the button. */}
-        {sum && waitsHere ? <div className="dsum" data-testid="drop-booking-waits-sum"><p><BookingWaits go={(route) => go(route)} onOn={refresh} /></p></div> : null}
-        {sum && !nothingNew ? <Summary sum={sum} rows={taken} books={books} receiptOf={receiptOf} feeBillsOf={[...new Set(states.flatMap((x) => (x.kind === 'feeBill' && x.provider ? [x.provider] : [])))].join(', ')} go={(loc) => { closeDrop(); onGo(loc); }} /> : null}
-        <div className="wftabs" role="tablist">
-          {tabs.map((x) => {
-            const of = x === 'all' ? rows : rows.filter((r) => tabOf(r) === x);
-            return (
-              <button key={x} type="button" role="tab" aria-selected={tab === x} className={tab === x ? 'on' : ''} onClick={() => setTab(x)}>
-                {t(`drop.tab.${x}` as 'drop.tab.all')} <span className="mono">{of.length}</span>{of.some(needsYou) ? <i className="ddot" aria-hidden="true" /> : null}
-              </button>
-            );
-          })}
+        {/* Between the head and the foot one part scrolls (#453): what came of the drop, the list and the lines below it; the head, the overview and «Schliessen» stay. */}
+        <div className="dmid">
+          {nothingNew ? <div className="dsum" data-testid="drop-nothing-new"><p>{t('drop.sum.nothing')}</p></div> : null}
+          {/* «Buchen» waits for «Einschalten» (#413): what the drop took is read and linked, not booked; said once, with the button. */}
+          {sum && waitsHere ? <div className="dsum" data-testid="drop-booking-waits-sum"><p><BookingWaits go={(route) => go(route)} onOn={refresh} /></p></div> : null}
+          {sum && !nothingNew ? <Summary sum={sum} rows={taken} books={books} receiptOf={receiptOf} feeBillsOf={[...new Set(states.flatMap((x) => (x.kind === 'feeBill' && x.provider ? [x.provider] : [])))].join(', ')} go={(loc) => { closeDrop(); onGo(loc); }} /> : null}
+          {many ? null : (
+            <div className="wftabs" role="tablist">
+              {tabs.map((x) => {
+                const of = x === 'all' ? rows : rows.filter((r) => tabOf(r) === x);
+                return (
+                  <button key={x} type="button" role="tab" aria-selected={tab === x} className={tab === x ? 'on' : ''} onClick={() => setTab(x)}>
+                    {t(`drop.tab.${x}` as 'drop.tab.all')} <span className="mono">{of.length}</span>{of.some(needsYou) ? <i className="ddot" aria-hidden="true" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          <div className="drows">
+            {!many ? (shown.length ? shown.map(rowOf) : <p className="m">{rows.length ? t('drop.emptyTab') : t('drop.empty')}</p>)
+              : filter !== 'all' ? stageRows(filter).map(rowOf)
+              // The whole drop: what needs her listed and named first; every other stage a line with its count, its rows behind it.
+              : stagesIn(ov).map((st) => {
+                const of = stageRows(st);
+                // The filter above names them: no second heading in the list.
+                if (st === 'needs') return <div key={st} className="dgroup" data-stage={st}>{of.map(rowOf)}</div>;
+                const open = unfolded.has(st);
+                return (
+                  <div key={st} className="dgroup" data-stage={st}>
+                    <h3 className="dgh">
+                      <button type="button" className="dfoldh" data-testid="drop-group" data-stage={st} aria-expanded={open} aria-controls={`drop-stage-${st}`}
+                        onClick={() => setUnfolded((was) => { const next = new Set(was); if (open) next.delete(st); else next.add(st); return next; })}>
+                        {t(STAGE_TEXT[st], { n: ov.counts[st] })}
+                        <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                      </button>
+                    </h3>
+                    <div id={`drop-stage-${st}`} className="drowsof">{open ? of.map(rowOf) : null}</div>
+                  </div>
+                );
+              })}
+          </div>
+          {s.note ? <p className="warnline" data-testid="drop-note">{s.note}</p> : null}
+          {s.error ? <p className="warnline">{s.error}</p> : null}
+          <Lost inDialog />
+          {receiptsWait || tasksWait ? (
+            <p className="m" data-testid="waits-where">
+              {receiptsWait ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts' })}>{t('drop.waitsReceipts', { n: receiptsWait })}</button> : null}
+              {receiptsWait && tasksWait ? ' · ' : null}
+              {tasksWait ? <button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'tasks' })}>{t('drop.waitsTasks', { n: tasksWait })}</button> : null}
+            </p>
+          ) : null}
+          {rows.some((r) => (r.state === 'duplicate' && r.reason === 'possible-duplicate') || r.state === 'locked' || r.state === 'unclear') ? <p className="m" data-testid="close-hint">{t('drop.closeHint')}</p> : null}
+          {rows.some((r) => r.state === 'asks' && !r.asked) ? <p className="m" data-testid="read-hint">{t('drop.read.closeHint')}</p> : null}
+          {rows.some((r) => r.state === 'asks' && r.asked) ? <p className="m" data-testid="asked-hint">{t('drop.read.askedHint')}</p> : null}
         </div>
-        <div className="drows">
-          {shown.length ? shown.map((r) => (r.state === 'taken'
-            ? <Taken key={r.key} r={r} session={s.session!} books={books} go={go} onGo={onGo} refresh={refresh} />
-            : <Waiting key={r.key} r={r} session={s.session!} go={go} />)) : <p className="m">{rows.length ? t('drop.emptyTab') : t('drop.empty')}</p>}
-        </div>
-        {s.note ? <p className="warnline" data-testid="drop-note">{s.note}</p> : null}
-        {s.error ? <p className="warnline">{s.error}</p> : null}
-        <Lost inDialog />
-        {receiptsWait || tasksWait ? (
-          <p className="m" data-testid="waits-where">
-            {receiptsWait ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts' })}>{t('drop.waitsReceipts', { n: receiptsWait })}</button> : null}
-            {receiptsWait && tasksWait ? ' · ' : null}
-            {tasksWait ? <button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'tasks' })}>{t('drop.waitsTasks', { n: tasksWait })}</button> : null}
-          </p>
-        ) : null}
-        {rows.some((r) => (r.state === 'duplicate' && r.reason === 'possible-duplicate') || r.state === 'locked' || r.state === 'unclear') ? <p className="m" data-testid="close-hint">{t('drop.closeHint')}</p> : null}
-        {rows.some((r) => r.state === 'asks' && !r.asked) ? <p className="m" data-testid="read-hint">{t('drop.read.closeHint')}</p> : null}
-        {rows.some((r) => r.state === 'asks' && r.asked) ? <p className="m" data-testid="asked-hint">{t('drop.read.askedHint')}</p> : null}
         <div className="dfoot">
           <span className="m">{taken.length ? <button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'runs' })}>{t('drop.toRuns')}</button> : t('drop.moreHint')}</span>
           <button type="button" className="btn primary" data-testid="drop-close" onClick={finishDrop}>{working ? t('drop.background') : t('common.close')}</button>

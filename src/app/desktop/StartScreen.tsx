@@ -18,8 +18,9 @@ const say = (key: string, vars?: Record<string, string>) => (vars ? t(key as 'on
 
 /** The account numbers behind a help text, folded under «mehr» (#398): the line itself says it in plain words. */
 const More = ({ k }: { k: string }) => (isKey(k) ? <details className="st-more" data-more={k}><summary>{t('desktop.more')}</summary><span>{tData(k)}</span></details> : null);
-import { ApiError, api, errorText } from '../lib/api.js';
-import { DEMO_HOME, START_PATH, desktop, setupPath } from './bridge.js';
+import { ApiError, api, errorText, sayAccess } from '../lib/api.js';
+import { DEMO_HOME, START_PATH, desktop, macAsksForFolders, setupPath } from './bridge.js';
+import { accessText } from './access-text.js';
 import { FirstRun, freeName } from '../ai/FirstRun.js';
 import { DraftConversation } from '../onboarding/DraftConversation.js';
 import { assumedOf } from '../../onboarding/model.js';
@@ -78,7 +79,8 @@ const answerList = (a: Partial<Answers>, key: QuestionKey): string[] => ([] as s
 
 /** What the start screen shows: the choices, «Einrichtung» from the AI to the folder, the setup conversation in a folder, or the form. */
 /** `first` with `create`: new books were chosen already (the start page, the menu's /start?new). */
-type Mode = { kind: 'home' } | { kind: 'first'; create?: boolean } | { kind: 'setup'; root: string } | { kind: 'form' };
+/** `form` with `root`: the folder she picked instead of the Documents folder (#373). */
+type Mode = { kind: 'home' } | { kind: 'first'; create?: boolean } | { kind: 'setup'; root: string } | { kind: 'form'; root?: string };
 
 const modeOfUrl = (): Mode => {
   const q = new URLSearchParams(location.search);
@@ -93,14 +95,20 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   const [error, setError] = useState('');
   /** Books refused for their layout before 0.4.0: the folder the app offers to move into the current one. */
   const [upgradable, setUpgradable] = useState<string>();
+  /** New books refused for a folder that holds books already: the free name beside it, put into the form. */
+  const [proposed, setProposed] = useState<string>();
+  /** A later start while macOS asks about the folder of the books opened last (src/desktop/start.ts askingPath). */
+  const [asking] = useState(() => {
+    const q = new URLSearchParams(location.search);
+    const root = q.get('asking');
+    return root ? { name: q.get('name') || root, folder: q.get('folder') ?? 'other' } : undefined;
+  });
 
   /** The first look at what this Mac knows was taken. */
   const looked = useRef(false);
   useEffect(() => {
     void api.desktop.info().then((i) => {
       setInfo(i);
-      // macOS still asks about the Documents folder: the screen shows now, the folders follow.
-      if (i.foldersPending) void api.desktop.folders().then(({ folders }) => setInfo((was) => (was ? { ...was, folders, foldersPending: false } : was)), () => undefined);
       // A fresh install: no books open and none known. Once: «Zur Startseite» from there stays on the start screen.
       if (!looked.current && mode.kind === 'home' && !i.open && !i.recent.length && !location.search) setMode({ kind: 'first' });
       looked.current = true;
@@ -128,6 +136,7 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
     } catch (e) {
       setError(errorText(e));
       if (e instanceof ApiError && e.body.code === 'oldLayout') setUpgradable(e.body.params.root);
+      if (e instanceof ApiError && e.body.code === 'folderTaken') setProposed(e.body.params.free);
       setBusy(false);
     }
   };
@@ -148,13 +157,18 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
         </span>
       </header>
       {mode.kind === 'setup' ? <DraftConversation root={mode.root} onLeave={() => setMode({ kind: 'home' })} />
-        : mode.kind === 'first' ? <FirstRun info={info} create={mode.create} onLeave={() => setMode({ kind: 'home' })} onSetup={(root) => setMode({ kind: 'setup', root })} onForm={() => setMode({ kind: 'form' })} />
+        : mode.kind === 'first' ? <FirstRun info={info} create={mode.create} onLeave={() => setMode({ kind: 'home' })} onSetup={(root) => setMode({ kind: 'setup', root })} onForm={(root) => setMode({ kind: 'form', ...(root ? { root } : {}) })} />
         : mode.kind === 'form'
-        ? <CreateForm info={info} language={language} busy={busy} error={error} onCancel={() => setMode({ kind: 'home' })} onCreate={(setup) => run(() => api.desktop.create(setup))} />
+        ? <CreateForm info={info} root={mode.root} proposed={proposed} language={language} busy={busy} error={error} onCancel={() => setMode({ kind: 'home' })} onCreate={(setup) => run(() => api.desktop.create(setup))} />
         : (
           <div className="st-main">
             <h1>Vanilla Accounting</h1>
             <p className="st-sub">{info?.open ? t('desktop.switchBooks', { name: info.open.demo ? t('desktop.demoName') : info.open.name ?? info.open.root }) : t('desktop.welcome')}</p>
+            {asking && !info?.open ? (
+              <p className="st-note" data-asking={asking.folder}>{asking.folder === 'documents' || asking.folder === 'desktop' || asking.folder === 'downloads'
+                ? t('desktop.access.asking', { folder: t(`desktop.access.folder.${asking.folder}`), name: asking.name })
+                : t('desktop.access.askingOther', { name: asking.name })}</p>
+            ) : null}
             <div className="st-choices">
               <button type="button" className="st-choice" data-act="open" disabled={busy} onClick={() => void chooseAndOpen()}>
                 <b>{t('desktop.open')}</b><span>{t('desktop.openHint')}</span>
@@ -178,9 +192,10 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
               <section className="st-recent">
                 <h2>{t('desktop.recent')}</h2>
                 {info.recent.map((b) => (
-                  <button key={b.root} type="button" className="st-book" data-tip={b.root} disabled={busy || (!b.name && !b.problem && !b.setup)} onClick={() => void run(() => api.desktop.open(b.root))}>
-                    <b>{b.demo ? t('desktop.demoName') : b.name ?? t(b.setup ? 'desktop.flow.unnamed' : b.problem ? 'desktop.unreadable' : 'desktop.missing')}</b>{b.setup ? <span className="st-badge">{t('desktop.flow.inProgress')}</span> : null}<span className="mono">{b.root}</span>
+                  <button key={b.root} type="button" className="st-book" data-tip={b.root} disabled={busy || (!b.name && !b.problem && !b.setup && !b.noAccess)} onClick={() => void run(() => api.desktop.open(b.root))}>
+                    <b>{b.demo ? t('desktop.demoName') : b.name ?? t(b.setup ? 'desktop.flow.unnamed' : b.noAccess ? 'desktop.access.refusedShort' : b.problem ? 'desktop.unreadable' : 'desktop.missing')}</b>{b.setup ? <span className="st-badge">{t('desktop.flow.inProgress')}</span> : null}{b.noAccess && b.name ? <span className="st-badge" data-no-access>{t('desktop.access.refusedShort')}</span> : null}<span className="mono">{b.root}</span>
                     {b.problem && <small className="st-problem">{b.problem}</small>}
+                    {b.noAccess && <small className="st-problem">{accessText(sayAccess, b.noAccess, b.root)}</small>}
                   </button>
                 ))}
               </section>
@@ -192,13 +207,16 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   );
 }
 
-function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
-  /** The app's language now: the form is in it, and the new books' language starts as it. */
-  info: DesktopInfo | null; language: string; busy: boolean; error: string; onCancel(): void;
+function CreateForm({ info, root: picked, proposed, language, busy, error, onCancel, onCreate }: {
+  /**
+   * The app's language now: the form is in it, and the new books' language starts as it. `root`: a
+   * folder she picked already; `proposed`: the free name the server gave when the folder held books.
+   */
+  info: DesktopInfo | null; root?: string; proposed?: string; language: string; busy: boolean; error: string; onCancel(): void;
   onCreate(setup: Parameters<typeof api.desktop.create>[0]): void;
 }) {
   const [f, setF] = useState<Form>(() => ({
-    preset: 'consultant', name: '', owner: '', language: LOCALES.some((l) => l.code === language) ? language : 'de', root: '',
+    preset: 'consultant', name: '', owner: '', language: LOCALES.some((l) => l.code === language) ? language : 'de', root: picked ?? '',
     answers: presetAnswers('consultant'), netRates: NO_RATES, banks: [{ ...NEW_BANK, bank: 'UBS' }],
     assumed: keysOf(presetAnswers('consultant')), assumedBy: 'consultant',
   }));
@@ -206,7 +224,19 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setF((x) => ({ ...x, [k]: v }));
   const setBank = (i: number, patch: Partial<BankRow>) => set('banks', f.banks.map((b, j) => (j === i ? { ...b, ...patch } : b)));
 
-  const root = f.root || (info ? `${info.booksHome}/${freeName(t('desktop.folderName', { year: String(new Date().getFullYear()) }), info.folders)}` : '');
+  /**
+   * The folders in Documents, read for a free name (#373 review): only where macOS asks nothing
+   * (allowed by this version of the app, or no Mac); otherwise «Erstellen» is the step that reads it,
+   * and the server refuses a folder that holds books, with the free name beside it.
+   */
+  const [folders, setFolders] = useState<string[]>();
+  const mayRead = !!info && (!macAsksForFolders || info.homeAccess === 'allowed');
+  useEffect(() => {
+    if (!mayRead) return;
+    void api.desktop.folders().then((r) => setFolders(r.folders), () => undefined);
+  }, [mayRead]);
+  useEffect(() => { if (proposed) setF((x) => ({ ...x, root: proposed })); }, [proposed]);
+  const root = f.root || (info ? `${info.booksHome}/${freeName(t('desktop.folderName', { year: String(new Date().getFullYear()) }), folders ?? info.folders)}` : '');
   const questions = QUESTION_ORDER.filter((k) => inSetup(k) && asked(k, f.answers));
   // How few are left (#452, checkpoint 5): the questions shown, and how many of them have an answer.
   const answeredCount = questions.filter((k) => answerList(f.answers, k).length > 0).length;
@@ -314,6 +344,10 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
             </span>
           </label>
           {folderError && <p className="st-stop" role="alert">{folderError}</p>}
+          {/* Books in the Documents folder: macOS asks on «Erstellen», unless it was asked already (#373). */}
+          {macAsksForFolders && info && info.homeAccess !== 'allowed' && (root === info.booksHome || root.startsWith(`${info.booksHome}/`))
+            ? <p className={`cf s4 ${info.homeAccess === 'refused' ? 'st-stop' : 'st-note'}`} data-access-note={info.homeAccess ?? 'ask'}>{info.homeAccess === 'refused' ? accessText(sayAccess, { folder: 'documents', why: 'privacy' }, info.booksHome) : t('desktop.access.formNote')}</p>
+            : null}
         </section>
 
         <section>

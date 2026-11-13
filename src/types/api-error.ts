@@ -11,6 +11,7 @@ import type { MacMailProblem } from './mac-mail.js';
 import type { TagRefusal } from '../books/tags.js';
 import type { AiRefusal } from './ai-refusal.js';
 import type { AdjustmentRefusal } from './adjustment-refusal.js';
+import type { NoAccess } from './desktop.js';
 
 /**
  * The JSON body of every refused API request. `error` is the German text the CLI, the tests and
@@ -43,6 +44,8 @@ export type ApiRefusal =
   /** A payment booked by hand is not booked twice. */
   | { code: 'hasEntries' }
   | { code: 'notByReceipt' }
+  /** «2270 ausgleichen» on a payment that has no employees' share open (#476). */
+  | { code: 'withheldNone' }
   | { code: 'decidedByHand' }
   | { code: 'changedSince' }
   | { code: 'undoGone' }
@@ -58,6 +61,8 @@ export type ApiRefusal =
   /** «Als Korrektur buchen» on a refund of a filed period a sales report offers (#231): the report is gone, or it offers that refund no more. */
   | { code: 'reportCorrection'; params: { why: 'gone' | 'notOffered' } }
   | { code: 'heldOrder'; params: { why: 'gone' | 'notHeld' | 'sum' | 'rate' | 'notRate' | 'noFacts' | 'beforeReach' } }
+  /** «Vorsteuer buchen» on a bill of a VAT-only correction (#458): why code books it not (src/booking/vat-corrections.ts CorrectionWait), or `none`: it is no such bill, or it is booked or linked already. */
+  | { code: 'vatCorrection'; params: { why: 'none' | 'noDate' | 'noVat' | 'filed' | 'noAccount' | 'noCode' | 'noRate' | 'twin' | 'noInputTax' } }
   /** «Privat oder bar bezahlt» for a part: the part must be above 0 and at most the receipt's total (src/server/edits.ts privatePayment). */
   | { code: 'partAmount'; params: { total: number; currency: string } }
   /** A part of a receipt that shows several Swiss VAT rates names the rate line it falls under (`rates`: the receipt's). */
@@ -190,6 +195,10 @@ export type ApiRefusal =
   | { code: 'notWorkspace' }
   /** The folder holds books in the layout before 0.4.0 (books.json at the top): POST /api/desktop/upgrade moves them. */
   | { code: 'oldLayout'; params: { root: string } }
+  /** macOS does not let the app read the folder (Systemeinstellungen › Datenschutz & Sicherheit › Dateien und Ordner, #373). */
+  | { code: 'folderRefused'; params: { root: string } & NoAccess }
+  /** New books named into a folder that holds books or a setup already (POST /api/desktop/create): `free` is the next free name beside it. */
+  | { code: 'folderTaken'; params: { root: string; holds: 'books' | 'setup'; name?: string; free: string } }
   | { code: 'setup'; params: SetupRefusal }
   /** An opening balance typed for an account that takes none by hand (Firma › Eröffnung). */
   | { code: 'openingAccount'; params: { account: string; reason: 'notBalanceSheet' | 'equity' | 'foreign' | 'foreignMismatch' | 'notForeign'; currency?: string } }
@@ -281,7 +290,12 @@ export type ClassifyRefusal =
   | { code: 'classifyVatNotRead'; params: { receipt: string } }
   | { code: 'classifyInputTaxShared'; params: { payments: string; currency: string; booked: number; shown: number } }
   /** The answer takes more off the wages' deductions account than it held on the payment's day (#426). */
-  | { code: 'classifyWithheldOver'; params: { account: string; currency: string; taken: number; open: number } };
+  | { code: 'classifyWithheldOver'; params: { account: string; currency: string; taken: number; open: number } }
+  /** An answer that takes more off the deductions account than the payslips withheld for this fund, where code can tell (#476). */
+  | { code: 'classifyWithheldShare'; params: { account: string; currency: string; taken: number; share: number } };
+
+/** A payment a step tried to book and left unbooked (#470): by ref, with the refusal the screens have words for, when it has one. */
+export interface LeftPayment { ref: string; refusal?: ClassifyRefusal }
 
 /**
  * Why a statement upload (POST /api/statements) was refused: not XML or PDF, an XML that is no

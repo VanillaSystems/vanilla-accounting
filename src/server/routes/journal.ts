@@ -3,11 +3,14 @@ import { randomBytes } from 'node:crypto';
 import { madeByHand } from '../../workspace/money-accounts.js';
 import { correctionCaseFor, type CorrectionKind } from '../../accounting/correction.js';
 import type { JournalEntry, QuarterKey } from '../../types/index.js';
-import { isIsoDate } from '../../accounting/periods.js';
+import { filingKeyOf, isIsoDate, parsePeriod } from '../../accounting/periods.js';
+import { filing } from '../../engines/index.js';
+import { providerIssuesIn } from '../../intake/pair-chain.js';
+import { unclearedContributions } from '../../booking/withheld.js';
 import { patchBody, stringField, tagsField, updateBooks, withBooks, RequestError, WS } from '../books.js';
 import { learnFromCorrection, undoAnswer } from '../questions.js';
 import type { EntrySet } from '../../types/assistant.js';
-import { addEntry, bookByReceipt, undoByReceipt, deleteEntry, link, restoreSaved, setEntry } from '../edits.js';
+import { addEntry, bookByReceipt, clearWithheld, undoByReceipt, deleteEntry, link, restoreSaved, setEntry } from '../edits.js';
 import { handEdits, recordDeletion } from '../../saving/changes.js';
 import { parseBookedBy } from '../../books/booked-by.js';
 import { bookPaymentAgain } from './automation.js';
@@ -185,6 +188,27 @@ router.post('/api/journal-entries/:id/by-receipt', (req, res) => {
   const done = updateBooks((books) => bookByReceipt(books, req.params.id));
   const undo = randomBytes(8).toString('hex');
   byReceiptUndos.set(undo, { ...done, at: Date.now() });
+  for (const [k, v] of byReceiptUndos) if (byReceiptUndos.size > UNDO_KEPT || Date.now() - v.at > UNDO_MS) byReceiptUndos.delete(k);
+  res.json({ undo, ...done });
+});
+
+/**
+ * «2270 ausgleichen» on a contribution payment booked without the employees' share (#476): the open item is the
+ * server's own (unclearedContributions over the payment's filing period, with the payees and shares the business files
+ * and payslips give), never the request's. Its «Rückgängig» is the one of «Nach Beleg buchen».
+ */
+router.post('/api/payments/:ref/clear-withheld', (req, res) => {
+  const ref = req.params.ref;
+  const done = updateBooks((books) => {
+    const tx = books.transactions.find((t) => t.ref === ref);
+    if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
+    const period = parsePeriod(filingKeyOf(tx.date, filing().length), tx.date);
+    const issues = providerIssuesIn(WS, books);
+    const u = period ? unclearedContributions(books, period.from, period.to, new Set(issues.withheldPayees ?? []), issues.withheldShares).find((x) => x.tx.ref === ref) : undefined;
+    return clearWithheld(books, u, ref);
+  });
+  const undo = randomBytes(8).toString('hex');
+  byReceiptUndos.set(undo, { before: done.before, after: done.after, at: Date.now() });
   for (const [k, v] of byReceiptUndos) if (byReceiptUndos.size > UNDO_KEPT || Date.now() - v.at > UNDO_MS) byReceiptUndos.delete(k);
   res.json({ undo, ...done });
 });

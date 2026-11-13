@@ -49,14 +49,14 @@ import { cardLinesOf, cardPart, cardParts, lineReceiptsOf } from '../books/card-
 import { wordsIn } from '../export/texts.js';
 import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
-import { businessVat, capAtBills, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
+import { businessVat, capAtBills, settlesVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
 import { separateFeeOf, withoutSeparateFee } from './separate-fee.js';
 import { bankChargesOf, isOwnBankFee, type BankCharges } from './bank-fee.js';
 import { bankCodedFee } from '../books/bank-import.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { withReceiptTax } from './receipt-tax.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
-import { overWithheld, paysContributions, withheldFor } from './withheld.js';
+import { atWithheld, fundShare, overWithheld, takenOff, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor, withinWithheld } from './withheld.js';
 import { splitByReceipts } from './receipt-lines.js';
 import { CUSTOMS_BY, customsSplit, importVatDeductions, ratesImportVat, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
@@ -114,11 +114,14 @@ export function entriesFor(tx: BankTransaction, llmEntries: ClassifyEntry[], { f
     ({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, ...e, ...fxStamp, origin: 'classify', receipts: [...receipts].sort(), ...(corrects && { corrects }), ...(decided ?? { ...(reason && { reason }), by }) });
 
   const customs = documents().customs;
-  return llmEntries.map((e) => {
+  return llmEntries.map((line) => {
+    // A line on the VAT settlement account pays or receives the tax itself: it carries no code (#456), not even a VAT-amount one.
+    const e = settlesVat(line.accountDebit) || settlesVat(line.accountCredit) ? { ...line, vatCode: undefined } : line;
     const { accountDebit, accountCredit } = sidesOf(e, tx.direction, bankAccount, isVatAmountCode(e.vatCode));
     const transfer = !!money?.has(accountDebit) && money.has(accountCredit);
-    const acquired = acquisition && !transfer ? acquisitionCodeOf({ ...e, accountDebit, accountCredit }, acquisition.documents, acquisition.setup) : undefined;
-    const vatCode = transfer ? undefined : acquired ? acquired.code : signed(permittedCode(e.vatCode), accountDebit, accountCredit, e.amount, bankAccount);
+    const onSettlement = settlesVat(accountDebit) || settlesVat(accountCredit);
+    const acquired = acquisition && !transfer && !onSettlement ? acquisitionCodeOf({ ...e, accountDebit, accountCredit }, acquisition.documents, acquisition.setup) : undefined;
+    const vatCode = transfer || onSettlement ? undefined : acquired ? acquired.code : signed(permittedCode(e.vatCode), accountDebit, accountCredit, e.amount, bankAccount);
     // A rate on the import VAT itself is left off: its input tax comes only with the customs assessment, as the one-legged deduction.
     const importVat = !!customs && ratesImportVat({ accountDebit, vatCode }, customs);
     return entry({
@@ -560,15 +563,15 @@ export function bookImportVatDeductions(books: Books, context: Pick<ClassifyCont
 /**
  * The input tax of each payment provider's fee bill (a document that proves a VAT-only correction),
  * booked into `books` or linked to the correction that books it already (src/booking/vat-corrections.ts).
- * Save the books when it booked or linked one.
+ * Save the books when it booked or linked one. `only`: that one bill (a person's «Vorsteuer buchen»).
  */
-export function bookBillCorrections(books: Books, context: Pick<ClassifyContext, 'counterparties' | 'chartOfAccounts'>, fx: FxResolver): CorrectionsDone {
+export function bookBillCorrections(books: Books, context: Pick<ClassifyContext, 'counterparties' | 'chartOfAccounts'>, fx: FxResolver, only?: string): CorrectionsDone {
   const lock = periodLock(books);
   const chart = new Set(chartNames(context.chartOfAccounts).keys());
   const de = wordsIn('de');
   const day = (iso: string) => iso.split('-').reverse().join('.');
   return bookVatCorrections(books, context.counterparties ?? [], {
-    inputTax: !withoutInputTax(), isClosed: (d) => lock.isClosed(d), inChart: (a) => chart.has(a), base: baseCurrency(),
+    inputTax: !withoutInputTax(), words: documents(), isClosed: (d) => lock.isClosed(d), inChart: (a) => chart.has(a), base: baseCurrency(),
     rate: (currency, date) => fx.daily(currency, date),
     code: (rate, account, billVat) => (billVat && vat().codes.parse(billVat)?.rate === rate ? billVat : codeOfFacts({ charge: 'charged', rate, amountIs: 'tax' }, '', account)),
     newId: () => randomBytes(8).toString('hex'), manualRef: (date) => nextManualRef(books, date.slice(0, 4)),
@@ -576,7 +579,7 @@ export function bookBillCorrections(books: Books, context: Pick<ClassifyContext,
       description: (business, date) => de.t('vatCorrection.text', { business, date: day(date) }),
       reason: (business, date, rate, currency, amount, code, account) => de.t('vatCorrection.reason', { business, date: day(date), rate, currency, amount: chf(amount), code, account }),
     },
-  });
+  }, only);
 }
 
 /** Why a provider's payout waits for the person (PayoutWait), in the books' language: what the run's note and the payment say. */
@@ -833,6 +836,16 @@ const refundReason = (r: RefundCode): string => wordsIn('de').t('rules.say.refun
  */
 const permittedCode = (code: string | undefined): string | undefined => (code && formTakes(code) ? code : undefined);
 
+
+/** The entries with no VAT code on a line on a settlement account, whichever step set it: such a code is dropped, and a code's decision about it with it (#456). */
+export function withoutSettlementCodes(entries: JournalEntry[], reason: string | undefined, by: BookedBy): JournalEntry[] {
+  return entries.map((e) => {
+    if (!e.vatCode || !(settlesVat(e.accountDebit) || settlesVat(e.accountCredit))) return e;
+    const { vatCode: _code, reason: _reason, ...rest } = e;
+    return { ...rest, ...(reason && { reason }), by };
+  });
+}
+
 /**
  * The model's lines without the zero input code (I0, M0, either sign) where the other account takes
  * no VAT code at all (zeroCodeOff: a wage, a contribution, the bank charges, a debt, the owner's or a
@@ -1024,10 +1037,18 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   };
   const isWage = (t: BankTransaction) => !!context.wageWordings?.some((w) => w.test(t.description) || (!!t.counterparty && w.test(t.counterparty)));
   const contributions = new Set(context.wageDeductions ? toModel.filter((t) => !repayments.has(t.ref) && !isWage(t) && !mappedReceipts(booksOf(t), t).some((r) => r.hasSwissVat) && paysContributions(books, t, businessOf)).map((t) => t.ref) : []);
-  const withheldOf = (own: Books, tx: BankTransaction): { account: string; open: number } | undefined => {
+  // Where code books what an answer takes off the deductions account over what it holds (#470): the employer's contribution accounts.
+  const wages = wageAccounts();
+  const employer = { named: wages?.contributions ?? new Set<string>(), shared: wages?.shared ?? new Set<string>(), fallback: [...(wages?.contributions ?? [])].find((a) => !chartAccounts.size || chartAccounts.has(a)) };
+  const withheldOf = (own: Books, tx: BankTransaction): { account: string; open: number; share?: number } | undefined => {
     if (!context.wageDeductions || !contributions.has(tx.ref)) return undefined;
+    // Nothing held is said too (#470), where the books carry wages: the whole contribution is the employer's, not the bill's split.
+    // Without a wage in the year it is no employer's contribution (an owner's own AHV, a fund's fee): no line, as before.
     const open = withheldFor(own, tx, context.wageDeductions);
-    return open === undefined ? undefined : { account: context.wageDeductions, open };
+    if (open === undefined && !wagesBooked(own, tx)) return undefined;
+    // What of it the payslips withheld for this payee, where code can tell (#476): booked so, whatever the bill or the model says.
+    const share = open ? fundShare(own, tx, businessOf(tx), businessOf) : undefined;
+    return { account: context.wageDeductions, open: open ?? 0, ...(share !== undefined && { share }) };
   };
   // The contribution payments go last, in waves of their own: what the wages of this run withhold is booked before they are asked.
   const batches: BankTransaction[][] = [];
@@ -1086,31 +1107,53 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const lines = splitByReceipts(tx, fee?.lines ?? derived, mapped);
         const noted = [reason, fee?.note, customsNotes.get(tx)].filter(Boolean).join(' ') || undefined;
         const coded = withPurchaseVat(tx, withRefundCodes(own, tx, withCreditNoteCodes(own, tx, withSaleCodes(tx, entriesFor(tx, lines, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: noted, by: { kind: 'model', model }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length), acquisition: { documents: mapped, setup: context.vat ?? EFFECTIVE_QUARTERLY } }), mapped, context.vat ?? EFFECTIVE_QUARTERLY), mapped), bankAccount), mapped, context.purchaseVat, context.counterparties);
-        const taxed = withoutZeroOnNoCode(receiptTaxOf(own, tx, coded, mapped), bankAccount, context);
+        const taxed = withoutSettlementCodes(withoutZeroOnNoCode(receiptTaxOf(own, tx, coded, mapped), bankAccount, context), noted, { kind: 'model', model });
         // A card line's bill that shows less than the line (a tip): its rate on no more than the bill taxes at it (#409).
-        const entries = views.get(tx)?.cap ? capAtBills(taxed, mapped, tx.currency, newEntryId) : taxed;
-        const twice = inputTaxOverReceipts(own, tx, legsOf(tx), entries, (c, d) => fx.daily(c, d));
+        const answered = views.get(tx)?.cap ? capAtBills(taxed, mapped, tx.currency, newEntryId) : taxed;
+        const twice = inputTaxOverReceipts(own, tx, legsOf(tx), answered, (c, d) => fx.daily(c, d));
         if (twice) {
           const others = twice.others.map((t) => t.ref).join(', ');
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: input tax ${twice.booked} with ${others} above the receipt's VAT ${twice.shown}`);
           if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, reason: `Die Vorsteuer dieser Zahlung ergäbe mit ${others} zusammen ${baseCurrency()} ${twice.booked.toFixed(2)}, der Beleg weist nur ${baseCurrency()} ${twice.shown.toFixed(2)} MWST aus: nichts gebucht. Jede Zahlung trägt nur ihren Teil der MWST; von Hand buchen.`, refusal: { code: 'classifyInputTaxShared', params: { payments: others, currency: baseCurrency(), booked: twice.booked, shown: twice.shown } } });
           continue;
         }
-        const refused = paymentRefusal(tx, entries, bankAccount, chartAccounts);
+        const refused = paymentRefusal(tx, answered, bankAccount, chartAccounts);
         if (refused) {
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${refused.reason}`);
           if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, ...refused });
           continue;
         }
-        // A contribution payment takes no more off the deductions account than the wages withheld by its day, with what this run booked before it (#426).
+        // A contribution payment takes no more off the deductions account than the wages withheld by its day, with what this run booked before it (#426):
+        // what it holds stays there, the rest is the employer's expense, on the contribution account the answer names (#470, #368's decision).
         const deductions = context.wageDeductions;
-        const over = deductions && contributions.has(tx.ref) ? overWithheld(entries, deductions, withheldFor(books, tx, deductions)) : undefined;
-        if (over) {
+        const heldOn = deductions && contributions.has(tx.ref) ? withheldFor(books, tx, deductions) : undefined;
+        // What the payslips withheld for this payee, where code can tell (#476): exactly that on the account, the rest the employer's.
+        const share = heldOn ? fundShare(books, tx, businessOf(tx), businessOf) : undefined;
+        // Named by no line of the answer: where the payee's earlier contributions went (a pension fund's 5720), then the setup's first.
+        const toEmployer = { ...employer, fallback: payeeContributionAccount(books, tx, businessOf) ?? employer.fallback };
+        const exact = share !== undefined ? atWithheld(answered, deductions!, share, toEmployer, newEntryId) : undefined;
+        // Where the share is known and code cannot book it so: an answer over the share is refused, one under it stands (the open item offers the rest).
+        if (share !== undefined && !exact && takenOff(answered, deductions!) > share + 0.004) {
           const cur = baseCurrency();
+          const taken = takenOff(answered, deductions!);
+          log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${taken} off ${deductions}, the payslips withheld ${share} for this payee`);
+          if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, reason: `Die Buchung nähme ${cur} ${taken.toFixed(2)} vom Konto ${deductions} der Lohnabzüge, die Lohnabrechnungen haben für diese Kasse nur ${cur} ${share.toFixed(2)} abgezogen: nichts gebucht. Von Hand buchen.`, refusal: { code: 'classifyWithheldShare', params: { account: deductions!, currency: cur, taken, share } } });
+          continue;
+        }
+        const capped = exact ?? (share !== undefined ? { entries: answered, moved: 0, to: '' } : deductions && contributions.has(tx.ref) ? withinWithheld(answered, deductions, heldOn, toEmployer, newEntryId) : { entries: answered, moved: 0, to: '' });
+        if (!capped) {
+          const cur = baseCurrency();
+          const over = overWithheld(answered, deductions!, heldOn)!;
           log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${over.taken} off ${deductions}, which held ${over.open}`);
           if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, reason: `Die Buchung nähme ${cur} ${over.taken.toFixed(2)} vom Konto ${deductions} der Lohnabzüge, das an diesem Tag nur ${cur} ${over.open.toFixed(2)} hielt: nichts gebucht. Von Hand buchen.`, refusal: { code: 'classifyWithheldOver', params: { account: deductions!, currency: cur, taken: over.taken, open: over.open } } });
           continue;
         }
+        // The booking's reason says what code moved, beside the model's.
+        const movedSaid = !capped.moved ? undefined
+          : share !== undefined ? wordsIn('de').t('rules.say.withheldShare', { account: deductions!, currency: baseCurrency(), share: share.toFixed(2) })
+            : wordsIn('de').t('rules.say.withheldCapped', { account: deductions!, currency: baseCurrency(), open: (heldOn ?? 0).toFixed(2), moved: capped.moved.toFixed(2), to: capped.to });
+        const entries = movedSaid ? capped.entries.map((e) => ({ ...e, reason: [e.reason, movedSaid].filter(Boolean).join(' ') })) : capped.entries;
+        if (capped.moved) log(`  [Batch ${batchNum}]  ${tx.ref}  ${'onto' in capped && capped.onto ? `${capped.moved} under the payslips' share moved onto ${deductions}` : `${capped.moved} over what ${deductions} ${share !== undefined ? 'holds for this payee' : 'held'} booked on ${capped.to}`}`);
         const held = proposing.get(tx.ref);
         if (held) { held.entries = atPoint(tx, entries.map((e) => ({ ...e, rule: held.rule }))); continue; }
         log(`  [Batch ${batchNum}]  ${keyOf(tx)}  → ${lines.length} entries (${lines.map((e) => e.accountDebit || e.accountCredit).join(', ')})`);

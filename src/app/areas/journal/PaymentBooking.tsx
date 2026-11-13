@@ -14,7 +14,7 @@ import type { HandStart } from '../../../saving/hand-rule.js';
 import { api } from '../../lib/api.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { firmCodes, formTakes, lookupVatCode, parseRate, vatCodeOf } from '../../../accounting/vat-codes.js';
-import { chart, withoutInputTax } from '../../../engines/index.js';
+import { baseCurrency, chart, withoutInputTax } from '../../../engines/index.js';
 import { domesticSale, saleVatCode } from '../../../accounting/sales-without-vat.js';
 import { ForeignTaxForm } from '../../questions/Questions.js';
 import { errorText } from '../../lib/api.js';
@@ -156,7 +156,8 @@ function noteText(n: DraftNote): string {
     case 'discount': return t(n.vat === 'paid' ? 'journal.byHand.note.discount' : n.vat === 'rates' ? 'journal.byHand.note.discountRates' : 'journal.byHand.note.discountNoVat', { percent: String(n.percent), amount: fmt(n.amount) });
     case 'ownerOutlays': return t(n.judged ? 'journal.byHand.note.ownerOutlaysJudged' : 'journal.byHand.note.ownerOutlays', { amount: fmt(n.open) });
     case 'ownerForeign': return t('journal.byHand.note.ownerForeign', { currency: n.currency });
-    case 'ownerWaits': return t('journal.byHand.note.ownerWaitsShort', { owner: n.owner, account: n.account, amount: fmt(n.open) });
+    case 'ownerWaits': return t(n.open > 0 ? 'journal.byHand.note.ownerWaitsShort' : 'journal.byHand.note.ownerWaitsNone',{ owner: n.owner, account: n.account, amount: fmt(n.open) });
+    case 'contributions': return t(n.open <= 0 ? 'journal.byHand.note.contributionsNone' : n.takes > 0 ? 'journal.byHand.note.contributions' : 'journal.byHand.note.contributionsUnsure', { deductions: n.deductions, account: n.account, open: `${baseCurrency()} ${fmt(n.open)}`, takes: `${baseCurrency()} ${fmt(n.takes)}` });
     default: return t(`journal.byHand.note.${n.kind}`);
   }
 }

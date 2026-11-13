@@ -38,6 +38,8 @@ import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
 import { isBankFee } from './separate-fee.js';
 import { businessVat } from './purchase-vat.js';
 import { linkedOf, type Linked } from '../accounting/receipt-due.js';
+import { isPurchaseDocument } from '../accounting/evidence-check.js';
+import { issuedByFirm } from '../intake/own-invoice.js';
 import { bankAccountFor } from '../workspace/money-accounts.js';
 import { providerOfPayment } from './providers.js';
 import { employs } from '../workspace/setup.js';
@@ -69,8 +71,10 @@ export type NoWait =
   | 'ruleAsks'
   /** It pays the owner back her outlays, which her account holds not paid back yet (repaysOwner, #402): their receipts are booked with them. */
   | 'repaysOwner'
-  /** Its business's file says its payments need no receipt. */
+  /** Its business's file says its payments need no receipt: a tax authority's notice is filed apart, so none is paired with them. */
   | 'business'
+  /** Its business's file says its payments need no receipt, and that its bills pair with them (`pairs: true`, a compensation fund's Akonto bill, #456): booked without waiting, still a candidate for its bill (never in NONE_OF_ITS_OWN). */
+  | 'businessBill'
   /** Its wording is one a guide's rule says needs no receipt (a cash withdrawal: money onto the cash box). */
   | 'wording'
   /** Its text is a wage's, on a firm that pays wages: booked without waiting, and still a candidate for a receipt (never in NONE_OF_ITS_OWN). */
@@ -100,6 +104,8 @@ export interface WaitFacts {
 export interface WaitContext {
   /** The businesses whose payments need no receipt (receiptFree). */
   free: ReadonlySet<string>;
+  /** Of those, the businesses whose bills still pair with their payments (receiptPairs, `apply: { receipt: none, pairs: true }`). */
+  pairs?: ReadonlySet<string>;
   /** The wordings of payments that need no receipt (receiptWordings), matched against the text and the counterparty. */
   wordings: readonly Wording[];
   /** The wordings of a wage, matched against the payment's text only; absent or empty on a firm that pays no wages. */
@@ -126,7 +132,7 @@ export function receiptWait(tx: BankTransaction, facts: WaitFacts, ctx: WaitCont
   if (facts.ruleAccount && ctx.settles(facts.ruleAccount)) return book('settlement');
   if (facts.ruleAsks) return book('ruleAsks');
   if (facts.repaysOwner) return book('repaysOwner');
-  if (facts.business && ctx.free.has(facts.business)) return book('business');
+  if (facts.business && ctx.free.has(facts.business)) return book(ctx.pairs?.has(facts.business) ? 'businessBill' : 'business');
   if (ctx.wordings.some((w) => w.test(`${tx.description} ${tx.counterparty ?? ''}`))) return book('wording');
   // The text only: a counterparty may be called like a wage word (a surname, a place, a firm).
   if (ctx.wages?.some((w) => w.test(tx.description))) return book('wage');
@@ -192,13 +198,30 @@ export { paysOwner };
  * money out to her by name in the books' currency on a firm with her account (repaysOwnerShape), no
  * wage by its wording and no payment a company rule decides (rent to her waits for its contract), as
  * ownerRepayments excludes them, while her account holds outlays not paid back (outlaysOpen above
- * zero, not enough for it yet). More of her receipts booked as outlays make it a repayment.
+ * zero, not enough for it yet), or before any is booked while receipts that could be hers are filed
+ * (mayBeOutlays, #457). More of her receipts booked as outlays make it a repayment.
  */
 export function awaitsOutlays(books: Books, tx: BankTransaction, context: ClassifyContext, wages: readonly Wording[], fx: FxResolver): boolean {
   const f = ownerFactsOf(context);
   if (!f || !repaysOwnerShape(tx, context.ownerName) || wages.some((w) => w.test(tx.description))) return false;
   if (ruleOfPayment(books, tx, context, fx)) return false;
-  return outlaysOpen(books, f, tx.date) > 0;
+  return outlaysOpen(books, f, tx.date) > 0 || mayBeOutlays(books, tx.date, context);
+}
+
+/**
+ * Whether a receipt filed by `date` could be one of her outlays not booked yet (#457): a purchase
+ * document, read (its day and amount), not of a filed payment, not the firm's own invoice, and paid
+ * by no payment but one on her own money account not booked yet («Privat bezahlt» before its run).
+ * A receipt the firm's payment pays is the firm's; without such a receipt nothing of hers will come.
+ */
+function mayBeOutlays(books: Pick<Books, 'receipts' | 'mappings' | 'transactions' | 'journalEntries'>, date: string, context: Pick<ClassifyContext, 'bankAccounts' | 'ownerAccount' | 'companyUid' | 'companyName'>): boolean {
+  const own = new Set(context.bankAccounts.filter((a) => a.account === context.ownerAccount).map((a) => a.bank));
+  const booked = new Set(books.journalEntries.map((e) => e.transactionRef));
+  const bank = new Map(books.transactions.map((t) => [t.ref, t.bank]));
+  const firms = new Set(books.mappings.filter((m) => booked.has(m.transactionRef) || !own.has(bank.get(m.transactionRef) ?? '')).map((m) => m.receiptId));
+  const firm = { ...(context.companyUid && { uid: context.companyUid }), ...(context.companyName && { name: context.companyName }) };
+  return books.receipts.some((r) => r.location === 'archived' && isPurchaseDocument(r) && !r.filedPayment && !!r.date && r.date <= date && !!r.amount && r.amount > 0
+    && !firms.has(r.id) && !issuedByFirm(r, firm));
 }
 
 /** The open payments that wait, as awaitsOutlays tells them, by ref: what the screens and the AI's facts say waits for her outlays (#428). */
@@ -226,19 +249,25 @@ const isMap = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
 
 /**
  * A rule's `apply:` on evidence.guide.yaml#rules, in either layer: `{ receipt: none }` in a
- * business file (the business is the condition), `{ receipt: none, text: "<pattern>" }` in a guide
+ * business file (the business is the condition: its payments are booked without waiting and none is
+ * paired with them, a tax authority's notice is filed apart; `pairs: true` beside it frees them from
+ * the wait only, its bills still pair, as a compensation fund's Akonto bill, #456),
+ * `{ receipt: none, text: "<pattern>" }` in a guide
  * (it holds for every payment, so it names the wording: a pattern over the payment's text and
  * counterparty, ignoring case; `not`: a second pattern whose match takes the wording back). `firm: employer`
  * beside them makes it a wage's wording: only on a firm that pays wages (employs), read off the
  * payment's text alone, and freeing the payment from the wait only, never from pairing.
  */
-export function parseReceiptApply(raw: unknown, where: 'business' | 'guide' = 'business'): { ok: true; text?: string; not?: string; firm?: 'employer' } | { ok: false; problem: string } {
+export function parseReceiptApply(raw: unknown, where: 'business' | 'guide' = 'business'): { ok: true; text?: string; not?: string; firm?: 'employer'; pairs?: true } | { ok: false; problem: string } {
   if (!isMap(raw)) return { ok: false, problem: `apply must be a map: { receipt: none${where === 'guide' ? ', text: "<pattern>"' : ''} }` };
-  const { receipt, text, not, firm, ...rest } = raw;
-  const extra = Object.keys(rest)[0];
-  if (extra) return { ok: false, problem: `apply.${extra} is unknown — apply on ${RECEIPT_STEP} takes receipt${where === 'guide' ? ', text, not and firm' : ''}` };
+  const { receipt, text, not, firm, pairs, ...rest } = raw;
+  const extra = Object.keys(where === 'guide' && pairs !== undefined ? { pairs, ...rest } : rest)[0];
+  if (extra) return { ok: false, problem: `apply.${extra} is unknown — apply on ${RECEIPT_STEP} takes receipt${where === 'guide' ? ', text, not and firm' : ' and pairs'}` };
   if (receipt !== 'none') return { ok: false, problem: 'apply.receipt must be none: the payments need no receipt to be booked' };
-  if (where === 'business') return text === undefined && firm === undefined && not === undefined ? { ok: true } : { ok: false, problem: `apply.${text !== undefined ? 'text' : firm !== undefined ? 'firm' : 'not'} is for a guide\'s rule; in a business file the business is the condition` };
+  if (where === 'business') {
+    if (pairs !== undefined && pairs !== true) return { ok: false, problem: 'apply.pairs must be true: the business\'s bills still pair with its payments' };
+    return text === undefined && firm === undefined && not === undefined ? { ok: true, ...(pairs === true && { pairs }) } : { ok: false, problem: `apply.${text !== undefined ? 'text' : firm !== undefined ? 'firm' : 'not'} is for a guide\'s rule; in a business file the business is the condition` };
+  }
   if (firm !== undefined && firm !== 'employer') return { ok: false, problem: 'apply.firm must be employer: the wording holds only on a firm that pays wages' };
   if (typeof text !== 'string' || !text.trim()) return { ok: false, problem: 'apply.text must name the wording of the payments that need no receipt, a pattern such as "Bancomat|Bargeldbezug"' };
   try { new RegExp(text, 'i'); } catch { return { ok: false, problem: `apply.text "${text}" is no valid pattern` }; }
@@ -255,11 +284,11 @@ type Rules = { rules?: Array<{ id?: string; status?: string; apply?: unknown }> 
 export interface Wording { test(s: string): boolean }
 
 /** What the knowledge says to the decision: whose payments and which wordings need no receipt, a wage's wordings on a firm that pays wages, and whose unread receipt the company counts at a rate. */
-export interface ReceiptKnowledge { free: ReadonlySet<string>; wordings: readonly Wording[]; wages: readonly Wording[]; assumesUnread: ReadonlySet<string> }
+export interface ReceiptKnowledge { free: ReadonlySet<string>; pairs: ReadonlySet<string>; wordings: readonly Wording[]; wages: readonly Wording[]; assumesUnread: ReadonlySet<string> }
 
 export function receiptKnowledge(k: Pick<Knowledge, 'counterpartyFiles' | 'guides'>, firm: Pick<Workspace, 'profile'>): ReceiptKnowledge {
   const { facts } = businessVat(k);
-  return { free: receiptFree(k), wordings: receiptWordings(k), wages: employs(firm.profile) ? receiptWordings(k, 'employer') : [], assumesUnread: new Set([...facts].filter(([, fs]) => fs.some((f) => f.fact.kind === 'unreadReceipt')).map(([id]) => id)) };
+  return { free: receiptFree(k), pairs: receiptFree(k, 'pairs'), wordings: receiptWordings(k), wages: employs(firm.profile) ? receiptWordings(k, 'employer') : [], assumesUnread: new Set([...facts].filter(([, fs]) => fs.some((f) => f.fact.kind === 'unreadReceipt')).map(([id]) => id)) };
 }
 
 /** The wordings the guides' rules of evidence.guide.yaml#rules, in either layer, say need no receipt: those for every firm, or (`firm`) those of a wage; a rule whose question is open says nothing. */
@@ -273,12 +302,12 @@ export function receiptWordings(k: Pick<Knowledge, 'guides'>, firm?: 'employer')
   });
 }
 
-/** The businesses whose file, in either layer, says their payments need no receipt; a rule whose question is open says nothing. */
-export function receiptFree(k: Pick<Knowledge, 'counterpartyFiles'>): Set<string> {
+/** The businesses whose file, in either layer, says their payments need no receipt (`pairs`: and that their bills still pair, `pairs: true`); a rule whose question is open says nothing. */
+export function receiptFree(k: Pick<Knowledge, 'counterpartyFiles'>, only?: 'pairs'): Set<string> {
   const free = new Set<string>();
   for (const f of k.counterpartyFiles) {
     const rules = (f.body.steps?.[RECEIPT_STEP] as Rules)?.rules ?? [];
-    if (f.body.id && rules.some((r) => r.apply !== undefined && r.status !== 'open' && parseReceiptApply(r.apply).ok)) free.add(f.body.id);
+    if (f.body.id && rules.some((r) => { const p = r.apply !== undefined && r.status !== 'open' ? parseReceiptApply(r.apply) : undefined; return !!p?.ok && (!only || !!p.pairs); })) free.add(f.body.id);
   }
   return free;
 }
@@ -299,7 +328,12 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
   });
 }
 
-/** Why a payment has no receipt of its own: the matching chain never pairs one (#187), nor the model's match. Money in, a rule that asks first, a wage and a firm without input tax still take a receipt; a provider's payout never does (#203). */
+/**
+ * Why a payment has no receipt of its own: the matching chain never pairs one (#187), nor the model's
+ * match. Money in, a rule that asks first, a wage, a business whose file says its bills pair
+ * (`businessBill`: the compensation fund's Akonto bill, #456) and a firm without input tax still take
+ * a receipt; a provider's payout never does (#203), nor a tax authority's payment (its notice is filed apart).
+ */
 const NONE_OF_ITS_OWN: ReadonlySet<NoWait> = new Set<NoWait>(['marked', 'zero', 'provider', 'bankFee', 'ownTransfer', 'settlement', 'business', 'wording', 'repaysOwner']);
 
 /** A booking the app made on its own (the classifier, by a rule, a check of code or the model): never one a person made or decided. */

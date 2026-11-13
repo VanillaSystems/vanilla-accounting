@@ -75,6 +75,9 @@ effects: []
 ## Rules the runtime and the lint enforce
 
 1. A step receives only what it declares in `reads`, and returns only what it declares in `emits`.
+   Its action names every key it may hand on (`emits` in src/workflows/actions.ts), also one it
+   hands on only now and then, and the lint refuses a step that leaves one out: otherwise the run
+   sticks the first time that key comes (#482).
 2. A step picks its branch by returning one of its `outcomes`. It never calls another step.
 3. A step never imports another step. Shared code is an action.
 4. A step causes side effects only through the handles of the effects it declares. A booking is

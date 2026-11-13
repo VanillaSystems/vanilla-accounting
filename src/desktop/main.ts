@@ -16,12 +16,14 @@ import { sealedStore } from '../secrets/sealed-store.js';
 import { useSecretStore } from '../secrets/secrets.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { KnownBooks, MenuCommand } from '../types/desktop.js';
+import type { ApiRefusal } from '../types/api-error.js';
 import { setupPath } from '../app/desktop/bridge.js';
 import { freshLoginPath } from '../platform/ai-cli.js';
 import { ASK, PUSH, TELL } from './channels.js';
 import { chosenFolder, newFolderPanel } from './new-folder.js';
 import { sameOrigin, saveFile } from './save-file.js';
-import { bringUp, offerMove, windowLoader, type Waiting } from './start.js';
+import { askingPath, bringUp, firstPage, offerMove, windowLoader, type Waiting } from './start.js';
+import { accessText } from '../app/desktop/access-text.js';
 import { dictate, isLang } from './dictation.js';
 import { languageOf, menuTemplate, textsIn } from './menu.js';
 import { electronPage } from './print.js';
@@ -104,6 +106,9 @@ async function start(): Promise<void> {
     stateFile,
     demoRoot: join(app.getPath('userData'), 'Demo'),
     booksHome: app.getPath('documents'),
+    // Names only: Electron reads none of them. The first read under one makes macOS ask the person (#373).
+    protectedFolders: { documents: app.getPath('documents'), desktop: app.getPath('desktop'), downloads: app.getPath('downloads') },
+    appVersion: app.getVersion(),
     dist: join(APP_ROOT, 'dist'),
     devUi: DEV?.ui,
     // The start screen opens books through the server; the menu's recent list follows.
@@ -124,17 +129,24 @@ async function start(): Promise<void> {
       show(pathOf(await open()));
     } catch (e) {
       const t = textsIn(language);
-      await dialog.showMessageBox({ type: 'warning', message: t('desktop.notWorkspace'), detail: (e as Error).message });
+      const refusal = (e as { refusal?: ApiRefusal }).refusal;
+      const detail = refusal?.code === 'folderRefused' ? accessText(t, refusal.params, refusal.params.root) : (e as Error).message;
+      await dialog.showMessageBox({ type: 'warning', message: t('desktop.notWorkspace'), detail });
     }
   };
-  const chooseFolder = async (title: string): Promise<string | null> => {
-    const options = { title, properties: ['openDirectory', 'createDirectory'] as Array<'openDirectory' | 'createDirectory'> };
+  /** The folder dialog; `home`: it starts in the home folder (she chose another folder than Documents). */
+  const chooseFolder = async (title: string, home = false): Promise<string | null> => {
+    const options = { title, ...(home ? { defaultPath: app.getPath('home') } : {}), properties: ['openDirectory', 'createDirectory'] as Array<'openDirectory' | 'createDirectory'> };
     const r = win && !win.isDestroyed() ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
     return r.canceled || !r.filePaths[0] ? null : r.filePaths[0];
   };
-  /** The save panel that names the folder of new books, in the Documents folder (the server's booksHome). */
+  /**
+   * The save panel that names the folder of new books, in the Documents folder (the server's
+   * booksHome), or in the home folder when she chose another place (`elsewhere`: Documents refused).
+   */
   const chooseNewFolder = async (choice: unknown): Promise<string | null> => {
-    const options = newFolderPanel(choice, app.getPath('documents'));
+    const elsewhere = !!choice && typeof choice === 'object' && (choice as { elsewhere?: unknown }).elsewhere === true;
+    const options = newFolderPanel(choice, app.getPath(elsewhere ? 'home' : 'documents'));
     return chosenFolder(win && !win.isDestroyed() ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options));
   };
   function refreshMenu(): void {
@@ -152,7 +164,7 @@ async function start(): Promise<void> {
   }
 
   if (SMOKE) smokeHandles();
-  ipcMain.handle(ASK.chooseFolder, (_e, title: unknown) => chooseFolder(typeof title === 'string' ? title : ''));
+  ipcMain.handle(ASK.chooseFolder, (_e, title: unknown, at: unknown) => chooseFolder(typeof title === 'string' ? title : '', at === 'home'));
   ipcMain.handle(ASK.chooseNewFolder, (_e, choice: unknown) => chooseNewFolder(choice));
   ipcMain.handle(ASK.saveFile, async (e, url: unknown, name: unknown) => {
     const href = typeof url === 'string' ? sameOrigin(url, e.sender.getURL()) : undefined;
@@ -176,13 +188,16 @@ async function start(): Promise<void> {
     const next = languageOf(typeof code === 'string' ? code : undefined);
     if (next !== language) { language = next; refreshMenu(); }
   });
-  const last = readState(stateFile).recent[0];
-  const first = last ? await server.open(last).catch(() => undefined) : undefined;
   refreshMenu();
   await pathKnown;
   server.startBackground();
   void server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); });
-  show(pathOf(first));
+  // The books opened last, read only after macOS answered for their folder; a first start reads none (#373).
+  void firstPage({
+    last: readState(stateFile).recent[0], reach: server.reach, open: server.open, current: server.current, pathOf, show,
+    // While macOS asks, the start screen names the folder and the books as desktop.json keeps them.
+    asking: (root) => askingPath(root, server.recent().find((b) => b.root === root)?.name ?? basename(root), server.folderOf(root)),
+  });
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   void checkForUpdates();
 }

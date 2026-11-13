@@ -6,10 +6,11 @@
  * only, with the pairing token (src/server/phone.ts); it is off until then.
  * Nothing here needs Electron, so the tests run it in Node.
  */
+import { switchOnCreated } from '../workflows/booking-waits.js';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import { createServer, request, type RequestListener, type Server } from 'node:http';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve, sep } from 'node:path';
 import express from 'express';
 import { isApiPath, isAppPath } from '../server/app-paths.js';
 import { lanAddresses, newPhoneToken, pairingUrl, phoneApp, refuseForeignHost, usePhoneToken } from '../server/phone.js';
@@ -27,7 +28,7 @@ import { isOldLayout } from '../workspace/layout.js';
 import { upgradeWorkspace } from '../workspace/upgrade.js';
 import { renewTerminalAgents } from '../workspace/terminal-agents.js';
 import type { ApiErrorBody } from '../types/api-error.js';
-import type { AiAvailability, DesktopInfo, KnownBooks, PhoneInfo, FolderLook } from '../types/desktop.js';
+import type { AiAvailability, DesktopInfo, HomeAccess, HomeFolders, KnownBooks, NoAccess, PhoneInfo, FolderLook, ProtectedFolder } from '../types/desktop.js';
 import { aiSetup } from '../server/ai-setup.js';
 import { qrSvg } from './qr.js';
 import { opened, readState, writeState, type PhonePairing } from './state.js';
@@ -49,10 +50,13 @@ export interface DesktopServerOptions {
   onOpen?: (books: KnownBooks) => void;
   /** How often the inbox is looked at for files that arrived (src/server/background.ts). */
   inboxEveryMs?: number;
-  /** How long GET /api/desktop waits for the listing of booksHome before it answers without it (default 300 ms). */
-  foldersWaitMs?: number;
-  /** Lists booksHome's folders (a test holds it as macOS does while it asks); by default foldersIn. */
-  listFolders?: (dir: string) => Promise<string[]>;
+  /**
+   * The folders macOS asks about before the app may read them (Electron's app.getPath): a folder
+   * the app may not read is named by the one it lies in (#373).
+   */
+  protectedFolders?: Partial<Record<Exclude<ProtectedFolder, 'other'>, string>>;
+  /** The app's version: macOS's answer about the Documents folder is kept for this version only (an update may lose it). */
+  appVersion?: string;
   /** Whether an AI provider answers on this computer (the setup conversation needs one); by default the providers of src/llm are asked. */
   aiAvailable?: () => Promise<boolean>;
   /** The model the setup conversation's typed words go to (src/onboarding/draft-talk.ts); by default src/llm's `ask`, the step's configured provider. */
@@ -65,6 +69,12 @@ async function anyProviderReady(): Promise<boolean> {
   return modelReady(8000).catch(() => false);
 }
 
+/**
+ * `missing`: nothing there (yet); `refused`: macOS does not let the app read it («Nicht erlauben»,
+ * EPERM); `locked`: the folder's own rights do not (EACCES).
+ */
+export type Reach = 'ok' | 'missing' | 'refused' | 'locked';
+
 export interface DesktopServer {
   app: express.Express;
   /**
@@ -76,13 +86,23 @@ export interface DesktopServer {
   openDemo(): Promise<KnownBooks>;
   current(): KnownBooks | null;
   /**
-   * What the start screen shows. Asynchronous: listing the Documents folder makes macOS ask the
-   * person first, and while the question is open the read waits; off the main thread, the app and
-   * its window go on meanwhile.
+   * What the start screen shows (GET /api/desktop). The recent folders are looked at asynchronously
+   * (macOS may hold a read while it asks the person, #373); booksHome is not read at all.
    */
   info(): Promise<DesktopInfo>;
-  /** The books this Mac opened lately, for the menu: nothing in the Documents folder is listed. */
+  /**
+   * The books this Mac opened lately, for the menu: named as desktop.json keeps them, so no folder
+   * is read (a folder an older desktop.json names without a name is called by its own name).
+   */
   recent(): KnownBooks[];
+  /**
+   * Whether `root` can be read, asked asynchronously: under a protected folder macOS asks the person
+   * first and holds the read until she answers, off the main process. Every synchronous read of a
+   * folder comes after this answer.
+   */
+  reach(root: string): Promise<Reach>;
+  /** Which protected folder `root` lies in (`other`: none of them). */
+  folderOf(root: string): ProtectedFolder;
   /** Only requests to this host reach the books (a page elsewhere cannot rebind its name to this port). */
   allowHost(host: string): void;
   /**
@@ -135,7 +155,35 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     try { return { root, name: readManifest(join(appFolderIn(root) ?? root, MANIFEST_FILE)).company.name, demo }; } catch (e) { return { root, demo, problem: e instanceof Error ? e.message : String(e) }; }
   };
 
-  const lookAt = (root: string): FolderLook => {
+  /** The protected folder `root` lies in; `other` for any else (macOS refuses an iCloud or a network folder too). */
+  const folderOf = (root: string): ProtectedFolder => {
+    const r = resolve(root);
+    const hit = Object.entries(opts.protectedFolders ?? {}).find(([, f]) => f && (r === resolve(f) || r.startsWith(resolve(f) + sep)));
+    return (hit?.[0] as ProtectedFolder | undefined) ?? 'other';
+  };
+  const noAccess = (root: string, r: Reach): NoAccess | undefined =>
+    (r === 'refused' || r === 'locked' ? { folder: folderOf(root), why: r === 'refused' ? 'privacy' : 'rights' } : undefined);
+  /** known(), after macOS answered for the folder: never a synchronous read it holds. A folder the app may not read keeps the name desktop.json has. */
+  const look = async (root: string): Promise<KnownBooks> => {
+    const no = noAccess(root, await reach(root));
+    if (!no) return known(root);
+    const name = readState(opts.stateFile).names?.[root];
+    return { root, demo: resolve(root) === resolve(opts.demoRoot), ...(name ? { name } : {}), noAccess: no };
+  };
+  /** Opening, creating, continuing in a folder the app may not read: said, with the way to allow it. */
+  const reachable = async (root: string): Promise<void> => {
+    const no = noAccess(root, await reach(root));
+    if (no) throw new WorkspaceRefusal(`${root}: the app may not read this folder (${no.why}).`, { code: 'folderRefused', params: { root, ...no } });
+  };
+  /** `root`, or `root 2`, `root 3`, … : the first name beside it that holds nothing yet. */
+  const freeBeside = (root: string): string => {
+    let free = root;
+    for (let n = 2; existsSync(free); n++) free = `${root} ${n}`;
+    return free;
+  };
+
+  const lookAt = async (root: string): Promise<FolderLook> => {
+    await reachable(root);
     const k = known(root);
     if (k.setup) return { holds: 'setup', ...(k.name ? { name: k.name } : {}) };
     if (k.name) return { holds: 'books', name: k.name };
@@ -151,17 +199,19 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     if (isOldLayout(opts.demoRoot)) rmSync(opts.demoRoot, { recursive: true, force: true });
     if (!appFolderIn(opts.demoRoot)) copyTree(opts.demoSource ?? join(APP_ROOT, 'demo'), opts.demoRoot);
   };
-  const remember = (root: string) => writeState(opts.stateFile, opened(readState(opts.stateFile), root));
+  const remember = (root: string, name?: string) => writeState(opts.stateFile, opened(readState(opts.stateFile), root, name));
 
   async function openBooks(root: string): Promise<KnownBooks> {
     root = resolve(root);
+    await reachable(root);
     if (bundledDemo(root)) return openDemo();
     if (root === resolve(opts.demoRoot)) freshDemoCopy();
     const folder = appFolderIn(root);
     if (!folder) {
       if (!readDraft(root)) throw new WorkspaceError(`${root}: no ${MANIFEST_FILE}, here or in its ${APP_FOLDER}/.`);
-      remember(root);
-      return known(root);
+      const begun = known(root);
+      remember(root, begun.name);
+      return begun;
     }
     if (isOldLayout(folder)) throw new WorkspaceRefusal(`${root} holds the books in the layout before 0.4.0 (books.json).`, { code: 'oldLayout', params: { root } });
     const ws = workspaceAt(root);
@@ -172,9 +222,9 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
       openWorkspaceAt(root);
       books = (await import('../server/api.js')).app;
     }
-    remember(root);
-    await runBackground();
     open = known(root);
+    remember(root, open.name);
+    await runBackground();
     opts.onOpen?.(open);
     return open;
   }
@@ -188,6 +238,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
    */
   async function upgradeBooks(root: string): Promise<KnownBooks> {
     root = resolve(root);
+    await reachable(root);
     const folder = appFolderIn(root);
     if (!folder) throw new WorkspaceError(`${root}: no ${MANIFEST_FILE}, here or in its ${APP_FOLDER}/.`);
     await upgradeWorkspace(workspaceAt(folder));
@@ -237,20 +288,39 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     return phoneInfo();
   }
 
-  const recent = () => readState(opts.stateFile).recent.map(known);
+  /** The menu's list: desktop.json's names, no folder read. */
+  const recent = (): KnownBooks[] => {
+    const state = readState(opts.stateFile);
+    return state.recent.map((root) => ({ root, demo: resolve(root) === resolve(opts.demoRoot), name: state.names?.[root] ?? basename(root) }));
+  };
   /** The newest listing of booksHome, and the one under way (macOS may hold it while it asks). */
   let listed: string[] | undefined;
-  let listing: Promise<string[]> | undefined;
-  const listFolders = () => (listing ??= (opts.listFolders ?? foldersIn)(opts.booksHome).then((f) => { listed = f; listing = undefined; return f; }));
-  const info = async (): Promise<DesktopInfo> => ({ open, recent: recent(), booksHome: opts.booksHome, folders: await listFolders() });
+  let listing: Promise<HomeFolders> | undefined;
   /**
-   * GET /api/desktop: answered without waiting for a listing macOS holds (the question about the
-   * Documents folder), so the first screen is not blank meanwhile; `foldersPending` then says the
-   * folders follow from GET /api/desktop/folders.
+   * booksHome read, at the step that needs it: «Neue Buchhaltung erstellen», once the page said why
+   * macOS asks. Its answer is kept, so the next time the step needs no word about it.
    */
-  const infoNow = async (): Promise<DesktopInfo> => {
-    const folders = await Promise.race([listFolders(), new Promise<undefined>((r) => setTimeout(r, opts.foldersWaitMs ?? 300))]);
-    return { open, recent: recent(), booksHome: opts.booksHome, folders: folders ?? listed ?? [], ...(folders ? {} : { foldersPending: true }) };
+  const listFolders = () => (listing ??= foldersIn(opts.booksHome).then((r) => {
+    listed = r.folders;
+    listing = undefined;
+    const state = readState(opts.stateFile);
+    const answer = r.access === 'locked' ? undefined : r.access;
+    if (answer && (state.homeAccess?.answer !== answer || state.homeAccess.version !== version)) writeState(opts.stateFile, { ...state, homeAccess: { answer, version } });
+    return r;
+  }));
+  const version = opts.appVersion ?? '';
+  /** macOS's answer as this version of the app had it; another version (an update) asks again. */
+  const homeAccess = (): HomeAccess | undefined => {
+    const kept = readState(opts.stateFile).homeAccess;
+    return kept?.version === version ? kept.answer : undefined;
+  };
+  const info = async (): Promise<DesktopInfo> => {
+    const state = readState(opts.stateFile);
+    const access = homeAccess();
+    return {
+      open, recent: await Promise.all(state.recent.map(look)), booksHome: opts.booksHome, folders: listed ?? [],
+      ...(access ? { homeAccess: access } : {}),
+    };
   };
 
   const app = express();
@@ -261,8 +331,8 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   app.use('/api/desktop', express.json());
   // This Mac's AI (docs/0.4.0/ai-setup.md): before any books exist, and the same while books are open.
   app.use(aiSetup);
-  app.get('/api/desktop', (_req, res, next) => { infoNow().then((i) => res.json(i), next); });
-  app.get('/api/desktop/folders', (_req, res, next) => { listFolders().then((folders) => res.json({ folders }), next); });
+  app.get('/api/desktop', (_req, res, next) => { info().then((i) => res.json(i), next); });
+  app.get('/api/desktop/folders', (_req, res, next) => { listFolders().then((r) => res.json(r satisfies HomeFolders), next); });
   app.post('/api/desktop/open', async (req, res) => {
     const root = (req.body as { root?: unknown }).root;
     if (typeof root !== 'string' || !root.trim()) return refuse(res, new WorkspaceError('No folder given.'));
@@ -271,10 +341,20 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   app.post('/api/desktop/create', async (req, res) => {
     try {
       const body = req.body as SetupRequest & { assumed?: unknown };
+      if (typeof body.root === 'string' && body.root.trim()) {
+        const root = resolve(body.root);
+        // New books never open books or a setup already there: she typed a new firm (#373, review).
+        const look = await lookAt(root);
+        if (look.holds === 'books' || look.holds === 'setup') {
+          throw new WorkspaceRefusal(`${root} holds ${look.holds === 'books' ? 'books' : 'a setup'} already.`, { code: 'folderTaken', params: { root, holds: look.holds, ...(look.name ? { name: look.name } : {}), free: freeBeside(root) } });
+        }
+      }
       const created = await createWorkspace(body);
       // What the kind of firm answered and she never touched (#385): kept only where the books took it.
       // The answers the setup does not ask (#452) took their `later` answer: assumed too, so the books show them to check.
       if (!created.existed) {
+        // She created the workspace and its rules: switched on as it is (#413).
+        switchOnCreated(workspaceAt(created.root));
         const said = parseAssumed(body.assumed);
         const { answers, filled } = withLater(body.answers);
         seedAssumed(workspaceAt(created.root), assumedOf([...stillAssumed(said, answers).map((a) => a.key), ...filled], answers, said?.by));
@@ -298,8 +378,8 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     return draftView(root, draft);
   };
   // What a folder named for new books already holds, so the page never goes on silently in one that is not new.
-  app.get('/api/desktop/folder', (req, res) => {
-    try { res.json(lookAt(rootOf(req.query.root))); } catch (e) { refuse(res, e); }
+  app.get('/api/desktop/folder', async (req, res) => {
+    try { res.json(await lookAt(rootOf(req.query.root))); } catch (e) { refuse(res, e); }
   });
   app.get('/api/desktop/setup', (req, res) => {
     try { res.json(viewOf(rootOf(req.query.root))); } catch (e) { refuse(res, e); }
@@ -308,9 +388,10 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     try {
       const { root: raw, language } = (req.body ?? {}) as { root?: unknown; language?: unknown };
       const root = rootOf(raw);
+      await reachable(root);
       if (appFolderIn(root)) { res.json({ kind: 'books', books: await openBooks(root) } satisfies SetupBegun); return; }
       const draft = beginDraft(root, typeof language === 'string' ? language : 'de', new Date().toISOString());
-      remember(root);
+      remember(root, draft.firm?.name);
       res.json({ kind: 'draft', view: draftView(root, draft) } satisfies SetupBegun);
     } catch (e) { refuse(res, e); }
   });
@@ -375,7 +456,7 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   });
 
   return {
-    app, open: openBooks, openDemo, info, recent,
+    app, open: openBooks, openDemo, info, recent, reach, folderOf,
     current: () => open,
     allowHost: (h) => { host = h; },
     startBackground: () => { if (background === 'off') { background = 'wanted'; void runBackground(); } },
@@ -407,18 +488,36 @@ function refuse(res: express.Response, e: unknown): void {
 }
 
 /**
- * The folders in `dir`; none when it is missing or may not be read. macOS asks the person before
- * the app reads the Documents folder: «Nicht erlauben» is an answer, never the end of the start.
- * Read off the main thread (fs/promises): a synchronous read held the main process for as long as
- * the question was open, and the first window's page then failed to load (issue #363).
+ * The folders in `dir`, and whether macOS let the app read it. macOS asks the person before the app
+ * reads the Documents folder: «Nicht erlauben» is an answer (`refused`, no folders), never the end of
+ * the start; a folder that is missing has none. Read off the main thread (fs/promises): a synchronous
+ * read held the main process for as long as the question was open (issue #363).
  */
-async function foldersIn(dir: string): Promise<string[]> {
+async function foldersIn(dir: string): Promise<HomeFolders> {
   try {
-    return (await readdir(dir, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
+    return { folders: (await readdir(dir, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name), access: 'allowed' };
   } catch (e) {
-    // Missing or refused is an answer; anything else is worth a line in the log.
-    if (!['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM'].includes((e as NodeJS.ErrnoException).code ?? '')) console.error(`folders in ${dir}:`, e);
-    return [];
+    const code = (e as NodeJS.ErrnoException).code ?? '';
+    // EPERM: macOS's «Nicht erlauben»; EACCES: the folder's own rights.
+    if (code === 'EPERM') return { folders: [], access: 'refused' };
+    if (code === 'EACCES') return { folders: [], access: 'locked' };
+    // Missing is an answer; anything else is worth a line in the log.
+    if (!['ENOENT', 'ENOTDIR'].includes(code)) console.error(`folders in ${dir}:`, e);
+    return { folders: [], access: 'allowed' };
+  }
+}
+
+/**
+ * DesktopServer.reach: one asynchronous look into `root`, which under Documents, Desktop or
+ * Downloads waits for macOS's question (on a thread of its own) and decides it for every read after.
+ */
+async function reach(root: string): Promise<Reach> {
+  try {
+    await readdir(root);
+    return 'ok';
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code ?? '';
+    return code === 'EPERM' ? 'refused' : code === 'EACCES' ? 'locked' : code === 'ENOENT' || code === 'ENOTDIR' ? 'missing' : 'ok';
   }
 }
 

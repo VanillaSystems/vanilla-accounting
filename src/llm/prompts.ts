@@ -229,8 +229,8 @@ interface TxInput {
   business?: { name: string; guidance: Guidance[] };
   /** It pays the owner back her outlays (src/booking/owner-outlays.ts, #402): her account and what it holds not paid back. */
   ownerOutlays?: { account: string; open: number };
-  /** The credit on the wages' deductions account at the end of its day (src/booking/withheld.ts, #426): what the payslips withheld and is not paid on yet. */
-  withheld?: { account: string; open: number };
+  /** The credit on the wages' deductions account at the end of its day (src/booking/withheld.ts, #426): what the payslips withheld and is not paid on yet; 0 for a contribution payment while it holds nothing (#470). */
+  withheld?: { account: string; open: number; share?: number };
 }
 
 const CLASSIFY_INSTRUCTIONS = `## Instructions
@@ -421,6 +421,10 @@ function ownerOutlaysLine(tx: TxInput): string {
 /** What the model is told of money out while the wages' deductions account holds a credit (booking.guide.yaml cls-social-insurance, #426). */
 function withheldLine(tx: TxInput): string {
   const w = tx.withheld!;
+  // Nothing held (#470): wages booked net withheld nothing in these books, so the whole contribution is the employer's (#368).
+  if (w.open <= 0) return `Withheld from wages: account ${w.account} holds nothing on this payment's day: the wages are booked net, or what the payslips withheld is paid already. This payment of social insurance contributions is the employer's expense as a whole (booking.guide.yaml cls-social-insurance): book all of it on the employer's contribution accounts with "vat": "none", and nothing on ${w.account}, even where the bill says that a part is the employees' share.`;
+  // What the payslips withheld for this payee, read by code (#476): the employees' share is that, not what the bill or the account suggests.
+  if (w.share !== undefined) return `Withheld from wages: account ${w.account} holds ${w.open} ${tx.currency}; of it, the payslips booked so far withheld ${w.share} ${tx.currency} for this payee's contributions, not paid on yet. That is the employees' share of this payment (booking.guide.yaml cls-social-insurance): book exactly ${w.share} on ${w.account} with "vat": "none", and the rest on the employer's contribution accounts, whatever the bill says of the parties' shares; the app books ${w.account} so in any case.`;
   return `Withheld from wages: account ${w.account} holds ${w.open} ${tx.currency}, deducted on the payslips booked so far and not paid on yet. Only a payment of social insurance contributions that the employer pays together with the employees' share clears it (booking.guide.yaml cls-social-insurance): book the employees' share on ${w.account} with "vat": "none", and the employer's share on its expense accounts. Take the employees' share from the bill when it states it; when the bill states only totals per contribution, it is the employees' share of each contribution they bear a part of by law, on the wages the bill names, which the payslips withheld: never more than ${w.account} holds (it may also hold deductions paid to another fund). Book nothing on ${w.account} for any other payment.`;
 }
 

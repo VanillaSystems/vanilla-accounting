@@ -76,6 +76,12 @@ export interface Action {
   outcomes: string[];
   /** The effects the action cannot run without. */
   effects: string[];
+  /**
+   * Every key its output may hold, also one it hands on only now and then (`refused`, a payment
+   * left unbooked): a step that uses it emits each, or the engine sticks the run the first time the
+   * key comes (#482). Required of a built action (src/workflows/load.ts checkWorkflow).
+   */
+  emits?: string[];
   /** A model decides in it: the step is an AI step, marked with the bot icon wherever it shows. */
   ai?: boolean;
   /** Absent: declared but not built yet. A workflow that uses it is drawn and explained, but cannot start. */
@@ -90,6 +96,9 @@ const declared = (outcomes: string[], o: { effects?: string[]; ai?: boolean } = 
  * notes (what waits for the model, what failed) are its output, and a step that stops gets the
  * run stuck with its reason, nothing written.
  */
+/** What a step of the inbox processing hands on (`batch`): `refused` only when it left payments unbooked. */
+const BATCH_EMITS = ['took', 'made', 'notes', 'refused'];
+
 function batch(step: StepRun, took: (books: Books, ws: Workspace, later?: () => ReadonlySet<string>) => Took[]): NonNullable<Action['run']> {
   return async (_input, effects, { ws, ask, later, arrivals, run }) => {
     const port = effects['books.write']!;
@@ -110,7 +119,7 @@ function batch(step: StepRun, took: (books: Books, ws: Workspace, later?: () => 
     const r = await step({ ws, books: port, ask, progress, log: () => {}, ...(hold ? { hold } : {}), ...(release ? { release } : {}), ...(later ? { later } : {}), ...(arrived ? { arrived } : {}) }).finally(() => { if (run) clearProgress(run.id); });
     if (r.stop) throw stopped(r.notes);
     // What it read and what it made, for the run view (src/workflows/summary.ts).
-    return { outcome: 'ok', output: { took: todo, made: madeBetween(before, port.read()), notes: r.notes } };
+    return { outcome: 'ok', output: { took: todo, made: madeBetween(before, port.read()), notes: r.notes, ...(r.refused?.length && { refused: r.refused }) } };
   };
 }
 
@@ -186,6 +195,7 @@ export const ACTIONS: Record<string, Action> = {
   'ledger.transaction-state': {
     outcomes: ['open', 'booked', 'closed'],
     effects: [],
+    emits: [],
     run(input, _effects, { ws }) {
       const t = tx(input);
       if (periodLock(books(input)).isClosed(t.date)) return { outcome: 'closed' };
@@ -196,6 +206,7 @@ export const ACTIONS: Record<string, Action> = {
   'accounting.expenses.classification': {
     outcomes: ['decided', 'undecided', 'held'],
     effects: [],
+    emits: ['entries', 'why', 'refused'],
     ai: true,
     // Code first: a rule books without the model; without one and without a model the step says why it waits (r4c-34).
     async run(input, effects, { ws, ask }) {
@@ -233,13 +244,16 @@ export const ACTIONS: Record<string, Action> = {
         closeSaleQuestionsHeld(ws, [t.ref], scratch.config.closedThrough);
         return { outcome: 'held', output: { why: 'asked' } };
       }
-      return { outcome: 'undecided', output: { why: unasked.length ? 'noModel' : failed.length ? 'failed' : 'asked' } };
+      // A refused answer is kept with its run (#470): the payment says why, and its «Verlauf» names the run.
+      const refused = failed.map((f) => ({ ref: f.ref, ...(f.refusal && { refusal: f.refusal }) }));
+      return { outcome: 'undecided', output: { why: unasked.length ? 'noModel' : failed.length ? 'failed' : 'asked', ...(refused.length && { refused }) } };
     },
   },
 
   'booking.rule-question': {
     outcomes: ['proposed', 'open', 'gone', 'noModel', 'booked', 'waits'],
     effects: [],
+    emits: ['question', 'rule', 'entries'],
     ai: true,
     async run(input, _effects, { ws, ask, run, waits }) {
       const b = books(input);
@@ -280,6 +294,7 @@ export const ACTIONS: Record<string, Action> = {
   'ledger.book': {
     outcomes: ['booked'],
     effects: ['ledger.book'],
+    emits: ['made'],
     run(input, effects, { ws, run }) {
       const entries = input.entries as JournalEntry[];
       effects['ledger.book']!(entries);
@@ -294,10 +309,10 @@ export const ACTIONS: Record<string, Action> = {
   ...YEAR_END_ACTIONS,
   ...COLLECT_ACTIONS,
   // The inbox, one run per arrival (src/intake/): every step takes up only what is still to do.
-  'intake.read': { outcomes: ['ok'], effects: ['books.write'], run: batch(readStep, inboxFiles) },
-  'intake.extract-vat': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: batch(vatStep(), (b) => { const todo = new Set(vatCandidates(b, false, true)); return receiptsWhere((r) => todo.has(r))(b); }) },
-  'intake.match': { outcomes: ['ok'], effects: ['books.write'], ai: true, run: learning(batch(matchStep, receiptsWhere((r) => r.location === 'staged'))) },
-  'intake.book': { outcomes: ['ok'], effects: ['books.write', 'runs.close'], ai: true, run: honoursBooking(batch(classifyStep(), unbooked)) },
+  'intake.read': { outcomes: ['ok'], emits: BATCH_EMITS, effects: ['books.write'], run: batch(readStep, inboxFiles) },
+  'intake.extract-vat': { outcomes: ['ok'], emits: BATCH_EMITS, effects: ['books.write'], ai: true, run: batch(vatStep(), (b) => { const todo = new Set(vatCandidates(b, false, true)); return receiptsWhere((r) => todo.has(r))(b); }) },
+  'intake.match': { outcomes: ['ok'], emits: BATCH_EMITS, effects: ['books.write'], ai: true, run: learning(batch(matchStep, receiptsWhere((r) => r.location === 'staged'))) },
+  'intake.book': { outcomes: ['ok'], emits: BATCH_EMITS, effects: ['books.write', 'runs.close'], ai: true, run: honoursBooking(batch(classifyStep(), unbooked)) },
   'parsers.statement': declared(['ok']),
   'books.merge-statement': declared(['ok'], { effects: ['books.transactions'] }),
   'books.statement-balance': declared(['matches', 'differs']),
