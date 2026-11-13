@@ -344,6 +344,19 @@ export function paymentFacts(books: Books, tx: BankTransaction, context: Classif
 }
 
 /** The rule that decides `tx`, if one does. */
+/**
+ * Whether the classifier decides a payment before any company rule (classifyTransactions' order): a
+ * provider's payout, one that waits for its report, or a payment that could pay an open invoice. A
+ * rule's card counts no such payment among those its keep books (#383).
+ */
+export function decidedBeforeRules(books: Books, context: ClassifyContext): (tx: BankTransaction) => boolean {
+  const invoicePaid = openInvoicesPaid(books, context);
+  return (tx) => {
+    const linked = mappedReceipts(books, tx);
+    return !!payoutWaitOf(tx, linked, context.counterparties ?? [], books.journalEntries) || !!providerOfPayment(tx, linked, context.counterparties ?? []) || invoicePaid.has(tx.ref);
+  };
+}
+
 export function ruleOfPayment(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): PlacedRule | undefined {
   if (!context.rules?.length) return undefined;
   return ruleFor(context.rules, paymentFacts(books, tx, context, fx));

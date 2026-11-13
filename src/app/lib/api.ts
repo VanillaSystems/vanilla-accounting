@@ -53,7 +53,7 @@ import { ATTACHMENT_MAX_MB, type Attachment } from '../../types/attachment.js';
 import type { DropAction, DropSession, PayoutWaitView, QuarantinedFile, StatementDetails } from '../../types/drop.js';
 import type { MailCheck, ReceiptSkipOffer, SourcePreview, SourcesView } from '../../platform/sources/model.js';
 import type { MailHost } from '../../platform/sources/mail-host.js';
-import type { DraftCommand, DraftView, KeepResult, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
+import type { DraftCommand, DraftView, KeepResult, KeptBookings, RuleCommand, RuleCommandResult, RulesView } from '../../saving/rules.js';
 import type { ShareOffer } from '../../saving/share-rule.js';
 import type { GroupedOffer } from '../../saving/grouped-flag.js';
 import type { ReceiptSet, SetCut } from '../../intake/receipt-sets.js';
@@ -499,6 +499,10 @@ export const api = {
   draftHand: (rule: HandRule) => request<{ path: string }>('POST', '/api/rules/hand', rule),
   /** The rule for the open wages, drafted by code (#383), or null. */
   wageOffer: () => request<{ offer: WageOffer | null }>('GET', '/api/rules/wages'),
+  /** What a kept rule's booking runs made so far (#383). */
+  keptState: (runs: string[]) => request<KeptBookings>('POST', '/api/rules/kept', { runs }),
+  /** «Rückgängig» of a keep: the rules file as it was, and the bookings its runs made that are still theirs. */
+  undoKept: (body: { runs: string[]; entries: string[]; undo: { file: string; before: string; after: string } }) => request<{ ok: true; removed: number; left: { changed: number; closed: number; gone: number } } | { ok: false; message: string }>('POST', '/api/rules/kept/undo', body),
   /** «Als Regel vorschlagen» on a sentence of a partner's notes, or «Regel anpassen» after it changed: the rule drafted for its card. */
   draftNoteRule: (c: NoteRuleCommand) => request<{ path: string }>('POST', '/api/rules/note', c),
   dropOpen: () => request<DropSession>('POST', '/api/drop'),

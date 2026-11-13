@@ -11,7 +11,8 @@ import { chartOf } from '../booking/classify.js';
 import { chartNames } from '../booking/rule-book.js';
 import { receiptKnowledge } from '../booking/receipt-wait.js';
 import { wholeWords } from '../booking/rules.js';
-import { setup } from '../engines/index.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { chart, setup } from '../engines/index.js';
 import { stableWords } from '../knowledge/gaps.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
@@ -23,9 +24,24 @@ export interface WageOffer { rule: HandRule; refs: string[]; text: string; accou
 /** At least this many open wages before a rule for them is offered: one is booked as quickly by hand. */
 export const WAGES_FROM = 2;
 
+/**
+ * The type of an account in the firm's own chart (accounts.json), else in the jurisdiction's for a
+ * number the books know: a firm whose 5000 is no expense account has no wage account there (as the
+ * bank-charges account, #381).
+ */
+export function firmTypeOf(ws: Pick<Workspace, 'paths'>): (account: string) => string | undefined {
+  if (existsSync(ws.paths.accounts)) {
+    const types = new Map((JSON.parse(readFileSync(ws.paths.accounts, 'utf8')) as Array<{ number: string; type?: string }>).map((a) => [String(a.number), a.type]));
+    // An account the firm's file lists without a type (an older chart) takes its number's type in the jurisdiction's chart.
+    return (account) => (types.has(account) ? types.get(account) ?? chart().typeOf(account) : undefined);
+  }
+  const known = chartNames(chartOf(ws));
+  return (account) => (known.has(account) ? chart().typeOf(account) : undefined);
+}
+
 export function wageOffer(ws: Workspace): WageOffer | undefined {
   const account = setup().wages?.account;
-  if (!account || !chartNames(chartOf(ws)).has(account)) return undefined;
+  if (!account || firmTypeOf(ws)(account) !== 'expense') return undefined;
   const { wages } = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws);
   if (!wages.length) return undefined;
   const books = loadBooks(ws);

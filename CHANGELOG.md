@@ -37,7 +37,12 @@ Two markers flag an entry you must read before you update:
   «vor Beginn dieser Bücher», never «fällig seit».
 - Keeping a rule books the open payments it decides at once (#383): the keep starts the booking
   run for each, as «Braucht keinen Beleg» does, closes their tasks, and says «6 Zahlungen
-  gebucht» with a link to the bookings and «Rückgängig» (the rule and those bookings taken back).
+  gebucht» with a link to the bookings and «Rückgängig». Runs still going after half a minute
+  are named («3 werden noch gebucht»), the line updates when they finish and their tasks close
+  then; past 200 payments the rest are named and follow on the next run. «Rückgängig» puts the
+  rules file back (none, after the first rule) and takes out the keep's bookings that are still
+  the rule's; one changed since, or of a period closed since, stays and is named; the payments are
+  as before the keep, their tasks back.
   Before, they stayed tasks and unbooked until some later inbox run. A payment that waits for its
   receipt is named so on the card («wartet auf den Beleg: die Regel bucht sie, sobald er da ist»),
   never as a booking the keep would make, and the card says how many the keep books and how many
@@ -77,8 +82,11 @@ Two markers flag an entry you must read before you update:
   and a private share the form held; keeping or discarding it leaves her in her tasks. The rule
   form's account is the hand form's account field: a word («Lohn», «Miete») finds the account.
 - A rule asks no VAT where none applies (#383): a rule on the wage account, a debt, the owner's
-  or a money account, or for payments the evidence rules recognise as wages, books without a code.
-  Where it asks, «Keine Schweizer MWST» stands first, the rates as equals after it, with one line
+  or a money account, or for payments the evidence rules recognise as wages, books without a code,
+  unless a receipt of its payments shows Swiss VAT: then it asks. The wage account counts only
+  while the firm's account of that number is an expense account. A rule started from the hand
+  form takes its VAT only when a receipt gave the rate or she typed it, never the zero code the
+  form proposes for a payment without a receipt yet. Where it asks, «Keine Schweizer MWST» stands first, the rates as equals after it, with one line
   on how to tell from the receipt.
 - The wider text rule under a payment («oder eine für alle 6 mit «Lohn» im Text») is offered only
   on words that say what the payments are (#383): never on a document's word («Rechnung»), a

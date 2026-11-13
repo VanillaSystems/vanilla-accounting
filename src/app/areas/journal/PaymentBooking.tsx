@@ -82,7 +82,7 @@ export function PaymentBooking(props: Props) {
     <>
       {typed.length ? <Unattached {...props} typed={typed} /> : null}
       <BookingForm {...props} onForm={(el) => { formEl.current = el; props.onForm?.(el); }} accounts={ws.bankAccounts} draft={draft} dimensions={ws.dimensions ?? []} defaults={defaults} pending={known!.books !== props.books} />
-      {props.canRule !== false && start ? <RuleWay nav={props.nav} payment={props.payment} start={start} form={() => formEl.current} other={draft.bank && (draft.bank.side === 'accountDebit' ? 'accountCredit' : 'accountDebit')} /> : null}
+      {props.canRule !== false && start ? <RuleWay nav={props.nav} payment={props.payment} start={start} form={() => formEl.current} lines={draft.lines} other={draft.bank && (draft.bank.side === 'accountDebit' ? 'accountCredit' : 'accountDebit')} /> : null}
     </>
   );
 }

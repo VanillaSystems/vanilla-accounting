@@ -31,23 +31,30 @@ export function rateShown(r: VatFacts): number | undefined {
 }
 
 /**
- * Whether a booking on `account` carries no VAT code whatever the receipts say: the jurisdiction's
- * wage account (setup.yaml `wages`: a wage is no supply), a debt, or an account that
- * only settles (`settles`: the owner's account, a money account; receipt-wait.ts settlementAccount).
+ * Whether a booking on `account` carries no VAT code, unless a receipt shows Swiss VAT: the
+ * jurisdiction's wage account (setup.yaml `wages`: a wage is no supply) while the firm's own account
+ * of that number is an expense account (`typeOf`, the firm's chart), a debt, or an account that only
+ * settles (`settles`: the owner's account, a money account; receipt-wait.ts settlementAccount).
  */
-export function takesNoCode(account: string, settles: (account: string) => boolean = () => false): boolean {
-  const type = chart().typeOf(account);
-  return account === setup().wages?.account || type === 'liability' || settles(account);
+export function takesNoCode(account: string, settles: (account: string) => boolean = () => false, typeOf: (account: string) => string | undefined = (a) => chart().typeOf(a)): boolean {
+  const wage = account === setup().wages?.account && typeOf(account) === 'expense';
+  return wage || typeOf(account) === 'liability' || settles(account);
 }
 
-/** The rule's VAT, given the account it books on and the receipts linked to the payments it holds for. `noCode`: the account takes none (takesNoCode), or every payment the rule holds for is a wage. */
+/**
+ * The rule's VAT, given the account it books on and the receipts linked to the payments it holds
+ * for. `noCode`: the account takes none (takesNoCode), or every payment the rule holds for is a
+ * wage: then it books without a code, unless a receipt shows Swiss VAT, which wins and is asked about.
+ */
 export function ruleVatOf(account: string, receipts: readonly VatFacts[], noCode = false): RuleVat {
   const without = withoutInputTax();
   const purchase = chart().typeOf(account) === 'expense' || chart().typeOf(account) === 'asset';
-  if (noCode || without === 'none' || (without === 'net-rate' && purchase)) return { kind: 'fill', vat: 'none' };
+  if (without === 'none' || (without === 'net-rate' && purchase)) return { kind: 'fill', vat: 'none' };
   const seen = new Map<number, number>();
   for (const r of receipts) { const rate = rateShown(r); if (rate !== undefined) seen.set(rate, (seen.get(rate) ?? 0) + 1); }
-  if (seen.size === 1) return { kind: 'fill', vat: [...seen.keys()][0] };
+  const charged = [...seen.keys()].some((rate) => rate > 0);
+  if (noCode && !charged) return { kind: 'fill', vat: 'none' };
+  if (seen.size === 1 && !noCode) return { kind: 'fill', vat: [...seen.keys()][0] };
   // No Swiss VAT first, then the rates: no rate stands first as if it were the answer (#383).
   const choices = [0, ...[...new Set(invoiceRates())].filter((r) => r > 0).sort((a, b) => b - a)];
   return { kind: 'ask', seen: [...seen].map(([rate, n]) => ({ rate, receipts: n })).sort((a, b) => b.receipts - a.receipts || b.rate - a.rate), choices };

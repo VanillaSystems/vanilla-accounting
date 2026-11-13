@@ -6,7 +6,7 @@
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startApi, type ApiServer } from './support/api-server.js';
@@ -83,6 +83,32 @@ test('a wage rule asks no VAT, shows the four open wages it books, and keeping i
   const again = loadBooks(api.ws);
   assert.equal(again.journalEntries.filter((e) => WAGES.includes(e.transactionRef)).length, 4, 'booked once');
   assert.equal(again.journalEntries.length, before);
+});
+
+test('«Rückgängig» of a keep: the rule file goes (it was the first), the keep\'s bookings go, one the person changed since stays and is named, the others are tasks again', async () => {
+  const api = await startApi('tests/fixtures/by-hand-index.json', {}, { manifestOf: employer() });
+  servers.push(api);
+  assert.equal((await api.send('PUT', '/api/accounts/5000', { name: 'Lohnaufwand' })).status, 200);
+  const path = String((await api.send('POST', '/api/rules/hand', { match: { kind: 'text', text: '\\bLohn\\b' }, direction: 'out', account: '5000' })).json.path);
+  const card = (await api.send('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`)).json as unknown as DraftView;
+  const kept = (await api.send('POST', '/api/rules/draft', { kind: 'keep', path, basis: card.basis, confirm: true })).json as unknown as KeepResult;
+  assert.ok(kept.ok && kept.booked && kept.undo, JSON.stringify(kept));
+  assert.equal(kept.undo.before, '', 'no rules file before');
+  assert.deepEqual([kept.booked.runs.length, kept.booked.running], [4, 0]);
+  assert.deepEqual((await api.send('POST', '/api/rules/kept', { runs: kept.booked.runs })).json.refs, kept.booked.refs, 'asked again: the same state');
+  // She changes one of the rule's bookings by hand (its id stays).
+  const changed = loadBooks(api.ws).journalEntries.find((e) => e.transactionRef === 'L1')!;
+  assert.equal((await api.send('PATCH', `/api/journal-entries/${changed.id}`, { description: 'Lohn Juli Max' })).status, 200);
+
+  const undone = (await api.send('POST', '/api/rules/kept/undo', { runs: kept.booked.runs, entries: kept.booked.entries, undo: kept.undo })).json;
+  assert.deepEqual([undone.ok, undone.removed, undone.left], [true, 3, { changed: 1, closed: 0, gone: 0 }], JSON.stringify(undone));
+  assert.equal(existsSync(join(api.ws.paths.root, path)), false, 'the first rules file is gone again, not left empty');
+  const books = loadBooks(api.ws);
+  assert.deepEqual(books.journalEntries.map((e) => e.transactionRef), ['L1'], 'only the changed booking stays');
+  assert.ok(books.transactions.every((t) => !t.waitsForPerson), 'no mark of a deletion');
+  await api.rest();
+  const tasks = ((await api.send('GET', '/api/automation')).json as unknown as { tasks: Array<{ item: { id: string } }> }).tasks.map((t) => t.item.id).sort();
+  assert.deepEqual(tasks, ['L2', 'L3', 'L4'], 'their tasks are there again');
 });
 
 test('the open wages of a firm with staff: code offers their rule (text, money out, the wage account, no code); one decision on the card books them', async () => {

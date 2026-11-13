@@ -13,12 +13,13 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative } from 'node:path';
 import { parse, parseDocument, YAMLMap, YAMLSeq } from 'yaml';
 import { chartNames, companyRules, factsOf, holdsRules, rulesIn, type RuleRow } from '../booking/rule-book.js';
-import { chartOf, loadClassifyContext, mappedReceipts, paymentFacts, ruleLine } from '../booking/classify.js';
+import { chartOf, decidedBeforeRules, loadClassifyContext, mappedReceipts, paymentFacts, ruleLine } from '../booking/classify.js';
 import { loadKnowledge, KNOWLEDGE_DIR } from '../knowledge/layers.js';
 import { holds, loneWords, parseRule, type BookingRule, type RuleFacts } from '../booking/rules.js';
 import { ruleVatOf, takesNoCode, type RateSeen } from '../booking/rule-vat.js';
 import { receiptKnowledge, receiptWaitOf, settlementAccount } from '../booking/receipt-wait.js';
 import type { BankTransaction } from '../types/index.js';
+import { firmTypeOf } from './wage-rule.js';
 import { rateOf } from '../accounting/vat-codes.js';
 import { previewRules, ruleKey, type OpenDecided, type PlacedRow, type RulePreview } from '../booking/rule-preview.js';
 import { noteOffer, type NoteOffer } from '../knowledge/note-rules.js';
@@ -205,6 +206,7 @@ function settleVat(ws: Workspace, path: string, text: string): { text: string; a
   const context = { ...loadClassifyContext(ws), counterparties: 'error' in k ? [] : k.counterparties };
   const fx = loadFxResolver();
   const { wages } = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws);
+  const typeOf = firmTypeOf(ws);
   const asks: VatAsk[] = [];
   for (const row of rows) {
     const node = ruleNode(doc, path, row.step, row.id);
@@ -219,7 +221,7 @@ function settleVat(ws: Workspace, path: string, text: string): { text: string; a
     const receipts = payments.flatMap((tx) => mappedReceipts(books!, tx));
     // Wages (the evidence rules' wording, on a firm that pays wages) and an account that takes no VAT code book without one, unasked (#383).
     const wage = (tx: BankTransaction) => wages.some((w) => w.test(tx.description));
-    const noCode = takesNoCode(booking.account, settlementAccount(context)) || (payments.length > 0 && payments.every(wage));
+    const noCode = takesNoCode(booking.account, settlementAccount(context), typeOf) || (payments.length > 0 && payments.every(wage));
     const vat = ruleVatOf(booking.account, receipts, noCode);
     if (vat.kind === 'fill') node.then.set('vat', vat.vat);
     else asks.push({ step: row.step, id: row.id, seen: vat.seen, choices: vat.choices });
@@ -278,7 +280,7 @@ function preview(ws: Workspace, path: string, after: string, targets: RuleRow[])
   // A payment that needs a receipt is not booked while none is linked, by a rule too: the card says it waits (#383).
   const known = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws);
   const waits = (tx: BankTransaction) => receiptWaitOf(books, tx, context, known, fx).wait;
-  return previewRules(all.filter((r) => keys.has(ruleKey(r.row))), all, books, context, fx, waits);
+  return previewRules(all.filter((r) => keys.has(ruleKey(r.row))), all, books, context, fx, waits, decidedBeforeRules(books, context));
 }
 
 export type KeepResult =
@@ -293,8 +295,12 @@ export type KeepResult =
   }
   | { ok: false; refusal: 'gone' | 'stale' | 'rules' | 'wide' | 'not-rules' | 'changed' | 'note'; message: string };
 
-/** What keeping a rule booked: the payments now booked, their entries (the undo takes them back), and those its runs left unbooked. */
-export interface KeptBookings { refs: string[]; entries: string[]; notBooked: string[]; first?: { id: string; date: string } }
+/**
+ * What keeping a rule booked: its booking runs (the undo goes by them), the payments they booked and
+ * their entries, how many runs are still going, the payments a run left unbooked, and how many
+ * payments were not started at the keep (more than KEEP_RUNS_MAX: the next run books them).
+ */
+export interface KeptBookings { runs: string[]; refs: string[]; entries: string[]; running: number; notBooked: string[]; later?: number; first?: { id: string; date: string } }
 
 const CUSTOMIZING = ['Vanilla-Kind: customizing', "Vanilla-Person: the app's user"];
 
@@ -418,7 +424,8 @@ export async function ruleCommand(ws: Ws, c: RuleCommand): Promise<RuleCommandRe
   const now = read(path);
   if (c.kind === 'restore') {
     if (hashOf(now) !== c.after) return { ok: false, refusal: 'changed', message: 'Die Regeln haben sich seither geändert.' };
-    writeFileSync(path, c.before);
+    // A file that was not there before (the first rule ever kept) goes again, as keepDraft removes one that would be empty.
+    if (c.before.trim()) writeFileSync(path, c.before); else rmSync(path, { force: true });
     return { ok: true, committed: await commit(ws, 'Regel wiederhergestellt', c.file) };
   }
   const next = editRule(now, c.file, c.step, c.id, c.kind);

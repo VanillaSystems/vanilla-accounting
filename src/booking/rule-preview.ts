@@ -194,7 +194,7 @@ function departures(books: Books, tx: BankTransaction, booking: RuleBooking, con
  * a payment without a booking waits for its receipt (receipt-wait.ts, with the draft's rules): such a
  * payment is shown as waiting, never as a booking the keep would make (#383).
  */
-export function previewRules(targets: readonly PlacedRow[], rules: readonly PlacedRow[], books: Books, context: ClassifyContext, fx: FxResolver, waits: (tx: BankTransaction) => boolean = () => false): RulePreview[] {
+export function previewRules(targets: readonly PlacedRow[], rules: readonly PlacedRow[], books: Books, context: ClassifyContext, fx: FxResolver, waits: (tx: BankTransaction) => boolean = () => false, before: (tx: BankTransaction) => boolean = () => false): RulePreview[] {
   const year = openYear(books);
   const closed = periodLock(books).isClosed;
   const txs = books.transactions.filter((t) => t.date.startsWith(year)).sort((a, b) => b.date.localeCompare(a.date) || a.ref.localeCompare(b.ref));
@@ -259,7 +259,8 @@ export function previewRules(targets: readonly PlacedRow[], rules: readonly Plac
         // Only where it books: another rule deciding first books nothing by this one.
         const decider = ruleFor(placed, p);
         if (decider && ruleKey(pool[placed.indexOf(decider)].row) === key) {
-          if (!closed(tx.date) && !books.journalEntries.some((e) => e.transactionRef === tx.ref)) (waits(tx) ? open.waits : open.book).push(tx.ref);
+          // Counted as the classifier will decide it: a payout or a possible invoice payment goes before any rule (`before`).
+          if (!closed(tx.date) && !books.journalEntries.some((e) => e.transactionRef === tx.ref) && !before(tx)) (waits(tx) ? open.waits : open.book).push(tx.ref);
           const { kinds, national } = departures(books, tx, t.booking, context);
           for (const kind of kinds) {
             const o = against.get(kind) ?? { count: 0, payments: [] };

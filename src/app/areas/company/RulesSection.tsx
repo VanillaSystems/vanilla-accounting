@@ -29,6 +29,7 @@ import { VatCodeField } from '../codes/VatCodeField.js';
 import { codeLabel } from '../codes/names.js';
 import { onBooksChanged } from '../../assistant/store.js';
 import { AccountField } from '../journal/AccountField.js';
+import type { HandSeed } from '../journal/rule-seed.js';
 import type { WageOffer } from '../../../saving/wage-rule.js';
 
 const words = ((key: string, vars: Record<string, string>) => (t as (k: string, v: Record<string, string>) => string)(key, vars)) as RuleWords;
@@ -110,8 +111,6 @@ export function RulesSection({ nav, canEdit, payment, by }: { nav: Nav; canEdit:
   );
 }
 
-/** What the hand-booking form held when the person asked for a rule (#383): the rule starts with it. */
-export interface HandSeed { account?: string; vat?: string; share?: string }
 
 /**
  * «Neue Regel»: whose payments (a business the firm knows, a payer, a text), optionally the
@@ -143,6 +142,8 @@ function HandRuleForm({ view, nav, payment, by, seed, inline, onKept }: { view: 
   async function preview(e: FormEvent) {
     e.preventDefault();
     const account = String((form.current ? new FormData(form.current).get('account') : f.account) ?? '');
+    // The form keeps the account it was previewed with: «Verwerfen» on the card brings it back as typed.
+    setF((was) => ({ ...was, account }));
     const made = handRuleOf({ ...f, account });
     if (!made.ok) { setError(t(`rules.hand.missing.${made.missing}`)); return; }
     setBusy(true);
@@ -249,7 +250,7 @@ export function LastKept({ nav }: { nav: Nav }) {
 /**
  * The rule for the open wages, drafted by code (src/saving/wage-rule.ts, #383): one line above the
  * tasks, «Regel für alle 6», and the click shows the rule's card with its payments. One decision,
- * no form; «Anpassen» opens the same rule in the form.
+ * no form.
  */
 export function WageRuleOffer({ nav }: { nav: Nav }) {
   const [offer, setOffer] = useState<WageOffer | null>(null);
@@ -286,36 +287,50 @@ type Done = 'kept' | 'removedDone' | 'discarded';
 /** A keep's answer: what it booked at once, what waits for a receipt, and the rules file as it was. */
 type Kept = Extract<KeepResult, { ok: true }>;
 
+/** How often the result line asks again while the keep's runs still book. */
+const KEPT_POLL_MS = 1500;
+
 /**
  * What keeping a rule did (#383): «4 Zahlungen gebucht» with a link to the newest of the bookings,
- * «2 warten auf ihren Beleg», and «Rückgängig», which puts the rules file back as it was and takes
- * the keep's bookings out again (a booking changed since stays: the journal refuses nothing it may).
+ * «2 warten auf ihren Beleg», «3 werden noch gebucht» while its runs go on (the line asks again
+ * until they rest), and «Rückgängig»: the server puts the rules file back and takes out the
+ * bookings the keep's runs made that are still theirs, naming what stays and why.
  */
 export function KeptLine({ kept, nav, lead }: { kept: Kept; nav?: Nav; lead?: boolean }) {
   const [said, setSaid] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const b = kept.booked;
+  const [b, setB] = useState(kept.booked);
   const waits = kept.open?.waits.length ?? 0;
+  useEffect(() => {
+    if (!b?.running) return;
+    const id = setTimeout(() => { api.keptState(b.runs).then((x) => { setB({ ...x, ...(b.later ? { later: b.later } : {}) }); nav?.refresh(); }, () => undefined); }, KEPT_POLL_MS);
+    return () => clearTimeout(id);
+  }, [b]);
   const undo = async () => {
-    if (!kept.undo) return;
+    if (!kept.undo || !b) return;
     setBusy(true);
     try {
-      const r = await api.ruleCommand({ kind: 'restore', ...kept.undo });
+      const r = await api.undoKept({ runs: b.runs, entries: b.entries, undo: kept.undo });
       if (!r.ok) { setSaid(r.message); return; }
-      let left = 0;
-      for (const id of b?.entries ?? []) await api.deleteJournalEntry(id).catch(() => { left++; });
-      setSaid(left ? t('rules.kept.undoneLeft', { n: left }) : t('rules.kept.undone'));
+      const left = [r.left.changed ? t('rules.kept.leftChanged', { n: r.left.changed }) : '', r.left.closed ? t('rules.kept.leftClosed', { n: r.left.closed }) : '', r.left.gone ? t('rules.kept.leftGone', { n: r.left.gone }) : ''].filter(Boolean);
+      setSaid([t('rules.kept.undone', { n: r.removed }), ...left].join(' '));
       nav?.refresh();
     } catch (e) { setSaid(errorText(e)); } finally { setBusy(false); }
   };
   return (
-    <span className="keptline" data-testid="rule-kept" data-booked={b?.refs.length ?? 0} data-waits={waits}>
+    <span className="keptline" data-testid="rule-kept" data-booked={b?.refs.length ?? 0} data-waits={waits} data-running={b?.running ?? 0}>
       {said ? <span>{said}</span> : (
         <>
           {lead ? <span className="m">{t('rules.draft.keptNow')}</span> : null}
-          <span>{[b?.refs.length ? t('rules.kept.booked', { n: b.refs.length }) : '', waits ? t('rules.kept.waits', { n: waits }) : '', b?.notBooked.length ? t('rules.kept.notBooked', { n: b.notBooked.length }) : ''].filter(Boolean).join(' · ')}</span>
+          <span>{[
+            b?.refs.length ? t('rules.kept.booked', { n: b.refs.length }) : '',
+            b?.running ? t('rules.kept.running', { n: b.running }) : '',
+            waits ? t('rules.kept.waits', { n: waits }) : '',
+            b?.notBooked.length ? t('rules.kept.notBooked', { n: b.notBooked.length }) : '',
+            b?.later ? t('rules.kept.later', { n: b.later }) : '',
+          ].filter(Boolean).join(' · ')}</span>
           {b?.first && nav ? <Go to={at({ area: 'journal', id: b.first.id }, b.first.date)} nav={nav} className="golink">{t('rules.kept.show')}</Go> : null}
-          {b?.entries.length && kept.undo ? <button type="button" className="linkbtn" data-act="rule-undo" disabled={busy} onClick={() => void undo()}>{t('rules.kept.undo')}</button> : null}
+          {b?.runs.length && kept.undo ? <button type="button" className="linkbtn" data-act="rule-undo" disabled={busy || !!b.running} onClick={() => void undo()}>{t('rules.kept.undo')}</button> : null}
         </>
       )}
     </span>
