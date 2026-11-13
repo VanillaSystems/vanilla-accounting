@@ -528,13 +528,20 @@ function linkCarried(books: Books, entry: JournalEntry): void {
 }
 
 /**
+ * The one payment an entry's ref names. An empty ref (a read before #401 left payments on it, filed
+ * ones among them) names none, so marking or unmarking it never touches a payment of another (#419).
+ */
+const paymentByRef = (books: Books, ref: string): BankTransaction | undefined =>
+  ref.trim() ? books.transactions.find((t) => t.ref === ref) : undefined;
+
+/**
  * The payment's wait for a person ends (r10h-5): someone booked it, or asked the app to. Called by
  * every path that books a payment; the mark is set by deleteEntry alone. A bank movement booked in a
  * filed quarter as a movement read from a PDF (bookedInFiled, #254) keeps its mark: only «Trotzdem
  * buchen» takes it (DELETE /api/transactions/:ref/filed-twin).
  */
 export function bookedAgain(books: Books, ref: string): void {
-  const tx = books.transactions.find((t) => t.ref === ref);
+  const tx = paymentByRef(books, ref);
   if (tx?.waitsForPerson?.why === 'bookingDeleted') delete tx.waitsForPerson;
 }
 
@@ -747,7 +754,7 @@ export function deleteEntry(books: Books, id: string): JournalEntry {
   const entry = entryOf(books, id);
   assertOpen(books, [entry.date], 'deleteEntry');
   books.journalEntries = books.journalEntries.filter((je) => je.id !== id);
-  const tx = books.transactions.find((t) => t.ref === entry.transactionRef);
+  const tx = paymentByRef(books, entry.transactionRef);
   // One booked in a filed quarter as a read movement (#254) stays so: its difference line gone, it is still booked there.
   if (tx && !bookedInFiled(tx)) tx.waitsForPerson = { since: new Date().toISOString(), why: 'bookingDeleted' };
   // A booking without a payment takes its links along: no receipt hangs on a booking that is gone. The entry keeps them in `receipts` for its undo.

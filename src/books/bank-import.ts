@@ -458,8 +458,8 @@ export const unreferencedLine = (files: ReadonlyArray<{ file: string; n: number 
 /**
  * What became of the open payments a statement read before #401 left on an empty ref (`repairEmptyRefs`):
  * `repaired` of them took their bank's ref; `left` of them stay as they are, with why: `yours`, a
- * person's entry or link stands on the empty ref and several payments share it, so it cannot be told
- * to one of them; `unmatched`, no one statement file holds exactly their movements.
+ * person's entry or link stands on the empty ref and several open payments share it, or her entry
+ * stands there beside filed payments on it (#419), so it cannot be told to one of them; `unmatched`, no one statement file holds exactly their movements.
  */
 export type EmptyRefRepair = { repaired: number } | { left: number; why: 'yours' | 'unmatched' };
 
@@ -473,7 +473,7 @@ export type EmptyRefRepair = { repaired: number } | { left: number; why: 'yours'
  * one such payment, every open entry and link moves to its ref; with several, the app's entries and
  * links on it go (they stood on all of them at once; the next run books and pairs again), and a
  * person's entry or link stops the repair (`yours`). With a filed payment on an empty ref no link on it
- * moves. Run as the person, by the statement import (src/server/routes/statements.ts), never by a module.
+ * moves, and a person's open entry there stops the repair too (`yours`), however many are open. Run as the person, by the statement import (src/server/routes/statements.ts), never by a module.
  */
 export function repairEmptyRefs(ws: Ws, books: Index): EmptyRefRepair {
   const lock = periodLock(books);
@@ -492,7 +492,8 @@ export function repairEmptyRefs(ws: Ws, books: Index): EmptyRefRepair {
   const entries = (books.journalEntries ?? []).filter((e) => !e.transactionRef.trim() && !lock.isClosed(e.date));
   const filedEmpty = books.transactions.some((t) => !t.ref.trim() && lock.isClosed(t.date));
   const links = filedEmpty ? [] : books.mappings.filter((m) => !m.transactionRef.trim());
-  if (open.length > 1 && (entries.some((e) => e.origin === 'manual') || links.some((m) => m.by === 'human'))) return { left: open.length, why: 'yours' };
+  // A person's entry on the empty ref beside filed payments there may be one of theirs (a correction of the filed quarter): it stays, as with several open.
+  if ((open.length > 1 || filedEmpty) && (entries.some((e) => e.origin === 'manual') || links.some((m) => m.by === 'human'))) return { left: open.length, why: 'yours' };
   if (open.length === 1) {
     for (const e of entries) e.transactionRef = pairs[0][1].ref;
     for (const m of links) m.transactionRef = pairs[0][1].ref;
