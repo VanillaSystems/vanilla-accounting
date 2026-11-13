@@ -32,12 +32,12 @@ export function rateShown(r: VatFacts): number | undefined {
 
 /**
  * Whether a booking on `account` carries no VAT code whatever the receipts say: the jurisdiction's
- * wage account (setup.yaml `wages`: a wage is no supply), a debt or the equity, or an account that
+ * wage account (setup.yaml `wages`: a wage is no supply), a debt, or an account that
  * only settles (`settles`: the owner's account, a money account; receipt-wait.ts settlementAccount).
  */
 export function takesNoCode(account: string, settles: (account: string) => boolean = () => false): boolean {
   const type = chart().typeOf(account);
-  return account === setup().wages?.account || type === 'liability' || type === 'equity' || settles(account);
+  return account === setup().wages?.account || type === 'liability' || settles(account);
 }
 
 /** The rule's VAT, given the account it books on and the receipts linked to the payments it holds for. `noCode`: the account takes none (takesNoCode), or every payment the rule holds for is a wage. */

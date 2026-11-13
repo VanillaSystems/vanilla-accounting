@@ -170,10 +170,13 @@ async function bookKept(refs: string[]): Promise<KeptBookings> {
   const books = loadBooks(WS);
   const booked = new Set(refs.filter((ref) => bookedState(books, ref, WS.bankAccounts) === 'booked'));
   for (const r of askRuns(e)) if (r.state.status === 'waiting' && r.item.kind === 'transaction' && booked.has(r.item.id)) await e.command({ kind: 'discard', run: r.id, reason: BOOKED_BY_RULE });
+  const made = books.journalEntries.filter((x) => booked.has(x.transactionRef) && runs.includes(x.run ?? ''));
+  const first = [...made].sort((a, b) => b.date.localeCompare(a.date))[0];
   return {
     refs: [...booked],
-    entries: books.journalEntries.filter((x) => booked.has(x.transactionRef) && runs.includes(x.run ?? '')).map((x) => x.id),
+    entries: made.map((x) => x.id),
     notBooked: refs.filter((ref) => !booked.has(ref)),
+    ...(first ? { first: { id: first.id, date: first.date } } : {}),
   };
 }
 

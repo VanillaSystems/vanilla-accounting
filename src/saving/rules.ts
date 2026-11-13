@@ -294,7 +294,7 @@ export type KeepResult =
   | { ok: false; refusal: 'gone' | 'stale' | 'rules' | 'wide' | 'not-rules' | 'changed' | 'note'; message: string };
 
 /** What keeping a rule booked: the payments now booked, their entries (the undo takes them back), and those its runs left unbooked. */
-export interface KeptBookings { refs: string[]; entries: string[]; notBooked: string[] }
+export interface KeptBookings { refs: string[]; entries: string[]; notBooked: string[]; first?: { id: string; date: string } }
 
 const CUSTOMIZING = ['Vanilla-Kind: customizing', "Vanilla-Person: the app's user"];
 

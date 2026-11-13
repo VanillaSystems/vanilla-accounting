@@ -14,7 +14,6 @@ import type { HandStart } from '../../../saving/hand-rule.js';
 import { api } from '../../lib/api.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { firmCodes, formTakes, lookupVatCode, parseRate, vatCodeOf } from '../../../accounting/vat-codes.js';
-import { patternText } from '../../../booking/rules.js';
 import { withoutInputTax } from '../../../engines/index.js';
 import { codeLabel, codeText } from '../codes/names.js';
 import { isVatAmountCode } from '../../../accounting/validate.js';
@@ -30,6 +29,7 @@ import { useInvoices } from '../invoices/data.js';
 import { Go } from '../vat/links.js';
 import { at } from '../receipts/view.js';
 import { TagFields, tagsOfForm } from './TagFields.js';
+import { RuleWay } from './RuleWay.js';
 import type { Dimension } from '../../../books/tags.js';
 
 const parseAmount = (s: string) => { const n = Number(s.replace(/['’\s]/g, '').replace(',', '.')); return Number.isFinite(n) && s.trim() ? n : null; };
@@ -73,37 +73,17 @@ export function PaymentBooking(props: Props) {
     defaults: ws.defaults, rule: start?.rule, nature: start?.nature, account: start?.account,
     invoiceRevenue: ws.invoicing?.revenueAccount, chart: getAccounts().map((a) => a.number), ownUid: ws.company.uid,
   })) : undefined), [ws, known, start, props.books, props.payment, invoices]);
+  // The form as it stands: the way to a rule starts with what it holds (#383).
+  const formEl = useRef<HTMLFormElement | null>(null);
   const typed = useMemo(() => (ws ? unattachedFor(props.books, props.payment, ws.bankAccounts) : []), [ws, props.books, props.payment]);
   if (!ws || !draft) return null;
   const defaults = ws.defaults ? [...new Set([ws.defaults.sales, ...ws.defaults.all.sales.map((x) => x.account), ...ws.defaults.all.purchase.map((x) => x.account)])] : [];
   return (
     <>
       {typed.length ? <Unattached {...props} typed={typed} /> : null}
-      <BookingForm {...props} accounts={ws.bankAccounts} draft={draft} dimensions={ws.dimensions ?? []} defaults={defaults} pending={known!.books !== props.books} />
-      {props.canRule !== false && start ? <RuleWay nav={props.nav} payment={props.payment} start={start} /> : null}
+      <BookingForm {...props} onForm={(el) => { formEl.current = el; props.onForm?.(el); }} accounts={ws.bankAccounts} draft={draft} dimensions={ws.dimensions ?? []} defaults={defaults} pending={known!.books !== props.books} />
+      {props.canRule !== false && start ? <RuleWay nav={props.nav} payment={props.payment} start={start} form={() => formEl.current} other={draft.bank && (draft.bank.side === 'accountDebit' ? 'accountCredit' : 'accountDebit')} /> : null}
     </>
-  );
-}
-
-/**
- * The faster way than one form per payment (#344): a rule for payments of this kind, started from
- * this one in Firma › Regeln (src/saving/hand-rule.ts), where its card shows every payment it
- * would book before anything is kept. It says how many unbooked payments are of the kind.
- */
-function RuleWay({ nav, payment, start }: { nav: Nav; payment: string; start: HandStart }) {
-  if (start.rule) return null;
-  const n = start.similar ?? 1;
-  const what = start.match.kind === 'text' ? patternText(start.match.text) : start.name;
-  return (
-    <p className="pbr" data-testid="task-make-rule" data-similar={n}>
-      <span>{n > 1 ? t('journal.byHand.ruleMany', { n, what }) : t('journal.byHand.ruleOne')}</span>{' '}
-      <Go to={{ route: { area: 'company', section: 'rules' }, query: { payment } }} nav={nav} className="btn ghost">{n > 1 ? t('journal.byHand.ruleManyGo', { n }) : t('journal.byHand.ruleOneGo')}</Go>
-      {start.wider ? (
-        <span data-testid="task-make-rule-wider" data-similar={start.wider.similar}>
-          <Go to={{ route: { area: 'company', section: 'rules' }, query: { payment, by: 'text' } }} nav={nav} className="golink">{t('journal.byHand.ruleWider', { n: start.wider.similar, text: start.wider.text })}</Go>
-        </span>
-      ) : null}
-    </p>
   );
 }
 
