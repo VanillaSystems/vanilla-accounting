@@ -424,6 +424,12 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The open list under a return (#477) no longer opens with «Nichts davon hält die Abrechnung auf»
+  while payments of the period are unbooked. Its first sentence names them, the money in and the
+  money out with their count and sum: «4 Zahlungseingänge über CHF … und ein Zahlungsausgang über
+  CHF … sind noch nicht gebucht: die Zahl ist noch nicht endgültig.» These
+  are the same payments the return's page counts beside «noch nicht endgültig». With every payment
+  booked and nothing withheld the sentence is as before. What withholds «Freigegeben» is unchanged.
 - The drop window with many files (#453): the line «Gesamt 51 % · 1 von 43 Dateien fertig» no
   longer lies over the tabs (it shrank to nothing once the list was long), and «Schliessen» no
   longer falls below a small window: between the head and the foot, what came of the drop, the

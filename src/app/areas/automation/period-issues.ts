@@ -22,6 +22,7 @@ import { waitingForReceipt, type WaitingPayment } from '../../../accounting/rece
 import { localToday, type IsoDate } from '../../../accounting/periods.js';
 import type { HeldOrder, MissingBill, ProviderIssues } from '../../../booking/provider-issues.js';
 import { unclearedContributions, type Uncleared } from '../../../booking/withheld.js';
+import { baseCurrency } from '../../../engines/index.js';
 
 export type PeriodIssue =
   | { kind: 'question'; q: Question; date: string }
@@ -133,21 +134,49 @@ export function billText(b: MissingBill, month: string, money: (n: number) => st
   return b.where ? `${line}. ${say('issues.billWhere', { provider: b.name, where: b.where })}` : `${line}.`;
 }
 
+/** Joins two or more parts as «a, b und c». */
+const joined = (parts: readonly string[], say: Say) => (parts.length > 1 ? say('issues.lead.and', { a: parts.slice(0, -1).join(', '), b: parts.at(-1)! }) : parts[0]);
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * The payments of `issues` nobody booked, in words (#477): the money in and the money out, each with its
+ * count and its sum per currency, the books' first, «4 Zahlungseingänge über … und ein Zahlungsausgang über
+ * … sind noch nicht gebucht: die Zahl ist noch nicht endgültig.» The payments counted are the list's,
+ * which the return's page counts beside «noch nicht endgültig» (countIssues `unbooked`). Undefined when none.
+ */
+export function unbookedLead(issues: readonly PeriodIssue[], say: Say, money: (amount: number, currency: string) => string): string | undefined {
+  const txs = issues.flatMap((i) => (i.kind === 'unbooked' ? [i.tx] : []));
+  if (!txs.length) return undefined;
+  const side = (key: 'issues.lead.unbookedIn' | 'issues.lead.unbookedOut', of: BankTransaction[]) => {
+    if (!of.length) return '';
+    const sums = new Map<string, number>();
+    for (const t of of) sums.set(t.currency, (sums.get(t.currency) ?? 0) + Math.abs(t.amount));
+    const base = baseCurrency();
+    const order = [...sums].sort(([a], [b]) => Number(b === base) - Number(a === base) || a.localeCompare(b));
+    return say(key, { n: of.length, amount: order.map(([c, a]) => money(Math.round(a * 100) / 100, c)).join(' + ') });
+  };
+  const parts = [side('issues.lead.unbookedIn', txs.filter((t) => t.direction === 'CRDT')), side('issues.lead.unbookedOut', txs.filter((t) => t.direction !== 'CRDT'))].filter(Boolean);
+  return say('issues.lead.unbooked', { n: txs.length, what: capital(joined(parts, say)) });
+}
+
 /**
  * The list's lead (#428): what withholds the approval, as filing-summary.ts withheldIn counts it for
  * the review too (rates without their activity code, open VAT questions, orders held for their rates),
- * named only when it is there, and whether the rest of the list (`listed` items) blocks nothing.
+ * named only when it is there; then the payments of the list (`issues`) nobody booked, which keep the
+ * figure from being final (#477); and only when none is, whether the rest of the list blocks nothing.
+ * What withholds «Freigegeben» stays `withheldIn`'s alone: an unbooked payment is named, never withheld for.
  */
-export function issuesLead(w: { rates: readonly string[]; questions: number; held: number }, listed: number, say: Say): string {
+export function issuesLead(w: { rates: readonly string[]; questions: number; held: number }, issues: readonly PeriodIssue[], say: Say, money: (amount: number, currency: string) => string): string {
   const parts = [
     w.rates.length ? say('issues.lead.rates', { n: w.rates.length, rates: w.rates.join(', ') }) : '',
     w.questions ? say('issues.lead.question', { n: w.questions }) : '',
     w.held ? say('issues.lead.order', { n: w.held }) : '',
   ].filter(Boolean);
-  if (!parts.length) return say('issues.lead.nothing');
-  const what = parts.length > 1 ? say('issues.lead.and', { a: parts.slice(0, -1).join(', '), b: parts.at(-1)! }) : parts[0];
-  const held = say(w.rates.length + w.questions + w.held === 1 ? 'issues.lead.withholdsOne' : 'issues.lead.withholdsMany', { what: what.charAt(0).toUpperCase() + what.slice(1) });
-  return listed > w.questions + w.held ? `${held} ${say('issues.lead.rest')}` : held;
+  const unbooked = unbookedLead(issues, say, money);
+  const held = parts.length ? say(w.rates.length + w.questions + w.held === 1 ? 'issues.lead.withholdsOne' : 'issues.lead.withholdsMany', { what: capital(joined(parts, say)) }) : '';
+  if (unbooked) return held ? `${held} ${unbooked}` : unbooked;
+  if (!held) return say('issues.lead.nothing');
+  return issues.length > w.questions + w.held ? `${held} ${say('issues.lead.rest')}` : held;
 }
 
 /**
