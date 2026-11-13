@@ -5592,6 +5592,7 @@ export default {
     'receipts.noTextNoAi': "(non lu : seule une IA lit une photo ou un scan)",
     'receipts.noTextNotRead': "(non lu : aucun texte reconnu)",
     'history.keptReceipt': "a classé la pièce, sans la lire",
+    'history.keptByHand': "a classé la pièce, sans la lire · données saisies à la main",
     'drop.p.unread': "pas encore lu",
     'drop.p.unreadNoAi': "Seule une IA lit une photo. Aucune n’est configurée sur ce Mac : saisissez vous-même la date, le montant et la TVA.",
     'drop.p.unreadFailed': "Aucun texte reconnu : saisissez vous-même la date, le montant et la TVA.",

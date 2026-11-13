@@ -5589,6 +5589,7 @@ export const messages = {
   'receipts.noTextNoAi': "(nicht gelesen: ein Foto oder einen Scan liest nur eine KI)",
   'receipts.noTextNotRead': "(nicht gelesen: kein Text erkannt)",
   'history.keptReceipt': "hat den Beleg abgelegt, nicht gelesen",
+  'history.keptByHand': "hat den Beleg abgelegt, nicht gelesen · Angaben von Hand erfasst",
   'drop.p.unread': "noch nicht gelesen",
   'drop.p.unreadNoAi': "Ein Foto liest nur eine KI. Auf diesem Mac ist keine eingerichtet: Datum, Betrag und MWST selbst eintippen.",
   'drop.p.unreadFailed': "Kein Text erkannt: Datum, Betrag und MWST selbst eintippen.",

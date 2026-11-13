@@ -328,6 +328,11 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A receipt's VAT typed by hand on a photo the app cannot read is kept (#438): the run that books
+  its payment again tried the photo once more and dropped what she had entered, so the receipt read
+  «MWST noch nicht gelesen», was called «nicht lesbar» and its payment lost the input tax. What a
+  person enters stays over every later run, the model is told her VAT when it books the payment, and
+  the receipt's Verlauf says «nicht gelesen · Angaben von Hand erfasst» instead of «hat den Beleg gelesen».
 - A payment provider's payouts list dropped before the firm has that provider is named as the
   provider's other export, with the reports to bring instead, at the first drop too (#425); before,
   it became a bank statement's column question; the dialog's head says it was set aside, not
