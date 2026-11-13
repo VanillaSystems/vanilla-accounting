@@ -16,6 +16,7 @@ import { isUnbooked } from '../areas/bank/model.js';
 import { receiptWaits } from '../areas/automation/period-issues.js';
 import { parsePeriod, filingKeyOf, parseSwissDate } from '../../accounting/periods.js';
 import { useQuestions } from '../questions/store.js';
+import { announceBooksChanged } from '../assistant/store.js';
 import { reloadWorkspace, useWorkspace } from '../hooks/use-workspace.js';
 import { periodName } from '../lib/period-label.js';
 import { OPEN_ITEMS } from '../areas/vat/model.js';
@@ -37,13 +38,14 @@ import { CsvColumnsForm, StatementRead } from './StatementRead.js';
 import { Menu } from './Menu.js';
 import type { Location, Route } from './route.js';
 import { at } from '../areas/receipts/view.js';
-import { fileKeyOf } from '../areas/bank/model.js';
+import { fileKey, fileKeyOf, isCamt, keyOfFile } from '../areas/bank/model.js';
+import { bankFor } from '../areas/bank/state.js';
 import { startIntake } from '../automation/intake.js';
 import { emptyRefsLine } from '../areas/bank/empty-refs.js';
 import { draftForm } from '../areas/company/bank-draft.js';
 import { getAccountMap } from '../lib/accounts.js';
-import { cardLineOf, cardLineOffers, cardStatementOf, chfOf, markLabel, suggestion } from '../areas/receipts/model.js';
-import { cardLineText, cardStatementLine, ledgerFor, noneText, txLine } from '../areas/receipts/view.js';
+import { balanceSheetOf, cardLineOf, cardLineOffers, cardStatementOf, chfOf, markLabel, suggestion } from '../areas/receipts/model.js';
+import { balanceSheetLine, cardLineText, cardStatementLine, ledgerFor, noneText, txLine } from '../areas/receipts/view.js';
 import { offersInBooks } from '../../intake/near-pairs.js';
 import { useFx } from '../hooks/use-fx.js';
 import { ReportCorrections } from '../areas/receipts/ReportCorrections.js';
@@ -56,6 +58,8 @@ const drop = dropStore(
   { open: api.dropOpen, add: api.dropAdd, close: api.dropClose },
   errorText,
   (f) => { const line = failedLine(f, errorText); return line && tWith(line.key, line.vars); },
+  // What the window reports as booked is on every page at once (#424): the books, the workspace and the invoices load again.
+  announceBooksChanged,
 );
 const { set } = drop;
 const useDrop = () => useSyncExternalStore(drop.subscribe, drop.get);
@@ -72,12 +76,24 @@ let finishing: (() => void) | undefined;
 /** Closes the window as its «Schliessen» does (the shell's Escape too). */
 export const finishDrop = (): void => (finishing ? finishing() : closeDrop());
 
-/** Where a taken statement row opens: its file under Kontoauszüge, in the period of its last day. */
-export function statementLocation(r: DropRow): Location | undefined {
+/**
+ * Where a taken statement row opens, in the period of its last day as the books hold it (#424): a
+ * bank export whole under Kontoauszüge › Datei, a PDF kept as the statement as the statement it is
+ * (Datei shows only exports), by the key Kontoauszüge gives it (two of one day apart). None while
+ * neither the books nor the file name its days: never today's period.
+ */
+export function statementLocation(r: DropRow, books: Index): Location | undefined {
   const account = r.statement?.account;
-  const name = r.statement?.file.split('/').pop();
-  if (!account || !name) return undefined;
-  return at({ area: 'bank', file: fileKeyOf(account, name) }, r.facts?.to ?? localToday());
+  const file = r.statement?.file;
+  const name = file?.split('/').pop();
+  if (!account || !file || !name) return undefined;
+  const held = books.bankStatements?.find((b) => `${b.bank}/${b.filename}` === file);
+  const to = held?.toDate ?? r.facts?.to;
+  if (!to) return undefined;
+  if (held && !isCamt(held)) {
+    return at({ area: 'bank', statement: keyOfFile(bankFor(books), held) ?? fileKey(account, held.fromDate, held.toDate) }, to);
+  }
+  return at({ area: 'bank', file: fileKeyOf(account, name) }, to);
 }
 
 /**
@@ -478,6 +494,9 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   const twin = v?.twin?.relation === 'duplicate' ? ledger.byId.get(v.twin.of) : undefined;
   const st = receiptStateOf(receipt, 0, !!twin);
   // A document beside an invoice (#384): what it is, and the invoice it belongs to when the books show which.
+  // A balance sheet (#427): said what it is, never a receipt waiting for its payment.
+  const sheet = st === 'supporting' ? balanceSheetOf(receipt, books, localToday()) : undefined;
+  if (sheet) return { kind: 'balanceSheet', sheet };
   if (st === 'supporting') {
     const of = v?.twin?.relation === 'companion' ? ledger.byId.get(v.twin.of) : undefined;
     return { kind: 'supporting', ...(v ? { why: noneText(v) } : {}), ...(of ? { of: { id: of.r.id, name: of.vendor ? `${of.vendor}${of.desc ? ` ${of.desc}` : ''}` : of.r.filename } } : {}) };
@@ -618,8 +637,8 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   const [busy, setBusy] = useState(false);
   const x = fileState(r, books, view);
   const receipt = books.receipts.find((y) => y.id === receiptIdOf(r, view));
-  // A document beside an invoice shows no amount of its own: an order confirmation is no amount of 0.00 (#384).
-  const amount = x.kind === 'supporting' ? undefined : receipt?.amount;
+  // A document beside an invoice shows no amount of its own: an order confirmation is no amount of 0.00 (#384), a balance sheet's total is none (#427).
+  const amount = x.kind === 'supporting' || x.kind === 'balanceSheet' ? undefined : receipt?.amount;
   const facts = !r.report && receipt && (receipt.date || amount !== undefined)
     ? [receipt.date && formatDate(receipt.date), amount !== undefined && `${receipt.currency ?? ''} ${fmt(amount)}`.trim()].filter(Boolean).join(' · ') : '';
   const running = view?.runs.find((y) => y.id === r.run)?.status === 'running';
@@ -634,7 +653,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   const missing = maybeTx ? t('near.dropMaybe', { what: txLine(maybeTx) }) : x.kind !== 'waits' && x.kind !== 'stuck' ? '' : lacks ? t('drop.p.missing', { what: lacks }) : proposed ? t('drop.p.payment') : t('drop.p.noPayment');
   const shown = !!receipt && open;
   // The books changed under the page: Belege must not show the receipt any more.
-  const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).then(refresh).finally(() => setBusy(false)); };
+  const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).finally(() => setBusy(false)); };
   // «schon da?» of a photo the run read (#361): answered as Belege answers it, the copy then set aside, or the pair not asked again.
   const twin = (answer: 'same' | 'distinct', of: string) => {
     setBusy(true);
@@ -645,8 +664,8 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   // Taken onto the one account of the bank it names (#273): said in the row, with «ändern».
   const byBank = r.byBank?.accounts.find((a) => a.account === r.statement?.account);
   const [menu, setMenu] = useState<DOMRect | null>(null);
-  const readPdf = () => { setBusy(true); void act(session, r, { kind: 'readPdf' }).then(refresh).finally(() => setBusy(false)); };
-  const statementAt = statementLocation(r);
+  const readPdf = () => { setBusy(true); void act(session, r, { kind: 'readPdf' }).finally(() => setBusy(false)); };
+  const statementAt = statementLocation(r, books);
   // A card statement taken as a receipt (#401): what the app did with it, in its row.
   const card = receipt && !r.report ? cardStatementOf(receipt, books) : undefined;
   // The bill of one line of a card's settlement (#409): which line, or the lines it fits that a person may link it to.
@@ -675,6 +694,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
           {missing ? <small className="dwhy" {...(maybeTx && { 'data-testid': 'drop-near' })}>{missing}</small> : x.kind === 'orderPage' ? <small className="dwhy" data-testid="drop-order-page">{t('drop.p.orderPageWhy', { provider: x.provider })}</small> : x.kind === 'refused' ? <small className="dwhy">{reasonText(x.reason)}</small>
             : x.kind === 'none' ? <small className="dwhy" data-testid="drop-none">{x.why}</small>
             : x.kind === 'supporting' ? <small className="dwhy" data-testid="drop-supporting">{x.of ? t('drop.p.supportingOf', { what: x.why || t('receipts.why.supporting'), name: x.of.name }) : t('drop.p.supportingAlone', { what: x.why || t('receipts.why.supporting') })}</small>
+            : x.kind === 'balanceSheet' && x.sheet ? <small className="dwhy" data-testid="drop-balance-sheet">{balanceSheetLine(x.sheet)}</small>
             : x.kind === 'twin' ? <small className="dwhy" data-testid="drop-twin">{t('drop.twin.duplicate', { name: x.name })} · {t(`drop.twin.why.${x.why}`)}</small> : null}
           {card ? <small className="dwhy" data-testid="drop-card-statement">{cardStatementLine(card)}</small> : null}
           {cardLine ? <small className="dwhy" data-testid="drop-card-line">{t('receipts.cardLine.bill', { line: cardLineText(cardLine, currencyOf(cardLine.payment)) })}</small> : null}
@@ -688,15 +708,16 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
                 <button type="button" className="linkbtn" data-testid="drop-twin-distinct" disabled={busy} onClick={() => twin('distinct', x.of)}>{t('drop.twin.distinct')}</button>
               </>
             ) : null}
-            {byBank ? <button type="button" className="linkbtn" data-testid="drop-other-account" disabled={running || busy} data-tip={t('drop.byBankChangeTip')} onClick={() => { setBusy(true); void act(session, r, { kind: 'otherAccount' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.byBankChange')}</button> : null}
+            {byBank ? <button type="button" className="linkbtn" data-testid="drop-other-account" disabled={running || busy} data-tip={t('drop.byBankChangeTip')} onClick={() => { setBusy(true); void act(session, r, { kind: 'otherAccount' }).finally(() => setBusy(false)); }}>{t('drop.byBankChange')}</button> : null}
             {statementAt ? <button type="button" className="linkbtn" data-testid="drop-open-file" onClick={() => { closeDrop(); onGo(statementAt); }}>{t('drop.openStatement')}</button> : null}
             {x.kind === 'supporting' && x.of ? <button type="button" className="linkbtn" data-testid="drop-open-invoice" onClick={() => go({ area: 'receipts', id: x.of!.id }, books.receipts.find((y) => y.id === x.of!.id)?.date)}>{t('drop.p.openInvoice')}</button> : null}
-            {(x.kind === 'none' || x.kind === 'supporting') && receipt && receipt.kind !== 'statement' && receipt.kind !== 'duplicate' ? <button type="button" className="linkbtn" data-testid="drop-is-receipt" disabled={busy} onClick={isReceipt}>{t(markLabel(receipt))}</button> : null}
+            {x.kind === 'balanceSheet' && x.sheet?.opens ? <button type="button" className="linkbtn" data-testid="drop-to-opening" onClick={() => go({ area: 'company', section: 'opening' })}>{t('reports.openingSet')}</button> : null}
+            {(x.kind === 'none' || x.kind === 'supporting' || x.kind === 'balanceSheet') && receipt && receipt.kind !== 'statement' && receipt.kind !== 'duplicate' ? <button type="button" className="linkbtn" data-testid="drop-is-receipt" disabled={busy} onClick={isReceipt}>{t(markLabel(receipt))}</button> : null}
             {x.kind === 'stuck' ? <button type="button" className="linkbtn" data-testid="drop-stuck-run" onClick={() => go({ area: 'automation', view: 'run', run: x.run })}>{t('processing.toRun')}</button> : null}
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t(x.kind === 'unread' ? 'drop.p.typeIn' : 'drop.openReceipt')}</button> : null}
             {/* A file that could be a statement (#384): not read, read as one, or read without a total or with a statement's signs; never a receipt read with its total, nor one linked to its payment, nor a card statement (#401). */}
             {(r.kind === 'receipt' || r.kind === 'photo') && !r.report && !card && (x.kind === 'unread' || (x.kind === 'none' && receipt?.kind === 'statement')
-              || ((x.kind === 'read' || x.kind === 'waits') && !!receipt && (receipt.amount == null || statementSigns(receipt.extractedText ?? '')))) ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
+              || ((x.kind === 'read' || x.kind === 'waits') && !!receipt && (receipt.amount == null || statementSigns(receipt.extractedText ?? '')))) ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
             {keptPdf ? <button type="button" className="linkbtn" data-act="actions" data-testid="drop-actions" aria-haspopup="menu" aria-expanded={!!menu} disabled={busy} onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}>{t('actions.label')}</button> : null}
             {r.statement?.again ? null : <button type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>}
           </span>
@@ -752,7 +773,7 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   // A receipt of a sealed quarter opens in that quarter, not in the open one (r9k-8).
   const go = (route: Route, date?: string) => { closeDrop(); onGo(date ? at(route, date) : { route, query: {} }); };
   // The last statement the drop read in: closing the window by hand opens it (Kontoauszüge does, #361).
-  const statement = [...rows].reverse().map((r) => (r.state === 'taken' ? statementLocation(r) : undefined)).find(Boolean);
+  const statement = [...rows].reverse().map((r) => (r.state === 'taken' ? statementLocation(r, books) : undefined)).find(Boolean);
   finishing = () => { closeDrop(); if (statement) onStatement(statement); };
   return (
     <>

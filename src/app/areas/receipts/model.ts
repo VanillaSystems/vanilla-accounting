@@ -5,9 +5,11 @@
  */
 import type { BankTransaction, BankTransactionPart, Index, JournalEntry, Receipt, ReceiptPatch } from '../../../types/index.js';
 import type { EstvRates } from '../../../accounting/fx-conversion.js';
-import type { Period } from '../../../accounting/periods.js';
+import { booksOpenPeriod, type Period } from '../../../accounting/periods.js';
+import { openingLock } from '../../../accounting/opening-balance.js';
+import { textFacts } from '../../../parsers/receipt-text.js';
 import { applyChips, type Chip, type Field } from '../../shell/chips.js';
-import { baseCurrency, documents } from '../../../engines/index.js';
+import { baseCurrency, documents, filing } from '../../../engines/index.js';
 import { duplicatesIn, type Twin } from '../../../intake/duplicates.js';
 import { documentKind } from '../../../intake/document-kind.js';
 import { isNoReceipt } from '../../../books/discard.js';
@@ -508,6 +510,34 @@ export const cardLineOf = (r: Pick<Receipt, 'id'>, books: Pick<Index, 'receipts'
 /** The free lines of open card settlements this unlinked receipt fits (#409): offered to link by hand; two bills that fit one line are both offered, code links neither. */
 export const cardLineOffers = (r: Pick<Receipt, 'id'>, books: Pick<Index, 'receipts' | 'mappings' | 'transactions' | 'config'>): LineOffer[] =>
   lineOffers(books, r.id, (d) => d > (books.config?.closedThrough ?? ''));
+export interface BalanceSheet {
+  /** The day it is drawn up for, as read. */
+  date?: string;
+  /** The year Firma › Eröffnung types (the books' open year), when it takes an opening by hand (openingLock). */
+  year?: string;
+  /** It is the balance sheet of the day before that year: offered for its opening. */
+  opens: boolean;
+}
+
+/**
+ * A balance sheet among the receipts (#427): no payment belongs to it, and the one of the last day
+ * of the year before the books' open year holds that year's opening, which the person types in
+ * Firma › Eröffnung (never written by the app). Undefined for any other receipt.
+ */
+/** The day a balance sheet names as its own («Bilanz per 31.12.2025», «Bilan au …», «Bilancio al …», «as of …»), before any letterhead date. */
+function drawnUpFor(text: string): string | undefined {
+  const m = /\b(?:per|au|al|as of|zum|vom)\s+(\d{1,2})\.(\d{1,2})\.(\d{4})\b/i.exec(text);
+  return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : undefined;
+}
+
+export function balanceSheetOf(r: Receipt, books: Pick<Index, 'config' | 'transactions' | 'journalEntries'>, today: string): BalanceSheet | undefined {
+  if (r.kind !== 'supporting' || noneWhyOf(r) !== 'balance-sheet') return undefined;
+  // Its day as read, else as code reads it off the text («Bilanz per 31.12.2025»), so a Mac without an AI is offered it too.
+  const date = r.date ?? drawnUpFor(r.extractedText ?? '') ?? textFacts(r.extractedText ?? '').date;
+  const year = booksOpenPeriod(books, today, filing().length).from.slice(0, 4);
+  if (openingLock(books, year)) return { ...(date ? { date } : {}), opens: false };
+  return { ...(date ? { date } : {}), year, opens: date === `${Number(year) - 1}-12-31` };
+}
 
 export function cardStatementOf(r: Pick<Receipt, 'id' | 'extractedText'>, books: Pick<Index, 'mappings' | 'transactions' | 'journalEntries'>): { debit?: string; lines: number } | undefined {
   if (!isCardStatement(r.extractedText ?? '', documents())) return undefined;
