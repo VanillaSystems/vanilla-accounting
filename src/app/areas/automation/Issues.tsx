@@ -55,7 +55,6 @@ export function payerName(tx: Pick<Index['transactions'][number], 'ref' | 'count
   return providerIssuesNow().payouts[tx.ref] ?? (tx.counterparty || tx.description);
 }
 
-
 function textOf(books: Index, i: PeriodIssue): string {
   switch (i.kind) {
     case 'question': {

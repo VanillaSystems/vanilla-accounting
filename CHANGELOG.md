@@ -344,9 +344,10 @@ Two markers flag an entry you must read before you update:
   read only PDFs and rebuilt the receipts from them, so the reports (CSV files) and every link to the
   sales and fees they booked went from the books, while those bookings still named them and the
   files still lay in `receipts/`. A run now keeps every receipt whose file lies there. A file whose
-  bytes changed under its name is read again: the new read is its receipt, and its links and the
-  bookings that name it go along (what lies in a filed period or a person's booking names stays as it
-  is, the old receipt beside it). Books damaged so get their reports back on the next run: each CSV in
+  bytes changed under its name is read again: the new read is its receipt, the app's links to the old
+  one go and its bookings are made again from the new read; a person's link goes along only when the
+  new read says the same, else it stays with the old receipt, kept beside, as does a person's booking
+  and what lies in a filed period. The run names each such file and how many links to check. Books damaged so get their reports back on the next run: each CSV in
   `receipts/` whose bytes the bookings name is its receipt again, with its links to every open
   booking and what it holds; nothing of a filed period changes.
 - The write door refuses a module or a run that removes a receipt whose file still lies in the
@@ -359,7 +360,8 @@ Two markers flag an entry you must read before you update:
   whose VAT rates the report cannot tell apart (a cart of tea and a teapot) withholds «Freigegeben»
   until it is booked: its report's receipt has «Aufteilen», one or two amounts at the firm's rates,
   booked by the person once they add up to the order. An order held for another reason (a possible
-  test order, one booked elsewhere) is shown with that reason and withholds nothing; one of a filed
+  test order, one booked elsewhere) is shown with that reason and withholds nothing, and one of the
+  days before the provider's cut-over day (less its payout days) is counted, never held; one of a filed
   period stays named on its report and is no open item. A refund of an order split so is held for
   the person to book by hand. Each held order keeps its day, gross, currency and delivery country on
   the report's receipt: optional fields added to `report.held`, as `heldMore` and `filedRefunds` were.

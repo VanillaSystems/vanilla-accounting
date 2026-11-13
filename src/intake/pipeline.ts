@@ -29,6 +29,8 @@ export type IntakeNote =
   | { code: 'poorScan'; files: string[] }
   /** Inbox files with the bytes of a file the books or the inbox hold (`of`): removed from the inbox. */
   | { code: 'sameBytes'; files: Array<{ file: string; of: string }> }
+  /** Files of receipts/ whose bytes changed under their name (#405): read again; `check` links a person should look at, `kept` the old record stayed beside the new read. */
+  | { code: 'rewritten'; files: Array<{ file: string; check: number; kept: boolean }> }
   /** Payments a company rule holds for the person (src/booking/rules.ts): not booked, each a question in Automatisierung. */
   | { code: 'asked'; count: number }
   /** Customer payments without an invoice booked without VAT: each a question to the owner (src/intake/sale-questions.ts). */
@@ -203,6 +205,7 @@ export function noteLines(notes: IntakeNote[]): string[] {
       case 'filedKept': return `⛔ ${n.count} link(s) or payment(s) of a FILED quarter lost their file; kept as they were (see above)`;
       case 'poorScan': return `⚠ ${n.files.length} receipt(s) too poorly scanned to read; flagged for a vision read (Belege › Neu lesen):\n${n.files.map((f) => `  ${f}`).join('\n')}`;
       case 'sameBytes': return `${n.files.length} file(s) in beleg-import/ had the bytes of one already there; removed:\n${n.files.map((f) => `  ${f.file} = ${f.of}`).join('\n')}`;
+      case 'rewritten': return `⚠ ${n.files.length} receipt file(s) changed under their name and were read again; links to check:\n${n.files.map((f) => `  ${f.file}: ${f.check}${f.kept ? ' (old record kept)' : ''}`).join('\n')}`;
       case 'asked': return `? ${n.count} payment(s) wait for the person: a company rule says to ask first`;
       case 'saleAsked': return `? ${n.count} customer payment(s) without an invoice wait for the owner: with VAT, abroad, or no sale?`;
       case 'waitingReceipt': return `${n.count} payment(s) wait for their receipt: booked once it is linked`;

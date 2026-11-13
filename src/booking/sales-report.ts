@@ -777,16 +777,25 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[]; map
    * A domestic order whose tax shows no one rate waits («rate»), unless the person booked it under its sale ref in parts by rate
    * («Aufteilen», #405) adding up to its gross: then it is known. A refund of such an order is never booked by code, nor
    * skipped: while the books carry no refund of it (one under its refund ref, or an entry that names it and takes revenue back),
-   * it waits as `refundSplit` for the person to book by hand.
+   * it waits as `refundSplit` for the person to book by hand. A refund booked under the sale's own ref (revenue back from the
+   * clearing account) counts as booked.
    */
   const splitByHand = (o: SaleRow): void => {
     const sale = saleRef(ctx.provider.id, o.order);
     const had = byRef.get(sale);
     const split = !!had?.length && had.reduce((s, e) => s + (e.accountDebit === ctx.clearing ? toRappen(e.amount) : 0), 0) === toRappen(o.gross);
-    if (!split) { out.held.push({ order: o.order, why: 'rate' }); return; }
+    if (!split) {
+      // Before the report's reach (before the books, or collected before the cut-over day less the payout days) it is counted
+      // as such rows are; one the books carry from elsewhere is theirs (legacy). A filed one stays held: named, never booked.
+      const where = dated(taxDay(o), o.date);
+      if (where === 'before' || where === 'beforeSince') { count(where, o.order); return; }
+      if (where !== 'filed' && carried(orderLegacy({ key: o.order, day: o.date, amount: o.gross }), o.order)) return;
+      out.held.push({ order: o.order, why: 'rate' });
+      return;
+    }
     const refunded = o.refunded > 0 || !!ctx.payments?.refunds.get(o.order)?.length;
     const plain = refundRef(ctx.provider.id, o.order);
-    const refundBooked = books.journalEntries.some((e) => e.transactionRef === plain || e.transactionRef.startsWith(`${plain}-`) || (e.accountDebit === ctx.revenue && !isReportRef(e.transactionRef) && textNames(e.description, o.order)));
+    const refundBooked = books.journalEntries.some((e) => e.transactionRef === plain || e.transactionRef.startsWith(`${plain}-`) || (e.accountDebit === ctx.revenue && ((e.transactionRef === sale && e.accountCredit === ctx.clearing) || (!isReportRef(e.transactionRef) && textNames(e.description, o.order)))));
     if (refunded && !refundBooked) { out.held.push({ order: o.order, why: 'refundSplit' }); return; }
     same(sale);
   };

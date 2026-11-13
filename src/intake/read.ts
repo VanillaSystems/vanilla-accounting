@@ -248,6 +248,8 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   // A file in the inbox with the bytes of one the books or the inbox hold already (a phone's
   // retry, the same scan sent twice) is that file: it leaves the inbox, and the run says so.
   const sameBytes: Array<{ file: string; of: string }> = [];
+  // Files of receipts/ whose bytes changed under their name (#405): how many links a person should check, and whether the old record stayed.
+  const rewritten: Array<{ file: string; check: number; kept: boolean }> = [];
   for (const f of [...archivedFiles, ...stagedFiles]) {
     const id = idOf(f.filepath);
     const first = seen.get(id);
@@ -361,32 +363,46 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
       } as Receipt];
     });
     // A receipt this step does not read (a provider's report, a CSV in receipts/, #405; a file named .pdf that is none) stays
-    // while its file lies there: the scan above takes readable PDFs only, and the books are rebuilt from it. A file
-    // whose bytes changed under its name is the scan's new receipt.
-    const scanned = new Set(receipts.flatMap((r) => [r.id, r.filename]));
+    // while its file lies there: the scan above takes readable PDFs only, and the books are rebuilt from it. So does a record
+    // kept beside the new read of its file (below): its name is scanned under an id the books know already.
+    const scannedId = new Map(receipts.map((r) => [r.filename, r.id]));
+    const ids = new Set(receipts.map((r) => r.id));
     const find = fileFinder(ws.paths);
-    receipts.push(...index.receipts.filter((r) => !scanned.has(r.id) && !scanned.has(r.filename) && r.location === 'archived' && !!find('receipts', r.filename)));
-    // A file whose bytes changed under its name (#405): the new read is the receipt, and the old record's links and the
-    // bookings that name it go to it, on purpose (release). What of it lies in a filed period, or a person's booking names,
-    // stays as it is, and the old record then stays beside the new one.
+    receipts.push(...index.receipts.filter((r) => {
+      if (ids.has(r.id) || r.location !== 'archived' || !find('receipts', r.filename)) return false;
+      const other = scannedId.get(r.filename);
+      return other === undefined || known.has(other);
+    }));
+    // A file whose bytes changed under its name (#405): the new read is the receipt. The app's links to the old record go
+    // (release), and the bookings that named it are left as they are, so the classify step takes them back and the payment
+    // is matched and booked from the new read. A person's link goes along only when the new read says what the old did (the
+    // same text, or the same day and total); else it stays with the old record, kept beside the new one, as does a person's
+    // booking (only she changes it) and whatever of it lies in a filed period. The run names each such file and how many links a person should check.
     const lockNow = periodLock(index);
     const fresh = new Map(receipts.filter((r) => !known.has(r.id)).map((r) => [r.filename, r]));
+    const words = (t: string | undefined) => (t ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
     for (const old of index.receipts) {
       const now = fresh.get(old.filename);
       if (!now || receipts.some((r) => r.id === old.id) || old.location !== 'archived') continue;
+      const agrees = (!!old.extractedText && words(old.extractedText) === words(now.extractedText)) || (!!old.date && old.date === now.date && old.amount != null && old.amount === now.amount);
       const closedRef = (ref: string) => lockNow.isClosed(index.transactions.find((t) => t.ref === ref)?.date) || index.journalEntries.some((e) => e.transactionRef === ref && lockNow.isClosed(e.date));
       const naming = index.journalEntries.filter((e) => e.receipts?.includes(old.id));
-      const stays = naming.filter((e) => lockNow.isClosed(e.date) || e.origin === 'manual');
+      const hers = naming.filter((e) => e.origin === 'manual' && !lockNow.isClosed(e.date));
       const links = index.mappings.filter((m) => m.receiptId === old.id);
-      const keep = links.filter((m) => closedRef(m.transactionRef) || stays.some((e) => e.transactionRef === m.transactionRef));
-      const move = links.filter((m) => !keep.includes(m));
-      release(index, { mappings: move });
-      for (const m of move) if (!index.mappings.some((x) => x.receiptId === now.id && x.transactionRef === m.transactionRef)) index.mappings.push({ ...m, receiptId: now.id });
-      index.mappings = index.mappings.filter((m) => !move.includes(m));
-      for (const e of naming) if (!stays.includes(e)) e.receipts = [...new Set(e.receipts!.map((id) => (id === old.id ? now.id : id)))].sort();
+      const filed = links.filter((m) => closedRef(m.transactionRef));
+      const human = links.filter((m) => !filed.includes(m) && m.by === 'human');
+      const app = links.filter((m) => !filed.includes(m) && !human.includes(m));
+      const carry = agrees ? human : [];
+      release(index, { mappings: [...app, ...carry] });
+      for (const m of carry) if (!index.mappings.some((x) => x.receiptId === now.id && x.transactionRef === m.transactionRef)) index.mappings.push({ ...m, receiptId: now.id });
+      index.mappings = index.mappings.filter((m) => !app.includes(m) && !carry.includes(m));
       Object.assign(now, { originalFilename: old.originalFilename });
-      if (stays.length || keep.length) { receipts.push(old); log(`  ${old.filename}: its file changed; the new read is its receipt, links carried, the old record kept for a filed period or a person's booking`); }
-      else { release(index, { receipts: [old.id] }); log(`  ${old.filename}: its file changed; the new read replaces its receipt, ${move.length} link(s) carried`); }
+      const keepOld = filed.length > 0 || hers.length > 0 || naming.some((e) => lockNow.isClosed(e.date)) || (!agrees && human.length > 0);
+      if (keepOld) receipts.push(old);
+      else release(index, { receipts: [old.id] });
+      const check = human.length + hers.length + filed.length;
+      rewritten.push({ file: old.filename, check, kept: keepOld });
+      log(`  ${old.filename}: its file changed; read again. ${app.length} link(s) of the app dropped, ${carry.length} of a person carried, ${check} to check${keepOld ? '; the old record kept beside it' : ''}`);
     }
     // The books keep their order, new receipts after them: a second run writes the same file.
     const pos = new Map(index.receipts.map((r, i) => [r.id, i]));
@@ -446,6 +462,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   if (waitingForModel) notes.push({ code: 'noModel', waiting: waitingForModel });
   if (readFailed.length) notes.push({ code: 'failed', count: readFailed.length, detail: `${readFailed[0].file}: ${readFailed[0].error}` });
   if (sameBytes.length) notes.push({ code: 'sameBytes', files: sameBytes });
+  if (rewritten.length) notes.push({ code: 'rewritten', files: rewritten });
   return { notes };
 };
 

@@ -213,7 +213,6 @@ export interface ClearingCheck {
   held?: number;
 }
 
-
 /** The last day of each of the `n` months up to and including the month of `through`, oldest first; `through` itself for its own month. */
 export function monthEnds(through: string, n: number): string[] {
   const out: string[] = [];

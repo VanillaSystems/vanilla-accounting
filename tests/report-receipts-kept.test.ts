@@ -11,7 +11,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bookHeldOrder, importSalesReport } from '../src/intake/sales-report-import.js';
 import { loadBooks, moduleActor, OwnershipError, PERSON, release, saveBooks, update } from '../src/books/store.js';
-import { runIntake, storePort } from '../src/intake/pipeline.js';
+import { runIntake, storePort, type Ask } from '../src/intake/pipeline.js';
+import { classifyStep } from '../src/intake/classify.js';
 import { readStep } from '../src/intake/read.js';
 import { matchStep } from '../src/intake/match.js';
 import { workspaceAt, type Workspace } from '../src/workspace/workspace.js';
@@ -151,29 +152,102 @@ test('#405 «Aufteilen»: the person books a held cart by its parts, each at the
   assert.equal(again.receipts.find((r) => r.id === id)?.report?.held, undefined, 'and not held again');
 });
 
-test('#405 a receipt whose file changed under its name: the run ends, the new read is the receipt, its links and the bookings that name it go along; a later run is fine', async () => {
+/** A receipt in receipts/ linked to a payment and booked, as the read step and a run leave it; `how` decides who linked and booked, and when. */
+async function linkedReceipt(how: 'app' | 'human' | 'manual' | 'filed') {
   const ws = shop();
   const rdir = join(ws.paths.root, 'transactional-data', '2026', 'receipts');
-  const run = () => runIntake({ ws, books: storePort(ws, moduleActor('intake')), steps: [['read', readStep]] });
-  await run();
-  const b0 = loadBooks(ws);
-  const closed = b0.config.closedThrough ?? '';
-  const pick = b0.receipts.find((r) => r.location === 'archived' && r.filename.endsWith('.pdf') && existsSync(join(rdir, r.filename)) && (r.date ?? '') > closed
-    && b0.mappings.some((m) => m.receiptId === r.id && (b0.transactions.find((t) => t.ref === m.transactionRef)?.date ?? '') > closed)
-    && !b0.journalEntries.some((e) => e.receipts?.includes(r.id) && e.origin === 'manual'))!;
-  assert.ok(pick, 'a linked receipt of the open period');
-  const links = b0.mappings.filter((m) => m.receiptId === pick.id).map((m) => m.transactionRef).sort();
-  const naming = b0.journalEntries.filter((e) => e.receipts?.includes(pick.id)).map((e) => e.id).sort();
-  writeFileSync(join(rdir, pick.filename), await textPdf(['Muster AG', 'Rechnung 99 vom 12.11.2026', 'Total CHF 10.00 inkl. MWST 8.1% CHF 0.75']));
-  await run();
-  const b1 = loadBooks(ws);
-  const now = b1.receipts.find((r) => r.filename === pick.filename && r.id !== pick.id);
-  assert.ok(now, 'the new read is in the books');
-  assert.equal(b1.receipts.some((r) => r.id === pick.id), false, 'the old record went, on purpose');
-  assert.deepEqual(b1.mappings.filter((m) => m.receiptId === now!.id).map((m) => m.transactionRef).sort(), links, 'its links carried');
-  assert.deepEqual(b1.journalEntries.filter((e) => e.receipts?.includes(now!.id)).map((e) => e.id).sort(), naming, 'and the bookings that named it');
-  await run();
-  assert.ok(loadBooks(ws).receipts.some((r) => r.id === now!.id), 'a later run is fine');
+  mkdirSync(rdir, { recursive: true });
+  const july = ['Muster Druck AG', 'Rechnung 4711 vom 10.07.2026', 'Flyer', 'Total CHF 172.00 inkl. MWST 8.1% CHF 12.90'];
+  writeFileSync(join(rdir, '20260710-muster-druck.pdf'), await textPdf(july));
+  const read = () => runIntake({ ws, books: storePort(ws, moduleActor('intake')), steps: [['read', readStep]] });
+  await read();
+  const b = loadBooks(ws);
+  const r = b.receipts.find((x) => x.filename === '20260710-muster-druck.pdf')!;
+  const day = '2026-11-05';
+  const actor = how === 'app' || how === 'filed' ? moduleActor('intake') : PERSON;
+  update(b, actor, (x) => {
+    x.transactions.push({ ref: 'TX', bank: 'Raiffeisen', date: day, amount: 172, currency: 'CHF', direction: 'DBIT', description: 'Muster Druck AG', counterparty: 'Muster Druck AG', source: 'manual' } as never);
+    x.mappings.push({ transactionRef: 'TX', receiptId: r.id, by: how === 'human' ? 'human' : 'llm' });
+    x.journalEntries.push({ id: 'e-tx', transactionRef: 'TX', date: day, accountDebit: '6570', accountCredit: '1020', amount: 172, vatCode: 'I81', origin: how === 'manual' ? 'manual' : 'classify', receipts: [r.id] });
+  });
+  saveBooks(ws, b);
+  // Filed: the period of the payment closed after it was booked.
+  if (how === 'filed') { const ledger = JSON.parse(readFileSync(ws.paths.ledger, 'utf8')); ledger.config.closedThrough = '2026-11-30'; writeFileSync(ws.paths.ledger, JSON.stringify(ledger, null, 2)); }
+  return { ws, rdir, old: r, july, read };
+}
+const stateOf = (job: Awaited<ReturnType<typeof runIntake>>) => job.steps.map((s) => s.state);
+const noteOf = (job: Awaited<ReturnType<typeof runIntake>>) => job.steps.flatMap((s) => s.notes ?? []).find((n) => n.code === 'rewritten');
+const OTHER = ['Ganz Andere AG', 'Rechnung 99 vom 12.11.2026', 'Total CHF 10.00 inkl. MWST 2.6% CHF 0.25'];
+
+test('#405 a file rewritten under its name with another document: the app\'s link goes, its booking is taken back and made again from the new read; the run names the file', async () => {
+  const { ws, rdir, old, read } = await linkedReceipt('app');
+  writeFileSync(join(rdir, old.filename), await textPdf(OTHER));
+  const job = await read();
+  assert.deepEqual(stateOf(job), ['done']);
+  assert.deepEqual(noteOf(job), { code: 'rewritten', files: [{ file: old.filename, check: 0, kept: false }] });
+  const b = loadBooks(ws);
+  const now = b.receipts.find((r) => r.filename === old.filename)!;
+  assert.notEqual(now.id, old.id);
+  assert.equal(b.receipts.some((r) => r.id === old.id), false);
+  assert.deepEqual(b.mappings.filter((m) => m.transactionRef === 'TX'), [], 'the app\'s link is not carried to another document');
+  assert.deepEqual(b.journalEntries.find((e) => e.id === 'e-tx')?.receipts, [old.id], 'the booking is left naming what it was booked from');
+  // The next run pairs the payment with the new read and books it from it: the old booking is taken back.
+  const ask: Ask = async (prompt, opts) => {
+    if (opts.step === 'receipt-pair') {
+      const list = JSON.parse(prompt.slice(prompt.indexOf('\n\n[') + 2, prompt.lastIndexOf(']\n\n') + 1)) as Array<{ i: number }>;
+      return JSON.stringify(list.map((x) => ({ i: x.i, fits: true, why: 'stub' })));
+    }
+    if (opts.step === 'classify') return JSON.stringify({ TX: { entries: [{ accountDebit: '6570', accountCredit: '', amount: 172, vat: 'none', description: 'Ganz Andere AG' }], reason: 'stub' } });
+    return '{}';
+  };
+  update(b, PERSON, (x) => { x.mappings.push({ transactionRef: 'TX', receiptId: now.id, by: 'human' }); });
+  saveBooks(ws, b);
+  const again = await runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask, steps: [['read', readStep], ['classify', classifyStep()]] });
+  assert.deepEqual(stateOf(again), ['done', 'done']);
+  const after = loadBooks(ws);
+  assert.equal(after.journalEntries.some((e) => e.id === 'e-tx'), false, 'the booking from the old document is taken back');
+  assert.deepEqual(after.journalEntries.filter((e) => e.transactionRef === 'TX').map((e) => e.receipts), [[now.id]], 'and made again from the new read');
+});
+
+test('#405 a person\'s link to a rewritten file stays with the old record when the new read says otherwise; three runs end done', async () => {
+  const { ws, rdir, old, read } = await linkedReceipt('human');
+  writeFileSync(join(rdir, old.filename), await textPdf(OTHER));
+  for (const run of [1, 2, 3]) assert.deepEqual(stateOf(await read()), ['done'], `run ${run}`);
+  const b = loadBooks(ws);
+  assert.deepEqual(b.receipts.filter((r) => r.filename === old.filename).map((r) => r.id === old.id).sort(), [false, true], 'the old record beside the new read');
+  assert.deepEqual(b.mappings.filter((m) => m.transactionRef === 'TX').map((m) => m.receiptId), [old.id], 'her link stays where she made it');
+});
+
+test('#405 a person\'s link to a rewritten file goes along when the new read says the same; her booking stays with the old record, which stays beside; three runs end done', async () => {
+  for (const how of ['human', 'manual'] as const) {
+    const { ws, rdir, old, july, read } = await linkedReceipt(how);
+    // The same document saved again: other bytes, the same words.
+    writeFileSync(join(rdir, old.filename), Buffer.concat([await textPdf(july), Buffer.from('\n% saved again\n')]));
+    const first = await read();
+    assert.deepEqual(stateOf(first), ['done'], JSON.stringify(first.steps[0].notes));
+    assert.deepEqual(noteOf(first)?.files.map((f) => [f.check, f.kept]), [[1, how === 'manual']], how);
+    for (const run of [2, 3]) assert.deepEqual(stateOf(await read()), ['done'], `${how} run ${run}`);
+    const b = loadBooks(ws);
+    const now = b.receipts.find((r) => r.filename === old.filename && r.id !== old.id)!;
+    assert.ok(now, how);
+    if (how === 'human') {
+      assert.deepEqual(b.mappings.filter((m) => m.transactionRef === 'TX').map((m) => m.receiptId), [now.id], 'her link goes along');
+      assert.equal(b.receipts.some((r) => r.id === old.id), false);
+    } else {
+      assert.deepEqual(b.journalEntries.find((e) => e.id === 'e-tx')?.receipts, [old.id], 'her booking is hers to change');
+      assert.ok(b.receipts.some((r) => r.id === old.id), 'so the old record stays beside');
+    }
+  }
+});
+
+test('#405 a rewritten file linked in a filed period: the old record stays with its link; three runs end done', async () => {
+  const { ws, rdir, old, read } = await linkedReceipt('filed');
+  writeFileSync(join(rdir, old.filename), await textPdf(OTHER));
+  for (const run of [1, 2, 3]) assert.deepEqual(stateOf(await read()), ['done'], `run ${run}`);
+  const b = loadBooks(ws);
+  assert.ok(b.receipts.some((r) => r.id === old.id), 'kept');
+  assert.deepEqual(b.mappings.filter((m) => m.transactionRef === 'TX').map((m) => m.receiptId), [old.id]);
+  assert.deepEqual(b.journalEntries.find((e) => e.id === 'e-tx')?.receipts, [old.id]);
 });
 
 test('#405 the write door holds no receipt of books without a home (a clone, as a dry run makes)', () => {
@@ -222,6 +296,27 @@ test('#405 a refund of a cart the person split is held for her to book by hand, 
   assert.deepEqual(held.map((h) => [h.order, h.why]), [['2102', 'refundSplit']]);
   assert.deepEqual(providerIssuesIn(ws, after, '2026-12-15').held.map((h) => h.why), ['refundSplit'], 'an open item while the sale is booked');
   assert.equal(after.journalEntries.filter((e) => e.transactionRef.startsWith('SR-shopify-2102')).length, 2, 'nothing booked by code');
+});
+
+test('#405 a two-rate order before the report\'s reach is counted, never held: it withholds nothing, and «Aufteilen» refuses its day', () => {
+  const ws = shop();
+  const csv = [FULL,
+    first('2050', '2026-08-05', '101.00', '0.00', '5.94', '101.00', '1', '68.00', 'CH MWST 8.1%,5.10', 'CH MWST 2.6%,0.84'), more('2050', '2026-08-05', '2', '16.50'),
+    first('2102', '2026-11-13', '101.00', '7.00', '6.12', '108.00', '1', '68.00', 'CH MWST 8.1%,5.28', 'CH MWST 2.6%,0.84'), more('2102', '2026-11-13', '2', '16.50'),
+  ].join('\n');
+  const done = importSalesReport(ws, Buffer.from(csv), 'orders_export.csv');
+  assert.ok(done.ok);
+  assert.ok(done.summary.beforeSince + done.summary.before >= 1, 'counted as a row before the reach');
+  const books = loadBooks(ws);
+  const report = books.receipts.find((r) => r.report)!;
+  assert.deepEqual(report.report!.held?.map((h) => h.order), ['2102'], 'not held');
+  const q3 = { workflow: 'vat-filing', step: 'review', reads: { return: { from: '2026-07-01', to: '2026-09-30', figures: {} } } } as never;
+  assert.equal(approvalWithheld(q3, [], books, providerIssuesIn(ws, books, '2026-12-15')), undefined, 'Q3 is not withheld');
+  // Held so by an older taking: the split route refuses its day.
+  const older = loadBooks(ws);
+  update(older, PERSON, (b) => { const r = b.receipts.find((x) => x.id === report.id)!; r.report = { ...r.report!, held: [...r.report!.held!, { order: '2050', why: 'rate', date: '2026-08-05', gross: 101, currency: 'CHF' }] }; });
+  saveBooks(ws, older);
+  assert.deepEqual(update(loadBooks(ws), PERSON, (b) => bookHeldOrder(ws, b, report.id, '2050', [{ amount: 101, rate: 8.1 }])), { ok: false, why: 'beforeReach' });
 });
 
 test('#405 the write door: a module removes no receipt whose file still lies in receipts/ and no link whose receipt and payment stand, unless it releases them', () => {

@@ -391,6 +391,7 @@ function keepHeld(books: Books, id: string, out: ReportOutcome, read: ReadReport
   const held = out.held.slice(0, HELD_KEPT).map((h) => {
     const o = rows.get(h.order);
     // Its tax point as the report books a sale: the order's day on the agreed basis; on the cash basis the day the provider charged it.
+    // Charged on several days the report would book a part per day: the split books in one, so it falls back to the order's day.
     const charged = [...new Set((payments?.charges.get(h.order) ?? []).map((c) => c.date))];
     return o ? { ...h, date: agreed ? o.ordered ?? o.date : charged.length === 1 ? charged[0] : o.date, gross: o.gross, ...(o.currency ? { currency: o.currency } : {}), ...(o.shipTo ? { shipTo: o.shipTo } : {}) } : h;
   });
@@ -692,7 +693,7 @@ export function restoreReportReceipts(ws: Workspace, books: Books, now = new Dat
 }
 
 /** Why a held order is not booked by the person's split: the report is gone, it holds the order no more (booked meanwhile), the parts do not add up to the order's gross, or a rate the firm does not book (or no daily rate of a foreign order's day). */
-export type HeldRefusal = 'gone' | 'notHeld' | 'notRate' | 'noFacts' | 'sum' | 'rate';
+export type HeldRefusal = 'gone' | 'notHeld' | 'notRate' | 'noFacts' | 'beforeReach' | 'sum' | 'rate';
 
 /**
  * The person's split of an order the sales report holds (#405), when the export cannot tell its rates
@@ -711,6 +712,8 @@ export function bookHeldOrder(ws: Workspace, books: Books, receiptId: string, or
   if (h.why !== 'rate') return { ok: false, why: 'notRate' };
   // Held before the report kept its day and gross: dropped again, it keeps them.
   if (!h.date || h.gross === undefined) return { ok: false, why: 'noFacts' };
+  // An order before the report's reach is none of its sales: the books before the cut-over day carry it, or none do.
+  if (h.date < reachOf(p)) return { ok: false, why: 'beforeReach' };
   if (!parts.length || parts.some((x) => !(x.amount > 0)) || parts.reduce((s, x) => s + toRappen(x.amount), 0) !== toRappen(h.gross)) return { ok: false, why: 'sum' };
   const ctx = reportContext(ws, books, p, 'sales', receipt.id, texts(p.name, receipt.filename), loadFxResolver(), loadClassifyContext(ws));
   const rates = ctx.codes ? [{ code: ctx.codes.domestic, rate: ctx.codes.rate }, ...(ctx.codes.reduced ?? [])] : [];
