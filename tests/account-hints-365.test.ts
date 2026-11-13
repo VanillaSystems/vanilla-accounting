@@ -31,7 +31,7 @@ test('money in: the words for a sale find the firm\'s revenue account first', ()
 });
 
 test('money out: the words for common costs find their expense account first', () => {
-  const expected: Record<string, string> = { Miete: '6000', Benzin: '6200', Diesel: '6200', Telefon: '6510', Versicherung: '6300', Material: '4000', Werkzeug: '6100', Lohn: '5000', Strom: '6400', Porto: '6513', Arbeitslosenversicherung: '5700', Autoversicherung: '6200', Arbeitskleider: '5880', Versich: '6300' };
+  const expected: Record<string, string> = { Miete: '6000', Benzin: '6200', Diesel: '6200', Telefon: '6510', Versicherung: '6300', Material: '4000', Werkzeug: '6100', Lohn: '5000', Strom: '6400', Porto: '6513', Arbeitslosenversicherung: '5700', Autoversicherung: '6200', Arbeitskleider: '5880', Versich: '6300', Gerüst: '4400', Gerüstbau: '4400' };
   for (const [w, account] of Object.entries(expected)) assert.equal(first(w, 'expense'), account, w);
 });
 

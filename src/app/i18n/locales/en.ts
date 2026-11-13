@@ -5613,6 +5613,7 @@ export default {
     'receipts.noTextNoAi': "(not read: only an AI reads a photo or a scan)",
     'receipts.noTextNotRead': "(not read: no text found)",
     'history.keptReceipt': "filed the receipt, did not read it",
+    'history.keptByHand': "filed the receipt, did not read it · details entered by hand",
     'drop.p.unread': "not read yet",
     'drop.p.unreadNoAi': "Only an AI reads a photo. None is set up on this Mac: type the date, amount and VAT yourself.",
     'drop.p.unreadFailed': "No text found: type the date, amount and VAT yourself.",

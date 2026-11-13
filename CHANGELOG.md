@@ -343,6 +343,13 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A receipt's VAT typed by hand on a photo the app cannot read is kept (#438): the run that books
+  its payment again tried the photo once more and dropped what she had entered, so the receipt read
+  «MWST noch nicht gelesen», was called «nicht lesbar» and its payment lost the input tax. What a
+  person enters stays over every later run, the model is told her VAT when it books the payment, and
+  the receipt's Verlauf says «nicht gelesen · Angaben von Hand erfasst» instead of «hat den Beleg gelesen».
+- «Gerüst», «Gerüstbau» and «Gerüstmiete» find an account in the account field (#438): Aufwand für
+  bezogene Dienstleistungen (4400); before, «Gerüst» found none.
 - Firma › Eröffnung (#427): a foreign-currency bank account is no longer refused with a terminal
   command. Typed, it shows a second field: its value in CHF and its balance in its own currency,
   as the balance sheet shows both; the statements are checked against the latter. Beside them the

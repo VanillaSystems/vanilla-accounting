@@ -5613,6 +5613,7 @@ export default {
     'receipts.noTextNoAi': "(non letto: solo un’IA legge una foto o una scansione)",
     'receipts.noTextNotRead': "(non letto: nessun testo riconosciuto)",
     'history.keptReceipt': "ha archiviato il giustificativo, senza leggerlo",
+    'history.keptByHand': "ha archiviato il giustificativo, senza leggerlo · dati inseriti a mano",
     'drop.p.unread': "non ancora letto",
     'drop.p.unreadNoAi': "Solo un’IA legge una foto. Su questo Mac non ne è configurata nessuna: inserisci tu data, importo e IVA.",
     'drop.p.unreadFailed': "Nessun testo riconosciuto: inserisci tu data, importo e IVA.",
