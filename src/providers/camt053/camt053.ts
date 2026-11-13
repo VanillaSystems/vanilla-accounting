@@ -120,13 +120,33 @@ function remittanceRef(rmtInf: Node | undefined): unknown {
 /**
  * The entry's stable id. Wise names its transaction (CARD-…, TRANSFER-…) in BkTxCd/Prtry/Cd and
  * often leaves AcctSvcrRef out. Other banks give AcctSvcrRef or NtryRef on the entry, or only
- * on its TxDtls; an entry without any is numbered within its statement.
+ * on its TxDtls (the one detail of an entry: a batch's details are its parts, not its id). An
+ * entry without any is numbered within its statement; a Wise one gets a ref made of its own facts
+ * (derivedRef, #401). Never empty.
  */
-function entryRef(entry: Node, txDtls: Node[], kind: StatementKind, statementId: string, n: number): string {
-  if (kind === 'wise') return String(entry.AcctSvcrRef ?? entry.BkTxCd?.Prtry?.Cd ?? '');
-  const ref = entry.AcctSvcrRef ?? entry.NtryRef ?? (txDtls.length === 1 ? txDtls[0].Refs?.AcctSvcrRef : undefined);
-  return ref !== undefined && String(ref).trim() ? String(ref).trim() : `${statementId}#${n}`;
+function entryRef(entry: Node, txDtls: Node[], kind: StatementKind, statementId: string, n: number, derived: () => string): string {
+  const detail = txDtls.length === 1 ? txDtls[0].Refs?.AcctSvcrRef : undefined;
+  const given = (kind === 'wise' ? [entry.AcctSvcrRef, entry.BkTxCd?.Prtry?.Cd, detail] : [entry.AcctSvcrRef, entry.NtryRef, detail])
+    .map((r) => (r === undefined || r === null ? '' : String(r).trim())).find(Boolean);
+  if (given) return given;
+  return kind === 'wise' ? derived() : `${statementId}#${n}`;
 }
+
+const DERIVED = 'NOREF-';
+const compact = (iban: string | undefined) => (iban ?? '').replace(/\s+/g, '').toUpperCase();
+
+/**
+ * A ref the app made for an entry the bank gave none (#401): of the account (its IBAN, else the
+ * statement's id), the booking day, the direction, the amount and its place among the statement's
+ * entries of the same day, direction and amount (`-<k>`). The same file read twice gives the same refs, and
+ * so does another export of the same days without references. `${statement}#${n}` is the older such
+ * ref of the other banks' entries, numbered within their statement.
+ */
+const derivedRef = (account: string, date: string, direction: string, amount: number, currency: string) =>
+  `${DERIVED}${account}-${date}-${direction === 'CRDT' ? 'C' : 'D'}${amount.toFixed(2)}${currency}`;
+
+/** Whether a payment's ref is one the app made because the bank's export named none (#401): a later export with the bank's reference is the same payment. */
+export const isDerivedRef = (ref: string): boolean => ref.startsWith(DERIVED) || /#\d+$/.test(ref);
 
 /** ISO 20022 bank transaction sub-families of the bank's own charges (Domn/Fmly/SubFmlyCd, as ACMT/MDOP/FEES for an account fee). */
 const CHARGES = new Set(['CHRG', 'FEES']);
@@ -158,6 +178,7 @@ export function bankCodedFees(statement: CamtStatement, account: { bank: string;
 
 function readEntries(statement: CamtStatement, account: { bank: string; statements: StatementKind }): Array<{ tx: BankTransaction; ownCharge: boolean }> {
   const entries: Node[] = statement.node.Ntry ?? [];
+  const equals = new Map<string, number>();
   return entries.map((entry, i) => {
     const { amount, currency } = getAmt(entry.Amt);
     const direction = String(entry.CdtDbtInd ?? 'DBIT') as 'CRDT' | 'DBIT';
@@ -173,7 +194,12 @@ function readEntries(statement: CamtStatement, account: { bank: string; statemen
     // NOTPROVIDED). Receipts that belong to a grouped payment are attached via
     // multiple mappings to this one transaction instead.
     const txDtlsArr: Node[] = ((entry.NtryDtls ?? []) as Node[]).flatMap((d) => d?.TxDtls ?? []);
-    const ref = entryRef(entry, txDtlsArr, account.statements, statement.id, i + 1);
+    const ref = entryRef(entry, txDtlsArr, account.statements, statement.id, i + 1, () => {
+      const facts = derivedRef(compact(statement.iban) || statement.id, date, direction, amount, currency);
+      const k = (equals.get(facts) ?? 0) + 1;
+      equals.set(facts, k);
+      return `${facts}-${k}`;
+    });
     const counterpartyOf = (d: Node) => {
       const side = direction === 'DBIT' ? d.RltdPties?.Cdtr : d.RltdPties?.Dbtr;
       return String(side?.Pty?.Nm ?? side?.Nm ?? '');
