@@ -293,12 +293,12 @@ const TELLING = 6;
  * characters at least, and, when only digits, neither the receipt's amount (in cents or whole
  * units) nor a day or a month (words.ts isDateDigits: «20260707», «260301», «202607» for «2026-07»).
  */
-export function telling(n: string, r: Pick<Receipt, 'amount'>): boolean {
+export function telling(n: string, r: Pick<Receipt, 'amount' | 'date'>): boolean {
   if (n.length < TELLING) return false;
   if (!/^\d+$/.test(n)) return true;
   const amount = Math.abs(r.amount ?? 0);
   if (n === String(Math.round(amount * 100)) || n === String(Math.round(amount))) return false;
-  return !isDateDigits(n);
+  return !isDateDigits(n, r.date);
 }
 
 /** Marks the pairs code may link: the rule of the header, then alone both ways among all near pairs. */

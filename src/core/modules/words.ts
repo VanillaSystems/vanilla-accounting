@@ -52,18 +52,23 @@ const validDay = (y: number, m: number, d: number): boolean => {
 /**
  * Digits that write a day or a month rather than a document's number: yyyymmdd, ddmmyyyy (19xx or
  * 20xx), yymmdd, ddmmyy, yyyymm, mmyyyy («20260707», «07072026», «260301», «202607» for «2026-07»).
+ * With `near` (a document's day), a six-digit number counts as a day only within NEAR_DAYS of it:
+ * «Nr. 230915» on a bill of 2026 is its number, not a day of 2023.
  */
-export function isDateDigits(n: string): boolean {
+export function isDateDigits(n: string, near?: string): boolean {
   if (!/^\d+$/.test(n)) return false;
   const c = (a: number, b: number) => Number(n.slice(a, b));
   const century = (y: string) => /^(?:19|20)\d{2}$/.test(y);
   if (n.length === 8) return (century(n.slice(0, 4)) && validDay(c(0, 4), c(4, 6), c(6, 8))) || (century(n.slice(4, 8)) && validDay(c(4, 8), c(2, 4), c(0, 2)));
   if (n.length === 6) {
-    return validDay(2000 + c(0, 2), c(2, 4), c(4, 6)) || validDay(2000 + c(4, 6), c(2, 4), c(0, 2))
-      || (century(n.slice(0, 4)) && c(4, 6) >= 1 && c(4, 6) <= 12) || (century(n.slice(2, 6)) && c(0, 2) >= 1 && c(0, 2) <= 12);
+    const around = near ? Date.parse(near) : NaN;
+    const close = (y: number, m: number, d: number) => validDay(y, m, d) && (!Number.isFinite(around) || Math.abs(Date.UTC(y, m - 1, d) - around) <= NEAR_DAYS * 864e5);
+    return close(2000 + c(0, 2), c(2, 4), c(4, 6)) || close(2000 + c(4, 6), c(2, 4), c(0, 2))
+      || (century(n.slice(0, 4)) && c(4, 6) >= 1 && c(4, 6) <= 12 && close(c(0, 4), c(4, 6), 1)) || (century(n.slice(2, 6)) && c(0, 2) >= 1 && c(0, 2) <= 12 && close(c(2, 6), c(0, 2), 1));
   }
   return false;
 }
+const NEAR_DAYS = 400;
 
 /** The first match of each list in `text`, by its position. */
 export function firstOf<K extends string>(lists: Record<K, string[]>, text: string): Array<{ key: K; at: number }> {

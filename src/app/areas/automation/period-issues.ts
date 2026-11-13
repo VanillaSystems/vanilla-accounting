@@ -90,7 +90,7 @@ export function periodIssues(books: Index, questions: readonly Question[], from:
   const unlinked = l.views.filter((v) => needsYou(v, l) && within(v.date) && !v.r.filedPayment && !mine.has(v.r.id)).map((v): PeriodIssue => ({ kind: 'unlinked', receipt: v.r }));
   const orders = (provider?.held ?? []).filter((h) => !h.filed && within(h.date)).map((h): PeriodIssue => ({ kind: 'held', held: h }));
   const bills = (provider?.bills ?? []).filter((b) => within(b.date)).map((b): PeriodIssue => ({ kind: 'bill', bill: b }));
-  const withheld = unclearedContributions(books as Parameters<typeof unclearedContributions>[0], from, to).map((uncleared): PeriodIssue => ({ kind: 'withheld', uncleared }));
+  const withheld = unclearedContributions(books as Parameters<typeof unclearedContributions>[0], from, to, new Set(provider?.withheldPayees ?? [])).map((uncleared): PeriodIssue => ({ kind: 'withheld', uncleared }));
   return [...asked, ...orders, ...evidence, ...withheld, ...unbooked, ...own, ...unlinked, ...bills];
 }
 

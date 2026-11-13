@@ -255,6 +255,8 @@ export interface SetupData {
     account: string; deductions?: string; contributions?: string[];
     /** The business files (ids) that collect contributions with the employees' share the payslips withheld: a payment to one is told what `deductions` holds (src/booking/withheld.ts, #426). */
     payees?: string[];
+    /** The contribution accounts the employees share in (AHV/IV/EO/ALV, BVG), never one the employer pays alone (family allowances): a payment booked there with nothing on `deductions` is a task (#426). */
+    shared?: string[];
   };
   /** The account each kind of private use (the setup's privateUse: car, phone) is booked on: a share named in the setup is offered as a rule on a payment booked there (#402). */
   privateUse?: Partial<Record<'car' | 'phone', string>>;

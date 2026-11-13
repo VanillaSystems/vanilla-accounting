@@ -30,7 +30,8 @@ export interface HeldOrder { provider: string; name: string; receipt: string; or
 export interface MissingBill { provider: string; name: string; month: string; date: string; fees: number }
 
 /** `payouts`: the provider's name by the ref of each payment code takes for its payout (providerOfMoneyIn): a list names it so, not by the processor that paid it (#405). */
-export interface ProviderIssues { held: HeldOrder[]; bills: MissingBill[]; payouts: Record<string, string> }
+/** `withheldPayees`: beside the providers', the refs of payments to a business that collects contributions with the employees' share (src/booking/withheld.ts withheldPayeesOf, #426): the business files are the server's. */
+export interface ProviderIssues { held: HeldOrder[]; bills: MissingBill[]; payouts: Record<string, string>; withheldPayees?: string[] }
 
 type Books = { receipts: readonly Receipt[]; journalEntries?: readonly JournalEntry[] };
 

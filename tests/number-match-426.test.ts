@@ -185,6 +185,12 @@ test('negatives past the terms: a short number, a number that is a day, a month 
   assert.deepEqual(before.mappings, [], 'the payment lies before the bill');
 });
 
+test('six digits read as a day only near the bill\'s date: «Rechnung Nr. 230915» on a bill of July 2026 is its number', async () => {
+  const b = books([bill({}, akonto('230915', 'Rechnung Nr.'))], [pay('p', '2026-09-28', 2683.5, 'Akonto 230915'), ...OTHERS]);
+  await run(b);
+  assert.deepEqual(links(b), [['akonto', 'p']]);
+});
+
 test('within the terms nothing changed: a short number with the same amount 10 days later is linked as before', async () => {
   const b = books([bill({}, akonto('AK-471'))], [pay('p', '2026-07-17', 2683.5, 'Akonto AK-471'), ...OTHERS]);
   await run(b);

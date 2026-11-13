@@ -130,19 +130,50 @@ test('code holds the cap: two contribution payments that each take the whole cre
   assert.equal(books.journalEntries.filter((e) => e.transactionRef === 'AK2').length, 0);
 });
 
-test('the task: a contribution payment booked without a line on 2270 while 2270 held a credit; none once it clears it', () => {
+const PAYEES = new Set(['AK']);
+const Q3 = ['2026-07-01', '2026-09-30'] as const;
+
+test('the task: a payment to the compensation fund booked without a line on 2270 while 2270 still holds a credit at the period\'s end; none once it clears it', () => {
   const whole = [entry('AK', '2026-09-28', '5700', '1020', 2683.5)];
   const books = { transactions: [...WAGES, PENSION, AKONTO], journalEntries: [...gross, ...pension, ...whole] };
-  assert.deepEqual(unclearedContributions(books, '2026-07-01', '2026-09-30').map((u) => [u.tx.ref, u.account, u.open]), [['AK', '2270', 1200]]);
+  assert.deepEqual(unclearedContributions(books, ...Q3, PAYEES).map((u) => [u.tx.ref, u.account, u.open]), [['AK', '2270', 1200]]);
   const split = [entry('AK', '2026-09-28', '2270', '1020', 1200), entry('AK', '2026-09-28', '5700', '1020', 1483.5)];
-  assert.deepEqual(unclearedContributions({ ...books, journalEntries: [...gross, ...pension, ...split] }, '2026-07-01', '2026-09-30'), []);
-  assert.deepEqual(unclearedContributions({ ...books, journalEntries: [...pension, ...whole] }, '2026-07-01', '2026-09-30'), [], 'wages booked net');
+  assert.deepEqual(unclearedContributions({ ...books, journalEntries: [...gross, ...pension, ...split] }, ...Q3, PAYEES), []);
+  assert.deepEqual(unclearedContributions({ ...books, journalEntries: [...pension, ...whole] }, ...Q3, PAYEES), [], 'wages booked net');
 });
 
-test('the task stands under «Noch offen» of the period and is counted', async () => {
+test('cleared by hand later on a ref of its own: the task is gone; cleared in part: it names what is still open at the period\'s end', () => {
+  const whole = [entry('AK', '2026-09-28', '5700', '1020', 2683.5)];
+  const fix = (amount: number) => entry('FIX', '2026-09-30', '2270', '5700', amount, { origin: 'manual', by: { kind: 'person', at: '2026-10-02T08:00:00Z' } } as never);
+  const books = (amount: number) => ({ transactions: [...WAGES, PENSION, AKONTO], journalEntries: [...gross, ...pension, ...whole, fix(amount)] });
+  assert.deepEqual(unclearedContributions(books(1200), ...Q3, PAYEES), []);
+  assert.deepEqual(unclearedContributions(books(1000), ...Q3, PAYEES).map((u) => u.open), [200]);
+});
+
+test('no task for a payment the employer pays alone: a family compensation fund billing on its own, booked whole on 5710', () => {
+  const FAK = pay('FAK', '2026-09-28', 243.75, 'Familienausgleichskasse Luzern', 'FAK Q3 2026');
+  const books = { transactions: [...WAGES, PENSION, AKONTO, FAK], journalEntries: [...gross, ...pension, entry('FAK', '2026-09-28', '5710', '1020', 243.75)] };
+  assert.deepEqual(unclearedContributions(books, ...Q3, new Set(['FAK'])), [], 'even when its business collects contributions: 5710 carries no employees\' share');
+});
+
+test('a payee is one that collects the share: by the business files (the server\'s refs) or an earlier payment that took something off 2270; a supplier booked on 5700 by mistake is none', () => {
+  const whole = [entry('AK', '2026-09-28', '5700', '1020', 2683.5)];
+  const books = { transactions: [...WAGES, PENSION, AKONTO], journalEntries: [...gross, ...pension, ...whole] };
+  assert.deepEqual(unclearedContributions(books, ...Q3), [], 'no payee known');
+  const PK2 = pay('PK2', '2026-09-29', 1195.2, 'Pensionskasse Zentral', 'Beiträge Q4 2026');
+  const later = { transactions: [...books.transactions, PK2], journalEntries: [...books.journalEntries, entry('PK2', '2026-09-29', '5720', '1020', 1195.2)] };
+  assert.deepEqual(unclearedContributions(later, ...Q3).map((u) => u.tx.ref), ['PK2'], 'the pension fund took its share off 2270 in July');
+});
+
+test('the task stands under «Noch offen» of the period and is counted, with the refs the server sends', async () => {
   const { periodIssues, countIssues } = await import('../src/app/areas/automation/period-issues.js');
   const books = { transactions: [...WAGES, PENSION, AKONTO], journalEntries: [...gross, ...pension, entry('AK', '2026-09-28', '5700', '1020', 2683.5)], receipts: [], mappings: [], bankStatements: [], config: { closedThrough: '2026-06-30' } };
-  const issues = periodIssues(books as never, [], '2026-07-01', '2026-09-30', []);
+  const issues = periodIssues(books as never, [], ...Q3, [], new Map(), '2026-11-13' as never, new Map(), { held: [], bills: [], payouts: {}, withheldPayees: ['AK'] });
   assert.deepEqual(issues.flatMap((i) => (i.kind === 'withheld' ? [[i.uncleared.tx.ref, i.uncleared.open]] : [])), [['AK', 1200]]);
   assert.equal(countIssues(issues).withheld, 1);
+});
+
+test('the server names the payments to the compensation fund by its business file', async () => {
+  const { withheldPayeesOf } = await import('../src/booking/withheld.js');
+  assert.deepEqual(withheldPayeesOf([AKONTO, PRINTER], (t) => (t.ref === 'AK' ? 'ausgleichskasse' : 'druckerei')), ['AK']);
 });

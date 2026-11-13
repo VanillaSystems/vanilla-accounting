@@ -350,8 +350,11 @@ Two markers flag an entry you must read before you update:
   employer's share on the staff expense (it booked the whole payment as expense, and 2270 kept the
   employees' share). Such payments are asked after the wages of the same drop are booked, and the
   year's opening of 2270 counts. An answer that takes more off 2270 than it holds is not booked. A
-  contribution payment booked without a line on 2270 while 2270 held a credit is named under «Noch
-  offen» («gebucht ohne den Anteil der Arbeitnehmenden»). No VAT figure changes.
+  payment to the compensation fund (or to a payee that took its share off 2270 before) booked on
+  AHV/ALV or BVG with nothing on 2270, while 2270 still holds a credit at the period's end, is named
+  under «Noch offen» («gebucht ohne den Anteil der Arbeitnehmenden», with what 2270 holds then);
+  never one the employer pays alone (family allowances), and gone once 2270 is cleared. No VAT
+  figure changes.
 - Firma › Eröffnung (#427): a foreign-currency bank account is no longer refused with a terminal
   command. Typed, it shows a second field: its value in CHF and its balance in its own currency,
   as the balance sheet shows both; the statements are checked against the latter. Beside them the

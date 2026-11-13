@@ -34,9 +34,9 @@ export function withheldFor(books: Books, tx: Pick<BankTransaction, 'ref' | 'dat
 }
 
 /** The deductions account and the employer's contribution accounts of the jurisdiction (setup.yaml `wages`); undefined without a deductions account. */
-export function wageAccounts(): { deductions: string; contributions: ReadonlySet<string>; payees: readonly string[] } | undefined {
+export function wageAccounts(): { deductions: string; contributions: ReadonlySet<string>; shared: ReadonlySet<string>; payees: readonly string[] } | undefined {
   const w = setup().wages;
-  return w?.deductions ? { deductions: w.deductions, contributions: new Set(w.contributions ?? []), payees: w.payees ?? [] } : undefined;
+  return w?.deductions ? { deductions: w.deductions, contributions: new Set(w.contributions ?? []), shared: new Set(w.shared ?? []), payees: w.payees ?? [] } : undefined;
 }
 
 const fold = (s: string | undefined) => (s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
@@ -79,24 +79,40 @@ export function overWithheld(entries: readonly JournalEntry[], account: string, 
   return taken > (open ?? 0) + 0.004 ? { taken, open: open ?? 0 } : undefined;
 }
 
-/** A booked payment of the employer's contributions that takes nothing off the deductions account while it held `open` that day. */
+/** A booked contribution payment that takes nothing off the deductions account, which still holds `open` at the end of the period. */
 export interface Uncleared { tx: BankTransaction; account: string; open: number }
 
 /**
- * The payments dated `from`–`to` booked on an employer's contribution account with no line on the
- * deductions account, while that account held a credit on their day: the employees' share the
- * payslips withheld is still on it, and the staff expense that much too high (#426).
+ * The payments dated `from`–`to` that can carry the employees' share, booked on a contribution
+ * account the employees share in (setup.yaml `wages.shared`: not one the employer pays alone, as the
+ * family allowances) with no line on the deductions account, while that account still holds a
+ * credit at `to`: the employees' share the payslips withheld is still on it, and the staff expense
+ * that much too high (#426). A payment can carry the share when its payee is one that collects it
+ * (`payees`: the refs of payments to a business of `wages.payees`, which the server routes by the
+ * business files, src/intake/pair-chain.ts providerIssuesIn) or an earlier payment to the same
+ * counterparty took something off the deductions account. Cleared since, by hand on a ref of its
+ * own, the account holds nothing at `to` and the task is gone.
  */
-export function unclearedContributions(books: Books & { transactions: readonly BankTransaction[] }, from: string, to: string): Uncleared[] {
+export function unclearedContributions(books: Books & { transactions: readonly BankTransaction[] }, from: string, to: string, payees: ReadonlySet<string> = new Set()): Uncleared[] {
   const w = wageAccounts();
   if (!w) return [];
+  const open = withheldFor(books, { ref: '', date: to, direction: 'DBIT' }, w.deductions);
+  if (!open) return [];
   const byRef = new Map<string, JournalEntry[]>();
-  for (const e of books.journalEntries) if (e.date >= from && e.date <= to) (byRef.get(e.transactionRef) ?? byRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
+  for (const e of books.journalEntries) (byRef.get(e.transactionRef) ?? byRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
+  const cleared = new Set(books.transactions.filter((t) => byRef.get(t.ref)?.some((e) => e.accountDebit === w.deductions)).map((t) => t));
+  const sharer = (tx: BankTransaction) => payees.has(tx.ref) || (!!tx.counterparty && [...cleared].some((t) => t.ref !== tx.ref && t.date <= tx.date && fold(t.counterparty) === fold(tx.counterparty)));
   return books.transactions.flatMap((tx): Uncleared[] => {
     const lines = tx.date >= from && tx.date <= to ? byRef.get(tx.ref) : undefined;
     if (!lines?.length || tx.direction !== 'DBIT') return [];
-    if (!lines.some((e) => w.contributions.has(e.accountDebit)) || lines.some((e) => e.accountDebit === w.deductions || e.accountCredit === w.deductions)) return [];
-    const open = withheldFor(books, tx, w.deductions);
-    return open ? [{ tx, account: w.deductions, open }] : [];
+    if (!lines.some((e) => w.shared.has(e.accountDebit)) || lines.some((e) => e.accountDebit === w.deductions || e.accountCredit === w.deductions)) return [];
+    return sharer(tx) ? [{ tx, account: w.deductions, open }] : [];
   });
+}
+
+/** The payments out to a business that collects contributions with the employees' share (setup.yaml `wages.payees`), by ref: what the app's task needs of the business files. */
+export function withheldPayeesOf(transactions: readonly BankTransaction[], businessOf: (t: BankTransaction) => string | undefined): string[] {
+  const w = wageAccounts();
+  if (!w?.payees.length) return [];
+  return transactions.filter((t) => t.direction === 'DBIT' && w.payees.includes(businessOf(t) ?? '')).map((t) => t.ref);
 }

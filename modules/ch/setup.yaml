@@ -31,7 +31,9 @@ bankCharges: { account: "6940" }
 # `payees`: the business files that collect contributions together with the employees' share withheld
 # from the wages (the compensation fund): a payment to one is told what `deductions` holds on its day,
 # as is a payment to a business booked on these accounts before (src/booking/withheld.ts, #426).
-wages: { account: "5000", deductions: "2270", contributions: ["5700", "5710", "5720"], payees: [ausgleichskasse] }
+# `shared`: the contribution accounts the employees share in (AHV/IV/EO/ALV, BVG), not FAK (5710),
+# which the employer pays alone.
+wages: { account: "5000", deductions: "2270", contributions: ["5700", "5710", "5720"], payees: [ausgleichskasse], shared: ["5700", "5720"] }
 
 # What the setup's «private use» names, by the account its costs are booked on: a share of it the person
 # named in the setup («öppe d Hälfti» of the phone) is offered as a rule with a private share on the first
