@@ -113,8 +113,12 @@ export function receiptState(tx: Pick<BankTransaction, 'date' | 'waitsForReceipt
   return { kind: today >= days.askFrom ? 'asks' : 'waits', ...days };
 }
 
-/** A payment the app holds, where it stands today (receiptState); `receipts` are its linked receipts. */
-export interface WaitingPayment { tx: BankTransaction; kind: 'waits' | 'asks' | 'unread'; due: IsoDate; askFrom: IsoDate; receipts: Receipt[] }
+/**
+ * A payment the app holds, where it stands today (receiptState); `receipts` are its linked receipts.
+ * `outlays`: a payment to the owner, which waits in truth for the outlays it pays back to be booked,
+ * not for a receipt of its own (src/booking/owner-outlays.ts repaysOwnerShape, #428).
+ */
+export interface WaitingPayment { tx: BankTransaction; kind: 'waits' | 'asks' | 'unread'; due: IsoDate; askFrom: IsoDate; receipts: Receipt[]; outlays?: true }
 
 /** The open payments that wait for their receipt or for the person's word on an unreadable one, oldest first; `isBooked` says whether the books hold its whole booking. */
 export function waitingForReceipt(books: Pick<Index, 'transactions' | 'mappings' | 'receipts' | 'config'>, isBooked: (ref: string) => boolean, today: IsoDate): WaitingPayment[] {
