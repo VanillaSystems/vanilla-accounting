@@ -1,15 +1,16 @@
 /**
  * The firm's own UID says nothing of who wrote a receipt (a supplier prints «Kunde CHE-… MWST»),
  * also while the settings have none (#466: the setup does not ask it). buyerUids gives the settings'
- * UID, else the ones the books show to be the buyer's: a UID on the receipts of two vendors or more,
- * the UID on the firm's own invoices recognised by its name. Synthetic receipts, no real vendor.
+ * UID, else the ones the books show to be the buyer's: a UID in a customer's block on the receipts of
+ * two vendors or more, the UID on the firm's own invoice money in pays. Without the settings' UID the
+ * receipt sets key no receipt by its VAT number. Synthetic receipts, no real vendor.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
 import { buyerUids, twoVendors } from '../src/intake/own-invoice.js';
 import { linkReceiptSets, proposalsFor } from '../src/intake/receipt-sets.js';
-import { batchPayersOf, businessesOf, buyerUidsOf } from '../src/intake/match.js';
+import { batchPayersOf, businessesOf } from '../src/intake/match.js';
 import { bookingDraft, type DraftKnowledge } from '../src/accounting/manual-booking.js';
 import { workspaceAt, type LedgerBankAccount } from '../src/workspace/workspace.js';
 import { DEMO_ROOT } from './support/workspace.js';
@@ -39,37 +40,64 @@ const shops = () => [
 const demo = () => workspaceAt(DEMO_ROOT);
 const withoutUid = <W extends { company: { uid?: string } }>(ws: W): W => ({ ...ws, company: { ...ws.company, uid: undefined } });
 
-test('buyerUids: the settings\' UID alone when there is one; else a UID on two vendors\' receipts, or on the firm\'s own invoice by its name', () => {
+const firm = { name: 'Muster GmbH' };
+const linkedTo = (rs: Receipt[], txs: BankTransaction[]) => booksOf(txs, rs, rs.map((r, i) => ({ receiptId: r.id, transactionRef: txs[i].ref }) as Mapping));
+
+test('buyerUids: the settings\' UID alone when there is one; else a UID in a customer\'s block on two vendors\' receipts, or on the firm\'s own invoice money in pays', () => {
   const b = booksOf([], shops());
   assert.deepEqual(buyerUids({ uid: 'CHE-999.888.777', name: 'Muster GmbH' }, b), ['999888777'], 'the settings decide, the books are not read');
-  assert.deepEqual(buyerUids({ name: 'Muster GmbH' }, b), [FIRM_DIGITS]);
-  assert.deepEqual(buyerUids({ name: 'Muster GmbH' }, booksOf([], [shops()[0]])), [], 'one vendor\'s receipts: its UID may be its own');
-  const own = receipt({ title: { vendor: 'Kunde AG', what: 'Rechnung' }, extractedText: `Muster GmbH, Bahnhofstrasse 1, 8000 Zürich\n${FIRM} MWST\nRechnung 2026-001\nKunde AG` });
-  assert.deepEqual(buyerUids({ name: 'Muster GmbH' }, booksOf([], [own])), [FIRM_DIGITS], 'the firm\'s own invoice by its name');
-  const untitled = [receipt({ vatId: FIRM, title: undefined }), receipt({ vatId: FIRM, title: undefined })];
-  const paid = booksOf([pay('P1', 1, { counterparty: 'Garage Muster' }), pay('P2', 1, { counterparty: 'Papeterie Beispiel' })], untitled, [{ receiptId: untitled[0].id, transactionRef: 'P1' }, { receiptId: untitled[1].id, transactionRef: 'P2' }] as Mapping[]);
-  assert.deepEqual(buyerUids({ name: 'Muster GmbH' }, paid), [FIRM_DIGITS], 'without a title: the counterparties of the payments they are linked to');
+  assert.deepEqual(buyerUids(firm, b), [FIRM_DIGITS]);
+  assert.deepEqual(buyerUids(firm, booksOf([], [shops()[0]])), [], 'one vendor\'s receipts: its UID may be its own');
+  const own = () => receipt({ title: { vendor: 'Kunde AG', what: 'Rechnung' }, extractedText: `Muster GmbH, Bahnhofstrasse 1, 8000 Zürich\n${FIRM} MWST\nRechnung 2026-001\nKunde AG` });
+  assert.deepEqual(buyerUids(firm, linkedTo([own()], [pay('IN', 1, { direction: 'CRDT' })])), [FIRM_DIGITS], 'her own invoice, paid by her customer');
+  // A supplier's invoice with her name as the addressee on its first line, its UID near it: paid by money out.
+  const addressed = receipt({ title: undefined, extractedText: 'Muster GmbH, Bahnhofstrasse 1, 8000 Zürich\nCHE-468.024.680 MWST\nRechnung 77\nLieferant AG' });
+  assert.deepEqual(buyerUids(firm, linkedTo([addressed], [pay('OUT', 1)])), [], 'the supplier\'s UID is never the firm\'s own');
+  assert.deepEqual(buyerUids(firm, booksOf([], [own()])), [], 'not paid in: no proof it is hers');
+  const untitled = [receipt({ vatId: FIRM, title: undefined, extractedText: `Rechnung\nKunde: Muster GmbH ${FIRM}` }), receipt({ vatId: FIRM, title: undefined, extractedText: `Quittung\nKunde: Muster GmbH ${FIRM}` })];
+  assert.deepEqual(buyerUids(firm, linkedTo(untitled, [pay('P1', 1, { counterparty: 'Garage Muster' }), pay('P2', 1, { counterparty: 'Papeterie Beispiel' })])), [FIRM_DIGITS], 'without a title: the counterparties of the payments they are linked to');
   assert.equal(twoVendors(['digitec', 'digitecgalaxus']), false, 'one name holding the other is one vendor');
   assert.equal(twoVendors(['shopalphaag', 'betahandelgmbh']), true);
+});
+
+test('buyerUids: a supplier\'s own UID is never the buyer\'s: two brands, two products, a card payment\'s name, a payout report and its fee bill', () => {
+  const letterhead = (vendor: string, uid: string) => receipt({ vatId: uid, title: { vendor, what: 'Rechnung' }, extractedText: `${vendor}\n${uid} MWST\nRechnung\nMuster GmbH` });
+  assert.deepEqual(buyerUids(firm, booksOf([], [letterhead('Digitec', 'CHE-192.837.465'), letterhead('Galaxus', 'CHE-192.837.465')])), [], 'two brands of one supplier');
+  const footer = (vendor: string) => receipt({ vatId: 'CHE-357.913.579', title: { vendor, what: 'Abo' }, extractedText: `${vendor}\nRechnung\nMuster GmbH\nTotal 10.00\nGoogle Beispiel Ltd, CHE-357.913.579 MWST` });
+  assert.deepEqual(buyerUids(firm, booksOf([], [footer('Google Cloud'), footer('Google Workspace')])), [], 'two products, the UID in the footer');
+  // The host's UID below the customer number: its title on one receipt, the card's name on the payment of another.
+  const hosting = (title?: string) => receipt({ vatId: 'CHE-579.135.791', title: title ? { vendor: title, what: 'Server' } : undefined, extractedText: 'Kunde: K-4711\nHosting Beispiel GmbH\nCHE-579.135.791 MWST\nRechnung' });
+  assert.deepEqual(buyerUids(firm, linkedTo([hosting('Hosting Beispiel'), hosting()], [pay('H1', 1, { counterparty: 'Hosting Beispiel' }), pay('H2', 1, { counterparty: 'Visa Kartenzahlung' })])), [], 'a title and a payment\'s name are never mixed');
+  const report = receipt({ vatId: 'CHE-111.222.333', title: { vendor: 'Verkauf', what: 'Auszahlung' }, extractedText: 'Kunde: Muster GmbH\nTerminal AG CHE-111.222.333\nAuszahlung Oktober' });
+  const fees = receipt({ vatId: 'CHE-111.222.333', title: { vendor: 'Terminal AG', what: 'Gebühren' }, extractedText: 'Terminal AG CHE-111.222.333 MWST\nGebühren Oktober' });
+  assert.deepEqual(buyerUids(firm, booksOf([], [report, fees])), [], 'a title that names no business counts for no vendor');
 });
 
 test('receipt sets: two shops printing the firm\'s UID are no one vendor, with the UID in the settings or without it', () => {
   const ws = demo();
   for (const w of [ws, withoutUid(ws)]) {
     const b = booksOf([pay('D', 200, { counterparty: 'Dritte AG', description: 'Dritte AG Zahlung' })], shops());
-    const found = linkReceiptSets(b, { isOpen: open, payers: batchPayersOf(w, b), buyerUids: buyerUidsOf(w, b) });
+    const found = linkReceiptSets(b, { isOpen: open, payers: batchPayersOf(w, b), firmUid: w.company.uid });
     assert.deepEqual(found.sets, [], w.company.uid ? 'with the UID' : 'without the UID');
     assert.deepEqual(b.mappings, []);
   }
 });
 
-test('receipt sets: receipts without a title keyed by the firm\'s UID join no set once the books show it is the buyer\'s', () => {
+test('receipt sets: without the UID in the settings no VAT number is a vendor; receipts without a title join no set and wait', () => {
   const ws = withoutUid(demo());
-  // The two shops' receipts teach the UID in their text (not read as theirs); the untitled ones would otherwise be one vendor by it.
-  const untitled = [receipt({ amount: 120, vatId: FIRM, title: undefined }), receipt({ amount: 80, vatId: FIRM, title: undefined })];
-  const b = booksOf([pay('D', 200, { counterparty: 'Dritte AG' })], [...shops().map((r) => ({ ...r, amount: 1, vatId: undefined })), ...untitled]);
-  assert.deepEqual(proposalsFor(b, b.transactions[0], { isOpen: open, buyerUids: [] }).sets.length, 1, 'keyed by the buyer\'s UID (the defect): one vendor of nobody');
-  assert.deepEqual(proposalsFor(b, b.transactions[0], { isOpen: open, buyerUids: buyerUidsOf(ws, b) }).sets, []);
+  const [alpha, beta] = shops();
+  const bare = (r: Receipt): Receipt => ({ ...r, title: undefined });
+  for (const [what, rs] of [['both without a title', [bare(alpha), bare(beta)]], ['one with a title', [alpha, bare(beta)]]] as Array<[string, Receipt[]]>) {
+    const b = booksOf([pay('D', 200, { counterparty: 'Dritte AG', description: 'Dritte AG Zahlung' })], rs);
+    assert.deepEqual(linkReceiptSets(b, { isOpen: open, payers: batchPayersOf(ws, b), firmUid: ws.company.uid }).sets, [], what);
+    assert.deepEqual(b.mappings, [], what);
+    assert.deepEqual(proposalsFor(b, b.transactions[0], { isOpen: open, firmUid: ws.company.uid }).sets, [], what);
+  }
+  // With the UID in the settings a supplier's own VAT number still keys its receipts, as before.
+  const supplier = [receipt({ amount: 120, vatId: 'CHE-283.746.519', title: undefined }), receipt({ amount: 80, vatId: 'CHE-283.746.519', title: undefined })];
+  const b = booksOf([pay('S', 200, { counterparty: 'Lieferant AG' })], supplier);
+  assert.equal(proposalsFor(b, b.transactions[0], { isOpen: open, firmUid: FIRM }).sets.length, 1, 'with the UID: keyed by the supplier\'s VAT number');
+  assert.deepEqual(proposalsFor(b, b.transactions[0], { isOpen: open }).sets, [], 'without it: no key, the receipts wait');
 });
 
 test('routing: a receipt printing only the buyer\'s UID is routed by its sender\'s address, with the UID in the settings or the books showing it', () => {

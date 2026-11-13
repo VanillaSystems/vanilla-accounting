@@ -322,6 +322,10 @@ export interface DocumentsData {
   months?: string[][];
   /** Legal forms and words of a firm's name that tell no one apart («GmbH», «Holding»). */
   legalForms?: string[];
+  /** The words that label the customer's block of an invoice («Kunde», «Rechnungsadresse», «Ihre UID»): a VAT number beside one is the buyer's, never the sender's (src/intake/own-invoice.ts buyerUids). */
+  buyer?: string[];
+  /** A title's vendor that names no business (the model's «Verkauf» for a till's slip): it tells no vendor apart (src/intake/own-invoice.ts buyerUids). */
+  notVendor?: string[];
 }
 
 /** What a line of a customs invoice charges: the import VAT the carrier advanced, customs duty, the carrier's fees, freight. */

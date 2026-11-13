@@ -17,7 +17,7 @@ import { askIfReady } from '../../intake/run.js';
 import { estvToChf, noPaymentFor, noReceiptFor, runPairChain, type ChainResult, type Found } from '../../intake/pair-chain.js';
 import type { BooksPort } from '../../intake/pipeline.js';
 import { proposalsFor } from '../../intake/receipt-sets.js';
-import { batchPayersOf, businessesOf, buyerUidsOf } from '../../intake/match.js';
+import { batchPayersOf, businessesOf } from '../../intake/match.js';
 import { nearOffers } from '../../intake/near-pairs.js';
 
 export const router = Router();
@@ -70,7 +70,7 @@ router.get('/api/transactions/:ref/receipt-sets', (req, res) => {
   const tx = books.transactions.find((t) => t.ref === req.params.ref);
   if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   const lock = periodLock(books);
-  res.json(proposalsFor(books, tx, { isOpen: (d) => !lock.isClosed(d), payers: batchPayersOf(WS, books), toChf: estvToChf(), buyerUids: buyerUidsOf(WS, books), noPayment: noPaymentFor(WS)(books) }));
+  res.json(proposalsFor(books, tx, { isOpen: (d) => !lock.isClosed(d), payers: batchPayersOf(WS, books), toChf: estvToChf(), firmUid: WS.company.uid, noPayment: noPaymentFor(WS)(books) }));
 });
 
 router.post('/api/transactions/:ref/find-receipt', async (req, res) => {

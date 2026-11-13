@@ -173,7 +173,7 @@ export async function main(): Promise<void> {
   console.log(`precision (links the books know): code ${precision(tc)}, code + oracle ${precision(tm)}; recall of one-to-one links: code ${(tc.oneToOneRight / Math.max(1, oneToOne)).toFixed(3)}, code + oracle ${(tm.oneToOneRight / Math.max(1, oneToOne)).toFixed(3)}`);
   // The match step's code after the chain: receipt sets (with the batch payers of the business files) and the legs of split card charges (#190).
   const isOpen = () => true;
-  linkReceiptSets(afterCode, { isOpen, payers: batchPayersOf(ws, blind), toChf, buyerUids: buyer });
+  linkReceiptSets(afterCode, { isOpen, payers: batchPayersOf(ws, blind), toChf, firmUid: ws.company.uid });
   linkSplitLegs(afterCode, isOpen, toChf);
   const multi = multiTally(afterCode, truth, books, toChf, (t) => !!providerOfPayment(t, [], counterparties));
   const say = (t: MultiTally) => `${t.payments} in the window; code alone found ${t.full} in full, ${t.part} in part, ${t.wrong} with a document the books do not have there, missed ${t.missed}`;

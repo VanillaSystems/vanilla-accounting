@@ -231,14 +231,17 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const toRead = staged.filter((r) => !r.needsVisionReview && r.kind !== 'noise');
   // Code first (#187): the staged receipts take part in the chain with the facts code reads off them.
   const early = toRead.flatMap((r) => provisional(r) ?? []);
-  const payers = batchPayersOf(ws, first);
+  // The batch payers with the firm's own UIDs as the books show them now (buyerUids): read again on every run of the code.
+  let payers = batchPayersOf(ws, first);
   const noPayment = noPaymentFor(ws);
   const byCode = async (stagedNow: readonly Receipt[] = []) => {
     const noReceipt = noReceiptFor(ws);
-    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt, noPayment, businesses: businessesOf(ws, books.read()), firm: ws.company && { uid: ws.company.uid, name: ws.company.name, owner: ws.company.owner } });
+    const now = books.read();
+    payers = batchPayersOf(ws, now);
+    const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt, noPayment, businesses: businessesOf(ws, now), firm: ws.company && { uid: ws.company.uid, name: ws.company.name, owner: ws.company.owner } });
     const providers = providersOf(ws);
     for (const l of books.update((index) => linkOrdersToSales(index, (d) => !periodLock(index).isClosed(d), providers))) log(`linked the order document to its sale: receipt ${l.receipt} → ${l.sale}`);
-    const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf, buyerUids: buyerUidsOf(ws, index), noReceipt: noReceipt(index), noPayment: noPayment(index) }); });
+    const found = books.update((index) => { const lock = periodLock(index); return linkReceiptSets(index, { isOpen: (d) => !lock.isClosed(d), payers, toChf, firmUid: ws.company?.uid, noReceipt: noReceipt(index), noPayment: noPayment(index) }); });
     for (const s of found.sets) log(`linked ${s.receipts.length} receipts that add up to the payment${s.basis === 'original' ? ' in the amount its bank names' : s.basis === 'rate' ? ' at the official daily rate' : ''}${s.run ? ' (the batch payer\'s open receipts in date order)' : ''}: ${s.receipts.join(', ')} → ${s.legs.join(', ')}`);
     const runs = found.cuts.filter((c) => c.limit === 'run');
     const combos = found.cuts.filter((c) => c.limit === 'combinations');

@@ -5,7 +5,7 @@
 import type { BankTransaction, Mapping, Receipt } from '../types/index.js';
 import type { DocumentsData } from '../core/modules/schema.js';
 import { documents } from '../engines/index.js';
-import { HEAD, compoundLines } from '../core/modules/words.js';
+import { HEAD, compoundLines, wordsRe } from '../core/modules/words.js';
 import { documentKind, titleIn } from './document-kind.js';
 import { labelledNumbers } from './duplicates.js';
 import { normUid, uidsIn } from '../parsers/receipt-text.js';
@@ -69,33 +69,90 @@ export function twoVendors(names: Iterable<string>): boolean {
 
 const uidDigits = (uid: string) => uid.replace(/\D/g, '');
 
+/** The books buyerUids reads: the receipts, and the payments they are linked to. */
+export interface UidBooks { receipts: readonly Receipt[]; mappings?: readonly Mapping[]; transactions?: readonly BankTransaction[] }
+
+/** The lines below a customer word that still belong to its address block. */
+const BLOCK = 4;
+
+/** The UIDs (digits) a receipt's text prints in a customer's block: after a buyer word on its line, or on the lines of the address below it (documents.yaml buyer). */
+function inBuyerBlock(text: string, words: DocumentsData): Set<string> {
+  const found = new Set<string>();
+  if (!words.buyer?.length) return found;
+  const re = wordsRe(words.buyer);
+  const lines = text.split('\n');
+  lines.forEach((line, i) => {
+    const at = re.exec(line);
+    if (!at) return;
+    for (const u of uidsIn([line.slice(at.index), ...lines.slice(i + 1, i + 1 + BLOCK)].join('\n'))) found.add(uidDigits(u));
+  });
+  return found;
+}
+
+const kept = new WeakMap<readonly Receipt[], { mappings?: readonly Mapping[]; transactions?: readonly BankTransaction[]; key: string; uids: string[] }>();
+
 /**
  * The firm's silent UIDs, as digits: those that say nothing of who wrote a receipt, since they are
- * the buyer's (a supplier prints its customer's VAT number beside the address). The UID of the settings when there is one,
- * and only that. Without it (#466: the setup does not ask it) the ones the books show to be the
- * buyer's: a UID read on the receipts of two vendors or more (by the vendor of their title, else by
- * the counterparty of the payment they are linked to; twoVendors), and the one UID on the firm's
- * own invoices recognised by its name (issuedByFirm 'name'). Derived on every call, never kept in
- * the settings: the person keeps the UID offered from her own invoice (uidToKeep).
+ * the buyer's (a supplier prints its customer's VAT number in the address block). The UID of the
+ * settings when there is one, and only that. Without it (#466: the setup does not ask it) the ones
+ * the books show to be the buyer's:
+ * - a UID printed in a customer's block (after «Kunde», «Rechnungsadresse», «Ihre UID»…,
+ *   documents.yaml buyer) on one receipt at least, and read on the receipts of two vendors or more
+ *   (twoVendors): by the vendors of their titles, or else by the counterparties of the payments they
+ *   are linked to, never the one mixed with the other (a card payment names the card, not the
+ *   shop); a title that names no business (documents.yaml notVendor, the firm's own name) counts
+ *   for none;
+ * - the one UID on the firm's own invoice recognised by its name (issuedByFirm 'name') that money
+ *   in pays: a supplier's invoice with her name as addressee on the first line is paid by money out.
+ * Derived from the books, never kept in the settings: the person keeps the UID offered from her own
+ * invoice (uidToKeep). Kept while the books' lists stay the same objects of the same length.
  */
-export function buyerUids(firm: Firm | undefined, books: { receipts: readonly Receipt[]; mappings?: readonly Mapping[]; transactions?: readonly BankTransaction[] }): string[] {
+export function buyerUids(firm: Firm | undefined, books: UidBooks, words: DocumentsData = documents()): string[] {
   if (firm?.uid) return [uidDigits(firm.uid)].filter(Boolean);
-  const counterparty = new Map((books.transactions ?? []).map((t) => [t.ref, vendorKey(t.counterparty)]));
-  const paidTo = new Map<string, string>();
-  for (const m of books.mappings ?? []) { const c = counterparty.get(m.transactionRef); if (c && !paidTo.has(m.receiptId)) paidTo.set(m.receiptId, c); }
-  const vendors = new Map<string, Set<string>>();
+  const key = `${firm?.name ?? ''}|${books.receipts.length}|${books.mappings?.length ?? 0}|${books.transactions?.length ?? 0}`;
+  const last = kept.get(books.receipts);
+  if (last && last.mappings === books.mappings && last.transactions === books.transactions && last.key === key) return last.uids;
+  const uids = inferred(firm, books, words);
+  kept.set(books.receipts, { mappings: books.mappings, transactions: books.transactions, key, uids });
+  return uids;
+}
+
+function inferred(firm: Firm | undefined, books: UidBooks, words: DocumentsData): string[] {
+  const txs = new Map((books.transactions ?? []).map((t) => [t.ref, t]));
+  const payees = new Map<string, Set<string>>();
+  const paidIn = new Set<string>();
+  const add = (to: Map<string, Set<string>>, k: string, v: string) => { const set = to.get(k); if (set) set.add(v); else to.set(k, new Set([v])); };
+  for (const m of books.mappings ?? []) {
+    const t = txs.get(m.transactionRef);
+    if (!t) continue;
+    if (t.direction === 'CRDT') paidIn.add(m.receiptId);
+    const c = vendorKey(t.counterparty);
+    if (c) add(payees, m.receiptId, c);
+  }
+  const noName = new Set([...(words.notVendor ?? []), ...(firm?.name ? [firm.name] : [])].map(vendorKey).filter(Boolean));
+  const byTitle = new Map<string, Set<string>>();
+  const byPayee = new Map<string, Set<string>>();
+  const besideBuyer = new Set<string>();
   const own = new Set<string>();
   for (const r of books.receipts) {
     if (r.kind === 'duplicate') continue;
-    const shown = uidsIn(r.extractedText ?? '');
-    if (r.vatId) shown.add(normUid(r.vatId));
+    const text = r.extractedText ?? '';
+    const shown = new Set([...uidsIn(text)].map(uidDigits));
+    if (r.vatId) shown.add(uidDigits(r.vatId));
+    shown.delete('');
     if (!shown.size) continue;
-    if (shown.size === 1 && issuedByFirm(r, firm) === 'name') own.add(uidDigits([...shown][0]));
-    const vendor = vendorKey(r.title?.vendor) || paidTo.get(r.id);
-    if (!vendor) continue;
-    for (const u of shown) { const d = uidDigits(u); if (!d) continue; const set = vendors.get(d); if (set) set.add(vendor); else vendors.set(d, new Set([vendor])); }
+    for (const u of inBuyerBlock(text, words)) besideBuyer.add(u);
+    if (shown.size === 1 && paidIn.has(r.id) && issuedByFirm(r, firm) === 'name') own.add([...shown][0]);
+    const title = vendorKey(r.title?.vendor);
+    if (title) {
+      if (!noName.has(title)) for (const u of shown) add(byTitle, u, title);
+      continue;
+    }
+    const payee = payees.get(r.id);
+    if (payee?.size === 1) for (const u of shown) add(byPayee, u, [...payee][0]);
   }
-  return [...new Set([...own, ...[...vendors].filter(([, v]) => twoVendors(v)).map(([d]) => d)])].filter(Boolean).sort();
+  const many = (m: Map<string, Set<string>>) => [...m].filter(([u, v]) => besideBuyer.has(u) && twoVendors(v)).map(([u]) => u);
+  return [...new Set([...own, ...many(byTitle), ...many(byPayee)])].sort();
 }
 
 /**
