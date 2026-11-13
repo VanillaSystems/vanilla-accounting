@@ -24,7 +24,7 @@ import { startIntake, useIntakeRunning } from '../../automation/intake.js';
 import { textIn, type RunSummary } from '../../../workflows/model.js';
 import { ICONS } from '../icons.js';
 import type { AreaProps } from '../index.js';
-import { chfOf, linkFit, vatMisfit, type Ledger, type ReceiptView, vatChipOf } from './model.js';
+import { ownAmount, chfOf, linkFit, markLabel, vatMisfit, type Ledger, type ReceiptView, vatChipOf } from './model.js';
 import { waitsForReading } from '../../../parsers/receipt-text.js';
 import { setUi, useUi, type Section } from './state.js';
 import { amountOf, at, bankOf, dayText, ledgerFor, listed, noneText, txLine } from './view.js';
@@ -149,10 +149,10 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
     <div className="detail-in" data-for={r.id} data-processing={busy ? proc.kind : proc?.kind === 'stuck' ? 'stuck' : undefined}>
       <div className="head">
         <h2 className="who">{v.vendor}<small>{v.desc}</small></h2>
-        {r.amount != null && (
+        {ownAmount(r) != null && (
           <div className="amount">
-            <small>{cur}</small>{fmt(r.amount)}
-            {rate && <span className="fx">{t('receipts.fxLine', { amount: fmt(Math.abs(r.amount) * rate.rate), date: formatDate(rate.validOn) })}</span>}
+            <small>{cur}</small>{fmt(r.amount!)}
+            {rate && <span className="fx">{t('receipts.fxLine', { amount: fmt(Math.abs(r.amount!) * rate.rate), date: formatDate(rate.validOn) })}</span>}
           </div>
         )}
       </div>
@@ -208,7 +208,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       {r.report?.held?.length ? <ReportHeld report={r.report} /> : null}
       <ReportCorrections receipt={r.id} books={props.books} canEdit={canEdit} said={(message) => { nav.refresh(); nav.toast(message); }} />
       {v.none && v.r.kind === 'supporting'
-        ? <div className="notice" data-testid="supporting-notice">{t('receipts.supportingNotice', { what: v.noneWhy ? t(`receipts.why.${v.noneWhy}`) : t('receipts.why.supporting') })} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>
+        ? <div className="notice" data-testid="supporting-notice">{t('receipts.supportingNotice', { what: v.noneWhy ? t(`receipts.why.${v.noneWhy}`) : t('receipts.why.supporting') })} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t(markLabel(r))}</a>}</div>
         : v.none
         ? <div className="notice">{v.noneWhy ? t('receipts.noneNoticeWhy', { why: noneText(v) }) : t('receipts.noneNotice')} {canEdit && <a href="#" onClick={(e) => { e.preventDefault(); runAct(props, 'mark'); }}>{t('receipts.isReceipt')}</a>}</div>
         : busy && !v.links.length ? <div className="status"><Working proc={proc} nav={nav} view={view} /></div>
@@ -584,7 +584,8 @@ function Datei(props: Props & { v: ReceiptView; edit: boolean }) {
       {canEdit && (
         <div className="dangers">
           {v.none
-            ? <button type="button" onClick={() => runAct(props, 'mark')}>{t('receipts.isReceipt')}</button>
+            // A document beside an invoice has its action once, in its notice above (#398).
+            ? r.kind === 'supporting' ? null : <button type="button" onClick={() => runAct(props, 'mark')}>{t('receipts.isReceipt')}</button>
             : <>
                 {edit && <button type="button" disabled={aiOff} data-tip={t(aiOff ? 'receipts.readAgainOff' : 'receipts.readAgainTip')} onClick={() => readAgain(nav, v)}>{t('receipts.readAgain')}</button>}
                 <button type="button" onClick={() => runAct(props, 'notreceipt')}>{t('receipts.notReceipt')}</button>

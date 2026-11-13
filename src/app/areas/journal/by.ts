@@ -6,6 +6,15 @@
 import type { BookingFields, JournalEntry } from '../../../types/index.js';
 import type { Key } from '../../i18n/types.js';
 import { fmt, formatDate } from '../../lib/utils.js';
+import de from '../../i18n/locales/de.js';
+
+/**
+ * The bank's fee row: its booking reuses the purchase check's stamp (classify.ts bankFeeEntries), its
+ * reason, written in German, says what it is. The «Erfasst» line reads it from there (#398), so a fee
+ * is never told in a purchase's words; the stamp stays as it is.
+ */
+const FEE_REASONS = (['bankFee.reason', 'bankFee.refundReason'] as const).map((k) => de.messages[k].split('{')[0]);
+export const isFeeRow = (e: Pick<JournalEntry, 'by' | 'reason'>): boolean => e.by?.kind === 'code' && !!e.reason && FEE_REASONS.some((p) => e.reason!.startsWith(p));
 
 export type Say = (key: Key, vars?: Record<string, string | number>) => string;
 
@@ -15,7 +24,7 @@ export function bookedByText(e: JournalEntry, say: Say): string {
   if (!by) return say(`journal.originText.${e.origin ?? 'other'}`);
   switch (by.kind) {
     case 'rule': return say('journal.byText.rule', { rule: by.rule });
-    case 'code': return say('journal.byText.code', { check: say(`journal.check.${by.check}`) });
+    case 'code': return say('journal.byText.code', { check: say(isFeeRow(e) ? 'journal.check.bankFee' : `journal.check.${by.check}`) });
     case 'model': return say('journal.byText.model', { model: by.model });
     case 'person': return say('journal.byText.person', { date: formatDate(by.at.slice(0, 10)) });
     case 'assistant': return say('journal.byText.assistant', { date: formatDate(by.at.slice(0, 10)) });

@@ -18,7 +18,7 @@ import { payText } from '../app/areas/bank/model.js';
 import { fillTask, textIn, type Task } from '../workflows/model.js';
 import type { EvidenceCheck } from '../accounting/evidence-check.js';
 import type { BankTransaction, JournalEntry } from '../types/index.js';
-import { chargesVat, filing, vatSetup } from '../engines/index.js';
+import { baseCurrency, chargesVat, filing, vatSetup } from '../engines/index.js';
 import { localToday, type IsoDate, type Period } from '../accounting/periods.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { elsewhereCount, elsewhereOf, nothingOpen, openPeriodState, waitingKinds, type Elsewhere, type Lack, type OpenPeriodState, type YourReceipt } from '../app/areas/automation/open-period.js';
@@ -29,7 +29,7 @@ import type { SetupProgress } from '../onboarding/model.js';
 
 const LIMIT = 20;
 const day = (iso: string) => iso.slice(0, 10).split('-').reverse().join('.');
-/** «CHF 3'200.00»: the app's one money format, as the card shows it (src/app/lib/utils.ts fmt). */
+/** «EUR 3'200.00»: the app's one money format, as the card shows it (src/app/lib/utils.ts fmt). */
 const money = (currency: string, amount: number) => `${currency} ${amount.toLocaleString('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const capped = (lines: string[]) => (lines.length > LIMIT ? [...lines.slice(0, LIMIT), `  … and ${lines.length - LIMIT} more`] : lines);
 
@@ -45,7 +45,7 @@ export function periodWords(t: T, p: Pick<Period, 'kind' | 'token'>): string {
 
 const LACKS: Record<Lack, string> = { date: 'receipts.dateMissing', amount: 'receipts.amountMissing', reading: 'openPeriod.lack.reading', copy: 'openPeriod.lack.copy' };
 const yourLine = (x: YourReceipt, t: T) =>
-  `- «${x.name}»${x.receipt.date ? ` of ${day(x.receipt.date)}` : ''}${x.receipt.amount != null ? `, ${money(x.receipt.currency ?? 'CHF', x.receipt.amount)}` : ''}: «${x.lacks.map((k) => t(LACKS[k] as 'receipts.dateMissing')).join(', ')}»`;
+  `- «${x.name}»${x.receipt.date ? ` of ${day(x.receipt.date)}` : ''}${x.receipt.amount != null ? `, ${money(x.receipt.currency ?? baseCurrency(), x.receipt.amount)}` : ''}: «${x.lacks.map((k) => t(LACKS[k] as 'receipts.dateMissing')).join(', ')}»`;
 
 function questionLine(books: Books, q: Question, t: T): string {
   const tx = q.on.kind === 'payment' ? books.transactions.find((x) => x.ref === q.on.id) : undefined;
@@ -125,7 +125,7 @@ export function periodNote(ws: Ws, books: Books, tasks: Tasks, language: string,
     ...(k.unread ? [`  Of them, ${k.unread} have their receipt linked, but its VAT could not be read: each waits for the person's word at once, under ${tasksPlace}; no receipt is missing.`] : []),
     `Open questions (${s.questions.length}):`, ...capped(s.questions.map((x) => questionLine(books, x.q, t))),
     `Bookings whose VAT code contradicts their receipts (${s.evidence.length}), each with its one click on the booking and under ${tasksPlace}:`, ...capped(s.evidence.map((x) => evidenceLine(x.entry, x.check, t))),
-    `Receipts without a payment (${unlinked.length})${unlinked.length ? `, under «${t('area.receipts')}»` : ''}:`, ...capped(unlinked.map((r) => `- «${name(r)}»${r.date ? ` of ${day(r.date)}` : ''}${r.amount != null ? `, ${money(r.currency ?? 'CHF', r.amount)}` : ''}`)),
+    `Receipts without a payment (${unlinked.length})${unlinked.length ? `, under «${t('area.receipts')}»` : ''}:`, ...capped(unlinked.map((r) => `- «${name(r)}»${r.date ? ` of ${day(r.date)}` : ''}${r.amount != null ? `, ${money(r.currency ?? baseCurrency(), r.amount)}` : ''}`)),
     `Tasks of the workflows (${s.tasks.length})${s.tasks.length ? `, under ${tasksPlace}; a task on a payment is one of the payments above, not one more` : ''}:`, ...capped(s.tasks.map((x) => taskLine(x, language))),
   ];
   return [

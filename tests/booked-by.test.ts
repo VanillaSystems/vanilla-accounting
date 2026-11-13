@@ -134,3 +134,13 @@ test('a change by hand through the API says who decided, and its undo puts the b
     await api.stop();
   }
 });
+
+test('the bank\'s fee row says it is the bank\'s fee in its «Erfasst» line, read from its reason; the stamp stays the purchase check (#398)', () => {
+  const fee = { id: 'f', transactionRef: 'FEE', date: '2026-09-30', accountDebit: '6940', accountCredit: '1020', amount: 12, vatCode: '', by: { kind: 'code', check: 'purchaseVat' }, reason: say('bankFee.reason', { account: '6940', name: 'Bankspesen' }) } as JournalEntry;
+  assert.equal(bookedByText(fee, say), 'von der App gebucht: die Gebühr der Bank laut Kontoauszug, ohne MWST');
+  const refund = { ...fee, reason: say('bankFee.refundReason', { account: '6940', name: 'Bankspesen' }) } as JournalEntry;
+  assert.match(bookedByText(refund, say), /Gebühr der Bank/);
+  const purchase = { ...fee, reason: 'Beleg zeigt 8.1 % MWST' } as JournalEntry;
+  assert.match(bookedByText(purchase, say), /die Vorsteuer folgt dem Beleg/, 'a purchase keeps its words');
+  for (const lang of ['en', 'fr', 'it']) assert.doesNotMatch(bookedByText(fee, wordsIn(lang).t), /journal\.check/, `${lang}: the words exist`);
+});

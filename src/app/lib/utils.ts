@@ -25,3 +25,11 @@ export function formatAmount(amount: number | undefined, currency: string | unde
 export function fmt(n: number): string {
   return n.toLocaleString('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
+
+/**
+ * An amount a reader or a model wrote into a text («EUR 3200.00»), in the app's one money format
+ * («EUR 3'200.00», #398): a currency code, then digits with two decimals. Anything else stays as written.
+ */
+export function moneyInText(text: string): string {
+  return text.replace(/\b([A-Z]{3}) ?(-?\d{4,})[.,](\d{2})\b/g, (_, cur: string, int: string, dec: string) => `${cur} ${fmt(Number(`${int}.${dec}`))}`);
+}

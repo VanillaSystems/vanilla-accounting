@@ -283,6 +283,10 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
       assert.deepEqual(await page.$$eval('.obrail button', (bs) => bs.map((b) => (b as HTMLElement).innerText.trim())), ['Firma und MWST', 'Eröffnung', 'Bank', 'Belege'], `${size}: four chips beside the count`);
       assert.match(await text(page, '[data-open=knowledge]'), /kommt mit den ersten Buchungen/);
       if (!ai) assert.match(await text(page, '[data-testid=setup-summary]'), /Die Firma rechnet keine MWST ab: Käufe und Verkäufe ohne MWST, Rechnungen der App ohne MWST, keine Abrechnung[\s\S]*Änderbar unter Firma › MWST, solange das Jahr keine Buchungen hat/, `${size}: the summary says it too, and where it changes`);
+      // The assumed answers stand once, on the firm's card (#398): the summary counts them and leads there.
+      assert.equal(await page.$('[data-testid=setup-summary] [data-assumed-list]'), null, `${size}: no second list in the summary`);
+      assert.match(await text(page, '[data-testid=setup-summary] [data-assumed-count]'), /^\d+ Antworten? angenommen · ansehen$/);
+      assert.equal(await page.$$eval('.aside.setup [data-assumed-list]', (e) => e.length), 1, `${size}: the list once, on the firm's card`);
       await shot(page, `${size}-4-summary`);
       if (size === '1440x900') t.diagnostic(`words: conversation in the books ${await words(page, '.aside.setup .aiturns')}`);
 

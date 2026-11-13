@@ -6,7 +6,7 @@
 import { orderPagesNow } from '../../lib/order-pages.js';
 import { FindPair } from '../receipts/FindPair.js';
 import { t } from '../../i18n/index.js';
-import { fmt, formatDate } from '../../lib/utils.js';
+import { fmt, formatDate, moneyInText } from '../../lib/utils.js';
 import { useQuestions } from '../../questions/store.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { at, ledgerFor } from '../receipts/view.js';
@@ -52,7 +52,7 @@ function textOf(books: Index, i: PeriodIssue): string {
     }
     case 'evidence': return `${formatDate(i.entry.date)} ${i.entry.description ?? ''}: ${evidenceText(i.entry, i.check)}`;
     case 'unbooked': return t('issues.unbooked', { date: formatDate(i.tx.date), text: i.tx.counterparty || i.tx.description, amount: `${i.tx.currency} ${fmt(i.tx.amount)}` });
-    case 'unlinked': return t('issues.unlinked', { date: formatDate(i.receipt.date ?? ''), text: i.receipt.description || i.receipt.filename });
+    case 'unlinked': return t('issues.unlinked', { date: formatDate(i.receipt.date ?? ''), text: moneyInText(i.receipt.description || i.receipt.filename) });
   }
 }
 

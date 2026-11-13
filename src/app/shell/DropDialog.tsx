@@ -25,7 +25,7 @@ import { needsYou, tabOf, type DropTab } from './drop-tabs.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { monthName } from '../lib/period-label.js';
 import { useAutomation } from '../automation/store.js';
-import { textIn } from '../../workflows/model.js';
+import { openCount, textIn } from '../../workflows/model.js';
 import type { Index } from '../../types/index.js';
 import type { DropRow, DropSession } from '../../types/drop.js';
 import { FileDetails } from './FileDetails.js';
@@ -37,7 +37,7 @@ import { at } from '../areas/receipts/view.js';
 import { fileKeyOf } from '../areas/bank/model.js';
 import { startIntake } from '../automation/intake.js';
 import { setBankDraft } from '../areas/company/bank-draft.js';
-import { chfOf, suggestion } from '../areas/receipts/model.js';
+import { chfOf, markLabel, suggestion } from '../areas/receipts/model.js';
 import { ledgerFor, noneText, txLine } from '../areas/receipts/view.js';
 import { offersInBooks } from '../../intake/near-pairs.js';
 import { useFx } from '../hooks/use-fx.js';
@@ -541,7 +541,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
             {byBank ? <button type="button" className="linkbtn" data-testid="drop-other-account" disabled={running || busy} data-tip={t('drop.byBankChangeTip')} onClick={() => { setBusy(true); void act(session, r, { kind: 'otherAccount' }).then(refresh).finally(() => setBusy(false)); }}>{t('drop.byBankChange')}</button> : null}
             {statementAt ? <button type="button" className="linkbtn" data-testid="drop-open-file" onClick={() => { closeDrop(); onGo(statementAt); }}>{t('drop.openStatement')}</button> : null}
             {x.kind === 'supporting' && x.of ? <button type="button" className="linkbtn" data-testid="drop-open-invoice" onClick={() => go({ area: 'receipts', id: x.of!.id }, books.receipts.find((y) => y.id === x.of!.id)?.date)}>{t('drop.p.openInvoice')}</button> : null}
-            {(x.kind === 'none' || x.kind === 'supporting') && receipt && receipt.kind !== 'statement' && receipt.kind !== 'duplicate' ? <button type="button" className="linkbtn" data-testid="drop-is-receipt" disabled={busy} onClick={isReceipt}>{t('receipts.isReceipt')}</button> : null}
+            {(x.kind === 'none' || x.kind === 'supporting') && receipt && receipt.kind !== 'statement' && receipt.kind !== 'duplicate' ? <button type="button" className="linkbtn" data-testid="drop-is-receipt" disabled={busy} onClick={isReceipt}>{t(markLabel(receipt))}</button> : null}
             {x.kind === 'stuck' ? <button type="button" className="linkbtn" data-testid="drop-stuck-run" onClick={() => go({ area: 'automation', view: 'run', run: x.run })}>{t('processing.toRun')}</button> : null}
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t(x.kind === 'unread' ? 'drop.p.typeIn' : 'drop.openReceipt')}</button> : null}
             {/* A file that could be a statement (#384): not read, read as one, or read without a total or with a statement's signs; never a receipt read with its total, nor one linked to its payment. */}
@@ -595,7 +595,9 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? []), questions, (r) => closingGroupOf(r, stateOf.get(r))) : undefined;
   // Only files the books hold already (#341): the window says that nothing new came in.
   const nothingNew = !working && !taken.length && rows.length > 0 && rows.every((r) => (r.state === 'duplicate' && r.reason !== 'possible-duplicate') || !!r.readAs);
-  const waits = !working && states.some((x) => x.kind === 'waits' || x.kind === 'stuck' || x.kind === 'unread' || x.kind === 'twin');
+  // What waits for her, named where it is (#398): the receipts of this drop under Belege, the tasks under Automatisierung › Aufgaben.
+  const receiptsWait = working ? 0 : states.filter((x) => x.kind === 'waits' || x.kind === 'stuck' || x.kind === 'unread' || x.kind === 'twin').length;
+  const tasksWait = !working && taken.length && view ? openCount(view) : 0;
   // A receipt of a sealed quarter opens in that quarter, not in the open one (r9k-8).
   const go = (route: Route, date?: string) => { closeDrop(); onGo(date ? at(route, date) : { route, query: {} }); };
   // The last statement the drop read in: closing the window by hand opens it (Kontoauszüge does, #361).
@@ -636,7 +638,13 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
         {s.note ? <p className="warnline" data-testid="drop-note">{s.note}</p> : null}
         {s.error ? <p className="warnline">{s.error}</p> : null}
         <Lost inDialog />
-        {waits ? <p className="m">{t('drop.waitsHint')}</p> : null}
+        {receiptsWait || tasksWait ? (
+          <p className="m" data-testid="waits-where">
+            {receiptsWait ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts' })}>{t('drop.waitsReceipts', { n: receiptsWait })}</button> : null}
+            {receiptsWait && tasksWait ? ' · ' : null}
+            {tasksWait ? <button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'tasks' })}>{t('drop.waitsTasks', { n: tasksWait })}</button> : null}
+          </p>
+        ) : null}
         {rows.some((r) => (r.state === 'duplicate' && r.reason === 'possible-duplicate') || r.state === 'locked' || r.state === 'unclear') ? <p className="m" data-testid="close-hint">{t('drop.closeHint')}</p> : null}
         {rows.some((r) => r.state === 'asks' && !r.asked) ? <p className="m" data-testid="read-hint">{t('drop.read.closeHint')}</p> : null}
         {rows.some((r) => r.state === 'asks' && r.asked) ? <p className="m" data-testid="asked-hint">{t('drop.read.askedHint')}</p> : null}

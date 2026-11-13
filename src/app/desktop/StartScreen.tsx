@@ -12,7 +12,10 @@ import { BANKS, parseIban } from '../../workspace/banks.js';
 import { PRESETS, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, firstMissing, hasWhere, noVatHint, firstUnsupported, notRegistered, optionOf, unsteered, withoutUnsteered, NO_VAT, type Answers, type Preset, type QuestionKey } from '../../workspace/setup.js';
 import { parseUid } from '../../workspace/uid.js';
 import type { DesktopInfo, KnownBooks } from '../../types/desktop.js';
-import { LOCALES, t, tData } from '../i18n/index.js';
+import { LOCALES, isKey, t, tData } from '../i18n/index.js';
+
+/** The account numbers behind a help text, folded under «mehr» (#398): the line itself says it in plain words. */
+const More = ({ k }: { k: string }) => (isKey(k) ? <details className="st-more" data-more={k}><summary>{t('desktop.more')}</summary><span>{tData(k)}</span></details> : null);
 import { ApiError, api, errorText } from '../lib/api.js';
 import { DEMO_HOME, START_PATH, desktop, setupPath } from './bridge.js';
 import { FirstRun, freeName } from '../ai/FirstRun.js';
@@ -323,7 +326,7 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
             const missing = checked && !chosen.length && !('multi' in QUESTIONS[key] && !('required' in QUESTIONS[key]));
             return (
               <div key={key} className={missing ? 'st-q err' : 'st-q'} data-q={key} tabIndex={missing ? -1 : undefined} role="group" aria-labelledby={`stq-${key}`}>
-                <div className="st-qhd"><b id={`stq-${key}`}>{tData(`desktop.q.${key}.ask`)}{shownAssumed.includes(key) ? <span className="st-assumed" data-assumed>{t('onboarding.draft.assumed')}</span> : null}{missing ? <em className="st-choose">{t('desktop.pleaseChoose')}</em> : null}</b><span>{tData(`desktop.q.${key}.why`)}</span>{hasWhere(key) ? <span data-where>{tData(`desktop.q.${key}.where`)}</span> : null}</div>
+                <div className="st-qhd"><b id={`stq-${key}`}>{tData(`desktop.q.${key}.ask`)}{shownAssumed.includes(key) ? <span className="st-assumed" data-assumed>{t('onboarding.draft.assumed')}</span> : null}{missing ? <em className="st-choose">{t('desktop.pleaseChoose')}</em> : null}</b><span>{tData(`desktop.q.${key}.why`)}</span>{hasWhere(key) ? <span data-where>{tData(`desktop.q.${key}.where`)}</span> : null}<More k={`desktop.q.${key}.more`} /></div>
                 <div className="st-opts" role={'multi' in QUESTIONS[key] ? 'group' : 'radiogroup'} aria-label={tData(`desktop.q.${key}.ask`)}>
                   {QUESTIONS[key].options.map((o) => (
                     <button key={o.value} type="button" role={'multi' in QUESTIONS[key] ? 'checkbox' : 'radio'} aria-checked={chosen.includes(o.value)} className={chosen.includes(o.value) ? 'on' : ''} onClick={() => pick(key, o.value)}>
@@ -334,7 +337,7 @@ function CreateForm({ info, language, busy, error, onCancel, onCreate }: {
                 </div>
                 {noVatHint(key) ? <p className="st-note" data-no-vat-hint={noVatHint(key)}>{t(noVatHint(key) === 'full' ? 'desktop.q.noVat.hint' : 'desktop.q.noVat.hintShort')}</p> : null}
                 {notes.map((o) => (
-                  <p key={o!.value} className={o!.unsupported ? 'st-stop' : 'st-note'}>{tData(`desktop.q.${key}.${o!.value}.${o!.unsupported ? 'unsupported' : 'caveat'}`)}</p>
+                  <div key={o!.value} className={o!.unsupported ? 'st-stop' : 'st-note'}>{tData(`desktop.q.${key}.${o!.value}.${o!.unsupported ? 'unsupported' : 'caveat'}`)}{o!.unsupported ? null : <More k={`desktop.q.${key}.${o!.value}.caveat.more`} />}</div>
                 ))}
                 {key === 'vatMethod' && netRate && (
                   <div className={`st-rates${checked && errors.netRate ? ' err' : ''}`} data-q="netRates">

@@ -452,7 +452,9 @@ test('the typed setup knows that «not registered» is her click only, and the h
 
   const de = (await import('../src/app/i18n/locales/de.js') as { default: Locale }).default.messages as unknown as Record<string, string>;
   assert.match(de['desktop.q.noVat.hint'], /Füllt eure Treuhand die MWST-Abrechnungen aus, ist die Firma eingetragen/, 'a firm whose Treuhand files is registered');
-  assert.match(de['desktop.q.noVat.hint'], /Falsch gewählt\? Unter Firma › MWST änderst du es, solange dieses Jahr keine Buchungen hat/, 'what a wrong pick costs');
+  // What a wrong pick costs stands once on the question (its help line above the answers), not again under them (#398).
+  assert.match(de['desktop.q.vatMethod.where'], /Falsch gewählt\? Unter Firma › MWST änderst du es, solange dieses Jahr keine Buchungen hat/, 'what a wrong pick costs');
+  assert.doesNotMatch(de['desktop.q.noVat.hint'], /Falsch gewählt/, 'said once');
   assert.match(de['desktop.q.vatRegistered.why'], /freiwillig eintragen und ist dann eingetragen/, 'below the threshold one can be registered voluntarily');
 });
 

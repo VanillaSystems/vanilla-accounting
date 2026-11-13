@@ -14,7 +14,7 @@ import { likelyReceipt } from '../../selection/likely.js';
 import { runEach } from '../../selection/batch.js';
 import { api } from '../../lib/api.js';
 import { paidPrivately } from '../../../accounting/paid-how.js';
-import type { Ledger, ReceiptView } from './model.js';
+import { markLabel, type Ledger, type ReceiptView } from './model.js';
 import { openSection, setUi } from './state.js';
 import { at, listed } from './view.js';
 import { accept, runAct } from './commands.js';
@@ -39,7 +39,7 @@ export function receiptActions(p: Props, v: ReceiptView, l: Ledger): ActionSet {
   const sug = listed.suggestions.get(r.id);
   const twin = v.twin && !v.links.length && !v.locked ? l.byId.get(v.twin.of) : undefined;
   const all: Record<string, ObjAction | undefined> = {
-    mark: v.none ? { id: 'mark', label: t('receipts.isReceipt'), run: () => setKind(nav, v, 'invoice') } : undefined,
+    mark: v.none ? { id: 'mark', label: t(markLabel(v.r)), run: () => setKind(nav, v, 'invoice') } : undefined,
     accept: open && sug ? { id: 'accept', label: t('actions.accept'), key: '↵', run: () => void accept(p, v, sug) } : undefined,
     private: open ? { id: 'private', label: t('actions.private'), run: () => { openSection('zahlung'); setUi({ overlay: 'link', linkStart: 'private' }); } } : undefined,
     employee: open ? { id: 'employee', label: t('actions.employee'), run: () => { openSection('zahlung'); setUi({ overlay: 'link', linkStart: 'employee' }); } } : undefined,

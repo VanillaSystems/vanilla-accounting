@@ -21,7 +21,7 @@ import { fmt, formatAmount, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import { ICONS } from '../icons.js';
 import type { Area, AreaProps, LegendItem } from '../index.js';
-import { COUNTED, badgeCount, chfOf, groups, isOpen, statesOf, suggestion, visible, type Candidate, type GroupKey, type ReceiptView } from './model.js';
+import { COUNTED, ownAmount, badgeCount, markLabel, chfOf, groups, isOpen, statesOf, suggestion, visible, type Candidate, type GroupKey, type ReceiptView } from './model.js';
 import { pollInbox, setUi, toggleGroup, ui, useUi } from './state.js';
 import { at, ledgerFor, listed, noneText } from './view.js';
 import { Kbd, accept, runAct, type Act } from './commands.js';
@@ -242,12 +242,12 @@ function Row({ v, proc, view, sel, picked, same, canEdit, onSelect, onClick, toa
       <Pick kind="receipt" id={r.id} on={picked} label={v.vendor || r.filename} toast={toast} />
       <span className="d mono">{same ? <span className="sr">{formatDate(v.date)}</span> : v.date ? <><span className="dl">{formatDate(v.date)}</span><span className="ds">{formatDate(v.date).slice(0, 6)}</span></> : <span className="d none" data-testid={waitsForReading(r) ? 'row-not-read' : undefined}>{t(waitsForReading(r) ? 'receipts.notRead' : 'receipts.noDate')}</span>}</span>
       <span className="t">{inProcess(proc) ? <span className="spin small" aria-hidden="true" /> : isOpen(v) && !v.locked && !v.none && !v.orderPage && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}{inProcess(proc) && <small className="proc" data-testid="row-processing"> · {processingText(proc, view)}</small>}{v.none && <small className="nonewhy" data-testid="none-why" data-by={v.noneBy} data-tip={noneText(v)}> · {noneText(v)}</small>}</span>
-      <span className="a mono">{r.amount != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount)}</>}</span>
+      <span className="a mono">{ownAmount(r) != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount!)}</>}</span>
       <span className="acts">
         {v.none ? (
           canEdit && (
             <>
-              <button type="button" aria-label={t('receipts.isReceipt')} onClick={act(() => onAct('mark'))}>{I.check}</button>
+              <button type="button" aria-label={t(markLabel(r))} onClick={act(() => onAct('mark'))}>{I.check}</button>
               {!v.locked && <button type="button" className="del" data-testid="discard" data-tip={t('receipts.discard')} aria-label={t('receipts.discard')} onClick={act(() => askDiscard({ from: 'hidden', files: [{ id: r.id, file: r.filename }] }))}>{I.trash}</button>}
             </>
           )
@@ -388,7 +388,7 @@ export const receipts: Area<RouteOf<'receipts'>> = {
     ...(canEdit ? [{ label: t('intake.run'), side: t('area.receipts'), run: () => void startIntake() }] : []),
     ...[...ledgerFor(books).views].sort((a, b) => (b.date ?? '').localeCompare(a.date ?? '')).map((v) => ({
     label: v.desc ? `${v.vendor} · ${v.desc}` : v.vendor,
-    side: [v.date && formatDate(v.date), v.r.amount != null && formatAmount(v.r.amount, v.r.currency)].filter(Boolean).join('  '),
+    side: [v.date && formatDate(v.date), ownAmount(v.r) != null && formatAmount(v.r.amount, v.r.currency)].filter(Boolean).join('  '),
     run: () => nav.go(at({ area: 'receipts', id: v.r.id }, v.day, period)),
   }))],
   keys(e, p) {

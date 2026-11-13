@@ -137,6 +137,15 @@ export function ledgerOf(books: Index, openFrom: string, processing: ReadonlyMap
 export const isOpen = (v: ReceiptView) => v.links.length === 0;
 
 /**
+ * A receipt's own amount as Belege shows it: none for a document beside an invoice (an order
+ * confirmation, a delivery note, #398), whose «0.00» is no amount of its own.
+ */
+export const ownAmount = (r: Pick<Receipt, 'kind' | 'amount'>): number | undefined => (r.kind === 'supporting' ? undefined : r.amount ?? undefined);
+
+/** The words of the action that makes a set-aside file a receipt: a document beside an invoice is kept as a receipt of its own; anything else «is a receipt after all». */
+export const markLabel = (r: Pick<Receipt, 'kind'>): 'receipts.asOwnReceipt' | 'receipts.isReceipt' => (r.kind === 'supporting' ? 'receipts.asOwnReceipt' : 'receipts.isReceipt');
+
+/**
  * What a locked receipt refuses (#151): a link or a delete, which would change a filed return.
  * Its date, words and kind still change; its amount, VAT and file stay (the server holds them).
  */
