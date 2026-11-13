@@ -5,7 +5,7 @@
  * its statement shows where to add it.
  */
 import { byStatement, madeByHand } from '../../../workspace/money-accounts.js';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { BankTransaction } from '../../../types/index.js';
 import type { PayoutWaitView } from '../../../types/drop.js';
@@ -50,7 +50,7 @@ import { linkableInvoices } from '../invoices/model.js';
 import { confirmPayment } from '../invoices/actions.js';
 import { openAmount } from '../../../invoices/rules.js';
 import { QuestionsOn } from '../../questions/Questions.js';
-import { bookDiffParts, missingOpenings } from '../../../accounting/opening-balance.js';
+import { bookDiffParts, missingOpenings, startGaps } from '../../../accounting/opening-balance.js';
 import { GroupedOffer, ShareOffers } from '../company/RulesSection.js';
 import { Pick } from '../../selection/Pick.js';
 import { ActionsMenu } from '../../selection/ActionsMenu.js';
@@ -92,13 +92,22 @@ const Amount = ({ tx }: { tx: BankTransaction }) => {
  */
 function BookDiff({ books, nav, diff, s, unbooked }: Props & { diff: number; s: Statement; unbooked: Check['unbooked'] }) {
   const ws = useWorkspace();
-  const { opening: missing, rest } = bookDiffParts(diff, ws ? missingOpenings(books, ws.bankAccounts, s.to.slice(0, 4)).find((m) => m.account === s.account.account) : undefined);
+  const year = s.to.slice(0, 4);
+  const mine = (m: { account: string }) => m.account === s.account.account;
+  const { opening: missing, before, rest } = bookDiffParts(diff, ws ? missingOpenings(books, ws.bankAccounts, year).find(mine) : undefined, ws ? startGaps(books, ws.bankAccounts, year).find(mine) : undefined);
+  const toOpening = (e: MouseEvent) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'opening' }, query: {} }); };
   return (
     <div className="status notes">
       {missing ? (
         <span className="notice warn" style={{ margin: 0 }} data-testid="opening-missing">{I.dot}
-          {t('reports.openingMissing', { account: `${missing.account} ${missing.label}`, year: missing.year, amount: fmt(missing.amount) })}{' '}
-          {missing.canType && <a href="#" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'opening' }, query: {} }); }}>{t('reports.openingSet')}</a>}
+          {t('reports.openingMissing', { account: `${missing.account} ${missing.label}`, year: missing.year, currency: missing.currency, amount: fmt(missing.amount) })}{' '}
+          {missing.canType && <a href="#" onClick={toOpening}>{t('reports.openingSet')}</a>}
+        </span>
+      ) : null}
+      {before ? (
+        <span className="notice warn" style={{ margin: 0 }} data-testid="book-diff-before">{I.dot}
+          {t('bank.bookDiffBefore', { diff: fmt(before.diff), date: formatDate(before.from), currency: before.currency, bank: fmt(before.bank), books: fmt(before.books) })}{' '}
+          {before.canType && <a href="#" onClick={toOpening}>{t('bank.openingShow')}</a>}
         </span>
       ) : null}
       {rest ? (
