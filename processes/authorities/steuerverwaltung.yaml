@@ -33,3 +33,13 @@ steps:
         why: it carries no input tax, so no receipt changes its booking (issue #29)
         source: decision 2026-10-21, owner
     precedents: []
+
+  booking.guide.yaml#purchase_vat:
+    rules:
+      - id: pv-steuerverwaltung-no-input-tax
+        when: a payment to or from the tax office
+        then: "no input tax: a tax is no supply, its bill carries no VAT"
+        why: "taxes are outside VAT; a tax bill read as a receipt must not bring input tax onto its payment (issue #456)"
+        apply: { inputTax: none }
+        source: MWSTG Art. 28 Abs. 1
+    precedents: []

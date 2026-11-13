@@ -7,6 +7,9 @@ import { entriesWithoutTheirReceipts, removeReceipt } from '../../accounting/cla
 import { parseVatFacts } from '../../accounting/vat-facts.js';
 import { assertReceiptFieldsOpen, privatePayment, setReceipt, unbookedPayments } from '../edits.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
+import { bookBillCorrections, loadClassifyContext } from '../../booking/classify.js';
+import type { CorrectionWait } from '../../booking/vat-corrections.js';
+import { withoutInputTax } from '../../engines/index.js';
 import { bookHeldOrder, bookReportCorrection } from '../../intake/sales-report-import.js';
 import type { PrivatePart } from '../../types/assistant.js';
 import { bookAgain } from './automation.js';
@@ -322,6 +325,31 @@ router.post('/api/receipts/:id/held-order', (req, res) => {
     if (!done.ok) throw new RequestError(done.why === 'gone' ? 404 : done.why === 'notHeld' || done.why === 'notRate' || done.why === 'beforeReach' ? 409 : 400, `Bestellung ${order} nicht gebucht (${done.why}).`, { code: 'heldOrder', params: { why: done.why } });
     assertOpen(books, done.entries.map((e) => e.date), 'newEntry');
     return { ok: true, entries: done.entries };
+  });
+});
+
+/**
+ * «Vorsteuer buchen» (#458): the input tax a bill of a VAT-only correction shows (a provider's Payments Invoice), booked
+ * as the booking step books it (src/booking/vat-corrections.ts), at once, on the day and with the facts the receipt has,
+ * a person's typed ones among them. Refused with why when code would not book it.
+ */
+router.post('/api/receipts/:id/vat-correction', (req, res) => {
+  withBooks(res, (books) => {
+    const r = books.receipts.find((x) => x.id === req.params.id);
+    if (!r) throw new RequestError(404, 'Diesen Beleg gibt es nicht (mehr).');
+    const refuse = (why: CorrectionWait | 'none' | 'noDate' | 'noInputTax') => new RequestError(409, `Vorsteuer nicht gebucht (${why}).`, { code: 'vatCorrection', params: { why } });
+    // A firm without input tax (the net tax rate method, not registered) deducts none: Belege offers no button there.
+    if (withoutInputTax()) throw refuse('noInputTax');
+    if (!r.date) throw refuse('noDate');
+    assertOpen(books, [r.date], 'newEntry');
+    // Her click is newer than a booking she took apart from the bill once (notPaidBy): that mark keeps the run from booking it, not her.
+    const apart = r.notPaidBy;
+    delete r.notPaidBy;
+    const done = bookBillCorrections(books, loadClassifyContext(WS), loadFxResolver(), r.id);
+    if (apart) r.notPaidBy = apart;
+    const ref = done.booked[0]?.ref ?? done.linked[0]?.ref;
+    if (!ref) throw refuse(done.waiting[0]?.why ?? 'none');
+    return { ok: true, ref, booked: done.booked.length > 0, entries: books.journalEntries.filter((e) => e.transactionRef === ref).map((e) => e.id) };
   });
 });
 

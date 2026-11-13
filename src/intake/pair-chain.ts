@@ -16,7 +16,7 @@ import type { Receipt, BankTransaction } from '../types/index.js';
 import { periodLock, release, type Books } from '../books/store.js';
 import type { Ask, BooksPort } from './pipeline.js';
 import { numbersIn } from '../accounting/document-numbers.js';
-import { baseCurrency, vat, withoutInputTax } from '../engines/index.js';
+import { baseCurrency, documents, vat, withoutInputTax } from '../engines/index.js';
 import { normalRate } from '../accounting/sales-without-vat.js';
 import { providerIssuesOf, type ProviderIssues } from '../booking/provider-issues.js';
 import { localToday } from '../accounting/periods.js';
@@ -128,7 +128,7 @@ function counterpartiesOf(ws: Pick<Workspace, 'paths'>): Counterparty[] {
 
 /** The bills of `books` that prove a VAT-only correction, by receipt id (src/booking/vat-corrections.ts, #190): Belege says what each is instead of a missing payment. */
 export function vatCorrectionsIn(ws: Pick<Workspace, 'paths'>, books: Parameters<typeof vatCorrectionsOf>[0]): Record<string, VatCorrection> {
-  return Object.fromEntries(vatCorrectionsOf(books, counterpartiesOf(ws)));
+  return Object.fromEntries(vatCorrectionsOf(books, counterpartiesOf(ws), documents()));
 }
 
 /** The order pages of the provider way nothing is linked to yet, by receipt id (src/booking/order-pages.ts, #253): Belege shows where each stands instead of a missing payment. */

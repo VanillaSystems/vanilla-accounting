@@ -437,6 +437,24 @@ Two markers flag an entry you must read before you update:
   01.07.2026». A clearing account below zero names its provider's reports in the books with their
   days and the bookings each made, and whether the account has its opening, instead of guessing
   «a sales report not dropped yet».
+- A provider's monthly Payments Invoice no longer waits for the AI (#458): no payment comes for it,
+  so the inbox takes its date and total from its text by code and the booking step books its input
+  tax, as for the other months. Before, one failed AI answer left the bill in the inbox with
+  «fehlt: Datum, Betrag» and its input tax unbooked. Where Belege says the booking without a
+  payment «fehlt noch», the new button «Vorsteuer buchen» books it at once, also on a date and
+  total she typed; it says why when it cannot («kein Datum», «eingereichte Periode», no fee
+  account). Such a bill no longer offers «Mit Zahlung verknüpfen» as its main action. A copy of
+  such a bill with other bytes (the same invoice number in the same month, or a copy as Belege finds
+  one), and one she marked as a copy, no longer books its input tax a second time: Belege names the
+  bill it copies. The button is not offered on a firm without input tax.
+- «Buchung passt nicht zu ihrem Beleg» no longer names a line the receipt leaves untaxed (#455). A
+  hotel bill of a room at 3.8 % and a Kurtaxe without VAT, on a card settlement, booked room I38
+  and Kurtaxe I0, got the task «Der Beleg zeigt 3.8 % MWST, die Buchung steht auf … I0» for the
+  Kurtaxe, and «Nach Beleg buchen» claimed CHF 0.22 input tax on it. The check now takes the bill of
+  a card statement's line as evidence of that line's bookings only, sets a VAT group the receipt
+  names by its tax alone against the lines at the gross that tax proves (allowing for the tax's
+  rounding to the cent), leaves a receipt in another currency out of the sum, and tells a line at 0 %
+  beside a line at the receipt's rate nothing when no receipt in the line's currency can be compared.
 - The fields of Firma's forms stand in line at every width (#454): a hint under one input («kein
   Konto», the account's name) or a label on two lines no longer pushes the field beside it down
   (Eröffnung, Regeln and the others). Firma › Eröffnung names its amount fields «Saldo per 1.1.2026
@@ -472,6 +490,15 @@ Two markers flag an entry you must read before you update:
   number; a payslip («Lohnabrechnung»), annual accounts («Erfolgsrechnung 2025») or a calculation are
   not, a reminder or an order confirmation below such a title stays what it is, and a compound
   credit note («Warengutschrift WG-…») pays in.
+- Pairing (#456): the compensation fund's Akonto bill is now paired with its payment in the drop.
+  The fund's payments are booked without waiting for a receipt, and that had also kept them from
+  ever being paired, so the bill stayed «gelesen, noch keine Zahlung» beside a payment booked «ohne
+  Beleg». Only the compensation fund's bills now pair (its file says `pairs: true`); the ESTV's and
+  the tax office's notices stay filed apart, never paired with their payment. A payment of the VAT
+  itself claims no input tax: the ESTV's and the tax office's files say so, and a line on the VAT
+  settlement account (2201, 2200) carries no VAT code whatever the AI answers, also where its answer
+  «the amount is the tax» had made an I81-2. In «Zahlung verknüpfen» a payment of the same amount
+  that names the receipt's own number comes first, above a «Skonto?» or a rounding guess.
 - Social insurance (#426): with wages booked gross, the AI is told what the deductions account
   (2270) holds on the payment's day, deducted on the payslips and not paid on yet, for a payment to
   the compensation fund or to a business booked on the contribution accounts before, so a bill that

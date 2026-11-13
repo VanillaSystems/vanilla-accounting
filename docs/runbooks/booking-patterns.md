@@ -52,7 +52,10 @@ owner's Kontokorrent.
   `provider.fees.billVat` (absent: the one the account takes, I81-2 on an operating expense
   account), in the bill's currency at the ESTV daily rate of its date, and links the bill. A
   correction booked by hand already takes the bill instead. A bill of a filed period, one without
-  Shopify's Swiss VAT, or one whose fee account is missing stays with the person.
+  Shopify's Swiss VAT, or one whose fee account is missing stays with the person. The inbox dates
+  such a bill and reads its total off the text by code, never from the AI's match answer (#458);
+  where Belege says the booking «fehlt noch», «Vorsteuer buchen» books it at once, on the date and
+  total the receipt has, typed ones too (`POST /api/receipts/:id/vat-correction`).
 
 ## Payment providers — payout over the clearing account (#203)
 

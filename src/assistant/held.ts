@@ -14,7 +14,7 @@
 import type { Books } from '../books/store.js';
 import type { JournalEntry, Receipt } from '../types/index.js';
 import type { HeldLine, HeldRow, HoldReason } from '../types/assistant.js';
-import { evidenceCheck } from '../accounting/evidence-check.js';
+import { evidenceCheck, lineBillsOf } from '../accounting/evidence-check.js';
 
 /** More payments than this rebooked in one answer are held even when they were all on one account. */
 export const FEW_PAYMENTS = 3;
@@ -26,7 +26,7 @@ const same = (a: JournalEntry, b: JournalEntry) => JSON.stringify([lineOf(a), a.
 export function withoutProof(books: Books, e: JournalEntry): boolean {
   const ids = new Set(books.mappings.filter((m) => m.transactionRef === e.transactionRef).map((m) => m.receiptId));
   const linked = books.receipts.filter((r): r is Receipt => ids.has(r.id));
-  return evidenceCheck(e, linked, books.config.closedThrough, undefined, books.journalEntries.filter((x) => x.transactionRef === e.transactionRef))?.kind === 'vatWithoutReceipt';
+  return evidenceCheck(e, linked, books.config.closedThrough, undefined, books.journalEntries.filter((x) => x.transactionRef === e.transactionRef), lineBillsOf(books.mappings, e.transactionRef))?.kind === 'vatWithoutReceipt';
 }
 
 /** Each booking the answer changed, added or deleted, as it was (`before`) and as it is now (`after`). */

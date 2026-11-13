@@ -28,8 +28,8 @@ steps:
     rules:
       - id: ev-ausgleichskasse-notice
         when: a payment to or from the compensation fund
-        then: "booked at once, without waiting for a receipt: the payment settles the fund's contribution invoice, kept with the payroll documents"
-        apply: { receipt: none }
-        why: it carries no input tax, so no receipt changes its booking (issue #29)
+        then: "booked at once, without waiting for a receipt: the payment settles the fund's contribution invoice, kept with the payroll documents. The invoice (an Akonto bill) is still paired with the payment that names its number"
+        apply: { receipt: none, pairs: true }
+        why: it carries no input tax, so no receipt changes its booking (issue #29); the bill tells the employees' share from the employer's (issue #456)
         source: decision 2026-10-21, owner
     precedents: []

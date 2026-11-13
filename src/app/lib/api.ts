@@ -168,6 +168,7 @@ export function errorText(e: unknown): string {
     case 'correctionBooked': return t('error.correctionBooked', { entry: b.params.entry });
     case 'reportCorrection': return t(`error.reportCorrection.${b.params.why}`);
     case 'heldOrder': return t(`error.heldOrder.${b.params.why}`);
+    case 'vatCorrection': return t(`error.vatCorrection.${b.params.why}`);
     case 'statementUndo': return t(`error.statementUndo.${b.params.why}`);
     case 'secondPayment': return t('error.secondPayment', { payment: b.params.payment });
     case 'paidPrivately': return t('error.paidPrivately', { payment: b.params.payment });
@@ -420,6 +421,8 @@ export const api = {
   /** «Als Korrektur buchen» on a refund of a filed period a sales report offers (#231): booked in the open period with `corrects`. */
   heldOrder: (receipt: string, order: string, parts: Array<{ amount: number; rate: number }>) => request<{ ok: true; entries: JournalEntry[] }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/held-order`, { order, parts }),
   reportCorrection: (receipt: string, order: string, date: string) => request<{ ok: true; entries: JournalEntry[] }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/report-correction`, { order, date }),
+  /** «Vorsteuer buchen» on a bill of a VAT-only correction (#458): booked, or linked to the booking that books it already (`booked` false). */
+  bookVatCorrection: (receipt: string) => request<{ ok: true; ref: string; booked: boolean; entries: string[] }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/vat-correction`),
   setFiledPayment: (receipt: string, payment: string | null) => request<{ ok: true }>('POST', `/api/receipts/${encodeURIComponent(receipt)}/filed-payment`, { payment }),
   findReceipt: (payment: string) => request<Found>('POST', `/api/transactions/${encodeURIComponent(payment)}/find-receipt`),
 
