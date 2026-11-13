@@ -23,25 +23,13 @@ import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '.
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 import { homeOf, loadKnowledge } from './layers.js';
 import { businesses } from '../intake/batch-payers.js';
-import { BANK_WORDS, makerOf } from '../intake/pairing.js';
+import { makerOf } from '../intake/pairing.js';
+import { merchantName } from './merchant-name.js';
 
 /** A name is learned once this many payments with it are linked to one business's receipts by a confirmed link. */
 export const LEARN_AFTER = 2;
 
-/**
- * The name a payment gives its merchant, as a learned name keeps it: the bank's counterparty field,
- * else the merchant of its text (merchantOf), cut before the first part with a digit (a card's
- * reference «*AB12CD», a terminal's number) and trimmed. None when what is left names nothing: fewer
- * than four letters, or only the bank's own words («Karte», «Einkauf»).
- */
-export function merchantName(tx: Pick<BankTransaction, 'counterparty' | 'description'>): string | undefined {
-  const raw = (tx.counterparty?.trim() || merchantOf(tx.description)).replace(/\s+/g, ' ');
-  const cut = raw.search(/[\s*#/]*[^\s*#/]*\d/);
-  const name = (cut < 0 ? raw : raw.slice(0, cut)).replace(/[\s*#/.,;:–-]+$/u, '').trim();
-  const words = name.toLowerCase().match(/\p{L}{3,}/gu) ?? [];
-  if ((name.match(/\p{L}/gu) ?? []).length < 4 || !words.some((w) => !BANK_WORDS.has(w))) return undefined;
-  return name;
-}
+export { merchantName };
 
 /** A name the company's file of a business learns: which business, the name, on how many payments a confirmed link showed it. */
 export interface LearnedName { business: string; name: string; payments: number }

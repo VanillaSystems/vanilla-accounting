@@ -2,7 +2,7 @@
 title: Zahlung in Fremdwährung
 summary: Die Firma zahlt in Euro oder Dollar. Die App bucht den Betrag in der Währung und rechnet ihn zum Tageskurs der ESTV in Franken um.
 section: faelle
-order: 4
+order: 5
 ---
 Die Firma zahlt eine Rechnung in Euro oder Dollar, etwa mit der Karte oder von einem Fremdwährungskonto. Die Bücher sind in Franken. Für die MWST muss jeder Betrag in Fremdwährung mit einem Kurs umgerechnet werden, den die ESTV anerkennt. Der Kurs der Bank gehört nicht dazu.
 

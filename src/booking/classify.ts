@@ -39,7 +39,7 @@ import { bookVatCorrections, type CorrectionsDone } from './vat-corrections.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
 import { acquisitionCodeOf, acquisitionReason, readSupplier, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
 import { codeSignFor } from '../accounting/code-sign.js';
-import { refundCodeOf } from './refund-code.js';
+import { refundCodeOf, refundLookup, refundedPurchase, SUMS_OF, type RefundCode } from './refund-code.js';
 import { homeOf, loadKnowledge } from '../knowledge/layers.js';
 import { identify, merchantOf, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
 import { payerNames } from '../knowledge/payer.js';
@@ -394,6 +394,27 @@ export function ruleVatCode(code: string | null, tx: Pick<BankTransaction, 'dire
   return back ? `-${unsigned}` : unsigned;
 }
 
+/** The books a refund's purchase is looked up in (refundedPurchase). */
+export type RefundBooks = Parameters<typeof refundedPurchase>[2];
+
+/**
+ * The purchase a rule's booking of money back refunds (#357): a refund without a document that
+ * shows Swiss VAT, on a rule with a purchase code, takes the code of the purchase it refunds with
+ * the minus (refundedPurchase), not the zero code; `notFound` when no purchase is found
+ * unambiguously (`tooMany`: more purchases to try in sums than the limit), and the line keeps the
+ * zero code with the minus. Undefined for any other payment.
+ */
+export function ruleRefund(tx: BankTransaction, booking: RuleBooking, documents: readonly Pick<Receipt, 'kind' | 'hasSwissVat'>[], owner: string | undefined, books: RefundBooks | undefined): RefundCode | 'notFound' | 'tooMany' | undefined {
+  if (!books || tx.direction !== 'CRDT' || !booking.vat || booking.foreignTax || documents.some((r) => isPurchaseDocument(r) && r.hasSwissVat)) return undefined;
+  const found = lookupVatCode(booking.vat);
+  if (!found || found.negative || (found.entry.family !== 'I' && found.entry.family !== 'M')) return undefined;
+  // With a private share outside own use the business's part is what came back on the rule's account.
+  const share = booking.private && owner && !booking.ownUse ? (Math.round(tx.amount * 100) - Math.round((Math.round(tx.amount * 100) * booking.private) / 100)) / 100 : tx.amount;
+  const refund = refundLookup(tx, share, books, booking.account);
+  // A code the firm's form does not take is never booked (formTakes): the rule's own code stands then.
+  return !refund ? 'notFound' : refund === 'tooMany' || formTakes(refund.code) ? refund : undefined;
+}
+
 /**
  * A rule's booking line as it lands: account, VAT code (none: no code) and amount, the bank on the
  * other side; `against`: the other side when it is no bank (an own-use correction, owner's account / the rule's account).
@@ -422,8 +443,9 @@ export function ownUseCode(code: string | undefined): string | undefined {
  * purchase document (evidence-check isPurchaseDocument) proves Swiss VAT, never a delivery note or
  * a supporting document (#81).
  */
-export function ruleBookingLines(tx: BankTransaction, booking: RuleBooking, documents: readonly Pick<Receipt, 'kind' | 'hasSwissVat'>[], owner: string | undefined): RuleLine[] {
-  const vat = ruleVatCode(booking.vat, tx, documents.some((r) => isPurchaseDocument(r) && r.hasSwissVat));
+export function ruleBookingLines(tx: BankTransaction, booking: RuleBooking, documents: readonly Pick<Receipt, 'kind' | 'hasSwissVat'>[], owner: string | undefined, books?: RefundBooks): RuleLine[] {
+  const refund = ruleRefund(tx, booking, documents, owner, books);
+  const vat = typeof refund === 'object' ? refund.code : ruleVatCode(booking.vat, tx, documents.some((r) => isPurchaseDocument(r) && r.hasSwissVat));
   const whole: RuleLine = { account: booking.account, ...(vat ? { vat } : {}), amount: tx.amount };
   if (booking.foreignTax) {
     const tax = foreignTaxIn(tx.amount, booking.foreignTax.rate);
@@ -615,13 +637,18 @@ export function ruleEntries(books: Books, tx: BankTransaction, placed: PlacedRul
   const bankAccount = bankAccountFor(tx, context.bankAccounts);
   const out = tx.direction === 'DBIT';
   // An own-use correction a person booked by hand already stands: the rule books the payment, never a second correction.
-  const lines = ruleBookingLines(tx, booking, mapped, context.ownerAccount).filter((l) => !l.against || !handOwnUse(books, tx, l).length);
+  const lines = ruleBookingLines(tx, booking, mapped, context.ownerAccount, books).filter((l) => !l.against || !handOwnUse(books, tx, l).length);
   const entries: ClassifyEntry[] = lines.map((l) => (l.against
     ? { accountDebit: out ? l.account : l.against, accountCredit: out ? l.against : l.account, amount: l.amount, vatCode: l.vat ?? '', description: wordsIn('de').t('rules.say.ownUseText', { percent: String(booking.private), text: merchantOf(tx.description) }) }
     : { accountDebit: out ? l.account : '', accountCredit: out ? '' : l.account, amount: l.amount, vatCode: l.vat ?? '', description: merchantOf(tx.description) }));
   const code = lines[0].vat;
   // The rule names a rate, the payment got the zero code: the reason says why, never the rule's rate alone.
-  const zero = booking.vat && code && code.replace(/^-/, '') !== booking.vat ? `; ${wordsIn('de').t('rules.say.zeroCode', { code })}` : '';
+  // A refund: the purchase it refunds names its code, or none was found and the zero code stands (#357).
+  const refund = ruleRefund(tx, booking, mapped, context.ownerAccount, books);
+  const de = wordsIn('de');
+  const zero = typeof refund === 'object' ? `; ${refundReason(refund)}`
+    : refund && code && formTakes(code) ? `; ${de.t(refund === 'tooMany' ? 'rules.say.refundTooMany' : 'rules.say.refundNotFound', { code, limit: String(SUMS_OF) })}`
+      : booking.vat && code && code.replace(/^-/, '') !== booking.vat ? `; ${de.t('rules.say.zeroCode', { code })}` : '';
   const lock = periodLock(books);
   const booked = entriesFor(tx, entries, { fx, receipts: mapped.map((r) => r.id), bankAccount, lock, reason: `Regel: ${ruleLine(placed, { ...context, payers: payerNames([tx]) })}${zero}`, by: { kind: 'rule', rule: placed.rule.id }, money: context.moneyAccounts, corrects: correctsFor(tx, mapped, lock.isClosed, filing().length) })
     .map((e) => stampRule(e, placed.rule.id, booking));
@@ -775,9 +802,12 @@ function withRefundCodes(books: Books, tx: BankTransaction, entries: JournalEntr
   return entries.map((e) => {
     const decided = e.by?.kind === 'model' ? refundCodeOf(e, tx, bank, books) : undefined;
     if (!decided || decided.code === e.vatCode) return e;
-    return { ...e, vatCode: decided.code, reason: wordsIn('de').t('rules.say.refundCode', { date: day(decided.original.date), originalCode: decided.originalCode, code: decided.code }), by: { kind: 'code', check: 'creditNote' } };
+    return { ...e, vatCode: decided.code, reason: refundReason(decided), by: { kind: 'code', check: 'creditNote' } };
   });
 }
+
+/** Why a refund takes the code of the purchase it refunds: that purchase, its entry and its code. */
+const refundReason = (r: RefundCode): string => wordsIn('de').t('rules.say.refundCode', { date: day(r.original.date), entry: r.entry, originalCode: r.originalCode, code: r.code });
 
 /**
  * A code the firm's form does not take is left off the entry: a firm not registered for VAT books

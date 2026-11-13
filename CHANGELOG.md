@@ -94,6 +94,20 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- **⚠ figures** A supplier's refund without a credit note takes the code of the purchase it refunds
+  with a minus (#357, owner's decision 2026-11-13; MWSTG Art. 41 Abs. 2): -I81 for an I81 purchase,
+  -I0 for one without input tax, a part at the purchase's rate. Before, a company rule booked and
+  the hand form proposed -I0, so the input tax claimed on the purchase stayed claimed; the AI's
+  booking already did so for the full amount and now for a part too. The purchase must be found
+  unambiguously: the same supplier and currency, no later, at least the refund's amount less what
+  came back of it already (the refund's text naming its invoice picks it among several); not when
+  other purchases add up to the refund or the purchase is split over two codes or a line without a
+  code. The booking names the purchase. A
+  purchase in a filed quarter stays as filed: the refund counts in the open quarter. When no
+  purchase is found, the refund keeps -I0 and its reason, and the hand form, say so. A refund
+  booked from now on (or booked again) lowers Ziffer 405 (or 400) of its open quarter; a booking
+  that stands is not changed. `npm run test:books` shows the difference. The
+  demos have no such refund: their figures do not move. Help: «Rückerstattung eines Einkaufs».
 - **⚠ figures** A webshop order of two VAT rates (tea at 2.6 %, a teapot at 8.1 %) is booked from
   the order export by its line items, a line per rate at its sale code (V26, V81), under the order's
   usual ref and linked to its report (#416). Code books it only when the items add up to what was

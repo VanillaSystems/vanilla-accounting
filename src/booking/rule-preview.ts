@@ -166,7 +166,7 @@ function withHandOwnUse(books: Books, tx: BankTransaction, now: RuleLine[], woul
 function wouldEntries(books: Books, tx: BankTransaction, booking: RuleBooking, context: ClassifyContext): SideLine[] {
   const mapped = mappedReceipts(books, tx);
   const bank = bankAccountFor(tx, context.bankAccounts);
-  return ruleBookingLines(tx, booking, mapped, context.ownerAccount).map((l) => ({
+  return ruleBookingLines(tx, booking, mapped, context.ownerAccount, books).map((l) => ({
     accountDebit: tx.direction === 'DBIT' ? l.account : l.against ?? bank,
     accountCredit: tx.direction === 'DBIT' ? l.against ?? bank : l.account,
     amount: l.amount,
