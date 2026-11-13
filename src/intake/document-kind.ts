@@ -6,7 +6,7 @@
  */
 import type { DocumentsData, OtherWhy, SupportingWhy } from '../core/modules/schema.js';
 import { SWISS_PERCENT, hasVatIndicator, textFacts, vatIdIn } from '../parsers/receipt-text.js';
-import { HEAD, firstOf, wordsRe } from '../core/modules/words.js';
+import { HEAD, compoundLines, firstOf, wordsRe } from '../core/modules/words.js';
 
 export type DocumentVerdict =
   | { is: 'receipt'; score: number }
@@ -23,12 +23,18 @@ const WEAK = 1;
 
 const IBAN = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}/;
 
+/** Where the first lines name the document a receipt: its title word, or a compound it closes at the start of a line with a number of its own («Akontorechnung AK-26-Q3-30871», words.ts compoundLines); Infinity when they do not. */
+export function titleIn(head: string, words: DocumentsData): number {
+  const word = wordsRe(words.receipt.title).exec(head)?.index ?? Infinity;
+  return Math.min(word, compoundLines(head, words.receipt.title, words.notCompound)[0]?.at ?? Infinity);
+}
+
 /** How much of an invoice the text shows: its title (more in its first lines), a total, VAT, a payment slip or account, a due date. */
 export function receiptScore(text: string, words: DocumentsData): number {
   const head = text.slice(0, HEAD);
   const title = wordsRe(words.receipt.title);
   const has = (list: string[]) => list.length > 0 && wordsRe(list).test(text);
-  return (title.test(head) ? 2 : title.test(text) ? 1 : 0)
+  return (titleIn(head, words) < Infinity ? 2 : title.test(text) ? 1 : 0)
     + (textFacts(text).amount !== undefined ? 1 : 0)
     + (hasVatIndicator(text) ? 1 : 0)
     + (IBAN.test(text) || has(words.receipt.slip) ? 1 : 0)
@@ -38,6 +44,7 @@ export function receiptScore(text: string, words: DocumentsData): number {
 export function documentKind(text: string, words: DocumentsData): DocumentVerdict {
   const score = receiptScore(text, words);
   const head = text.slice(0, HEAD);
+  // Only a title word on its own outranks a supporting word below it: a compound title («Prämienrechnung PR-1») above «2. Mahnung» is the reminder's.
   const titleAt = wordsRe(words.receipt.title).exec(head)?.index ?? Infinity;
   // A balance sheet's word also names what a fiduciary's invoice is for («Honorarrechnung Bilanz 2025»)
   // or stands in its letterhead: it decides only on a text that shows less than an invoice and charges

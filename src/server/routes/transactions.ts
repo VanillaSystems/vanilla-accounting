@@ -10,7 +10,7 @@ import { ownerOf } from '../../workspace/money-accounts.js';
 import { baseCurrency } from '../../engines/index.js';
 import { nextManualRef } from '../../books/next-ref.js';
 import { assertOpen, readBooks, refDates, reopenWorkspace, withBooks, RequestError, patchBody, stringField, tagsField, WS } from '../books.js';
-import { assertPlaced, attachEntries, bookPayment, dropPayment } from '../edits.js';
+import { assertPlaced, attachEntries, bookPayment, dropPayment, handTaxPoint } from '../edits.js';
 import { accountName, setAccountName } from '../../workspace/accounts-write.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { isIsoDate } from '../../accounting/periods.js';
@@ -169,11 +169,11 @@ function bookingLine(raw: unknown): BookingLine {
   return { accountDebit: text('accountDebit'), accountCredit: text('accountCredit'), amount: b.amount, ...(vatCode && { vatCode }), description: text('description'), ...(tags && { tags }) };
 }
 
-/** A booking typed without its payment, tied to it (src/server/edits.ts attachEntries); answers the entries as they were, for the undo. */
+/** A booking typed without its payment, tied to it (src/server/edits.ts attachEntries); answers the entries as they were and the lines it added, for the undo. */
 router.post('/api/transactions/:ref/attach', (req, res) => {
   const own = (req.body as { ref?: unknown })?.ref;
   if (typeof own !== 'string' || !own) throw new RequestError(400, 'ref: die Buchung ohne Zahlung (M2026-004).');
-  return withBooks(res, (books) => ({ before: attachEntries(books, req.params.ref, own, WS.bankAccounts) }));
+  return withBooks(res, (books) => attachEntries(books, req.params.ref, own, WS.bankAccounts, loadFxResolver(), handTaxPoint(WS)));
 });
 
 /** The sale question answered on the hand form (#382, src/server/questions.ts answerSaleOnForm): the form's lines and links, the answer as on the card. */
@@ -195,5 +195,5 @@ router.post('/api/transactions/:ref/entries', (req, res) => {
   const proof = inputTaxProof === undefined ? undefined : typeof inputTaxProof === 'string' ? inputTaxProof.trim() : '';
   if (proof === '') throw new RequestError(400, 'inputTaxProof: den anderen Nachweis der Vorsteuer nennen (Vertrag, Auftragsbestätigung, E-Mail).');
   if (links !== undefined && !(Array.isArray(links) && links.every((l) => typeof l === 'string' && l))) throw new RequestError(400, 'links: die Belege, die mit der Buchung verknüpft werden.');
-  return withBooks(res, (books) => ({ entries: bookPayment(books, req.params.ref, parsed, WS.bankAccounts, loadFxResolver(), proof, links as string[] | undefined, WS.company) }));
+  return withBooks(res, (books) => ({ entries: bookPayment(books, req.params.ref, parsed, WS.bankAccounts, loadFxResolver(), proof, links as string[] | undefined, WS.company, handTaxPoint(WS)) }));
 });

@@ -55,6 +55,7 @@ import { bankCodedFee } from '../books/bank-import.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { withReceiptTax } from './receipt-tax.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
+import { overWithheld, paysContributions, withheldFor } from './withheld.js';
 import { splitByReceipts } from './receipt-lines.js';
 import { CUSTOMS_BY, customsSplit, importVatDeductions, ratesImportVat, type Assessment, type CustomsHold, type CustomsTexts } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
@@ -697,7 +698,8 @@ export function classifyInput(books: Books, tx: BankTransaction, legs: readonly 
   const cp = routing.kind === 'known' ? counterparties.find((c) => c.id === routing.counterparty) : undefined;
   const guidance = cp ? businessGuidance(cp) : [];
   const receipts = linked
-    .filter((r) => r.extractedText && r.extractedText.length > 10)
+    // A photo nothing could read counts by what a person entered on it (#438).
+    .filter((r) => (r.extractedText && r.extractedText.length > 10) || r.vatBy === 'human')
     .map((r) => ({
       text: r.extractedText,
       amount: r.amount,
@@ -954,8 +956,28 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
   }
   // The payments that repay the owner's outlays, each told what was open for it after the earlier ones (#402).
   const repayments = repaymentsOf(books, context, context.wageWordings ?? [], fx);
+  // The payments of contributions (#426): to a business that collects them, or one booked on the wages' accounts before; never a wage
+  // (its text or its payee's), nor a purchase whose receipt shows the jurisdiction's VAT. Each is told what the wages withheld.
+  const businessOf = (t: BankTransaction): string | undefined => {
+    const routing = identify(signalsOfTransaction(t, mappedReceipts(books, t)), context.counterparties ?? []);
+    return routing.kind === 'known' ? routing.counterparty : undefined;
+  };
+  const isWage = (t: BankTransaction) => !!context.wageWordings?.some((w) => w.test(t.description) || (!!t.counterparty && w.test(t.counterparty)));
+  const contributions = new Set(context.wageDeductions ? toModel.filter((t) => !repayments.has(t.ref) && !isWage(t) && !mappedReceipts(booksOf(t), t).some((r) => r.hasSwissVat) && paysContributions(books, t, businessOf)).map((t) => t.ref) : []);
+  const withheldOf = (own: Books, tx: BankTransaction): { account: string; open: number } | undefined => {
+    if (!context.wageDeductions || !contributions.has(tx.ref)) return undefined;
+    const open = withheldFor(own, tx, context.wageDeductions);
+    return open === undefined ? undefined : { account: context.wageDeductions, open };
+  };
+  // The contribution payments go last, in waves of their own: what the wages of this run withhold is booked before they are asked.
   const batches: BankTransaction[][] = [];
-  for (let i = 0; i < toModel.length; i += BATCH_SIZE) batches.push(toModel.slice(i, i + BATCH_SIZE));
+  const later: BankTransaction[][] = [];
+  const first = toModel.filter((t) => !contributions.has(t.ref));
+  const last = toModel.filter((t) => contributions.has(t.ref));
+  for (let i = 0; i < first.length; i += BATCH_SIZE) batches.push(first.slice(i, i + BATCH_SIZE));
+  for (let i = 0; i < last.length; i += BATCH_SIZE) later.push(last.slice(i, i + BATCH_SIZE));
+  const firstCount = batches.length;
+  batches.push(...later);
 
   const processBatch = async (batch: BankTransaction[], batchNum: number) => {
     // An asked payment the model could not propose for still waits for the person, without a proposal.
@@ -967,7 +989,9 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         // A payment that pays the owner back her outlays (#402): the model is told what her account holds, so it books there, never an expense again.
         const open = repayments.get(tx.ref);
         const owed = context.ownerAccount && open !== undefined ? { account: context.ownerAccount, open } : undefined;
-        return { ...input, tx: { ...input.tx, ref: keyOf(tx), ...(owed && { ownerOutlays: owed }) } };
+        // Money out while the wages' deductions account holds a credit (#426): what the payslips withheld, so a contribution payment can clear the employees' share.
+        const withheld = owed ? undefined : withheldOf(booksOf(tx), tx);
+        return { ...input, tx: { ...input.tx, ref: keyOf(tx), ...(owed && { ownerOutlays: owed }), ...(withheld && { withheld }) } };
       }), context, examples);
       let model: string | undefined;
       const raw = await ask(prompt, { step: 'classify', timeoutMs: CALL_TIMEOUT_MS, answered: (by) => { model = by.model; } });
@@ -1016,6 +1040,15 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
           if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, ...refused });
           continue;
         }
+        // A contribution payment takes no more off the deductions account than the wages withheld by its day, with what this run booked before it (#426).
+        const deductions = context.wageDeductions;
+        const over = deductions && contributions.has(tx.ref) ? overWithheld(entries, deductions, withheldFor(books, tx, deductions)) : undefined;
+        if (over) {
+          const cur = baseCurrency();
+          log(`  [Batch ${batchNum}]  ${tx.ref}  refused: ${over.taken} off ${deductions}, which held ${over.open}`);
+          if (!proposing.has(tx.ref)) outcome.failed.push({ ref: tx.ref, reason: `Die Buchung nähme ${cur} ${over.taken.toFixed(2)} vom Konto ${deductions} der Lohnabzüge, das an diesem Tag nur ${cur} ${over.open.toFixed(2)} hielt: nichts gebucht. Von Hand buchen.`, refusal: { code: 'classifyWithheldOver', params: { account: deductions!, currency: cur, taken: over.taken, open: over.open } } });
+          continue;
+        }
         const held = proposing.get(tx.ref);
         if (held) { held.entries = atPoint(tx, entries.map((e) => ({ ...e, rule: held.rule }))); continue; }
         log(`  [Batch ${batchNum}]  ${keyOf(tx)}  → ${lines.length} entries (${lines.map((e) => e.accountDebit || e.accountCredit).join(', ')})`);
@@ -1036,7 +1069,11 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     log(`  [Batch ${batchNum}/${batches.length}]  done (${outcome.classified.length} classified, ${outcome.failed.length} failed)`);
   };
 
-  for (let i = 0; i < batches.length; i += CONCURRENCY) {
+  for (let i = 0; i < firstCount; i += CONCURRENCY) {
+    await Promise.all(batches.slice(i, Math.min(i + CONCURRENCY, firstCount)).map((b, j) => processBatch(b, i + j + 1)));
+    afterWave?.();
+  }
+  for (let i = firstCount; i < batches.length; i += CONCURRENCY) {
     await Promise.all(batches.slice(i, i + CONCURRENCY).map((b, j) => processBatch(b, i + j + 1)));
     afterWave?.();
   }

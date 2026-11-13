@@ -5,7 +5,7 @@
  */
 import { clearProgress, noteProgress } from './step-progress.js';
 import { classifyTransactions, loadClassifyContext } from '../booking/classify.js';
-import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
+import { answerSettles, awaitsOutlays, mustSettle, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
@@ -182,15 +182,18 @@ export const ACTIONS: Record<string, Action> = {
       const context = loadClassifyContext(ws);
       // No provisional booking: a payment that needs a receipt waits for it, as in the inbox run (issue #29).
       // An answer that only settles (the owner's outlays paid back) has no receipt of its own and is booked (issue #90).
-      const wait = receiptWaitOf(scratch, t, context, receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws), fx);
+      const known = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws);
+      const wait = receiptWaitOf(scratch, t, context, known, fx);
       // A repayment of the owner's outlays goes to the model but is booked only onto her account (#402).
       const waits = wait.wait;
       const settles = mustSettle(wait);
       if (wait.wait && wait.unread) return { outcome: 'held', output: { why: 'receiptUnread' } };
-      if (waits && (!ask || t.waitsForReceipt?.decided)) return { outcome: 'held', output: { why: 'waitsForReceipt' } };
+      // A payment to the owner waits for the outlays it pays back, not for a receipt of its own (#428).
+      const held = { outcome: 'held', output: { why: awaitsOutlays(scratch, t, context, known.wages, fx) ? 'waitsForOutlays' : 'waitsForReceipt' } } as const;
+      if (waits && (!ask || t.waitsForReceipt?.decided)) return held;
       const { classified, failed, asked, unasked } = await classifyTransactions(scratch, [t], { ask, fx, context });
       const entries = scratch.journalEntries.slice(before);
-      if (waits && !answerSettles(t, entries, context)) return { outcome: 'held', output: { why: 'waitsForReceipt' } };
+      if (waits && !answerSettles(t, entries, context)) return held;
       // Without a model nothing was answered: the step says the AI is missing, not that it failed.
       if (settles && !waits && entries.length && !answerSettles(t, entries, context)) return { outcome: 'undecided', output: { why: 'failed' } };
       if (!failed.length && classified.length) return { outcome: 'decided', output: { entries } };

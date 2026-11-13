@@ -51,6 +51,15 @@ export function paysOwner(tx: Pick<BankTransaction, 'counterparty' | 'descriptio
 /** Her name as the payee: the counterparty only. */
 const toOwner = (tx: Pick<BankTransaction, 'counterparty'>, name: string | undefined) => paysOwner({ counterparty: tx.counterparty, description: '' }, name);
 
+/**
+ * Money out to her by name (the payee) in the books' currency: what a repayment of her outlays is
+ * (ownerRepayments' candidates; a wage aside, which never waits). One that waits for its receipt
+ * waits in truth for the outlays it pays back to be booked over her account (#428): her receipts
+ * paid privately, booked as her outlays, end the wait.
+ */
+export const repaysOwnerShape = (tx: Pick<BankTransaction, 'counterparty' | 'direction' | 'currency'>, ownerName: string | undefined): boolean =>
+  tx.direction === 'DBIT' && tx.currency === baseCurrency() && toOwner(tx, ownerName);
+
 /** The wage accounts of the jurisdiction: a wage booked expense / her account is no outlay. */
 const wageAccounts = (): Set<string> => { const w = setup().wages; return new Set([...(w ? [w.account] : []), ...(w?.contributions ?? [])]); };
 
@@ -107,7 +116,7 @@ export function ownerRepayments(books: Books, f: OwnerFacts, wage: (text: string
   const out = new Map<string, number>();
   if (!f.ownerName) return out;
   const candidates = books.transactions
-    .filter((t) => t.direction === 'DBIT' && t.currency === baseCurrency() && toOwner(t, f.ownerName) && !wage(t.description))
+    .filter((t) => repaysOwnerShape(t, f.ownerName) && !wage(t.description))
     .sort((a, b) => a.date.localeCompare(b.date) || a.ref.localeCompare(b.ref));
   if (!candidates.length) return out;
   const { byRef, moves, repaid, outlay } = reading(books, f);

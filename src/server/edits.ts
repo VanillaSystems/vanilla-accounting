@@ -4,7 +4,7 @@
  * that undoes it. Who made it (Author) is what the booking records as its `by`.
  */
 import { issuedByFirm } from '../intake/own-invoice.js';
-import { byStatement } from '../workspace/money-accounts.js';
+import { accountOf, byStatement } from '../workspace/money-accounts.js';
 import { randomBytes } from 'node:crypto';
 import { periodLock, type Books } from '../books/store.js';
 import { isManualRef } from '../books/refs.js';
@@ -21,10 +21,14 @@ import { heldFacts, setVatFacts } from '../accounting/vat-facts.js';
 import { unbookPayments } from '../accounting/classify-force.js';
 import { codeOnAccount, formTakes, lookupVatCode } from '../accounting/vat-codes.js';
 import { agreedBasis, withoutInputTax } from '../engines/index.js';
-import { isOpenItemAccount, openItemAccounts } from '../accounting/tax-point.js';
+import { atTaxPoint, isOpenItemAccount, openItemAccounts } from '../accounting/tax-point.js';
 import type { BankTransaction, BookedBy, BookingFields, JournalEntry, Receipt } from '../types/index.js';
 import type { BookChange, ChangeNote, EntrySet, MadeChange, NewEntry, PrivatePart, ReceiptSet } from '../types/assistant.js';
-import type { LedgerBankAccount } from '../workspace/workspace.js';
+import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
+import { accountsOf } from '../workspace/reads.js';
+import { loadKnowledge } from '../knowledge/layers.js';
+import type { Counterparty } from '../knowledge/counterparties.js';
+import { clearingAccounts } from '../booking/providers.js';
 import { loadFxResolver, type FxResolver } from '../accounting/fx-rates.js';
 import { offSide, type BookingLine } from '../accounting/manual-booking.js';
 import { isVatAmountCode } from '../accounting/validate.js';
@@ -570,17 +574,43 @@ export function assertOwnInvoice(books: Books, id: string, company: { uid?: stri
   }
 }
 
+/** What a payment booked by hand needs to find its tax point on the agreed basis: the chart's accounts (the open items) and the providers' clearing accounts. */
+export interface HandTaxPoint { chart: readonly string[]; clearing: ReadonlySet<string> }
+
+/**
+ * A person's lines of payment `tx` as the agreed basis books them (atTaxPoint), by the receipts
+ * linked to it now; on the cash basis as they are. Not written: the caller puts them in the books.
+ */
+export function handTaxPointOf(books: Books, tx: BankTransaction, entries: readonly JournalEntry[], accounts: readonly LedgerBankAccount[], fx: FxResolver, point: HandTaxPoint): JournalEntry[] {
+  const linked = new Set(books.mappings.filter((m) => m.transactionRef === tx.ref).map((m) => m.receiptId));
+  return atTaxPoint(tx, entries, {
+    accounts: openItemAccounts(point.chart), bankAccount: accountOf(tx, accounts)?.account ?? '', clearing: point.clearing, lock: periodLock(books),
+    rateOn: (c, d) => fx.daily(c, d), documents: books.receipts.filter((r) => linked.has(r.id)), length: filing().length, newId: () => randomBytes(8).toString('hex'),
+  });
+}
+
+/** The workspace's HandTaxPoint: read only on the agreed basis, the cash basis needs none. */
+export function handTaxPoint(ws: Workspace): HandTaxPoint {
+  if (!agreedBasis()) return { chart: [], clearing: new Set() };
+  let counterparties: Counterparty[] = [];
+  try { counterparties = loadKnowledge(APP_ROOT, ws.paths.root).counterparties; } catch { /* knowledge that does not load names no clearing account */ }
+  return { chart: (accountsOf(ws) as Array<{ number: unknown }>).map((a) => String(a.number)), clearing: clearingAccounts(counterparties) };
+}
+
 /**
  * A payment booked by hand (src/accounting/manual-booking.ts): its lines as a person's entries,
- * each dated on the payment (cash basis), at the official rate of that day when it is foreign, with
- * the receipts linked now, so a later run sees nothing new and keeps them. Refused when the
+ * each dated on the payment, at the official rate of that day when it is foreign, with
+ * the receipts linked now, so a later run sees nothing new and keeps them. On the agreed basis a
+ * coded line is dated by its receipt and booked over the open item, the payment settling it on its
+ * own day, as the classifier books it (atTaxPoint, #360, with `point`), its exceptions included: a
+ * receipt of a filed period leaves the line on the payment's day with `corrects`. Refused when the
  * payment is booked already or the lines do not add up to what the bank paid. `proof`: the other
  * proof of its input tax the person names instead of a receipt (BankTransaction.inputTaxProof, #134).
  * A bank movement booked in a filed quarter as a read one (#254) is refused until «Trotzdem buchen».
  * `links`: receipts linked to the payment by the same click, before its entries record them (the
  * firm's own invoice the payment names by its number, #382).
  */
-export function bookPayment(books: Books, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[], fx: FxResolver, proof?: string, links: readonly string[] = [], company: { uid?: string; name?: string } = {}): JournalEntry[] {
+export function bookPayment(books: Books, ref: string, lines: readonly BookingLine[], accounts: readonly LedgerBankAccount[], fx: FxResolver, proof?: string, links: readonly string[] = [], company: { uid?: string; name?: string } = {}, point: HandTaxPoint = { chart: [], clearing: new Set() }): JournalEntry[] {
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, ref), 'newEntry');
@@ -606,11 +636,12 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
   // A private outlay for a receipt of a filed quarter is a correction of that quarter (r8k-10).
   const corrects = correctsFor(tx, books.receipts.filter((r) => receipts.includes(r.id)), periodLock(books).isClosed, filing().length);
   const at = new Date().toISOString();
-  const entries = lines.map((l): JournalEntry => ({
+  const typed = lines.map((l): JournalEntry => ({
     id: randomBytes(8).toString('hex'), transactionRef: ref, date: tx.date,
     accountDebit: l.accountDebit, accountCredit: l.accountCredit, amount: l.amount,
     ...(l.vatCode && { vatCode: l.vatCode }), description: l.description.trim(), ...rate, origin: 'manual', receipts, ...(corrects && { corrects }), ...(l.tags && { tags: l.tags }), by: { kind: 'person', at },
   }));
+  const entries = handTaxPointOf(books, tx, typed, accounts, fx, point);
   books.journalEntries.push(...entries);
   if (proof !== undefined) tx.inputTaxProof = { text: proof, at };
   bookedAgain(books, ref);
@@ -619,12 +650,14 @@ export function bookPayment(books: Books, ref: string, lines: readonly BookingLi
 
 /**
  * A person's booking typed without its payment (Buchungen › N, ref M2026-004) tied to the payment
- * it books (manual-booking.ts unattachedFor): its entries take the payment's ref and date (cash
- * basis) and record the receipts linked now, so the payment counts as booked and no run books it
- * again. Refused when the payment is booked already, the ref is no such booking, or its entries do
- * not add up to what the bank paid. Returns the entries as they were, for the undo.
+ * it books (manual-booking.ts unattachedFor): its entries take the payment's ref and date and
+ * record the receipts linked now, so the payment counts as booked and no run books it again; on the
+ * agreed basis a line with a VAT code then takes its receipt's day over the open item, as a booking
+ * by hand does (handTaxPointOf, #360). Refused when the payment is booked already, the ref is no such
+ * booking, or its entries do not add up to what the bank paid. Returns the entries as they were and
+ * the ids of the lines it added (the payment settling the open item), for the undo.
  */
-export function attachEntries(books: Books, ref: string, own: string, accounts: readonly LedgerBankAccount[]): JournalEntry[] {
+export function attachEntries(books: Books, ref: string, own: string, accounts: readonly LedgerBankAccount[], fx: FxResolver = loadFxResolver(), point: HandTaxPoint = { chart: [], clearing: new Set() }): { before: JournalEntry[]; made: string[] } {
   const tx = books.transactions.find((t) => t.ref === ref);
   if (!tx) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, ref), 'newEntry');
@@ -637,7 +670,12 @@ export function attachEntries(books: Books, ref: string, own: string, accounts: 
   const before = entries.map((e) => ({ ...e }));
   const receipts = [...new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId))].sort();
   for (const e of entries) Object.assign(e, { transactionRef: ref, date: tx.date, receipts, origin: 'manual', by: { kind: 'person', at: new Date().toISOString() } });
-  return before;
+  const placed = handTaxPointOf(books, tx, entries, accounts, fx, point);
+  const ids = new Set(entries.map((e) => e.id));
+  for (const e of entries) Object.assign(e, placed.find((p) => p.id === e.id));
+  const made = placed.filter((p) => !ids.has(p.id));
+  books.journalEntries.push(...made);
+  return { before, made: made.map((e) => e.id) };
 }
 
 /**

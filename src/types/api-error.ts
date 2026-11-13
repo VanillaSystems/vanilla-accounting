@@ -273,7 +273,9 @@ export type ClassifyRefusal =
   | { code: 'classifyOpenInvoice'; params: { number: string; customer: string } }
   /** The payment's purchase receipts are not read yet (#391): it waits for the VAT step's reading, never booked on the model's guess. */
   | { code: 'classifyVatNotRead'; params: { receipt: string } }
-  | { code: 'classifyInputTaxShared'; params: { payments: string; currency: string; booked: number; shown: number } };
+  | { code: 'classifyInputTaxShared'; params: { payments: string; currency: string; booked: number; shown: number } }
+  /** The answer takes more off the wages' deductions account than it held on the payment's day (#426). */
+  | { code: 'classifyWithheldOver'; params: { account: string; currency: string; taken: number; open: number } };
 
 /**
  * Why a statement upload (POST /api/statements) was refused: not XML or PDF, an XML that is no
