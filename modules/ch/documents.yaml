@@ -33,6 +33,9 @@ supporting:
   delivery-note: [Lieferschein, Delivery note, Packing slip, Bulletin de livraison, Bon de livraison, Bolla di consegna, Documento di trasporto]
   # The customs office's assessment: proof beside the carrier's invoice that the carrier is paid for, never paid on its own (customs.assessment below).
   customs-assessment: [Veranlagungsverfügung MWST, Veranlagungsverfügung Zoll, Décision de taxation TVA, Décision de taxation douane, Decisione d'imposizione IVA, Decisione d'imposizione dazio, Assessment decision VAT]
+  # A balance sheet (a fiduciary's year-end or interim one): no payment belongs to it; the one of the
+  # year before's last day holds the opening of the books' first year (Firma › Eröffnung, #427).
+  balance-sheet: [Bilanz, Schlussbilanz, Zwischenbilanz, Jahresbilanz, Eröffnungsbilanz, Balance sheet, Interim balance sheet, Bilan, Bilan intermédiaire, Bilan de clôture, Bilancio, Bilancio intermedio, Bilancio di chiusura]
 
 # Newsletter words count anywhere (they stand in the footer); the others where a document names
 # what it is, in its first lines.
