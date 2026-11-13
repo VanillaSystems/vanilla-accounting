@@ -7,7 +7,8 @@
 import type { BankTransaction, Index } from '../../types/index.js';
 import type { DropRow } from '../../types/drop.js';
 import type { Question } from '../../questions/model.js';
-import type { Receipt } from '../../types/index.js';
+import type { Mapping, Receipt } from '../../types/index.js';
+import { CORRECTION_LINK } from '../../booking/vat-corrections.js';
 import { filingKeyOf, inPeriod, parsePeriod, type FilingLength, type IsoDate, type Period } from '../../accounting/periods.js';
 import { waitsForReading } from '../../parsers/receipt-text.js';
 import { isNoReceipt } from '../../books/discard.js';
@@ -52,21 +53,29 @@ export function receiptStateOf(r: Receipt, links: number, copy: boolean): Receip
 }
 
 /**
+ * What a receipt's links make of it (#406): a provider's fee bill that code linked to the booking of
+ * its VAT (src/booking/vat-corrections.ts) has no payment and is said so; any other link is to a payment.
+ */
+export const linkedAs = (links: readonly Pick<Mapping, 'rule'>[]): 'feeBill' | 'matched' | undefined =>
+  !links.length ? undefined : links.every((m) => m.rule === CORRECTION_LINK) ? 'feeBill' : 'matched';
+
+/**
  * Where one taken file is, read from the books and its run: still in its step (said as Belege says
  * it, #218: «Sucht die Zahlung …», «Wartet (3 vor diesem)»), read, matched, waiting for a person,
  * its run stopped, or set aside by the run with the reason.
  */
-export type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'unread' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string }
+export type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'unread' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'feeBill'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string }
   | { kind: 'none'; why: string } | { kind: 'twin'; of: string; name: string; why: TwinWhy } | { kind: 'supporting'; why?: string; of?: { id: string; name: string } };
 
 /**
  * The groups of a drop's closing lines (#384). Every row is in exactly one, in its own words: a
- * statement read in, a report booked, a receipt by its state (receiptStateOf), an order page, a run
+ * statement read in, a report booked, a provider's monthly fee bill whose VAT code booked without a
+ * payment (#406: no payment, so never «einer Zahlung zugeordnet»), a receipt by its state (receiptStateOf), an order page, a run
  * that stopped, a file the books had already («nicht übernommen: schon da», «schon eingelesen»), one
  * that waits for an answer in its row (columns, a password, «was ist das?», «schon da?»), one set
  * aside or not saved, one taken back, and one still worked on.
  */
-export const CLOSING_GROUPS = ['statement', 'report', 'matched', 'read', 'supporting', 'beside', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
+export const CLOSING_GROUPS = ['statement', 'report', 'matched', 'feeBill', 'read', 'supporting', 'beside', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
 export type ClosingGroup = typeof CLOSING_GROUPS[number];
 export type ClosingCounts = Record<ClosingGroup, number>;
 
@@ -88,6 +97,7 @@ export function closingGroupOf(r: DropRow, x: FileState | undefined): ClosingGro
     case 'report': return 'report';
     case 'refused': return 'refused';
     case 'matched': return 'matched';
+    case 'feeBill': return 'feeBill';
     case 'read': return 'read';
     case 'unread': return 'unread';
     case 'waits': return 'incomplete';
@@ -122,11 +132,11 @@ export const readOf = (f: ClosingCounts) => ({ read: f.matched + f.read + f.copy
  */
 export const CLOSING_SENTENCE = {
   supporting: 'drop.sum.supporting', beside: 'drop.sum.beside', copy: 'drop.sum.copies', incomplete: 'drop.sum.incomplete', unread: 'drop.sum.unread',
-  orderPage: 'drop.sum.orderPages', stuck: 'drop.sum.stuck', report: 'drop.sum.reports',
+  orderPage: 'drop.sum.orderPages', feeBill: 'drop.sum.feeBills', stuck: 'drop.sum.stuck', report: 'drop.sum.reports',
   none: 'drop.sum.none', known: 'drop.sum.known', asks: 'drop.sum.asks', aside: 'drop.sum.aside', refused: 'drop.sum.refused', undone: 'drop.sum.undone', working: 'drop.sum.working',
 } as const satisfies Record<Exclude<ClosingGroup, 'statement' | 'matched' | 'read'>, string>;
 /** The receipts' sentences after the read line, and the line of the files that are no receipt or brought nothing new. */
-export const RECEIPT_SENTENCES = ['supporting', 'beside', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'report'] as const;
+export const RECEIPT_SENTENCES = ['feeBill', 'supporting', 'beside', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'report'] as const;
 export const OTHER_SENTENCES = ['none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
 
 /** How many rows are in each group: their sum is the number of rows. */

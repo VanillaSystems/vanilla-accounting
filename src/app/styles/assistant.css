@@ -190,7 +190,7 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .dropdlg .dsum p { margin: 0; }
 .dchip.p-working, .dchip.p-none { background: var(--hover); color: var(--ink-2); }
 .dchip.p-waits, .dchip.p-stuck, .dchip.p-unread, .dchip.p-twin { background: var(--warn-soft); color: var(--warn); }
-.dchip.p-matched { background: color-mix(in srgb, var(--pos, #1a7f4b) 14%, transparent); color: var(--pos, #1a7f4b); }
+.dchip.p-matched, .dchip.p-feeBill { background: color-mix(in srgb, var(--pos, #1a7f4b) 14%, transparent); color: var(--pos, #1a7f4b); }
 .dpw input { font-size: 12px; }
 .droprow.open { border-bottom: 0; }
 .droprow .dtog { width: 22px; height: 22px; display: grid; place-items: center; border: 0; border-radius: 6px; background: none; color: var(--faint); cursor: pointer; }
