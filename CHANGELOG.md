@@ -333,6 +333,8 @@ Two markers flag an entry you must read before you update:
   «MWST noch nicht gelesen», was called «nicht lesbar» and its payment lost the input tax. What a
   person enters stays over every later run, the model is told her VAT when it books the payment, and
   the receipt's Verlauf says «nicht gelesen · Angaben von Hand erfasst» instead of «hat den Beleg gelesen».
+- «Gerüst», «Gerüstbau» and «Gerüstmiete» find an account in the account field (#438): Aufwand für
+  bezogene Dienstleistungen (4400); before, «Gerüst» found none.
 - A payment provider's payouts list dropped before the firm has that provider is named as the
   provider's other export, with the reports to bring instead, at the first drop too (#425); before,
   it became a bank statement's column question; the dialog's head says it was set aside, not
