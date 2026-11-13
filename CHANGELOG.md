@@ -98,14 +98,19 @@ Two markers flag an entry you must read before you update:
   the order export by its line items, a line per rate at its sale code (V26, V81), under the order's
   usual ref and linked to its report (#416). Code books it only when the items add up to what was
   charged, shipping and discount are zero, nothing is refunded and exactly one way of putting the
-  items at the rates matches the tax the export shows per rate («Tax 1 Name», «Tax 1 Value»), to the
-  Rappen. Every other such order waits for «Aufteilen» as before. Why the figures change: until now
+  items at the rates matches the tax the export shows per rate («Tax 1 Name», «Tax 1 Value»), within the rounding
+  a provider may do per item (a Rappen per two items at that rate). Every other such order waits for «Aufteilen» as before. Why the figures change: until now
   each such order waited, and its turnover was missing from the open period's return. An order the
   report holds for its rates in an open period is booked when that order export is dropped again or
   a payments export of the provider is dropped; one of a filed period is never booked, and an order split by hand stays as she booked it.
   The drop row names the orders split so («nach ihren Positionen auf die MWST-Sätze aufgeteilt»), and
   each entry's reason says it. «Rückgängig» of the report takes these lines back with its other
-  sales. A later refund of such an order waits for her to book it by hand.
+  sales. A later refund of such an order waits for her to book it by hand. An order with more
+  line items than code tries (twelve at two rates) waits with its own reason that names the limit.
+- Demos (#374): the bundled demos are written again by today's generator, so their payments show
+  the other party's name and their bank fee rows are marked as fees, as in books read from a
+  statement now; no booking and no figure changed. A test now fails when a committed demo is not
+  what `npm run demo:generate` writes.
 - Setup (#423): «MWST-Methode» and «Abrechnungsart» say where the owner finds her answer herself:
   in the ESTV portal, under «Neue Geschäfte» her firm, then «Anpassen» on the card «Abrechnungsmodalitäten», changing nothing; the Treuhand
   only when she has no access. «Abrechnungsart» no longer says that vereinbart applies unless the
@@ -340,6 +345,12 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- After the drop she sees her data (#424): what «Dateien hinzufügen» reports as booked (a provider's
+  reports, the payouts her answer in a row booked, a statement read or kept, a file taken back) is on
+  every page at once, the MWST figure and the dock too; before, the page kept the figures of before
+  the drop until the window was reloaded. Closing the window after a bank's PDF statement opens that
+  statement in its own quarter; before, it opened a «Datei» view in today's quarter that said the
+  file was not read.
 - A payment provider's payouts list dropped before the firm has that provider is named as the
   provider's other export, with the reports to bring instead, at the first drop too (#425); before,
   it became a bank statement's column question; the dialog's head says it was set aside, not
