@@ -330,7 +330,9 @@ Two markers flag an entry you must read before you update:
 
 - Firma › Eröffnung (#427): a foreign-currency bank account is no longer refused with a terminal
   command. Typed, it shows a second field: its value in CHF and its balance in its own currency,
-  as the balance sheet shows both; the statements are checked against the latter.
+  as the balance sheet shows both; the statements are checked against the latter. Beside them the
+  form names the balance's value at the ESTV rate of 31.12. and how far the typed value is off it,
+  with a click to take it; values of opposite signs, or one of them 0, are refused.
 - Kontoauszüge (#427): a difference to the bank that the opening explains is no longer blamed on «eine
   Zahlung … nicht oder falsch gebucht». A foreign-currency account without its opening is named
   «Anfangsbestand fehlt» in its currency, as a CHF account was; and books whose opening is entered

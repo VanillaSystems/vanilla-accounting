@@ -46,7 +46,7 @@ import { RequestError, WS, assertOpen, patchBody, readBooks, reopenWorkspace, up
 import { patchManifest } from '../../workspace/manifest-write.js';
 import { askAbout, closeAsk, correctAsk, importAsk } from '../statement-asks.js';
 import { openingLock, withNativeOpening, withOpening } from '../../accounting/opening-balance.js';
-import { yearEndAccounts } from '../../accounting/year-close.js';
+import { foreignAccounts, yearEndAccounts } from '../../accounting/year-close.js';
 import { chartOf, differenceAccountOf } from '../../books/year-close.js';
 import { baseCurrency, chart } from '../../engines/index.js';
 
@@ -698,12 +698,15 @@ router.put('/api/opening-balances/:year/:account', (req, res) => {
   if (amount !== null && (typeof amount !== 'number' || !Number.isFinite(amount))) throw new RequestError(400, 'Betrag fehlt.');
   const equity = yearEndAccounts(chartOf(WS), WS.company.legalForm).resultTo;
   const side = chart().sideOf(account);
-  const refuse = (reason: 'notBalanceSheet' | 'equity' | 'foreign', text: string, currency?: string) => new RequestError(400, text, { code: 'openingAccount', params: { account, reason, ...(currency && { currency }) } });
+  const refuse = (reason: 'notBalanceSheet' | 'equity' | 'foreign' | 'foreignMismatch' | 'notForeign', text: string, currency?: string) => new RequestError(400, text, { code: 'openingAccount', params: { account, reason, ...(currency && { currency }) } });
   if (side !== 'assets' && side !== 'liabilities') throw refuse('notBalanceSheet', `Konto ${account} ist kein Bilanzkonto.`);
   if (account === equity) throw refuse('equity', `Konto ${account} nimmt die Differenz der Eröffnung auf.`);
-  const currency = WS.bankAccounts.find((a) => a.account === account && a.currency !== baseCurrency())?.currency;
-  if (currency && amount !== null && (typeof native !== 'number' || !Number.isFinite(native))) {
-    throw refuse('foreign', `Konto ${account} führt ${currency}: seine Eröffnung braucht auch den Saldo in ${currency}.`, currency);
+  const currency = foreignAccounts(WS.bankAccounts).find((a) => a.account === account)?.currency;
+  if (!currency && native !== undefined) throw refuse('notForeign', `Konto ${account} führt ${baseCurrency()}: seine Eröffnung hat keinen Saldo in einer anderen Währung.`);
+  // `native: null` keeps a foreign account's opening without its balance in its currency, as older books had it: «Rückgängig» restores them.
+  if (currency && amount !== null && native !== null) {
+    if (typeof native !== 'number' || !Number.isFinite(native)) throw refuse('foreign', `Konto ${account} führt ${currency}: seine Eröffnung braucht auch den Saldo in ${currency}.`, currency);
+    if (Math.sign(native) !== Math.sign(amount as number)) throw refuse('foreignMismatch', `Konto ${account}: der Saldo in ${currency} und sein Wert in ${baseCurrency()} haben nicht das gleiche Vorzeichen, oder einer ist 0.`, currency);
   }
   withBooks(res, (books) => {
     const lock = openingLock(books, year);
@@ -713,7 +716,7 @@ router.put('/api/opening-balances/:year/:account', (req, res) => {
     if (next) books.config.openingBalances = next;
     else delete books.config.openingBalances;
     if (currency) {
-      const natives = withNativeOpening(books.config.openingBalancesNative, year, account, amount === null ? null : { amount: native as number, currency });
+      const natives = withNativeOpening(books.config.openingBalancesNative, year, account, amount === null || native === null ? null : { amount: native as number, currency });
       if (natives) books.config.openingBalancesNative = natives;
       else delete books.config.openingBalancesNative;
     }

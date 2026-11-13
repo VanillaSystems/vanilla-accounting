@@ -517,10 +517,16 @@ export interface BalanceSheet {
  * of the year before the books' open year holds that year's opening, which the person types in
  * Firma › Eröffnung (never written by the app). Undefined for any other receipt.
  */
+/** The day a balance sheet names as its own («Bilanz per 31.12.2025», «Bilan au …», «Bilancio al …», «as of …»), before any letterhead date. */
+function drawnUpFor(text: string): string | undefined {
+  const m = /\b(?:per|au|al|as of|zum|vom)\s+(\d{1,2})\.(\d{1,2})\.(\d{4})\b/i.exec(text);
+  return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : undefined;
+}
+
 export function balanceSheetOf(r: Receipt, books: Pick<Index, 'config' | 'transactions' | 'journalEntries'>, today: string): BalanceSheet | undefined {
   if (r.kind !== 'supporting' || noneWhyOf(r) !== 'balance-sheet') return undefined;
   // Its day as read, else as code reads it off the text («Bilanz per 31.12.2025»), so a Mac without an AI is offered it too.
-  const date = r.date ?? textFacts(r.extractedText ?? '').date;
+  const date = r.date ?? drawnUpFor(r.extractedText ?? '') ?? textFacts(r.extractedText ?? '').date;
   const year = booksOpenPeriod(books, today, filing().length).from.slice(0, 4);
   if (openingLock(books, year)) return { ...(date ? { date } : {}), opens: false };
   return { ...(date ? { date } : {}), year, opens: date === `${Number(year) - 1}-12-31` };

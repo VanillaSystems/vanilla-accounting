@@ -106,13 +106,18 @@ function BookDiff({ books, nav, diff, s, unbooked }: Props & { diff: number; s: 
       ) : null}
       {before ? (
         <span className="notice warn" style={{ margin: 0 }} data-testid="book-diff-before">{I.dot}
-          {t('bank.bookDiffBefore', { diff: fmt(before.diff), date: formatDate(before.from), currency: before.currency, bank: fmt(before.bank), books: fmt(before.books) })}{' '}
+          {/* With a rest, the gap is a part of the difference and says so («davon»); the rest's sentence then names «die übrigen» (#427 review). */}
+          {rest
+            ? t('bank.bookDiffBeforePart', { total: fmt(diff), diff: fmt(before.diff), date: formatDate(before.from), currency: before.currency, bank: fmt(before.bank), books: fmt(before.books) })
+            : t('bank.bookDiffBefore', { diff: fmt(before.diff), date: formatDate(before.from), currency: before.currency, bank: fmt(before.bank), books: fmt(before.books) })}{' '}
           {before.canType && <a href="#" onClick={toOpening}>{t('bank.openingShow')}</a>}
         </span>
       ) : null}
       {rest ? (
         <span className="notice warn" style={{ margin: 0 }} data-testid="book-diff">{I.dot}
-          {unbooked.n && toRappen(rest) === -toRappen(unbooked.sum) ? t('bank.bookDiffUnbooked', { diff: fmt(rest), n: unbooked.n }) : t('bank.bookDiff', { diff: fmt(rest) })}
+          {unbooked.n && toRappen(rest) === -toRappen(unbooked.sum)
+            ? t(before ? 'bank.bookDiffRestUnbooked' : 'bank.bookDiffUnbooked', { diff: fmt(rest), n: unbooked.n })
+            : t(before ? 'bank.bookDiffRest' : 'bank.bookDiff', { diff: fmt(rest) })}
         </span>
       ) : null}
     </div>

@@ -565,7 +565,7 @@ export const api = {
   },
 
   /** An account's opening balance of `year`; null takes it back (src/accounting/opening-balance.ts). A foreign-currency account's also takes its balance in its currency (`native`). */
-  setOpeningBalance: (year: string, account: string, amount: number | null, native?: number) =>
+  setOpeningBalance: (year: string, account: string, amount: number | null, native?: number | null) =>
     request<Ok>('PUT', `/api/opening-balances/${year}/${encodeURIComponent(account)}`, { amount, ...(native !== undefined && { native }) }),
 
   /** Firma › MWST › Nachdeklarationen (config.vatAdjustments): `id` on an add only puts a removed line back. */
