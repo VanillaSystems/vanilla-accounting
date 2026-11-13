@@ -82,7 +82,54 @@ test('«Nach Beleg buchen» on an over-claim books the receipt\'s rate on its ta
   assert.deepEqual(books.journalEntries.map((e) => evidenceCheck(e, [partly], '2026-09-30', undefined, books.journalEntries)), [undefined, undefined], 'the booking now fits its bill');
 });
 
+// ─── #493 review: a hotel bill of a room at 3.8 % and a Kurtaxe without VAT ─────────────────────
+
+/** The bill as the reader read it in the consultancy's round 7: the room's group, and «0 %» without an amount for the Kurtaxe. */
+const hotelRead = bill('hotel', 164, [{ ratePercent: 3.8, vat: 5.78, gross: 158 }, { ratePercent: 0, vat: 0 }]);
+const room = (vatCode: string, amount = 158) => line('room', amount, vatCode, { accountDebit: '6640' });
+const kurtaxe = (vatCode: string) => line('kurtaxe', 6, vatCode, { accountDebit: '6640' });
+
+test('#493 review: the hotel bill as read in round 7, room I38 and Kurtaxe I0: no finding, so no click books the Kurtaxe at 3.8 %', () => {
+  assert.deepEqual(check([room('I38'), kurtaxe('I0')], [hotelRead]), [undefined, undefined]);
+  assert.deepEqual(check([room('I38', 164)], [hotelRead])[0], { kind: 'receiptGroups', rate: 3.8, amount: 158, booked: 164, currency: 'CHF', lines: [{ amount: 158, code: 'I38' }, { amount: 6, code: 'I0' }], entries: ['room'], receipts: ['hotel'] }, 'the whole bill at 3.8 %');
+  assert.deepEqual(check([room('I38'), kurtaxe('I38')], [hotelRead])[0], { kind: 'receiptGroups', rate: 3.8, amount: 158, booked: 164, currency: 'CHF', lines: [{ amount: 158, code: 'I38' }, { amount: 6, code: 'I0' }], entries: ['room', 'kurtaxe'], receipts: ['hotel'] }, 'the Kurtaxe at 3.8 %');
+});
+
+test('#493 review: a gross read above what the tax proves (the total, a net of 164) never offers 3.8 % on the Kurtaxe; 164 at I38 is told', () => {
+  for (const [what, group] of [['gross 164', { ratePercent: 3.8, vat: 5.78, gross: 164 }], ['net 164', { ratePercent: 3.8, vat: 5.78, net: 164 }]] as const) {
+    const misread = bill('hotel', 164, [group]);
+    assert.deepEqual(check([room('I38'), kurtaxe('I0')], [misread]), [undefined, undefined], what);
+    const whole = check([room('I38', 164)], [misread])[0];
+    assert.deepEqual(whole && { ...whole }, { kind: 'receiptGroups', rate: 3.8, amount: 157.89, booked: 164, currency: 'CHF', lines: [{ amount: 157.89, code: 'I38' }, { amount: 6.11, code: 'I0' }], entries: ['room'], receipts: ['hotel'] }, `${what}: 5.78 proves 157.89`);
+  }
+  // The tax not read: the group proves no amount, the zero line beside the room is not told.
+  assert.deepEqual(check([room('I38'), kurtaxe('I0')], [bill('hotel', 164, [{ ratePercent: 3.8, vat: 0, gross: 164 }])]), [undefined, undefined], 'vat 0');
+});
+
 // ─── The app's own runs ─────────────────────────────────────────────────────────────────────────
+
+test('#493 review: capAtReceipts counts the lines at a rate together, takes a credit line into account, and leaves a group without its tax alone', () => {
+  let n = 0;
+  const id = () => `x${++n}`;
+  const parts = (es: JournalEntry[]) => es.map((e) => [e.id, e.accountDebit, e.amount, e.vatCode]);
+  assert.deepEqual(parts(capAtReceipts([room('I38'), kurtaxe('I38')], [hotelRead], id)), [['room', '6640', 158, 'I38'], ['kurtaxe', '6640', 6, 'I0']], 'room and Kurtaxe both at 3.8 %');
+  const split = bill('s', 150, [{ ratePercent: 8.1, gross: 100, vat: 7.49 }, { ratePercent: 0, gross: 50, vat: 0 }]);
+  assert.deepEqual(parts(capAtReceipts([line('a', 80, 'I81'), line('b', 70, 'I81', { accountDebit: '6510' })], [split], id)), [['a', '6500', 80, 'I81'], ['b', '6510', 20, 'I81'], ['x1', '6510', 50, 'I0']], 'spread over two accounts');
+  const slip = [line('a', 108.1, 'I81')];
+  assert.equal(capAtReceipts(slip, [bill('t', 108.1, [{ ratePercent: 8.1, vat: 0 }])], id), slip, 'a till slip «inkl. 8.1 % MWST» without its tax: nothing to compare');
+  assert.equal(capAtReceipts(slip, [bill('t', 108.1, [{ ratePercent: 8.1, net: 100, vat: 0 }])], id), slip, 'a net without its tax');
+  assert.equal(capAtReceipts(slip, [bill('t', 108.1, [{ ratePercent: 8.1, gross: 100, vat: 8.1 }])], id), slip, 'a net read for a gross: the tax proves 108.10');
+  const credit = [line('a', 120, 'I81'), line('b', -20, '-I81')];
+  assert.equal(capAtReceipts(credit, [tipped], id), credit, '120 less a credit of 20 on a bill of 100');
+});
+
+test('#493 review: the model books room and Kurtaxe at 3.8 % on the round-7 bill: the Kurtaxe goes to the zero code', async () => {
+  const entries = await book({ ...pay, amount: 164 }, [hotelRead], context, model([
+    { accountDebit: '6640', accountCredit: '', amount: 158, vatCode: 'I38', description: 'Übernachtung' },
+    { accountDebit: '6640', accountCredit: '', amount: 6, vatCode: 'I38', description: 'Kurtaxe' },
+  ]));
+  assert.deepEqual(entries.map((e) => [e.description, e.amount, e.vatCode]), [['Übernachtung', 158, 'I38'], ['Kurtaxe', 6, 'I0']]);
+});
 
 test('capAtReceipts: the rate on no more than the receipt taxes at it, the rest to a rate the receipt shows unused, then to the zero code', () => {
   let n = 0;

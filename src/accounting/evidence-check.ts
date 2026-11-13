@@ -135,14 +135,20 @@ function receiptGroups(receipts: readonly Receipt[], currency: string): { groups
     let slack = 0;
     let derived: number | undefined;
     for (const g of r.vatSummary ?? []) {
+      // A group at 0 % without an amount («0 %» and no figure, as the reader leaves the untaxed part) names nothing: its part is the rest.
+      if (g.ratePercent === 0 && g.gross === undefined && g.net === undefined) continue;
       const byTax = g.ratePercent > 0 && g.gross === undefined && g.net === undefined && g.vat !== undefined;
-      const gross = g.gross ?? (g.net !== undefined ? g.net + g.vat : byTax ? (g.vat * (100 + g.ratePercent)) / g.ratePercent : undefined);
+      let gross = g.gross ?? (g.net !== undefined ? g.net + g.vat : byTax ? (g.vat * (100 + g.ratePercent)) / g.ratePercent : undefined);
       if (gross === undefined || (g.ratePercent > 0 && !vat().isDomesticRate(g.ratePercent))) return undefined;
       if (byTax) { slack += (0.005 * (100 + g.ratePercent)) / g.ratePercent; derived = g.ratePercent; }
       if (g.ratePercent > 0) {
+        const proved = (Math.abs(g.vat) * (100 + g.ratePercent)) / g.ratePercent;
+        const rounding = (0.005 * (100 + g.ratePercent)) / g.ratePercent;
         if (!(Math.abs(g.vat) > 0)) untaxed.add(g.ratePercent);
-        taxed.set(g.ratePercent, (taxed.get(g.ratePercent) ?? 0) + (Math.abs(g.vat) * (100 + g.ratePercent)) / g.ratePercent);
-        taxSlack.set(g.ratePercent, (taxSlack.get(g.ratePercent) ?? 0) + (0.005 * (100 + g.ratePercent)) / g.ratePercent);
+        // A gross read above what its tax proves (the total read for the group's gross, a net for a gross): the group is what the tax proves, the rest is the rest (#469).
+        else if (Math.abs(gross) > proved + rounding) gross = cents(proved);
+        taxed.set(g.ratePercent, (taxed.get(g.ratePercent) ?? 0) + proved);
+        taxSlack.set(g.ratePercent, (taxSlack.get(g.ratePercent) ?? 0) + rounding);
       }
       add(g.ratePercent, Math.abs(gross));
       shown += Math.abs(gross);
@@ -353,9 +359,11 @@ export function evidenceCheck(e: JournalEntry, linked: readonly Receipt[], close
     const read = receiptGroups(own, currency);
     if (!read && own.some((r) => (r.currency ?? baseCurrency()) !== currency) && lines.some(taxedBeside)) return undefined;
     // The rate on the whole line only where the receipt taxes it whole, with what the lines beside it book at the rate (#469).
-    const at = read?.groups.get(shown);
+    // A group whose tax was not read proves no amount: beside a line at its rate the zero line may be the untaxed part, nothing is said.
+    const beside = lines.filter((l) => taxedBeside(l) && vat().codes.parse(l.vatCode!)!.rate === shown).reduce((s, l) => s + Math.abs(l.amount), 0);
+    if (read && !read.taxed.has(shown) && beside > TOLERANCE) return undefined;
+    const at = read?.taxed.has(shown) ? read.groups.get(shown) : undefined;
     if (read && at !== undefined) {
-      const beside = lines.filter((l) => taxedBeside(l) && vat().codes.parse(l.vatCode!)!.rate === shown).reduce((s, l) => s + Math.abs(l.amount), 0);
       const left = cents(at - beside);
       const amount = Math.abs(e.amount);
       if (amount > left + TOLERANCE + read.slack) {

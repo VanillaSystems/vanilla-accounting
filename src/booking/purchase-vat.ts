@@ -165,21 +165,28 @@ export function capAtBills(entries: JournalEntry[], bills: readonly Receipt[], c
  * rate. What a line books beyond goes first to a rate the receipts show and the lines leave unused
  * (the receipt's 2.6 % for a line the model put at 8.1 %), with the code of the line's family, and
  * the rest to the zero code of that family. Only where the receipts' VAT is known: every purchase
- * document read, in the lines' currency, each group at a rate of the jurisdiction; else, and for a
- * line in another currency, a minus code, or a code without a rate, the entries stay as they are.
+ * document read, in the lines' currency, each group at a rate of the jurisdiction with its tax
+ * read; else, and for a line in another currency, a minus code, or a code without a rate, the
+ * entries stay as they are. A group counts at the larger of its gross as read and the gross its tax
+ * proves (a net read for a gross never shaves a line); the lines at a rate count together, less a
+ * minus line at that rate of the same booking (a credit within the payment).
  */
 export function capAtReceipts(entries: JournalEntry[], documents: readonly Receipt[], newId: () => string): JournalEntry[] {
   const receipts = documents.filter(isPurchaseDocument);
   if (!receipts.length) return entries;
   const currency = receipts[0].currency ?? baseCurrency();
   if (receipts.some((r) => (r.currency ?? baseCurrency()) !== currency || r.hasSwissVat === undefined || (r.hasSwissVat && !r.vatSummary?.length)
-    || (r.hasSwissVat && r.vatSummary!.some((g) => g.ratePercent > 0 && !vat().isDomesticRate(g.ratePercent))))) return entries;
+    // A group at a rate without its tax read (a till slip that says only that the price includes the tax) proves no amount: nothing to compare.
+    || (r.hasSwissVat && r.vatSummary!.some((g) => g.ratePercent > 0 && (!vat().isDomesticRate(g.ratePercent) || !(Math.abs(g.vat) > 0)))))) return entries;
   const left = new Map<number, number>();
   const slack = new Map<number, number>();
   for (const r of receipts.filter((x) => x.hasSwissVat)) {
     for (const g of r.vatSummary!) {
       if (!(g.ratePercent > 0)) continue;
-      left.set(g.ratePercent, (left.get(g.ratePercent) ?? 0) + Math.abs(grossOf(g)));
+      // The gross its tax proves only where the gross read lies below it by more than the tax's rounding.
+      const proved = (Math.abs(g.vat) * (100 + g.ratePercent)) / g.ratePercent;
+      const read = Math.abs(grossOf(g));
+      left.set(g.ratePercent, (left.get(g.ratePercent) ?? 0) + (proved > read + (0.005 * (100 + g.ratePercent)) / g.ratePercent ? proved : read));
       if (g.gross === undefined && g.net === undefined) slack.set(g.ratePercent, (slack.get(g.ratePercent) ?? 0) + (0.005 * (100 + g.ratePercent)) / g.ratePercent);
     }
   }
@@ -188,8 +195,13 @@ export function capAtReceipts(entries: JournalEntry[], documents: readonly Recei
     const rate = m && !m[1] && !settlesVat(e.accountDebit) && !settlesVat(e.accountCredit) && (e.exchangeCurrency ?? baseCurrency()) === currency ? vat().codes.parse(e.vatCode!)?.rate : undefined;
     return rate ? { rate, family: m![2] } : undefined;
   };
-  if (!entries.some((e) => { const r = rated(e); return r && Math.abs(e.amount) > (left.get(r.rate) ?? 0) + 0.05 + (slack.get(r.rate) ?? 0); })) return entries;
-  // Each line first on its own rate, in order; then what is over goes to the rates left unused.
+  // A minus line at a rate takes back what a line at it claims in the same booking.
+  for (const e of entries) {
+    const m = ratedCode.exec(e.vatCode ?? '');
+    const rate = m?.[1] && (e.exchangeCurrency ?? baseCurrency()) === currency ? vat().codes.parse(e.vatCode!)?.rate : undefined;
+    if (rate) left.set(rate, (left.get(rate) ?? 0) + Math.abs(e.amount));
+  }
+  // Each line first on its own rate, in order, the lines at a rate together; then what is over goes to the rates left unused.
   const over = new Map<JournalEntry, number>();
   const kept = new Map<JournalEntry, number>();
   for (const e of entries) {
@@ -203,6 +215,7 @@ export function capAtReceipts(entries: JournalEntry[], documents: readonly Recei
     kept.set(e, keep);
     over.set(e, cents(amount - keep));
   }
+  if (!over.size) return entries;
   const boxes = vat().codes.purchaseBoxes;
   const out: JournalEntry[] = [];
   for (const e of entries) {

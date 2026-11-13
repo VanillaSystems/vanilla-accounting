@@ -592,7 +592,10 @@ Two markers flag an entry you must read before you update:
   (I81 on a whole bill whose tax covers only part of it, a tip on top of a bill, a Kurtaxe booked
   at 3.8 % beside the room, also on the whole card settlement). The task says «Der Beleg zeigt
   8.1 % MWST nur auf …, gebucht sind … auf I81», and «Nach Beleg buchen» books the receipt's rate on what it taxes and the rest at the zero code. A line at 0 %
-  alone on a receipt that names its tax only is offered the rate only on what that tax covers. The
+  alone on a receipt that names its tax only is offered the rate only on what that tax covers. A
+  hotel bill read as the room's group and «0 %» without an amount, booked room I38 and Kurtaxe I0,
+  is no longer told «Der Beleg zeigt 3.8 % MWST» on the Kurtaxe (whose click booked it at 3.8 %); a
+  group's gross read above what its tax proves counts as what the tax proves. The
   app's own runs book no such line where the receipt's VAT is known: a rule's or the model's rate
   goes on what the receipt taxes at it, the rest to another rate the receipt shows, then to the
   zero code, with the reason on the line. An under-claim and a line without a receipt are told as
