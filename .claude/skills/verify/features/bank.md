@@ -52,9 +52,8 @@ rows in tests/period-lock.test.ts).
   Bankspesen, ohne MWST …` (#359); with 6940 missing from the chart it stays unbooked and its form shows
   `[data-testid=note-bankChargesMissing]` («… aber dieses Konto fehlt im Kontenplan …»).
   Money in whose text names the number of the firm's own invoice among the receipts (issued by its UID or name,
-  its amount need not be read) shows `[data-testid=own-invoice]` (`data-receipt`, `data-from` invoice | other |
-  taxPoint; «Deine Rechnung 2026-031 gefunden …»; `[data-act=not-own-invoice]` drops it; across periods on the
-  agreed basis `[data-act=link-own-invoice]` only links). It proposes only what the invoice proves (a Swiss rate;
+  its amount need not be read) shows `[data-testid=own-invoice]` (`data-receipt`, `data-from` invoice | other;
+  «Deine Rechnung 2026-031 gefunden …»; `[data-act=not-own-invoice]` drops it). It proposes only what the invoice proves (a Swiss rate;
   `V0-E` for a place of supply abroad after «Leistungsort», src/accounting/sale-document.ts), revenue up to what is
   open of it (`[data-testid=note-ownInvoiceSurplus]`), and books with «Verknüpfen und buchen»
   (`POST /api/transactions/<ref>/entries` `links`, checked again: 409 `ownInvoiceTaken`). Where it proves nothing

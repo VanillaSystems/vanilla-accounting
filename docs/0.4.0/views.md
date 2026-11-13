@@ -351,8 +351,10 @@ the other's when they next open the books.
   money out takes the account only from a rule, a precedent or the business's file, with the
   receipt's rate (purchase documents only). A receipt gives a rate, never a code: the code follows
   the account in the field, and a proposed code follows it too (`followedVat`), until she sets one.
-  On the agreed basis a receipt dated in another period than the payment proposes no account and
-  says why: the hand path books on the payment's day. The line under the fields names each
+  On the agreed basis booking dates a line with a VAT code by its receipt, over the open item, as
+  the classifier does (`atTaxPoint`, #360), and the form says so when the receipt is of another
+  day (`[data-testid=note-taxPoint]`) or of a filed period (`note-taxPointCorrects`: the line
+  stays on the payment's day, declared in that period's correction). The line under the fields names each
   proposal still standing and its source. The account field ranks by the payment's direction and
   the account's class, then by the name, and a word that names a class («Ertrag», «Aufwand»;
   `accounts.words.*` of the dictionary) lists its accounts (`rankAccounts`,

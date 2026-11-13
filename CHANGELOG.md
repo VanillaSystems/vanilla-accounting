@@ -94,6 +94,14 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- **⚠ figures** Agreed basis (#360): a payment booked by hand dates each line with a VAT code by its
+  receipt and books it over Kreditoren or Debitoren, the payment settling that account on its own
+  day (an exchange difference to 6960), as the app's own booking does; a receipt of a filed quarter
+  leaves the line on the payment's day, declared in that quarter's Korrekturabrechnung, and one
+  from before the year the basis began leaves it as it is. Before, a hand line always took the
+  payment's day. The hand form now proposes the account across periods too and says where the line
+  goes; a payment naming the firm's own invoice of another period is booked from it, not only
+  linked. The cash basis is unchanged; payments booked already stay as they are.
 - Setup (#423): «MWST-Methode» and «Abrechnungsart» say where the owner finds her answer herself:
   in the ESTV portal, under «Neue Geschäfte» her firm, then «Anpassen» on the card «Abrechnungsmodalitäten», changing nothing; the Treuhand
   only when she has no access. «Abrechnungsart» no longer says that vereinbart applies unless the
