@@ -103,6 +103,17 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
     const root = q.get('asking');
     return root ? { name: q.get('name') || root, folder: q.get('folder') ?? 'other' } : undefined;
   });
+  /**
+   * Books in a folder macOS has not answered for to this version of the app (a later start after an
+   * update, src/desktop/start.ts unaskedPath, or a click on them in the list): the words before
+   * macOS's question, and the folder is read only on «Weiter» (#373).
+   */
+  const [unasked, setUnasked] = useState<{ root: string; name: string; folder: string } | undefined>(() => {
+    const q = new URLSearchParams(location.search);
+    const root = q.get('unasked');
+    return root ? { root, name: q.get('name') || root, folder: q.get('folder') ?? 'other' } : undefined;
+  });
+  const named = (folder: string): folder is 'documents' | 'desktop' | 'downloads' => folder === 'documents' || folder === 'desktop' || folder === 'downloads';
 
   /** The first look at what this Mac knows was taken. */
   const looked = useRef(false);
@@ -137,6 +148,8 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
       setError(errorText(e));
       if (e instanceof ApiError && e.body.code === 'oldLayout') setUpgradable(e.body.params.root);
       if (e instanceof ApiError && e.body.code === 'folderTaken') setProposed(e.body.params.free);
+      // «Nicht erlauben»: the words before the question go; the list shows the books with «Kein Zugriff» and the way in System Settings.
+      if (e instanceof ApiError && e.body.code === 'folderRefused') { setUnasked(undefined); void api.desktop.info().then(setInfo, () => undefined); }
       setBusy(false);
     }
   };
@@ -169,6 +182,18 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
                 ? t('desktop.access.asking', { folder: t(`desktop.access.folder.${asking.folder}`), name: asking.name })
                 : t('desktop.access.askingOther', { name: asking.name })}</p>
             ) : null}
+            {unasked ? (
+              <div className="st-note" data-unasked={unasked.folder}>
+                <p>{named(unasked.folder)
+                  ? t('desktop.access.openAsk', { folder: t(`desktop.access.folder.${unasked.folder}`), name: unasked.name })
+                  : t('desktop.access.openAskOther', { name: unasked.name })}</p>
+                <p>{t('desktop.access.openAskNo')}</p>
+                <button type="button" className="st-choice" data-act="open-unasked" disabled={busy} onClick={() => void run(() => api.desktop.open(unasked.root))}>
+                  <b>{t('desktop.access.openGo')}</b>
+                  <span>{named(unasked.folder) ? t('desktop.access.openGoHint', { folder: t(`desktop.access.folder.${unasked.folder}`) }) : t('desktop.access.openGoHintOther')}</span>
+                </button>
+              </div>
+            ) : null}
             <div className="st-choices">
               <button type="button" className="st-choice" data-act="open" disabled={busy} onClick={() => void chooseAndOpen()}>
                 <b>{t('desktop.open')}</b><span>{t('desktop.openHint')}</span>
@@ -192,8 +217,8 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
               <section className="st-recent">
                 <h2>{t('desktop.recent')}</h2>
                 {info.recent.map((b) => (
-                  <button key={b.root} type="button" className="st-book" data-tip={b.root} disabled={busy || (!b.name && !b.problem && !b.setup && !b.noAccess)} onClick={() => void run(() => api.desktop.open(b.root))}>
-                    <b>{b.demo ? t('desktop.demoName') : b.name ?? t(b.setup ? 'desktop.flow.unnamed' : b.noAccess ? 'desktop.access.refusedShort' : b.problem ? 'desktop.unreadable' : 'desktop.missing')}</b>{b.setup ? <span className="st-badge">{t('desktop.flow.inProgress')}</span> : null}{b.noAccess && b.name ? <span className="st-badge" data-no-access>{t('desktop.access.refusedShort')}</span> : null}<span className="mono">{b.root}</span>
+                  <button key={b.root} type="button" className="st-book" data-tip={b.root} disabled={busy || (!b.name && !b.problem && !b.setup && !b.noAccess && !b.unasked)} onClick={() => (b.unasked ? setUnasked({ root: b.root, name: b.demo ? t('desktop.demoName') : b.name ?? b.root, folder: b.unasked }) : void run(() => api.desktop.open(b.root)))}>
+                    <b>{b.demo ? t('desktop.demoName') : b.name ?? (b.unasked ? b.root.split('/').filter(Boolean).pop() : t(b.setup ? 'desktop.flow.unnamed' : b.noAccess ? 'desktop.access.refusedShort' : b.problem ? 'desktop.unreadable' : 'desktop.missing'))}</b>{b.setup ? <span className="st-badge">{t('desktop.flow.inProgress')}</span> : null}{b.noAccess && b.name ? <span className="st-badge" data-no-access>{t('desktop.access.refusedShort')}</span> : null}<span className="mono">{b.root}</span>
                     {b.problem && <small className="st-problem">{b.problem}</small>}
                     {b.noAccess && <small className="st-problem">{accessText(sayAccess, b.noAccess, b.root)}</small>}
                   </button>

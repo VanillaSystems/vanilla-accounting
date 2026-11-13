@@ -13,7 +13,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { desktopServer, listen, portOf, type DesktopServerOptions } from '../src/desktop/server.js';
-import { askingPath, firstPage } from '../src/desktop/start.js';
+import { askingPath, firstPage, unaskedPath } from '../src/desktop/start.js';
 import { protectedFolders, type ProtectedFolders, type Touch } from './support/protected-folders.js';
 
 const ANSWERS = {
@@ -50,7 +50,7 @@ test('a first start touches nothing under Documents, Desktop or Downloads until 
     assert.deepEqual(server.recent(), []);
     const http = await serve(server);
     const shown: string[] = [];
-    await firstPage({ last: undefined, reach: server.reach, open: server.open, current: server.current, pathOf: () => '/', asking: () => '/start?asking', show: (p) => shown.push(p) });
+    await firstPage({ last: undefined, reach: server.reach, answered: server.answered, unasked: () => '/start?unasked', open: server.open, current: server.current, pathOf: () => '/', asking: () => '/start?asking', show: (p) => shown.push(p) });
     assert.deepEqual(shown, ['/']);
     try {
       // The page of the first window, until her first click: the welcome screen and the look at this Mac's AI.
@@ -77,34 +77,75 @@ test('a first start touches nothing under Documents, Desktop or Downloads until 
   }
 });
 
-test('a later start with books in Documents reads them only asynchronously while macOS asks; the menu reads nothing (#373)', async () => {
+/** Books «Maler Huber GmbH» made in Documents by version `version` of the app, as the save panel's folder. */
+async function booksInDocuments(tcc: ProtectedFolders, version: string): Promise<string> {
+  const books = join(tcc.documents, 'Maler Huber');
+  const http = await serve(serverOn(tcc, { appVersion: version }));
+  try {
+    const made = await fetch(`${http.base}/api/desktop/create`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preset: 'consultant', name: 'Maler Huber GmbH', uid: 'CHE-153.004.184', owner: 'Sandra Huber', language: 'de', root: books, answers: ANSWERS, banks: [{ bank: 'UBS', currency: 'CHF' }] }),
+    });
+    assert.equal(made.status, 200, await made.text());
+  } finally {
+    http.close();
+  }
+  return books;
+}
+
+test('after an update the start reads nothing in Documents before she was told why macOS asks: the books open on her «Weiter» (#373, 2026-11-13)', async () => {
   const tcc = protectedFolders();
   try {
-    const books = join(tcc.documents, 'Maler Huber');
-    {
-      const setup = serverOn(tcc);
-      const http = await serve(setup);
-      try {
-        const made = await fetch(`${http.base}/api/desktop/create`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ preset: 'consultant', name: 'Maler Huber GmbH', uid: 'CHE-153.004.184', owner: 'Sandra Huber', language: 'de', root: books, answers: ANSWERS, banks: [{ bank: 'UBS', currency: 'CHF' }] }),
-        });
-        assert.equal(made.status, 200, await made.text());
-      } finally {
-        http.close();
-      }
-    }
-
-    // The next start: macOS asks again about Documents (the grant of the save panel lasted one run).
+    const books = await booksInDocuments(tcc, '0.4.1');
+    // The first start of the new version: an unsigned build lost macOS's permission with the update.
     tcc.start();
     tcc.hold();
-    const server = serverOn(tcc);
+    const server = serverOn(tcc, { appVersion: '0.4.2' });
+    assert.equal(server.answered(books), false, 'this version has no answer of macOS for Documents');
+    const http = await serve(server);
+    try {
+      const shown: string[] = [];
+      const unasked = (root: string) => unaskedPath(root, server.recent().find((b) => b.root === root)?.name ?? '', server.folderOf(root));
+      await firstPage({ last: books, reach: server.reach, answered: server.answered, unasked, open: server.open, current: server.current, pathOf: () => '/', asking: () => '/start?asking', show: (p) => shown.push(p), wait: async () => {} });
+      assert.deepEqual(shown, [`/start?${new URLSearchParams({ unasked: books, name: 'Maler Huber GmbH', folder: 'documents' })}`], 'the window says first why macOS will ask');
+      // The start screen's list names them from desktop.json, without a look into the folder.
+      const info = await (await fetch(`${http.base}/api/desktop`)).json();
+      assert.deepEqual(info.recent, [{ root: books, demo: false, name: 'Maler Huber GmbH', unasked: 'documents' }]);
+      assert.equal(info.homeAccess, undefined);
+      assert.deepEqual(tcc.touches, [], 'nothing under Documents before her click: macOS would ask over a screen that said nothing about it');
+
+      // «Weiter»: now macOS asks, and only asynchronously.
+      const opening = fetch(`${http.base}/api/desktop/open`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ root: books }) });
+      await tcc.asked();
+      await new Promise((r) => setTimeout(r, 50));
+      assert.deepEqual(tcc.frozen, [], 'no synchronous call under Documents before macOS answered');
+      tcc.answer();
+      assert.equal((await (await opening).json()).name, 'Maler Huber GmbH');
+      assert.equal(server.answered(books), true, 'the answer is kept for this version');
+      assert.equal((await (await fetch(`${http.base}/api/desktop`)).json()).homeAccess, 'allowed');
+    } finally {
+      http.close();
+    }
+  } finally {
+    tcc.stop();
+  }
+});
+
+test('a later start of the same version opens the books before the window; if macOS asks anyway, only asynchronously; the menu reads nothing (#373)', async () => {
+  const tcc = protectedFolders();
+  try {
+    const books = await booksInDocuments(tcc, '0.4.2');
+    // The next start: macOS answered this version already, yet asks again (the grant of the save panel lasted one run).
+    tcc.start();
+    tcc.hold();
+    const server = serverOn(tcc, { appVersion: '0.4.2' });
+    assert.equal(server.answered(books), true);
     assert.deepEqual(server.recent().map((b) => [b.root, b.name]), [[books, 'Maler Huber GmbH']], 'the menu names the books from desktop.json');
     assert.deepEqual(tcc.touches, [], 'the menu reads nothing under Documents');
     const shown: string[] = [];
     // The wait for the folder is over at once here: macOS's question takes longer than any wait.
     const asking = (root: string) => askingPath(root, server.recent().find((b) => b.root === root)?.name ?? '', server.folderOf(root));
-    const started = firstPage({ last: books, reach: server.reach, open: server.open, current: server.current, pathOf: () => '/', asking, show: (p) => shown.push(p), wait: async () => {} });
+    const started = firstPage({ last: books, reach: server.reach, answered: server.answered, unasked: () => '/start?unasked', open: server.open, current: server.current, pathOf: () => '/', asking, show: (p) => shown.push(p), wait: async () => {} });
     await tcc.asked();
     await new Promise((r) => setTimeout(r, 50));
     const waitingAt = `/start?${new URLSearchParams({ asking: books, name: 'Maler Huber GmbH', folder: 'documents' })}`;
@@ -119,7 +160,7 @@ test('a later start with books in Documents reads them only asynchronously while
     // The menu's «Zuletzt geöffnet» and the start screen's list open and look through the server too.
     tcc.forget();
     tcc.hold();
-    const again = serverOn(tcc);
+    const again = serverOn(tcc, { appVersion: '0.4.2' });
     const http = await serve(again);
     try {
       const listed = fetch(`${http.base}/api/desktop`).then((r) => r.json());
@@ -134,6 +175,74 @@ test('a later start with books in Documents reads them only asynchronously while
     } finally {
       http.close();
     }
+  } finally {
+    tcc.stop();
+  }
+});
+
+test('iCloud Drive, the cloud providers\' folders and the volumes count as asked about too, each volume and provider on its own (#373)', async () => {
+  const tcc = protectedFolders();
+  const icloud = join(tcc.home, 'Library', 'Mobile Documents', 'com~apple~CloudDocs');
+  const dropbox = join(tcc.home, 'Library', 'CloudStorage', 'Dropbox', 'Buchhaltung');
+  const stick = join(tcc.home, 'Volumes', 'STICK', 'Buchhaltung');
+  const share = join(tcc.home, 'Volumes', 'Treuhand', 'Buchhaltung');
+  for (const d of [icloud, dropbox, stick, share]) mkdirSync(d, { recursive: true });
+  const state = join(tcc.home, 'Library', 'Application Support', 'Vanilla Accounting', 'desktop.json');
+  const server = serverOn(tcc, { protectedFolders: { documents: tcc.documents, icloud: join(tcc.home, 'Library', 'Mobile Documents'), cloud: join(tcc.home, 'Library', 'CloudStorage'), volumes: join(tcc.home, 'Volumes') } });
+  try {
+    writeFileSync(state, JSON.stringify({ recent: [icloud, dropbox, stick], names: { [icloud]: 'Maler Huber GmbH' } }));
+    for (const d of [icloud, dropbox, stick, share]) assert.equal(server.answered(d), false, d);
+    assert.equal(server.answered(join(tcc.home, 'Buchhaltung')), true, 'a folder macOS guards not: read as ever');
+    assert.deepEqual((await server.info()).recent, [
+      { root: icloud, demo: false, name: 'Maler Huber GmbH', unasked: 'other' },
+      { root: dropbox, demo: false, unasked: 'other' },
+      { root: stick, demo: false, unasked: 'other' },
+    ]);
+    // Her «Weiter» for the stick: macOS answered for that volume, not for the network share.
+    assert.equal(await server.reach(stick), 'ok');
+    assert.equal(server.answered(stick), true);
+    assert.equal(server.answered(share), false, 'macOS asks per volume');
+    assert.equal(server.answered(dropbox), false);
+    assert.deepEqual(Object.keys(JSON.parse((await import('node:fs')).readFileSync(state, 'utf8')).access), ['volumes:STICK']);
+  } finally {
+    tcc.stop();
+  }
+});
+
+test('only a read that went through or macOS\'s refusal is kept as its answer; a missing folder is none (#373 review)', async () => {
+  const tcc = protectedFolders();
+  try {
+    const server = serverOn(tcc, { appVersion: 'b1' });
+    assert.equal(await server.reach(join(tcc.documents, 'Gibt es nicht')), 'missing');
+    assert.equal(server.answered(tcc.documents), false, 'a missing folder says nothing about macOS\'s answer');
+    assert.equal(await server.reach(join(tcc.documents)), 'ok');
+    assert.equal(server.answered(tcc.documents), true);
+  } finally {
+    tcc.stop();
+  }
+});
+
+test('two builds of one package version: the second asks first, since an ad hoc signed build is a new app to macOS; a Developer ID build keeps its answers per version (#373 review)', async () => {
+  const { answerKey, signedByDeveloperId } = await import('../src/desktop/build-key.js');
+  const rc56 = answerKey({ packageVersion: '0.4.2', build: '0.4.2-rc.56+g36b66d6', builtAt: '2026-11-13T09:00:00Z', developerId: false });
+  const rc57 = answerKey({ packageVersion: '0.4.2', build: '0.4.2-rc.57+g1a2b3c4', builtAt: '2026-11-13T15:00:00Z', developerId: false });
+  const rebuilt = answerKey({ packageVersion: '0.4.2', build: '0.4.2-rc.56+g36b66d6', builtAt: '2026-11-13T16:00:00Z', developerId: false });
+  assert.equal(new Set([rc56, rc57, rebuilt]).size, 3, 'every build its own key, a rebuild of one commit too');
+  const signed = (build: string) => answerKey({ packageVersion: '0.4.2', build, builtAt: build, developerId: true });
+  assert.equal(signed('0.4.2-rc.56+g36b66d6'), signed('0.4.2-rc.57+g1a2b3c4'), 'signed: kept across builds of the version');
+  assert.equal(signedByDeveloperId('Executable=/Applications/Vanilla Accounting.app/Contents/MacOS/Vanilla Accounting\nAuthority=Developer ID Application: Muster AG (ABCDE12345)\nAuthority=Developer ID Certification Authority\n'), true);
+  assert.equal(signedByDeveloperId('Executable=/Applications/Vanilla Accounting.app/Contents/MacOS/Vanilla Accounting\nSignature=adhoc\n'), false);
+
+  const tcc = protectedFolders();
+  try {
+    const books = await booksInDocuments(tcc, rc56);
+    tcc.start();
+    const server = serverOn(tcc, { appVersion: rc57 });
+    assert.equal(server.answered(books), false, 'rc.57 has no answer of macOS, though rc.56 of the same 0.4.2 had');
+    const shown: string[] = [];
+    await firstPage({ last: books, reach: server.reach, answered: server.answered, unasked: () => '/start?unasked', open: server.open, current: server.current, pathOf: () => '/', asking: () => '/start?asking', show: (p) => shown.push(p), wait: async () => {} });
+    assert.deepEqual(shown, ['/start?unasked'], 'the words come before macOS asks');
+    assert.deepEqual(tcc.touches, []);
   } finally {
     tcc.stop();
   }
@@ -161,9 +270,13 @@ test('a folder macOS refuses (EPERM) and one whose rights refuse (EACCES) are to
       assert.deepEqual(e.refusal, { code: 'folderRefused', params: { root: inDownloads, folder: 'downloads', why: 'rights' } });
       return true;
     });
-    // The start screen's list: the name desktop.json keeps, with why.
+    // The start screen's list: the name desktop.json keeps, with why. macOS answered for both folders
+    // to this version (the Desktop's «Nicht erlauben» was kept just now; Downloads allowed before).
     const state = join(tcc.home, 'Library', 'Application Support', 'Vanilla Accounting', 'desktop.json');
-    writeFileSync(state, JSON.stringify({ recent: [onDesktop, inDownloads], names: { [onDesktop]: 'Maler Huber GmbH' } }));
+    const { readFileSync } = await import('node:fs');
+    const access = { ...JSON.parse(readFileSync(state, 'utf8')).access, downloads: { answer: 'allowed', version: '' } };
+    assert.deepEqual(access.desktop, { answer: 'refused', version: '' }, '«Nicht erlauben» is macOS\'s answer, kept');
+    writeFileSync(state, JSON.stringify({ recent: [onDesktop, inDownloads], names: { [onDesktop]: 'Maler Huber GmbH' }, access }));
     const recent = (await (await fetch(`${http.base}/api/desktop`)).json()).recent;
     assert.deepEqual(recent, [
       { root: onDesktop, demo: false, name: 'Maler Huber GmbH', noAccess: { folder: 'desktop', why: 'privacy' } },
@@ -182,7 +295,7 @@ test('the books opened last open before the window when their folder answers at 
   const asking = () => '/start?asking';
   await firstPage({
     last: books.root, reach: async () => { order.push('reach'); return 'ok'; }, open: async (r) => { order.push(`open ${r}`); return books; }, current: () => undefined,
-    pathOf: (b) => (b ? '/' : '/start'), asking, show: (p) => order.push(`show ${p}`), wait: () => new Promise(() => {}),
+    answered: () => true, unasked: () => '/start?unasked', pathOf: (b) => (b ? '/' : '/start'), asking, show: (p) => order.push(`show ${p}`), wait: () => new Promise(() => {}),
   });
   assert.deepEqual(order, ['reach', `open ${books.root}`, 'show /'], 'as before #373: no start screen flashes before the books');
 
@@ -190,7 +303,7 @@ test('the books opened last open before the window when their folder answers at 
   let answer: (r: string) => void = () => {};
   const started = firstPage({
     last: books.root, reach: () => new Promise<string>((r) => { answer = r; }), open: async (r) => { order.push(`open ${r}`); return books; },
-    current: () => ({ root: '/Users/sandra/Demo' }), pathOf: () => '/', asking, show: (p) => order.push(`show ${p}`), wait: async () => {},
+    current: () => ({ root: '/Users/sandra/Demo' }), answered: () => true, unasked: () => '/start?unasked', pathOf: () => '/', asking, show: (p) => order.push(`show ${p}`), wait: async () => {},
   });
   await new Promise((r) => setTimeout(r, 10));
   answer('ok');
@@ -200,7 +313,7 @@ test('the books opened last open before the window when their folder answers at 
   order.length = 0;
   const refused = firstPage({
     last: books.root, reach: () => new Promise<string>((r) => { answer = r; }), open: async (r) => { order.push(`open ${r}`); return books; },
-    current: () => null, pathOf: () => '/', asking, show: (p) => order.push(`show ${p}`), wait: async () => {},
+    current: () => null, answered: () => true, unasked: () => '/start?unasked', pathOf: () => '/', asking, show: (p) => order.push(`show ${p}`), wait: async () => {},
   });
   await new Promise((r) => setTimeout(r, 10));
   answer('refused');
@@ -309,4 +422,27 @@ test('the look for the AI\'s programs never looks into Documents, Desktop or Dow
   } finally {
     if (pinned !== undefined) process.env.CLAUDE_BIN = pinned;
   }
+});
+
+test('desktop.json of 0.4.1 kept the Documents answer as homeAccess: read as the Documents folder\'s answer (#373)', async () => {
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { readState } = await import('../src/desktop/state.js');
+  const file = join(mkdtempSync(join(tmpdir(), 'vanilla-state-')), 'desktop.json');
+  writeFileSync(file, JSON.stringify({ recent: [], homeAccess: { answer: 'allowed', version: '0.4.1' } }));
+  assert.deepEqual(readState(file).access, { documents: { answer: 'allowed', version: '0.4.1' } });
+  writeFileSync(file, JSON.stringify({ recent: [], access: { desktop: { answer: 'refused', version: '0.4.2' }, downloads: { answer: 'maybe', version: '0.4.2' } } }));
+  assert.deepEqual(readState(file).access, { desktop: { answer: 'refused', version: '0.4.2' } }, 'an answer macOS cannot give is dropped');
+});
+
+test('the phone listens again when the first books open, once, not at the start (#373 review)', async () => {
+  const { resumeOnce } = await import('../src/desktop/start.js');
+  let resumed = 0;
+  const onOpen = resumeOnce(async () => { resumed++; });
+  assert.equal(resumed, 0, 'nothing before books open');
+  onOpen();
+  assert.equal(resumed, 1, 'the first open starts the listener again');
+  onOpen();
+  onOpen();
+  assert.equal(resumed, 1, 'later opens leave it as it is');
 });

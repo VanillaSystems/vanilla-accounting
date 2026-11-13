@@ -448,6 +448,15 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Mac app (#373): no question of macOS comes before the app said why. At the first start of
+  another build (an unsigned build is a new app to macOS each time, rc to rc too), books in
+  Documents, Desktop, Downloads, iCloud Drive, a cloud provider's folder or on a volume are no
+  longer read before the window: the start screen says «Deine Buchhaltung … liegt im Ordner «Dokumente».
+  Gleich fragt macOS …» and opens them on «Weiter»; their entry in «Zuletzt geöffnet» (start
+  screen and menu) shows the same words first. The chat's microphone says, before macOS first
+  asks about the microphone and the speech recognition, what both are for; «Prüfen» of a source
+  that reads the Mail app says that macOS will ask whether the app may control Mail. The phone's
+  listener (Firma › Handy, which the firewall may ask about) starts again only once books are open.
 - A drop in which the AI's booking of one payment was refused (#482) no longer leaves stuck runs
   «Eingang verarbeiten: Lauf steckt» behind the task badge. The run finishes, and the payment says
   why it waits, as #470 meant. «Automatisch buchen» on such a payment goes on to «Von Hand
