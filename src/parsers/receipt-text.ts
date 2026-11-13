@@ -8,7 +8,7 @@ import type { Receipt, VatRateGroup } from '../types/index.js';
 import type { DocumentsData } from '../core/modules/schema.js';
 import { documentWordsInUse } from '../books/statement-facts.js';
 import { HEAD, firstOf, namesStatement, wordsRe } from '../core/modules/words.js';
-import { invoicing } from '../engines/index.js';
+import { invoicing, vat as vatEngine } from '../engines/index.js';
 
 // A Swiss UID survives text extraction in more shapes than one: extraction wraps it across
 // lines ("#CHE-\n153.004.184 MWST" on Shopify's bills, the same break after "CHE-" on some
@@ -77,6 +77,12 @@ const NOT_TOTAL = /exkl|excl|netto|zwischen|sub/i;
 const CURRENCY = /\bCHF\b|\bFr\.|\bEUR\b|€|\bUSD\b|US\$/g;
 /** A Swiss rate as a percent anywhere in the text, with or without a VAT word beside it («8.1%», «2,6 %», «3.8 Prozent»). */
 export const SWISS_PERCENT = new RegExp(String.raw`(?<![\d.,])(?:${RATES.map((r) => String(r).replace('.', '[.,]')).join('|')})\s*(?:%|Prozent|pour ?cent|per ?cento)`, 'i');
+/** A rate of the jurisdiction as a percent anywhere in the text, today's or a superseded one (rates.yaml: «7.7 %» of 2023). */
+const namesDomesticRate = (text: string): boolean =>
+  [...text.matchAll(/(?<![\d.,])(\d{1,2}(?:[.,]\d{1,2})?)\s*(?:%|Prozent|pour ?cent|per ?cento)/giu)].some((m) => {
+    const rate = Number(m[1].replace(',', '.'));
+    return rate > 0 && vatEngine().isDomesticRate(rate);
+  });
 /** A line that states an amount of VAT («MWST-Betrag 8.1% 81.00», «Total MWST», «Montant TVA»): no total of the document, unless it says the total includes the VAT. */
 const VAT_WORD = /MWST|MwSt|Mehrwertsteuer|TVA|IVA|\bVAT\b|\bUSt\b|Steuer/i;
 const VAT_INCLUDED = /inkl|incl|inclus|compris|enthalten|darin|davon|TTC/i;
@@ -323,9 +329,11 @@ export function textFacts(text: string, words: DocumentsData | undefined = docum
   const line = labelled?.line;
   const currency = amount === undefined ? undefined : currencyIn(line ?? '') ?? currencyIn(text);
   // «No Swiss VAT» only when said in words (documents.yaml noVat) and nothing on the receipt speaks of Swiss VAT: no rate group, no
-  // Swiss rate as a percent anywhere, no Swiss VAT number with its «MWST». Silence is never read as it.
+  // Swiss rate as a percent anywhere (a superseded one too), no Swiss VAT number with its «MWST», no wording that a price includes the
+  // VAT («Flyer inkl. MWST» beside «Porto nicht MWST-pflichtig»). Silence is never read as it.
   const says = !!words?.noVat?.length && wordsRe(words.noVat).test(text);
-  const noSwissVat = says && !groups && !SWISS_PERCENT.test(text) && !vatId;
+  const included = invoicing().vatIncluded ?? [];
+  const noSwissVat = says && !groups && !namesDomesticRate(text) && !vatId && !(included.length && wordsRe(included).test(text));
   return {
     ...(date ? { date } : {}),
     ...(amount !== undefined ? { amount } : {}),

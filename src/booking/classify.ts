@@ -18,6 +18,7 @@ import { isVatAmountCode } from '../accounting/validate.js';
 import { periodLock, type Books, type PeriodLock } from '../books/store.js';
 import type { BankTransaction, BookedBy, JournalEntry, Receipt } from '../types/index.js';
 import { isPurchaseDocument } from '../accounting/evidence-check.js';
+import { vatNotRead } from '../accounting/receipt-due.js';
 import type { ClassifyRefusal } from '../types/api-error.js';
 import { loadCases, OWN_HISTORY_THRESHOLD, selectCases, type BookingCase } from '../knowledge/cases.js';
 import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
@@ -925,6 +926,14 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         continue;
       }
       if (customs) customsNotes.set(tx, customs.note);
+    }
+    // A payment out whose purchase receipts nobody has read yet waits for the VAT step instead of the model's guess at its input tax (#391).
+    const notRead = !placed && ask && tx.direction === 'DBIT' && !withoutInputTax() ? mappedReceipts(books, tx).filter(isPurchaseDocument) : [];
+    if (notRead.length && notRead.every(vatNotRead)) {
+      const receipt = notRead.map((r) => r.originalFilename ?? r.filename).join(', ');
+      log(`  ${tx.ref}  waits: the VAT of its receipt is not read yet (${receipt})`);
+      outcome.failed.push({ ref: tx.ref, reason: `Die MWST des Belegs ${receipt} ist noch nicht gelesen: nichts gebucht. Die App liest sie beim nächsten Lauf und bucht die Zahlung dann; oder trage die MWST beim Beleg unter Angaben ein.`, refusal: { code: 'classifyVatNotRead', params: { receipt } } });
+      continue;
     }
     if (!placed || !then) { toModel.push(tx); continue; }
     if (then.kind === 'book') {

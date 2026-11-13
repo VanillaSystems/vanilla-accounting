@@ -124,7 +124,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/accounting/vat-codes.source.ts` | MWST 3, ESTV 1, Ziffer 4, tax code 89 |
 | `src/accounting/vat-codes.ts` | MWST 3, ESTV 2, Ziffer 6, tax code 1 |
 | `src/accounting/year-close.ts` | CHF 12, MWST 2, ESTV 3, Ziffer 1, form 0535 3, camt.053 1, Rappen 1 |
-| `src/booking/classify.ts` | MWST 1, ESTV 1, Rappen 1 |
+| `src/booking/classify.ts` | MWST 2, ESTV 1, Rappen 1 |
 | `src/collect/tutti.ts` | CHF 8, MWST 1 |
 | `src/intake/match.ts` | CHF 1 |
 | `src/intake/read.ts` | camt.053 4 |
@@ -139,7 +139,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/invoices/texts.ts` | MWST 5 |
 | `src/knowledge/cases.ts` | MWST 5, ESTV 4, Ziffer 4, camt.053 1 |
 | `src/knowledge/layers.ts` | CHF 1 |
-| `src/parsers/receipt-text.ts` | CHF 5, MWST 20, UID 3 |
+| `src/parsers/receipt-text.ts` | CHF 5, MWST 21, UID 3 |
 
 ## infrastructure
 
@@ -186,7 +186,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 44, MWST 404, ESTV 51, Ziffer 61, form 0535 1, UID 1, camt.053 24, QR-bill 1, Rappen 3 |
+| `src/app/i18n/locales/de.ts` | CHF 44, MWST 405, ESTV 51, Ziffer 61, form 0535 1, UID 1, camt.053 24, QR-bill 1, Rappen 3 |
 | `src/app/i18n/locales/en.ts` | CHF 44, MWST 5, ESTV 30, form 0535 1, UID 1, camt.053 24, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 44, MWST 1, form 0535 1, UID 1, camt.053 24, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 44, MWST 1, form 0535 1, UID 1, camt.053 24, QR-bill 1 |

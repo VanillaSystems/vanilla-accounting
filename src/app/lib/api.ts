@@ -209,6 +209,7 @@ export function errorText(e: unknown): string {
     }
     case 'classifySeparateFee': return t('error.classifySeparateFee', { fee: b.params.fee, amount: `${b.params.currency} ${fmt(b.params.amount)}` });
     case 'classifyOpenInvoice': return t('error.classifyOpenInvoice', b.params);
+    case 'classifyVatNotRead': return t('error.classifyVatNotRead', b.params);
     case 'classifyInputTaxShared': return t('error.classifyInputTaxShared', { payments: b.params.payments, booked: `${b.params.currency} ${fmt(b.params.booked)}`, shown: `${b.params.currency} ${fmt(b.params.shown)}` });
     case 'personsBooking': return t('error.personsBooking', { n: b.params.entries });
     case 'fileExists': return t('error.fileExists', b.params);

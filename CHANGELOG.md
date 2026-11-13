@@ -333,12 +333,16 @@ Two markers flag an entry you must read before you update:
 ### Fixed
 
 - A receipt that names no VAT is «MWST noch nicht gelesen», no longer «keine CH-MWST» (#391).
-  Only a model, or the receipt's own words («ohne MWST», «not subject to Swiss VAT», «von der MWST
-  ausgenommen»), say it carries no Swiss VAT; the next run with an AI reads it. So a rule drafted on
-  such receipts asks for the VAT instead of filling «keine», and Bezugsteuer is no longer booked
-  because a receipt said nothing. Its payment does not wait because of it. A VAT word counts only
-  as a word: «August», «Muster» and «Industrie» are no longer read as «USt». TVA, IVA and a UID
-  written with spaces («CHE 111.222.333 TVA») count now.
+  Only a model, or the receipt's own words («nicht MWST-pflichtig», «not subject to Swiss VAT», «von
+  der MWST ausgenommen», never beside «inkl. MWST» or a Swiss rate, 7.7 % too), say it carries no
+  Swiss VAT; the next run with an AI reads it. Nothing claims input tax on such a receipt: with an
+  AI its payment waits until the receipt is read («Die MWST des Belegs … ist noch nicht gelesen:
+  nichts gebucht»), a rate code the AI or a rule writes on it becomes the zero code, and the
+  company's «unlesbarer Beleg zählt als 8.1 %» counts only a receipt that could not be read. A rule
+  drafted on such receipts asks for the VAT instead of filling «keine», and Bezugsteuer is no longer
+  booked because a receipt said nothing. A VAT word counts only as a word: «August», «Muster» and
+  «Industrie» are no longer read as «USt». TVA, IVA and a UID written with spaces («CHE 111.222.333
+  TVA») count now.
 - Firma › Eröffnung (#427): a foreign-currency bank account is no longer refused with a terminal
   command. Typed, it shows a second field: its value in CHF and its balance in its own currency,
   as the balance sheet shows both; the statements are checked against the latter. Beside them the

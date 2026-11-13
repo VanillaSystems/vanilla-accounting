@@ -145,7 +145,7 @@ steps:
 
 test('an unread receipt of a business whose company file counts it as 8.1 %: the model\'s I0 becomes I81 by code, naming the company\'s rule', async () => {
   const k = knowledgeWith({ station: STATION_HOUSE });
-  const [e] = await book(pay('Tankstelle Muster Dorf', 'DBIT', 80), [receipt({ amount: 80 })], [line('6200', '', 80, 'I0')], contextOf(k));
+  const [e] = await book(pay('Tankstelle Muster Dorf', 'DBIT', 80), [receipt({ amount: 80, needsVisionReview: true })], [line('6200', '', 80, 'I0')], contextOf(k));
   assert.deepEqual(fields(e), ['6200', 'I81', CODE]);
   assert.match(e.reason ?? '', /station-unread der Firma/);
 });
@@ -153,9 +153,9 @@ test('an unread receipt of a business whose company file counts it as 8.1 %: the
 test('an unread receipt without a company rule is no evidence, also of a business the app knows charges VAT: the model\'s code stands either way', async () => {
   const k = knowledgeWith();
   for (const who of ['Kiosk Ecke', 'Tankstelle Muster Dorf']) {
-    const [zero] = await book(pay(who, 'DBIT', 80), [receipt({ amount: 80 })], [line('6200', '', 80, 'I0')], contextOf(k));
+    const [zero] = await book(pay(who, 'DBIT', 80), [receipt({ amount: 80, needsVisionReview: true })], [line('6200', '', 80, 'I0')], contextOf(k));
     assert.deepEqual(fields(zero), ['6200', 'I0', MODEL], who);
-    const [rated] = await book(pay(who, 'DBIT', 80), [receipt({ amount: 80 })], [line('6200', '', 80, 'I81')], contextOf(k));
+    const [rated] = await book(pay(who, 'DBIT', 80), [receipt({ amount: 80, needsVisionReview: true })], [line('6200', '', 80, 'I81')], contextOf(k));
     assert.deepEqual(fields(rated), ['6200', 'I81', MODEL], who);
   }
 });
@@ -198,7 +198,7 @@ test('a firm on the net tax rate method books its purchases without a code, what
   setJurisdiction(ch, netRate);
   try {
     const k = knowledgeWith({ station: STATION_HOUSE });
-    const [fuel] = await book(pay('Tankstelle Muster Dorf', 'DBIT', 80), [receipt({ amount: 80 })], [line('6200', '', 80, 'I0')], contextOf(k, netRate));
+    const [fuel] = await book(pay('Tankstelle Muster Dorf', 'DBIT', 80), [receipt({ amount: 80, needsVisionReview: true })], [line('6200', '', 80, 'I0')], contextOf(k, netRate));
     assert.deepEqual(fields(fuel), ['6200', '', MODEL]);
     const [, fee] = await book(pay('Plattform Auszahlung', 'CRDT', 95), [], [line('', '3400', 100, 'F1'), line('6580', '1020', 5, 'I81')], contextOf(k, netRate));
     assert.deepEqual(fields(fee), ['6580', '', MODEL]);
@@ -210,7 +210,7 @@ test('a firm not registered for VAT books every line without a code', async () =
   setJurisdiction(ch, unregistered);
   try {
     const k = knowledgeWith({ station: STATION_HOUSE });
-    const [fuel] = await book(pay('Tankstelle Muster Dorf', 'DBIT', 80), [receipt({ amount: 80 })], [line('6200', '', 80, 'I81')], contextOf(k, unregistered));
+    const [fuel] = await book(pay('Tankstelle Muster Dorf', 'DBIT', 80), [receipt({ amount: 80, needsVisionReview: true })], [line('6200', '', 80, 'I81')], contextOf(k, unregistered));
     assert.deepEqual(fields(fuel), ['6200', '', MODEL]);
   } finally { setJurisdiction(ch); }
 });

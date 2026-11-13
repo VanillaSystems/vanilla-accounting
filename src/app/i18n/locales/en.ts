@@ -466,6 +466,7 @@ export default {
     'error.classifyAccount': 'Claude’s answer had an entry without an account («{description}»): nothing was booked, the payment stays as it was.',
     'error.classifySeparateFee': 'Claude’s answer has a line of {amount} in the payment, as much as the fee the bank debits separately ({fee}): nothing was booked, the payment stays as it was.',
     'error.classifyInputTaxShared': 'The input tax of this payment together with {payments} would come to {booked}, while the receipt shows only {shown} VAT: nothing was booked. Each payment of the card charge carries only its share of the VAT; book it by hand.',
+    'error.classifyVatNotRead': 'The VAT of the receipt {receipt} is not read yet: nothing was booked. The app reads it in the next run and books the payment then; or enter the VAT on the receipt under Details.',
     'error.classifyOpenInvoice': 'The payment could pay invoice {number} of {customer}, whose revenue is booked with the invoice already: nothing was booked. Confirm the payment under Invoices › {number}, or book it by hand.',
     'error.classifyUnknownAccount': 'Claude’s answer booked on account {account} («{description}»), which the chart of accounts does not have: nothing was booked, the payment stays as it was. Add the account (Firma › Kontenplan) or book it by hand.',
     'error.classifyUnknownVatCode': 'Claude’s answer booked with the VAT code {code} («{description}»), which the app does not know: nothing was booked, the payment stays as it was. Classify again or book it by hand.',

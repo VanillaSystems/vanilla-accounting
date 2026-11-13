@@ -33,6 +33,14 @@ export function isUnreadable(r: Pick<Receipt, 'kind' | 'vatBy' | 'hasSwissVat' |
 }
 
 /**
+ * A purchase document whose VAT nobody has read yet (#391): no facts, and not one that could not be
+ * read (isUnreadable). The VAT step takes it up on its next run; until then it shows no rate either way.
+ */
+export function vatNotRead(r: Pick<Receipt, 'kind' | 'vatBy' | 'hasSwissVat' | 'vatSummary' | 'needsVisionReview' | 'vatExtractedAt'>): boolean {
+  return isPurchaseDocument(r) && r.vatBy !== 'human' && r.hasSwissVat === undefined && !r.vatSummary?.length && !isUnreadable(r);
+}
+
+/**
  * What the receipts linked to a payment say: none, at least one readable, only purchase documents
  * whose VAT could not be read, or (`short`, given the payment `tx`) part of a set: two or more
  * receipts in the payment's currency that add up to less than it paid out, by more than a
