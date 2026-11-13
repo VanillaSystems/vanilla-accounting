@@ -8,7 +8,7 @@
  * until it is answered.
  */
 import { randomBytes } from 'node:crypto';
-import { saleProposal, saleQuestionGone, salesWithoutInvoice } from '../accounting/sales-without-vat.js';
+import { orderProposal, saleProposal, saleQuestionGone, salesWithoutInvoice, type PaidElsewhere } from '../accounting/sales-without-vat.js';
 import type { BankTransaction, Index } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { appendQuestionLine, readQuestions } from '../questions/store.js';
@@ -19,12 +19,12 @@ export const APP_ASKER = 'app';
 
 const day = (iso: string) => iso.split('-').reverse().join('.');
 
-/** The app's question about the sale `tx`, asked as of `at`. */
-export function saleQuestionLine(ws: Pick<Workspace, 'company'>, tx: BankTransaction, at: string): Extract<QuestionLine, { event: 'asked' }> {
+/** The app's question about the sale `tx`, asked as of `at`; `orders`: the orders of the providers' exports they did not collect, one of which the payment may name (#406). */
+export function saleQuestionLine(ws: Pick<Workspace, 'company'>, tx: BankTransaction, at: string, orders: readonly PaidElsewhere[] = []): Extract<QuestionLine, { event: 'asked' }> {
   const who = tx.counterparty || tx.description;
   return {
     v: 1, event: 'asked', id: `q-${randomBytes(4).toString('hex')}`, at, by: APP_ASKER, to: ws.company.owner, origin: 'booking', topic: 'saleVat',
-    on: { kind: 'payment', id: tx.ref }, choices: [...SALE_CHOICES], proposal: saleProposal(tx),
+    on: { kind: 'payment', id: tx.ref }, choices: [...SALE_CHOICES], proposal: orderProposal(tx, orders) ?? saleProposal(tx),
     text: `Kundenzahlung ohne Rechnung: ${who}, ${tx.currency} ${tx.amount.toFixed(2)} am ${day(tx.date)}. Ein Verkauf im Inland, ins Ausland, oder kein Umsatz?`,
   };
 }
@@ -34,7 +34,7 @@ export function saleQuestionLine(ws: Pick<Workspace, 'company'>, tx: BankTransac
  * answered or withdrawn) is never asked again. First closes the questions whose reason went away.
  * Returns the questions it asked.
  */
-export function askSalesWithoutVat(ws: Pick<Workspace, 'paths' | 'company'>, books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'config'>, at = new Date().toISOString()): Question[] {
+export function askSalesWithoutVat(ws: Pick<Workspace, 'paths' | 'company'>, books: Pick<Index, 'transactions' | 'journalEntries' | 'mappings' | 'config'>, at = new Date().toISOString(), orders: readonly PaidElsewhere[] = []): Question[] {
   closeGoneSaleQuestions(ws, books, at);
   const sales = salesWithoutInvoice(books, ws.company.vat.registered);
   if (!sales.length) return [];
@@ -42,7 +42,7 @@ export function askSalesWithoutVat(ws: Pick<Workspace, 'paths' | 'company'>, boo
   const ids: string[] = [];
   for (const { payment: tx } of sales) {
     if (asked.has(tx.ref)) continue;
-    const line = saleQuestionLine(ws, tx, at);
+    const line = saleQuestionLine(ws, tx, at, orders);
     appendQuestionLine(ws, line, books.config?.closedThrough);
     ids.push(line.id);
   }

@@ -130,6 +130,8 @@ export interface VatReturn {
   adjustments: VatAdjustment[];
   /** Entries booked later in an open quarter that correct this one (`corrects`). */
   corrections: JournalEntry[];
+  /** A filing period's figures as the return files them (vat().figures, the review and the XML): a rate row's turnover from here (#406). */
+  filed?: Record<string, number>;
 }
 
 /** The return a period shows: its own when it is an ESTV period, else the open quarter's. */
@@ -163,16 +165,22 @@ export function vatReturn(books: Index, key: string, today: IsoDate = localToday
     lines,
     adjustments: vat().adjustmentsFor(all, entries, key),
     corrections: quarter ? entries.filter((e) => e.corrects === key) : [],
+    ...(quarter ? { filed: vat().figures(entries, key as QuarterKey, all).ziffern } : {}),
   };
 }
 
 export const amountOf = (v: VatReturn, n: string) => v.report.ziffern.find((z) => z.number === n)?.amount ?? 0;
 export const rateOf = (v: VatReturn, n: string): VatReport['rates'][number] | undefined => v.report.rates.find((r) => r.row.ziffer === n);
 
-/** A Ziffer's figure as the filed form holds it: a rate row is its turnover, with the tax for supplies, net for Bezugsteuer. */
+/**
+ * A Ziffer's figure as the filed form holds it: a rate row is its turnover, with the tax for supplies, net for Bezugsteuer.
+ * A filing period's is the figure the return files (`filed`): the nets rounded per entry plus the tax on the total
+ * are Rappen off the gross the bookings hold (#406); a year, which files nothing, adds them.
+ */
 export function formAmount(v: VatReturn, n: string): number {
   const r = rateOf(v, n);
   if (!r) return amountOf(v, n);
+  if (v.filed?.[n] !== undefined) return v.filed[n];
   return r.row.kind === 'supply' ? Math.round((r.base + r.tax) * 100) / 100 : r.base;
 }
 

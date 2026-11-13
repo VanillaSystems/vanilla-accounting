@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
 import { language, t, tWith } from '../i18n/index.js';
 import { dropStore, failedLine } from './drop-upload.js';
-import { CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingGroupOf, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, waitsAfterDrop, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
+import { CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingGroupOf, linkedAs, readOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, receiptStateOf, waitsAfterDrop, type ClosingCounts, type ClosingGroup, type DropSummary, type FileState } from './drop-summary.js';
 import { isUnbooked } from '../areas/bank/model.js';
 import { receiptWaits } from '../areas/automation/period-issues.js';
 import { parsePeriod, filingKeyOf, parseSwissDate } from '../../accounting/periods.js';
@@ -29,7 +29,7 @@ import { textIn } from '../../workflows/model.js';
 import { tasksWaiting } from '../automation/widget.js';
 import { forMe } from '../../questions/model.js';
 import type { Index } from '../../types/index.js';
-import type { DropRow, DropSession } from '../../types/drop.js';
+import type { DropRow, DropSession, OtherExportOf } from '../../types/drop.js';
 import { FileDetails } from './FileDetails.js';
 import { AccountField } from '../areas/journal/AccountField.js';
 import { BOOKING_SWITCH_ON, payoutsBookedText } from '../lib/payouts.js';
@@ -103,7 +103,7 @@ const groupIban = (iban: string) => iban.replace(/(.{4})/g, '$1 ').trim();
 /** What a waiting row says about its file, the parts apart: its kind (when known), the ZIP it came out of, the statement's account and period. */
 function metaOf(r: DropRow): string {
   return [
-    r.provider ? t(`drop.report.${r.provider.kind}`, { provider: r.provider.name }) : r.kind && t(`drop.kind.${r.kind}` as 'drop.kind.receipt'),
+    r.provider ? t(`drop.report.${r.provider.kind}`, { provider: r.provider.name }) : r.otherExport ? t(`drop.otherExport.kind.${r.otherExport.what}`, { provider: r.otherExport.name }) : r.kind && t(`drop.kind.${r.kind}` as 'drop.kind.receipt'),
     r.from && t('drop.from', { name: r.from }),
     r.facts?.iban,
     r.facts?.from && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to!)}`,
@@ -283,12 +283,20 @@ function reportLine(s: NonNullable<DropRow['report']>): string {
   ].filter(Boolean).join(' · ');
 }
 
+/** A provider's other export (its payouts list, #406): what it is, which reports the app books from, and where the provider's admin exports them when its file says. */
+function otherExportText(o: OtherExportOf): string {
+  return [
+    t(`drop.otherExport.text.${o.what}`, { provider: o.name }),
+    ...o.reports.map((k) => (o.where[k] ? t(`drop.otherExport.reportAt.${k}`, { where: o.where[k]! }) : t(`drop.otherExport.report.${k}`))),
+  ].filter(Boolean).join(' ');
+}
+
 /** A row with an open question, or one not taken: what it is and its small action. */
 function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(route: Route): void }) {
   const [password, setPassword] = useState('');
   const [open, setOpen] = useState(false);
   const asked = r.state === 'duplicate' && r.reason === 'possible-duplicate';
-  const chip = r.state === 'take' ? t('drop.taking') : asked ? t('drop.state.possible') : r.readAs ? t('drop.state.read') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
+  const chip = r.state === 'take' ? t('drop.taking') : asked ? t('drop.state.possible') : r.otherExport && r.state === 'duplicate' ? t('drop.state.otherExport') : r.readAs ? t('drop.state.read') : t(`drop.state.${r.state}` as 'drop.state.duplicate');
   const details = r.state === 'asks' ? r.details : undefined;
   // A statement read without a bank export (#217): its table, unless it asks for its account first; a bank CSV: its columns.
   const table = r.state === 'asks' && r.read && !r.chooseAccount && !r.unknownAccount;
@@ -320,6 +328,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
               {r.readAs.ref ? <button type="button" className="linkbtn" data-testid="drop-open-statement" onClick={() => go({ area: 'bank', payment: r.readAs!.ref })}>{t('drop.openStatement')}</button> : null}
             </>
           ) : r.asked ? <small data-testid="drop-asked">{t('drop.read.asked', { month: monthName(`${r.asked.month}-01`) })}</small>
+          : r.otherExport ? <small data-testid="drop-other-export">{otherExportText(r.otherExport)}</small>
           : r.message ? <small>{r.message}</small> : r.reason ? <small>{t(`drop.reason.${r.reason}` as 'drop.reason.duplicate')}</small> : null}
           {asked ? (
             <span className="dacts">
@@ -328,8 +337,8 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
             </span>
           ) : r.kind === 'statement-pdf' && r.reason === 'not-imported' && !r.chooseAccount && !r.unknownAccount && !r.read
             ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'as', as: 'receipt' })}>{t('drop.isReceipt')}</button>
-          : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' && (r.kind !== 'statement-csv' || r.reason === 'csv-known') && r.reason !== 'unreadable'
-            ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'take' })}>{r.state === 'quarantine' && r.reason === 'not-receipt' ? t('drop.isReceipt') : t('drop.takeAnyway')}</button> : null}
+          : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' && (r.kind !== 'statement-csv' || r.reason === 'csv-known' || r.reason === 'provider-export') && r.reason !== 'unreadable'
+            ? <button type="button" className="linkbtn" data-testid={r.otherExport ? 'drop-read-anyway' : undefined} onClick={() => void act(session, r, { kind: 'take' })}>{r.state === 'quarantine' && r.reason === 'not-receipt' ? t('drop.isReceipt') : r.otherExport ? t('drop.otherExport.readAnyway') : t('drop.takeAnyway')}</button> : null}
           {r.state === 'locked' ? (
             <form className="dpw" onSubmit={(e) => { e.preventDefault(); if (password) void act(session, r, { kind: 'unlock', password }).then(() => setPassword('')); }}>
               <input type="password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('drop.password')} aria-label={t('drop.password')} />
@@ -374,7 +383,13 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   const id = receiptIdOf(r, view);
   const proc = processingOf(view?.runs ?? [], books.receipts).get(id);
   if (inProcess(proc)) return { kind: 'working', step: processingText(proc, view) };
-  if (books.mappings.some((m) => m.receiptId === id)) return { kind: 'matched' };
+  const links = books.mappings.filter((m) => m.receiptId === id);
+  // A provider's fee bill booked by code without a payment (src/booking/vat-corrections.ts): its VAT, no payment (#406).
+  if (linkedAs(links) === 'feeBill') {
+    const bill = books.receipts.find((x) => x.id === id);
+    return { kind: 'feeBill', provider: bill?.title?.vendor ?? bill?.vatId ?? '' };
+  }
+  if (links.length) return { kind: 'matched' };
   if (isWorking(run)) return working;
   if (proc?.kind === 'stuck') return { kind: 'stuck', run: proc.run };
   const receipt = books.receipts.find((x) => x.id === id);
@@ -419,7 +434,7 @@ function doneOf(r: DropRow, x: FileState, view: View): number {
  * from when to when, how many are booked and how many wait for what; the receipts read and linked;
  * each line with a link to them in the period they landed in.
  */
-function Summary({ sum, rows, books, go, receiptOf }: { sum: DropSummary; rows: readonly DropRow[]; books: Index; go(loc: Location): void; receiptOf(r: DropRow): { date?: string; dateSource?: 'captured' } | undefined }) {
+function Summary({ sum, rows, books, go, receiptOf, feeBillsOf }: { sum: DropSummary; rows: readonly DropRow[]; books: Index; go(loc: Location): void; receiptOf(r: DropRow): { date?: string; dateSource?: 'captured' } | undefined; feeBillsOf: string }) {
   const today = localToday();
   const dates = datesIn(books, receiptOf);
   const periodOf = (of: readonly DropRow[]) => majorityPeriod(of, dates, today, filing().length);
@@ -431,7 +446,7 @@ function Summary({ sum, rows, books, go, receiptOf }: { sum: DropSummary; rows: 
   // What is open is listed in the period of the oldest payment not booked, which need not be the one most payments are in.
   const open = pays?.openFrom ? parsePeriod(filingKeyOf(pays.openFrom, filing().length), today) ?? undefined : undefined;
   if (!pays && !files) return null;
-  const receipts = files ? receiptLines(files, noAi) : '';
+  const receipts = files ? receiptLines(files, noAi, feeBillsOf) : '';
   const others = files ? otherLines(files) : '';
   return (
     <div className="dsum" data-testid="drop-summary">
@@ -467,17 +482,18 @@ function Summary({ sum, rows, books, go, receiptOf }: { sum: DropSummary; rows: 
  * a new group without its sentence does not compile, so no row is left out of the closing lines.
  */
 /** A closing group's sentence (CLOSING_SENTENCE); a photo no AI read says why on a Mac without one. */
-const sentence = (g: keyof typeof CLOSING_SENTENCE, n: number, noAi: boolean) => t(g === 'unread' && noAi ? 'drop.sum.unreadNoAi' : CLOSING_SENTENCE[g], { n });
+const sentence = (g: keyof typeof CLOSING_SENTENCE, n: number, noAi: boolean, providers = '') =>
+  t(g === 'unread' && noAi ? 'drop.sum.unreadNoAi' : g === 'feeBill' && !providers ? 'drop.sum.feeBillsUnnamed' : CLOSING_SENTENCE[g], { n, provider: providers });
 
 /** The receipts' sentences: read (linked or not), beside an invoice, a possible copy, incomplete, waiting for their reading, order pages, stopped. */
-function receiptLines(f: ClosingCounts, noAi: boolean): string {
+function receiptLines(f: ClosingCounts, noAi: boolean, feeBillsOf: string): string {
   const { read, matched, unmatched } = readOf(f);
   return [
     read ? t('drop.sum.line', {
       head: t('drop.sum.receipts', { n: read }),
       parts: [matched ? t('drop.sum.matched', { n: matched }) : '', unmatched ? t('drop.sum.unmatched', { n: unmatched }) : ''].filter(Boolean).join(', '),
     }) : '',
-    ...RECEIPT_SENTENCES.map((g) => (f[g] ? sentence(g, f[g], noAi) : '')),
+    ...RECEIPT_SENTENCES.map((g) => (f[g] ? sentence(g, f[g], noAi, g === 'feeBill' ? feeBillsOf : '') : '')),
   ].filter(Boolean).join(' ');
 }
 
@@ -671,7 +687,7 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
           </div>
         ) : null}
         {nothingNew ? <div className="dsum" data-testid="drop-nothing-new"><p>{t('drop.sum.nothing')}</p></div> : null}
-        {sum && !nothingNew ? <Summary sum={sum} rows={taken} books={books} receiptOf={receiptOf} go={(loc) => { closeDrop(); onGo(loc); }} /> : null}
+        {sum && !nothingNew ? <Summary sum={sum} rows={taken} books={books} receiptOf={receiptOf} feeBillsOf={[...new Set(states.flatMap((x) => (x.kind === 'feeBill' && x.provider ? [x.provider] : [])))].join(', ')} go={(loc) => { closeDrop(); onGo(loc); }} /> : null}
         <div className="wftabs" role="tablist">
           {tabs.map((x) => {
             const of = x === 'all' ? rows : rows.filter((r) => tabOf(r) === x);

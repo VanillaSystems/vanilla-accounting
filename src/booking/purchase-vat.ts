@@ -168,7 +168,7 @@ export function withPurchaseVat(tx: BankTransaction, entries: JournalEntry[], do
     const purchase = documents.filter(isPurchaseDocument);
     const read = assume ? purchase.map((r) => (unread(r) ? asRead(r, assume.rate, e.amount) : r)) : purchase;
     // Only a sales record or a supporting document linked: no purchase document, so no input tax (pv-no-receipt).
-    const check = evidenceCheck(e, read, undefined);
+    const check = evidenceCheck(e, read, undefined, undefined, entries);
     if (check?.kind === 'vatWithoutReceipt') return decide(e, check.code, de().t('rules.say.zeroCode', { code: check.code }));
     const part = tx.businessPart && model.length === 1 ? partRate(read, tx.businessPart, e.amount, tx.currency) : undefined;
     if (part !== undefined) {

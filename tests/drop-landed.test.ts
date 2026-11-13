@@ -6,7 +6,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CLOSING_GROUPS, CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingCounts, closingGroupOf, receiptStateOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, ownDate, type ClosingCounts, type ClosingGroup, type FileState } from '../src/app/shell/drop-summary.js';
+import { CLOSING_GROUPS, CLOSING_SENTENCE, OTHER_SENTENCES, RECEIPT_SENTENCES, closingCounts, closingGroupOf, linkedAs, receiptStateOf, datesIn, dropProgress, dropSummary, landedPeriod, majorityPeriod, ownDate, type ClosingCounts, type ClosingGroup, type FileState } from '../src/app/shell/drop-summary.js';
 import { parsePeriod } from '../src/accounting/periods.js';
 import type { DropRow } from '../src/types/drop.js';
 import type { BankTransaction, Receipt } from '../src/types/index.js';
@@ -182,4 +182,16 @@ test('a drop of only refused or asking files still has its closing lines; a docu
   assert.deepEqual(dropSummary(refused, { transactions: [] }, () => true, new Set(), [], (r) => closingGroupOf(r, undefined)).files, only({ refused: 1, asks: 1 }));
   assert.equal(closingGroupOf(row('ab'), { kind: 'supporting', why: 'Auftragsbestätigung' }), 'beside', 'no invoice of it in the books: «kommt neben ihre Rechnung»');
   assert.equal(closingGroupOf(row('ab'), { kind: 'supporting', why: 'Auftragsbestätigung', of: { id: 'fm', name: 'FM-78230' } }), 'supporting');
+});
+
+test('a provider\'s monthly fee bill booked by code has no payment: its own group and sentence, never «einer Zahlung zugeordnet» (#406, webshop-ai-19)', () => {
+  assert.equal(linkedAs([{ rule: 'vat-correction' }]), 'feeBill');
+  assert.equal(linkedAs([{ rule: 'vat-correction' }, { rule: 'pair-checked:amount' }]), 'matched', 'also linked to a payment');
+  assert.equal(linkedAs([{}]), 'matched');
+  assert.equal(linkedAs([]), undefined);
+  const bills = ['07', '08', '09'].map((m) => row(`bill-${m}`));
+  const counts = closingCounts(bills, (r) => closingGroupOf(r, { kind: 'feeBill', provider: 'Shopify' }));
+  assert.deepEqual(counts, only({ feeBill: 3 }));
+  assert.equal(counts.matched, 0);
+  assert.match(de.messages['drop.sum.feeBills'].other.replace('{n}', '3').replace('{provider}', 'Shopify'), /^3 Monatsrechnungen von Shopify: MWST der Gebühren gebucht\.$/);
 });
