@@ -424,6 +424,12 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The fields of Firma's forms stand in line at every width (#454): a hint under one input («kein
+  Konto», the account's name) or a label on two lines no longer pushes the field beside it down
+  (Eröffnung, Regeln and the others). Firma › Eröffnung names its amount fields «Saldo per 1.1.2026
+  (CHF)» and, for a foreign-currency account, «Saldo per 1.1.2026 (EUR)» beside it, and its table's
+  column (and Abschluss's) «Saldo per 1.1.2026», no longer «Eröffnung 1.1.2026», which read like a
+  date; an amount typed there is right-aligned and shown in the app's number format once left.
 - A repayment to the owner before any of her outlays is booked (#457): «Spesen Juli 2026» said
   «wartet auf ihren Beleg; ist er verknüpft, bucht die App sie», though no receipt is ever linked to
   it. While receipts that could be hers are filed (read, dated before it, paid by no payment of the
