@@ -14,6 +14,18 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Fixed
+
+- Audit export: the floating top bar, the status corner, the dock and the page now start below
+  the amber audit bar, at every window width, zoom and theme, so its text («Prüfmodus · nur
+  Lesen …», the snapshot's date, schema and version) is never covered (#515).
+- Audit export: the invoices are in it (#516). `npm run build:audit` writes the invoicing records
+  as of the export's day (`data/invoices.json`), every issued invoice's and credit note's PDF
+  (`invoices/<number>.pdf`) and every sent reminder or notice (`invoices/sent/<id>.pdf`) exactly
+  as stored, and the logos the sheets show; `manifest.json` lists each with its SHA-256, and
+  `verify-audit` also checks that each PDF is the one its record's checksum names. The Invoices
+  area shows them read-only: no issue, send, copy, credit, cancel or reminder button.
+
 ## [0.5.0] - 2026-11-13
 
 ### Added

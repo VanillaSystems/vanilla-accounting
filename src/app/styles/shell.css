@@ -314,7 +314,12 @@ main.full { display: flex; flex-direction: column; }
 .lbody { padding: 0 32px 140px 56px; overflow: auto; }
 
 /* audit mode: every write is refused */
-.auditbar { position: fixed; top: 0; left: 0; right: 0; z-index: 15; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 4px 16px; font-size: 12px; font-weight: 500; background: var(--warn-soft); color: var(--warn); border-bottom: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+.auditbar { position: fixed; top: 0; left: 0; right: 0; z-index: 15; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 0 8px; padding: 4px 16px; font-size: 12px; font-weight: 500; line-height: 1.4; text-align: center; background: var(--warn-soft); color: var(--warn); border-bottom: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+/* Everything else starts below it, at every width and zoom: --audit-h is its height (shell/AuditBar.tsx; 0 outside audit mode, #515). */
+:root:has(.auditbar) main { margin-top: var(--audit-h); height: calc(100vh / var(--z, 1) - var(--audit-h)); }
+:root:has(.auditbar) :is(.topbar, .corner) { top: calc(14px + var(--audit-h)); }
+:root:has(.auditbar) :is(.split, .aside, .dropchat) { top: var(--audit-h); }
+:root:has(.auditbar):not(.phone) .activity { top: var(--audit-h); }
 /* A demo says that it is one: a quiet line along the page's bottom edge while it is open, and once a card on what to look at (src/app/shell/Demo.tsx). */
 .demobar { position: fixed; left: var(--abw); right: var(--aiw); bottom: 0; z-index: 6; display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 2px 14px; padding: 5px 16px; font-size: 12px; line-height: 1.4; color: var(--muted); background: var(--bg); border-top: 1px solid var(--line); pointer-events: none; }
 .demobar a { color: var(--accent); white-space: nowrap; pointer-events: auto; }
@@ -344,7 +349,7 @@ html.phone:has(.demobar) .toast.droplost { bottom: 156px; }
 .no-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=tab]) { -webkit-app-region: no-drag; }
 
 /* Fixed elements centre on the page, not the window: the AI sidebar (when open) is not page. */
-:root { --aiw: 0px; --abw: 52px; --page-mid: calc(var(--abw) + (100% - var(--abw) - var(--aiw)) / 2); }
+:root { --audit-h: 0px; --aiw: 0px; --abw: 52px; --page-mid: calc(var(--abw) + (100% - var(--abw) - var(--aiw)) / 2); }
 .bartip .btn { background: transparent; color: var(--bg); border: 1px solid color-mix(in srgb, var(--bg) 40%, transparent); }
 .bartip .btn:last-child { background: var(--bg); color: var(--ink); border-color: var(--bg); }
 .bartip .btn:hover:not(:disabled) { background: color-mix(in srgb, var(--bg) 16%, transparent); color: var(--bg); }

@@ -690,9 +690,9 @@ export const api = {
   assistantDetach: (id: string) => request<{ ok: true }>('DELETE', `/api/assistant/attachments/${encodeURIComponent(id)}`),
   assistantExportUrl: (file: string) => `/api/assistant/exports/${encodeURIComponent(file)}`,
   assistantAttachmentUrl: (conversation: string, id: string) => `/api/assistant/${encodeURIComponent(conversation)}/attachments/${encodeURIComponent(id)}`,
-  logoUrl: (path: string) => `/api/invoice-logo?path=${encodeURIComponent(path)}`,
+  logoUrl: (path: string) => sources.invoiceLogo(path),
 
-  invoices: () => request<InvoiceList>('GET', '/api/invoices'),
+  invoices: () => request<InvoiceList>('GET', sources.invoices()),
   paymentProposals: () => request<{ proposals: PaymentProposal[] }>('GET', '/api/invoices/payments').then((r) => r.proposals),
   createCustomer: (fields: CustomerFields) => request<Customer>('POST', '/api/customers', fields),
   patchCustomer: (id: string, fields: Partial<CustomerFields>) => request<Customer>('PATCH', `/api/customers/${id}`, fields),

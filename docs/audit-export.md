@@ -1,7 +1,7 @@
 # Audit export
 
 An audit export is a read-only copy of your books that runs without Node.js and without the
-API. It is a folder of static files: the app, the books as one `books.json`, every receipt and bank statement PDF
+API. It is a folder of static files: the app, the books as one `books.json`, every receipt, bank statement and invoice PDF
 the books name, the VAT returns as filed, and a `manifest.json` with the SHA-256 of every file.
 Give it to your Treuhänder, to an ESTV or AHV auditor, or keep it as the state of the books on
 the day you made it.
@@ -40,6 +40,8 @@ that holds other files. It replaces an earlier export in the same folder.
 | `data/` | What the API would answer: the status with the snapshot, the chart of accounts, the company and its bank accounts, the filed returns per year, the ESTV exchange rates the foreign entries are checked against. |
 | `receipts/<id>.pdf` | Every receipt in the books, named by its id. |
 | `bank-statements/<bank>/` | Every bank statement PDF in the books. |
+| `data/invoices.json`, `invoices/` | The invoices, credit notes, customers and sent documents as of the export's day, with every issued PDF (`invoices/<number>.pdf`) and every sent reminder or notice (`invoices/sent/<id>.pdf`) exactly as stored. `verify-audit` checks each against the checksum its record kept. |
+| `invoice-logos/` | The logos the invoices are laid out with. |
 | `manifest.json` | The SHA-256 and size of every other file, and the seals of the filed quarters at the time of the export. |
 
 ## Look at it

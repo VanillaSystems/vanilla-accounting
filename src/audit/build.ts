@@ -15,6 +15,9 @@ import { APP_ROOT, findFile, yearPaths, yearsOf as yearsWithFolders, type Worksp
 import { schemaOf } from '../workspace/schema.js';
 import { EXPORT_FILES, type AuditSnapshot } from './sources.js';
 import { workspaceModules } from '../core/modules/load.js';
+import { loadInvoices, readPdf } from '../invoices/store.js';
+import { liveCustomers, liveInvoices } from '../invoices/rules.js';
+import { viewOf } from '../invoices/service.js';
 import { appVersion, hashFiles, MANIFEST, MANIFEST_FORMAT, type ExportedSeal, type ExportManifest } from './manifest.js';
 
 export class ExportError extends Error {}
@@ -61,6 +64,8 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
     else missing.push(`statement ${s.bank}/${s.filename}`);
   }
 
+  missing.push(...writeInvoices(ws, out, createdAt.slice(0, 10)));
+
   const { checks, unsealed } = sealsOf(books);
   const seals = checks.map((c): ExportedSeal => {
     if (c.status === 'broken') return { quarter: c.quarter, status: 'broken', problem: c.problem };
@@ -70,6 +75,32 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
   const manifest: ExportManifest = { format: MANIFEST_FORMAT, snapshot, seals, unsealed, missing, files: hashFiles(out) };
   writeFileSync(join(out, MANIFEST), JSON.stringify(manifest, null, 2) + '\n');
   return manifest;
+}
+
+/**
+ * The invoicing records as GET /api/invoices serves them on the day of the export, with every issued
+ * invoice's and credit note's PDF and every sent document's PDF as stored, and the logos the sheets
+ * show (#516). A PDF that is gone or no longer matches its checksum is named, not copied.
+ */
+function writeInvoices(ws: Workspace, out: string, day: string): string[] {
+  const book = loadInvoices(ws);
+  const invoices = liveInvoices(book);
+  const sent = book.sent.filter((d) => !d.deleted);
+  writeOut(out, EXPORT_FILES.invoices(), JSON.stringify({ today: day, invoices: invoices.map((i) => viewOf(book, i, day)), customers: liveCustomers(book), sent }));
+  const missing: string[] = [];
+  const copyPdf = (path: string, doc: { file: string; sha256: string }, what: string) => {
+    try { writeFileSync(target(out, path), readPdf(ws, doc)); } catch (e) { missing.push(`${what} (${doc.file}): ${e instanceof Error && 'code' in e ? 'not found' : (e as Error).message}`); }
+  };
+  for (const inv of invoices) if (inv.status === 'issued') copyPdf(EXPORT_FILES.invoicePdf(inv.number), inv.pdf, `invoice ${inv.number}`);
+  for (const doc of sent) copyPdf(EXPORT_FILES.sentPdf(doc.id), doc, `sent document ${doc.id}`);
+  const logos = new Set([ws.invoicing?.layout.logo, ...invoices.map((i) => (i.status === 'issued' ? i.layout.logo : undefined))]);
+  for (const logo of logos) {
+    if (!logo) continue;
+    const src = join(ws.paths.root, logo);
+    if (existsSync(src)) copyOut(out, EXPORT_FILES.invoiceLogo(logo), src);
+    else missing.push(`invoice logo ${logo}`);
+  }
+  return missing;
 }
 
 /** Every year the period picker can show, and every year with a filing. */

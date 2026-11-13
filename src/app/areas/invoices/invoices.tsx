@@ -67,7 +67,8 @@ function List(props: Props) {
   useEffect(() => {
     if (route.view !== 'list' || route.id !== 'new' || load.state !== 'ready' || creating.current) return;
     const c = load.data.customers.find((x) => x.id === props.query.customer);
-    if (!c) { nav.go({ route: { area: 'invoices', view: 'customers' }, query: {} }); return; }
+    // Read-only (the audit export): no draft is made, the customer is shown instead.
+    if (!c || !props.canEdit) { nav.go({ route: { area: 'invoices', view: 'customers', ...(c ? { id: c.id } : {}) }, query: {} }); return; }
     creating.current = true;
     void newDraftFor(nav, c).finally(() => { creating.current = false; });
   }, [route.id, load.state]);
