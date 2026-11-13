@@ -94,6 +94,15 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- «Buchen» waiting for «Einschalten» holds every booking by the firm's rules or the AI (#413): a
+  rule or business file changed outside the app's own controls (by hand, by git, an AI's draft not
+  kept) no longer acts on the next drop or mail. The inbox still reads, matches and links, but books
+  nothing; a provider's report waits in its row; «Automatisch buchen» for all, «Neu buchen» and a
+  rule kept meanwhile book nothing either. Wherever she tries, one sentence says what changed, why
+  the app waits and what ends it, with «Einschalten» right there; switched on, the app books what
+  waited (the payments by an inbox run, the report taken again). Her own answers and links, and a
+  merchant name the app learns from confirmed links, make nothing wait: a new firm starts switched
+  on and its first drop books as before.
 - Setup (#423): «MWST-Methode» and «Abrechnungsart» say where the owner finds her answer herself:
   in the ESTV portal, under «Neue Geschäfte» her firm, then «Anpassen» on the card «Abrechnungsmodalitäten», changing nothing; the Treuhand
   only when she has no access. «Abrechnungsart» no longer says that vereinbart applies unless the
