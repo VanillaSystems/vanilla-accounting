@@ -9,13 +9,16 @@
  * While the booking waits for «Einschalten» nothing is booked, and that is said.
  */
 import { readBooks, WS } from './books.js';
-import { BOOKING } from './routes/automation.js';
+import { BOOKING, INTAKE, engine } from './routes/automation.js';
+import { bookingWaits } from './booking-waits.js';
+import { takeWaitingReports } from './waiting-reports.js';
+import { unbooked } from '../workflows/actions.js';
 import { bookByRules } from '../workflows/book-by-rules.js';
 import { chartOf, loadClassifyContext, mappedReceipts } from '../booking/classify.js';
 import { fromClearing, payoutWaitOf, providerOfMoneyIn, type Provider } from '../booking/providers.js';
 import { periodLock } from '../books/store.js';
 import { chartNames } from '../booking/rule-book.js';
-import { keepSwitchedOn, openSwitch } from '../workflows/switch-on.js';
+import { keepSwitchedOn } from '../workflows/switch-on.js';
 import { loadWorkflows } from '../workflows/load.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 import type { PayoutGroup, PayoutsBooked } from '../types/drop.js';
@@ -61,8 +64,8 @@ export const readyPayouts = (provider?: string): string[] => payoutGroups().filt
  */
 export async function bookPayouts(refs: readonly string[]): Promise<PayoutsBooked> {
   const of = refs.length;
-  const booking = loadWorkflows(APP_ROOT, WS.paths.root).workflows.find((w) => w.id === BOOKING);
-  if (booking && !openSwitch(WS).isApproved(booking)) return { booked: 0, of, waits: 'switchOn' };
+  const files = bookingWaits();
+  if (files) return { booked: 0, of, waits: 'switchOn', files };
   await bookByRules(WS, refs);
   const books = readBooks();
   const counterparties = loadClassifyContext(WS).counterparties ?? [];
@@ -88,11 +91,20 @@ export function asHerAct<T>(change: () => T): T {
 }
 
 /**
- * «Einschalten» of the booking: the provider payouts code decides are booked then (bookPayouts), in
- * code, no model and no inbox run; undefined for another workflow or when none is ready.
+ * «Einschalten» of the booking books what waited (#404, #413): the provider payouts code decides,
+ * in code (bookPayouts), said with the switching on; and, when payments are still open, an inbox run
+ * books them by rule or model, as the drop or the mail that came while the booking waited would
+ * have (its book step booked nothing then). Undefined for another workflow or when no payout is ready.
  */
 export async function bookWhatWaited(workflow: string): Promise<PayoutsBooked | undefined> {
   if (workflow !== BOOKING) return undefined;
+  // The reports a closed drop left waiting for it are taken first: what they book onto the clearing account comes before the payouts.
+  takeWaitingReports();
   const refs = readyPayouts();
-  return refs.length ? bookPayouts(refs) : undefined;
+  const payouts = refs.length ? await bookPayouts(refs) : undefined;
+  if (unbooked(readBooks()).some((x) => x.kind === 'transactions')) {
+    const r = await engine().start(INTAKE, { kind: 'company', id: 'inbox' }, { kind: 'manual' }, 'live');
+    if (!r.ok && r.refusal !== 'not-runnable') console.error(`${INTAKE}: ${r.refusal} ${r.detail ?? ''}`);
+  }
+  return payouts;
 }
