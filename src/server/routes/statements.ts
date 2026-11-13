@@ -45,8 +45,8 @@ import { findFile, yearPaths, type LedgerBankAccount } from '../../workspace/wor
 import { RequestError, WS, assertOpen, patchBody, readBooks, reopenWorkspace, updateBooks, updateBooksWithEffects, withBooks } from '../books.js';
 import { patchManifest } from '../../workspace/manifest-write.js';
 import { askAbout, closeAsk, correctAsk, importAsk } from '../statement-asks.js';
-import { openingLock, withOpening } from '../../accounting/opening-balance.js';
-import { yearEndAccounts } from '../../accounting/year-close.js';
+import { openingLock, withNativeOpening, withOpening } from '../../accounting/opening-balance.js';
+import { foreignAccounts, yearEndAccounts } from '../../accounting/year-close.js';
 import { chartOf, differenceAccountOf } from '../../books/year-close.js';
 import { baseCurrency, chart } from '../../engines/index.js';
 
@@ -685,19 +685,29 @@ router.post('/api/reconciliations/:account', (req, res) => {
  * for the books' first year. `amount` sets it, null takes it back; the difference goes to retained
  * earnings. A year closed through 31.12. keeps its openings (a filed quarter does not: an opening is
  * in no VAT return and no seal); a later year is opened by the close of
- * the one before; a foreign-currency account also needs its native balance (npm run import-opening).
+ * the one before. A foreign-currency account takes two values, as the import of a closed year
+ * (src/cli/import-opening-balances.ts) and the balance sheet carry them: `amount`, its value in the
+ * base currency, in the Bilanz, and `native`, its balance in its currency, which its statements are
+ * checked against (config.openingBalancesNative).
  */
 router.put('/api/opening-balances/:year/:account', (req, res) => {
   const { year, account } = req.params;
   const amount: unknown = req.body?.amount;
+  const native: unknown = req.body?.native;
   if (!/^\d{4}$/.test(year)) throw new RequestError(400, 'Kein Jahr.');
   if (amount !== null && (typeof amount !== 'number' || !Number.isFinite(amount))) throw new RequestError(400, 'Betrag fehlt.');
   const equity = yearEndAccounts(chartOf(WS), WS.company.legalForm).resultTo;
   const side = chart().sideOf(account);
-  const refuse = (reason: 'notBalanceSheet' | 'equity' | 'foreign', text: string) => new RequestError(400, text, { code: 'openingAccount', params: { account, reason } });
+  const refuse = (reason: 'notBalanceSheet' | 'equity' | 'foreign' | 'foreignMismatch' | 'notForeign', text: string, currency?: string) => new RequestError(400, text, { code: 'openingAccount', params: { account, reason, ...(currency && { currency }) } });
   if (side !== 'assets' && side !== 'liabilities') throw refuse('notBalanceSheet', `Konto ${account} ist kein Bilanzkonto.`);
   if (account === equity) throw refuse('equity', `Konto ${account} nimmt die Differenz der Eröffnung auf.`);
-  if (WS.bankAccounts.some((a) => a.account === account && a.currency !== baseCurrency())) throw refuse('foreign', `Konto ${account} führt eine Fremdwährung: npm run import-opening.`);
+  const currency = foreignAccounts(WS.bankAccounts).find((a) => a.account === account)?.currency;
+  if (!currency && native !== undefined) throw refuse('notForeign', `Konto ${account} führt ${baseCurrency()}: seine Eröffnung hat keinen Saldo in einer anderen Währung.`);
+  // `native: null` keeps a foreign account's opening without its balance in its currency, as older books had it: «Rückgängig» restores them.
+  if (currency && amount !== null && native !== null) {
+    if (typeof native !== 'number' || !Number.isFinite(native)) throw refuse('foreign', `Konto ${account} führt ${currency}: seine Eröffnung braucht auch den Saldo in ${currency}.`, currency);
+    if (Math.sign(native) !== Math.sign(amount as number)) throw refuse('foreignMismatch', `Konto ${account}: der Saldo in ${currency} und sein Wert in ${baseCurrency()} haben nicht das gleiche Vorzeichen, oder einer ist 0.`, currency);
+  }
   withBooks(res, (books) => {
     const lock = openingLock(books, year);
     if (lock === 'closed') throw new RequestError(403, `${year} ist bis zum 31.12. abgeschlossen: seine Eröffnung bleibt, wie sie ist.`, { code: 'openingYearClosed', params: { year } });
@@ -705,6 +715,11 @@ router.put('/api/opening-balances/:year/:account', (req, res) => {
     const next = withOpening(books.config.openingBalances, year, account, amount, equity, side === 'liabilities');
     if (next) books.config.openingBalances = next;
     else delete books.config.openingBalances;
+    if (currency) {
+      const natives = withNativeOpening(books.config.openingBalancesNative, year, account, amount === null || native === null ? null : { amount: native as number, currency });
+      if (natives) books.config.openingBalancesNative = natives;
+      else delete books.config.openingBalancesNative;
+    }
     return { ok: true };
   });
 });

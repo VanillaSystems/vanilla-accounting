@@ -487,6 +487,10 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
   };
 }
 
+/** The key Kontoauszüge gives a statement file of the books (`keyed`: two of one first day apart), or none when it shows none for it. */
+export const keyOfFile = (b: Bank, f: Pick<BankStatement, 'bank' | 'filename' | 'fromDate' | 'toDate'>): string | undefined =>
+  b.statements(f.fromDate, f.toDate).find((s) => s.file?.bank === f.bank && s.file.filename === f.filename)?.key;
+
 /**
  * A statement with a problem: missing on an account that has had statements, its payments do not
  * add up to the bank's balance, or a statement is missing between two that do not chain. A month

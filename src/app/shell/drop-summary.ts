@@ -13,6 +13,7 @@ import { filingKeyOf, inPeriod, parsePeriod, type FilingLength, type IsoDate, ty
 import { waitsForReading } from '../../parsers/receipt-text.js';
 import { isNoReceipt } from '../../books/discard.js';
 import type { TwinWhy } from '../../types/index.js';
+import type { BalanceSheet } from '../areas/receipts/model.js';
 
 export interface DropSummary {
   /** The payments the drop's statements added to the books. */
@@ -65,7 +66,9 @@ export const linkedAs = (links: readonly Pick<Mapping, 'rule'>[]): 'feeBill' | '
  * its run stopped, or set aside by the run with the reason.
  */
 export type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | { kind: 'unread' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'feeBill'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string }
-  | { kind: 'none'; why: string } | { kind: 'twin'; of: string; name: string; why: TwinWhy } | { kind: 'supporting'; why?: string; of?: { id: string; name: string } };
+  | { kind: 'none'; why: string } | { kind: 'twin'; of: string; name: string; why: TwinWhy } | { kind: 'supporting'; why?: string; of?: { id: string; name: string } }
+  /** A balance sheet (#427): no payment belongs to it; the one of the year before's last day is offered for the opening. */
+  | { kind: 'balanceSheet'; sheet?: BalanceSheet };
 
 /**
  * The groups of a drop's closing lines (#384). Every row is in exactly one, in its own words: a
@@ -75,7 +78,7 @@ export type FileState = { kind: 'working'; step?: string } | { kind: 'read' } | 
  * that waits for an answer in its row (columns, a password, «was ist das?», «schon da?»), one set
  * aside or not saved, one taken back, and one still worked on.
  */
-export const CLOSING_GROUPS = ['statement', 'report', 'matched', 'feeBill', 'read', 'supporting', 'beside', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
+export const CLOSING_GROUPS = ['statement', 'report', 'matched', 'feeBill', 'read', 'supporting', 'beside', 'balanceSheet', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
 export type ClosingGroup = typeof CLOSING_GROUPS[number];
 export type ClosingCounts = Record<ClosingGroup, number>;
 
@@ -106,6 +109,7 @@ export function closingGroupOf(r: DropRow, x: FileState | undefined): ClosingGro
     case 'none': return 'none';
     case 'twin': return 'copy';
     case 'supporting': return x!.kind === 'supporting' && x.of ? 'supporting' : 'beside';
+    case 'balanceSheet': return 'balanceSheet';
   }
 }
 
@@ -131,12 +135,12 @@ export const readOf = (f: ClosingCounts) => ({ read: f.matched + f.read + f.copy
  * groups, so a new group without its sentence does not compile (tests/drop-landed.test.ts).
  */
 export const CLOSING_SENTENCE = {
-  supporting: 'drop.sum.supporting', beside: 'drop.sum.beside', copy: 'drop.sum.copies', incomplete: 'drop.sum.incomplete', unread: 'drop.sum.unread',
+  supporting: 'drop.sum.supporting', beside: 'drop.sum.beside', balanceSheet: 'drop.sum.balanceSheets', copy: 'drop.sum.copies', incomplete: 'drop.sum.incomplete', unread: 'drop.sum.unread',
   orderPage: 'drop.sum.orderPages', feeBill: 'drop.sum.feeBills', stuck: 'drop.sum.stuck', report: 'drop.sum.reports',
   none: 'drop.sum.none', known: 'drop.sum.known', asks: 'drop.sum.asks', aside: 'drop.sum.aside', refused: 'drop.sum.refused', undone: 'drop.sum.undone', working: 'drop.sum.working',
 } as const satisfies Record<Exclude<ClosingGroup, 'statement' | 'matched' | 'read'>, string>;
 /** The receipts' sentences after the read line, and the line of the files that are no receipt or brought nothing new. */
-export const RECEIPT_SENTENCES = ['feeBill', 'supporting', 'beside', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'report'] as const;
+export const RECEIPT_SENTENCES = ['feeBill', 'supporting', 'beside', 'balanceSheet', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'report'] as const;
 export const OTHER_SENTENCES = ['none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
 
 /** How many rows are in each group: their sum is the number of rows. */
