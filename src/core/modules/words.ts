@@ -12,6 +12,30 @@ export const HEAD = 600;
 const escape = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 export const wordsRe = (words: readonly string[]) => new RegExp(`(?<![\\p{L}\\d])(?:${[...words].sort((a, b) => b.length - a.length).map(escape).join('|')})(?![\\p{L}])`, 'iu');
 
+/** A list's word closes a compound only when it is this long: «Akontorechnung», never «Waybill». */
+const COMPOUND_HEAD = 6;
+
+/**
+ * The lines whose first word is a compound that one of `words` closes («Akontorechnung»,
+ * «Prämienrechnung» for «Rechnung»): a single word of COMPOUND_HEAD letters or more, with letters
+ * before it, and not one that ends in a word of `not` (documents.yaml notCompound: «Lohnabrechnung»
+ * is a payslip, «Berechnung» a calculation). Each with where the word starts and what follows it.
+ */
+export function compoundLines(text: string, words: readonly string[], not: readonly string[] = []): Array<{ at: number; rest: string }> {
+  const heads = words.filter((w) => !/\s/.test(w) && w.length >= COMPOUND_HEAD).map((w) => w.toLowerCase());
+  const tails = not.map((w) => w.toLowerCase());
+  if (!heads.length) return [];
+  const out: Array<{ at: number; rest: string }> = [];
+  let at = 0;
+  for (const line of text.split('\n')) {
+    const m = /^\s*(\p{L}+)(?![\p{L}\d])(.*)$/u.exec(line);
+    const first = m?.[1].toLowerCase();
+    if (first && heads.some((h) => first.length > h.length && first.endsWith(h)) && !tails.some((w) => first.endsWith(w))) out.push({ at: at + line.indexOf(m![1]), rest: m![2] });
+    at += line.length + 1;
+  }
+  return out;
+}
+
 /** The first match of each list in `text`, by its position. */
 export function firstOf<K extends string>(lists: Record<K, string[]>, text: string): Array<{ key: K; at: number }> {
   return (Object.entries(lists) as Array<[K, string[]]>)

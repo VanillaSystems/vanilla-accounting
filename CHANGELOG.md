@@ -322,6 +322,13 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Pairing (#426): a bill whose own number the payment names, with the same amount to the cent, is
+  paired by code whatever the days between (a compensation fund's Akonto bill of early July paid at
+  the end of September), so the payment is booked with it in the same drop, not «ohne Beleg». Past
+  the bill's terms only a number of six characters or more that is neither the amount nor a date,
+  that one payment names and one receipt carries. A title written as a compound
+  («Akontorechnung AK-26-Q3-30871», «Prämienrechnung») is read as the bill's title and number; a
+  payslip («Lohnabrechnung») is not.
 - Keeping rules (#396, #392): «Rückgängig» on a second kept rule took back the first rule's bookings
   and the second rule's file. Each keep now has a line of its own above Aufgaben and Firma › Regeln
   («4 Zahlungen gebucht · Rückgängig»), true to its own numbers and still there after a reload; the

@@ -5,8 +5,8 @@
 import type { Receipt } from '../types/index.js';
 import type { DocumentsData } from '../core/modules/schema.js';
 import { documents } from '../engines/index.js';
-import { HEAD, wordsRe } from '../core/modules/words.js';
-import { documentKind } from './document-kind.js';
+import { HEAD, compoundLines } from '../core/modules/words.js';
+import { documentKind, titleIn } from './document-kind.js';
 import { labelledNumbers } from './duplicates.js';
 import { normUid, uidsIn } from '../parsers/receipt-text.js';
 
@@ -37,16 +37,22 @@ export function issuedByFirm(r: Pick<Receipt, 'vatId' | 'extractedText'>, firm: 
 /**
  * The numbers an invoice gives itself: those an invoice word labels («Rechnung 2026-029»,
  * «Invoice # 4471», documents.yaml receipt.number; squashed as tokensIn squashes, four characters at
- * least), never a customer, order, account, phone number, a date or a year alone («Rechnung 2026
- * Unterhalt»). None for a document whose text names it an offer, an
+ * least), also the word right after a compound title that starts a line («Akontorechnung
+ * AK-26-Q3-30871», words.ts compoundLines), never a customer, order, account, phone number, a date
+ * or a year alone («Rechnung 2026 Unterhalt»). None for a document whose text names it an offer, an
  * order confirmation, a delivery note or a reminder (documentKind), or whose first lines have no
  * invoice title.
  */
 export function ownNumbers(r: Pick<Receipt, 'kind' | 'extractedText'>, words: DocumentsData = documents()): string[] {
   if (r.kind && r.kind !== 'invoice') return [];
   const text = r.extractedText ?? '';
-  if (documentKind(text, words).is !== 'receipt' || !wordsRe(words.receipt.title).test(text.slice(0, HEAD))) return [];
-  return [...labelledNumbers(text, words)].map((n) => n.replace(/\s/g, '')).filter((n) => !YEAR.test(n));
+  if (documentKind(text, words).is !== 'receipt' || titleIn(text.slice(0, HEAD), words) === Infinity) return [];
+  const compound = compoundLines(text, words.receipt.number, words.notCompound).flatMap(({ rest }) => {
+    const m = /^[\s:#.]*([A-Z0-9][A-Z0-9\-/]{2,}[A-Z0-9])(?![\p{L}\d])/iu.exec(rest);
+    const n = m?.[1].toUpperCase().replace(/[-/]/g, '');
+    return n && /\d/.test(n) && n.length >= 4 ? [n] : [];
+  });
+  return [...new Set([...labelledNumbers(text, words), ...compound])].map((n) => n.replace(/\s/g, '')).filter((n) => !YEAR.test(n));
 }
 
 /** A year alone (four digits, 19xx or 20xx) is no invoice number by itself. */

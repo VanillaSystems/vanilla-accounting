@@ -11,6 +11,12 @@ receipt:
   slip: [Zahlteil, Empfangsschein, Section paiement, Récépissé, Sezione pagamento, Payment part]
   number: [Rechnungsnummer, Rechnungs-Nr., Rechnung Nr., Rechnungsnr., Rechnung, Belegnummer, Beleg-Nr., Quittungsnummer, Invoice number, Invoice No., "Invoice #", Invoice, Receipt number, "Receipt #", Bill number, Numéro de facture, Facture n°, Facture no, Facture, Numero fattura, Fattura n., Fattura nr., Fattura]
 
+# A title or number word of six letters or more also closes a compound that starts a line, as German
+# writes a bill's kind into its title («Akontorechnung AK-26-Q3-30871», «Prämienrechnung PR-2026-2210»):
+# such a line is the title, and the word after it the bill's number (src/core/modules/words.ts
+# compoundLines). Never a compound that ends in one of these: a statement or a payslip, a calculation.
+notCompound: [Abrechnung, Berechnung, Verrechnung, Hochrechnung, Umrechnung]
+
 # A line with a total's word that is no total of the document: a payroll, a sum insured, a limit, a
 # turnover, hours, a minimum payment (receipt-text.ts totalLabel).
 notTotal: [Lohnsumme, Summe der Löhne, Löhne, Versicherungssumme, Kreditlimite, Limite, Limit, Umsatz, Stunden, Hours, Heures, Ore, Mindestbetrag, Minimum, Masse salariale, Somme assurée, Massa salariale, Somma assicurata]

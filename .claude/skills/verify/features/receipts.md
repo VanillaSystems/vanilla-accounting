@@ -52,7 +52,9 @@ and Datei. The order and the ranking are pure functions in `model.ts` (tests/rec
   `[data-testid=drop-near]` «passt vielleicht zu …». Code links by itself only the sure ones: the
   number named with a rounding or a stated Skonto (`pair:rounded+…`, `pair:discount+…`), or the same
   business with the exact amount within the invoice's terms. Driven 2026-11-13 on the persona's
-  drop without an AI.
+  drop without an AI. Past the terms (#426) only the number named with the exact amount, whatever
+  the days between, when the number tells one bill apart (six characters or more, not the amount,
+  not a date): the Akonto bill of the webshop and consulting personas (`pair:amount+…number+near`).
 - `rc-unlink`: `.status .quiet` (`lösen`) or `.tx .un` in Zahlung (`POST /api/mapping/remove`).
   When the payment is a private one only this receipt holds, the same place says `Privat bezahlt
   aufheben`: it deletes that payment (`DELETE /api/transactions/<ref>`) and its link; ⌘Z pays the
