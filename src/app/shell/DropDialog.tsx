@@ -6,7 +6,7 @@
  * small action, «Rückgängig» for a taken one. Further drops, onto the window or the dialog, add
  * rows until it closes; the work goes on when it does.
  */
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { outlayWaitsNow } from '../lib/order-pages.js';
 import { createPortal } from 'react-dom';
 import { api, errorText } from '../lib/api.js';
@@ -25,7 +25,7 @@ import { OPEN_ITEMS } from '../areas/vat/model.js';
 import { localToday, type Period } from '../../accounting/periods.js';
 import { baseCurrency, chargesVat, filing } from '../../engines/index.js';
 import { needsYou, tabOf, type DropTab } from './drop-tabs.js';
-import { OVERVIEW_FROM, STAGE_OF, STAGE_TEXT, overviewOf, stagesIn, type Stage } from './drop-overview.js';
+import { DOING_TEXT, OVERVIEW_FROM, STAGE_OF, STAGE_TEXT, doingOf, doingsIn, overviewOf, stagesIn, type Doing, type Stage } from './drop-overview.js';
 import { fmt, formatDate } from '../lib/utils.js';
 import { monthName } from '../lib/period-label.js';
 import { useAutomation } from '../automation/store.js';
@@ -465,19 +465,19 @@ function fileState(r: DropRow, books: Index, view: View): FileState {
   const run = r.run ? view?.runs.find((x) => x.id === r.run) : undefined;
   const steps = view?.workflows.find((w) => w.id === run?.workflow)?.steps ?? [];
   const step = run?.at ? steps.find((x) => x.id === run.at) : undefined;
-  const working: FileState = { kind: 'working', ...(step ? { step: textIn(step.label, language()) } : {}) };
+  const working: FileState = { kind: 'working', doing: doingOf(run?.status === 'queued' ? { kind: 'queued' } : run?.status === 'running' && run.at ? { kind: 'running', step: run.at } : undefined), ...(step ? { step: textIn(step.label, language()) } : {}) };
   // Its run is not in the last poll yet: it has only just started.
   if (r.run && !run) return working;
   if (r.statement) {
     const p = run && runProcessing(run, view?.runs ?? []);
-    return inProcess(p) ? { kind: 'working', step: processingText(p, view) } : isWorking(run) ? working : { kind: 'statement' };
+    return inProcess(p) ? { kind: 'working', step: processingText(p, view), doing: doingOf(p) } : isWorking(run) ? working : { kind: 'statement' };
   }
   if (r.report) return { kind: 'report' };
   const arrival = run?.arrived?.find((x) => x.file === r.name);
   if (arrival?.kind === 'refused') return { kind: 'refused', reason: arrival.reason };
   const id = receiptIdOf(r, view);
   const proc = processingOf(view?.runs ?? [], books.receipts).get(id);
-  if (inProcess(proc)) return { kind: 'working', step: processingText(proc, view) };
+  if (inProcess(proc)) return { kind: 'working', step: processingText(proc, view), doing: doingOf(proc) };
   const links = books.mappings.filter((m) => m.receiptId === id);
   // A provider's fee bill booked by code without a payment (src/booking/vat-corrections.ts): its VAT, no payment (#406).
   if (linkedAs(links) === 'feeBill') {
@@ -755,6 +755,17 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   const [stage, setStage] = useState<Stage | 'all'>('all');
   const [unfolded, setUnfolded] = useState<ReadonlySet<Stage>>(new Set());
   useEffect(() => { setStage('all'); setUnfolded(new Set()); }, [s.session?.id]);
+  // The session the overview was shown for: it stays for that session, never flipping back to the tabs under her hand.
+  const overviewFor = useRef<string>();
+  // A filter whose last file left it gives way to «alle»; the focus, lost with that file's row, goes to «alle».
+  const allButton = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    const at = document.activeElement;
+    if (!at || at === document.body || !at.isConnected) allButton.current?.focus();
+  });
   const accounts = useWorkspace()?.bankAccounts;
   const { questions, me } = useQuestions();
   const receiptOf = (r: DropRow) => books.receipts.find((y) => y.id === receiptIdOf(r, view));
@@ -776,12 +787,15 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
   // Every row in one group of the closing lines, by the state its own row shows (#384); the overview's stages and the bar's line count the same (#453).
   const stateOf = new Map(taken.map((r, i) => [r, states[i]]));
   const groupOf = (r: DropRow) => closingGroupOf(r, stateOf.get(r));
-  const ov = overviewOf(rows.map(groupOf), s.adding);
-  const many = ov.n >= OVERVIEW_FROM;
+  // What is done now with a file worked on: uploading while it is taken, else its run's state (FileState.doing).
+  const ov = overviewOf(rows.map((r) => ({ group: groupOf(r), doing: r.state === 'take' ? 'uploading' : stateOf.get(r)?.kind === 'working' ? (stateOf.get(r) as { doing?: Doing }).doing : undefined })), s.adding);
+  if (ov.n >= OVERVIEW_FROM && s.session) overviewFor.current = s.session.id;
+  const many = ov.n >= OVERVIEW_FROM || (!!s.session && overviewFor.current === s.session.id);
   // Files still uploading or being taken count as not begun, so the bar does not fall back when they join; a file at rest counts whole.
   const pct = dropProgress([...rows.map((r) => (r.state === 'take' ? 0 : r.state === 'taken' ? doneOf(r, stateOf.get(r)!, view) : 1)), ...Array<number>(s.adding).fill(0)]);
   const sum = !working && rows.length ? dropSummary(rows, books, isUnbooked(books, accounts ?? []), receiptWaits(books, accounts ?? [], undefined, outlayWaitsNow()), questions, groupOf) : undefined;
-  // A filter whose stage has no file any more (its last one answered) shows the whole drop again.
+  // A filter whose stage has no file any more (its last one answered) shows the whole drop again, and stays so.
+  if (stage !== 'all' && !ov.counts[stage]) { setStage('all'); refocus.current = true; }
   const filter = stage !== 'all' && ov.counts[stage] ? stage : 'all';
   const stageRows = (st: Stage) => rows.filter((r) => STAGE_OF[groupOf(r)] === st);
   // A row of a report says it in its own line; the dialog says it for the payments the drop brought or left open.
@@ -815,13 +829,13 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
             {!sum ? (
               <>
                 <div className="dbar" role="progressbar" aria-label={t('drop.ov.bar')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}><i style={{ width: `${pct}%` }} /></div>
-                <p className="m">{t('drop.overall', { pct, done: ov.done, n: ov.n })}</p>
+                <p className="m" aria-live="polite" data-testid="drop-overall">{[t('drop.overall', { pct, done: ov.done, n: ov.n }), ...(many ? doingsIn(ov).map((d) => t(DOING_TEXT[d], { n: ov.doing[d] })) : [])].join(' · ')}</p>
               </>
             ) : null}
             {many ? (
               <div className="dfilters" role="group" aria-label={t('drop.ov.filters')}>
                 {(['all', ...stagesIn(ov)] as const).map((st) => (
-                  <button key={st} type="button" className={`dfilter f-${st}`} data-testid="drop-filter" data-stage={st} aria-pressed={filter === st}
+                  <button key={st} ref={st === 'all' ? allButton : undefined} type="button" className={`dfilter f-${st}`} data-testid="drop-filter" data-stage={st} aria-pressed={filter === st}
                     onClick={() => setStage(st === 'all' || filter === st ? 'all' : st)}>
                     {st === 'all' ? t('drop.ov.all', { n: ov.n }) : t(STAGE_TEXT[st], { n: ov.counts[st] })}
                   </button>
@@ -830,55 +844,61 @@ export function DropDialog({ onGo, onLanded, onStatement, period, books, refresh
             ) : null}
           </div>
         ) : null}
-        {nothingNew ? <div className="dsum" data-testid="drop-nothing-new"><p>{t('drop.sum.nothing')}</p></div> : null}
-        {/* «Buchen» waits for «Einschalten» (#413): what the drop took is read and linked, not booked; said once, with the button. */}
-        {sum && waitsHere ? <div className="dsum" data-testid="drop-booking-waits-sum"><p><BookingWaits go={(route) => go(route)} onOn={refresh} /></p></div> : null}
-        {sum && !nothingNew ? <Summary sum={sum} rows={taken} books={books} receiptOf={receiptOf} feeBillsOf={[...new Set(states.flatMap((x) => (x.kind === 'feeBill' && x.provider ? [x.provider] : [])))].join(', ')} go={(loc) => { closeDrop(); onGo(loc); }} /> : null}
-        {many ? null : (
-          <div className="wftabs" role="tablist">
-            {tabs.map((x) => {
-              const of = x === 'all' ? rows : rows.filter((r) => tabOf(r) === x);
-              return (
-                <button key={x} type="button" role="tab" aria-selected={tab === x} className={tab === x ? 'on' : ''} onClick={() => setTab(x)}>
-                  {t(`drop.tab.${x}` as 'drop.tab.all')} <span className="mono">{of.length}</span>{of.some(needsYou) ? <i className="ddot" aria-hidden="true" /> : null}
-                </button>
-              );
-            })}
-          </div>
-        )}
-        <div className="drows">
-          {!many ? (shown.length ? shown.map(rowOf) : <p className="m">{rows.length ? t('drop.emptyTab') : t('drop.empty')}</p>)
-            : filter !== 'all' ? stageRows(filter).map(rowOf)
-            // The whole drop: what needs her listed and named first; every other stage a line with its count, its rows behind it.
-            : stagesIn(ov).map((st) => {
-              const of = stageRows(st);
-              if (st === 'needs') return <div key={st} className="dgroup" data-stage={st}><p className="dgh">{t(STAGE_TEXT[st], { n: ov.counts[st] })}</p>{of.map(rowOf)}</div>;
-              const open = unfolded.has(st);
-              return (
-                <div key={st} className="dgroup" data-stage={st}>
-                  <button type="button" className="dgh dfoldh" data-testid="drop-group" data-stage={st} aria-expanded={open}
-                    onClick={() => setUnfolded((was) => { const next = new Set(was); if (open) next.delete(st); else next.add(st); return next; })}>
-                    {t(STAGE_TEXT[st], { n: ov.counts[st] })}
-                    <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+        {/* Between the head and the foot one part scrolls (#453): what came of the drop, the list and the lines below it; the head, the overview and «Schliessen» stay. */}
+        <div className="dmid">
+          {nothingNew ? <div className="dsum" data-testid="drop-nothing-new"><p>{t('drop.sum.nothing')}</p></div> : null}
+          {/* «Buchen» waits for «Einschalten» (#413): what the drop took is read and linked, not booked; said once, with the button. */}
+          {sum && waitsHere ? <div className="dsum" data-testid="drop-booking-waits-sum"><p><BookingWaits go={(route) => go(route)} onOn={refresh} /></p></div> : null}
+          {sum && !nothingNew ? <Summary sum={sum} rows={taken} books={books} receiptOf={receiptOf} feeBillsOf={[...new Set(states.flatMap((x) => (x.kind === 'feeBill' && x.provider ? [x.provider] : [])))].join(', ')} go={(loc) => { closeDrop(); onGo(loc); }} /> : null}
+          {many ? null : (
+            <div className="wftabs" role="tablist">
+              {tabs.map((x) => {
+                const of = x === 'all' ? rows : rows.filter((r) => tabOf(r) === x);
+                return (
+                  <button key={x} type="button" role="tab" aria-selected={tab === x} className={tab === x ? 'on' : ''} onClick={() => setTab(x)}>
+                    {t(`drop.tab.${x}` as 'drop.tab.all')} <span className="mono">{of.length}</span>{of.some(needsYou) ? <i className="ddot" aria-hidden="true" /> : null}
                   </button>
-                  {open ? of.map(rowOf) : null}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
+          )}
+          <div className="drows">
+            {!many ? (shown.length ? shown.map(rowOf) : <p className="m">{rows.length ? t('drop.emptyTab') : t('drop.empty')}</p>)
+              : filter !== 'all' ? stageRows(filter).map(rowOf)
+              // The whole drop: what needs her listed and named first; every other stage a line with its count, its rows behind it.
+              : stagesIn(ov).map((st) => {
+                const of = stageRows(st);
+                // The filter above names them: no second heading in the list.
+                if (st === 'needs') return <div key={st} className="dgroup" data-stage={st}>{of.map(rowOf)}</div>;
+                const open = unfolded.has(st);
+                return (
+                  <div key={st} className="dgroup" data-stage={st}>
+                    <h3 className="dgh">
+                      <button type="button" className="dfoldh" data-testid="drop-group" data-stage={st} aria-expanded={open} aria-controls={`drop-stage-${st}`}
+                        onClick={() => setUnfolded((was) => { const next = new Set(was); if (open) next.delete(st); else next.add(st); return next; })}>
+                        {t(STAGE_TEXT[st], { n: ov.counts[st] })}
+                        <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+                      </button>
+                    </h3>
+                    <div id={`drop-stage-${st}`} className="drowsof">{open ? of.map(rowOf) : null}</div>
+                  </div>
+                );
+              })}
+          </div>
+          {s.note ? <p className="warnline" data-testid="drop-note">{s.note}</p> : null}
+          {s.error ? <p className="warnline">{s.error}</p> : null}
+          <Lost inDialog />
+          {receiptsWait || tasksWait ? (
+            <p className="m" data-testid="waits-where">
+              {receiptsWait ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts' })}>{t('drop.waitsReceipts', { n: receiptsWait })}</button> : null}
+              {receiptsWait && tasksWait ? ' · ' : null}
+              {tasksWait ? <button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'tasks' })}>{t('drop.waitsTasks', { n: tasksWait })}</button> : null}
+            </p>
+          ) : null}
+          {rows.some((r) => (r.state === 'duplicate' && r.reason === 'possible-duplicate') || r.state === 'locked' || r.state === 'unclear') ? <p className="m" data-testid="close-hint">{t('drop.closeHint')}</p> : null}
+          {rows.some((r) => r.state === 'asks' && !r.asked) ? <p className="m" data-testid="read-hint">{t('drop.read.closeHint')}</p> : null}
+          {rows.some((r) => r.state === 'asks' && r.asked) ? <p className="m" data-testid="asked-hint">{t('drop.read.askedHint')}</p> : null}
         </div>
-        {s.note ? <p className="warnline" data-testid="drop-note">{s.note}</p> : null}
-        {s.error ? <p className="warnline">{s.error}</p> : null}
-        <Lost inDialog />
-        {receiptsWait || tasksWait ? (
-          <p className="m" data-testid="waits-where">
-            {receiptsWait ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts' })}>{t('drop.waitsReceipts', { n: receiptsWait })}</button> : null}
-            {receiptsWait && tasksWait ? ' · ' : null}
-            {tasksWait ? <button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'tasks' })}>{t('drop.waitsTasks', { n: tasksWait })}</button> : null}
-          </p>
-        ) : null}
-        {rows.some((r) => (r.state === 'duplicate' && r.reason === 'possible-duplicate') || r.state === 'locked' || r.state === 'unclear') ? <p className="m" data-testid="close-hint">{t('drop.closeHint')}</p> : null}
-        {rows.some((r) => r.state === 'asks' && !r.asked) ? <p className="m" data-testid="read-hint">{t('drop.read.closeHint')}</p> : null}
-        {rows.some((r) => r.state === 'asks' && r.asked) ? <p className="m" data-testid="asked-hint">{t('drop.read.askedHint')}</p> : null}
         <div className="dfoot">
           <span className="m">{taken.length ? <button type="button" className="linkbtn" onClick={() => go({ area: 'automation', view: 'runs' })}>{t('drop.toRuns')}</button> : t('drop.moreHint')}</span>
           <button type="button" className="btn primary" data-testid="drop-close" onClick={finishDrop}>{working ? t('drop.background') : t('common.close')}</button>

@@ -35,23 +35,60 @@ export const STAGE_OF = {
   none: 'out', known: 'out', aside: 'out', refused: 'out', undone: 'out',
 } as const satisfies Record<ClosingGroup, Stage>;
 
+/**
+ * What the app does now with a file it works on, in the order a file goes through: uploading (not a
+ * row yet, or a row being taken), waiting for its run, read (its text and VAT), looking for its
+ * payment, booked; `other` for a step of the company's own, a statement read in, or a run not polled yet.
+ */
+export const DOINGS = ['uploading', 'waiting', 'reading', 'matching', 'booking', 'other'] as const;
+export type Doing = typeof DOINGS[number];
+
+/** The inbox run's steps (src/workflows/processing.ts INTAKE_STEPS) as what is done to the file. */
+const STEP_DOING: Record<string, Doing> = { read: 'reading', facts: 'reading', match: 'matching', book: 'booking' };
+
+/** What a run does with a file: waiting while queued, else its step. */
+export function doingOf(p: { kind: 'queued' } | { kind: 'running'; step: string } | undefined): Doing {
+  if (!p) return 'other';
+  return p.kind === 'queued' ? 'waiting' : STEP_DOING[p.step] ?? 'other';
+}
+
+/** A row of the overview: its closing group, and what is done with it while it is worked on. */
+export interface OverviewRow { group: ClosingGroup; doing?: Doing }
+
 export interface Overview {
   /** Every file of the drop: its rows and the files still uploading. */
   n: number;
   /** How many files are in each stage; they add up to `n`. */
   counts: Record<Stage, number>;
+  /** The files worked on, by what is done with them now; they add up to `counts.working`. */
+  doing: Record<Doing, number>;
   /** The files at rest: every file not worked on any more (one that waits for her among them). */
   done: number;
 }
 
-/** The overview of rows in these closing groups, with `uploading` files not yet rows. */
-export function overviewOf(groups: readonly ClosingGroup[], uploading: number): Overview {
+/** The overview of these rows, with `uploading` files not yet rows. */
+export function overviewOf(rows: readonly OverviewRow[], uploading: number): Overview {
   const counts = Object.fromEntries(STAGES.map((s) => [s, 0])) as Record<Stage, number>;
-  for (const g of groups) counts[STAGE_OF[g]]++;
+  const doing = Object.fromEntries(DOINGS.map((d) => [d, 0])) as Record<Doing, number>;
+  for (const r of rows) {
+    const stage = STAGE_OF[r.group];
+    counts[stage]++;
+    if (stage === 'working') doing[r.doing ?? 'other']++;
+  }
   counts.working += uploading;
-  const n = groups.length + uploading;
-  return { n, counts, done: n - counts.working };
+  doing.uploading += uploading;
+  const n = rows.length + uploading;
+  return { n, counts, doing, done: n - counts.working };
 }
+
+/** The words of each part of the work, in the line under the bar. */
+export const DOING_TEXT = {
+  uploading: 'drop.ov.doing.uploading', waiting: 'drop.ov.doing.waiting', reading: 'drop.ov.doing.reading',
+  matching: 'drop.ov.doing.matching', booking: 'drop.ov.doing.booking', other: 'drop.ov.working',
+} as const satisfies Record<Doing, Key>;
+
+/** The parts of the work with files, in their order. */
+export const doingsIn = (o: Overview): Doing[] => DOINGS.filter((d) => o.doing[d] > 0);
 
 /** Each stage's words: a statement read in and a receipt linked say what the closing lines say of them. */
 export const STAGE_TEXT = {

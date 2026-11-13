@@ -5,20 +5,34 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CLOSING_GROUPS, closingGroupOf, waitsAfterDrop, type FileState } from '../src/app/shell/drop-summary.js';
-import { STAGES, STAGE_OF, overviewOf, stagesIn } from '../src/app/shell/drop-overview.js';
+import { CLOSING_GROUPS, closingGroupOf, waitsAfterDrop, type ClosingGroup, type FileState } from '../src/app/shell/drop-summary.js';
+import { STAGES, STAGE_OF, doingOf, doingsIn, overviewOf, stagesIn } from '../src/app/shell/drop-overview.js';
 import { needsYou } from '../src/app/shell/drop-tabs.js';
 import type { DropRow, DropState } from '../src/types/drop.js';
 
 const row = (state: DropState, extra: Partial<DropRow> = {}): DropRow => ({ key: state, id: state, name: `${state}.pdf`, size: 1, state, ...extra });
 
+const of = (...groups: ClosingGroup[]) => groups.map((group) => ({ group }));
+
 test('the stages add up to the files, the uploading ones worked on', () => {
-  const o = overviewOf(['asks', 'working', 'statement', 'matched', 'matched', 'read', 'report', 'known'], 3);
+  const o = overviewOf(of('asks', 'working', 'statement', 'matched', 'matched', 'read', 'report', 'known'), 3);
   assert.equal(o.n, 11);
   assert.deepEqual(o.counts, { needs: 1, working: 4, statements: 1, matched: 2, read: 1, other: 1, out: 1 });
   assert.equal(Object.values(o.counts).reduce((a, b) => a + b, 0), o.n);
   assert.equal(o.done, 7, 'done: every file not worked on any more, the one waiting for her among them');
-  assert.deepEqual(stagesIn(overviewOf(['matched', 'working'], 0)), ['working', 'matched'], 'only stages with files, in their order');
+  assert.deepEqual(stagesIn(overviewOf(of('matched', 'working'), 0)), ['working', 'matched'], 'only stages with files, in their order');
+});
+
+test('the files worked on, by what is done with them now: the parts add up to «in Arbeit»', () => {
+  const o = overviewOf([
+    { group: 'working', doing: 'uploading' }, { group: 'working', doing: doingOf({ kind: 'queued' }) }, { group: 'working', doing: doingOf({ kind: 'queued' }) },
+    { group: 'working', doing: doingOf({ kind: 'running', step: 'read' }) }, { group: 'working', doing: doingOf({ kind: 'running', step: 'facts' }) },
+    { group: 'working', doing: doingOf({ kind: 'running', step: 'match' }) }, { group: 'working', doing: doingOf({ kind: 'running', step: 'company-step' }) },
+    { group: 'working' }, { group: 'matched', doing: 'reading' },
+  ], 35);
+  assert.deepEqual(o.doing, { uploading: 36, waiting: 2, reading: 2, matching: 1, booking: 0, other: 2 });
+  assert.equal(Object.values(o.doing).reduce((a, b) => a + b, 0), o.counts.working);
+  assert.deepEqual(doingsIn(o), ['uploading', 'waiting', 'reading', 'matching', 'other'], 'a part without files is left out');
 });
 
 test('what needs her in the overview is what the closing lines and the tabs say waits for her', () => {

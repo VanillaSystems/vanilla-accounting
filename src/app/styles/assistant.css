@@ -144,7 +144,7 @@ html.aiover .list { padding-left: 24px; padding-right: 16px; }
 .dropdlg .dhd b { font-size: 15px; flex: 1; }
 .dropdlg .wftabs .mono { color: var(--muted); font-size: 11px; margin-left: 4px; }
 .dropdlg .ddot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--warn); margin-left: 5px; vertical-align: middle; }
-.dropdlg .drows { flex: 1; overflow: auto; display: flex; flex-direction: column; margin: 6px 0; min-height: 80px; }
+.dropdlg .drows { display: flex; flex-direction: column; margin: 6px 0; }
 .droprow { display: grid; grid-template-columns: minmax(0, 1fr) auto 22px; gap: 12px; align-items: center; padding: 8px 4px; border-bottom: 1px solid var(--line); }
 .droprow .dn { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .droprow .dn b { font-size: 12.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -194,13 +194,14 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .dropdlg .dfoot { display: flex; align-items: center; gap: 8px; padding-top: 8px; }
 .dropdlg .dfoot .m { flex: 1; font-size: 12px; }
 /*
- * Only the list gives way when the dialog is full (#453): every other part keeps its height. Before,
- * the progress line had `min-height: 0` and shrank to nothing, its text drawn over the tabs. The
- * closing lines may shrink too, once the list is at its least, scrolling in their own box.
+ * The head, the overview and the foot keep their height; everything between them scrolls as one
+ * (#453): what came of the drop, the list and the lines below it. Before, the progress line had
+ * `min-height: 0` and shrank to nothing, its text drawn over the tabs, and with a long summary the
+ * foot with «Schliessen» was pushed out of the dialog.
  */
 .dropdlg > * { flex: none; }
-.dropdlg > .drows { flex: 1 1 auto; }
-.dropdlg > .dsum { flex: 0 0.001 auto; min-height: 3em; overflow: auto; }
+.dropdlg > .dmid { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.dropdlg .dmid > * { flex: none; }
 .dropdlg .dprog { display: flex; flex-direction: column; gap: 6px; }
 /* A drop of many files (#453): the stages as filters, what needs her named, the rest folded into a line each. */
 .dropdlg .dov { margin-bottom: 6px; }
@@ -211,9 +212,9 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .dropdlg .dfilter.f-needs { border-color: var(--warn); color: var(--warn); }
 .dropdlg .dfilter.f-needs[aria-pressed="true"] { background: var(--warn-soft); }
 .dropdlg .dgroup { display: flex; flex-direction: column; }
-.dropdlg .dgh { display: flex; align-items: center; gap: 4px; margin: 0; padding: 8px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink-2); font: inherit; font-size: 12.5px; font-weight: 500; text-align: left; }
-.dropdlg .dgroup[data-stage="needs"] .dgh { color: var(--warn); }
-.dropdlg .dfoldh { cursor: pointer; }
+.dropdlg .dgh { margin: 0; font: inherit; }
+.dropdlg .dfoldh { display: flex; align-items: center; gap: 4px; width: 100%; padding: 8px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink-2); font: inherit; font-size: 12.5px; font-weight: 500; text-align: left; cursor: pointer; }
+.dropdlg .drowsof { display: flex; flex-direction: column; }
 .dropdlg .dfoldh:hover, .dropdlg .dfoldh:focus-visible { background: var(--hover); outline: none; }
 .dropdlg .dfoldh svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; transition: transform .12s; }
 .dropdlg .dfoldh[aria-expanded="true"] svg { transform: rotate(180deg); }

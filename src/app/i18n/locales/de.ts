@@ -3692,7 +3692,12 @@ export const messages = {
   'drop.ov.all': { one: '{n} Datei', other: '{n} Dateien' },
   'drop.ov.needs': { one: '{n} braucht dich', other: '{n} brauchen dich' },
   'drop.ov.working': '{n} in Arbeit',
-  'drop.ov.read': '{n} gelesen, noch keine Zahlung',
+  'drop.ov.read': { one: '{n} wartet auf seine Zahlung', other: '{n} warten auf ihre Zahlung' },
+  'drop.ov.doing.uploading': { one: '{n} wird hochgeladen', other: '{n} werden hochgeladen' },
+  'drop.ov.doing.waiting': { one: '{n} wartet auf den Start', other: '{n} warten auf den Start' },
+  'drop.ov.doing.reading': { one: '{n} wird gelesen', other: '{n} werden gelesen' },
+  'drop.ov.doing.matching': { one: '{n} sucht die Zahlung', other: '{n} suchen die Zahlung' },
+  'drop.ov.doing.booking': { one: '{n} wird gebucht', other: '{n} werden gebucht' },
   'drop.ov.other': '{n} abgelegt, ohne eigene Zahlung',
   'drop.ov.out': '{n} nicht übernommen',
   // After a drop: what came of it, what is still open, and a figure that is not final (#341).

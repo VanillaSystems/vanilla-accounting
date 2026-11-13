@@ -3694,7 +3694,12 @@ export default {
     'drop.ov.all': { one: '{n} file', other: '{n} files' },
     'drop.ov.needs': { one: '{n} needs you', other: '{n} need you' },
     'drop.ov.working': '{n} in progress',
-    'drop.ov.read': '{n} read, no payment yet',
+    'drop.ov.read': { one: '{n} waits for its payment', other: '{n} wait for their payment' },
+    'drop.ov.doing.uploading': { one: '{n} uploading', other: '{n} uploading' },
+    'drop.ov.doing.waiting': { one: '{n} waiting to start', other: '{n} waiting to start' },
+    'drop.ov.doing.reading': { one: '{n} being read', other: '{n} being read' },
+    'drop.ov.doing.matching': { one: '{n} looking for its payment', other: '{n} looking for their payment' },
+    'drop.ov.doing.booking': { one: '{n} being booked', other: '{n} being booked' },
     'drop.ov.other': '{n} filed, no payment of their own',
     'drop.ov.out': '{n} not taken',
     // After a drop: what came of it, what is still open, and a figure that is not final (#341).
