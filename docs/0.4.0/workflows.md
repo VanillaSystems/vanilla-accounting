@@ -202,10 +202,12 @@ sidebar or switched off or deleted in Firma › Regeln is a person's click: a wo
 switched on before it runs switched on after it (src/server/routes/rules.ts). So is an answer to
 the app's own question in a drop row (a payment provider's clearing account, cut-over day, revenue
 or fee account, src/server/provider-payouts.ts `asHerAct`): the workflow's approved state moves with
-it, in the same write, and the payouts it decides are booked at once, each by a booking run of its
-own. The same file changed by hand, by the AI's draft before it is kept, or by git still waits.
-Whatever is switched on with «Einschalten», what waited for it is booked then: an inbox run books
-the payments without a booking (`bookWhatWaited`).
+it, in the same write, and the payouts it decides are booked at once, in code through the write door
+(`bookPayouts`). A workflow that waited already (a change from elsewhere) keeps waiting: then nothing
+is booked, and the drop row and Aufgaben say that «Buchen» waits for «Einschalten». The same file
+changed by hand, by the AI's draft before it is kept, or by git still waits. «Einschalten» of the
+booking books the provider payouts code decides then (`bookWhatWaited`), in code, without a model,
+and the toast says how many; nothing else is started.
 
 Where runs are stored (Git, beside the books, or a local store outside the workspace) is open:
 [decisions.md](decisions.md), D3.

@@ -216,7 +216,7 @@ function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, cont
     const { clearing, since } = provider.provider;
     const inChart = !!clearing && chartNames(context.chartOfAccounts).has(clearing);
     const why = waits ? waits.why : since && tx.date < since ? 'before' : inChart ? 'ready' : 'clearing';
-    return { kind: 'payout', provider: provider.name, why, ...(clearing ? { account: clearing } : {}), ...(since ? { since } : {}) };
+    return { kind: 'payout', provider: provider.name, why, sales: !!provider.provider.reports.sales, ...(clearing ? { account: clearing } : {}), ...(since ? { since } : {}) };
   }
   // The bank's own fee row: on the bank-charges account, as code books it (#359), or what the chart lacks for it.
   if (isOwnBankFee(tx, context.bankCoded)) {

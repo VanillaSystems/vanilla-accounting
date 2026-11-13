@@ -4,30 +4,28 @@
  * src/booking/classify.ts providerPayout); until the company's file names the clearing account and
  * the cut-over day it waits for the person (PayoutWait), who answers in the drop row of the
  * provider's report. Her answer is her switching on (keepSwitchedOn): what it decides is booked then,
- * each payout by a booking run of its own (as a rule kept books its payments, #383), and the row says
- * how many. A switching on by «Einschalten» books what waited too (bookWhatWaited).
+ * in code through the write door (bookByRules, as a rule kept books its payments, #383), and the row
+ * says how many. «Einschalten» of the booking books the payouts code decides then (bookWhatWaited).
+ * While the booking waits for «Einschalten» nothing is booked, and that is said.
  */
 import { readBooks, WS } from './books.js';
-import { BOOKING, INTAKE, engine } from './routes/automation.js';
+import { BOOKING } from './routes/automation.js';
+import { bookByRules } from '../workflows/book-by-rules.js';
 import { chartOf, loadClassifyContext, mappedReceipts } from '../booking/classify.js';
 import { fromClearing, payoutWaitOf, providerOfMoneyIn, type Provider } from '../booking/providers.js';
 import { periodLock } from '../books/store.js';
 import { chartNames } from '../booking/rule-book.js';
-import { keepSwitchedOn } from '../workflows/switch-on.js';
+import { keepSwitchedOn, openSwitch } from '../workflows/switch-on.js';
 import { loadWorkflows } from '../workflows/load.js';
 import { APP_ROOT } from '../workspace/workspace.js';
-import type { PayoutGroup } from '../types/drop.js';
-
-/** How long a request waits for the payouts' runs; runs still going then finish on their own. */
-const WAIT_MS = 30_000;
-const RESTING = new Set(['done', 'waiting', 'stuck', 'parked', 'discarded']);
+import type { PayoutGroup, PayoutsBooked } from '../types/drop.js';
 
 /**
  * The provider's payouts of the open period without a booking, grouped by provider and by what
  * they wait for: `ready` (code books them now, bank / `account` without VAT), `clearing` or `since`
  * (the company's file lacks it: the provider's report asks), `gap` (before the cut-over day beside
- * sales a report booked: hers to decide), `before` (before the cut-over day: a payment like any
- * other, booked as the payouts before it were).
+ * sales a report booked: hers to decide). One before the cut-over day otherwise is a payment like any
+ * other (a rule or the model may book it): it is in no group.
  */
 export function payoutGroups(): PayoutGroup[] {
   const books = readBooks();
@@ -43,9 +41,10 @@ export function payoutGroups(): PayoutGroup[] {
     if (!p) continue;
     const wait = payoutWaitOf(tx, linked, counterparties, books.journalEntries);
     const { clearing, since } = p.provider;
-    const why: PayoutGroup['why'] = wait ? wait.why : since && tx.date < since ? 'before' : clearing && chart.has(clearing) ? 'ready' : 'clearing';
+    if (!wait && since && tx.date < since) continue;
+    const why: PayoutGroup['why'] = wait ? wait.why : clearing && chart.has(clearing) ? 'ready' : 'clearing';
     const key = `${p.id} ${why}`;
-    const g = groups.get(key) ?? { provider: p.id, name: p.name, why, refs: [], ...(clearing ? { account: clearing } : {}), ...(since ? { since } : {}) };
+    const g = groups.get(key) ?? { provider: p.id, name: p.name, why, refs: [], sales: !!p.provider.reports.sales, ...(clearing ? { account: clearing } : {}), ...(since ? { since } : {}) };
     g.refs.push(tx.ref);
     groups.set(key, g);
   }
@@ -55,20 +54,16 @@ export function payoutGroups(): PayoutGroup[] {
 /** The payouts code books now, of one provider or of all. */
 export const readyPayouts = (provider?: string): string[] => payoutGroups().filter((g) => g.why === 'ready' && (!provider || g.provider === provider)).flatMap((g) => g.refs);
 
-const restsNow = (id: string) => RESTING.has(engine().run(id)?.state.status ?? 'done');
-
 /**
- * A booking run for each payout code books now (`refs`), awaited a while: how many are booked from
- * the clearing account then, and how many runs still go (they finish on their own).
+ * Books the payouts code books now (`refs`), in code through the write door, no model (bookByRules):
+ * how many were booked from the clearing account, of how many. While the booking workflow waits for
+ * «Einschalten» (a change it has not been switched on for) nothing is booked: `waits` says so.
  */
-export async function bookPayouts(refs: readonly string[]): Promise<{ booked: number; running: number }> {
-  const runs: string[] = [];
-  for (const id of refs) {
-    const r = await engine().start(BOOKING, { kind: 'transaction', id }, { kind: 'manual' }, 'live');
-    if (r.ok && r.run) runs.push(r.run);
-  }
-  const until = Date.now() + WAIT_MS;
-  while (Date.now() < until && !runs.every(restsNow)) await new Promise((r) => setTimeout(r, 100));
+export async function bookPayouts(refs: readonly string[]): Promise<PayoutsBooked> {
+  const of = refs.length;
+  const booking = loadWorkflows(APP_ROOT, WS.paths.root).workflows.find((w) => w.id === BOOKING);
+  if (booking && !openSwitch(WS).isApproved(booking)) return { booked: 0, of, waits: 'switchOn' };
+  await bookByRules(WS, refs);
   const books = readBooks();
   const counterparties = loadClassifyContext(WS).counterparties ?? [];
   const booked = refs.filter((ref) => {
@@ -76,7 +71,7 @@ export async function bookPayouts(refs: readonly string[]): Promise<{ booked: nu
     const clearing = tx && providerOfMoneyIn(tx, mappedReceipts(books, tx), counterparties)?.provider.clearing;
     return !!clearing && fromClearing(books.journalEntries.filter((e) => e.transactionRef === ref), clearing);
   }).length;
-  return { booked, running: runs.filter((id) => !restsNow(id)).length };
+  return { booked, of };
 }
 
 /**
@@ -93,11 +88,11 @@ export function asHerAct<T>(change: () => T): T {
 }
 
 /**
- * What waited while a workflow was not switched on is booked once it is («Einschalten»): one run of
- * the inbox, whose book step books the payments without a booking.
+ * «Einschalten» of the booking: the provider payouts code decides are booked then (bookPayouts), in
+ * code, no model and no inbox run; undefined for another workflow or when none is ready.
  */
-export async function bookWhatWaited(workflow: string): Promise<void> {
-  if (workflow !== BOOKING && workflow !== INTAKE) return;
-  const r = await engine().start(INTAKE, { kind: 'company', id: 'inbox' }, { kind: 'manual' }, 'live');
-  if (!r.ok && r.refusal !== 'not-runnable') console.error(`${INTAKE}: ${r.refusal} ${r.detail ?? ''}`);
+export async function bookWhatWaited(workflow: string): Promise<PayoutsBooked | undefined> {
+  if (workflow !== BOOKING) return undefined;
+  const refs = readyPayouts();
+  return refs.length ? bookPayouts(refs) : undefined;
 }

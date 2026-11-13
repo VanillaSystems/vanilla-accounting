@@ -32,6 +32,7 @@ import type { Index } from '../../types/index.js';
 import type { DropRow, DropSession } from '../../types/drop.js';
 import { FileDetails } from './FileDetails.js';
 import { AccountField } from '../areas/journal/AccountField.js';
+import { BOOKING_SWITCH_ON, payoutsBookedText } from '../lib/payouts.js';
 import { CsvColumnsForm, StatementRead } from './StatementRead.js';
 import { Menu } from './Menu.js';
 import type { Location, Route } from './route.js';
@@ -210,7 +211,7 @@ function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
               : propose?.name ? t('drop.provider.why.newAccount', { account: propose.account, name: propose.name, provider: ask.name })
                 : propose ? t('drop.provider.why.chartAccount', { account: propose.account, provider: ask.name }) : ''}</small>
           <span className="dpw">
-            <AccountField key="account" name="account" label={t(ask.missing === 'fees' ? 'drop.provider.label.fees' : ask.missing === 'revenue' ? 'drop.provider.label.revenue' : 'drop.provider.label.clearing')} defaultValue={answer.account ?? propose?.account ?? ''} offer={propose?.name ? { number: propose.account, name: propose.name } : undefined} />
+            <AccountField key="account" name="account" prefer={ask.missing === 'revenue' ? 'revenue' : ask.missing === 'fees' ? 'expense' : 'asset'} label={t(ask.missing === 'fees' ? 'drop.provider.label.fees' : ask.missing === 'revenue' ? 'drop.provider.label.revenue' : 'drop.provider.label.clearing')} defaultValue={answer.account ?? propose?.account ?? ''} offer={propose?.name ? { number: propose.account, name: propose.name } : undefined} />
             {ask.missing === 'fees' && !propose?.vat ? <input value={vat} onChange={(e) => setVat(e.target.value)} placeholder={t('drop.provider.vat')} aria-label={t('drop.provider.vat')} /> : null}
             <button type="submit" className="btn">{last ? t('drop.provider.keep') : t('drop.provider.next')}</button>
           </span>
@@ -230,7 +231,7 @@ function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
           <b>{t('drop.provider.q.revenue', { provider: ask.name })}</b>
           <small>{sells ? t('drop.provider.why.revenue', { account: ask.revenue!.account, sells }) : t('drop.provider.why.revenueDefault', { account: ask.revenue!.account })}</small>
           <span className="dpw">
-            <AccountField key="revenue" name="revenue" label={t('drop.provider.label.revenue')} defaultValue={answer.revenue ?? ask.revenue!.account} />
+            <AccountField key="revenue" name="revenue" label={t('drop.provider.label.revenue')} prefer="revenue" defaultValue={answer.revenue ?? ask.revenue!.account} />
             <button type="submit" className="btn">{t('drop.provider.keep')}</button>
           </span>
         </>
@@ -566,7 +567,8 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
     <>
       <div className={`droprow s-taken${shown ? ' open' : ''}`} data-testid="drop-row" data-file={r.name} data-state={x.kind}>
         <div className="dn"><b className="mono">{r.name}</b><small>{r.report ? `${t(`drop.report.${r.report.kind}`, { provider: r.report.name })} · ${reportLine(r.report)}` : r.statement ? [r.read && t(`drop.read.by.${r.read.by}`), r.facts?.from && r.facts.to && `${formatDate(r.facts.from)} – ${formatDate(r.facts.to)}`, keptPdf ? t('drop.kept') : t('drop.entries', { n: r.statement.refs.length })].filter(Boolean).join(' · ') : receipt && receipt.filename !== r.name ? receipt.filename : t(`drop.kind.${r.kind ?? 'receipt'}` as 'drop.kind.receipt')}{facts ? ` · ${facts}` : ''}{r.twin?.relation === 'companion' ? ` · ${t('drop.twin.companion', { name: r.twin.name })}` : r.document ? ` · ${t(`drop.doc.${r.document}` as 'drop.doc.newsletter')}` : ''}</small>
-          {r.payouts ? <small data-testid="drop-payouts">{t('drop.booked.payouts', { n: r.payouts.booked, provider: r.payouts.provider })}{r.payouts.running ? ` · ${t('drop.booked.payoutsRunning', { n: r.payouts.running })}` : ''}</small> : null}</div>
+          {r.payouts ? <small data-testid="drop-payouts" data-waits={r.payouts.waits ?? ''}>{payoutsBookedText(r.payouts, r.payouts.provider)}</small> : null}
+          {r.payouts?.waits ? <button type="button" className="linkbtn dfold" data-testid="drop-payouts-switch-on" onClick={() => go(BOOKING_SWITCH_ON)}>{t('marks.goSwitchOn')}</button> : null}</div>
         <div className="dgo">
           <span className={`dchip p-${x.kind}`}>{x.kind === 'working' ? (x.step ?? t('drop.p.working')) : t(`drop.p.${x.kind}` as 'drop.p.read')}</span>
           {x.kind === 'unread' ? (

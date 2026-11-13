@@ -344,10 +344,13 @@ Two markers flag an entry you must read before you update:
   account, the cut-over day, the fee account) no longer makes «Buchen» wait for «Einschalten»: an
   answer to the app's own question is her switching on, and the payouts it decides are booked at
   once, bank / clearing account without VAT; the row says «40 Auszahlungen von Shopify gebucht».
-  The same file changed by hand still waits. After «Einschalten» what waited is booked.
+  The same file changed by hand still waits; when «Buchen» waited already, the row and Aufgaben say
+  so, with the way to «Einschalten». «Einschalten» of «Buchen» books the payouts code decides and
+  says how many.
 - A provider's payout never gets a revenue proposal in the hand form: from its clearing account
-  without a code once the company's file names it, otherwise no account, with a sentence on what a
-  payout is and what it waits for. Its line on the payment names no file path any more.
+  without a code once the company's file names it, otherwise no account (before the cut-over day:
+  as the business's last booking), with a sentence on what a payout is and what it waits for. Its
+  line on the payment names no file path any more. A revenue account that is none is refused.
 - Aufgaben names a provider's payouts as its payouts («40 Auszahlungen von Shopify ohne Buchung»),
   grouped, with the one thing to do (the order export, or «Jetzt buchen»).
 - The provider's questions in the drop row come one at a time and once (the second report row

@@ -72,9 +72,11 @@ export type PaymentNature =
  * holds, never a sale. `ready`: code books it bank / its clearing account `account` without VAT;
  * `clearing`, `since`: the company's file lacks it, the provider's report asks; `gap`: before the
  * cut-over day beside sales a report booked, hers to decide; `before`: before the cut-over day, booked
- * as the payouts before it were.
+ * as the payouts before it were (the business's last booking proposed, never the default sale).
+ * `sales`: the provider's file names a sales report (its order export); without one, its payout report
+ * books its sales.
  */
-export interface PayoutNature { kind: 'payout'; provider: string; why: 'ready' | 'clearing' | 'since' | 'gap' | 'before'; account?: string; since?: string }
+export interface PayoutNature { kind: 'payout'; provider: string; why: 'ready' | 'clearing' | 'since' | 'gap' | 'before'; account?: string; since?: string; sales?: boolean }
 
 /** What code knows beside the books when the form opens. */
 export interface DraftKnowledge {
@@ -445,8 +447,11 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   });
 
   const nature = known.nature;
-  // A provider's payout is no sale (#404): from its clearing account when code books it so, else nothing proposed.
-  if (nature?.kind === 'payout') {
+  // A provider's payout is no sale (#404): from its clearing account when code books it so, else nothing proposed;
+  // before the cut-over day as the payouts before it were (the business's last booking), never the default sale.
+  const payoutBefore = nature?.kind === 'payout' && nature.why === 'before';
+  if (payoutBefore) notes.push(nature);
+  if (nature?.kind === 'payout' && !payoutBefore) {
     notes.push(nature);
     const from = nature.why === 'ready' && nature.account ? nature.account : '';
     return result([place(from, paid, '', from ? { account: { from: 'clearing', provider: nature.provider } } : undefined)]);
@@ -547,7 +552,7 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   } else if (proposes && (nature?.kind === 'ownTransfer' || nature?.kind === 'authority')) {
     notes.push(nature);
     other = { account: '', vat: '' };
-  } else if (proposes && moneyIn) {
+  } else if (proposes && moneyIn && !payoutBefore) {
     // Money back from a business the firm buys from: a refund on the account of its last purchase, the code inverted on it.
     // Plausible only when it is no more than the firm paid that business, and the text names no invoice of the firm's own.
     const bought = own?.named ? undefined : refundOf(books, tx, bankAccounts, paid, invoices);

@@ -133,7 +133,7 @@ function sourceText(s: DraftSource, account: string | undefined, vat: string | u
 /** A fact under the lines, in plain words (DraftNote). */
 function noteText(n: DraftNote): string {
   switch (n.kind) {
-    case 'payout': return t(`journal.byHand.note.payout.${n.why}`, { provider: n.provider, account: n.account ?? '', since: n.since ? formatDate(n.since) : '' });
+    case 'payout': return t(`journal.byHand.note.payout.${n.why}${(n.why === 'clearing' || n.why === 'since') && n.sales === false ? 'NoSales' : ''}` as 'journal.byHand.note.payout.gap', { provider: n.provider, account: n.account ?? '', since: n.since ? formatDate(n.since) : '' });
     case 'authority': return t('journal.byHand.note.authority', { name: n.name });
     case 'saleVat': return t(`journal.byHand.note.saleVat.${n.why}`);
     case 'ask': return t('journal.byHand.note.ask', { question: n.question });

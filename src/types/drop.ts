@@ -88,8 +88,8 @@ export interface DropRow {
   report?: ReportSummary;
   /** A report the company's file of its provider cannot book yet: the account (or fee code) the row asks for, once. */
   askProvider?: ProviderAsk;
-  /** Her answer in this row booked the provider's payouts it decided (#404): how many, and how many runs still book. */
-  payouts?: { provider: string; booked: number; running: number };
+  /** Her answer in this row booked the provider's payouts it decided (#404): how many of how many, or that the booking waits for «Einschalten». */
+  payouts?: PayoutsBooked & { provider: string };
   /** A report held because no payout of its provider is recognised: why, and what was looked at. */
   payoutUnseen?: PayoutUnseen;
   /** The person took the report anyway («Trotzdem übernehmen»): the unseen-payout check is skipped; a bank CSV «schon da» is read, its columns asked. */
@@ -138,11 +138,18 @@ export interface StatementMovement { date: string; amount: number; counterparty?
  * A provider's payouts of the open period without a booking, by what they wait for (#404,
  * src/server/provider-payouts.ts): `ready` code books them now (bank / `account`, without VAT);
  * `clearing` or `since` the company's file lacks it (the provider's report asks); `gap` before the
- * cut-over day beside sales a report booked; `before` before the cut-over day, a payment like any other.
+ * cut-over day beside sales a report booked. `sales`: the provider's file names a sales report (its
+ * order export); without one its payout report is what books its sales.
  */
-export interface PayoutGroup { provider: string; name: string; why: 'ready' | 'clearing' | 'since' | 'gap' | 'before'; refs: string[]; account?: string; since?: string }
+export interface PayoutGroup { provider: string; name: string; why: 'ready' | 'clearing' | 'since' | 'gap'; refs: string[]; account?: string; since?: string; sales: boolean }
 
-export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: string; file: string; since?: string }
+/**
+ * What booking a provider's payouts came to (src/server/provider-payouts.ts bookPayouts): `booked` of
+ * `of`; `waits: 'switchOn'`: nothing booked, the booking workflow waits for «Einschalten».
+ */
+export interface PayoutsBooked { booked: number; of: number; waits?: 'switchOn' }
+
+export interface PayoutWaitView { why: 'clearing' | 'since' | 'gap'; provider: string; file: string; since?: string; /** The provider's file names a sales report (its order export). */ sales: boolean }
 
 /**
  * What the company's file of a provider lacks for its report: its clearing account (with the cut-over

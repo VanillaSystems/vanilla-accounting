@@ -187,9 +187,9 @@ router.post('/api/automation', async (req, res) => {
     return;
   }
   const out = await engine().command(cmd);
-  // Switched on: what waited for it is booked now (#404).
-  if (cmd.kind === 'approve' && out.ok) await bookWhatWaited(cmd.workflow);
-  res.json(out);
+  // The booking switched on: the provider payouts code decides are booked now, in code (#404).
+  const payouts = cmd.kind === 'approve' && out.ok ? await bookWhatWaited(cmd.workflow) : undefined;
+  res.json(payouts ? { ...out, payouts } : out);
 });
 
 /** The direct way, without AI: a workflow's schedule, or null to switch it off. It applies at once and waits in Änderungen to be saved. */

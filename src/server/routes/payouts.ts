@@ -2,7 +2,7 @@
  * A payment provider's payouts without a booking (#404, src/server/provider-payouts.ts):
  *
  *   GET  /api/payouts          the groups by provider and by what they wait for (Aufgaben names them as payouts)
- *   POST /api/payouts/book     { provider }: a booking run for each payout code books now; how many were booked
+ *   POST /api/payouts/book     { provider }: books the payouts code books now, in code; how many of how many, or that booking waits for «Einschalten»
  */
 import { Router } from 'express';
 import { RequestError } from '../books.js';
@@ -16,5 +16,5 @@ router.post('/api/payouts/book', async (req, res) => {
   const provider = (req.body as { provider?: unknown })?.provider;
   if (typeof provider !== 'string' || !provider) throw new RequestError(400, 'provider erwartet.');
   const refs = readyPayouts(provider);
-  res.json({ ok: true, ...(await bookPayouts(refs)), of: refs.length });
+  res.json({ ok: true, ...(await bookPayouts(refs)) });
 });

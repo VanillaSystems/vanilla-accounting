@@ -34,7 +34,8 @@ import { approvalWithheld, fileName, returnSummary } from './filing-summary.js';
 import { outcomeText, periodText, paymentWords, readsInWords } from './words.js';
 import type { PeriodReturn, PreparedXml, SealOutput } from '../../../workflows/filing.js';
 import type { ClearingCheck } from '../../../booking/providers.js';
-import type { PayoutGroup } from '../../../types/drop.js';
+import type { PayoutGroup, PayoutsBooked } from '../../../types/drop.js';
+import { BOOKING_SWITCH_ON, payoutsBookedText } from '../../lib/payouts.js';
 import { commandRefusalText, refusalPayment, refusalText } from '../../automation/refusal.js';
 import type { Refusal } from '../../../types/refusal.js';
 import { RunFromLog } from '../../history/RunHistory.js';
@@ -312,11 +313,11 @@ function Pending({ w, view, nav }: { w: WorkflowDecl; view: AutomationView; nav:
   const p = view.pending.find((x) => x.workflow === w.id);
   const [busy, setBusy] = useState(false);
   if (!p) return null;
-  const act = (cmd: AutomationCommand, done?: string) => async () => {
+  const act = (cmd: AutomationCommand, done?: string, said?: (r: Awaited<ReturnType<typeof automationCommand>>) => string | undefined) => async () => {
     setBusy(true);
     try {
       const r = await automationCommand(cmd);
-      nav.toast(r.ok ? done ?? t('automation.done') : commandRefusalText(r));
+      nav.toast(r.ok ? said?.(r) ?? done ?? t('automation.done') : commandRefusalText(r));
     } catch (e) {
       nav.toast(errorText(e));
     } finally {
@@ -347,7 +348,7 @@ function Pending({ w, view, nav }: { w: WorkflowDecl; view: AutomationView; nav:
       ) : <span className="m">{t('automation.pending.unchecked')}</span>}
       <span className="wfactions">
         <button type="button" className="btn" disabled={busy} onClick={act({ kind: 'check', workflow: w.id }, t('automation.pending.checking'))}><BotIcon />{t('automation.pending.check')}</button>
-        <button type="button" className="btn primary" disabled={busy || count('running') > 0} onClick={act({ kind: 'approve', workflow: w.id }, t('automation.pending.on'))}>{t('automation.pending.approve')}</button>
+        <button type="button" className="btn primary" disabled={busy || count('running') > 0} onClick={act({ kind: 'approve', workflow: w.id }, t('automation.pending.on'), (r) => { const p = (r as { payouts?: PayoutsBooked }).payouts; return p ? t('automation.pending.onPayouts', { n: p.booked, of: p.of }) : undefined; })}>{t('automation.pending.approve')}</button>
       </span>
       <span className="m">{t('automation.pending.why')}</span>
     </div>
@@ -870,6 +871,18 @@ function usePayoutGroups(books: Index): PayoutGroup[] {
   return groups;
 }
 
+/** What a group of payouts waits for, in words: a provider without a sales report books its sales from its payout reports. */
+function payoutLead(g: PayoutGroup): string {
+  const own = g.sales ? '' : 'NoSales';
+  const account = g.account ?? '';
+  switch (g.why) {
+    case 'ready': return t('automation.payouts.ready', { account });
+    case 'gap': return t('automation.payouts.gap', { account, since: g.since ? formatDate(g.since) : '' });
+    case 'since': return t(`automation.payouts.since${own}` as 'automation.payouts.since', { provider: g.name, account });
+    default: return t(`automation.payouts.clearing${own}` as 'automation.payouts.clearing', { provider: g.name });
+  }
+}
+
 /**
  * A provider's payouts without a booking, as its payouts (#404): one group per provider and what they
  * wait for, with the one thing to do: drop the provider's order export (it asks for the clearing
@@ -878,10 +891,12 @@ function usePayoutGroups(books: Index): PayoutGroup[] {
  */
 function PayoutTasks({ groups, books, nav, canEdit }: { groups: PayoutGroup[]; books: Index; nav: Nav; canEdit: boolean }) {
   const [busy, setBusy] = useState<string>();
+  // «Buchen» waits for «Einschalten»: said under the group, with the way there, not as «0 gebucht».
+  const [waits, setWaits] = useState<string>();
   const book = (g: PayoutGroup) => {
     setBusy(g.provider);
     api.bookPayouts(g.provider).then(
-      (r) => { setBusy(undefined); nav.toast(t('automation.payouts.booked', { n: r.booked, provider: g.name })); },
+      (r) => { setBusy(undefined); setWaits(r.waits ? g.provider : undefined); nav.toast(payoutsBookedText(r, g.name)); },
       (e: unknown) => { setBusy(undefined); nav.toast(errorText(e)); },
     );
   };
@@ -892,8 +907,9 @@ function PayoutTasks({ groups, books, nav, canEdit }: { groups: PayoutGroup[]; b
         return (
           <section key={`${g.provider}-${g.why}`} className="wfunbooked" data-testid="unbooked-payouts" data-why={g.why}>
             <h3>{t('automation.payouts.title', { n: g.refs.length, provider: g.name })}</h3>
-            <p className="m">{t(`automation.payouts.${g.why}`, { provider: g.name, account: g.account ?? '', since: g.since ? formatDate(g.since) : '' })}</p>
+            <p className="m">{payoutLead(g)}</p>
             {g.why === 'ready' && canEdit ? <p><button type="button" className="btn" disabled={busy === g.provider} data-testid="book-payouts" onClick={() => book(g)}>{t('automation.payouts.book', { n: g.refs.length })}</button></p> : null}
+            {waits === g.provider ? <p className="warnline" data-testid="book-payouts-waits">{t('drop.booked.payoutsWait', { provider: g.name })}{' '}<button type="button" className="golink" onClick={() => nav.go({ route: BOOKING_SWITCH_ON, query: {} })}>{t('marks.goSwitchOn')}</button></p> : null}
             <details>
               <summary className="m">{t('automation.payouts.show', { n: g.refs.length })}</summary>
               <ul>

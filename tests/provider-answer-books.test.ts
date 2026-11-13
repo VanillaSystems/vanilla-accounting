@@ -61,7 +61,7 @@ const payoutsOf = (b: Awaited<ReturnType<typeof books>>) => b.transactions.filte
 const pendingOf = async (api: ApiServer) => ((await api.send('GET', '/api/automation')).json as { pending?: Array<{ workflow: string; files: string[] }> }).pending ?? [];
 
 /** Her first two drops, and her answers in the rows as the dialog sends them. */
-async function walk(api: ApiServer) {
+async function walk(api: ApiServer, beforeAnswer: () => void = () => undefined) {
   const one = await dropper(api);
   await one.add('camt053_LUKB_Q3-2026.xml');
   await api.rest();
@@ -69,8 +69,8 @@ async function walk(api: ApiServer) {
   assert.equal(payoutsOf(before).length, 40, 'her statement has 40 payouts of Shopify');
   assert.equal(before.journalEntries.filter((e) => payoutsOf(before).some((t) => t.ref === e.transactionRef)).length, 0, 'before her answers no payout is booked');
   // Aufgaben names them as the payouts of Shopify, by the provider's name, not the processor's, and what they wait for.
-  const groups = ((await api.send('GET', '/api/payouts')).json as { groups: Array<{ name: string; why: string; refs: string[] }> }).groups;
-  assert.deepEqual(groups.map((g) => [g.name, g.why, g.refs.length]), [['Shopify', 'clearing', 40]]);
+  const groups = ((await api.send('GET', '/api/payouts')).json as { groups: Array<{ name: string; why: string; refs: string[]; sales: boolean }> }).groups;
+  assert.deepEqual(groups.map((g) => [g.name, g.why, g.refs.length, g.sales]), [['Shopify', 'clearing', 40, true]], 'its file names a sales report: it waits for the order export');
   const two = await dropper(api);
   await two.add('orders_export_1.csv');
   const both = await two.add('payment_transactions_export_1.csv');
@@ -79,6 +79,10 @@ async function walk(api: ApiServer) {
   // The revenue account comes with the clearing account, proposed from what she sells, never taken silently.
   assert.deepEqual(orders.askProvider?.revenue, { account: '3200', sells: ['traded'] });
   assert.equal(orders.askProvider?.since, '2026-07-01');
+  // A revenue account that is none (the bank) is refused with its code; nothing is kept.
+  const wrong = await two.act(orders.key, { kind: 'provider', account: orders.askProvider!.propose!.account, since: orders.askProvider!.since, revenue: '1020', ...(orders.askProvider!.propose!.name ? { create: true } : {}) });
+  assert.deepEqual([wrong.status, wrong.s.code], [400, 'revenueNotRevenue']);
+  beforeAnswer();
   const answered = await two.act(orders.key, { kind: 'provider', account: orders.askProvider!.propose!.account, since: orders.askProvider!.since, revenue: orders.askProvider!.revenue!.account, ...(orders.askProvider!.propose!.name ? { create: true } : {}) });
   assert.equal(answered.status, 200, JSON.stringify(answered.s));
   const fees = answered.s.rows.find((r) => r.name === 'payment_transactions_export_1.csv')!;
@@ -93,7 +97,7 @@ test('her answers in the drop row book the 40 payouts bank / clearing account wi
   try {
     const { answered } = await walk(api);
     const orders = answered.rows.find((r) => r.name === 'orders_export_1.csv')!;
-    assert.equal(orders.payouts?.booked, 40, 'the row says how many payouts the answer booked');
+    assert.deepEqual(orders.payouts, { provider: 'Shopify', booked: 40, of: 40 }, 'the row says how many payouts the answer booked');
     await api.rest();
     const b = await books(api);
     const payouts = payoutsOf(b);
@@ -136,6 +140,19 @@ test('the hand form of a payout never proposes turnover: bank / the clearing acc
     assert.equal(f.line, line, why);
     assert.deepEqual(f.notes.map((n) => [n.kind, 'why' in n ? n.why : '']), [['payout', why]], why);
   }
+  // Before the cut-over day: as the payouts before it were booked (the business's last booking), never the default sale.
+  writeFileSync(file, 'id: shopify\nprovider:\n  clearing: "1093"\n  since: 2026-07-20\n');
+  const p = loadBooks(ws);
+  const second = txs.find((t) => t.description.includes('88124407'))!;
+  p.journalEntries.push({ id: 'pre', transactionRef: second.ref, date: second.date, accountDebit: '1020', accountCredit: '3400', amount: second.amount, origin: 'manual' });
+  saveBooks(ws, p);
+  const before = handStart(ws, first.ref);
+  const draft = bookingDraft(loadBooks(ws), first.ref, ws.bankAccounts, undefined, { defaults: { sales: '3200' }, nature: before?.nature })!;
+  assert.deepEqual(draft.lines.map((l) => [l.accountDebit, l.accountCredit, l.source?.account?.from]), [['1020', '3400', 'precedent']], 'the business\'s last booking');
+  assert.ok(draft.notes.some((n) => n.kind === 'payout' && n.why === 'before') && !draft.notes.some((n) => n.kind === 'sale'));
+  const q = loadBooks(ws);
+  q.journalEntries = q.journalEntries.filter((e) => e.id !== 'pre');
+  saveBooks(ws, q);
   // Before the cut-over day beside sales a report booked onto the clearing account: hers to decide, no account.
   writeFileSync(file, 'id: shopify\nprovider:\n  clearing: "1093"\n  since: 2026-07-05\n');
   const s = loadBooks(ws);
@@ -157,9 +174,13 @@ test('«Einschalten» books what waited: the payouts a change by hand decided ar
     assert.ok((await pendingOf(api)).some((p) => p.workflow === 'booking'));
     const before = await books(api);
     assert.equal(before.journalEntries.filter((e) => payoutsOf(before).some((t) => t.ref === e.transactionRef)).length, 0);
+    const inbox = async () => ((await api.send('GET', '/api/automation')).json as { runs: Array<{ workflow: string }> }).runs.filter((r) => r.workflow === 'receipt-intake').length;
+    const runs = await inbox();
     const on = await api.send('POST', '/api/automation', { kind: 'approve', workflow: 'booking' });
     assert.equal(on.json.ok, true);
+    assert.deepEqual(on.json.payouts, { booked: 40, of: 40 }, 'the payouts code decides, said with the switching on');
     await api.rest();
+    assert.equal(await inbox(), runs, 'no inbox run: «Einschalten» books only what code decides');
     const b = await books(api);
     const booked = payoutsOf(b).filter((t) => b.journalEntries.some((e) => e.transactionRef === t.ref && e.accountDebit === '1020' && e.accountCredit === '1093' && !e.vatCode));
     assert.equal(booked.length, 40, 'switched on, the 40 payouts are booked from the clearing account');
@@ -219,5 +240,25 @@ test('in the app: Aufgaben names the 40 payouts as Shopify\'s with the one thing
     assert.deepEqual(app.errors, []);
   } finally {
     await app.stop();
+  }
+});
+
+test('her answer while «Buchen» already waits for a change from elsewhere: it keeps waiting, nothing is booked, and the row says why', async () => {
+  const api = await startApi(shopBooks(), {}, { whole: true });
+  try {
+    const file = join(api.root, 'knowledge', 'suppliers', 'shopify.yaml');
+    const { answered } = await walk(api, () => {
+      // A change by hand before her answer: «Buchen» waits for «Einschalten».
+      writeFileSync(file, 'id: shopify\nprovider:\n  payoutDays: 5\n');
+    });
+    const orders = answered.rows.find((r) => r.name === 'orders_export_1.csv')!;
+    assert.deepEqual(orders.payouts, { provider: 'Shopify', booked: 0, of: 40, waits: 'switchOn' });
+    assert.ok((await pendingOf(api)).some((p) => p.workflow === 'booking'), 'a workflow that waited keeps waiting');
+    const b = await books(api);
+    assert.equal(b.journalEntries.filter((e) => payoutsOf(b).some((t) => t.ref === e.transactionRef)).length, 0);
+    const book = await api.send('POST', '/api/payouts/book', { provider: 'shopify' });
+    assert.deepEqual(book.json, { ok: true, booked: 0, of: 40, waits: 'switchOn' }, '«Jetzt buchen» says it too');
+  } finally {
+    await api.stop();
   }
 });

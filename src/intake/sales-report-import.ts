@@ -614,6 +614,7 @@ export function bookReportCorrection(ws: Workspace, books: Books, receiptId: str
 export type ProviderRefusal =
   | { code: 'unknownAccount'; params: { account: string } }
   | { code: 'clearingNotBalance'; params: { account: string } }
+  | { code: 'revenueNotRevenue'; params: { account: string } }
   | { code: 'unknownVatCode'; params: { code: string } }
   | { code: 'codeNotTaken'; params: { code: string; method: 'none' | 'net-rate' } }
   | { code: 'sinceNotOpen'; params: { since: string; from: string } }
@@ -635,6 +636,8 @@ export function setProviderAccount(ws: Workspace, providerId: string, set: { cle
   const accounts = chartNames(chartOf(ws));
   for (const a of [set.clearing, set.revenue, set.fees?.account]) if (a !== undefined && !accounts.has(a)) return { ok: false, refusal: { code: 'unknownAccount', params: { account: a } } };
   if (set.clearing !== undefined && !['asset', 'liability'].includes(chart().typeOf(set.clearing) ?? '')) return { ok: false, refusal: { code: 'clearingNotBalance', params: { account: set.clearing } } };
+  // The orders' revenue goes on a revenue account, never on the bank or the clearing account (#404).
+  if (set.revenue !== undefined && chart().typeOf(set.revenue) !== 'revenue') return { ok: false, refusal: { code: 'revenueNotRevenue', params: { account: set.revenue } } };
   const other = set.clearing !== undefined ? providers.find((x) => x.id !== p.id && x.provider.clearing === set.clearing) : undefined;
   if (other) return { ok: false, refusal: { code: 'clearingTaken', params: { account: set.clearing!, other: other.name } } };
   if (set.since !== undefined) {
