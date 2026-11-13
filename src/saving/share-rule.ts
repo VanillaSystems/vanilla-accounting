@@ -138,7 +138,7 @@ export function shareOffer(ws: Workspace, books: Books, ref: string, context: Cl
   const percent = Math.round((split.share / tx.amount) * 100);
   const booking: RuleBooking = { account, vat: ruleCode(split.vat), private: percent, ...(split.ownUse ? { ownUse: true as const } : {}) };
   if (percent <= 0 || percent >= 100) return undefined;
-  const lines = ruleBookingLines(tx, booking, mappedReceipts(books, tx), owner);
+  const lines = ruleBookingLines(tx, booking, mappedReceipts(books, tx), owner, books);
   // A whole percent: the rule books the split again, give or take the odd cent of an uneven half (a setup's share is no split yet).
   if (!split.setup && (!lines[1] || Math.abs(Math.round(lines[1].amount * 100) - Math.round(split.share * 100)) > 1)) return undefined;
   const fx = loadFxResolver();

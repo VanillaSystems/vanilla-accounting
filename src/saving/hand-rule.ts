@@ -183,7 +183,7 @@ export function handStart(ws: Workspace, ref: string, by?: 'text'): HandStart | 
   const then = placed?.rule.then;
   const booking = then?.kind === 'book' ? then.booking : then?.booking;
   const rule = placed && booking ? {
-    id: placed.rule.id, lines: ruleBookingLines(tx, booking, mappedReceipts(books, tx), context.ownerAccount),
+    id: placed.rule.id, lines: ruleBookingLines(tx, booking, mappedReceipts(books, tx), context.ownerAccount, books),
     ...(then?.kind === 'ask' && { ask: then.question }), ...(booking.tags && { tags: booking.tags }),
   } : undefined;
   let wordings: ReadonlyArray<{ test(s: string): boolean }> | undefined;

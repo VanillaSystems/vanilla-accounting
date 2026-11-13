@@ -68,9 +68,15 @@ test('a refund of a booked M81 purchase on an expense account takes -M81, though
   assert.equal(e.vatCode, '-M81');
 });
 
-test('a refund of another amount than the purchase keeps the zero code with its minus', async () => {
+test('a part of the purchase refunded takes its code with the minus, at its rate (#357)', async () => {
   const b = books('1540', 'I81', card('R1', '2026-10-09', 'CRDT', 30));
   const e = await booked(b, { accountDebit: '', accountCredit: '1540', amount: 30, vatCode: 'I0', description: 'Kulanz' });
+  assert.equal(e.vatCode, '-I81');
+});
+
+test('more back than the purchase was is no refund of it: the zero code with its minus', async () => {
+  const b = books('1540', 'I81', card('R1', '2026-10-09', 'CRDT', 150));
+  const e = await booked(b, { accountDebit: '', accountCredit: '1540', amount: 150, vatCode: 'I0', description: 'Gutschrift' });
   assert.equal(e.vatCode, '-I0');
 });
 
