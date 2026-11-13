@@ -22,7 +22,8 @@ import { waitingForReceipt, type WaitingPayment } from '../../../accounting/rece
 import { localToday, type IsoDate } from '../../../accounting/periods.js';
 import type { HeldOrder, MissingBill, ProviderIssues } from '../../../booking/provider-issues.js';
 import { unclearedContributions, type Uncleared } from '../../../booking/withheld.js';
-import { issuedByFirm, ownNumbers, twoVendors, vendorKey, type Firm } from '../../../intake/own-invoice.js';
+import { issuedByFirm, ownNumbers, vendorKey, type Firm } from '../../../intake/own-invoice.js';
+import type { DocumentsData } from '../../../core/modules/schema.js';
 import { agreedBasis, baseCurrency, documents } from '../../../engines/index.js';
 
 export type PeriodIssue =
@@ -222,17 +223,28 @@ export function unbookedOpen(books: Pick<Index, 'transactions' | 'journalEntries
   return { unbooked: open.length, waitingReceipt: count(false), waitingOutlays: count(true), ...(open[0] ? { first: open[0] } : {}) };
 }
 
+/** A name to compare whole: its letters and digits, without its legal forms («Kälin Advisory GmbH» is «kälinadvisory»). */
+function nameKey(name: string | undefined, words: DocumentsData): string {
+  const legal = new Set((words.legalForms ?? []).map((w) => vendorKey(w)));
+  return (name ?? '').split(/[\s,.]+/u).map((w) => vendorKey(w)).filter((w) => w && !legal.has(w)).join('');
+}
+
 /**
  * The firm's own invoice by issuedByFirm: by its UID, or, while the settings have none (#466, #497), by its name heading
- * the letterhead when the vendor read on the receipt names the firm too: its name, or no business (documents.yaml
- * notVendor, the model's «Verkauf» for the firm's own sale). The name alone is no proof: a supplier whose logo is an
- * image leaves the addressee on the first line, and its read vendor names the supplier.
+ * the letterhead, and only with each of these: it is an invoice with its own number (ownNumbers), no credit note, and the
+ * vendor the model read on it is the firm's own sale (documents.yaml ownSale, «Verkauf») or the firm's name, whole and
+ * without its legal form («Meier» is not «Meier Tobler»). The name alone is no proof: a supplier whose logo is an image
+ * leaves the addressee on the first line, and the model names the supplier or only the document («Rechnung»), which
+ * says nothing. What is left: a supplier's invoice the model read as «Verkauf» or as the firm, with the firm's name
+ * on its first line and at most the one UID in its letterhead; the model is told «Verkauf» is the firm's own sale only.
  */
-function ownByFirm(r: Receipt, firm: Firm | undefined): boolean {
+function ownByFirm(r: Receipt, firm: Firm | undefined, words: DocumentsData = documents()): boolean {
   const by = issuedByFirm(r, firm);
   if (by !== 'name') return by === 'uid';
-  const read = vendorKey(r.title?.vendor);
-  return !!read && (new Set((documents().notVendor ?? []).map(vendorKey)).has(read) || !twoVendors([read, vendorKey(firm?.name)]));
+  if ((r.amount ?? 0) < 0 || !ownNumbers(r, words).length) return false;
+  const read = nameKey(r.title?.vendor, words);
+  if (!read) return false;
+  return (words.ownSale ?? []).some((w) => vendorKey(w) === read) || read === nameKey(firm?.name, words);
 }
 
 const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -248,7 +260,7 @@ function mayBePaid(books: Index, r: Receipt): boolean {
 
 /**
  * Whether a receipt without a payment is the firm's own invoice that only waits for its customer,
- * nothing for the person to do (#428): issued by the firm (ownByFirm, by its UID or by its name and read vendor), no
+ * nothing for the person to do (#428): issued by the firm (ownByFirm, by its UID, or by its name, its number and its read vendor), no
  * money in may be its payment (one booked without the link is hers to pair), and on the agreed basis its issue is
  * booked as a receivable (an invoice dropped, not issued in the app, has no event: its turnover is VAT work). Which list
  * names it is display, never a link. An invoice the app issued is never a receipt without a payment: its record is

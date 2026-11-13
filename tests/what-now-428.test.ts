@@ -130,6 +130,6 @@ test('the AI is handed the setup\'s waiting proposal, and the firm\'s own invoic
   assert.match(note, /listed in the order of the return's list «Noch offen», then what only the app's card adds/);
   assert.match(note, /Proposals from the setup that wait for the person's answer \(1\)[^\n]*\n- Alpentel AG: 50 % private, the rest on 6510/);
   assert.match(note, /Receipts without a payment \(1\)[^\n]*\n- «Hotel Pilatusblick/);
-  assert.match(note, /Invoices the firm issued, with its UID, that no payment in the books fits \(1\): they wait for the customer's payment, nothing for the person to do, so never name them as work[^\n]*\n- «[^\n]*Ausgangsrechnung RE-2026-036/);
+  assert.match(note, /Invoices the firm issued \(they show its UID, or its name heads them and they were read as its own sale\), that no payment in the books fits \(1\): they wait for the customer's payment, nothing for the person to do, so never name them as work[^\n]*\n- «[^\n]*Ausgangsrechnung RE-2026-036/);
   assert.ok(note.indexOf('Receipts without a payment') < note.indexOf('Proposals from the setup'), 'the list\'s points before the proposal, as on the card (#476)');
 });

@@ -450,10 +450,13 @@ Two markers flag an entry you must read before you update:
 
 - The firm's own unpaid invoice is again kept apart as «eigene Rechnung, wartet auf die Zahlung der
   Kundschaft» on the open list, the return's line and the AI's «was muss ich» card when the settings
-  have no UID (#497, since #466 the setup asks none). Without a UID it is told by the firm's name
-  heading the invoice and the vendor the AI read on it (the firm, or «Verkauf», its own sale). A
-  supplier's invoice that names the firm as its addressee stays a receipt without a payment: it shows
-  another UID, the AI read another vendor, or nothing but the name says it is the firm's.
+  have no UID (#497, since #466 the setup asks none). Without a UID it needs all of these: the firm's
+  name heads the invoice, the invoice has its own number, it is no credit note, and the AI read the
+  firm's own sale as its vendor («Verkauf», documents.yaml `ownSale`) or the firm's name whole,
+  without its legal form («Meier» is not «Meier Tobler»). A supplier's document that names the firm
+  as its addressee stays a receipt without a payment and keeps the return «noch nicht endgültig»:
+  it shows another UID, the AI read another vendor or only a document word («Rechnung»,
+  «Quittung», «Beleg»), or nothing but the name says it is the firm's.
 - The setup conversation keeps to the app's facts (#496). The AI is told where the books begin:
   the first statement's period, with what came before left in the old program. It is told that the
   opening is always per 1 January from the balance sheet of 31 December, never from an interim one,

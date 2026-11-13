@@ -109,6 +109,10 @@ legalForms: [GmbH, AG, SA, Sàrl, Sagl, KlG, KG, Ltd, Limited, Inc, Corp, LLC, C
 buyer: [Kunde, Kundin, Rechnungsadresse, Rechnungsempfänger, Ihre UID, Ihre MWST-Nr, Ihre MWST-Nummer, Customer, Bill to, Billed to, Invoice to, Your VAT number, Client, Cliente, Adresse de facturation, Votre numéro TVA, Indirizzo di fatturazione, Vostro numero IVA]
 # Words the model may take for a title's vendor that name no business: they tell no vendor apart.
 notVendor: [Verkauf, Verkäufe, Umsatz, Kasse, Kassenbon, Quittung, Rechnung, Beleg, Sale, Sales, Receipt, Invoice, Vente, Ventes, Caisse, Facture, Vendita, Vendite, Cassa, Fattura, Ricevuta]
+# The title's vendors the model gives the firm's own sale (src/llm/prompts.ts: «Verkauf» for its own invoices and
+# orders): on an invoice headed by the firm's name they say it is the firm's own (src/app/areas/automation/period-issues.ts
+# ownByFirm). Never a word that only names a document («Rechnung», «Quittung»): a supplier's invoice is read so too.
+ownSale: [Verkauf, Verkäufe, Umsatz, Sale, Sales, Vente, Ventes, Vendita, Vendite]
 
 # A courier's or forwarder's customs invoice (src/booking/customs-invoice.ts): each of its read lines
 # (Receipt.lineItems) is one position by its words, and the position lands on its account of the
