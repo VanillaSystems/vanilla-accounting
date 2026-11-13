@@ -5,7 +5,7 @@
 // exports, its monthly bills and the answer key agree to the Rappen. The columns are the ones the app's
 // processes/suppliers/shopify.yaml names (orders export, payments transactions export); the payouts
 // export is the file she finds first and is no report the app reads.
-import { ibanOf, uidOf, spaced, n, r2, r05, chf, mulberry32, addDays, weekday, bankDay, days, dmy, camt, csv, table, css, tillPhoto, estvRates, vatBoxes } from './kit.mjs';
+import { ibanOf, uidOf, spaced, n, r2, r05, chf, mulberry32, addDays, weekday, bankDay, days, dmy, camt, csv, table, css, tillPhoto, estvRates, vatBoxes, payroll, balanceSheet } from './kit.mjs';
 
 const REPO = new URL('../../../../', import.meta.url).pathname;
 const Q3 = { from: '2026-07-01', to: '2026-09-30' };
@@ -175,19 +175,24 @@ export default function build() {
   add(d2.day, 'CRDT', d2.gross, d2.name, `Bestellung ${d2.no}`, 'PMNT/RCDT/DMCT', { kind: 'deposit', o: d2 });
   add(d2.refundBank.day, 'DBIT', d2.refundBank.amount, d2.name, `Rückerstattung Bestellung ${d2.no}`, 'PMNT/ICDT/DMCT', { kind: 'deposit-refund', o: d2 });
 
-  // Wages, the AHV Akonto, the Q2 VAT, the bank's fee.
-  for (const m of ['07', '08', '09']) {
-    add(bankDay(`2026-${m}-25`), 'DBIT', 4200.00, FIRM.owner, `Lohn ${MONTH[m]} 2026`, 'PMNT/ICDT/SALA', { kind: 'wage' });
-    add(bankDay(`2026-${m}-25`), 'DBIT', 1450.00, FIRM.helper, `Lohn ${MONTH[m]} 2026`, 'PMNT/ICDT/SALA', { kind: 'wage' });
-  }
-  add('2026-09-28', 'DBIT', 2050.80, 'Ausgleichskasse Luzern', 'Akonto AHV/IV/EO/ALV Q3 2026', 'PMNT/ICDT/DMCT', { kind: 'ahv' });
+  // Wages and contributions as the payroll's documents state them (kit.mjs payroll): payslips, the Akonto bill, the pension fund's bill.
+  const pay = payroll({
+    firm: { name: FIRM.name, street: FIRM.street, city: FIRM.city }, months: ['07', '08', '09'],
+    people: [{ name: FIRM.owner, role: 'Geschäftsführerin', gross: 4700, bvg: 199.20 }, { name: FIRM.helper, role: 'Mitarbeiterin Versand (40 %)', gross: 1550 }],
+    ahvFund: { name: 'Ausgleichskasse Luzern', addr: 'Würzenbachstrasse 8, 6006 Luzern', no: 'AK-26-Q3-30871', file: 'Ausgleichskasse_Luzern' },
+    bvgFund: { name: 'Pensionskasse Zentral', addr: 'Bundesplatz 14, 6003 Luzern', no: 'PK-26-3-1180', file: 'Pensionskasse' },
+    ahvDate: '2026-07-07', bvgDate: '2026-07-01',
+  });
+  for (const m of ['07', '08', '09']) for (const p of pay.people) add(bankDay(`2026-${m}-25`), 'DBIT', p.net, p.name, `Lohn ${MONTH[m]} 2026`, 'PMNT/ICDT/SALA', { kind: 'wage' });
+  add('2026-09-28', 'DBIT', pay.ahv.total, 'Ausgleichskasse Luzern', 'Akonto AHV/IV/EO/ALV Q3 2026 AK-26-Q3-30871', 'PMNT/ICDT/DMCT', { kind: 'ahv' });
+  add('2026-07-10', 'DBIT', pay.bvg.total, 'Pensionskasse Zentral', 'Beiträge Q3 2026 PK-26-3-1180', 'PMNT/ICDT/DMCT', { kind: 'bvg' });
   add('2026-08-26', 'DBIT', 2208.35, 'Eidg. Steuerverwaltung ESTV', 'MWST 2. Quartal 2026', 'PMNT/ICDT/DMCT', { kind: 'estv' });
   add('2026-09-30', 'DBIT', 9.00, 'Luzerner Kantonalbank', 'Kontoführung Q3', 'ACMT/MDOP/FEES', { kind: 'fee' });
 
   rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   rows.forEach((r, i) => { r.ref = `LUKB-26-${String(i + 1).padStart(4, '0')}`; });
   const OPEN = 21460.25;
-  const statement = camt({ msgId: 'LUKB-20261001-1', created: '2026-10-01T05:30:00', stmtId: 'LUKB-STMT-Q3', iban: IBAN, ccy: 'CHF', owner: FIRM.name, bank: 'Luzerner Kantonalbank', open: OPEN, from: '2026-06-30', to: Q3.to, rows });
+  const statement = camt({ created: '2026-10-01T05:30:00', stmtId: 'LUKB-STMT-2026-Q3', iban: IBAN, ccy: 'CHF', owner: FIRM.name, bank: 'Luzerner Kantonalbank', open: OPEN, from: '2026-07-01', to: Q3.to, rows });
 
   // ─── Shopify's exports ─────────────────────────────────────────────────────
   const q3orders = orders.filter((o) => inQ3(o.createdDay));
@@ -230,10 +235,28 @@ export default function build() {
   for (const b of post) docs[`PostCH_Rechnung_${b.no}.pdf`] = `<style>${css}</style><h1>Post CH AG</h1><div class=small>Wankdorfallee 4, 3030 Bern<br>MWST-Nr. ${POST_UID} MWST</div><p style="margin-top:30px">${to}</p><h2>Rechnung ${b.no}</h2><p>Datum: ${dmy(b.date)} &nbsp; Leistungszeitraum: ${MONTH[b.m]} 2026, Versandetiketten</p><table><tr><th>Leistung</th><th class=r>Anzahl</th><th class=r>MWST</th><th class=r>Betrag CHF</th></tr><tr><td>PostPac Priority Inland</td><td class=r>${b.dom}</td><td class=r>8.1%</td><td class=r>${n(b.domNet)}</td></tr><tr><td>PostPac International Europa</td><td class=r>${b.abroad}</td><td class=r>0% (Export)</td><td class=r>${n(b.abroadNet)}</td></tr><tr><td colspan=3>Total exkl. MWST</td><td class=r>${n(r2(b.domNet + b.abroadNet))}</td></tr><tr><td colspan=3>MWST 8.1% auf ${n(b.domNet)}</td><td class=r>${n(b.vat)}</td></tr><tr><th colspan=3>Total CHF</th><th class=r>${n(b.total)}</th></tr></table><p>Zahlbar innert 30 Tagen.</p>`;
 
   const photos = {
-    'IMG_2231.jpg': tillPhoto({ shop: 'LANDI Sursee', uid: `${uidOf(['5520', '7711'].join(''))} MWST`, lines: landi.lines, total: landi.total, vat: [[8.1, landi.vat]], paid: 'Debitkarte ****4471', tilt: -5 }),
+    'IMG_2231.jpg': tillPhoto({ shop: 'LANDI Sursee', uid: `${uidOf(['5520', '7711'].join(''))} MWST`, lines: landi.lines, total: landi.total, vat: [[8.1, landi.vat]], paid: 'Debitkarte ****4471', date: '2026-08-21', time: '10:37', tilt: -2 }),
     // A product photo for the shop: no receipt.
     'IMG_2240.jpg': `<body style="margin:0;background:radial-gradient(circle at 50% 45%,#f4efe6,#cfc4b2);height:900px;display:flex;align-items:center;justify-content:center"><div style="width:260px;height:200px;border-radius:50% 50% 45% 45%;background:#7a4a2e;box-shadow:inset -20px -20px 40px #0005, 6px 10px 20px #0004;position:relative"><div style="position:absolute;right:-70px;top:60px;width:90px;height:28px;background:#6b3f27;border-radius:14px;transform:rotate(-20deg)"></div><div style="position:absolute;left:90px;top:-22px;width:80px;height:30px;background:#5d361f;border-radius:40px 40px 6px 6px"></div></div><div style="position:absolute;bottom:60px;font:16px Helvetica;color:#5d4a3a">Kyusu Tokoname – Produktfoto Shop</div></body>`,
   };
+
+  // The credit note she wrote for the order paid by bank transfer and sent back (Shopify › Bestellung › Rückerstattung, printed).
+  docs[`Gutschrift_GS-2026-007_${d2.no.slice(1)}.pdf`] = `<style>${css}</style><h1>${FIRM.name}</h1><div class=small>${FIRM.street}, ${FIRM.city}<br>MWST-Nr. ${UID} MWST</div><p style="margin-top:30px">${d2.name}<br>${d2.zip} ${d2.city}</p><h2>Gutschrift GS-2026-007</h2><p>Datum: ${dmy(d2.refundBank.day)} &nbsp; zu Bestellung ${d2.no} vom ${dmy(d2.createdDay)} (Rücksendung)</p><table>${d2.lines.map((l) => `<tr><td>${l.qty} × ${l.name}</td><td class=r>-${n(l.price * l.qty)}</td></tr>`).join('')}<tr><th>Total Gutschrift CHF</th><th class=r>-${n(d2.gross)}</th></tr><tr><td class=small>darin MWST 8.1%</td><td class=r>-${n(r2((d2.gross * 8.1) / 108.1))}</td></tr></table><p>Der Betrag wird auf Ihr Konto überwiesen.</p>`;
+  const fid = 'Treuhand Surental GmbH, Sursee';
+  const stock = { dec: 7900, jun: 8400 };
+  const dec = { bank: 17905.10, shopify: 988.40, vat: 1640.25, capital: 20000 };
+  dec.carried = r2(dec.bank + dec.shopify + stock.dec - dec.vat - dec.capital);
+  const jun = { shopify: balanceOn('2026-06-30'), vat: 2208.35 };
+  jun.profit = r2(OPEN + jun.shopify + stock.jun - jun.vat - dec.capital - dec.carried);
+  const opening = {
+    dec: [['1020', 'Luzerner Kantonalbank', dec.bank], ['1093', 'Guthaben Shopify Payments', dec.shopify], ['1200', 'Warenlager', stock.dec]],
+    decL: [['2201', 'Abrechnungskonto MWST (4. Quartal 2025)', dec.vat], ['2800', 'Stammkapital', dec.capital], ['2970', 'Gewinnvortrag', dec.carried]],
+    jun: [['1020', 'Luzerner Kantonalbank', OPEN], ['1093', 'Guthaben Shopify Payments', jun.shopify], ['1200', 'Warenlager', stock.jun]],
+    junL: [['2201', 'Abrechnungskonto MWST (2. Quartal 2026)', jun.vat], ['2800', 'Stammkapital', dec.capital], ['2970', 'Gewinnvortrag', dec.carried], ['', 'Gewinn 1.1.–30.6.2026', jun.profit]],
+  };
+  docs['Bilanz_31.12.2025_Treuhand.pdf'] = balanceSheet({ firm: FIRM, fiduciary: fid, title: 'Bilanz', date: '2025-12-31', assets: opening.dec, liabilities: opening.decL });
+  docs['Zwischenbilanz_30.06.2026_Treuhand.pdf'] = balanceSheet({ firm: FIRM, fiduciary: fid, title: 'Zwischenbilanz', date: '2026-06-30', assets: opening.jun, liabilities: opening.junL });
+  Object.assign(docs, pay.docs);
 
   const files = {
     [CAMT]: statement.xml,
@@ -247,20 +270,31 @@ export default function build() {
   // The VAT-relevant entries of Q3 as the books should hold them: [day, code, amount (gross; for a -2 code the tax), what].
   const entries = [];
   const sales = orders.filter((o) => sp(o) && inQ3(o.day));
+  const stage = new Map();
   const domesticOf = (o) => o.country === 'CH' || o.country === 'LI';
   for (const o of sales) {
     if (!domesticOf(o)) entries.push([o.day, 'V0', o.gross, `${o.no} ${o.country}`]);
     else for (const [rt, t] of Object.entries(o.taxes)) entries.push([o.day, rt === '8.1' ? 'V81' : 'V26', t.base, `${o.no}${o.kind === 'mixed' ? ' (two rates)' : ''}`]);
+    for (let i = entries.length - 1; i >= 0 && !stage.has(entries[i]); i--) stage.set(entries[i], o.kind === 'mixed' ? 'mixed' : 'report');
   }
   entries.push([rf.day, '-V81', rf.amount, `${special.refund.no} refund`]);
+  stage.set(entries.at(-1), 'report');
   entries.push([d1.day, 'V81', d1.gross, `${d1.no} bank transfer`], [d2.day, 'V81', d2.gross, `${d2.no} bank transfer`], [d2.refundBank.day, '-V81', d2.refundBank.amount, `${d2.no} refunded by bank`]);
-  for (const f of feeBills) entries.push([f.date, 'I81-2', f.vat, `Shopify Payments Invoice ${f.m}`]);
+  for (const f of feeBills) { entries.push([f.date, 'I81-2', f.vat, `Shopify Payments Invoice ${f.m}`]); stage.set(entries.at(-1), 'bill'); }
   for (const s of subs) entries.push([bankDay(addDays(s.date, 1)), 'I81', s.total, `Shopify Rechnung ${s.no}`]);
   entries.push(['2026-07-29', 'M81-2', customs.vat, 'import VAT, assessment'], ['2026-07-29', 'M81', r2(dhl.fee + dhl.feeVat), 'DHL Vorlageprovision']);
   entries.push(['2026-08-06', 'M81', kartonage.total, 'Kartonage Rigi'], ['2026-09-02', 'M26', teeimport.total, 'Teeimport Basel'], ['2026-08-21', 'M81', landi.total, 'LANDI packaging']);
   for (const b of post) entries.push([b.paid, 'I81', r2(b.domNet + b.vat), `Post ${b.no} domestic`]);
 
   const ziffern = vatBoxes(entries);
+  const upTo = (kinds) => vatBoxes(entries.filter((e) => kinds.includes(stage.get(e) ?? 'bank')));
+  const stages = [
+    ['after drop 1 (statement, PDFs and photos; no Shopify export, no Payments Invoice)', upTo(['bank'])],
+    ['after drop 2 (orders and payments exports in; the mixed cart held)', upTo(['bank', 'report'])],
+    ['the mixed cart booked by rate (by her or the AI)', upTo(['bank', 'report', 'mixed'])],
+    ['after drop 3 (the Payments Invoices): the final figures above', ziffern],
+  ];
+  const boxes = [...new Set(stages.flatMap(([, z]) => Object.keys(z)))].sort();
   const fees = sum(q3tx, (t) => t.fee);
   const clearingApp = r2(sum(sales, (o) => o.gross) - rf.amount - fees - sum(q3payouts, (p) => p.total));
   const heldMixed = special.mixed;
@@ -272,18 +306,19 @@ export default function build() {
   };
   const other = rows.filter((r) => r.kind !== 'payout');
   const becomes = {
-    kyoto: '4200 / 1020, M0 (goods abroad, no Swiss VAT; the import VAT comes with the customs bill)',
+    kyoto: '4200 / 1020, M0 (goods abroad, no Swiss VAT; the import VAT comes with the customs bill). Paid in CHF from the CHF account: it tests no exchange rate',
     dhl: `4030 import VAT CHF ${k(customs.vat)} no code, then – / 4030 M81-2 CHF ${k(customs.vat)} from the assessment (Ziffer 400); 4040 Vorlageprovision CHF ${k(r2(dhl.fee + dhl.feeVat))} M81`,
-    kartonage: '4xxx packaging / 1020, M81 (receipt: the Kartonage PDF; its copy «(1)» is a duplicate)',
+    kartonage: 'packaging: 4xxx / 1020 M81, or an operating-cost account (6xxx, as 6280) with I81: the tax is equal, only 400 and 405 split differently (receipt: the Kartonage PDF; its copy «(1)» is a duplicate)',
     teeimport: '4200 / 1020, M26 (2.6 % on the invoice)',
     subscription: '6xxx IT / 1020, I81 (the Shopify Rechnung of the month)',
     post: 'shipping costs / 1020: the domestic part with I81 (or M81), the part abroad at 0 % without input tax',
-    landi: 'packaging / 1020, M81 (the photo IMG_2231)',
+    landi: 'packaging: 4xxx M81 or 6xxx I81, as Kartonage (the photo IMG_2231)',
     deposit: '1020 / 3200, V81 (a sale by bank transfer: the order export counts it, the bank books it)',
-    'deposit-refund': '3200 / 1020, -V81 (refund of the order paid by bank transfer)',
-    wage: '5000 / 1020, no VAT code, no receipt needed',
-    ahv: '5700 (and 2270) / 1020, no VAT code',
-    estv: '2201 (or 2200) / 1020, no VAT code: the Q2 return paid',
+    'deposit-refund': `3200 or 3800 (sales reductions) / 1020, -V81: the refund of the order paid by bank transfer; its document is the credit note Gutschrift_GS-2026-007_${d2.no.slice(1)}.pdf`,
+    wage: 'the net wage of its payslip: (a) or (b) under «Wages and contributions»; no VAT code (I0 on a wage is a low finding, no figure)',
+    ahv: `(a) 2270 CHF ${chf(pay.ahv.employee)} + 5700 CHF ${chf(pay.ahv.employer)}, or (b) 5700 whole; no VAT code`,
+    bvg: `(a) 2270 CHF ${chf(pay.bvg.employee)} + 5720 CHF ${chf(pay.bvg.employer)}, or (b) 5720 whole; no VAT code`,
+    estv: '2201 (or 2200) / 1020, no VAT code: the Q2 VAT of the interim balance per 30.06. paid',
     fee: '6940 / 1020, no VAT code, the bank\'s own fee row',
   };
   const key = [
@@ -297,6 +332,12 @@ export default function build() {
     '',
     `The mixed cart ${heldMixed.no} (${dmy(heldMixed.day)}, CHF ${k(heldMixed.gross)}: ${Object.entries(heldMixed.taxes).map(([rt, t]) => `${k(t.base)} at ${rt} %`).join(', ')}) is in these figures split by rate. The app cannot read two rates off one tax column and holds it («rate»); until the person books it, 303 and 313 lack its parts and the clearing account lacks CHF ${k(heldMixed.gross)}.`,
     `Without the three Shopify Payments Invoices (she forgets them at first) 405 is CHF ${k(sum(feeBills, (f) => f.vat))} lower: the fees stay on 6580 with I0. The September invoice is dated ${dmy(feeBills[2].date)}.`,
+    'Packaging (Kartonage, LANDI) on a material account with M81 or on an operating-cost account with I81 are both right: the tax is the same, only 400 and 405 split differently. The refund by bank on 3200 or 3800 with -V81: both right.',
+    '',
+    '### The figures at each stage of the walk (checkpoint 12)',
+    '',
+    table(['Ziffer', ...stages.map(([t]) => t)], boxes.map((b) => [b, ...stages.map(([, z]) => (z[b] === undefined ? '–' : k(z[b])))])),
+    '',
     `Without the customs assessment, 400 is CHF ${k(customs.vat)} lower (the import VAT stays a cost on 4030).`,
     '',
     '## Shopify',
@@ -307,9 +348,9 @@ export default function build() {
     `- Payments transactions export: ${counts.txRows} rows (charges and the refund). Fees of Q3: CHF ${k(fees)} on 6580 / 1093 with I0, each charge on its day; per month ${feeBills.map((f) => `${MONTH[f.m]} ${k(f.fees)}`).join(', ')}.`,
     `- Shopify Payments Invoices (no payment, the VAT in the fees): ${feeBills.map((f) => `${MONTH[f.m]} CHF ${k(f.vat)}`).join(', ')}, each booked once as – / 6580 with the tax-only code (I81-2, or M81-2 when the firm's file says so).`,
     `- Payouts on the statement: ${counts.payouts}, total CHF ${k(sum(q3payouts, (p) => p.total))}, each 1020 / 1093 without a VAT code. The first one (${dmy(q3payouts[0].day)}, CHF ${k(q3payouts[0].total)}) pays charges of late June.`,
-    `- The cut-over day the app should propose: ${dmy(Q3.from)} (the first day of the orders export). Clearing account 1093 «Durchlaufkonto Shopify», revenue 3200, fees 6580 with I0.`,
+    `- The cut-over day the app should propose: ${dmy(Q3.from)} (the first day of the orders export). A clearing account of the balance sheet for what Shopify holds (the chart's 1093, whatever its name), the revenue account (3200, which the app may take from the setup's «what you sell» without asking), fees 6580 with I0.`,
     `- Shopify's own balance (charges not yet paid out, net of fees): CHF ${k(balanceOn('2026-06-30'))} on 30.06., CHF ${k(balanceOn(Q3.to))} on 30.09.`,
-    `- Clearing account 1093 on 30.09. as the app can book it from these files (Q3 orders, refund and fees, less the Q3 payouts): CHF ${k(clearingApp)}. The right balance is Shopify's CHF ${k(balanceOn(Q3.to))}; the difference, CHF ${k(r2(balanceOn(Q3.to) - clearingApp))}, is the June balance the first July payouts paid (it needs an opening balance on 1093, or the June orders), and less the mixed cart while it is held. A negative balance on the way is the same cause.`,
+    `- Clearing account 1093 on 30.09. from the Q3 files alone (Q3 orders, refund and fees, less the Q3 payouts): CHF ${k(clearingApp)}, and CHF ${k(r2(clearingApp - heldMixed.gross))} while the mixed cart is held. With the interim balance's 1093 of CHF ${k(jun.shopify)} per 30.06. it is Shopify's CHF ${k(balanceOn(Q3.to))}: the first July payouts paid June's sales. With only the 31.12.2025 opening (CHF ${k(dec.shopify)}) it is CHF ${k(r2(clearingApp + dec.shopify))}, off by the first half year's change. A negative balance on the way has the same cause.`,
     '',
     `## The ${counts.payments} payments of the statement`,
     '',
@@ -317,18 +358,31 @@ export default function build() {
     '',
     table(['day', 'who', 'CHF', 'should become'], other.map((r) => [dmy(r.date), r.who, `${r.dir === 'CRDT' ? '+' : '-'}${k(r.amount)}`, becomes[r.kind]])),
     '',
-    `Opening balance of the statement CHF ${k(OPEN)} on 30.06., closing CHF ${k(statement.close)} on 30.09.`,
+    `Opening balance of the statement CHF ${k(OPEN)} on 01.07., closing CHF ${k(statement.close)} on 30.09. Every entry carries its own reference on the entry (LUKB-26-…).`,
+    '',
+    '## Wages and contributions',
+    '',
+    ...pay.keyLines,
+    '',
+    '## Opening balances',
+    '',
+    `The fiduciary kept the first half year: \`Bilanz_31.12.2025_Treuhand.pdf\` and \`Zwischenbilanz_30.06.2026_Treuhand.pdf\`. The app takes an opening per 1 January under Firma › Eröffnung; books that begin mid-year are an open question (issue #358). Acceptable:`,
+    '',
+    `- the opening per 1.1.2026: ${opening.dec.concat(opening.decL).map(([a, nm, v]) => `${a} ${nm} CHF ${k(v)}`).join(', ')}. 1020 then differs from the statement's opening on 01.07. by the first half year's movements (CHF ${k(r2(OPEN - dec.bank))}), which the app should state as a fact;`,
+    `- the balances per 30.06.2026, if the app offers a start mid-year: ${opening.jun.concat(opening.junL).map(([a, nm, v]) => `${a || '–'} ${nm} CHF ${k(v)}`).join(', ')}.`,
     '',
     '## The files',
     '',
     `- \`payouts_export.csv\`: Shopify's payouts list (Finanzen › Auszahlungen), the file she finds first. Not a report the app books from (no order column): the app must say what it is not and which export it needs (Bestellungen › Exportieren, and Finanzen › Transaktionen).`,
     `- \`IMG_2240.jpg\`: a product photo, no receipt. \`Kartonage_Rigi_${kartonage.no} (1).pdf\`: a duplicate.`,
-    `- The wages, the AHV Akonto and the ESTV payment need no receipt; every other payment out has its document among the files.`,
+    `- Every payment out has its document among the files: the wages their payslips, the contributions their bills, the ESTV payment the interim balance's 2201, the refund by bank the credit note, the bank's fee row the statement itself.`,
+    'A walk in mid-November opens the app in Q4 until the first drop: the files are Q3. Finding the period of the files is checkpoint 11.',
   ].join('\n');
 
   const summary = [
     `- ${counts.payments} payments on the statement, ${counts.payouts} of them Shopify payouts; ${counts.orders} orders in the orders export (${counts.exports} abroad, 1 refunded through Shopify, 2 paid by bank transfer, 1 test order, 1 mixed cart at two rates).`,
     `- Ziffer 200 about CHF ${chf(Math.round(ziffern['200'])).slice(0, -3)}, tax payable (500) about CHF ${chf(Math.round(ziffern['500'] ?? -ziffern['510'])).slice(0, -3)}; Ziffern in whole francs: ${Object.entries(ziffern).map(([b, v]) => `${b} ${chf(Math.round(v)).slice(0, -3)}`).join(', ')}; the exact figures, the clearing account and every payment: \`answer-key.md\`.`,
+    `- Tax payable (500, or 510 a credit) at each stage of the walk: ${stages.map(([t, z]) => `${t.split(' (')[0]}: ${z['500'] !== undefined ? '500 ' + chf(Math.round(z['500'])).slice(0, -3) : '510 ' + chf(Math.round(z['510'])).slice(0, -3)}`).join('; ')}.`,
   ].join('\n');
 
   return {
