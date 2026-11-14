@@ -112,7 +112,11 @@ async function launch(port, shell, env = {}) {
 // A killed script ends through process.exit, so the 'exit' handlers of launch() stop the app.
 for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => process.exit(130));
 
-const shot = (page, name) => page.screenshot({ path: join(out, `${name}.png`) });
+// After the webfonts settled and a frame painted with them, so a shot never catches the fallback font.
+const shot = async (page, name) => {
+  await page.evaluate(() => document.fonts.ready.then(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)))));
+  await page.screenshot({ path: join(out, `${name}.png`) });
+};
 const api = (page, path, init) => page.evaluate(async (path, init) => {
   const r = await fetch(path, init);
   return { status: r.status, json: await r.json().catch(() => null) };

@@ -83,11 +83,11 @@
 /* «Verknüpft»: what the books hold for the partner. */
 .kw section.kwsec { border-top: 1px solid var(--line); padding-top: 14px; }
 .kw .kwsec > header .m { font-size: 12.5px; }
-.kw .kwsec > header .n { font-family: "Geist Mono", monospace; font-size: 12px; color: var(--muted); }
+.kw .kwsec > header .n { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
 .kw .kwlinked { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 24px; }
 .kw .kwlink-g { min-width: 0; }
 .kw .kwlink-g h4 { margin-left: 0; }
-.kw .kwlink-g h4 .n { font-family: "Geist Mono", monospace; color: var(--muted); letter-spacing: 0; }
+.kw .kwlink-g h4 .n { font-family: var(--font-mono); color: var(--muted); letter-spacing: 0; }
 .kw .kwlink-g ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
 .kw .kwlink-g li { min-width: 0; display: flex; justify-content: space-between; gap: 10px; padding: 4px 0; font-size: 12.5px; border-bottom: 1px solid var(--line); }
 .kw .kwlink-g li a { min-width: 0; color: var(--ink); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

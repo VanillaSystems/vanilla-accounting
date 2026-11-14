@@ -17,20 +17,20 @@ main { container: page / inline-size; }
   .list { padding-left: 24px; padding-right: 16px; }
   .detail { padding-left: 28px; padding-right: 28px; }
 }
-h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; margin: 0; display: flex; align-items: baseline; gap: 14px; }
-.period { white-space: nowrap; font: 500 15px "Geist Mono"; color: var(--muted); letter-spacing: 0; display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; padding: 2px 4px; margin-left: -4px; }
+h1 { font: 800 34px/1.1 var(--font-display); letter-spacing: -.025em; margin: 0; display: flex; align-items: baseline; gap: 14px; }
+.period { white-space: nowrap; font: 500 15px var(--font-mono); color: var(--muted); letter-spacing: 0; display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; padding: 2px 4px; margin-left: -4px; }
 .period:hover { color: var(--ink); }
 .period svg { width: 13px; height: 13px; }
 .counts { margin: 10px 0 24px; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 14px; min-height: 26px; }
 .counts button { color: inherit; border-radius: 4px; white-space: nowrap; }
 .counts button.on { color: var(--ink); font-weight: 600; }
 .counts button:hover { color: var(--ink); }
-.counts .n { font-family: "Geist Mono"; font-size: 12.5px; margin-right: 3px; }
+.counts .n { font-family: var(--font-mono); font-size: 12.5px; margin-right: 3px; }
 .search { margin-left: auto; display: flex; align-items: center; gap: 6px; color: var(--faint); }
 .search input { border: 0; outline: 0; background: transparent; width: 64px; font-size: 13px; transition: width .2s; color: var(--ink); }
 .search input::placeholder { color: var(--faint); }
 .search input:focus, .search input.has { width: 160px; }
-.search .k { font: 500 11px "Geist Mono"; border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
+.search .k { font: 500 11px var(--font-mono); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
 .search input:focus + .k, .search input.has + .k { display: none; }
 
 .group { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin: 22px 0 6px; display: flex; justify-content: space-between; }
@@ -41,7 +41,7 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .row.sel { background: var(--accent-soft); }
 .row .d { color: var(--date); font-size: 12.5px; }
 .row.sel .d { color: var(--muted); }
-.row .d.none { font-family: "Instrument Sans"; color: var(--warn); font-size: 12px; }
+.row .d.none { font-family: var(--font-sans); color: var(--warn); font-size: 12px; }
 .row .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row .t small { color: var(--muted); font-size: 13px; }
 .row .a { font-size: 13px; text-align: right; transition: opacity .15s; }
@@ -67,7 +67,7 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .row .t small.proc { color: var(--muted); }
 .row.working .d.none { color: var(--muted); }
 .notice.proc, .notice.proc a, .facts .proc { color: var(--muted); }
-.facts .proc { font-family: "Instrument Sans"; display: inline-flex; align-items: center; }
+.facts .proc { font-family: var(--font-sans); display: inline-flex; align-items: center; }
 .row.leaving { animation: leave .28s ease forwards; }
 @keyframes leave { to { opacity: 0; transform: translateX(8px); } }
 .row.entering { animation: enter .35s ease; }
@@ -94,7 +94,7 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 
 /* empty */
 .empty { padding: 80px 0 0; color: var(--muted); }
-.empty h2 { font: 700 20px "Hanken Grotesk"; color: var(--ink); margin: 0 0 6px; letter-spacing: -.01em; }
+.empty h2 { font: 700 20px var(--font-display); color: var(--ink); margin: 0 0 6px; letter-spacing: -.01em; }
 .empty p { margin: 0 0 4px; max-width: 34ch; }
 .empty .well { margin-top: 28px; height: 180px; border: 1.5px dashed var(--line-2); border-radius: 14px; display: grid; place-items: center; text-align: center; color: var(--faint); font-size: 13px; }
 .empty .well b { display: block; color: var(--muted); font-weight: 500; margin-bottom: 4px; }
@@ -115,7 +115,7 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 :is(.btn.primary, .btn.danger, .chip.primary, .aiact.primary, .btn2.primary, .addbtn, .aisend) :is(svg.i, svg.bot) { color: inherit; stroke: currentColor; }
 .btn.ghost { border-color: var(--line); background: transparent; color: var(--ink-2); }
 .btn.ghost:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
-.btn .k { font: 500 11px "Geist Mono"; opacity: .75; }
+.btn .k { font: 500 11px var(--font-mono); opacity: .75; }
 /* A button that reads as a link (accent, underlined on hover); an area's own rule may size it. */
 .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-align: left; }
 .linkbtn:hover { text-decoration: underline; text-underline-offset: 2px; }
@@ -128,7 +128,7 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
   -webkit-backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); transition: opacity .2s; z-index: 20; }
 .chip { height: 32px; padding: 0 12px; border-radius: 9px; display: inline-flex; align-items: center; gap: 8px; color: var(--ink); font-size: 13px; cursor: pointer; white-space: nowrap; }
 .chip:hover { background: var(--accent-soft); }
-.chip .k { font: 500 11px "Geist Mono"; color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
+.chip .k { font: 500 11px var(--font-mono); color: var(--muted); border: 1px solid var(--line); border-radius: 5px; padding: 0 5px; }
 .chip.primary { background: var(--accent); color: var(--on-accent); }
 .chip.primary:hover { filter: brightness(1.08); }
 .chip.lock { color: var(--muted); cursor: default; }
@@ -150,13 +150,13 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .activity .it .mark { position: absolute; top: -2px; right: -4px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px var(--desk, var(--bg)); }
 .activity .nm { display: none; }
 .activity .tip { position: absolute; left: calc(100% + 6px); top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 12px; padding: 6px 7px 6px 11px; border-radius: 7px;
-  background: var(--ink); color: var(--bg); font: 400 12px/1.35 "Instrument Sans"; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .1s; z-index: 1; }
+  background: var(--ink); color: var(--bg); font: 400 12px/1.35 var(--font-sans); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .1s; z-index: 1; }
 .activity .tip .tx { display: flex; flex-direction: column; text-align: left; }
 .activity .tip .tx b { font-weight: 600; font-size: 12.5px; }
 .activity :is(.it, .wopen, .navtoggle):hover .tip { opacity: 1; transition-delay: .3s; }
 .activity :is(.it, .wopen, .navtoggle):focus-visible .tip, .activity.keys :is(.it, .wopen) .tip { opacity: 1; transition-delay: 0s; }
 .activity .tip .kk { display: inline-flex; gap: 3px; }
-.activity .tip .kk span { font: 500 10.5px "Geist Mono"; min-width: 17px; height: 18px; padding: 0 4px; display: inline-grid; place-items: center; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--bg) 30%, transparent); border-bottom-width: 2px; }
+.activity .tip .kk span { font: 500 10.5px var(--font-mono); min-width: 17px; height: 18px; padding: 0 4px; display: inline-grid; place-items: center; border-radius: 4px; border: 1px solid color-mix(in srgb, var(--bg) 30%, transparent); border-bottom-width: 2px; }
 .activity.keys .tip { padding-left: 7px; }
 .activity.keys .tip .tx { display: none; }
 .activity .div { width: 24px; height: 1px; margin: 8px 0; background: var(--line); }
@@ -177,15 +177,15 @@ html.no-titlebar.aiopen:not(.phone) .topbar { left: max(calc(var(--abw) + 16px),
 
 /* folded bars: a pill (docs/0.4.0/views.md, "Both bars") */
 .topbar.folded { padding: 4px; border-radius: 999px; }
-.barpill { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 12px; border: 0; border-radius: 999px; background: none; color: var(--ink-2); font: 500 12px "Instrument Sans"; cursor: pointer; white-space: nowrap; }
+.barpill { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 12px; border: 0; border-radius: 999px; background: none; color: var(--ink-2); font: 500 12px var(--font-sans); cursor: pointer; white-space: nowrap; }
 .barpill:hover, .barpill:focus-visible { color: var(--ink); background: var(--hover); outline: none; }
 .barpill b { font-weight: 600; color: var(--ink); }
-.barpill .pbadge { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font: 600 9.5px "Geist Mono"; display: inline-grid; place-items: center; }
+.barpill .pbadge { min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font: 600 9.5px var(--font-mono); display: inline-grid; place-items: center; }
 .pin { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 9px; color: var(--muted); cursor: pointer; align-self: center; }
 .pin input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
 .pin:hover, .pin:focus-within { background: var(--hover); color: var(--ink); }
 .pin.on { color: var(--accent); }
-.pin .ptip { position: absolute; right: 0; width: 280px; display: none; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--ink); color: var(--bg); font: 400 12px/1.4 "Instrument Sans"; text-align: left; z-index: 30; }
+.pin .ptip { position: absolute; right: 0; width: 280px; display: none; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--ink); color: var(--bg); font: 400 12px/1.4 var(--font-sans); text-align: left; z-index: 30; }
 .topbar .pin .ptip { top: calc(100% + 10px); }
 .pin:hover .ptip, .pin:focus-within .ptip { display: flex; }
 .pin .ptip span { opacity: .7; }
@@ -212,7 +212,7 @@ body > .menu { z-index: 42; }
 .palette .gh { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 10px 12px 4px; }
 .palette .o { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 9px; cursor: pointer; font-size: 13.5px; }
 .palette .o.on { background: var(--accent-soft); }
-.palette .o .r { margin-left: auto; color: var(--muted); font: 12px "Geist Mono"; }
+.palette .o .r { margin-left: auto; color: var(--muted); font: 12px var(--font-mono); }
 .palette .o svg { color: var(--muted); }
 /* the inbox processing while it runs (shell/Intake.tsx), bottom left, out of the dock's way */
 @keyframes pulse { 50% { opacity: .3; transform: scale(.8); } }
@@ -223,7 +223,7 @@ body > .menu { z-index: 42; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
 .toast button { color: inherit; font-weight: 600; padding: 4px 8px; border-radius: 7px; }
 .toast button:hover { background: color-mix(in srgb, var(--bg) 15%, transparent); }
-.toast .k { font: 500 11px "Geist Mono"; opacity: .6; margin-left: 4px; }
+.toast .k { font: 500 11px var(--font-mono); opacity: .6; margin-left: 4px; }
 .toast.droplost { bottom: 74px; max-width: min(720px, calc(100vw - 32px)); }
 .toast.droplost span { overflow-wrap: anywhere; }
 .droplost button { white-space: nowrap; }
@@ -233,19 +233,19 @@ body > .menu { z-index: 42; }
 .drop .box { width: min(640px, 80vw); height: min(380px, 60vh); border: 2px dashed var(--accent); border-radius: 22px; display: grid; place-items: center; text-align: center; transform: scale(.98); transition: transform .25s; }
 [data-theme="dark"] .drop .box { border-color: var(--ink-2); }
 .drop.show .box { transform: scale(1); }
-.drop h2 { font: 800 28px "Hanken Grotesk"; letter-spacing: -.02em; margin: 14px 0 6px; }
+.drop h2 { font: 800 28px var(--font-display); letter-spacing: -.02em; margin: 14px 0 6px; }
 .drop p { color: var(--muted); margin: 0; }
 .drop .ic { width: 44px; height: 44px; color: var(--accent); }
 [data-theme="dark"] .drop .ic { color: var(--ink); }
 .legend { position: fixed; right: 16px; bottom: 16px; font-size: 11px; color: var(--faint); text-align: right; line-height: 1.6; z-index: 5; }
 
 .k { position: relative; display: inline-flex; vertical-align: middle; margin-left: 6px; gap: 2px; align-items: center; }
-.k .cap { font: 500 10.5px "Geist Mono"; min-width: 16px; height: 17px; padding: 0 4px; display: inline-grid; place-items: center; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; color: var(--muted); background: var(--bg); }
+.k .cap { font: 500 10.5px var(--font-mono); min-width: 16px; height: 17px; padding: 0 4px; display: inline-grid; place-items: center; border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 4px; color: var(--muted); background: var(--bg); }
 .search .k { border: 0; padding: 0; margin-left: 0; } .legend .k { margin-left: 0; }
 .k[data-tip] { cursor: help; }
 /* The one tooltip (HoverTip.tsx): an element's data-tip, or an icon control's aria-label. */
 .hovertip { position: fixed; z-index: 200; width: max-content; max-width: 280px; white-space: pre-line; text-align: left; padding: 6px 9px; border-radius: 7px;
-  font: 400 12px/1.4 "Instrument Sans"; color: var(--bg); background: var(--ink); box-shadow: var(--shadow); pointer-events: none; animation: hovertip .1s ease-out; }
+  font: 400 12px/1.4 var(--font-sans); color: var(--bg); background: var(--ink); box-shadow: var(--shadow); pointer-events: none; animation: hovertip .1s ease-out; }
 @keyframes hovertip { from { opacity: 0; } }
 .legend { pointer-events: auto; }
 .legend .item { display: inline-flex; gap: 5px; align-items: center; margin-left: 12px; }
@@ -271,7 +271,7 @@ body > .menu { z-index: 42; }
 .pp .pi.back { font-weight: 600; color: var(--ink); margin-bottom: 4px; }
 .pp .right { display: flex; flex-direction: column; }
 .pp .ins { display: flex; align-items: center; gap: 10px; padding: 16px 20px 4px; color: var(--faint); }
-.pp .ins input { width: 100%; border: 1px solid var(--line-2); border-radius: 8px; padding: 7px 10px; background: var(--bg); color: var(--ink); font: 13px "Geist Mono"; outline: 0; }
+.pp .ins input { width: 100%; border: 1px solid var(--line-2); border-radius: 8px; padding: 7px 10px; background: var(--bg); color: var(--ink); font: 13px var(--font-mono); outline: 0; }
 .pp .ins input:focus { border-color: var(--accent); }
 .pp .cals { display: flex; gap: 24px; padding: 8px 20px 14px; }
 .pp .mh { display: grid; grid-template-columns: 28px 1fr 28px; align-items: center; height: 32px; text-align: center; } .pp .mh b { font-weight: 600; }
@@ -279,7 +279,7 @@ body > .menu { z-index: 42; }
 .pp .wd, .pp .days { display: grid; grid-template-columns: repeat(7, 34px); text-align: center; }
 .pp .wd span { font-size: 11px; color: var(--faint); padding: 4px 0; }
 .pp .day { padding: 1px 0; } .pp .day.in, .pp .day.l, .pp .day.r { background: var(--accent-soft); } .pp .day.l { border-radius: 8px 0 0 8px; } .pp .day.r { border-radius: 0 8px 8px 0; }
-.pp .day button { width: 32px; height: 30px; border-radius: 7px; font: 12.5px "Geist Mono"; color: var(--ink-2); } .pp .day button:hover { background: var(--hover); }
+.pp .day button { width: 32px; height: 30px; border-radius: 7px; font: 12.5px var(--font-mono); color: var(--ink-2); } .pp .day button:hover { background: var(--hover); }
 .pp .day.fut button { color: var(--faint); } .pp .day.tod button { text-decoration: underline; text-underline-offset: 4px; }
 .pp .day.edge button { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .pp .ft { display: flex; align-items: center; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
@@ -298,15 +298,15 @@ body > .menu { z-index: 42; }
 .seg2 { display: inline-flex; gap: 2px; background: var(--hover); border-radius: 8px; padding: 2px; }
 .seg2 button { font-size: 12.5px; padding: 2px 10px; border-radius: 6px; color: var(--muted); }
 .seg2 button.on { background: var(--bg); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
-.addbtn { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 8px; font: 500 13px "Instrument Sans"; letter-spacing: 0; color: var(--on-accent); background: var(--accent); padding: 6px 12px 6px 10px; border-radius: 9px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.addbtn { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: inline-flex; align-items: center; gap: 8px; font: 500 13px var(--font-sans); letter-spacing: 0; color: var(--on-accent); background: var(--accent); padding: 6px 12px 6px 10px; border-radius: 9px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 .addbtn:hover { filter: brightness(1.08); }
-.addbtn .kb { font: 500 10.5px "Geist Mono"; opacity: .7; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; line-height: 15px; }
+.addbtn .kb { font: 500 10.5px var(--font-mono); opacity: .7; border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; line-height: 15px; }
 h1:has(.addbtn) { position: relative; padding-right: 130px; }
 
 /* a detail's heading */
 .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
-.who { font: 700 22px/1.2 "Hanken Grotesk"; letter-spacing: -.01em; margin: 0; }
-.who small { display: block; font: 400 14px "Instrument Sans"; color: var(--muted); margin-top: 2px; letter-spacing: 0; }
+.who { font: 700 22px/1.2 var(--font-display); letter-spacing: -.01em; margin: 0; }
+.who small { display: block; font: 400 14px var(--font-sans); color: var(--muted); margin-top: 2px; letter-spacing: 0; }
 
 /* a page without a detail column: its heading, then the content filling the rest */
 main.full { display: flex; flex-direction: column; }
@@ -331,7 +331,7 @@ main.full { display: flex; flex-direction: column; }
 :root:has(.demobar) .toast { bottom: 52px; }
 :root:has(.demobar) .toast.droplost { bottom: 100px; }
 .demointro { position: fixed; left: calc(var(--abw) + 16px); bottom: 44px; z-index: 24; width: min(360px, calc(100vw - var(--abw) - var(--aiw) - 32px)); display: grid; gap: 8px; padding: 16px 18px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg); color: var(--ink-2); font-size: 13px; line-height: 1.5; box-shadow: var(--shadow); }
-.demointro b { font: 700 15px "Hanken Grotesk", system-ui, sans-serif; color: var(--ink); }
+.demointro b { font: 700 15px var(--font-display); color: var(--ink); }
 .demointro p, .demointro ul { margin: 0; }
 .demointro ul { padding-left: 18px; }
 .demointro a { color: var(--accent); }
@@ -364,7 +364,7 @@ html.phone:has(.demobar) .toast.droplost { bottom: 156px; }
 .cornerbtn.aibtn { width: 30px; padding: 0; justify-content: center; color: var(--ai, var(--ink)); }
 .cornerbtn.aibtn svg { width: 16px; height: 16px; }
 .cornerbtn.aibtn[aria-expanded="true"] { color: var(--ink-2); }
-.cornerbtn { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(18px); color: var(--ink); font: 500 12.5px "Instrument Sans"; cursor: pointer; box-shadow: var(--shadow); }
+.cornerbtn { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--glass-line); background: var(--glass); backdrop-filter: blur(18px); color: var(--ink); font: 500 12.5px var(--font-sans); cursor: pointer; box-shadow: var(--shadow); }
 .spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line-2); border-top-color: var(--accent); animation: spin .9s linear infinite; flex: none; }
 .spin.small { width: 10px; height: 10px; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -399,8 +399,8 @@ html:not(.phone) .activity a.it.bolt { display: none; }
 .autow.on .wopen::before { background: var(--accent); }
 .autow .wopen:focus-visible { outline: none; box-shadow: inset 0 0 0 1.5px var(--accent); }
 .autow .n { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.autow .n b { font: 600 13px/1 "Geist Mono"; color: var(--ink); }
-.autow .n span { font: 500 8.5px/1 "Instrument Sans"; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.autow .n b { font: 600 13px/1 var(--font-mono); color: var(--ink); }
+.autow .n span { font: 500 8.5px/1 var(--font-sans); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
 .autow .n.waiting b { color: var(--faint); }
 /* The payments booked, said in words (#385): the label wraps under the figure in the narrow bar and takes two columns in the wide one. */
 .autow .n.payments span { white-space: normal; text-align: center; line-height: 1.15; max-width: 50px; text-transform: none; letter-spacing: 0; font-size: 9px; }
@@ -430,23 +430,23 @@ html.navwide:not(.phone) .activity .it::before { left: -8px; }
 html.navwide:not(.phone) .activity .it.on { background: var(--hover); }
 html.navwide:not(.phone) .activity .it .ic { width: 20px; height: 20px; flex: none; }
 html.navwide:not(.phone) .activity .it .ic svg { width: 20px; height: 20px; }
-html.navwide:not(.phone) .activity .nm { display: inline; font: 500 13.5px "Instrument Sans"; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+html.navwide:not(.phone) .activity .nm { display: inline; font: 500 13.5px var(--font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 html.navwide:not(.phone) .activity .div { width: auto; margin: 8px 10px; }
 html.navwide:not(.phone) .activity:not(.keys) .tip { display: none; }
 html.navwide:not(.phone) .autow { padding: 12px 2px 6px; }
 html.navwide:not(.phone) .autow .wopen { align-items: stretch; gap: 10px; padding: 4px; }
 html.navwide:not(.phone) .autow .wopen::before { left: -8px; }
-.autow .wtitle { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; font: 600 12.5px "Instrument Sans"; color: var(--ink); }
+.autow .wtitle { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; min-width: 0; font: 600 12.5px var(--font-sans); color: var(--ink); }
 .autow .wtitle .trig { width: 24px; height: 24px; border-radius: 7px; }
 .autow .wtitle .trig svg { width: 14px; height: 14px; }
 .autow .wtitle .trig { flex: none; }
 .autow .wtitle .wname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.autow .wtitle em { margin-left: auto; flex: none; font: 500 10.5px "Geist Mono"; font-style: normal; color: var(--muted); white-space: nowrap; }
+.autow .wtitle em { margin-left: auto; flex: none; font: 500 10.5px var(--font-mono); font-style: normal; color: var(--muted); white-space: nowrap; }
 .autow.running .wtitle em { color: var(--accent); }
 .autow.waiting .wtitle em { color: var(--warn); }
 .autow .figrow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 .autow .figrow .n { padding: 6px 0; border-radius: 8px; background: var(--hover); }
-.autow .wbtn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; margin: 0 4px; border: 0; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font: 600 12.5px "Instrument Sans"; text-decoration: none; cursor: pointer; }
+.autow .wbtn { display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; margin: 0 4px; border: 0; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font: 600 12.5px var(--font-sans); text-decoration: none; cursor: pointer; }
 .autow .wbtn.ask { background: var(--warn-soft); color: var(--warn); }
 .autow .wbtn:hover:not(:disabled) { filter: brightness(.96); }
 .autow .wbtn:disabled { opacity: .5; cursor: default; }
@@ -455,12 +455,12 @@ html.navwide:not(.phone) .navtoggle { margin: 2px 4px 0 auto; }
 
 /* The summary card the widget opens: beside the bar, at its foot; left of the AI sidebar, never over it. */
 .autocard { position: fixed; left: calc(var(--abw) + 8px); bottom: 12px; width: max(240px, min(340px, calc(100vw - var(--abw) - var(--aiw) - 24px))); z-index: 25; display: flex; flex-direction: column; gap: 12px; padding: 14px;
-  background: var(--bg); color: var(--ink); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: var(--shadow); font: 400 13px/1.35 "Instrument Sans"; animation: pop .12s ease-out; }
+  background: var(--bg); color: var(--ink); border: 1px solid var(--line-2); border-radius: 14px; box-shadow: var(--shadow); font: 400 13px/1.35 var(--font-sans); animation: pop .12s ease-out; }
 .no-titlebar .autocard { -webkit-app-region: no-drag; }
 .autocard header { display: flex; align-items: center; gap: 8px; }
 .autocard header svg { width: 16px; height: 16px; color: var(--accent); }
-.autocard header b { font: 700 15px "Hanken Grotesk", sans-serif; }
-.autocard header span { margin-left: auto; font: 500 11px "Geist Mono"; color: var(--muted); }
+.autocard header b { font: 700 15px var(--font-display); }
+.autocard header span { margin-left: auto; font: 500 11px var(--font-mono); color: var(--muted); }
 .autocard .now { display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 9px; background: var(--hover); color: var(--ink-2); }
 .autocard .ndot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
 .autocard.running .ndot { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
@@ -498,7 +498,7 @@ html.phone .list { padding: 72px 16px 84px; border-right: 0; }
 html.phone .detail { padding: 60px 16px 84px; }
 html.phone main.full { padding-top: 60px; padding-bottom: 84px; }
 html.phone .lhead { padding-left: 16px; padding-right: 16px; }
-html.phone .phoneback { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px -6px; padding: 4px 8px; border-radius: 8px; color: var(--muted); font: 500 13px "Instrument Sans"; cursor: pointer; }
+html.phone .phoneback { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px -6px; padding: 4px 8px; border-radius: 8px; color: var(--muted); font: 500 13px var(--font-sans); cursor: pointer; }
 html.phone .phoneback:hover { color: var(--ink); background: var(--hover); }
 html.phone .detail-in > .head .amount { font-size: 26px; }
 html.phone .legend { display: none; }
@@ -510,7 +510,7 @@ html.phone .activity .it::before { left: 10px; right: 10px; top: 0; bottom: auto
 html.phone .activity .div, html.phone .activity .tip { display: none; }
 html.phone :is(.autow, .navtoggle, .autocard) { display: none; }
 html.phone .activity .it.bolt { display: grid; }
-html.phone .activity .it .cnt { position: absolute; top: -6px; right: -10px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--warn); color: var(--bg); font: 600 9.5px "Geist Mono"; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--desk, var(--bg)); }
+html.phone .activity .it .cnt { position: absolute; top: -6px; right: -10px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--warn); color: var(--bg); font: 600 9.5px var(--font-mono); display: grid; place-items: center; box-shadow: 0 0 0 2px var(--desk, var(--bg)); }
 /* Files dragged over the window (src/app/shell/Shell.tsx useDrop): the page takes them as receipts, the AI sidebar (closed: the window's right edge, --ai-edge wide) as a message's attachments; the zone under the pointer is lit. */
 :root { --ai-edge: 88px; }
 .drop { right: max(var(--aiw), var(--ai-edge)); }
@@ -520,7 +520,7 @@ html.phone .activity .it .cnt { position: absolute; top: -6px; right: -10px; min
 .dropchat .box { margin: 14px; border: 2px dashed color-mix(in srgb, var(--ai) 55%, transparent); border-radius: 18px; display: grid; place-items: center; text-align: center; padding: 12px; transition: background .15s, border-color .15s; }
 .dropchat.on .box { border-color: var(--ai); background: color-mix(in srgb, var(--ai) 10%, transparent); }
 .dropchat .box svg { width: 34px; height: 34px; color: var(--ai); }
-.dropchat h2 { font: 800 20px "Hanken Grotesk"; letter-spacing: -.01em; margin: 10px 0 6px; }
+.dropchat h2 { font: 800 20px var(--font-display); letter-spacing: -.01em; margin: 10px 0 6px; }
 .dropchat p { color: var(--muted); margin: 0; font-size: 13px; }
 .dropchat.edge .box { margin: 10px 8px; padding: 8px 0; }
 .dropchat.edge h2 { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 15px; margin: 10px auto 0; }

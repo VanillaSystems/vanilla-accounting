@@ -3,18 +3,18 @@
 /* «Teilen» and the version in the top bar */
 .topbar .chip.shchip { gap: 6px; padding: 0 10px; }
 .topbar .chip.shchip svg.i { width: 15px; height: 15px; }
-.topbar .chip .vers { font: 500 11.5px "Geist Mono"; color: var(--muted); margin-left: 6px; }
+.topbar .chip .vers { font: 500 11.5px var(--font-mono); color: var(--muted); margin-left: 6px; }
 
 /* The dialogs: the palette's frame, narrower */
 .shscrim { background: color-mix(in srgb, var(--bg) 45%, transparent); }
 .palette.shdlg { width: min(560px, 94vw); top: 10vh; display: flex; flex-direction: column; max-height: 84vh; }
 .shdlg .xhd { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 16px 20px 14px; border-bottom: 1px solid var(--line); }
 .shdlg .xhd .lbl { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 2px; }
-.shdlg .xhd b { font: 700 17px "Hanken Grotesk"; }
+.shdlg .xhd b { font: 700 17px var(--font-display); }
 .shdlg .xhd .x { color: var(--muted); font-size: 18px; padding: 2px 6px; border-radius: 6px; }
 .shdlg .xhd .x:hover { background: var(--hover); color: var(--ink); }
 .shdlg .shbody { padding: 16px 20px; display: grid; gap: 12px; overflow: auto; }
-.shdlg .shbody input, .shdlg .shbody textarea { all: revert; font: 14px "Instrument Sans"; padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; }
+.shdlg .shbody input, .shdlg .shbody textarea { all: revert; font: 14px var(--font-sans); padding: 8px 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; }
 .shdlg .shbody input[type="checkbox"] { width: 14px; height: 14px; padding: 0; accent-color: var(--accent); }
 .shdlg .shbody textarea { min-height: 64px; resize: vertical; }
 .shdlg .two2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -23,7 +23,7 @@
 .shdlg .what { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--desk); }
 .shdlg .what .wt { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; }
 .shdlg .what .wt b { font-weight: 600; }
-.shdlg .what .wt .mono { color: var(--ink-2); font-family: "Geist Mono"; }
+.shdlg .what .wt .mono { color: var(--ink-2); font-family: var(--font-mono); }
 .shdlg .what .wm { color: var(--muted); font-size: 12px; }
 .shdlg .shmore { justify-self: start; font-size: 12.5px; }
 .shdlg .shopts { display: grid; gap: 6px; font-size: 13px; color: var(--ink-2); }
@@ -43,7 +43,7 @@
 .shdlg .chg .gh { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 0 0 2px; }
 .shdlg .chg .r { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
 .shdlg .chg .r i { color: var(--muted); }
-.shdlg .chg .r .mono { color: var(--muted); font: 12px "Geist Mono"; white-space: nowrap; }
+.shdlg .chg .r .mono { color: var(--muted); font: 12px var(--font-mono); white-space: nowrap; }
 
 /* The recipient: a fact at the top (the read-only bar's place), his changes at the bottom */
 .auditbar.shrecv { background: var(--accent-soft); color: var(--ink); border-bottom-color: color-mix(in srgb, var(--accent) 25%, transparent); padding: 7px 16px; font-size: 12.5px; gap: 0 14px; }
@@ -58,7 +58,7 @@
 .shret.done { padding-right: 16px; color: var(--ink-2); }
 .shret.done svg.i { color: var(--pos); }
 .shwelcome { position: fixed; right: 24px; top: calc(70px + var(--audit-h, 0px)); z-index: 24; width: min(360px, calc(100vw - 32px)); padding: 16px 18px; border-radius: 14px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); font-size: 13px; animation: pop .16s ease; }
-.shwelcome h3 { margin: 0 0 6px; font: 700 16px "Hanken Grotesk"; }
+.shwelcome h3 { margin: 0 0 6px; font: 700 16px var(--font-display); }
 .shwelcome p { margin: 0 0 8px; color: var(--ink-2); }
 .shwelcome .msg { margin: 10px 0; padding: 9px 11px; border-radius: 10px; background: var(--accent-soft); color: var(--ink); font-size: 13px; display: grid; gap: 4px; }
 .shwelcome .msg small { display: block; color: var(--muted); font-size: 11.5px; }
@@ -69,13 +69,13 @@
 /* The review «Was <Name> geändert hat» (Änderungen › detail) */
 .chpage.rv { max-width: 860px; }
 .rv .head h2.who { font-size: 20px; }
-.rv .head h2.who small { display: block; font: 400 12.5px "Instrument Sans"; color: var(--muted); margin-top: 4px; }
+.rv .head h2.who small { display: block; font: 400 12.5px var(--font-sans); color: var(--muted); margin-top: 4px; }
 .rv .effect { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin: 14px 0 16px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .rv .effect > div { padding: 11px 14px; display: grid; gap: 3px; border-left: 1px solid var(--line); margin-left: -1px; }
 .rv .effect .ek { font-size: 11.5px; color: var(--muted); }
-.rv .effect .ev { font: 500 14px "Geist Mono"; font-variant-numeric: tabular-nums; }
+.rv .effect .ev { font: 500 14px var(--font-mono); font-variant-numeric: tabular-nums; }
 .rv .effect .rvar { color: var(--faint); margin: 0 4px; }
-.rv .effect .ed { font: 500 11.5px "Geist Mono"; color: var(--muted); }
+.rv .effect .ed { font: 500 11.5px var(--font-mono); color: var(--muted); }
 .rv .effect .ed.up { color: var(--warn); }
 .rv .all { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; flex-wrap: wrap; }
 .rv .all .btn { height: 34px; }
@@ -85,17 +85,17 @@
 .rvg { border: 1px solid var(--line); border-radius: 12px; margin: 0 0 12px; overflow: hidden; }
 .rvg > .gh { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--desk); border-bottom: 1px solid var(--line); }
 .rvg > .gh .t { font-weight: 600; font-size: 13.5px; }
-.rvg > .gh .n { font: 500 11.5px "Geist Mono"; color: var(--muted); }
+.rvg > .gh .n { font: 500 11.5px var(--font-mono); color: var(--muted); }
 .rvg > .gh .btn { margin-left: auto; height: 28px; font-size: 12.5px; }
 .rvg > .gh .done { margin-left: auto; color: var(--pos); font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; }
 .rvg > .gh .done svg.i { width: 14px; height: 14px; }
 .rvg.taken > .gh { background: var(--pos-soft); }
 .rvr { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 4px 12px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .rvr:last-child { border-bottom: 0; }
-.rvr .rvdt { font: 500 12px "Geist Mono"; color: var(--date); padding-top: 1px; }
+.rvr .rvdt { font: 500 12px var(--font-mono); color: var(--date); padding-top: 1px; }
 .rvr .rvtx { min-width: 0; }
 .rvr .rvtx .golink { font-weight: 500; }
-.rvr .rvba { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; font: 12px "Geist Mono"; color: var(--ink-2); }
+.rvr .rvba { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; font: 12px var(--font-mono); color: var(--ink-2); }
 .rvr .rvba .rvwas { color: var(--muted); text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--neg) 60%, transparent); }
 .rvr .rvba .rvar { color: var(--faint); }
 .rvr .rvba .rvnow { color: var(--ink); background: var(--pos-soft); border-radius: 5px; padding: 0 5px; }
@@ -103,7 +103,7 @@
 .rvr .rvwhy .m { font-style: normal; color: var(--muted); }
 .rvr .rvorig { margin-top: 3px; font-size: 11.5px; color: var(--muted); }
 .rvr .rvra { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; white-space: nowrap; }
-.rvr .rvamt { font: 500 13px "Geist Mono"; text-align: right; }
+.rvr .rvamt { font: 500 13px var(--font-mono); text-align: right; }
 .rvr.skipped .rvtx, .rvr.skipped .rvdt, .rvr.skipped .rvamt { opacity: .45; }
 .rvr .rvask { grid-column: 2 / 4; display: flex; gap: 8px; margin-top: 6px; }
 .rvr .rvask input { flex: 1; border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 9px; font-size: 13px; background: var(--bg); color: var(--ink); }
@@ -115,7 +115,7 @@
 .rvc button:hover:not(:disabled) { border-color: var(--accent); }
 .rvc button.on { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); background: var(--accent-soft); }
 .rvc .ck { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
-.rvc .cv { font: 500 13px "Geist Mono"; }
+.rvc .cv { font: 500 13px var(--font-mono); }
 .rvconf { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 2px; font-size: 12.5px; color: var(--warn); }
 .rvconf .btn { height: 28px; font-size: 12.5px; }
 .rvconf .btn.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }

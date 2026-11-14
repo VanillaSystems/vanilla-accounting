@@ -24,7 +24,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFil
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from 'puppeteer-core';
-import { browserPath, closeChrome, launchChrome } from './support/browser.js';
+import { browserPath, closeChrome, launchChrome, screenshot } from './support/browser.js';
 import { testIban } from './support/iban.js';
 import { APP_FOLDER, MANIFEST_FILE } from '../src/workspace/workspace.js';
 
@@ -45,7 +45,7 @@ const IBAN = testIban('00762011623852957');
 const words = (page: Page, sel: string) => page.$eval(sel, (e) => (e as HTMLElement).innerText.split(/\s+/).filter((w) => /\p{L}/u.test(w)).length);
 const text = (page: Page, sel: string) => page.$eval(sel, (e) => (e as HTMLElement).innerText);
 const count = (page: Page) => text(page, '.obflowhd [data-progress]').then((s) => s.trim());
-const shot = async (page: Page, name: string) => { if (SHOTS) await page.screenshot({ path: join(SHOTS, `${name}.png`) }); };
+const shot = async (page: Page, name: string) => { if (SHOTS) await screenshot(page, join(SHOTS, `${name}.png`)); };
 /** Waits for `sel`, then clicks it as a person would. */
 const press = async (page: Page, sel: string) => { await page.waitForSelector(sel, { visible: true, timeout: 20_000 }); await page.click(sel); };
 

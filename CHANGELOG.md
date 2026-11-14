@@ -75,6 +75,10 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The app no longer shows a serif (Times) while its fonts load or when they fail: every font is
+  named through a token with a system sans or mono behind it, and Geist Mono's semibold and bold
+  are bundled instead of faked. Run from a worktree whose `node_modules` is a link, the dev server
+  serves the fonts again, and screenshots of the app wait for them.
 - A linked file that is no PDF no longer shows «Failed to load PDF document». Every linked file
   shows by its type, in the app and in the audit export alike: a PDF as paper, an image as
   itself, a CSV (a payment provider's report) as a table, text and XML as text, a saved mail
