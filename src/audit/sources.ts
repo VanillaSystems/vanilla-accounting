@@ -107,4 +107,6 @@ export interface AuditSnapshot {
   createdAt: string;
   booksSchema: number;
   appVersion: string;
+  /** The books' content version when the snapshot was made (src/handover/versions.ts): «Prüfmodus · nur Lesen · Version 12». */
+  version?: { n: number; at: string; checksum: string };
 }
