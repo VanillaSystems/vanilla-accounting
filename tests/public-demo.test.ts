@@ -1,7 +1,8 @@
 /**
  * The public demo (npm run build:audit -- <dir> --demo): the static export of one of the app's made-up companies, served
  * under a sub-path of a website. It says it is a demo in the audit bar's place, links to the download, asks the host for
- * nothing but its own files, and says where the AI and the server's pages are instead of failing.
+ * nothing but its own files, and says where the AI and the server's pages are instead of failing. It opens in German
+ * whatever the browser's language, until the viewer picks another.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -16,6 +17,7 @@ import type { ApiStatus } from '../src/types/api-error.js';
 import { APP_ROOT, workspaceAt } from '../src/workspace/workspace.js';
 import { serveStatic, type StaticServer } from './support/static-server.js';
 import { browserPath, closeChrome, closeContext, launchChrome } from './support/browser.js';
+import de from '../src/app/i18n/locales/de.js';
 import en from '../src/app/i18n/locales/en.js';
 
 const DOWNLOAD = 'https://example.com/accounting/download/';
@@ -64,7 +66,7 @@ test('--demo refuses books that are not one of the app\'s demos, and a download 
   assert.equal(existsSync(out), false);
 });
 
-test('the demo bar names the made-up company and links to the download; the AI and the server\'s pages say they are in the app', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async () => {
+test('the demo opens in German in an English browser, keeps a picked language; the bar names the made-up company and links to the download; the AI and the server\'s pages say they are in the app', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async () => {
   const browser = await chrome();
   const context = await browser.createBrowserContext();
   const page = await context.newPage();
@@ -77,8 +79,17 @@ test('the demo bar names the made-up company and links to the download; the AI a
     const first = server.requests.length;
     await page.goto(`${base}#/receipts`, { waitUntil: 'networkidle0' });
 
-    const bar = await page.waitForSelector('[data-testid=demo-bar]');
-    const text = await bar!.evaluate((e) => (e as HTMLElement).innerText);
+    // German in a browser set to English (--lang=en-US): the made-up company is Swiss.
+    const barText = async () => (await page.waitForSelector('[data-testid=demo-bar]'))!.evaluate((e) => (e as HTMLElement).innerText);
+    assert.match(await barText(), /Muster Kaffee GmbH ist eine erfundene Firma/);
+    assert.equal(await page.$eval('html', (h) => h.lang), 'de');
+    // The picker still works, and its choice is kept over a reload.
+    await page.click(`button[aria-label="${de.messages['app.language']}"]`);
+    await page.click(`[role=menu] button ::-p-text(${en.name})`);
+    await page.waitForFunction(() => document.documentElement.lang === 'en');
+    await page.reload({ waitUntil: 'networkidle0' });
+    await page.waitForFunction(() => document.documentElement.lang === 'en');
+    const text = await barText();
     assert.match(text, /Muster Kaffee GmbH is a made-up company/);
     assert.equal(await page.$eval('[data-act=demo-download]', (a) => (a as HTMLAnchorElement).href), DOWNLOAD);
     assert.equal(await page.$('[data-testid=audit-bar]'), null, 'no audit bar: the demo is no audit');

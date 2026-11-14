@@ -129,6 +129,8 @@ It is the same export, with these differences:
 - `--download <url>` gives the bar an **App herunterladen** link to that page. The app names no
   website of its own, so without the option the bar has no link.
 - On the first visit a card says what the demo shows and links to Belege, Buchungen and MWST.
+- It opens in German, whatever the browser's language. A language the viewer picks in the top
+  bar is kept in that browser, as in the app.
 - Where the export would speak of an audit or of the local server (Automatisierung, Wissen,
   Geschäftspartner, the year close, the export dialog, the AI column), the demo says that this
   is in the app.
