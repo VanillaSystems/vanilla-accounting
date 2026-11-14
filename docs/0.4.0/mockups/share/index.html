@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teilen · Prototyp</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@700;800&family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* The story of «Teilen» as a sequence: steps on the left, the screen on the right. Opens by double click
+   (file://): no fetch, every screen is a file beside this one. ←/→ or the buttons move; a screen's own
+   buttons move the story too (they post { shareGo } to this page). */
+:root { --bg: #ffffff; --ink: #0b1220; --ink-2: #4a5263; --muted: #6e7685; --faint: #a3a9b5; --line: #e7eaf0; --accent: #0067b1; --accent-soft: #e8f1f9; --page: #e9ecf1; --chrome: #f4f5f7; --chrome-line: #d9dde4; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { display: grid; grid-template-columns: 330px minmax(0, 1fr); background: var(--page); color: var(--ink); font: 14px/1.5 "Instrument Sans", system-ui, sans-serif; }
+aside { background: var(--bg); border-right: 1px solid var(--line); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; }
+aside header { padding: 20px 20px 12px; }
+aside h1 { margin: 0; font: 800 22px/1.15 "Hanken Grotesk", sans-serif; letter-spacing: -.02em; }
+aside header p { margin: 6px 0 0; color: var(--ink-2); font-size: 13px; }
+aside header a { color: var(--accent); }
+ol { list-style: none; margin: 0; padding: 4px 10px 16px; overflow: auto; }
+li.act { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 14px 10px 4px; }
+li button { width: 100%; display: grid; grid-template-columns: 26px 1fr; gap: 0 6px; text-align: left; padding: 6px 10px; border: 0; border-radius: 8px; background: none; color: var(--ink-2); font: inherit; font-size: 13.5px; cursor: pointer; }
+li button .n { font: 500 12px "Geist Mono", monospace; color: var(--faint); padding-top: 1px; }
+li button:hover { background: var(--chrome); color: var(--ink); }
+li button[aria-current="step"] { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+li button[aria-current="step"] .n { color: var(--accent); }
+aside footer { display: flex; gap: 8px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--line); }
+aside footer button { height: 34px; padding: 0 14px; border-radius: 9px; border: 1px solid #d3d8e1; background: var(--bg); font: inherit; cursor: pointer; }
+aside footer button.primary { background: var(--accent); border-color: var(--accent); color: #fff; margin-left: auto; }
+aside footer button:disabled { opacity: .4; cursor: default; }
+aside footer .k { color: var(--faint); font: 12px "Geist Mono", monospace; }
+main { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-width: 0; min-height: 0; }
+.stage { position: relative; min-height: 0; display: grid; place-items: center; padding: 20px; overflow: hidden; }
+.box { position: relative; }
+.device { position: absolute; left: 0; top: 0; transform-origin: 0 0; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 30px 80px -30px rgba(11,18,32,.45), 0 0 0 1px rgba(11,18,32,.12); display: grid; grid-template-rows: auto 1fr; }
+.device iframe { border: 0; display: block; width: 100%; height: 100%; background: #fff; }
+.bar { height: 38px; display: flex; align-items: center; gap: 8px; padding: 0 14px; background: var(--chrome); border-bottom: 1px solid var(--chrome-line); font-size: 12.5px; color: var(--ink-2); }
+.dots { display: inline-flex; gap: 7px; margin-right: 8px; }
+.dots i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; } .dots i:nth-child(2) { background: #febc2e; } .dots i:nth-child(3) { background: #28c840; }
+.bar .title { flex: 1; text-align: center; margin-right: 70px; }
+.bar .url { flex: 1; max-width: 640px; margin: 0 auto; height: 26px; border-radius: 7px; background: #fff; border: 1px solid var(--chrome-line); display: flex; align-items: center; gap: 8px; padding: 0 10px; font-size: 12.5px; color: var(--ink); white-space: nowrap; overflow: hidden; }
+.bar .url .lk { color: #1a7f4b; }
+.bar .url .h { color: var(--faint); }
+.device.phone { border-radius: 46px; padding: 14px; background: #111; box-shadow: 0 30px 80px -30px rgba(11,18,32,.6); }
+.device.phone .screen { border-radius: 34px; overflow: hidden; background: #fff; display: grid; grid-template-rows: 44px 1fr; height: 100%; }
+.device.phone .status { display: flex; align-items: center; justify-content: space-between; padding: 0 26px; font: 600 14px system-ui; }
+.device.phone .bar { height: auto; padding: 0; border: 0; }
+.cap { padding: 12px 24px 16px; background: var(--bg); border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 20px; }
+.cap h2 { margin: 0; font: 700 17px/1.3 "Hanken Grotesk", sans-serif; }
+.cap p { margin: 0; color: var(--ink-2); font-size: 13.5px; max-width: 110ch; }
+.cap a { grid-row: span 2; align-self: center; color: var(--accent); font-size: 13px; white-space: nowrap; }
+@media (max-width: 900px) { body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); } aside { max-height: 40vh; } }
+</style>
+</head>
+<body>
+<aside>
+  <header>
+    <h1>Teilen mit dem Treuhänder</h1>
+    <p>Clickable prototype: Anna Muster (Muster Kaffee GmbH, the demo firm) sends her books to her father, a fiduciary, and gets his corrections back. Screens are captures of the real app with the new parts added. The buttons inside each screen work too. <a href="notes.html">Notes and decisions</a></p>
+  </header>
+  <ol id="steps"></ol>
+  <footer><button type="button" id="prev">Zurück</button><span class="k">← →</span><button type="button" id="next" class="primary">Weiter</button></footer>
+</aside>
+<main>
+  <div class="stage" id="stage"><div class="box" id="box"></div></div>
+  <div class="cap"><h2 id="capt"></h2><a id="full" href="#" target="_blank">Screen alone ↗</a><p id="capn"></p></div>
+</main>
+<script>
+'use strict';
+const URL_SHARE = 'vanilla-accounting.ch/teilen/7Hq2Vx';
+const KEY = '#k=Rk3pV0QmXz…';
+const STEPS = [
+  { act: 'Anna teilt' },
+  { src: 'anna.html#start', kind: 'app', t: '«Teilen» in der Kontextleiste',
+    n: 'Where it lives: a «Teilen» chip in the context bar, next to Export, reachable from every area (and ⇧S). Not in Firma: sharing is something you do with the books in front of you.' },
+  { src: 'anna.html#dialog', kind: 'app', t: 'An wen, was, wie gross',
+    n: 'One e-mail field, an optional message, what goes (the books as of now, 64 MB for the first time; later only what is new) and the encryption note. No PIN, no account. One button: «Senden».' },
+  { src: 'anna.html#sent', kind: 'app', t: 'Gesendet · noch nicht geöffnet',
+    n: 'The chip now says «Bei Papa». Its card is the status: sent, available until 24.11., not opened yet. «Zurückziehen» is the only action. Anna keeps booking: nothing is held.' },
+  { act: 'Papa bekommt den Link' },
+  { src: 'mail.html', kind: 'mail', t: 'Die E-Mail',
+    n: 'Sent by the share service, replies go to Anna. One button «Buchhaltung öffnen», the date it expires, one line on end-to-end encryption, a small footer.' },
+  { src: 'mail.html', kind: 'phone', t: 'Die E-Mail am Handy',
+    n: 'The same e-mail at 390 px. The button takes the full width.' },
+  { src: 'web.html#mac', kind: 'browser', url: URL_SHARE, t: 'Website: ① Vanilla Accounting laden',
+    n: 'The company website\'s page /teilen/<id>, in its look (the domain and the logo are stand-ins, see the notes). Step ① downloads the dmg straight from the GitHub release (Apple chip picked; Intel and «Alle Versionen auf GitHub» as small links), with three drawn install steps. «Schon installiert? Direkt öffnen» skips to ②.' },
+  { src: 'web.html#loaded', kind: 'browser', url: URL_SHARE, t: 'Website: ② Buchhaltung öffnen',
+    n: 'After the download, ① shows done and ② is the one button: it opens the app through vanilla-accounting://teilen/… The key travels in the link after the #, so the server never sees it.' },
+  { src: 'papa.html#open', kind: 'app', title: 'Vanilla Accounting — Muster Kaffee GmbH · von Anna', t: 'Annas Buchhaltung in Papas App',
+    n: 'The bar on top states the fact: whose books, as of when, from whom, and «Prüfmodus für Treuhänder». He can correct and write notes; filing stays with Anna («Einreichen macht Anna»). A one-time card shows Anna\'s message.' },
+  { act: 'Anna sieht' },
+  { src: 'anna.html#opened', kind: 'app', t: 'Geöffnet am 15.11. 19:04',
+    n: 'The same card, one fact more. No badge, no reminder.' },
+  { act: 'Papa korrigiert' },
+  { src: 'papa-journal.html#edit', kind: 'app', title: 'Vanilla Accounting — Muster Kaffee GmbH · von Anna', t: 'Korrigieren mit «Warum? (für Anna)»',
+    n: 'He edits in the normal entry editor: here a 30 % private share on the fuel payments, and one line «Warum?». His changes count in the bar at the bottom: «3 Änderungen · An Anna zurücksenden».' },
+  { src: 'papa-journal.html#send', kind: 'app', title: 'Vanilla Accounting — Muster Kaffee GmbH · von Anna', t: 'An Anna zurücksenden',
+    n: 'The dialog lists his changes, takes an optional message and sends. 48 KB: only his changes travel back.' },
+  { src: 'papa-journal.html#done', kind: 'app', title: 'Vanilla Accounting — Muster Kaffee GmbH · von Anna', t: 'Zurückgesendet',
+    n: 'A fact in the bar. Nothing else to do.' },
+  { act: 'Anna übernimmt' },
+  { src: 'anna.html#back', kind: 'app', t: 'Papa hat 7 Änderungen geschickt',
+    n: 'The changes arrive on their own (the same encrypted way back). One card, «Durchsehen» or «Später»; the dot stays on Änderungen until she has looked.' },
+  { src: 'anna-changes.html#review', kind: 'app', t: 'Durchsehen: die Wirkung oben, pro Gruppe übernehmen',
+    n: 'In Änderungen. On top the effect on the figures (MWST Q3, the Q1 Korrekturabrechnung, the asset account), then «Alles übernehmen». Groups by kind, each with «Übernehmen»; per row «Auslassen» or «Frage zurück». Before → after, his «Warum?», who made the original booking.' },
+  { src: 'anna-changes.html#conflict', kind: 'app', t: 'Ein Konflikt: deine oder Papas Version',
+    n: 'Anna changed the Torrefazione booking after sharing; so did he. The row shows both versions side by side, one click picks. Without a pick, «Alles übernehmen» keeps hers and leaves this one open.' },
+  { src: 'anna-changes.html#applied', kind: 'app', t: 'Übernommen · Immer so?',
+    n: '«Übernommen — von Papa (Treuhänder) · rückgängig machen», each row undoable too. He corrected three Coop payments the same way, so the app offers «Immer so?»: the rule, shown plainly, kept with one click.' },
+  { act: 'Varianten' },
+  { src: 'web.html#windows', kind: 'browser', url: URL_SHARE, t: 'Windows-PC: zurzeit nur für den Mac',
+    n: 'On Windows the page says so plainly and offers the books read-only in the browser.' },
+  { src: 'web.html#phone', kind: 'phone', t: 'Handy: zurzeit nur für den Mac',
+    n: 'The same at phone width.' },
+  { src: 'papa.html#web', kind: 'browser', url: URL_SHARE + '/ansehen', t: 'Im Browser ansehen (nur lesen)',
+    n: 'The app\'s own screens, decrypted in the browser, read-only (as the audit export is). The bar says how to correct: on a Mac.' },
+  { src: 'anna.html#withdrawn', kind: 'app', t: 'Zurückziehen',
+    n: 'After «Zurückziehen» the link is dead. Honest about the limit: what Papa already opened stays on his Mac, but nothing comes back.' },
+  { src: 'web.html#withdrawn', kind: 'browser', url: URL_SHARE, t: 'Link zurückgezogen',
+    n: 'What the link shows after that.' },
+  { src: 'web.html#expired', kind: 'browser', url: URL_SHARE, t: 'Link abgelaufen',
+    n: 'After 24.11. the package is deleted on the server; the page says so and whom to ask.' },
+  { src: 'anna.html#dialog2', kind: 'app', t: 'Das nächste Teilen: nur Neues',
+    n: 'The second time only what is new since his return goes: «Neu seit der letzten Übergabe (16.11.): 12 MB».' },
+];
+const SCREENS = STEPS.map((s, i) => ({ ...s, i })).filter((s) => s.src);
+let cur = 0;
+const list = document.getElementById('steps');
+let k = 0;
+list.innerHTML = STEPS.map((s) => s.act ? `<li class="act">${s.act}</li>` : `<li><button type="button" data-k="${k}"><span class="n">${String(++k).padStart(2, '0')}</span><span>${s.t}</span></button></li>`).join('');
+list.addEventListener('click', (e) => { const b = e.target.closest('button[data-k]'); if (b) show(Number(b.dataset.k)); });
+
+const box = document.getElementById('box');
+const stage = document.getElementById('stage');
+let frame;
+
+function chrome(s) {
+  if (s.kind === 'browser') return `<div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="url"><span class="lk">🔒</span>${s.url}<span class="h">${KEY}</span></span></div>`;
+  if (s.kind === 'mail') return `<div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="title">Posteingang — peter.muster@example.ch</span></div>`;
+  return `<div class="bar"><span class="dots"><i></i><i></i><i></i></span><span class="title">${s.title || 'Vanilla Accounting — Muster Kaffee GmbH'}</span></div>`;
+}
+
+function layout(s) {
+  const phone = s.kind === 'phone';
+  const w = phone ? 390 + 28 : 1440;
+  const h = phone ? 844 + 28 : 900 + 38;
+  const r = stage.getBoundingClientRect();
+  const scale = Math.min((r.width - 40) / w, (r.height - 40) / h, 1);
+  box.style.width = `${w * scale}px`; box.style.height = `${h * scale}px`;
+  const d = box.firstElementChild;
+  d.style.width = `${w}px`; d.style.height = `${h}px`; d.style.transform = `scale(${scale})`;
+}
+
+function show(i, src) {
+  cur = Math.max(0, Math.min(SCREENS.length - 1, i));
+  const s = SCREENS[cur];
+  const url = src || s.src;
+  const phone = s.kind === 'phone';
+  box.innerHTML = phone
+    ? `<div class="device phone"><div class="screen"><div class="status"><span>19:02</span><span>●●● 5G</span></div><iframe title="${s.t}"></iframe></div></div>`
+    : `<div class="device">${chrome(s)}<iframe title="${s.t}"></iframe></div>`;
+  frame = box.querySelector('iframe');
+  frame.src = url;
+  layout(s);
+  document.querySelectorAll('button[data-k]').forEach((b) => { if (Number(b.dataset.k) === cur) { b.setAttribute('aria-current', 'step'); b.scrollIntoView({ block: 'nearest' }); } else b.removeAttribute('aria-current'); });
+  document.getElementById('capt').textContent = `${String(cur + 1).padStart(2, '0')} · ${s.t}`;
+  document.getElementById('capn').textContent = s.n;
+  document.getElementById('full').href = url;
+  document.getElementById('prev').disabled = cur === 0;
+  document.getElementById('next').disabled = cur === SCREENS.length - 1;
+  try { history.replaceState(null, '', `#${cur + 1}`); } catch { /* file:// in some browsers */ }
+}
+
+// A screen's own button: go to the step that shows the target; a phone stays a phone.
+window.addEventListener('message', (e) => {
+  let target = e.data && e.data.shareGo;
+  if (!target) return;
+  const here = SCREENS[cur];
+  if (here.kind === 'phone' && target === 'web.html#mac') target = 'web.html#phone';
+  const exact = SCREENS.findIndex((s) => s.src === target && (here.kind === 'phone') === (s.kind === 'phone'));
+  const any = exact >= 0 ? exact : SCREENS.findIndex((s) => s.src === target);
+  if (any >= 0) show(any);
+  else { frame.src = target; document.getElementById('full').href = target; }
+});
+document.getElementById('prev').addEventListener('click', () => show(cur - 1));
+document.getElementById('next').addEventListener('click', () => show(cur + 1));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowRight' || e.key === 'PageDown') { e.preventDefault(); show(cur + 1); }
+  if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(cur - 1); }
+});
+addEventListener('resize', () => layout(SCREENS[cur]));
+addEventListener('hashchange', () => { const n = Number(location.hash.slice(1)); if (n && n - 1 !== cur) show(n - 1); });
+show((Number(location.hash.slice(1)) || 1) - 1);
+</script>
+</body>
+</html>

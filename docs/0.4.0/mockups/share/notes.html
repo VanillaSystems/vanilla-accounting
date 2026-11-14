@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teilen · Notes</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@700;800&family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+:root { --bg: #ffffff; --ink: #0b1220; --ink-2: #4a5263; --line: #e7eaf0; --accent: #0067b1; --page: #eceff4; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 15px/1.55 "Instrument Sans", system-ui, sans-serif; }
+.doc { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; display: grid; gap: 18px; }
+h1 { font: 800 30px/1.1 "Hanken Grotesk", sans-serif; margin: 0; }
+h2 { font: 700 19px/1.2 "Hanken Grotesk", sans-serif; margin: 10px 0 0; }
+p, li { color: var(--ink-2); }
+p { margin: 0; }
+ol, ul { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+b { color: var(--ink); }
+a { color: var(--accent); }
+code { font: 13px "Geist Mono", monospace; }
+.card { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: grid; gap: 10px; }
+</style>
+</head>
+<body>
+<div class="doc">
+  <h1>Teilen mit dem Treuhänder · notes</h1>
+  <p><a href="index.html">← Back to the prototype</a></p>
+  <div class="card">
+    <p>How it was made: the app ran read-only on the demo workspace (Muster Kaffee GmbH, <code>READONLY=1</code>, a copy outside the repository); its rendered DOM and CSS were captured with puppeteer-core (<code>.verify/share-capture/capture.mjs</code>, not in git: it is the same recipe as earlier mockups). <code>app.css</code> is the app's CSS as rendered; <code>share.css</code> and <code>share.js</code> add only the new parts with the app's tokens and class names. The website page and the e-mail use the company website's styles (<code>site/site.css</code>, a subset of its site.css) and its logo's red mark. The people are made up: Anna Muster (the demo firm's owner) and her father Peter Muster, a fiduciary, whom she calls «Papa».</p>
+    <p>The figures are the demo's: Q3 2026 zu bezahlen 2'146.30 today; Papa's changes move it to 2'151.33 (the 30 % private share takes 5.03 of input tax); the Q1 correction shifts 85.56 from Ziffer 400 to 405 and leaves the amount due unchanged; 1510 grows by 806.88 + 1'141.89.</p>
+  </div>
+
+  <h2>Decisions to look at</h2>
+  <ol>
+    <li><b>The company's name, domain and logo are stand-ins.</b> check-public allows the company's name, its domain and its GitHub org only in README.md (<code>IDENTITY_FILES</code> in src/publish/leak-guard.ts, your decision of 2026-10-09), so the website and the e-mail say «Vanilla Accounting» and <code>vanilla-accounting.ch</code>, the logo is its red mark with a wordmark, and the release links point nowhere. Everything else is the website's look. To show the real ones, the mockup folder would have to join <code>IDENTITY_FILES</code>.</li>
+    <li><b>Where «Teilen» lives:</b> a chip in the context bar next to Export (every area, ⇧S), whose status card replaces a separate screen. The spec (PR #514, B10) puts «Bücher übergeben …» in Firma › Personen and Änderungen.</li>
+    <li><b>No hold while shared.</b> The flow lets Anna keep booking; the spec recommends holding her writes (Q-B8) so that the return is a fast-forward. Without the hold, a record both changed is a conflict, hence the «Deine Version | Papas Version» row. That needs a record-by-record merge (ADR 0003 §3), which the spec calls much larger than the baton.</li>
+    <li><b>Approve per group, as decided with you,</b> with «Alles übernehmen» on top. The spec's Q11 recommends the fast-forward as the take-over and undo per row afterwards. In the prototype every row stays undoable after «Übernehmen».</li>
+    <li><b>A hosted, end-to-end encrypted relay</b> instead of the spec's <code>.vanilla</code> file: the package lies on the company's server, the key is in the link after the # (never sent to the server), the link expires after 10 days and the package is deleted then. This needs new infrastructure: storage, sending the e-mail, the return channel, and the website page. No PIN means whoever has the e-mail can open the books. «Zurückziehen» cannot take back what he already opened; the card says so.</li>
+    <li><b>«Prüfmodus» is taken.</b> The read-only mode already shows «Prüfmodus · nur Lesen». The recipient's mode is labelled «Prüfmodus für Treuhänder» as you asked; one of the two should get another name.</li>
+    <li><b>The recipient files nothing:</b> «Abrechnung erstellen» is replaced by «Einreichen macht Anna» (the fiduciary role of the spec, B2). A correction of a filed quarter is a correction booking with <code>corrects</code> (golden rule), dated in the first open quarter (Q2, since Q2 is not filed in the demo).</li>
+    <li><b>Apple chip or Intel:</b> only Chromium browsers report the architecture (<code>navigator.userAgentData</code>); Safari does not. The page picks the Apple-chip dmg and offers Intel as a small link. The dmg comes straight from the GitHub release (<code>Vanilla.Accounting-0.5.0-arm64.dmg</code>, 129 MB).</li>
+    <li><b>Windows and phone:</b> «gibt es zurzeit für den Mac», with the books read-only in the browser. That view is the app's UI decrypting the package in the browser, like the audit export: a new build target.</li>
+    <li><b>Size:</b> the first share carries 2026 (64 MB, closed years stay with Anna, as in B3.2); later ones only what is new (12 MB); his return only his changes (48 KB).</li>
+    <li><b>Where the mockup lives:</b> <code>docs/0.4.0/mockups/share/</code>, beside the earlier mockups, because <code>docs/0.4.0/**</code> is already in public-files.txt. <code>docs/mockups/</code> would need a new line there.</li>
+  </ol>
+</div>
+</body>
+</html>
