@@ -11,6 +11,8 @@ import { formatDate } from '../lib/utils.js';
 import { ICONS } from '../areas/icons.js';
 import { sizeText } from './store.js';
 import { mailto, refreshShares, runJob, running, type Job, type Registered, type SenderView, type ShareRecord, type Shared } from './link.js';
+import type { LinkPreview } from '../../share/sharing.js';
+import { askLines } from './ask-text.js';
 
 /** «15.11. 19:04»: a moment as a person reads it, in this computer's time. */
 export function atText(iso: string): string {
@@ -202,19 +204,42 @@ export function SharesList({ shares, onShares }: { shares: ShareRecord[]; onShar
   );
 }
 
-/** «Einen Link bekommen?»: a link pasted here opens like a link in the invitation, as a copy for «Durchsicht». */
+/**
+ * «Einen Link bekommen?»: a link pasted here opens like a link in the invitation, as a copy for
+ * «Durchsicht». First the app says whose books, from whom and through which service (no opening
+ * spent); the link opens only on «Öffnen», with what the person confirmed there.
+ */
 export function OpenLink({ onOpened }: { onOpened(o: { kind: 'full' | 'update'; firm: string; version: number; conflicts: number; dropped: number }): void }) {
   const [text, setText] = useState('');
+  const [preview, setPreview] = useState<LinkPreview | null>(null);
   const [job, setJob] = useState<Job<unknown> | null>(null);
   const [error, setError] = useState('');
+  const look = async () => {
+    setError(''); setPreview(null);
+    try { setPreview(await request<LinkPreview>('POST', '/api/share/preview', { link: text.trim() })); } catch (e) { setError(errorText(e)); }
+  };
+  const ask = preview ? askLines((k, v) => t(k, v as never), preview) : null;
   const open = async () => {
     setError('');
-    try { onOpened(await runJob<Parameters<typeof onOpened>[0]>('/api/share/open', { link: text.trim() }, setJob as (j: Job<unknown>) => void)); } catch (e) { setError(errorText(e)); setJob(null); }
+    try {
+      onOpened(await runJob<Parameters<typeof onOpened>[0]>('/api/share/open', { link: text.trim(), trust: !!preview?.foreign, replace: !!ask?.replaces }, setJob as (j: Job<unknown>) => void));
+    } catch (e) { setError(errorText(e)); setJob(null); }
   };
   return (
     <div className="shopen">
-      <label>{t('share.openLink')}<input value={text} onChange={(e) => setText(e.target.value)} placeholder={t('share.openLinkHint')} data-testid="share-open-link" /></label>
-      <button type="button" className="btn" disabled={!text.trim() || !!job} onClick={() => void open()} data-testid="share-open-go">{t('share.openGo')}</button>
+      <label>{t('share.openLink')}<input value={text} onChange={(e) => { setText(e.target.value); setPreview(null); }} placeholder={t('share.openLinkHint')} data-testid="share-open-link" /></label>
+      <button type="button" className="btn" disabled={!text.trim() || !!job} onClick={() => void look()} data-testid="share-open-go">{t('share.openGo')}</button>
+      {preview && ask ? (
+        <div className="what shask" data-testid="share-open-ask">
+          <div className="wt"><b>{t('share.ask.title')}</b></div>
+          <div className="wm">{ask.what}</div>
+          {ask.warnings.map((w) => <div key={w} className="err">{w}</div>)}
+          <div className="acts">
+            <button type="button" className="btn ghost" onClick={() => setPreview(null)}>{t('common.cancel')}</button>
+            <button type="button" className="btn" disabled={!!job} onClick={() => void open()} data-testid="share-open-yes">{t('share.ask.open')}</button>
+          </div>
+        </div>
+      ) : null}
       {job ? <JobProgress job={job} /> : null}
       {error ? <div className="err" role="alert">{error}</div> : null}
     </div>

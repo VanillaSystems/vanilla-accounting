@@ -11,27 +11,34 @@
  * keeps its link (service, id, key, return token) in its own data/durchsicht/, which lives in the
  * app's folder and travels nowhere.
  *
+ * A link is someone else's data until the person says otherwise (review of PR #538): a link naming
+ * another service than this app's, or one that would move an existing copy to another sharer or
+ * service, opens only when the person confirmed it, after seeing whose books, from whom and through
+ * which service (`previewLink`).
+ *
  * The `.vanilla` file stays the way for every step without the service (B3.7).
  */
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { secrets } from '../secrets/secrets.js';
 import { sendText, sendingAddress } from '../invoices/mail.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { prepareShare, HANDOVER_DIR, type ShareRequest } from '../handover/share.js';
-import { readPackage } from '../handover/package.js';
-import { buildReturn, durchsichtHome, markerOf, openPackage, type Opened } from '../handover/durchsicht.js';
+import { readPackage, writePackage } from '../handover/package.js';
+import { buildReturn, copyRootOf, durchsichtHome, markerOf, openPackage, type Opened } from '../handover/durchsicht.js';
 import { receiveReturn } from '../handover/returns.js';
 import { DURCHSICHT_MARKER } from '../handover/content.js';
 import type { Party } from '../handover/versions.js';
 import { shareClient, ShareServiceError, type ShareClient } from './client.js';
-import { decodeKey, encodeKey, encryptMeta, generateKey, unwrapKey, wrapKey } from './crypto/index.js';
+import { decodeKey, decryptMeta, encodeKey, encryptMeta, generateKey, unwrapKey, wrapKey } from './crypto/index.js';
 import { renderInvitation, type Invitation } from './invitation.js';
 import { linkOf, parseLink, shareService } from './service.js';
 import { receivePackage, sendPackage, type Progress } from './transport.js';
 
 /** A step of the flow refused before or beside the service: the UI says it by its code. */
-export type ShareFlowRefusal = 'shareNoService' | 'shareNoSecretStore' | 'shareSenderMissing' | 'shareSenderUnconfirmed' | 'shareLinkInvalid' | 'shareNoLink' | 'shareUnknown';
+export type ShareFlowRefusal =
+  | 'shareNoService' | 'shareNoSecretStore' | 'shareSenderMissing' | 'shareSenderUnconfirmed' | 'shareLinkInvalid' | 'shareNoLink' | 'shareUnknown'
+  | 'shareForeignService' | 'shareCopyOther' | 'shareConfirmationOdd';
 
 export class ShareFlowError extends Error {
   constructor(message: string, readonly code: ShareFlowRefusal, readonly params: Record<string, string> = {}) { super(message); }
@@ -72,6 +79,26 @@ export interface Registered extends SenderView {
   mailError?: string;
 }
 
+/** The subject the service's inbound address reads (its docs/api.md); nothing else goes out from her mailbox. */
+const CONFIRM_SUBJECT = /^Vanilla Accounting confirmation [A-Za-z0-9]{8,64}$/;
+
+/**
+ * What the service asks to be sent, held to what a confirmation is: to an address at the service's
+ * own domain, with the subject it reads; the body is the app's own. A service never chooses whom
+ * her mailbox writes to or what it says (review of PR #538).
+ */
+function confirmationOf(service: string, email: string, c: { to?: unknown; subject?: unknown; expiresAt?: unknown }): NonNullable<Registered['confirmation']> {
+  const host = new URL(service).hostname.toLowerCase();
+  const to = typeof c.to === 'string' ? c.to.trim() : '';
+  const domain = to.split('@')[1]?.toLowerCase();
+  const subject = typeof c.subject === 'string' ? c.subject : '';
+  if (!/^[^@\s]+@[^@\s]+$/.test(to) || domain !== host || !CONFIRM_SUBJECT.test(subject)) {
+    throw new ShareFlowError(`Der Dienst ${host} verlangt eine Bestätigung an ${to || '(leer)'} mit dem Betreff «${subject.slice(0, 80)}»: das sendet die App nicht.`, 'shareConfirmationOdd', { host });
+  }
+  const text = `Mit dieser E-Mail bestätigt Vanilla Accounting, dass ${email} Buchhaltungen über ${host} teilt.\n`;
+  return { to, subject, text, expiresAt: typeof c.expiresAt === 'string' ? c.expiresAt : '' };
+}
+
 /**
  * Registers `email` as this computer's sender (docs/api.md POST /api/senders) and sends the
  * confirmation e-mail from that address when the books' mailbox sends from it; otherwise the
@@ -82,10 +109,12 @@ export async function registerSender(ws: Workspace, email: string): Promise<Regi
   const service = serviceNow();
   const reg = await shareClient(service).registerSender(email.trim());
   await secrets.set('share:sender', JSON.stringify({ service, email: email.trim(), token: reg.senderToken } satisfies Sender));
-  const out: Registered = { email: email.trim(), confirmed: reg.confirmed, confirmation: reg.confirmation, mailed: false, confirmationExpiresAt: reg.confirmation.expiresAt };
-  if (!reg.confirmed && sendingAddress(ws)?.toLowerCase() === email.trim().toLowerCase()) {
+  if (reg.confirmed) return { email: email.trim(), confirmed: true, mailed: false };
+  const confirmation = confirmationOf(service, email.trim(), reg.confirmation ?? {});
+  const out: Registered = { email: email.trim(), confirmed: false, confirmation, mailed: false, ...(confirmation.expiresAt ? { confirmationExpiresAt: confirmation.expiresAt } : {}) };
+  if (sendingAddress(ws)?.toLowerCase() === email.trim().toLowerCase()) {
     try {
-      await sendText(ws, { to: reg.confirmation.to, subject: reg.confirmation.subject, body: reg.confirmation.text });
+      await sendText(ws, { to: confirmation.to, subject: confirmation.subject, body: confirmation.text });
       out.mailed = true;
     } catch (e) { out.mailError = (e as Error).message; }
   }
@@ -150,10 +179,30 @@ export function readShares(ws: Pick<Workspace, 'paths'>): ShareRecord[] {
   try { return (JSON.parse(readFileSync(f, 'utf8')) as { shares?: ShareRecord[] }).shares ?? []; } catch { return []; }
 }
 
-function writeShares(ws: Pick<Workspace, 'paths'>, shares: ShareRecord[]): void {
+/**
+ * Every change of shares.json: read, changed and written in one synchronous step, so no network
+ * wait sits between the read and the write and no share added meanwhile is lost (review of #538).
+ */
+function updateShares(ws: Pick<Workspace, 'paths'>, fn: (shares: ShareRecord[]) => ShareRecord[]): ShareRecord[] {
+  const next = fn(readShares(ws));
   mkdirSync(dirname(sharesFile(ws)), { recursive: true });
-  writeFileSync(sharesFile(ws), JSON.stringify({ schema: 1, shares }, null, 1) + '\n');
+  writeFileSync(`${sharesFile(ws)}.tmp`, JSON.stringify({ schema: 1, shares: next }, null, 1) + '\n');
+  renameSync(`${sharesFile(ws)}.tmp`, sharesFile(ws));
+  return next;
 }
+const updateShare = (ws: Pick<Workspace, 'paths'>, id: string, fn: (r: ShareRecord) => void): ShareRecord | undefined => {
+  let out: ShareRecord | undefined;
+  updateShares(ws, (all) => all.map((r) => { if (r.id !== id) return r; const c = structuredClone(r); fn(c); out = c; return c; }));
+  return out;
+};
+
+/**
+ * The versions handed over by link that never reached their person: no opening at the service.
+ * The next share to that person builds on none of them (a full package after a link withdrawn or
+ * ended unopened; versions.ts heldBy).
+ */
+export const unopenedVersions = (ws: Pick<Workspace, 'paths'>): number[] =>
+  readShares(ws).filter((r) => !r.opens.length && !r.returns.some((x) => x.received)).map((r) => r.version);
 
 interface ShareKeys { key: string; revokeToken: string }
 const keysOf = async (id: string): Promise<ShareKeys | undefined> => {
@@ -163,12 +212,27 @@ const keysOf = async (id: string): Promise<ShareKeys | undefined> => {
 
 export interface Shared { record: ShareRecord; link: string; invitation: Invitation; mailed: boolean; mailError?: string }
 
+/** One share of the same books at a time: two at once would both build on the same next version. */
+const running = new Map<string, Promise<unknown>>();
+function oneAtATime<T>(ws: Pick<Workspace, 'paths'>, fn: () => Promise<T>): Promise<T> {
+  const key = ws.paths.root;
+  const before = running.get(key) ?? Promise.resolve();
+  const next = before.catch(() => undefined).then(fn);
+  running.set(key, next.catch(() => undefined));
+  return next;
+}
+
 /**
  * «Teilen» by link: builds the next version's package, seals and uploads it, then writes the
  * version (only once the service holds it), keeps the share, and sends the invitation from the
  * books' mailbox when `mail` and the mailbox can send; else the person sends the link herself.
+ * The person holds the version only once the link was opened (unopenedVersions).
  */
-export async function shareByLink(ws: Workspace, req: ShareRequest, from: Party, opts: { mail?: boolean; progress?: Progress; now?: Date; publisher?: string } = {}): Promise<Shared> {
+export function shareByLink(ws: Workspace, req: ShareRequest, from: Party, opts: { mail?: boolean; progress?: Progress; now?: Date; publisher?: string } = {}): Promise<Shared> {
+  return oneAtATime(ws, () => shareNow(ws, req, from, opts));
+}
+
+async function shareNow(ws: Workspace, req: ShareRequest, from: Party, opts: { mail?: boolean; progress?: Progress; now?: Date; publisher?: string }): Promise<Shared> {
   needSecretStore();
   const service = serviceNow();
   const sender = await senderKept();
@@ -176,8 +240,10 @@ export async function shareByLink(ws: Workspace, req: ShareRequest, from: Party,
   const client = shareClient(service);
   const me = await client.sender(sender.token);
   if (!me.confirmed) throw new ShareFlowError(`${sender.email} ist noch nicht bestätigt.`, 'shareSenderUnconfirmed', { email: sender.email });
+  // Whether the earlier links were opened decides between a full package and an update.
+  await refreshShares(ws).catch(() => undefined);
   const now = opts.now ?? new Date();
-  const prepared = await prepareShare(ws, req, from, now);
+  const prepared = await prepareShare(ws, { ...req, notHeld: [...(req.notHeld ?? []), ...unopenedVersions(ws)] }, from, now);
   const key = generateKey();
   const message = prepared.index.message;
   const meta = await encryptMeta(key, { v: 1, senderName: from.name, direction: 'send', company: ws.company.name, ...(message ? { note: message.slice(0, 1000) } : {}), asOf: now.toISOString().slice(0, 10) });
@@ -189,13 +255,22 @@ export async function shareByLink(ws: Workspace, req: ShareRequest, from: Party,
   // The link is made here from the service and the id; the key goes only into the fragment.
   const link = linkOf(`${service}/${sent.id}`, encodeKey(key));
   const expiresAt = sent.status.expiresAt ?? new Date(now.getTime() + 10 * 86400_000).toISOString();
-  const invitation = renderInvitation({
-    senderName: from.name, link, expiresAt: new Date(expiresAt),
-    company: ws.company.name, ...(message ? { message } : {}), ...(opts.publisher ? { publisher: opts.publisher } : {}),
-  });
-  await secrets.set(`share:${sent.id}`, JSON.stringify({ key: encodeKey(key), revokeToken: sent.revokeToken } satisfies ShareKeys));
-  // Written only now, with the service holding the package: the version the person is then known to hold.
-  const version = prepared.commit();
+  let version;
+  let invitation: Invitation;
+  try {
+    invitation = renderInvitation({
+      senderName: from.name, link, expiresAt: new Date(expiresAt),
+      company: ws.company.name, ...(message ? { message } : {}), ...(opts.publisher ? { publisher: opts.publisher } : {}),
+    });
+    await secrets.set(`share:${sent.id}`, JSON.stringify({ key: encodeKey(key), revokeToken: sent.revokeToken } satisfies ShareKeys));
+    // Written only now, with the service holding the package.
+    version = prepared.commit();
+  } catch (e) {
+    // A share the books keep no version of (another version written meanwhile): gone at the service, its key dropped.
+    await client.revoke(sent.id, sent.revokeToken).catch(() => undefined);
+    await secrets.set(`share:${sent.id}`, null).catch(() => undefined);
+    throw e;
+  }
   const record: ShareRecord = {
     id: sent.id, service, to: req.to, version: version.n, kind: prepared.index.kind as 'full' | 'update',
     bytes: sent.status.bytes, files: prepared.files.size, at: now.toISOString(), state: sent.status.state, expiresAt, opens: [], returns: [],
@@ -209,7 +284,7 @@ export async function shareByLink(ws: Workspace, req: ShareRequest, from: Party,
       record.mailed = new Date().toISOString();
     } catch (e) { mailError = (e as Error).message; }
   }
-  writeShares(ws, [record, ...readShares(ws)]);
+  updateShares(ws, (all) => [record, ...all.filter((r) => r.id !== record.id)]);
   return { record, link, invitation, mailed, ...(mailError ? { mailError } : {}) };
 }
 
@@ -223,16 +298,13 @@ export async function linkFor(ws: Workspace, id: string): Promise<string> {
 
 /** «Zurückziehen»: the service deletes the share at once. A copy already opened stays where it was opened. */
 export async function revokeShare(ws: Workspace, id: string, now = new Date()): Promise<ShareRecord> {
-  const all = readShares(ws);
-  const r = all.find((x) => x.id === id);
+  const r = readShares(ws).find((x) => x.id === id);
   const keys = r ? await keysOf(id) : undefined;
   if (!r || !keys) throw new ShareFlowError('Diesen Link kennt die App nicht (mehr).', 'shareUnknown');
   const status = await shareClient(r.service).revoke(id, keys.revokeToken);
-  r.state = status.state;
-  r.revokedAt = now.toISOString();
-  writeShares(ws, all);
+  const next = updateShare(ws, id, (x) => { x.state = status.state; x.revokedAt = now.toISOString(); });
   await secrets.set(`share:${id}`, null);
-  return r;
+  return next ?? r;
 }
 
 /** A share ends at the service 30 days after it was made at the latest (returns too): no use asking later. */
@@ -244,44 +316,51 @@ export interface Arrived { share: string; id: string; from: Party; changes: numb
  * Asks the service about every share still running (on opening the books and on demand): its
  * openings and its returns. A return that is ready is fetched, decrypted with the key from the
  * sharer's own link and kept for review, like a `.vanilla` file opened by hand. Nothing is taken over.
+ * Each share's facts are written by id as they arrive, never the list read before the waits.
  */
 export async function refreshShares(ws: Workspace, now = new Date(), client: (service: string) => ShareClient = shareClient): Promise<{ shares: ShareRecord[]; arrived: Arrived[] }> {
-  const all = readShares(ws);
   const arrived: Arrived[] = [];
-  for (const r of all) {
+  for (const r of readShares(ws)) {
     if (r.revokedAt || r.state === 'gone' || now.getTime() - Date.parse(r.at) > ASK_DAYS * 86400_000) continue;
     const keys = await keysOf(r.id);
     if (!keys) continue;
     const c = client(r.service);
     try {
       const s = await c.status(r.id, keys.revokeToken);
-      r.state = s.state;
-      r.opens = s.opens;
-      if (s.firstOpenedAt) r.firstOpenedAt = s.firstOpenedAt;
-      if (s.expiresAt) r.expiresAt = s.expiresAt;
-      delete r.error;
+      updateShare(ws, r.id, (x) => {
+        x.state = s.state;
+        x.opens = s.opens;
+        if (s.firstOpenedAt) x.firstOpenedAt = s.firstOpenedAt;
+        if (s.expiresAt) x.expiresAt = s.expiresAt;
+        delete x.error;
+        for (const ret of s.returns) {
+          const kept = x.returns.find((y) => y.id === ret.id);
+          if (kept) { kept.state = ret.state; kept.bytes = ret.bytes; } else x.returns.push({ id: ret.id, state: ret.state, at: ret.createdAt, bytes: ret.bytes });
+        }
+        x.checkedAt = now.toISOString();
+      });
+      const received = new Set(r.returns.filter((x) => x.received).map((x) => x.id));
       for (const ret of s.returns) {
-        const kept = r.returns.find((x) => x.id === ret.id) ?? (r.returns.push({ id: ret.id, state: ret.state, at: ret.createdAt, bytes: ret.bytes }), r.returns.at(-1)!);
-        kept.state = ret.state;
-        kept.bytes = ret.bytes;
-        if (kept.received || ret.state !== 'ready' || !ret.wrappedKey) continue;
+        if (received.has(ret.id) || ret.state !== 'ready' || !ret.wrappedKey) continue;
         try {
           const returnKey = await unwrapKey(decodeKey(keys.key), ret.wrappedKey, ret.id);
-          const { bytes } = await receivePackage({ client: c, id: ret.id, key: returnKey, token: keys.revokeToken });
-          const got = receiveReturn(ws, bytes, now);
-          kept.received = got.id;
-          delete kept.error;
+          const { contents } = await receivePackage({ client: c, id: ret.id, key: returnKey, token: keys.revokeToken });
+          const got = receiveReturn(ws, writePackage(contents), now);
+          updateShare(ws, r.id, (x) => { const k = x.returns.find((y) => y.id === ret.id); if (k) { k.received = got.id; delete k.error; } });
           arrived.push({ share: r.id, ...got });
-        } catch (e) { kept.error = (e as Error).message.slice(0, 300); }
+        } catch (e) {
+          updateShare(ws, r.id, (x) => { const k = x.returns.find((y) => y.id === ret.id); if (k) k.error = (e as Error).message.slice(0, 300); });
+        }
       }
     } catch (e) {
-      if (e instanceof ShareServiceError && e.code === 'notFound') r.state = 'gone';
-      else r.error = (e as Error).message.slice(0, 300);
+      updateShare(ws, r.id, (x) => {
+        if (e instanceof ShareServiceError && e.code === 'notFound') x.state = 'gone';
+        else x.error = (e as Error).message.slice(0, 300);
+        x.checkedAt = now.toISOString();
+      });
     }
-    r.checkedAt = now.toISOString();
   }
-  writeShares(ws, all);
-  return { shares: all, arrived };
+  return { shares: readShares(ws), arrived };
 }
 
 // ─── the recipient's copy ───────────────────────────────────────────────────
@@ -299,20 +378,73 @@ export function linkOfCopy(root: string): LinkFacts | undefined {
 /** Whether a return from this copy can go back through the service. */
 export const canReturnByLink = (root: string): boolean => !!linkOfCopy(root)?.returnToken;
 
+const samePerson = (a: Party, b: Party) => (a.email && b.email ? a.email.toLowerCase() === b.email.toLowerCase() : a.name.trim() === b.name.trim());
+
+/** What a link holds, read without opening it (no opening is spent): what the person confirms. */
+export interface LinkPreview {
+  service: string;
+  host: string;
+  /** The link names another service than this app's. */
+  foreign: boolean;
+  state: string;
+  expiresAt?: string;
+  /** From the share's encrypted envelope: who shares which books (the sharer's own words, not proven). */
+  senderName?: string;
+  company?: string;
+  note?: string;
+  /** A copy here of books by that name, which the link would move forward. */
+  copy?: { firm: string; sharer: string; service?: string };
+}
+
+export async function previewLink(text: string, opts: { at?: string; client?: (service: string) => ShareClient } = {}): Promise<LinkPreview> {
+  const link = parseLink(text);
+  if (!link) throw new ShareFlowError('Das ist kein Link einer geteilten Buchhaltung.', 'shareLinkInvalid');
+  const info = await (opts.client ?? shareClient)(link.service).info(link.id);
+  let meta: Awaited<ReturnType<typeof decryptMeta>> | undefined;
+  try { meta = info.meta ? await decryptMeta(decodeKey(link.key), info.meta) : undefined; } catch { meta = undefined; }
+  const at = opts.at ?? durchsichtHome();
+  let copy: LinkPreview['copy'];
+  if (meta?.company && existsSync(at)) {
+    for (const d of readdirSync(at)) {
+      const m = markerOf(join(at, d));
+      if (m && m.firm.name === meta.company) { const f = linkOfCopy(join(at, d)); copy = { firm: m.firm.name, sharer: m.sharer.name, ...(f ? { service: f.service } : {}) }; break; }
+    }
+  }
+  return {
+    service: link.service, host: new URL(link.service).host, foreign: link.foreign, state: info.state,
+    ...(info.expiresAt ? { expiresAt: info.expiresAt } : {}),
+    ...(meta ? { senderName: meta.senderName, ...(meta.company ? { company: meta.company } : {}), ...(meta.note ? { note: meta.note } : {}) } : {}),
+    ...(copy ? { copy } : {}),
+  };
+}
+
 /**
  * Opens a link (pasted, or handed over by the system's `vanilla-accounting://`): one opening at the
  * service, every file decrypted and checked, then the package opened as a Durchsicht copy through
  * the hand-over code, exactly as the `.vanilla` file would be.
+ *
+ * Refused unless the person confirmed it: a link naming another service than this app's (`trust`),
+ * and a link that would move an existing copy to another sharer or another service (`replace`).
+ * Then nothing is written: neither the copy nor its link.
  */
-export async function openLink(text: string, opts: { at?: string; progress?: Progress; now?: Date; client?: (service: string) => ShareClient } = {}): Promise<Opened> {
+export async function openLink(text: string, opts: { at?: string; progress?: Progress; now?: Date; client?: (service: string) => ShareClient; trust?: boolean; replace?: boolean } = {}): Promise<Opened> {
   const link = parseLink(text);
   if (!link) throw new ShareFlowError('Das ist kein Link einer geteilten Buchhaltung.', 'shareLinkInvalid');
+  const host = new URL(link.service).host;
+  if (link.foreign && !opts.trust) throw new ShareFlowError(`Der Link führt zu ${host}, nicht zum Teil-Dienst dieser App.`, 'shareForeignService', { host });
+  const at = opts.at ?? durchsichtHome();
   const c = (opts.client ?? shareClient)(link.service);
-  const { bytes, index } = await receivePackage({ client: c, id: link.id, key: decodeKey(link.key), progress: opts.progress });
-  const opened = openPackage(bytes, opts.now ?? new Date(), opts.at ?? durchsichtHome());
-  const facts: LinkFacts = { service: link.service, id: link.id, key: link.key, ...(index.returnToken ? { returnToken: index.returnToken } : {}), at: (opts.now ?? new Date()).toISOString() };
+  const { contents, index } = await receivePackage({ client: c, id: link.id, key: decodeKey(link.key), progress: opts.progress });
+  const root = copyRootOf(contents.index, at);
+  const had = markerOf(root);
+  const facts = linkOfCopy(root);
+  if (had && !opts.replace && (!samePerson(had.sharer, contents.index.from) || (facts && facts.service !== link.service))) {
+    throw new ShareFlowError(`Hier liegt schon eine Kopie von ${had.firm.name} von ${had.sharer.name}; dieser Link ist von ${contents.index.from.name} über ${host}.`, 'shareCopyOther', { firm: had.firm.name, was: had.sharer.name, now: contents.index.from.name, host });
+  }
+  const opened = openPackage(contents, opts.now ?? new Date(), at);
+  const kept: LinkFacts = { service: link.service, id: link.id, key: link.key, ...(index.returnToken ? { returnToken: index.returnToken } : {}), at: (opts.now ?? new Date()).toISOString() };
   mkdirSync(dirname(linkFile(opened.root)), { recursive: true });
-  writeFileSync(linkFile(opened.root), JSON.stringify(facts, null, 2) + '\n', { mode: 0o600 });
+  writeFileSync(linkFile(opened.root), JSON.stringify(kept, null, 2) + '\n', { mode: 0o600 });
   chmodSync(linkFile(opened.root), 0o600);
   return opened;
 }

@@ -71,8 +71,12 @@ export function serviceOf(text: string): string {
   return url.origin;
 }
 
-/** A share link: the service, the share's id, and its key from the fragment. */
-export interface ShareLink { service: string; id: string; key: string }
+/**
+ * A share link: the service, the share's id, and its key from the fragment. `foreign`: the link
+ * names another service than the one this app uses, which the person must confirm before it opens
+ * (src/share/sharing.ts openLink; review of PR #538).
+ */
+export interface ShareLink { service: string; id: string; key: string; foreign: boolean }
 
 /**
  * Reads a link a person pasted or the system handed over: `https://<service>/<id>#<key>`, or the Mac
@@ -89,12 +93,12 @@ export function parseLink(text: string, service = shareService().url): ShareLink
     let from = service;
     const named = url.searchParams.get('service');
     if (named) { try { from = serviceOf(named); } catch { return undefined; } }
-    return SHARE_ID.test(id) && from ? { service: from, id, key } : undefined;
+    return SHARE_ID.test(id) && from ? { service: from, id, key, foreign: from !== service } : undefined;
   }
   let origin: string;
   try { origin = serviceOf(url.origin); } catch { return undefined; }
   const id = url.pathname.replace(/^\/+|\/+$/g, '');
-  return SHARE_ID.test(id) ? { service: origin, id, key } : undefined;
+  return SHARE_ID.test(id) ? { service: origin, id, key, foreign: origin !== service } : undefined;
 }
 
 /** The link the invitation carries: the key only after the #, which a browser never sends. */

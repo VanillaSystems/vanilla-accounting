@@ -156,3 +156,4 @@
 .shdlg > .shbody > .wm, .shdlg .ways > .wm { color: var(--muted); font-size: 12px; }
 .shdlg .xft { flex-wrap: wrap; row-gap: 8px; }
 .shdlg .xft .m { flex: 1 1 180px; }
+.shdlg .shopen .shask { grid-column: 1 / -1; }

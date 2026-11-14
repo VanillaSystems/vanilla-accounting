@@ -68,6 +68,8 @@ export const isDurchsicht = (root: string): boolean => existsSync(markerFile(roo
 /** The person working on a copy, as the write door knows him: a person, with his name and role (never written into the books). */
 export const recipientActor = (m: Pick<Marker, 'me'>): Actor => ({ kind: 'person', name: m.me.name, ...(m.me.email ? { email: m.me.email } : {}), role: 'fiduciary' });
 
+/** The folder a package of this firm opens into: the copy an update moves forward. */
+export const copyRootOf = (index: Pick<PackageIndex, 'firm'>, at: string = durchsichtHome()): string => join(at, slug(index));
 const slug = (index: Pick<PackageIndex, 'firm'>) => (index.firm.uid?.replace(/\D/g, '') || index.firm.name.toLowerCase().replace(/[^a-z0-9äöü]+/g, '-').replace(/^-|-$/g, '') || 'buchhaltung');
 
 function writeFiles(root: string, files: Map<string, Uint8Array>, paths: (path: string) => boolean = () => true): void {
@@ -101,8 +103,9 @@ export interface Opened { root: string; kind: 'full' | 'update'; marker: Marker;
  * copy of makes a new one; on an existing copy, like an `update`, it moves the copy forward and keeps
  * his changes. An update on a version his copy lacks is refused (shareBaseMissing), changing nothing.
  */
-export function openPackage(bytes: Uint8Array, now = new Date(), at: string = durchsichtHome()): Opened {
-  const p = readPackage(bytes);
+export function openPackage(bytes: Uint8Array | PackageContents, now = new Date(), at: string = durchsichtHome()): Opened {
+  // A link's files come checked and decrypted already (src/share/transport.ts, checkPackage); a file is read here.
+  const p = bytes instanceof Uint8Array ? readPackage(bytes) : bytes;
   if (p.index.kind === 'return') throw new PackageError('Das ist eine Rücksendung: sie gehört in die Bücher, aus denen geteilt wurde.', 'shareWrongKind');
   const root = join(at, slug(p.index));
   recover(root);

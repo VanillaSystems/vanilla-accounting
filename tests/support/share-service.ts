@@ -70,7 +70,7 @@ export async function startShareService(): Promise<FakeShareService> {
       if (!/^[^@\s]+@[^@\s]+$/.test(email)) return no(400, 'badEmail');
       const t = token();
       senders.set(t, { email, confirmed: fake.autoConfirm });
-      return send(201, { senderToken: t, confirmed: fake.autoConfirm, confirmation: { to: 'confirm@share.example', subject: `Vanilla Accounting confirmation ${token().slice(0, 16)}`, text: 'Bestätigung', expiresAt: new Date(Date.now() + 3600_000).toISOString() } });
+      return send(201, { senderToken: t, confirmed: fake.autoConfirm, confirmation: { to: `confirm@${new URL(base).hostname}`, subject: `Vanilla Accounting confirmation ${randomBytes(12).toString('hex')}`, text: 'Bestätigung', expiresAt: new Date(Date.now() + 3600_000).toISOString() } });
     }
     if (req.method === 'GET' && url.pathname === '/api/senders/me') {
       const s = senders.get(bearer);

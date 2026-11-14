@@ -67,6 +67,12 @@ export type ApiRefusal =
   | { code: 'shareNoLink' }
   /** A share this computer keeps no key of. */
   | { code: 'shareUnknown' }
+  /** A link to another service than this app's, not confirmed by the person. */
+  | { code: 'shareForeignService'; params: { host: string } }
+  /** A link that would move an existing copy to another sharer or service, not confirmed by the person. */
+  | { code: 'shareCopyOther'; params: { firm: string; was: string; now: string; host: string } }
+  /** The service asked for a confirmation e-mail the app does not send (another domain, another subject). */
+  | { code: 'shareConfirmationOdd'; params: { host: string } }
   | { code: 'localOnly' }
   /** From this computer, but under a name that is no loopback name (DNS rebinding). */
   | { code: 'foreignHost' }

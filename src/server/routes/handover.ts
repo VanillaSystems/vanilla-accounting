@@ -26,7 +26,7 @@ import { buildReturn, isDurchsicht, markerOf, openPackage, planReturn, readNotes
 import { applyReturn, decide, GROUPS, HandoverRefused, listReturns, receiveReturn, reviewOf, undoReturn, type Decision, type GroupId } from '../../handover/returns.js';
 import { OwnershipError } from '../../books/store.js';
 import type { ApiRefusal } from '../../types/api-error.js';
-import { canReturnByLink, readShares } from '../../share/sharing.js';
+import { canReturnByLink, readShares, unopenedVersions } from '../../share/sharing.js';
 
 export const router = Router();
 
@@ -107,6 +107,8 @@ export const shareRequest = (q: Record<string, unknown>): ShareRequest => ({
   ...(text(q.message, 2000) ? { message: text(q.message, 2000) } : {}),
   ...(q.full === true || q.full === '1' ? { full: true } : {}),
   ...(q.archive ? { archive: String(q.archive).split(',').filter((y) => /^\d{4}$/.test(y)) } : {}),
+  // A link nobody opened did not reach the person: the next share, by link or file, builds on none of them.
+  ...(unopenedVersions(WS).length ? { notHeld: unopenedVersions(WS) } : {}),
 });
 
 router.get('/api/handover/plan', (req, res) => {

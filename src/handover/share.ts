@@ -33,6 +33,8 @@ export interface ShareRequest {
   full?: boolean;
   /** «mit Archiv <Jahr>»: closed years whose receipts and statements go along. */
   archive?: string[];
+  /** Versions handed over that never reached the person (a link withdrawn or ended unopened): the next share builds on none of them. */
+  notHeld?: number[];
 }
 
 /** What a hand-over would carry, before it is made: the dialog names it with its size. */
@@ -63,7 +65,7 @@ function sentIndex(ws: Pick<Workspace, 'paths'>, n: number): PackageIndex | unde
 export function planShare(ws: Workspace, req: ShareRequest): SharePlan {
   const closedThrough = loadBooks(ws).config.closedThrough;
   const files = contentFiles(ws.paths.root).map((f) => ({ ...f, ...factOf(ws.paths.root, f.path) }));
-  const held = req.full ? undefined : heldBy(ws.paths, req.to);
+  const held = req.full ? undefined : heldBy(ws.paths, req.to, new Set(req.notHeld ?? []));
   const had = held ? sentIndex(ws, held.n) : undefined;
   const hadFiles = had ? new Map([...had.files, ...(had.held ?? [])].map((f) => [f.path, f.sha256])) : undefined;
   const closedYears = [...new Set(files.flatMap((f) => (f.year && isClosedYear(f.year, closedThrough) ? [f.year] : [])))].sort();
@@ -158,9 +160,10 @@ export async function prepareShare(ws: Workspace, req: ShareRequest, from: Party
   };
   const files = new Map(plan.files.map((f) => [f.path, readFileSync(join(ws.paths.root, f.path)) as Uint8Array]));
   const commit = (): Version => {
+    // A version written meanwhile would leave the package naming a number the log gives to something else: nothing is written then.
+    const next = nextVersion(ws.paths);
+    if (next !== n) throw new Error(`${VERSIONS_FILE}: version ${n} was expected, the next is ${next}: written meanwhile.`);
     const version = writeVersion(ws.paths, { reason: 'handover', to: req.to, at: index.version.at, checksum });
-    // A version written meanwhile would leave the package naming a number the log gives to something else.
-    if (version.n !== n) throw new Error(`${VERSIONS_FILE}: version ${n} was expected, ${version.n} was written.`);
     takeQuestions(ws, req.to);
     mkdirSync(join(ws.paths.root, HANDOVER_DIR, 'sent'), { recursive: true });
     const { git: _g, ...kept } = index;

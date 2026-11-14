@@ -80,14 +80,17 @@ test('a chunk swapped, cut or changed fails; a wrong key fails; one file opens w
 test('links: the service\'s page link and the app\'s scheme; the key only in the fragment', () => {
   const key = Buffer.from(generateKey()).toString('base64url');
   const id = 'abcdefghijklmnopqrstuvwxyz';
-  assert.deepEqual(parseLink(`https://share.example.ch/${id}#${key}`), { service: 'https://share.example.ch', id, key });
-  assert.deepEqual(parseLink(`vanilla-accounting://open?share=${id}#${key}`, 'https://share.example.ch'), { service: 'https://share.example.ch', id, key });
-  assert.deepEqual(parseLink(`vanilla-accounting://open?share=${id}&service=https%3A%2F%2Fother.example#${key}`, 'https://share.example.ch'), { service: 'https://other.example', id, key });
+  const ours = 'https://share.example.ch';
+  assert.deepEqual(parseLink(`https://share.example.ch/${id}#${key}`, ours), { service: ours, id, key, foreign: false });
+  assert.deepEqual(parseLink(`vanilla-accounting://open?share=${id}#${key}`, ours), { service: ours, id, key, foreign: false });
+  // Another service named in the link is marked: it opens only once the person confirmed it (review of #538).
+  assert.deepEqual(parseLink(`vanilla-accounting://open?share=${id}&service=https%3A%2F%2Fother.example#${key}`, ours), { service: 'https://other.example', id, key, foreign: true });
+  assert.deepEqual(parseLink(`https://other.example/${id}#${key}`, ours), { service: 'https://other.example', id, key, foreign: true });
   assert.equal(parseLink(`vanilla-accounting://open?share=${id}#${key}`, undefined), undefined, 'no service known');
   assert.equal(parseLink(`https://share.example.ch/${id}`), undefined, 'no key');
   assert.equal(parseLink(`https://share.example.ch/${id}#short`), undefined, 'not a key');
   assert.equal(parseLink(`http://share.example.ch/${id}#${key}`), undefined, 'http only on this computer');
-  assert.deepEqual(parseLink(`http://localhost:8787/${id}#${key}`), { service: 'http://localhost:8787', id, key });
+  assert.deepEqual(parseLink(`http://localhost:8787/${id}#${key}`, 'http://localhost:8787'), { service: 'http://localhost:8787', id, key, foreign: false });
   assert.equal(parseLink(`https://share.example.ch/notanid#${key}`), undefined);
   assert.equal(serviceOf('share.example.ch/'), 'https://share.example.ch');
   assert.throws(() => serviceOf('ftp://x'));

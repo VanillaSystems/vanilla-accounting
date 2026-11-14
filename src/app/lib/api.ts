@@ -154,7 +154,7 @@ const SHARE_BAD = new Set(['badSize', 'badObjects', 'badMeta', 'badWrappedKey', 
 const SHARE_UPLOAD = new Set(['sizeChanged', 'exists', 'notUploading', 'missingObjects', 'overDeclared', 'undeclared', 'sizeMismatch', 'unexpectedObjects', 'notAPackage']);
 const SHARE_GUARD = new Set(['sharesPerDay', 'opensPerDay', 'classAPerMonth', 'classBPerMonth']);
 const SHARE_OWN = new Set(['badEmail', 'wrongProof', 'indexAlreadyRead', 'senderUnknown', 'senderNotConfirmed', 'wrongToken', 'notFound', 'tooLarge', 'tooManyObjects',
-  'tooManyShares', 'tooManyConfirmations', 'tooManyReturns', 'storageFull', 'notReady', 'spent', 'expired', 'revoked', 'returnClosed', 'ticketExpired', 'internal']);
+  'tooManyShares', 'tooManyConfirmations', 'tooManyReturns', 'storageFull', 'notReady', 'spent', 'expired', 'revoked', 'returnClosed', 'ticketExpired', 'internal', 'oversized']);
 /** A byte limit as a size («1 GB»), any other as the number. */
 const limitText = (limit: string | undefined): string => {
   const n = Number(limit);
@@ -199,6 +199,9 @@ export function errorText(e: unknown): string {
     case 'shareLinkInvalid': return t('error.shareLinkInvalid');
     case 'shareNoLink': return t('error.shareNoLink');
     case 'shareUnknown': return t('error.shareUnknown');
+    case 'shareForeignService': return t('error.shareForeignService', { host: b.params.host });
+    case 'shareCopyOther': return t('error.shareCopyOther', b.params);
+    case 'shareConfirmationOdd': return t('error.shareConfirmationOdd', { host: b.params.host });
     case 'localOnly': return t('error.localOnly');
     case 'foreignHost': return t('error.foreignHost');
     case 'phoneToken': return t('error.phoneToken');

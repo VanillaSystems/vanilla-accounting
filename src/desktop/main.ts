@@ -33,7 +33,8 @@ import { appVersion } from '../version.js';
 import { readState, writeState, type Bounds } from './state.js';
 import { setDurchsichtHome } from '../handover/durchsicht.js';
 import { APP_SCHEME, setShareSettingsFile } from '../share/service.js';
-import { openLink } from '../share/sharing.js';
+import { openLink, previewLink } from '../share/sharing.js';
+import { askLines } from '../app/handover/ask-text.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** tools/desktop/smoke.mjs: the fused release build has no inspector, so the page reaches the menu (preload.ts). */
@@ -229,29 +230,43 @@ async function start(): Promise<void> {
   await pathKnown;
   server.startBackground();
   /**
-   * A link of shared books: fetched, decrypted and checked, then opened as a Durchsicht copy in the
-   * app's own folder, which needs no question of macOS. The Dock shows that it works; a link that
-   * does not open says why.
+   * A link of shared books: any web page can hand one over, so nothing opens before the person
+   * says yes to whose books, from whom and through which service (read from the share's envelope
+   * without spending an opening), with a plain warning for another service than this app's and for
+   * a copy the link would move. Then fetched, decrypted and checked, and opened as a Durchsicht copy
+   * in the app's own folder, which needs no question of macOS. A link that does not open says why.
    */
-  openShares = () => {
-    for (let url = shareLinks.shift(); url; url = shareLinks.shift()) {
-      const link = url;
-      win?.setProgressBar(2);
-      void openLink(link)
-        .then((opened) => server.open(opened.root))
-        .then((books) => show(pathOf(books)))
-        .catch(async (e: unknown) => { await dialog.showMessageBox({ type: 'warning', message: textsIn(language)('desktop.shareOpenFailed'), detail: (e as Error).message }); })
-        .finally(() => { if (win && !win.isDestroyed()) win.setProgressBar(-1); });
-    }
-  };
-  // Started by a link: it opens instead of the books opened last.
-  if (shareLinks.length) openShares();
   // The books opened last, read only after macOS answered for their folder; a first start reads none (#373).
-  else void firstPage({
+  const lastBooks = () => void firstPage({
     last: readState(stateFile).recent[0], reach: server.reach, answered: server.answered, unasked, open: server.open, current: server.current, pathOf, show,
     // While macOS asks, the start screen names the folder and the books as desktop.json keeps them.
     asking: (root) => askingPath(root, server.recent().find((b) => b.root === root)?.name ?? basename(root), server.folderOf(root)),
   });
+  const askShare = async (link: string): Promise<boolean> => {
+    const t = textsIn(language);
+    const { what, warnings } = askLines((k, v) => t(k, v), await previewLink(link));
+    const options = { type: 'question' as const, message: t('desktop.shareAskTitle'), detail: [what, ...warnings].join('\n\n'), buttons: [t('share.ask.open'), t('common.cancel')], defaultId: 1, cancelId: 1 };
+    const r = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+    return r.response === 0;
+  };
+  openShares = () => {
+    for (let url = shareLinks.shift(); url; url = shareLinks.shift()) {
+      const link = url;
+      void askShare(link)
+        .then(async (yes) => {
+          if (!yes) { if (!win || win.isDestroyed()) lastBooks(); return; }
+          win?.setProgressBar(2);
+          // Confirmed: another service and a copy moved to this link are what the person said yes to.
+          const opened = await openLink(link, { trust: true, replace: true });
+          show(pathOf(await server.open(opened.root)));
+        })
+        .catch(async (e: unknown) => { await dialog.showMessageBox({ type: 'warning', message: textsIn(language)('desktop.shareOpenFailed'), detail: (e as Error).message }); })
+        .finally(() => { if (win && !win.isDestroyed()) win.setProgressBar(-1); });
+    }
+  };
+  // Started by a link: it opens instead of the books opened last (those open when the person says no).
+  if (shareLinks.length) openShares();
+  else lastBooks();
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   void checkForUpdates();
 }

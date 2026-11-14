@@ -9,7 +9,8 @@
  *   POST   /api/share/sender          { email }: registers it; sends the confirmation e-mail from the books' mailbox when it sends from that address
  *   DELETE /api/share/sender          forgets it («Andere Adresse»)
  *   POST   /api/share/link            { to, message?, full?, archive?, mail? } → a job: seal, upload, version, invitation
- *   POST   /api/share/open            { link } → a job: fetch, decrypt, open as a Durchsicht copy
+ *   POST   /api/share/preview         { link }: what it holds, from its envelope, without an opening
+ *   POST   /api/share/open            { link, trust?, replace? } → a job: fetch, decrypt, open as a Durchsicht copy
  *   POST   /api/share/return          { message? } on a copy that came by link → a job: the return into the same share
  *   GET    /api/share/jobs/:id        a job's phase and progress, its result or its refusal
  *   POST   /api/share/refresh         asks the service about every running share; returns that arrived are kept for review
@@ -27,7 +28,7 @@ import { ShareServiceError, ShareUnreachable } from '../../share/client.js';
 import { ShareCryptoError } from '../../share/crypto/index.js';
 import { setService, shareService } from '../../share/service.js';
 import {
-  forgetSender, linkFor, openLink, readShares, refreshShares, registerSender, returnByLink, revokeShare, senderState, shareByLink,
+  forgetSender, linkFor, openLink, previewLink, readShares, refreshShares, registerSender, returnByLink, revokeShare, senderState, shareByLink,
   ShareFlowError,
 } from '../../share/sharing.js';
 import { ShareLimitError, type Phase } from '../../share/transport.js';
@@ -123,11 +124,21 @@ router.post('/api/share/link', (req, res) => {
   res.status(202).json(job);
 });
 
-router.post('/api/share/open', (req, res) => {
-  const link = (req.body as { link?: unknown })?.link;
+const linkOfBody = (body: unknown): string => {
+  const link = (body as { link?: unknown })?.link;
   if (typeof link !== 'string' || !link.trim()) throw new RequestError(400, 'link erwartet.', { code: 'shareLinkInvalid' });
+  return link;
+};
+
+/** What a link holds, without spending an opening: the person sees whose books, from whom, through which service, and confirms. */
+router.post('/api/share/preview', (req, res) => answer(res, () => previewLink(linkOfBody(req.body))));
+
+/** `trust` and `replace` only as the person confirmed them after the preview: another service, another sharer or service for an existing copy. */
+router.post('/api/share/open', (req, res) => {
+  const link = linkOfBody(req.body);
+  const b = req.body as { trust?: unknown; replace?: unknown };
   const job = startJob('open', async (progress) => {
-    const opened = await openLink(link, { progress });
+    const opened = await openLink(link, { progress, trust: b.trust === true, replace: b.replace === true });
     await openCopy(opened.root);
     return { kind: opened.kind, firm: opened.marker.firm.name, version: opened.marker.version.n, conflicts: opened.conflicts, dropped: opened.dropped };
   });

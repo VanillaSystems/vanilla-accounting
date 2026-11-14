@@ -92,12 +92,13 @@ export function writeVersion(paths: Pick<WorkspacePaths, 'root'>, v: Omit<Versio
 }
 
 /** The newest version `email` (or, without one, `name`) holds: the newest handed to them or that their return was based on. */
-export function heldBy(paths: Pick<WorkspacePaths, 'root'>, who: Party): Version | undefined {
+export function heldBy(paths: Pick<WorkspacePaths, 'root'>, who: Party, notHeld: ReadonlySet<number> = new Set()): Version | undefined {
   const same = (p: Party | undefined) => !!p && (who.email && p.email ? p.email.toLowerCase() === who.email.toLowerCase() : p.name === who.name);
   const all = readVersions(paths);
   let held: Version | undefined;
   for (const v of all) {
-    const got = v.reason === 'handover' && same(v.to) ? v : v.reason === 'return-applied' && same(v.from) && v.basedOn ? all.find((x) => x.n === v.basedOn) : undefined;
+    // `notHeld`: hand-overs that never reached the person (a link nobody opened, src/share/sharing.ts unopenedVersions).
+    const got = v.reason === 'handover' && same(v.to) && !notHeld.has(v.n) ? v : v.reason === 'return-applied' && same(v.from) && v.basedOn ? all.find((x) => x.n === v.basedOn) : undefined;
     if (got && (!held || got.n > held.n)) held = got;
   }
   return held;

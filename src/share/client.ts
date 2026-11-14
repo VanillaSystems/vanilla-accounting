@@ -94,13 +94,34 @@ export function shareClient(service: string, fetcher: typeof fetch = fetch) {
     info: (id: string) => call<ShareInfo>('GET', `/api/shares/${id}`),
     open: (id: string, proof: string, token?: string) => call<Opening>('POST', `/api/shares/${id}/open`, { proof }, token),
     urls: (id: string, ticket: string, objects: string[], proof: string) => call<{ targets: Target[] }>('POST', `/api/shares/${id}/urls`, { ticket, objects, proof }),
-    async get(target: Target): Promise<Uint8Array> {
+    /**
+     * One object's ciphertext, at most `max` bytes (its size as the index names it): a service that
+     * sends more is cut off at once, by its Content-Length or while it streams, never read into memory.
+     */
+    async get(target: Target, max: number): Promise<Uint8Array> {
       const res = await reach(readUrl(target.url), { method: 'GET', headers: target.headers ?? {} });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
         throw new ShareServiceError(data.error ?? `HTTP ${res.status}`, data.code ?? 'internal', res.status);
       }
-      return new Uint8Array(await res.arrayBuffer());
+      const oversized = () => new ShareServiceError(`${target.object}: der Dienst liefert mehr als ${max} Bytes.`, 'oversized', 502, { limit: max });
+      const declared = Number(res.headers.get('content-length') ?? NaN);
+      if (Number.isFinite(declared) && declared > max) { await res.body?.cancel().catch(() => undefined); throw oversized(); }
+      if (!res.body) return new Uint8Array();
+      const reader = res.body.getReader();
+      const parts: Uint8Array[] = [];
+      let total = 0;
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > max) { await reader.cancel().catch(() => undefined); throw oversized(); }
+        parts.push(value);
+      }
+      const out = new Uint8Array(total);
+      let at = 0;
+      for (const p of parts) { out.set(p, at); at += p.byteLength; }
+      return out;
     },
     status: (id: string, token: string) => call<ShareStatus>('GET', `/api/shares/${id}/status`, undefined, token),
     revoke: (id: string, token: string) => call<ShareStatus>('DELETE', `/api/shares/${id}`, undefined, token),
