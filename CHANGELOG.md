@@ -14,6 +14,17 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-14
+
+No figure changes: the demo goldens and the books schema are as in 0.5.0.
+
+### Highlights
+
+- **Share the books with your fiduciary:** as a `.vanilla` file or by an end-to-end encrypted link; his corrections come back for you to review and take over.
+- **A mailbox learns what to set aside:** newsletters and reports of one sender, approved per group, and re-sent invoices as duplicates.
+- **Every linked file shows by its type:** images, CSV reports, saved mails and text, not only PDFs.
+- **Tram blue:** the product colour as the app's accent, and fonts that never fall back to serif.
+
 ### Added
 
 - **Share the books by link, end to end encrypted** (docs/specs/e2e-and-fiduciary.md B3, ADR 0016,
@@ -90,7 +101,6 @@ Two markers flag an entry you must read before you update:
   takes the same colour; the dark theme keeps its grey accent.
 - The public demo (`build:audit --demo`) opens in German whatever the browser's language; a
   language picked in its top bar is kept as before.
-
 - Firma › Quellen offers to skip a sender only when none of its files stands in the books (before:
   when nearly all of its files were set aside), so a supplier with one real invoice is never offered.
 
