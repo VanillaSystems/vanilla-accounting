@@ -6041,5 +6041,6 @@ export default {
     'share.role.invoices': "Les factures et les clients",
     'share.role.sources': "Les boîtes mail et les sources",
     'review.fileGone': "Supprimé : un brouillon ne supprime aucun fichier ; la suppression se fait à la main dans Connaissances.",
+    'error.shareUpdateFailed': "La remise n’a pas été intégrée ({why}). La copie et tes modifications sont restées telles quelles.",
   },
 } satisfies Locale;

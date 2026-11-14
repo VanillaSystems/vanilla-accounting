@@ -40,6 +40,8 @@ export type ApiRefusal =
   | { code: 'shareTooLarge'; params: { limit: string } }
   /** A return based on a version never handed to its sender. */
   | { code: 'shareUnknownBase'; params: { version: string; name: string } }
+  /** An update that could not be written: the copy and his changes stay as they were. */
+  | { code: 'shareUpdateFailed'; params: { why: string } }
   /** A return opened on a copy, or a hand-over where a return belongs. */
   | { code: 'shareWrongKind' }
   /** «Teilen» without a name, or with an address that is none. */

@@ -6041,5 +6041,6 @@ export default {
     'share.role.invoices': "Invoices and customers",
     'share.role.sources': "Mailboxes and sources",
     'review.fileGone': "Deleted: a draft deletes no file; delete it by hand in Knowledge.",
+    'error.shareUpdateFailed': "The hand-over was not applied ({why}). The copy and your changes are as they were.",
   },
 } satisfies Locale;

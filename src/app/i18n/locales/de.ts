@@ -6039,6 +6039,7 @@ export const messages = {
   'share.role.invoices': "Rechnungen und Kunden",
   'share.role.sources': "Postfächer und Quellen",
   'review.fileGone': "Gelöscht: ein Entwurf löscht keine Datei; löschen geht in Wissen von Hand.",
+  'error.shareUpdateFailed': "Die Übergabe wurde nicht eingespielt ({why}). Die Kopie und deine Änderungen sind, wie sie waren.",
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

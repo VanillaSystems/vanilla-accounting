@@ -6041,5 +6041,6 @@ export default {
     'share.role.invoices': "Le fatture e i clienti",
     'share.role.sources': "Le caselle e le fonti",
     'review.fileGone': "Eliminato: una bozza non elimina file; si elimina a mano in Conoscenze.",
+    'error.shareUpdateFailed': "La consegna non è stata integrata ({why}). La copia e le tue modifiche sono rimaste com’erano.",
   },
 } satisfies Locale;

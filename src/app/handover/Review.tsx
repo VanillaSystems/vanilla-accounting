@@ -39,7 +39,7 @@ function said(r: ReviewRow, x: unknown): string {
     const groups = Array.isArray(o.vatSummary) ? (o.vatSummary as Array<{ ratePercent?: number; vat?: number }>) : [];
     const vatText = o.hasSwissVat === true ? t('review.receipt.vat', { rates: groups.map((g) => `${g.ratePercent ?? '?'} %: ${money(g.vat ?? 0)}`).join(', ') || '–' })
       : o.hasSwissVat === false ? t('review.receipt.noVat') : t('review.receipt.unread');
-    return [String(o.originalFilename ?? o.filename ?? r.key), typeof o.amount === 'number' ? `${money(o.amount)} ${String(o.currency ?? '')}`.trim() : undefined, vatText, o.vatBy === 'human' ? t('review.receipt.byHand') : undefined].filter(Boolean).join(' · ');
+    return [String(o.originalFilename ?? o.filename ?? r.key), typeof o.date === 'string' ? formatDate(o.date) : undefined, typeof o.description === 'string' ? o.description : undefined, typeof o.kind === 'string' ? o.kind : undefined, typeof o.amount === 'number' ? `${money(o.amount)} ${String(o.currency ?? '')}`.trim() : undefined, vatText, o.vatBy === 'human' ? t('review.receipt.byHand') : undefined].filter(Boolean).join(' · ');
   }
   if (r.kind === 'transactions' && o) {
     const proof = asRec(o.inputTaxProof);

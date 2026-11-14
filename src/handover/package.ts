@@ -64,7 +64,7 @@ export interface PackageContents {
   changes?: ReturnChange[];
 }
 
-export type PackageRefusal = 'shareTampered' | 'shareOtherCompany' | 'shareBaseMissing' | 'shareNotPackage' | 'shareWrongKind' | 'shareTooLarge' | 'shareUnknownBase';
+export type PackageRefusal = 'shareTampered' | 'shareOtherCompany' | 'shareBaseMissing' | 'shareNotPackage' | 'shareWrongKind' | 'shareTooLarge' | 'shareUnknownBase' | 'shareUpdateFailed';
 
 export class PackageError extends Error {
   constructor(message: string, readonly code: PackageRefusal, readonly params: Record<string, string> = {}) { super(message); }

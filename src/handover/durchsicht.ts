@@ -6,7 +6,7 @@
  * books' own files as they came (base/), against which his changes are the change set of his
  * return (B5.1). Filed quarters stay sealed: the seals come along and the write door holds them.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { loadBooks, saveBooks, update, periodLock, type Actor } from '../books/store.js';
@@ -142,6 +142,30 @@ function moveForward(root: string, had: Marker, p: PackageContents, now: Date): 
   }
   const oldBase = recordsInFolder(baseDir(root));
   const mine = diffRecords(oldBase, recordsInFolder(root));
+  // His change set is kept first: whatever happens to the update, it is there to restore.
+  mkdirSync(dirOf(root), { recursive: true });
+  writeFileSync(join(dirOf(root), 'unsent.json'), JSON.stringify({ at: now.toISOString(), version: had.version.n, changes: mine }) + '\n');
+  // The new state is built beside the copy and takes its place in one rename: a failure half way leaves the copy as it was.
+  const next = `${root}.next-${process.pid}`;
+  const old = `${root}.old-${process.pid}`;
+  rmSync(next, { recursive: true, force: true });
+  try {
+    cpSync(root, next, { recursive: true });
+    const opened = moveForwardIn(next, had, p, now, oldBase, mine);
+    renameSync(root, old);
+    try { renameSync(next, root); } catch (e) { renameSync(old, root); throw e; }
+    rmSync(old, { recursive: true, force: true });
+    return { ...opened, root };
+  } catch (e) {
+    rmSync(next, { recursive: true, force: true });
+    if (e instanceof PackageError) throw e;
+    throw new PackageError(`Die Übergabe wurde nicht eingespielt (${(e as Error).message.slice(0, 200)}). Die Kopie und deine Änderungen sind, wie sie waren.`, 'shareUpdateFailed', { why: (e as Error).message.slice(0, 200) });
+  }
+}
+
+/** moveForward's work on the folder `root` (the copy's sibling), with his change set read from the copy before. */
+function moveForwardIn(root: string, had: Marker, p: PackageContents, now: Date, oldBase: ReturnType<typeof recordsInFolder>, mine: RecordChange[]): Opened {
+  const index = p.index;
   writeFiles(root, p.files);
   // The copy proves the version from its disk: the files as written, the ones held from before, the omitted ones' checksums.
   const listed = [...index.files, ...(index.held ?? [])].map((f) => f.path);
@@ -149,9 +173,11 @@ function moveForward(root: string, had: Marker, p: PackageContents, now: Date): 
     throw new PackageError('Die Kopie ergibt nach dem Schreiben nicht die Prüfsumme der Version.', 'shareTampered', { path: 'checksum' });
   }
   // Files of the old version the new one no longer names (the sharer removed them) go; his own new files stay.
-  const named = new Set([...index.files, ...(index.held ?? []), ...(index.omitted ?? [])].map((f) => f.path));
+  // Compared as a case-insensitive file system does: a file renamed only in case is the same file, never removed.
+  const fold = (path: string) => path.normalize('NFC').toLowerCase();
+  const named = new Set([...index.files, ...(index.held ?? []), ...(index.omitted ?? [])].map((f) => fold(f.path)));
   // Only a content file of the copy itself, never a path that leaves it (review of #535).
-  for (const f of had.files) if (!named.has(f.path) && carriageOf(f.path) && inside(root, f.path)) rmSync(join(root, f.path), { force: true });
+  for (const f of had.files) if (!named.has(fold(f.path)) && carriageOf(f.path) && inside(root, f.path)) rmSync(join(root, f.path), { force: true });
   writeBase(root, p.files);
   keepGit(root, index);
   const newBase = recordsInFolder(baseDir(root));

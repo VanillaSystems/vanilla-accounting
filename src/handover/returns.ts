@@ -24,6 +24,7 @@ import { filesOfPart } from '../workspace/workspace.js';
 import { applyToBooks, dateOf, isRecordFile, parseRefKey, recordFiles, recordsInFolder, recordsOf, refKey, sameRecord, type RecordChange, type RecordMap } from './records.js';
 import { keyOf, type Part } from '../books/years.js';
 import { formTakes } from '../accounting/vat-codes.js';
+import { baseCurrency } from '../engines/index.js';
 import { learnOffer } from '../saving/learn-rule.js';
 import { draftDir } from '../saving/changes.js';
 import { inside, sha256 } from './content.js';
@@ -134,7 +135,7 @@ const MANUAL_PAYMENT: ReadonlySet<string> = new Set(['ref', 'bank', 'source', 'd
  * undefined: on a payment the bank brought only its description, remark, «braucht keinen Beleg» and
  * other proof change; a new one is a payment by hand, as the app makes it; only a hand payment goes.
  */
-function paymentProblem(before: Rec | undefined, after: Rec | undefined, banks: ReadonlySet<string>): string | undefined {
+function paymentProblem(before: Rec | undefined, after: Rec | undefined, accounts: ReadonlySet<string>): string | undefined {
   if (!after) return before?.source === 'manual' ? undefined : 'eine Zahlung der Bank bleibt';
   if (before) {
     const fields = new Set([...Object.keys(before), ...Object.keys(after)]);
@@ -144,7 +145,8 @@ function paymentProblem(before: Rec | undefined, after: Rec | undefined, banks: 
     const extra = Object.keys(after).filter((f) => !MANUAL_PAYMENT.has(f));
     if (extra.length) return `eine neue Zahlung ist eine von Hand, ohne ${extra.join(', ')}`;
     if (after.source !== 'manual' || typeof after.ref !== 'string' || !/^M\d{4}-\d{3,}$/.test(after.ref)) return 'eine neue Zahlung ist eine von Hand';
-    if (typeof after.bank !== 'string' || !banks.has(after.bank)) return 'kein Geldkonto der Firma';
+    // The money account and its currency, as POST /api/transactions/manual takes them.
+    if (typeof after.bank !== 'string' || typeof after.currency !== 'string' || !accounts.has(`${after.bank} ${after.currency}`)) return 'kein Geldkonto der Firma in dieser Währung';
     if (typeof after.amount !== 'number' || !Number.isFinite(after.amount) || after.amount <= 0) return 'kein Betrag';
     if (typeof after.currency !== 'string' || !/^[A-Z]{3}$/.test(after.currency) || (after.direction !== 'DBIT' && after.direction !== 'CRDT')) return 'keine Währung oder Richtung';
   }
@@ -152,6 +154,36 @@ function paymentProblem(before: Rec | undefined, after: Rec | undefined, banks: 
   if (after.remarks !== undefined && typeof after.remarks !== 'string') return 'keine Bemerkung';
   if (after.noReceiptNeeded !== undefined && after.noReceiptNeeded !== true) return 'kein Beleg-Vermerk';
   if (after.inputTaxProof !== undefined && !(isObj(after.inputTaxProof) && typeof after.inputTaxProof.text === 'string' && typeof after.inputTaxProof.at === 'string')) return 'kein Nachweis';
+  return undefined;
+}
+
+/** What a person changes on a receipt in the app (PATCH /api/receipts/:id, setReceipt, setVatFacts, setReceiptKind). */
+const RECEIPT_EDITS: ReadonlySet<string> = new Set(['date', 'amount', 'currency', 'description', 'remarks', 'handSet', 'kind', 'kindBy', 'kindRule', 'kindWhy', 'hasSwissVat', 'vatSummary', 'vatId', 'lineItems', 'vatBy']);
+/** What such a change may only take away. */
+const RECEIPT_CLEARS: ReadonlySet<string> = new Set(['dateSource', 'vatReadFailures', 'vatExtractedAt']);
+const VAT_FACTS = ['hasSwissVat', 'vatSummary', 'vatId', 'lineItems'] as const;
+/** The kinds a person sets on a receipt: never the ones only the app derives (a provider's report, a statement). */
+const PERSON_KINDS: ReadonlySet<unknown> = new Set([undefined, 'invoice', 'supporting', 'noise', 'duplicate']);
+
+/**
+ * Why a change of an existing receipt is not one a person could have made in the app, or undefined:
+ * only its date, amount and currency, text, remark, kind and the VAT facts by hand change; the
+ * file, what was read off it and what the app derives (a payout, a report, a filed payment) stay.
+ */
+function receiptProblem(before: Rec, after: Rec): string | undefined {
+  const fields = new Set([...Object.keys(before), ...Object.keys(after)]);
+  const moved = [...fields].filter((f) => !sameRecord(before[f], after[f]));
+  const other = moved.filter((f) => !RECEIPT_EDITS.has(f) && !(RECEIPT_CLEARS.has(f) && after[f] === undefined));
+  if (other.length) return `an einem Beleg ändert sich nur, was eine Person in der App ändert (${other.join(', ')})`;
+  if (after.date !== undefined && (typeof after.date !== 'string' || !DAY.test(after.date))) return 'kein Datum';
+  if (after.amount !== undefined && (typeof after.amount !== 'number' || !Number.isFinite(after.amount))) return 'kein Betrag';
+  if (after.currency !== undefined && (typeof after.currency !== 'string' || !/^[A-Z]{3}$/.test(after.currency))) return 'keine Währung';
+  if (moved.includes('kind') && (!PERSON_KINDS.has(after.kind) || after.kindBy !== 'human')) return 'diese Art setzt nur die App';
+  if (VAT_FACTS.some((f) => moved.includes(f))) {
+    if (after.vatBy !== 'human') return 'Steuerangaben nur von Hand';
+    if (after.hasSwissVat !== undefined && typeof after.hasSwissVat !== 'boolean') return 'keine Steuerangabe';
+    if (after.vatSummary !== undefined && !(Array.isArray(after.vatSummary) && after.vatSummary.every((g) => isObj(g) && typeof g.ratePercent === 'number' && typeof g.vat === 'number'))) return 'keine Steuer-Zusammenstellung';
+  }
   return undefined;
 }
 
@@ -171,7 +203,7 @@ function baseOf(ws: Workspace, p: PackageContents): RecordMap {
  * the firm takes, files only of knowledge/ and the chart, and `before` read from the version as it was
  * handed to him, never from the return. Records he left as they were drop out.
  */
-function checkedChanges(ws: Workspace, p: PackageContents, hers: Pick<Books, 'receipts'> = loadBooks(ws)): ReturnChange[] {
+function checkedChanges(ws: Workspace, p: PackageContents, hers: Pick<Books, 'receipts' | 'transactions' | 'journalEntries'> = loadBooks(ws)): ReturnChange[] {
   const base = baseOf(ws, p);
   // Receipt names already taken, as a case-insensitive file system sees them: a new receipt never points at her file.
   // The name of a receipt his take-over brought counts as his own, not as taken.
@@ -181,7 +213,8 @@ function checkedChanges(ws: Workspace, p: PackageContents, hers: Pick<Books, 're
     ...hers.receipts.map((r): [string, string] => [fold(r.filename), r.id]),
   ]);
   const isTaken = (name: string, id: unknown) => takenBy.has(fold(name)) && takenBy.get(fold(name)) !== id;
-  const banks = new Set(['manual', ...ws.bankAccounts.map((a) => a.bank)]);
+  const accounts = new Set([`manual ${baseCurrency()}`, ...ws.bankAccounts.map((a) => `${a.bank} ${a.currency}`)]);
+  const links: Array<{ key: string; ref: string; receipt: string }> = [];
   const seen = new Set<string>();
   const out: ReturnChange[] = [];
   for (const raw of (p.changes ?? []) as unknown[]) {
@@ -201,7 +234,7 @@ function checkedChanges(ws: Workspace, p: PackageContents, hers: Pick<Books, 're
     const before = base.get(k);
     let after: unknown = raw.after;
     if (kind === 'transactions') {
-      const why = paymentProblem(before as Rec | undefined, after as Rec | undefined, banks);
+      const why = paymentProblem(before as Rec | undefined, after as Rec | undefined, accounts);
       if (why) throw tampered(key, why);
     }
     if (kind === 'receipts' && after !== undefined) {
@@ -217,14 +250,24 @@ function checkedChanges(ws: Workspace, p: PackageContents, hers: Pick<Books, 're
           extractedText: '', extractionMethod: 'pdftotext', fileSize: file[1].byteLength, indexedAt: p.index.at, location: 'archived',
           ...(typeof r.description === 'string' ? { description: r.description.slice(0, 200) } : {}),
         };
-      } else if ((before as Rec).filename !== r.filename || (before as Rec).location !== r.location) {
-        throw tampered(key, 'ein Beleg behält seine Datei');
+      } else {
+        const why = receiptProblem(before as Rec, r);
+        if (why) throw tampered(key, why);
       }
     }
     if (kind === 'receipts' && after === undefined && before !== undefined) throw tampered(key, 'einen Beleg nimmt nur, wer die Bücher führt, aus den Büchern');
+    if (kind === 'mappings' && after !== undefined) {
+      const m = after as Rec;
+      if (Object.keys(m).sort().join() !== 'receiptId,transactionRef' || typeof m.transactionRef !== 'string' || typeof m.receiptId !== 'string') throw tampered(key, 'eine Verknüpfung nennt nur Zahlung und Beleg');
+      links.push({ key, ref: String(m.transactionRef), receipt: String(m.receiptId) });
+    }
     if (sameRecord(before, after)) continue;
     out.push({ kind: kind as ReturnChange['kind'], key, ...(before !== undefined ? { before } : {}), ...(after !== undefined ? { after } : {}), ...(typeof raw.why === 'string' && raw.why.trim() ? { why: raw.why.trim().slice(0, 500) } : {}) });
   }
+  // A link names a payment and a receipt that exist: in her books, or added by this same return.
+  const refs = new Set([...hers.transactions.map((t) => t.ref), ...hers.journalEntries.map((e) => e.transactionRef), ...out.filter((c) => c.kind === 'transactions' && c.after).map((c) => c.key), ...out.filter((c) => c.kind === 'journalEntries' && c.after).map((c) => String((c.after as Rec).transactionRef))]);
+  const receipts = new Set([...hers.receipts.map((r) => r.id), ...out.filter((c) => c.kind === 'receipts' && c.after).map((c) => c.key)]);
+  for (const l of links) if (!refs.has(l.ref) || !receipts.has(l.receipt)) throw tampered(l.key, 'die Verknüpfung nennt eine Zahlung oder einen Beleg, den es nicht gibt');
   return out;
 }
 
