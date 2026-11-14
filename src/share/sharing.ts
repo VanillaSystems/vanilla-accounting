@@ -80,8 +80,8 @@ export interface Registered extends SenderView {
   mailError?: string;
 }
 
-/** The subject the service's inbound address reads (its docs/api.md); nothing else goes out from her mailbox. */
-const CONFIRM_SUBJECT = /^Vanilla Accounting confirmation [A-Za-z0-9]{8,64}$/;
+/** The subject the service's inbound address reads (its docs/api.md), its code in base64url; nothing else goes out from her mailbox. */
+const CONFIRM_SUBJECT = /^Vanilla Accounting confirmation [A-Za-z0-9_-]{8,64}$/;
 
 /**
  * What the service asks to be sent, held to what a confirmation is: to an address at the service's
