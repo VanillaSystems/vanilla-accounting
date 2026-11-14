@@ -25,6 +25,14 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Reading the bank statements again (the inbox run, an import, `npm run read-statements`) no
+  longer drops the reference or the amount in another currency of a payment the books hold
+  already when no file states it now: a QR reference or a payout reference that an earlier reader
+  gave (Wise's statement PDFs before #243) stays, and a second read writes the same files (#522).
+  The bank's file still decides when it states one, and so does a kept statement PDF's table; a
+  table that goes («Neu lesen») or that a person replaces takes back what it gave. Missing fee
+  tags of the bank's file and a camt.053's balance of a statement PDF's last day (the same amount)
+  are filled in once.
 - Audit export: the floating top bar, the status corner, the dock and the page now start below
   the amber audit bar, at every window width, zoom and theme, so its text («Prüfmodus · nur
   Lesen …», the snapshot's date, schema and version) is never covered (#515).

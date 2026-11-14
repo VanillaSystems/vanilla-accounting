@@ -198,6 +198,21 @@ export function withReadFacts(transactions: readonly BankTransaction[], reads: r
   });
 }
 
+/**
+ * Takes back, in place, the references and foreign amounts a table gave the open payments of its
+ * account (the lines paired as factsOfRead pairs them, where the payment holds the line's value): the
+ * merge keeps a fact no file states now (#522), so a table that goes («Neu lesen») or is replaced
+ * by a person's takes its own along. The next merge gives back what a file still states.
+ */
+export function takeBackReadFacts(transactions: BankTransaction[], r: Pick<KeptRead, 'statement' | 'account'>, isClosed: (date: string) => boolean): void {
+  const { pairs } = pairLines(r.statement.movements, transactions.filter((t) => !isClosed(t.date)), r.account);
+  for (const [i, t] of pairs) {
+    const f = factOf(r.statement.movements[i], r.account.currency);
+    if (f.reference && t.reference === f.reference) delete t.reference;
+    if (f.original && t.original && sameFacts({ reference: undefined, original: t.original }, { reference: undefined, original: f.original })) delete t.original;
+  }
+}
+
 // ─── The month-end balance ──────────────────────────────────────────────────
 
 /**
