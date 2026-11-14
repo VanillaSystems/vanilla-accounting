@@ -104,7 +104,7 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
 /** The window event of a refusal for want of an AI; its detail is the error line's text. */
 export const NO_AI_EVENT = 'vanilla:no-ai';
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await apiFetch(path, body === undefined ? { method } : {
     method,
     headers: { 'Content-Type': 'application/json' },
@@ -157,6 +157,13 @@ export function errorText(e: unknown): string {
   if ('mailRefusal' in b) return t(`mail.refusal.${b.mailRefusal}`, { detail: b.detail ?? '' });
   switch (b.code) {
     case 'readonly': return t('error.readonly');
+    case 'roleRefused': return t('error.roleRefused', { what: t(`share.role.${b.params.action}` as 'share.role.share'), name: b.params.name });
+    case 'shareTampered': return t('error.shareTampered', { path: b.params.path });
+    case 'shareOtherCompany': return t('error.shareOtherCompany', { firm: b.params.firm });
+    case 'shareBaseMissing': return t('error.shareBaseMissing', { version: b.params.version, name: b.params.name });
+    case 'shareNotPackage': return t('error.shareNotPackage');
+    case 'shareWrongKind': return t('error.shareWrongKind');
+    case 'shareNoRecipient': return t('error.shareNoRecipient');
     case 'localOnly': return t('error.localOnly');
     case 'foreignHost': return t('error.foreignHost');
     case 'phoneToken': return t('error.phoneToken');
