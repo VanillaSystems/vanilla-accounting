@@ -34,6 +34,9 @@ async function dropOn(path: string) {
     }, OCTOBER, PNG);
     assert.equal(fellThrough, false, 'the drop never falls through to the browser');
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=drop-row]').length === 2 && !!document.querySelector('[data-testid=drop-summary]'), { timeout: 120_000 });
+    // The summary says «no AI here» only once the app's one look at GET /api/ai/setup has answered (src/app/ai/no-ai.ts),
+    // which may come after the drop's last row: its «KI einrichten» link shows that answer.
+    await page.waitForFunction(() => !!document.querySelector('[data-testid=drop-summary] [data-act=ai-set-up]'), { timeout: 30_000 });
     const seen = await page.evaluate(() => ({
       rows: [...document.querySelectorAll<HTMLElement>('[data-testid=drop-row]')].map((r) => `${r.dataset.file} ${r.dataset.state}`),
       tabs: [...document.querySelectorAll<HTMLElement>('.wftabs button')].map((b) => b.innerText.replace(/\s+/g, ' ').trim()),

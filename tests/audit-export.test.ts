@@ -34,7 +34,7 @@ let launched: Promise<Browser> | undefined;
 const chrome = () => launched ??= launchChrome(browserPath!, ['--lang=en-US']);
 
 before(async () => {
-  await buildAuditExport(workspaceAt(join(APP_ROOT, 'demo')), dir, '2026-10-09T12:00:00.000Z');
+  await buildAuditExport(workspaceAt(join(APP_ROOT, 'demo')), dir, { createdAt: '2026-10-09T12:00:00.000Z' });
   server = await serveStatic(join(tmp, 'host'));
   base = `${server.url}/snapshot/`;
 });

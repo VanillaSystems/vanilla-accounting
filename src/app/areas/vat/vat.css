@@ -6,7 +6,7 @@
 .clink2:hover { color: var(--ink); }
 .vresult { display: flex; justify-content: space-between; align-items: baseline; padding: 14px 16px; margin: 0 -16px 18px; width: calc(100% + 32px); border-radius: 12px; background: var(--hover); text-align: left; }
 .vresult span { color: var(--muted); font-size: 13px; }
-.vresult b { font: 500 26px "Geist Mono"; letter-spacing: -.03em; color: var(--ink); }
+.vresult b { font: 500 26px var(--font-mono); letter-spacing: -.03em; color: var(--ink); }
 .vresult b small { font-size: 12px; color: var(--muted); margin-right: 6px; letter-spacing: 0; }
 .vresult.bad b { color: var(--neg); }
 button.vresult:hover { background: var(--accent-soft); }
@@ -22,7 +22,7 @@ button.vresult:hover { background: var(--accent-soft); }
 .formula { margin-top: 20px; max-width: 560px; display: grid; gap: 2px; }
 .formula > * { display: grid; grid-template-columns: 18px 40px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 7px 10px; border-radius: 8px; text-align: left; font-size: 13px; }
 .formula button:hover { background: var(--hover); }
-.formula .op { color: var(--faint); font-family: "Geist Mono"; }
+.formula .op { color: var(--faint); font-family: var(--font-mono); }
 .formula .zn { color: var(--muted); font-size: 12.5px; }
 .formula .eq { border-top: 1.5px solid var(--ink); border-radius: 0; margin-top: 4px; font-weight: 600; }
 .vlines { margin-top: 20px; max-width: 760px; }
@@ -60,7 +60,7 @@ a.vlink:hover { text-decoration-color: currentColor; color: var(--ink); }
 /* A box name wraps rather than being cut («Total der v…» at 1024 px, r9n-38). */
 .ftable .tt { overflow-wrap: anywhere; }
 .ftable .r { text-align: right; }
-.fcases { font: 700 15px "Hanken Grotesk"; margin: 30px 0 4px; }
+.fcases { font: 700 15px var(--font-display); margin: 30px 0 4px; }
 .f0535 .notice .block { display: block; }
 .case { max-width: 760px; margin-top: 8px; border-top: 1px solid var(--line); }
 .case summary { display: flex; gap: 12px; align-items: baseline; padding: 9px 0; cursor: pointer; font-size: 13.5px; font-weight: 500; }

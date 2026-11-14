@@ -3,7 +3,7 @@
  * connection to Chrome: a start without a limit once stalled for good and kept a failed run's runner, test process and
  * Chrome alive, holding the machine's test lock, and puppeteer's close waits for Chrome's exit without one.
  */
-import type { Browser, BrowserContext } from 'puppeteer-core';
+import type { Browser, BrowserContext, Page } from 'puppeteer-core';
 import { findBrowser } from '../../src/invoices/pdf.js';
 
 /**
@@ -36,6 +36,20 @@ export async function launchChrome(executablePath: string, args: string[] = []):
 export async function closeContext(browser: Browser, context: BrowserContext): Promise<void> {
   if (browser.connected) return context.close();
   throw new Error(`Chrome went away during the test: ${ends.get(browser) ?? 'its connection closed'}. If it ends on its own, install Chrome for Testing (npx playwright install chromium) or set CHROME_PATH to another Chromium-based browser.`);
+}
+
+/**
+ * The page once its webfonts have settled and a frame painted with them. A capture before that catches the fallback
+ * font (once the browser's default serif, where a declaration named a webfont without a generic family).
+ */
+export async function fontsSettled(page: Page): Promise<void> {
+  await page.evaluate(() => document.fonts.ready.then(() => new Promise<void>((ok) => requestAnimationFrame(() => requestAnimationFrame(() => ok())))));
+}
+
+/** A screenshot of the page as a person sees it: after its fonts settled (tests/css-fonts.test.ts sends every test's capture here). */
+export async function screenshot(page: Page, path: string): Promise<void> {
+  await fontsSettled(page);
+  await page.screenshot({ path });
 }
 
 /** Closes the browser; one still running after `ms` is killed by the pid of the process this test started. */

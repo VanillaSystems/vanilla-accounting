@@ -29,6 +29,15 @@ Two markers flag an entry you must read before you update:
   the sharer's app fetches it when the books open and keeps it for review. Each refusal of the
   service is said with the limit it names. The service is a setting (`VANILLA_SHARE_SERVICE`, at
   build time or run time, or «Teil-Dienst» in the dialog); without one, the file does every step.
+  A link to another service than the app's, and a link that would move an existing copy without
+  its sharer's signature (an Ed25519 key per books and recipient, pinned by the copy's first link),
+  opens only after the person confirmed it.
+- **A public demo in the browser** (docs/audit-export.md, «Publish the demo»). `npm run build:audit --
+  <dir> --demo [--download <url>]` exports the demo company as a static, read-only site for a
+  website, under any sub-path: a bar in the product colour says that the company and its figures
+  are made up and links to the download page; a card on the first visit points at Belege,
+  Buchungen and MWST; the AI column and the pages that need the app say that they are in the app.
+  It takes only the app's own demo workspaces.
 - **Share the books with a fiduciary and take back his corrections** (docs/specs/e2e-and-fiduciary.md
   Part B, as a file for now). «Teilen» in the top bar (⇧S) saves the books as a `.vanilla` file
   for a named person: the first time the open years' books and receipts (a closed year's receipts
@@ -76,6 +85,12 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- The accent is Tram blue, the product colour: `#005b8c`, with its 10 % tint `#e6eff4` as the soft
+  accent (before: `#0067b1` / `#e8f1f9`). White on it reads at 7.3:1, the blue on the tint at 6.3:1. The public demo's bar
+  takes the same colour; the dark theme keeps its grey accent.
+- The public demo (`build:audit --demo`) opens in German whatever the browser's language; a
+  language picked in its top bar is kept as before.
+
 - Firma › Quellen offers to skip a sender only when none of its files stands in the books (before:
   when nearly all of its files were set aside), so a supplier with one real invoice is never offered.
 
@@ -88,6 +103,10 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The app no longer shows a serif (Times) while its fonts load or when they fail: every font is
+  named through a token with a system sans or mono behind it, and Geist Mono's semibold and bold
+  are bundled instead of faked. Run from a worktree whose `node_modules` is a link, the dev server
+  serves the fonts again, and screenshots of the app wait for them.
 - A linked file that is no PDF no longer shows «Failed to load PDF document». Every linked file
   shows by its type, in the app and in the audit export alike: a PDF as paper, an image as
   itself, a CSV (a payment provider's report) as a table, text and XML as text, a saved mail

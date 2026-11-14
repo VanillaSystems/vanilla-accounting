@@ -81,7 +81,11 @@ import type { OrderPage } from '../../booking/order-pages.js';
 import type { VatCorrection } from '../../booking/vat-corrections.js';
 import type { ProviderIssues } from '../../booking/provider-issues.js';
 
-export const STATIC_EXPORT = import.meta.env.MODE === 'audit';
+/** The public demo (npm run build:audit -- --demo, vite --mode demo): the static export of one of the app's made-up companies. */
+export const DEMO = import.meta.env.MODE === 'demo';
+
+/** Built by `npm run build:audit` (vite --mode audit, or demo): reads the export's files, never an API. */
+export const STATIC_EXPORT = import.meta.env.MODE === 'audit' || DEMO;
 
 /** Where each read goes: every URL the UI fetches or links to comes from here. */
 export const sources = STATIC_EXPORT ? EXPORT_SOURCES : API_SOURCES;
@@ -179,7 +183,7 @@ export function errorText(e: unknown): string {
   if ('invoiceRefusal' in b) return invoiceRefusalText(b.invoiceRefusal, b.missing);
   if ('mailRefusal' in b) return t(`mail.refusal.${b.mailRefusal}`, { detail: b.detail ?? '' });
   switch (b.code) {
-    case 'readonly': return t('error.readonly');
+    case 'readonly': return t(DEMO ? 'error.demo' : 'error.readonly');
     case 'roleRefused': return t('error.roleRefused', { what: t(`share.role.${b.params.action}` as 'share.role.share'), name: b.params.name });
     case 'shareTampered': return t('error.shareTampered', { path: b.params.path });
     case 'shareOtherCompany': return t('error.shareOtherCompany', { firm: b.params.firm });

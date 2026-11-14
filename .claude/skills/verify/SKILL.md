@@ -37,7 +37,7 @@ Two sandboxes can run side by side because each one has its own ports, data, and
 $S doctor my-run
 ```
 
-The doctor is read-only. Every line must say `ok`. It checks that the PIDs are alive, that each port is owned by our PID and the API's only on loopback, that the API's cwd and `VANILLA_WORKSPACE` are the sandbox, that the API keeps its local state beside the sandbox, and that it finds the refusing `claude` shim. It also checks `/api/status`, that the UI serves and compiles the app (its Vite config is `.verify/vite.<run>.config.mjs` in the repo, so it resolves the repo's node_modules) and proxies `/api` to this sandbox, that the UI serves the same books as the sandbox API (by SHA), a sandbox receipt PDF and a sandbox bank statement PDF (byte for byte), and that **the real workspace's books (`ledger.json` and every `books/*.jsonl`) are unchanged since `up`**. It prints the workspace's `closedThrough`. Run it first, and again whenever something looks off. If a line is `FAIL`, run `down` and then `up` instead of driving a half-working instance.
+The doctor is read-only. Every line must say `ok`. It checks that the PIDs are alive, that each port is owned by our PID and the API's only on loopback, that the API's cwd and `VANILLA_WORKSPACE` are the sandbox, that the API keeps its local state beside the sandbox, and that it finds the refusing `claude` shim. It also checks `/api/status`, that the UI serves and compiles the app (its Vite config is `.verify/vite.<run>.config.mjs` in the repo, so it resolves the repo's node_modules) and its bundled fonts (a worktree's linked node_modules is on Vite's allow list) and proxies `/api` to this sandbox, that the UI serves the same books as the sandbox API (by SHA), a sandbox receipt PDF and a sandbox bank statement PDF (byte for byte), and that **the real workspace's books (`ledger.json` and every `books/*.jsonl`) are unchanged since `up`**. It prints the workspace's `closedThrough`. Run it first, and again whenever something looks off. If a line is `FAIL`, run `down` and then `up` instead of driving a half-working instance.
 
 ## Drive
 
@@ -52,9 +52,12 @@ $B snapshot -i -c                            # interactive elements as @e refs
 $B click @e14 ; $B fill <sel> "text" ; $B press Enter
 $B js "<expr>"                               # read DOM state / dispatch events
 $B dialog                                    # alert() texts (the app reports API errors via alert, auto-accepted)
+$B js "document.fonts.ready.then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))).then(() => [...document.fonts].filter(f => f.status === 'error').length + ' fonts failed')"
 $B screenshot --viewport "$EVIDENCE/<feature>/NN-step.png"
 $B closetab
 ```
+
+**Fonts before every screenshot.** Run the `document.fonts.ready` line above right before each `screenshot`: the app's webfonts load after its first paint, and a capture before them shows the fallback fonts. It must answer `0 fonts failed`; more means Vite refused the font files (doctor's `UI serves the app's fonts`), and the shot shows system fonts instead of the app's. `app.mjs`, `tools/desktop/smoke.mjs` and a test's `screenshot(page, path)` (tests/support/browser.ts) wait the same way; tests/css-fonts.test.ts holds every capture to it.
 
 These are the stable handles. They come from the source, not from coordinates.
 

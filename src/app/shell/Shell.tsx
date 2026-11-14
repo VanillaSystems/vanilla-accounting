@@ -21,7 +21,7 @@ import { DropDialog, dropFiles, dropOpen, finishDrop } from './DropDialog.js';
 import { INTAKE, watchRuns, watchSteps } from '../automation/intake.js';
 import { bookingWaitsNote } from '../automation/marks.js';
 import { bookingWaitsText } from '../lib/booking-waits.js';
-import { STATIC_EXPORT, api, errorText, request } from '../lib/api.js';
+import { DEMO, STATIC_EXPORT, api, errorText, request } from '../lib/api.js';
 import { noTitleBar } from '../desktop/bridge.js';
 import { Demo } from './Demo.js';
 import { ExportDialog } from '../areas/export/ExportDialog.js';
@@ -332,7 +332,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
 
   return (
     <ShellUiContext.Provider value={ui}>
-      {readonly && <AuditBar snapshot={snapshot} version={handover?.version} />}
+      {readonly && !DEMO && <AuditBar snapshot={snapshot} version={handover?.version} />}
       {!readonly && copy ? <DurchsichtBar d={copy} onClose={copy.back ? closeCopy : undefined} /> : null}
       <a className="skip" href="#list">{t('shell.skip')}</a>
       <FxProvider index={books}>
@@ -370,7 +370,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       <DropDialog books={books} refresh={refresh} period={period} onGo={(loc) => nav.go(loc)} onLanded={showLanded} onStatement={(loc) => { if (current.current.route.area === 'bank') nav.go(loc); }} />
       <Corner onAssistant={toggleAssistant} onGo={(route) => nav.go({ route, query: {} })} />
       <Dock current={loc.route.area} books={books} keys={dockKeys} wide={navWide} onToggle={toggleNav} nav={nav} canEdit={canEdit} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
-      {workspace?.demo ? <Demo name={workspace.company.name} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} /> : null}
+      {workspace && (DEMO || workspace.demo) ? <Demo name={workspace.company.name} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} /> : null}
       {toastNode}
       {copy && !readonly ? <><Welcome d={copy} /><ReturnBar d={copy} toast={toast} /></> : null}
       {legend && (

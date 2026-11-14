@@ -6,7 +6,7 @@
  * sidebar takes its width from the page (--aiw), and every fixed element centres on what is left.
  */
 import { useSyncExternalStore } from 'react';
-import { ApiError, api, apiFetch, errorText } from '../lib/api.js';
+import { ApiError, DEMO, api, apiFetch, errorText } from '../lib/api.js';
 import { language, t, tWith } from '../i18n/index.js';
 import { store as remember, stored } from '../shell/storage.js';
 import { reloadWorkspace } from '../hooks/use-workspace.js';
@@ -251,7 +251,8 @@ export async function sendMessage(text: string, page: ContextRef | undefined): P
       for (const l of lines) if (l.trim()) apply(JSON.parse(l) as AssistantEvent);
     }
   } catch (e) {
-    if (!stop.signal.aborted) withAi((t) => ({ ...t, error: errorText(e), done: true }));
+    // The public demo has no AI: it says where the AI is, not that a change was refused.
+    if (!stop.signal.aborted) withAi((turn) => ({ ...turn, error: DEMO ? t('demo.web.ai') : errorText(e), done: true }));
   } finally {
     withAi((t) => ({ ...t, done: true }));
     set({ sending: false });
