@@ -85,8 +85,8 @@ test('a booking without a payment moved on no money account: an amount chip keep
   const lb = ledgerOf(withBooking, '2026-10-01');
   const vb = lb.byId.get('inv')!;
   const fb = linkFields(accounts, lb, { say: wordsIn('de').t as never, monthName: (d) => d });
-  const unpaid = (chips: Chip[]) => { const pass = chipTest(chips, fb); return bookingsWithoutPayment(vb, lb, '', (u) => pass(rowOfUnpaid(u))).map((u) => u.ref); };
-  assert.deepEqual(bookingsWithoutPayment(vb, lb).map((u) => u.ref), ['M2026-001'], 'the fixture has the booking');
+  const unpaid = (chips: Chip[]) => { const pass = chipTest(chips, fb); return bookingsWithoutPayment(vb, lb, '', (u) => pass(rowOfUnpaid(u))).rows.map((u) => u.ref); };
+  assert.deepEqual(bookingsWithoutPayment(vb, lb).rows.map((u) => u.ref), ['M2026-001'], 'the fixture has the booking');
   assert.deepEqual(unpaid([{ field: 'over', value: '100' }]), ['M2026-001']);
   assert.deepEqual(unpaid([konto('Raiffeisen')]), []);
   assert.deepEqual(unpaid([{ field: 'way', value: 'out' }]), []);

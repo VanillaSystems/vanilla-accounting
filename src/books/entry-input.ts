@@ -15,10 +15,20 @@ export type JournalEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'ac
   /** A correction of a filed entry: the entry it corrects and what was wrong, for its case (r8c-6). */
   & { correctsEntry?: string; correction?: 'vat' | 'account' | 'storno' }
   /** The receipt the booking is for (a late receipt of a filed payment, r10h-6): linked to the new entry, and pointed at the payment corrected. */
-  & { receipt?: string };
+  & { receipt?: string }
+  /** An undo's: the person's links its deletion took along (DeletedEntry). */
+  & { takenLinks?: string[] };
+
+/**
+ * A booking as its deletion returns it (src/server/edits.ts deleteEntry). The last entry of a
+ * module's booking under a ref of its own takes the links a person or the AI made to that ref along
+ * (#524): `takenLinks` names them, apart from the entry's own `receipts` (what the module saw), so
+ * the undo links exactly those again and never writes them into the module's booking. Never in the books.
+ */
+export type DeletedEntry = JournalEntry & { takenLinks?: string[] };
 
 /** A deleted booking as its undo books it again: everything that made it what it was. */
-export function undoInput(e: JournalEntry): JournalEntryInput {
+export function undoInput(e: DeletedEntry): JournalEntryInput {
   return {
     id: e.id,
     transactionRef: e.transactionRef,
@@ -37,5 +47,6 @@ export function undoInput(e: JournalEntry): JournalEntryInput {
     ...(e.reason && { reason: e.reason }),
     ...(e.run && { run: e.run }),
     ...(e.receipts && { receipts: e.receipts }),
+    ...(e.takenLinks?.length && { takenLinks: e.takenLinks }),
   };
 }

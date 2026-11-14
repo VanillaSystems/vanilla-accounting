@@ -84,6 +84,7 @@ import { FEE_NEEDS, SALES_NEEDS } from '../knowledge/provider.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { addDays, isIsoDate } from '../accounting/periods.js';
 import { orderPageOf, type Provider } from './providers.js';
+import { isPersonsLink } from '../books/refs.js';
 
 /**
  * The VAT code of an export's foreign tax line: none, the foreign VAT stays out of the return (owner
@@ -918,7 +919,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[]; map
     if (ctx.agreed || !charged || charged === 'differ' || charged.off || charged.days.length !== 1) return false;
     const day = charged.days[0].date;
     if (had.every((e) => e.date === day) || saleRefsOf(sale).length !== 1 || !ownParts(sale) || had.some((e) => ctx.isClosed(e.date))) return false;
-    if (books.mappings?.some((m) => m.transactionRef === sale && (m.by === 'human' || m.by === 'llm')) || dated(day, day)) return false;
+    if (books.mappings?.some((m) => m.transactionRef === sale && isPersonsLink(m)) || dated(day, day)) return false;
     const receipts = [...new Set([...had.flatMap((e) => e.receipts ?? []), ctx.receipt])].sort();
     const made: JournalEntry[] = [];
     for (const e of had) {
@@ -1011,7 +1012,7 @@ export function bookReport(books: { journalEntries: readonly JournalEntry[]; map
      */
     const resplit = (ref: string, parts: typeof lines): JournalEntry[] | undefined => {
       const had = byRef.get(ref)!;
-      if (!ownParts(ref) || had.some((e) => ctx.isClosed(e.date)) || books.mappings?.some((m) => m.transactionRef === ref && (m.by === 'human' || m.by === 'llm'))) return undefined;
+      if (!ownParts(ref) || had.some((e) => ctx.isClosed(e.date)) || books.mappings?.some((m) => m.transactionRef === ref && isPersonsLink(m))) return undefined;
       if (parts.every((p) => p.date === had[0].date)) return undefined;
       if (refunds.exceeds || refunds.undated || parts.some((p) => dated(p.date, p.collected) || orderLegacy({ key: o.order, day: p.collected, amount: p.net }))) return undefined;
       const receipts = [...new Set([...had.flatMap((e) => e.receipts ?? []), ctx.receipt])].sort();

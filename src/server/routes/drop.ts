@@ -710,8 +710,8 @@ function undo(row: DropRow): string[] {
   const run = row.run ? engine().run(row.run) : undefined;
   if (run && run.state.status === 'running') throw new RequestError(409, 'Der Lauf arbeitet gerade daran. Gleich noch einmal.');
   if (row.report) {
-    // A report's bookings go with its receipt; one a person changed, or of a filed period, keeps it (removeSalesReport).
-    if (!removeSalesReport(WS, row.id)) throw new RequestError(409, 'Eine Buchung dieses Berichts ist eingereicht oder von Hand geändert: er bleibt. Die Buchungen von Hand korrigieren.');
+    // A report's bookings go with its receipt; one a person changed or linked a receipt to, or of a filed period, keeps it (removeSalesReport).
+    if (!removeSalesReport(WS, row.id)) throw new RequestError(409, 'Eine Buchung dieses Berichts ist eingereicht, von Hand geändert oder trägt einen von Hand verknüpften Beleg: er bleibt. Die Buchungen von Hand korrigieren oder den Beleg dort lösen.');
   } else if (row.statement?.again) {
     throw new RequestError(400, 'Dieser Auszug war schon in den Büchern; das Hineinziehen hat nur Referenzen ergänzt. Nichts zurückzunehmen.');
   } else if (row.statement) {

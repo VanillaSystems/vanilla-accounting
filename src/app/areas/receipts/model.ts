@@ -16,7 +16,6 @@ import { isNoReceipt } from '../../../books/discard.js';
 import { accountOfStatement, isCardStatement, statementFacts, type StatementFacts } from '../../../books/statement-facts.js';
 import { lineOffers, lineOfReceipt, readCardLines, type CardLinesWhy, type LineOffer } from '../../../books/card-lines.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
-import { isManualRef } from '../../../books/refs.js';
 import { paidCards, type PaidCards } from '../../../accounting/paid-how.js';
 import { byStatement } from '../../../workspace/money-accounts.js';
 import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';
@@ -377,19 +376,26 @@ export function candidates(v: ReceiptView, l: Ledger, toChf: ToChf, query = '', 
 /** A booking without a payment a receipt can hang on (#89): its ref, its first line, and whether a line is the receipt's amount. */
 export interface Unpaid { ref: string; date: string; amount: number; currency: string; description: string; sameAmount: boolean }
 
+/** At most this many bookings without a payment in the link dialog, this many for a search: the dialog names the limit when it is hit. */
+export const UNPAID_SHOWN = 8;
+export const UNPAID_SEARCHED = 40;
+
 /**
  * The bookings without a payment of the open period (a depreciation, an accrual, a private share,
- * a correction; src/server/edits.ts withoutPayment) the receipt could hang on, not yet linked to it:
+ * a correction, or a booking a module or an import made under a ref of its own; src/server/edits.ts
+ * holdsLinks) the receipt could hang on, not yet linked to it:
  * those with a line of the receipt's amount, nearest in date first. With a query, every one whose
  * text, ref, amount or date hold every word (a depreciation books less than the invoice it carries).
+ * `total`: how many there are before the list is cut.
  */
-export function bookingsWithoutPayment(v: ReceiptView, l: Ledger, query = '', keep?: (u: Unpaid) => boolean): Unpaid[] {
+export function bookingsWithoutPayment(v: ReceiptView, l: Ledger, query = '', keep?: (u: Unpaid) => boolean): { rows: Unpaid[]; total: number } {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   const cur = v.r.currency || baseCurrency();
   const near = (d: string) => (v.date ? Math.abs(Date.parse(d) - Date.parse(v.date)) : 0);
   const out: Unpaid[] = [];
   for (const [ref, es] of l.entriesByRef) {
-    if (!isManualRef(ref) || l.txByRef.has(ref) || v.links.includes(ref) || es.some((e) => !!l.closedThrough && e.date <= l.closedThrough)) continue;
+    // The year close's own bookings take no receipt, as on their page (src/app/areas/journal/Detail.tsx).
+    if (!ref || l.txByRef.has(ref) || v.links.includes(ref) || es.some((e) => (!!l.closedThrough && e.date <= l.closedThrough) || e.origin === 'year-close')) continue;
     const [e] = es;
     const h = es.flatMap((x) => [x.description, x.amount.toFixed(2)]).concat(ref, e.date, e.date.split('-').reverse().join('.')).join(' ').toLowerCase();
     if (!words.every((w) => h.includes(w))) continue;
@@ -398,7 +404,8 @@ export function bookingsWithoutPayment(v: ReceiptView, l: Ledger, query = '', ke
     const u: Unpaid = { ref, date: e.date, amount: e.amount, currency: e.exchangeCurrency ?? baseCurrency(), description: e.description ?? ref, sameAmount };
     if (!keep || keep(u)) out.push(u);
   }
-  return out.sort((a, b) => Number(b.sameAmount) - Number(a.sameAmount) || near(a.date) - near(b.date) || a.ref.localeCompare(b.ref)).slice(0, words.length ? 40 : 8);
+  const rows = out.sort((a, b) => Number(b.sameAmount) - Number(a.sameAmount) || near(a.date) - near(b.date) || a.ref.localeCompare(b.ref)).slice(0, words.length ? UNPAID_SEARCHED : UNPAID_SHOWN);
+  return { rows, total: out.length };
 }
 
 /** A best fit: the amount fits (the same, a Skonto, an exact part) and the money goes the receipt's way. */

@@ -445,7 +445,7 @@ export const api = {
     request<Ok>('PATCH', `/api/journal-entries/${encodeURIComponent(id)}`, patch),
   createJournalEntry: (input: JournalEntryInput) =>
     request<{ entry: JournalEntry }>('POST', '/api/journal-entries', input).then((r) => r.entry),
-  deleteJournalEntry: (id: string) => request<Ok>('DELETE', `/api/journal-entries/${encodeURIComponent(id)}`),
+  deleteJournalEntry: (id: string) => request<Ok & { takenLinks?: string[] }>('DELETE', `/api/journal-entries/${encodeURIComponent(id)}`),
   /** «Nach Beleg buchen» on a receipt of several VAT groups (#406): the payment's lines as they were, and their ids now. */
   bookByReceipt: (id: string) => request<{ undo: string; before: JournalEntry[]; after: JournalEntry[] }>('POST', `/api/journal-entries/${encodeURIComponent(id)}/by-receipt`),
   /** Its undo by the id the click returned, in one write: refused when a line changed since. */
