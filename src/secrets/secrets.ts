@@ -5,8 +5,7 @@
  * (keychain-store.ts) and fall back to the environment (.env) for the mail sending password.
  * A test names a plain file with VANILLA_SECRETS_FILE, so it never touches a keychain.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 /**
  * The sending password, and one per source channel: `source:<id>:mail` (ADR 0014; derived, never
@@ -61,7 +60,6 @@ export function fileSecrets(file: string): Required<SecretStore> {
     async set(name, value) {
       const all = read();
       if (value === null) delete all[name]; else all[name] = value;
-      mkdirSync(dirname(file), { recursive: true });
       writeFileSync(file, JSON.stringify(all, null, 2), { mode: 0o600 });
     },
   };
