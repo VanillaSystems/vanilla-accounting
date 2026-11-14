@@ -280,6 +280,17 @@ export function recordDeletion(ws: Ws, entry: JournalEntry, kept: string[], dele
   fs.writeFileSync(join(dir, `${entry.id}.json`), JSON.stringify(record, null, 2));
 }
 
+/** The booking deleted under `id` as its deletion recorded it, while the record is kept (until the next save); undefined else. */
+export function deletedEntry(ws: Ws, id: string): JournalEntry | undefined {
+  const path = join(entryTrash(ws), `${id}.json`);
+  if (!/^[\w-]+$/.test(id) || !existsSync(path)) return undefined;
+  try {
+    return (JSON.parse(readFileSync(path, 'utf8')) as TrashedEntry).entry;
+  } catch {
+    return undefined;
+  }
+}
+
 /** The deletions recorded since `after` (the last save); records from before it are dropped, the save holds their story. */
 function trashedSince(ws: Ws, after: string | undefined): TrashedEntry[] {
   const dir = entryTrash(ws);

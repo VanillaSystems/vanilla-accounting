@@ -68,7 +68,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/accounting/ledger.ts` | CHF 3 |
 | `src/accounting/rappen.ts` | Rappen 1 |
 | `src/accounting/validate.ts` | MWST 1, Ziffer 1, tax code 11 |
-| `src/books/bank-import.ts` | ESTV 1, camt.053 21 |
+| `src/books/bank-import.ts` | ESTV 1, camt.053 22 |
 | `src/books/company.ts` | ESTV 1 |
 | `src/books/year-close.ts` | CHF 2, ESTV 4, camt.053 2 |
 | `src/core/modules/check.ts` | Ziffer 9 |

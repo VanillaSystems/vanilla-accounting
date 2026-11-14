@@ -28,7 +28,7 @@ import { agreedBasis, baseCurrency, vat } from '../engines/index.js';
 import { settlementLines, sideOf, type OpenItemAccounts } from '../accounting/tax-point.js';
 import { roundCHF } from '../accounting/rappen.js';
 import { bookInvoiceEvents, invoiceReceipt } from './events.js';
-import { eventRef, hasEvent } from '../books/refs.js';
+import { eventRef, hasEvent, isPersonsLink } from '../books/refs.js';
 
 export interface PaymentContext {
   bankAccounts: readonly LedgerBankAccount[];
@@ -230,7 +230,13 @@ function dropEvent(books: Books, event: readonly JournalEntry[]): void {
 
 /** The events the books lack after a payment changed what they book (a prepayment, «Lösen»), booked again: the PDFs to file go to `out`. */
 function rebookEvents(books: Books, book: InvoiceBook, ctx: PaymentContext, out: Pick<PaymentOutcome, 'files'>): void {
-  if (agreedBasis()) out.files.push(...bookInvoiceEvents(books, book, ctx).files);
+  if (!agreedBasis()) return;
+  out.files.push(...bookInvoiceEvents(books, book, ctx).files);
+  // An event its payments took over whole (a prepayment of the whole invoice) is gone: a receipt a person or the AI linked to it
+  // goes with it, so no link hangs on a booking that is gone (#524); the receipt is open again to be linked where it belongs.
+  const booked = new Set(books.journalEntries.map((e) => e.transactionRef));
+  const events = new Set(liveInvoices(book).flatMap((i) => (i.status === 'issued' ? [eventRef(i, 'issue')] : [])));
+  books.mappings = books.mappings.filter((m) => !(events.has(m.transactionRef) && !booked.has(m.transactionRef) && isPersonsLink(m)));
 }
 
 /** What the receivable holds in the books' currency for `amount` of the document: at its event's rate (MWSTV Art. 45), the amount itself in the books' currency. */

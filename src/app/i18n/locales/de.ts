@@ -1389,6 +1389,8 @@ export const messages = {
   'receipts.toCorrection': 'zur Korrektur',
   'receipts.withoutBank': 'Ohne Bankzahlung',
   'receipts.bookingsWithoutPayment': 'Buchungen ohne Zahlung',
+  'receipts.bookingsCut': '{shown} von {total} gezeigt: suchen, um weitere zu finden',
+  'receipts.bookingsCutSearched': '{shown} von {total} gezeigt: genauer suchen, um weitere zu finden',
   'receipts.escKey': 'esc',
   'receipts.fxLine': '≈ CHF {amount} · ESTV {date}',
   'receipts.sha': 'SHA-256',

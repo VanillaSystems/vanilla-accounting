@@ -1392,6 +1392,8 @@ export default {
     'receipts.toCorrection': 'alla correzione',
     'receipts.withoutBank': 'Senza pagamento bancario',
     'receipts.bookingsWithoutPayment': 'Registrazioni senza pagamento',
+    'receipts.bookingsCut': '{shown} di {total} mostrate: cercare per trovare le altre',
+    'receipts.bookingsCutSearched': '{shown} di {total} mostrate: affinare la ricerca per trovare le altre',
     'receipts.escKey': 'esc',
     'receipts.fxLine': '≈ CHF {amount} · AFC {date}',
     'receipts.sha': 'SHA-256',

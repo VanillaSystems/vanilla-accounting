@@ -37,6 +37,14 @@ Two markers flag an entry you must read before you update:
   `.bin`; the API serves every receipt and statement file with `nosniff` and, unless a PDF, a
   sandboxing CSP; an HTML page or mail is shown in a sandboxed frame that allows no script and
   no request (#523).
+- Reading the bank statements again (the inbox run, an import, `npm run read-statements`) no
+  longer drops the reference or the amount in another currency of a payment the books hold
+  already when no file states it now: a QR reference or a payout reference that an earlier reader
+  gave (Wise's statement PDFs before #243) stays, and a second read writes the same files (#522).
+  The bank's file still decides when it states one, and so does a kept statement PDF's table; a
+  table that goes («Neu lesen») or that a person replaces takes back what it gave. Missing fee
+  tags of the bank's file and a camt.053's balance of a statement PDF's last day (the same amount)
+  are filled in once.
 - Audit export: the floating top bar, the status corner, the dock and the page now start below
   the amber audit bar, at every window width, zoom and theme, so its text («Prüfmodus · nur
   Lesen …», the snapshot's date, schema and version) is never covered (#515).
@@ -47,6 +55,17 @@ Two markers flag an entry you must read before you update:
   `verify-audit` also checks that each PDF is the one its record's checksum names. The Invoices
   area shows them read-only: no issue, send, copy, credit, cancel or reminder button. Drafts
   are left out: an export is the record, not work in progress.
+- A receipt can be linked by hand to a booking that a module or an older import made under a
+  ref of its own, without a bank payment (for example a payment provider's order booked without
+  its payout, or an invoice's event). Before, «Zuordnen» refused such a booking with «Transaction
+  not found» while the app's own modules could link it. The booking's page offers «Beleg
+  zuordnen», the link dialog in Belege lists it among the bookings without a payment, and the
+  booking shows the linked receipt. A booking of a filed quarter still takes no link (#524).
+  Such a link is the person's: «Rückgängig» of a sales report whose booking carries one is
+  refused until she takes the receipt off; deleting the booking takes her link along and its undo
+  brings it back; an invoice's event that a prepayment of the whole invoice replaces takes it
+  along, and the receipt is open again. The link dialog says when it shows only some of the
+  bookings without a payment («8 von 23 gezeigt: suchen, um weitere zu finden»).
 
 ## [0.5.0] - 2026-11-13
 
