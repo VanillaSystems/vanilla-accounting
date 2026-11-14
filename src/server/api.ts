@@ -38,6 +38,7 @@ import { router as terminal } from './routes/terminal.js';
 import { router as batch } from './routes/batch.js';
 import { router as vatAdjustments } from './routes/vat-adjustments.js';
 import { router as handover } from './routes/handover.js';
+import { router as share } from './routes/share.js';
 import { markerOf } from '../handover/durchsicht.js';
 import { aiSetup } from './ai-setup.js';
 import { NoClaudeError } from '../llm/providers/claude-cli.js';
@@ -87,6 +88,9 @@ const SHARER_ONLY: Array<[string, RegExp, string]> = [
   ['POST', /^\/api\/workspace\/logo$/, 'settings'],
   ['POST', /^\/api\/handover\/share$/, 'share'],
   ['POST', /^\/api\/handover\/returns\/[^/]+\/(apply|undo|decide)$/, 'return'],
+  // The link through the share service: sharing, the sender, withdrawing and fetching returns are the sharer's.
+  ['POST', /^\/api\/share\/(link|sender|refresh)$/, 'share'],
+  ['DELETE', /^\/api\/share\/(sender|[a-z2-7]{26})$/, 'share'],
   // Invoices and customers are issued and sent by the firm; mailboxes and collectors are its own (a copy reads no mail).
   ['*', /^\/api\/(invoices|customers)(\/|$)/, 'invoices'],
   ['*', /^\/api\/(sources|mail)(\/|$)/, 'sources'],
@@ -109,7 +113,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY, ...(aiOff() ? { aiOff: true } : {}) } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, payouts, questions, reports, batch, vatAdjustments, handover);
+app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, payouts, questions, reports, batch, vatAdjustments, handover, share);
 app.use(knowledge);
 app.use(onboarding);
 

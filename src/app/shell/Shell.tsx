@@ -54,6 +54,7 @@ import { actionsNow, openActions } from '../selection/ActionsMenu.js';
 import { ShareDialog } from '../handover/ShareDialog.js';
 import { DurchsichtBar, ReturnBar, Welcome } from '../handover/Durchsicht.js';
 import { isVanillaFile, openVanilla, reloadHandover, useHandover, type Opened } from '../handover/store.js';
+import { refreshShares, running } from '../handover/link.js';
 
 type Overlay =
   | { kind: 'palette' }
@@ -97,6 +98,13 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const canShare = canEdit && !STATIC_EXPORT && !copy;
   // His changes on a copy are counted anew whenever the books are read again.
   useEffect(() => { if (copy) void reloadHandover(); }, [books]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Shares by link: the service is asked once when the books open; a return that arrived is said once, then it is a row of Änderungen.
+  const askedShares = useRef(false);
+  useEffect(() => {
+    if (askedShares.current || !canEdit || !handover?.shares?.some(running)) return;
+    askedShares.current = true;
+    refreshShares().then((r) => { for (const a of r.arrived) toast(t('share.returnArrived', { name: a.from.name, n: a.changes, v: a.basedOn })); }, () => undefined);
+  }, [handover, canEdit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const area = areaOf(loc.route);
   // Without a period in the link, a page shows where the newest data is (F10), its own rows outside the books included.

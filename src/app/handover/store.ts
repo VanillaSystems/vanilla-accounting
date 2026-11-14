@@ -7,6 +7,7 @@ import { STATIC_EXPORT, apiFetch, request, ApiError } from '../lib/api.js';
 import type { Version } from '../../handover/versions.js';
 import type { Marker } from '../../handover/durchsicht.js';
 import type { ReturnSummary } from '../../handover/returns.js';
+import type { ShareRecord } from '../../share/sharing.js';
 import type { ApiErrorBody } from '../../types/api-error.js';
 
 export interface DurchsichtFacts extends Pick<Marker, 'firm' | 'sharer' | 'me' | 'version' | 'receivedAt' | 'message' | 'sent'> {
@@ -18,6 +19,8 @@ export interface DurchsichtFacts extends Pick<Marker, 'firm' | 'sharer' | 'me' |
   notes: Record<string, string>;
   /** Whether the server can go back to the books opened before (not in the Mac app, which lists them under «Zuletzt»). */
   back: boolean;
+  /** The copy came by link: its return goes back into the same share (src/share/sharing.ts). */
+  linked?: boolean;
 }
 
 export interface HandoverView {
@@ -25,6 +28,8 @@ export interface HandoverView {
   versions: Version[];
   durchsicht?: DurchsichtFacts;
   returns: ReturnSummary[];
+  /** The shares by link, newest first (handover/shares.json). */
+  shares?: ShareRecord[];
 }
 
 let view: HandoverView | undefined;

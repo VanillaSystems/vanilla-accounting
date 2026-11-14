@@ -72,6 +72,35 @@ export async function sendMail(ws: Workspace, message: MailMessage, pdf: { filen
   }
 }
 
+/** The address the mailbox sends from, or undefined without one set up. */
+export const sendingAddress = (ws: Workspace): string | undefined => ws.outgoingMail?.fromAddress || undefined;
+
+/**
+ * Sends a message without an attachment (the share's invitation and the sender's confirmation,
+ * src/share/sharing.ts): plain text, and HTML when given. Resolves once the server took it.
+ */
+export async function sendText(ws: Workspace, message: MailMessage & { html?: string; replyTo?: string }): Promise<{ to: string; messageId: string }> {
+  const m = checkMessage(message);
+  const { settings, send } = await transport(ws);
+  try {
+    const info = await send.sendMail({
+      from: settings.fromName ? { name: settings.fromName, address: settings.fromAddress } : settings.fromAddress,
+      ...(message.replyTo ?? settings.replyTo ? { replyTo: message.replyTo ?? settings.replyTo } : {}),
+      to: m.to,
+      subject: m.subject,
+      text: m.body,
+      ...(message.html ? { html: message.html } : {}),
+    });
+    if (!info.accepted.length) throw new Error(`abgelehnt: ${info.rejected.join(', ')}`);
+    return { to: m.to, messageId: info.messageId };
+  } catch (e) {
+    const why = e instanceof Error ? e.message : String(e);
+    throw new MailError('failed', `E-Mail nicht gesendet: ${why}`, why);
+  } finally {
+    send.close();
+  }
+}
+
 /** Logs in to the mailbox without sending anything: Firma › E-Mail's check. */
 export async function verifyMail(ws: Workspace): Promise<void> {
   const { send } = await transport(ws);

@@ -32,6 +32,8 @@ import { answerKey, developerIdOf } from './build-key.js';
 import { appVersion } from '../version.js';
 import { readState, writeState, type Bounds } from './state.js';
 import { setDurchsichtHome } from '../handover/durchsicht.js';
+import { APP_SCHEME, setShareSettingsFile } from '../share/service.js';
+import { openLink } from '../share/sharing.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** tools/desktop/smoke.mjs: the fused release build has no inspector, so the page reaches the menu (preload.ts). */
@@ -49,6 +51,22 @@ const DICTATION = process.platform !== 'darwin' ? undefined
 
 // The sheet's text is laid out as puppeteer prints it (src/invoices/pdf.ts launches Chrome so).
 app.commandLine.appendSwitch('font-render-hinting', 'none');
+
+/**
+ * Links of shared books (`vanilla-accounting://open?share=<id>#<key>`, the share page's «Buchhaltung
+ * öffnen»): macOS hands them over by `open-url`, also when the link starts the app, so they are
+ * taken before the app is ready and opened once the server listens (src/share/sharing.ts openLink).
+ */
+const shareLinks: string[] = [];
+let openShares: (() => void) | undefined;
+app.on('open-url', (e, url) => {
+  e.preventDefault();
+  if (!url.startsWith(`${APP_SCHEME}:`)) return;
+  shareLinks.push(url);
+  openShares?.();
+});
+// The packed app's Info.plist names the scheme (desktop/electron-builder.config.cjs `protocols`); this makes it the handler.
+if (app.isPackaged) app.setAsDefaultProtocolClient(APP_SCHEME);
 
 if (!app.requestSingleInstanceLock()) app.quit();
 // A start that fails says so and ends: never a running app without a window.
@@ -111,6 +129,8 @@ async function start(): Promise<void> {
   const resumePhone = resumeOnce(() => server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); }));
   // Copies of books handed over to this Mac («Durchsicht»): in the app's own folder, never among the person's own books.
   setDurchsichtHome(join(app.getPath('userData'), 'Durchsicht'));
+  // This Mac's share service address, when the person names one («Teilen › Mehr»).
+  setShareSettingsFile(join(app.getPath('userData'), 'share.json'));
   const server = desktopServer({
     stateFile,
     demoRoot: join(app.getPath('userData'), 'Demo'),
@@ -208,8 +228,26 @@ async function start(): Promise<void> {
   refreshMenu();
   await pathKnown;
   server.startBackground();
+  /**
+   * A link of shared books: fetched, decrypted and checked, then opened as a Durchsicht copy in the
+   * app's own folder, which needs no question of macOS. The Dock shows that it works; a link that
+   * does not open says why.
+   */
+  openShares = () => {
+    for (let url = shareLinks.shift(); url; url = shareLinks.shift()) {
+      const link = url;
+      win?.setProgressBar(2);
+      void openLink(link)
+        .then((opened) => server.open(opened.root))
+        .then((books) => show(pathOf(books)))
+        .catch(async (e: unknown) => { await dialog.showMessageBox({ type: 'warning', message: textsIn(language)('desktop.shareOpenFailed'), detail: (e as Error).message }); })
+        .finally(() => { if (win && !win.isDestroyed()) win.setProgressBar(-1); });
+    }
+  };
+  // Started by a link: it opens instead of the books opened last.
+  if (shareLinks.length) openShares();
   // The books opened last, read only after macOS answered for their folder; a first start reads none (#373).
-  void firstPage({
+  else void firstPage({
     last: readState(stateFile).recent[0], reach: server.reach, answered: server.answered, unasked, open: server.open, current: server.current, pathOf, show,
     // While macOS asks, the start screen names the folder and the books as desktop.json keeps them.
     asking: (root) => askingPath(root, server.recent().find((b) => b.root === root)?.name ?? basename(root), server.folderOf(root)),
