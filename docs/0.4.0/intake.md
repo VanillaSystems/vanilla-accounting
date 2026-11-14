@@ -139,11 +139,23 @@ The drop judges a PDF by its own text, before anything is written, so the person
 row. A photo has no text until the run's reading, and mail, the Finder and the phone bypass the
 dialog, so the same checks run again later:
 
-- **Mail collection** (src/platform/sources/host.ts) puts an attachment whose words say it is no
-  receipt into `data/quarantine/` instead of the inbox; its ledger line keeps the sender. When 3
-  or more of one sender's attachments, and nearly all of them, were no receipt (quarantined, or
-  marked so by a person in Belege), Firma › Quellen offers to skip that address: one click adds it
-  to `reach.mail.skip` and, since that only narrows the reach, switches the new version on.
+- **Mail collection** (src/platform/sources/host.ts) sets an attachment aside into
+  `data/quarantine/` («Aussortiert» in Belege) instead of the inbox when its words say it is no
+  receipt, when its sender and file-name shape are a group the person keeps aside, or when it
+  repeats a receipt of the books with other bytes (same sender, labelled invoice number and amount,
+  the day within a week; src/platform/sources/aside.ts). Its ledger line keeps the sender, the
+  attachment's own name, the mail's subject and day, its size, and for a PDF its page count and
+  whether it has a text layer. What a mailbox set aside is deleted 30 days after it came unless a
+  person keeps it («Doch behalten», per file or per group); what a drop or a person set aside stays.
+- **Firma › Quellen offers, never decides.** A group of one sender's files of one file-name shape
+  («report.pdf», «<Nummer>.pdf», «IMG_<Nummer>.pdf») of which 2 or more were set aside and none
+  stands in the books is offered once, with every file of it and «0 davon in den Büchern»;
+  «Immer beiseite» adds it to the source's `settings.aside` (`{ from, name, source: hand <date> }`).
+  «Doch behalten» on a file of the group switches the group off (`off: true`, never offered again).
+  When 3 or more of one sender's attachments were no receipt and none of its files stands in the
+  books, Quellen offers to skip that address: one click adds it to `reach.mail.skip`. Both changes
+  only narrow what the source delivers, so the click switches the new version on. A rule per sender
+  alone would lose invoices: a supplier sends its invoices and its brochures from one address.
 - **The read step** makes an order confirmation or delivery note kind `supporting`, and a text the
   model read off a photo that says it is no receipt kind `noise` (both by rule; a person's kind wins).
   The model's reading of a picture new to the books may answer exactly «Kein Beleg: <what it shows>»

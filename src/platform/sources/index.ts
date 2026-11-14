@@ -72,5 +72,20 @@ function diffFromLines(was: Approved['reach'], next: Reach) {
   return { added: now.filter((l) => !had.has(key(l))), removed: was.filter((l) => !has.has(key(l))) as ReturnType<typeof reachLines> };
 }
 
+/**
+ * A change the person's click makes to a source's source.yaml (a sender skipped, a group kept aside
+ * or switched off): it only narrows what the source delivers, so a source that ran live keeps
+ * running live: its new version is switched on with the same click, and left waiting if the change
+ * would reach anything new or the source waited to be switched on before.
+ */
+export function changeKeepingOn(ws: Ws, appRoot: string, id: string, change: () => void): void {
+  const before = sources(ws, appRoot).find((x) => x.kind !== 'invalid' && x.decl.id === id);
+  change();
+  const after = sources(ws, appRoot).find((x) => x.kind !== 'invalid' && x.decl.id === id);
+  if (!before || before.kind !== 'ready' || !after || after.kind === 'invalid') return;
+  if (reachDiff(before.decl.reach, after.decl.reach).added.some((l) => !l.what.startsWith('not from '))) return;
+  approveSource(ws, after.decl);
+}
+
 export const sourceFolder = (ws: Ws, id: string): string => join(ws.paths.root, 'sources', id);
 export const hasSources = (ws: Ws): boolean => existsSync(join(ws.paths.root, 'sources'));

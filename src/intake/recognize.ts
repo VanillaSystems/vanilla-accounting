@@ -11,7 +11,7 @@ import { STATEMENT_FILES } from '../providers/statement-files.js';
 import { documents } from '../engines/index.js';
 import { documentKind } from './document-kind.js';
 import { isBankStatement } from '../core/modules/words.js';
-import { pdfRuns, textOf } from '../parsers/pdf-text.js';
+import { pdfRuns, pdfRunsCounted, textOf } from '../parsers/pdf-text.js';
 import { csvTable } from '../providers/statement-read/csv.js';
 
 /** What the file is, and a PDF's text of its first pages (for the duplicate check; never stored in the row). */
@@ -85,9 +85,23 @@ export async function recognize(bytes: Buffer, name: string, words?: DocumentsDa
  * (a scan) is left to the run's reading.
  */
 export async function notReceipt(bytes: Buffer, words?: DocumentsData): Promise<OtherWhy | undefined> {
-  if (!starts(bytes, 0x25, 0x50, 0x44, 0x46)) return undefined;
-  const text = await firstPages(bytes);
-  if (!text?.trim()) return undefined;
-  const v = documentKind(text, words ?? documents());
-  return v.is === 'other' ? v.why : undefined;
+  return (await readAttachment(bytes, words)).other;
+}
+
+/**
+ * What a collected attachment shows without a model, read once: a PDF's text of its first two pages
+ * (`text`: '' for a scan), its page count, and `other` when its words say it is clearly no receipt.
+ * Empty for a file that is no PDF or that no reader opens.
+ */
+export async function readAttachment(bytes: Buffer, words?: DocumentsData): Promise<{ text?: string; pages?: number; other?: OtherWhy }> {
+  if (!starts(bytes, 0x25, 0x50, 0x44, 0x46)) return {};
+  let read: { runs: Awaited<ReturnType<typeof pdfRunsCounted>>['runs']; pages: number };
+  try {
+    read = await pdfRunsCounted(bytes, 2);
+  } catch {
+    return {};
+  }
+  const text = textOf(read.runs, 'reading');
+  const v = text.trim() ? documentKind(text, words ?? documents()) : undefined;
+  return { text, pages: read.pages, ...(v?.is === 'other' ? { other: v.why } : {}) };
 }

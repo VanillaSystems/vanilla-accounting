@@ -9,8 +9,30 @@ import { dirname, join } from 'node:path';
 import type { Workspace } from '../../workspace/workspace.js';
 import type { OtherWhy } from '../../core/modules/schema.js';
 
+/**
+ * A delivered document. `file`: its name in the inbox; `quarantined`: set aside instead, by its words
+ * (`why` the kind), by a group the person keeps aside (`group`, the file-name shape) or as a
+ * `duplicate` of the receipt `of`. What a later rule learns from is logged beside (absent on lines
+ * written before): `name` the attachment's own name, `subject` the mail's, `date` the mail's day,
+ * `size` in bytes, `pages` and `text` (whether its first pages have a text layer) for a PDF.
+ */
+export interface DeliveredDocument {
+  kind: 'document';
+  sha256: string;
+  file?: string;
+  duplicateOf?: string;
+  from?: string;
+  quarantined?: { file: string; why: OtherWhy | 'group' | 'duplicate'; group?: string; of?: string };
+  name?: string;
+  subject?: string;
+  date?: string;
+  size?: number;
+  pages?: number;
+  text?: boolean;
+}
+
 export type LedgerLine =
-  | { at: string; run: string; feed: string; key: string; got: { kind: 'document'; sha256: string; file?: string; duplicateOf?: string; from?: string; quarantined?: { file: string; why: OtherWhy } } }
+  | { at: string; run: string; feed: string; key: string; got: DeliveredDocument }
   | { at: string; run: string; feed: string; key: string; got: { kind: 'record'; record: string; id: string; change: 'new' | 'updated' | 'same' | 'refused-closed' } }
   | { at: string; run: string; feed: string; cursor: unknown };
 

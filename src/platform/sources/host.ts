@@ -2,8 +2,11 @@
  * The host of a pull (ADR 0014): everything a source's code does not do. It finds the source and
  * its code, refuses a version not switched on, takes the channel's secret from the store, opens
  * the channel, runs each due feed in the child, and delivers what it yields: a document into the
- * inbox (unless the books, the inbox or the ledger hold its bytes already, or its words say it is
- * no receipt: then into data/quarantine/), a checkpoint into the ledger. A dry run delivers nothing and writes nothing.
+ * inbox (unless the books, the inbox or the ledger hold its bytes already; or it is set aside into
+ * data/quarantine/: its sender and file-name shape are a group the person keeps aside, its words say
+ * it is no receipt, or it repeats a receipt of the books with other bytes, src/platform/sources/aside.ts),
+ * a checkpoint into the ledger. A live pull first deletes what was set aside 30 days ago and nobody
+ * kept. A dry run delivers nothing and writes nothing.
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
@@ -15,8 +18,13 @@ import { sources } from './index.js';
 import { launcherFor, runFeed, ChildCrashed, SourceError, type Launcher } from './launcher.js';
 import { appendLedger, feedState, readLedger } from './ledger.js';
 import { mailBackend, mailChannel, sha256, type Held, type MailBackend } from './mail-channel.js';
-import { notReceipt } from '../../intake/recognize.js';
-import { freeName, putInQuarantine } from '../../intake/quarantine.js';
+import { readAttachment } from '../../intake/recognize.js';
+import { freeName, putInQuarantine, sweepQuarantine } from '../../intake/quarantine.js';
+import type { QuarantineReason } from '../../types/drop.js';
+import type { Receipt } from '../../types/index.js';
+import { documents } from '../../engines/index.js';
+import { asideGroupOf, contentTwin, lineOfReceipt } from './aside.js';
+import type { DeliveredDocument } from './ledger.js';
 import { secretKey, type Seen, type Cadence, type FeedDecl, type MacMailProblem, type MacMailReach, type MailReach, type SourceDecl } from './model.js';
 import { MacMailError, macMailBackend } from './mac-mail.js';
 import { ReachError } from './reach.js';
@@ -24,7 +32,7 @@ import { LoginNeeded, navigationAllowed, sessionOf, Trace, webChannel, type WebD
 import { playwrightDriver } from './web-driver.js';
 import { ApiRefused, apiChannel, type ApiFetch } from './api-channel.js';
 
-/** `quarantined`: documents whose words say they are no receipt, put into data/quarantine/ instead of the inbox. */
+/** `quarantined`: documents set aside into data/quarantine/ instead of the inbox (no receipt by their words, a group kept aside, a duplicate by content). */
 export interface FeedReport { feed: string; documents: number; duplicates: number; quarantined: number; complete: boolean; seen?: Seen[] }
 
 export type PullOutcome =
@@ -78,12 +86,13 @@ function located(req: PullRequest): { decl: SourceDecl; folder: string; entry: s
 
 const sha16 = (b: Buffer) => sha256(b).slice(0, 16);
 
-/** The bytes the books, the inbox and the ledgers hold already, by their first 16 hex. */
-function known(ws: Workspace): Map<string, string> {
+/** The bytes the books, the inbox and the ledgers hold already, by their first 16 hex; and the books' receipts. */
+function known(ws: Workspace): { bytes: Map<string, string>; receipts: Receipt[] } {
   const out = new Map<string, string>();
-  if (hasBooks(ws)) for (const r of loadBooks(ws).receipts) out.set(r.id, `receipt ${r.filename}`);
+  const receipts = hasBooks(ws) ? loadBooks(ws).receipts : [];
+  for (const r of receipts) out.set(r.id, `receipt ${r.filename}`);
   if (existsSync(ws.paths.inbox)) for (const f of readdirSync(ws.paths.inbox)) out.set(sha16(readFileSync(join(ws.paths.inbox, f))), `inbox ${f}`);
-  return out;
+  return { bytes: out, receipts };
 }
 
 export async function pull(req: PullRequest): Promise<PullOutcome> {
@@ -135,8 +144,13 @@ export async function pull(req: PullRequest): Promise<PullOutcome> {
     if (!token) return { outcome: 'missing-secret', channel: 'api', feeds: reports };
     api = apiChannel(decl.reach.api, token, held, req.apiFetch);
   }
-  const bytes = known(req.ws);
+  const { bytes, receipts } = known(req.ws);
   for (const l of lines) if ('got' in l && l.got.kind === 'document') bytes.set(l.got.sha256.slice(0, 16), `${l.feed} ${l.key}`);
+  // The receipts a delivered file could repeat by content, each with the sender of the mail it came by.
+  const delivered = lines.filter((l): l is Extract<typeof l, { got: DeliveredDocument }> => 'got' in l && l.got.kind === 'document');
+  const twins = receipts.map((receipt) => ({ receipt, from: lineOfReceipt(delivered, receipt)?.got.from }));
+  const words = documents();
+  if (req.mode === 'live') sweepQuarantine(req.ws.paths.data, now());
 
   try {
     for (const feed of feeds) {
@@ -159,28 +173,42 @@ export async function pull(req: PullRequest): Promise<PullOutcome> {
         if (!file) throw new SourceError(`${item.file} is no file the host fetched`);
         const sum = sha256(file.content);
         const dup = bytes.get(sum.slice(0, 16));
-        const why = dup ? undefined : await notReceipt(file.content);
-        if (dup) report.duplicates++; else if (why) report.quarantined++; else report.documents++;
+        const group = dup ? undefined : asideGroupOf(decl.settings, file.from, file.name);
+        const read = dup ? {} : await readAttachment(file.content, words);
+        const why = dup || group ? undefined : read.other;
+        const twin = dup || group || why || !read.text ? undefined : contentTwin(read.text, file.from, twins, words);
+        const aside: QuarantineReason | undefined = group ? { kind: 'not-receipt', why: 'group', shape: group.name }
+          : why ? { kind: 'not-receipt', why }
+          : twin ? { kind: 'duplicate', of: twin.id, ofFile: twin.filename }
+          : undefined;
+        if (dup) report.duplicates++; else if (aside) report.quarantined++; else report.documents++;
         state.keys.add(item.key);
         if (req.mode !== 'live') {
           if (!dup) bytes.set(sum.slice(0, 16), `${feed.id} ${item.key}`);
-          (report.seen ??= []).push({ name: file.name, ...(file.from ? { from: file.from } : {}), ...(item.date ? { date: item.date } : {}), as: dup ? 'duplicate' : why ? 'not-receipt' : 'new' });
+          (report.seen ??= []).push({ name: file.name, ...(file.from ? { from: file.from } : {}), ...(item.date ? { date: item.date } : {}), as: dup || twin ? 'duplicate' : aside ? 'not-receipt' : 'new' });
           if (req.limit && report.seen.length >= req.limit) break;
           continue;
         }
         let name: string | undefined;
-        let quarantined: { file: string; why: NonNullable<typeof why> } | undefined;
-        if (!dup && why) {
-          // Clearly no receipt by its words: kept apart with its reason, the books never see it.
-          quarantined = { file: putInQuarantine(req.ws.paths.data, file.name, file.content, { kind: 'not-receipt', why, ...(file.from ? { from: file.from } : {}) }), why };
-          bytes.set(sum.slice(0, 16), `quarantine ${quarantined.file}`);
+        let quarantined: DeliveredDocument['quarantined'];
+        if (aside) {
+          // Set aside with its reason: the books never see it, «Aussortiert» shows it, and it is deleted after 30 days unless a person keeps it.
+          const reason = { ...aside, ...(file.from ? { from: file.from } : {}), source: decl.id } as QuarantineReason;
+          const kept = putInQuarantine(req.ws.paths.data, file.name, file.content, reason);
+          quarantined = { file: kept, why: group ? 'group' : why ?? 'duplicate', ...(group ? { group: group.name } : {}), ...(twin ? { of: twin.id } : {}) };
+          bytes.set(sum.slice(0, 16), `quarantine ${kept}`);
         } else if (!dup) {
           mkdirSync(req.ws.paths.inbox, { recursive: true });
           name = freeName(req.ws.paths.inbox, file.name);
           writeFileSync(join(req.ws.paths.inbox, name), file.content);
           bytes.set(sum.slice(0, 16), `inbox ${name}`);
         }
-        appendLedger(req.ws, decl.id, { at, run: req.run, feed: feed.id, key: item.key, got: { kind: 'document', sha256: sum, ...(name ? { file: name } : {}), ...(dup ? { duplicateOf: dup } : {}), ...(file.from ? { from: file.from } : {}), ...(quarantined ? { quarantined } : {}) } });
+        const got: DeliveredDocument = {
+          kind: 'document', sha256: sum, ...(name ? { file: name } : {}), ...(dup ? { duplicateOf: dup } : {}), ...(file.from ? { from: file.from } : {}), ...(quarantined ? { quarantined } : {}),
+          name: file.name, ...(file.subject ? { subject: file.subject } : {}), ...(item.date ? { date: item.date } : {}), size: file.content.length,
+          ...(read.pages !== undefined ? { pages: read.pages } : {}), ...(read.text !== undefined ? { text: !!read.text.trim() } : {}),
+        };
+        appendLedger(req.ws, decl.id, { at, run: req.run, feed: feed.id, key: item.key, got });
       }
       report.complete = true;
     }

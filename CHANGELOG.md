@@ -14,7 +14,29 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Added
+
+- A mailbox learns what to set aside, and the person approves per group. Firma › Quellen offers
+  «Immer beiseite» for a sender's files of one file-name shape («report.pdf», «<Nummer>.pdf»,
+  «IMG_<Nummer>.pdf») once two of them were set aside and none stands in the books; the card shows
+  every file of the group with its day and «0 davon in den Büchern». Kept, the next files of the
+  group are set aside at delivery; «Doch behalten» on one of them switches the group off. A supplier
+  that sends invoices and brochures from one address keeps its invoices: their names differ.
+- A re-sent invoice with other bytes (same sender, labelled invoice number and amount, the day
+  within a week) is set aside as the duplicate of the receipt in the books, named in its reason,
+  instead of being filed twice. Where a fact is missing, nothing is set aside.
+- Belege › «Aussortiert» (was «Quarantäne») groups what was set aside by why (a group kept aside,
+  duplicates, newsletters, terms …), with «Doch behalten» per file and per group. What a mailbox set
+  aside is deleted 30 days after it came, and each file says the day («wird am … gelöscht»); what a
+  drop or a person set aside, and what a person kept, is never deleted by itself.
+- The collected ledger logs per delivered document the attachment's own name, the mail's subject
+  and day, its size, and for a PDF its page count and whether it has a text layer. Older lines
+  stay readable.
+
 ### Changed
+
+- Firma › Quellen offers to skip a sender only when none of its files stands in the books (before:
+  when nearly all of its files were set aside), so a supplier with one real invoice is never offered.
 
 - The GitHub release text (`npm run release:github`) starts with the downloads: one line saying
   what the app is, the download table with each `.dmg` linked to its file, «What's new» with a
