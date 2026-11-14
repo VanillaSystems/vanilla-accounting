@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Rechnungen · Prototyp</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@500&display=swap">
+<style>
+:root { --ink: #0b1220; --muted: #8b93a3; --bar: #0b1220; --chip: #1c2433; --chip-line: #3a4558; --on: #ffffff; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bar); font: 13px/1 "Instrument Sans", system-ui, sans-serif; }
+body { display: grid; grid-template-rows: auto 1fr; }
+.bar { display: flex; align-items: center; gap: 8px; padding: 7px 14px; color: var(--on); flex-wrap: wrap; }
+.bar .name { font: 500 11px "Geist Mono", monospace; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-right: 4px; }
+.bar a.name { text-decoration: none; }
+.bar a.name:hover { color: var(--on); }
+.bar .lbl { color: var(--muted); font-size: 12px; margin-left: 4px; }
+.bar button { height: 26px; padding: 0 11px; border-radius: 7px; border: 1px solid var(--chip); background: var(--chip); color: var(--on); font: inherit; cursor: pointer; }
+.bar button:hover { border-color: var(--chip-line); }
+.bar button[aria-pressed="true"] { background: var(--on); color: var(--ink); border-color: var(--on); }
+.bar button:disabled { opacity: .4; cursor: default; }
+.bar .sep { width: 1px; height: 18px; background: var(--chip); margin: 0 4px; }
+.bar .hint { margin-left: auto; color: var(--muted); font-size: 12px; line-height: 1.4; max-width: 520px; text-align: right; }
+iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+</style>
+</head>
+<body>
+<div class="bar" role="toolbar" aria-label="Prototyp">
+  <a class="name" href="index.html" title="Zur Übersicht">← Prototyp Rechnungen</a>
+  <span class="lbl">Firma</span>
+  <button type="button" data-firm="kaffee" aria-pressed="true">Muster Kaffee GmbH</button>
+  <button type="button" data-firm="salon" aria-pressed="false">Salon Beispiel (Coiffeur)</button>
+  <span class="sep"></span>
+  <span class="lbl">MWST</span>
+  <button type="button" data-basis="received" aria-pressed="true">vereinnahmt</button>
+  <button type="button" data-basis="agreed" aria-pressed="false">vereinbart</button>
+  <span class="sep"></span>
+  <button type="button" data-cmd="import">camt.053 vom 14.11. einlesen</button>
+  <button type="button" data-cmd="mark" aria-pressed="true">Neues markieren</button>
+  <button type="button" data-cmd="reset">Von vorn</button>
+  <span class="hint" id="hint"></span>
+</div>
+<iframe id="app" title="Vanilla Accounting, Rechnungen"></iframe>
+<script>
+const frame = document.getElementById('app');
+frame.src = 'app.html' + (location.hash || '#/invoices');
+const send = (m) => frame.contentWindow.postMessage(m, '*');
+const state = { firm: 'kaffee', basis: 'received', mark: true };
+const press = () => {
+  document.querySelectorAll('[data-firm]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.firm === state.firm)));
+  document.querySelectorAll('[data-basis]').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.basis === state.basis)); b.disabled = state.firm === 'salon'; });
+  document.querySelector('[data-cmd="mark"]').setAttribute('aria-pressed', String(state.mark));
+  document.querySelector('[data-cmd="import"]').disabled = state.firm === 'salon';
+};
+document.querySelectorAll('[data-firm]').forEach((b) => b.addEventListener('click', () => { state.firm = b.dataset.firm; press(); send({ firm: state.firm }); }));
+document.querySelectorAll('[data-basis]').forEach((b) => b.addEventListener('click', () => { state.basis = b.dataset.basis; press(); send({ basis: state.basis }); }));
+document.querySelector('[data-cmd="import"]').addEventListener('click', () => send({ import: true }));
+document.querySelector('[data-cmd="mark"]').addEventListener('click', () => { state.mark = !state.mark; press(); send({ mark: state.mark }); });
+document.querySelector('[data-cmd="reset"]').addEventListener('click', () => send({ reset: true }));
+const HINTS = [
+  [/draft-sd1|^#\/invoices\/2026-00[3]$/, null],
+  [/^#\/invoices\/draft-/, 'Tipp: auf dem Blatt tippen · «Aus Artikelliste» · «Vorschau» zeigt den QR-Zahlteil · «Ausstellen»'],
+  [/^#\/invoices\/quotes/, 'Tipp: «In Rechnung umwandeln» macht einen Rechnungsentwurf mit allen Positionen'],
+  [/^#\/invoices\/open-items/, 'Tipp: einen Kunden wählen · die Nummern führen zur Rechnung'],
+  [/^#\/invoices\/recurring/, 'Tipp: «Am Stichtag» umschalten · «Nächste jetzt als Entwurf anlegen»'],
+  [/^#\/invoices\/customers/, 'Tipp: «Gemeinde Beispielwil» ist «nie mahnen» · «Neue Offerte»'],
+  [/^#\/invoices\/articles/, 'Tipp: in einem Entwurf «＋ Aus Artikelliste»'],
+  [/^#\/invoices\/sent/, 'Tipp: jedes gesendete Dokument, wie es hinausging'],
+  [/^#\/company/, 'Tipp: «Verzugszins» einschalten, dann eine Mahnung ansehen · eine QR-IBAN für EUR eingeben'],
+  [/^#\/invoices\/2026-004/, 'Tipp: die Gutschrift steht als Abzugszeile im Entwurf an Muster Hotel GmbH'],
+  [/^#\/invoices\/2026-005/, 'Tipp: EUR: IBAN mit RF-Referenz, kein QR-Zahlteil · nach «camt.053 einlesen»: Gebühr ausbuchen'],
+  [/^#\/invoices\/2026-008/, 'Tipp: von der Vorlage ausgestellt · nach «camt.053 einlesen»: Skonto vom Code ausgebucht'],
+  [/^#\/invoices/, 'Tipp: «Neue Rechnung» · oben «camt.053 vom 14.11. einlesen» · «vereinbart» zeigt die andere Buchung'],
+];
+const hintFor = (h) => {
+  if (state.firm === 'salon') return 'Tipp: im Entwurf «Bezahlt bei Ausstellung: Bar», dann «Quittung ausstellen»';
+  if (/^#\/invoices\/2026-003/.test(h)) return 'Tipp: «1. Mahnung» (Verzugszins aus) · oben «camt.053 einlesen», dann «Zuordnen» und «Rest ausbuchen»';
+  return (HINTS.find(([re, t]) => t && re.test(h)) || [, ''])[1];
+};
+window.addEventListener('message', (e) => {
+  const m = e.data || {};
+  if (!m.route) return;
+  if (m.firm) state.firm = m.firm;
+  if (m.basis) state.basis = m.basis;
+  press();
+  history.replaceState(null, '', m.route);
+  document.getElementById('hint').textContent = hintFor(m.route);
+});
+press();
+</script>
+</body>
+</html>

@@ -1,14 +1,16 @@
 # Spec: invoicing for the personas
 
-Status: draft for the owner (2026-11-13), on `0.4.2`. Asked: «can we on the start speccing out the
-invoicing for the personas in question? I want a fully fledged invoicing tool».
+Status: decided (2026-11-14), on `0.4.2`. The owner accepted all twelve recommendations of the
+draft of 2026-11-13; section 7 records them. Asked: «can we on the start speccing out the
+invoicing for the personas in question? I want a fully fledged invoicing tool». A clickable
+prototype of phases 1 to 3 is in [mockups/invoicing/](mockups/invoicing/index.html).
 
 This spec builds on [ADR 0010](../adr/0010-invoicing.md) (invoicing in the same app, paid
 invoices matched by their reference) and [ADR 0012](../adr/0012-invoice-pdfs.md) (PDFs). It
 follows [MISSION.md](../../MISSION.md) for who does the work and
 [ADR 0015](../adr/0015-base-cases-in-the-app-long-tail-in-the-workspace.md) for what is in the app
 and what is in the workspace. Sections 1 to 3 report what exists and what applies. Sections 4 to 6
-propose the work. Section 7 lists what the owner decides.
+set out the work. Section 7 records what the owner decided.
 
 ---
 
@@ -111,7 +113,7 @@ and after it (Skonto, write-off, dunning, open items).
 | Topic | Rule | Source | App today |
 |---|---|---|---|
 | Invoice content | The invoice identifies supplier, recipient and supply, and as a rule contains: (a) name and place of the supplier as it appears in business, that it is registered, and its number; (b) name and place of the recipient; (c) date or period of the supply if it differs from the invoice date; (d) kind, object and extent of the supply; (e) the consideration; (f) the rate and the tax owed; if the price includes the tax, the rate is enough. | MWSTG Art. 26 Abs. 2 | checked by `missingForIssue` |
-| Till receipts | Receipts from automated tills need no recipient if the amount is below the threshold the Federal Council sets. The threshold is CHF 400. Such a receipt gives no refund in the refund procedure. | MWSTG Art. 26 Abs. 3; MWSTV Art. 57 | not built; it matters only if a simple receipt (Quittung) is added |
+| Till receipts | Receipts from automated tills need no recipient if the amount is below the threshold the Federal Council sets. The threshold is CHF 400. Such a receipt gives no refund in the refund procedure. | MWSTG Art. 26 Abs. 3; MWSTV Art. 57 | not built and not planned: the Quittung (decision 7.11) is an invoice paid at issue and names its recipient |
 | VAT shown wrongly | Someone not in the register may not mention the tax on an invoice. A tax shown without right, or too high, is owed unless the invoice is corrected. | MWSTG Art. 27 Abs. 1, 2 | not-registered firms print no VAT (exists) |
 | Net tax rate | The tax is the gross taxable turnover times the approved net rate. Invoices to customers show the statutory rates (8.1, 2.6, 3.8 %), never the net rate. Showing the net rate costs the difference. | MWSTG Art. 37 Abs. 2; ESTV MWST-Info 12 «Saldosteuersätze», Ziff. 1.2 (as quoted by ESTV pages; the current issue was not opened here) | statutory rates printed (exists) |
 | When the tax arises | Agreed basis: with the invoice; with each partial invoice or partial payment for supplies that run in parts; on receipt for prepayments and for supplies without an invoice. Cash basis: on receipt. | MWSTG Art. 40 Abs. 1 lit. a–c, Abs. 2 | events and prepayment (exist) |
@@ -122,7 +124,7 @@ and after it (Skonto, write-off, dunning, open items).
 | Switch of basis | On a switch from cash to agreed, the tax on the receivables open at the switch is declared in the next period, and the reverse on a switch back. | MWSTV Art. 106 | handled by `lockedTaxPoint` and `eventPlan` (exists) |
 | Supplies abroad | Service with place of supply abroad (Art. 8) or export of goods (Art. 23): no Swiss VAT, with the reason on the invoice. The customer abroad accounts for its own VAT (EU reverse charge is the customer's law, not Swiss). | MWSTG Art. 8, 23 | `exemption: abroad | export` with the printed note (exists) |
 | Retention | Books and records kept 10 years from the end of the business year, on paper or electronically if they stay faithful to the events and readable at any time. VAT records until the absolute limitation, 10 years after the tax period. Records on the own use and the input tax correction of real estate: 20 years. | OR Art. 958f Abs. 1, 3 (SR 220); MWSTG Art. 70 Abs. 2, 3; Art. 42 Abs. 6 | issued PDFs stored once with SHA-256, never printed again (exists) |
-| Storage medium | Changeable media are allowed when the integrity is guaranteed (for example a digital signature) and the time of storage is provable (for example a time stamp). | GeBüV Art. 9 Abs. 1 lit. b (SR 221.431) | SHA-256 per PDF, git history; no time stamp. Open question 7.9 |
+| Storage medium | Changeable media are allowed when the integrity is guaranteed (for example a digital signature) and the time of storage is provable (for example a time stamp). | GeBüV Art. 9 Abs. 1 lit. b (SR 221.431) | SHA-256 per PDF, git history; no time stamp, judged enough (decision 7.9) |
 | Default and dunning | A debt that is due falls into default through a reminder. If a payment day was agreed, default starts when that day passes. The default interest is 5 % a year unless more was agreed. Swiss law sets no number of reminders and no fee. A fee must be agreed (for example in the terms) to be claimed. | OR Art. 102 Abs. 1, 2; Art. 104 Abs. 1 | 3 levels, optional fee; no interest |
 | QR-bill | Standard for written invoices in CH and LI. QR-IBAN goes only with a QR reference (QRR); IBAN goes with SCOR or no reference. Since v2.3 (21.11.2025), structured addresses only. Since v2.4, QR-IBAN and QRR are for CHF only, and EUR uses IBAN with SCOR or a message. «Billing information» (Swico S1 syntax, now owned by SIX, Annex D) can carry invoice number, date, UID and VAT rates for the payer's software. | SIX IG QR-bill v2.4 (24.02.2026): general notes, change log, ch. 4.2.2, 4.3.3, Annex D | QRR/SCOR (exists); F1; no billing information |
 | eBill | Invoices delivered into the payer's e-banking. A biller joins through a network partner (a bank or a provider), not directly. | ebill.ch (SIX) | none |
@@ -168,7 +170,8 @@ Deleting an issued invoice is not possible today and stays impossible.
 Everything below lives in `invoices.json` (its own ladder, `INVOICES_MIGRATIONS`) or in the
 `invoicing:` section of `belege.workspace.yaml` (manifest ladder). The books' own format
 (`ledger.json` `schema`) changes only where marked **books**. Each row marked **step** needs a
-version and a ladder step in `src/workspace/schema.ts`. The owner decides each one (7.1).
+version and a ladder step in `src/workspace/schema.ts`: one `invoices.json` step per phase
+(decision 7.1).
 
 | Addition | Where | Step |
 |---|---|---|
@@ -177,7 +180,7 @@ version and a ladder step in `src/workspace/schema.ts`. The owner decides each o
 | `role?: 'partial' | 'final'` on an invoice (Akonto / Schlussrechnung). A final invoice's deduction lines carry `deducts: <invoice id>` and a negative price at the deducted invoice's rate, so totals, QR amount and booking work as they do today | `invoices.json` `InvoiceLine.deducts` | **step** (same) |
 | `schedule?: Array<{ amount, dueDate, label }>` on an issued invoice: the retention or instalments. The QR-bill asks for what is due first. A later instalment is sent as a payment notice (a sent document of kind `instalment`) with its own QR-bill and the same reference | `invoices.json`; `SENT_KINDS` gains `instalment` | **step** (same) |
 | `writeOffs: Array<{ date, amount, reason: 'skonto' | 'discount' | 'loss' | 'fee' | 'rounding', note? }>` on an issued invoice. `openAmount` subtracts it | `invoices.json` | **step** (same) |
-| `offsets: Array<{ creditNoteId, amount }>` on an invoice: a credit note set off against it (F5) | `invoices.json` | **step** (same) |
+| `offsets: Array<{ creditNoteId, amount }>` on an invoice: a credit note set off against it (F5), as a deduction line on the invoice (decision 7.6) | `invoices.json` | **step** (same) |
 | `InvoiceLine` gains `kind?: 'item' | 'title' | 'subtotal' | 'text'` (a title or text line has no amount), `discount?: number` (percent, per line), `articleId?`, `activity?: 1 | 2` (net tax rate method: which approved rate, F3), `tags?` (dimensions), `source?: { receiptId } | { hours: rowId }` (where the line came from) | `invoices.json` | **step** (same) |
 | `UNITS` widens to `h, day, pcs, flat, km, m2, m, m3, l, kg, month` | `model.ts:18` | **step** (same; an old reader refuses a new unit) |
 | `INVOICE_CURRENCIES` widens to any ISO 4217 code the ESTV publishes a rate for. The QR-bill only for CHF and EUR; other currencies print bank details only | `model.ts:12`; `payTo` may map more currencies | **step** for `invoices.json`, **step** for the manifest |
@@ -185,7 +188,8 @@ version and a ladder step in `src/workspace/schema.ts`. The owner decides each o
 | `articles: Array<Envelope & { number?, text, unit, price, vatRate, vatIncluded?, account?, activity? }>` | `invoices.json` (top level, beside `customers`) | **step** (same) |
 | `recurring: Array<Envelope & { customerId, template: InvoiceContent, every: 'month' | 'quarter' | 'year', next: date, until?, issue: 'draft' | 'issue' | 'send' }>` | `invoices.json` | **step** (same) |
 | Settings: `numbering: { invoice: 'YYYY-NNN', quote: 'OF-YYYY-NNN', … }` (a pattern with `YYYY` and `N…`, digits enough for QRR's 26), `quoteValidDays`, `skonto?: { percent, days }` (printed in the terms and applied on payment), `dunning: { levels: [{ afterDays, fee? }], interest?: 5 }`, `writeOffAccount: { skonto: '3800', loss: '3805' }` | `belege.workspace.yaml` `invoicing:` | **step** (manifest) |
-| New booking refs on the agreed basis: `RE-<number>-wo-<n>` for a write-off, `RE-<number>-off-<GS number>` for a set-off. Same entry shape as today; new ref patterns that `refs.ts` must name | books (journal entries) | **books**: no shape change, but a new ref pattern that readers (reconcile, seals, refs) must know. The owner decides whether it counts as a format change |
+| A new booking ref on the agreed basis: `RE-<number>-wo-<n>` for a write-off. Same entry shape as today; a new ref pattern that `refs.ts` must name. A set-off needs no ref of its own: the deduction line is on the invoice (decision 7.6) | books (journal entries) | no `schema` step: no shape change (decision 7.2). Named in `src/books/refs.ts` and in the CHANGELOG |
+| `paidAtIssue?: { means: 'cash' | 'twint' | 'card' | 'bank', account }` on an invoice: the Quittung (decision 7.11), printed with the title «Quittung» and no QR-bill | `invoices.json` | **step** (phase 3) |
 
 Nothing here changes a filed figure. Write-offs and set-offs are new events dated in the open
 period (golden rule 1).
@@ -220,26 +224,33 @@ quote ──accept──► (order confirmation = the quote re-sent as «Auftrag
   as a fact («Rückbehalt fällig seit …»), and «Zahlungsaufforderung» sends the instalment notice.
 - **Recurring.** Code drafts each due template on the next start of the app or run after its
   day. With `issue: 'issue'` or `'send'` it also issues (and sends), which the person chose once
-  on the template. A failure (mail refused, something missing for Art. 26) becomes a task with
-  words (ADR 0015 base errors).
+  on the template. Only the device that holds the books issues; a clone without that role only
+  drafts (decision 7.4). A failure (mail refused, something missing for Art. 26) becomes a task
+  with words (ADR 0015 base errors).
 - **Dunning run.** «Mahnlauf» lists every overdue invoice with its next level, fee and interest
   by the settings, leaves out customers marked `noReminders` and invoices with a comment from the
   last 7 days, and sends or downloads all of them after one confirmation. The list shows overdue
   invoices as a fact («fällig seit 12 Tagen»), never as a nudge to the person (memory: no nagging
-  reminders). Interest is calculated from the due date at the rate set (OR Art. 104 Abs. 1:
+  reminders). Default interest is off for a new firm (decision 7.10). When the person switches it
+  on in the settings, it is calculated from the due date at the rate set (OR Art. 104 Abs. 1:
   5 %) and printed as a line without VAT.
 - **Payment.** Unchanged (ADR 0010), plus: a payment that is less than open by the Skonto the
   terms offered, paid within the Skonto days, is allocated and the rest written off as `skonto`
   by code. Any other shortfall below a limit in the settings (default CHF 5, the limit named
   when hit) is proposed as a write-off `fee`. Anything larger stays open and asks the person.
 - **Write-off.** «Rest ausbuchen» on an invoice with something open: reason, date, amount.
-- **Set-off.** Issuing an invoice to a customer with a credit note `settlement: 'offset'` still
-  to set off adds a deduction line «Gutschrift GS … verrechnet» (the person may remove it), and
-  records the offset on both documents.
+- **Set-off** (decision 7.6). The next draft for a customer with a credit note
+  `settlement: 'offset'` still to set off gets a deduction line «Gutschrift … verrechnet» (the
+  person may remove it). Issuing records the offset on both documents.
 - **Re-billed costs.** On a draft, «Spesen weiterverrechnen» lists the customer's receipts
   (tagged with the customer or a project dimension, or picked by hand) not yet re-billed. Each one
   becomes a line at its net amount and at the supply's rate (MWSTG Art. 24 Abs. 1), with
   `source.receiptId`, so it is never re-billed twice.
+- **Quittung** (decision 7.11). For a sale paid on the spot (the coiffeur's cash or TWINT
+  customer), «Bezahlt bei Ausstellung» on a draft names the means (cash, TWINT, card, bank).
+  Issuing then prints the document under the title «Quittung» with «bezahlt am … in bar» instead
+  of a QR-bill, and records the payment on the issue day. It is an invoice like any other: its
+  number is the next of the invoice series, and the Art. 26 check applies.
 - **Hours.** «Stunden übernehmen» takes a table (pasted, or a CSV the workspace source produced)
   of date, text, hours and rate, and makes lines grouped by text or one per row, as the person
   picks.
@@ -257,11 +268,12 @@ Cash basis = `company.vat.reporting: received`. Agreed = `agreed`. The codes are
 | Payment | bank / revenue with the codes, split like the invoice (exists) | bank / 1100, exchange difference on 6960 (exists) |
 | Prepayment before the invoice | as a payment | taxed on its day, the event rebooked for the rest (exists, `prepaidEvent`) |
 | Credit note, cancellation | as today (refund with minus codes; storno not booked) | `GS-<n>`, `RE-<n>-storno` (exists) |
-| Write-off `skonto` or `discount` | nothing: what was never received was never taxed | `RE-<n>-wo-<k>`: 3800 Erlösminderungen / 1100 with the minus sale codes, split like the invoice (MWSTG Art. 41 Abs. 1) |
+| Quittung (paid at issue, decision 7.11) | on the issue day: the means' account (1000 Kasse for cash; for TWINT or a card, the account the settings name for it) / revenue with the sale codes, split like any invoice | `RE-<n>` as for any invoice, and on the same day the means' account / 1100 |
+| Write-off `skonto` or `discount` | nothing: what was never received was never taxed (no note entry either, decision 7.3) | `RE-<n>-wo-<k>`: 3800 Erlösminderungen / 1100 with the minus sale codes, split like the invoice (MWSTG Art. 41 Abs. 1) |
 | Write-off `loss` | nothing | `RE-<n>-wo-<k>`: 3805 Verluste aus Forderungen / 1100 with the minus sale codes. If the customer pays later, the payment books revenue with the sale codes again (Art. 41: when received) |
 | Write-off `fee` or `rounding` | nothing | as `discount`, on 3800 |
 | Reminder fee, default interest paid | revenue without a code on `feeAccount` (exists for fees), interest on a financial income account | same, from the payment; not booked on issue (not consideration, MWSTG Art. 18 Abs. 2 lit. i) |
-| Set-off of a credit note | the invoice's payment is smaller; its revenue split takes the deduction line | `RE-<n>` already holds the deduction line; the credit note's `GS-<m>` stands; `RE-<n>-off-<m>` 1100 / 1100 is not needed if the deduction line is on the invoice. Open question 7.6 |
+| Set-off of a credit note (a deduction line on the next invoice, decision 7.6) | the invoice's payment is smaller; its revenue split takes the deduction line | `RE-<n>` holds the deduction line; the credit note's `GS-<m>` stands; no entry of its own |
 | Retention instalment notice | nothing | nothing (the receivable stands since issue) |
 | A document of a filed period | never changed; a write-off or credit note is dated in the open period, with `corrects` where golden rule 1 says so (as `eventPlan` does) | same |
 
@@ -333,7 +345,7 @@ Rechnungen stays one area (`src/app/areas/invoices/`) with list and detail (`Spl
   layers lint, `tests/layers.test.ts`). Form wordings that are Swiss belong in
   `modules/ch/invoicing.yaml`.
 - Romansh: QR-bill headings in Romansh exist since 1 January 2026 (SIX IG v2.4, ch. 3.2). Not a
-  goal; open question 7.8.
+  goal until a persona asks (decision 7.8).
 
 ### 4.10 Tests and golden master
 
@@ -410,8 +422,9 @@ Acceptance (Sandra and the Schreinerei):
 
 Scope: recurring templates (draft, issue or send on their day), the lines import contract (paste
 or CSV), «Spesen weiterverrechnen» from receipts, the article list with rate and price, customer
-defaults (currency, account, discount, number, contacts), set-off of credit notes (F5). Further
-`invoices.json` step (`articles`, `recurring`, customer fields, `offsets`, line `source`).
+defaults (currency, account, discount, number, contacts), set-off of credit notes as a deduction
+line (F5), the Quittung (an invoice paid at issue). Further `invoices.json` step (`articles`,
+`recurring`, customer fields, `offsets`, line `source`, `paidAtIssue`).
 
 Acceptance (the consultant and the webshop):
 
@@ -422,13 +435,14 @@ Acceptance (the consultant and the webshop):
 | P3.3 | Train and hotel re-billed | the receipts become lines at the supply's rate, net; the same receipt is never offered twice |
 | P3.4 | Wholesale invoice: coffee 2.6 % and grinders 8.1 % from the article list | both rates right on paper and in the books |
 | P3.5 | Credit note set off against the next invoice | the next invoice carries the deduction line; both documents show it |
+| P3.6 | Coiffeur: a wedding party paid in cash after the appointment | a Quittung with the next invoice number, no VAT, «bezahlt in bar», no QR-bill; on the cash basis 1000 / revenue on the issue day; nothing left open |
 
 ### Phase 4: dunning run, interest, currencies, import, delivery channels
 
 Scope: «Mahnlauf» with levels from the settings, default interest, customer stop; currencies
 beyond CHF and EUR (no QR-bill, bank details only); import of customers and open invoices from
 a table at the switch; the delivery channel contract and a reference eBill source in the
-workspace (ADR 0015); QR «billing information» (Swico S1) if open question 7.7 says yes.
+workspace (ADR 0015); QR «billing information» (Swico S1, decision 7.7).
 
 Acceptance (Treuhänderin and the consultant):
 
@@ -445,8 +459,8 @@ Acceptance (Treuhänderin and the consultant):
 
 - **Numbering across devices.** ADR 0010 planned «issue pulls main and pushes». Today a number
   is safe only within one process (`serial` in `service.ts`). Recurring issuing makes more issues
-  happen without a person. Before phase 3, the owner decides whether one device issues
-  (open question 7.4).
+  happen without a person. The owner decided that only the device holding the books issues
+  (decision 7.4); phase 3 builds that role check before recurring issuing.
 - **Agreed-basis write-offs of filed periods** must follow golden rule 1 and the `eventPlan`
   logic (`events.ts`): dated open, `corrects` when the firm reported on the agreed basis then.
   This needs the same reviews as any change under `src/accounting`.
@@ -455,49 +469,40 @@ Acceptance (Treuhänderin and the consultant):
 
 ---
 
-## 7. Open questions for the owner
+## 7. Decisions (owner, 2026-11-14)
 
-Each question has a recommendation.
+The owner accepted the recommendation of each of the twelve questions of the draft. Sections 4 to
+6 follow them.
 
-1. **Format steps.** Phase 1 needs one `invoices.json` step (2→3) and one manifest step. Phases
-   2 and 3 each need another `invoices.json` step. Approve the steps per phase, or one larger
-   step up front? *Recommendation:* one step per phase, so each release migrates only what it
-   uses.
-2. **New refs in the books** (`RE-<n>-wo-<k>`, possibly `-off-`). Do they count as a books format
-   change? *Recommendation:* no shape change, so no `schema` step. Name them in `src/books/refs.ts`
-   and in the CHANGELOG.
-3. **Write-off on the cash basis** books nothing. Should it still leave a trace in the books (a
-   0.00 note entry) for the auditor? *Recommendation:* no entry. The write-off is on the invoice
-   record and in the open-items list, with date, reason and person. An entry without an amount
-   breaks no rule but explains nothing the record doesn't.
-4. **Who issues on which device.** Recurring invoices issue without a person. *Recommendation:*
-   issue only on the device that holds the books (the desktop app or `npm start`). A clone
-   without that role only drafts. Revisit if collaboration (ADR 0003) ships.
-5. **Quote numbers.** Are quotes in their own series (`OF-YYYY-NNN`), or in the invoice series?
-   *Recommendation:* their own series. Invoice numbers are the one gapless sequence customers and
-   auditors expect, and declined quotes would leave gaps.
-6. **Set-off of a credit note**: a deduction line on the next invoice (one document, simple
-   booking), or an allocation between the two records with no line? *Recommendation:* the
-   deduction line. It is what the customer reads, the QR amount is right, and the booking falls
-   out of the existing revenue split.
-7. **QR «billing information» (Swico S1)** in the QR code, for customers whose software reads it?
-   *Recommendation:* yes, in phase 4, if `swissqrbill` supports it. Otherwise a small encoder in
-   `src/providers/qr-bill/`.
-8. **Romansh** document texts and QR headings? *Recommendation:* not now. Add it when a persona
+1. **Format steps.** One `invoices.json` step per phase (2→3 in phase 1, then one each in phases 2
+   and 3) and one manifest step in phase 1. Each release migrates only what it uses.
+2. **New refs in the books.** `RE-<n>-wo-<k>` is no books format change: the entry shape stays,
+   so there is no `schema` step. The ref is named in `src/books/refs.ts` and in the CHANGELOG.
+3. **Write-off on the cash basis** books nothing, not even a 0.00 note entry. The write-off stands
+   on the invoice record and in the open-items list, with date, reason and person.
+4. **Who issues on which device.** Only the device that holds the books (the desktop app or
+   `npm start`) issues, recurring invoices included. A clone without that role only drafts.
+   Revisited if collaboration (ADR 0003) ships.
+5. **Quote numbers.** Quotes have their own series, `OF-YYYY-NNN`. The invoice series stays the
+   one gapless sequence customers and auditors expect; a declined quote leaves no gap in it.
+6. **Set-off of a credit note** is a deduction line on the next invoice. It is what the customer
+   reads, the QR amount is right, and the booking falls out of the existing revenue split, so no
+   `-off-` ref is needed.
+7. **QR «billing information» (Swico S1)** goes into the QR code in phase 4, through
+   `swissqrbill` if it supports it, otherwise a small encoder in `src/providers/qr-bill/`.
+8. **Romansh** document texts and QR headings are not built now. They are added when a persona
    asks.
-9. **Retention proof (GeBüV Art. 9 Abs. 1 lit. b).** PDFs carry SHA-256 and live in git, but have
-   no trusted time stamp. Enough? *Recommendation:* enough for this target group, since git
-   history and seals make changes visible. Note it in `docs/audit-export.md` and revisit with an
-   auditor.
-10. **Default interest** on reminders: off by default, or 5 % (OR Art. 104 Abs. 1)?
-    *Recommendation:* off by default and offered in the settings. Most small firms do not charge
-    it, and a wrong interest line on a reminder costs a customer.
-11. **Simple receipt (Quittung)** for the coiffeur and cash sales: a document kind of its own, or
-    an invoice marked paid at issue? *Recommendation:* an invoice paid at issue (cash or TWINT
-    named), with a «Quittung» title. It needs no new record and books like any invoice paid on
-    its day.
-12. **Currencies beyond CHF and EUR** in phase 4, or earlier for the consultant? *Recommendation:*
-    phase 4. No persona has a non-EUR client today.
+9. **Retention proof (GeBüV Art. 9 Abs. 1 lit. b).** SHA-256 per PDF, git history and seals are
+   enough for this target group; no trusted time stamp. This is noted in `docs/audit-export.md`
+   and revisited with an auditor.
+10. **Default interest** on reminders is off by default and offered in the settings at 5 %
+    (OR Art. 104 Abs. 1). Most small firms do not charge it, and a wrong interest line costs a
+    customer.
+11. **Simple receipt (Quittung)** is an invoice paid at issue, with the means named (cash, TWINT,
+    card, bank) and the title «Quittung». It needs no new document kind and books like any invoice
+    paid on its day (4.5). It comes in phase 3.
+12. **Currencies beyond CHF and EUR** come in phase 4. No persona has a client outside CHF and EUR
+    today.
 
 ## Sources
 
