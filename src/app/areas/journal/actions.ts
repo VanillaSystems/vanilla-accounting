@@ -59,8 +59,9 @@ export const clearWithheld = (nav: Pick<Nav, 'toast' | 'refresh'>, ref: string) 
 export const linkReceipt = (nav: Nav, receiptId: string, ref: string, what: string) =>
   run(nav, () => api.addMapping({ receiptId, transactionRef: ref }), () => t('receipts.linkedTo', { what }), () => api.removeMapping({ receiptId, transactionRef: ref }));
 
+/** The undo puts the booking back with the person's links its deletion took along (#524, DeletedEntry). */
 export const deleteEntry = (nav: Nav, e: JournalEntry) =>
-  run(nav, () => api.deleteJournalEntry(e.id), () => t('journal.deleted', { id: e.transactionRef }), () => api.createJournalEntry(undoInput(e)));
+  run(nav, () => api.deleteJournalEntry(e.id), () => t('journal.deleted', { id: e.transactionRef }), (r) => api.createJournalEntry(undoInput({ ...e, ...(r.takenLinks && { takenLinks: r.takenLinks }) })));
 
 /** A booking in a toast: Soll / Haben, its code, its amount (r8c-21: not the bank's reference). */
 export const bookingLine = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredit' | 'vatCode' | 'amount'>): string =>

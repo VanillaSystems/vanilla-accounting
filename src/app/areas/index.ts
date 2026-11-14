@@ -46,6 +46,8 @@ export interface AreaProps<R extends Route = Route> {
   nav: Nav;
   /** A write could succeed: the API answers and is not in audit mode. */
   canEdit: boolean;
+  /** Known to refuse every write (the audit export, or a server in audit mode); false while the status is not yet known. */
+  readOnly?: boolean;
 }
 
 export interface PaletteItem {

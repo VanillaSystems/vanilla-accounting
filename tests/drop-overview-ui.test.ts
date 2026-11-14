@@ -15,6 +15,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import type { Page } from 'puppeteer-core';
+import { screenshot } from './support/browser.js';
 import { noBrowser, openApp } from './support/e2e.js';
 import type { DropRow } from '../src/types/drop.js';
 
@@ -83,7 +84,7 @@ async function placedAtEveryWidth(page: Page, state: string): Promise<void> {
   for (const [width, height] of WIDTHS) {
     await page.setViewport({ width, height });
     await new Promise((r) => setTimeout(r, 300));
-    if (process.env.SHOTS) await page.screenshot({ path: join(process.env.SHOTS, `drop-many-${state}-${width}.png`) });
+    if (process.env.SHOTS) await screenshot(page, join(process.env.SHOTS, `drop-many-${state}-${width}.png`));
     assert.deepEqual(await misplaced(page), [], `${state}, ${width} × ${height}: every part of the dialog in its own place, inside it`);
   }
 }

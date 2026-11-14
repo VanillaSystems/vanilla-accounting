@@ -12,7 +12,6 @@ import type { LedgerBankAccount } from '../../../workspace/workspace.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { hasVat } from '../codes/model.js';
 import { baseCurrency, chart, vat } from '../../../engines/index.js';
-import { isManualRef } from '../../../books/refs.js';
 import { bookedInFiled } from '../../../books/twins.js';
 import { lockedThrough } from '../../../books/lock-line.js';
 import { applyChips, type Chip, type Field } from '../../shell/chips.js';
@@ -36,14 +35,15 @@ export interface EntryView {
 }
 
 /**
- * The receipts a booking without a payment (#89: a depreciation, an accrual) can take: those no
+ * The receipts a booking without a payment (#89: a depreciation, an accrual, or a booking a module
+ * or an import made under a ref of its own, such as a payment provider's order) can take: those no
  * payment or booking holds yet, not set aside as a duplicate or noise; a receipt of one of its
  * amounts first, then the nearest in date. None for an entry of a payment: its receipt hangs on the
  * payment (Belege › «Zahlung verknüpfen»).
  */
 export function receiptsFor(books: Pick<Index, 'transactions' | 'mappings' | 'receipts'>, entries: readonly JournalEntry[]): Receipt[] {
   const [e] = entries;
-  if (!e || !isManualRef(e.transactionRef) || books.transactions.some((t) => t.ref === e.transactionRef)) return [];
+  if (!e?.transactionRef || books.transactions.some((t) => t.ref === e.transactionRef)) return [];
   const linked = new Set(books.mappings.map((m) => m.receiptId));
   const same = (r: Receipt) => r.amount != null && entries.some((x) => (x.exchangeCurrency ?? baseCurrency()) === (r.currency || baseCurrency()) && Math.abs(x.amount - Math.abs(r.amount!)) < 0.005);
   const near = (r: Receipt) => (r.date ? Math.abs(Date.parse(r.date) - Date.parse(e.date)) : Infinity);

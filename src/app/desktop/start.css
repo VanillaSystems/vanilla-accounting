@@ -7,7 +7,7 @@
 .st-sub { color: var(--muted); font-size: 14px; line-height: 1.5; margin: 0 0 32px; }
 .st-choices { display: grid; gap: 10px; }
 .st-choice { display: grid; gap: 4px; text-align: left; padding: 16px 18px; border: 1px solid var(--line-2); border-radius: 12px; background: var(--bg); }
-.st-choice b { font: 700 16px "Hanken Grotesk"; }
+.st-choice b { font: 700 16px var(--font-display); }
 .st-choice span { color: var(--muted); font-size: 13px; line-height: 1.45; }
 .st-choice:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); }
 .st-choice:disabled, .st-book:disabled { opacity: .55; cursor: default; }
@@ -16,7 +16,7 @@
 .st-book { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; width: 100%; text-align: left; padding: 8px 10px; margin-left: -10px; border-radius: 8px; }
 .st-book:hover:not(:disabled) { background: var(--hover); }
 .st-book b { font-weight: 600; font-size: 14px; white-space: nowrap; }
-.st-book .mono { font: 12px "Geist Mono"; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-book .mono { font: 12px var(--font-mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-book .st-problem { flex-basis: 100%; font-size: 12px; line-height: 1.4; color: var(--warn); }
 .st-upgrade { margin: 12px 0 0; }
 .st-back { margin-top: 28px; font-size: 13px; }
@@ -27,8 +27,8 @@
 .st-grid h2 { grid-column: span 4; }
 .st-form .cf { min-width: 0; display: grid; gap: 4px; font-size: 12px; color: var(--muted); align-content: start; }
 .st-form .cf.s2 { grid-column: span 2; } .st-form .cf.s4 { grid-column: span 4; }
-.st-form .cf input { box-sizing: border-box; width: 100%; font: 13px "Instrument Sans"; color: var(--ink); padding: 6px 9px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); }
-.st-form .cf input.mono { font-family: "Geist Mono"; font-size: 12.5px; }
+.st-form .cf input { box-sizing: border-box; width: 100%; font: 13px var(--font-sans); color: var(--ink); padding: 6px 9px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); }
+.st-form .cf input.mono { font-family: var(--font-mono); font-size: 12.5px; }
 .st-form .cf.err input { border-color: var(--warn); }
 .st-form .cf em, .st-bankerr { font-style: normal; color: var(--warn); margin-left: 4px; }
 .st-form .seg2 { justify-self: start; }

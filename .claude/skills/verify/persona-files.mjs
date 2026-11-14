@@ -54,7 +54,7 @@ for (const [f, body] of Object.entries(persona.files)) fs.writeFileSync(`${OUT}/
 const b = await puppeteer.launch({ executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
 const p = await b.newPage();
 for (const [f, html] of Object.entries(persona.docs)) { await p.setContent(html); await p.pdf({ path: `${OUT}/${f}`, format: 'A4' }); }
-for (const [f, html] of Object.entries(persona.photos)) { await p.setViewport({ width: 600, height: 900 }); await p.setContent(html); await p.screenshot({ path: `${OUT}/${f}`, type: 'jpeg', quality: 70 }); }
+for (const [f, html] of Object.entries(persona.photos)) { await p.setViewport({ width: 600, height: 900 }); await p.setContent(html); await p.evaluate(() => document.fonts.ready.then(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok))))); await p.screenshot({ path: `${OUT}/${f}`, type: 'jpeg', quality: 70 }); }
 await b.close();
 for (const [to, from] of persona.copies ?? []) fs.copyFileSync(`${OUT}/${from}`, `${OUT}/${to}`);
 fs.writeFileSync(`${OUT}/../persona.env`, persona.env);

@@ -5,7 +5,7 @@
  */
 import { useSyncExternalStore } from 'react';
 import type { JournalEntryInput } from '../../lib/api.js';
-import type { JournalEntry } from '../../../types/index.js';
+import type { DeletedEntry } from '../../../books/entry-input.js';
 import { store, stored } from '../../shell/storage.js';
 import type { CorrectionKind } from '../../../accounting/correction.js';
 
@@ -19,7 +19,7 @@ interface State {
   /** A field of the entry form to focus once it shows. */
   focus?: string;
   /** The entry just deleted: the detail keeps its place with «Rückgängig», so no row moves under the pointer (r6h-28). */
-  deleted?: JournalEntry;
+  deleted?: DeletedEntry;
 }
 
 function read<T>(key: string, fallback: T): T {

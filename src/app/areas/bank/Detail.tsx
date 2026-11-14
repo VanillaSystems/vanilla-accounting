@@ -29,6 +29,8 @@ import { bankFor, setUi, useUi, type Section } from './state.js';
 import { importStatements, linkReceiptSet, pickStatements, removeStatement, setNote, setNoReceipt } from './actions.js';
 import type { ReceiptSet, SetCut } from '../../../intake/receipt-sets.js';
 import { at } from '../receipts/view.js';
+import { FileView } from '../receipts/FileView.js';
+import { fileKindOf } from '../../../core/files.js';
 import { FindPair, madeBy } from '../receipts/FindPair.js';
 import { StatementPaper, type Mark } from './StatementPaper.js';
 import { Parts } from './Parts.js';
@@ -140,7 +142,8 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
   const closed = !!b.closedThrough && s.to <= b.closedThrough;
   const file = s.file && sources.statement(s.file.bank, s.file.filename);
   const camt = !!s.file && isCamt(s.file);
-  const src = camt ? undefined : file;
+  // Drawn with its payments marked: a PDF. Any other statement file (the bank's XML, a CSV) is shown by its type (#523).
+  const src = file && fileKindOf(s.file!.filename).view === 'pdf' ? file : undefined;
   // A month with no paper of its own (none, or the bank's XML) shows the statement filed among the receipts.
   const filedPaper = !src && s.receipts?.[0];
   const wise = s.account.statements === 'wise';
@@ -242,9 +245,15 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
           ) : (
             <>
               {camt && !s.part && <div className="notice" data-testid="camt-notice">{t('bank.camtNotice', { from: formatDate(s.file!.fromDate), to: formatDate(s.file!.toDate) })}</div>}
-              {filedPaper && (
+              {filedPaper ? (
                 <div className="paper real stmt" data-testid="statement-receipt-paper">
-                  <StatementPaper key={filedPaper.id} src={sources.receipt(filedPaper.id)} scroller={(el) => el.closest('.detail')} />
+                  {fileKindOf(filedPaper.filename).view === 'pdf'
+                    ? <StatementPaper key={filedPaper.id} src={sources.receipt(filedPaper)} scroller={(el) => el.closest('.detail')} />
+                    : <FileView key={filedPaper.id} src={sources.receipt(filedPaper)} file={filedPaper.filename} />}
+                </div>
+              ) : file && (
+                <div className="paper real stmt" data-testid="statement-file">
+                  <FileView key={file} src={file} file={s.file!.filename} />
                 </div>
               )}
               {!camt && !s.running && s.account.statements && canEdit && !closed ? (

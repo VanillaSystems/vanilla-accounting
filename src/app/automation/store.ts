@@ -5,7 +5,7 @@
  * while nothing moved. It lives in src/app/automation/ so it imports neither the shell nor an area.
  */
 import { useSyncExternalStore } from 'react';
-import { api, errorText, STATIC_EXPORT } from '../lib/api.js';
+import { api, DEMO, errorText, STATIC_EXPORT } from '../lib/api.js';
 import { t } from '../i18n/index.js';
 import { poller } from './poller.js';
 import type { AutomationCommand, AutomationView, CommandResult, RunDetail } from '../../workflows/model.js';
@@ -18,7 +18,7 @@ const emit = () => { for (const l of listeners) l(); };
 let hurry = false;
 
 async function ask(): Promise<void> {
-  if (STATIC_EXPORT) { state = { error: t('automation.apiOnly') }; emit(); return; }
+  if (STATIC_EXPORT) { state = { error: t(DEMO ? 'automation.demoOff' : 'automation.apiOnly') }; emit(); return; }
   try {
     const answer = await api.automation(state.view?.rev);
     if (!('unchanged' in answer)) { state = { view: answer }; emit(); }

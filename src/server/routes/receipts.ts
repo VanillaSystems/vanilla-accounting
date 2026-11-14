@@ -17,6 +17,7 @@ import { ask } from '../../llm/ask.js';
 import { buildVisionPrompt } from '../../llm/prompts.js';
 import { visionVerdict } from '../../intake/unclear.js';
 import { findFile } from '../../workspace/workspace.js';
+import { fileHeaders } from '../../core/files.js';
 import { orderPagesIn, providerIssuesIn, vatCorrectionsIn } from '../../intake/pair-chain.js';
 import { forgetReadFacts } from '../../intake/vat.js';
 import { isNoReceipt, referenced, refsOf } from '../../books/discard.js';
@@ -111,12 +112,12 @@ router.get('/api/receipts/:id', (req, res) => {
   const receipt = books.receipts.find((r) => r.id === req.params.id);
   if (!receipt) throw new RequestError(404, 'Receipt not found');
 
-  const pdfPath = receiptPath(books, receipt);
-  if (!existsSync(pdfPath)) throw new RequestError(404, 'File not found on disk');
+  const path = receiptPath(books, receipt);
+  if (!existsSync(path)) throw new RequestError(404, 'File not found on disk');
 
-  res.setHeader('Content-Type', 'application/pdf');
+  res.set(fileHeaders(receipt.filename)); // its own type (#523): a provider's CSV report, an image or a mail is no PDF
   res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(receipt.filename)}"`);
-  createReadStream(pdfPath).pipe(res);
+  createReadStream(path).pipe(res);
 });
 
 /** The receipt leaves the books with its links and the entries booked with it; its payments are booked again without it. */

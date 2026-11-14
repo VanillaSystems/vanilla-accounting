@@ -211,8 +211,22 @@ test('a field another step set on a bank transaction survives the rebuild', () =
 });
 
 test('a bank field the bank no longer reports is not carried over', () => {
-  const prev = previousIndex({ transactions: [tx('T-closed', '2026-05-10'), tx('T-open', '2026-08-10', { type: 'wise-fee', reference: 'old' })] });
+  const prev = previousIndex({ transactions: [tx('T-closed', '2026-05-10'), tx('T-open', '2026-08-10', { type: 'wise-fee', counterparty: 'old' })] });
   assert.deepEqual(byRef(merge(prev, scan()), 'T-open'), tx('T-open', '2026-08-10'));
+});
+
+test('reading the statements again keeps the reference and the foreign amount of a payment that no file states now; a second read changes nothing (#522)', () => {
+  // The books took them from a reader the folder no longer has (Wise's PDF reader before #243): the export states neither.
+  const held = tx('T-open', '2026-08-10', { reference: '000000000000000000000077770', original: { amount: 11.2, currency: 'EUR' } });
+  const prev = previousIndex({ transactions: [tx('T-closed', '2026-05-10'), held] });
+  const once = merge(prev, scan());
+  assert.deepEqual(byRef(once, 'T-open'), held);
+  const twice = merge(once, scan());
+  assert.equal(JSON.stringify(twice.transactions), JSON.stringify(once.transactions), 'the second read writes the same file');
+  // A source that states one still decides: the bank's export, else a kept PDF's table.
+  assert.equal(byRef(merge(prev, scan({ bankTransactions: [tx('T-closed', '2026-05-10'), tx('T-open', '2026-08-10', { reference: 'RE-2026-0042' })] })), 'T-open')?.reference, 'RE-2026-0042');
+  const table = kept('Raiffeisen', [{ date: '2026-08-10', amount: -10, reference: 'corrected by hand', payment: 'T-open' }], { by: 'hand' });
+  assert.equal(byRef(merge(prev, scan({ reads: [table] })), 'T-open')?.reference, 'corrected by hand');
 });
 
 // ─── (b) A filed quarter's receipt links are never dropped ───────────────────

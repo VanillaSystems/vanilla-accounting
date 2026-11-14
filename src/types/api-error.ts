@@ -27,6 +27,52 @@ export type ClosedReason = (typeof CLOSED_REASONS)[number];
 
 export type ApiRefusal =
   | { code: 'readonly' }
+  /** A Durchsicht copy (src/handover/durchsicht.ts): filing, sealing, closing the year, the company's settings and sharing onward are the sharer's, named. */
+  | { code: 'roleRefused'; params: { action: string; name: string } }
+  /** A `.vanilla` file whose file `path` is missing, extra or not as its index says. */
+  | { code: 'shareTampered'; params: { path: string } }
+  /** A hand-over or return of another firm than these books. */
+  | { code: 'shareOtherCompany'; params: { firm: string } }
+  /** An update on a version this copy lacks: `name` is asked for a full hand-over. */
+  | { code: 'shareBaseMissing'; params: { version: string; name: string } }
+  | { code: 'shareNotPackage' }
+  /** A hand-over file past a limit (its size, a file's size, its number of files): the limit is named. */
+  | { code: 'shareTooLarge'; params: { limit: string } }
+  /** A return based on a version never handed to its sender. */
+  | { code: 'shareUnknownBase'; params: { version: string; name: string } }
+  /** An update that could not be written: the copy and his changes stay as they were. */
+  | { code: 'shareUpdateFailed'; params: { why: string } }
+  /** A return opened on a copy, or a hand-over where a return belongs. */
+  | { code: 'shareWrongKind' }
+  /** «Teilen» without a name, or with an address that is none. */
+  | { code: 'shareNoRecipient' }
+  /**
+   * The share service refused (src/share/client.ts): `reason` is its stable code (docs/share-protocol.md,
+   * the service's docs/api.md «Codes»), `limit` and `per` the limit it names, `refusedReason` why a
+   * sender's confirmation e-mail was not taken.
+   */
+  | { code: 'shareServiceRefused'; params: { reason: string; limit?: string; per?: string } }
+  /** The share service did not answer at all. */
+  | { code: 'shareUnreachable'; params: { service: string } }
+  /** No share service set up: the `.vanilla` file does it. */
+  | { code: 'shareNoService' }
+  /** No secret store that keeps a link's key on this computer. */
+  | { code: 'shareNoSecretStore' }
+  /** «Teilen» by link before this computer's sender registered, or while its address waits for its confirmation e-mail. */
+  | { code: 'shareSenderMissing' }
+  | { code: 'shareSenderUnconfirmed'; params: { email: string } }
+  /** Not a link of shared books. */
+  | { code: 'shareLinkInvalid' }
+  /** «Zurückschicken» by link on a copy that came as a file. */
+  | { code: 'shareNoLink' }
+  /** A share this computer keeps no key of. */
+  | { code: 'shareUnknown' }
+  /** A link to another service than this app's, not confirmed by the person. */
+  | { code: 'shareForeignService'; params: { host: string } }
+  /** A link that would move an existing copy to another sharer or service, not confirmed by the person. */
+  | { code: 'shareCopyOther'; params: { firm: string; version: string; was: string; now: string; claimed: string; host: string } }
+  /** The service asked for a confirmation e-mail the app does not send (another domain, another subject). */
+  | { code: 'shareConfirmationOdd'; params: { host: string } }
   | { code: 'localOnly' }
   /** From this computer, but under a name that is no loopback name (DNS rebinding). */
   | { code: 'foreignHost' }

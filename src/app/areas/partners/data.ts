@@ -4,7 +4,7 @@
  * static audit export has no API: these pages then say they cannot be read.
  */
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { STATIC_EXPORT, api, errorText } from '../../lib/api.js';
+import { DEMO, STATIC_EXPORT, api, errorText } from '../../lib/api.js';
 import { onBooksChanged } from '../../assistant/store.js';
 import { t } from '../../i18n/index.js';
 
@@ -26,7 +26,7 @@ export function useFetched<T>(key: string, fetch: () => Promise<T>): Load<T> {
   const v = useSyncExternalStore(subscribe, () => version);
   const [load, setLoad] = useState<{ key: string; load: Load<T> }>({ key, load: { state: 'loading' } });
   useEffect(() => {
-    if (STATIC_EXPORT) { setLoad({ key, load: { state: 'failed', error: t('partners.notInAudit') } }); return; }
+    if (STATIC_EXPORT) { setLoad({ key, load: { state: 'failed', error: t(DEMO ? 'partners.demoOff' : 'partners.notInAudit') } }); return; }
     let live = true;
     fetch().then((data) => { if (live) setLoad({ key, load: { state: 'ready', data } }); }, (e) => { if (live) setLoad({ key, load: { state: 'failed', error: errorText(e) } }); });
     return () => { live = false; };

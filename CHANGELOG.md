@@ -14,6 +14,151 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-14
+
+No figure changes: the demo goldens and the books schema are as in 0.5.0.
+
+### Highlights
+
+- **Share the books with your fiduciary:** as a `.vanilla` file or by an end-to-end encrypted link; his corrections come back for you to review and take over.
+- **A mailbox learns what to set aside:** newsletters and reports of one sender, approved per group, and re-sent invoices as duplicates.
+- **Every linked file shows by its type:** images, CSV reports, saved mails and text, not only PDFs.
+- **Tram blue:** the product colour as the app's accent, and fonts that never fall back to serif.
+
+### Added
+
+- **Share the books by link, end to end encrypted** (docs/specs/e2e-and-fiduciary.md B3, ADR 0016,
+  docs/share-protocol.md). «Teilen» offers «Per Link» besides the file when a share service is set
+  up: the address the invitations come from is confirmed once by one e-mail from it (sent from the
+  books' mailbox when it sends from there, else prepared for the mail program); every file of the
+  package is sealed on its own under a key that stays in the link's fragment, uploaded with its
+  progress shown, and the version is written only once the service holds it. The invitation goes
+  from the books' mailbox or the person's mail program («Link kopieren», «Im Mailprogramm öffnen»).
+  The shares are facts in the dialog (sent, opened, until when, returns fetched) with
+  «Zurückziehen». A link opens as a Durchsicht copy (pasted under «Mehr», or by the Mac app's
+  `vanilla-accounting://` scheme); «An … zurückschicken» sends the return into the same share, and
+  the sharer's app fetches it when the books open and keeps it for review. Each refusal of the
+  service is said with the limit it names. The service is a setting (`VANILLA_SHARE_SERVICE`, at
+  build time or run time, or «Teil-Dienst» in the dialog); without one, the file does every step.
+  A link to another service than the app's, and a link that would move an existing copy without
+  its sharer's signature (an Ed25519 key per books and recipient, pinned by the copy's first link),
+  opens only after the person confirmed it.
+- **A public demo in the browser** (docs/audit-export.md, «Publish the demo»). `npm run build:audit --
+  <dir> --demo [--download <url>]` exports the demo company as a static, read-only site for a
+  website, under any sub-path: a bar in the product colour says that the company and its figures
+  are made up and links to the download page; a card on the first visit points at Belege,
+  Buchungen and MWST; the AI column and the pages that need the app say that they are in the app.
+  It takes only the app's own demo workspaces.
+- **Share the books with a fiduciary and take back his corrections** (docs/specs/e2e-and-fiduciary.md
+  Part B, as a file for now). «Teilen» in the top bar (⇧S) saves the books as a `.vanilla` file
+  for a named person: the first time the open years' books and receipts (a closed year's receipts
+  only «mit Archiv»), later only what is new since the version that person holds, with the size
+  told. Opening it makes a copy in «Durchsicht»: a bar names whose books, which version and from
+  whom; he corrects as a person, with a «Warum?» per booking; filed quarters stay sealed; filing,
+  the year close, the company settings and sharing onward are refused («Einreichen macht …»).
+  «An … zurücksenden» saves his changes as a return. Opened in the books it came from, Änderungen
+  shows «… hat N Änderungen geschickt»: the effect on each period's VAT payable, his changes by
+  kind with before → after and his reason, «Übernehmen» per group or «Alles übernehmen»,
+  «Auslassen» and «Frage zurück» per row (the question goes with the next hand-over). A record
+  both changed shows both versions to pick; a change into a quarter filed meanwhile is booked, on
+  request, as a correction in the open period with `corrects`. The take-over is one save through
+  the write door, undone as a whole, and offers «Ins Wissen übernehmen?» once per partner. A changed
+  rule or knowledge file is shown as its diff and goes to Änderungen as a draft (the rule card decides),
+  never with «Alles übernehmen». A `.vanilla` file is untrusted: its paths, sizes, records and codes are
+  checked before anything is written, and a return is merged against the version as it was handed over.
+- **The content version**: `versions.jsonl` at the workspace's top (its own `schema: 1`, no step
+  of the books' schema) counts every hand-over, every return taken over and every sealed quarter:
+  «Version 12» beside the company in the top bar (date and checksum on hover), in Änderungen, in
+  the read-only bar of the audit export, and in the `.vanilla` file's name.
+- A mailbox learns what to set aside, and the person approves per group. Firma › Quellen offers
+  «Immer beiseite» for a sender's files of one file-name shape («report.pdf»,
+  «newsletter_<Nummer>.pdf») once two of them were set aside and none stands in the books (the whole
+  books, and what waits in the inbox); the card shows every file of the group with its day and
+  «0 davon in den Büchern». Kept, the next files of the group are set aside at delivery, never one
+  whose own words name it a receipt; «Doch behalten» on one of them switches the group off and keeps
+  its other files. A supplier that sends invoices and brochures from one address keeps its invoices:
+  their names differ. A name without a telling word («IMG_…», «Scan…», «Screenshot…», a bare
+  number) or of a receipt's words («Rechnung…», «RE_…», «inv_…») is never offered. If a group cannot
+  be switched off, the toast says it is still on.
+- A re-sent invoice with other bytes (same sender, own invoice number, signed amount, both dated
+  within a week) is set aside as the duplicate of the receipt in the books, named in its reason,
+  instead of being filed twice. A credit note, a refund, a correction, a proforma, an instalment
+  or a reminder never is;
+  where a fact is missing, nothing is set aside.
+- Belege › «Aussortiert» (was «Quarantäne») groups what was set aside by why (a group kept aside,
+  duplicates, newsletters, terms …), with «Doch behalten» per file and per group (all or none). What
+  a mailbox set aside is deleted by its next live pull 30 days after it was set aside; each file
+  says the day («wird am … gelöscht») and the list says how many went when. What a drop or a person
+  set aside, and what a person kept, is never deleted by itself; reading the list deletes nothing.
+- The collected ledger logs per delivered document the name's shape, the mail's day, its size, and
+  for a PDF its page count and whether it has a text layer. The mail's subject and the attachment's
+  own name stay outside git (`data/collected/`). Older lines stay readable.
+
+### Changed
+
+- The accent is Tram blue, the product colour: `#005b8c`, with its 10 % tint `#e6eff4` as the soft
+  accent (before: `#0067b1` / `#e8f1f9`). White on it reads at 7.3:1, the blue on the tint at 6.3:1. The public demo's bar
+  takes the same colour; the dark theme keeps its grey accent.
+- The public demo (`build:audit --demo`) opens in German whatever the browser's language; a
+  language picked in its top bar is kept as before.
+- Firma › Quellen offers to skip a sender only when none of its files stands in the books (before:
+  when nearly all of its files were set aside), so a supplier with one real invoice is never offered.
+
+- The GitHub release text (`npm run release:github`) starts with the downloads: one line saying
+  what the app is, the download table with each `.dmg` linked to its file, «What's new» with a
+  few highlights, and the full changelog folded away at the end. The highlights come from an
+  optional `### Highlights` subsection under the version's heading, else from the titles of
+  «Added» and «Changed». A changelog too long for GitHub's 125,000 characters is linked at the
+  tag instead (docs/releasing.md).
+
+### Fixed
+
+- The app no longer shows a serif (Times) while its fonts load or when they fail: every font is
+  named through a token with a system sans or mono behind it, and Geist Mono's semibold and bold
+  are bundled instead of faked. Run from a worktree whose `node_modules` is a link, the dev server
+  serves the fonts again, and screenshots of the app wait for them.
+- A linked file that is no PDF no longer shows «Failed to load PDF document». Every linked file
+  shows by its type, in the app and in the audit export alike: a PDF as paper, an image as
+  itself, a CSV (a payment provider's report) as a table, text and XML as text, a saved mail
+  (`.eml`) as its sender, subject and body, an HTML page in a sandbox. A type the app does not
+  show (xlsx, heic, …) names its file, type and size and offers its download. The API serves
+  each receipt with its own type, and the audit export keeps each receipt's extension
+  (`receipts/<id>.csv`), listed in its manifest as before; an earlier export keeps its `.pdf`
+  names. No linked file runs script on the app's or the export's origin: the export keeps an
+  extension only for inert types and names an HTML, SVG or XML file (the bank's camt XML too)
+  `.bin`; the API serves every receipt and statement file with `nosniff` and, unless a PDF, a
+  sandboxing CSP; an HTML page or mail is shown in a sandboxed frame that allows no script and
+  no request (#523).
+- Reading the bank statements again (the inbox run, an import, `npm run read-statements`) no
+  longer drops the reference or the amount in another currency of a payment the books hold
+  already when no file states it now: a QR reference or a payout reference that an earlier reader
+  gave (Wise's statement PDFs before #243) stays, and a second read writes the same files (#522).
+  The bank's file still decides when it states one, and so does a kept statement PDF's table; a
+  table that goes («Neu lesen») or that a person replaces takes back what it gave. Missing fee
+  tags of the bank's file and a camt.053's balance of a statement PDF's last day (the same amount)
+  are filled in once.
+- Audit export: the floating top bar, the status corner, the dock and the page now start below
+  the amber audit bar, at every window width, zoom and theme, so its text («Prüfmodus · nur
+  Lesen …», the snapshot's date, schema and version) is never covered (#515).
+- Audit export: the invoices are in it (#516). `npm run build:audit` writes the invoicing records
+  as of the export's day (`data/invoices.json`), every issued invoice's and credit note's PDF
+  (`invoices/<number>.pdf`) and every sent reminder or notice (`invoices/sent/<id>.pdf`) exactly
+  as stored, and the logos the sheets show; `manifest.json` lists each with its SHA-256, and
+  `verify-audit` also checks that each PDF is the one its record's checksum names. The Invoices
+  area shows them read-only: no issue, send, copy, credit, cancel or reminder button. Drafts
+  are left out: an export is the record, not work in progress.
+- A receipt can be linked by hand to a booking that a module or an older import made under a
+  ref of its own, without a bank payment (for example a payment provider's order booked without
+  its payout, or an invoice's event). Before, «Zuordnen» refused such a booking with «Transaction
+  not found» while the app's own modules could link it. The booking's page offers «Beleg
+  zuordnen», the link dialog in Belege lists it among the bookings without a payment, and the
+  booking shows the linked receipt. A booking of a filed quarter still takes no link (#524).
+  Such a link is the person's: «Rückgängig» of a sales report whose booking carries one is
+  refused until she takes the receipt off; deleting the booking takes her link along and its undo
+  brings it back; an invoice's event that a prepayment of the whole invoice replaces takes it
+  along, and the receipt is open again. The link dialog says when it shows only some of the
+  bookings without a payment («8 von 23 gezeigt: suchen, um weitere zu finden»).
+
 ## [0.5.0] - 2026-11-13
 
 ### Added

@@ -1,11 +1,11 @@
 /**
- * The invoicing records as the API serves them (invoices.json): customers, invoices and sent
+ * The invoicing records as the API serves them (invoices.json; in the audit export its data/invoices.json, #516): customers, invoices and sent
  * documents, read once per page and again after every change. A draft edited on the sheet is
  * put back here at once, so the list follows while the API saves it.
  */
 import { useSyncExternalStore } from 'react';
 import type { Customer, Invoice } from '../../../invoices/model.js';
-import { api, STATIC_EXPORT, type InvoiceList } from '../../lib/api.js';
+import { api, type InvoiceList } from '../../lib/api.js';
 import { localEdits } from '../../lib/local-edits.js';
 
 export type Load = { state: 'loading' } | { state: 'failed' } | { state: 'ready'; data: InvoiceList };
@@ -19,11 +19,6 @@ const emit = () => listeners.forEach((l) => l());
 
 /** Reads the records again; resolves when they are in. */
 export function reloadInvoices(): Promise<void> {
-  if (STATIC_EXPORT) {
-    load = { state: 'failed' };
-    emit();
-    return Promise.resolve();
-  }
   const merge = edits.read();
   pending = api.invoices().then(
     (data) => { load = { state: 'ready', data: load.state === 'ready' ? { ...data, invoices: merge(data.invoices, load.data.invoices) } : data }; emit(); },

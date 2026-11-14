@@ -13,3 +13,9 @@ export const hasEvent = (books: { journalEntries: ReadonlyArray<{ transactionRef
   const ref = eventRef(doc, 'issue');
   return books.journalEntries.some((e) => e.transactionRef === ref);
 };
+
+/**
+ * A link no module made: a person's (or the AI sidebar's on her wish), or the AI matcher's. A module
+ * that takes back or rebooks its own bookings leaves a ref that carries one as it is (#524).
+ */
+export const isPersonsLink = (m: { by?: string }): boolean => m.by === 'human' || m.by === 'llm';

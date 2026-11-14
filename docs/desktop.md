@@ -216,6 +216,7 @@ and never in a packed app (`app.isPackaged`), whatever its environment says. `np
 | `CSC_LINK`, `CSC_KEY_PASSWORD` | the Developer ID certificate (.p12) and its password: the app is signed. Without them it is not signed, even when the keychain holds an identity. |
 | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | with a signing certificate: the app is notarized. |
 | `VANILLA_RELEASES` | `owner/repo` of the GitHub releases: the update feed written into the app, and the `.zip` files the updater installs from. |
+| `VANILLA_SHARE_SERVICE` | the share service's address, the default of «Teilen» by link (package.json `share.service` in the app); at run time the same variable overrides it. |
 
 The app checks for updates only when `package.json` has `"desktop": { "autoUpdate": true }`
 (or `VANILLA_AUTO_UPDATE=1` is set), and only as a packaged app. Help › Dokumentation appears

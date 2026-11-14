@@ -350,21 +350,27 @@ export interface Scan {
 
 /**
  * Where each transaction field comes from. A rebuild takes the 'bank' fields from the camt053
- * (and the tables of the kept statement PDFs) and keeps every other field from the previous index: a remark, "no
- * receipt needed", whatever a later step adds. A new BankTransaction field does not compile
+ * and keeps the 'kept' fields from the previous index: a remark, "no receipt needed", whatever a
+ * later step adds. A 'fact' (the payment's reference, its amount in another currency) is the
+ * camt053's when it states one, else a kept statement PDF's table's (withReadFacts), else what the
+ * books hold: a source that says nothing of it takes nothing away (#522; a reference the Wise PDF
+ * reader gave before #243 has no source any more). A new BankTransaction field does not compile
  * until it is listed here.
  */
 const TRANSACTION_FIELD_SOURCE = {
   ref: 'bank', bank: 'bank', date: 'bank', amount: 'bank', currency: 'bank', direction: 'bank',
-  description: 'bank', type: 'bank', parts: 'bank', reference: 'bank', counterparty: 'bank', counterpartyIban: 'bank', bankTxId: 'bank', original: 'bank',
+  description: 'bank', type: 'bank', parts: 'bank', counterparty: 'bank', counterpartyIban: 'bank', bankTxId: 'bank',
+  reference: 'fact', original: 'fact',
   source: 'kept', statement: 'kept', businessPart: 'kept', replaced: 'kept', remarks: 'kept', noReceiptNeeded: 'kept', waitsForPerson: 'kept', waitsForReceipt: 'kept', inputTaxProof: 'kept',
-} as const satisfies Record<keyof BankTransaction, 'bank' | 'kept'>;
+} as const satisfies Record<keyof BankTransaction, 'bank' | 'fact' | 'kept'>;
 
-function keptFields(t: BankTransaction): Partial<BankTransaction> {
-  return Object.fromEntries(
-    Object.entries(t).filter(([k]) => TRANSACTION_FIELD_SOURCE[k as keyof BankTransaction] !== 'bank'),
-  );
-}
+/** The fields of `t` of that source; 'kept' takes as well a field a later step set that this list does not know. */
+const fieldsOf = (t: BankTransaction, source: 'fact' | 'kept'): Partial<BankTransaction> =>
+  Object.fromEntries(Object.entries(t).filter(([k]) => (TRANSACTION_FIELD_SOURCE[k as keyof BankTransaction] ?? 'kept') === source));
+
+/** `t` with each fact no file states now taken from `before`, the payment as the books hold it. */
+const withHeldFacts = (t: BankTransaction, before: BankTransaction | undefined): BankTransaction =>
+  before ? { ...t, ...Object.fromEntries(Object.entries(fieldsOf(before, 'fact')).filter(([k]) => t[k as keyof BankTransaction] === undefined)) } : t;
 
 
 export { MATCH_DAYS };
@@ -540,7 +546,7 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
   const fromBank = unclaimed.filter((t) => !confirmingLegs.has(legOf(t))).map((t) => {
     const before = previousByLeg.get(legOf(t));
     if (!before) return t;
-    return isClosed(before) ? before : { ...t, ...keptFields(before) };
+    return isClosed(before) ? before : { ...t, ...fieldsOf(before, 'kept') };
   });
   const vanishedClosedTransactions = previous.transactions.filter(
     (t) => !madeByHand(t) && t.ref.trim() !== '' && !freshLegs.has(legOf(t)) && isClosed(t),
@@ -556,8 +562,11 @@ export function mergeIndex(previous: Index, scan: Scan): Merged {
     return rest;
   });
 
-  // A reference or an amount in another currency the export drops and its statement PDF prints (#243).
-  const transactions = withReadFacts([...fromBank, ...vanishedClosedTransactions, ...manual], scan.reads, lock.isClosed).concat(emptyHeld);
+  // A reference or an amount in another currency the export drops and its statement PDF prints (#243);
+  // one no file states now stays as the books hold it (#522).
+  const transactions = withReadFacts([...fromBank, ...vanishedClosedTransactions, ...manual], scan.reads, lock.isClosed)
+    .map((t) => (isClosed(t) ? t : withHeldFacts(t, previousByLeg.get(legOf(t)))))
+    .concat(emptyHeld);
 
   const receiptIds = new Set(scan.receipts.map((r) => r.id));
   const byRef = new Map(transactions.map((t) => [t.ref, t]));

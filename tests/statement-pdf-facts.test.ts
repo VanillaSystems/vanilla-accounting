@@ -248,3 +248,22 @@ test('a question\'s table is the PDF\'s one table: «Als Auszug behalten» keeps
     await api.stop();
   }
 });
+
+test('a question\'s table corrected without the reference its PDF\'s table gave takes it away, kept beside the PDF and through the next merge (#522 review)', async () => {
+  const api = await demo();
+  try {
+    const pay = (await full(api)).transactions.find((t) => t.bank === 'Raiffeisen' && t.date.startsWith('2026-09') && !t.reference && !t.counterparty?.includes('Raiffeisen'))!;
+    const refOf = async () => (await full(api)).transactions.find((t) => t.ref === pay.ref)?.reference;
+    await json(api, `${URL_OF}/facts`, 'PUT', { statement: septemberTable(pay, 'WRONG-REF', 72000, { payment: true }) });
+    assert.equal(await refOf(), 'WRONG-REF', 'the table beside the PDF gave it');
+    assert.equal((await json<StatementAsk>(api, `${URL_OF}/read`, 'POST')).status, 200);
+    await json(api, `${URL_OF}/read`, 'PUT', { statement: septemberTable(pay, '', 72000, { payment: true }) });
+    await json(api, `${URL_OF}/read`, 'DELETE');
+    assert.equal(await refOf(), undefined, 'kept as corrected: the reference goes');
+    const other = 'Kontoauszug 01.08.2026 - 31.08.2026 - CH6580808000000000001 - 2026-08-31.pdf';
+    await json(api, `/api/statements/Raiffeisen/${encodeURIComponent(other)}/facts`, 'DELETE');
+    assert.equal(await refOf(), undefined, 'and stays gone through the next merge');
+  } finally {
+    await api.stop();
+  }
+});

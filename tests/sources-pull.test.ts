@@ -86,7 +86,7 @@ test('a pull delivers the PDFs of the senders the reach lets through; a copy is 
   assert.deepEqual(first, { outcome: 'ok', feeds: [{ feed: 'attachments', documents: 2, duplicates: 1, quarantined: 0, complete: true }] });
   assert.deepEqual(inbox(ws), ['invoice-1.pdf', 'invoice-2.pdf'], 'not the logo, not the other sender\'s offer, not the copy');
   const ledger = readLedger(ws, 'office');
-  assert.deepEqual(ledger.map((l) => ('cursor' in l ? `cursor ${JSON.stringify(l.cursor)}` : `${l.key} ${l.got.kind === 'document' && l.got.duplicateOf ? 'duplicate' : 'new'}`)), [
+  assert.deepEqual(ledger.map((l) => ('cursor' in l ? `cursor ${JSON.stringify(l.cursor)}` : 'got' in l ? `${l.key} ${l.got.kind === 'document' && l.got.duplicateOf ? 'duplicate' : 'new'}` : 'deleted')), [
     '<1@vendor>#invoice-1.pdf new', '<3@vendor>#copy.pdf duplicate', '<4@vendor>#invoice-2.pdf new', 'cursor {"validity":"7","uid":4}',
   ]);
   const second = fake();

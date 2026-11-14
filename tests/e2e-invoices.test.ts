@@ -94,3 +94,25 @@ test('a draft is issued with its stored PDF and sent; a part is credited; a prop
     await app.stop();
   }
 });
+
+/**
+ * #521 review: the deep link /invoices/new?customer=<id> on a fresh load makes the draft. The invoices may be read before
+ * the API's status, while canEdit is still false: the link waits for the status, never sends the person to the customer.
+ */
+test('a fresh load of /invoices/new?customer=<id> makes a draft for that customer', { skip: noBrowser, timeout: 120_000 }, async () => {
+  const app = await openApp();
+  const { page, api } = app;
+  const customer = 'cu_2KIQYfUMHYIT';
+  const drafts = async () => ((await api.send('GET', '/api/invoices')).json.invoices as Array<{ id: string; status: string; customerId: string }>).filter((i) => i.status === 'draft' && i.customerId === customer).map((i) => i.id);
+  try {
+    const before = await drafts();
+    await page.goto(`${app.ui}/invoices/new?customer=${customer}`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => /^\/invoices\/draft-/.test(location.pathname), { timeout: 60_000 });
+    const made = (await drafts()).filter((id) => !before.includes(id));
+    assert.equal(made.length, 1, 'one new draft for the customer');
+    assert.equal(await page.evaluate(() => location.pathname), `/invoices/draft-${made[0]}`);
+    assert.deepEqual(app.errors, []);
+  } finally {
+    await app.stop();
+  }
+});

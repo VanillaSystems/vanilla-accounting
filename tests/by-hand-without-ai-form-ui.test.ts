@@ -12,7 +12,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { startApi } from './support/api-server.js';
-import { browserPath, closeChrome, launchChrome } from './support/browser.js';
+import { browserPath, closeChrome, launchChrome, screenshot } from './support/browser.js';
 import { devProxy } from '../src/server/app-paths.js';
 import { APP_FOLDER, APP_ROOT } from '../src/workspace/workspace.js';
 import { loadBooks } from '../src/books/store.js';
@@ -88,7 +88,7 @@ test('the hand form opens with the final proposal, and a proposed sale code leav
     const text = () => page.$eval('[data-testid=payment-booking]', (e) => (e as HTMLElement).innerText);
     assert.match(await text(), /nimmt einen Verkauf an/);
     assert.match(await page.$eval('[data-testid=proposal]', (e) => e.textContent ?? ''), /V81/);
-    if (EVIDENCE) await page.screenshot({ path: join(EVIDENCE, 'form-sale-proposal.png') });
+    if (EVIDENCE) await screenshot(page, join(EVIDENCE, 'form-sale-proposal.png'));
 
     // She books the money onto the owner's account: by the list, with the mouse.
     const credit = (await page.$('[name="accountCredit-0"]'))!;
@@ -99,7 +99,7 @@ test('the hand form opens with the final proposal, and a proposed sale code leav
     await page.waitForFunction(() => (document.querySelector('[name="vatCode-0"]') as HTMLInputElement | null)?.value === '', { timeout: 10_000 });
     assert.equal(await field('accountCredit-0'), '2451');
     assert.doesNotMatch(await page.$eval('[data-testid=payment-booking]', (e) => (e as HTMLElement).innerText), /V81|nimmt einen Verkauf an/, 'no sale code and no sale assumed stands anywhere on the form');
-    if (EVIDENCE) await page.screenshot({ path: join(EVIDENCE, 'form-owner-no-code.png') });
+    if (EVIDENCE) await screenshot(page, join(EVIDENCE, 'form-owner-no-code.png'));
 
     await page.click('[data-testid=payment-booking] button[type=submit]');
     for (const end = Date.now() + 30_000; Date.now() < end;) {

@@ -17,6 +17,7 @@ import { useState } from 'react';
 import { BOOKING_WORKFLOW, BookingWaits, bookingWaitsOf } from './booking-waits.js';
 import { bookingWaitsText } from '../lib/booking-waits.js';
 import type { BookOpen } from '../../saving/rules.js';
+import { useHandover } from '../handover/store.js';
 
 const OPEN = new Set(['queued', 'running', 'waiting', 'parked', 'stuck']);
 const RESTING = new Set(['done', 'waiting', 'stuck', 'parked', 'discarded']);
@@ -111,6 +112,7 @@ function bookOpenLine(n: Omit<BookOpen, 'waits'>, workflowName: string): string 
  */
 export function WorkflowButtons({ kind, id, facts = [], nav, canEdit, confirm }: { kind: ItemKind; id: string; facts?: ItemFact[]; nav: Nav; canEdit: boolean; confirm?: string }) {
   const { view } = useAutomation();
+  const copy = useHandover()?.durchsicht;
   // What the last click came to, beside the button as well as in the toast: a toast is gone in
   // seconds and easily missed (r4c-34, r5h-20: «Automatisch buchen» without Claude seemed to do nothing).
   const [said, setSaid] = useState<{ item: string; text: string; go?: Location; waits?: boolean }>();
@@ -166,6 +168,8 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit, confirm }:
             </button>
           );
         }
+        // On a Durchsicht copy filing is the sharer's (docs/specs/e2e-and-fiduciary.md B4): said, not offered.
+        if (copy && (workflow.id === 'vat-filing' || workflow.id === 'year-close')) return <span key={workflow.id} className="m" data-testid="files-sharer">{t('durchsicht.files', { name: copy.sharer.name })}</span>;
         return (
           <button key={workflow.id} type="button" className="btn" disabled={!canEdit} data-tip={ai ? t('automation.ai') : undefined}
             onClick={() => { if (confirm) setAsking({ item: id, workflow }); else void start(workflow); }}>
