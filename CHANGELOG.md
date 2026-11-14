@@ -25,6 +25,18 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A linked file that is no PDF no longer shows «Failed to load PDF document». Every linked file
+  shows by its type, in the app and in the audit export alike: a PDF as paper, an image as
+  itself, a CSV (a payment provider's report) as a table, text and XML as text, a saved mail
+  (`.eml`) as its sender, subject and body, an HTML page in a sandbox. A type the app does not
+  show (xlsx, heic, …) names its file, type and size and offers its download. The API serves
+  each receipt with its own type, and the audit export keeps each receipt's extension
+  (`receipts/<id>.csv`), listed in its manifest as before; an earlier export keeps its `.pdf`
+  names. No linked file runs script on the app's or the export's origin: the export keeps an
+  extension only for inert types and names an HTML, SVG or XML file (the bank's camt XML too)
+  `.bin`; the API serves every receipt and statement file with `nosniff` and, unless a PDF, a
+  sandboxing CSP; an HTML page or mail is shown in a sandboxed frame that allows no script and
+  no request (#523).
 - Reading the bank statements again (the inbox run, an import, `npm run read-statements`) no
   longer drops the reference or the amount in another currency of a payment the books hold
   already when no file states it now: a QR reference or a payout reference that an earlier reader

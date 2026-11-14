@@ -27,7 +27,7 @@ import type { IntakeNote } from '../../../intake/pipeline.js';
 import type { Made as MadeThing, Took } from '../../../workflows/summary.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { sources } from '../../lib/api.js';
-import { Paper } from '../receipts/Paper.js';
+import { FileView } from '../receipts/FileView.js';
 import { PaymentBooking } from '../journal/PaymentBooking.js';
 import { bookedStates } from '../../../accounting/payment-entries.js';
 import { Parts } from '../bank/Parts.js';
@@ -607,10 +607,10 @@ function runDocuments(data: RunDetail, books: Index): Index['receipts'] {
 
 /** The document beside its facts, to check the run against it. */
 function RunDocument({ r, nav }: { r: Index['receipts'][number]; nav: Nav }) {
-  const src = sources.receipt(r.id);
+  const src = sources.receipt(r);
   return (
     <div className="rundoc">
-      <div className="paper real"><Paper key={src} src={src} maxWidth={420} /></div>
+      <div className="paper real"><FileView key={src} src={src} file={r.filename} size={r.fileSize} maxWidth={420} /></div>
       <div className="rdfacts">
         <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'receipts', id: r.id }, query: {} })}><b>{r.filename}</b></button>
         {r.originalFilename && r.originalFilename !== r.filename ? <small className="mono">{r.originalFilename}</small> : null}

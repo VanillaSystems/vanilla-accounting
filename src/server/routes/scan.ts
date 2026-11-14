@@ -7,6 +7,7 @@ import type { InboxFile } from '../../types/index.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { RECEIPT_TYPES, receiptType, type ReceiptType } from '../../types/upload.js';
 import { capturedStem } from '../../intake/captured.js';
+import { fileHeaders } from '../../core/files.js';
 import { smallerPdf } from '../../parsers/smaller.js';
 import { INTAKE, engine } from './automation.js';
 import { APP_STORE_URL } from '../phone.js';
@@ -95,6 +96,6 @@ router.get('/api/inbox', (_req, res) => {
 router.get('/api/inbox/:id', (req, res) => {
   const file = inboxFiles({ withRead: true }).find((f) => f.id === req.params.id);
   if (!file) throw new RequestError(404, 'Not in the inbox', { code: 'gone', params: { what: 'file' } });
-  res.setHeader('Content-Type', 'application/pdf');
+  res.set(fileHeaders(file.filename));
   res.sendFile(join(WS.paths.inbox, file.filename));
 });

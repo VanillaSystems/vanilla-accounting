@@ -4,6 +4,10 @@
  * EXPORT_FILES, so each read of the exported app is a file the export holds.
  */
 import { issuedPdfUrl, sentPdfUrl } from '../invoices/model.js';
+import { inertExt } from '../core/files.js';
+
+/** What names a receipt's file: its id, and its file name, whose extension the export keeps (a CSV report, an image). */
+export interface ReceiptFile { id: string; filename: string }
 
 export interface Sources {
   books(): string;
@@ -21,7 +25,7 @@ export interface Sources {
   vatCorrections(): string;
   /** What a payment provider's reports leave open (src/booking/provider-issues.ts, #405): held orders, months without the provider's bill. */
   providerIssues(): string;
-  receipt(id: string): string;
+  receipt(r: ReceiptFile): string;
   statement(bank: string, filename: string): string;
   /** The invoicing records as GET /api/invoices serves them: customers, invoices with their view, sent documents (#516). */
   invoices(): string;
@@ -44,7 +48,7 @@ export const API_SOURCES: Sources = {
   orderPages: () => '/api/receipts/order-pages',
   vatCorrections: () => '/api/receipts/vat-corrections',
   providerIssues: () => '/api/receipts/provider-issues',
-  receipt: (id) => `/api/receipts/${id}`,
+  receipt: (r) => `/api/receipts/${r.id}`,
   statement: (bank, filename) => `/bank-statements/${bank}/${encodeURIComponent(filename)}`,
   invoices: () => '/api/invoices',
   invoicePdf: issuedPdfUrl,
@@ -64,8 +68,12 @@ export const EXPORT_FILES: Sources = {
   orderPages: () => 'data/order-pages.json',
   vatCorrections: () => 'data/vat-corrections.json',
   providerIssues: () => 'data/provider-issues.json',
-  receipt: (id) => `receipts/${id}.pdf`,
-  statement: (bank, filename) => `bank-statements/${bank}/${filename}`,
+  // With its own extension when that is inert, so a static host serves it with its type; an HTML, SVG or XML file, or one of
+  // an unknown type, as `.bin`, never a document that runs script on the export's origin (#523). An export made before kept
+  // `.pdf` for every receipt.
+  receipt: (r) => `receipts/${r.id}.${inertExt(r.filename)}`,
+  // The bank's XML (camt) likewise goes out with `.bin` added: shown as text by the UI, never a document of the export's origin.
+  statement: (bank, filename) => `bank-statements/${bank}/${filename}${inertExt(filename) === 'bin' ? '.bin' : ''}`,
   invoices: () => 'data/invoices.json',
   invoicePdf: (number) => `invoices/${number}.pdf`,
   sentPdf: (id) => `invoices/sent/${id}.pdf`,
@@ -86,7 +94,7 @@ export const EXPORT_SOURCES: Sources = {
   orderPages: () => encodePath(EXPORT_FILES.orderPages()),
   vatCorrections: () => encodePath(EXPORT_FILES.vatCorrections()),
   providerIssues: () => encodePath(EXPORT_FILES.providerIssues()),
-  receipt: (id) => encodePath(EXPORT_FILES.receipt(id)),
+  receipt: (r) => encodePath(EXPORT_FILES.receipt(r)),
   statement: (bank, filename) => encodePath(EXPORT_FILES.statement(bank, filename)),
   invoices: () => encodePath(EXPORT_FILES.invoices()),
   invoicePdf: (number) => encodePath(EXPORT_FILES.invoicePdf(number)),
