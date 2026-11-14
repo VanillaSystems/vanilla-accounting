@@ -18,7 +18,7 @@ import { bookPaymentAgain } from './automation.js';
 import { bookingWarnings } from '../../accounting/booking-warnings.js';
 import { bookedState } from '../../accounting/payment-entries.js';
 import type { Books } from '../../books/store.js';
-import { UNDO_FIELDS } from '../../books/entry-input.js';
+import { UNDO_FIELDS, type DeletedEntry } from '../../books/entry-input.js';
 
 export const router = Router();
 
@@ -97,8 +97,15 @@ router.post('/api/journal-entries', (req, res) => {
 
   return withBooks(res, (books) => {
     // An undo of a module's last booking under a ref of its own (#524): only of one this workspace's deletion recorded, never a made-up id.
-    if (id && transactionRef && !isManualRef(transactionRef) && !refDates(books, transactionRef).length && deletedEntry(WS, id)?.transactionRef !== transactionRef) {
+    const record: DeletedEntry | undefined = id ? deletedEntry(WS, id) : undefined;
+    if (id && transactionRef && !isManualRef(transactionRef) && !refDates(books, transactionRef).length && record?.transactionRef !== transactionRef) {
       throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
+    }
+    // The links a deletion took along come from its record, never from the request: sent otherwise, the undo is refused.
+    const sameLinks = (a: readonly string[], b: readonly string[]) => [...a].sort().join('\u0000') === [...b].sort().join('\u0000');
+    const recorded = record?.transactionRef === transactionRef ? record?.takenLinks ?? [] : undefined;
+    if (Array.isArray(takenLinks) && takenLinks.length && !(recorded && sameLinks(takenLinks as string[], recorded))) {
+      throw new RequestError(400, 'takenLinks: nicht die Verknüpfungen, die das Löschen dieser Buchung mitnahm.');
     }
     const original = correctsEntry ? books.journalEntries.find((e) => e.id === correctsEntry) : undefined;
     if (correctsEntry && !original) throw new RequestError(404, `Buchung ${correctsEntry} gibt es nicht.`, { code: 'gone', params: { what: 'entry' } });
@@ -117,7 +124,7 @@ router.post('/api/journal-entries', (req, res) => {
       ...(origin && { origin: origin as Origin }),
       // Booked by hand now, not put back by an undo: a person decided it (Änderungen lists it).
       ...(id ? provenance : { by: { kind: 'person' as const, at: new Date().toISOString() } }),
-      ...(Array.isArray(takenLinks) && takenLinks.length ? { takenLinks: takenLinks as string[] } : {}),
+      ...(Array.isArray(takenLinks) && takenLinks.length && recorded?.length ? { takenLinks: [...recorded] } : {}),
     });
     if (original && corrects) books.config.correctionCases = [...(books.config.correctionCases ?? []), correctionCaseFor(original, entry, (correction ?? 'vat') as CorrectionKind, corrects)];
     // The receipt the booking is for (r10h-6): linked to it, so the receipt shows its booking and the input tax has its voucher;

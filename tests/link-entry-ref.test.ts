@@ -124,7 +124,7 @@ test('the API puts a module\'s booking back on a ref of its own only for a delet
 test('the API: DELETE names the person\'s links it took along, the undo sends them back, the booking as it was', async () => {
   const f = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Index & { journalEntries: JournalEntry[] };
   const mine = order('SHOP-3004');
-  writeIndex(api.ws, { ...f, receipts: [...f.receipts, doc('rep'), doc('hers')], journalEntries: [...f.journalEntries, mine], mappings: [...f.mappings, { transactionRef: 'SHOP-3004', receiptId: 'rep', by: 'rule', rule: 'sales-report' }] });
+  writeIndex(api.ws, { ...f, receipts: [...f.receipts, doc('rep'), doc('hers'), doc('other')], journalEntries: [...f.journalEntries, mine], mappings: [...f.mappings, { transactionRef: 'SHOP-3004', receiptId: 'rep', by: 'rule', rule: 'sales-report' }] });
   assert.equal((await api.send('POST', '/api/mapping/add', { receiptId: 'hers', transactionRef: 'SHOP-3004' })).status, 200);
   const del = await api.send('DELETE', `/api/journal-entries/${mine.id}`);
   assert.equal(del.status, 200, JSON.stringify(del.json));
@@ -136,6 +136,20 @@ test('the API: DELETE names the person\'s links it took along, the undo sends th
   assert.deepEqual(books.journalEntries.find((e) => e.id === mine.id)!.receipts, ['rep'], 'the module\'s receipts unchanged');
   const forged = await api.send('POST', '/api/journal-entries', { date: DAY, accountDebit: '6500', accountCredit: '1021', amount: 1, description: 'neu', transactionRef: 'SHOP-3004', takenLinks: ['hers'] });
   assert.equal(forged.status, 400, 'takenLinks only with an undo');
+
+  // The links come from the deletion's record, never from the request.
+  const linksNow = () => loadBooks(api.ws).mappings.filter((m) => m.transactionRef === 'SHOP-3004').map((m) => m.receiptId).sort();
+  const fresh = await api.send('POST', '/api/journal-entries', undoInput({ ...order('SHOP-3004', 'fresh1'), takenLinks: ['other'] }));
+  assert.equal(fresh.status, 400, 'a fresh id on a ref that has entries: no record, no links');
+  assert.equal(loadBooks(api.ws).journalEntries.some((e) => e.id === 'fresh1'), false);
+  assert.deepEqual(linksNow(), ['hers', 'rep']);
+  assert.equal((await api.send('DELETE', `/api/journal-entries/${mine.id}`)).status, 200);
+  const swapped = await api.send('POST', '/api/journal-entries', undoInput({ ...mine, takenLinks: ['other'] }));
+  assert.equal(swapped.status, 400, 'the recorded id with other links than it took along');
+  assert.deepEqual(linksNow(), ['rep'], 'nothing linked');
+  assert.equal(loadBooks(api.ws).journalEntries.some((e) => e.id === mine.id), false, 'nothing booked');
+  assert.equal((await api.send('POST', '/api/journal-entries', undoInput({ ...mine, takenLinks: ['hers'] }))).status, 200);
+  assert.deepEqual(linksNow(), ['hers', 'rep']);
 });
 
 test('one of two entries of a module\'s booking deleted: the links stay with the one left', () => {
