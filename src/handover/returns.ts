@@ -24,6 +24,9 @@ import { filesOfPart } from '../workspace/workspace.js';
 import { applyToBooks, dateOf, isRecordFile, parseRefKey, recordFiles, recordsInFolder, recordsOf, refKey, sameRecord, type RecordChange, type RecordMap } from './records.js';
 import { keyOf, type Part } from '../books/years.js';
 import { formTakes } from '../accounting/vat-codes.js';
+import { parseVatFacts } from '../accounting/vat-facts.js';
+import { parseUid } from '../workspace/uid.js';
+import type { VatFacts } from '../types/index.js';
 import { baseCurrency } from '../engines/index.js';
 import { learnOffer } from '../saving/learn-rule.js';
 import { draftDir } from '../saving/changes.js';
@@ -162,6 +165,8 @@ const RECEIPT_EDITS: ReadonlySet<string> = new Set(['date', 'amount', 'currency'
 /** What such a change may only take away. */
 const RECEIPT_CLEARS: ReadonlySet<string> = new Set(['dateSource', 'vatReadFailures', 'vatExtractedAt']);
 const VAT_FACTS = ['hasSwissVat', 'vatSummary', 'vatId', 'lineItems'] as const;
+/** src/server/edits.ts FROZEN, in the receipt's own fields. */
+const FROZEN: ReadonlySet<string> = new Set(['amount', 'currency', 'filename', 'vatBy', ...VAT_FACTS]);
 /** The kinds a person sets on a receipt: never the ones only the app derives (a provider's report, a statement). */
 const PERSON_KINDS: ReadonlySet<unknown> = new Set([undefined, 'invoice', 'supporting', 'noise', 'duplicate']);
 
@@ -170,9 +175,11 @@ const PERSON_KINDS: ReadonlySet<unknown> = new Set([undefined, 'invoice', 'suppo
  * only its date, amount and currency, text, remark, kind and the VAT facts by hand change; the
  * file, what was read off it and what the app derives (a payout, a report, a filed payment) stay.
  */
-function receiptProblem(before: Rec, after: Rec): string | undefined {
+function receiptProblem(before: Rec, after: Rec, filed: boolean): string | undefined {
   const fields = new Set([...Object.keys(before), ...Object.keys(after)]);
   const moved = [...fields].filter((f) => !sameRecord(before[f], after[f]));
+  // What a link into a filed period freezes on a receipt (src/server/edits.ts assertReceiptFieldsOpen): what the filed return took from it, and its file.
+  if (filed && moved.some((f) => FROZEN.has(f))) return 'der Beleg belegt eine eingereichte Periode: Betrag, Währung und Steuerangaben bleiben, wie eingereicht';
   const other = moved.filter((f) => !RECEIPT_EDITS.has(f) && !(RECEIPT_CLEARS.has(f) && after[f] === undefined));
   if (other.length) return `an einem Beleg ändert sich nur, was eine Person in der App ändert (${other.join(', ')})`;
   if (after.date !== undefined && (typeof after.date !== 'string' || !DAY.test(after.date))) return 'kein Datum';
@@ -181,8 +188,14 @@ function receiptProblem(before: Rec, after: Rec): string | undefined {
   if (moved.includes('kind') && (!PERSON_KINDS.has(after.kind) || after.kindBy !== 'human')) return 'diese Art setzt nur die App';
   if (VAT_FACTS.some((f) => moved.includes(f))) {
     if (after.vatBy !== 'human') return 'Steuerangaben nur von Hand';
-    if (after.hasSwissVat !== undefined && typeof after.hasSwissVat !== 'boolean') return 'keine Steuerangabe';
-    if (after.vatSummary !== undefined && !(Array.isArray(after.vatSummary) && after.vatSummary.every((g) => isObj(g) && typeof g.ratePercent === 'number' && typeof g.vat === 'number'))) return 'keine Steuer-Zusammenstellung';
+    // The facts as PATCH /api/receipts takes them (parseVatFacts): the same rates, amounts and UID, nothing else.
+    if (moved.includes('lineItems') && after.lineItems !== undefined) return 'Positionen liest die App, eine Person setzt sie nicht';
+    let parsed: VatFacts;
+    try {
+      parsed = parseVatFacts({ hasSwissVat: after.hasSwissVat, vatSummary: after.vatSummary, ...(after.vatId !== undefined ? { vatId: after.vatId } : {}) }, (what) => { throw new Error(what); });
+    } catch (e) { return (e as Error).message; }
+    if (parsed.vatId !== undefined && !('uid' in parseUid(parsed.vatId))) return `${parsed.vatId} ist keine UID`;
+    if (!sameRecord(parsed.vatSummary, after.vatSummary ?? [])) return 'keine Steuer-Zusammenstellung';
   }
   return undefined;
 }
@@ -203,7 +216,8 @@ function baseOf(ws: Workspace, p: PackageContents): RecordMap {
  * the firm takes, files only of knowledge/ and the chart, and `before` read from the version as it was
  * handed to him, never from the return. Records he left as they were drop out.
  */
-function checkedChanges(ws: Workspace, p: PackageContents, hers: Pick<Books, 'receipts' | 'transactions' | 'journalEntries'> = loadBooks(ws)): ReturnChange[] {
+function checkedChanges(ws: Workspace, p: PackageContents, hers: Books = loadBooks(ws)): ReturnChange[] {
+  const lock = periodLock(hers);
   const base = baseOf(ws, p);
   // Receipt names already taken, as a case-insensitive file system sees them: a new receipt never points at her file.
   // The name of a receipt his take-over brought counts as his own, not as taken.
@@ -251,7 +265,7 @@ function checkedChanges(ws: Workspace, p: PackageContents, hers: Pick<Books, 're
           ...(typeof r.description === 'string' ? { description: r.description.slice(0, 200) } : {}),
         };
       } else {
-        const why = receiptProblem(before as Rec, r);
+        const why = receiptProblem(before as Rec, r, lock.isClosed(dateOf({ kind: 'receipts', key }, before, hers)));
         if (why) throw tampered(key, why);
       }
     }

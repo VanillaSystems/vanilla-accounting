@@ -6,9 +6,9 @@
  * books' own files as they came (base/), against which his changes are the change set of his
  * return (B5.1). Filed quarters stay sealed: the seals come along and the write door holds them.
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { loadBooks, saveBooks, update, periodLock, type Actor } from '../books/store.js';
 import { findFile, workspacePaths, type Workspace } from '../workspace/workspace.js';
 import { readManifest } from '../workspace/manifest.js';
@@ -105,6 +105,7 @@ export function openPackage(bytes: Uint8Array, now = new Date(), at: string = du
   const p = readPackage(bytes);
   if (p.index.kind === 'return') throw new PackageError('Das ist eine Rücksendung: sie gehört in die Bücher, aus denen geteilt wurde.', 'shareWrongKind');
   const root = join(at, slug(p.index));
+  recover(root);
   const had = markerOf(root);
   if (had && had.firm.uid && p.index.firm.uid && had.firm.uid !== p.index.firm.uid) throw new PackageError(`Diese Übergabe ist von ${p.index.firm.name}, die Kopie hier von ${had.firm.name}.`, 'shareOtherCompany', { firm: p.index.firm.name });
   if (!had) {
@@ -142,9 +143,6 @@ function moveForward(root: string, had: Marker, p: PackageContents, now: Date): 
   }
   const oldBase = recordsInFolder(baseDir(root));
   const mine = diffRecords(oldBase, recordsInFolder(root));
-  // His change set is kept first: whatever happens to the update, it is there to restore.
-  mkdirSync(dirOf(root), { recursive: true });
-  writeFileSync(join(dirOf(root), 'unsent.json'), JSON.stringify({ at: now.toISOString(), version: had.version.n, changes: mine }) + '\n');
   // The new state is built beside the copy and takes its place in one rename: a failure half way leaves the copy as it was.
   const next = `${root}.next-${process.pid}`;
   const old = `${root}.old-${process.pid}`;
@@ -161,6 +159,22 @@ function moveForward(root: string, had: Marker, p: PackageContents, now: Date): 
     if (e instanceof PackageError) throw e;
     throw new PackageError(`Die Übergabe wurde nicht eingespielt (${(e as Error).message.slice(0, 200)}). Die Kopie und deine Änderungen sind, wie sie waren.`, 'shareUpdateFailed', { why: (e as Error).message.slice(0, 200) });
   }
+}
+
+/**
+ * A copy that a crash left between the two renames of an update: the copy itself was moved aside
+ * (`.old-<pid>`) and the new one not yet put in its place (`.next-<pid>`). The copy as it was, his
+ * changes in it, comes back; the half-made new one goes. Nothing happens to a copy in its place.
+ */
+export function recover(root: string): void {
+  const dir = dirname(root), name = basename(root);
+  if (!existsSync(dir)) return;
+  const beside = (kind: 'old' | 'next') => readdirSync(dir).filter((f) => f.startsWith(`${name}.${kind}-`)).map((f) => join(dir, f)).sort();
+  if (!existsSync(root)) {
+    const old = beside('old').at(-1);
+    if (old) renameSync(old, root);
+  }
+  if (existsSync(root)) for (const f of [...beside('next'), ...beside('old')]) rmSync(f, { recursive: true, force: true });
 }
 
 /** moveForward's work on the folder `root` (the copy's sibling), with his change set read from the copy before. */

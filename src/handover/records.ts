@@ -123,9 +123,15 @@ export function applyToBooks(books: Pick<Index, 'config'> & Partial<Record<Part,
 }
 
 /** The date a record is dated by, when it has one: an entry's or payment's own, a link's payment's. */
-export function dateOf(ref: RecordRef, record: unknown, books: Pick<Index, 'transactions'> & { journalEntries?: Array<{ transactionRef: string; date: string }> }): string | undefined {
+export function dateOf(ref: RecordRef, record: unknown, books: Pick<Index, 'transactions'> & { journalEntries?: Array<{ transactionRef: string; date: string }>; mappings?: Array<{ transactionRef: string; receiptId: string }> }): string | undefined {
   const r = record as Record<string, unknown> | undefined;
   if (!r) return undefined;
+  // A receipt is dated by the payments it is linked to (src/server/books.ts receiptDates): the earliest, so a link into a filed period holds it.
+  if (ref.kind === 'receipts') {
+    const refs = new Set((books.mappings ?? []).filter((m) => m.receiptId === ref.key).map((m) => m.transactionRef));
+    const days = [...books.transactions.filter((t) => refs.has(t.ref)).map((t) => t.date), ...(books.journalEntries ?? []).filter((e) => refs.has(e.transactionRef)).map((e) => e.date)].sort();
+    return days[0];
+  }
   if (ref.kind === 'journalEntries' || ref.kind === 'transactions') return typeof r.date === 'string' ? r.date : undefined;
   if (ref.kind === 'mappings') {
     const tx = String(r.transactionRef ?? '');

@@ -448,3 +448,63 @@ test('M6: a link names exactly a payment and a receipt that exist', async () => 
   const filed = await hostileReturn(ws, [{ kind: 'mappings', key: 'T1 r1', after: { transactionRef: 'T1', receiptId: 'r1' } }]);
   assert.equal(reviewOf(ws, receiveReturn(ws, filed).id).rows[0].status, 'fixed');
 });
+
+// ─── Final review of a48ca8a0: probes F1b, F2, F3 ──────────────────────────
+
+test('F1b: the receipt that proves a filed quarter keeps its amount and VAT; its row is fixed', async () => {
+  const ws = tempWorkspace('f1b-');
+  const rq1 = { id: 'rq1', filename: 'rq1.pdf', originalFilename: 'rq1.pdf', extractedText: 'MWST', extractionMethod: 'pdftotext' as const, fileSize: 10, indexedAt: '2026-02-10T00:00:00Z', location: 'archived' as const, date: '2026-02-10', amount: 100, currency: 'CHF', hasSwissVat: true, vatSummary: [{ ratePercent: 8.1, vat: 7.49 }] };
+  writeIndex(ws, {
+    receipts: [rq1], mappings: [{ transactionRef: 'T1', receiptId: 'rq1' }],
+    transactions: [tx('T1', '2026-02-10', 100), tx('T2', '2026-07-10', 50)],
+    journalEntries: [entry('eq1', 'T1', '2026-02-10', '6500', 100, 'I81'), entry('e1', 'T2', '2026-07-10', '6500', 50, 'I81')],
+    config: { closedThrough: '2026-03-31' },
+  });
+  mkdirSync(join(ws.paths.root, 'transactional-data/2026/receipts'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'transactional-data/2026/receipts/rq1.pdf'), '%PDF');
+  writeSeal(ws, loadBooks(ws), '2026-Q1', '2026-04-10');
+  const frozen = await hostileReturn(ws, [{ kind: 'receipts', key: 'rq1', after: { ...rq1, amount: 1, hasSwissVat: false, vatSummary: [], vatBy: 'human' } }]);
+  assert.throws(() => receiveReturn(ws, frozen), tampered('shareTampered'));
+  // Its text may change (no return took it), but the row lies in the filed quarter: fixed, never applied.
+  const text = await hostileReturn(ws, [{ kind: 'receipts', key: 'rq1', after: { ...rq1, description: 'Büromaterial' } }]);
+  const got = receiveReturn(ws, text);
+  assert.equal(reviewOf(ws, got.id).rows[0].status, 'fixed');
+  assert.throws(() => applyReturn(ws, got.id, 'all'), HandoverRefused);
+  const now = loadBooks(workspaceAt(ws.paths.root));
+  assert.equal(now.receipts.find((x) => x.id === 'rq1')?.amount, 100);
+  assert.deepEqual(sealsOf(now).checks.map((c) => c.status), ['intact']);
+});
+
+test('F2: VAT facts by hand are parsed as Belege › Angaben parses them', async () => {
+  const ws = withReceipt();
+  const r = loadBooks(ws).receipts.find((x) => x.id === 'r1')!;
+  for (const facts of [
+    { vatSummary: [{ ratePercent: 81, vat: 3 }] },
+    { vatSummary: [{ ratePercent: 8.1, vat: 3 }, { ratePercent: -8.1, vat: -5 }] },
+    { vatSummary: [{ ratePercent: 8.1, vat: -1 }] },
+    { vatSummary: [{ ratePercent: 8.1, vat: 3 }], lineItems: [{ description: 'x', gross: 1, ratePercent: 8.1, suggestedAccount: '2451' }] },
+    { vatSummary: [{ ratePercent: 8.1, vat: 3 }], vatId: 'not a uid' },
+  ]) {
+    const ret = await hostileReturn(ws, [{ kind: 'receipts', key: 'r1', after: { ...r, hasSwissVat: true, vatBy: 'human', ...facts } }]);
+    assert.throws(() => receiveReturn(ws, ret), tampered('shareTampered'), JSON.stringify(facts));
+  }
+  const ok = await hostileReturn(ws, [{ kind: 'receipts', key: 'r1', after: { ...r, hasSwissVat: true, vatBy: 'human', vatSummary: [{ ratePercent: 8.1, vat: 3.75 }] } }]);
+  assert.ok(receiveReturn(ws, ok).id);
+});
+
+test('F3: a copy a crash left between the two renames comes back, with his change, before the next package', async () => {
+  const ws = books();
+  const first = await makeShare(ws, { to: ERNST }, SANDRA);
+  const at = home();
+  const o = openPackage(first.bytes, new Date(), at);
+  const cb = loadBooks(workspaceAt(o.root));
+  update(cb, { kind: 'person', name: 'E', role: 'fiduciary' }, (x) => { x.journalEntries.find((e) => e.id === 'e1')!.accountDebit = '6510'; });
+  saveBooks(workspaceAt(o.root), cb);
+  renameSync(o.root, `${o.root}.old-99999`);
+  mkdirSync(`${o.root}.next-99999`);
+  const second = await makeShare(workspaceAt(ws.paths.root), { to: ERNST }, SANDRA);
+  assert.equal(openPackage(second.bytes, new Date(), at).kind, 'update');
+  assert.deepEqual(readdirSync(at).filter((f) => f.includes('.old-') || f.includes('.next-')), []);
+  assert.equal(markerOf(o.root)?.version.n, 2);
+  assert.equal(loadBooks(workspaceAt(o.root)).journalEntries.find((e) => e.id === 'e1')?.accountDebit, '6510');
+});
