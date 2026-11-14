@@ -289,8 +289,26 @@ export type DropAction =
   /** «Bewegungen aus dem PDF einlesen» on a statement PDF kept as the statement (#254): read now, its question kept in the books. */
   | { kind: 'readPdf' };
 
-/** Why a file is in data/quarantine/: its words say it is no receipt (and which kind, and the mail's sender), a person set it aside, or it is no PDF inside. */
-export type QuarantineReason = { kind: 'not-receipt'; why?: OtherWhy; from?: string } | { kind: 'held' } | { kind: 'unreadable' };
+/**
+ * Why a file is in data/quarantine/: its words say it is no receipt (and which kind, and the mail's
+ * sender), its sender and file-name shape are a group the person set aside («Immer beiseite»,
+ * `why: 'group'` with its `shape`), it repeats a receipt of the books with other bytes (`duplicate`,
+ * `of` that receipt's id and `ofFile` its file name), a person set it aside, or it is no PDF inside.
+ * `source`: the mailbox source that set it aside (absent on a drop, on files set aside before
+ * sources named themselves); `at`: when, as recorded; `kept`: a person keeps it, never deleted by itself.
+ */
+export type QuarantineReason =
+  | { kind: 'not-receipt'; why?: OtherWhy | 'group'; shape?: string; from?: string; source?: string; at?: string; kept?: true }
+  | { kind: 'duplicate'; of: string; ofFile?: string; from?: string; source?: string; at?: string; kept?: true }
+  | { kind: 'held' }
+  | { kind: 'unreadable' };
 
-/** A file in data/quarantine/ as Belege lists it (src/intake/quarantine.ts). */
-export interface QuarantinedFile { file: string; reason: QuarantineReason; at: string }
+/** «Doch behalten» took the files back, but these groups could not be switched off: they still set their next files aside (code `groupStillOn`). */
+export interface GroupStillOn { code: 'groupStillOn'; groups: Array<{ source: string; from: string; shape: string }> }
+
+/**
+ * A file in data/quarantine/ as Belege lists it under «Aussortiert» (src/intake/quarantine.ts).
+ * `deleteOn`: the day it is deleted by itself (what a mailbox source set aside, 30 days after it
+ * came); absent for what is kept until a person decides.
+ */
+export interface QuarantinedFile { file: string; reason: QuarantineReason; at: string; deleteOn?: string }

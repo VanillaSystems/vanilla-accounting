@@ -96,8 +96,8 @@ export async function mailBackend(r: MailReach, password: string): Promise<MailB
 }
 
 export interface MailCursor { validity: string; uid: number }
-/** An attachment's bytes the host holds until it delivers them, with the address of the mail's sender. */
-export interface Held { name: string; content: Buffer; from?: string }
+/** An attachment's bytes the host holds until it delivers them, with the address of the mail's sender and its subject. */
+export interface Held { name: string; content: Buffer; from?: string; subject?: string }
 export const sha256 = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 
 /**
@@ -127,7 +127,7 @@ export function mailChannel(backend: MailBackend, r: Pick<MailReach, 'folders' |
       const parts = await backend.attachments(folder, uid);
       return parts.map((p) => {
         const ref = `held:${sha256(p.content)}`;
-        held.set(ref, { name: p.filename, content: p.content, from: seen.get(uid) });
+        held.set(ref, { name: p.filename, content: p.content, from: seen.get(uid), subject: subjects.get(uid) });
         return { file: ref, filename: p.filename, contentType: p.contentType, size: p.content.length };
       });
     },

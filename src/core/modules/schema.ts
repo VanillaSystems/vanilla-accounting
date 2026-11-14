@@ -284,6 +284,12 @@ export interface DocumentsData {
   notTotal?: string[];
   /** Phrases by which a document says it charges no VAT of the jurisdiction (a sale abroad, an exempt premium, a reverse charge). */
   noVat?: string[];
+  /** Words of a document that repeats another's number and amount without being its copy (a credit note, a proforma, an instalment): a mailbox never sets it aside as a duplicate (src/platform/sources/aside.ts contentTwin). */
+  notDuplicate?: string[];
+  /** Words of a file name that say nothing of what a file is (a camera's «IMG», a scanner's «Scan»): a file-name shape made of these alone is never offered to be kept aside (src/platform/sources/aside.ts). */
+  genericFileNames?: string[];
+  /** Short forms by which a file name says it is a receipt («re», «inv»): a file-name shape with one as a part of its own is never offered to be kept aside, however short. */
+  receiptFileNames?: string[];
   /** Documents kept as proof beside an invoice, never paid on their own. */
   supporting: Record<'order-confirmation' | 'delivery-note' | 'reminder' | 'customs-assessment' | 'balance-sheet', string[]>;
   /** Documents that are no receipt at all. */

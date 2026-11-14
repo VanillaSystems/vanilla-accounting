@@ -63,6 +63,11 @@ function loadPdfjs() {
 
 /** The runs of every page of a PDF (a path, or its bytes), or of its first `pages`. */
 export async function pdfRuns(pdf: string | Uint8Array, pages = Infinity): Promise<PageRuns[]> {
+  return (await pdfRunsCounted(pdf, pages)).runs;
+}
+
+/** The runs of a PDF's first `pages`, and how many pages it has in all: the count costs nothing more. */
+export async function pdfRunsCounted(pdf: string | Uint8Array, pages = Infinity): Promise<{ runs: PageRuns[]; pages: number }> {
   const { getDocument, VerbosityLevel } = await loadPdfjs();
   const data = typeof pdf === 'string' ? new Uint8Array(readFileSync(pdf)) : new Uint8Array(pdf);
   const doc = await getDocument({ data, ...FONT_OPTIONS, verbosity: VerbosityLevel.ERRORS }).promise;
@@ -74,7 +79,7 @@ export async function pdfRuns(pdf: string | Uint8Array, pages = Infinity): Promi
       out.push(content.items.flatMap((item) => ('str' in item ? runOf(item) : [])));
       page.cleanup();
     }
-    return out;
+    return { runs: out, pages: doc.numPages };
   } finally {
     await doc.destroy();
   }

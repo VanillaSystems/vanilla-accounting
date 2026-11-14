@@ -1,7 +1,8 @@
 /**
  * Firma › Quellen (ADR 0014): every source with its verdict (ready, waiting
  * to be switched on with what its reach adds, or invalid with file and line), its feeds, its reach
- * whether each channel's secret is set, and the senders a mailbox could skip (one click). A person
+ * whether each channel's secret is set, the senders a mailbox could skip and the groups of a sender's
+ * files (by file-name shape) it could keep aside, each with one click. A person
  * connects a mailbox here (r5h-27): its address, server and login, its password into the secret
  * store, and a check that logs in and lists what the source would read. On a Mac an account of the
  * Mail app can be connected too: its accounts are listed on that click only, one click connects one.
@@ -10,7 +11,8 @@ import { Fragment, useEffect, useState, type FormEvent } from 'react';
 import { language, t } from '../../i18n/index.js';
 import { api, errorText } from '../../lib/api.js';
 import { reachLines } from '../../../platform/sources/reach.js';
-import type { MailCheck, Reach, SourcePreview, SourcesView } from '../../../platform/sources/model.js';
+import type { AsideOffer, MailCheck, Reach, SourcePreview, SourcesView } from '../../../platform/sources/model.js';
+import { shapeText } from '../../lib/name-shape.js';
 import type { Nav } from '../index.js';
 import { clearMailDraft, peekMailDraft, type MailDraft } from './mail-draft.js';
 
@@ -20,6 +22,22 @@ function Lines({ lines, first = 6 }: { lines: string[]; first?: number }) {
     <div className="srclines">
       {lines.slice(0, first).map((l) => <div key={l}>{l}</div>)}
       {lines.length > first ? <details><summary>{t('sources.more', { n: lines.length - first })}</summary>{lines.slice(first).map((l) => <div key={l}>{l}</div>)}</details> : null}
+    </div>
+  );
+}
+
+/**
+ * «Immer beiseite» (src/platform/sources/aside.ts): a sender's files of one name shape, every one
+ * of them with its day, how many were set aside and that none is in the books; one click for the group.
+ */
+function AsideCard({ offer, keep }: { offer: AsideOffer; keep(): void }) {
+  const aside = offer.files.filter((f) => f.aside).length;
+  return (
+    <div className="srcon srcaside" data-testid="aside-offer">
+      <span>{t('sources.asideOffer', { sender: offer.sender, shape: shapeText(offer.shape), n: offer.files.length, aside })}</span>
+      <Lines lines={offer.files.map((f) => `${f.date} · ${f.name}${f.aside ? ` · ${t('sources.asideFileAside')}` : ''}`)} />
+      <span className="m">{t('sources.asideInBooks', { n: offer.inBooks })}</span>
+      <button type="button" className="btn" onClick={keep}>{t('sources.asideKeep')}</button>
     </div>
   );
 }
@@ -207,7 +225,7 @@ export function SourcesSection({ nav, canEdit }: { nav: Nav; canEdit: boolean })
   return (
     <div className="srcs">
       {notHere}
-      {rows.map(({ verdict, secrets, skipOffers }) => {
+      {rows.map(({ verdict, secrets, skipOffers, asideOffers }) => {
         const id = verdict.kind === 'invalid' ? verdict.id : verdict.decl.id;
         const label = verdict.kind === 'invalid' ? id : verdict.decl.label[language()] ?? verdict.decl.label.en;
         return (
@@ -232,6 +250,9 @@ export function SourcesSection({ nav, canEdit }: { nav: Nav; canEdit: boolean })
                     <span>{t('sources.skipOffer', { n: o.n, sender: o.sender })}</span>
                     <button type="button" className="btn" onClick={() => api.skipSender(verdict.decl.id, o.sender, verdict.decl.version).then(reload, (e) => setError(errorText(e)))}>{t('sources.skipSender')}</button>
                   </div>
+                ))}
+                {canEdit && (asideOffers ?? []).map((o) => (
+                  <AsideCard key={`${o.sender} ${o.shape}`} offer={o} keep={() => api.keepAside(verdict.decl.id, o.sender, o.shape, verdict.decl.version).then(reload, (e) => setError(errorText(e)))} />
                 ))}
                 <dl className="kv">
                   <dt>{t('sources.feeds')}</dt>

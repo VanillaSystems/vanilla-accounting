@@ -14,7 +14,36 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Added
+
+- A mailbox learns what to set aside, and the person approves per group. Firma › Quellen offers
+  «Immer beiseite» for a sender's files of one file-name shape («report.pdf»,
+  «newsletter_<Nummer>.pdf») once two of them were set aside and none stands in the books (the whole
+  books, and what waits in the inbox); the card shows every file of the group with its day and
+  «0 davon in den Büchern». Kept, the next files of the group are set aside at delivery, never one
+  whose own words name it a receipt; «Doch behalten» on one of them switches the group off and keeps
+  its other files. A supplier that sends invoices and brochures from one address keeps its invoices:
+  their names differ. A name without a telling word («IMG_…», «Scan…», «Screenshot…», a bare
+  number) or of a receipt's words («Rechnung…», «RE_…», «inv_…») is never offered. If a group cannot
+  be switched off, the toast says it is still on.
+- A re-sent invoice with other bytes (same sender, own invoice number, signed amount, both dated
+  within a week) is set aside as the duplicate of the receipt in the books, named in its reason,
+  instead of being filed twice. A credit note, a refund, a correction, a proforma, an instalment
+  or a reminder never is;
+  where a fact is missing, nothing is set aside.
+- Belege › «Aussortiert» (was «Quarantäne») groups what was set aside by why (a group kept aside,
+  duplicates, newsletters, terms …), with «Doch behalten» per file and per group (all or none). What
+  a mailbox set aside is deleted by its next live pull 30 days after it was set aside; each file
+  says the day («wird am … gelöscht») and the list says how many went when. What a drop or a person
+  set aside, and what a person kept, is never deleted by itself; reading the list deletes nothing.
+- The collected ledger logs per delivered document the name's shape, the mail's day, its size, and
+  for a PDF its page count and whether it has a text layer. The mail's subject and the attachment's
+  own name stay outside git (`data/collected/`). Older lines stay readable.
+
 ### Changed
+
+- Firma › Quellen offers to skip a sender only when none of its files stands in the books (before:
+  when nearly all of its files were set aside), so a supplier with one real invoice is never offered.
 
 - The GitHub release text (`npm run release:github`) starts with the downloads: one line saying
   what the app is, the download table with each `.dmg` linked to its file, «What's new» with a

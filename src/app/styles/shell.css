@@ -85,6 +85,10 @@ h1 { font: 800 34px/1.1 "Hanken Grotesk", sans-serif; letter-spacing: -.025em; m
 .quarantine .qacts { margin-left: auto; display: flex; gap: 12px; }
 .linkbtn.danger { color: var(--neg); }
 .quarantine .qall { margin-top: 10px; font-size: 12.5px; }
+.quarantine .qgroup { margin: 12px 0 0; }
+.quarantine .qghead { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: 13px; padding-bottom: 4px; border-bottom: 1px solid var(--line-2); overflow-wrap: anywhere; }
+.quarantine .qghead .m { color: var(--muted); }
+.quarantine .qghead .linkbtn { margin-left: auto; }
 .nonewhy { color: var(--muted); }
 .row.nonreceipt .t { color: var(--muted); font-style: italic; }
 
