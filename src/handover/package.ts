@@ -49,6 +49,13 @@ export interface PackageIndex {
   message?: string;
   /** «Frage zurück» of earlier returns, for the recipient. */
   questions?: Question[];
+  /**
+   * A link's signature (src/share/signing.ts): the sharer's Ed25519 public key for this person (SPKI,
+   * base64) and her signature over the rest of the index, files' hashes included. A copy pins the key
+   * of its first link and moves forward without a question only for a package signed by it.
+   */
+  signer?: string;
+  signature?: string;
   /** A return: how many records it changes. */
   changes?: number;
 }
@@ -148,6 +155,21 @@ export function readPackage(bytes: Uint8Array): PackageContents {
   if (!raw) throw notPackage('das Verzeichnis index.json fehlt');
   let parsed: unknown;
   try { parsed = JSON.parse(strFromU8(raw)); } catch { throw notPackage('das Verzeichnis ist kein JSON'); }
+  const files = new Map<string, Uint8Array>();
+  for (const [name, data] of Object.entries(members)) {
+    if (name === 'index.json' || name === 'changes.json' || name.endsWith('/')) continue;
+    if (!name.startsWith('files/')) throw new PackageError(`Die Übergabe enthält ${name}, das ihr Verzeichnis nicht nennt.`, 'shareTampered', { path: name.slice(0, 200) });
+    files.set(name.slice('files/'.length), data);
+  }
+  return checkPackage(parsed, files, members['changes.json']);
+}
+
+/**
+ * The checks of a package however it came (a `.vanilla` file, or the files of a link decrypted one
+ * by one, src/share/transport.ts): the index's shape, every path, every file against its SHA-256 and
+ * nothing beside them, the version's checksum, a return's change set. `files` by path.
+ */
+export function checkPackage(parsed: unknown, members: ReadonlyMap<string, Uint8Array>, changesRaw?: Uint8Array): PackageContents {
   const index = checkedIndex(parsed);
   const allowed = (p: string) => (index.kind === 'return' ? isReturnFile(p) : safePath(p) && carriageOf(p) !== undefined);
   for (const f of [...index.files, ...(index.held ?? []), ...(index.omitted ?? [])]) {
@@ -159,10 +181,8 @@ export function readPackage(bytes: Uint8Array): PackageContents {
   const named = new Set(index.files.map((f) => f.path));
   if (named.size !== index.files.length) throw new PackageError('Die Übergabe nennt eine Datei zweimal.', 'shareTampered', { path: 'files' });
   const files = new Map<string, Uint8Array>();
-  for (const [name, data] of Object.entries(members)) {
-    if (name === 'index.json' || name === 'changes.json' || name.endsWith('/')) continue;
-    const path = name.startsWith('files/') ? name.slice('files/'.length) : name;
-    if (!name.startsWith('files/') || !named.has(path)) throw new PackageError(`Die Übergabe enthält ${path}, das ihr Verzeichnis nicht nennt.`, 'shareTampered', { path: path.slice(0, 200) });
+  for (const [path, data] of members) {
+    if (!named.has(path)) throw new PackageError(`Die Übergabe enthält ${path}, das ihr Verzeichnis nicht nennt.`, 'shareTampered', { path: path.slice(0, 200) });
     files.set(path, data);
   }
   for (const f of index.files) {
@@ -173,8 +193,8 @@ export function readPackage(bytes: Uint8Array): PackageContents {
     throw new PackageError('Die Dateien der Übergabe ergeben nicht die Prüfsumme ihrer Version.', 'shareTampered', { path: 'checksum' });
   }
   let changes: ReturnChange[] | undefined;
-  if (members['changes.json']) {
-    try { changes = JSON.parse(strFromU8(members['changes.json'])) as ReturnChange[]; } catch { throw notPackage('die Änderungen sind kein JSON'); }
+  if (changesRaw) {
+    try { changes = JSON.parse(strFromU8(changesRaw)) as ReturnChange[]; } catch { throw notPackage('die Änderungen sind kein JSON'); }
     if (!Array.isArray(changes)) throw notPackage('die Änderungen sind keine Liste');
   }
   if (index.kind === 'return' && !changes) throw new PackageError('Der Rücksendung fehlen ihre Änderungen (changes.json).', 'shareTampered', { path: 'changes.json' });

@@ -46,6 +46,33 @@ export type ApiRefusal =
   | { code: 'shareWrongKind' }
   /** «Teilen» without a name, or with an address that is none. */
   | { code: 'shareNoRecipient' }
+  /**
+   * The share service refused (src/share/client.ts): `reason` is its stable code (docs/share-protocol.md,
+   * the service's docs/api.md «Codes»), `limit` and `per` the limit it names, `refusedReason` why a
+   * sender's confirmation e-mail was not taken.
+   */
+  | { code: 'shareServiceRefused'; params: { reason: string; limit?: string; per?: string } }
+  /** The share service did not answer at all. */
+  | { code: 'shareUnreachable'; params: { service: string } }
+  /** No share service set up: the `.vanilla` file does it. */
+  | { code: 'shareNoService' }
+  /** No secret store that keeps a link's key on this computer. */
+  | { code: 'shareNoSecretStore' }
+  /** «Teilen» by link before this computer's sender registered, or while its address waits for its confirmation e-mail. */
+  | { code: 'shareSenderMissing' }
+  | { code: 'shareSenderUnconfirmed'; params: { email: string } }
+  /** Not a link of shared books. */
+  | { code: 'shareLinkInvalid' }
+  /** «Zurückschicken» by link on a copy that came as a file. */
+  | { code: 'shareNoLink' }
+  /** A share this computer keeps no key of. */
+  | { code: 'shareUnknown' }
+  /** A link to another service than this app's, not confirmed by the person. */
+  | { code: 'shareForeignService'; params: { host: string } }
+  /** A link that would move an existing copy to another sharer or service, not confirmed by the person. */
+  | { code: 'shareCopyOther'; params: { firm: string; version: string; was: string; now: string; claimed: string; host: string } }
+  /** The service asked for a confirmation e-mail the app does not send (another domain, another subject). */
+  | { code: 'shareConfirmationOdd'; params: { host: string } }
   | { code: 'localOnly' }
   /** From this computer, but under a name that is no loopback name (DNS rebinding). */
   | { code: 'foreignHost' }

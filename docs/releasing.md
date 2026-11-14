@@ -130,6 +130,7 @@ update feed.
 | `CSC_LINK`, `CSC_KEY_PASSWORD` | The Developer ID Application certificate (a `.p12` file or its base64) and its password: the app is signed. Without `CSC_LINK` it is not signed, even when the keychain holds an identity. |
 | `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | With a certificate: the app is notarized by Apple, so it opens with a double-click on any Mac. |
 | `VANILLA_RELEASES` | `owner/repo` of the GitHub repository whose releases are the update feed. The build then also writes the `.zip` files and `latest-mac.yml` that the updater reads. |
+| `VANILLA_SHARE_SERVICE` | The share service the app offers for «Teilen» by link (`https://share.<domain>`, src/share/service.ts), written into the packed app's package.json as `share.service`. Without it the person names a service herself, or shares the books as a file. |
 
 The app looks for updates only when `package.json` has `"desktop": { "autoUpdate": true }`, and
 only as a packaged app (`VANILLA_AUTO_UPDATE=1` turns it on for a test). macOS installs an update

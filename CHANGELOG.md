@@ -16,6 +16,22 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- **Share the books by link, end to end encrypted** (docs/specs/e2e-and-fiduciary.md B3, ADR 0016,
+  docs/share-protocol.md). «Teilen» offers «Per Link» besides the file when a share service is set
+  up: the address the invitations come from is confirmed once by one e-mail from it (sent from the
+  books' mailbox when it sends from there, else prepared for the mail program); every file of the
+  package is sealed on its own under a key that stays in the link's fragment, uploaded with its
+  progress shown, and the version is written only once the service holds it. The invitation goes
+  from the books' mailbox or the person's mail program («Link kopieren», «Im Mailprogramm öffnen»).
+  The shares are facts in the dialog (sent, opened, until when, returns fetched) with
+  «Zurückziehen». A link opens as a Durchsicht copy (pasted under «Mehr», or by the Mac app's
+  `vanilla-accounting://` scheme); «An … zurückschicken» sends the return into the same share, and
+  the sharer's app fetches it when the books open and keeps it for review. Each refusal of the
+  service is said with the limit it names. The service is a setting (`VANILLA_SHARE_SERVICE`, at
+  build time or run time, or «Teil-Dienst» in the dialog); without one, the file does every step.
+  A link to another service than the app's, and a link that would move an existing copy without
+  its sharer's signature (an Ed25519 key per books and recipient, pinned by the copy's first link),
+  opens only after the person confirmed it.
 - **A public demo in the browser** (docs/audit-export.md, «Publish the demo»). `npm run build:audit --
   <dir> --demo [--download <url>]` exports the demo company as a static, read-only site for a
   website, under any sub-path: a bar in the product colour says that the company and its figures

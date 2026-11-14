@@ -32,6 +32,9 @@ import { answerKey, developerIdOf } from './build-key.js';
 import { appVersion } from '../version.js';
 import { readState, writeState, type Bounds } from './state.js';
 import { setDurchsichtHome } from '../handover/durchsicht.js';
+import { APP_SCHEME, setShareSettingsFile } from '../share/service.js';
+import { openLink, previewLink, type ShareFlowError } from '../share/sharing.js';
+import { askLines, askReplace } from '../app/handover/ask-text.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** tools/desktop/smoke.mjs: the fused release build has no inspector, so the page reaches the menu (preload.ts). */
@@ -49,6 +52,22 @@ const DICTATION = process.platform !== 'darwin' ? undefined
 
 // The sheet's text is laid out as puppeteer prints it (src/invoices/pdf.ts launches Chrome so).
 app.commandLine.appendSwitch('font-render-hinting', 'none');
+
+/**
+ * Links of shared books (`vanilla-accounting://open?share=<id>#<key>`, the share page's «Buchhaltung
+ * öffnen»): macOS hands them over by `open-url`, also when the link starts the app, so they are
+ * taken before the app is ready and opened once the server listens (src/share/sharing.ts openLink).
+ */
+const shareLinks: string[] = [];
+let openShares: (() => void) | undefined;
+app.on('open-url', (e, url) => {
+  e.preventDefault();
+  if (!url.startsWith(`${APP_SCHEME}:`)) return;
+  shareLinks.push(url);
+  openShares?.();
+});
+// The packed app's Info.plist names the scheme (desktop/electron-builder.config.cjs `protocols`); this makes it the handler.
+if (app.isPackaged) app.setAsDefaultProtocolClient(APP_SCHEME);
 
 if (!app.requestSingleInstanceLock()) app.quit();
 // A start that fails says so and ends: never a running app without a window.
@@ -111,6 +130,8 @@ async function start(): Promise<void> {
   const resumePhone = resumeOnce(() => server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); }));
   // Copies of books handed over to this Mac («Durchsicht»): in the app's own folder, never among the person's own books.
   setDurchsichtHome(join(app.getPath('userData'), 'Durchsicht'));
+  // This Mac's share service address, when the person names one («Teilen › Mehr»).
+  setShareSettingsFile(join(app.getPath('userData'), 'share.json'));
   const server = desktopServer({
     stateFile,
     demoRoot: join(app.getPath('userData'), 'Demo'),
@@ -208,12 +229,57 @@ async function start(): Promise<void> {
   refreshMenu();
   await pathKnown;
   server.startBackground();
+  /**
+   * A link of shared books: any web page can hand one over, so nothing opens before the person
+   * says yes to whose books, from whom and through which service (read from the share's envelope
+   * without spending an opening), with a plain warning for another service than this app's and for
+   * a copy the link would move. Then fetched, decrypted and checked, and opened as a Durchsicht copy
+   * in the app's own folder, which needs no question of macOS. A link that does not open says why.
+   */
   // The books opened last, read only after macOS answered for their folder; a first start reads none (#373).
-  void firstPage({
+  const lastBooks = () => void firstPage({
     last: readState(stateFile).recent[0], reach: server.reach, answered: server.answered, unasked, open: server.open, current: server.current, pathOf, show,
     // While macOS asks, the start screen names the folder and the books as desktop.json keeps them.
     asking: (root) => askingPath(root, server.recent().find((b) => b.root === root)?.name ?? basename(root), server.folderOf(root)),
   });
+  const ask = async (detail: string, yes: string): Promise<boolean> => {
+    const t = textsIn(language);
+    const options = { type: 'question' as const, message: t('desktop.shareAskTitle'), detail, buttons: [yes, t('common.cancel')], defaultId: 1, cancelId: 1 };
+    const r = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+    return r.response === 0;
+  };
+  /** The link's service and claims first; `trust` only for the service the person saw named. */
+  const askShare = async (link: string): Promise<{ yes: boolean; trust: boolean }> => {
+    const t = textsIn(language);
+    const preview = await previewLink(link);
+    const { what, warnings } = askLines((k, v) => t(k, v), preview);
+    return { yes: await ask([what, ...warnings].join('\n\n'), t('share.ask.open')), trust: preview.foreign };
+  };
+  openShares = () => {
+    for (let url = shareLinks.shift(); url; url = shareLinks.shift()) {
+      const link = url;
+      void askShare(link)
+        .then(async ({ yes, trust }) => {
+          if (!yes) { if (!win || win.isDestroyed()) lastBooks(); return; }
+          win?.setProgressBar(2);
+          let opened;
+          try { opened = await openLink(link, { trust }); } catch (e) {
+            // The package would move a copy here it does not continue: asked again with that copy's real facts (no second download).
+            const refusal = e as ShareFlowError;
+            if (refusal?.code !== 'shareCopyOther') throw e;
+            const t = textsIn(language);
+            if (!(await ask(askReplace((k, v) => t(k, v), refusal.params), t('share.ask.replaceYes')))) { if (!win || win.isDestroyed()) lastBooks(); return; }
+            opened = await openLink(link, { trust, replace: true });
+          }
+          show(pathOf(await server.open(opened.root)));
+        })
+        .catch(async (e: unknown) => { await dialog.showMessageBox({ type: 'warning', message: textsIn(language)('desktop.shareOpenFailed'), detail: (e as Error).message }); })
+        .finally(() => { if (win && !win.isDestroyed()) win.setProgressBar(-1); });
+    }
+  };
+  // Started by a link: it opens instead of the books opened last (those open when the person says no).
+  if (shareLinks.length) openShares();
+  else lastBooks();
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   void checkForUpdates();
 }

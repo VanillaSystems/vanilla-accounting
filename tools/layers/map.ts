@@ -49,6 +49,7 @@ export const LAYER_OF: [prefix: string, layer: Layer][] = [
   ['src/handover/versions.ts', 'core'],
   ['src/handover/content.ts', 'core'],
   ['src/handover/', 'infrastructure'],
+  ['src/share/', 'infrastructure'],
   ['src/platform/', 'infrastructure'],
   ['src/app/', 'view'],
   ['src/server/', 'view'],

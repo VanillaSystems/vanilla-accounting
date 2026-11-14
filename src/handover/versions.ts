@@ -71,13 +71,19 @@ export function readVersions(paths: Pick<WorkspacePaths, 'root'>): Version[] {
 /** The newest version; undefined while the books have none. */
 export const currentVersion = (paths: Pick<WorkspacePaths, 'root'>): Version | undefined => readVersions(paths).at(-1);
 
+/** The number the next version gets: past every version read and every line written, so a line that no longer reads never gives its number twice. */
+export function nextVersion(paths: Pick<WorkspacePaths, 'root'>): number {
+  const file = fileOf(paths);
+  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  const lines = text.split('\n').filter((l) => l.trim() && !l.startsWith('{"schema"')).length;
+  return Math.max(lines, ...readVersions(paths).map((x) => x.n), 0) + 1;
+}
+
 /** Appends the next version for the content as it is now, and returns it. */
 export function writeVersion(paths: Pick<WorkspacePaths, 'root'>, v: Omit<Version, 'n' | 'at' | 'checksum'> & { at?: string; checksum?: string }): Version {
   const file = fileOf(paths);
-  // The next number is past every version read and every line written: a line that no longer reads never gives its number twice.
   const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
-  const lines = text.split('\n').filter((l) => l.trim() && !l.startsWith('{"schema"')).length;
-  const n = Math.max(lines, ...readVersions(paths).map((x) => x.n), 0) + 1;
+  const n = nextVersion(paths);
   const line: Version = { n, at: v.at ?? new Date().toISOString(), ...v, checksum: v.checksum ?? contentChecksum(paths).checksum };
   if (!existsSync(file)) writeFileSync(file, `${JSON.stringify({ schema: VERSIONS_SCHEMA })}\n`);
   else if (text && !text.endsWith('\n')) appendFileSync(file, '\n');
@@ -86,12 +92,13 @@ export function writeVersion(paths: Pick<WorkspacePaths, 'root'>, v: Omit<Versio
 }
 
 /** The newest version `email` (or, without one, `name`) holds: the newest handed to them or that their return was based on. */
-export function heldBy(paths: Pick<WorkspacePaths, 'root'>, who: Party): Version | undefined {
+export function heldBy(paths: Pick<WorkspacePaths, 'root'>, who: Party, notHeld: ReadonlySet<number> = new Set()): Version | undefined {
   const same = (p: Party | undefined) => !!p && (who.email && p.email ? p.email.toLowerCase() === who.email.toLowerCase() : p.name === who.name);
   const all = readVersions(paths);
   let held: Version | undefined;
   for (const v of all) {
-    const got = v.reason === 'handover' && same(v.to) ? v : v.reason === 'return-applied' && same(v.from) && v.basedOn ? all.find((x) => x.n === v.basedOn) : undefined;
+    // `notHeld`: hand-overs that never reached the person (a link nobody opened, src/share/sharing.ts unopenedVersions).
+    const got = v.reason === 'handover' && same(v.to) && !notHeld.has(v.n) ? v : v.reason === 'return-applied' && same(v.from) && v.basedOn ? all.find((x) => x.n === v.basedOn) : undefined;
     if (got && (!held || got.n > held.n)) held = got;
   }
   return held;

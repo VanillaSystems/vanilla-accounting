@@ -12,9 +12,9 @@ and the providers.
 | engine | 4 | 1 |
 | provider | 14 | 11 |
 | split | 134 | 26 |
-| infrastructure | 77 | 4 |
+| infrastructure | 88 | 4 |
 | workflow | 31 | 0 |
-| view | 382 | 55 |
+| view | 386 | 55 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -57,6 +57,7 @@ Layers are assigned by path prefix, most specific first:
 - `src/handover/versions.ts` → core
 - `src/handover/content.ts` → core
 - `src/handover/` → infrastructure
+- `src/share/` → infrastructure
 - `src/platform/` → infrastructure
 - `src/app/` → view
 - `src/server/` → view

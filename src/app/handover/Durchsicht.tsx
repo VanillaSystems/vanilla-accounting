@@ -12,6 +12,8 @@ import { formatDate } from '../lib/utils.js';
 import { ICONS } from '../areas/icons.js';
 import { useTopBarHeight } from '../shell/AuditBar.js';
 import { reloadHandover, shortSum, sizeText, type DurchsichtFacts } from './store.js';
+import { runJob, type Job } from './link.js';
+import { JobProgress } from './LinkParts.js';
 
 const PEN = <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" /></svg>;
 
@@ -88,6 +90,7 @@ function ReturnDialog({ d, toast, onClose }: { d: DurchsichtFacts; toast(msg: st
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => { request<ReturnPlan>('GET', '/api/handover/return').then(setPlan, (e) => setError(errorText(e))); }, []);
+  const [job, setJob] = useState<Job<unknown> | null>(null);
   const LIMIT = 50;
   async function send() {
     setBusy(true);
@@ -97,6 +100,16 @@ function ReturnDialog({ d, toast, onClose }: { d: DurchsichtFacts; toast(msg: st
       toast(t('durchsicht.saved', { file, name: d.sharer.name }));
       onClose();
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+  }
+  /** A copy that came by link sends its return into the same share: no e-mail, the sharer's app fetches it. */
+  async function sendBack() {
+    setBusy(true); setError('');
+    try {
+      await runJob('/api/share/return', { message }, setJob);
+      await reloadHandover();
+      toast(t('durchsicht.returned', { name: d.sharer.name }));
+      onClose();
+    } catch (e) { setError(errorText(e)); } finally { setBusy(false); setJob(null); }
   }
   return (
     <>
@@ -115,13 +128,19 @@ function ReturnDialog({ d, toast, onClose }: { d: DurchsichtFacts; toast(msg: st
             {plan && plan.changes.length > LIMIT ? <div className="r m">{t('durchsicht.moreChanges', { n: plan.changes.length - LIMIT, limit: LIMIT })}</div> : null}
           </div>
           <label>{t('share.message')}<textarea value={message} onChange={(e) => setMessage(e.target.value)} maxLength={2000} /></label>
-          <div className="lock">{ICONS.lock}<span>{t('durchsicht.decides', { name: d.sharer.name })}</span></div>
+          <div className="lock">{ICONS.lock}<span>{t(d.linked ? 'durchsicht.decidesLink' : 'durchsicht.decides', { name: d.sharer.name })}</span></div>
+          <JobProgress job={job} />
           {error ? <div className="err" role="alert">{error}</div> : null}
         </div>
         <div className="xft">
           <span className="m">{plan ? `${t('durchsicht.summary', { n: plan.changes.length, files: plan.files })} · ${sizeText(plan.bytes)} · ${t('durchsicht.basedOn', { n: d.version.n, sum: shortSum(d.version.checksum) })}` : ''}</span>
           <button type="button" className="btn ghost" onClick={onClose}>{t('common.cancel')}</button>
-          <button type="button" className="btn primary" disabled={!plan?.changes.length || busy} onClick={() => void send()} data-testid="return-save">{t('durchsicht.saveFile')}</button>
+          {d.linked ? (
+            <>
+              <button type="button" className="btn ghost" disabled={!plan?.changes.length || busy} onClick={() => void send()} data-testid="return-save">{t('durchsicht.saveFile')}</button>
+              <button type="button" className="btn primary" disabled={!plan?.changes.length || busy} onClick={() => void sendBack()} data-testid="return-send">{busy ? t('share.sending') : t('durchsicht.sendLink', { name: d.sharer.name })}</button>
+            </>
+          ) : <button type="button" className="btn primary" disabled={!plan?.changes.length || busy} onClick={() => void send()} data-testid="return-save">{t('durchsicht.saveFile')}</button>}
         </div>
       </div>
     </>

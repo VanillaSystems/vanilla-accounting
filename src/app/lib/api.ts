@@ -153,6 +153,29 @@ export function leftText(r: Pick<PaymentRefusal, 'refusal'>): string | undefined
 /** t() for accessText (src/app/desktop/access-text.ts), which the main process calls with textsIn too. */
 export const sayAccess = (key: AccessKey, vars: Record<string, string>): string => t(key as 'desktop.access.refused', vars as { folder: string });
 
+/** The service's refusal codes (docs/share-protocol.md, its api.md «Codes»), grouped where one sentence says them. */
+const SHARE_BAD = new Set(['badSize', 'badObjects', 'badMeta', 'badWrappedKey', 'badProof', 'badJson']);
+const SHARE_UPLOAD = new Set(['sizeChanged', 'exists', 'notUploading', 'missingObjects', 'overDeclared', 'undeclared', 'sizeMismatch', 'unexpectedObjects', 'notAPackage']);
+const SHARE_GUARD = new Set(['sharesPerDay', 'opensPerDay', 'classAPerMonth', 'classBPerMonth']);
+const SHARE_OWN = new Set(['badEmail', 'wrongProof', 'indexAlreadyRead', 'senderUnknown', 'senderNotConfirmed', 'wrongToken', 'notFound', 'tooLarge', 'tooManyObjects',
+  'tooManyShares', 'tooManyConfirmations', 'tooManyReturns', 'storageFull', 'notReady', 'spent', 'expired', 'revoked', 'returnClosed', 'ticketExpired', 'internal', 'oversized']);
+/** A byte limit as a size («1 GB»), any other as the number. */
+const limitText = (limit: string | undefined): string => {
+  const n = Number(limit);
+  if (!limit || !Number.isFinite(n)) return limit ?? '';
+  return n >= 1024 ** 3 ? `${+(n / 1024 ** 3).toFixed(1)} GB` : n >= 1024 ** 2 ? `${Math.round(n / 1024 ** 2)} MB` : String(n);
+};
+/** A refusal of the share service in words, with the limit it names (the service's numbers; its known defaults where it names none). */
+export function shareRefusalText(reason: string, limit?: string, per?: string): string {
+  const perText = per && ['sender-day', 'ip-day', 'day', 'month'].includes(per) ? t(`share.per.${per}` as 'share.per.day') : per ?? '';
+  const known = { hours: 5, days: reason === 'returnClosed' ? 30 : 10 };
+  if (SHARE_BAD.has(reason)) return t('share.refused.bad', { reason });
+  if (SHARE_UPLOAD.has(reason)) return t('share.refused.upload', { reason });
+  if (SHARE_GUARD.has(reason)) return t('share.refused.guard', { limit: limitText(limit), per: perText });
+  if (SHARE_OWN.has(reason)) return t(`share.refused.${reason}` as 'share.refused.tooManyShares', { limit: limitText(limit ?? (reason === 'spent' ? '3' : '')), per: perText, ...known });
+  return t('share.refused.bad', { reason });
+}
+
 export function errorText(e: unknown): string {
   if (e instanceof DesktopCallError) return t(e.text);
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e);
@@ -171,6 +194,18 @@ export function errorText(e: unknown): string {
     case 'shareUpdateFailed': return t('error.shareUpdateFailed', { why: b.params.why });
     case 'shareWrongKind': return t('error.shareWrongKind');
     case 'shareNoRecipient': return t('error.shareNoRecipient');
+    case 'shareServiceRefused': return shareRefusalText(b.params.reason, b.params.limit, b.params.per);
+    case 'shareUnreachable': return t('error.shareUnreachable', { service: b.params.service });
+    case 'shareNoService': return t('error.shareNoService');
+    case 'shareNoSecretStore': return t('error.shareNoSecretStore');
+    case 'shareSenderMissing': return t('error.shareSenderMissing');
+    case 'shareSenderUnconfirmed': return t('error.shareSenderUnconfirmed', { email: b.params.email });
+    case 'shareLinkInvalid': return t('error.shareLinkInvalid');
+    case 'shareNoLink': return t('error.shareNoLink');
+    case 'shareUnknown': return t('error.shareUnknown');
+    case 'shareForeignService': return t('error.shareForeignService', { host: b.params.host });
+    case 'shareCopyOther': return t('error.shareCopyOther', b.params);
+    case 'shareConfirmationOdd': return t('error.shareConfirmationOdd', { host: b.params.host });
     case 'localOnly': return t('error.localOnly');
     case 'foreignHost': return t('error.foreignHost');
     case 'phoneToken': return t('error.phoneToken');
