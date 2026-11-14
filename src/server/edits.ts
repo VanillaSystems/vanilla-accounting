@@ -7,7 +7,7 @@ import { issuedByFirm } from '../intake/own-invoice.js';
 import { accountOf, byStatement } from '../workspace/money-accounts.js';
 import { randomBytes } from 'node:crypto';
 import { periodLock, type Books } from '../books/store.js';
-import { isManualRef } from '../books/refs.js';
+import { isManualRef, isPersonsLink } from '../books/refs.js';
 import { nextManualRef } from '../books/next-ref.js';
 import { addDays, isFilingKey, parsePeriod } from '../accounting/periods.js';
 import { correctsFor } from '../accounting/correction.js';
@@ -546,7 +546,8 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
   if (!id) { assertPlaced(rest.accountDebit, rest.accountCredit); assertCodeTaken(rest.vatCode); assertCodeSign(rest.vatCode, rest.accountDebit, rest.accountCredit); }
   if (transactionRef) {
     const dates = refDates(books, transactionRef);
-    if (!dates.length && !isManualRef(transactionRef)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
+    // An undo (`id`) puts a module's last booking under a ref of its own back (#524), as a person's own ref.
+    if (!dates.length && !isManualRef(transactionRef) && !id) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
     assertOpen(books, dates, 'newEntry');
   }
   const entry: JournalEntry = { id: id ?? randomBytes(8).toString('hex'), transactionRef: transactionRef ?? nextManualRef(books, date.slice(0, 4)), ...rest };
@@ -556,10 +557,13 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
   return entry;
 }
 
-/** A booking without a payment made or put back with the receipts it carries (`receipts`): linked to it again. */
+/** A booking without a payment (a person's, or a module's under a ref of its own) made or put back with the receipts it carries (`receipts`): linked to it again. */
 function linkCarried(books: Books, entry: JournalEntry): void {
-  if (!entry.receipts?.length || !withoutPayment(books, entry.transactionRef)) return;
-  for (const id of entry.receipts) if (books.receipts.some((r) => r.id === id)) link(books, id, entry.transactionRef);
+  const ref = entry.transactionRef;
+  if (!entry.receipts?.length || !ref || books.transactions.some((t) => t.ref === ref)) return;
+  // A module's booking (#524) names in `receipts` what it saw, linked already by the module: only the ones its deletion took along come back.
+  const linked = new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId));
+  for (const id of entry.receipts) if (books.receipts.some((r) => r.id === id) && !linked.has(id)) link(books, id, ref);
   // A receipt deleted meanwhile is no longer recorded.
   carried(books, entry.transactionRef);
 }
@@ -868,9 +872,14 @@ export function deleteEntry(books: Books, id: string): JournalEntry {
   if (tx && !bookedInFiled(tx)) tx.waitsForPerson = { since: new Date().toISOString(), why: 'bookingDeleted' };
   // A booking without a payment takes its links along: no receipt hangs on a booking that is gone. The entry keeps them in `receipts` for its undo.
   // Each receipt is taken apart from it, so code never books from it again (a provider's fee bill, src/booking/vat-corrections.ts); the undo links it back.
-  else if (isManualRef(entry.transactionRef) && !books.journalEntries.some((je) => je.transactionRef === entry.transactionRef)) {
-    for (const m of books.mappings) if (m.transactionRef === entry.transactionRef) apart(books, m.receiptId, m.transactionRef, true);
-    books.mappings = books.mappings.filter((m) => m.transactionRef !== entry.transactionRef);
+  // A module's booking under a ref of its own (#524) takes the links a person or the AI made along, and the entry returned names them for its
+  // undo; the module's own links stay with the module, which books that ref again or takes it back.
+  else if (entry.transactionRef && (isManualRef(entry.transactionRef) || !tx) && !books.journalEntries.some((je) => je.transactionRef === entry.transactionRef)) {
+    const manual = isManualRef(entry.transactionRef);
+    const going = books.mappings.filter((m) => m.transactionRef === entry.transactionRef && (manual || isPersonsLink(m)));
+    for (const m of going) apart(books, m.receiptId, m.transactionRef, true);
+    books.mappings = books.mappings.filter((m) => !going.includes(m));
+    if (!manual && going.length) return { ...entry, receipts: [...new Set([...(entry.receipts ?? []), ...going.map((m) => m.receiptId)])].sort() };
   }
   return entry;
 }

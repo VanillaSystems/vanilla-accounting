@@ -32,6 +32,7 @@ import { parseMatchResult } from '../src/llm/prompts.js';
 import { parseRule } from '../src/booking/rules.js';
 import { loadBooks, PERSON, saveBooks, updateSaved, type Books } from '../src/books/store.js';
 import { readQuestions } from '../src/questions/store.js';
+import { link, unlink } from '../src/server/edits.js';
 import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import type { BankTransaction, JournalEntry, Receipt } from '../src/types/index.js';
 import type { DropSession } from '../src/types/drop.js';
@@ -917,6 +918,25 @@ test('4. «Rückgängig» takes only the report\'s own entries and links: no pay
   assert.equal(now.journalEntries.some((e) => e.transactionRef.startsWith('SR-')), false, '«Rückgängig» takes its bookings back');
   assert.deepEqual(lines(now.journalEntries.filter((e) => !e.transactionRef.startsWith('SR-'))), lines(before), 'every other entry as it was, the payout booked as sales included');
   assert.equal(now.mappings.some((m) => m.receiptId === 'pg'), false, 'the order page\'s link to a sale that is gone goes too');
+});
+
+test('#524 «Rückgängig» of a report whose sale a person linked a receipt to is refused: her link never dangles; once she takes it off, the report goes', () => {
+  const ws = shop();
+  const done = importSalesReport(ws, Buffer.from([head, row('2101', '2026-11-20', '108.10', '8.10')].join('\n')), 'a.csv');
+  assert.ok(done.ok);
+  const id = loadBooks(ws).receipts.find((r) => r.filename === done.summary.file)!.id;
+  assert.ok(loadBooks(ws).journalEntries.some((e) => e.transactionRef === 'SR-shopify-2101'));
+  const doc: Receipt = { id: 'fees-doc', filename: '20261130-gebuehren.csv', originalFilename: 'fees.csv', extractedText: 'Order,Fee', extractionMethod: 'pdftotext', fileSize: 1, indexedAt: '2026-11-30T00:00:00Z', location: 'archived', date: '2026-11-30' };
+  updateSaved(ws, PERSON, (b) => { b.receipts.push(doc); link(b, 'fees-doc', 'SR-shopify-2101'); });
+  assert.equal(removeSalesReport(ws, id), false, 'refused: her link would hang on nothing');
+  let now = loadBooks(ws);
+  assert.ok(now.journalEntries.some((e) => e.transactionRef === 'SR-shopify-2101'), 'the sale stays');
+  assert.ok(now.receipts.some((r) => r.id === id), 'and the report with it');
+  updateSaved(ws, PERSON, (b) => { unlink(b, 'fees-doc', 'SR-shopify-2101'); });
+  assert.equal(removeSalesReport(ws, id), true);
+  now = loadBooks(ws);
+  assert.equal(now.journalEntries.some((e) => e.transactionRef === 'SR-shopify-2101'), false);
+  assert.equal(now.mappings.some((m) => m.transactionRef === 'SR-shopify-2101'), false, 'no link left on the sale that is gone');
 });
 
 test('6. what a report holds is kept on its receipt and shown there; the drop row names the first ones, the receipt the first HELD_KEPT', () => {

@@ -35,6 +35,7 @@ import { chartNames } from '../booking/rule-book.js';
 import { fromClearing, isProvider, orderOf, payoutDaysOf, providerOfMoneyIn, providerOfPayment, type Provider } from '../booking/providers.js';
 import { bookReport, recognizeOtherExport, collectedBy, isReportRef, linkOrdersToSales, paymentFacts, readReport, recognizeReport, reportFacts, REPORT_LINK_RULE, saleRef, unpaidRow, type PaymentFacts, type ReadReport, type ReportContext, type ReportOutcome, type ReportTexts } from '../booking/sales-report.js';
 import { loadKnowledge, homeOf } from '../knowledge/layers.js';
+import { isPersonsLink } from '../books/refs.js';
 import { silentUids } from '../knowledge/counterparties.js';
 import { buyerUids } from './own-invoice.js';
 import { businessOfReceipt } from './batch-payers.js';
@@ -362,7 +363,7 @@ function paymentsOf(ws: Workspace, books: Books, p: Provider): PaymentFacts | un
  */
 function dropStale(books: Books, refs: readonly string[]): void {
   const lock = periodLock(books);
-  const kept = new Set(books.mappings.filter((m) => m.by === 'human' || m.by === 'llm').map((m) => m.transactionRef));
+  const kept = new Set(books.mappings.filter(isPersonsLink).map((m) => m.transactionRef));
   const gone = new Set(refs.filter((r) => !kept.has(r)));
   if (!gone.size) return;
   books.journalEntries = books.journalEntries.filter((e) => !(gone.has(e.transactionRef) && isReportRef(e.transactionRef) && appMade(e) && !lock.isClosed(e.date)));
@@ -580,7 +581,8 @@ function summaryOf(p: Provider, kind: 'sales' | 'fees', facts: ReturnType<typeof
  * booked none again. A payments report's «Rückgängig» takes the provider's sales reports again without
  * it (#214): what it held (an order no transaction of it named) is booked, and the app's own refunds of
  * the open period dated only by it go back, their sales held for a refund day again. Returns false, and
- * takes nothing back, when a booking of it lies in a filed period or a person changed one.
+ * takes nothing back, when a booking of it lies in a filed period, a person changed one, or a person
+ * (or the AI on her wish) linked a receipt to one.
  */
 export function removeSalesReport(ws: Workspace, id: string): boolean {
   const books = loadBooks(ws);
@@ -588,7 +590,9 @@ export function removeSalesReport(ws: Workspace, id: string): boolean {
   if (!receipt?.report) return false;
   const lock = periodLock(books);
   const mine = books.journalEntries.filter((e) => isReportRef(e.transactionRef) && e.receipts?.includes(id));
-  if (mine.some((e) => lock.isClosed(e.date) || !appMade(e))) return false;
+  const refs = new Set(mine.map((e) => e.transactionRef));
+  // A receipt a person (or the AI on her wish) linked to one of its bookings is hers: taking the booking would orphan her link (#524).
+  if (mine.some((e) => lock.isClosed(e.date) || !appMade(e)) || books.mappings.some((m) => refs.has(m.transactionRef) && isPersonsLink(m))) return false;
   const path = receiptFile(ws, books, receipt);
   const p = providersOf(ws).find((x) => x.id === receipt.report!.provider);
   const fees = receipt.report.kind === 'fees' && p?.provider.clearing && p.provider.since ? p : undefined;
