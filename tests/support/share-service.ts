@@ -37,6 +37,8 @@ export interface FakeShareService {
 
 const ID = () => [...randomBytes(26)].map((b) => 'abcdefghijklmnopqrstuvwxyz234567'[b & 31]).join('');
 const token = () => randomBytes(32).toString('base64url');
+/** The live service's codes are base64url: this prefix makes every fake one carry its `-` and `_`. */
+const CODE_PREFIX = 'a-b_';
 const body = (req: IncomingMessage) => new Promise<Buffer>((resolve) => { const parts: Buffer[] = []; req.on('data', (c) => parts.push(c)); req.on('end', () => resolve(Buffer.concat(parts))); });
 
 export async function startShareService(): Promise<FakeShareService> {
@@ -70,7 +72,7 @@ export async function startShareService(): Promise<FakeShareService> {
       if (!/^[^@\s]+@[^@\s]+$/.test(email)) return no(400, 'badEmail');
       const t = token();
       senders.set(t, { email, confirmed: fake.autoConfirm });
-      return send(201, { senderToken: t, confirmed: fake.autoConfirm, confirmation: { to: `confirm@${new URL(base).hostname}`, subject: `Vanilla Accounting confirmation ${randomBytes(12).toString('hex')}`, text: 'Bestätigung', expiresAt: new Date(Date.now() + 3600_000).toISOString() } });
+      return send(201, { senderToken: t, confirmed: fake.autoConfirm, confirmation: { to: `confirm@${new URL(base).hostname}`, subject: `Vanilla Accounting confirmation ${CODE_PREFIX}${randomBytes(9).toString('base64url')}`, text: 'Bestätigung', expiresAt: new Date(Date.now() + 3600_000).toISOString() } });
     }
     if (req.method === 'GET' && url.pathname === '/api/senders/me') {
       const s = senders.get(bearer);
