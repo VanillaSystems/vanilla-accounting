@@ -34,7 +34,17 @@ function said(r: ReviewRow, x: unknown): string {
   if (x === undefined) return t('review.none');
   if (r.kind === 'journalEntries' && o) return [`${o.accountDebit ?? '–'} / ${o.accountCredit ?? '–'}`, o.vatCode, typeof o.amount === 'number' ? money(o.amount) : undefined, o.date !== r.date ? formatDate(String(o.date)) : undefined].filter(Boolean).join(' · ');
   if (r.kind === 'mappings' && o) return t('review.linked', { receipt: String(o.receiptId) });
-  if (r.kind === 'receipts' && o) return String(o.originalFilename ?? o.filename ?? r.key);
+  if (r.kind === 'receipts' && o) {
+    // What the receipt says counts for the VAT: its amount and its tax, as the review's reader must see them.
+    const groups = Array.isArray(o.vatSummary) ? (o.vatSummary as Array<{ ratePercent?: number; vat?: number }>) : [];
+    const vatText = o.hasSwissVat === true ? t('review.receipt.vat', { rates: groups.map((g) => `${g.ratePercent ?? '?'} %: ${money(g.vat ?? 0)}`).join(', ') || '–' })
+      : o.hasSwissVat === false ? t('review.receipt.noVat') : t('review.receipt.unread');
+    return [String(o.originalFilename ?? o.filename ?? r.key), typeof o.amount === 'number' ? `${money(o.amount)} ${String(o.currency ?? '')}`.trim() : undefined, vatText, o.vatBy === 'human' ? t('review.receipt.byHand') : undefined].filter(Boolean).join(' · ');
+  }
+  if (r.kind === 'transactions' && o) {
+    const proof = asRec(o.inputTaxProof);
+    return [typeof o.amount === 'number' ? `${o.direction === 'CRDT' ? '+' : '−'}${money(o.amount)} ${String(o.currency ?? '')}` : undefined, String(o.description ?? ''), o.remarks ? `«${String(o.remarks)}»` : undefined, o.noReceiptNeeded ? t('review.tx.noReceipt') : undefined, proof ? t('review.tx.proof', { text: String(proof.text) }) : undefined].filter(Boolean).join(' · ');
+  }
   if (r.kind === 'file') return t('review.fileText', { n: String(x).split('\n').length });
   return typeof x === 'object' ? JSON.stringify(x).slice(0, 80) : String(x);
 }
@@ -163,7 +173,8 @@ export function ReturnReview({ id, nav, period, canEdit }: { id: string; nav: Na
                       <span className="rvnow">{r.after === undefined ? t('review.removed') : said(r, r.after)}</span>
                     </div>
                   )}
-                  {r.kind === 'file' ? (
+                  {r.kind === 'file' && r.after === undefined ? <div className="rvorig">{t('review.fileGone')}</div> : null}
+                  {r.kind === 'file' && r.after !== undefined ? (
                     <div className="rvorig">
                       {r.decision === 'draft' ? t('review.drafted') : t('review.fileNote')}
                       {canEdit && r.decision !== 'draft' ? <> <button type="button" className="linkbtn" disabled={busy} onClick={() => void decide(r.id, 'draft')}>{t('review.toDraft')}</button></> : null}

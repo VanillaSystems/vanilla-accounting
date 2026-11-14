@@ -6030,6 +6030,15 @@ export const messages = {
   'review.toDraft': "In Änderungen prüfen",
   'review.drafted': "Liegt in Änderungen als Entwurf: dort zeigt die Regelkarte, was er täte; gilt erst mit «Behalten».",
   'review.fileNote': "Eine Datei von Wissen oder dem Kontenplan wird nie mit «Alles übernehmen» übernommen.",
+  'review.receipt.vat': "MWST {rates}",
+  'review.receipt.noVat': "ohne MWST",
+  'review.receipt.unread': "wird gelesen",
+  'review.receipt.byHand': "MWST von Hand",
+  'review.tx.noReceipt': "braucht keinen Beleg",
+  'review.tx.proof': "anderer Nachweis: {text}",
+  'share.role.invoices': "Rechnungen und Kunden",
+  'share.role.sources': "Postfächer und Quellen",
+  'review.fileGone': "Gelöscht: ein Entwurf löscht keine Datei; löschen geht in Wissen von Hand.",
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

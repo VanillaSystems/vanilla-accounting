@@ -143,6 +143,11 @@ function moveForward(root: string, had: Marker, p: PackageContents, now: Date): 
   const oldBase = recordsInFolder(baseDir(root));
   const mine = diffRecords(oldBase, recordsInFolder(root));
   writeFiles(root, p.files);
+  // The copy proves the version from its disk: the files as written, the ones held from before, the omitted ones' checksums.
+  const listed = [...index.files, ...(index.held ?? [])].map((f) => f.path);
+  if (checksumOf([...listed.map((path) => factOf(root, path)), ...(index.omitted ?? [])]) !== index.version.checksum) {
+    throw new PackageError('Die Kopie ergibt nach dem Schreiben nicht die Prüfsumme der Version.', 'shareTampered', { path: 'checksum' });
+  }
   // Files of the old version the new one no longer names (the sharer removed them) go; his own new files stay.
   const named = new Set([...index.files, ...(index.held ?? []), ...(index.omitted ?? [])].map((f) => f.path));
   // Only a content file of the copy itself, never a path that leaves it (review of #535).

@@ -8,14 +8,14 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { strToU8, unzipSync, zipSync } from 'fflate';
 import { PERSON, loadBooks, saveBooks, sealsOf, update } from '../src/books/store.js';
 import { writeSeal } from '../src/books/seal.js';
 import { workspaceAt, type Workspace } from '../src/workspace/workspace.js';
-import { sha256 } from '../src/handover/content.js';
+import { checksumOf, sha256 } from '../src/handover/content.js';
 import { LIMITS, PackageError, readPackage, writePackage, type PackageIndex } from '../src/handover/package.js';
 import { makeShare } from '../src/handover/share.js';
 import { buildReturn, openPackage } from '../src/handover/durchsicht.js';
@@ -225,5 +225,117 @@ test('API: on a copy the sharer\'s steps are refused however the path is spelled
   const bad = await api.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: new TextEncoder().encode('PK\u0003\u0004garbage') });
   assert.equal(bad.status, 400);
   assert.equal((await bad.json() as { code: string }).code, 'shareNotPackage');
+  assert.equal((await api.send('POST', '/api/handover/close')).status, 200);
+});
+
+// ─── Re-review of b1a8b197: probes N1 to N5 and the second API probe ───────
+
+function withReceipt(): Workspace {
+  const ws = books();
+  const b = loadBooks(ws);
+  update(b, PERSON, (x) => { x.receipts.push({ id: 'r1', filename: 'r1.pdf', originalFilename: 'r1.pdf', extractedText: 'r1', extractionMethod: 'pdftotext', fileSize: 10, indexedAt: '2026-07-10T00:00:00Z', location: 'archived', date: '2026-07-10', amount: 50, currency: 'CHF' }); });
+  saveBooks(ws, b);
+  mkdirSync(join(ws.paths.root, 'transactional-data/2026/receipts'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'transactional-data/2026/receipts/r1.pdf'), '%PDF hers');
+  return workspaceAt(ws.paths.root);
+}
+
+test('N1: two paths only case apart, or a path not in NFC, are refused', async () => {
+  const ws = books();
+  const made = await makeShare(ws, { to: ERNST }, SANDRA);
+  for (const paths of [['knowledge/a.yaml', 'knowledge/A.yaml'], ['knowledge/ä.yaml']]) {
+    const m = unzipSync(made.bytes);
+    const idx = JSON.parse(new TextDecoder().decode(m['index.json'])) as PackageIndex;
+    paths.forEach((p, i) => { const t = `x${i}`; m[`files/${p}`] = strToU8(t); idx.files.push({ path: p, sha256: sha256(t), blob: '', bytes: t.length }); });
+    idx.version = { ...idx.version, checksum: checksumOf([...idx.files, ...(idx.omitted ?? [])]) };
+    m['index.json'] = strToU8(JSON.stringify(idx));
+    const at = home();
+    assert.throws(() => openPackage(zipSync(m), new Date(), at), tampered('shareTampered'), paths.join(' '));
+  }
+});
+
+test('N2: a new receipt under her file\'s name (case apart) is refused; a new receipt brings its own file and is read here, not as he says', async () => {
+  const ws = withReceipt();
+  const facts = { originalFilename: 'Quittung.pdf', extractedText: 'Total 9999 MWST 8.1%', extractionMethod: 'pdftotext', fileSize: 3, indexedAt: '2026-07-10T00:00:00Z', location: 'archived', date: '2026-07-10', amount: 9999, hasSwissVat: true, vatBy: 'human', vatSummary: [{ ratePercent: 8.1, net: 9250, vat: 749 }] };
+  const clash = await hostileReturn(ws, [{ kind: 'receipts', key: 'zz', after: { id: 'zz', filename: 'R1.pdf', ...facts } }], { 'transactional-data/2026/receipts/R1.pdf': '%PDF his' });
+  assert.throws(() => receiveReturn(ws, clash), tampered('shareTampered'));
+  const noFile = await hostileReturn(ws, [{ kind: 'receipts', key: 'zz', after: { id: 'zz', filename: 'zz.pdf', ...facts } }]);
+  assert.throws(() => receiveReturn(ws, noFile), tampered('shareTampered'));
+  const own = await hostileReturn(ws, [{ kind: 'receipts', key: 'zz', after: { id: 'zz', filename: 'zz.pdf', ...facts } }], { 'transactional-data/2026/receipts/zz.pdf': '%PDF his' });
+  const got = receiveReturn(ws, own);
+  applyReturn(ws, got.id, 'all');
+  assert.equal(readFileSync(join(ws.paths.root, 'transactional-data/2026/receipts/r1.pdf'), 'utf8'), '%PDF hers');
+  const zz = loadBooks(workspaceAt(ws.paths.root)).receipts.find((r) => r.id === 'zz')!;
+  assert.equal(zz.extractedText, '', 'read here');
+  for (const f of ['hasSwissVat', 'vatBy', 'vatSummary', 'amount', 'date'] as const) assert.equal(zz[f], undefined, f);
+});
+
+test('N3: an imported payment\'s amount does not change, a payment is not invented; a description and a proof may change', async () => {
+  const ws = books();
+  const t2 = loadBooks(ws).transactions.find((t) => t.ref === 'T2')!;
+  for (const changes of [
+    [{ kind: 'transactions', key: 'T2', after: { ...t2, amount: 5 } }],
+    [{ kind: 'transactions', key: 'TX9', after: { ...t2, ref: 'TX9', amount: 7777, inputTaxProof: { text: 'contract', at: 'x' } } }],
+    [{ kind: 'transactions', key: 'M2026-009', after: { ref: 'M2026-009', bank: 'manual', source: 'manual', date: '2026-08-01', amount: 7, currency: 'CHF', direction: 'DBIT', description: 'x', inputTaxProof: { text: 'contract', at: 'x' } } }],
+    [{ kind: 'transactions', key: 'T2' }],
+  ]) {
+    const ret = await hostileReturn(ws, changes);
+    assert.throws(() => receiveReturn(ws, ret), tampered('shareTampered'), JSON.stringify(changes).slice(0, 80));
+  }
+  const ok = await hostileReturn(ws, [
+    { kind: 'transactions', key: 'T2', after: { ...t2, description: 'Telefon Juli', remarks: 'privat?' } },
+    { kind: 'transactions', key: 'M2026-009', after: { ref: 'M2026-009', bank: 'manual', source: 'manual', date: '2026-08-01', amount: 7, currency: 'CHF', direction: 'DBIT', description: 'Parkuhr' } },
+  ]);
+  const got = receiveReturn(ws, ok);
+  applyReturn(ws, got.id, 'all');
+  const now = loadBooks(workspaceAt(ws.paths.root)).transactions;
+  assert.equal(now.find((t) => t.ref === 'T2')?.amount, 50);
+  assert.equal(now.find((t) => t.ref === 'T2')?.description, 'Telefon Juli');
+  assert.equal(now.find((t) => t.ref === 'M2026-009')?.amount, 7);
+});
+
+test('N4: a knowledge file he deleted is no empty draft', async () => {
+  const ws = books();
+  mkdirSync(join(ws.paths.root, 'knowledge/suppliers'), { recursive: true });
+  writeFileSync(join(ws.paths.root, 'knowledge/suppliers/x.yaml'), 'id: x\n');
+  const ret = await hostileReturn(ws, [{ kind: 'file', key: 'knowledge/suppliers/x.yaml' }]);
+  const got = receiveReturn(ws, ret);
+  assert.throws(() => decide(ws, got.id, 'file\u0000knowledge/suppliers/x.yaml', 'draft'), HandoverRefused);
+  assert.equal(existsSync(join(ws.paths.data, 'draft', 'knowledge/suppliers/x.yaml')), false);
+  assert.equal(readFileSync(join(ws.paths.root, 'knowledge/suppliers/x.yaml'), 'utf8'), 'id: x\n');
+});
+
+test('N5: a correction into a filed quarter and a changed code are rows the review shows, with their effect', async () => {
+  const ws = books();
+  const e1 = loadBooks(ws).journalEntries.find((e) => e.id === 'e1')!;
+  const ret = await hostileReturn(ws, [{ kind: 'journalEntries', key: 'e1', after: { ...e1, vatCode: 'I0' } }, { kind: 'journalEntries', key: 'n1', after: { ...e1, id: 'n1', corrects: '2026-Q1', amount: 1000, vatCode: 'I81' } }]);
+  const r = reviewOf(ws, receiveReturn(ws, ret).id);
+  assert.deepEqual(r.rows.map((x) => `${x.group}/${x.key}`), ['corrects/n1', 'vat/e1']);
+  assert.ok(r.effect.find((e) => e.period === '2026-Q1')?.filed, 'the filed quarter\'s correction is shown');
+  assert.ok(r.effect.some((e) => e.period === '2026-Q3' && e.before !== e.after));
+});
+
+test('API 2: on a copy invoices, customers and mail sources are the sharer\'s; his bookings and his return work', async () => {
+  const res = await api.fetch('/api/handover/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: { name: 'E' }, full: true }) });
+  const file = new Uint8Array(await res.arrayBuffer());
+  assert.equal((await api.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file })).status, 200);
+  const entries = (await api.send('GET', '/books.json')).json.journalEntries as Array<{ id: string; date: string; transactionRef: string }>;
+  const open = entries.find((e) => e.date > '2026-06-30')!;
+  assert.equal((await api.send('PATCH', `/api/journal-entries/${open.id}`, { accountDebit: '6510' })).status, 200);
+  for (const [m, p, b] of [
+    ['POST', '/API/Automation/', { kind: 'start', workflow: 'quarter-close', item: { kind: 'period', id: '2026-Q3' } }],
+    ['POST', '/api/customers', { name: 'Kunde AG' }],
+    ['POST', '/api/invoices', { customer: 'x' }],
+    ['POST', '/api/invoices/in_p/issue', {}],
+    ['POST', '/api/invoices/in_p/send', {}],
+    ['POST', '/api/sources/mail', {}],
+    ['PUT', '/api/mail/password', {}],
+  ] as const) {
+    const r = await api.send(m, p, b);
+    assert.equal(r.status, 403, `${m} ${p}`);
+    assert.equal(r.json.code, 'roleRefused');
+  }
+  const ret = await api.fetch('/api/handover/return', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  assert.equal(ret.status, 200);
   assert.equal((await api.send('POST', '/api/handover/close')).status, 200);
 });

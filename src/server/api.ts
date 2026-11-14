@@ -87,6 +87,9 @@ const SHARER_ONLY: Array<[string, RegExp, string]> = [
   ['POST', /^\/api\/workspace\/logo$/, 'settings'],
   ['POST', /^\/api\/handover\/share$/, 'share'],
   ['POST', /^\/api\/handover\/returns\/[^/]+\/(apply|undo|decide)$/, 'return'],
+  // Invoices and customers are issued and sent by the firm; mailboxes and collectors are its own (a copy reads no mail).
+  ['*', /^\/api\/(invoices|customers)(\/|$)/, 'invoices'],
+  ['*', /^\/api\/(sources|mail)(\/|$)/, 'sources'],
 ];
 /** The workflows that file, seal or close: the sharer's. */
 const SHARER_WORKFLOWS: ReadonlySet<string> = new Set(['vat-filing', 'year-close', 'quarter-close']);
@@ -96,7 +99,8 @@ app.use((req, res, next) => {
   // Express routes ignore case and a trailing slash: the guard reads the path the same way.
   const path = req.path.toLowerCase().replace(/\/+$/, '');
   const filing = req.method === 'POST' && path === '/api/automation' && (req.body as { kind?: string } | undefined)?.kind === 'start' && SHARER_WORKFLOWS.has(String((req.body as { workflow?: string }).workflow));
-  const hit = filing ? 'filing' : SHARER_ONLY.find(([method, re]) => req.method === method && re.test(path))?.[2];
+  const writes = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
+  const hit = filing ? 'filing' : SHARER_ONLY.find(([method, re]) => (method === '*' ? writes : req.method === method) && re.test(path))?.[2];
   if (!hit) return next();
   res.status(403).json({ error: `Durchsicht: das macht ${m.sharer.name}.`, code: 'roleRefused', params: { action: hit, name: m.sharer.name } } satisfies ApiErrorBody);
 });

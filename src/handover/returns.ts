@@ -20,6 +20,7 @@ import { filing, vat } from '../engines/index.js';
 import type { JournalEntry } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { PackageError, isReturnFile, readPackage, safePath, type PackageContents, type Question, type ReturnChange } from './package.js';
+import { filesOfPart } from '../workspace/workspace.js';
 import { applyToBooks, dateOf, isRecordFile, parseRefKey, recordFiles, recordsInFolder, recordsOf, refKey, sameRecord, type RecordChange, type RecordMap } from './records.js';
 import { keyOf, type Part } from '../books/years.js';
 import { formTakes } from '../accounting/vat-codes.js';
@@ -119,6 +120,41 @@ function recordProblem(kind: Part, key: string, r: unknown): string | undefined 
   return undefined;
 }
 
+type Rec = Record<string, unknown>;
+/** A file name as a case-insensitive file system compares it: NFC, lower case. */
+const fold = (name: string) => name.normalize('NFC').toLowerCase();
+
+/** The fields a person may change on a payment the bank brought (src/server/routes/transactions.ts parseTransactionPatch). */
+const PAYMENT_EDITS: ReadonlySet<string> = new Set(['description', 'remarks', 'noReceiptNeeded', 'inputTaxProof']);
+/** The fields of a payment booked by hand (POST /api/transactions/manual). */
+const MANUAL_PAYMENT: ReadonlySet<string> = new Set(['ref', 'bank', 'source', 'date', 'amount', 'currency', 'direction', 'description']);
+
+/**
+ * Why a payment his return changes or adds is not one a person could have made in the app, or
+ * undefined: on a payment the bank brought only its description, remark, «braucht keinen Beleg» and
+ * other proof change; a new one is a payment by hand, as the app makes it; only a hand payment goes.
+ */
+function paymentProblem(before: Rec | undefined, after: Rec | undefined, banks: ReadonlySet<string>): string | undefined {
+  if (!after) return before?.source === 'manual' ? undefined : 'eine Zahlung der Bank bleibt';
+  if (before) {
+    const fields = new Set([...Object.keys(before), ...Object.keys(after)]);
+    const moved = [...fields].filter((f) => !PAYMENT_EDITS.has(f) && !sameRecord(before[f], after[f]));
+    if (moved.length) return `an einer Zahlung ändert sich nur Text, Bemerkung und Beleg-Nachweis (${moved.join(', ')})`;
+  } else {
+    const extra = Object.keys(after).filter((f) => !MANUAL_PAYMENT.has(f));
+    if (extra.length) return `eine neue Zahlung ist eine von Hand, ohne ${extra.join(', ')}`;
+    if (after.source !== 'manual' || typeof after.ref !== 'string' || !/^M\d{4}-\d{3,}$/.test(after.ref)) return 'eine neue Zahlung ist eine von Hand';
+    if (typeof after.bank !== 'string' || !banks.has(after.bank)) return 'kein Geldkonto der Firma';
+    if (typeof after.amount !== 'number' || !Number.isFinite(after.amount) || after.amount <= 0) return 'kein Betrag';
+    if (typeof after.currency !== 'string' || !/^[A-Z]{3}$/.test(after.currency) || (after.direction !== 'DBIT' && after.direction !== 'CRDT')) return 'keine Währung oder Richtung';
+  }
+  if (typeof after.description !== 'string' || !after.description.trim()) return 'ohne Text';
+  if (after.remarks !== undefined && typeof after.remarks !== 'string') return 'keine Bemerkung';
+  if (after.noReceiptNeeded !== undefined && after.noReceiptNeeded !== true) return 'kein Beleg-Vermerk';
+  if (after.inputTaxProof !== undefined && !(isObj(after.inputTaxProof) && typeof after.inputTaxProof.text === 'string' && typeof after.inputTaxProof.at === 'string')) return 'kein Nachweis';
+  return undefined;
+}
+
 /** The records of the version a return names as its base, when it was handed to its sender as it says; else shareUnknownBase. */
 function baseOf(ws: Workspace, p: PackageContents): RecordMap {
   const v = readVersions(ws.paths).find((x) => x.n === p.index.version.n && x.reason === 'handover' && !!x.to && samePerson(x.to, p.index.from) && x.checksum === p.index.version.checksum);
@@ -135,8 +171,17 @@ function baseOf(ws: Workspace, p: PackageContents): RecordMap {
  * the firm takes, files only of knowledge/ and the chart, and `before` read from the version as it was
  * handed to him, never from the return. Records he left as they were drop out.
  */
-function checkedChanges(ws: Workspace, p: PackageContents): ReturnChange[] {
+function checkedChanges(ws: Workspace, p: PackageContents, hers: Pick<Books, 'receipts'> = loadBooks(ws)): ReturnChange[] {
   const base = baseOf(ws, p);
+  // Receipt names already taken, as a case-insensitive file system sees them: a new receipt never points at her file.
+  // The name of a receipt his take-over brought counts as his own, not as taken.
+  const takenBy = new Map<string, string>([
+    ...filesOfPart(ws.paths, 'receipts').map(([name]): [string, string] => [fold(basename(name)), '']),
+    ...[...base].filter(([k]) => k.startsWith('receipts\u0000')).map(([, r]): [string, string] => [fold(String((r as { filename?: unknown }).filename ?? '')), '']),
+    ...hers.receipts.map((r): [string, string] => [fold(r.filename), r.id]),
+  ]);
+  const isTaken = (name: string, id: unknown) => takenBy.has(fold(name)) && takenBy.get(fold(name)) !== id;
+  const banks = new Set(['manual', ...ws.bankAccounts.map((a) => a.bank)]);
   const seen = new Set<string>();
   const out: ReturnChange[] = [];
   for (const raw of (p.changes ?? []) as unknown[]) {
@@ -154,8 +199,31 @@ function checkedChanges(ws: Workspace, p: PackageContents): ReturnChange[] {
       if (why) throw tampered(key, why);
     }
     const before = base.get(k);
-    if (sameRecord(before, raw.after)) continue;
-    out.push({ kind: kind as ReturnChange['kind'], key, ...(before !== undefined ? { before } : {}), ...(raw.after !== undefined ? { after: raw.after } : {}), ...(typeof raw.why === 'string' && raw.why.trim() ? { why: raw.why.trim().slice(0, 500) } : {}) });
+    let after: unknown = raw.after;
+    if (kind === 'transactions') {
+      const why = paymentProblem(before as Rec | undefined, after as Rec | undefined, banks);
+      if (why) throw tampered(key, why);
+    }
+    if (kind === 'receipts' && after !== undefined) {
+      const r = after as Rec;
+      if (before === undefined) {
+        // A new receipt brings its own file under a name no receipt of hers has; what was read off it is read again here.
+        if (isTaken(String(r.filename), r.id)) throw tampered(key, `den Dateinamen ${String(r.filename)} hat schon ein Beleg`);
+        const file = [...p.files].find(([path]) => isReturnFile(path) && basename(path) === r.filename);
+        if (!file) throw tampered(key, 'der Beleg bringt seine Datei nicht mit');
+        takenBy.set(fold(String(r.filename)), String(r.id));
+        after = {
+          id: r.id, filename: r.filename, originalFilename: typeof r.originalFilename === 'string' ? r.originalFilename.slice(0, 200) : r.filename,
+          extractedText: '', extractionMethod: 'pdftotext', fileSize: file[1].byteLength, indexedAt: p.index.at, location: 'archived',
+          ...(typeof r.description === 'string' ? { description: r.description.slice(0, 200) } : {}),
+        };
+      } else if ((before as Rec).filename !== r.filename || (before as Rec).location !== r.location) {
+        throw tampered(key, 'ein Beleg behält seine Datei');
+      }
+    }
+    if (kind === 'receipts' && after === undefined && before !== undefined) throw tampered(key, 'einen Beleg nimmt nur, wer die Bücher führt, aus den Büchern');
+    if (sameRecord(before, after)) continue;
+    out.push({ kind: kind as ReturnChange['kind'], key, ...(before !== undefined ? { before } : {}), ...(after !== undefined ? { after } : {}), ...(typeof raw.why === 'string' && raw.why.trim() ? { why: raw.why.trim().slice(0, 500) } : {}) });
   }
   return out;
 }
@@ -370,7 +438,7 @@ function effectOf(rows: readonly ReviewRow[], books: Books): VatEffect[] {
 export function reviewOf(ws: Workspace, id: string, books: Books = loadBooks(ws)): Review {
   const p = packageOf(ws, id);
   const state = readState(ws, id);
-  const rows = rowsOf(ws, books, checkedChanges(ws, p), state);
+  const rows = rowsOf(ws, books, checkedChanges(ws, p, books), state);
   const applied = state.applied.filter((a) => !a.pending);
   const learnRows = rows.filter((r) => r.applied && r.kind === 'journalEntries' && (r.group === 'account' || r.group === 'vat' || r.group === 'split'));
   const refs = [...new Set(learnRows.map((r) => asEntry(r.after).transactionRef).filter((x): x is string => !!x))];
@@ -401,9 +469,10 @@ export function decide(ws: Workspace, id: string, row: string, decision: Decisio
   if (decision === 'draft') {
     // His text of a knowledge file or the chart goes into Änderungen as a draft: shown on the rule card there, kept only by «Behalten».
     if (c.kind !== 'file' || !isRecordFile(c.key) || !inside(draftDir(ws), c.key)) throw new HandoverRefused('Nur eine Datei von knowledge/ oder der Kontenplan geht als Entwurf in die Änderungen.', []);
+    if (typeof c.after !== 'string') throw new HandoverRefused(`${c.key} hat er gelöscht: ein Entwurf löscht keine Datei. Löschen geht in Wissen von Hand.`, [c.key]);
     const to = join(draftDir(ws), c.key);
     mkdirSync(dirname(to), { recursive: true });
-    writeFileSync(to, typeof c.after === 'string' ? c.after : '');
+    writeFileSync(to, c.after);
   }
   if (decision === null) delete s.decisions[row]; else if (decision) s.decisions[row] = decision;
   if (question === null) delete s.questions[row];
@@ -430,7 +499,7 @@ export function applyReturn(ws: Workspace, id: string, groups: readonly GroupId[
   // A take-over a failed save left pending never stands.
   state.applied = state.applied.filter((a) => !a.pending);
   const books = loadBooks(ws);
-  const checked = checkedChanges(ws, p);
+  const checked = checkedChanges(ws, p, books);
   const rows = rowsOf(ws, books, checked, state).filter((r) => groups === 'all' || groups.includes(r.group));
   const pending = rows.filter((r) => takes(r));
   if (!pending.length) throw new HandoverRefused('Nichts zu übernehmen: jede Zeile ist übernommen, ausgelassen, gefragt oder wartet auf deine Wahl.', []);
@@ -440,8 +509,10 @@ export function applyReturn(ws: Workspace, id: string, groups: readonly GroupId[
   const files: Array<{ path: string; sha256: string; data: Uint8Array }> = [];
   for (const c of changes.filter((x) => x.kind === 'receipts' && x.after)) {
     const name = (c.after as { filename: string }).filename;
+    const taken = new Set(filesOfPart(ws.paths, 'receipts').map(([n]) => fold(basename(n))));
     for (const [path, data] of p.files) {
-      if (!isReturnFile(path) || basename(path) !== name || !inside(ws.paths.root, path) || existsSync(join(ws.paths.root, path))) continue;
+      if (!isReturnFile(path) || basename(path) !== name || !inside(ws.paths.root, path)) continue;
+      if (taken.has(fold(name)) || books.receipts.some((r) => fold(r.filename) === fold(name))) throw new HandoverRefused(`Den Dateinamen ${name} hat inzwischen ein Beleg: nichts übernommen.`, [c.key]);
       files.push({ path, sha256: sha256(data), data });
     }
   }
@@ -458,6 +529,9 @@ export function applyReturn(ws: Workspace, id: string, groups: readonly GroupId[
       b.journalEntries.push(...corrections);
     });
     saveBooks(ws, books);
+    // Saved: the take-over stands from here, with its undo, whatever comes after.
+    delete step.pending;
+    writeState(ws, id, { ...state, applied: [...state.applied, step] });
   } catch (e) {
     for (const f of files) if (existsSync(join(ws.paths.root, f.path)) && sha256(readFileSync(join(ws.paths.root, f.path))) === f.sha256) rmSync(join(ws.paths.root, f.path));
     writeState(ws, id, state);
@@ -466,7 +540,6 @@ export function applyReturn(ws: Workspace, id: string, groups: readonly GroupId[
   const taken = new Set(pending.map((r) => r.id));
   const left = rowsOf(ws, books, checked, state).filter((r) => r.status !== 'same' && !r.applied && !taken.has(r.id)).length;
   const v = writeVersion(ws.paths, { reason: 'return-applied', from: p.index.from, basedOn: p.index.version.n, taken: changes.length + corrections.length, left, ret: id, at: now.toISOString() });
-  delete step.pending;
   step.version = v.n;
   writeState(ws, id, { ...state, applied: [...state.applied, step] });
   return { applied: changes.length, corrections: corrections.length, left, version: v };

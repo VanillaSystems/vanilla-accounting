@@ -153,6 +153,9 @@ export function readPackage(bytes: Uint8Array): PackageContents {
   for (const f of [...index.files, ...(index.held ?? []), ...(index.omitted ?? [])]) {
     if (!allowed(f.path)) throw new PackageError(`Die Übergabe nennt ${f.path}: diese Datei nimmt die App nicht an.`, 'shareTampered', { path: f.path.slice(0, 200) });
   }
+  // Two paths a case-insensitive file system (macOS) takes for one: the second would overwrite the first.
+  const folded = [...index.files, ...(index.held ?? []), ...(index.omitted ?? [])].map((f) => f.path.normalize('NFC').toLowerCase());
+  if (new Set(folded).size !== folded.length) throw new PackageError('Die Übergabe nennt zwei Dateien, die sich nur in Gross- und Kleinschreibung unterscheiden.', 'shareTampered', { path: 'files' });
   const named = new Set(index.files.map((f) => f.path));
   if (named.size !== index.files.length) throw new PackageError('Die Übergabe nennt eine Datei zweimal.', 'shareTampered', { path: 'files' });
   const files = new Map<string, Uint8Array>();
