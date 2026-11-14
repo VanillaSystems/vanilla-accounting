@@ -198,6 +198,36 @@ export function withReadFacts(transactions: readonly BankTransaction[], reads: r
   });
 }
 
+/**
+ * Takes back, in place, the references and foreign amounts a table gave the open payments of its
+ * account (the lines paired as factsOfRead pairs them, where the payment holds the line's value): the
+ * merge keeps a fact no file states now (#522), so a table that goes («Neu lesen») or is replaced
+ * by a person's takes its own along. The next merge gives back what a file still states.
+ */
+export function takeBackReadFacts(transactions: BankTransaction[], r: Pick<KeptRead, 'statement' | 'account'>, isClosed: (date: string) => boolean): void {
+  const { pairs } = pairLines(r.statement.movements, transactions.filter((t) => !isClosed(t.date)), r.account);
+  for (const [i, t] of pairs) {
+    const f = factOf(r.statement.movements[i], r.account.currency);
+    if (f.reference && t.reference === f.reference) delete t.reference;
+    if (f.original && t.original && sameFacts({ reference: undefined, original: t.original }, { reference: undefined, original: f.original })) delete t.original;
+  }
+}
+
+/**
+ * A PDF's table replaced by another (a question's table corrected, kept beside its PDF), in place:
+ * what `was` gave the open payments is taken back (takeBackReadFacts), what `now` gives goes on.
+ */
+export function replaceReadFacts(transactions: BankTransaction[], was: Pick<KeptRead, 'statement' | 'account'> | undefined, now: Pick<KeptRead, 'statement' | 'account'>, isClosed: (date: string) => boolean): void {
+  if (was) takeBackReadFacts(transactions, was, isClosed);
+  const open = transactions.filter((t) => !isClosed(t.date));
+  const { references, originals } = factsOfRead(now, open);
+  for (const t of open) {
+    const reference = references.get(t.ref), original = originals.get(t.ref);
+    if (reference) t.reference = reference;
+    if (original) t.original = original;
+  }
+}
+
 // ─── The month-end balance ──────────────────────────────────────────────────
 
 /**
