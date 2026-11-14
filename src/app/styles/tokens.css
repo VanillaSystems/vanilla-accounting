@@ -1,13 +1,15 @@
-/* The mockup's design tokens (planning/ui-mockup): light, and dark under [data-theme="dark"]. */
+/* The mockup's design tokens (planning/ui-mockup): light, and dark under [data-theme="dark"].
+   The accent is the product colour, Tram blue, and accent-soft its 10 % tint; dark mode is
+   grayscale, its accent neutral. */
 :root {
   --bg: #ffffff; --ink: #0b1220; --ink-2: #4a5263; --muted: #6e7685; --faint: #a3a9b5; --date: #98a0ad; --line: #e7eaf0; --line-2: #d3d8e1;
-  --accent: #0067b1; --accent-soft: #e8f1f9; --on-accent: #fff; --on-fill: #fff; --hover: #f4f6f9;
+  --accent: #005b8c; --accent-soft: #e6eff4; --on-accent: #fff; --on-fill: #fff; --hover: #f4f6f9;
   --glass: rgba(255,255,255,.72); --glass-line: rgba(11,18,32,.08); --shadow: 0 10px 40px -10px rgba(11,18,32,.25);
   --warn: #9a5b00; --warn-soft: #fdf3e1; --pos: #1a7f4b; --pos-soft: #e8f5ee; --neg: #b42318;
   --paper-bg: #ffffff; --desk: #f4f6f9; --ai: #6d4fc2; --rec: #d92d20; --on-rec: #fff;
   --dim: rgba(11,18,32,.16);
   /* The product colour, the same in both themes (the public demo's bar, src/app/shell/Demo.tsx). */
-  --brand: #0067b1; --on-brand: #fff;
+  --brand: #005b8c; --on-brand: #fff;
 }
 [data-theme="dark"] {
   --bg: #0a0a0a; --ink: #ededed; --ink-2: #b0b0b0; --muted: #8f8f8f; --faint: #5a5a5a; --date: #6b6b6b; --line: #1f1f1f; --line-2: #2e2e2e;
@@ -16,7 +18,7 @@
   --warn: #e8b04b; --warn-soft: #2c2112; --pos: #5cc790; --pos-soft: #14281d; --neg: #f2877d;
   --paper-bg: #f2f2f2; --desk: #111; --ai: #b9a6f2; --rec: #e5484d; --on-rec: #fff;
   --dim: rgba(0,0,0,.45);
-  --brand: #0067b1; --on-brand: #fff;
+  --brand: #005b8c; --on-brand: #fff;
 }
 /* The app's fonts (bundled in main.tsx), each with a generic family behind it: while a webfont
    loads, or if it fails, the text falls back to the system's sans or mono, never to the browser's

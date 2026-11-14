@@ -69,6 +69,12 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- The accent is Tram blue, the product colour: `#005b8c`, with its 10 % tint `#e6eff4` as the soft
+  accent (before: `#0067b1` / `#e8f1f9`). White on it reads at 7.3:1, the blue on the tint at 6.3:1. The public demo's bar
+  takes the same colour; the dark theme keeps its grey accent.
+- The public demo (`build:audit --demo`) opens in German whatever the browser's language; a
+  language picked in its top bar is kept as before.
+
 - Firma › Quellen offers to skip a sender only when none of its files stands in the books (before:
   when nearly all of its files were set aside), so a supplier with one real invoice is never offered.
 
