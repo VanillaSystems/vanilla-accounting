@@ -496,6 +496,7 @@ export const api = {
   checkSource: (id: string) => request<MailCheck>('POST', `/api/sources/${encodeURIComponent(id)}/check`),
   quarantine: () => request<QuarantinedFile[]>('GET', '/api/quarantine'),
   takeFromQuarantine: (file: string) => request<{ ok: true; file: string; run?: string }>('POST', `/api/quarantine/${encodeURIComponent(file)}/take`),
+  quarantineSwept: () => request<{ swept: { on: string; n: number } | null }>('GET', '/api/quarantine/.swept'),
   takeAllFromQuarantine: (files: string[]) => request<{ ok: true; files: string[]; run?: string }>('POST', '/api/quarantine/take', { files }),
   deleteFromQuarantine: (files: string[]) => request<{ ok: true; deleted: number }>('POST', '/api/quarantine/delete', { files }),
   discardReceipts: (ids: string[]) => request<{ ok: true; deleted: number }>('POST', '/api/receipts/discard', { ids }),

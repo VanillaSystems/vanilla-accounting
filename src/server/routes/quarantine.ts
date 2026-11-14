@@ -3,10 +3,13 @@
  * notice), what a mailbox set aside by a group the person keeps aside or as a duplicate of a receipt,
  * or what a person set aside in the drop dialog (src/intake/quarantine.ts). It never entered the
  * books; «Doch behalten» takes it back into the inbox, and the inbox's run reads it. Taking back a
- * file of a group kept aside switches that group off (src/platform/sources/aside.ts). What a mailbox
- * set aside is deleted 30 days after it came; the list is swept when it is read.
+ * file of a group kept aside switches that group off (src/platform/sources/aside.ts), and the
+ * group's other files are kept from then on. What a mailbox set aside is deleted 30 days after it was
+ * set aside, by the mailbox's next live pull (src/platform/sources/host.ts sweepAside); reading the
+ * list never deletes anything.
  *
  *   GET  /api/quarantine              QuarantinedFile[]
+ *   GET  /api/quarantine/.swept       { swept: Swept | null }: the last day files were deleted after 30 days, and how many
  *   GET  /api/quarantine/:file        the file itself, to look at
  *   POST /api/quarantine/:file/take   back into the inbox, handed to the run
  *   POST /api/quarantine/take         { files }: all of them back into the inbox (a group), all or none
@@ -17,70 +20,100 @@
  */
 import { Router } from 'express';
 import { createHash } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { RequestError, WS } from '../books.js';
 import { INTAKE, engine, handedOver } from './automation.js';
 import { namesOf } from './receipts.js';
-import { freeName, quarantined, quarantinePath, reasonOf, release, sweepQuarantine } from '../../intake/quarantine.js';
+import { bytesOf, freeName, keepQuarantined, lastSwept, quarantined, quarantinePath, reasonOf, release, type Swept } from '../../intake/quarantine.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { changeKeepingOn, sources } from '../../platform/sources/index.js';
 import { switchAsideOff } from '../../platform/sources/aside.js';
 import type { Arrival } from '../../workflows/model.js';
+import type { QuarantineReason } from '../../types/drop.js';
 
 export const router = Router();
 
+const gone = (file: string) => new RequestError(404, `${file} ist nicht in der Quarantäne.`, { code: 'gone', params: { what: 'quarantined' } });
+
 router.get('/api/quarantine', (_req, res) => {
-  sweepQuarantine(WS.paths.data);
   res.json(quarantined(WS.paths.data));
+});
+
+router.get('/api/quarantine/.swept', (_req, res) => {
+  res.json({ swept: lastSwept(WS.paths.data) ?? null } satisfies { swept: Swept | null });
 });
 
 router.post('/api/quarantine/delete', (req, res) => {
   const files = namesOf(req.body, 'files');
   const missing = files.find((f) => !quarantinePath(WS.paths.data, f));
-  if (missing) throw new RequestError(404, `${missing} ist nicht in der Quarantäne.`, { code: 'gone', params: { what: 'quarantined' } });
+  if (missing) throw gone(missing);
   for (const f of files) release(WS.paths.data, f);
   res.json({ ok: true, deleted: files.length });
 });
 
 router.get('/api/quarantine/:file', (req, res) => {
   const path = quarantinePath(WS.paths.data, req.params.file);
-  if (!path) throw new RequestError(404, 'Diese Datei ist nicht in der Quarantäne.');
+  if (!path) throw gone(req.params.file);
   res.sendFile(path);
 });
 
 router.post('/api/quarantine/take', async (req, res) => {
   const files = namesOf(req.body, 'files');
   const missing = files.find((f) => !quarantinePath(WS.paths.data, f));
-  if (missing) throw new RequestError(404, `${missing} ist nicht in der Quarantäne.`, { code: 'gone', params: { what: 'quarantined' } });
-  const taken = files.map(takeBack);
+  if (missing) throw gone(missing);
+  const taken = takeBack(files);
   const run = await handToRun(taken);
   res.json({ ok: true, files: taken.map((t) => t.file), ...(run ? { run } : {}) });
 });
 
 router.post('/api/quarantine/:file/take', async (req, res) => {
-  if (!quarantinePath(WS.paths.data, req.params.file)) throw new RequestError(404, 'Diese Datei ist nicht in der Quarantäne.');
-  const taken = takeBack(req.params.file);
+  if (!quarantinePath(WS.paths.data, req.params.file)) throw gone(req.params.file);
+  const [taken] = takeBack([req.params.file]);
   const run = await handToRun([taken]);
   res.json({ ok: true, file: taken.file, ...(run ? { run } : {}) });
 });
 
 /**
- * A quarantined file back into the inbox under a free name. A file a mailbox set aside by a group the
- * person keeps aside switches that group off: the person said one of its files is a receipt.
+ * Quarantined files back into the inbox, all or none: each file's bytes are written into the inbox
+ * first; if one cannot be, those written are taken out again and the quarantine stays as it was.
+ * Only then do the files leave the quarantine. Last, best effort, a group a taken file was set aside
+ * by is switched off and its other files are kept: a person said one of them is a receipt.
  */
-function takeBack(file: string): { file: string; id: string } {
-  const reason = reasonOf(WS.paths.data, file);
-  const bytes = release(WS.paths.data, file)!;
-  if (reason?.kind === 'not-receipt' && reason.why === 'group' && reason.source && reason.from && reason.shape) {
-    const { source, from, shape } = reason;
-    const own = sources(WS, APP_ROOT).some((v) => v.kind !== 'invalid' && v.decl.id === source && v.decl.origin === 'company');
-    if (own) changeKeepingOn(WS, APP_ROOT, source, () => { switchAsideOff(WS, source, { from, name: shape }); });
+function takeBack(files: readonly string[]): Array<{ file: string; id: string }> {
+  const reasons = files.map((f) => reasonOf(WS.paths.data, f));
+  const written: Array<{ file: string; id: string }> = [];
+  try {
+    mkdirSync(WS.paths.inbox, { recursive: true });
+    for (const f of files) {
+      const bytes = bytesOf(WS.paths.data, f);
+      if (!bytes) throw gone(f);
+      const name = freeName(WS.paths.inbox, f);
+      writeFileSync(join(WS.paths.inbox, name), bytes);
+      written.push({ file: name, id: createHash('sha256').update(bytes).digest('hex').slice(0, 16) });
+    }
+  } catch (e) {
+    for (const w of written) rmSync(join(WS.paths.inbox, w.file), { force: true });
+    throw e;
   }
-  mkdirSync(WS.paths.inbox, { recursive: true });
-  const name = freeName(WS.paths.inbox, file);
-  writeFileSync(join(WS.paths.inbox, name), bytes);
-  return { file: name, id: createHash('sha256').update(bytes).digest('hex').slice(0, 16) };
+  for (const f of files) release(WS.paths.data, f);
+  for (const r of reasons) switchGroupOff(r);
+  return written;
+}
+
+/** The group a file was set aside by goes off in its source.yaml, and the files of it still set aside are kept. A failure leaves the group as it was: the files taken are in the inbox already. */
+function switchGroupOff(r: QuarantineReason | undefined): void {
+  if (r?.kind !== 'not-receipt' || r.why !== 'group' || !r.source || !r.from || !r.shape) return;
+  const { source, from, shape } = r;
+  const same = (q: QuarantineReason) => q.kind === 'not-receipt' && q.why === 'group' && q.source === source && q.from === from && q.shape === shape;
+  keepQuarantined(WS.paths.data, quarantined(WS.paths.data).filter((q) => same(q.reason)).map((q) => q.file));
+  const own = sources(WS, APP_ROOT).some((v) => v.kind !== 'invalid' && v.decl.id === source && v.decl.origin === 'company');
+  if (!own) return;
+  try {
+    changeKeepingOn(WS, APP_ROOT, source, (expect) => { switchAsideOff(WS, source, { from, name: shape }, expect); });
+  } catch (e) {
+    console.warn(`sources/${source}: group ${from} ${shape} not switched off: ${(e as Error).message}`);
+  }
 }
 
 /** The files taken back, handed to one run of the inbox. */

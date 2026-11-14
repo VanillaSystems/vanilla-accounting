@@ -16,7 +16,7 @@
 import { Router } from 'express';
 import { WS } from '../books.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
-import { approveSource, changeKeepingOn, sources } from '../../platform/sources/index.js';
+import { SourceVersionChanged, approveSource, changeKeepingOn, sources } from '../../platform/sources/index.js';
 import { RequestError } from '../books.js';
 import { secretKey, type ReceiptSkipOffer, type SourcePreview, type MailCheck, type SourceDecl, type SourceRow, type SourcesView } from '../../platform/sources/model.js';
 import { mailSecret, secrets } from '../../secrets/secrets.js';
@@ -29,8 +29,8 @@ import { sessionOf, signInUrl } from '../../platform/sources/web-channel.js';
 import { openSession } from '../../platform/browser/chrome.js';
 import { readLedger } from '../../platform/sources/ledger.js';
 import { addSkip, mailReachOf, receiptSkipOffer, skipOffers } from '../../platform/sources/skip.js';
-import { reachDiff } from '../../platform/sources/reach.js';
-import { addAside, asideOffers } from '../../platform/sources/aside.js';
+import { addAside, asideOffersOf } from '../../platform/sources/aside.js';
+import { documents } from '../../engines/index.js';
 import { readBooks } from '../books.js';
 import { resolveMx } from 'node:dns/promises';
 import { domainOf, lookupMailHost } from '../../platform/sources/mail-host.js';
@@ -47,7 +47,7 @@ router.get('/api/sources', async (_req, res) => {
     const mail = decl && mailReachOf(decl);
     const lines = mail ? readLedger(WS, decl.id) : [];
     const offers = mail ? skipOffers(lines, readBooks().receipts, mail.reach) : [];
-    const groups = mail && decl.origin === 'company' ? asideOffers(lines, readBooks().receipts, mail.reach, decl.settings) : [];
+    const groups = mail && decl.origin === 'company' ? asideOffersOf(WS, APP_ROOT, decl.id, mail.reach, decl.settings, readBooks().receipts, documents()) : [];
     rows.push({ verdict, secrets: channels.map((channel, i) => ({ channel, present: present[i] })), ...(offers.length ? { skipOffers: offers } : {}), ...(groups.length ? { asideOffers: groups } : {}) });
   }
   res.json({ rows, secretsInApp: secrets.inApp(), secretsWhere: secrets.where(mailSecret('<id>')), runsHere: sourcesRunHere() } satisfies SourcesView);
@@ -225,11 +225,7 @@ router.post('/api/sources/:id/skip', (req, res) => {
   if (!before || before.kind === 'invalid' || !mail || before.decl.origin !== 'company') throw new RequestError(404, `Die Mailbox ${req.params.id} gibt es nicht, oder sie hat Fehler.`);
   if (before.decl.version !== version) throw new RequestError(409, 'Die Quelle hat sich seit dem Anzeigen geändert: neu laden und noch einmal prüfen.');
   if (typeof sender !== 'string') throw new RequestError(400, 'sender fehlt.');
-  try { addSkip(WS, before.decl.id, sender, mail.key); } catch (e) { throw new RequestError(400, (e as Error).message); }
-  const after = sources(WS, APP_ROOT).find((x) => x.kind !== 'invalid' && x.decl.id === req.params.id);
-  if (!after || after.kind === 'invalid') throw new RequestError(500, 'Die Quelle lädt nach dem Ändern nicht mehr.');
-  const diff = reachDiff(before.decl.reach, after.decl.reach);
-  if (before.kind === 'ready' && !diff.added.some((l) => !l.what.startsWith('not from '))) approveSource(WS, after.decl);
+  keepingOn(before.decl.id, version, (expect) => addSkip(WS, before.decl.id, sender, mail.key, expect));
   res.json({ ok: true });
 });
 
@@ -245,10 +241,16 @@ router.post('/api/sources/:id/aside', (req, res) => {
   if (!before || before.kind === 'invalid' || !mailReachOf(before.decl) || before.decl.origin !== 'company') throw new RequestError(404, `Die Mailbox ${req.params.id} gibt es nicht, oder sie hat Fehler.`);
   if (before.decl.version !== version) throw new RequestError(409, 'Die Quelle hat sich seit dem Anzeigen geändert: neu laden und noch einmal prüfen.');
   if (typeof from !== 'string' || typeof name !== 'string') throw new RequestError(400, 'from und name fehlen.');
-  try {
-    changeKeepingOn(WS, APP_ROOT, before.decl.id, () => addAside(WS, before.decl.id, { from, name }));
-  } catch (e) {
-    throw new RequestError(400, (e as Error).message);
-  }
+  keepingOn(before.decl.id, version, (expect) => addAside(WS, before.decl.id, { from, name }, new Date(), expect));
   res.json({ ok: true });
 });
+
+/** A person's change to a mailbox's source.yaml, kept switched on (changeKeepingOn): a version changed meanwhile is 409, a refused value 400. */
+function keepingOn(id: string, version: string, change: (expect: string) => void): void {
+  try {
+    changeKeepingOn(WS, APP_ROOT, id, change, version);
+  } catch (e) {
+    if (e instanceof SourceVersionChanged) throw new RequestError(409, 'Die Quelle hat sich seit dem Anzeigen geändert: neu laden und noch einmal prüfen.');
+    throw new RequestError(400, (e as Error).message);
+  }
+}

@@ -9,8 +9,8 @@ import type { CsvOfProvider, DropRow } from '../types/drop.js';
 import type { DocumentsData, OtherWhy } from '../core/modules/schema.js';
 import { STATEMENT_FILES } from '../providers/statement-files.js';
 import { documents } from '../engines/index.js';
-import { documentKind } from './document-kind.js';
-import { isBankStatement } from '../core/modules/words.js';
+import { documentKind, titleIn } from './document-kind.js';
+import { HEAD, isBankStatement } from '../core/modules/words.js';
 import { pdfRuns, pdfRunsCounted, textOf } from '../parsers/pdf-text.js';
 import { csvTable } from '../providers/statement-read/csv.js';
 
@@ -90,10 +90,11 @@ export async function notReceipt(bytes: Buffer, words?: DocumentsData): Promise<
 
 /**
  * What a collected attachment shows without a model, read once: a PDF's text of its first two pages
- * (`text`: '' for a scan), its page count, and `other` when its words say it is clearly no receipt.
+ * (`text`: '' for a scan), its page count, `other` when its words say it is clearly no receipt, and
+ * `saysReceipt` when they name it a receipt (its title in its first lines, or most of an invoice).
  * Empty for a file that is no PDF or that no reader opens.
  */
-export async function readAttachment(bytes: Buffer, words?: DocumentsData): Promise<{ text?: string; pages?: number; other?: OtherWhy }> {
+export async function readAttachment(bytes: Buffer, words?: DocumentsData): Promise<{ text?: string; pages?: number; other?: OtherWhy; saysReceipt?: boolean }> {
   if (!starts(bytes, 0x25, 0x50, 0x44, 0x46)) return {};
   let read: { runs: Awaited<ReturnType<typeof pdfRunsCounted>>['runs']; pages: number };
   try {
@@ -102,6 +103,8 @@ export async function readAttachment(bytes: Buffer, words?: DocumentsData): Prom
     return {};
   }
   const text = textOf(read.runs, 'reading');
-  const v = text.trim() ? documentKind(text, words ?? documents()) : undefined;
-  return { text, pages: read.pages, ...(v?.is === 'other' ? { other: v.why } : {}) };
+  const w = words ?? documents();
+  const v = text.trim() ? documentKind(text, w) : undefined;
+  const saysReceipt = v?.is === 'receipt' || (!!text.trim() && titleIn(text.slice(0, HEAD), w) < Infinity);
+  return { text, pages: read.pages, ...(v?.is === 'other' ? { other: v.why } : {}), ...(saysReceipt ? { saysReceipt } : {}) };
 }

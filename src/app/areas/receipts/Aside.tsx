@@ -39,11 +39,16 @@ function fileWhy(q: QuarantinedFile): string {
 export function Quarantine({ nav, canEdit, asked }: { nav: AreaProps['nav']; canEdit: boolean; asked: boolean }) {
   const [files, setFiles] = useState<QuarantinedFile[] | undefined>();
   const [shown, setOpen] = useState(false);
-  const load = () => { api.quarantine().then(setFiles, () => setFiles([])); };
+  const [swept, setSwept] = useState<{ on: string; n: number } | null>(null);
+  const load = () => {
+    api.quarantine().then(setFiles, () => setFiles([]));
+    api.quarantineSwept().then((r) => setSwept(r.swept), () => setSwept(null));
+  };
   useEffect(load, []);
   // The state chip opens the list, and says when it is empty (#211).
   const open = shown || asked;
-  if (!files?.length) return asked && files ? <div className="empty"><h2>{t('chips.quarantineEmpty')}</h2></div> : null;
+  const sweptLine = swept ? <p className="m qswept" data-testid="aside-swept">{t('receipts.asideSwept', { n: swept.n, date: formatDate(swept.on) })}</p> : null;
+  if (!files?.length) return asked && files ? <div className="empty"><h2>{t('chips.quarantineEmpty')}</h2>{sweptLine}</div> : null;
   async function take(names: string[]) {
     try {
       if (names.length === 1) await api.takeFromQuarantine(names[0]);
@@ -61,6 +66,7 @@ export function Quarantine({ nav, canEdit, asked }: { nav: AreaProps['nav']; can
       {open && (
         <>
           <p className="m qlead">{t('receipts.quarantineLead')}</p>
+          {sweptLine}
           {asideGroups(files).map((g) => (
             <section key={g.key} className="qgroup" data-testid="aside-group" data-group={g.key}>
               <div className="qghead">

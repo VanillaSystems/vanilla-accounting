@@ -12,14 +12,12 @@
  * sender of that file, with what the mailbox delivered from it and which of those stand in the
  * books as receipts, shown on a card before the person keeps it.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { parseDocument } from 'yaml';
 import type { Receipt } from '../../types/index.js';
 import type { Workspace } from '../../workspace/workspace.js';
 import type { LedgerLine } from './ledger.js';
 import type { MacMailReach, MailReach, ReceiptSkipOffer, SkipOffer, SourceDecl } from './model.js';
 import { senderAllowed } from './reach.js';
+import { editSourceYaml } from './aside.js';
 
 const AT_LEAST = 3;
 
@@ -96,15 +94,15 @@ export function skipOffers(lines: readonly LedgerLine[], receipts: readonly Pick
 }
 
 /** Adds the sender's address to the source's reach.mail.skip (reach.mac-mail.skip for the Mail app) in its source.yaml, comments and all. */
-export function addSkip(ws: Pick<Workspace, 'paths'>, source: string, address: string, key: 'mail' | 'mac-mail' = 'mail'): void {
+export function addSkip(ws: Pick<Workspace, 'paths'>, source: string, address: string, key: 'mail' | 'mac-mail' = 'mail', expect?: string): void {
   if (!/^[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(address)) throw new Error(`${address} is no mail address`);
-  const file = join(ws.paths.root, 'sources', source, 'source.yaml');
-  const doc = parseDocument(readFileSync(file, 'utf8'));
   const pattern = address.toLowerCase();
-  const skip = doc.getIn(['reach', key, 'skip']);
-  const list = skip && typeof skip === 'object' && 'items' in (skip as object) ? (skip as { items: Array<{ value?: unknown }> }).items.map((i) => String(i.value ?? i)) : [];
-  if (list.includes(pattern)) return;
-  if (list.length) doc.addIn(['reach', key, 'skip'], pattern);
-  else doc.setIn(['reach', key, 'skip'], doc.createNode([pattern]));
-  writeFileSync(file, doc.toString());
+  editSourceYaml(ws, source, (doc) => {
+    const skip = doc.getIn(['reach', key, 'skip']);
+    const list = skip && typeof skip === 'object' && 'items' in (skip as object) ? (skip as { items: Array<{ value?: unknown }> }).items.map((i) => String(i.value ?? i)) : [];
+    if (list.includes(pattern)) return false;
+    if (list.length) doc.addIn(['reach', key, 'skip'], pattern);
+    else doc.setIn(['reach', key, 'skip'], doc.createNode([pattern]));
+    return true;
+  }, expect);
 }

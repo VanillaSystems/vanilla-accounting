@@ -2,16 +2,18 @@
  * data/quarantine/: files that came in (by a drop or from a mailbox source) and are no receipt by
  * their words, that a person set aside in the drop dialog, or that no PDF reader opens (r8k-9). They never enter the books; each
  * keeps its reason beside it (`<file>.reason.txt`), so Belege can say why it is there, and a
- * person can take it back into the inbox («Ist ein Beleg»). Belege shows them as «Aussortiert».
- * What a mailbox source set aside (by its words, a group the person set aside, a duplicate of a
- * receipt) is deleted by itself ASIDE_DAYS after it came; anything else stays until a person decides.
+ * person can take it back into the inbox («Doch behalten»). Belege shows them as «Aussortiert».
+ * What a mailbox source set aside (by its words, a group the person keeps aside, a duplicate of a
+ * receipt) is deleted ASIDE_DAYS after it was set aside, by the mailbox's next live pull
+ * (src/platform/sources/host.ts); anything else, and what a person kept, stays until a person decides.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import type { OtherWhy } from '../core/modules/schema.js';
 import type { QuarantinedFile, QuarantineReason } from '../types/drop.js';
 
 const REASON = '.reason.txt';
+const TMP = '.tmp';
 const dirOf = (data: string) => join(data, 'quarantine');
 
 /** A free name in `folder` for `name` (no path, no control characters): the same stem with -2, -3 … when taken. */
@@ -33,9 +35,10 @@ const enc = (s: string) => encodeURIComponent(s);
 const dec = (s: string) => { try { return decodeURIComponent(s); } catch { return s; } };
 
 /**
- * The reason as written beside the file: `not-receipt <why>[ from <sender>][ source <id>]`,
- * `not-receipt group <shape> from <sender> source <id>`, `duplicate <receipt id> <file> …`,
- * `unreadable` or `held`. Lines written before `source` and `group` existed read as before.
+ * The reason as written beside the file: `not-receipt <why>[ from <sender>][ source <id>][ at <iso>]`,
+ * `not-receipt group <shape> from <sender> source <id> at <iso>`, `duplicate <receipt id> <file> …`,
+ * `unreadable` or `held`. `at`: when it was set aside, recorded (a file's time on disk changes with
+ * a copy). Lines written before `source`, `group` and `at` existed read as before.
  */
 export function parseReason(line: string): QuarantineReason {
   const [head, ...rest] = line.trim().split(/\s+/);
@@ -44,10 +47,11 @@ export function parseReason(line: string): QuarantineReason {
   const named: Record<string, string> = {};
   const free: string[] = [];
   for (let i = 0; i < rest.length; i++) {
-    if ((rest[i] === 'from' || rest[i] === 'source') && rest[i + 1] !== undefined) named[rest[i]] = rest[++i];
+    if ((rest[i] === 'from' || rest[i] === 'source' || rest[i] === 'at') && rest[i + 1] !== undefined) named[rest[i]] = rest[++i];
     else free.push(rest[i]);
   }
-  const tail = { ...(named.from ? { from: named.from } : {}), ...(named.source ? { source: named.source } : {}) };
+  const at = named.at && !Number.isNaN(Date.parse(named.at)) ? named.at : undefined;
+  const tail = { ...(named.from ? { from: named.from } : {}), ...(named.source ? { source: named.source } : {}), ...(at ? { at } : {}) };
   if (head === 'duplicate') return { kind: 'duplicate', of: free[0] ?? '', ...(free[1] ? { ofFile: dec(free[1]) } : {}), ...tail };
   if (free[0] === 'group' && free[1]) return { kind: 'not-receipt', why: 'group', shape: dec(free[1]), ...tail };
   const why = OTHER.find((w) => w === free[0]);
@@ -56,17 +60,21 @@ export function parseReason(line: string): QuarantineReason {
 
 export function formatReason(r: QuarantineReason): string {
   if (r.kind === 'held' || r.kind === 'unreadable') return r.kind;
-  const tail = `${r.from ? ` from ${r.from.replace(/\s/g, '')}` : ''}${r.source ? ` source ${r.source}` : ''}`;
+  const tail = `${r.from ? ` from ${r.from.replace(/\s/g, '')}` : ''}${r.source ? ` source ${r.source}` : ''}${r.at ? ` at ${r.at}` : ''}`;
   if (r.kind === 'duplicate') return `duplicate ${r.of}${r.ofFile ? ` ${enc(r.ofFile)}` : ''}${tail}`;
   if (r.why === 'group') return `not-receipt group ${enc(r.shape ?? '')}${tail}`;
   return `not-receipt${r.why ? ` ${r.why}` : ''}${tail}`;
 }
 
-/** The day a file set aside at `at` is deleted by itself: only what a mailbox source set aside; a drop's and a person's are kept until a person decides. */
-export function deleteOn(reason: QuarantineReason, at: string): string | undefined {
+/**
+ * The day a file set aside is deleted by itself: only what a mailbox source set aside, counted from
+ * when it was set aside as recorded in its reason. A drop's, a person's, one a person kept, and one
+ * without a recorded time are kept until a person decides.
+ */
+export function deleteOn(reason: QuarantineReason): string | undefined {
   if (reason.kind !== 'not-receipt' && reason.kind !== 'duplicate') return undefined;
-  if (!reason.source) return undefined;
-  return new Date(Date.parse(at) + ASIDE_DAYS * 86_400_000).toISOString().slice(0, 10);
+  if (!reason.source || !reason.at) return undefined;
+  return new Date(Date.parse(reason.at) + ASIDE_DAYS * 86_400_000).toISOString().slice(0, 10);
 }
 
 /** Puts `bytes` into quarantine under a free name for `name`; returns that name. */
@@ -84,11 +92,11 @@ export function quarantined(data: string): QuarantinedFile[] {
   const dir = dirOf(data);
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
-    .filter((f) => !f.endsWith(REASON) && !f.startsWith('.'))
+    .filter((f) => !f.endsWith(REASON) && !f.startsWith('.') && !f.endsWith(TMP))
     .map((file) => {
       const reason = reasonOf(data, file) ?? { kind: 'held' as const };
-      const at = statSync(join(dir, file)).mtime.toISOString();
-      const until = deleteOn(reason, at);
+      const at = ('at' in reason && reason.at) || statSync(join(dir, file)).mtime.toISOString();
+      const until = deleteOn(reason);
       return { file, reason, at, ...(until ? { deleteOn: until } : {}) };
     })
     .sort((a, b) => b.at.localeCompare(a.at) || a.file.localeCompare(b.file));
@@ -102,13 +110,44 @@ export function reasonOf(data: string, file: string): QuarantineReason | undefin
 }
 
 /**
- * Deletes what a mailbox source set aside and nobody took back within ASIDE_DAYS (its `deleteOn`
- * passed). A drop's file, one a person set aside and an unreadable one stay. Returns the names deleted.
+ * A person keeps these files: their reasons lose the source that set them aside, so they are never
+ * deleted by themselves (a group switched off: its other files stay until a person decides).
  */
-export function sweepQuarantine(data: string, now: Date = new Date()): string[] {
+export function keepQuarantined(data: string, files: readonly string[]): void {
+  for (const f of files) {
+    const r = reasonOf(data, f);
+    if (!r || (r.kind !== 'not-receipt' && r.kind !== 'duplicate') || !r.source) continue;
+    const kept: QuarantineReason = { ...r };
+    delete (kept as { source?: string }).source;
+    const path = quarantinePath(data, f)! + REASON;
+    writeFileSync(path + TMP, `${formatReason(kept)}\n`);
+    renameSync(path + TMP, path);
+  }
+}
+
+/** The last sweep that deleted something: the day and how many, for «Aussortiert» to say. */
+export interface Swept { on: string; n: number }
+const SWEPT = '.swept.json';
+
+export function lastSwept(data: string): Swept | undefined {
+  try { return JSON.parse(readFileSync(join(dirOf(data), SWEPT), 'utf8')) as Swept; } catch { return undefined; }
+}
+
+/**
+ * Deletes what a mailbox source set aside and nobody kept within ASIDE_DAYS of when it was set
+ * aside (as recorded). A recorded time in the future deletes nothing (a clock set wrong). A drop's
+ * file, one a person set aside or kept, and an unreadable one stay. Returns what it deleted, and
+ * records the day and the count for the person to read.
+ */
+export function sweepQuarantine(data: string, now: Date = new Date()): QuarantinedFile[] {
   const today = now.toISOString().slice(0, 10);
-  const gone = quarantined(data).filter((q) => q.deleteOn && q.deleteOn <= today).map((q) => q.file);
-  for (const f of gone) release(data, f);
+  const gone = quarantined(data).filter((q) => q.deleteOn && q.deleteOn <= today && Date.parse(q.at) <= now.getTime());
+  for (const q of gone) release(data, q.file);
+  if (gone.length) {
+    const before = lastSwept(data);
+    const n = before?.on === today ? before.n + gone.length : gone.length;
+    writeFileSync(join(dirOf(data), SWEPT), JSON.stringify({ on: today, n } satisfies Swept) + '\n');
+  }
   return gone;
 }
 
@@ -117,6 +156,12 @@ export function quarantinePath(data: string, file: string): string | undefined {
   if (file !== basename(file) || file.endsWith(REASON) || file.startsWith('.')) return undefined;
   const path = join(dirOf(data), file);
   return existsSync(path) ? path : undefined;
+}
+
+/** A quarantined file's bytes, leaving it where it is. */
+export function bytesOf(data: string, file: string): Buffer | undefined {
+  const path = quarantinePath(data, file);
+  return path ? readFileSync(path) : undefined;
 }
 
 /** Takes a file out of quarantine: its bytes, and it and its reason are gone. */

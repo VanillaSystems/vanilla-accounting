@@ -294,12 +294,12 @@ export type DropAction =
  * sender), its sender and file-name shape are a group the person set aside («Immer beiseite»,
  * `why: 'group'` with its `shape`), it repeats a receipt of the books with other bytes (`duplicate`,
  * `of` that receipt's id and `ofFile` its file name), a person set it aside, or it is no PDF inside.
- * `source`: the mailbox source that set it aside (absent on a drop and on files set aside before
- * sources named themselves).
+ * `source`: the mailbox source that set it aside (absent on a drop, on files set aside before
+ * sources named themselves, and once a person kept it); `at`: when, as recorded.
  */
 export type QuarantineReason =
-  | { kind: 'not-receipt'; why?: OtherWhy | 'group'; shape?: string; from?: string; source?: string }
-  | { kind: 'duplicate'; of: string; ofFile?: string; from?: string; source?: string }
+  | { kind: 'not-receipt'; why?: OtherWhy | 'group'; shape?: string; from?: string; source?: string; at?: string }
+  | { kind: 'duplicate'; of: string; ofFile?: string; from?: string; source?: string; at?: string }
   | { kind: 'held' }
   | { kind: 'unreadable' };
 

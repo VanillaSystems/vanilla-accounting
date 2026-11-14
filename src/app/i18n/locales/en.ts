@@ -1260,6 +1260,7 @@ export default {
     'receipts.asideDuplicates': 'Duplicate of a receipt in the books',
     'receipts.asideDuplicateOf': 'duplicate of {file}',
     'receipts.asideDeleteOn': 'deleted on {date}',
+    'receipts.asideSwept': { one: '{n} file deleted after 30 days on {date}', other: '{n} files deleted after 30 days on {date}' },
     'receipts.asideCount': { one: '{n} file', other: '{n} files' },
     'receipts.asideKeepAll': { one: 'Keep after all', other: 'Keep all {n} after all' },
     'receipts.asideTakenAll': { one: '{n} file is back in the inbox and is being read', other: '{n} files are back in the inbox and are being read' },

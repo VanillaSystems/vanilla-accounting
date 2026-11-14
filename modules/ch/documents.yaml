@@ -26,6 +26,16 @@ notTotal: [Lohnsumme, Summe der Löhne, Löhne, Versicherungssumme, Kreditlimite
 # number stands on it (receipt-text.ts textFacts noSwissVat): «Total ohne MWST» beside «MWST 8.1 %» says nothing.
 noVat: [nicht der schweizerischen MWST unterstellt, nicht der MWST unterstellt, nicht MWST-pflichtig, not subject to Swiss VAT, non assujetti à la TVA, non assoggettato all'IVA, von der MWST ausgenommen, unterliegen nicht der MWST, unterliegt nicht der MWST, keine schweizerische MWST, not registered for VAT in Switzerland, no Swiss VAT, no VAT charged, no sales tax or VAT charged, reverse charge, Steuerschuldnerschaft des Leistungsempfängers, exonéré de la TVA, exonérée de la TVA, hors du champ de la TVA suisse, pas de TVA suisse, non soggetto all'IVA, non soggetta all'IVA, esente IVA, senza IVA svizzera]
 
+# A document that repeats another's number and amount without being its copy: a credit note on an
+# invoice, a proforma before it, an instalment of it. A mailbox never sets it aside as a duplicate of
+# a receipt in the books (src/platform/sources/aside.ts contentTwin); a reminder's words (supporting
+# below) count too.
+notDuplicate: [Gutschrift, Gutschriftsanzeige, Stornorechnung, Storno, Credit note, Credit memo, Note de crédit, Avoir, Nota di credito, Proforma, Pro forma, Pro-forma, Proformarechnung, Rate, Ratenzahlung, Teilrechnung, Teilzahlung, Akontorechnung, Anzahlung, Instalment, Installment, Acompte, Rata, Acconto]
+
+# Words of a file name that say nothing of what a file is: a camera's, a scanner's, a mail program's
+# default. A file-name shape made of these alone (and numbers) is never offered to be kept aside.
+genericFileNames: [img, image, photo, foto, pic, dsc, dscn, pxl, scan, scanned, scansione, numérisation, document, dokument, documento, doc, file, datei, fichier, attachment, anhang, allegato, pièce jointe, untitled, unbenannt, sans titre, senza titolo, pdf, print, druck, copy, kopie, copie, page, seite, export]
+
 supporting:
   order-confirmation: [Auftragsbestätigung, Bestellbestätigung, Bestelleingang, Order confirmation, Confirmation de commande, Confirmation d'ordre, Conferma d'ordine, Conferma dell'ordine]
   # A reminder of an invoice: its number links it to the invoice, it never is a second one to pay.

@@ -77,15 +77,26 @@ function diffFromLines(was: Approved['reach'], next: Reach) {
  * or switched off): it only narrows what the source delivers, so a source that ran live keeps
  * running live: its new version is switched on with the same click, and left waiting if the change
  * would reach anything new or the source waited to be switched on before.
+ *
+ * `change` gets the text of source.yaml this check read, and writes only if the file still holds it
+ * (src/platform/sources/aside.ts editSourceYaml): the version switched on is exactly the one checked
+ * plus the click's change. `version`: the version the person saw; another refuses (as approve does).
  */
-export function changeKeepingOn(ws: Ws, appRoot: string, id: string, change: () => void): void {
+export function changeKeepingOn(ws: Ws, appRoot: string, id: string, change: (expect: string) => void, version?: string): void {
+  const file = join(ws.paths.root, 'sources', id, 'source.yaml');
+  const expect = readFileSync(file, 'utf8');
   const before = sources(ws, appRoot).find((x) => x.kind !== 'invalid' && x.decl.id === id);
-  change();
+  if (version !== undefined && (before?.kind === 'invalid' || before?.decl.version !== version)) throw new SourceVersionChanged(`sources/${id} changed since it was shown`);
+  if (readFileSync(file, 'utf8') !== expect) throw new SourceVersionChanged(`sources/${id}/source.yaml changed meanwhile`);
+  change(expect);
   const after = sources(ws, appRoot).find((x) => x.kind !== 'invalid' && x.decl.id === id);
   if (!before || before.kind !== 'ready' || !after || after.kind === 'invalid') return;
   if (reachDiff(before.decl.reach, after.decl.reach).added.some((l) => !l.what.startsWith('not from '))) return;
   approveSource(ws, after.decl);
 }
+
+/** The source changed since the person saw it, or while the app changed it: nothing is written. */
+export class SourceVersionChanged extends Error {}
 
 export const sourceFolder = (ws: Ws, id: string): string => join(ws.paths.root, 'sources', id);
 export const hasSources = (ws: Ws): boolean => existsSync(join(ws.paths.root, 'sources'));

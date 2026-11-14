@@ -1260,6 +1260,7 @@ export default {
     'receipts.asideDuplicates': 'Doublon d’un justificatif des livres',
     'receipts.asideDuplicateOf': 'doublon de {file}',
     'receipts.asideDeleteOn': 'supprimé le {date}',
+    'receipts.asideSwept': { one: '{n} fichier supprimé après 30 jours le {date}', other: '{n} fichiers supprimés après 30 jours le {date}' },
     'receipts.asideCount': { one: '{n} fichier', other: '{n} fichiers' },
     'receipts.asideKeepAll': { one: 'Garder quand même', other: 'Garder les {n} quand même' },
     'receipts.asideTakenAll': { one: '{n} fichier est de retour dans l’entrée et sera lu', other: '{n} fichiers sont de retour dans l’entrée et seront lus' },
