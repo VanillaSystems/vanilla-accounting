@@ -31,6 +31,7 @@ import { desktopServer, listen, portOf } from './server.js';
 import { answerKey, developerIdOf } from './build-key.js';
 import { appVersion } from '../version.js';
 import { readState, writeState, type Bounds } from './state.js';
+import { setDurchsichtHome } from '../handover/durchsicht.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** tools/desktop/smoke.mjs: the fused release build has no inspector, so the page reaches the menu (preload.ts). */
@@ -108,6 +109,8 @@ async function start(): Promise<void> {
   const developerId = app.isPackaged && process.platform === 'darwin' && await developerIdOf(join(dirname(process.execPath), '..', '..'));
   // The phone's listener (macOS's firewall may ask about it) only once books are open, never before the first window (#373).
   const resumePhone = resumeOnce(() => server.phone.resume().then((p) => { if (p.error) console.error(`phone: ${p.error}`); }));
+  // Copies of books handed over to this Mac («Durchsicht»): in the app's own folder, never among the person's own books.
+  setDurchsichtHome(join(app.getPath('userData'), 'Durchsicht'));
   const server = desktopServer({
     stateFile,
     demoRoot: join(app.getPath('userData'), 'Demo'),

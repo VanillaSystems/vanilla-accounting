@@ -37,6 +37,8 @@ import { router as ai } from './routes/ai.js';
 import { router as terminal } from './routes/terminal.js';
 import { router as batch } from './routes/batch.js';
 import { router as vatAdjustments } from './routes/vat-adjustments.js';
+import { router as handover } from './routes/handover.js';
+import { markerOf } from '../handover/durchsicht.js';
 import { aiSetup } from './ai-setup.js';
 import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { AiRefused } from '../llm/provider.js';
@@ -77,15 +79,43 @@ if (READONLY) {
   });
 }
 
+// A Durchsicht copy (docs/specs/e2e-and-fiduciary.md B4): the recipient books and corrects; filing, sealing, the year's
+// close, the company's settings and sharing onward are the sharer's. A guard against mistakes, not security (B2).
+const SHARER_ONLY: Array<[string, RegExp, string]> = [
+  ['POST', /^\/api\/year-close\/\d{4}\/(close|open)$/, 'yearClose'],
+  ['PATCH', /^\/api\/workspace$/, 'settings'],
+  ['POST', /^\/api\/workspace\/logo$/, 'settings'],
+  ['POST', /^\/api\/handover\/share$/, 'share'],
+  ['POST', /^\/api\/handover\/returns\/[^/]+\/(apply|undo|decide)$/, 'return'],
+  // Invoices and customers are issued and sent by the firm; mailboxes and collectors are its own (a copy reads no mail).
+  ['*', /^\/api\/(invoices|customers)(\/|$)/, 'invoices'],
+  ['*', /^\/api\/(sources|mail)(\/|$)/, 'sources'],
+];
+/** The workflows that file, seal or close: the sharer's. */
+const SHARER_WORKFLOWS: ReadonlySet<string> = new Set(['vat-filing', 'year-close', 'quarter-close']);
+app.use((req, res, next) => {
+  const m = markerOf(WS.paths.root);
+  if (!m) return next();
+  // Express routes ignore case and a trailing slash: the guard reads the path the same way.
+  const path = req.path.toLowerCase().replace(/\/+$/, '');
+  const filing = req.method === 'POST' && path === '/api/automation' && (req.body as { kind?: string } | undefined)?.kind === 'start' && SHARER_WORKFLOWS.has(String((req.body as { workflow?: string }).workflow));
+  const writes = req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS';
+  const hit = filing ? 'filing' : SHARER_ONLY.find(([method, re]) => (method === '*' ? writes : req.method === method) && re.test(path))?.[2];
+  if (!hit) return next();
+  res.status(403).json({ error: `Durchsicht: das macht ${m.sharer.name}.`, code: 'roleRefused', params: { action: hit, name: m.sharer.name } } satisfies ApiErrorBody);
+});
+
 app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY, ...(aiOff() ? { aiOff: true } : {}) } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, payouts, questions, reports, batch, vatAdjustments);
+app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, payouts, questions, reports, batch, vatAdjustments, handover);
 app.use(knowledge);
 app.use(onboarding);
 
-app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  // A hand-over file over the upload's limit: the limit is told (body-parser's 413).
+  if ((err as { type?: string }).type === 'entity.too.large' && req.path.startsWith('/api/handover')) { res.status(413).json({ error: 'Die Datei ist grösser als 1 GB: höchstens 1 GB pro Übergabe.', code: 'shareTooLarge', params: { limit: '1 GB' } } satisfies ApiErrorBody); return; }
   if (err instanceof ClosedPeriodError) res.status(403).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);
   else if (err instanceof EmptyRefError) res.status(409).json({ error: err.message, code: 'emptyRef', params: {} } satisfies ApiErrorBody);
   else if (err instanceof StaleBooksError) res.status(409).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);

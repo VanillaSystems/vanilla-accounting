@@ -27,6 +27,25 @@ export type ClosedReason = (typeof CLOSED_REASONS)[number];
 
 export type ApiRefusal =
   | { code: 'readonly' }
+  /** A Durchsicht copy (src/handover/durchsicht.ts): filing, sealing, closing the year, the company's settings and sharing onward are the sharer's, named. */
+  | { code: 'roleRefused'; params: { action: string; name: string } }
+  /** A `.vanilla` file whose file `path` is missing, extra or not as its index says. */
+  | { code: 'shareTampered'; params: { path: string } }
+  /** A hand-over or return of another firm than these books. */
+  | { code: 'shareOtherCompany'; params: { firm: string } }
+  /** An update on a version this copy lacks: `name` is asked for a full hand-over. */
+  | { code: 'shareBaseMissing'; params: { version: string; name: string } }
+  | { code: 'shareNotPackage' }
+  /** A hand-over file past a limit (its size, a file's size, its number of files): the limit is named. */
+  | { code: 'shareTooLarge'; params: { limit: string } }
+  /** A return based on a version never handed to its sender. */
+  | { code: 'shareUnknownBase'; params: { version: string; name: string } }
+  /** An update that could not be written: the copy and his changes stay as they were. */
+  | { code: 'shareUpdateFailed'; params: { why: string } }
+  /** A return opened on a copy, or a hand-over where a return belongs. */
+  | { code: 'shareWrongKind' }
+  /** «Teilen» without a name, or with an address that is none. */
+  | { code: 'shareNoRecipient' }
   | { code: 'localOnly' }
   /** From this computer, but under a name that is no loopback name (DNS rebinding). */
   | { code: 'foreignHost' }

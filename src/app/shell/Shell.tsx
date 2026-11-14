@@ -21,7 +21,7 @@ import { DropDialog, dropFiles, dropOpen, finishDrop } from './DropDialog.js';
 import { INTAKE, watchRuns, watchSteps } from '../automation/intake.js';
 import { bookingWaitsNote } from '../automation/marks.js';
 import { bookingWaitsText } from '../lib/booking-waits.js';
-import { STATIC_EXPORT, api } from '../lib/api.js';
+import { STATIC_EXPORT, api, errorText, request } from '../lib/api.js';
 import { noTitleBar } from '../desktop/bridge.js';
 import { Demo } from './Demo.js';
 import { ExportDialog } from '../areas/export/ExportDialog.js';
@@ -51,12 +51,16 @@ import { filing } from '../../engines/index.js';
 import { clearSelection, selectAll, selectionNow, useSelection } from '../selection/store.js';
 import { installWindowDrop, setDropHandler, type DropState, type DropTarget, type Dropped } from './window-drop.js';
 import { actionsNow, openActions } from '../selection/ActionsMenu.js';
+import { ShareDialog } from '../handover/ShareDialog.js';
+import { DurchsichtBar, ReturnBar, Welcome } from '../handover/Durchsicht.js';
+import { isVanillaFile, openVanilla, reloadHandover, useHandover, type Opened } from '../handover/store.js';
 
 type Overlay =
   | { kind: 'palette' }
   | { kind: 'period'; anchor: DOMRect }
   | { kind: 'language'; anchor: DOMRect }
-  | { kind: 'export'; config: DialogConfig };
+  | { kind: 'export'; config: DialogConfig }
+  | { kind: 'share' };
 
 interface ShellProps { language: string; onLanguage(code: string): void }
 
@@ -87,6 +91,12 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const [navWide, toggleNav] = useNavWide();
   const [dropping, setDropping] = useState<DropTarget | null>(null);
   const aiOpen = useAssistant().open;
+  const handover = useHandover();
+  const copy = handover?.durchsicht;
+  // Shared from the person's own books only: never from a copy (no onward sharing) or a read-only snapshot.
+  const canShare = canEdit && !STATIC_EXPORT && !copy;
+  // His changes on a copy are counted anew whenever the books are read again.
+  useEffect(() => { if (copy) void reloadHandover(); }, [books]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const area = areaOf(loc.route);
   // Without a period in the link, a page shows where the newest data is (F10), its own rows outside the books included.
@@ -98,6 +108,8 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   latestNow.current = latestOf;
   const period = loc.query.period ?? latest;
 
+  const canShareNow = useRef(canShare);
+  canShareNow.current = canShare;
   const current = useRef(loc);
   current.current = loc;
   const nav: Nav = useMemo(() => ({
@@ -194,6 +206,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     toggleTheme,
     toggleLegend: () => setLegend(!legend),
     exportOpen: () => openExport(),
+    shareOpen: () => { if (!canShare) return false; setOverlay({ kind: 'share' }); return true; },
     assistant: toggleAssistant,
     toggleNav,
     selectAll: () => !!area.selects && selectAll(area.selects, toast),
@@ -229,6 +242,9 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const takeDrop = useRef<(d: Dropped) => void>(() => undefined);
   takeDrop.current = ({ files, target, entries }) => {
     if (target === 'chat') return void droppedFiles(entries, files, CHAT_TAKES).then(attachDropped);
+    // A hand-over file opens as such (a return to review, books handed over): never as a receipt.
+    const vanilla = files.find((f) => isVanillaFile(f.name));
+    if (vanilla) return void openVanilla(vanilla).then(opened, (e) => toast(errorText(e)));
     void droppedFiles(entries, files, PAGE_TAKES).then((d) => dropFiles(d.files, leftOut(d, PAGE_TAKES).map((x) => tWith(x.key, x.vars)).join(' ')));
   };
   const dropState: DropState = !known ? 'unknown' : !online ? 'offline' : readonly ? 'readonly' : 'ready';
@@ -243,6 +259,19 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     });
     return () => setDropHandler(undefined);
   }, [dropState, toast]);
+
+  /** What «Öffnen…» of a `.vanilla` did: a return opens its review; a hand-over is now the books open here. */
+  const opened = (o: Opened) => {
+    if (o.kind === 'return') {
+      toast(t('share.returnArrived', { name: o.from.name, n: o.changes, v: o.basedOn }));
+      nav.go({ route: { area: 'changes', commit: 'return', file: o.id }, query: {} });
+      return;
+    }
+    toast(o.conflicts || o.dropped ? t('share.copyMoved', { firm: o.firm, n: o.version, conflicts: o.conflicts, dropped: o.dropped }) : t('share.copyOpened', { firm: o.firm, n: o.version }));
+    // Other books: everything is read anew.
+    setTimeout(() => location.assign('/'), 400);
+  };
+  const closeCopy = () => { void request('POST', '/api/handover/close').then(() => location.assign('/'), (e) => toast(errorText(e))); };
 
   const search = useCallback((q: string): PaletteGroup[] => {
     const p = propsRef.current;
@@ -261,6 +290,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       report('trial', t('tab.trialBalance')),
       { label: t('area.codes'), side: t('shell.lookup'), run: () => goArea('codes') },
       { label: t('export.paletteAction'), side: '⇧E', run: () => openExport() },
+      ...(canShareNow.current ? [{ label: t('share.paletteAction'), side: '⇧S', run: () => setOverlay({ kind: 'share' }) }] : []),
       ...PRESETS.map((x) => ({ label: t('export.palettePreset', { name: t(`export.preset.${x.id}`) }), side: t('export.paletteBuiltin'), run: () => openExport(configOf(x.id, openNow(), p.period)) })),
       ...ownPresets().map((x) => ({ label: t('export.palettePreset', { name: x.name }), side: t('export.paletteOwn'), run: () => openExport(ownConfig(x)) })),
       { label: t('shell.themeToggle'), side: 'T', run: toggleTheme },
@@ -294,7 +324,8 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
 
   return (
     <ShellUiContext.Provider value={ui}>
-      {readonly && <AuditBar snapshot={snapshot} />}
+      {readonly && <AuditBar snapshot={snapshot} version={handover?.version} />}
+      {!readonly && copy ? <DurchsichtBar d={copy} onClose={copy.back ? closeCopy : undefined} /> : null}
       <a className="skip" href="#list">{t('shell.skip')}</a>
       <FxProvider index={books}>
         {Detail && !area.fullPage?.(loc.route) ? (
@@ -322,6 +353,8 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
         onZoom={zoomStep}
         onTheme={cycleTheme}
         onExport={() => openExport()}
+        onShare={canShare ? () => setOverlay({ kind: 'share' }) : undefined}
+        version={copy ? copy.version : handover?.version}
         language={language}
         onLanguage={(anchor) => setOverlay({ kind: 'language', anchor: anchor.getBoundingClientRect() })}
       />
@@ -331,6 +364,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       <Dock current={loc.route.area} books={books} keys={dockKeys} wide={navWide} onToggle={toggleNav} nav={nav} canEdit={canEdit} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
       {workspace?.demo ? <Demo name={workspace.company.name} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} /> : null}
       {toastNode}
+      {copy && !readonly ? <><Welcome d={copy} /><ReturnBar d={copy} toast={toast} /></> : null}
       {legend && (
         <div className="legend">
           {t('shell.edges')}<br />
@@ -374,6 +408,9 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
           toast={toast}
           onClose={() => { setOverlay(null); focusSelectedRow(); }}
         />
+      )}
+      {overlay?.kind === 'share' && (
+        <ShareDialog company={workspace?.company.name} toast={toast} onClose={() => { setOverlay(null); focusSelectedRow(); }} onOpened={opened} />
       )}
       {overlay?.kind === 'period' && (
         <PeriodPicker

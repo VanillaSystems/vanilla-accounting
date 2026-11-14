@@ -8,13 +8,13 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 79 | 23 |
+| core | 81 | 23 |
 | engine | 4 | 1 |
 | provider | 14 | 11 |
 | split | 134 | 26 |
-| infrastructure | 72 | 4 |
+| infrastructure | 77 | 4 |
 | workflow | 31 | 0 |
-| view | 377 | 55 |
+| view | 382 | 55 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -54,6 +54,9 @@ Layers are assigned by path prefix, most specific first:
 - `src/publish/` → infrastructure
 - `src/reconcile/` → infrastructure
 - `src/saving/` → infrastructure
+- `src/handover/versions.ts` → core
+- `src/handover/content.ts` → core
+- `src/handover/` → infrastructure
 - `src/platform/` → infrastructure
 - `src/app/` → view
 - `src/server/` → view
@@ -186,7 +189,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 44, MWST 431, ESTV 52, Ziffer 61, form 0535 1, camt.053 24, QR-bill 1, Rappen 3 |
+| `src/app/i18n/locales/de.ts` | CHF 44, MWST 435, ESTV 52, Ziffer 61, form 0535 1, camt.053 24, QR-bill 1, Rappen 3 |
 | `src/app/i18n/locales/en.ts` | CHF 44, MWST 5, ESTV 31, form 0535 1, camt.053 24, QR-bill 4 |
 | `src/app/i18n/locales/fr.ts` | CHF 44, MWST 1, form 0535 1, camt.053 24, QR-bill 1 |
 | `src/app/i18n/locales/it.ts` | CHF 44, MWST 1, form 0535 1, camt.053 24, QR-bill 1 |
