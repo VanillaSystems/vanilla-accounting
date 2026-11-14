@@ -69,8 +69,9 @@ export function verifyExport(dir: string): string[] {
 
 /**
  * Each invoice document's PDF in the export is the one its record names: the SHA-256 the manifest lists
- * for it is the checksum invoices.json kept when it was issued or sent (#516). One the export lacks is
- * named by the manifest's `missing`, or above as removed.
+ * for it is the checksum invoices.json kept when it was issued or sent (#516). One the manifest lists in
+ * neither its files nor its `missing` (build.ts writeInvoices names them «invoice <number>: …», «sent document
+ * <id>: …») is reported.
  */
 function invoiceProblems(dir: string, manifest: ExportManifest): string[] {
   const file = join(dir, EXPORT_FILES.invoices());
@@ -81,12 +82,13 @@ function invoiceProblems(dir: string, manifest: ExportManifest): string[] {
   };
   const hashes = new Map(manifest.files.map((f) => [f.path, f.sha256]));
   const docs = [
-    ...invoices.flatMap((i) => (i.status === 'issued' && i.number && i.pdf ? [{ path: EXPORT_FILES.invoicePdf(i.number), sha256: i.pdf.sha256 }] : [])),
-    ...sent.map((d) => ({ path: EXPORT_FILES.sentPdf(d.id), sha256: d.sha256 })),
+    ...invoices.flatMap((i) => (i.status === 'issued' && i.number && i.pdf ? [{ what: `invoice ${i.number}`, path: EXPORT_FILES.invoicePdf(i.number), sha256: i.pdf.sha256 }] : [])),
+    ...sent.map((d) => ({ what: `sent document ${d.id}`, path: EXPORT_FILES.sentPdf(d.id), sha256: d.sha256 })),
   ];
-  return docs.flatMap(({ path, sha256: want }) => {
+  return docs.flatMap(({ what, path, sha256: want }) => {
     const got = hashes.get(path);
-    return !got || got === want ? [] : [`${path}: not the PDF as issued (sha256 ${got}, ${EXPORT_FILES.invoices()} ${want})`];
+    if (!got) return manifest.missing.some((m) => m.startsWith(`${what}:`)) ? [] : [`${path}: ${EXPORT_FILES.invoices()} names it, the manifest neither lists it nor names it missing`];
+    return got === want ? [] : [`${path}: not the PDF as issued (sha256 ${got}, ${EXPORT_FILES.invoices()} ${want})`];
   });
 }
 

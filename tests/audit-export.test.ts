@@ -241,6 +241,9 @@ test('the invoices and their PDFs are in the export, each with the checksum it w
   assert.equal(d.today, '2026-10-09', 'the records are as on the day of the export');
   const issued = d.invoices.filter((i) => i.status === 'issued');
   assert.ok(issued.length > 3 && d.sent.length > 3, 'the demo has issued invoices and sent documents');
+  const demo = JSON.parse(readFileSync(join(APP_ROOT, 'demo', 'vanilla-accounting', 'invoices.json'), 'utf8')) as ExportedInvoices;
+  assert.ok(demo.invoices.some((i) => i.status === 'draft'), 'the demo has a draft');
+  assert.deepEqual(d.invoices.filter((i) => i.status !== 'issued').map((i) => i.id), [], 'drafts are left out of the export');
   const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) as { files: Array<{ path: string; sha256: string }> };
   const hashes = new Map(manifest.files.map((f) => [f.path, f.sha256]));
   const docs = [...issued.map((i) => ({ path: EXPORT_SOURCES.invoicePdf(i.number!), sha256: i.pdf!.sha256 })), ...d.sent.map((s) => ({ path: EXPORT_SOURCES.sentPdf(s.id), sha256: s.sha256 }))];
@@ -269,6 +272,27 @@ test('verify-audit refuses an invoice PDF swapped for another with a manifest ma
   assert.deepEqual(verifyExport(copy), [`${pathA}: not the PDF as issued (sha256 ${b.pdf!.sha256}, data/invoices.json ${a.pdf!.sha256})`]);
 });
 
+test('verify-audit names an invoice PDF taken out with its manifest line, and prints what the export lacked', () => {
+  const copy = join(tmp, 'pdf-gone');
+  cpSync(dir, copy, { recursive: true });
+  const d = JSON.parse(readFileSync(join(copy, EXPORT_SOURCES.invoices()), 'utf8')) as ExportedInvoices;
+  const gone = EXPORT_SOURCES.invoicePdf(d.invoices.find((i) => i.status === 'issued')!.number!);
+  unlinkSync(join(copy, gone));
+  const manifestFile = join(copy, 'manifest.json');
+  const manifest = JSON.parse(readFileSync(manifestFile, 'utf8')) as { files: Array<{ path: string }>; missing: string[] };
+  manifest.files = manifest.files.filter((f) => f.path !== gone);
+  writeFileSync(manifestFile, JSON.stringify(manifest));
+  assert.deepEqual(verifyExport(copy), [`${gone}: data/invoices.json names it, the manifest neither lists it nor names it missing`]);
+
+  // Named missing when the export was made, it is no tampering: verify-audit says ok and names what is incomplete.
+  manifest.missing = ['receipt r_x (scan.pdf)', `invoice ${gone.slice('invoices/'.length, -'.pdf'.length)}: transactional-data/2026/invoices/x.pdf not found`];
+  writeFileSync(manifestFile, JSON.stringify(manifest));
+  assert.deepEqual(verifyExport(copy), []);
+  const cli = spawnSync(process.execPath, ['--import', 'tsx', 'src/cli/verify-audit.ts', copy], { cwd: APP_ROOT, encoding: 'utf8' });
+  assert.equal(cli.status, 0, cli.stdout + cli.stderr);
+  assert.match(cli.stdout, /incomplete: 2 file\(s\)[\s\S]*receipt r_x/);
+});
+
 /** #516: the Invoices area of the export shows the invoices read-only and opens their PDFs. */
 test('the Invoices area of the export lists the invoices, offers no change and opens a sent PDF', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async () => {
   const d = await json<ExportedInvoices>(EXPORT_SOURCES.invoices());
@@ -285,7 +309,7 @@ test('the Invoices area of the export lists the invoices, offers no change and o
     assert.ok(rows > 3, `the list shows the invoices (${rows})`);
     const body = await page.evaluate(() => document.body.innerText);
     assert.ok(!body.includes(en.messages['invoices.unavailable']), 'no «only with its server»');
-    const writes = await page.$$eval('[data-act="send"], [data-act="copy"], [data-act="credit"], [data-act="cancel"], [data-act="remind"], [data-act="issue"], [data-act="delete"], .addbtn',
+    const writes = await page.$$eval('[data-act="send"], [data-act="copy"], [data-act="credit"], [data-act="cancel"], [data-act="remind"], [data-act="issue"], [data-act="delete"], [data-act="reset-texts"], .addbtn',
       (xs) => xs.map((x) => x.getAttribute('data-act') ?? x.className));
     assert.deepEqual(writes, [], 'no button that would change an invoice');
     const href = await page.$eval('.detail a.dl', (a) => (a as HTMLAnchorElement).href);
@@ -307,6 +331,7 @@ test('the audit bar is never covered by the top bar, at any width, zoom or theme
   const page = await context.newPage();
   try {
     page.setDefaultTimeout(60_000);
+    await page.bringToFront();
     await page.goto(`${base}#/receipts`, { waitUntil: 'networkidle0' });
     const covered: string[] = [];
     for (const theme of ['light', 'dark']) {
@@ -316,7 +341,13 @@ test('the audit bar is never covered by the top bar, at any width, zoom or theme
           await page.evaluate((th, z) => { localStorage.setItem('theme', th); localStorage.setItem('zoom', z); localStorage.setItem('language', 'de'); }, theme, zoom);
           await page.reload({ waitUntil: 'networkidle0' });
           await page.waitForSelector('[data-testid=audit-snapshot]');
-          await page.evaluate(() => document.fonts.ready.then(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)))));
+          // Polled by a timer, never by animation frames (a page Chrome renders in the background gets none): the fonts are
+          // in and --audit-h holds the bar's height as laid out now, rounded up (AuditBar.tsx).
+          await page.waitForFunction(() => {
+            const bar = document.querySelector<HTMLElement>('.auditbar');
+            const h = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--audit-h'));
+            return document.fonts.status === 'loaded' && !!bar && h >= bar.offsetHeight && h <= bar.offsetHeight + 1;
+          }, { polling: 100, timeout: 20_000 });
           const m = await page.evaluate(() => {
             const bar = document.querySelector<HTMLElement>('.auditbar')!;
             const a = bar.getBoundingClientRect();

@@ -40,7 +40,7 @@ that holds other files. It replaces an earlier export in the same folder.
 | `data/` | What the API would answer: the status with the snapshot, the chart of accounts, the company and its bank accounts, the filed returns per year, the ESTV exchange rates the foreign entries are checked against. |
 | `receipts/<id>.pdf` | Every receipt in the books, named by its id. |
 | `bank-statements/<bank>/` | Every bank statement PDF in the books. |
-| `data/invoices.json`, `invoices/` | The invoices, credit notes, customers and sent documents as of the export's day, with every issued PDF (`invoices/<number>.pdf`) and every sent reminder or notice (`invoices/sent/<id>.pdf`) exactly as stored. `verify-audit` checks each against the checksum its record kept. |
+| `data/invoices.json`, `invoices/` | The invoices, credit notes, customers and sent documents as of the export's day, with every issued PDF (`invoices/<number>.pdf`) and every sent reminder or notice (`invoices/sent/<id>.pdf`) exactly as stored. `verify-audit` checks each against the checksum its record kept. Drafts are left out: an export is the record, not work in progress. |
 | `invoice-logos/` | The logos the invoices are laid out with. |
 | `manifest.json` | The SHA-256 and size of every other file, and the seals of the filed quarters at the time of the export. |
 
@@ -90,7 +90,9 @@ npm run verify-audit -- audit-2026-10-09
 ```
 
 `verify-audit` lists every file that changed, was added or is missing, and exits with 1 when
-there is one. When the folder is as it was exported, it prints `ok` and the seals.
+there is one. When the folder is as it was exported, it prints `ok` and the seals, and names
+every file the books name that was not in the export when it was made (a receipt not found, an
+invoice PDF that no longer matched its checksum), so the recipient knows what is incomplete.
 
 ## Host it
 

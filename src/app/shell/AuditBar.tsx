@@ -15,13 +15,21 @@ export function AuditBar({ snapshot }: { snapshot?: AuditSnapshot }) {
     const el = bar.current;
     if (!el) return;
     const root = document.documentElement;
-    // The border box in the page's own px, as the CSS that reads the variable (the zoom on <html> scales both alike); rounded up,
-    // since a zoom makes it fractional and offsetHeight rounds it down: a part of a pixel would lie under what follows.
-    const set = (h: number) => root.style.setProperty('--audit-h', `${Math.ceil(h)}px`);
-    set(el.offsetHeight);
-    const seen = new ResizeObserver(([e]) => set(e.borderBoxSize[0]?.blockSize ?? el.offsetHeight));
+    // The border box in the page's own px, as the CSS that reads the variable: the box on screen undone by the zoom on <html>
+    // (prefs.ts useZoom). Rounded up, since a zoom makes it fractional: a part of a pixel would lie under what follows.
+    // Measured at once (a layout effect needs no frame), again on every resize (a zoom step sends one), when the fonts are in,
+    // and whenever the observer sees the bar change size (its text wrapping anew).
+    const measure = () => {
+      const zoom = Number(root.style.zoom) || 1;
+      root.style.setProperty('--audit-h', `${Math.ceil(el.getBoundingClientRect().height / zoom - 0.01)}px`);
+    };
+    measure();
+    const seen = new ResizeObserver(measure);
     seen.observe(el);
-    return () => { seen.disconnect(); root.style.removeProperty('--audit-h'); };
+    addEventListener('resize', measure);
+    let live = true;
+    void document.fonts?.ready.then(() => { if (live) measure(); });
+    return () => { live = false; seen.disconnect(); removeEventListener('resize', measure); root.style.removeProperty('--audit-h'); };
   }, []);
   return (
     <div ref={bar} role="status" data-testid="audit-bar" className="auditbar">

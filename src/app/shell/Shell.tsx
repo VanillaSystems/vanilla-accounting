@@ -122,7 +122,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     if (!area.periodless) nav.go({ route: AREA_HOME[area.id], query: { ...current.current.query, period: next } });
   };
 
-  const props: AreaProps = { route: loc.route, query: loc.query, period, books, nav, canEdit };
+  const props: AreaProps = { route: loc.route, query: loc.query, period, books, nav, canEdit, readOnly: STATIC_EXPORT || (online && readonly) };
   const propsRef = useRef(props);
   propsRef.current = props;
 

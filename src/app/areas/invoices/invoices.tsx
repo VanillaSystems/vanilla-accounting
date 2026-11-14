@@ -67,11 +67,13 @@ function List(props: Props) {
   useEffect(() => {
     if (route.view !== 'list' || route.id !== 'new' || load.state !== 'ready' || creating.current) return;
     const c = load.data.customers.find((x) => x.id === props.query.customer);
-    // Read-only (the audit export): no draft is made, the customer is shown instead.
-    if (!c || !props.canEdit) { nav.go({ route: { area: 'invoices', view: 'customers', ...(c ? { id: c.id } : {}) }, query: {} }); return; }
+    // Known read-only (the audit export): no draft is made, the customer is shown instead. While the API's status is not yet
+    // known canEdit is false too: the link waits for it, never sends a person away from a draft she may make.
+    if (!c || props.readOnly) { nav.go({ route: { area: 'invoices', view: 'customers', ...(c ? { id: c.id } : {}) }, query: {} }); return; }
+    if (!props.canEdit) return;
     creating.current = true;
     void newDraftFor(nav, c).finally(() => { creating.current = false; });
-  }, [route.id, load.state]);
+  }, [route.id, load.state, props.canEdit, props.readOnly]);
 
   if (load.state !== 'ready') {
     return (

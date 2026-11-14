@@ -356,7 +356,7 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
       </div>
       {/* A firm not registered issues invoices without VAT (#347): said as a fact, with its place. */}
       {!chargesVat() && <p className="m ivhint" data-testid="invoice-no-vat">{t('invoices.noVat')} · <button type="button" className="quiet2" onClick={() => nav.go({ route: { area: 'company', section: 'vat' }, query: {} })}>{t('invoices.toVat')}</button></p>}
-      {own && <p className="m ivhint">{t('invoices.ownTexts')} · <button type="button" className="quiet2" onClick={() => void saveDraft(nav, inv, { intro: null, closing: null })}>{t('invoices.resetTexts')}</button></p>}
+      {own && <p className="m ivhint">{t('invoices.ownTexts')}{canEdit && <> · <button type="button" className="quiet2" data-act="reset-texts" onClick={() => void saveDraft(nav, inv, { intro: null, closing: null })}>{t('invoices.resetTexts')}</button></>}</p>}
       <p className="lkfoot"><button type="button" className="quiet2" onClick={() => nav.go({ route: { area: 'company', section: 'invoice-layout' }, query: {} })}>{t('invoices.toLayout')}</button></p>
     </Sec>
   );
