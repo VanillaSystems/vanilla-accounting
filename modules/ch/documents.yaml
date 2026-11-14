@@ -34,7 +34,7 @@ notDuplicate: [Refund, Refunded, Refund receipt, Rückerstattung, Erstattung, R�
 
 # Short forms by which a file name says it is a receipt («RE_2026-104.pdf», «inv_7781.pdf»): a
 # file-name shape with one of these as a part of its own is never offered to be kept aside, however short.
-receiptFileNames: [re, rg, rgn, rech, rechn, inv, invc, fact, fakt, fatt, gs, qt, quit]
+receiptFileNames: [re, rg, rgn, rch, rech, rechn, inv, invc, fact, fakt, fatt, factuur, gs, qt, quit, bon, spesen, zahlungsbestaetigung, zahlungsbestätigung]
 
 # Words of a file name that say nothing of what a file is: a camera's, a scanner's, a mail program's
 # default. A file-name shape made of these alone (and numbers) is never offered to be kept aside.

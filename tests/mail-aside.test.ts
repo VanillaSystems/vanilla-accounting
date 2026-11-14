@@ -82,14 +82,14 @@ test('a shape without a telling word, or of a receipt\'s words, is never a group
   for (const s of ['#.pdf', 'img_#.pdf', 'img.pdf', 'scan.pdf', 'scan_#.pdf', 'document_#.pdf', 'rechnung_#.pdf', 'invoice_#.pdf', 'receipt_#.pdf', 'beleg.pdf', 'quittung_#.pdf', 'facture_#.pdf', 'fattura.pdf', 'ricevuta_#.pdf', 'rechnungskopie.pdf']) {
     assert.equal(offerableShape(s, W), false, s);
   }
-  for (const s of ['re_#.pdf', 'rg_#.pdf', 'inv_#.pdf', 'rech_#.pdf', 'fact_#.pdf', 'gs_#.pdf', 'screenshot_#.png', 'screen_shot_#.png', 'bildschirmfoto_#.png', 'whatsapp_image_#.jpeg']) {
+  for (const s of ['re_#.pdf', 'rg_#.pdf', 'inv_#.pdf', 'rech_#.pdf', 'fact_#.pdf', 'gs_#.pdf', 'rch_#.pdf', 'bon_#.pdf', 'factuur_#.pdf', 'spesen_#.pdf', 'zahlungsbestaetigung_#.pdf', 'zahlungsbestätigung.pdf','screenshot_#.png', 'screen_shot_#.png', 'bildschirmfoto_#.png', 'whatsapp_image_#.jpeg']) {
     assert.equal(offerableShape(s, W), false, `a receipt's short form or a screen's default: ${s}`);
   }
   assert.equal(nameShape('RE_2026-104.pdf'), 're_#.pdf');
   assert.equal(nameShape('Screenshot 2026-10-01 at 08.15.22.png'), 'screenshot_#_at_#.png');
   assert.equal(offerableShape(nameShape('Screenshot 2026-10-01 at 08.15.22.png'), W), false, 'a two-letter word («at», «um») tells nothing');
   assert.equal(offerableShape(nameShape('Bildschirmfoto 2026-10-01 um 08.15.22.png'), W), false);
-  for (const s of ['report.pdf', 'katalog_#.pdf', 'newsletter_#.pdf', 'prospekt_gläser.pdf', 'preview.pdf', 'invest_news.pdf']) assert.equal(offerableShape(s, W), true, s);
+  for (const s of ['report.pdf', 'katalog_#.pdf', 'newsletter_#.pdf', 'prospekt_gläser.pdf', 'preview.pdf', 'invest_news.pdf', 'bonus_news.pdf']) assert.equal(offerableShape(s, W), true, s);
   const lines = [line('IMG_1.pdf', 'me@phone.example', { aside: true }), line('IMG_22.pdf', 'me@phone.example', { aside: true }), line('IMG_333.pdf', 'me@phone.example', { aside: true })];
   assert.deepEqual(offers(lines), [], 'a phone\'s photos: a receipt photo has the same name');
   const invoices = [line('Rechnung 101.pdf', 'billing@x.example', { aside: true }), line('Rechnung 202.pdf', 'billing@x.example', { aside: true })];
