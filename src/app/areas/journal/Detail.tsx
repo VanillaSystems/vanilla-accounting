@@ -23,7 +23,7 @@ import { t } from '../../i18n/index.js';
 import { useAiOff } from '../../ai/ai-off.js';
 import { ICONS } from '../icons.js';
 import type { AreaProps, Nav } from '../index.js';
-import { Paper } from '../receipts/Paper.js';
+import { FileView } from '../receipts/FileView.js';
 import { I } from '../receipts/icons.js';
 import { at, bankOf, amountOf } from '../receipts/view.js';
 import { explain } from '../codes/vat-card.js';
@@ -50,7 +50,7 @@ import { QuestionsOn } from '../../questions/Questions.js';
 import { AccountField, unknownAccountText } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
-import { isCamt } from '../bank/model.js';
+import { fileKindOf } from '../../../core/files.js';
 import { CorrectionOffer } from '../company/RulesSection.js';
 import { LearnOffer } from '../company/LearnOffer.js';
 import { baseCurrency, chargesVat, filing, vat, withoutInputTax } from '../../../engines/index.js';
@@ -186,8 +186,8 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
           <QuestionsOn key={`q-${e.id}`} on={{ kind: 'entry', id: e.id }} also={[...(tx ? [{ kind: 'payment' as const, id: tx.ref }] : []), ...v.receipts.map((r) => ({ kind: 'receipt' as const, id: r.id }))]} nav={nav} canEdit={canEdit} books={props.books} />
           {receipt ? (
             <div className="paper real" role="button" tabIndex={0} aria-label={t('journal.openReceipt')} onClick={() => nav.go(at({ area: 'receipts', id: receipt.id }, receipt.date))}>
-              <Paper key={receipt.id} src={sources.receipt(receipt.id)} />
-              <a className="dl float" href={sources.receipt(receipt.id)} download={receipt.filename} data-tip={t('receipts.downloadTitle', { file: receipt.filename })} onClick={(ev) => ev.stopPropagation()}>{I.dl}<span>{t('receipts.download')}</span></a>
+              <FileView key={receipt.id} src={sources.receipt(receipt)} file={receipt.filename} size={receipt.fileSize} />
+              <a className="dl float" href={sources.receipt(receipt)} download={receipt.filename} data-tip={t('receipts.downloadTitle', { file: receipt.filename })} onClick={(ev) => ev.stopPropagation()}>{I.dl}<span>{t('receipts.download')}</span></a>
             </div>
           ) : tx ? (
             <Excerpt {...props} tx={tx} />
@@ -455,7 +455,8 @@ function Excerpt({ books, nav, tx }: Props & { tx: BankTransaction }) {
   const [page, setPage] = useState('');
   const b = bankFor(books, ws?.bankAccounts);
   const s = b.statementOf(tx);
-  const src = s?.file && !isCamt(s.file) && sources.statement(s.file.bank, s.file.filename);
+  // An excerpt is drawn from a PDF; the bank's XML or a CSV shows whole in Kontoauszüge (#523).
+  const src = s?.file && fileKindOf(s.file.filename).view === 'pdf' && sources.statement(s.file.bank, s.file.filename);
   const toStatement = () => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date));
   const link = <button type="button" data-tip={t('journal.openPaymentKey')} onClick={toStatement}>{t('journal.statementOf', { month: monthName(tx.date) })}</button>;
   if (!src) return <div className="src">{t('journal.noReceiptSource')} {link}</div>;

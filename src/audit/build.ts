@@ -56,7 +56,7 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
   const missing: string[] = [];
   for (const r of books.receipts) {
     const src = receiptPathOf(ws, r);
-    if (src) copyOut(out, EXPORT_FILES.receipt(r.id), src);
+    if (src) copyOut(out, EXPORT_FILES.receipt(r), src);
     else missing.push(`receipt ${r.id} (${r.filename})`);
   }
   for (const s of books.bankStatements) {

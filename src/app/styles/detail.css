@@ -98,6 +98,24 @@
 [data-theme="dark"] .paper.real .pg { filter: brightness(.82) contrast(1.06); box-shadow: 0 0 0 1px #1f1f1f, 0 24px 48px -28px #000; }
 .paper.real .loading { width: 100%; aspect-ratio: 1 / 1.3; border-radius: 4px; background: var(--hover); }
 .quick .paper.real { height: auto; max-height: 88vh; overflow: auto; }
+/* A linked file that is no PDF (receipts/FileView.tsx, #523): an image, a table, text, a mail, a page, or its facts and download. */
+.paper.real .pg.fimg { height: auto; }
+.paper.real .pg.fdoc, [data-theme="dark"] .paper.real .pg.fdoc { width: 100%; box-sizing: border-box; padding: 16px 18px; background: var(--bg); color: var(--ink); filter: none; text-align: left; font-size: 12.5px; cursor: auto; }
+.fdoc .fscroll { overflow: auto; max-height: 70vh; }
+.fdoc .ftable { display: table; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.fdoc .ftable thead { display: table-header-group; }
+.fdoc .ftable tbody { display: table-row-group; }
+.fdoc .ftable tr { display: table-row; }
+.fdoc .ftable th, .fdoc .ftable td { border-bottom: 1px solid var(--line); padding: 4px 10px 4px 0; white-space: nowrap; text-align: left; vertical-align: top; }
+.fdoc .ftable th { position: sticky; top: 0; background: var(--bg); color: var(--muted); font-weight: 600; }
+.fdoc .ftext { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.5 "Geist Mono", ui-monospace, monospace; max-height: 70vh; overflow: auto; }
+.fdoc .fmail { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 0 0 12px; }
+.fdoc .fmail dt { color: var(--muted); }
+.fdoc .fmail dd { margin: 0; overflow-wrap: anywhere; }
+.fdoc .fcut { margin: 10px 0 0; color: var(--muted); }
+.fdoc .fdl { display: inline-block; margin-top: 4px; color: var(--accent); }
+/* A page as its author laid it out: on paper, in both themes. */
+.paper.real .pg.fhtml, .fdoc .fhtml { width: 100%; height: 70vh; border: 0; background: #fff; }
 .facts .ok { color: var(--pos); }
 @container (max-width: 560px) { .body { grid-template-columns: minmax(0, 1fr) !important; gap: 28px !important; } .body .margin { max-width: 600px; } }
 /* quiet by default, full strength on intent: hover, keyboard focus, or while a form is open */

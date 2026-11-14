@@ -38,7 +38,7 @@ that holds other files. It replaces an earlier export in the same folder.
 | `index.html`, `assets/` | The app, built in audit mode. All paths are relative. |
 | `books.json` | Your books as the app reads them: every year's records and the config, in one file. |
 | `data/` | What the API would answer: the status with the snapshot, the chart of accounts, the company and its bank accounts, the filed returns per year, the ESTV exchange rates the foreign entries are checked against. |
-| `receipts/<id>.pdf` | Every receipt in the books, named by its id. |
+| `receipts/<id>.<ext>` | Every receipt in the books, named by its id with its own extension (`.pdf`, a provider's report `.csv`, an image, …; an export made before #523 named every one `.pdf`). |
 | `bank-statements/<bank>/` | Every bank statement PDF in the books. |
 | `data/invoices.json`, `invoices/` | The invoices, credit notes, customers and sent documents as of the export's day, with every issued PDF (`invoices/<number>.pdf`) and every sent reminder or notice (`invoices/sent/<id>.pdf`) exactly as stored. `verify-audit` checks each against the checksum its record kept. Drafts are left out: an export is the record, not work in progress. |
 | `invoice-logos/` | The logos the invoices are laid out with. |

@@ -53,7 +53,7 @@ test('every read the UI makes is a file of the export, under any base path', asy
   const urls = [
     EXPORT_SOURCES.status(), EXPORT_SOURCES.accounts(), EXPORT_SOURCES.workspace(), EXPORT_SOURCES.fxRates(),
     ...[...years].map((y) => EXPORT_SOURCES.filedReturns(y)),
-    ...books.receipts.map((r) => EXPORT_SOURCES.receipt(r.id)),
+    ...books.receipts.map((r) => EXPORT_SOURCES.receipt(r)),
     ...books.bankStatements.map((s) => EXPORT_SOURCES.statement(s.bank, s.filename)),
   ];
   assert.ok(books.receipts.length > 10 && books.bankStatements.length > 5, 'the demo names receipts and statements');
@@ -93,7 +93,7 @@ test('verify-audit fails on a changed, an added and a removed file', () => {
   const copy = join(tmp, 'tampered');
   cpSync(dir, copy, { recursive: true });
   const books = JSON.parse(readFileSync(join(copy, 'books.json'), 'utf8')) as Index;
-  const receipt = EXPORT_SOURCES.receipt(books.receipts[0].id);
+  const receipt = EXPORT_SOURCES.receipt(books.receipts[0]);
   appendFileSync(join(copy, receipt), ' ');
   writeFileSync(join(copy, 'data', 'extra.json'), '{}');
   unlinkSync(join(copy, EXPORT_SOURCES.accounts()));

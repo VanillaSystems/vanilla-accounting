@@ -25,6 +25,14 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A linked file that is no PDF no longer shows «Failed to load PDF document». Every linked file
+  shows by its type, in the app and in the audit export alike: a PDF as paper, an image as
+  itself, a CSV (a payment provider's report) as a table, text and XML as text, a saved mail
+  (`.eml`) as its sender, subject and body, an HTML page in a sandbox. A type the app does not
+  show (xlsx, heic, …) names its file, type and size and offers its download. The API serves
+  each receipt with its own type, and the audit export keeps each receipt's extension
+  (`receipts/<id>.csv`), listed in its manifest as before; an earlier export keeps its `.pdf`
+  names (#523).
 - Audit export: the floating top bar, the status corner, the dock and the page now start below
   the amber audit bar, at every window width, zoom and theme, so its text («Prüfmodus · nur
   Lesen …», the snapshot's date, schema and version) is never covered (#515).
