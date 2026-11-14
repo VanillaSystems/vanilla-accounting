@@ -64,7 +64,7 @@ const MAIL = [
 const FILES = [
   { id: 'lf-csv', filename: 'shop-fees-2026-09.csv', bytes: Buffer.from('Order;Fee;Currency\n#1001;1.20;CHF\n#1002;"0,95";CHF\n'), view: 'table', shows: '#1002' },
   { id: 'lf-png', filename: 'kassenzettel.png', bytes: PNG, view: 'image', width: 2 },
-  { id: 'lf-svg', filename: 'stempel.svg', bytes: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="3" height="3"><rect width="3" height="3" fill="grey"/><script>parent.document.title="svg"</script></svg>'), view: 'image', width: 3 },
+  { id: 'lf-svg', filename: 'stempel.svg', bytes: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="3" height="3"><rect width="3" height="3" fill="grey"/><script>try{localStorage.setItem("pwn","1")}catch(e){}document.title="svg"</script></svg>'), view: 'image', width: 3 },
   { id: 'lf-txt', filename: 'notiz.txt', bytes: Buffer.from('Barbeleg Parkhaus CHF 12.00\n', 'latin1'), view: 'text', shows: 'Parkhaus' },
   { id: 'lf-xml', filename: 'auszug.xml', bytes: Buffer.from('<?xml version="1.0"?><Document><Amt Ccy="CHF">12.00</Amt></Document>'), view: 'text', shows: '<Amt Ccy="CHF">' },
   { id: 'lf-eml', filename: 'bestellung.eml', bytes: Buffer.from(MAIL, 'latin1'), view: 'mail', shows: 'für Kaffeebohnen' },
@@ -197,6 +197,16 @@ test('the exported app shows every kind by its type, and a type it does not draw
       const text = await page.$eval(pane, (el) => (el as HTMLElement).innerText);
       if ('shows' in f) assert.ok(text.includes(f.shows), `${f.filename}: «${f.shows}» in ${JSON.stringify(text.slice(0, 200))}`);
       if ('width' in f) await page.waitForFunction((sel, w) => (document.querySelector(sel) as HTMLImageElement | null)?.naturalWidth === w, {}, pane, f.width);
+      if (f.id === 'lf-svg') {
+        // Drawn from a data: URL, never a blob: one, which has the app's origin: opened on its own, its script would run there.
+        const img = await page.$eval(pane, (el) => (el as HTMLImageElement).src);
+        assert.ok(img.startsWith('data:image/svg+xml;base64,'), img.slice(0, 40));
+        const alone = await context.newPage();
+        await alone.goto(img).catch(() => undefined);
+        await new Promise((ok) => setTimeout(ok, 300));
+        await alone.close();
+        assert.equal(await page.evaluate(() => localStorage.getItem('pwn')), null, 'the SVG opened on its own left no mark on the app\'s origin');
+      }
       if (f.view === 'html') {
         const frame = await page.$eval(pane, (el) => ({ sandbox: el.getAttribute('sandbox'), doc: (el as HTMLIFrameElement).srcdoc }));
         assert.equal(frame.sandbox, '', 'the page runs no script: no allow-scripts');

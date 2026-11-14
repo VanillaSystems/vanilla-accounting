@@ -59,8 +59,10 @@ export function FileView({ src, file, size, maxWidth = 600, whole = false }: { s
 }
 
 /**
- * An image. An SVG is drawn from its bytes as an image of its own type: the audit export keeps it under an
- * inert name (`.bin`, src/core/files.ts inertExt), which no browser draws by itself, and an <img> runs no script.
+ * An image. An SVG is drawn from its bytes as a `data:` URL of its own type: the audit export keeps it under
+ * an inert name (`.bin`, src/core/files.ts inertExt), which no browser draws by itself. Never a `blob:` URL: that
+ * has the app's origin, and opened on its own («open image in new tab») the SVG's script would run there. A
+ * `data:` URL has an opaque origin, the browser opens none at the top level, and an <img> runs no script.
  */
 function ImageFile({ src, file, kind, size }: { src: string; file: string; kind: FileKind; size?: number }) {
   const [failed, setFailed] = useState(false);
@@ -70,14 +72,11 @@ function ImageFile({ src, file, kind, size }: { src: string; file: string; kind:
     setFailed(false);
     if (!svg) { setUrl(src); return; }
     let live = true;
-    let made: string | undefined;
     setUrl(undefined);
     fetch(src).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status))))).then((b) => {
-      if (!live) return;
-      made = URL.createObjectURL(new Blob([b], { type: 'image/svg+xml' }));
-      setUrl(made);
+      if (live) setUrl(`data:image/svg+xml;base64,${btoa(binary(new Uint8Array(b)))}`);
     }, () => { if (live) setFailed(true); });
-    return () => { live = false; if (made) URL.revokeObjectURL(made); };
+    return () => { live = false; };
   }, [src, svg]);
   if (failed) return <NoPreview src={src} file={file} kind={kind} size={size} failed />;
   if (!url) return <div className="pages"><div className="loading" /></div>;
