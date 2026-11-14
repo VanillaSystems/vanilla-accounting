@@ -47,7 +47,7 @@ export function SenderStep({ kept, mailFrom, onConfirmed, onFile }: { kept?: str
   const [busy, setBusy] = useState(false);
   const waiting = !!kept || !!reg;
   const stopped = useRef(false);
-  useEffect(() => () => { stopped.current = true; }, []);
+  useEffect(() => { stopped.current = false; return () => { stopped.current = true; }; }, []);
 
   // While an address waits for its e-mail: the service is asked every few seconds, ten minutes at most.
   useEffect(() => {

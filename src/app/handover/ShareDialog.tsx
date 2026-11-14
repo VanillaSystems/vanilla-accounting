@@ -203,7 +203,7 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
         <div className="xft">
           {sent ? (
             <>
-              <span className="m">{t('share.version', { n: sent.record.version })}</span>
+              <span className="m">{t('version.short', { n: sent.record.version })}</span>
               <button type="button" className="btn primary" onClick={onClose} data-testid="share-done">{t('share.done')}</button>
             </>
           ) : (

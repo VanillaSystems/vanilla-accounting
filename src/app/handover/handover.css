@@ -154,3 +154,5 @@
 .shdlg .shsvc .btn, .shdlg .shopen .btn { height: 34px; }
 .shdlg .chk.shchk { display: flex; flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); }
 .shdlg > .shbody > .wm, .shdlg .ways > .wm { color: var(--muted); font-size: 12px; }
+.shdlg .xft { flex-wrap: wrap; row-gap: 8px; }
+.shdlg .xft .m { flex: 1 1 180px; }
