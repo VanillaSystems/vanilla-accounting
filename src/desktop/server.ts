@@ -274,6 +274,8 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     else {
       openWorkspaceAt(root);
       books = (await import('../server/api.js')).app;
+      // A hand-over opened in the app (a Durchsicht copy, or back from one) opens like any books: remembered, listed under the recent ones.
+      (await import('../server/books.js')).setBooksOpener(async (r) => { await openBooks(r); });
     }
     open = known(root);
     remember(root, open.name);
