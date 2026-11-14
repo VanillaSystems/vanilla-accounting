@@ -20,6 +20,7 @@ import type { Issued } from '../invoices/model.js';
 import { liveCustomers, liveInvoices } from '../invoices/rules.js';
 import { viewOf } from '../invoices/service.js';
 import { appVersion, hashFiles, MANIFEST, MANIFEST_FORMAT, type ExportedSeal, type ExportManifest } from './manifest.js';
+import { currentVersion } from '../handover/versions.js';
 
 export class ExportError extends Error {}
 
@@ -40,7 +41,8 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
   const books = loadBooks(ws);
   const write = (path: string, data: unknown) => writeOut(out, path, JSON.stringify(data));
   const raw = JSON.parse(readFileSync(ws.paths.ledger, 'utf8')) as { schema?: unknown };
-  const snapshot: AuditSnapshot = { createdAt, booksSchema: schemaOf(raw.schema, ws.paths.ledger), appVersion: appVersion() };
+  const version = currentVersion(ws.paths);
+  const snapshot: AuditSnapshot = { createdAt, booksSchema: schemaOf(raw.schema, ws.paths.ledger), appVersion: appVersion(), ...(version ? { version: { n: version.n, at: version.at, checksum: version.checksum } } : {}) };
 
   write(EXPORT_FILES.books(), books);
   write(EXPORT_FILES.modules(), workspaceModules(APP_ROOT, ws.paths.root, ws.company.vat));

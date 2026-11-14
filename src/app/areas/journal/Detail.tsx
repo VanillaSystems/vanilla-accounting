@@ -53,6 +53,8 @@ import { bankFor } from '../bank/state.js';
 import { fileKindOf } from '../../../core/files.js';
 import { CorrectionOffer } from '../company/RulesSection.js';
 import { LearnOffer } from '../company/LearnOffer.js';
+import { WhyField } from '../../handover/Durchsicht.js';
+import { useHandover } from '../../handover/store.js';
 import { baseCurrency, chargesVat, filing, vat, withoutInputTax } from '../../../engines/index.js';
 import { correctionName } from '../../lib/vat-words.js';
 import { TagFields, tagField, tagsOfForm } from './TagFields.js';
@@ -94,6 +96,8 @@ const quarterName = (date: string) => { const p = parsePeriod(periodContaining(d
 const filedName = (quarter: string) => { const p = parsePeriod(quarter, localToday()); return p ? periodName(p) : quarter; };
 
 function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
+  // On a Durchsicht copy: his «Warum?» for the sharer, and no «Ins Wissen übernehmen?» (rules are the sharer's to keep, B6).
+  const copy = useHandover()?.durchsicht;
   const { v, j, nav, canEdit } = props;
   const { e, tx } = v;
   const fx = useFx().convert(e);
@@ -208,7 +212,8 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
             </Sec>
           )}
           <EntryForm {...props} edit={edit} />
-          {edit && (e.by?.kind === 'person' || e.by?.kind === 'assistant') && e.by.was ? <div className="jlearn"><LearnOffer payment={e.transactionRef} nav={nav} /></div> : null}
+          {copy && props.canEdit ? <WhyField d={copy} entry={e.id} /> : null}
+          {edit && !copy && (e.by?.kind === 'person' || e.by?.kind === 'assistant') && e.by.was ? <div className="jlearn"><LearnOffer payment={e.transactionRef} nav={nav} /></div> : null}
           <Sec k="herkunft" val={e.by ? t(`journal.by.${e.by.kind}`) : t(`journal.origin.${e.origin ?? 'other'}`)}>
             <dl className="kv">
               <dt>{t('journal.entryId')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.id}</dd>

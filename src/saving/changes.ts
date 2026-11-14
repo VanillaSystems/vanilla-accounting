@@ -29,7 +29,7 @@ export function customizingNames(): string[] {
 }
 
 /** The records: the books, which a save of kind books commits. */
-export const recordsPaths = (ws: Ws): string[] => [ws.paths.ledger, ws.paths.transactional, ws.paths.invoices, join(ws.paths.root, 'collected')];
+export const recordsPaths = (ws: Ws): string[] => [ws.paths.ledger, ws.paths.transactional, ws.paths.invoices, join(ws.paths.root, 'collected'), join(ws.paths.root, 'versions.jsonl'), join(ws.paths.root, 'handover')];
 
 export const draftDir = (ws: Ws): string => join(ws.paths.data, 'draft');
 

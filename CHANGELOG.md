@@ -14,6 +14,27 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Added
+
+- **Share the books with a fiduciary and take back his corrections** (docs/specs/e2e-and-fiduciary.md
+  Part B, as a file for now). «Teilen» in the top bar (⇧S) saves the books as a `.vanilla` file
+  for a named person: the first time the open years' books and receipts (a closed year's receipts
+  only «mit Archiv»), later only what is new since the version that person holds, with the size
+  told. Opening it makes a copy in «Durchsicht»: a bar names whose books, which version and from
+  whom; he corrects as a person, with a «Warum?» per booking; filed quarters stay sealed; filing,
+  the year close, the company settings and sharing onward are refused («Einreichen macht …»).
+  «An … zurücksenden» saves his changes as a return. Opened in the books it came from, Änderungen
+  shows «… hat N Änderungen geschickt»: the effect on each period's VAT payable, his changes by
+  kind with before → after and his reason, «Übernehmen» per group or «Alles übernehmen»,
+  «Auslassen» and «Frage zurück» per row (the question goes with the next hand-over). A record
+  both changed shows both versions to pick; a change into a quarter filed meanwhile is booked, on
+  request, as a correction in the open period with `corrects`. The take-over is one save through
+  the write door, undone as a whole, and offers «Ins Wissen übernehmen?» once per partner.
+- **The content version**: `versions.jsonl` at the workspace's top (its own `schema: 1`, no step
+  of the books' schema) counts every hand-over, every return taken over and every sealed quarter:
+  «Version 12» beside the company in the top bar (date and checksum on hover), in Änderungen, in
+  the read-only bar of the audit export, and in the `.vanilla` file's name.
+
 ### Changed
 
 - The GitHub release text (`npm run release:github`) starts with the downloads: one line saying

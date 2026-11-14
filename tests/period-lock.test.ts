@@ -17,6 +17,7 @@ import { booksOnDisk } from './support/workspace.js';
 import { closedPart } from '../src/books/seal.js';
 import type { RunDetail } from '../src/workflows/model.js';
 import { startApi, type ApiServer } from './support/api-server.js';
+import { writePackage } from '../src/handover/package.js';
 
 const REPO = process.cwd();
 let api: ApiServer;
@@ -504,4 +505,53 @@ test('refused: the opening of a year closed through 31.12., a foreign-currency a
   } finally {
     await closed.stop();
   }
+});
+
+/** A return (src/handover) of a recipient who changed the filed entry jc and an open one, as his `.vanilla` file. */
+function returnOf(): Uint8Array {
+  const ws = workspaceAt(api.ws.paths.root);
+  const books = loadBooks(ws);
+  const jc = books.journalEntries.find((e) => e.id === 'jc')!, jo = books.journalEntries.find((e) => e.date > '2026-06-30' && !e.corrects)!;
+  return writePackage({
+    index: {
+      format: 1, kind: 'return', firm: { name: ws.company.name, ...(ws.company.uid ? { uid: ws.company.uid } : {}) },
+      from: { name: 'Ernst Beispiel' }, to: { name: 'Owner' }, version: { n: 1, at: '2026-11-14T10:00:00Z', checksum: 'sha256:0' },
+      app: 'test', at: '2026-11-16T10:00:00Z', files: [], changes: 2,
+    },
+    files: new Map(),
+    changes: [
+      { kind: 'journalEntries', key: 'jc', before: jc, after: { ...jc, accountDebit: '6510' }, why: 'Telefon' },
+      { kind: 'journalEntries', key: jo.id, before: jo, after: { ...jo, accountDebit: '6510' } },
+    ],
+  });
+}
+
+test('a return taken over (POST /api/handover/returns/:id/apply, …/undo): the filed entry never changes; offered as a correction it is booked in the open period', async () => {
+  const sealedBefore = closedPart(loadBooks(workspaceAt(api.ws.paths.root)), '2026-06-30');
+  const opened = await api.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: new Uint8Array(returnOf()) });
+  assert.equal(opened.status, 200);
+  const { id } = await opened.json() as { id: string };
+  const review = await send({ method: 'GET', path: `/api/handover/returns/${id}` });
+  const rows = review.json.rows as Array<{ key: string; status: string }>;
+  assert.equal(rows.find((r) => r.key === 'jc')?.status, 'sealed');
+  // Picking his version of a filed entry does not reach it: only a correction does.
+  await send({ method: 'POST', path: `/api/handover/returns/${id}/decide`, body: { row: 'journalEntries\u0000jc', decision: 'theirs' } });
+  const applied = await send({ method: 'POST', path: `/api/handover/returns/${id}/apply`, body: { groups: 'all' } });
+  assert.equal(applied.status, 200, applied.error);
+  assert.equal(applied.json.applied, 1);
+  let now = loadBooks(workspaceAt(api.ws.paths.root));
+  assert.equal(now.journalEntries.filter((e) => e.accountDebit === '6510' && e.date > '2026-06-30').length, 1);
+  assert.deepEqual(closedPart(now, '2026-06-30'), sealedBefore, 'the filed quarter stays as filed');
+  await send({ method: 'POST', path: `/api/handover/returns/${id}/decide`, body: { row: 'journalEntries\u0000jc', decision: 'correction' } });
+  assert.equal((await send({ method: 'POST', path: `/api/handover/returns/${id}/apply`, body: { groups: 'all' } })).json.corrections, 2);
+  now = loadBooks(workspaceAt(api.ws.paths.root));
+  assert.deepEqual(closedPart(now, '2026-06-30'), sealedBefore);
+  assert.ok(now.journalEntries.filter((e) => e.corrects === '2026-Q2').every((e) => e.date > '2026-06-30'));
+  assert.equal((await send({ method: 'POST', path: `/api/handover/returns/${id}/apply`, body: { groups: 'all' } })).status, 409, 'nothing left to take');
+  const undone = await send({ method: 'POST', path: `/api/handover/returns/${id}/undo` });
+  assert.equal(undone.status, 200);
+  now = loadBooks(workspaceAt(api.ws.paths.root));
+  assert.equal(now.journalEntries.filter((e) => e.accountDebit === '6510').length, 0);
+  assert.equal(now.journalEntries.filter((e) => e.id.startsWith('jc-k')).length, 0);
+  assert.deepEqual(closedPart(now, '2026-06-30'), sealedBefore);
 });

@@ -21,6 +21,7 @@ import { Refused } from '../types/refusal.js';
 import { asQuarter, checkSeals, closesTheYear, periodKeyOf, writeSeal } from '../books/seal.js';
 import { addDays, derivePeriod } from '../accounting/periods.js';
 import { openWorkspace } from '../workspace/workspace.js';
+import { sealedVersion } from '../handover/versions.js';
 
 const args = process.argv.slice(2);
 const ws = openWorkspace();
@@ -57,7 +58,8 @@ if (args.includes('--close') && (!closedThrough || closedThrough < end)) {
 try {
   const result = writeSeal(ws, books, quarter, new Date().toISOString().slice(0, 10));
   if (result.status === 'intact') console.log(`${quarter} is sealed already, and the seal holds: ${result.file}`);
-  else console.log(`Sealed ${quarter}: ${result.file}\n  ${result.seal!.records.entries} entries, ${result.seal!.records.transactions} transactions, ${result.seal!.records.mappings} mappings, sha256 ${result.seal!.sha256.slice(0, 16)}…`);
+  else sealedVersion(ws, quarter);
+  if (result.status === 'written') console.log(`Sealed ${quarter}: ${result.file}\n  ${result.seal!.records.entries} entries, ${result.seal!.records.transactions} transactions, ${result.seal!.records.mappings} mappings, sha256 ${result.seal!.sha256.slice(0, 16)}…`);
 } catch (e) {
   console.error((e as Error).message);
   process.exit(1);

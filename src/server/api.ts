@@ -37,6 +37,8 @@ import { router as ai } from './routes/ai.js';
 import { router as terminal } from './routes/terminal.js';
 import { router as batch } from './routes/batch.js';
 import { router as vatAdjustments } from './routes/vat-adjustments.js';
+import { router as handover } from './routes/handover.js';
+import { markerOf } from '../handover/durchsicht.js';
 import { aiSetup } from './ai-setup.js';
 import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { AiRefused } from '../llm/provider.js';
@@ -77,11 +79,28 @@ if (READONLY) {
   });
 }
 
+// A Durchsicht copy (docs/specs/e2e-and-fiduciary.md B4): the recipient books and corrects; filing, sealing, the year's
+// close, the company's settings and sharing onward are the sharer's. A guard against mistakes, not security (B2).
+const SHARER_ONLY: Array<[string, RegExp, string]> = [
+  ['POST', /^\/api\/year-close\/\d{4}\/(close|open)$/, 'yearClose'],
+  ['PATCH', /^\/api\/workspace$/, 'settings'],
+  ['POST', /^\/api\/workspace\/logo$/, 'settings'],
+  ['POST', /^\/api\/handover\/share$/, 'share'],
+];
+app.use((req, res, next) => {
+  const m = markerOf(WS.paths.root);
+  if (!m) return next();
+  const filing = req.method === 'POST' && req.path === '/api/automation' && (req.body as { kind?: string; workflow?: string } | undefined)?.kind === 'start' && ['vat-filing', 'year-close'].includes(String((req.body as { workflow?: string }).workflow));
+  const hit = filing ? 'filing' : SHARER_ONLY.find(([method, path]) => req.method === method && path.test(req.path))?.[2];
+  if (!hit) return next();
+  res.status(403).json({ error: `Durchsicht: das macht ${m.sharer.name}.`, code: 'roleRefused', params: { action: hit, name: m.sharer.name } } satisfies ApiErrorBody);
+});
+
 app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY, ...(aiOff() ? { aiOff: true } : {}) } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, payouts, questions, reports, batch, vatAdjustments);
+app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, payouts, questions, reports, batch, vatAdjustments, handover);
 app.use(knowledge);
 app.use(onboarding);
 
