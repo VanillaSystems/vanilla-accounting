@@ -7,11 +7,12 @@ import { filingKeyOf, isIsoDate, parsePeriod } from '../../accounting/periods.js
 import { filing } from '../../engines/index.js';
 import { providerIssuesIn } from '../../intake/pair-chain.js';
 import { unclearedContributions } from '../../booking/withheld.js';
-import { patchBody, stringField, tagsField, updateBooks, withBooks, RequestError, WS } from '../books.js';
+import { patchBody, refDates, stringField, tagsField, updateBooks, withBooks, RequestError, WS } from '../books.js';
+import { isManualRef } from '../../books/refs.js';
 import { learnFromCorrection, undoAnswer } from '../questions.js';
 import type { EntrySet } from '../../types/assistant.js';
 import { addEntry, bookByReceipt, clearWithheld, undoByReceipt, undoClearWithheld, deleteEntry, link, restoreSaved, setEntry } from '../edits.js';
-import { handEdits, recordDeletion } from '../../saving/changes.js';
+import { deletedEntry, handEdits, recordDeletion } from '../../saving/changes.js';
 import { parseBookedBy } from '../../books/booked-by.js';
 import { bookPaymentAgain } from './automation.js';
 import { bookingWarnings } from '../../accounting/booking-warnings.js';
@@ -61,7 +62,7 @@ router.patch('/api/journal-entries/:id', (req, res) => {
  * back as it was (r8f-46); the provenance is taken only with `id`.
  */
 router.post('/api/journal-entries', (req, res) => {
-  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'exchangeCurrency', 'exchangeRate', 'corrects', 'transactionRef', 'id', 'origin', 'correctsEntry', 'correction', 'receipt', 'tags', ...UNDO_FIELDS]);
+  const b = patchBody(req.body, ['date', 'accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'exchangeCurrency', 'exchangeRate', 'corrects', 'transactionRef', 'id', 'origin', 'correctsEntry', 'correction', 'receipt', 'tags', 'takenLinks', ...UNDO_FIELDS]);
   const date = stringField(b, 'date');
   if (!isIsoDate(date)) throw new RequestError(400, 'date: YYYY-MM-DD.');
   const amount = amountField(b);
@@ -89,9 +90,16 @@ router.post('/api/journal-entries', (req, res) => {
   const origin = optional('origin') ?? (id ? undefined : 'manual');
   if (origin && !ORIGINS.includes(origin as Origin)) throw new RequestError(400, `origin: ${ORIGINS.join(', ')}.`);
   const provenance = provenanceOf(b, !!id);
+  // The person's links a deletion took along (#524, DeletedEntry): only its undo sends them back.
+  const takenLinks = b.takenLinks;
+  if (takenLinks !== undefined && !(id && Array.isArray(takenLinks) && takenLinks.every((r) => typeof r === 'string' && r.trim()))) throw new RequestError(400, 'takenLinks: nur ein Rückgängig (mit id), eine Liste von Beleg-Ids.');
   const tags = tagsField(b.tags);
 
   return withBooks(res, (books) => {
+    // An undo of a module's last booking under a ref of its own (#524): only of one this workspace's deletion recorded, never a made-up id.
+    if (id && transactionRef && !isManualRef(transactionRef) && !refDates(books, transactionRef).length && deletedEntry(WS, id)?.transactionRef !== transactionRef) {
+      throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
+    }
     const original = correctsEntry ? books.journalEntries.find((e) => e.id === correctsEntry) : undefined;
     if (correctsEntry && !original) throw new RequestError(404, `Buchung ${correctsEntry} gibt es nicht.`, { code: 'gone', params: { what: 'entry' } });
     const entry = addEntry(books, {
@@ -109,6 +117,7 @@ router.post('/api/journal-entries', (req, res) => {
       ...(origin && { origin: origin as Origin }),
       // Booked by hand now, not put back by an undo: a person decided it (Änderungen lists it).
       ...(id ? provenance : { by: { kind: 'person' as const, at: new Date().toISOString() } }),
+      ...(Array.isArray(takenLinks) && takenLinks.length ? { takenLinks: takenLinks as string[] } : {}),
     });
     if (original && corrects) books.config.correctionCases = [...(books.config.correctionCases ?? []), correctionCaseFor(original, entry, (correction ?? 'vat') as CorrectionKind, corrects)];
     // The receipt the booking is for (r10h-6): linked to it, so the receipt shows its booking and the input tax has its voucher;
@@ -220,5 +229,6 @@ router.delete('/api/journal-entries/:id', (req, res) => {
     return { gone, left: books.journalEntries.filter((e) => e.transactionRef === gone.transactionRef).map((e) => e.id) };
   });
   recordDeletion(WS, gone, left);
-  res.json({ ok: true });
+  // The person's links the deletion took along (#524): the client's undo sends them back.
+  res.json({ ok: true, ...(gone.takenLinks?.length && { takenLinks: gone.takenLinks }) });
 });

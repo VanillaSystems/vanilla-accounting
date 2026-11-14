@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs';
 import type { Index, JournalEntry, Receipt } from '../src/types/index.js';
 import { emptyBooks, loadBooks, PERSON, update, type Books } from '../src/books/store.js';
 import { applyChange, link } from '../src/server/edits.js';
+import { undoInput } from '../src/books/entry-input.js';
 import { journalOf, receiptsFor } from '../src/app/areas/journal/model.js';
 import { bookingsWithoutPayment, ledgerOf, UNPAID_SHOWN } from '../src/app/areas/receipts/model.js';
 import { startApi, type ApiServer } from './support/api-server.js';
@@ -90,6 +91,51 @@ test('deleting the last entry of a module\'s booking takes the person\'s link al
   assert.equal(b.mappings.find((m) => m.receiptId === 'hers')!.by, 'human');
   assert.deepEqual(refsOf(b, 'rep'), ['SHOP-3001'], 'the module\'s link once');
   assert.equal(b.receipts.find((r) => r.id === 'hers')!.notPaidBy, undefined);
+  assert.deepEqual(b.journalEntries.find((e) => e.id === 'j-SHOP-3001'), order('SHOP-3001'), 'the module\'s booking comes back as it was: its receipts are what it saw, hers is never written into them');
+
+  // B: she takes hers off, deletes and undoes again: hers stays off.
+  update(b, PERSON, (x) => applyChange(x, { kind: 'unlink', receipt: 'hers', payment: 'SHOP-3001' }));
+  const again = update(b, PERSON, (x) => applyChange(x, { kind: 'deleteEntry', id: 'j-SHOP-3001' }));
+  update(b, PERSON, (x) => applyChange(x, again!));
+  assert.deepEqual(refsOf(b, 'hers'), [], 'a link she took off never comes back');
+  assert.deepEqual(b.journalEntries.find((e) => e.id === 'j-SHOP-3001'), order('SHOP-3001'));
+});
+
+test('A: the module\'s own link a person took off is never put back by deleting and undoing its booking', () => {
+  const b = emptyBooks();
+  b.receipts.push(doc('rep'));
+  b.journalEntries.push(order('SHOP-3003'));
+  b.mappings.push({ transactionRef: 'SHOP-3003', receiptId: 'rep', by: 'rule', rule: 'sales-report' });
+  update(b, PERSON, (x) => applyChange(x, { kind: 'unlink', receipt: 'rep', payment: 'SHOP-3003' }));
+  const undo = update(b, PERSON, (x) => applyChange(x, { kind: 'deleteEntry', id: 'j-SHOP-3003' }));
+  assert.equal((undo as { entry: { takenLinks?: string[] } }).entry.takenLinks, undefined, 'nothing of hers to take along');
+  update(b, PERSON, (x) => applyChange(x, undo!));
+  assert.deepEqual(b.mappings.filter((m) => m.transactionRef === 'SHOP-3003'), [], 'no link comes back, least of all one as hers');
+  assert.deepEqual(b.journalEntries.find((e) => e.id === 'j-SHOP-3003'), order('SHOP-3003'));
+});
+
+test('the API puts a module\'s booking back on a ref of its own only for a deletion it recorded: a made-up id is refused 404', async () => {
+  const before = JSON.stringify(loadBooks(api.ws));
+  const made = await api.send('POST', '/api/journal-entries', undoInput(order('SHOP-9999', 'madeup1')));
+  assert.deepEqual([made.status, made.json.code], [404, 'gone'], JSON.stringify(made.json));
+  assert.equal(JSON.stringify(loadBooks(api.ws)), before);
+});
+
+test('the API: DELETE names the person\'s links it took along, the undo sends them back, the booking as it was', async () => {
+  const f = JSON.parse(readFileSync(FIXTURE, 'utf8')) as Index & { journalEntries: JournalEntry[] };
+  const mine = order('SHOP-3004');
+  writeIndex(api.ws, { ...f, receipts: [...f.receipts, doc('rep'), doc('hers')], journalEntries: [...f.journalEntries, mine], mappings: [...f.mappings, { transactionRef: 'SHOP-3004', receiptId: 'rep', by: 'rule', rule: 'sales-report' }] });
+  assert.equal((await api.send('POST', '/api/mapping/add', { receiptId: 'hers', transactionRef: 'SHOP-3004' })).status, 200);
+  const del = await api.send('DELETE', `/api/journal-entries/${mine.id}`);
+  assert.equal(del.status, 200, JSON.stringify(del.json));
+  assert.deepEqual(del.json.takenLinks, ['hers']);
+  const back = await api.send('POST', '/api/journal-entries', undoInput({ ...mine, takenLinks: del.json.takenLinks as string[] }));
+  assert.equal(back.status, 200, JSON.stringify(back.json));
+  const books = loadBooks(api.ws);
+  assert.deepEqual(books.mappings.filter((m) => m.transactionRef === 'SHOP-3004').map((m) => [m.receiptId, m.by]).sort(), [['hers', 'human'], ['rep', 'rule']]);
+  assert.deepEqual(books.journalEntries.find((e) => e.id === mine.id)!.receipts, ['rep'], 'the module\'s receipts unchanged');
+  const forged = await api.send('POST', '/api/journal-entries', { date: DAY, accountDebit: '6500', accountCredit: '1021', amount: 1, description: 'neu', transactionRef: 'SHOP-3004', takenLinks: ['hers'] });
+  assert.equal(forged.status, 400, 'takenLinks only with an undo');
 });
 
 test('one of two entries of a module\'s booking deleted: the links stay with the one left', () => {
