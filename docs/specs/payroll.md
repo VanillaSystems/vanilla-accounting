@@ -1,6 +1,7 @@
 # Spec: payroll (Lohnbuchhaltung)
 
-Status: draft for the owner, 2026-11-13. No code yet. Builds on
+Status: decided by the owner, 2026-11-14 (§13). No code yet. A clickable prototype of B0 is in
+[mockups/payroll/](mockups/payroll/index.html). Builds on
 [ADR 0011](../adr/0011-payroll.md) (payroll: book what others calculate, a narrow helper for the
 owner's salary) and is judged by [MISSION.md](../../MISSION.md) and
 [ADR 0015](../adr/0015-base-cases-in-the-app-long-tail-in-the-workspace.md).
@@ -9,11 +10,12 @@ The owner asked: «and how about Lohnbuchhaltung?». This spec answers on two le
 
 - **Level A**: book payslips from external payroll software better. ADR 0011 step 1 exists. This
   spec lists what is still missing.
-- **Level B**: compute payroll in the app. Starts with ADR 0011 step 2 (the owner's salary) and,
-  if the owner agrees, goes further than ADR 0011 allows today.
+- **Level B**: compute payroll in the app. Starts with ADR 0011 step 2 (the owner's salary). Staff
+  (B1) follows once B0 has shipped and a persona round has scored it.
 
 Sections 1 to 3 are findings: what exists, who needs what, what the law requires. Sections 4 to
-12 are the proposal. Section 13 lists the questions only the owner can answer.
+12 are the proposal. Section 13 holds the owner's decisions. The order is **B0 first**, then A-2,
+then B1 (§12).
 
 ---
 
@@ -314,7 +316,8 @@ said.
   (free transport to work) and G (canteen meals). Several cantons (BS, BE, …) want the employer
   to send copies to the tax office. **K**.
 - Free federal tool: «eLohnausweis SSK». Software may print the form if it matches the Wegleitung.
-  Whether the SSK tool reads an import file was not verified: see open question Q8.
+  Whether the SSK tool reads an import file was not verified: it is checked before B0's year-end
+  step (§13, decision 8).
 
 ### 3h Contract law: 13th salary, holidays, hourly pay, payslip
 
@@ -355,6 +358,9 @@ said.
 - It is **not mandatory** for the employer. Paper, the fund's web portal and eLohnausweis SSK
   remain allowed. Some cantons push electronic Quellensteuer reporting. Check per canton
   (**K**).
+- ELM is the authorities' XML interface for wage data. Only certified software may send it. The
+  app does not plan it (§11, §13 decision 8): the person uses the fund's portal for the annual
+  wage declaration and eLohnausweis SSK for Form 11.
 - Public sources name no certification fee. Ask Swissdec.
 
 ### 3k Retention and data protection
@@ -410,7 +416,7 @@ to the person (no-nagging-reminders: a fact on the run, not a reminder).
 - Time tracking. Hours come in as a number per month or a CSV, never from a clock-in app.
 - HR: contracts, absences, certificates. Only the figures payroll needs are kept.
 - Paying wages from the app. A pain.001 file comes only if the invoicing/payments work builds the
-  channel (open question Q11).
+  channel (§13, decision 11).
 - Hard-coded fund, insurer or GAV figures (ADR 0011 «Rejected»; ADR 0015).
 
 ---
@@ -434,7 +440,7 @@ to the person (no-nagging-reminders: a fact on the run, not a reminder).
 |---|---|---|---|
 | A1 | **Document kind `payslip`.** Recognised by code: the firm is the issuer (`issuedByFirm` ≠ false), the head names a payslip word (a new `documents.yaml` list `payslip: [Lohnabrechnung, Lohnblatt, Salärabrechnung, Gehaltsabrechnung, Décompte de salaire, Bulletin de salaire, Conteggio salario, Busta paga, Payslip]`) and `payslipDeductions` reads. A payslip is never an «own invoice» waiting for its customer (`waitsForCustomer`) and never a bill. | code | modules/ch/documents.yaml, src/intake/document-kind.ts, src/intake/own-invoice.ts, period-issues.ts |
 | A2 | **`readPayslip(text)` → `{ employee, period, gross, net, deductions: Map<kind, amount>, allowances, expenses }`**, built on `payslipDeductions`. It needs gross − Σ deductions + allowances + expenses = net to the Rappen, else undefined. The words for gross, net, allowance and expenses come from `setup.yaml wages.payslip` (data, de/fr/it/en), never from code. | code | src/booking/withheld.ts (or a new src/booking/payslip.ts), modules/ch/setup.yaml |
-| A3 | **Code books `cls-salary`.** A wage payment linked to a payslip that reads, with net = the bank amount: D 5000 / C bank (net); D 5000 / C 2270 for the social deductions; D 5000 / C 2279 for kind `tax`; an allowance D 2270 / C bank (the fund refunds it on its bill; see Q10); expenses D 5820/5830 / C bank. `by: { kind: 'code', check: 'payslip' }`. A payment of several wages (one bank line, several payslips) books each payslip as its own lines. The model is not asked. Without a payslip, the payment is booked net as today (ev-exempt-wages), and when a payslip comes later, code books it again (as `bookWithheldShares` does, never a person's booking). | code | src/booking/classify.ts, processes/booking.guide.yaml cls-salary (→ status: accepted), **books schema step** for the new check (§7.1) |
+| A3 | **Code books `cls-salary`.** A wage payment linked to a payslip that reads, with net = the bank amount: D 5000 / C bank (net); D 5000 / C 2270 for the social deductions; D 5000 / C 2279 for kind `tax`; an allowance D 2270 / C bank (the fund refunds it on its bill; §13, decision 10); expenses D 5820/5830 / C bank. `by: { kind: 'code', check: 'payslip' }`. A payment of several wages (one bank line, several payslips) books each payslip as its own lines. The model is not asked. Without a payslip, the payment is booked net as today (ev-exempt-wages), and when a payslip comes later, code books it again (as `bookWithheldShares` does, never a person's booking). | code | src/booking/classify.ts, processes/booking.guide.yaml cls-salary (→ status: accepted), **books schema step** for the new check (§7.1) |
 | A4 | **Quellensteuer as a kind with a payee.** `setup.yaml wages.withholdsTo: { tax: "2279" }` (per-kind deductions account; 2270 stays the default). A business file whose `collects: [tax]` names the cantonal tax office routes its payment to clear 2279. The Bezugsprovision (payment < 2279's share) books C 3xxx/6xxx «Bezugsprovision Quellensteuer» (account in setup.yaml). | code; the person names the tax office's file once | modules/ch/setup.yaml, processes/authorities/steuerverwaltung.yaml (fact `withholding`, DBG Art. 88), src/booking/withheld.ts `fundShare` per account |
 | A5 | **Generic payees for pension, accident, sickness.** A business file may say `collects: [pension]` (a contract, not a name). The app's `wages.payees` becomes «ausgleichskasse **plus** every file that declares `collects`». The workspace grows the fund's file. The AI drafts it from the first bill, and the person keeps it on its card. `fundShare` then works for the pension fund too. | code + AI drafts + person keeps | src/knowledge/ (file schema), src/booking/withheld.ts, processes/README.md |
 | A6 | **Payroll journal import.** A payroll program's CSV export, recognised by the columns a business file names (`payroll: { reports: { journal: { columns: … } } }`, exactly like `provider.reports.sales` in src/booking/sales-report.ts). It is booked as entries per employee and month by ref `LJ-<business>-<period>-<employee>`, once. The person names the program's file. The app ships the contract and one reference file in tests, no vendor (ADR 0015 row 4). | code (contract), AI writes the column map with the person | src/intake/ (new payroll-journal-import.ts), src/booking/ |
@@ -448,7 +454,8 @@ to the person (no-nagging-reminders: a fact on the run, not a reminder).
   src/types/index.ts). Its read figures are derived on every read (as `order-pages.ts` is,
   #253), not stored, so a better reader re-reads old payslips.
 - JournalEntry `by.check` gains `'payslip'` and `'payrollJournal'`. That is a **books schema step
-  (9 → 10)** with an empty migration, like schema 9 for `withheldShare`. Owner decides (§7.1).
+  (9 → 10)** with an empty migration, like schema 9 for `withheldShare`. Decided: one step for all
+  three checks (§13, decision 5).
 - Business files gain `collects: [<kind>]` and `payroll.reports.journal`. That is a knowledge-file
   schema change (src/knowledge/), not a books or manifest step.
 
@@ -482,8 +489,9 @@ Scored on the first-run walks (first-run.md checkpoints), with the AI **off** fo
 | **B2** | Quellensteuer: tariff code per employee, the canton's tariff file, monthly or annual model by canton, Bezugsprovision, the settlement list per canton, entry/exit reports | cross-border regimes other than the canton's tariff files | none today. Needs a new persona (a cross-border employee from DE) |
 | **B3** | Treuhänder mode: several firms' runs from one desk, an export of the year for ELM-capable software | ELM itself | Treuhänder |
 
-ADR 0011 rejects «full payroll in this app now». B1 and B2 go beyond it. B0 does not. The owner
-decides whether to amend the ADR (Q3).
+ADR 0011 rejects «full payroll in this app now». B1 and B2 go beyond it. B0 does not. Decided: the
+ADR is amended for B1 only after B0 ships and a persona round scores it. B2 and ELM stay out
+until a firm asks (§13, decision 3).
 
 ### 6.2 User stories
 
@@ -553,7 +561,7 @@ keyed by canton, as data.
      kind `payslip`, linked to the run (so level A's code reads it the same way, and `fundShare`
      can take its deductions from the run directly instead of from text);
    - the entries are booked per employee on the payday by ref `LR-<yyyy>-<mm>-<employeeId>`:
-     D 5000 / C 2290 «Lohnverbindlichkeiten» (net, a new account; see Q12), D 5000 / C 2270
+     D 5000 / C 2290 «Lohnverbindlichkeiten» (net, a new account; §13, decision 12), D 5000 / C 2270
      (social deductions), D 5000 / C 2279 (QST), D 2270 / C 2290 (allowances paid through), D
      57xx / C 2270 (the employer's contributions accrued per kind, so 2270 holds the whole debt
      to each fund). Stamped `by: { kind: 'code', check: 'payroll' }`, `run: <runId>`;
@@ -606,8 +614,9 @@ instead.
 ### 7.1 Books (ledger, `BOOKS_SCHEMA` 9, src/workspace/schema.ts)
 
 - `JournalEntry.by.check` gains `'payslip'` (A3), `'payrollJournal'` (A6) and `'payroll'` (B).
-  `JournalEntry.run` already exists. That makes **books schema 10** with an empty migration step. **Owner
-  decides** (AGENTS.md «Versions and data format»).
+  `JournalEntry.run` already exists. That makes **books schema 10** with an empty migration step,
+  one step for all three, taken with the first phase that books a payroll check (§13, decision 5;
+  AGENTS.md «Versions and data format»).
 - Refs `LR-…` (runs), `LJ-…` (journal import): new ref prefixes. Check `transactionRef` consumers
   that assume a bank ref or `M`/`RE`/`GS`. No schema change if refs are free text, which they
   appear to be.
@@ -618,8 +627,8 @@ instead.
 
 Beside `invoices.json` (LAYOUT top, owner `app`), with its own `PAYROLL_SCHEMA = 1` and ladder in
 src/workspace/schema.ts. The manifest stays unchanged (no `WORKSPACE_SCHEMA` step), because payroll's
-setup lives in its own store. **Owner decides** between this and a `company.payroll` manifest
-section (Q6).
+setup lives in its own store. Decided: `payroll.json`, not a `company.payroll` manifest section
+(§13, decision 6).
 
 ```ts
 interface PayrollStore {
@@ -677,8 +686,11 @@ It is not acceptable once a bookkeeper or an employee who scans receipts has acc
 - **The store.** `payroll.json` and `payroll/` sit in the workspace, versioned (10-year retention,
   OR 958f; the audit trail of a released run). The alternative of encrypting them with the
   desktop's sealed store (src/secrets/sealed-store.ts) breaks git history, diff and the auditor's
-  copy. Recommended: plain in the workspace, with access controlled at the repository, and said
-  so in setup («Wer die Buchhaltung öffnet, sieht die Löhne»). Owner decides (Q4).
+  copy. Decided: plain in the workspace, no encryption, with access controlled at the repository,
+  and said so in setup («Wer die Buchhaltung öffnet, sieht die Löhne») once a firm has staff
+  (§13, decision 4).
+- **The accountant.** Wages are not hidden from the accountant or the Treuhänder. The net shows in
+  every bank line, and the accountant needs the gross anyway.
 - **The model.** No AHV number in any prompt (masked by pattern before every call, tested). Payroll
   runs never call the model. Reading a certificate or contract is the only AI step, and it is the
   person's explicit drop. The AI's facts list payroll totals, not names with wages, unless the
@@ -789,69 +801,76 @@ It is not acceptable once a bookkeeper or an employee who scans receipts has acc
 Each phase ends with acceptance checks a persona walk can score (first-run.md style: pass/fail
 per checkpoint, AI on and off).
 
+The order follows the owner's decision of 2026-11-14 (§13, decisions 1 and 2): **B0 first**. The
+owner's own firm is a one-person GmbH that runs its payroll itself, with no payroll provider and
+no Treuhänder doing the payroll. The app must work for that firm first. Most small Swiss firms
+have a Treuhänder or their accounting software run payroll, or the owner does it himself. A
+dedicated payroll provider is rare for a micro firm. So the payslips the app reads (level A) come
+second, and staff (B1) third.
+
 | Phase | Content | Rough effort | Acceptance (scored) |
 |---|---|---|---|
-| **A-1** | A1 payslip kind, A2 `readPayslip`, A3 code books the gross wage, A9 (#383, #359). Books schema 10 if the owner agrees | 2–3 weeks | §5.4 checks 1–3 pass with the AI **off**. withheld-*.test.ts stay green. Demo books regenerated with payslip PDFs, no figure change |
-| **A-2** | A4 Quellensteuer on 2279, A5 `collects:` for pension/accident/sickness, A8 masking | 1–2 weeks | webshop walk: the pension fund's payment clears exactly the BVG share once its file is kept. A payslip with QST books 2279. No `756.` in any prompt (test) |
-| **A-3** | A7 year-close payroll checks and Lohnausweis data CSV; A6 payroll journal import (contract + test reference) | 2–3 weeks | §5.4 checks 4–5. Year close of demo-consulting shows 0 differences, and a broken payslip shows its CHF 10 |
-| **B0** | ADR 0011 step 2: owner only. `payroll.json`, `modules/ch/payroll{,/2026}.yaml`, the Löhne area, Firma › Löhne, run → PDF → entries → payment match, fund reconciliation, year totals | 4–6 weeks | consulting walk: salary set up in < 5 min from the fund's certificate (AI proposes, he keeps). July run figures = golden case 1 to the Rappen. The bank's net matched by code. 2270 per fund = 0 after the Q3 bills. Without an AI the same by forms |
-| **B1** | staff, hourly, 13th, entry/exit, thresholds, allowances, VAV, Lohnausweis PDF, payslip mail | 6–10 weeks | webshop walk: Jana's hourly run with surcharge, no BVG with the reason shown. Huber walk: «mach d Lohnabrechnig für Marco» opens the run and books it after release. Golden payroll set green. Lohnausweis field 8 = Σ runs |
-| **B2** | Quellensteuer | 4–8 weeks per first canton, then data | new persona (cross-border from DE): tariff file fetched, run waits without it, settlement list = Σ runs, Bezugsprovision booked |
-| **B3** | Treuhänder multi-firm, export for ELM software | open | Treuhänder walk |
+| **B0** | ADR 0011 step 2: the owner is the only employee of a GmbH or AG. Wage from the fund's certificates, monthly run, payslip PDF, run → entries → payment match, 2270 reconciled per fund, year totals for the Lohnausweis. `payroll.json`, `modules/ch/payroll{,/2026}.yaml`, the Löhne area, Firma › Löhne. From A-1 it takes only what B0 needs: the document kind `payslip` (A1, so a run's payslip is never an own invoice or a bill) and booking the gross wage by code, without an AI (A3 for the run's own payslip). Books schema 10. Before the year-end step: check whether eLohnausweis SSK imports a file (decision 8) | 4–6 weeks | consulting walk (owner-employee): salary set up in < 5 min from the fund's certificate (AI proposes, he keeps). July run figures = golden case 1 to the Rappen. The bank's net matched by code. 2270 per fund = 0 after the Q3 bills. Year totals = Σ runs, field by field. Without an AI the same by forms. Prototype: [mockups/payroll/](mockups/payroll/index.html) |
+| **A-2** | Payslips a Treuhänder or a program issues: the rest of A-1 (A2 `readPayslip` for external payslips, A3 for them, A9: #383, #359), A4 Quellensteuer on 2279, A5 `collects:` for pension, accident and sickness clearing, A8 masking | 3–4 weeks | §5.4 checks 1–3 pass with the AI **off**. Webshop walk: the pension fund's payment clears exactly the BVG share once its file is kept. A payslip with QST books 2279. No `756.` in any prompt (test). withheld-*.test.ts stay green |
+| **B1** | staff, hourly, 13th, entry/exit, thresholds, allowances, VAV, Lohnausweis PDF, payslip mail. Starts only after B0 has shipped and a persona round has scored it; ADR 0011 is amended then (decision 3) | 6–10 weeks | webshop walk: Jana's hourly run with surcharge, no BVG with the reason shown. Huber walk: «mach d Lohnabrechnig für Marco» opens the run and books it after release. Golden payroll set green. Lohnausweis field 8 = Σ runs |
+| **A-3** | A7 year-close checks for external payslips and the Lohnausweis data CSV for them; A6 payroll journal import (contract + test reference) | 2–3 weeks | §5.4 checks 4–5. Year close of demo-consulting shows 0 differences, and a broken payslip shows its CHF 10 |
+| B2 | Quellensteuer computed | 4–8 weeks per first canton, then data | not planned: only when a firm asks (decision 3). Then a new persona (cross-border from DE) |
+| B3 | Treuhänder multi-firm, export for ELM software | open | not planned |
 
 The efforts are one developer's estimates with agents doing the programming, before review and
 persona rounds.
 
 ---
 
-## 13. Open questions for the owner
+## 13. The owner's decisions (2026-11-14)
 
-Each with a recommendation.
+The owner answered the open questions of the draft on 2026-11-14. Each item says what was
+decided.
 
-1. **Start with A or B?** *Recommendation: A first (A-1 and A-2, about a month).* Every persona and
-   every firm with a payroll provider lands its wages through payslips today. The #426–#489 chain
-   still leaves the wage line itself to the model. A-1 makes wages work without an AI (#359), and
-   B builds on A's payslip kind and `fundShare` anyway.
-2. **Which persona first?** *Recommendation: consulting (Matthias) for A-1 and B0; webshop (Corinne
-   + Jana) for B1.* Consulting is exactly ADR 0011's scope and has the payslip texts in tests
-   already. The webshop adds the smallest real staff case (part-time below the BVG threshold).
-   Huber needs payslips in her persona files before A helps her.
-3. **Amend ADR 0011 to allow B1 (staff) and B2 (Quellensteuer)?** *Recommendation: amend for B1
-   after B0 ships and a persona round scores it. Keep B2 and ELM out until a firm asks.* The
-   liability argument of ADR 0011 still holds for Quellensteuer.
-4. **Where do salary data live, and who sees them?** *Recommendation: in the workspace, plain,
-   versioned. Setup says that whoever opens the books sees the wages. AHV numbers never go to the
-   model.* Encryption would break the audit trail and git.
-5. **Books schema 10 for `by.check: 'payslip' | 'payrollJournal' | 'payroll'`?** *Recommendation:
-   yes, one step for all three, with A-1.*
-6. **Payroll settings in a new `payroll.json` (own schema) or in the manifest (`company.payroll`,
-   workspace schema 5)?** *Recommendation: `payroll.json`*, like invoices.json. The manifest stays
-   small, and payroll's schema can move without migrating every workspace.
-7. **Federal rates maintained by the app, company rates from documents?** *Recommendation: yes, as
-   ADR 0011 says.* `modules/ch/payroll/<year>.yaml` with sources. A test fails when the next year's
-   file is missing once a run is dated in it.
-8. **Lohnausweis: own Form 11 PDF or data for eLohnausweis SSK?** *Recommendation: A-3 delivers the
-   field-by-field data (CSV + a page). B1 prints Form 11 once it is verified that software-printed
-   forms are accepted under the current Wegleitung.* Whether the SSK tool imports a file was not
-   verified.
-9. **Accrue the employer's contributions in each run (B), or expense them on payment (A, today)?**
-   *Recommendation: accrue in B (monthly expense, 2270 matches the funds), keep A as it is, and
-   refuse double expensing when a firm switches mid-year.*
-10. **Family allowances paid through the wage: which account?** *Recommendation: D 2270 (the fund
-    owes them back and nets them on its bill) for A3 and B, with a precedent in booking.guide.yaml.*
-    Some Treuhänder use a separate receivable. A firm rule can override.
-11. **Payment file (pain.001) for wages?** *Recommendation: not in payroll. If the invoicing or
-    payments spec builds a pain.001 channel, payroll hands it the net amounts.* Until then the person
-    pays in e-banking, and code matches the bank line to the run.
-12. **New account 2290 «Lohnverbindlichkeiten» for B's net between release and payment?**
-    *Recommendation: yes, in modules/ch/accounts.yaml.* It makes a released but unpaid run visible
-    at a quarter end. Level A keeps booking the net against the bank.
-13. **Rounding of payslip amounts to 5 Rappen?** No law found that requires it. Common practice
-    rounds each deduction to 0.05. *Recommendation: round to 0.05 per line, as data in
-    `modules/ch/payroll.yaml`, so a firm can switch it.*
-14. **Disclaimer wording on every payslip and run:** ADR 0011 wants «a calculation from the entered
-    rates, to be checked by the Treuhänder». *Recommendation: on the run's detail and in the
-    payslip's footer in small print, not as a dialog.*
+1. **Order: B0 first, not A.** The owner's own firm is a one-person GmbH that runs its payroll
+   itself, without a payroll provider and without a Treuhänder doing the payroll. The app must
+   work for that firm first. So B0 comes first: the owner as the only employee of a GmbH, the wage
+   set from the fund's certificates, a monthly run, the payslip PDF, the bookings, the payment
+   match, 2270 reconciled, the year totals. From A-1, B0 takes only what it needs: the payslip
+   document kind and booking the gross wage by code, without an AI. Then A-2 (external payslips:
+   Quellensteuer on 2279, pension and accident clearing) for firms whose Treuhänder issues the
+   payslips. Then B1 (staff). Why: most small Swiss firms have a Treuhänder or their accounting
+   software run payroll, or the owner does it himself. A dedicated payroll provider is rare for a
+   micro firm.
+2. **First persona: consulting** (Matthias Kälin, owner-employee; demo-consulting for the
+   prototype and the golden case). The webshop (Corinne and Jana) follows with B1.
+3. **ADR 0011:** amended for B1 only after B0 has shipped and a persona round has scored it. B2
+   (Quellensteuer computed) and ELM stay out until a firm asks. The liability argument of
+   ADR 0011 still holds for Quellensteuer.
+4. **Salary data: in the workspace, plain, versioned. No encryption.** Wages are not hidden from
+   the accountant or the Treuhänder: the net shows in every bank line, and the accountant needs
+   the gross anyway. Privacy is about two things: (1) the AI model, which never receives an AHV
+   number (#508); (2) colleagues, once a firm has staff: setup says plainly that whoever opens
+   the books sees the wages.
+5. **Books schema 10** for `by.check: 'payslip' | 'payrollJournal' | 'payroll'`: one step for all
+   three, with the first phase that books one (B0).
+6. **`payroll.json`** with its own schema, like invoices.json. Not a manifest section.
+7. **Federal rates maintained by the app, company rates from documents**, as ADR 0011 says.
+   `modules/ch/payroll/<year>.yaml` with sources. A test fails when the next year's file is
+   missing once a run is dated in it.
+8. **Lohnausweis: field-by-field data first.** B0 shows the year totals per Form 11 field and
+   exports them as CSV. A Form 11 PDF comes with B1, once it is verified that software-printed
+   forms are accepted under the current Wegleitung. The government's XML interface is Swissdec
+   ELM, which only certified software may send. It is not planned (§11). Without it the person
+   uses the compensation fund's portal for the annual wage declaration and eLohnausweis SSK for
+   Form 11. Whether SSK imports a file is verified before B0's year-end step is built.
+9. **The employer's contributions are accrued in each run** (B: monthly expense, 2270 matches the
+   funds). Level A stays as it is. Code refuses double expensing when a firm switches mid-year.
+10. **Family allowances paid through the wage: D 2270**, with a precedent in booking.guide.yaml.
+    A firm rule can override.
+11. **No payment file (pain.001) in payroll.** If the invoicing or payments spec builds a pain.001
+    channel, payroll hands it the net amounts. Until then the person pays in e-banking, and code
+    matches the bank line to the run.
+12. **New account 2290 «Lohnverbindlichkeiten»** in modules/ch/accounts.yaml for B's net between
+    release and payment. Level A keeps booking the net against the bank.
+13. **Rounding to 0.05 per line**, as data in `modules/ch/payroll.yaml`, so a firm can switch it.
+14. **The disclaimer** «Berechnung aus den erfassten Sätzen, vom Treuhänder zu prüfen» stands on
+    the run's detail and in the payslip's footer in small print, never as a dialog.
 
 ---
 

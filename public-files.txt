@@ -82,6 +82,7 @@ docs/specs/eCH-0217-V2.0.0-E-MWST_de.pdf
 docs/specs/mwst-form-0535-04-2024-de.pdf
 docs/specs/mwst-form-0550-03-2024-de.pdf
 docs/specs/payroll.md
+docs/specs/mockups/payroll/**
 
 .claude/settings.json
 .claude/skills/verify/**

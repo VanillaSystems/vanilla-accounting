@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Löhne B0 · Prototyp</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="app.css">
+<style>
+body { background: var(--desk); overflow: auto; height: auto; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 40px 16px 60px; }
+h1 { font: 800 30px/1.1 "Hanken Grotesk", sans-serif; margin: 0 0 8px; }
+.lead { color: var(--ink-2); max-width: 72ch; line-height: 1.55; margin: 0 0 6px; }
+.m { color: var(--muted); font-size: 12.5px; max-width: 80ch; line-height: 1.5; }
+.start { display: inline-flex; margin: 16px 0 26px; height: 34px; align-items: center; padding: 0 14px; border-radius: 9px; background: var(--accent); color: var(--on-accent); text-decoration: none; font-weight: 600; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 18px; }
+.card { display: block; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; text-decoration: none; color: var(--ink); }
+.card:hover { border-color: var(--accent); }
+.thumb { height: 212px; overflow: hidden; border-bottom: 1px solid var(--line); position: relative; }
+.thumb iframe { width: 1440px; height: 900px; border: 0; transform: scale(.236); transform-origin: 0 0; pointer-events: none; }
+.cap { padding: 10px 12px; font-size: 13.5px; display: flex; gap: 10px; align-items: baseline; }
+.cap .n { font-family: "Geist Mono", monospace; color: var(--muted); font-size: 12px; }
+ul.facts { margin: 22px 0 0; padding-left: 18px; color: var(--ink-2); font-size: 13px; line-height: 1.6; max-width: 80ch; }
+</style></head>
+<body>
+<div class="wrap">
+<h1>Löhne B0 · klickbarer Prototyp</h1>
+<p class="lead">Die Inhaberin oder der Inhaber ist die einzige Person mit Lohn in einer GmbH: Lohn einrichten, monatlicher Lauf, Lohnabrechnung als PDF, Buchungen, Zahlung zugeordnet, 2270 je Kasse ausgeglichen, Jahreswerte für den Lohnausweis. Spec: <span class="mono">docs/specs/payroll.md</span>, Phase B0.</p>
+<p class="m">Gebaut aus dem DOM und CSS der echten App (Demo «Muster Consulting GmbH», nur lesen). Neu von Hand sind nur die Löhne-Teile, mit den Tokens und Klassen der App. Zahlen: Monatslohn 8'600.00 und die Rechnungen der Kassen aus der Demo; AHV/IV/EO 5.3 %, ALV 1.1 % (Bundessätze 2026); FAK 1.00 % und Verwaltungskosten 1.58 % sind erfunden. Knöpfe ohne Ziel tun nichts.</p>
+<a class="start" href="1-einrichten.html">Prototyp starten →</a>
+<div class="grid">
+<a class="card" href="1-einrichten.html"><div class="thumb"><iframe src="1-einrichten.html" loading="lazy" tabindex="-1" title="Firma › Löhne einrichten"></iframe></div><div class="cap"><span class="n">1</span>Firma › Löhne einrichten</div></a>
+<a class="card" href="1b-ohne-ki.html"><div class="thumb"><iframe src="1b-ohne-ki.html" loading="lazy" tabindex="-1" title="Ohne KI: das Formular"></iframe></div><div class="cap"><span class="n">2</span>Ohne KI: das Formular</div></a>
+<a class="card" href="2-lauf.html"><div class="thumb"><iframe src="2-lauf.html" loading="lazy" tabindex="-1" title="Lohnlauf September"></iframe></div><div class="cap"><span class="n">3</span>Lohnlauf September</div></a>
+<a class="card" href="3-lohnabrechnung.html"><div class="thumb"><iframe src="3-lohnabrechnung.html" loading="lazy" tabindex="-1" title="Lohnabrechnung (PDF)"></iframe></div><div class="cap"><span class="n">4</span>Lohnabrechnung (PDF)</div></a>
+<a class="card" href="4-buchungen.html"><div class="thumb"><iframe src="4-buchungen.html" loading="lazy" tabindex="-1" title="Buchungen des Laufs"></iframe></div><div class="cap"><span class="n">5</span>Buchungen des Laufs</div></a>
+<a class="card" href="5-zahlung.html"><div class="thumb"><iframe src="5-zahlung.html" loading="lazy" tabindex="-1" title="Zahlung zugeordnet"></iframe></div><div class="cap"><span class="n">6</span>Zahlung zugeordnet</div></a>
+<a class="card" href="6-kassen.html"><div class="thumb"><iframe src="6-kassen.html" loading="lazy" tabindex="-1" title="2270 je Kasse"></iframe></div><div class="cap"><span class="n">7</span>2270 je Kasse</div></a>
+<a class="card" href="6a-akonto.html"><div class="thumb"><iframe src="6a-akonto.html" loading="lazy" tabindex="-1" title="Akonto-Zahlung"></iframe></div><div class="cap"><span class="n">8</span>Akonto-Zahlung</div></a>
+<a class="card" href="6b-akontorechnung.html"><div class="thumb"><iframe src="6b-akontorechnung.html" loading="lazy" tabindex="-1" title="Akontorechnung gleicht 2270 aus"></iframe></div><div class="cap"><span class="n">9</span>Akontorechnung gleicht 2270 aus</div></a>
+<a class="card" href="7-jahr.html"><div class="thumb"><iframe src="7-jahr.html" loading="lazy" tabindex="-1" title="Jahreswerte für den Lohnausweis"></iframe></div><div class="cap"><span class="n">10</span>Jahreswerte für den Lohnausweis</div></a>
+</div>
+<ul class="facts">
+<li>Unten in jeder Seite führt die Leiste «Prototyp Löhne» Schritt für Schritt weiter.</li>
+<li>Firma › Löhne: «Beispiel: drei Ausweise ablegen» zeigt, wie die KI die Sätze vorschlägt; «Ohne KI ausfüllen» zeigt das Formular.</li>
+<li>Lohnlauf September: «Freigeben» bucht; die Läufe Januar bis August in der Liste sind schon freigegeben.</li>
+<li>Die Jahreswerte gibt es als <a href="lohnausweis-2026-lukas-beispiel.csv">CSV</a>.</li>
+</ul>
+</div>
+</body></html>
