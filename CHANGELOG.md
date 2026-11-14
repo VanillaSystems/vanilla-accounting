@@ -29,7 +29,10 @@ Two markers flag an entry you must read before you update:
   «Auslassen» and «Frage zurück» per row (the question goes with the next hand-over). A record
   both changed shows both versions to pick; a change into a quarter filed meanwhile is booked, on
   request, as a correction in the open period with `corrects`. The take-over is one save through
-  the write door, undone as a whole, and offers «Ins Wissen übernehmen?» once per partner.
+  the write door, undone as a whole, and offers «Ins Wissen übernehmen?» once per partner. A changed
+  rule or knowledge file is shown as its diff and goes to Änderungen as a draft (the rule card decides),
+  never with «Alles übernehmen». A `.vanilla` file is untrusted: its paths, sizes, records and codes are
+  checked before anything is written, and a return is merged against the version as it was handed over.
 - **The content version**: `versions.jsonl` at the workspace's top (its own `schema: 1`, no step
   of the books' schema) counts every hand-over, every return taken over and every sealed quarter:
   «Version 12» beside the company in the top bar (date and checksum on hover), in Änderungen, in

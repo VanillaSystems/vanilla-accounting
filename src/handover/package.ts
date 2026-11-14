@@ -8,7 +8,7 @@
  */
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import type { Party } from './versions.js';
-import { sha256, type FileFact } from './content.js';
+import { carriageOf, checksumOf, sha256, type FileFact } from './content.js';
 import type { RecordChange } from './records.js';
 
 export const PACKAGE_FORMAT = 1;
@@ -64,11 +64,32 @@ export interface PackageContents {
   changes?: ReturnChange[];
 }
 
+export type PackageRefusal = 'shareTampered' | 'shareOtherCompany' | 'shareBaseMissing' | 'shareNotPackage' | 'shareWrongKind' | 'shareTooLarge' | 'shareUnknownBase';
+
 export class PackageError extends Error {
-  constructor(message: string, readonly code: 'shareTampered' | 'shareOtherCompany' | 'shareBaseMissing' | 'shareNotPackage' | 'shareWrongKind', readonly params: Record<string, string> = {}) { super(message); }
+  constructor(message: string, readonly code: PackageRefusal, readonly params: Record<string, string> = {}) { super(message); }
 }
 
-const safePath = (p: string) => !!p && !p.startsWith('/') && !p.split('/').some((s) => s === '..' || s === '' || s === '.');
+/**
+ * A package comes from another person: everything in it is untrusted (review of PR #535). A path
+ * is relative, of plain segments, in NFC, without a backslash, a control character or a segment
+ * that leaves its folder; a file a full or update package carries lies where the books' content
+ * lies (src/handover/content.ts carriageOf); a return carries only receipts, each in a year's
+ * receipts/ under a plain name.
+ */
+export function safePath(p: unknown): p is string {
+  if (typeof p !== 'string' || !p || p.length > 400 || p !== p.normalize('NFC')) return false;
+  if (/[\\\u0000-\u001f\u007f\u202a-\u202e\u2066-\u2069\ufeff]/.test(p) || p.startsWith('/') || /^[A-Za-z]:/.test(p)) return false;
+  return p.split('/').every((s) => s !== '' && s !== '.' && s !== '..' && !s.startsWith('.') && s.trim() === s);
+}
+
+/** A receipt's file of a return: transactional-data/<year>/receipts/<plain name>. */
+export const RETURN_FILE = /^transactional-data\/\d{4}\/receipts\/[^/]+$/;
+export const isReturnFile = (p: string): boolean => safePath(p) && RETURN_FILE.test(p);
+
+/** Limits a package must keep: told to the person when hit (shareTooLarge). */
+export const LIMITS = { files: 20000, fileBytes: 300 * 1024 * 1024, totalBytes: 1024 * 1024 * 1024, jsonBytes: 64 * 1024 * 1024 };
+const mb = (n: number) => `${Math.round(n / 1024 / 1024)} MB`;
 
 /** The `.vanilla` file's bytes. Receipts are already compressed: every member is stored, the JSON deflated. */
 export function writePackage(p: PackageContents): Uint8Array {
@@ -78,27 +99,81 @@ export function writePackage(p: PackageContents): Uint8Array {
   return zipSync(zip);
 }
 
-/** Reads a `.vanilla` file and checks every file against its index; a file missing, extra or changed is refused (shareTampered). */
+const notPackage = (why: string) => new PackageError(`Keine Übergabe-Datei (.vanilla): ${why}.`, 'shareNotPackage', {});
+const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
+const isFact = (x: unknown): x is FileFact => isObj(x) && typeof x.path === 'string' && typeof x.sha256 === 'string' && /^[0-9a-f]{64}$/.test(x.sha256) && typeof x.bytes === 'number';
+const isParty = (x: unknown) => isObj(x) && typeof x.name === 'string' && !!x.name.trim() && (x.email === undefined || typeof x.email === 'string');
+const isVersion = (x: unknown) => isObj(x) && Number.isInteger(x.n) && (x.n as number) > 0 && typeof x.at === 'string' && typeof x.checksum === 'string';
+
+/** The index as it must be, or shareNotPackage. */
+function checkedIndex(raw: unknown): PackageIndex {
+  if (!isObj(raw)) throw notPackage('ihr Verzeichnis ist kein Objekt');
+  if (raw.format !== PACKAGE_FORMAT) throw new PackageError(`Übergabe im Format ${String(raw.format)}: diese App liest Format ${PACKAGE_FORMAT}.`, 'shareNotPackage', {});
+  if (!['full', 'update', 'return'].includes(raw.kind as string)) throw notPackage('unbekannte Art');
+  if (!isObj(raw.firm) || typeof raw.firm.name !== 'string' || (raw.firm.uid !== undefined && typeof raw.firm.uid !== 'string')) throw notPackage('die Firma fehlt');
+  if (!isParty(raw.from) || !isParty(raw.to) || !isVersion(raw.version) || (raw.base !== undefined && !isVersion(raw.base))) throw notPackage('Personen oder Version fehlen');
+  for (const k of ['files', 'held', 'omitted'] as const) {
+    if (raw[k] !== undefined && !(Array.isArray(raw[k]) && (raw[k] as unknown[]).every(isFact))) throw notPackage(`${k} ist keine Liste von Dateien`);
+  }
+  if (!Array.isArray(raw.files)) throw notPackage('die Liste der Dateien fehlt');
+  if (raw.kind !== 'update' && (raw.held as unknown[] | undefined)?.length) throw new PackageError('Eine vollständige Übergabe oder Rücksendung nennt keine Dateien, die schon da sein sollen.', 'shareTampered', { path: 'held' });
+  if (raw.kind === 'update' && !raw.base) throw notPackage('der Übergabe fehlt ihre Basis');
+  return raw as unknown as PackageIndex;
+}
+
+/**
+ * Reads a `.vanilla` file and checks it whole before anything is written: the index's shape, every
+ * path (safePath; where its kind may put a file), the sizes (LIMITS), every file against its
+ * SHA-256, and for a hand-over that the files make the version's checksum. A file missing, extra or
+ * changed is refused (shareTampered); a damaged file is shareNotPackage, a too large one shareTooLarge.
+ */
 export function readPackage(bytes: Uint8Array): PackageContents {
   let members: Record<string, Uint8Array>;
-  try { members = unzipSync(bytes); } catch { throw new PackageError('Keine Übergabe-Datei (.vanilla).', 'shareNotPackage'); }
+  let count = 0, total = 0;
+  let tooLarge: PackageError | undefined;
+  try {
+    members = unzipSync(bytes, {
+      filter: (f) => {
+        count++; total += f.originalSize;
+        const json = f.name === 'index.json' || f.name === 'changes.json';
+        if (count > LIMITS.files) tooLarge ??= new PackageError(`Mehr als ${LIMITS.files} Dateien in der Übergabe: höchstens ${LIMITS.files}.`, 'shareTooLarge', { limit: String(LIMITS.files) });
+        else if (f.originalSize > (json ? LIMITS.jsonBytes : LIMITS.fileBytes)) tooLarge ??= new PackageError(`${f.name} ist ${mb(f.originalSize)} gross: höchstens ${mb(json ? LIMITS.jsonBytes : LIMITS.fileBytes)} pro Datei.`, 'shareTooLarge', { limit: mb(json ? LIMITS.jsonBytes : LIMITS.fileBytes) });
+        else if (total > LIMITS.totalBytes) tooLarge ??= new PackageError(`Die Übergabe ist entpackt grösser als ${mb(LIMITS.totalBytes)}.`, 'shareTooLarge', { limit: mb(LIMITS.totalBytes) });
+        return !tooLarge;
+      },
+    });
+  } catch { throw notPackage('kein lesbares Zip'); }
+  if (tooLarge) throw tooLarge;
   const raw = members['index.json'];
-  if (!raw) throw new PackageError('Keine Übergabe-Datei: das Verzeichnis index.json fehlt.', 'shareNotPackage');
-  const index = JSON.parse(strFromU8(raw)) as PackageIndex;
-  if (index.format !== PACKAGE_FORMAT || !['full', 'update', 'return'].includes(index.kind)) throw new PackageError(`Übergabe im Format ${index.format} (${index.kind}): diese App liest Format ${PACKAGE_FORMAT}.`, 'shareNotPackage');
-  const files = new Map<string, Uint8Array>();
+  if (!raw) throw notPackage('das Verzeichnis index.json fehlt');
+  let parsed: unknown;
+  try { parsed = JSON.parse(strFromU8(raw)); } catch { throw notPackage('das Verzeichnis ist kein JSON'); }
+  const index = checkedIndex(parsed);
+  const allowed = (p: string) => (index.kind === 'return' ? isReturnFile(p) : safePath(p) && carriageOf(p) !== undefined);
+  for (const f of [...index.files, ...(index.held ?? []), ...(index.omitted ?? [])]) {
+    if (!allowed(f.path)) throw new PackageError(`Die Übergabe nennt ${f.path}: diese Datei nimmt die App nicht an.`, 'shareTampered', { path: f.path.slice(0, 200) });
+  }
   const named = new Set(index.files.map((f) => f.path));
+  if (named.size !== index.files.length) throw new PackageError('Die Übergabe nennt eine Datei zweimal.', 'shareTampered', { path: 'files' });
+  const files = new Map<string, Uint8Array>();
   for (const [name, data] of Object.entries(members)) {
-    if (!name.startsWith('files/') || name.endsWith('/')) continue;
-    const path = name.slice('files/'.length);
-    if (!safePath(path) || !named.has(path)) throw new PackageError(`Die Übergabe enthält ${path}, das ihr Verzeichnis nicht nennt.`, 'shareTampered', { path });
+    if (name === 'index.json' || name === 'changes.json' || name.endsWith('/')) continue;
+    const path = name.startsWith('files/') ? name.slice('files/'.length) : name;
+    if (!name.startsWith('files/') || !named.has(path)) throw new PackageError(`Die Übergabe enthält ${path}, das ihr Verzeichnis nicht nennt.`, 'shareTampered', { path: path.slice(0, 200) });
     files.set(path, data);
   }
   for (const f of index.files) {
     const data = files.get(f.path);
     if (!data || sha256(data) !== f.sha256) throw new PackageError(`${f.path} fehlt in der Übergabe oder stimmt nicht mit ihrer Prüfsumme überein.`, 'shareTampered', { path: f.path });
   }
-  const changes = members['changes.json'] ? (JSON.parse(strFromU8(members['changes.json'])) as ReturnChange[]) : undefined;
+  if (index.kind !== 'return' && checksumOf([...index.files, ...(index.held ?? []), ...(index.omitted ?? [])]) !== index.version.checksum) {
+    throw new PackageError('Die Dateien der Übergabe ergeben nicht die Prüfsumme ihrer Version.', 'shareTampered', { path: 'checksum' });
+  }
+  let changes: ReturnChange[] | undefined;
+  if (members['changes.json']) {
+    try { changes = JSON.parse(strFromU8(members['changes.json'])) as ReturnChange[]; } catch { throw notPackage('die Änderungen sind kein JSON'); }
+    if (!Array.isArray(changes)) throw notPackage('die Änderungen sind keine Liste');
+  }
   if (index.kind === 'return' && !changes) throw new PackageError('Der Rücksendung fehlen ihre Änderungen (changes.json).', 'shareTampered', { path: 'changes.json' });
   return { index, files, changes };
 }

@@ -46,7 +46,7 @@ const partyOf = (v: unknown): Party => {
 const refusal = (e: PackageError): ApiRefusal => ({ code: e.code, params: e.params } as ApiRefusal);
 function guarded<T>(fn: () => T): T {
   try { return fn(); } catch (e) {
-    if (e instanceof PackageError) throw new RequestError(e.code === 'shareBaseMissing' || e.code === 'shareOtherCompany' ? 409 : 400, e.message, refusal(e));
+    if (e instanceof PackageError) throw new RequestError(e.code === 'shareTooLarge' ? 413 : e.code === 'shareBaseMissing' || e.code === 'shareOtherCompany' || e.code === 'shareUnknownBase' ? 409 : 400, e.message, refusal(e));
     if (e instanceof HandoverRefused) throw new RequestError(409, e.message, { code: 'changedSince' });
     if (e instanceof OwnershipError) throw new RequestError(409, e.message);
     throw e;
@@ -131,12 +131,16 @@ router.post('/api/handover/close', async (_req, res) => {
   res.json({ ok: true });
 });
 
+/** A return is taken over only in the books it came back to, never on a copy. */
+const refuseReturnOnCopy = () => refuseOnCopy('return');
+
 router.get('/api/handover/returns/:id', (req, res) => {
   res.json(guarded(() => reviewOf(WS, req.params.id, readBooks())));
 });
 
-const DECISIONS = new Set<Decision>(['skip', 'mine', 'theirs', 'correction']);
+const DECISIONS = new Set<Decision>(['skip', 'mine', 'theirs', 'correction', 'draft']);
 router.post('/api/handover/returns/:id/decide', (req, res) => {
+  refuseReturnOnCopy();
   const b = (req.body ?? {}) as { row?: unknown; decision?: unknown; question?: unknown };
   if (typeof b.row !== 'string') throw new RequestError(400, 'row erwartet.');
   const decision = b.decision === null ? null : DECISIONS.has(b.decision as Decision) ? (b.decision as Decision) : undefined;
@@ -146,6 +150,7 @@ router.post('/api/handover/returns/:id/decide', (req, res) => {
 });
 
 router.post('/api/handover/returns/:id/apply', (req, res) => {
+  refuseReturnOnCopy();
   const g = (req.body as { groups?: unknown })?.groups;
   const groups = g === 'all' ? 'all' : Array.isArray(g) && g.every((x) => (GROUPS as readonly string[]).includes(x)) ? (g as GroupId[]) : undefined;
   if (!groups) throw new RequestError(400, 'groups: "all" oder eine Liste der Gruppen.');
@@ -154,6 +159,7 @@ router.post('/api/handover/returns/:id/apply', (req, res) => {
 });
 
 router.post('/api/handover/returns/:id/undo', (req, res) => {
+  refuseReturnOnCopy();
   const result = guarded(() => undoReturn(WS, req.params.id));
   res.json({ ...result, review: reviewOf(WS, req.params.id, readBooks()) });
 });

@@ -7,7 +7,7 @@
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { YEAR_FOLDER, type WorkspacePaths } from '../workspace/workspace.js';
 
 /** How a file travels: whole in every package, or only when new (B3.4). */
@@ -88,3 +88,15 @@ export function contentChecksum(paths: Pick<WorkspacePaths, 'root'>): { checksum
 
 /** The checksum as a person reads it: its first 12 hex digits in three groups («a3f9 c21e 07bd»). */
 export const shortChecksum = (checksum: string): string => (checksum.replace(/^sha256:/, '').slice(0, 12).match(/.{4}/g) ?? []).join(' ');
+
+/** Where a Durchsicht copy keeps what it got (src/handover/durchsicht.ts): its presence makes the books a copy. */
+export const DURCHSICHT_MARKER = 'data/durchsicht/marker.json';
+/** Whether the books in `root` are a Durchsicht copy: filing, sealing and closing the year are the sharer's there. */
+export const isDurchsichtCopy = (root: string): boolean => existsSync(join(root, DURCHSICHT_MARKER));
+
+/** Whether `path` (relative) resolves inside `root`: nothing a package names is ever written or removed elsewhere. */
+export function inside(root: string, path: string): boolean {
+  const base = resolve(root);
+  const full = resolve(base, path);
+  return full !== base && full.startsWith(base + sep);
+}

@@ -35,6 +35,7 @@ import { reconcilePendingThrough } from './reconcile.js';
 import { writeSeal } from './seal.js';
 import { nextManualRef } from './next-ref.js';
 import { sealedVersion, VERSIONS_FILE } from '../handover/versions.js';
+import { isDurchsichtCopy } from '../handover/content.js';
 
 export const stateFile = (ws: Workspace, year: string): string => join(yearPaths(ws.paths, year).filings, 'year-close.json');
 
@@ -369,6 +370,7 @@ export interface CloseResult { closedThrough: string; seal: string; committed: b
  * workspace when it is a git repository. Running it on a closed year only checks and records.
  */
 export async function closeYear(ws: Workspace, year: string, rates: EstvRates = ratesOf(), today = new Date().toISOString().slice(0, 10)): Promise<CloseResult> {
+  if (isDurchsichtCopy(ws.paths.root)) throw new Error('Durchsicht: den Jahresabschluss macht, wer die Bücher geteilt hat.');
   const books = loadBooks(ws);
   const close = yearCloseOf(ws, year, rates, books);
   if (close.blockers.length) throw new YearCloseRefused({ code: 'yearItemsOpen', params: { year, n: String(close.blockers.length) } }, `${year} cannot close yet: ${close.blockers.length} item(s) open.`);

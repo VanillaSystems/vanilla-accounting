@@ -5971,14 +5971,14 @@ export const messages = {
   'review.rowUndone': "Übernahme rückgängig",
   'review.basedOn': "basiert auf Version {n}",
   'review.title': "Was {name} geändert hat",
-  'review.fromRole': "{name} (Treuhänder)",
+  'review.fromRole': "Rücksendung von {name}",
   'review.count': { one: "{n} Änderung", other: "{n} Änderungen" },
   'review.writes': "{name} schreibt",
   'review.effect.open': "{period} · zu bezahlen",
   'review.effect.filed': "Korrektur {period} · zu bezahlen",
   'review.effect.none': "unverändert",
   'review.applied': "Übernommen",
-  'review.appliedBy': "von {name} (Treuhänder) · {date} · Version {v}",
+  'review.appliedBy': "übernommen von {name} · {date} · Version {v}",
   'review.undo': "rückgängig machen",
   'review.appliedToast': { one: "{n} Änderung von {name} übernommen · Version {v}", other: "{n} Änderungen von {name} übernommen · Version {v}" },
   'review.undoneToast': { one: "Übernahme rückgängig: {n} Datensatz wie vorher", other: "Übernahme rückgängig: {n} Datensätze wie vorher" },
@@ -6025,6 +6025,11 @@ export const messages = {
   'review.group.deleted': "Gelöscht",
   'review.group.knowledge': "Regeln, Konten und Wissen",
   'review.group.other': "Weitere Änderungen",
+  'error.shareTooLarge': "Die Übergabe-Datei ist zu gross: höchstens {limit}.",
+  'error.shareUnknownBase': "Version {version} wurde nicht an {name} übergeben: die Rücksendung passt nicht zu diesen Büchern. Nichts übernommen.",
+  'review.toDraft': "In Änderungen prüfen",
+  'review.drafted': "Liegt in Änderungen als Entwurf: dort zeigt die Regelkarte, was er täte; gilt erst mit «Behalten».",
+  'review.fileNote': "Eine Datei von Wissen oder dem Kontenplan wird nie mit «Alles übernehmen» übernommen.",
 } as const;
 
 export default { name: 'Deutsch', order: 0, messages } satisfies Locale;

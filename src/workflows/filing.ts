@@ -37,6 +37,7 @@ import { providerIssuesIn } from '../intake/pair-chain.js';
 import type { Action } from './actions.js';
 import type { Run } from './model.js';
 import { sealedVersion } from '../handover/versions.js';
+import { isDurchsichtCopy } from '../handover/content.js';
 
 /**
  * What the compute step hands on: the period, its figures by box and what is to pay (negative: a
@@ -230,6 +231,7 @@ export const FILING_ACTIONS: Record<string, Action> = {
       const filed = filedXml(ws, key);
       if (existsSync(prepared) && !existsSync(filed)) { mkdirSync(dirname(filed), { recursive: true }); copyFileSync(prepared, filed); }
       if (lastOfYear) return { outcome: 'ok', output: { seal: { yearClose: true } satisfies SealOutput } };
+      if (isDurchsichtCopy(ws.paths.root)) throw new Error('Durchsicht: einreichen und versiegeln macht, wer die Bücher geteilt hat.');
       const seal = writeSeal(ws, books, key, new Date().toISOString().slice(0, 10));
       if (seal.status === 'written') sealedVersion(ws, key);
       return { outcome: 'ok', output: { seal: { file: seal.file } satisfies SealOutput } };

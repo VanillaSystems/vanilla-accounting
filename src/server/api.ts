@@ -86,12 +86,17 @@ const SHARER_ONLY: Array<[string, RegExp, string]> = [
   ['PATCH', /^\/api\/workspace$/, 'settings'],
   ['POST', /^\/api\/workspace\/logo$/, 'settings'],
   ['POST', /^\/api\/handover\/share$/, 'share'],
+  ['POST', /^\/api\/handover\/returns\/[^/]+\/(apply|undo|decide)$/, 'return'],
 ];
+/** The workflows that file, seal or close: the sharer's. */
+const SHARER_WORKFLOWS: ReadonlySet<string> = new Set(['vat-filing', 'year-close', 'quarter-close']);
 app.use((req, res, next) => {
   const m = markerOf(WS.paths.root);
   if (!m) return next();
-  const filing = req.method === 'POST' && req.path === '/api/automation' && (req.body as { kind?: string; workflow?: string } | undefined)?.kind === 'start' && ['vat-filing', 'year-close'].includes(String((req.body as { workflow?: string }).workflow));
-  const hit = filing ? 'filing' : SHARER_ONLY.find(([method, path]) => req.method === method && path.test(req.path))?.[2];
+  // Express routes ignore case and a trailing slash: the guard reads the path the same way.
+  const path = req.path.toLowerCase().replace(/\/+$/, '');
+  const filing = req.method === 'POST' && path === '/api/automation' && (req.body as { kind?: string } | undefined)?.kind === 'start' && SHARER_WORKFLOWS.has(String((req.body as { workflow?: string }).workflow));
+  const hit = filing ? 'filing' : SHARER_ONLY.find(([method, re]) => req.method === method && re.test(path))?.[2];
   if (!hit) return next();
   res.status(403).json({ error: `Durchsicht: das macht ${m.sharer.name}.`, code: 'roleRefused', params: { action: hit, name: m.sharer.name } } satisfies ApiErrorBody);
 });
@@ -104,7 +109,9 @@ app.use(files, scan, receipts, transactions, mappings, pairing, journal, config,
 app.use(knowledge);
 app.use(onboarding);
 
-app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  // A hand-over file over the upload's limit: the limit is told (body-parser's 413).
+  if ((err as { type?: string }).type === 'entity.too.large' && req.path.startsWith('/api/handover')) { res.status(413).json({ error: 'Die Datei ist grösser als 1 GB: höchstens 1 GB pro Übergabe.', code: 'shareTooLarge', params: { limit: '1 GB' } } satisfies ApiErrorBody); return; }
   if (err instanceof ClosedPeriodError) res.status(403).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);
   else if (err instanceof EmptyRefError) res.status(409).json({ error: err.message, code: 'emptyRef', params: {} } satisfies ApiErrorBody);
   else if (err instanceof StaleBooksError) res.status(409).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);

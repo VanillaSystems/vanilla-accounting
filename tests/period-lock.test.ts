@@ -17,7 +17,7 @@ import { booksOnDisk } from './support/workspace.js';
 import { closedPart } from '../src/books/seal.js';
 import type { RunDetail } from '../src/workflows/model.js';
 import { startApi, type ApiServer } from './support/api-server.js';
-import { writePackage } from '../src/handover/package.js';
+import { readPackage, writePackage } from '../src/handover/package.js';
 
 const REPO = process.cwd();
 let api: ApiServer;
@@ -508,14 +508,14 @@ test('refused: the opening of a year closed through 31.12., a foreign-currency a
 });
 
 /** A return (src/handover) of a recipient who changed the filed entry jc and an open one, as his `.vanilla` file. */
-function returnOf(): Uint8Array {
+function returnOf(version: { n: number; at: string; checksum: string }): Uint8Array {
   const ws = workspaceAt(api.ws.paths.root);
   const books = loadBooks(ws);
   const jc = books.journalEntries.find((e) => e.id === 'jc')!, jo = books.journalEntries.find((e) => e.date > '2026-06-30' && !e.corrects)!;
   return writePackage({
     index: {
       format: 1, kind: 'return', firm: { name: ws.company.name, ...(ws.company.uid ? { uid: ws.company.uid } : {}) },
-      from: { name: 'Ernst Beispiel' }, to: { name: 'Owner' }, version: { n: 1, at: '2026-11-14T10:00:00Z', checksum: 'sha256:0' },
+      from: { name: 'Ernst Beispiel' }, to: { name: 'Owner' }, version,
       app: 'test', at: '2026-11-16T10:00:00Z', files: [], changes: 2,
     },
     files: new Map(),
@@ -528,7 +528,11 @@ function returnOf(): Uint8Array {
 
 test('a return taken over (POST /api/handover/returns/:id/apply, …/undo): the filed entry never changes; offered as a correction it is booked in the open period', async () => {
   const sealedBefore = closedPart(loadBooks(workspaceAt(api.ws.paths.root)), '2026-06-30');
-  const opened = await api.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: new Uint8Array(returnOf()) });
+  // The return builds on a version handed to him: a share first.
+  const shared = await api.fetch('/api/handover/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: { name: 'Ernst Beispiel' } }) });
+  assert.equal(shared.status, 200);
+  const version = readPackage(new Uint8Array(await shared.arrayBuffer())).index.version;
+  const opened = await api.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: new Uint8Array(returnOf(version)) });
   assert.equal(opened.status, 200);
   const { id } = await opened.json() as { id: string };
   const review = await send({ method: 'GET', path: `/api/handover/returns/${id}` });

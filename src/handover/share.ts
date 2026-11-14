@@ -7,7 +7,7 @@
  * handover/sent/, so the next update knows what the person has.
  */
 import fs, { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import git from 'isomorphic-git';
 import { isClosedYear } from '../books/years.js';
 import { loadBooks } from '../books/store.js';
@@ -22,6 +22,9 @@ import { pendingQuestions, takeQuestions } from './returns.js';
 /** The sharer's own folder of hand-overs in the workspace: sent/ (each version's index), returns/ (what came back). */
 export const HANDOVER_DIR = 'handover';
 const sentFile = (ws: Pick<Workspace, 'paths'>, n: number) => join(ws.paths.root, HANDOVER_DIR, 'sent', `v${n}.json`);
+/** The books' record files of the version `n` as handed over: the base a return from that person is merged against. */
+export const baseDirOf = (ws: Pick<Workspace, 'paths'>, n: number): string => join(ws.paths.root, HANDOVER_DIR, 'sent', `v${n}`);
+const isBaseFile = (p: string) => p === 'ledger.json' || p === 'master-data/accounts.json' || p.startsWith('knowledge/') || /^transactional-data\/\d{4}\/books\//.test(p);
 
 export interface ShareRequest {
   to: Party;
@@ -141,5 +144,11 @@ export async function makeShare(ws: Workspace, req: ShareRequest, from: Party, n
   mkdirSync(join(ws.paths.root, HANDOVER_DIR, 'sent'), { recursive: true });
   const { git: _g, ...kept } = index;
   writeFileSync(sentFile(ws, version.n), JSON.stringify(kept) + '\n');
+  // The records as handed over: a return's `before` is read from here, never from the return (review of #535).
+  for (const f of plan.files.filter((x) => isBaseFile(x.path))) {
+    const to = join(baseDirOf(ws, version.n), f.path);
+    mkdirSync(dirname(to), { recursive: true });
+    writeFileSync(to, files.get(f.path)!);
+  }
   return { version, name: packageName(index), bytes, index };
 }

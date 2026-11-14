@@ -74,9 +74,13 @@ export const currentVersion = (paths: Pick<WorkspacePaths, 'root'>): Version | u
 /** Appends the next version for the content as it is now, and returns it. */
 export function writeVersion(paths: Pick<WorkspacePaths, 'root'>, v: Omit<Version, 'n' | 'at' | 'checksum'> & { at?: string; checksum?: string }): Version {
   const file = fileOf(paths);
-  const n = (currentVersion(paths)?.n ?? 0) + 1;
+  // The next number is past every version read and every line written: a line that no longer reads never gives its number twice.
+  const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+  const lines = text.split('\n').filter((l) => l.trim() && !l.startsWith('{"schema"')).length;
+  const n = Math.max(lines, ...readVersions(paths).map((x) => x.n), 0) + 1;
   const line: Version = { n, at: v.at ?? new Date().toISOString(), ...v, checksum: v.checksum ?? contentChecksum(paths).checksum };
   if (!existsSync(file)) writeFileSync(file, `${JSON.stringify({ schema: VERSIONS_SCHEMA })}\n`);
+  else if (text && !text.endsWith('\n')) appendFileSync(file, '\n');
   appendFileSync(file, `${JSON.stringify(line)}\n`);
   return line;
 }

@@ -162,6 +162,8 @@ export function errorText(e: unknown): string {
     case 'shareOtherCompany': return t('error.shareOtherCompany', { firm: b.params.firm });
     case 'shareBaseMissing': return t('error.shareBaseMissing', { version: b.params.version, name: b.params.name });
     case 'shareNotPackage': return t('error.shareNotPackage');
+    case 'shareTooLarge': return t('error.shareTooLarge', { limit: b.params.limit });
+    case 'shareUnknownBase': return t('error.shareUnknownBase', { version: b.params.version, name: b.params.name });
     case 'shareWrongKind': return t('error.shareWrongKind');
     case 'shareNoRecipient': return t('error.shareNoRecipient');
     case 'localOnly': return t('error.localOnly');

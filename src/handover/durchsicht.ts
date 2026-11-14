@@ -10,11 +10,13 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { loadBooks, saveBooks, update, periodLock, type Actor } from '../books/store.js';
-import { findFile, workspaceAt, type Workspace } from '../workspace/workspace.js';
+import { findFile, workspacePaths, type Workspace } from '../workspace/workspace.js';
+import { readManifest } from '../workspace/manifest.js';
+import { filingLengthOf } from '../workspace/vat-setup.js';
 import { appVersion } from '../version.js';
-import { carriageOf, checksumOf, contentFiles, factOf, sha256, type FileFact } from './content.js';
+import { carriageOf, checksumOf, contentFiles, factOf, inside, sha256, DURCHSICHT_MARKER, type FileFact } from './content.js';
 import { PACKAGE_FORMAT, PackageError, packageName, readPackage, writePackage, type PackageContents, type PackageIndex, type Question, type ReturnChange } from './package.js';
-import { applyToBooks, dateOf, diffRecords, recordsInFolder, refKey, type RecordChange } from './records.js';
+import { applyToBooks, dateOf, diffRecords, isRecordFile, recordsInFolder, refKey, type RecordChange } from './records.js';
 import type { Party } from './versions.js';
 
 /** Where the copies live: one folder per firm. A test run keeps its own; the Mac app names its folder (setDurchsichtHome). */
@@ -50,7 +52,7 @@ export interface Marker {
 }
 
 const dirOf = (root: string) => join(root, 'data', 'durchsicht');
-const markerFile = (root: string) => join(dirOf(root), 'marker.json');
+const markerFile = (root: string) => join(root, DURCHSICHT_MARKER);
 const baseDir = (root: string) => join(dirOf(root), 'base');
 const notesFile = (root: string) => join(dirOf(root), 'notes.json');
 
@@ -143,13 +145,17 @@ function moveForward(root: string, had: Marker, p: PackageContents, now: Date): 
   writeFiles(root, p.files);
   // Files of the old version the new one no longer names (the sharer removed them) go; his own new files stay.
   const named = new Set([...index.files, ...(index.held ?? []), ...(index.omitted ?? [])].map((f) => f.path));
-  for (const f of had.files) if (!named.has(f.path)) rmSync(join(root, f.path), { force: true });
+  // Only a content file of the copy itself, never a path that leaves it (review of #535).
+  for (const f of had.files) if (!named.has(f.path) && carriageOf(f.path) && inside(root, f.path)) rmSync(join(root, f.path), { force: true });
   writeBase(root, p.files);
   keepGit(root, index);
   const newBase = recordsInFolder(baseDir(root));
   const conflicts: string[] = [];
   const dropped: string[] = [];
-  const ws = workspaceAt(root);
+  // The copy's books, read without making them the books the app has open (no switch of the engines).
+  const paths = workspacePaths(root);
+  const manifest = readManifest(paths.manifest);
+  const ws: Workspace = { ...manifest, filingLength: filingLengthOf(manifest.company.vat, 'quarter'), paths };
   const marker: Marker = { ...markerFrom(index, now), ...(had.sent ? { sent: had.sent } : {}) };
   if (mine.length) {
     const books = loadBooks(ws);
@@ -163,7 +169,7 @@ function moveForward(root: string, had: Marker, p: PackageContents, now: Date): 
     });
     update(books, recipientActor(had), (b) => applyToBooks(b, keep.filter((c) => c.kind !== 'file')));
     saveBooks(ws, books);
-    for (const c of keep.filter((x) => x.kind === 'file')) {
+    for (const c of keep.filter((x) => x.kind === 'file' && isRecordFile(x.key) && inside(root, x.key))) {
       if (c.after === undefined) rmSync(join(root, c.key), { force: true });
       else { mkdirSync(dirname(join(root, c.key)), { recursive: true }); writeFileSync(join(root, c.key), String(c.after)); }
     }
@@ -192,9 +198,12 @@ export function setNote(root: string, key: string, text: string): Record<string,
 }
 
 /** What he changed since the version he got (B5.1), each with his «Warum?». */
+const TRAVELS: ReadonlySet<string> = new Set(['journalEntries', 'transactions', 'mappings', 'receipts', 'file']);
+
 export function changesOf(root: string): ReturnChange[] {
   const notes = readNotes(root);
-  return diffRecords(recordsInFolder(baseDir(root)), recordsInFolder(root)).map((c) => {
+  // Only what a return may carry: entries, payments, links, receipts, knowledge and the chart (src/handover/returns.ts RETURN_KINDS).
+  return diffRecords(recordsInFolder(baseDir(root)), recordsInFolder(root)).filter((c) => TRAVELS.has(c.kind)).map((c) => {
     const why = notes[refKey(c)] ?? (c.kind === 'journalEntries' ? entryKey(c, notes) : undefined);
     return { ...c, ...(why ? { why } : {}) };
   });

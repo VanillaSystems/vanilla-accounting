@@ -21,6 +21,8 @@ import type { Period } from '../../accounting/periods.js';
 import type { JournalEntry } from '../../types/index.js';
 import type { Decision, GroupId, Review as ReviewData, ReviewRow } from '../../handover/returns.js';
 import { reloadHandover } from './store.js';
+import { diffLines, hunks } from '../../saving/model.js';
+import '../areas/changes/changes.css';
 
 const money = (n: number) => n.toLocaleString('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 type Rec = Record<string, unknown> | undefined;
@@ -51,7 +53,19 @@ function madeBy(r: ReviewRow): string | undefined {
 
 const GROUP_ORDER: readonly GroupId[] = ['corrects', 'vat', 'account', 'amount', 'split', 'link', 'new', 'deleted', 'knowledge', 'other'];
 /** Whether «Übernehmen» would take the row with the decisions as they stand (returns.ts `takes`). */
-const takes = (r: ReviewRow) => !r.applied && r.decision !== 'skip' && !r.question && (r.status === 'apply' || (r.status === 'conflict' && r.decision === 'theirs') || (r.status === 'sealed' && r.decision === 'correction'));
+const takes = (r: ReviewRow) => r.kind !== 'file' && !r.applied && r.decision !== 'skip' && !r.question && (r.status === 'apply' || (r.status === 'conflict' && r.decision === 'theirs') || (r.status === 'sealed' && r.decision === 'correction'));
+
+/** His text of a knowledge file or the chart against the version he got: the lines that changed, as Änderungen shows a file. */
+function FileDiff({ before, after }: { before: string; after: string }) {
+  const lines = hunks(diffLines(before, after), 2);
+  return (
+    <pre className="chdiff rvdiff">
+      {lines.map((l, i) => (l === null
+        ? <span key={i} className="gap">⋯{'\n'}</span>
+        : <span key={i} className={`ln k${l.kind === '+' ? 'add' : l.kind === '-' ? 'del' : 'same'}`}>{l.kind}{l.text}{'\n'}</span>))}
+    </pre>
+  );
+}
 
 export function ReturnReview({ id, nav, period, canEdit }: { id: string; nav: Nav; period: Period; canEdit: boolean }) {
   const [data, setData] = useState<ReviewData | null>(null);
@@ -143,10 +157,19 @@ export function ReturnReview({ id, nav, period, canEdit }: { id: string; nav: Na
                 <div className="rvtx">
                   {r.kind === 'journalEntries' && (r.mine || r.after) ? <Go to={entryAt((r.mine ?? r.after) as JournalEntry, period)} nav={nav} className="golink">{r.label}</Go> : <span className="golink">{r.label}</span>}
                   {asRec(r.after)?.corrects ? <span className="rvtag fq">{t('review.corrects', { period: String(asRec(r.after)!.corrects) })}</span> : null}
-                  <div className="rvba">
-                    {r.before !== undefined ? <><span className="rvwas">{said(r, r.before)}</span><span className="rvar">→</span></> : null}
-                    <span className="rvnow">{r.after === undefined ? t('review.removed') : said(r, r.after)}</span>
-                  </div>
+                  {r.kind === 'file' ? <FileDiff before={typeof r.before === 'string' ? r.before : ''} after={typeof r.after === 'string' ? r.after : ''} /> : (
+                    <div className="rvba">
+                      {r.before !== undefined ? <><span className="rvwas">{said(r, r.before)}</span><span className="rvar">→</span></> : null}
+                      <span className="rvnow">{r.after === undefined ? t('review.removed') : said(r, r.after)}</span>
+                    </div>
+                  )}
+                  {r.kind === 'file' ? (
+                    <div className="rvorig">
+                      {r.decision === 'draft' ? t('review.drafted') : t('review.fileNote')}
+                      {canEdit && r.decision !== 'draft' ? <> <button type="button" className="linkbtn" disabled={busy} onClick={() => void decide(r.id, 'draft')}>{t('review.toDraft')}</button></> : null}
+                      {r.decision === 'draft' ? <> <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'changes' }, query: {} })}>{t('review.toDraft')}</button></> : null}
+                    </div>
+                  ) : null}
                   {r.why ? <div className="rvwhy"><span className="m">{name}: </span>{r.why}</div> : null}
                   {madeBy(r) ? <div className="rvorig">{madeBy(r)}</div> : null}
                   {r.applied ? <div className="rvorig">{t('review.rowTaken')}</div> : null}

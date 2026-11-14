@@ -11,18 +11,23 @@
  * «Rückgängig» takes the whole take-over back; it writes a version (B7).
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { loadBooks, periodLock, saveBooks, update, PERSON, type Actor, type Books } from '../books/store.js';
 import { addDays, filingKeyOf } from '../accounting/periods.js';
 import { reversalOf } from '../accounting/reversal.js';
 import { filing, vat } from '../engines/index.js';
 import type { JournalEntry } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
-import { PackageError, readPackage, type PackageContents, type Question, type ReturnChange } from './package.js';
-import { applyToBooks, dateOf, parseRefKey, recordFiles, recordsOf, refKey, sameRecord, type RecordChange, type RecordMap } from './records.js';
+import { PackageError, isReturnFile, readPackage, safePath, type PackageContents, type Question, type ReturnChange } from './package.js';
+import { applyToBooks, dateOf, isRecordFile, parseRefKey, recordFiles, recordsInFolder, recordsOf, refKey, sameRecord, type RecordChange, type RecordMap } from './records.js';
+import { keyOf, type Part } from '../books/years.js';
+import { formTakes } from '../accounting/vat-codes.js';
 import { learnOffer } from '../saving/learn-rule.js';
-import { currentVersion, writeVersion, type Party, type Version } from './versions.js';
+import { draftDir } from '../saving/changes.js';
+import { inside, sha256 } from './content.js';
+import { baseDirOf } from './share.js';
+import { currentVersion, readVersions, writeVersion, type Party, type Version } from './versions.js';
 
 const DIR = 'handover';
 const returnsDir = (ws: Pick<Workspace, 'paths'>) => join(ws.paths.root, DIR, 'returns');
@@ -31,8 +36,12 @@ const dirOf = (ws: Pick<Workspace, 'paths'>, id: string) => {
   return join(returnsDir(ws), id);
 };
 
-/** What the sharer decided on a row: leave it out, keep her version or take his (a conflict), or book it as a correction (a period filed meanwhile). */
-export type Decision = 'skip' | 'mine' | 'theirs' | 'correction';
+/**
+ * What the sharer decided on a row: leave it out, keep her version or take his (a conflict), book it
+ * as a correction (a period filed meanwhile), or, for a file of knowledge/ or the chart, put his text
+ * into Änderungen as a draft, where the rule card shows what it would do and she keeps it there.
+ */
+export type Decision = 'skip' | 'mine' | 'theirs' | 'correction' | 'draft';
 
 /** One take-over: what it changed, each record as it was in her books before, so it can be taken back whole. */
 export interface Applied {
@@ -40,11 +49,13 @@ export interface Applied {
   version: number;
   /** Records it changed: `before` hers before, `after` as it left them. */
   changes: RecordChange[];
-  /** Correction entries it booked for rows of filed periods. */
-  corrections: string[];
-  /** Receipt files it put into the workspace. */
-  files: string[];
+  /** Correction entries it booked for rows of filed periods, as booked: an undo refuses when one changed since. */
+  corrections: JournalEntry[];
+  /** Receipt files it put into the workspace, with their SHA-256: an undo removes them when unchanged. */
+  files: Array<{ path: string; sha256: string }>;
   rows: string[];
+  /** Written before the books are saved; cleared once they are (a failed save leaves no take-over standing). */
+  pending?: true;
   undone?: { at: string; version: number };
 }
 
@@ -74,6 +85,7 @@ export function receiveReturn(ws: Workspace, bytes: Uint8Array, now = new Date()
   if (uid && p.index.firm.uid ? uid !== p.index.firm.uid : p.index.firm.name !== ws.company.name) {
     throw new PackageError(`Diese Rücksendung gehört zu ${p.index.firm.name}, nicht zu ${ws.company.name}.`, 'shareOtherCompany', { firm: p.index.firm.name });
   }
+  checkedChanges(ws, p);
   const id = createHash('sha256').update(bytes).digest('hex').slice(0, 12);
   const dir = dirOf(ws, id);
   if (!existsSync(join(dir, 'package.vanilla'))) {
@@ -84,6 +96,70 @@ export function receiveReturn(ws: Workspace, bytes: Uint8Array, now = new Date()
   return { id, from: p.index.from, changes: p.changes?.length ?? 0, basedOn: p.index.version.n };
 }
 
+const samePerson = (a: Party, b: Party) => (a.email && b.email ? a.email.toLowerCase() === b.email.toLowerCase() : a.name === b.name);
+
+/** The kinds of record a return may change: entries, payments, links, receipts, and the files of knowledge/ and the chart. Config and the statements' parts never travel. */
+const RETURN_KINDS: ReadonlySet<string> = new Set(['journalEntries', 'transactions', 'mappings', 'receipts', 'file']);
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
+const tampered = (key: string, why: string) => new PackageError(`Die Rücksendung ändert ${key.slice(0, 120)}: ${why}. Nichts übernommen.`, 'shareTampered', { path: key.slice(0, 120) });
+
+/** Why a record his return brings cannot be one of the books, or undefined. */
+function recordProblem(kind: Part, key: string, r: unknown): string | undefined {
+  if (!isObj(r)) return 'kein Datensatz';
+  if ((keyOf[kind] as unknown as (x: unknown) => string)(r) !== key) return 'der Schlüssel passt nicht zum Datensatz';
+  if (kind === 'journalEntries') {
+    if (typeof r.date !== 'string' || !DAY.test(r.date)) return 'kein Datum';
+    if (typeof r.amount !== 'number' || !Number.isFinite(r.amount)) return 'kein Betrag';
+    if (typeof r.accountDebit !== 'string' || typeof r.accountCredit !== 'string' || typeof r.transactionRef !== 'string') return 'keine Konten';
+    if (r.vatCode !== undefined && (typeof r.vatCode !== 'string' || !formTakes(r.vatCode) || !vat().codes.parse(r.vatCode))) return `den Steuercode ${String(r.vatCode)} nimmt diese Firma nicht`;
+  }
+  if (kind === 'transactions' && (typeof r.date !== 'string' || !DAY.test(r.date) || typeof r.amount !== 'number')) return 'keine Zahlung';
+  if (kind === 'receipts' && (typeof r.filename !== 'string' || !safePath(r.filename) || r.filename.includes('/'))) return 'kein schlichter Dateiname';
+  return undefined;
+}
+
+/** The records of the version a return names as its base, when it was handed to its sender as it says; else shareUnknownBase. */
+function baseOf(ws: Workspace, p: PackageContents): RecordMap {
+  const v = readVersions(ws.paths).find((x) => x.n === p.index.version.n && x.reason === 'handover' && !!x.to && samePerson(x.to, p.index.from) && x.checksum === p.index.version.checksum);
+  const dir = baseDirOf(ws, p.index.version.n);
+  if (!v || !existsSync(dir)) {
+    throw new PackageError(`Version ${p.index.version.n} wurde nicht an ${p.index.from.name} übergeben: die Rücksendung passt nicht zu diesen Büchern.`, 'shareUnknownBase', { version: String(p.index.version.n), name: p.index.from.name });
+  }
+  return recordsInFolder(dir);
+}
+
+/**
+ * His change set, checked whole (a return comes from another person: review of #535): only the
+ * kinds a return may change, each key once, every record whole and keyed as it says, every code one
+ * the firm takes, files only of knowledge/ and the chart, and `before` read from the version as it was
+ * handed to him, never from the return. Records he left as they were drop out.
+ */
+function checkedChanges(ws: Workspace, p: PackageContents): ReturnChange[] {
+  const base = baseOf(ws, p);
+  const seen = new Set<string>();
+  const out: ReturnChange[] = [];
+  for (const raw of (p.changes ?? []) as unknown[]) {
+    if (!isObj(raw) || typeof raw.kind !== 'string' || typeof raw.key !== 'string' || !raw.key || raw.key.length > 300) throw tampered('?', 'keine Änderung eines Datensatzes');
+    const kind = raw.kind, key = raw.key;
+    if (!RETURN_KINDS.has(kind)) throw tampered(`${kind}:${key}`, 'diese Art von Daten nimmt eine Rücksendung nicht mit');
+    const k = refKey({ kind: kind as ReturnChange['kind'], key });
+    if (seen.has(k) || key.includes('#')) throw tampered(key, 'derselbe Datensatz zweimal');
+    seen.add(k);
+    if (kind === 'file') {
+      if (!safePath(key) || !isRecordFile(key)) throw tampered(key, 'nur Dateien von knowledge/ und der Kontenplan');
+      if (raw.after !== undefined && (typeof raw.after !== 'string' || raw.after.length > 2_000_000)) throw tampered(key, 'kein Text');
+    } else if (raw.after !== undefined) {
+      const why = recordProblem(kind as Part, key, raw.after);
+      if (why) throw tampered(key, why);
+    }
+    const before = base.get(k);
+    if (sameRecord(before, raw.after)) continue;
+    out.push({ kind: kind as ReturnChange['kind'], key, ...(before !== undefined ? { before } : {}), ...(raw.after !== undefined ? { after: raw.after } : {}), ...(typeof raw.why === 'string' && raw.why.trim() ? { why: raw.why.trim().slice(0, 500) } : {}) });
+  }
+  return out;
+}
+
 export interface ReturnSummary { id: string; from: Party; at: string; receivedAt: string; changes: number; basedOn: number; applied: boolean; undone: boolean; message?: string }
 
 /** The returns kept, newest first. */
@@ -92,7 +168,7 @@ export function listReturns(ws: Workspace): ReturnSummary[] {
   return readdirSync(returnsDir(ws)).filter((d) => /^[0-9a-f]{12}$/.test(d) && existsSync(join(returnsDir(ws), d, 'package.vanilla'))).map((id) => {
     const { index, changes } = packageOf(ws, id);
     const s = readState(ws, id);
-    const live = s.applied.filter((a) => !a.undone);
+    const live = s.applied.filter((a) => !a.undone && !a.pending);
     return { id, from: index.from, at: index.at, receivedAt: s.receivedAt, changes: changes?.length ?? 0, basedOn: index.version.n, applied: live.length > 0, undone: s.applied.length > 0 && !live.length, ...(index.message ? { message: index.message } : {}) };
   }).sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
 }
@@ -153,7 +229,7 @@ const asEntry = (r: unknown) => (r ?? {}) as Entry;
 
 /** Which group a change of an entry falls in (B5.2); a split is decided per payment afterwards. */
 function groupOf(c: Pick<RecordChange, 'kind' | 'before' | 'after'>): GroupId {
-  if (c.kind === 'file' || c.kind === 'config') return 'knowledge';
+  if (c.kind === 'file') return 'knowledge';
   if (c.kind === 'mappings' || c.kind === 'receipts') return 'link';
   if (c.kind !== 'journalEntries') return 'other';
   const b = asEntry(c.before), a = asEntry(c.after);
@@ -180,7 +256,7 @@ const hersOf = (ws: Workspace, books: Books): RecordMap => recordsOf(books, reco
 function rowsOf(ws: Workspace, books: Books, changes: readonly ReturnChange[], state: State): ReviewRow[] {
   const mine = hersOf(ws, books);
   const lock = periodLock(books);
-  const live = new Set(state.applied.filter((a) => !a.undone).flatMap((a) => a.rows));
+  const live = new Set(state.applied.filter((a) => !a.undone && !a.pending).flatMap((a) => a.rows));
   const rows = changes.map((c): ReviewRow => {
     const id = refKey(c);
     const hers = mine.get(id);
@@ -220,7 +296,8 @@ function rowsOf(ws: Workspace, books: Books, changes: readonly ReturnChange[], s
 
 /** Whether a row would be taken over by «Übernehmen» with the decisions as they stand. */
 const takes = (r: ReviewRow): 'theirs' | 'correction' | undefined => {
-  if (r.applied || r.decision === 'skip' || r.question) return undefined;
+  // A file of knowledge/ or the chart is never taken blind: it goes to Änderungen as a draft, through the rule card (decide 'draft').
+  if (r.applied || r.decision === 'skip' || r.question || r.kind === 'file') return undefined;
   if (r.status === 'apply') return 'theirs';
   if (r.status === 'conflict' && r.decision === 'theirs') return 'theirs';
   if (r.status === 'sealed' && r.decision === 'correction') return 'correction';
@@ -293,8 +370,8 @@ function effectOf(rows: readonly ReviewRow[], books: Books): VatEffect[] {
 export function reviewOf(ws: Workspace, id: string, books: Books = loadBooks(ws)): Review {
   const p = packageOf(ws, id);
   const state = readState(ws, id);
-  const rows = rowsOf(ws, books, p.changes ?? [], state);
-  const applied = state.applied;
+  const rows = rowsOf(ws, books, checkedChanges(ws, p), state);
+  const applied = state.applied.filter((a) => !a.pending);
   const learnRows = rows.filter((r) => r.applied && r.kind === 'journalEntries' && (r.group === 'account' || r.group === 'vat' || r.group === 'split'));
   const refs = [...new Set(learnRows.map((r) => asEntry(r.after).transactionRef).filter((x): x is string => !!x))];
   // One offer per partner (B6): his corrections of the same partner count together; a payment no offer fits teaches nothing.
@@ -318,11 +395,19 @@ export function reviewOf(ws: Workspace, id: string, books: Books = loadBooks(ws)
 /** A decision on a row, or a question back («Frage zurück», kept for the next hand-over); `null` clears it. */
 export function decide(ws: Workspace, id: string, row: string, decision: Decision | null | undefined, question?: string | null, now = new Date()): void {
   const s = readState(ws, id);
+  const changes = checkedChanges(ws, packageOf(ws, id));
+  const c = changes.find((x) => refKey(x) === row);
+  if (!c) throw new HandoverRefused(`Die Rücksendung hat keine Zeile ${row.replace('\u0000', ' ')}.`, []);
+  if (decision === 'draft') {
+    // His text of a knowledge file or the chart goes into Änderungen as a draft: shown on the rule card there, kept only by «Behalten».
+    if (c.kind !== 'file' || !isRecordFile(c.key) || !inside(draftDir(ws), c.key)) throw new HandoverRefused('Nur eine Datei von knowledge/ oder der Kontenplan geht als Entwurf in die Änderungen.', []);
+    const to = join(draftDir(ws), c.key);
+    mkdirSync(dirname(to), { recursive: true });
+    writeFileSync(to, typeof c.after === 'string' ? c.after : '');
+  }
   if (decision === null) delete s.decisions[row]; else if (decision) s.decisions[row] = decision;
   if (question === null) delete s.questions[row];
   else if (typeof question === 'string' && question.trim()) {
-    const { changes } = packageOf(ws, id);
-    const c = (changes ?? []).find((x) => refKey(x) === row);
     s.questions[row] = { key: row, text: question.trim().slice(0, 500), at: now.toISOString(), ...(c ? { label: labelOf(c) } : {}) };
   }
   writeState(ws, id, s);
@@ -342,41 +427,49 @@ export interface ApplyResult { applied: number; corrections: number; left: numbe
 export function applyReturn(ws: Workspace, id: string, groups: readonly GroupId[] | 'all', now = new Date()): ApplyResult {
   const p = packageOf(ws, id);
   const state = readState(ws, id);
+  // A take-over a failed save left pending never stands.
+  state.applied = state.applied.filter((a) => !a.pending);
   const books = loadBooks(ws);
-  const rows = rowsOf(ws, books, p.changes ?? [], state).filter((r) => groups === 'all' || groups.includes(r.group));
+  const checked = checkedChanges(ws, p);
+  const rows = rowsOf(ws, books, checked, state).filter((r) => groups === 'all' || groups.includes(r.group));
   const pending = rows.filter((r) => takes(r));
   if (!pending.length) throw new HandoverRefused('Nichts zu übernehmen: jede Zeile ist übernommen, ausgelassen, gefragt oder wartet auf deine Wahl.', []);
-  const { changes, corrections } = planOf(pending, books, (currentVersion(ws.paths)?.n ?? 0) + 1);
-  update(books, takeOverActor(p.index.from), (b) => {
-    applyToBooks(b, changes.filter((c) => c.kind !== 'file'));
-    b.journalEntries.push(...corrections);
-  });
-  saveBooks(ws, books);
-  for (const c of changes.filter((x) => x.kind === 'file')) writeText(ws, c.key, c.after as string | undefined);
-  // The receipt files his rows bring: put where the record says, picked up by the next load (placeFiles).
-  const files: string[] = [];
+  const next = (currentVersion(ws.paths)?.n ?? 0) + 1;
+  const { changes, corrections } = planOf(pending, books, next);
+  // The receipt files his receipts bring: only into a year's receipts/, under the receipt's own plain name, never over a file.
+  const files: Array<{ path: string; sha256: string; data: Uint8Array }> = [];
   for (const c of changes.filter((x) => x.kind === 'receipts' && x.after)) {
-    const name = (c.after as { filename?: string }).filename;
+    const name = (c.after as { filename: string }).filename;
     for (const [path, data] of p.files) {
-      if (!name || !path.endsWith(`/${name}`) || existsSync(join(ws.paths.root, path))) continue;
-      mkdirSync(dirname(join(ws.paths.root, path)), { recursive: true });
-      writeFileSync(join(ws.paths.root, path), data);
-      files.push(path);
+      if (!isReturnFile(path) || basename(path) !== name || !inside(ws.paths.root, path) || existsSync(join(ws.paths.root, path))) continue;
+      files.push({ path, sha256: sha256(data), data });
     }
   }
+  const step: Applied = { at: now.toISOString(), version: next, changes: changes.map(({ row: _r, ...c }) => c), corrections, files: files.map(({ path, sha256: sum }) => ({ path, sha256: sum })), rows: pending.map((r) => r.id), pending: true };
+  // State and files first, the books' save last: a save that fails takes back what came before it.
+  writeState(ws, id, { ...state, applied: [...state.applied, step] });
+  try {
+    for (const f of files) {
+      mkdirSync(dirname(join(ws.paths.root, f.path)), { recursive: true });
+      writeFileSync(join(ws.paths.root, f.path), f.data, { flag: 'wx' });
+    }
+    update(books, takeOverActor(p.index.from), (b) => {
+      applyToBooks(b, changes);
+      b.journalEntries.push(...corrections);
+    });
+    saveBooks(ws, books);
+  } catch (e) {
+    for (const f of files) if (existsSync(join(ws.paths.root, f.path)) && sha256(readFileSync(join(ws.paths.root, f.path))) === f.sha256) rmSync(join(ws.paths.root, f.path));
+    writeState(ws, id, state);
+    throw e;
+  }
   const taken = new Set(pending.map((r) => r.id));
-  const left = rowsOf(ws, books, p.changes ?? [], state).filter((r) => r.status !== 'same' && !r.applied && !taken.has(r.id)).length;
+  const left = rowsOf(ws, books, checked, state).filter((r) => r.status !== 'same' && !r.applied && !taken.has(r.id)).length;
   const v = writeVersion(ws.paths, { reason: 'return-applied', from: p.index.from, basedOn: p.index.version.n, taken: changes.length + corrections.length, left, ret: id, at: now.toISOString() });
-  state.applied.push({ at: now.toISOString(), version: v.n, changes: changes.map(({ row: _r, ...c }) => c), corrections: corrections.map((e) => e.id), files, rows: pending.map((r) => r.id) });
-  writeState(ws, id, state);
+  delete step.pending;
+  step.version = v.n;
+  writeState(ws, id, { ...state, applied: [...state.applied, step] });
   return { applied: changes.length, corrections: corrections.length, left, version: v };
-}
-
-function writeText(ws: Workspace, path: string, text: string | undefined): void {
-  const full = join(ws.paths.root, path);
-  if (text === undefined) { if (existsSync(full)) writeFileSync(full, ''); return; }
-  mkdirSync(dirname(full), { recursive: true });
-  writeFileSync(full, text);
 }
 
 export class HandoverRefused extends Error {
@@ -391,33 +484,39 @@ export class HandoverRefused extends Error {
 export function undoReturn(ws: Workspace, id: string, now = new Date()): { restored: number; version: Version } {
   const p = packageOf(ws, id);
   const state = readState(ws, id);
-  const live = state.applied.filter((a) => !a.undone);
+  const live = state.applied.filter((a) => !a.undone && !a.pending);
   if (!live.length) throw new HandoverRefused('Diese Rücksendung ist nicht übernommen.', []);
   const books = loadBooks(ws);
   const hers = hersOf(ws, books);
   const changes = live.flatMap((a) => a.changes);
-  const corrections = new Set(live.flatMap((a) => a.corrections));
-  const changed = changes.filter((c) => !sameRecord(hers.get(refKey(c)), c.after)).map((c) => refKey(c));
-  const gone = [...corrections].filter((eid) => !books.journalEntries.some((e) => e.id === eid));
-  if (changed.length || gone.length) throw new HandoverRefused(`Seit der Übernahme geändert: ${[...changed.map((k) => parseRefKey(k).key), ...gone].join(', ')}. Nichts zurückgenommen.`, [...changed, ...gone]);
-  // Each record goes back to the state before the first take-over that touched it.
+  const corrections = live.flatMap((a) => a.corrections);
+  // The last take-over that touched a record left it as it must be now; the first one knew it before.
+  const last = new Map<string, RecordChange>();
+  for (const c of changes) last.set(refKey(c), c);
+  const changed = [...last.values()].filter((c) => !sameRecord(hers.get(refKey(c)), c.after)).map((c) => c.key);
+  const edited = corrections.filter((e) => !sameRecord(books.journalEntries.find((x) => x.id === e.id), e)).map((e) => e.id);
+  if (changed.length || edited.length) throw new HandoverRefused(`Seit der Übernahme geändert: ${[...changed, ...edited].join(', ')}. Nichts zurückgenommen.`, [...changed, ...edited]);
   const back = new Map<string, RecordChange>();
   for (const c of changes) if (!back.has(refKey(c))) back.set(refKey(c), c);
+  const ids = new Set(corrections.map((e) => e.id));
   update(books, PERSON, (b) => {
-    applyToBooks(b, [...back.values()].filter((c) => c.kind !== 'file').map((c) => ({ kind: c.kind, key: c.key, ...(c.before !== undefined ? { after: c.before } : {}) })));
-    b.journalEntries = b.journalEntries.filter((e) => !corrections.has(e.id));
+    applyToBooks(b, [...back.values()].map((c) => ({ kind: c.kind, key: c.key, ...(c.before !== undefined ? { after: c.before } : {}) })));
+    b.journalEntries = b.journalEntries.filter((e) => !ids.has(e.id));
   });
   saveBooks(ws, books);
-  for (const c of [...back.values()].filter((x) => x.kind === 'file')) writeText(ws, c.key, c.before as string | undefined);
+  // The receipt files it brought go too, when unchanged and no receipt names them any more.
+  const named = new Set(books.receipts.map((r) => r.filename));
+  for (const f of live.flatMap((a) => a.files)) {
+    const full = join(ws.paths.root, f.path);
+    if (inside(ws.paths.root, f.path) && existsSync(full) && !named.has(basename(f.path)) && sha256(readFileSync(full)) === f.sha256) rmSync(full);
+  }
   const v = writeVersion(ws.paths, { reason: 'return-undone', from: p.index.from, basedOn: p.index.version.n, ret: id, at: now.toISOString() });
   for (const a of live) a.undone = { at: now.toISOString(), version: v.n };
   writeState(ws, id, state);
-  return { restored: back.size + corrections.size, version: v };
+  return { restored: back.size + corrections.length, version: v };
 }
 
 // ─── «Frage zurück»: questions that go with the next hand-over ─────────────
-
-const samePerson = (a: Party, b: Party) => (a.email && b.email ? a.email.toLowerCase() === b.email.toLowerCase() : a.name === b.name);
 
 /** The questions to `to` not yet handed over. */
 export function pendingQuestions(ws: Workspace, to: Party): Question[] {

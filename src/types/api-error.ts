@@ -36,6 +36,10 @@ export type ApiRefusal =
   /** An update on a version this copy lacks: `name` is asked for a full hand-over. */
   | { code: 'shareBaseMissing'; params: { version: string; name: string } }
   | { code: 'shareNotPackage' }
+  /** A hand-over file past a limit (its size, a file's size, its number of files): the limit is named. */
+  | { code: 'shareTooLarge'; params: { limit: string } }
+  /** A return based on a version never handed to its sender. */
+  | { code: 'shareUnknownBase'; params: { version: string; name: string } }
   /** A return opened on a copy, or a hand-over where a return belongs. */
   | { code: 'shareWrongKind' }
   /** «Teilen» without a name, or with an address that is none. */

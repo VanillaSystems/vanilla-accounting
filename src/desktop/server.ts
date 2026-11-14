@@ -33,6 +33,7 @@ import type { AiAvailability, DesktopInfo, GuardedFolder, HomeAccess, HomeFolder
 import { aiSetup } from '../server/ai-setup.js';
 import { qrSvg } from './qr.js';
 import { opened, readState, writeState, type PhonePairing } from './state.js';
+import { isDurchsichtCopy } from '../handover/content.js';
 
 export interface DesktopServerOptions {
   /** desktop.json in the user data folder. */
@@ -252,7 +253,8 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     if (isOldLayout(opts.demoRoot)) rmSync(opts.demoRoot, { recursive: true, force: true });
     if (!appFolderIn(opts.demoRoot)) copyTree(opts.demoSource ?? join(APP_ROOT, 'demo'), opts.demoRoot);
   };
-  const remember = (root: string, name?: string) => writeState(opts.stateFile, opened(readState(opts.stateFile), root, name));
+  // A Durchsicht copy (src/handover/durchsicht.ts) is opened from its file again, never listed among the person's own books.
+  const remember = (root: string, name?: string) => { if (!isDurchsichtCopy(appFolderIn(root) ?? root)) writeState(opts.stateFile, opened(readState(opts.stateFile), root, name)); };
 
   async function openBooks(root: string): Promise<KnownBooks> {
     root = resolve(root);

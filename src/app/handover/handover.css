@@ -130,3 +130,4 @@
 
 /* The toast stays above the return bar of a Durchsicht copy. */
 :root:has(.shret) .toast { bottom: 76px; }
+.rvr .rvdiff { margin: 6px 0 0; max-height: 240px; overflow: auto; font-size: 11.5px; }
