@@ -18,7 +18,8 @@ import { basename, join } from 'node:path';
 import { RequestError, WS, assertOpen, readBooks, updateBooks } from './books.js';
 import { findFile } from '../workspace/workspace.js';
 import { structuredSpans } from '../books/bank-import.js';
-import { readBeside, writeBeside } from '../books/pdf-reads.js';
+import { readBeside, replaceReadFacts, writeBeside, type KeptRead } from '../books/pdf-reads.js';
+import { periodLock } from '../books/store.js';
 import { hasBalances, isBlank, parseReadStatement } from '../books/statement-check.js';
 import { accountOfRead, asRead, coveredDays, coversAll, heldOf, isCovered, readDays, readStatementPdf, MAX_READ_PAGES, type PdfRead } from '../intake/statement-read.js';
 import { toStatementXml } from '../providers/statement-read/camt-writer.js';
@@ -26,7 +27,8 @@ import { ask, modelReady } from '../llm/ask.js';
 import { aiOff } from '../llm/off.js';
 import type { StatementReadParams } from '../types/api-error.js';
 import type { ReadBy, ReadStatement, StatementRead } from '../types/statement-read.js';
-import type { BankTransaction, StatementAsk, StatementImport } from '../types/index.js';
+import type { BankTransaction, Index, StatementAsk, StatementImport } from '../types/index.js';
+import type { PdfTable } from '../types/statement-read.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 
 /** Whether a bank export or bank CSV of the account is in the books: then its statement PDFs ask nothing. */
@@ -110,6 +112,12 @@ function keptPdf(file: string): { path: string; account: LedgerBankAccount } {
 /** The question of a kept statement PDF, as the books hold it. */
 export const askOf = (file: string): StatementAsk | undefined => readBooks().statementAsks?.find((a) => a.file === file);
 
+/** A table of the books' account numbered `account`, as the books take its facts; none when no bank account has that number. */
+const tableAt = (statement: PdfTable, account: string): Pick<KeptRead, 'statement' | 'account'> | undefined => {
+  const at = WS.bankAccounts.find((a) => a.statements && a.account === account);
+  return at ? { statement, account: at } : undefined;
+};
+
 /** Keeps `read` as the question of the kept PDF `file` (a new one, or the table corrected). Never in a filed period. */
 export function keepAsk(file: string, account: string, date: string, read: StatementRead): StatementAsk {
   return updateBooks((b) => {
@@ -117,15 +125,25 @@ export function keepAsk(file: string, account: string, date: string, read: State
     const was = b.statementAsks?.find((a) => a.file === file);
     const ask: StatementAsk = { file, account, date, since: was?.since ?? new Date().toISOString().slice(0, 10), read };
     b.statementAsks = [...(b.statementAsks ?? []).filter((a) => a.file !== file), ask];
+    // A corrected table takes back what the one before gave the payments (#522): the merge keeps a fact no table states now.
+    const now = tableAt(read.statement, account);
+    if (was && now) replaceReadFacts(b.transactions, tableAt(was.read.statement, was.account), now, periodLock(b).isClosed);
     return ask;
   });
 }
 
-/** A question's table kept beside its PDF as the PDF's read: a person's as hers, the model's (corrected or not) as its read. A blank table is no read. */
-export function keepAskTable(ask: StatementAsk): void {
+/**
+ * A question's table kept beside its PDF as the PDF's read: a person's as hers, the model's (corrected or not) as its read. A blank table is no read.
+ * Inside the books' change `books`: what the table kept beside the PDF before gave the payments is taken back, what this one gives goes on (#522).
+ */
+export function keepAskTable(ask: StatementAsk, books: Pick<Index, 'transactions' | 'config'>): void {
   if (isBlank(ask.read.statement)) return;
   const path = findFile(WS.paths, 'statements', ask.file);
-  if (path) writeBeside(path, ask.read.by === 'hand' ? { by: 'hand', statement: ask.read.statement } : { by: 'model', statement: ask.read.statement });
+  if (!path) return;
+  const before = readBeside(path);
+  const now = tableAt(ask.read.statement, ask.account);
+  if (now) replaceReadFacts(books.transactions, before && 'statement' in before ? tableAt(before.statement, ask.account) : undefined, now, periodLock(books).isClosed);
+  writeBeside(path, ask.read.by === 'hand' ? { by: 'hand', statement: ask.read.statement } : { by: 'model', statement: ask.read.statement });
 }
 
 /**
@@ -134,11 +152,10 @@ export function keepAskTable(ask: StatementAsk): void {
  * Also in a filed period: nothing booked changes, and a question there could never be answered otherwise.
  */
 export function closeAsk(file: string): void {
-  const was = askOf(file);
-  if (was) keepAskTable(was);
   updateBooks((b) => {
     const ask = b.statementAsks?.find((a) => a.file === file);
     if (!ask) return;
+    keepAskTable(ask, b);
     b.statementAsks = b.statementAsks!.filter((a) => a !== ask);
     if (!b.statementAsks.length) delete b.statementAsks;
   });

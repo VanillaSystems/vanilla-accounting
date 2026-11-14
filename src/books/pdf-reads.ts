@@ -213,6 +213,21 @@ export function takeBackReadFacts(transactions: BankTransaction[], r: Pick<KeptR
   }
 }
 
+/**
+ * A PDF's table replaced by another (a question's table corrected, kept beside its PDF), in place:
+ * what `was` gave the open payments is taken back (takeBackReadFacts), what `now` gives goes on.
+ */
+export function replaceReadFacts(transactions: BankTransaction[], was: Pick<KeptRead, 'statement' | 'account'> | undefined, now: Pick<KeptRead, 'statement' | 'account'>, isClosed: (date: string) => boolean): void {
+  if (was) takeBackReadFacts(transactions, was, isClosed);
+  const open = transactions.filter((t) => !isClosed(t.date));
+  const { references, originals } = factsOfRead(now, open);
+  for (const t of open) {
+    const reference = references.get(t.ref), original = originals.get(t.ref);
+    if (reference) t.reference = reference;
+    if (original) t.original = original;
+  }
+}
+
 // ─── The month-end balance ──────────────────────────────────────────────────
 
 /**
