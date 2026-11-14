@@ -166,7 +166,8 @@ export async function prepareShare(ws: Workspace, req: ShareRequest, from: Party
     const version = writeVersion(ws.paths, { reason: 'handover', to: req.to, at: index.version.at, checksum });
     takeQuestions(ws, req.to);
     mkdirSync(join(ws.paths.root, HANDOVER_DIR, 'sent'), { recursive: true });
-    const { git: _g, ...kept } = index;
+    // The chain token of a link stays out of the books (src/share/sharing.ts keeps it in the secret store).
+    const { git: _g, chain: _c, ...kept } = index;
     writeFileSync(sentFile(ws, version.n), JSON.stringify(kept) + '\n');
     // The records as handed over: a return's `before` is read from here, never from the return (review of #535).
     for (const f of plan.files.filter((x) => isBaseFile(x.path))) {

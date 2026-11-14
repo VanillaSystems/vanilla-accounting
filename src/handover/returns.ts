@@ -91,7 +91,10 @@ export function receiveReturn(ws: Workspace, bytes: Uint8Array, now = new Date()
     throw new PackageError(`Diese Rücksendung gehört zu ${p.index.firm.name}, nicht zu ${ws.company.name}.`, 'shareOtherCompany', { firm: p.index.firm.name });
   }
   checkedChanges(ws, p);
-  const id = createHash('sha256').update(bytes).digest('hex').slice(0, 12);
+  // The same return is the same id however its file was packed (a zip carries the time it was made): its index, its files' checksums, its changes.
+  const id = createHash('sha256').update(JSON.stringify(p.index)).update('\0')
+    .update([...p.files.keys()].sort().map((k) => `${k}\0${createHash('sha256').update(p.files.get(k)!).digest('hex')}`).join('\n')).update('\0')
+    .update(JSON.stringify(p.changes ?? [])).digest('hex').slice(0, 12);
   const dir = dirOf(ws, id);
   if (!existsSync(join(dir, 'package.vanilla'))) {
     mkdirSync(dir, { recursive: true });

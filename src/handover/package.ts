@@ -49,6 +49,12 @@ export interface PackageIndex {
   message?: string;
   /** «Frage zurück» of earlier returns, for the recipient. */
   questions?: Question[];
+  /**
+   * A link's chain token (src/share/sharing.ts): random, the same in every link the sharer sends to
+   * this person, known only to the two of them. A copy moves forward without a question only for a
+   * package carrying the token it was made with.
+   */
+  chain?: string;
   /** A return: how many records it changes. */
   changes?: number;
 }

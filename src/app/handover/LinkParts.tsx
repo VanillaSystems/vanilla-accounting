@@ -12,7 +12,7 @@ import { ICONS } from '../areas/icons.js';
 import { sizeText } from './store.js';
 import { mailto, refreshShares, runJob, running, type Job, type Registered, type SenderView, type ShareRecord, type Shared } from './link.js';
 import type { LinkPreview } from '../../share/sharing.js';
-import { askLines } from './ask-text.js';
+import { askLines, askReplace } from './ask-text.js';
 
 /** «15.11. 19:04»: a moment as a person reads it, in this computer's time. */
 export function atText(iso: string): string {
@@ -218,12 +218,19 @@ export function OpenLink({ onOpened }: { onOpened(o: { kind: 'full' | 'update'; 
     setError(''); setPreview(null);
     try { setPreview(await request<LinkPreview>('POST', '/api/share/preview', { link: text.trim() })); } catch (e) { setError(errorText(e)); }
   };
+  const [replace, setReplace] = useState<Record<string, string> | null>(null);
   const ask = preview ? askLines((k, v) => t(k, v as never), preview) : null;
-  const open = async () => {
+  // The copy question comes from the package itself (shareCopyOther), after the download, which the server keeps for the answer.
+  const open = async (moves = false) => {
     setError('');
     try {
-      onOpened(await runJob<Parameters<typeof onOpened>[0]>('/api/share/open', { link: text.trim(), trust: !!preview?.foreign, replace: !!ask?.replaces }, setJob as (j: Job<unknown>) => void));
-    } catch (e) { setError(errorText(e)); setJob(null); }
+      onOpened(await runJob<Parameters<typeof onOpened>[0]>('/api/share/open', { link: text.trim(), trust: !!preview?.foreign, ...(moves ? { replace: true } : {}) }, setJob as (j: Job<unknown>) => void));
+    } catch (e) {
+      setJob(null);
+      const body = (e as { body?: { code?: string; params?: Record<string, string> } }).body;
+      if (!moves && body?.code === 'shareCopyOther' && body.params) { setReplace(body.params); setPreview(null); return; }
+      setError(errorText(e));
+    }
   };
   return (
     <div className="shopen">
@@ -237,6 +244,16 @@ export function OpenLink({ onOpened }: { onOpened(o: { kind: 'full' | 'update'; 
           <div className="acts">
             <button type="button" className="btn ghost" onClick={() => setPreview(null)}>{t('common.cancel')}</button>
             <button type="button" className="btn" disabled={!!job} onClick={() => void open()} data-testid="share-open-yes">{t('share.ask.open')}</button>
+          </div>
+        </div>
+      ) : null}
+      {replace ? (
+        <div className="what shask" data-testid="share-open-replace">
+          <div className="wt"><b>{t('share.ask.title')}</b></div>
+          <div className="err">{askReplace((k, v) => t(k, v as never), replace)}</div>
+          <div className="acts">
+            <button type="button" className="btn ghost" onClick={() => setReplace(null)}>{t('common.cancel')}</button>
+            <button type="button" className="btn" disabled={!!job} onClick={() => { setReplace(null); void open(true); }} data-testid="share-open-replace-yes">{t('share.ask.replaceYes')}</button>
           </div>
         </div>
       ) : null}

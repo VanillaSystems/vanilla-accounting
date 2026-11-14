@@ -33,8 +33,8 @@ import { appVersion } from '../version.js';
 import { readState, writeState, type Bounds } from './state.js';
 import { setDurchsichtHome } from '../handover/durchsicht.js';
 import { APP_SCHEME, setShareSettingsFile } from '../share/service.js';
-import { openLink, previewLink } from '../share/sharing.js';
-import { askLines } from '../app/handover/ask-text.js';
+import { openLink, previewLink, type ShareFlowError } from '../share/sharing.js';
+import { askLines, askReplace } from '../app/handover/ask-text.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** tools/desktop/smoke.mjs: the fused release build has no inspector, so the page reaches the menu (preload.ts). */
@@ -242,22 +242,35 @@ async function start(): Promise<void> {
     // While macOS asks, the start screen names the folder and the books as desktop.json keeps them.
     asking: (root) => askingPath(root, server.recent().find((b) => b.root === root)?.name ?? basename(root), server.folderOf(root)),
   });
-  const askShare = async (link: string): Promise<boolean> => {
+  const ask = async (detail: string, yes: string): Promise<boolean> => {
     const t = textsIn(language);
-    const { what, warnings } = askLines((k, v) => t(k, v), await previewLink(link));
-    const options = { type: 'question' as const, message: t('desktop.shareAskTitle'), detail: [what, ...warnings].join('\n\n'), buttons: [t('share.ask.open'), t('common.cancel')], defaultId: 1, cancelId: 1 };
+    const options = { type: 'question' as const, message: t('desktop.shareAskTitle'), detail, buttons: [yes, t('common.cancel')], defaultId: 1, cancelId: 1 };
     const r = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
     return r.response === 0;
+  };
+  /** The link's service and claims first; `trust` only for the service the person saw named. */
+  const askShare = async (link: string): Promise<{ yes: boolean; trust: boolean }> => {
+    const t = textsIn(language);
+    const preview = await previewLink(link);
+    const { what, warnings } = askLines((k, v) => t(k, v), preview);
+    return { yes: await ask([what, ...warnings].join('\n\n'), t('share.ask.open')), trust: preview.foreign };
   };
   openShares = () => {
     for (let url = shareLinks.shift(); url; url = shareLinks.shift()) {
       const link = url;
       void askShare(link)
-        .then(async (yes) => {
+        .then(async ({ yes, trust }) => {
           if (!yes) { if (!win || win.isDestroyed()) lastBooks(); return; }
           win?.setProgressBar(2);
-          // Confirmed: another service and a copy moved to this link are what the person said yes to.
-          const opened = await openLink(link, { trust: true, replace: true });
+          let opened;
+          try { opened = await openLink(link, { trust }); } catch (e) {
+            // The package would move a copy here it does not continue: asked again with that copy's real facts (no second download).
+            const refusal = e as ShareFlowError;
+            if (refusal?.code !== 'shareCopyOther') throw e;
+            const t = textsIn(language);
+            if (!(await ask(askReplace((k, v) => t(k, v), refusal.params), t('share.ask.replaceYes')))) { if (!win || win.isDestroyed()) lastBooks(); return; }
+            opened = await openLink(link, { trust, replace: true });
+          }
           show(pathOf(await server.open(opened.root)));
         })
         .catch(async (e: unknown) => { await dialog.showMessageBox({ type: 'warning', message: textsIn(language)('desktop.shareOpenFailed'), detail: (e as Error).message }); })

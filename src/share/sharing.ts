@@ -18,7 +18,7 @@
  *
  * The `.vanilla` file stays the way for every step without the service (B3.7).
  */
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { secrets } from '../secrets/secrets.js';
 import { sendText, sendingAddress } from '../invoices/mail.js';
@@ -212,7 +212,23 @@ const keysOf = async (id: string): Promise<ShareKeys | undefined> => {
 
 export interface Shared { record: ShareRecord; link: string; invitation: Invitation; mailed: boolean; mailError?: string }
 
-/** One share of the same books at a time: two at once would both build on the same next version. */
+/**
+ * The chain of hand-overs to one person (review of #538): a random token, made with the first link
+ * to that person and carried, encrypted, in every link after it. Only the sharer's app and the
+ * recipient's copy know it: a link from anyone else, even one naming the same firm and sharer,
+ * cannot carry it, and moves no copy without the person's confirmation (openLink). Kept in the
+ * secret store, never in the books.
+ */
+async function chainFor(to: Party): Promise<string> {
+  const name = `share:chain:${(to.email ?? to.name).trim().toLowerCase()}` as const;
+  const kept = await secrets.get(name);
+  if (kept) return kept;
+  const made = encodeKey(generateKey());
+  await secrets.set(name, made);
+  return made;
+}
+
+/** One share, and one check of the shares, of the same books at a time: two shares at once would both build on the same next version, two checks would fetch a return twice. */
 const running = new Map<string, Promise<unknown>>();
 function oneAtATime<T>(ws: Pick<Workspace, 'paths'>, fn: () => Promise<T>): Promise<T> {
   const key = ws.paths.root;
@@ -241,9 +257,10 @@ async function shareNow(ws: Workspace, req: ShareRequest, from: Party, opts: { m
   const me = await client.sender(sender.token);
   if (!me.confirmed) throw new ShareFlowError(`${sender.email} ist noch nicht bestätigt.`, 'shareSenderUnconfirmed', { email: sender.email });
   // Whether the earlier links were opened decides between a full package and an update.
-  await refreshShares(ws).catch(() => undefined);
+  await refreshNow(ws).catch(() => undefined);
   const now = opts.now ?? new Date();
   const prepared = await prepareShare(ws, { ...req, notHeld: [...(req.notHeld ?? []), ...unopenedVersions(ws)] }, from, now);
+  prepared.index.chain = await chainFor(req.to);
   const key = generateKey();
   const message = prepared.index.message;
   const meta = await encryptMeta(key, { v: 1, senderName: from.name, direction: 'send', company: ws.company.name, ...(message ? { note: message.slice(0, 1000) } : {}), asOf: now.toISOString().slice(0, 10) });
@@ -318,7 +335,11 @@ export interface Arrived { share: string; id: string; from: Party; changes: numb
  * sharer's own link and kept for review, like a `.vanilla` file opened by hand. Nothing is taken over.
  * Each share's facts are written by id as they arrive, never the list read before the waits.
  */
-export async function refreshShares(ws: Workspace, now = new Date(), client: (service: string) => ShareClient = shareClient): Promise<{ shares: ShareRecord[]; arrived: Arrived[] }> {
+export function refreshShares(ws: Workspace, now = new Date(), client: (service: string) => ShareClient = shareClient): Promise<{ shares: ShareRecord[]; arrived: Arrived[] }> {
+  return oneAtATime(ws, () => refreshNow(ws, now, client));
+}
+
+async function refreshNow(ws: Workspace, now = new Date(), client: (service: string) => ShareClient = shareClient): Promise<{ shares: ShareRecord[]; arrived: Arrived[] }> {
   const arrived: Arrived[] = [];
   for (const r of readShares(ws)) {
     if (r.revokedAt || r.state === 'gone' || now.getTime() - Date.parse(r.at) > ASK_DAYS * 86400_000) continue;
@@ -366,7 +387,7 @@ export async function refreshShares(ws: Workspace, now = new Date(), client: (se
 // ─── the recipient's copy ───────────────────────────────────────────────────
 
 /** What a copy keeps of the link it came by: where its return goes. */
-interface LinkFacts { service: string; id: string; key: string; returnToken?: string; at: string }
+interface LinkFacts { service: string; id: string; key: string; returnToken?: string; /** The chain token of the hand-overs this copy belongs to (chainFor). */ chain?: string; at: string }
 const linkFile = (root: string) => join(root, dirname(DURCHSICHT_MARKER), 'link.json');
 
 export function linkOfCopy(root: string): LinkFacts | undefined {
@@ -378,8 +399,6 @@ export function linkOfCopy(root: string): LinkFacts | undefined {
 /** Whether a return from this copy can go back through the service. */
 export const canReturnByLink = (root: string): boolean => !!linkOfCopy(root)?.returnToken;
 
-const samePerson = (a: Party, b: Party) => (a.email && b.email ? a.email.toLowerCase() === b.email.toLowerCase() : a.name.trim() === b.name.trim());
-
 /** What a link holds, read without opening it (no opening is spent): what the person confirms. */
 export interface LinkPreview {
   service: string;
@@ -388,44 +407,47 @@ export interface LinkPreview {
   foreign: boolean;
   state: string;
   expiresAt?: string;
-  /** From the share's encrypted envelope: who shares which books (the sharer's own words, not proven). */
+  /** From the share's encrypted envelope: who shares which books, as the link itself claims (whoever made it wrote it). */
   senderName?: string;
   company?: string;
   note?: string;
-  /** A copy here of books by that name, which the link would move forward. */
-  copy?: { firm: string; sharer: string; service?: string };
 }
 
-export async function previewLink(text: string, opts: { at?: string; client?: (service: string) => ShareClient } = {}): Promise<LinkPreview> {
+/**
+ * What a link holds, without spending an opening: its service and its envelope's claims. Whether it
+ * would move a copy here is not guessed from those claims; openLink decides it from the package.
+ */
+export async function previewLink(text: string, opts: { client?: (service: string) => ShareClient } = {}): Promise<LinkPreview> {
   const link = parseLink(text);
   if (!link) throw new ShareFlowError('Das ist kein Link einer geteilten Buchhaltung.', 'shareLinkInvalid');
   const info = await (opts.client ?? shareClient)(link.service).info(link.id);
   let meta: Awaited<ReturnType<typeof decryptMeta>> | undefined;
   try { meta = info.meta ? await decryptMeta(decodeKey(link.key), info.meta) : undefined; } catch { meta = undefined; }
-  const at = opts.at ?? durchsichtHome();
-  let copy: LinkPreview['copy'];
-  if (meta?.company && existsSync(at)) {
-    for (const d of readdirSync(at)) {
-      const m = markerOf(join(at, d));
-      if (m && m.firm.name === meta.company) { const f = linkOfCopy(join(at, d)); copy = { firm: m.firm.name, sharer: m.sharer.name, ...(f ? { service: f.service } : {}) }; break; }
-    }
-  }
   return {
     service: link.service, host: new URL(link.service).host, foreign: link.foreign, state: info.state,
     ...(info.expiresAt ? { expiresAt: info.expiresAt } : {}),
     ...(meta ? { senderName: meta.senderName, ...(meta.company ? { company: meta.company } : {}), ...(meta.note ? { note: meta.note } : {}) } : {}),
-    ...(copy ? { copy } : {}),
   };
 }
+
+/**
+ * A link's download, kept a while after a refusal that waits for the person (shareCopyOther): her
+ * «Öffnen» opens it from here, so the question spends no second opening of the link.
+ */
+const downloaded = new Map<string, { at: number; got: Awaited<ReturnType<typeof receivePackage>> }>();
+const KEEP_MS = 15 * 60_000;
 
 /**
  * Opens a link (pasted, or handed over by the system's `vanilla-accounting://`): one opening at the
  * service, every file decrypted and checked, then the package opened as a Durchsicht copy through
  * the hand-over code, exactly as the `.vanilla` file would be.
  *
- * Refused unless the person confirmed it: a link naming another service than this app's (`trust`),
- * and a link that would move an existing copy to another sharer or another service (`replace`).
- * Then nothing is written: neither the copy nor its link.
+ * Refused unless the person confirmed it (and then nothing is written, neither the copy nor its link):
+ * - a link naming another service than this app's (`trust`);
+ * - a link whose package would move an existing copy (the copy of its firm, by the package's UID)
+ *   without carrying that copy's chain token (`replace`). The package's names and firm are whatever
+ *   its maker wrote; only the chain token, which the copy got with its first link and only that
+ *   sharer's app knows, shows that it continues the same hand-overs.
  */
 export async function openLink(text: string, opts: { at?: string; progress?: Progress; now?: Date; client?: (service: string) => ShareClient; trust?: boolean; replace?: boolean } = {}): Promise<Opened> {
   const link = parseLink(text);
@@ -433,16 +455,26 @@ export async function openLink(text: string, opts: { at?: string; progress?: Pro
   const host = new URL(link.service).host;
   if (link.foreign && !opts.trust) throw new ShareFlowError(`Der Link führt zu ${host}, nicht zum Teil-Dienst dieser App.`, 'shareForeignService', { host });
   const at = opts.at ?? durchsichtHome();
-  const c = (opts.client ?? shareClient)(link.service);
-  const { contents, index } = await receivePackage({ client: c, id: link.id, key: decodeKey(link.key), progress: opts.progress });
+  const stash = `${link.service}/${link.id}#${link.key}`;
+  for (const [k, v] of downloaded) if (Date.now() - v.at > KEEP_MS) downloaded.delete(k);
+  const got = downloaded.get(stash)?.got ?? await receivePackage({ client: (opts.client ?? shareClient)(link.service), id: link.id, key: decodeKey(link.key), progress: opts.progress });
+  downloaded.delete(stash);
+  const { contents, index } = got;
   const root = copyRootOf(contents.index, at);
   const had = markerOf(root);
-  const facts = linkOfCopy(root);
-  if (had && !opts.replace && (!samePerson(had.sharer, contents.index.from) || (facts && facts.service !== link.service))) {
-    throw new ShareFlowError(`Hier liegt schon eine Kopie von ${had.firm.name} von ${had.sharer.name}; dieser Link ist von ${contents.index.from.name} über ${host}.`, 'shareCopyOther', { firm: had.firm.name, was: had.sharer.name, now: contents.index.from.name, host });
+  const chain = linkOfCopy(root)?.chain;
+  if (had && !opts.replace && (!chain || contents.index.chain !== chain)) {
+    downloaded.set(stash, { at: Date.now(), got });
+    const claimed = contents.index.from.name.slice(0, 120);
+    throw new ShareFlowError(`Hier liegt schon eine Kopie von ${had.firm.name} (Version ${had.version.n}, von ${had.sharer.name}). Dieser Link gehört nicht zu ihren Übergaben; laut Link ist er von ${claimed} über ${host}.`, 'shareCopyOther', {
+      firm: had.firm.name, version: String(had.version.n), was: had.sharer.name, now: claimed, claimed: contents.index.firm.name.slice(0, 120), host,
+    });
   }
   const opened = openPackage(contents, opts.now ?? new Date(), at);
-  const kept: LinkFacts = { service: link.service, id: link.id, key: link.key, ...(index.returnToken ? { returnToken: index.returnToken } : {}), at: (opts.now ?? new Date()).toISOString() };
+  const kept: LinkFacts = {
+    service: link.service, id: link.id, key: link.key, ...(index.returnToken ? { returnToken: index.returnToken } : {}),
+    ...(contents.index.chain ? { chain: contents.index.chain } : {}), at: (opts.now ?? new Date()).toISOString(),
+  };
   mkdirSync(dirname(linkFile(opened.root)), { recursive: true });
   writeFileSync(linkFile(opened.root), JSON.stringify(kept, null, 2) + '\n', { mode: 0o600 });
   chmodSync(linkFile(opened.root), 0o600);

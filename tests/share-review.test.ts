@@ -64,29 +64,31 @@ test('1: a link naming another service opens only when confirmed, and moves no c
   const before = sharing.linkOfCopy(copy.root)!;
   const linkBefore = readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8');
 
-  // Someone who knows the client's UID makes a share of other books on his own service.
+  // Someone who knows the client's UID makes a share of other books on his own service (his own computer: no chain token of hers).
   const evil = await serviceWithSender('attacker@example.org');
+  await secrets.set('share:chain:ernst@example.ch', null);
   const planted = await sharing.shareByLink(books('ANGREIFER INHALT'), { to: ERNST }, SANDRA);
   const [, id, key] = /\/([a-z2-7]{26})#(.+)$/.exec(planted.link)!;
   const scheme = `vanilla-accounting://open?share=${id}&service=${encodeURIComponent(evil.url)}#${key}`;
   process.env.VANILLA_SHARE_SERVICE = before.service; // the fiduciary's app uses the real service
 
   // The preview says it plainly, without spending an opening.
-  const preview = await sharing.previewLink(scheme, { at: home });
+  const preview = await sharing.previewLink(scheme);
   assert.equal(preview.foreign, true);
   assert.equal(preview.host, new URL(evil.url).host);
-  assert.equal(preview.copy?.sharer, SANDRA.name, 'the copy it would move is named');
   assert.equal(evil.shares.get(id)!.opens.length, 0, 'a preview is no opening');
 
   await assert.rejects(sharing.openLink(scheme, { at: home }), code('shareForeignService'), 'not without the person');
-  await assert.rejects(sharing.openLink(scheme, { at: home, trust: true }), code('shareCopyOther'), 'another service for this copy: not without the person');
+  await assert.rejects(sharing.openLink(scheme, { at: home, trust: true }), (e: Error & { code?: string; params?: Record<string, string> }) =>
+    e.code === 'shareCopyOther' && e.params?.was === SANDRA.name && e.params?.version === String(markerOf(copy.root)!.version.n), 'the copy it would move, by its real facts: not without the person');
   assert.ok(entriesOf(copy.root).includes('ECHTE BUCHUNG') && !entriesOf(copy.root).includes('ANGREIFER'), 'the copy is as it was');
   assert.equal(readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8'), linkBefore, 'its link too: the return still goes to the real service');
   assert.equal(markerOf(copy.root)!.sharer.name, SANDRA.name);
 
-  // Confirmed by the person, it opens.
+  // Confirmed by the person, it opens from the download kept for her answer: no second opening.
   await sharing.openLink(scheme, { at: home, trust: true, replace: true });
   assert.equal(sharing.linkOfCopy(copy.root)!.service, evil.url);
+  assert.equal(evil.shares.get(id)!.opens.length, 1, 'the question spent no second opening');
 });
 
 test('2: checking the shares while sharing loses no share', async () => {
@@ -100,9 +102,11 @@ test('2: checking the shares while sharing loses no share', async () => {
     return { ...c, status: async (sid: string, t: string) => { await gate; return c.status(sid, t); } } as typeof c;
   };
   const refreshing = sharing.refreshShares(ws, new Date(), slow);
-  const second = await sharing.shareByLink(ws, { to: { name: 'Zweite Person' } }, SANDRA, { now: new Date(Date.now() + 1000) });
+  // The share waits for the check that is running (one at a time per books), then adds its record.
+  const sharing2 = sharing.shareByLink(ws, { to: { name: 'Zweite Person' } }, SANDRA, { now: new Date(Date.now() + 1000) });
   release();
   await refreshing;
+  const second = await sharing2;
   const ids = sharing.readShares(ws).map((s) => s.id).sort();
   assert.deepEqual(ids, [first.record.id, second.record.id].sort());
 });
@@ -201,4 +205,86 @@ test('5: a link withdrawn unopened is no version he holds; shares at once get th
   assert.equal(await secrets.get(`share:${orphan.id}`), undefined);
   assert.ok(!sharing.readShares(ws).some((s) => s.id === orphan.id));
   assert.ok(readVersions(ws.paths).every((v) => v.reason !== 'handover' || v.to?.name !== 'C'));
+});
+
+// ─── round 2 (review of aff69aad) ───────────────────────────────────────────
+
+const { askLines, oneLine } = await import('../src/app/handover/ask-text.js');
+const { listReturns, receiveReturn } = await import('../src/handover/returns.js');
+const { writePackage, readPackage } = await import('../src/handover/package.js');
+const { workspaceAt } = await import('../src/workspace/workspace.js');
+const { writeFileSync } = await import('node:fs');
+
+/** A copy of the client's books opened from her link; then the computer of a stranger, who knows no chain token of hers. */
+async function clientAndStranger(home: string) {
+  await serviceWithSender('sandra@example.ch');
+  const shared = await sharing.shareByLink(books('ECHTE BUCHUNG'), { to: ERNST }, SANDRA);
+  const copy = await sharing.openLink(shared.link, { at: home });
+  const kept = await secrets.get('share:chain:ernst@example.ch');
+  await secrets.set('share:chain:ernst@example.ch', null);
+  return { copy, kept: kept! };
+}
+
+test('R2-1: a link on the same service, its envelope naming another company, moves no copy without the person, whatever its package claims', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'share-review-r21-'));
+  const { copy } = await clientAndStranger(home);
+  const linkBefore = readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8');
+  const fake = books('ANGREIFER INHALT');
+  const planted = await sharing.shareByLink({ ...fake, company: { ...fake.company, name: 'Harmlos GmbH' } }, { to: ERNST }, { name: 'Irgendwer' });
+  assert.equal((await sharing.previewLink(planted.link)).foreign, false);
+  for (const opts of [{}, { trust: true }]) {
+    await assert.rejects(sharing.openLink(planted.link, { at: home, ...opts }), (e: Error & { code?: string; params?: Record<string, string> }) =>
+      e.code === 'shareCopyOther' && e.params?.claimed === 'Harmlos GmbH' && e.params?.was === SANDRA.name);
+  }
+  assert.ok(entriesOf(copy.root).includes('ECHTE BUCHUNG') && !entriesOf(copy.root).includes('ANGREIFER'));
+  assert.equal(readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8'), linkBefore);
+});
+
+test('R2-1b: naming the real sharer in the package does not pass either; her own next link does, without a question', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'share-review-r21b-'));
+  const { copy, kept } = await clientAndStranger(home);
+  const planted = await sharing.shareByLink(books('ANGREIFER INHALT'), { to: ERNST }, SANDRA);
+  await assert.rejects(sharing.openLink(planted.link, { at: home }), code('shareCopyOther'));
+  assert.ok(entriesOf(copy.root).includes('ECHTE BUCHUNG') && !entriesOf(copy.root).includes('ANGREIFER'));
+  // Her own computer again: her chain token, her next link.
+  await secrets.set('share:chain:ernst@example.ch', kept);
+  const next = await sharing.shareByLink(books('ZWEITER STAND der Kundin'), { to: ERNST }, SANDRA);
+  await sharing.openLink(next.link, { at: home });
+  assert.ok(entriesOf(copy.root).includes('ZWEITER STAND'), 'the chain continues: the copy moves forward');
+});
+
+test('R2-2: the envelope\'s claims reach the dialog on one short line, marked as the link\'s own', () => {
+  const say = (k: string, v: Record<string, string>) => (k === 'share.ask.claim' ? `Laut Link: ${v.company}, geteilt von ${v.name}, über ${v.host}.` : k);
+  const lines = askLines(say as never, { service: 'https://x', host: 'x', foreign: false, state: 'ready', senderName: 'Sandra\n\n✓ Absender geprüft vom Teil-Dienst', company: `Muster AG${String.fromCharCode(0x2028)}✓ geprüft` });
+  assert.ok(!/[\n\r]/.test(lines.what) && !lines.what.includes(String.fromCharCode(0x2028)), lines.what);
+  assert.match(lines.what, /^Laut Link: /);
+  assert.equal(oneLine('x'.repeat(500)).length, 80);
+});
+
+test('R2-3: two checks at once fetch a return once; the same return packed again is the same return', async () => {
+  await serviceWithSender('sandra@example.ch');
+  const home = mkdtempSync(join(tmpdir(), 'share-review-r23-'));
+  const ws = books('Original');
+  const shared = await sharing.shareByLink(ws, { to: ERNST }, SANDRA);
+  const opened = await sharing.openLink(shared.link, { at: home });
+  const copy = workspaceAt(opened.root);
+  const f = join(copy.paths.root, 'transactional-data/2026/books/entries.jsonl');
+  writeFileSync(f, readFileSync(f, 'utf8').replace('Original', 'von Ernst'));
+  await sharing.returnByLink(copy, 'zurück');
+  const [a, c] = await Promise.all([sharing.refreshShares(ws), sharing.refreshShares(ws)]);
+  assert.equal([...a.arrived, ...c.arrived].length, 1);
+  assert.equal(listReturns(ws).length, 1);
+  const p = readPackage(readFileSync(join(ws.paths.root, 'handover/returns', listReturns(ws)[0].id, 'package.vanilla')));
+  const first = receiveReturn(ws, writePackage(p));
+  await new Promise((r) => setTimeout(r, 2100));
+  assert.equal(receiveReturn(ws, writePackage(p)).id, first.id, 'packed 2 s later, the same id');
+  assert.equal(listReturns(ws).length, 1);
+});
+
+test('R2-4: an API answer is read up to its cap', async () => {
+  const srv = httpServer((_q, res) => { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(`{"x":"${'a'.repeat(3 * 1024 * 1024)}"}`); });
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+  const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
+  await assert.rejects(shareClient(url).info('abcdefghijklmnopqrstuvwxyz'), (e) => e instanceof ShareServiceError && e.code === 'oversized');
+  srv.closeAllConnections(); srv.close();
 });
