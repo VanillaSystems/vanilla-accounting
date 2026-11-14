@@ -30,11 +30,15 @@ noVat: [nicht der schweizerischen MWST unterstellt, nicht der MWST unterstellt, 
 # invoice, a proforma before it, an instalment of it. A mailbox never sets it aside as a duplicate of
 # a receipt in the books (src/platform/sources/aside.ts contentTwin); a reminder's words (supporting
 # below) count too.
-notDuplicate: [Gutschrift, Gutschriftsanzeige, Stornorechnung, Storno, Credit note, Credit memo, Note de crédit, Avoir, Nota di credito, Proforma, Pro forma, Pro-forma, Proformarechnung, Rate, Ratenzahlung, Teilrechnung, Teilzahlung, Akontorechnung, Anzahlung, Instalment, Installment, Acompte, Rata, Acconto]
+notDuplicate: [Refund, Refunded, Refund receipt, Rückerstattung, Erstattung, Rückzahlung, Rückvergütung, Korrektur, Korrekturrechnung, Remboursement, Rimborso, Restituzione, Nota di accredito, Gutschrift, Gutschriftsanzeige, Stornorechnung, Storno, Credit note, Credit memo, Note de crédit, Avoir, Nota di credito, Proforma, Pro forma, Pro-forma, Proformarechnung, Rate, Ratenzahlung, Teilrechnung, Teilzahlung, Akontorechnung, Anzahlung, Instalment, Installment, Acompte, Rata, Acconto]
+
+# Short forms by which a file name says it is a receipt («RE_2026-104.pdf», «inv_7781.pdf»): a
+# file-name shape with one of these as a part of its own is never offered to be kept aside, however short.
+receiptFileNames: [re, rg, rgn, rech, rechn, inv, invc, fact, fakt, fatt, gs, qt, quit]
 
 # Words of a file name that say nothing of what a file is: a camera's, a scanner's, a mail program's
 # default. A file-name shape made of these alone (and numbers) is never offered to be kept aside.
-genericFileNames: [img, image, photo, foto, pic, dsc, dscn, pxl, scan, scanned, scansione, numérisation, document, dokument, documento, doc, file, datei, fichier, attachment, anhang, allegato, pièce jointe, untitled, unbenannt, sans titre, senza titolo, pdf, print, druck, copy, kopie, copie, page, seite, export]
+genericFileNames: [screenshot, screen, shot, bildschirmfoto, bildschirmaufnahme, capture, whatsapp, img, image, photo, foto, pic, dsc, dscn, pxl, scan, scanned, scansione, numérisation, document, dokument, documento, doc, file, datei, fichier, attachment, anhang, allegato, pièce jointe, untitled, unbenannt, sans titre, senza titolo, pdf, print, druck, copy, kopie, copie, page, seite, export]
 
 supporting:
   order-confirmation: [Auftragsbestätigung, Bestellbestätigung, Bestelleingang, Order confirmation, Confirmation de commande, Confirmation d'ordre, Conferma d'ordine, Conferma dell'ordine]

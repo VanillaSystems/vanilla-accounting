@@ -1261,6 +1261,7 @@ export default {
     'receipts.asideDuplicateOf': 'doppione di {file}',
     'receipts.asideDeleteOn': 'eliminato il {date}',
     'receipts.asideSwept': { one: '{n} file eliminato dopo 30 giorni il {date}', other: '{n} file eliminati dopo 30 giorni il {date}' },
+    'receipts.asideGroupStillOn': 'Il gruppo «{shape}» da {from} non si è potuto disattivare e scarta ancora file: riprovare sotto Azienda › Fonti.',
     'receipts.asideCount': { one: '{n} file', other: '{n} file' },
     'receipts.asideKeepAll': { one: 'Tieni comunque', other: 'Tieni comunque tutti i {n}' },
     'receipts.asideTakenAll': { one: '{n} file è di nuovo in entrata e viene letto', other: '{n} file sono di nuovo in entrata e vengono letti' },

@@ -23,11 +23,13 @@ Two markers flag an entry you must read before you update:
   «0 davon in den Büchern». Kept, the next files of the group are set aside at delivery, never one
   whose own words name it a receipt; «Doch behalten» on one of them switches the group off and keeps
   its other files. A supplier that sends invoices and brochures from one address keeps its invoices:
-  their names differ. A name without a telling word («IMG_…», «Scan…», a bare number) or of a
-  receipt's words («Rechnung…») is never offered.
+  their names differ. A name without a telling word («IMG_…», «Scan…», «Screenshot…», a bare
+  number) or of a receipt's words («Rechnung…», «RE_…», «inv_…») is never offered. If a group cannot
+  be switched off, the toast says it is still on.
 - A re-sent invoice with other bytes (same sender, own invoice number, signed amount, both dated
   within a week) is set aside as the duplicate of the receipt in the books, named in its reason,
-  instead of being filed twice. A credit note, a proforma, an instalment or a reminder never is;
+  instead of being filed twice. A credit note, a refund, a correction, a proforma, an instalment
+  or a reminder never is;
   where a fact is missing, nothing is set aside.
 - Belege › «Aussortiert» (was «Quarantäne») groups what was set aside by why (a group kept aside,
   duplicates, newsletters, terms …), with «Doch behalten» per file and per group (all or none). What

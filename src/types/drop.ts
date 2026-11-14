@@ -295,13 +295,16 @@ export type DropAction =
  * `why: 'group'` with its `shape`), it repeats a receipt of the books with other bytes (`duplicate`,
  * `of` that receipt's id and `ofFile` its file name), a person set it aside, or it is no PDF inside.
  * `source`: the mailbox source that set it aside (absent on a drop, on files set aside before
- * sources named themselves, and once a person kept it); `at`: when, as recorded.
+ * sources named themselves); `at`: when, as recorded; `kept`: a person keeps it, never deleted by itself.
  */
 export type QuarantineReason =
-  | { kind: 'not-receipt'; why?: OtherWhy | 'group'; shape?: string; from?: string; source?: string; at?: string }
-  | { kind: 'duplicate'; of: string; ofFile?: string; from?: string; source?: string; at?: string }
+  | { kind: 'not-receipt'; why?: OtherWhy | 'group'; shape?: string; from?: string; source?: string; at?: string; kept?: true }
+  | { kind: 'duplicate'; of: string; ofFile?: string; from?: string; source?: string; at?: string; kept?: true }
   | { kind: 'held' }
   | { kind: 'unreadable' };
+
+/** «Doch behalten» took the files back, but these groups could not be switched off: they still set their next files aside (code `groupStillOn`). */
+export interface GroupStillOn { code: 'groupStillOn'; groups: Array<{ source: string; from: string; shape: string }> }
 
 /**
  * A file in data/quarantine/ as Belege lists it under «Aussortiert» (src/intake/quarantine.ts).

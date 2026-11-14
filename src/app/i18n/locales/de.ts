@@ -1258,6 +1258,7 @@ export const messages = {
   'receipts.asideDuplicateOf': 'Doppel von {file}',
   'receipts.asideDeleteOn': 'wird am {date} gelöscht',
   'receipts.asideSwept': { one: '{n} Datei nach 30 Tagen gelöscht am {date}', other: '{n} Dateien nach 30 Tagen gelöscht am {date}' },
+  'receipts.asideGroupStillOn': 'Die Gruppe «{shape}» von {from} liess sich nicht ausschalten und legt weiter beiseite: unter Firma › Quellen noch einmal versuchen.',
   'receipts.asideCount': { one: '{n} Datei', other: '{n} Dateien' },
   'receipts.asideKeepAll': { one: 'Doch behalten', other: 'Alle {n} doch behalten' },
   'receipts.asideTakenAll': { one: '{n} Datei liegt wieder im Eingang und wird gelesen', other: '{n} Dateien liegen wieder im Eingang und werden gelesen' },

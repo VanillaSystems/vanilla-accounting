@@ -9,7 +9,7 @@
 import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -82,7 +82,14 @@ test('a shape without a telling word, or of a receipt\'s words, is never a group
   for (const s of ['#.pdf', 'img_#.pdf', 'img.pdf', 'scan.pdf', 'scan_#.pdf', 'document_#.pdf', 'rechnung_#.pdf', 'invoice_#.pdf', 'receipt_#.pdf', 'beleg.pdf', 'quittung_#.pdf', 'facture_#.pdf', 'fattura.pdf', 'ricevuta_#.pdf', 'rechnungskopie.pdf']) {
     assert.equal(offerableShape(s, W), false, s);
   }
-  for (const s of ['report.pdf', 'katalog_#.pdf', 'newsletter_#.pdf', 'prospekt_gläser.pdf']) assert.equal(offerableShape(s, W), true, s);
+  for (const s of ['re_#.pdf', 'rg_#.pdf', 'inv_#.pdf', 'rech_#.pdf', 'fact_#.pdf', 'gs_#.pdf', 'screenshot_#.png', 'screen_shot_#.png', 'bildschirmfoto_#.png', 'whatsapp_image_#.jpeg']) {
+    assert.equal(offerableShape(s, W), false, `a receipt's short form or a screen's default: ${s}`);
+  }
+  assert.equal(nameShape('RE_2026-104.pdf'), 're_#.pdf');
+  assert.equal(nameShape('Screenshot 2026-10-01 at 08.15.22.png'), 'screenshot_#_at_#.png');
+  assert.equal(offerableShape(nameShape('Screenshot 2026-10-01 at 08.15.22.png'), W), false, 'a two-letter word («at», «um») tells nothing');
+  assert.equal(offerableShape(nameShape('Bildschirmfoto 2026-10-01 um 08.15.22.png'), W), false);
+  for (const s of ['report.pdf', 'katalog_#.pdf', 'newsletter_#.pdf', 'prospekt_gläser.pdf', 'preview.pdf', 'invest_news.pdf']) assert.equal(offerableShape(s, W), true, s);
   const lines = [line('IMG_1.pdf', 'me@phone.example', { aside: true }), line('IMG_22.pdf', 'me@phone.example', { aside: true }), line('IMG_333.pdf', 'me@phone.example', { aside: true })];
   assert.deepEqual(offers(lines), [], 'a phone\'s photos: a receipt photo has the same name');
   const invoices = [line('Rechnung 101.pdf', 'billing@x.example', { aside: true }), line('Rechnung 202.pdf', 'billing@x.example', { aside: true })];
@@ -197,6 +204,11 @@ test('never a duplicate: a credit note, an undated instalment, next year\'s invo
   const proforma = [{ ...BOOKS[0], receipt: { ...BOOKS[0].receipt, extractedText: INVOICE.replace('Rechnung Nr.', 'Proformarechnung\nRechnung Nr.') } }];
   assert.equal(twin(`${INVOICE}\nDefinitiv`, proforma), undefined, 'the invoice after its proforma');
   assert.equal(twin(`Vendor AG\nZweite Mahnung\n${INVOICE.split('\n').slice(1).join('\n')}`), undefined, 'a reminder');
+  const refund = (word: string) => `Vendor AG\n${word}\nInvoice number: R-2026-0815\nDatum: 01.10.2026\nTotal CHF 54.00`;
+  assert.ok(twin(refund('Kopie')), 'the same lines without a refund\'s word are a copy: the words decide');
+  for (const word of ['Refund', 'Rückerstattung', 'Erstattung', 'Rückzahlung', 'Korrektur', 'Korrekturrechnung', 'Remboursement', 'Rimborso', 'Nota di accredito']) {
+    assert.equal(twin(refund(word)), undefined, `a refund, written positive: ${word}`);
+  }
   const bare = (t: string) => t.replace('Rechnung Nr. R-2026-0815', 'Rechnung R-2026-0815');
   assert.equal(twin(bare(INVOICE), [{ ...BOOKS[0], receipt: { ...BOOKS[0].receipt, extractedText: bare(INVOICE) } }]), undefined, 'the bare «Rechnung» also names the invoice a document refers to');
 });
@@ -206,6 +218,7 @@ test('the reason beside a file reads back; deletion counts from the recorded tim
     { kind: 'not-receipt', why: 'newsletter', from: 'news@vendor.example', source: 'office', at: '2026-10-01T08:00:00.000Z' },
     { kind: 'not-receipt', why: 'group', shape: 'report.pdf', from: 'a@tool.example', source: 'office', at: '2026-10-01T08:00:00.000Z' },
     { kind: 'duplicate', of: 'abcdef0123456789', ofFile: 'Rechnung 7 Kopie.pdf', from: 'billing@vendor.example', source: 'office', at: '2026-10-01T08:00:00.000Z' },
+    { kind: 'not-receipt', why: 'group', shape: 'report.pdf', from: 'a@tool.example', source: 'office', at: '2026-10-01T08:00:00.000Z', kept: true },
     { kind: 'not-receipt', why: 'tracking' },
     { kind: 'held' },
     { kind: 'unreadable' },
@@ -394,8 +407,22 @@ test('over HTTP: Quellen offers the group, «Immer beiseite» keeps it; reading 
     assert.equal(quarantined(data).length, 3, 'the inbox could not take them: nothing left the quarantine');
     rmSync(inboxDir, { force: true });
 
+    // The group cannot be switched off (its folder is not writable): the file is taken all the same, and the answer says the group is still on.
+    const extra = putInQuarantine(data, 'report.pdf', Buffer.from('%PDF-1.4\n% report 4\n%%EOF\n'), group);
+    chmodSync(join(api.root, 'sources', 'office'), 0o555);
+    let stuck;
+    try {
+      stuck = await api.send('POST', `/api/quarantine/${encodeURIComponent(extra)}/take`);
+    } finally {
+      chmodSync(join(api.root, 'sources', 'office'), 0o755);
+    }
+    assert.equal(stuck.status, 200, String(stuck.json.error));
+    assert.deepEqual(stuck.json.groupStillOn, { code: 'groupStillOn', groups: [{ source: 'office', from: 'reports@tool.example', shape: 'report.pdf' }] });
+    assert.doesNotMatch(readFileSync(yamlFile, 'utf8'), /off: true/, 'still on, as the answer says');
+
     const took = await api.send('POST', `/api/quarantine/${encodeURIComponent(files[0])}/take`);
     assert.equal(took.status, 200, String(took.json.error));
+    assert.equal(took.json.groupStillOn, undefined);
     assert.match(readFileSync(yamlFile, 'utf8'), /off: true/, 'the person said it is a receipt: the group is off');
     const rest = quarantined(data);
     assert.deepEqual(rest.map((q) => [q.file, q.deleteOn]).sort(), [[files[1], undefined], [files[2], undefined]], 'its other files are kept: never deleted by themselves');

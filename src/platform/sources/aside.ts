@@ -83,10 +83,12 @@ export function offerableShape(shape: string, words: DocumentsData): boolean {
   const dot = shape.lastIndexOf('.');
   const parts = (dot > 0 ? shape.slice(0, dot) : shape).split('_').map(letters).filter((p) => p.length >= 2);
   const generic = new Set((words.genericFileNames ?? []).map((w) => letters(w.toLowerCase())));
-  const telling = parts.filter((p) => !generic.has(p) && !generic.has(p.replace(/s$/, '')));
+  // A telling word has three letters or more: «at», «um» of a screenshot's «… at 08.15.22» say nothing.
+  const telling = parts.filter((p) => p.length >= 3 && !generic.has(p) && !generic.has(p.replace(/s$/, '')));
   if (!telling.length) return false;
   const receiptWords = wordsOf([...words.receipt.title, ...words.receipt.number]);
-  return !parts.some((p) => receiptWords.some((w) => p.includes(w)));
+  const short = new Set((words.receiptFileNames ?? []).map((w) => letters(w.toLowerCase())));
+  return !parts.some((p) => short.has(p) || receiptWords.some((w) => p.includes(w)));
 }
 
 /** The line's shape: logged since the ledger kept it, else read off the name the file got. */

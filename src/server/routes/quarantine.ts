@@ -30,7 +30,7 @@ import { APP_ROOT } from '../../workspace/workspace.js';
 import { changeKeepingOn, sources } from '../../platform/sources/index.js';
 import { switchAsideOff } from '../../platform/sources/aside.js';
 import type { Arrival } from '../../workflows/model.js';
-import type { QuarantineReason } from '../../types/drop.js';
+import type { GroupStillOn, QuarantineReason } from '../../types/drop.js';
 
 export const router = Router();
 
@@ -62,17 +62,25 @@ router.post('/api/quarantine/take', async (req, res) => {
   const files = namesOf(req.body, 'files');
   const missing = files.find((f) => !quarantinePath(WS.paths.data, f));
   if (missing) throw gone(missing);
-  const taken = takeBack(files);
+  const { taken, stillOn } = takeBack(files);
   const run = await handToRun(taken);
-  res.json({ ok: true, files: taken.map((t) => t.file), ...(run ? { run } : {}) });
+  res.json({ ok: true, files: taken.map((t) => t.file), ...(run ? { run } : {}), ...stillOnOf(stillOn) } satisfies TakeResult);
 });
 
 router.post('/api/quarantine/:file/take', async (req, res) => {
   if (!quarantinePath(WS.paths.data, req.params.file)) throw gone(req.params.file);
-  const [taken] = takeBack([req.params.file]);
+  const { taken: [taken], stillOn } = takeBack([req.params.file]);
   const run = await handToRun([taken]);
-  res.json({ ok: true, file: taken.file, ...(run ? { run } : {}) });
+  res.json({ ok: true, file: taken.file, ...(run ? { run } : {}), ...stillOnOf(stillOn) } satisfies TakeResult);
 });
+
+/**
+ * What «Doch behalten» answers. `groupStillOn`: groups whose switch-off failed (a source.yaml
+ * changed meanwhile, a file that cannot be written): the files are in the inbox, but the group still
+ * sets its next files aside, and the person is told so (code `groupStillOn`).
+ */
+type TakeResult = { ok: true; file?: string; files?: string[]; run?: string; groupStillOn?: GroupStillOn };
+const stillOnOf = (groups: Array<{ source: string; from: string; shape: string }>) => (groups.length ? { groupStillOn: { code: 'groupStillOn' as const, groups } } : {});
 
 /**
  * Quarantined files back into the inbox, all or none: each file's bytes are written into the inbox
@@ -80,7 +88,7 @@ router.post('/api/quarantine/:file/take', async (req, res) => {
  * Only then do the files leave the quarantine. Last, best effort, a group a taken file was set aside
  * by is switched off and its other files are kept: a person said one of them is a receipt.
  */
-function takeBack(files: readonly string[]): Array<{ file: string; id: string }> {
+function takeBack(files: readonly string[]): { taken: Array<{ file: string; id: string }>; stillOn: Array<{ source: string; from: string; shape: string }> } {
   const reasons = files.map((f) => reasonOf(WS.paths.data, f));
   const written: Array<{ file: string; id: string }> = [];
   try {
@@ -97,22 +105,32 @@ function takeBack(files: readonly string[]): Array<{ file: string; id: string }>
     throw e;
   }
   for (const f of files) release(WS.paths.data, f);
-  for (const r of reasons) switchGroupOff(r);
-  return written;
+  const stillOn = new Map<string, { source: string; from: string; shape: string }>();
+  for (const r of reasons) {
+    const failed = switchGroupOff(r);
+    if (failed) stillOn.set(`${failed.source} ${failed.from} ${failed.shape}`, failed);
+  }
+  return { taken: written, stillOn: [...stillOn.values()] };
 }
 
-/** The group a file was set aside by goes off in its source.yaml, and the files of it still set aside are kept. A failure leaves the group as it was: the files taken are in the inbox already. */
-function switchGroupOff(r: QuarantineReason | undefined): void {
-  if (r?.kind !== 'not-receipt' || r.why !== 'group' || !r.source || !r.from || !r.shape) return;
+/**
+ * The group a file was set aside by goes off in its source.yaml, and the files of it still set aside
+ * are kept. A failure leaves the group as it was (the files taken are in the inbox already) and is
+ * returned, for the person to be told.
+ */
+function switchGroupOff(r: QuarantineReason | undefined): { source: string; from: string; shape: string } | undefined {
+  if (r?.kind !== 'not-receipt' || r.why !== 'group' || !r.source || !r.from || !r.shape) return undefined;
   const { source, from, shape } = r;
   const same = (q: QuarantineReason) => q.kind === 'not-receipt' && q.why === 'group' && q.source === source && q.from === from && q.shape === shape;
   keepQuarantined(WS.paths.data, quarantined(WS.paths.data).filter((q) => same(q.reason)).map((q) => q.file));
   const own = sources(WS, APP_ROOT).some((v) => v.kind !== 'invalid' && v.decl.id === source && v.decl.origin === 'company');
-  if (!own) return;
+  if (!own) return undefined;
   try {
     changeKeepingOn(WS, APP_ROOT, source, (expect) => { switchAsideOff(WS, source, { from, name: shape }, expect); });
+    return undefined;
   } catch (e) {
     console.warn(`sources/${source}: group ${from} ${shape} not switched off: ${(e as Error).message}`);
+    return { source, from, shape };
   }
 }
 

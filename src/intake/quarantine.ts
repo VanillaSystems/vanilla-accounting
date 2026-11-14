@@ -36,7 +36,7 @@ const dec = (s: string) => { try { return decodeURIComponent(s); } catch { retur
 
 /**
  * The reason as written beside the file: `not-receipt <why>[ from <sender>][ source <id>][ at <iso>]`,
- * `not-receipt group <shape> from <sender> source <id> at <iso>`, `duplicate <receipt id> <file> …`,
+ * `not-receipt group <shape> from <sender> source <id> at <iso>[ kept]`, `duplicate <receipt id> <file> …`,
  * `unreadable` or `held`. `at`: when it was set aside, recorded (a file's time on disk changes with
  * a copy). Lines written before `source`, `group` and `at` existed read as before.
  */
@@ -48,10 +48,11 @@ export function parseReason(line: string): QuarantineReason {
   const free: string[] = [];
   for (let i = 0; i < rest.length; i++) {
     if ((rest[i] === 'from' || rest[i] === 'source' || rest[i] === 'at') && rest[i + 1] !== undefined) named[rest[i]] = rest[++i];
+    else if (rest[i] === 'kept') named.kept = 'yes';
     else free.push(rest[i]);
   }
   const at = named.at && !Number.isNaN(Date.parse(named.at)) ? named.at : undefined;
-  const tail = { ...(named.from ? { from: named.from } : {}), ...(named.source ? { source: named.source } : {}), ...(at ? { at } : {}) };
+  const tail = { ...(named.from ? { from: named.from } : {}), ...(named.source ? { source: named.source } : {}), ...(at ? { at } : {}), ...(named.kept ? { kept: true as const } : {}) };
   if (head === 'duplicate') return { kind: 'duplicate', of: free[0] ?? '', ...(free[1] ? { ofFile: dec(free[1]) } : {}), ...tail };
   if (free[0] === 'group' && free[1]) return { kind: 'not-receipt', why: 'group', shape: dec(free[1]), ...tail };
   const why = OTHER.find((w) => w === free[0]);
@@ -60,7 +61,7 @@ export function parseReason(line: string): QuarantineReason {
 
 export function formatReason(r: QuarantineReason): string {
   if (r.kind === 'held' || r.kind === 'unreadable') return r.kind;
-  const tail = `${r.from ? ` from ${r.from.replace(/\s/g, '')}` : ''}${r.source ? ` source ${r.source}` : ''}${r.at ? ` at ${r.at}` : ''}`;
+  const tail = `${r.from ? ` from ${r.from.replace(/\s/g, '')}` : ''}${r.source ? ` source ${r.source}` : ''}${r.at ? ` at ${r.at}` : ''}${r.kept ? ' kept' : ''}`;
   if (r.kind === 'duplicate') return `duplicate ${r.of}${r.ofFile ? ` ${enc(r.ofFile)}` : ''}${tail}`;
   if (r.why === 'group') return `not-receipt group ${enc(r.shape ?? '')}${tail}`;
   return `not-receipt${r.why ? ` ${r.why}` : ''}${tail}`;
@@ -73,7 +74,7 @@ export function formatReason(r: QuarantineReason): string {
  */
 export function deleteOn(reason: QuarantineReason): string | undefined {
   if (reason.kind !== 'not-receipt' && reason.kind !== 'duplicate') return undefined;
-  if (!reason.source || !reason.at) return undefined;
+  if (!reason.source || !reason.at || reason.kept) return undefined;
   return new Date(Date.parse(reason.at) + ASIDE_DAYS * 86_400_000).toISOString().slice(0, 10);
 }
 
@@ -110,15 +111,15 @@ export function reasonOf(data: string, file: string): QuarantineReason | undefin
 }
 
 /**
- * A person keeps these files: their reasons lose the source that set them aside, so they are never
- * deleted by themselves (a group switched off: its other files stay until a person decides).
+ * A person keeps these files: their reasons are marked `kept`, so they are never deleted by
+ * themselves (a group switched off: its other files stay until a person decides). The source that
+ * set them aside stays named, so «Doch behalten» on one of them can still switch its group off.
  */
 export function keepQuarantined(data: string, files: readonly string[]): void {
   for (const f of files) {
     const r = reasonOf(data, f);
-    if (!r || (r.kind !== 'not-receipt' && r.kind !== 'duplicate') || !r.source) continue;
-    const kept: QuarantineReason = { ...r };
-    delete (kept as { source?: string }).source;
+    if (!r || (r.kind !== 'not-receipt' && r.kind !== 'duplicate') || r.kept) continue;
+    const kept: QuarantineReason = { ...r, kept: true };
     const path = quarantinePath(data, f)! + REASON;
     writeFileSync(path + TMP, `${formatReason(kept)}\n`);
     renameSync(path + TMP, path);

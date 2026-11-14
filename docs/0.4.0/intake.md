@@ -144,7 +144,7 @@ dialog, so the same checks run again later:
   receipt, when its sender and file-name shape are a group the person keeps aside (never a file
   whose own words name it a receipt), or when it repeats a receipt of the books with other bytes
   (same sender, own labelled invoice number, signed amount, both dated within a week; never a
-  credit note, a proforma, an instalment or a reminder: documents.yaml `notDuplicate`;
+  credit note, a refund, a correction, a proforma, an instalment or a reminder: documents.yaml `notDuplicate`;
   src/platform/sources/aside.ts). Its ledger line (in git) keeps the sender, the name's shape, the
   mail's day, its size, and for a PDF its page count and whether it has a text layer; the mail's
   subject, the attachment's own name and its VAT number stay in `data/collected/<source>.details.jsonl`,
@@ -157,11 +157,14 @@ dialog, so the same checks run again later:
   is offered once, with every file of it and «0 davon in den Büchern». «None in the books» looks at
   the whole books: no file of the group in the books or waiting in the inbox, and no receipt of that
   shape from that sender by any mailbox, of a VAT number one of the group showed, or naming the
-  sender's domain. A shape without a telling word («#.pdf», «img_#.pdf», «scan.pdf»: documents.yaml
-  `genericFileNames`) or of a receipt's words («rechnung_#.pdf») is never offered.
+  sender's domain. A shape without a telling word of three letters or more («#.pdf», «img_#.pdf»,
+  «scan.pdf», «screenshot_#_at_#.png»: documents.yaml `genericFileNames`) or of a receipt's words
+  («rechnung_#.pdf», and the short forms «re_#.pdf», «inv_#.pdf»: `receiptFileNames`) is never offered.
   «Immer beiseite» adds it to the source's `settings.aside` (`{ from, name, source: hand <date> }`).
   «Doch behalten» writes the file into the inbox first, then takes it out of «Aussortiert», then
-  switches the group off (`off: true`, never offered again) and keeps the group's other files.
+  switches the group off (`off: true`, never offered again) and marks the group's other files kept.
+  When the switch-off fails (source.yaml changed meanwhile, not writable), the files are taken all
+  the same and the answer says the group is still on (`groupStillOn`), which the toast tells.
   Every write of source.yaml is atomic and refused when the file changed since it was read.
   When 3 or more of one sender's attachments were no receipt and none of its files stands in the
   books, Quellen offers to skip that address: one click adds it to `reach.mail.skip`. Both changes

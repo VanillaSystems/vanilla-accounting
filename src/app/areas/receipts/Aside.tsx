@@ -51,9 +51,11 @@ export function Quarantine({ nav, canEdit, asked }: { nav: AreaProps['nav']; can
   if (!files?.length) return asked && files ? <div className="empty"><h2>{t('chips.quarantineEmpty')}</h2>{sweptLine}</div> : null;
   async function take(names: string[]) {
     try {
-      if (names.length === 1) await api.takeFromQuarantine(names[0]);
-      else await api.takeAllFromQuarantine(names);
-      nav.toast(names.length === 1 ? t('receipts.quarantineTaken', { file: names[0] }) : t('receipts.asideTakenAll', { n: names.length }));
+      const r = names.length === 1 ? await api.takeFromQuarantine(names[0]) : await api.takeAllFromQuarantine(names);
+      const taken = names.length === 1 ? t('receipts.quarantineTaken', { file: names[0] }) : t('receipts.asideTakenAll', { n: names.length });
+      // A group that could not be switched off still sets its next files aside: the person is told.
+      const stillOn = r.groupStillOn?.groups.map((g) => t('receipts.asideGroupStillOn', { shape: shapeText(g.shape), from: g.from })) ?? [];
+      nav.toast([taken, ...stillOn].join(' · '));
       load();
       nav.refresh();
     } catch (e) { nav.toast(errorText(e)); }
