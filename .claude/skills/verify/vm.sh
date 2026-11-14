@@ -23,6 +23,9 @@
 #   vm.sh claude            Claude Code into the VM (as an owner installs it); with the owner's token
 #                           in ~/.vanilla-accounting/e2e/claude-token (claude setup-token) the app's
 #                           model calls run on that subscription
+#   vm.sh sender            this Mac's confirmed share sender (~/.vanilla-accounting/e2e/share-sender)
+#                           into the VM's app, which then runs with --use-mock-keychain: «Teilen» ›
+#                           «Per Link» needs no confirmation mail; checks the token at the service first
 #   vm.sh app               (re)start the installed app in the GUI session (keychain) with its DevTools
 #                           port, the token from ~/.claude-token; log in /tmp/va.log
 #   vm.sh down [run]        stop and delete the VM and the tunnel; the evidence stays
@@ -122,6 +125,18 @@ click) load; vnc move "$(px "$1")" "$(px "$2")" click 1 ;;
 dclick) load; vnc move "$(px "$1")" "$(px "$2")" click 1 pause 0.1 click 1 ;;
 type) load; vnc type "$1" ;;
 key) load; vnc key "$1" ;;
+sender)
+  # The app seals its secrets (src/secrets/sealed-store.ts) with the key of the keychain item
+  # «vanilla-accounting Safe Storage», which only the app may read, and the keychain prompt that
+  # would let anything else read it takes no keys over VNC. So the sharer's app runs with Chromium's
+  # --use-mock-keychain (a fixed key, no keychain), read by launch.sh from ./args, and its secrets.json
+  # gets the sender sealed under that key. It replaces what the VM's app sealed before.
+  load; SENDER="$HOME/.vanilla-accounting/e2e/share-sender"
+  [ -f "$SENDER" ] || { echo "no $SENDER: «Teilen» › «Per Link» asks for a confirmation mail; keep the sender after it (SKILL.md)" >&2; exit 2; }
+  node "$HERE/share-sender.mjs" --check "$SENDER" || { echo "the kept sender is not confirmed: «Teilen» › «Per Link» asks for a confirmation mail; keep the new sender after it (SKILL.md)" >&2; exit 2; }
+  node "$HERE/share-sender.mjs" "$SENDER" | ssh_ 'D="$HOME/Library/Application Support"; mkdir -p "$D/vanilla-accounting" "$D/vanilla-verify"; umask 077; cat > "$D/vanilla-accounting/secrets.json"; echo --use-mock-keychain > "$D/vanilla-verify/args"'
+  echo "sender in the VM's app: vm.sh app (re)starts it with --use-mock-keychain; «Teilen» › «Per Link» needs no confirmation"
+  ;;
 claude)
   load
   ssh_ 'curl -fsSL https://claude.ai/install.sh | bash >/tmp/claude-install.log 2>&1; grep -q ".local/bin" ~/.zshrc 2>/dev/null || echo "export PATH=\$HOME/.local/bin:\$PATH" >> ~/.zshrc; ~/.local/bin/claude --version'
@@ -139,7 +154,9 @@ app)
 export PATH="$HOME/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 [ -f "$HOME/.claude-token" ] && { IFS= read -r CLAUDE_CODE_OAUTH_TOKEN < "$HOME/.claude-token"; export CLAUDE_CODE_OAUTH_TOKEN; }
 E="$HOME/Library/Application Support/vanilla-verify/env"; [ -f "$E" ] && . "$E"
-exec "/Applications/Vanilla Accounting.app/Contents/MacOS/Vanilla Accounting" --remote-debugging-port=9222
+A="$HOME/Library/Application Support/vanilla-verify/args"; ARGS=; [ -f "$A" ] && ARGS=$(cat "$A")
+# shellcheck disable=SC2086
+exec "/Applications/Vanilla Accounting.app/Contents/MacOS/Vanilla Accounting" --remote-debugging-port=9222 $ARGS
 EOF
   ssh_ 'cat > ~/Library/Application\ Support/vanilla-verify/app.plist' <<'EOF'
 <?xml version="1.0" encoding="UTF-8"?>
