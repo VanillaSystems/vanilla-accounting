@@ -34,7 +34,7 @@ import { closeThroughSaved, loadBooks, moduleActor, periodLock, PERSON, saveBook
 import { reconcilePendingThrough } from './reconcile.js';
 import { writeSeal } from './seal.js';
 import { nextManualRef } from './next-ref.js';
-import { sealedVersion } from '../handover/versions.js';
+import { sealedVersion, VERSIONS_FILE } from '../handover/versions.js';
 
 export const stateFile = (ws: Workspace, year: string): string => join(yearPaths(ws.paths, year).filings, 'year-close.json');
 
@@ -383,7 +383,7 @@ export async function closeYear(ws: Workspace, year: string, rates: EstvRates = 
   if (seal.status === 'written') sealedVersion(ws, q4);
   const state = readState(ws, year);
   if (!state.closedAt) writeState(ws, { ...state, closedAt: today });
-  const committed = await commit(ws, `Jahresabschluss ${year}: closed through ${end}, ${q4} sealed`, [ws.paths.ledger, ws.paths.transactional]);
+  const committed = await commit(ws, `Jahresabschluss ${year}: closed through ${end}, ${q4} sealed`, [ws.paths.ledger, ws.paths.transactional, join(ws.paths.root, VERSIONS_FILE)]);
   return { closedThrough: end, seal: seal.file, committed };
 }
 
