@@ -19,40 +19,53 @@ read them, and must not become a place where twenty years of books pile up.
 
 ## Decision
 
-- **A link, not a file.** «Teilen…» in the app encrypts the package end to end (a random 256-bit
-  key per share, AES-GCM in chunks) and uploads only ciphertext to `share.<domain>` (the
-  publisher's domain, named in README.md). The service e-mails the recipient a link
-  `share.<domain>/<id>#<key>`. The key sits in the fragment, which a browser never sends; the page
-  hands it to the app (`vanilla-accounting://open?share=<id>#<key>`).
-- **The same package both ways.** The first share carries the open years, later ones only what is
-  new; the recipient's return carries only his change set. The sharer takes it over through the
-  write door, by record, after review.
+- **A link, not a file.** «Teilen…» in the app encrypts every file of the package on its own (a
+  random 256-bit key per share, AES-GCM) with an encrypted index, and uploads only ciphertext to
+  the share service (`<domain>` is the publisher's domain, named in README.md).
+- **The invitation comes from the sharer's own mail account**, from a template the service's
+  repository provides. It holds the link `https://<id>.share.<domain>/#<key>`. The key sits in the
+  fragment, which a browser never sends. The service never receives the key and sends no e-mail
+  with it; in v1 it has no e-mail provider at all.
+- **The sender confirms her address once** by an e-mail the app sends from that account to the
+  service's inbound address, checked by DKIM or SPF. It keeps the upload API from becoming free
+  anonymous storage.
+- **Two ways to open, both in v1.** The page shows the books read-only in any browser: the app's
+  read-only build decrypts the index there and loads receipts lazily, on a per-share origin
+  `<id>.share.<domain>`. On a Mac it also installs the app and opens the books in it
+  (`vanilla-accounting://open?share=<id>#<key>`) to work on them.
+- **The same package both ways.** The first share carries the open years, later ones the books'
+  files and only the new receipts. The recipient's return is his change set, uploaded to the same
+  share with its key wrapped under the share's key. The sharer takes it over through the write
+  door, by record, after review.
 - **No PIN, no login, no accounts.** Whoever has the e-mail can open the books. The protections
-  are time and count: 10 days, then deleted; at most 3 downloads; the sharer sees «geöffnet am …»;
-  «Zurückziehen» deletes at once.
-- **Cloudflare now** (a Worker and R2 storage), within the free tier, with hard caps. The service
-  is free for the person.
+  are time and count: deleted 5 hours after the first opening, at the latest after 10 days; at most
+  3 openings within those 5 hours; the sharer sees «geöffnet am …»; «Zurückziehen» deletes at once.
+- **Cloudflare now** (a Worker, R2 storage, Email Routing for the confirmation), within the free
+  tier, with hard caps: 1 GB per share, 10 shares per sender and day, 5 GB stored in total. Free for
+  the person.
 - **The `.vanilla` file stays** as the offline way (a USB stick, SwissTransfer), with the same
   format.
 
 ## Consequences
 
-- **The host stores nothing it can read.** Moving it is a matter of trust, not of data: a Swiss
-  host later takes over `share.<domain>` by a DNS change, and the app does not change. What the
-  service does see is named in the spec: addresses, names, the company's name, the optional
-  message, sizes and times.
-- **Sending the e-mail is the weak point.** The service writes the e-mail, so the link with the
-  key passes through it once. It must keep that text in memory only; the spec lists alternatives
-  (the key sent another way, or the sharer's own mail program) as an open question.
+- **The host stores nothing it can read**, and never holds a key. Moving it is a matter of trust,
+  not of data: a Swiss host later takes over `share.<domain>` by a DNS change, and the app does not
+  change. What the service does see is the sender's confirmed address, sizes and times.
+- **The app must be able to send mail.** It uses the account it reads receipts from (SMTP or Mail
+  on the Mac). Without one, the person copies the link or opens it in her mail program.
+- **Each share has its own origin**, because the page's script holds the key. One share's page can
+  read no other share's storage. Wildcard DNS and certificates are part of the service.
 - **No PIN, no login, on purpose.** A PIN sent in the same e-mail protects nothing, and one sent
   another way is a step a 71-year-old fiduciary fails at; an account is a password he forgets for
   a quarterly visit. The e-mail address is the identity, as it is for every invoice the company
-  sends. The short life and the download count bound a forwarded or leaked e-mail.
+  sends. The 5 hours and the 3 openings bound a forwarded or leaked e-mail. An account for
+  fiduciaries with many mandates (keys stored encrypted per user) is a later phase and stays
+  optional.
 - **«Zurückziehen» cannot recall a copy.** It deletes what the service holds. A copy the
   recipient has already opened stays on his Mac, as a printed binder would. The app says so on the
   share card and never claims more.
 - **The return is a proposal.** Nothing the recipient changes reaches the books until the sharer
   takes it over, and a filed quarter stays as filed on both sides.
-- **New things to run:** the service, its e-mail sending, the download page, and the app's URL
-  scheme. Until the app is signed with an Apple Developer ID, the page must walk the recipient
-  through «Dennoch öffnen» in the system settings.
+- **New things to run:** the service, the inbound confirmation address, the page with the
+  read-only build, and the app's URL scheme. Until the app is signed with an Apple Developer ID,
+  the page must walk the recipient through «Dennoch öffnen» in the system settings.

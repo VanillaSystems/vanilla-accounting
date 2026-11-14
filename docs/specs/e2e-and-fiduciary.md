@@ -1,7 +1,7 @@
 # Spec: end-to-end tests for the phone and pairing, and the fiduciary loop
 
 Status: draft for the owner, 2026-11-13; Part B revised with the owner's decisions of
-2026-11-14 (sharing by link, no hold, take-over per group, the content version). No code yet.
+2026-11-14 (sharing by link, the browser view, no hold, take-over per group, the content version). No code yet.
 Judged by [MISSION.md](../../MISSION.md),
 [ADR 0015](../adr/0015-base-cases-in-the-app-long-tail-in-the-workspace.md),
 [ADR 0003](../adr/0003-deployment-and-collaboration.md) (local-first books in git, roles, hand-over,
@@ -367,8 +367,8 @@ app needs from it.
 
 `<domain>` below stands for the publisher's web domain, which README.md names. check-public keeps
 the company's name and domain out of every other public file (`IDENTITY_FILES` in
-`src/publish/leak-guard.ts`), so this spec writes `share.<domain>`, `share@<domain>` and
-`<domain>/app`.
+`src/publish/leak-guard.ts`), so this spec writes `<id>.share.<domain>`,
+`confirm@share.<domain>` and `<domain>/app`.
 
 ## B0. What exists today
 
@@ -412,8 +412,9 @@ changes back. The owner sees **what was fixed**, takes it over, and books better
 
 | Persona | Role | Language, skill, manner | What the loop must give them |
 |---|---|---|---|
-| **Sandra Huber** (owner's side, Malerei Huber GmbH) | owner | Swiss German; not technical; careful, busy; books with the AI | one dialog to share; she keeps booking meanwhile; afterwards «Ernst hat 14 Änderungen geschickt», grouped, taken over in a few clicks, with «Immer so?» for a rule |
-| **Ernst Bühler**, Sandra's uncle (new, family fiduciary) | fiduciary | German; 71, retired fiduciary, 30 years with Banana; slow mouse, large text, prefers one screen at a time; no AI, no git; phones rather than writes | an e-mail with a link; one page that installs the app and opens the books; he corrects with debit and credit and a short «Warum?»; one button sends his changes back. Never a technical question, never an account. |
+| **Sandra Huber** (owner's side, Malerei Huber GmbH) | owner | Swiss German; not technical; careful, busy; books with the AI | one dialog to share; she keeps booking meanwhile; afterwards «Ernst Bühler hat 14 Änderungen geschickt», grouped, taken over in a few clicks, with «Immer so?» for a rule |
+| **Ernst Bühler**, Sandra's uncle (new, family fiduciary) | fiduciary | German; 71, retired fiduciary, 30 years with Banana; slow mouse, large text, prefers one screen at a time; no AI, no git; phones rather than writes | an e-mail with a link; one page that shows the books in the browser, or installs the app
+and opens them; he corrects with debit and credit and a short «Warum?»; one button sends his changes back. Never a technical question, never an account. |
 | **Monika Frei** (existing, `treuhaender.md`) | fiduciary | German; professional with 40 clients; fast, keyboard; no AI | the same loop for many clients. Each later share carries only what is new. |
 | **Luca Bernasconi** (new) | auditor | Italian, from Ticino; reads the UI in Italian; expert | read-only: who changed what, seals, filed returns. Gets the audit export or a read-only share. |
 
@@ -426,7 +427,8 @@ opens books whose history shows another author. Firma › Personen changes it la
 > **Wer arbeitet an diesem Mac?** Name, E-Mail. «Damit man in den Änderungen sieht, wer was
 > gemacht hat.»
 
-The «Teilen» dialog needs this e-mail: the service uses it as the e-mail's Reply-To.
+The «Teilen» dialog needs this e-mail: it is the address the invitation is sent from and the one
+the sender confirms to the service (B3.3).
 
 `authorOf` (`src/workspace/git.ts`) puts this person after `GIT_AUTHOR_*` and before the git
 config: an explicit environment variable still wins for developers. Every app commit's trailer
@@ -462,108 +464,151 @@ that comes back passes the sharer's review (B6).
 ## B3. Sharing by link
 
 The books reach the fiduciary as **a link in an e-mail, not a file sent around** (owner decision
-1, ADR 0016). The `.vanilla` file stays as the offline way (B3.6), with the same format.
+1, ADR 0016). The sharer's app sends that e-mail from her own mail account; the service stores
+only ciphertext and never sees the key. The `.vanilla` file stays as the offline way (B3.7), with
+the same format.
+
+**UI wording is neutral.** No text of the app, the page or the invitation uses a family word. It
+names the other person by name («Ernst Bühler hat 14 Änderungen geschickt», «An Sandra Huber
+zurücksenden») and, where no name is known, by the neutral role («Treuhänder», «Empfänger»). The
+prototype's «Papa» (PR #530) is a persona's word and goes into no UI text.
 
 ### B3.1 «Teilen…» in the app
 
 A chip «Teilen» in the top bar next to Export, in every area (⇧S). Its dialog asks for:
 
-- **An wen:** the recipient's e-mail (and name, proposed from Firma › Personen or earlier shares).
-- **Nachricht (freiwillig):** one short text. The dialog says: «Die Nachricht steht im E-Mail und
-  ist nicht verschlüsselt.»
+- **An wen:** the recipient's name and e-mail, proposed from Firma › Personen or earlier shares.
+- **Nachricht (freiwillig):** one short text. It goes into the invitation, which the sharer's own
+  mail account sends.
 - **Was:** decided by the app and named with its size:
-  - «Die Buchhaltung, Stand jetzt (64 MB)»: the first share with this person (`full`, B3.3).
+  - «Die Buchhaltung, Stand jetzt (64 MB)»: the first share with this person (`full`, B3.4).
   - «Neu seit der letzten Übergabe am 16.11. (12 MB)»: every later share (`update`): 9 bookings,
     14 receipts, the November statement. «Vollständig» stays a choice under «Mehr».
-- The fact line: «Ende-zu-Ende verschlüsselt: nur Ernst kann den Inhalt lesen, der Server nicht.
-  Der Link gilt 10 Tage. Ernst bekommt eine E-Mail mit einem Link, ohne Konto, ohne PIN.»
+- The fact line: «Ende-zu-Ende verschlüsselt: nur Ernst Bühler kann den Inhalt lesen, der Server
+  nicht. Der Link gilt bis 5 Stunden nach dem ersten Öffnen, höchstens 10 Tage. Ernst Bühler
+  bekommt eine E-Mail von dir, mit einem Link, ohne Konto, ohne PIN.»
 
-«Senden» encrypts, uploads and asks the service to send the e-mail. The chip then reads «Bei
-Ernst», and its card shows the share's state as facts: «Gesendet 14.11. 16:42 · 64 MB»,
-«Verfügbar bis 24.11.», «Noch nicht geöffnet» or «Geöffnet am 15.11. 19:04», «Ende-zu-Ende
-verschlüsselt», and the buttons «Zurückziehen» and «Neu teilen». The card says: «Du buchst weiter
-wie immer. Was Ernst ändert, kommt als Vorschlag zurück; du entscheidest.»
+«Senden» encrypts, uploads, and sends the invitation from the sharer's mail account (B3.3). The
+chip then reads «Bei Ernst Bühler», and its card shows the share's state as facts: «Gesendet
+14.11. 16:42 · 64 MB», «Verfügbar bis 24.11.» (after the first opening: «Verfügbar bis 15.11.
+00:04»), «Noch nicht geöffnet» or «Geöffnet am 15.11. 19:04», «Ende-zu-Ende verschlüsselt», and
+the buttons «Zurückziehen» and «Neu teilen». The card says: «Du buchst weiter wie immer. Was Ernst
+Bühler ändert, kommt als Vorschlag zurück; du entscheidest.»
 
-Sharing writes a content version (B7): the card, the e-mail and the page say «Version 12».
+Sharing writes a content version (B7): the card, the invitation and the page say «Version 12».
 
 ### B3.2 Encryption and the service
 
-- **End to end.** The app makes a random 256-bit key per share and encrypts the package (B3.3) in
-  chunks with AES-GCM: one nonce per chunk, the chunk's index and the final flag in the associated
-  data, so a chunk cut, swapped or dropped fails the tag. The service stores only ciphertext.
-- **The link** is `https://share.<domain>/<id>#<key>`. The key is in the fragment after `#`,
-  which a browser never sends to a server. Opening the link never shows the key to the service.
-- **Sending the link is the one weak point.** The decision has the service send the e-mail, and
-  the e-mail holds the full link. So the key passes through the service once, on its way into the
-  e-mail. The protocol must hold that text only in memory, store and log nothing of it, and hand
-  it straight to the mail provider, which then holds the e-mail like any mail server. «The key
-  never reaches the server» is true for storage and for every download, not for the sending.
-  *Open question 12* names two ways that close the gap.
-- **What the service does see:** the recipient's e-mail, the sharer's name and e-mail (Reply-To),
-  the company's name (in the subject), the optional message, the size, and the times of upload,
-  download and withdrawal. Never a booking, a receipt or a figure.
-- **The e-mail** comes from `share@<domain>`, with Reply-To the sharer: «Sandra Huber hat dir die
-  Buchhaltung Malerei Huber GmbH geteilt · Version 12», the message, one button «Öffnen», «Gilt
-  bis 24.11.2026». Ernst's «Antworten» reaches Sandra.
+- **End to end.** The app makes a random 256-bit key per share. Every file of the package is
+  encrypted on its own with AES-GCM (a key per file derived from the share key and the file's id,
+  large files in chunks with the chunk's index and the final flag in the associated data, so a
+  chunk cut, swapped or dropped fails the tag). An **encrypted index** lists the files (B3.4). The
+  service stores only ciphertext under random object ids, so it sees neither paths nor names.
+- **The link** is `https://<id>.share.<domain>/#<key>`. The key is in the fragment after `#`,
+  which a browser never sends to a server. Every share has **its own origin** (`<id>` as a
+  subdomain): the page's script holds the key, and another share's page can then read neither its
+  storage nor its service worker.
+- **The service never receives the key** and sends no e-mail containing it: the invitation goes
+  out from the sharer's own account (B3.3). The service has no e-mail provider in v1.
+- **What the service does see:** the sharer's confirmed e-mail address (B3.3), the size and number
+  of objects, and the times of upload, opening and withdrawal. Never a recipient's address, a
+  name, a message, a booking, a receipt or a figure.
 - **No PIN, no login, no accounts.** Whoever has the e-mail can open the books. The protections:
-  - **10 days**, then the service deletes the ciphertext.
-  - **At most 3 downloads**, then the link is spent.
-  - **«Geöffnet am …»**: the sharer sees each download (time only).
+  - **5 hours after the first opening** the service deletes the ciphertext, **at the latest after
+    10 days** if nobody opens it.
+  - **At most 3 openings**, all within those 5 hours. An opening is a fetch of the index; the
+    receipts a browser view loads lazily afterwards do not count.
+  - **«Geöffnet am …»**: the sharer sees each opening (time only).
   - **«Zurückziehen»** deletes the ciphertext at once; the link then shows «zurückgezogen». It
-    **cannot take back a copy already opened**: the card says so («Hat Ernst sie schon geöffnet,
-    bleibt seine Kopie auf seinem Mac»). The app never claims more.
-- **Free, within Cloudflare's free tier, with hard caps.** The service refuses beyond its caps
-  (size per share, shares per sender and day, total storage) with a reason the app shows as a
-  fact, and the dialog then offers the `.vanilla` file (B3.6). The exact caps are *open question
-  15*.
-- **The app's side of the protocol** is a small client (`src/share/client.ts`): create a share,
-  upload chunks, ask for the e-mail, read the state (opened, returned), withdraw. It talks only
-  to `share.<domain>` and is tested against a fake service in the test process (B11). The
-  protocol itself is `docs/protocol.md` of `vanilla-share`.
+    **cannot take back a copy already opened**: the card says so («Hat Ernst Bühler sie schon
+    geöffnet, bleibt seine Kopie auf seinem Mac»). The app never claims more.
+- **Free, within Cloudflare's free tier, with hard caps:** **1 GB per share, 10 shares per sender
+  address per day, 5 GB stored in total.** Beyond a cap the service refuses with a reason the app
+  shows as a fact, and the dialog offers the `.vanilla` file (B3.7). The free tier's own limits (R2
+  storage and operations, Worker requests) stay above these caps.
+- **The app's side of the protocol** is a small client (`src/share/client.ts`): confirm the
+  sender, create a share, upload objects, read the state (opened, returned), withdraw, fetch a
+  return. It talks only to the share service and is tested against a fake service in the test
+  process (B12). The protocol itself is `docs/protocol.md` of `vanilla-share`.
 
-### B3.3 The package: incremental
+### B3.3 The invitation from the sharer's account, and the sender's confirmation
 
-The encrypted package has the format the `.vanilla` file had in the first draft. Receipts are
-about 95 % of a workspace's size: about 250 MB per year of receipts, 864 files in one real year,
-so about 290 KB each. A package of the whole repository would grow by that much every year. The
-package therefore never carries the whole history.
+- **The invitation** is an HTML and plain-text e-mail from a template that `vanilla-share`
+  provides (the app bundles a copy and fills it in): «Sandra Huber hat dir die Buchhaltung Malerei
+  Huber GmbH geteilt · Version 12», the message, one button «Öffnen» with the link, «Gilt bis 5
+  Stunden nach dem ersten Öffnen, höchstens bis 24.11.2026». It comes from the sharer's own
+  address, so Ernst's «Antworten» reaches her without a Reply-To trick.
+- **How the app sends it:** through the mail account the app already uses for receipt import. On
+  that account's channel (ADR 0014): over SMTP with the account's stored secret, or through Mail on
+  this Mac (the mail program channel), which puts it into the account's «Gesendet» like any mail.
+  A workspace without a sending account gets «Link kopieren» and «Im Mailprogramm öffnen»
+  (`mailto:` with subject and text), and the sharer sends it herself. The key then still never
+  passes the service.
+- **The sender confirms her address once, by sending one e-mail.** The simplest proof that needs no
+  outgoing e-mail at the service: the app sends, from the same account, a short e-mail with a
+  one-time token to `confirm@share.<domain>`. Cloudflare Email Routing hands it to the Worker,
+  which accepts it only when the From domain passes DKIM (or SPF) alignment, and from then on
+  accepts uploads for that address from this app installation (a device token). It guards the
+  upload API against use as free anonymous storage; it is once per Mac and address and needs no
+  typing. A provider whose mail fails alignment is refused with that reason, and the dialog offers
+  the `.vanilla` file. Without a sending account, «Im Mailprogramm öffnen» does the same with a
+  prepared confirmation e-mail.
+- **The return** needs no e-mail. The recipient's app encrypts his change set under a new key,
+  stores that key wrapped under the share's key, and uploads both to the same share (the package
+  carries a return token for that share, so he needs no confirmation of his own). The sharer's app
+  sees it on the share card («Ernst Bühler hat 14 Änderungen geschickt») and fetches it: it holds
+  the share's key. A return lives under the same rules (5 hours after it is fetched, 10 days at
+  most).
 
-**What is in it.** A zip with two members:
+### B3.4 The package: incremental, file by file
 
-- `manifest.json`: `format: 1`, `kind` (`full`, `update` or `return`), the company's name and UID
-  (to refuse a package of another company), the sharer and the recipient (name, e-mail, role),
-  the content version (`version`, `checksum`, B7), `base` (the version and commit the bundle
-  builds on; absent for `full`), the app version, the SHA-256 of `bundle`, and for `full` the list
-  `omitted` (B3.4). A `return` names `basedOn` (the version it was made on).
-- `bundle` (for `full` and `update`): a git bundle (v2: a header naming the prerequisite commit
-  and the refs, then one packfile). The app writes and reads it with isomorphic-git
-  (`packObjects` for the pack, `indexPack` on arrival) and writes the bundle header itself. It
-  needs no git program: a Mac without the developer tools has none, and running the
-  `/usr/bin/git` stub opens Apple's install dialog (`src/platform/git-program.ts`).
-- `changes.json` and `files/` (for `return`): the change set of B5.1 instead of a bundle.
+Receipts are about 95 % of a workspace's size: about 250 MB per year of receipts, 864 files in one
+real year, so about 290 KB each. A package of the whole repository would grow by that much every
+year. The package therefore never carries the whole history, and it is built so that a browser
+can show it file by file.
+
+**What is in it:**
+
+- **The index** (encrypted, one object): `format: 1`, `kind` (`full`, `update` or `return`), the
+  company's name and UID (to refuse a package of another company), the sharer and the recipient
+  (name, e-mail, role), the content version (`version`, `checksum`, B7), `base` (the version and
+  commit it builds on; absent for `full`), the app version, and per file `{ path, object, blob,
+  sha256, bytes }`. For the git side it also carries the version's commit and tree objects, which
+  are small, so the recipient's app rebuilds the exact commit (a shallow root) from the files
+  without a git bundle. For `full` it lists `omitted` (B3.5). A `return` names `basedOn`.
+- **The files**, one encrypted object each. **The books' own files** (`ledger.json`,
+  `books/*.jsonl`, `master-data/`, `knowledge/`, the settings, filings and seals) **go whole in
+  every share**: they are small, and so every link can be shown on its own. **Receipts and
+  statements go incrementally.**
+- `changes.json` and its new receipts (for `return`): the change set of B5.1.
+
+The app writes and reads the git side with isomorphic-git and needs no git program: a Mac without
+the developer tools has none, and running the `/usr/bin/git` stub opens Apple's install dialog
+(`src/platform/git-program.ts`).
 
 | Kind | Made by | Carries | Typical size |
 |---|---|---|---|
-| `full`, the first share with this person | «Teilen» when this recipient holds no earlier version, or «Vollständig» | the version's commit as a shallow root (no parents), all tree objects, and every blob except the closed years' receipts and statements (B3.4) | about 60 MB in April (Q1's receipts and statements); up to about 250 MB at year end; up to about 300 MB in the first months of a year, while the previous year is still open |
-| `update`, every later share | «Teilen» when the recipient holds an earlier version | the commits from that version to the new one: the new receipts, statements and bookings | tens of MB (one quarter is about 60 MB of receipts) |
-| `return` | «An Sandra zurücksenden» on the recipient's Mac | his change set (B5.1) | kilobytes for bookings, plus any receipt he adds |
+| `full`, the first share with this person | «Teilen» when this recipient holds no earlier version, or «Vollständig» | the books' files and every receipt and statement except the closed years' (B3.5) | about 60 MB in April (Q1's receipts and statements); up to about 250 MB at year end; up to about 300 MB while the previous year is still open |
+| `update`, every later share | «Teilen» when the recipient holds an earlier version | the books' files, plus the receipts and statements new since that version | tens of MB (one quarter is about 60 MB of receipts) |
+| `return` | «An Sandra Huber zurücksenden» on the recipient's Mac | his change set (B5.1) | kilobytes for bookings, plus any receipt he adds |
 
 The sharer's app keeps, per recipient, the newest version that recipient holds: the newest one his
-app fetched (the service reports the download) or that his return was based on. An `update`
-built on a version his Mac lacks (his import failed, a new computer) is refused there without
-changing anything: «Diese Übergabe baut auf Version 11 auf, die auf diesem Mac fehlt. Bitte Sandra
-Huber um eine vollständige Übergabe.»
+app fetched (the service reports the opening by the app) or that his return was based on. An
+`update` whose receipts build on a version his Mac lacks (his import failed, a new computer) is
+refused there without changing anything: «Diese Übergabe baut auf Version 11 auf, die auf diesem
+Mac fehlt. Bitte Sandra Huber um eine vollständige Übergabe.»
 
-### B3.4 Closed years stay out, and stay provable
+### B3.5 Closed years stay out, and stay provable
 
-A `full` package leaves out the blobs under `transactional-data/<year>/receipts/` and
-`…/bank-statements/` of every year the books have closed (`closedThrough` at 31.12. of that year
-or later). Everything else of those years comes along: their books (`books/*.jsonl`), filings and
-seals, which are small. The seals and `loadBooks` therefore work on the copy, and corrections that
-reach back (`corrects`) can still be checked.
+A `full` package leaves out the receipts and statements (`transactional-data/<year>/receipts/`,
+`…/bank-statements/`) of every year the books have closed (`closedThrough` at 31.12. of that year
+or later). Everything else of those years comes along: their books, filings and seals, which are
+small. The seals and `loadBooks` therefore work on the copy, and corrections that reach back
+(`corrects`) can still be checked. **A closed year's receipts go along only on request:** «mit
+Archiv 2025» under «Mehr» (owner decision).
 
-`omitted` lists each left-out file as `{ path, blob, sha256, bytes }`. The trees in the bundle
-name the same blob ids, so the recipient's app proves two things:
+`omitted` lists each left-out file as `{ path, blob, sha256, bytes }`. The tree objects in the
+index name the same blob ids, so the recipient's app proves two things:
 
 - **Nothing is missing for what it shows.** Every receipt that an entry of an open period links
   is present. A link to a closed-year receipt shows «Im Archiv bei Sandra Huber (Prüfsumme …)»
@@ -574,53 +619,61 @@ name the same blob ids, so the recipient's app proves two things:
 
 **The recipient never loses a closed year by saving.** His copy is a sparse checkout of the open
 paths. When he saves, the app builds the new commit's tree from the base tree and replaces only
-the subtrees he changed. It never writes the tree from the index alone. A save whose tree drops a
-path of `omitted` is refused (a test proves it). A closed year's receipts go along only as an
-explicit «mit Archiv 2025» under «Mehr».
+the subtrees he changed. A save whose tree drops a path of `omitted` is refused (a test proves
+it). A year closed after the recipient got it stays in his copy as it was; a later `update`
+removes nothing.
 
-**Year boundaries.** A first share in a new year carries at most the one or two open years. A
-year closed after the recipient got it stays in his copy as it was; a later `update` removes
-nothing.
+### B3.6 The page `<id>.share.<domain>`
 
-### B3.5 The page `share.<domain>/<id>`
+The invitation's button opens one page (prototype: `web.html`). The page reads the key from the
+fragment in the browser and never sends it. It offers two ways, both in v1:
 
-The e-mail's button opens one page with two steps (prototype: `web.html`). The page reads the key
-from the fragment in the browser and never sends it.
+**A. In the browser, read-only, on any device.** «Im Browser ansehen» loads the app's read-only
+UI (the build of the audit export, `READONLY`) from the same origin, fetches the index, decrypts
+it in the browser, and shows the books: journal, receipts, MWST, Änderungen. Receipts are fetched
+and decrypted lazily, when a person opens one. A receipt the link does not carry (an `update`'s
+older receipts, a closed year) shows «nicht in diesem Link». The banner: «Durchsicht · nur Lesen
+· Version 12 · von Sandra Huber». Nothing is written; nothing is stored in the browser beyond the
+session. This is the way for Windows, a phone, and a quick look.
+
+**B. In the app, to work on the books (Mac).**
 
 1. **Vanilla Accounting laden.** One button for this Mac: Apple chip or Intel, picked by the page
    (only Chromium browsers report the architecture through `navigator.userAgentData`; Safari does
    not, so the page offers the Apple-chip dmg and Intel as a small link). The dmg comes straight
-   from the GitHub release. Three pictures show the install as the Mac shows it: open the dmg,
-   drag to Programme, start. **While the app is unsigned** a fourth picture shows «Systemeinstellungen
-   › Datenschutz & Sicherheit › Dennoch öffnen»: right-click › Öffnen no longer opens an unsigned
-   app since macOS 15. «Schon installiert? Direkt öffnen» skips the step.
-2. **Buchhaltung öffnen.** A button to `vanilla-accounting://open?share=<id>#<key>`. The page says:
-   «Fragt der Browser, ob die Seite die App öffnen darf: Erlauben.» The app registers the scheme
-   (`protocols` in `desktop/electron-builder.config.cjs`, the `open-url` event), downloads the
-   ciphertext, decrypts and verifies it, and opens the copy (B4). After that the page says «Sandra
-   sieht, dass du sie geöffnet hast».
+   from the GitHub release. Pictures show the install as the Mac shows it: open the dmg, drag to
+   Programme, start. **While the app is unsigned** a further picture shows «Systemeinstellungen ›
+   Datenschutz & Sicherheit › Dennoch öffnen»: right-click › Öffnen no longer opens an unsigned app
+   since macOS 15. «Schon installiert? Direkt öffnen» skips the step.
+2. **Buchhaltung öffnen.** A button to `vanilla-accounting://open?share=<id>#<key>`. The page
+   says: «Fragt der Browser, ob die Seite die App öffnen darf: Erlauben.» The app registers the
+   scheme (`protocols` in `desktop/electron-builder.config.cjs`, the `open-url` event), fetches and
+   decrypts the index and the files, verifies them, and opens the copy (B4). After that the page
+   says «Sandra Huber sieht, dass du sie geöffnet hast».
 
-States of the page, each a plain fact: expired («Dieser Link galt bis 24.11. Bitte Sandra um einen
-neuen.»), withdrawn, spent (3 downloads).
+States of the page, each a plain fact: expired («Dieser Link galt bis 15.11. 00:04. Bitte Sandra
+Huber um einen neuen.»), withdrawn, spent (3 openings).
 
-**Windows and the phone** get no app today. The page says «Vanilla Accounting gibt es zurzeit für
-den Mac» and offers the books **read-only in the browser**: the app's UI built as a static page
-that decrypts the package in the browser, like the audit export. That is a new build target and a
-later phase (B12). A browser view counts as a download.
-
-**The general download page** `<domain>/app` offers the same step 1 without a share.
+**The general download page** `<domain>/app` offers step B1 without a share.
 
 **Prerequisite worth naming:** an Apple Developer ID. Signing and notarizing the dmg removes the
-settings detour of step 1, which is the hardest step for Ernst. Until then the page must show it.
+settings detour of step B1, which is the hardest step for Ernst. Until then the page must show it.
 
-### B3.6 The `.vanilla` file: the offline way
+### B3.7 The `.vanilla` file: the offline way
 
-The dialog's «Mehr › Als Datei sichern» writes the same package (B3.3), unencrypted or with a
-password the person chooses (*open question 16*), as
+The dialog's «Mehr › Als Datei sichern» writes the same package (B3.4: the index and the files in
+one zip, unencrypted, or with a password: *open question 11*) as
 `<Firma> – Buchhaltung v12 (2026-11-14).vanilla`. The person sends it any way she likes (a USB
 stick, SwissTransfer). A double click opens the Mac app (`fileAssociations`, the `open-file`
 event), which treats it exactly like a link. Returns work the same way. The file is also what the
 dialog offers when the service refuses or cannot be reached.
+
+### B3.8 Later, not now: an account for fiduciaries with many mandates
+
+Phase 2, outside v1: a fiduciary such as Monika Frei may open an account to see all her mandates
+in one overview. Login by an e-mail link or a passkey; the share keys she received are stored
+encrypted for her (wrapped under a key only her login unlocks), so the service still cannot read
+them. The owner side stays without an account. Its design is a spec of its own.
 
 ## B4. The fiduciary works in his own app
 
@@ -628,27 +681,28 @@ dialog offers when the service refuses or cannot be reached.
   (`~/Library/Application Support/Vanilla Accounting/Treuhand/<UID>/`) and lists it under the
   recent books by the company's name. He never sees the folder or git. An `update` moves his copy
   forward. His unsent changes stay: they are records he changed, and an update that touches the
-  same record shows it as a conflict on his side first («Sandra hat diese Buchung inzwischen auch
-  geändert»), with the same view as B6.
+  same record shows it as a conflict on his side first («Sandra Huber hat diese Buchung
+  inzwischen auch geändert»), with the same view as B6.
 - **His name.** The identity of B2 makes him the author of every save.
-- **The top bar** shows a fact: «Malerei Huber GmbH · Version 12 · von Sandra geteilt am 14.11.»
-  and the mode (*open question 13*: «Prüfmodus» is taken by the read-only export; proposal
-  «Durchsicht»).
-- **«Warum? (für Sandra)»**: in the entry editor, `reason` becomes a visible field, optional, one
+- **The mode is «Durchsicht»** (owner decision; «Prüfmodus» stays the read-only export's). The
+  top bar shows it as a fact: «Durchsicht für Sandra Huber · Malerei Huber GmbH · Version 12 ·
+  geteilt am 14.11.»
+- **«Warum? (für Sandra Huber)»**: in the entry editor, `reason` becomes a visible field, optional, one
   line, next to «Speichern». `edits.ts` keeps it as it does today.
 - **A filed quarter stays as filed.** Q1 and Q2, sealed, stay sealed on his copy: the seals come
   along and `loadBooks` checks them. In a closed period his change is refused as today (403,
   `assertOpen`). The entry's detail then offers «Korrektur im offenen Quartal buchen». The
   correction carries `corrects: "2026-Q2"`, and its description names the original id (the golden
   rule; `src/accounting/correction.ts correctsFor`). The MWST tab shows its effect on the Q2 0535.
-- **He cannot file.** «Abrechnung erstellen» reads «Einreichen macht Sandra». Sealing, closing the
+- **He cannot file.** «Abrechnung erstellen» reads «Einreichen macht Sandra Huber».
+  Sharing onward is refused too (owner decision). Sealing, closing the
   year and the company settings are refused (`roleRefused`, B2).
 - **He works without the AI.** Every step he takes is a hand step the app has already (MISSION:
   possible without the AI). Simple screens for him mean: no new mode beyond the role, and the
   editor keeps to one column at 1280 px and follows the system's text size.
-- **«An Sandra zurücksenden»** saves what is unsaved under his name, builds the `return` (B5.1),
-  and sends it the same way: encrypted, uploaded, an e-mail to Sandra (Reply-To Ernst), a link.
-  It names the size and the count: «14 Änderungen, 2 neue Belege, 48 KB». He may send again
+- **«An Sandra Huber zurücksenden»** saves what is unsaved under his name, builds the `return`
+  (B5.1), encrypts and uploads it to the same share (B3.3). No e-mail is needed: Sandra Huber's app
+  sees it on the share card. It names the size and the count: «14 Änderungen, 2 neue Belege, 48 KB». He may send again
   later; each return carries what changed since the version he got, so a second return replaces
   the first on Sandra's side unless she has taken the first over.
 
@@ -659,18 +713,18 @@ dialog offers when the service refuses or cannot be reached.
 A return carries **records by id**, not commits. `changes.json` lists, for every record he
 changed, added or deleted since the version he got: its kind (entry, mapping, receipt,
 transaction, a knowledge or master-data file), its id, `before` (the record in the shared
-version), `after` (his record, absent for a delete), his «Warum?», and the time. `files/` holds
-the receipts he added. The manifest names `basedOn: 12` and the checksum of version 12.
+version), `after` (his record, absent for a delete), his «Warum?», and the time. Its new receipts
+go along as files of their own. The index names `basedOn: 12` and the checksum of version 12.
 
 Files under `knowledge/` and `master-data/accounts.json` are records too: a rule or a business's
 file by its id, an account by its number. A text file without ids counts as one record.
 
 ### B5.2 The sharer sees it
 
-When the return arrives (its link opened in the app, or fetched from the share card: *open
-question 12*), the app shows the fact «Ernst hat 14 Änderungen geschickt · basiert auf Version 12»
-with «Durchsehen». The review is a detail of Änderungen (`/changes/<id>`), and the return is a row
-in Verlauf («Zurück von Ernst · 14 Änderungen»). Nothing new goes in the dock.
+When the return arrives (the share card fetches it, B3.3), the app shows the fact «Ernst Bühler hat
+14 Änderungen geschickt · basiert auf Version 12» with «Durchsehen». The review is a detail of
+Änderungen (`/changes/<id>`), and the return is a row in Verlauf («Zurück von Ernst Bühler · 14
+Änderungen»). Nothing new goes in the dock.
 
 **On top: the effect on the VAT figures.** Per open period: «Q3 2026 zu bezahlen» before → after,
 and per filed period touched by a `corrects` entry its 0535 (bisher / korrigiert / Differenz).
@@ -690,12 +744,12 @@ and per filed period touched by a `corrects` entry its 0535 (bisher / korrigiert
 Within each group, entries come by partner. «3 Zahlungen an Coop Pronto: 30 % privat auf 2451» is
 one row that opens into its entries. **Per entry:** the date, the description, **before → after**
 for the changed fields (debit, credit, code, amount, date), his «Warum?», **who made the booking he
-changed** (Sandra by hand, rule `swisscom-telefon`, the AI with its reason), and links to the
+changed** (Sandra Huber by hand, rule `swisscom-telefon`, the AI with its reason), and links to the
 receipt and the payment (`hrefOf` with a period holding the date).
 
 **Decisions, never hundreds of them.** «Übernehmen» per group and «Alles übernehmen» on top. Per
 row: «Auslassen» (not taken over; the row shows «ausgelassen» as a fact) and «Frage zurück» (a
-question to Ernst, kept on the row; it goes with the next share to him and shows on his side under
+question to Ernst Bühler, kept on the row; it goes with the next share to him and shows on his side under
 the entry). There is no approval per field.
 
 ### B5.3 Three-way merge by record
@@ -708,7 +762,7 @@ against the shared version (the base):
 | unchanged | changed | his change applies |
 | changed | unchanged (not in his set) | hers stays |
 | changed | changed to the same | nothing to do |
-| changed | changed otherwise | **conflict**: the row shows «Deine Version \| Ernsts Version», she picks one |
+| changed | changed otherwise | **conflict**: the row shows «Deine Version \| Version von Ernst Bühler», she picks one |
 | deleted | changed | conflict |
 | any | added (new id) | applies; a new entry on a payment Sandra booked meanwhile is a conflict on that payment |
 
@@ -760,14 +814,15 @@ Version 12 · 14.11.2026», with a checksum underneath in small type («Prüfsum
   --close` (or the app's filing step) seals the quarter.
 - **The checksum** is the SHA-256 over the sorted list of `path`, NUL, the file's SHA-256, newline,
   for every tracked file of the version except the version log itself. Shown: its first 12 hex
-  digits in three groups. The recipient recomputes it from his copy plus `omitted` (B3.4), so the
+  digits in three groups. The recipient recomputes it from his copy plus `omitted` (B3.5), so the
   closed years' receipts count without being sent.
-- **Shown in:** the top bar's company line and Firma, the share card, the e-mail's subject, the
-  page, the file name `<Firma> – Buchhaltung v12 (2026-11-14).vanilla`, the read-only export's
-  banner («Prüfmodus · nur Lesen · Version 12»), and Verlauf (a version is a row).
+- **Shown in:** the top bar's company line and Firma, the share card, the invitation's subject,
+  the page, the file name `<Firma> – Buchhaltung v12 (2026-11-14).vanilla`, the read-only export's
+  banner («Prüfmodus · nur Lesen · Version 12») and the browser view's («Durchsicht · nur Lesen ·
+  Version 12»), and Verlauf (a version is a row).
 - **Distinct from `schema`.** The format versions (`BOOKS_SCHEMA`, `WORKSPACE_SCHEMA`) stay
   technical and are never shown as «Version».
-- **Where it is stored (proposal):** a version log `versions.jsonl` at the workspace's top, in
+- **Where it is stored (owner decision):** a version log `versions.jsonl` at the workspace's top, in
   `LAYOUT` and listed by `npm run doctor`, appended only, one line per version:
 
   ```json
@@ -777,14 +832,12 @@ Version 12 · 14.11.2026», with a checksum underneath in small type («Prüfsum
   ```
 
   The counter is the last line's `n`; the first event after this lands is Version 1. The log also
-  holds what the sharer's app needs per recipient (the newest version he holds, B3.3), so a second
+  holds what the sharer's app needs per recipient (the newest version he holds, B3.4), so a second
   Mac of the owner knows it too. Seals do not hash it, so a new line never touches a sealed
   quarter. The commit of each version also carries `Vanilla-Version: <n>`.
-- **The format decision needs the owner's OK** (books format changes always do, AGENTS.md
-  «Versions and data format»). The proposal adds a file with its own `schema: 1` header line and
-  changes no existing file, so neither `BOOKS_SCHEMA` nor `WORKSPACE_SCHEMA` takes a step. The
-  alternative, `config.version` in `ledger.json`, is `BOOKS_SCHEMA` 10 with a ladder step (absent
-  = 0) and holds only the counter, not the log. *Open question 17.*
+- **The format:** the owner gave his OK on 2026-11-14 (books format changes always need it,
+  AGENTS.md «Versions and data format»). The log is a new file with its own `schema: 1` header line
+  and changes no existing file, so neither `BOOKS_SCHEMA` nor `WORKSPACE_SCHEMA` takes a step.
 
 ## B8. Invariants this loop must keep
 
@@ -796,8 +849,9 @@ Version 12 · 14.11.2026», with a checksum underneath in small type («Prüfsum
   and the write door refuses it on those entries. A test proves it (B11).
 - **Nothing reaches the books without the sharer.** A return changes nothing until she takes it
   over; «Auslassen» leaves her record as it is.
-- **The key never reaches the service's storage or logs** (B3.2), and the service never sees a
-  booking, a receipt or a figure.
+- **The key never reaches the service** (B3.2, B3.3): the link travels in the sharer's own
+  e-mail, and the page and the app decrypt locally. The service never sees a booking, a receipt, a
+  name or a figure.
 - **Sandra can undo** the take-over as a whole, and any single change of his in an open period, as
   a new change under her name (ADR 0003 §4); his change stays in the history.
 
@@ -805,10 +859,11 @@ Version 12 · 14.11.2026», with a checksum underneath in small type («Prüfsum
 
 The memory rule applies: state facts, never remind of chores.
 
-- Sandra: «Geöffnet am 15.11. 19:04» on the share card; «Ernst hat 14 Änderungen geschickt» once,
-  then the Verlauf row. No badge, no count of «unread», no «bitte prüfen».
-- Ernst: «von Sandra geteilt am 14.11. · Version 12». No «noch nicht zurückgesendet» after n days.
-- The link's end is a date («Verfügbar bis 24.11.»), never a countdown.
+- Sandra Huber: «Geöffnet am 15.11. 19:04» on the share card; «Ernst Bühler hat 14 Änderungen
+  geschickt» once, then the Verlauf row. No badge, no count of «unread», no «bitte prüfen».
+- Ernst Bühler: «Durchsicht für Sandra Huber · geteilt am 14.11. · Version 12». No «noch nicht
+  zurückgesendet» after n days.
+- The link's end is a time («Verfügbar bis 15.11. 00:04»), never a countdown.
 
 ## B10. Data model: what changes, and the schema flags for the owner
 
@@ -816,8 +871,8 @@ The memory rule applies: state facts, never remind of chores.
 |---|---|---|
 | `person { name, email }` | `desktop.json` (per device, not in the books) | no |
 | `access.yaml` with `schema: 1` | workspace top, `LAYOUT.top` (`company`), listed by `npm run doctor` | **a new file with its own version**. The alternative, `people:` inside `belege.workspace.yaml`, would be `WORKSPACE_SCHEMA` 5 with a ladder step. **Owner decides** (Q-B1). |
-| `versions.jsonl` with `schema: 1` | workspace top, `LAYOUT` | **a new file with its own version**; the alternative is `BOOKS_SCHEMA` 10. **Owner decides** (B7, open question 17). |
-| the package (`manifest.json` with `format: 1`, a git bundle or a change set) | encrypted at the service, or a `.vanilla` file | no: the package is versioned on its own. The books inside are unchanged. |
+| `versions.jsonl` with `schema: 1` | workspace top, `LAYOUT` | **a new file with its own version**; no step of the books' schema. **Decided** by the owner (B7). |
+| the package (an encrypted index with `format: 1`, the files encrypted one by one, or a change set) | encrypted at the service, or a `.vanilla` file | no: the package is versioned on its own. The books inside are unchanged. |
 | the recipient's copy: shallow root and sparse checkout, `omitted` kept beside it | `.git/shallow` and the app's folder on the recipient's Mac | no: git's own shallow format |
 | `Vanilla-Person`, `Vanilla-Approved-By`, `Vanilla-Version` trailers | commit messages | no |
 | who changed an entry | **derived from git**: the take-over's author | no |
@@ -835,18 +890,23 @@ The memory rule applies: state facts, never remind of chores.
   `src/app/i18n/locales/de.ts`, with `fr`, `it` and `en` matching (`tests/i18n.test.ts`). The
   refusals `roleRefused`, `shareBaseMissing`, `shareOtherCompany`, `shareTampered` and
   `shareServiceRefused` go into `src/types/api-error.ts`. Luca reads the review in Italian, so `it`
-  must cover it fully. The page and the e-mail are the service's and carry their own texts (de
-  first; the e-mail in the sharer's language).
+  must cover it fully. The page and the invitation template are `vanilla-share`'s and carry their
+  own texts (de first; the invitation in the sharer's language). No text uses a family word (B3).
+- **The browser view** is the read-only build of the app (B3.6), with the banner «Durchsicht · nur
+  Lesen».
 - **CSS:** `src/app/areas/changes/changes.css` and the shell's top bar, with the existing tokens.
 
 ## B12. Tests
 
 **Unit and integration** (`npm test`):
 
-- `tests/share-crypto.test.ts`: a package encrypts and decrypts; a chunk swapped, cut or dropped
-  fails; a wrong key fails. A fake service in the test process records every request: **no URL,
-  header or body holds the key** except the one e-mail request of B3.2 (absent under open
-  question 12's alternatives).
+- `tests/share-crypto.test.ts`: a package encrypts and decrypts file by file; a chunk swapped,
+  cut or dropped fails; a wrong key fails; one file decrypts without the others. A fake service in
+  the test process records every request: **no URL, header or body holds the key**, a path or a
+  name.
+- `tests/share-invite.test.ts`: the invitation fills the template (HTML and text), goes through
+  the workspace's sending channel (a fake SMTP server), and carries the link; without a sending
+  account the dialog gets the `mailto:` text. The confirmation e-mail carries only its token.
 - `tests/share-package.test.ts`, on a temp workspace with a closed 2025 and an open 2026 and small
   made-up receipts:
   - `full` leaves out 2025's receipts and statements, `omitted` matches the trees, the seals
@@ -855,7 +915,8 @@ The memory rule applies: state facts, never remind of chores.
     receipts. Applied on a copy without its base, it is refused (`shareBaseMissing`) and nothing
     changes.
   - A save on the sparse copy keeps every omitted path in the tree.
-  - Refused: another company's UID, a bundle hash mismatch.
+  - The index's tree objects rebuild the exact commit on the copy.
+  - Refused: another company's UID, a file whose hash does not match the index.
   - No git program is spawned (`gitProgram` stubbed to throw).
 - `tests/share-merge.test.ts`: Sandra books after sharing (author A), Ernst changes an account, a
   code and an amount, splits one booking, links a receipt, books a depreciation, deletes one entry
@@ -873,20 +934,23 @@ The memory rule applies: state facts, never remind of chores.
   refused (`roleRefused`), a shared copy takes its role from the package, a missing `access.yaml`
   means owner.
 - A row per new write route in `tests/period-lock.test.ts`.
-- One browser test (`launchChrome`): the review renders its groups and the VAT effect, «Alles
-  übernehmen» applies, a learn offer opens the rule card.
+- Browser tests (`launchChrome`): the review renders its groups and the VAT effect, «Alles
+  übernehmen» applies, a learn offer opens the rule card. The browser view opens a share from the
+  fake service by its fragment key, shows the journal, and fetches a receipt only when it is
+  opened.
 
 **Persona walk.** `.claude/skills/verify/personas/treuhaender.md` gains the scenario «Ernst,
 family fiduciary» on two VMs, Apple's limit, so the simulator stays off (A2.4). The share service
-runs as its local development server on the host, reachable from both VMs, with the e-mails
-caught instead of sent:
+runs as its local development server on the host, reachable from both VMs, and a local mail
+catcher stands in for Sandra Huber's mail account:
 
 1. VM `sandra` from snapshot `huber-q3`: she books Q3 with the AI, with three planted mistakes (an
-   account, a VAT code on a receipt without Swiss VAT, a private lunch), then «Teilen…» to Ernst.
-2. VM `ernst` (fresh, no app, no Claude): he opens the caught e-mail's link, installs the app from
+   account, a VAT code on a receipt without Swiss VAT, a private lunch), then «Teilen…» to Ernst Bühler.
+2. VM `ernst` (fresh, no app, no Claude): he opens the caught invitation's link, looks at the books in the
+   browser first, installs the app from
    the page, opens the books, tells the app who he is, and corrects by hand: «Warum?» on two
    corrections, one correction of the filed Q2. Meanwhile Sandra books two more payments, one of
-   them a record he also changes. Then «An Sandra zurücksenden».
+   them a record he also changes. Then «An Sandra Huber zurücksenden».
 3. Back in `sandra`: the review. Judge: does she understand it without help? Does the conflict
    read plainly? Does she keep a rule from it? Does the next intake keep Ernst's changes? Is
    anything nagging?
@@ -894,37 +958,55 @@ caught instead of sent:
 Judge Ernst as written in B1: large text, one screen at a time, no technical question, debit and
 credit by keyboard, and the page's install steps followed without help. Monika Frei's scenario
 gets one step: a second share carries only what is new. Luca opens a read-only share in Italian
-and finds Ernst's changes with author and reason.
+in the browser and finds Ernst's changes with author and
+reason.
 
 ## B13. Phases and acceptance checks
 
 | Phase | Work | Accepted when |
 |---|---|---|
-| B-1 Identity and version | `person` in desktop state, the question, `authorOf`, the trailers, names in Verlauf; the content version (B7) once the owner has decided its storage | in a fresh VM, two Macs saving the same repository show two names in Verlauf; `content-version` passes |
-| B-2 The package and the file | the package (`full`, `update`, `return`; B3.3–B3.4), «Als Datei sichern», opening by double click, the recipient's copy and role, «An … zurücksenden» as a file | `share-package` passes; on books with a closed year of real size, `full` is no bigger than the open years' receipts plus their books, an `update` no bigger than the new objects, a bookings-only return under 1 MB |
+| B-1 Identity and version | `person` in desktop state, the question, `authorOf`, the trailers, names in Verlauf; the content version in `versions.jsonl` (B7) | in a fresh VM, two Macs saving the same repository show two names in Verlauf; `content-version` passes |
+| B-2 The package and the file | the package (`full`, `update`, `return`; B3.4–B3.5), «Als Datei sichern», opening by double click, the recipient's copy and role, «An … zurücksenden» as a file | `share-package` passes; on books with a closed year of real size, `full` is no bigger than the open years' receipts plus their books, an `update` no bigger than the new objects, a bookings-only return under 1 MB |
 | B-3 Review and merge | the review (B5.2), the three-way merge and the take-over (B5.3), «Warum?» in the editor, i18n de/fr/it/en | `share-merge` passes; Sandra (walk step 3) names what Ernst changed and why from the screen alone |
-| B-4 Sharing by link | `src/share/client.ts`, the dialog and card, the URL scheme, the page's two steps (in `vanilla-share`), «Zurückziehen» | `share-crypto` passes; the walk's steps 1–2 work from the e-mail without a terminal, a folder dialog or an account |
+| B-4 Sharing by link | `src/share/client.ts`, the sender's confirmation, the invitation from the sharer's account, the dialog and card, the URL scheme, the page (in `vanilla-share`), the read-only browser view on per-share origins, «Zurückziehen» | `share-crypto` and `share-invite` pass; the walk's steps 1–2 work from the invitation without a terminal, a folder dialog or an account; Luca's step works in a browser without the app |
 | B-5 Learning | the offers of B6 in the review | from the walk, at least one kept rule books the next quarter's matching payment as Ernst did |
 | B-6 Roles and the shared repository | `access.yaml`, Firma › Personen, `roleRefused`, the loop over a git remote for people who have one | `access-roles` passes |
-| B-7 Read-only in the browser | the static read-only build that decrypts a package (Windows, phone, Luca) | Luca's walk step works in a browser without the app |
-| B-8 (only if the owner says yes) | `by.who`, `BOOKS_SCHEMA` 10, ladder step | `npm test` and `test:books` green; sealed quarters intact after `npm run update` |
+| B-7 (only if the owner says yes) | `by.who`, `BOOKS_SCHEMA` 10, ladder step | `npm test` and `test:books` green; sealed quarters intact after `npm run update` |
 
-Outside this repository and worth naming: an Apple Developer ID (signing and notarization, B3.5).
+Outside this repository and worth naming: an Apple Developer ID (signing and notarization, B3.6).
+Phase 2, not in this spec's phases: the fiduciary's account with all mandates (B3.8).
 
 ---
 
 ## Decided by the owner on 2026-11-14
 
-These replace the first draft's recommendations:
+These replace the first draft's recommendations and close the questions they answer:
 
-- **Sharing by link**, end to end encrypted, through `share.<domain>`; the `.vanilla` file is the
-  offline way (B3; first draft: the file as default, its Q9).
+- **Sharing by link**, end to end encrypted, through the share service; the `.vanilla` file is the
+  offline way (B3; first draft: the file as default).
+- **The invitation comes from the sharer's own mail account** (SMTP or Mail on this Mac), from a
+  template of `vanilla-share`. The service never receives the key and sends no e-mail; it has no
+  e-mail provider in v1 (B3.3).
+- **The sender confirms her address once** against misuse of the upload API, by one e-mail the app
+  sends to the service's inbound address (B3.3). Chosen as the simplest proof that needs no
+  outgoing e-mail at the service.
+- **Lifetime:** deleted 5 hours after the first opening, at the latest after 10 days; at most 3
+  openings within those 5 hours (B3.2).
+- **Limits:** 1 GB per share, 10 shares per sender address per day, 5 GB stored in total (B3.2).
+- **The read-only view in the browser is in v1**, on a per-share origin `<id>.share.<domain>`,
+  with every file encrypted on its own and an encrypted index, so receipts load lazily (B3.2,
+  B3.4, B3.6). An account for fiduciaries with many mandates is phase 2 (B3.8).
+- **No onward sharing** by a fiduciary (B2).
+- **A closed year's receipts only on request** («mit Archiv 2025», B3.5).
+- **The recipient's mode is «Durchsicht»** (B4). «Prüfmodus» stays the read-only export's.
+- **UI wording is neutral:** the other person's name, or the neutral role where no name is known;
+  never a family word (B3).
 - **No hold while the books are shared.** The sharer keeps booking; a record-level three-way merge
-  takes the return (B5.3; first draft: hold the owner's writes, its Q8).
+  takes the return (B5.3; first draft: hold the owner's writes).
 - **Take-over per group** with «Alles übernehmen», «Auslassen» and «Frage zurück» per row, one
-  save, undoable as a whole (B5.2–B5.3; first draft: the fast-forward is the take-over, its Q11).
-- **A content version as a plain counter** with a checksum and named milestones (B7). Its storage
-  still needs the owner's OK (open question 17).
+  save, undoable as a whole (B5.2–B5.3; first draft: the fast-forward is the take-over).
+- **A content version as a plain counter** with a checksum and named milestones, stored in
+  `versions.jsonl` with its own schema; the books' schema is unchanged (B7; owner's OK given).
 
 ## Open questions for the owner
 
@@ -954,37 +1036,10 @@ These replace the first draft's recommendations:
 8. **May a fiduciary mark a quarter «geprüft», and does that block anything?**
    *Recommendation:* he may mark it, as the role table says. It blocks nothing and shows as a
    fact on the MWST tab. Filing stays with the owner.
-9. **May a fiduciary share onward** (to his own colleague)? *Recommendation:* no; B2 refuses it.
-   The owner shares with each person herself.
-10. **A closed year's receipts in a `full` share**, for a fiduciary who checks an old year?
-    *Recommendation:* only as an explicit «mit Archiv 2025» under «Mehr», never by default.
-11. **Does «Frage zurück» need its own channel**, or is it enough that the question travels with
-    the next share? *Recommendation:* with the next share; the e-mail's Reply-To covers the urgent
-    case.
-12. **The key and the e-mail.** As decided, the service writes the e-mail, so the full link with
-    the key passes through it once (B3.2). Alternatives: (a) the service sends the e-mail with the
-    link *without* the key, and the sharer's app shows the key as a short code she sends another
-    way (more secure, one more step for Ernst); (b) the app opens the sharer's own mail program
-    with the full link, and the service sends nothing (the key never leaves her Mac, but the
-    «Geöffnet» fact and the 3 downloads still work; no `share@` sender). *Recommendation:* (b) as
-    the default if the owner accepts that the e-mail comes from Sandra's own address, else the
-    decision as it stands with the in-memory rule. The same question decides whether a return's
-    key may be encrypted under the share's key, so that Sandra's card fetches it without the
-    e-mail.
-13. **The recipient's mode needs a name.** «Prüfmodus» is taken by the read-only export («Prüfmodus
-    · nur Lesen»). *Proposal:* «Durchsicht» («Durchsicht für Sandra Huber»).
-14. **A one-time confirmation of the sender's e-mail against spam?** Without it, anyone can make
-    the service e-mail anyone. *Recommendation:* yes, once per Mac and address: the service sends
-    a code to the sharer, the app asks for it once. It adds one step for Sandra and none for Ernst.
-15. **Size and rate limits.** *Proposal:* 500 MB per share (the largest `full` is about 300 MB), 10
-    shares per sender address per day, 5 GB stored in total; above it, the app offers the file.
-    The free tier's own limits (R2 storage and operations, Worker requests, the e-mail provider)
-    set the ceiling; `vanilla-share`'s `docs/protocol.md` holds the numbers.
-16. **A password on the `.vanilla` file?** *Recommendation:* optional, off by default. The file
+9. **Does «Frage zurück» need its own channel**, or is it enough that the question travels with
+   the next share? *Recommendation:* with the next share; a reply to the invitation reaches the
+   sharer for the urgent case.
+10. **A sender whose mail provider fails DKIM/SPF alignment** cannot confirm by e-mail (B3.3).
+    *Recommendation:* the `.vanilla` file for now; add another proof only if real users hit it.
+11. **A password on the `.vanilla` file?** *Recommendation:* optional, off by default. The file
     goes the way the person picks; she decides.
-17. **Where the content version lives** (B7): `versions.jsonl` with its own schema (proposal, no
-    ladder step), or `config.version` in `ledger.json` (`BOOKS_SCHEMA` 10)? Books format changes
-    need the owner's OK.
-18. **Delete right after the first download?** It would make a forwarded e-mail useless, but an
-    interrupted download or a second Mac would then need a new share. *Recommendation:* no; keep
-    3 downloads and 10 days, and let the sharer «Zurückziehen» once she sees «Geöffnet».
