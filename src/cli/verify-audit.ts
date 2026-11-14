@@ -20,5 +20,6 @@ if (problems.length) {
 }
 const m = JSON.parse(readFileSync(join(dir, MANIFEST), 'utf8')) as ExportManifest;
 console.log(`ok: ${m.files.length} files as exported on ${m.snapshot.createdAt} (app v${m.snapshot.appVersion}, books schema ${m.snapshot.booksSchema}).`);
+if (m.missing.length) console.log(`  incomplete: ${m.missing.length} file(s) the books name were not in the export when it was made:\n    ${m.missing.join('\n    ')}`);
 for (const s of m.seals) console.log(`  seal ${s.quarter}: ${s.status === 'intact' ? `intact through ${s.through} (${s.sha256})` : `BROKEN at export: ${s.problem}`}`);
 console.log(`manifest.json sha256 ${manifestHash(dir)}: compare it with the hash sent with the export.`);

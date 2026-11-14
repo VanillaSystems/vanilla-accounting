@@ -3,6 +3,8 @@
  * static audit export (npm run build:audit, docs/audit-export.md). The export writes exactly
  * EXPORT_FILES, so each read of the exported app is a file the export holds.
  */
+import { issuedPdfUrl, sentPdfUrl } from '../invoices/model.js';
+
 export interface Sources {
   books(): string;
   /** The workspace's jurisdiction as the engines use it (modules/ch with its overlay). */
@@ -21,6 +23,14 @@ export interface Sources {
   providerIssues(): string;
   receipt(id: string): string;
   statement(bank: string, filename: string): string;
+  /** The invoicing records as GET /api/invoices serves them: customers, invoices with their view, sent documents (#516). */
+  invoices(): string;
+  /** An issued invoice's or credit note's PDF, exactly as stored when it was issued. */
+  invoicePdf(number: string): string;
+  /** A sent document's PDF (a reminder, a notice, a resend), exactly as sent. */
+  sentPdf(id: string): string;
+  /** A logo an invoice is laid out with, by its path in the workspace. */
+  invoiceLogo(path: string): string;
 }
 
 export const API_SOURCES: Sources = {
@@ -36,6 +46,10 @@ export const API_SOURCES: Sources = {
   providerIssues: () => '/api/receipts/provider-issues',
   receipt: (id) => `/api/receipts/${id}`,
   statement: (bank, filename) => `/bank-statements/${bank}/${encodeURIComponent(filename)}`,
+  invoices: () => '/api/invoices',
+  invoicePdf: issuedPdfUrl,
+  sentPdf: sentPdfUrl,
+  invoiceLogo: (path) => `/api/invoice-logo?path=${encodeURIComponent(path)}`,
 };
 
 /** Paths relative to the export's index.html, so it runs under any base path and from a zip. */
@@ -52,6 +66,10 @@ export const EXPORT_FILES: Sources = {
   providerIssues: () => 'data/provider-issues.json',
   receipt: (id) => `receipts/${id}.pdf`,
   statement: (bank, filename) => `bank-statements/${bank}/${filename}`,
+  invoices: () => 'data/invoices.json',
+  invoicePdf: (number) => `invoices/${number}.pdf`,
+  sentPdf: (id) => `invoices/sent/${id}.pdf`,
+  invoiceLogo: (path) => `invoice-logos/${path}`,
 };
 
 const encodePath = (path: string) => path.split('/').map(encodeURIComponent).join('/');
@@ -70,6 +88,10 @@ export const EXPORT_SOURCES: Sources = {
   providerIssues: () => encodePath(EXPORT_FILES.providerIssues()),
   receipt: (id) => encodePath(EXPORT_FILES.receipt(id)),
   statement: (bank, filename) => encodePath(EXPORT_FILES.statement(bank, filename)),
+  invoices: () => encodePath(EXPORT_FILES.invoices()),
+  invoicePdf: (number) => encodePath(EXPORT_FILES.invoicePdf(number)),
+  sentPdf: (id) => encodePath(EXPORT_FILES.sentPdf(id)),
+  invoiceLogo: (path) => encodePath(EXPORT_FILES.invoiceLogo(path)),
 };
 
 /** What the export's api/status.json adds to the API's status: when and from what it was made. */

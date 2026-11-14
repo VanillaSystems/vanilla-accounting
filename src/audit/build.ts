@@ -3,7 +3,7 @@
  * ./sources.ts), so it runs from any static file server without the API. docs/audit-export.md.
  */
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { build } from 'vite';
 import { loadBooks, sealsOf } from '../books/store.js';
 import { readEstvRateTable } from '../accounting/fx-rates.js';
@@ -15,6 +15,10 @@ import { APP_ROOT, findFile, yearPaths, yearsOf as yearsWithFolders, type Worksp
 import { schemaOf } from '../workspace/schema.js';
 import { EXPORT_FILES, type AuditSnapshot } from './sources.js';
 import { workspaceModules } from '../core/modules/load.js';
+import { loadInvoices, sha256 as pdfHash } from '../invoices/store.js';
+import type { Issued } from '../invoices/model.js';
+import { liveCustomers, liveInvoices } from '../invoices/rules.js';
+import { viewOf } from '../invoices/service.js';
 import { appVersion, hashFiles, MANIFEST, MANIFEST_FORMAT, type ExportedSeal, type ExportManifest } from './manifest.js';
 
 export class ExportError extends Error {}
@@ -61,6 +65,8 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
     else missing.push(`statement ${s.bank}/${s.filename}`);
   }
 
+  missing.push(...writeInvoices(ws, out, createdAt.slice(0, 10)));
+
   const { checks, unsealed } = sealsOf(books);
   const seals = checks.map((c): ExportedSeal => {
     if (c.status === 'broken') return { quarter: c.quarter, status: 'broken', problem: c.problem };
@@ -71,6 +77,47 @@ export async function buildAuditExport(ws: Workspace, outDir: string, createdAt 
   writeFileSync(join(out, MANIFEST), JSON.stringify(manifest, null, 2) + '\n');
   return manifest;
 }
+
+/**
+ * The invoicing records as GET /api/invoices serves them on the day of the export, with every issued
+ * invoice's and credit note's PDF and every sent document's PDF as stored, and the logos the sheets
+ * show (#516). Drafts are left out: an export is the record, not work in progress. A PDF that is gone or
+ * no longer matches its checksum, and a logo the API would not serve, is named, not copied; a failed write
+ * fails the export.
+ */
+function writeInvoices(ws: Workspace, out: string, day: string): string[] {
+  const book = loadInvoices(ws);
+  const issued = liveInvoices(book).filter((i): i is Issued => i.status === 'issued');
+  const ids = new Set(issued.map((i) => i.id));
+  const sent = book.sent.filter((d) => !d.deleted && ids.has(d.invoiceId));
+  writeOut(out, EXPORT_FILES.invoices(), JSON.stringify({ today: day, invoices: issued.map((i) => viewOf(book, i, day)), customers: liveCustomers(book), sent }));
+  const missing: string[] = [];
+  const copyPdf = (path: string, doc: { file: string; sha256: string }, what: string) => {
+    let bytes: Buffer;
+    try { bytes = readFileSync(join(ws.paths.root, doc.file)); } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+      missing.push(`${what}: ${doc.file} not found`);
+      return;
+    }
+    if (pdfHash(bytes) !== doc.sha256) { missing.push(`${what}: ${doc.file} no longer matches its checksum (${doc.sha256.slice(0, 12)}…), not copied`); return; }
+    writeOut(out, path, bytes);
+  };
+  for (const inv of issued) copyPdf(EXPORT_FILES.invoicePdf(inv.number), inv.pdf, `invoice ${inv.number}`);
+  for (const doc of sent) copyPdf(EXPORT_FILES.sentPdf(doc.id), doc, `sent document ${doc.id}`);
+  const logos = new Set([ws.invoicing?.layout.logo, ...issued.map((i) => i.layout.logo)]);
+  for (const logo of logos) {
+    if (!logo) continue;
+    const src = resolve(ws.paths.root, logo);
+    const inside = !isAbsolute(logo) && !relative(ws.paths.root, src).startsWith('..');
+    if (!inside || !LOGO_TYPES.test(logo)) missing.push(`invoice logo ${logo}: not an svg, png or jpg file inside the workspace, not copied`);
+    else if (!existsSync(src)) missing.push(`invoice logo ${logo}: not found`);
+    else copyOut(out, EXPORT_FILES.invoiceLogo(logo), src);
+  }
+  return missing;
+}
+
+/** The logos GET /api/invoice-logo serves (src/server/routes/invoices.ts). */
+const LOGO_TYPES = /\.(svg|png|jpe?g)$/i;
 
 /** Every year the period picker can show, and every year with a filing. */
 function yearsOf(ws: Workspace, books: ReturnType<typeof loadBooks>): string[] {
@@ -87,6 +134,6 @@ function target(out: string, path: string): string {
   return file;
 }
 
-const writeOut = (out: string, path: string, data: string) => writeFileSync(target(out, path), data);
+const writeOut = (out: string, path: string, data: string | Buffer) => writeFileSync(target(out, path), data);
 const copyOut = (out: string, path: string, src: string) => copyFileSync(src, target(out, path));
 

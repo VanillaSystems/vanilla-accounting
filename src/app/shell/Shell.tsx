@@ -13,8 +13,8 @@ import { useWorkspace } from '../hooks/use-workspace.js';
 import { FxProvider } from '../hooks/use-fx.js';
 import { LOCALES, t, tWith } from '../i18n/index.js';
 import { periodName } from '../lib/period-label.js';
-import { formatDate } from '../lib/utils.js';
 import { ICONS } from '../areas/icons.js';
+import { AuditBar } from './AuditBar.js';
 import { Dock } from './Dock.js';
 import { hrefOf, useLocationState } from './history.js';
 import { DropDialog, dropFiles, dropOpen, finishDrop } from './DropDialog.js';
@@ -122,7 +122,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     if (!area.periodless) nav.go({ route: AREA_HOME[area.id], query: { ...current.current.query, period: next } });
   };
 
-  const props: AreaProps = { route: loc.route, query: loc.query, period, books, nav, canEdit };
+  const props: AreaProps = { route: loc.route, query: loc.query, period, books, nav, canEdit, readOnly: STATIC_EXPORT || (online && readonly) };
   const propsRef = useRef(props);
   propsRef.current = props;
 
@@ -294,12 +294,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
 
   return (
     <ShellUiContext.Provider value={ui}>
-      {readonly && (
-        <div role="status" data-testid="audit-bar" className="auditbar">
-          {ICONS.lock} {t('app.auditBar')}
-          {snapshot && <span data-testid="audit-snapshot"> · {t('app.snapshot', { date: formatDate(snapshot.createdAt.slice(0, 10)), schema: snapshot.booksSchema, version: snapshot.appVersion })}</span>}
-        </div>
-      )}
+      {readonly && <AuditBar snapshot={snapshot} />}
       <a className="skip" href="#list">{t('shell.skip')}</a>
       <FxProvider index={books}>
         {Detail && !area.fullPage?.(loc.route) ? (

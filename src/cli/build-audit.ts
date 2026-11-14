@@ -26,7 +26,7 @@ try {
   console.log(`Audit export of ${ws.company.name} written to ${outDir}: ${m.files.length} files, ${mb} MB.`);
   for (const s of m.seals) console.log(`  seal ${s.quarter}: ${s.status === 'intact' ? `intact through ${s.through}` : `BROKEN: ${s.problem}`}`);
   if (m.unsealed.length) console.log(`  filed quarters without a seal: ${m.unsealed.join(', ')}`);
-  if (m.missing.length) console.log(`  ${m.missing.length} PDF(s) the books name were not found:\n    ${m.missing.join('\n    ')}`);
+  if (m.missing.length) console.log(`  ${m.missing.length} file(s) the books name are not in the export (not found, a changed invoice PDF, or a logo the app would not show):\n    ${m.missing.join('\n    ')}`);
   console.log(`manifest.json sha256 ${manifestHash(outDir)}\nSend this hash apart from the export; npm run verify-audit -- <dir> checks the files against the manifest.`);
   console.log('Real books on a public URL publish them: serve this folder only behind access protection (docs/audit-export.md).');
 } catch (e) {

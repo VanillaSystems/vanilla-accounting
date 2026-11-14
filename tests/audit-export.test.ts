@@ -228,3 +228,144 @@ test('a browser walk over every area asks the host for no /api/, logs no error a
     await closeContext(browser, context);
   }
 });
+
+interface ExportedInvoices {
+  today: string;
+  invoices: Array<{ id: string; status: string; kind: string; number?: string; pdf?: { file: string; sha256: string } }>;
+  sent: Array<{ id: string; kind: string; sha256: string }>;
+}
+
+/** #516: the invoices, credit notes and sent documents are in the export, each PDF as stored, listed in the manifest with its checksum. */
+test('the invoices and their PDFs are in the export, each with the checksum it was issued with', async () => {
+  const d = await json<ExportedInvoices>(EXPORT_SOURCES.invoices());
+  assert.equal(d.today, '2026-10-09', 'the records are as on the day of the export');
+  const issued = d.invoices.filter((i) => i.status === 'issued');
+  assert.ok(issued.length > 3 && d.sent.length > 3, 'the demo has issued invoices and sent documents');
+  const demo = JSON.parse(readFileSync(join(APP_ROOT, 'demo', 'vanilla-accounting', 'invoices.json'), 'utf8')) as ExportedInvoices;
+  assert.ok(demo.invoices.some((i) => i.status === 'draft'), 'the demo has a draft');
+  assert.deepEqual(d.invoices.filter((i) => i.status !== 'issued').map((i) => i.id), [], 'drafts are left out of the export');
+  const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) as { files: Array<{ path: string; sha256: string }> };
+  const hashes = new Map(manifest.files.map((f) => [f.path, f.sha256]));
+  const docs = [...issued.map((i) => ({ path: EXPORT_SOURCES.invoicePdf(i.number!), sha256: i.pdf!.sha256 })), ...d.sent.map((s) => ({ path: EXPORT_SOURCES.sentPdf(s.id), sha256: s.sha256 }))];
+  const wrong: string[] = [];
+  for (const doc of docs) {
+    const res = await get(doc.path);
+    const body = Buffer.from(await res.arrayBuffer());
+    if (res.status !== 200 || !body.subarray(0, 5).equals(Buffer.from('%PDF-'))) wrong.push(`${res.status} ${doc.path}`);
+    if (hashes.get(doc.path) !== doc.sha256) wrong.push(`${doc.path}: manifest ${hashes.get(doc.path)}, record ${doc.sha256}`);
+  }
+  assert.deepEqual(wrong, []);
+  assert.ok(manifest.files.some((f) => f.path.startsWith('invoice-logos/')), 'the logo the sheets show is in the export');
+});
+
+test('verify-audit refuses an invoice PDF swapped for another with a manifest made to match', () => {
+  const copy = join(tmp, 'swapped');
+  cpSync(dir, copy, { recursive: true });
+  const d = JSON.parse(readFileSync(join(copy, EXPORT_SOURCES.invoices()), 'utf8')) as ExportedInvoices;
+  const [a, b] = d.invoices.filter((i) => i.status === 'issued');
+  const pathA = EXPORT_SOURCES.invoicePdf(a.number!);
+  writeFileSync(join(copy, pathA), readFileSync(join(copy, EXPORT_SOURCES.invoicePdf(b.number!))));
+  const manifestFile = join(copy, 'manifest.json');
+  const manifest = JSON.parse(readFileSync(manifestFile, 'utf8')) as { files: Array<{ path: string; sha256: string }> };
+  for (const f of manifest.files) if (f.path === pathA) f.sha256 = b.pdf!.sha256;
+  writeFileSync(manifestFile, JSON.stringify(manifest));
+  assert.deepEqual(verifyExport(copy), [`${pathA}: not the PDF as issued (sha256 ${b.pdf!.sha256}, data/invoices.json ${a.pdf!.sha256})`]);
+});
+
+test('verify-audit names an invoice PDF taken out with its manifest line, and prints what the export lacked', () => {
+  const copy = join(tmp, 'pdf-gone');
+  cpSync(dir, copy, { recursive: true });
+  const d = JSON.parse(readFileSync(join(copy, EXPORT_SOURCES.invoices()), 'utf8')) as ExportedInvoices;
+  const gone = EXPORT_SOURCES.invoicePdf(d.invoices.find((i) => i.status === 'issued')!.number!);
+  unlinkSync(join(copy, gone));
+  const manifestFile = join(copy, 'manifest.json');
+  const manifest = JSON.parse(readFileSync(manifestFile, 'utf8')) as { files: Array<{ path: string }>; missing: string[] };
+  manifest.files = manifest.files.filter((f) => f.path !== gone);
+  writeFileSync(manifestFile, JSON.stringify(manifest));
+  assert.deepEqual(verifyExport(copy), [`${gone}: data/invoices.json names it, the manifest neither lists it nor names it missing`]);
+
+  // Named missing when the export was made, it is no tampering: verify-audit says ok and names what is incomplete.
+  manifest.missing = ['receipt r_x (scan.pdf)', `invoice ${gone.slice('invoices/'.length, -'.pdf'.length)}: transactional-data/2026/invoices/x.pdf not found`];
+  writeFileSync(manifestFile, JSON.stringify(manifest));
+  assert.deepEqual(verifyExport(copy), []);
+  const cli = spawnSync(process.execPath, ['--import', 'tsx', 'src/cli/verify-audit.ts', copy], { cwd: APP_ROOT, encoding: 'utf8' });
+  assert.equal(cli.status, 0, cli.stdout + cli.stderr);
+  assert.match(cli.stdout, /incomplete: 2 file\(s\)[\s\S]*receipt r_x/);
+});
+
+/** #516: the Invoices area of the export shows the invoices read-only and opens their PDFs. */
+test('the Invoices area of the export lists the invoices, offers no change and opens a sent PDF', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async () => {
+  const d = await json<ExportedInvoices>(EXPORT_SOURCES.invoices());
+  const issued = d.invoices.find((i) => i.status === 'issued' && i.kind === 'invoice')!;
+  const browser = await chrome();
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
+  try {
+    page.setDefaultTimeout(60_000);
+    await page.setViewport({ width: 1400, height: 900 });
+    await page.goto(`${base}#/invoices/${issued.number}`, { waitUntil: 'networkidle0' });
+    await page.waitForSelector(`.detail-in[data-for="${issued.id}"]`);
+    const rows = await page.$$eval('.list .row.inv', (xs) => xs.length);
+    assert.ok(rows > 3, `the list shows the invoices (${rows})`);
+    const body = await page.evaluate(() => document.body.innerText);
+    assert.ok(!body.includes(en.messages['invoices.unavailable']), 'no «only with its server»');
+    const writes = await page.$$eval('[data-act="send"], [data-act="copy"], [data-act="credit"], [data-act="cancel"], [data-act="remind"], [data-act="issue"], [data-act="delete"], [data-act="reset-texts"], .addbtn',
+      (xs) => xs.map((x) => x.getAttribute('data-act') ?? x.className));
+    assert.deepEqual(writes, [], 'no button that would change an invoice');
+    const href = await page.$eval('.detail a.dl', (a) => (a as HTMLAnchorElement).href);
+    const pdf = Buffer.from(await (await fetch(href)).arrayBuffer());
+    assert.ok(pdf.subarray(0, 5).equals(Buffer.from('%PDF-')), `the download is the issued PDF (${href})`);
+
+    const sent = d.sent[0];
+    await page.evaluate((hash) => { location.hash = hash; }, `#/invoices/sent/${sent.id}`);
+    await page.waitForSelector(`.detail-in[data-for="${sent.id}"] .sentpdf canvas`);
+  } finally {
+    await closeContext(browser, context);
+  }
+});
+
+/** #515: the floating top bar, the corner, the dock and the page start below the amber audit bar, whose text stays whole, at every width, zoom and theme. */
+test('the audit bar is never covered by the top bar, at any width, zoom or theme', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async () => {
+  const browser = await chrome();
+  const context = await browser.createBrowserContext();
+  const page = await context.newPage();
+  try {
+    page.setDefaultTimeout(60_000);
+    await page.bringToFront();
+    await page.goto(`${base}#/receipts`, { waitUntil: 'networkidle0' });
+    const covered: string[] = [];
+    for (const theme of ['light', 'dark']) {
+      for (const zoom of ['0.8', '1', '1.4', '1.6']) {
+        for (const width of [1440, 1000, 700, 390]) {
+          await page.setViewport({ width, height: 800 });
+          await page.evaluate((th, z) => { localStorage.setItem('theme', th); localStorage.setItem('zoom', z); localStorage.setItem('language', 'de'); }, theme, zoom);
+          await page.reload({ waitUntil: 'networkidle0' });
+          await page.waitForSelector('[data-testid=audit-snapshot]');
+          // Polled by a timer, never by animation frames (a page Chrome renders in the background gets none): the fonts are
+          // in and --audit-h holds the bar's height as laid out now, rounded up (AuditBar.tsx).
+          await page.waitForFunction(() => {
+            const bar = document.querySelector<HTMLElement>('.auditbar');
+            const h = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--audit-h'));
+            return document.fonts.status === 'loaded' && !!bar && h >= bar.offsetHeight && h <= bar.offsetHeight + 1;
+          }, { polling: 100, timeout: 20_000 });
+          const m = await page.evaluate(() => {
+            const bar = document.querySelector<HTMLElement>('.auditbar')!;
+            const a = bar.getBoundingClientRect();
+            const over = [...document.querySelectorAll<HTMLElement>('.topbar, .corner, .activity, main')].filter((e) => {
+              const r = e.getBoundingClientRect();
+              return r.width > 0 && r.height > 0 && r.top < a.bottom - 0.5 && r.bottom > a.top + 0.5 && r.left < a.right && r.right > a.left;
+            }).map((e) => e.tagName === 'MAIN' ? 'main' : e.className.split(' ')[0]);
+            return { over, clipped: bar.scrollHeight > bar.clientHeight + 1, theme: document.documentElement.dataset.theme };
+          });
+          const at = `${theme} zoom ${zoom} ${width}px`;
+          if (m.theme !== theme) covered.push(`${at}: the theme is ${m.theme}`);
+          if (m.over.length) covered.push(`${at}: ${m.over.join(', ')} over the audit bar`);
+          if (m.clipped) covered.push(`${at}: the audit bar's text is clipped`);
+        }
+      }
+    }
+    assert.deepEqual(covered, []);
+  } finally {
+    await closeContext(browser, context);
+  }
+});
