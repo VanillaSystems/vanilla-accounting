@@ -53,7 +53,7 @@ const app = join(dir, 'mac-arm64', 'Vanilla Accounting.app');
 const codesign = spawnSync('codesign', ['-dv', '--verbose=2', app], { encoding: 'utf8' });
 const signed = /Authority=Developer ID Application/.test(`${codesign.stdout}${codesign.stderr}`);
 
-const notes = releaseNotes({ changelog: readFileSync(join(root, 'CHANGELOG.md'), 'utf8'), version, assets, signed });
+const notes = releaseNotes({ changelog: readFileSync(join(root, 'CHANGELOG.md'), 'utf8'), version, assets, signed, repo });
 
 console.log(`${publish ? 'Publishing' : 'Dry run (add --publish to create it)'}: ${repo} ${tag}, ${signed ? 'signed' : 'unsigned'}`);
 for (const a of assets) console.log(`  ${a.name}  ${a.sha256}`);

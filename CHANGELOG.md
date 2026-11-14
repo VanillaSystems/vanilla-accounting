@@ -14,6 +14,15 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Changed
+
+- The GitHub release text (`npm run release:github`) starts with the downloads: one line saying
+  what the app is, the download table with each `.dmg` linked to its file, «What's new» with a
+  few highlights, and the full changelog folded away at the end. The highlights come from an
+  optional `### Highlights` subsection under the version's heading, else from the titles of
+  «Added» and «Changed». A changelog too long for GitHub's 125,000 characters is linked at the
+  tag instead (docs/releasing.md).
+
 ### Fixed
 
 - Audit export: the floating top bar, the status corner, the dock and the page now start below
@@ -24,7 +33,8 @@ Two markers flag an entry you must read before you update:
   (`invoices/<number>.pdf`) and every sent reminder or notice (`invoices/sent/<id>.pdf`) exactly
   as stored, and the logos the sheets show; `manifest.json` lists each with its SHA-256, and
   `verify-audit` also checks that each PDF is the one its record's checksum names. The Invoices
-  area shows them read-only: no issue, send, copy, credit, cancel or reminder button.
+  area shows them read-only: no issue, send, copy, credit, cancel or reminder button. Drafts
+  are left out: an export is the record, not work in progress.
 
 ## [0.5.0] - 2026-11-13
 
