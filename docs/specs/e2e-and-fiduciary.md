@@ -367,7 +367,7 @@ app needs from it.
 
 `<domain>` below stands for the publisher's web domain, which README.md names. check-public keeps
 the company's name and domain out of every other public file (`IDENTITY_FILES` in
-`src/publish/leak-guard.ts`), so this spec writes `<id>.share.<domain>`,
+`src/publish/leak-guard.ts`), so this spec writes `share.<domain>`,
 `confirm@share.<domain>` and `<domain>/app`.
 
 ## B0. What exists today
@@ -504,10 +504,21 @@ Sharing writes a content version (B7): the card, the invitation and the page say
   large files in chunks with the chunk's index and the final flag in the associated data, so a
   chunk cut, swapped or dropped fails the tag). An **encrypted index** lists the files (B3.4). The
   service stores only ciphertext under random object ids, so it sees neither paths nor names.
-- **The link** is `https://<id>.share.<domain>/#<key>`. The key is in the fragment after `#`,
-  which a browser never sends to a server. Every share has **its own origin** (`<id>` as a
-  subdomain): the page's script holds the key, and another share's page can then read neither its
-  storage nor its service worker.
+- **The link** is `https://share.<domain>/<id>#<key>`: one origin for every share, with a free
+  certificate. The key is in the fragment after `#`, which a browser never sends to a server.
+- **Isolation between shares without an origin each** (owner decision). Everything that shows a
+  share's content (the read-only viewer, receipt previews) runs inside an
+  `<iframe sandbox="allow-scripts">` without `allow-same-origin`, so it has an opaque origin of its
+  own: it can read no cookie, no storage and no other frame of `share.<domain>`, and no other
+  share's frame can read it. The outer page reads the key from the fragment, fetches the
+  ciphertext, and passes the key or the decrypted files into the frame by `postMessage` (checking
+  `event.source`; the frame answers only its parent). Keys and decrypted data are **never written
+  to browser storage** (no `localStorage`, IndexedDB, cache or service worker); they live in
+  memory for the page's life. The service sends a strict Content-Security-Policy (scripts only
+  from the page's own files with hashes, `connect-src` only the service, no inline script, no
+  third-party resource, `frame-ancestors 'none'`), `Referrer-Policy: no-referrer`, and
+  `X-Content-Type-Options: nosniff`. A receipt PDF is shown from a `blob:` URL inside the
+  sandboxed frame, never as a page of the outer origin.
 - **The service never receives the key** and sends no e-mail containing it: the invitation goes
   out from the sharer's own account (B3.3). The service has no e-mail provider in v1.
 - **What the service does see:** the sharer's confirmed e-mail address (B3.3), the size and number
@@ -623,18 +634,18 @@ the subtrees he changed. A save whose tree drops a path of `omitted` is refused 
 it). A year closed after the recipient got it stays in his copy as it was; a later `update`
 removes nothing.
 
-### B3.6 The page `<id>.share.<domain>`
+### B3.6 The page `share.<domain>/<id>`
 
 The invitation's button opens one page (prototype: `web.html`). The page reads the key from the
 fragment in the browser and never sends it. It offers two ways, both in v1:
 
 **A. In the browser, read-only, on any device.** «Im Browser ansehen» loads the app's read-only
-UI (the build of the audit export, `READONLY`) from the same origin, fetches the index, decrypts
-it in the browser, and shows the books: journal, receipts, MWST, Änderungen. Receipts are fetched
-and decrypted lazily, when a person opens one. A receipt the link does not carry (an `update`'s
+UI (the build of the audit export, `READONLY`) into the sandboxed frame (B3.2). The outer page
+fetches the index and the files; the frame decrypts them in memory and shows the books: journal, receipts, MWST, Änderungen. Receipts are fetched
+and decrypted lazily, when a person opens one (the frame asks the outer page by `postMessage`). A receipt the link does not carry (an `update`'s
 older receipts, a closed year) shows «nicht in diesem Link». The banner: «Durchsicht · nur Lesen
-· Version 12 · von Sandra Huber». Nothing is written; nothing is stored in the browser beyond the
-session. This is the way for Windows, a phone, and a quick look.
+· Version 12 · von Sandra Huber». Nothing is written; nothing is stored in the browser, and a reload
+starts again from the link. This is the way for Windows, a phone, and a quick look.
 
 **B. In the app, to work on the books (Mac).**
 
@@ -852,6 +863,8 @@ Version 12 · 14.11.2026», with a checksum underneath in small type («Prüfsum
 - **The key never reaches the service** (B3.2, B3.3): the link travels in the sharer's own
   e-mail, and the page and the app decrypt locally. The service never sees a booking, a receipt, a
   name or a figure.
+- **A share's content runs only in a sandboxed frame** (B3.2): opaque origin, no browser storage of
+  keys or decrypted data, strict CSP, no referrer. One share's content can never read another's.
 - **Sandra can undo** the take-over as a whole, and any single change of his in an open period, as
   a new change under her name (ADR 0003 §4); his change stays in the history.
 
@@ -937,7 +950,9 @@ The memory rule applies: state facts, never remind of chores.
 - Browser tests (`launchChrome`): the review renders its groups and the VAT effect, «Alles
   übernehmen» applies, a learn offer opens the rule card. The browser view opens a share from the
   fake service by its fragment key, shows the journal, and fetches a receipt only when it is
-  opened.
+  opened. The frame has an opaque origin (`origin` is `null`, `localStorage` throws), and after
+  the view closes no key or decrypted byte is in any browser storage. The service's responses carry
+  the CSP, `no-referrer` and `nosniff` headers (a test in `vanilla-share`).
 
 **Persona walk.** `.claude/skills/verify/personas/treuhaender.md` gains the scenario «Ernst,
 family fiduciary» on two VMs, Apple's limit, so the simulator stays off (A2.4). The share service
@@ -968,7 +983,7 @@ reason.
 | B-1 Identity and version | `person` in desktop state, the question, `authorOf`, the trailers, names in Verlauf; the content version in `versions.jsonl` (B7) | in a fresh VM, two Macs saving the same repository show two names in Verlauf; `content-version` passes |
 | B-2 The package and the file | the package (`full`, `update`, `return`; B3.4–B3.5), «Als Datei sichern», opening by double click, the recipient's copy and role, «An … zurücksenden» as a file | `share-package` passes; on books with a closed year of real size, `full` is no bigger than the open years' receipts plus their books, an `update` no bigger than the new objects, a bookings-only return under 1 MB |
 | B-3 Review and merge | the review (B5.2), the three-way merge and the take-over (B5.3), «Warum?» in the editor, i18n de/fr/it/en | `share-merge` passes; Sandra (walk step 3) names what Ernst changed and why from the screen alone |
-| B-4 Sharing by link | `src/share/client.ts`, the sender's confirmation, the invitation from the sharer's account, the dialog and card, the URL scheme, the page (in `vanilla-share`), the read-only browser view on per-share origins, «Zurückziehen» | `share-crypto` and `share-invite` pass; the walk's steps 1–2 work from the invitation without a terminal, a folder dialog or an account; Luca's step works in a browser without the app |
+| B-4 Sharing by link | `src/share/client.ts`, the sender's confirmation, the invitation from the sharer's account, the dialog and card, the URL scheme, the page (in `vanilla-share`), the read-only browser view in a sandboxed frame, «Zurückziehen» | `share-crypto` and `share-invite` pass; the walk's steps 1–2 work from the invitation without a terminal, a folder dialog or an account; Luca's step works in a browser without the app |
 | B-5 Learning | the offers of B6 in the review | from the walk, at least one kept rule books the next quarter's matching payment as Ernst did |
 | B-6 Roles and the shared repository | `access.yaml`, Firma › Personen, `roleRefused`, the loop over a git remote for people who have one | `access-roles` passes |
 | B-7 (only if the owner says yes) | `by.who`, `BOOKS_SCHEMA` 10, ladder step | `npm test` and `test:books` green; sealed quarters intact after `npm run update` |
@@ -993,8 +1008,8 @@ These replace the first draft's recommendations and close the questions they ans
 - **Lifetime:** deleted 5 hours after the first opening, at the latest after 10 days; at most 3
   openings within those 5 hours (B3.2).
 - **Limits:** 1 GB per share, 10 shares per sender address per day, 5 GB stored in total (B3.2).
-- **The read-only view in the browser is in v1**, on a per-share origin `<id>.share.<domain>`,
-  with every file encrypted on its own and an encrypted index, so receipts load lazily (B3.2,
+- **The read-only view in the browser is in v1**, on one origin `share.<domain>/<id>` with the
+  share's content in a sandboxed frame (no per-share subdomains), with every file encrypted on its own and an encrypted index, so receipts load lazily (B3.2,
   B3.4, B3.6). An account for fiduciaries with many mandates is phase 2 (B3.8).
 - **No onward sharing** by a fiduciary (B2).
 - **A closed year's receipts only on request** («mit Archiv 2025», B3.5).
