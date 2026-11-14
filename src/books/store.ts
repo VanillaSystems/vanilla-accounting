@@ -459,7 +459,12 @@ export function periodLock(books: Pick<Index, 'config'> & { transactions?: reado
  * (intake, year close, a collector), or a workflow run. The actor decides what may be replaced.
  */
 export type Actor =
-  | { kind: 'person' }
+  /**
+   * `name` (and `email`, `role`) when the app knows which person: the recipient of a hand-over working on his copy,
+   * or his changes taken over by the sharer (src/handover). The write door treats every person alike; the name goes
+   * into the history and the version log, never into the books (whether it should is the owner's open question Q-B2).
+   */
+  | { kind: 'person'; name?: string; email?: string; role?: 'fiduciary' }
   | { kind: 'module'; id: string }
   | { kind: 'run'; id: string; workflow: string };
 
@@ -643,7 +648,7 @@ function lostByModule(books: Books, before: { receipts: Map<string, Receipt>; li
   return out;
 }
 
-const describe = (a: Actor) => (a.kind === 'person' ? 'Eine Person' : a.kind === 'module' ? `Modul ${a.id}` : `Lauf ${a.id} (${a.workflow})`);
+const describe = (a: Actor) => (a.kind === 'person' ? (a.name ?? 'Eine Person') : a.kind === 'module' ? `Modul ${a.id}` : `Lauf ${a.id} (${a.workflow})`);
 
 function personsEntries(books: Books): Map<string, string[]> {
   return new Map(books.journalEntries.filter((e) => e.origin && OWNER[e.origin] === 'person').map((e) => [e.id, [JSON.stringify(e)]]));
