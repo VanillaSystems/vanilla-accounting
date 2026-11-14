@@ -5,6 +5,12 @@ how to build and publish the Mac app. For the people who maintain the app. If yo
 `npm run update` (or the new `.dmg` of the Mac app) is all you need, and
 [`CHANGELOG.md`](../CHANGELOG.md) tells you what changed.
 
+## Branches
+
+- `next`: where the work comes together. Every pull request goes here.
+- `release/X.Y.Z`: cut from `next` for a release, merged into `main` when it is published.
+- `main`: released versions only. `npm run update` of an adopter's copy follows it.
+
 ## Version numbers
 
 The app follows [Semantic Versioning](https://semver.org/): `MAJOR.MINOR.PATCH`. The person a
