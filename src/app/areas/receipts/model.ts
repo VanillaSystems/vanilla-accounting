@@ -16,7 +16,6 @@ import { isNoReceipt } from '../../../books/discard.js';
 import { accountOfStatement, isCardStatement, statementFacts, type StatementFacts } from '../../../books/statement-facts.js';
 import { lineOffers, lineOfReceipt, readCardLines, type CardLinesWhy, type LineOffer } from '../../../books/card-lines.js';
 import type { LedgerBankAccount } from '../../../workspace/workspace.js';
-import { isManualRef } from '../../../books/refs.js';
 import { paidCards, type PaidCards } from '../../../accounting/paid-how.js';
 import { byStatement } from '../../../workspace/money-accounts.js';
 import type { OtherWhy, SupportingWhy } from '../../../core/modules/schema.js';
@@ -379,7 +378,8 @@ export interface Unpaid { ref: string; date: string; amount: number; currency: s
 
 /**
  * The bookings without a payment of the open period (a depreciation, an accrual, a private share,
- * a correction; src/server/edits.ts withoutPayment) the receipt could hang on, not yet linked to it:
+ * a correction, or a booking a module or an import made under a ref of its own; src/server/edits.ts
+ * holdsLinks) the receipt could hang on, not yet linked to it:
  * those with a line of the receipt's amount, nearest in date first. With a query, every one whose
  * text, ref, amount or date hold every word (a depreciation books less than the invoice it carries).
  */
@@ -389,7 +389,7 @@ export function bookingsWithoutPayment(v: ReceiptView, l: Ledger, query = '', ke
   const near = (d: string) => (v.date ? Math.abs(Date.parse(d) - Date.parse(v.date)) : 0);
   const out: Unpaid[] = [];
   for (const [ref, es] of l.entriesByRef) {
-    if (!isManualRef(ref) || l.txByRef.has(ref) || v.links.includes(ref) || es.some((e) => !!l.closedThrough && e.date <= l.closedThrough)) continue;
+    if (!ref || l.txByRef.has(ref) || v.links.includes(ref) || es.some((e) => !!l.closedThrough && e.date <= l.closedThrough)) continue;
     const [e] = es;
     const h = es.flatMap((x) => [x.description, x.amount.toFixed(2)]).concat(ref, e.date, e.date.split('-').reverse().join('.')).join(' ').toLowerCase();
     if (!words.every((w) => h.includes(w))) continue;

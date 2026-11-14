@@ -35,6 +35,12 @@ Two markers flag an entry you must read before you update:
   `verify-audit` also checks that each PDF is the one its record's checksum names. The Invoices
   area shows them read-only: no issue, send, copy, credit, cancel or reminder button. Drafts
   are left out: an export is the record, not work in progress.
+- A receipt can be linked by hand to a booking that a module or an older import made under a
+  ref of its own, without a bank payment (for example a payment provider's order booked without
+  its payout, or an invoice's event). Before, «Zuordnen» refused such a booking with «Transaction
+  not found» while the app's own modules could link it. The booking's page offers «Beleg
+  zuordnen», the link dialog in Belege lists it among the bookings without a payment, and the
+  booking shows the linked receipt. A booking of a filed quarter still takes no link (#524).
 
 ## [0.5.0] - 2026-11-13
 

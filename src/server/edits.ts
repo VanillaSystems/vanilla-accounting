@@ -104,7 +104,7 @@ export function setReceiptKind(books: Books, c: Extract<BookChange, { kind: 'rec
     for (const ref of links) carried(books, ref);
     if (links.length) before.links = links;
   }
-  for (const ref of c.links ?? []) if (books.transactions.some((t) => t.ref === ref) || withoutPayment(books, ref)) link(books, c.id, ref);
+  for (const ref of c.links ?? []) if (holdsLinks(books, ref)) link(books, c.id, ref);
   return before;
 }
 
@@ -161,6 +161,14 @@ export const withoutPayment = (books: Pick<Books, 'transactions' | 'journalEntri
   isManualRef(ref) && !books.transactions.some((t) => t.ref === ref) && books.journalEntries.some((e) => e.transactionRef === ref);
 
 /**
+ * A ref a receipt can be linked to: a payment's, or any booking's without one. That is a person's
+ * own (M2026-004, withoutPayment) or one a module or an import booked under a ref of its own (a
+ * payment provider's order, an invoice's event): whatever the app links there, a person may link
+ * too. A ref that books nothing and pays nothing holds no link.
+ */
+export const holdsLinks = (books: Pick<Books, 'transactions' | 'journalEntries'>, ref: string): boolean => refDates(books, ref).length > 0;
+
+/**
  * The receipts a booking without a payment carries, recorded on its entries (JournalEntry.receipts)
  * so that the booking deleted and put back (an undo) carries them again. Nothing for a payment's
  * ref: there `receipts` is what its booking saw.
@@ -175,13 +183,13 @@ function carried(books: Books, ref: string): void {
 }
 
 /**
- * A receipt linked to a payment, or to a booking without one (withoutPayment), of the open period.
+ * A receipt linked to a payment, or to a booking without one (holdsLinks), of the open period.
  * A receipt the owner paid privately takes no other link (assertNotPaidPrivately).
  */
 export function link(books: Books, receipt: string, payment: string, line?: number, bills?: readonly LineBill[]): BookChange | undefined {
   receiptOf(books, receipt);
   assertNotPaidPrivately(books, receipt, payment);
-  if (!books.transactions.some((t) => t.ref === payment) && !withoutPayment(books, payment)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
+  if (!holdsLinks(books, payment)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, payment), 'mapping');
   if (books.mappings.some((m) => m.transactionRef === payment && m.receiptId === receipt)) return undefined;
   if (line !== undefined) assertLineFree(books, receipt, payment, line);
