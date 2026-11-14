@@ -11,8 +11,8 @@ const scratch = ['.claude', '.verify', '.gstack', 'out', 'release'].map((dir) =>
 const isScratch = (path: string) => scratch.some((dir) => path === dir || path.startsWith(dir + sep));
 
 export default defineConfig(({ mode }) => ({
-  // The static audit export (npm run build:audit) runs under any base path: every URL is relative.
-  base: mode === 'audit' ? './' : '/',
+  // The static audit export and the public demo (npm run build:audit [--demo]) run under any base path: every URL is relative.
+  base: mode === 'audit' || mode === 'demo' ? './' : '/',
   plugins: [react()],
   resolve: {
     alias: {
