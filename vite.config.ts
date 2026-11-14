@@ -1,4 +1,5 @@
-import { defineConfig } from 'vite';
+import { realpathSync } from 'fs';
+import { defineConfig, searchForWorkspaceRoot } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve, sep } from 'path';
 import { devProxy } from './src/server/app-paths';
@@ -23,6 +24,11 @@ export default defineConfig(({ mode }) => ({
   },
   server: {
     proxy: devProxy('http://localhost:3456'),
+    // A worktree's node_modules is often a link to the main checkout's, outside this root: without
+    // its target on the allow list the bundled fonts answer 403 and the app shows its fallback fonts.
+    fs: {
+      allow: [searchForWorkspaceRoot(process.cwd()), realpathSync(resolve(__dirname, 'node_modules'))],
+    },
     watch: {
       ignored: isScratch,
     },

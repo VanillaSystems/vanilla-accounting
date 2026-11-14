@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Page } from 'puppeteer-core';
 import { startApi } from './support/api-server.js';
-import { browserPath, closeChrome, launchChrome } from './support/browser.js';
+import { browserPath, closeChrome, launchChrome, screenshot } from './support/browser.js';
 import { devProxy } from '../src/server/app-paths.js';
 import { APP_FOLDER, APP_ROOT } from '../src/workspace/workspace.js';
 import { loadBooks, saveBooks } from '../src/books/store.js';
@@ -103,7 +103,7 @@ test('her own invoice found by its number, linked and booked from the form; the 
           assert.ok(box.width >= 80, `${at}: amount field ${box.width}px wide`);
           assert.equal(box.labelLines, 1, `${at}: «Betrag CHF» on one line`);
           if (wide) assert.ok(box.sameRow, `${at}: the amount stands in the row of the accounts`);
-          if (EVIDENCE) await page.screenshot({ path: join(EVIDENCE, `amount-${width}${sidebar ? '-ai' : ''}${wide ? '-wide' : ''}.png`) });
+          if (EVIDENCE) await screenshot(page, join(EVIDENCE, `amount-${width}${sidebar ? '-ai' : ''}${wide ? '-wide' : ''}.png`));
         }
       }
     }
@@ -113,7 +113,7 @@ test('her own invoice found by its number, linked and booked from the form; the 
     assert.deepEqual([await field('accountCredit-0'), await field('vatCode-0')], ['3400', 'V0-E']);
     assert.match(await page.$eval('[data-testid=proposal]', (e) => e.textContent ?? ''), /Leistungsort im Ausland/);
     assert.doesNotMatch(await page.$eval('[data-testid=payment-booking]', (e) => (e as HTMLElement).innerText), /keine Rechnung verknüpft|V81/);
-    if (EVIDENCE) await page.screenshot({ path: join(EVIDENCE, 'own-invoice-abroad.png') });
+    if (EVIDENCE) await screenshot(page, join(EVIDENCE, 'own-invoice-abroad.png'));
     await page.click('[data-testid=payment-booking] button[type=submit]');
     for (const end = Date.now() + 30_000; Date.now() < end;) {
       if (loadBooks(api.ws).journalEntries.some((e) => e.transactionRef === 'K1')) break;
@@ -127,7 +127,7 @@ test('her own invoice found by its number, linked and booked from the form; the 
     await open('K4', 1280);
     assert.equal(await field('vatCode-0'), '');
     await page.waitForSelector('[data-testid=sale-question] [data-choice=saleAbroad]');
-    if (EVIDENCE) await page.screenshot({ path: join(EVIDENCE, 'sale-question.png') });
+    if (EVIDENCE) await screenshot(page, join(EVIDENCE, 'sale-question.png'));
     await page.click('[data-testid=sale-question] [data-choice=saleDomestic]');
     for (const end = Date.now() + 30_000; Date.now() < end;) {
       if (loadBooks(api.ws).journalEntries.some((e) => e.transactionRef === 'K4')) break;
@@ -137,7 +137,7 @@ test('her own invoice found by its number, linked and booked from the form; the 
     assert.deepEqual(k4.journalEntries.filter((e) => e.transactionRef === 'K4').map((e) => [e.accountCredit, e.vatCode, e.origin, e.receipts]), [['3400', 'V81', 'manual', ['r030']]]);
     // The answered question stands on the payment, with «Immer so?».
     await page.waitForSelector('[data-question] [data-act=sale-always]', { timeout: 15_000 });
-    if (EVIDENCE) await page.screenshot({ path: join(EVIDENCE, 'sale-question-answered.png') });
+    if (EVIDENCE) await screenshot(page, join(EVIDENCE, 'sale-question-answered.png'));
   } finally {
     await closeChrome(browser);
     await vite.close();

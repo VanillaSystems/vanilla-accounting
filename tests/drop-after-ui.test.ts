@@ -19,6 +19,7 @@ import { applyPlan, planWorkspace } from '../src/workspace/scaffold.js';
 import { loadChart } from '../src/workspace/chart.js';
 import { APP_FOLDER, type Uid } from '../src/workspace/workspace.js';
 import type { Iban } from '../src/workspace/banks.js';
+import { screenshot } from './support/browser.js';
 import { noBrowser, openApp } from './support/e2e.js';
 import { textPdf } from './support/text-pdf.js';
 import './support/jurisdiction.js';
@@ -65,7 +66,7 @@ test('in the app: what the drop booked is on the page behind at once, and closin
     await page.waitForNetworkIdle({ timeout: 30_000 }).catch(() => undefined);
     const dockBefore = await page.$eval('nav.activity', (e) => e.textContent ?? '');
     const vatBefore = await page.$eval('[data-testid=vat-pending]', (e) => e.textContent ?? '');
-    await page.screenshot({ path: join(shots, '01-vat-before.png') });
+    await screenshot(page, join(shots, '01-vat-before.png'));
 
     // Her second drop on MWST: the orders export and the payments export; she answers the rows' questions with their proposals.
     await dropIn(page, [csv('orders_export_1.csv'), csv('payment_transactions_export_1.csv')]);
@@ -80,24 +81,24 @@ test('in the app: what the drop booked is on the page behind at once, and closin
     const moved = await page.waitForFunction((dock, vat) => !!document.querySelector('[data-testid=drop-dialog]')
       && document.querySelector('nav.activity')?.textContent !== dock && document.querySelector('[data-testid=vat-pending]')?.textContent !== vat,
     { timeout: 20_000 }, dockBefore, vatBefore).then(() => true, () => false);
-    await page.screenshot({ path: join(shots, '02-vat-after-reports.png') });
+    await screenshot(page, join(shots, '02-vat-after-reports.png'));
     assert.ok(moved, `while the window is open, the dock and MWST show what it booked: ${await dockText(page)} | ${await vatText(page)}`);
     assert.ok(await page.$('[data-testid=drop-dialog]'), 'the window is still open');
     await page.click('[data-testid=drop-close]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=drop-dialog]'));
-    await page.screenshot({ path: join(shots, '03-vat-closed.png') });
+    await screenshot(page, join(shots, '03-vat-closed.png'));
 
     // A third drop on Kontoauszüge: the bank's PDF statement of the quarter, kept as the account's statement beside its export.
     await app.open('/bank?period=2026-Q3', 'nav.activity');
     const pdf = await textPdf(['Luzerner Kantonalbank', 'Kontoauszug 01.07.2026 - 30.09.2026', `IBAN ${IBAN.replace(/(.{4})/g, '$1 ').trim()}`, 'Teegarten Beispiel GmbH', 'Saldo per 30.09.2026']);
     await dropIn(page, [{ name: 'LUKB_Kontoauszug_Q3_2026.pdf', type: 'application/pdf', b64: pdf.toString('base64') }]);
     await page.waitForFunction(() => document.querySelector('[data-testid=drop-row][data-file="LUKB_Kontoauszug_Q3_2026.pdf"]')?.classList.contains('s-taken') && !!document.querySelector('[data-testid=drop-summary]'), { timeout: 60_000 })
-      .catch(async (e) => { await page.screenshot({ path: join(shots, '04-pdf-row.png') }); throw e; });
+      .catch(async (e) => { await screenshot(page, join(shots, '04-pdf-row.png')); throw e; });
     await page.click('[data-testid=drop-close]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=drop-dialog]'));
     await page.waitForNetworkIdle({ timeout: 30_000 }).catch(() => undefined);
     const url = new URL(page.url());
-    await page.screenshot({ path: join(shots, '04-bank-closed.png') });
+    await screenshot(page, join(shots, '04-bank-closed.png'));
     console.log(`screenshots: ${shots}`);
     // No period in the link is the open quarter, Q3 here: the heading says which.
     assert.ok([null, '2026-Q3'].includes(url.searchParams.get('period')), `the quarter of the statement: ${url.pathname}${url.search}`);

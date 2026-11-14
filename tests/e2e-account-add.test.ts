@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { screenshot } from './support/browser.js';
 import { noBrowser, openApp } from './support/e2e.js';
 
 const ID = 'b9a7cba1c428824f';
@@ -103,12 +104,12 @@ test('F08/F09: the drop row of a provider\'s report proposes «Durchlaufkonto Sh
     assert.equal(await page.$eval(`${first} input[name=account]`, (e) => (e as HTMLInputElement).value), '1093');
     assert.match(await page.$eval(`${first} .acn`, (e) => (e as HTMLElement).innerText), /Durchlaufkonto Shopify · wird angelegt/);
     assert.match(await page.$eval(first, (e) => (e as HTMLElement).innerText), /Frage 1 von 2[\s\S]*Auf welchem Konto stehen die Verkäufe von Shopify[\s\S]*Vorschlag 1093 Durchlaufkonto Shopify/);
-    await page.screenshot({ path: join(dir, 'drop-proposed.png') });
+    await screenshot(page, join(dir, 'drop-proposed.png'));
     await page.$eval(`${first} button[type=submit]`, (e) => (e as HTMLElement).click());
     await page.waitForFunction(() => document.querySelector('[data-testid=drop-provider]')?.getAttribute('data-step') === 'since', { timeout: 10_000 });
     assert.equal(await page.$eval(`${first} input[name=since]`, (e) => (e as HTMLInputElement).value), '02.10.2026', 'the report\'s first day, as the app writes dates');
     assert.match(await page.$eval(first, (e) => (e as HTMLElement).innerText), /Vorschlag 02\.10\.2026[\s\S]*Umstellungstag/);
-    await page.screenshot({ path: join(dir, 'drop-since.png') });
+    await screenshot(page, join(dir, 'drop-since.png'));
     await page.$eval(`${first} button[type=submit]`, (e) => (e as HTMLElement).click());
     await page.waitForFunction(() => document.querySelectorAll('[data-testid=drop-provider]').length === 1 && document.querySelector<HTMLInputElement>('[data-testid=drop-provider] input[name=account]')?.value === '6580', { timeout: 60_000 });
     const chart = JSON.parse(readFileSync(join(app.api.root, 'master-data', 'accounts.json'), 'utf8')) as Array<{ number: string; name: string }>;
@@ -117,7 +118,7 @@ test('F08/F09: the drop row of a provider\'s report proposes «Durchlaufkonto Sh
     // The fee code is said in words, not asked (AGENTS.md «Shopify billing»): I0, the input tax from the monthly invoice.
     assert.equal(await page.$('[data-testid=drop-provider] input[aria-label=Steuercode]'), null);
     assert.match(await page.$eval(first, (e) => (e as HTMLElement).innerText), /ohne Vorsteuer \(I0\)[\s\S]*Monatsrechnung von Shopify/);
-    await page.screenshot({ path: join(dir, 'drop-fees.png') });
+    await screenshot(page, join(dir, 'drop-fees.png'));
     console.log(`screenshots: ${dir}`);
     assert.deepEqual(app.errors, []);
   } finally {

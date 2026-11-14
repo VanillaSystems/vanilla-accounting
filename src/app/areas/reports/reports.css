@@ -13,7 +13,7 @@
 .rows.rep.sbal .row .f { color: var(--muted); font-size: 12.5px; }
 .sbh { display: grid; gap: 14px; font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 0 12px; margin: 0 -12px 4px; }
 .sbh .r { text-align: right; }
-.rhead { font: 700 15px "Hanken Grotesk"; margin: 26px 0 4px; }
+.rhead { font: 700 15px var(--font-display); margin: 26px 0 4px; }
 .rhead:first-child { margin-top: 0; }
 .rsum { display: flex; justify-content: space-between; padding: 9px 0; margin: 4px 0 10px; border-top: 1px solid var(--line-2); font-size: 13.5px; font-weight: 500; }
 .rsum .mono { font-size: 13px; }
@@ -38,7 +38,7 @@
 
 /* A report the owner asked for (src/app/areas/reports/custom/ReportView.tsx): on the sidebar's card and in Eigene Berichte. */
 .rpt { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-.rpts h3 { font: 600 14px "Hanken Grotesk"; margin: 0 0 2px; }
+.rpts h3 { font: 600 14px var(--font-display); margin: 0 0 2px; }
 .rptf { font-size: 12px; margin: 0 0 6px; }
 .rptt { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .rptt th { text-align: left; font-weight: 500; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--line); padding: 4px 6px; }
@@ -73,7 +73,7 @@
 .rform small { font-size: 11px; }
 .rform-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 14px; }
 .rform-sec { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px 12px; margin: 0; display: flex; flex-direction: column; gap: 10px; }
-.rform-sec legend { font: 600 13px "Hanken Grotesk"; color: var(--ink); padding: 0 4px; }
+.rform-sec legend { font: 600 13px var(--font-display); color: var(--ink); padding: 0 4px; }
 .rform-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 12.5px; }
 .rform-checks label { flex-direction: row; align-items: center; gap: 5px; color: var(--ink-2); font-size: 12.5px; }
 .rform-holes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: -4px; }

@@ -23,6 +23,7 @@ import { readCamt, transactionsOf } from '../src/providers/camt053/camt053.js';
 import { handStart } from '../src/saving/hand-rule.js';
 import { bookingDraft } from '../src/accounting/manual-booking.js';
 import { startApi, type ApiServer } from './support/api-server.js';
+import { screenshot } from './support/browser.js';
 import { noBrowser, openApp } from './support/e2e.js';
 import './support/jurisdiction.js';
 
@@ -218,14 +219,14 @@ test('in the app: Aufgaben names the 40 payouts as Shopify\'s with the one thing
     assert.match(group, /40 Auszahlungen von Shopify ohne Buchung[\s\S]*Kein Umsatz: sie warten auf den Bestellexport von Shopify/);
     assert.doesNotMatch(await page.$eval('body', (e) => (e as HTMLElement).innerText), /Stripe Technology Europe Ltd CHF/, 'not named by the processor');
     await page.$eval('[data-testid=unbooked-payouts]', (e) => e.scrollIntoView({ block: 'center' }));
-    await page.screenshot({ path: join(shots, 'tasks-payouts-waiting.png') });
+    await screenshot(page, join(shots, 'tasks-payouts-waiting.png'));
     await app.open(`/bank/1020-2026-07/${encodeURIComponent(payout.ref)}?period=2026-Q3`, '[data-testid=payout-wait]');
     await page.waitForFunction(() => document.body.innerText.includes('Das ist eine Auszahlung von Shopify'), { timeout: 30_000 }).catch(() => undefined);
     assert.match(await page.$eval('[data-testid=payout-wait]', (e) => (e as HTMLElement).innerText), /Auszahlung von Shopify, kein Umsatz: wartet auf den Bestellexport von Shopify/);
     const pane = await page.$eval('body', (e) => (e as HTMLElement).innerText);
     assert.match(pane, /Das ist eine Auszahlung von Shopify: kein Umsatz/);
     assert.doesNotMatch(pane, /Handelserlöse|nimmt einen Verkauf an|knowledge\//);
-    await page.screenshot({ path: join(shots, 'payout-form-waiting.png') });
+    await screenshot(page, join(shots, 'payout-form-waiting.png'));
     // Her answers: the payouts are booked, Aufgaben has nothing of them left.
     const two = await dropper(api);
     await two.add('orders_export_1.csv');
@@ -236,7 +237,7 @@ test('in the app: Aufgaben names the 40 payouts as Shopify\'s with the one thing
     await api.rest();
     await app.open('/automation/tasks?period=2026-Q3');
     assert.equal(await page.$('[data-testid=unbooked-payouts]'), null);
-    await page.screenshot({ path: join(shots, 'tasks-after-answers.png') });
+    await screenshot(page, join(shots, 'tasks-after-answers.png'));
     console.log(`screenshots: ${shots}`);
     assert.deepEqual(app.errors, []);
   } finally {
