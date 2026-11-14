@@ -32,6 +32,7 @@ import type { Party } from '../handover/versions.js';
 import { shareClient, ShareServiceError, type ShareClient } from './client.js';
 import { decodeKey, decryptMeta, encodeKey, encryptMeta, generateKey, unwrapKey, wrapKey } from './crypto/index.js';
 import { renderInvitation, type Invitation } from './invitation.js';
+import { signedBy, signIndex } from './signing.js';
 import { linkOf, parseLink, shareService } from './service.js';
 import { receivePackage, sendPackage, type Progress } from './transport.js';
 
@@ -212,22 +213,6 @@ const keysOf = async (id: string): Promise<ShareKeys | undefined> => {
 
 export interface Shared { record: ShareRecord; link: string; invitation: Invitation; mailed: boolean; mailError?: string }
 
-/**
- * The chain of hand-overs to one person (review of #538): a random token, made with the first link
- * to that person and carried, encrypted, in every link after it. Only the sharer's app and the
- * recipient's copy know it: a link from anyone else, even one naming the same firm and sharer,
- * cannot carry it, and moves no copy without the person's confirmation (openLink). Kept in the
- * secret store, never in the books.
- */
-async function chainFor(to: Party): Promise<string> {
-  const name = `share:chain:${(to.email ?? to.name).trim().toLowerCase()}` as const;
-  const kept = await secrets.get(name);
-  if (kept) return kept;
-  const made = encodeKey(generateKey());
-  await secrets.set(name, made);
-  return made;
-}
-
 /** One share, and one check of the shares, of the same books at a time: two shares at once would both build on the same next version, two checks would fetch a return twice. */
 const running = new Map<string, Promise<unknown>>();
 function oneAtATime<T>(ws: Pick<Workspace, 'paths'>, fn: () => Promise<T>): Promise<T> {
@@ -260,7 +245,8 @@ async function shareNow(ws: Workspace, req: ShareRequest, from: Party, opts: { m
   await refreshNow(ws).catch(() => undefined);
   const now = opts.now ?? new Date();
   const prepared = await prepareShare(ws, { ...req, notHeld: [...(req.notHeld ?? []), ...unopenedVersions(ws)] }, from, now);
-  prepared.index.chain = await chainFor(req.to);
+  // Signed by these books' key for this person: his copy moves forward on her links alone (src/share/signing.ts).
+  await signIndex(prepared.index, req.to);
   const key = generateKey();
   const message = prepared.index.message;
   const meta = await encryptMeta(key, { v: 1, senderName: from.name, direction: 'send', company: ws.company.name, ...(message ? { note: message.slice(0, 1000) } : {}), asOf: now.toISOString().slice(0, 10) });
@@ -387,7 +373,7 @@ async function refreshNow(ws: Workspace, now = new Date(), client: (service: str
 // ─── the recipient's copy ───────────────────────────────────────────────────
 
 /** What a copy keeps of the link it came by: where its return goes. */
-interface LinkFacts { service: string; id: string; key: string; returnToken?: string; /** The chain token of the hand-overs this copy belongs to (chainFor). */ chain?: string; at: string }
+interface LinkFacts { service: string; id: string; key: string; returnToken?: string; /** The sharer's public key this copy is pinned to (src/share/signing.ts). */ signer?: string; at: string }
 const linkFile = (root: string) => join(root, dirname(DURCHSICHT_MARKER), 'link.json');
 
 export function linkOfCopy(root: string): LinkFacts | undefined {
@@ -445,9 +431,10 @@ const KEEP_MS = 15 * 60_000;
  * Refused unless the person confirmed it (and then nothing is written, neither the copy nor its link):
  * - a link naming another service than this app's (`trust`);
  * - a link whose package would move an existing copy (the copy of its firm, by the package's UID)
- *   without carrying that copy's chain token (`replace`). The package's names and firm are whatever
- *   its maker wrote; only the chain token, which the copy got with its first link and only that
- *   sharer's app knows, shows that it continues the same hand-overs.
+ *   without a signature by the key that copy is pinned to (`replace`). The package's names and firm
+ *   are whatever its maker wrote; only the signature shows it comes from the sharer whose first link
+ *   made the copy (src/share/signing.ts). A copy pins the key of a link whose signature verifies,
+ *   on its first link, and on a link the person confirmed.
  */
 export async function openLink(text: string, opts: { at?: string; progress?: Progress; now?: Date; client?: (service: string) => ShareClient; trust?: boolean; replace?: boolean } = {}): Promise<Opened> {
   const link = parseLink(text);
@@ -462,8 +449,8 @@ export async function openLink(text: string, opts: { at?: string; progress?: Pro
   const { contents, index } = got;
   const root = copyRootOf(contents.index, at);
   const had = markerOf(root);
-  const chain = linkOfCopy(root)?.chain;
-  if (had && !opts.replace && (!chain || contents.index.chain !== chain)) {
+  const pinned = had?.signer ?? linkOfCopy(root)?.signer;
+  if (had && !opts.replace && (!pinned || !signedBy(contents.index, pinned))) {
     downloaded.set(stash, { at: Date.now(), got });
     const claimed = contents.index.from.name.slice(0, 120);
     throw new ShareFlowError(`Hier liegt schon eine Kopie von ${had.firm.name} (Version ${had.version.n}, von ${had.sharer.name}). Dieser Link gehört nicht zu ihren Übergaben; laut Link ist er von ${claimed} über ${host}.`, 'shareCopyOther', {
@@ -471,9 +458,12 @@ export async function openLink(text: string, opts: { at?: string; progress?: Pro
     });
   }
   const opened = openPackage(contents, opts.now ?? new Date(), at);
+  // The key pinned: the one whose signature this package carries, when it verifies (first use, or as the person confirmed).
+  const signer = signedBy(contents.index) ? contents.index.signer : undefined;
+  if (signer) writeFileSync(join(opened.root, DURCHSICHT_MARKER), JSON.stringify({ ...markerOf(opened.root), signer }, null, 2) + '\n');
   const kept: LinkFacts = {
     service: link.service, id: link.id, key: link.key, ...(index.returnToken ? { returnToken: index.returnToken } : {}),
-    ...(contents.index.chain ? { chain: contents.index.chain } : {}), at: (opts.now ?? new Date()).toISOString(),
+    ...(signer ? { signer } : {}), at: (opts.now ?? new Date()).toISOString(),
   };
   mkdirSync(dirname(linkFile(opened.root)), { recursive: true });
   writeFileSync(linkFile(opened.root), JSON.stringify(kept, null, 2) + '\n', { mode: 0o600 });

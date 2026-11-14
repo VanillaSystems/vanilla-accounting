@@ -64,9 +64,9 @@ test('1: a link naming another service opens only when confirmed, and moves no c
   const before = sharing.linkOfCopy(copy.root)!;
   const linkBefore = readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8');
 
-  // Someone who knows the client's UID makes a share of other books on his own service (his own computer: no chain token of hers).
+  // Someone who knows the client's UID makes a share of other books on his own service (his own computer: no signing key of hers).
   const evil = await serviceWithSender('attacker@example.org');
-  await secrets.set('share:chain:ernst@example.ch', null);
+  await secrets.set('share:sign:ernst@example.ch', null);
   const planted = await sharing.shareByLink(books('ANGREIFER INHALT'), { to: ERNST }, SANDRA);
   const [, id, key] = /\/([a-z2-7]{26})#(.+)$/.exec(planted.link)!;
   const scheme = `vanilla-accounting://open?share=${id}&service=${encodeURIComponent(evil.url)}#${key}`;
@@ -215,13 +215,13 @@ const { writePackage, readPackage } = await import('../src/handover/package.js')
 const { workspaceAt } = await import('../src/workspace/workspace.js');
 const { writeFileSync } = await import('node:fs');
 
-/** A copy of the client's books opened from her link; then the computer of a stranger, who knows no chain token of hers. */
+/** A copy of the client's books opened from her link; then the computer of a stranger, who has no signing key of hers. */
 async function clientAndStranger(home: string) {
   await serviceWithSender('sandra@example.ch');
   const shared = await sharing.shareByLink(books('ECHTE BUCHUNG'), { to: ERNST }, SANDRA);
   const copy = await sharing.openLink(shared.link, { at: home });
-  const kept = await secrets.get('share:chain:ernst@example.ch');
-  await secrets.set('share:chain:ernst@example.ch', null);
+  const kept = await secrets.get('share:sign:ernst@example.ch');
+  await secrets.set('share:sign:ernst@example.ch', null);
   return { copy, kept: kept! };
 }
 
@@ -246,11 +246,11 @@ test('R2-1b: naming the real sharer in the package does not pass either; her own
   const planted = await sharing.shareByLink(books('ANGREIFER INHALT'), { to: ERNST }, SANDRA);
   await assert.rejects(sharing.openLink(planted.link, { at: home }), code('shareCopyOther'));
   assert.ok(entriesOf(copy.root).includes('ECHTE BUCHUNG') && !entriesOf(copy.root).includes('ANGREIFER'));
-  // Her own computer again: her chain token, her next link.
-  await secrets.set('share:chain:ernst@example.ch', kept);
+  // Her own computer again: her signing key, her next link.
+  await secrets.set('share:sign:ernst@example.ch', kept);
   const next = await sharing.shareByLink(books('ZWEITER STAND der Kundin'), { to: ERNST }, SANDRA);
   await sharing.openLink(next.link, { at: home });
-  assert.ok(entriesOf(copy.root).includes('ZWEITER STAND'), 'the chain continues: the copy moves forward');
+  assert.ok(entriesOf(copy.root).includes('ZWEITER STAND'), 'signed by the pinned key: the copy moves forward');
 });
 
 test('R2-2: the envelope\'s claims reach the dialog on one short line, marked as the link\'s own', () => {
@@ -287,4 +287,75 @@ test('R2-4: an API answer is read up to its cap', async () => {
   const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
   await assert.rejects(shareClient(url).info('abcdefghijklmnopqrstuvwxyz'), (e) => e instanceof ShareServiceError && e.code === 'oversized');
   srv.closeAllConnections(); srv.close();
+});
+
+// ─── round 3 (review of 1b9bb020) ───────────────────────────────────────────
+
+const { receivePackage, sendPackage } = await import('../src/share/transport.js');
+const { prepareShare } = await import('../src/handover/share.js');
+const { linkOf } = await import('../src/share/service.js');
+const { encodeKey, decodeKey, generateKey } = await import('../src/share/crypto/index.js');
+const { signIndex, signedBy } = await import('../src/share/signing.js');
+
+test('R3-1: a link seen once reveals no secret: its signature and public key let nobody else move the copy', async () => {
+  const svc = await serviceWithSender('sandra@example.ch');
+  const home = mkdtempSync(join(tmpdir(), 'share-review-r31-'));
+  const real = books('ECHTE BUCHUNG');
+  const first = await sharing.shareByLink(real, { to: ERNST }, SANDRA);
+  const copy = await sharing.openLink(first.link, { at: home });
+  assert.ok(markerOf(copy.root)!.signer && sharing.linkOfCopy(copy.root)!.signer, 'the copy pins the key of its first link');
+
+  // Mallory saw the invitation and opens it once: the index holds a public key and a signature, no shared secret.
+  const [, id, key] = /\/([a-z2-7]{26})#(.+)$/.exec(first.link)!;
+  const peek = (await receivePackage({ client: shareClient(svc.url), id, key: decodeKey(key) })).contents.index;
+  assert.ok(peek.signer && peek.signature && signedBy(peek));
+  assert.equal((peek as unknown as Record<string, unknown>).chain, undefined, 'no chain token any more');
+
+  const c = shareClient(svc.url);
+  const reg = await c.registerSender('mallory@example.org');
+  const plant = async (fill: (index: typeof peek) => Promise<void>) => {
+    const prepared = await prepareShare(books('ANGREIFER INHALT'), { to: ERNST, full: true }, SANDRA);
+    await fill(prepared.index);
+    const k = generateKey();
+    const sent = await sendPackage({ client: c, key: k, out: { index: prepared.index, files: prepared.files }, carriesReturnToken: true, start: (s) => c.create(reg.senderToken, s) });
+    return linkOf(`${svc.url}/${sent.id}`, encodeKey(k));
+  };
+  // Her package naming the real key with the real link's signature: it does not cover her content.
+  const copied = await plant(async (i) => { i.signer = peek.signer; i.signature = peek.signature; });
+  await assert.rejects(sharing.openLink(copied, { at: home }), code('shareCopyOther'));
+  // Signed with a key of her own (another computer): not the pinned key.
+  await secrets.set('share:sign:ernst@example.ch', null);
+  const own = await plant((i) => signIndex(i, ERNST));
+  await assert.rejects(sharing.openLink(own, { at: home }), code('shareCopyOther'));
+  assert.ok(entriesOf(copy.root).includes('ECHTE BUCHUNG') && !entriesOf(copy.root).includes('ANGREIFER'));
+  assert.equal(sharing.linkOfCopy(copy.root)!.id, id, 'his returns still go into her share');
+});
+
+test('R3-1b: a copy without a pinned key (made before signatures) pins it on its next link, after one confirmation', async () => {
+  await serviceWithSender('sandra@example.ch');
+  const home = mkdtempSync(join(tmpdir(), 'share-review-r31b-'));
+  const real = books('ERSTER STAND');
+  const copy = await sharing.openLink((await sharing.shareByLink(real, { to: ERNST }, SANDRA)).link, { at: home });
+  // As an older copy: no key pinned.
+  const markerFile = join(copy.root, 'data/durchsicht/marker.json');
+  const { signer: _s, ...old } = JSON.parse(readFileSync(markerFile, 'utf8'));
+  writeFileSync(markerFile, JSON.stringify(old));
+  const linkFile = join(copy.root, 'data/durchsicht/link.json');
+  const { signer: _l, ...oldLink } = JSON.parse(readFileSync(linkFile, 'utf8'));
+  writeFileSync(linkFile, JSON.stringify(oldLink));
+  const second = (await sharing.shareByLink(real, { to: ERNST }, SANDRA, { now: new Date(Date.now() + 1000) })).link;
+  await assert.rejects(sharing.openLink(second, { at: home }), code('shareCopyOther'));
+  await sharing.openLink(second, { at: home, replace: true });
+  assert.ok(markerOf(copy.root)!.signer, 'pinned now');
+  const third = (await sharing.shareByLink(real, { to: ERNST }, SANDRA, { now: new Date(Date.now() + 2000) })).link;
+  await sharing.openLink(third, { at: home });
+});
+
+test('R3-2: oneLine takes out every format character: bidi marks, zero-width spaces, joiners', () => {
+  for (const cp of [0x200e, 0x200f, 0x061c, 0x200b, 0x2060, 0x202e, 0x2066, 0xfeff]) {
+    const ch = String.fromCodePoint(cp);
+    assert.ok(!oneLine(`Sandra${ch}Muster`).includes(ch), `U+${cp.toString(16)}`);
+  }
+  assert.equal(oneLine(`a${String.fromCodePoint(0x202e)}b`), 'a b');
+  assert.equal(oneLine('x'.repeat(200)).length, 80);
 });

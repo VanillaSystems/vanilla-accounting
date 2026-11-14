@@ -11,8 +11,8 @@ import type { LinkPreview } from '../../share/sharing.js';
 
 type Say = (key: 'share.ask.claim' | 'share.ask.unknown' | 'share.ask.foreign' | 'share.ask.replaceReal', vars: Record<string, string>) => string;
 
-/** Control characters, line and paragraph separators, and bidirectional overrides. */
-const UNSAFE = new RegExp('[\\u0000-\\u001f\\u007f-\\u009f\\u2028\\u2029\\u202a-\\u202e\\u2066-\\u2069]', 'g');
+/** Control and format characters (every bidirectional mark, override and isolate, zero-width spaces and joiners: Unicode Cc and Cf), line and paragraph separators. */
+const UNSAFE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu;
 
 /** One line, at most `max` characters: control characters and line breaks become spaces. */
 export const oneLine = (s: string | undefined, max = 80): string => {

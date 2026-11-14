@@ -72,6 +72,19 @@ read them, and must not become a place where twenty years of books pile up.
 - **«Zurückziehen» cannot recall a copy.** It deletes what the service holds. A copy the
   recipient has already opened stays on his Mac, as a printed binder would. The app says so on the
   share card and never claims more.
+- **A copy moves forward only on its sharer's signature** (added in the reviews of PR #538). A link
+  is someone else's data: anyone can make one naming any firm, sharer and UID. So the sharer's app
+  keeps an Ed25519 key pair per books and recipient (the private key in the secret store, never in
+  the books or a link) and signs every package's index, whose files are named with their SHA-256,
+  so the signature covers the content. The recipient's copy pins the public key of its first link
+  (trust on first use; that first link, like any link opened by the system's URL scheme, is shown
+  with its service and claims before it opens) and moves forward without a question only for a
+  package that verifies against the pinned key. Any other package that would move the copy is
+  refused until the person confirms it, shown the copy's real facts beside the package's claims and
+  told that the sender cannot be verified. A forwarded invitation reveals the public key alone.
+  Copies made before signatures pin the key on their next link after one confirmation. A link to
+  another service than the app's is confirmed the same way. The `.vanilla` file carries no
+  signature: opening a file is the person's own act.
 - **The return is a proposal.** Nothing the recipient changes reaches the books until the sharer
   takes it over, and a filed quarter stays as filed on both sides.
 - **New things to run:** the service, the inbound confirmation address, the page with the

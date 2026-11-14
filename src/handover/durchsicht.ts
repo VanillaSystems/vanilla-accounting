@@ -47,6 +47,8 @@ export interface Marker {
   dropped?: string[];
   /** The version's git commit, when the package carried its objects (data/durchsicht/git.json). */
   commit?: string;
+  /** The sharer's public key the copy is pinned to: set by src/share/sharing.ts openLink for a link whose signature it verified (src/share/signing.ts), never from a package's word alone. */
+  signer?: string;
   /** When he last sent a return, and on which version. */
   sent?: { at: string; version: number; changes: number };
 }

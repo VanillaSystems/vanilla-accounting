@@ -50,11 +50,12 @@ export interface PackageIndex {
   /** «Frage zurück» of earlier returns, for the recipient. */
   questions?: Question[];
   /**
-   * A link's chain token (src/share/sharing.ts): random, the same in every link the sharer sends to
-   * this person, known only to the two of them. A copy moves forward without a question only for a
-   * package carrying the token it was made with.
+   * A link's signature (src/share/signing.ts): the sharer's Ed25519 public key for this person (SPKI,
+   * base64) and her signature over the rest of the index, files' hashes included. A copy pins the key
+   * of its first link and moves forward without a question only for a package signed by it.
    */
-  chain?: string;
+  signer?: string;
+  signature?: string;
   /** A return: how many records it changes. */
   changes?: number;
 }
