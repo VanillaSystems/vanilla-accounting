@@ -4,7 +4,7 @@
  * EXPORT_FILES, so each read of the exported app is a file the export holds.
  */
 import { issuedPdfUrl, sentPdfUrl } from '../invoices/model.js';
-import { fileKindOf } from '../core/files.js';
+import { inertExt } from '../core/files.js';
 
 /** What names a receipt's file: its id, and its file name, whose extension the export keeps (a CSV report, an image). */
 export interface ReceiptFile { id: string; filename: string }
@@ -68,9 +68,12 @@ export const EXPORT_FILES: Sources = {
   orderPages: () => 'data/order-pages.json',
   vatCorrections: () => 'data/vat-corrections.json',
   providerIssues: () => 'data/provider-issues.json',
-  // With its own extension, so a static host serves it with its type (#523); an export made before kept `.pdf` for every receipt.
-  receipt: (r) => { const { ext } = fileKindOf(r.filename); return `receipts/${r.id}${ext ? `.${ext}` : ''}`; },
-  statement: (bank, filename) => `bank-statements/${bank}/${filename}`,
+  // With its own extension when that is inert, so a static host serves it with its type; an HTML, SVG or XML file, or one of
+  // an unknown type, as `.bin`, never a document that runs script on the export's origin (#523). An export made before kept
+  // `.pdf` for every receipt.
+  receipt: (r) => `receipts/${r.id}.${inertExt(r.filename)}`,
+  // The bank's XML (camt) likewise goes out with `.bin` added: shown as text by the UI, never a document of the export's origin.
+  statement: (bank, filename) => `bank-statements/${bank}/${filename}${inertExt(filename) === 'bin' ? '.bin' : ''}`,
   invoices: () => 'data/invoices.json',
   invoicePdf: (number) => `invoices/${number}.pdf`,
   sentPdf: (id) => `invoices/sent/${id}.pdf`,

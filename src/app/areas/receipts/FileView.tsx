@@ -7,10 +7,10 @@
 import { useEffect, useState } from 'react';
 import { csvRows, decodeText, fileKindOf, type FileKind } from '../../../core/files.js';
 import { mailText, type MailText } from '../../../core/mail-text.js';
-import { t } from '../../i18n/index.js';
+import { language, t } from '../../i18n/index.js';
 import { Paper } from './Paper.js';
 
-/** The most rows a table shows and the most characters a text shows: the rest is named and downloaded. */
+/** The most rows a table shows and the most characters a text, a mail's body or a page shows: the rest is named and downloaded. */
 export const MAX_ROWS = 1000;
 export const MAX_CHARS = 500_000;
 
@@ -22,8 +22,8 @@ type Loaded =
   | { state: 'failed' }
   | { state: 'table'; rows: string[][]; total: number; bytes: number }
   | { state: 'text'; text: string; total: number; bytes: number }
-  | { state: 'mail'; mail: MailText; bytes: number }
-  | { state: 'html'; html: string; bytes: number };
+  | { state: 'mail'; mail: MailText; total: number; bytes: number }
+  | { state: 'html'; html: string; total: number; bytes: number };
 
 /** One character per byte, as mailText reads a mail (TextDecoder's «latin1» is Windows-1252 and changes 0x80–0x9F). */
 function binary(bytes: Uint8Array): string {
@@ -36,9 +36,13 @@ async function load(src: string, kind: FileKind): Promise<Loaded> {
   const res = await fetch(src);
   if (!res.ok) return { state: 'failed' };
   const bytes = new Uint8Array(await res.arrayBuffer());
-  if (kind.view === 'mail') return { state: 'mail', mail: mailText(binary(bytes)), bytes: bytes.length };
+  if (kind.view === 'mail') {
+    const mail = mailText(binary(bytes));
+    const body = mail.text ?? mail.html ?? '';
+    return { state: 'mail', mail: { ...mail, ...(mail.text !== undefined ? { text: body.slice(0, MAX_CHARS) } : mail.html !== undefined ? { html: body.slice(0, MAX_CHARS) } : {}) }, total: body.length, bytes: bytes.length };
+  }
   const text = decodeText(bytes);
-  if (kind.view === 'html') return { state: 'html', html: text, bytes: bytes.length };
+  if (kind.view === 'html') return { state: 'html', html: text.slice(0, MAX_CHARS), total: text.length, bytes: bytes.length };
   if (kind.view === 'table') {
     const rows = csvRows(text);
     return { state: 'table', rows: rows.slice(0, MAX_ROWS + 1), total: rows.length, bytes: bytes.length };
@@ -54,11 +58,30 @@ export function FileView({ src, file, size, maxWidth = 600, whole = false }: { s
   return <TextFile src={src} file={file} kind={kind} size={size} />;
 }
 
+/**
+ * An image. An SVG is drawn from its bytes as an image of its own type: the audit export keeps it under an
+ * inert name (`.bin`, src/core/files.ts inertExt), which no browser draws by itself, and an <img> runs no script.
+ */
 function ImageFile({ src, file, kind, size }: { src: string; file: string; kind: FileKind; size?: number }) {
   const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [src]);
-  if (failed) return <NoPreview src={src} file={file} kind={kind} size={size} />;
-  return <img className="pg fimg" data-view="image" src={src} alt={file} onError={() => setFailed(true)} />;
+  const svg = kind.type === 'image/svg+xml';
+  const [url, setUrl] = useState<string | undefined>(svg ? undefined : src);
+  useEffect(() => {
+    setFailed(false);
+    if (!svg) { setUrl(src); return; }
+    let live = true;
+    let made: string | undefined;
+    setUrl(undefined);
+    fetch(src).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status))))).then((b) => {
+      if (!live) return;
+      made = URL.createObjectURL(new Blob([b], { type: 'image/svg+xml' }));
+      setUrl(made);
+    }, () => { if (live) setFailed(true); });
+    return () => { live = false; if (made) URL.revokeObjectURL(made); };
+  }, [src, svg]);
+  if (failed) return <NoPreview src={src} file={file} kind={kind} size={size} failed />;
+  if (!url) return <div className="pages"><div className="loading" /></div>;
+  return <img className="pg fimg" data-view="image" src={url} alt={file} onError={() => setFailed(true)} />;
 }
 
 function TextFile({ src, file, kind, size }: { src: string; file: string; kind: FileKind; size?: number }) {
@@ -91,11 +114,18 @@ function TextFile({ src, file, kind, size }: { src: string; file: string; kind: 
     return (
       <div className="pg fdoc" data-view="text">
         <pre className="ftext">{got.text}</pre>
-        {got.total > got.text.length && <p className="fcut">{t('file.textCut', { limit: MAX_CHARS.toLocaleString() })}</p>}
+        {got.total > got.text.length && <Cut />}
       </div>
     );
   }
-  if (got.state === 'html') return <iframe className="pg fhtml" data-view="html" sandbox="" srcDoc={LOCKED + got.html} title={file} />;
+  if (got.state === 'html') {
+    return (
+      <>
+        <iframe className="pg fhtml" data-view="html" sandbox="" srcDoc={LOCKED + got.html} title={file} />
+        {got.total > got.html.length && <Cut />}
+      </>
+    );
+  }
   const m = got.mail;
   return (
     <div className="pg fdoc" data-view="mail">
@@ -108,14 +138,19 @@ function TextFile({ src, file, kind, size }: { src: string; file: string; kind: 
       {m.text !== undefined ? <pre className="ftext">{m.text}</pre>
         : m.html !== undefined ? <iframe className="fhtml" sandbox="" srcDoc={LOCKED + m.html} title={m.subject ?? file} />
         : <p className="fcut">{t('file.mail.noBody')}</p>}
+      {got.total > MAX_CHARS && <Cut />}
     </div>
   );
 }
 
-const sizeText = (n: number) => {
-  const f = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 });
-  return n < 1024 ? `${n} B` : n < 1024 * 1024 ? `${f.format(n / 1024)} KB` : `${f.format(n / 1024 / 1024)} MB`;
-};
+const number = (n: number) => new Intl.NumberFormat(`${language()}-CH`, { maximumFractionDigits: 1 }).format(n);
+
+/** What was left out of a long text, a mail's body or a page: the limit, named. */
+const Cut = () => <p className="fcut">{t('file.textCut', { limit: number(MAX_CHARS) })}</p>;
+
+/** A file's size in the app's language: «1,2 Mo», «1.2 MB». */
+export const sizeText = (n: number) =>
+  n < 1024 ? t('file.bytes', { n: number(n) }) : n < 1024 * 1024 ? t('file.kb', { n: number(n / 1024) }) : t('file.mb', { n: number(n / 1024 / 1024) });
 
 /** A type the app does not draw, or a file that could not be read: what it is, and its download. */
 function NoPreview({ src, file, kind, size, failed = false }: { src: string; file: string; kind: FileKind; size?: number; failed?: boolean }) {

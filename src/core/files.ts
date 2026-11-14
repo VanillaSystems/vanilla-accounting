@@ -50,6 +50,20 @@ export function fileKindOf(filename: string): FileKind {
 }
 
 /**
+ * The extensions a static host serves as inert data: never a document that runs script (HTML, SVG, XML,
+ * XHTML, MHT, …). The audit export keeps a receipt's extension only when it is one of these; any other
+ * file goes out as `.bin`, so a mail's HTML or an SVG never runs on the export's origin, which holds the
+ * books (#523). The UI still shows it by its own name (FileView).
+ */
+const INERT = new Set(['pdf', 'png', 'jpg', 'jpeg', 'gif', 'webp', 'avif', 'heic', 'heif', 'tif', 'tiff', 'csv', 'tsv', 'txt', 'json', 'eml', 'xlsx', 'xls', 'docx', 'zip']);
+
+/** The extension a file keeps in the audit export: its own when inert, else `bin`. */
+export const inertExt = (filename: string): string => {
+  const { ext } = fileKindOf(filename);
+  return INERT.has(ext) ? ext : 'bin';
+};
+
+/**
  * The headers a linked file is served with: its own type, never sniffed. A file the UI does not draw itself
  * (a mail's HTML, an SVG) runs no script when opened on its own: sandboxed, without the app's origin.
  */

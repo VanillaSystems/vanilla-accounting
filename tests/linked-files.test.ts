@@ -15,7 +15,7 @@ import { buildAuditExport } from '../src/audit/build.js';
 import { verifyExport } from '../src/audit/manifest.js';
 import { EXPORT_FILES, EXPORT_SOURCES } from '../src/audit/sources.js';
 import { loadBooks, PERSON, saveBooks, update } from '../src/books/store.js';
-import { csvRows, decodeText, fileHeaders, fileKindOf } from '../src/core/files.js';
+import { csvRows, decodeText, fileHeaders, fileKindOf, inertExt } from '../src/core/files.js';
 import { mailText } from '../src/core/mail-text.js';
 import type { Receipt } from '../src/types/index.js';
 import { APP_ROOT, workspaceAt, yearPaths, type Workspace } from '../src/workspace/workspace.js';
@@ -63,11 +63,12 @@ const MAIL = [
 /** One file of each kind, its id, its name, its bytes, and what its pane shows. */
 const FILES = [
   { id: 'lf-csv', filename: 'shop-fees-2026-09.csv', bytes: Buffer.from('Order;Fee;Currency\n#1001;1.20;CHF\n#1002;"0,95";CHF\n'), view: 'table', shows: '#1002' },
-  { id: 'lf-png', filename: 'kassenzettel.png', bytes: PNG, view: 'image' },
+  { id: 'lf-png', filename: 'kassenzettel.png', bytes: PNG, view: 'image', width: 2 },
+  { id: 'lf-svg', filename: 'stempel.svg', bytes: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="3" height="3"><rect width="3" height="3" fill="grey"/><script>parent.document.title="svg"</script></svg>'), view: 'image', width: 3 },
   { id: 'lf-txt', filename: 'notiz.txt', bytes: Buffer.from('Barbeleg Parkhaus CHF 12.00\n', 'latin1'), view: 'text', shows: 'Parkhaus' },
   { id: 'lf-xml', filename: 'auszug.xml', bytes: Buffer.from('<?xml version="1.0"?><Document><Amt Ccy="CHF">12.00</Amt></Document>'), view: 'text', shows: '<Amt Ccy="CHF">' },
   { id: 'lf-eml', filename: 'bestellung.eml', bytes: Buffer.from(MAIL, 'latin1'), view: 'mail', shows: 'für Kaffeebohnen' },
-  { id: 'lf-html', filename: 'beleg.html', bytes: Buffer.from('<html><body><h1>Quittung</h1><script>parent.document.title="x"</script></body></html>'), view: 'html' },
+  { id: 'lf-html', filename: 'beleg.html', bytes: Buffer.from('<html><body><h1>Quittung</h1><script>document.body.setAttribute("data-ran","1");parent.document.title="x"</script></body></html>'), view: 'html' },
   { id: 'lf-xlsx', filename: 'umsatz.xlsx', bytes: Buffer.from('PK\u0003\u0004 not really a workbook'), view: 'none', shows: 'umsatz.xlsx' },
 ] as const;
 
@@ -124,6 +125,13 @@ test('the API serves each receipt with its own type, not as a PDF', async () => 
       assert.equal(res.headers.get('content-security-policy'), 'sandbox', f.filename);
       assert.deepEqual(Buffer.from(await res.arrayBuffer()), f.bytes, f.filename);
     }
+    // The file by its name, as the UI's dev proxy and the desktop serve it: never an active document of the app's origin.
+    for (const name of ['beleg.html', 'stempel.svg', 'auszug.xml']) {
+      const res = await api.fetch(`/receipts/${name}`);
+      assert.equal(res.status, 200, name);
+      assert.equal(res.headers.get('x-content-type-options'), 'nosniff', name);
+      assert.equal(res.headers.get('content-security-policy'), 'sandbox', name);
+    }
   } finally {
     await api.stop();
   }
@@ -151,10 +159,12 @@ after(async () => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-test('the export keeps each receipt with its own extension and bytes, and its manifest verifies', async () => {
+test('the export keeps each receipt with its bytes, its own extension when inert, and its manifest verifies', async () => {
+  assert.deepEqual(FILES.map((f) => inertExt(f.filename)), ['csv', 'png', 'bin', 'txt', 'bin', 'eml', 'bin', 'xlsx'], 'html, svg and xml go out as .bin');
+  assert.equal(inertExt('ohne-endung'), 'bin');
   for (const f of FILES) {
     const path = EXPORT_FILES.receipt(f);
-    assert.equal(path, `receipts/${f.id}.${fileKindOf(f.filename).ext}`);
+    assert.equal(path, `receipts/${f.id}.${inertExt(f.filename)}`);
     assert.deepEqual(readFileSync(join(dir, path)), f.bytes, path);
     const res = await fetch(new URL(EXPORT_SOURCES.receipt(f), base));
     assert.equal(res.status, 200, path);
@@ -163,6 +173,10 @@ test('the export keeps each receipt with its own extension and bytes, and its ma
   const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) as { files: Array<{ path: string }>; missing: string[] };
   for (const f of FILES) assert.ok(manifest.files.some((m) => m.path === EXPORT_FILES.receipt(f)), `${f.filename} is in the manifest`);
   assert.deepEqual(manifest.missing, []);
+  const active = manifest.files.map((m) => m.path).filter((p) => /^(receipts|bank-statements)\/.*\.(html?|svg|xml|xhtml|mht|shtml)$/i.test(p));
+  assert.deepEqual(active, [], 'no receipt or statement a static host would serve as an active document');
+  assert.equal(EXPORT_FILES.statement('Muster Bank', 'camt053-2026-09.xml'), 'bank-statements/Muster Bank/camt053-2026-09.xml.bin', 'the bank\'s XML goes out inert');
+  assert.equal(EXPORT_FILES.statement('Muster Bank', '2026-09.pdf'), 'bank-statements/Muster Bank/2026-09.pdf');
 });
 
 test('the exported app shows every kind by its type, and a type it does not draw with its facts and download', { skip: browserPath ? false : 'no Chromium browser installed (CHROME_PATH)', timeout: 300_000 }, async () => {
@@ -182,15 +196,23 @@ test('the exported app shows every kind by its type, and a type it does not draw
       await page.waitForSelector(pane);
       const text = await page.$eval(pane, (el) => (el as HTMLElement).innerText);
       if ('shows' in f) assert.ok(text.includes(f.shows), `${f.filename}: «${f.shows}» in ${JSON.stringify(text.slice(0, 200))}`);
-      if (f.view === 'image') await page.waitForFunction((sel) => (document.querySelector(sel) as HTMLImageElement | null)?.naturalWidth === 2, {}, pane);
+      if ('width' in f) await page.waitForFunction((sel, w) => (document.querySelector(sel) as HTMLImageElement | null)?.naturalWidth === w, {}, pane, f.width);
       if (f.view === 'html') {
         const frame = await page.$eval(pane, (el) => ({ sandbox: el.getAttribute('sandbox'), doc: (el as HTMLIFrameElement).srcdoc }));
-        assert.equal(frame.sandbox, '', 'the page runs no script');
+        assert.equal(frame.sandbox, '', 'the page runs no script: no allow-scripts');
+        assert.ok(frame.doc.startsWith('<meta http-equiv="Content-Security-Policy" content="default-src \'none\''), 'the page carries the CSP that forbids script and requests');
         assert.match(frame.doc, /<h1>Quittung<\/h1>/);
+        // Seen from inside the frame: the page is drawn, and its script did not run (it would mark the body).
+        const inside = (await (await page.$(pane))!.contentFrame())!;
+        assert.equal(await inside.$eval('h1', (h) => h.textContent), 'Quittung');
+        assert.equal(await inside.$eval('body', (b) => b.getAttribute('data-ran')), null, 'the page\'s script did not run');
       }
+      await new Promise((ok) => setTimeout(ok, 300));
+      assert.ok(!['x', 'svg'].includes(await page.title()), `${f.filename}: a script in the file ran`);
       if (f.view === 'none') {
         assert.ok(text.includes(en.messages['file.noPreview'] as string), text);
         assert.match(text, /XLSX/);
+        assert.match(text, /\b26 B\b/, 'its size, in the app\'s language');
         const href = await page.$eval(`${pane} a[download]`, (a) => (a as HTMLAnchorElement).href);
         assert.ok(href.endsWith(EXPORT_FILES.receipt(f)), href);
         assert.equal((await fetch(href)).status, 200);

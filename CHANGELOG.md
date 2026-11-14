@@ -32,7 +32,11 @@ Two markers flag an entry you must read before you update:
   show (xlsx, heic, …) names its file, type and size and offers its download. The API serves
   each receipt with its own type, and the audit export keeps each receipt's extension
   (`receipts/<id>.csv`), listed in its manifest as before; an earlier export keeps its `.pdf`
-  names (#523).
+  names. No linked file runs script on the app's or the export's origin: the export keeps an
+  extension only for inert types and names an HTML, SVG or XML file (the bank's camt XML too)
+  `.bin`; the API serves every receipt and statement file with `nosniff` and, unless a PDF, a
+  sandboxing CSP; an HTML page or mail is shown in a sandboxed frame that allows no script and
+  no request (#523).
 - Audit export: the floating top bar, the status corner, the dock and the page now start below
   the amber audit bar, at every window width, zoom and theme, so its text («Prüfmodus · nur
   Lesen …», the snapshot's date, schema and version) is never covered (#515).
