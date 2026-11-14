@@ -7,6 +7,7 @@ import { APP_ROOT, findFile } from '../workspace/workspace.js';
 import { loadBooks } from '../books/store.js';
 import { workspaceModules } from '../core/modules/load.js';
 import { isAppPath } from './app-paths.js';
+import { fileHeaders } from '../core/files.js';
 
 export const router = Router();
 
@@ -22,7 +23,9 @@ function yearFile(part: 'receipts' | 'statements'): express.RequestHandler {
     const name = decodeURIComponent(req.path.slice(1));
     if (!name || name.split('/').includes('..')) return next();
     const file = findFile(WS.paths, part, name);
-    if (file) res.sendFile(file); else next();
+    if (!file) return next();
+    res.set(fileHeaders(name)); // an HTML, SVG or XML file runs no script on the app's origin (#523)
+    res.sendFile(file);
   };
 }
 router.use('/receipts', yearFile('receipts'));

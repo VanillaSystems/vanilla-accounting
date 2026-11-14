@@ -84,6 +84,7 @@ import { FEE_NEEDS, SALES_NEEDS } from '../knowledge/provider.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { addDays, isIsoDate } from '../accounting/periods.js';
 import { orderPageOf, type Provider } from './providers.js';
+import { csvRows } from '../core/files.js';
 import { isPersonsLink } from '../books/refs.js';
 
 /**
@@ -94,35 +95,6 @@ import { isPersonsLink } from '../books/refs.js';
 const FOREIGN_TAX_CODE: string | undefined = undefined;
 
 // ─── Reading the file ────────────────────────────────────────────────────────
-
-/** The rows of a CSV file: its separator found on the header line (comma, semicolon or tab), quotes as RFC 4180 writes them. */
-export function csvRows(text: string): string[][] {
-  const body = text.replace(/^﻿/, '');
-  const nl = body.search(/\r?\n/);
-  const head = nl < 0 ? body : body.slice(0, nl);
-  const sep = [',', ';', '\t'].map((c) => ({ c, n: head.split(c).length })).sort((a, b) => b.n - a.n)[0].c;
-  const rows: string[][] = [];
-  let row: string[] = [];
-  let cell = '';
-  let quoted = false;
-  for (let i = 0; i < body.length; i++) {
-    const ch = body[i];
-    if (quoted) {
-      if (ch === '"' && body[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') quoted = false; else cell += ch;
-      continue;
-    }
-    if (ch === '"' && cell === '') quoted = true;
-    else if (ch === sep) { row.push(cell); cell = ''; } else if (ch === '\n' || ch === '\r') {
-      if (ch === '\r' && body[i + 1] === '\n') i++;
-      row.push(cell); cell = '';
-      if (row.some((c) => c.trim())) rows.push(row);
-      row = [];
-    } else cell += ch;
-  }
-  row.push(cell);
-  if (row.some((c) => c.trim())) rows.push(row);
-  return rows;
-}
 
 const norm = (h: string) => h.trim().toLowerCase();
 
