@@ -32,7 +32,7 @@ import type { Party } from '../handover/versions.js';
 import { shareClient, ShareServiceError, type ShareClient } from './client.js';
 import { decodeKey, decryptMeta, encodeKey, encryptMeta, generateKey, unwrapKey, wrapKey } from './crypto/index.js';
 import { renderInvitation, type Invitation } from './invitation.js';
-import { signedBy, signIndex } from './signing.js';
+import { sentTo, signDestination, signedBy, signIndex } from './signing.js';
 import { linkOf, parseLink, shareService } from './service.js';
 import { receivePackage, sendPackage, type Progress } from './transport.js';
 
@@ -252,6 +252,8 @@ async function shareNow(ws: Workspace, req: ShareRequest, from: Party, opts: { m
   const meta = await encryptMeta(key, { v: 1, senderName: from.name, direction: 'send', company: ws.company.name, ...(message ? { note: message.slice(0, 1000) } : {}), asOf: now.toISOString().slice(0, 10) });
   const sent = await sendPackage({
     client, key, out: { index: prepared.index, files: prepared.files }, carriesReturnToken: true,
+    // Signed for exactly this share: re-uploaded elsewhere, the package moves no copy (src/share/signing.ts Destination).
+    bind: async ({ id, returnToken }) => ({ destination: await signDestination(prepared.index, req.to, { service, share: id, returnToken: returnToken ?? "" }) }),
     start: (s) => client.create(sender.token, { ...s, meta }),
     progress: opts.progress,
   });
@@ -449,8 +451,12 @@ export async function openLink(text: string, opts: { at?: string; progress?: Pro
   const { contents, index } = got;
   const root = copyRootOf(contents.index, at);
   const had = markerOf(root);
+  // Signed by `signer` for exactly this link: its content, and its destination (this service, this share, the return token it brought).
+  const boundBy = (signer: string | undefined): signer is string => !!signer && signedBy(contents.index, signer)
+    && sentTo(index.destination, contents.index, signer, { service: link.service, share: link.id, ...(index.returnToken ? { returnToken: index.returnToken } : {}) });
   const pinned = had?.signer ?? linkOfCopy(root)?.signer;
-  if (had && !opts.replace && (!pinned || !signedBy(contents.index, pinned))) {
+  // Moved without a question: by the pinned key, for this share, and forward only (an older version replayed rolls nothing back).
+  if (had && !opts.replace && !(boundBy(pinned) && contents.index.version.n > had.version.n)) {
     downloaded.set(stash, { at: Date.now(), got });
     const claimed = contents.index.from.name.slice(0, 120);
     throw new ShareFlowError(`Hier liegt schon eine Kopie von ${had.firm.name} (Version ${had.version.n}, von ${had.sharer.name}). Dieser Link gehört nicht zu ihren Übergaben; laut Link ist er von ${claimed} über ${host}.`, 'shareCopyOther', {
@@ -459,7 +465,7 @@ export async function openLink(text: string, opts: { at?: string; progress?: Pro
   }
   const opened = openPackage(contents, opts.now ?? new Date(), at);
   // The key pinned: the one whose signature this package carries, when it verifies (first use, or as the person confirmed).
-  const signer = signedBy(contents.index) ? contents.index.signer : undefined;
+  const signer = boundBy(contents.index.signer) ? contents.index.signer : undefined;
   if (signer) writeFileSync(join(opened.root, DURCHSICHT_MARKER), JSON.stringify({ ...markerOf(opened.root), signer }, null, 2) + '\n');
   const kept: LinkFacts = {
     service: link.service, id: link.id, key: link.key, ...(index.returnToken ? { returnToken: index.returnToken } : {}),

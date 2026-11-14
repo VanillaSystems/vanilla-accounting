@@ -21,6 +21,8 @@ import { SHARE_LIMITS } from './service.js';
 export interface PackageShareIndex extends ShareIndex {
   package: PackageIndex;
   returnToken?: string;
+  /** Where the sharer sent it, signed (src/share/signing.ts Destination): binds the package to this share. */
+  destination?: unknown;
 }
 
 /** The package as it goes out: its index and its files by path, and a return's change set. */
@@ -28,8 +30,8 @@ export interface Outgoing { index: PackageIndex; files: ReadonlyMap<string, Uint
 
 /** A return's change set travels as this file of the share. */
 export const CHANGES_FILE = 'changes.json';
-/** Room kept in the index for the return token the service names only once the share exists. */
-const TOKEN_ROOM = 256;
+/** Room kept in the index for what the service names only once the share exists: the return token, and the signed destination (signing.ts). */
+const TOKEN_ROOM = 1024;
 const BATCH = 100;
 
 export type Phase = 'encrypt' | 'upload' | 'download' | 'decrypt';
@@ -70,6 +72,8 @@ export async function sendPackage(opts: {
   out: Outgoing;
   /** A hand-over makes room for the return token in its index. */
   carriesReturnToken: boolean;
+  /** Fields for the share's index once the service named the share (its id and return token): the signed destination. */
+  bind?(made: { id: string; returnToken?: string }): Promise<Record<string, unknown>>;
   start(sizes: { bytes: number; objects: number; openProof: string }): Promise<{ id: string; revokeToken: string; returnToken?: string; batch?: number }>;
   finish?(id: string): Promise<Record<string, unknown>>;
   progress?: Progress;
@@ -91,7 +95,8 @@ export async function sendPackage(opts: {
   if (bytes > SHARE_LIMITS.bytes) throw new ShareLimitError('bytes', bytes);
 
   const made = await opts.start({ bytes, objects, openProof: await openProof(key) });
-  const index = indexText({ ...shareIndex, ...(made.returnToken && opts.carriesReturnToken ? { returnToken: made.returnToken } : {}) }, room);
+  const bound = opts.bind ? await opts.bind({ id: made.id, ...(made.returnToken ? { returnToken: made.returnToken } : {}) }) : {};
+  const index = indexText({ ...shareIndex, ...(made.returnToken && opts.carriesReturnToken ? { returnToken: made.returnToken } : {}), ...bound }, room);
   const blobs: Array<{ name: string; bytes: number; seal: () => Promise<Uint8Array> }> = [
     { name: INDEX_OBJECT, bytes: indexBytes, seal: () => encrypt(key, index, { kind: 'index', name: INDEX_OBJECT }) },
     ...planned.map((p) => ({ name: p.object, bytes: encryptedSize(p.data.byteLength), seal: () => encryptFile(key, p.object, p.data) })),

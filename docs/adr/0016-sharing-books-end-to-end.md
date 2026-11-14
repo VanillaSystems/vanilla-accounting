@@ -79,7 +79,14 @@ read them, and must not become a place where twenty years of books pile up.
   so the signature covers the content. The recipient's copy pins the public key of its first link
   (trust on first use; that first link, like any link opened by the system's URL scheme, is shown
   with its service and claims before it opens) and moves forward without a question only for a
-  package that verifies against the pinned key. Any other package that would move the copy is
+  package that verifies against the pinned key, was signed for this very share, and is newer than
+  the copy. The binding: once the service has named the share's id and the recipient's return
+  token, the sharer's app signs a small destination record (the service's origin, the share's id,
+  a SHA-256 of the return token, a SHA-256 of the signed index) with the same key and puts it into
+  the share's own index, which is encrypted and uploaded only after that. The recipient checks it
+  against the link's own origin and id and the return token the index brought. A genuine package
+  re-uploaded as another share keeps its index signature but fails the destination, and a replayed
+  older version fails the version check: both ask. Any other package that would move the copy is
   refused until the person confirms it, shown the copy's real facts beside the package's claims and
   told that the sender cannot be verified. A forwarded invitation reveals the public key alone.
   Copies made before signatures pin the key on their next link after one confirmation. A link to

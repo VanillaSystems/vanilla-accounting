@@ -218,11 +218,12 @@ const { writeFileSync } = await import('node:fs');
 /** A copy of the client's books opened from her link; then the computer of a stranger, who has no signing key of hers. */
 async function clientAndStranger(home: string) {
   await serviceWithSender('sandra@example.ch');
-  const shared = await sharing.shareByLink(books('ECHTE BUCHUNG'), { to: ERNST }, SANDRA);
+  const real = books('ECHTE BUCHUNG');
+  const shared = await sharing.shareByLink(real, { to: ERNST }, SANDRA);
   const copy = await sharing.openLink(shared.link, { at: home });
   const kept = await secrets.get('share:sign:ernst@example.ch');
   await secrets.set('share:sign:ernst@example.ch', null);
-  return { copy, kept: kept! };
+  return { copy, kept: kept!, real };
 }
 
 test('R2-1: a link on the same service, its envelope naming another company, moves no copy without the person, whatever its package claims', async () => {
@@ -242,13 +243,15 @@ test('R2-1: a link on the same service, its envelope naming another company, mov
 
 test('R2-1b: naming the real sharer in the package does not pass either; her own next link does, without a question', async () => {
   const home = mkdtempSync(join(tmpdir(), 'share-review-r21b-'));
-  const { copy, kept } = await clientAndStranger(home);
+  const { copy, kept, real } = await clientAndStranger(home);
   const planted = await sharing.shareByLink(books('ANGREIFER INHALT'), { to: ERNST }, SANDRA);
   await assert.rejects(sharing.openLink(planted.link, { at: home }), code('shareCopyOther'));
   assert.ok(entriesOf(copy.root).includes('ECHTE BUCHUNG') && !entriesOf(copy.root).includes('ANGREIFER'));
   // Her own computer again: her signing key, her next link.
   await secrets.set('share:sign:ernst@example.ch', kept);
-  const next = await sharing.shareByLink(books('ZWEITER STAND der Kundin'), { to: ERNST }, SANDRA);
+  const f = join(real.paths.root, 'transactional-data/2026/books/entries.jsonl');
+  writeFileSync(f, readFileSync(f, 'utf8').replace('ECHTE BUCHUNG', 'ZWEITER STAND der Kundin'));
+  const next = await sharing.shareByLink(real, { to: ERNST, full: true }, SANDRA, { now: new Date(Date.now() + 1000) });
   await sharing.openLink(next.link, { at: home });
   assert.ok(entriesOf(copy.root).includes('ZWEITER STAND'), 'signed by the pinned key: the copy moves forward');
 });
@@ -358,4 +361,52 @@ test('R3-2: oneLine takes out every format character: bidi marks, zero-width spa
   }
   assert.equal(oneLine(`a${String.fromCodePoint(0x202e)}b`), 'a b');
   assert.equal(oneLine('x'.repeat(200)).length, 80);
+});
+
+// ─── round 4 (review of 67e20cc7) ───────────────────────────────────────────
+
+/** Whoever saw a link re-uploads its genuine, signed package as a share of her own: her key, her return token. */
+async function replay(svcUrl: string, leaked: string): Promise<{ link: string; id: string }> {
+  const c = shareClient(svcUrl);
+  const [, id, key] = /\/([a-z2-7]{26})#(.+)$/.exec(leaked)!;
+  const { contents, index } = await receivePackage({ client: c, id, key: decodeKey(key) });
+  const reg = await c.registerSender('mallory@example.org');
+  const k = generateKey();
+  // She may even carry the original destination along: it names another share.
+  const sent = await sendPackage({ client: c, key: k, out: { index: contents.index, files: contents.files }, carriesReturnToken: true, start: (s) => c.create(reg.senderToken, s), bind: async () => ({ destination: index.destination }) });
+  return { link: linkOf(`${svcUrl}/${sent.id}`, encodeKey(k)), id: sent.id };
+}
+
+test('R4-1: a genuine signed package re-uploaded as another share moves no copy without a question', async () => {
+  const svc = await serviceWithSender('sandra@example.ch');
+  const home = mkdtempSync(join(tmpdir(), 'share-review-r41-'));
+  const real = books('ECHT');
+  const first = await sharing.shareByLink(real, { to: ERNST }, SANDRA);
+  const copy = await sharing.openLink(first.link, { at: home });
+  const linkBefore = readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8');
+  // Her next version, re-uploaded by someone else: newer, signed by the pinned key, but not for that share.
+  const second = await sharing.shareByLink(real, { to: ERNST, full: true }, SANDRA, { now: new Date(Date.now() + 1000) });
+  const planted = await replay(svc.url, second.link);
+  await assert.rejects(sharing.openLink(planted.link, { at: home }), code('shareCopyOther'));
+  assert.equal(readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8'), linkBefore, 'his returns still go into her share');
+  // Her own link of that version opens without a question.
+  await sharing.openLink(second.link, { at: home });
+  assert.equal(sharing.linkOfCopy(copy.root)!.id, /\/([a-z2-7]{26})#/.exec(second.link)![1]);
+});
+
+test('R4-2: an older signed version moves no copy back without a question', async () => {
+  await serviceWithSender('sandra@example.ch');
+  const home = mkdtempSync(join(tmpdir(), 'share-review-r42-'));
+  const real = books('VERSION EINS');
+  const v1 = await sharing.shareByLink(real, { to: ERNST }, SANDRA);
+  const copy = await sharing.openLink(v1.link, { at: home });
+  const f = join(real.paths.root, 'transactional-data/2026/books/entries.jsonl');
+  writeFileSync(f, readFileSync(f, 'utf8').replace('VERSION EINS', 'VERSION ZWEI'));
+  const v2 = await sharing.shareByLink(real, { to: ERNST, full: true }, SANDRA, { now: new Date(Date.now() + 1000) });
+  await sharing.openLink(v2.link, { at: home });
+  assert.equal(markerOf(copy.root)!.version.n, 2);
+  // Her own first link, opened again (an opening is left): signed for its share, but older.
+  await assert.rejects(sharing.openLink(v1.link, { at: home }), code('shareCopyOther'));
+  assert.equal(markerOf(copy.root)!.version.n, 2);
+  assert.ok(entriesOf(copy.root).includes('VERSION ZWEI'));
 });
