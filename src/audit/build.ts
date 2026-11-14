@@ -13,7 +13,8 @@ import { orderPagesIn, providerIssuesIn, vatCorrectionsIn } from '../intake/pair
 import { companyInfo } from '../books/company.js';
 import { APP_ROOT, findFile, yearPaths, yearsOf as yearsWithFolders, type Workspace } from '../workspace/workspace.js';
 import { schemaOf } from '../workspace/schema.js';
-import { EXPORT_FILES, type AuditSnapshot } from './sources.js';
+import { EXPORT_FILES, type AuditSnapshot, type ExportPurpose } from './sources.js';
+import { bundledDemo } from '../workspace/demo-copy.js';
 import { workspaceModules } from '../core/modules/load.js';
 import { loadInvoices, sha256 as pdfHash } from '../invoices/store.js';
 import type { Issued } from '../invoices/model.js';
@@ -26,23 +27,33 @@ export class ExportError extends Error {}
 
 /**
  * Builds the export into `outDir`. An earlier export there is replaced; any other non-empty
- * folder is refused, so a wrong path never deletes someone's files.
+ * folder is refused, so a wrong path never deletes someone's files. The demo (`purpose: 'demo'`)
+ * is meant for a public URL, so it takes only one of the app's own demo workspaces (demo/,
+ * demo-<name>/), never a company's books; `download` is the page its «App herunterladen» opens.
  */
-export async function buildAuditExport(ws: Workspace, outDir: string, createdAt = new Date().toISOString()): Promise<ExportManifest> {
+export async function buildAuditExport(
+  ws: Workspace, outDir: string,
+  { purpose = 'audit', createdAt = new Date().toISOString(), download }: { purpose?: ExportPurpose; createdAt?: string; download?: string } = {},
+): Promise<ExportManifest> {
   const out = resolve(outDir);
+  if (download !== undefined && (purpose !== 'demo' || !/^https?:\/\/[^\s"'<>]+$/.test(download))) throw new ExportError(`--download takes the http(s) address of a page, and only with --demo: ${download}`);
+  if (purpose === 'demo' && !bundledDemo(ws.paths.root)) throw new ExportError(`${ws.paths.root} is not one of the app's demo workspaces: --demo is for a public URL, so it takes only those (demo, demo-consulting, …).`);
   if (existsSync(out) && readdirSync(out).length && !existsSync(join(out, MANIFEST))) {
     throw new ExportError(`${out} is not empty and holds no audit export: choose an empty or new folder.`);
   }
   if (out === ws.paths.root || out.startsWith(ws.paths.root + '/')) throw new ExportError(`${out} is inside the workspace: choose a folder outside it.`);
   rmSync(out, { recursive: true, force: true });
 
-  await build({ root: APP_ROOT, mode: 'audit', logLevel: 'warn', build: { outDir: out, emptyOutDir: true } });
+  await build({
+    root: APP_ROOT, mode: purpose, logLevel: 'warn', build: { outDir: out, emptyOutDir: true },
+    ...(download ? { define: { 'import.meta.env.VITE_DEMO_DOWNLOAD': JSON.stringify(download) } } : {}),
+  });
 
   const books = loadBooks(ws);
   const write = (path: string, data: unknown) => writeOut(out, path, JSON.stringify(data));
   const raw = JSON.parse(readFileSync(ws.paths.ledger, 'utf8')) as { schema?: unknown };
   const version = currentVersion(ws.paths);
-  const snapshot: AuditSnapshot = { createdAt, booksSchema: schemaOf(raw.schema, ws.paths.ledger), appVersion: appVersion(), ...(version ? { version: { n: version.n, at: version.at, checksum: version.checksum } } : {}) };
+  const snapshot: AuditSnapshot = { ...(purpose === 'demo' ? { purpose } : {}), createdAt, booksSchema: schemaOf(raw.schema, ws.paths.ledger), appVersion: appVersion(), ...(version ? { version: { n: version.n, at: version.at, checksum: version.checksum } } : {}) };
 
   write(EXPORT_FILES.books(), books);
   write(EXPORT_FILES.modules(), workspaceModules(APP_ROOT, ws.paths.root, ws.company.vat));

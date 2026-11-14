@@ -16,6 +16,12 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- **A public demo in the browser** (docs/audit-export.md, «Publish the demo»). `npm run build:audit --
+  <dir> --demo [--download <url>]` exports the demo company as a static, read-only site for a
+  website, under any sub-path: a bar in the product colour says that the company and its figures
+  are made up and links to the download page; a card on the first visit points at Belege,
+  Buchungen and MWST; the AI column and the pages that need the app say that they are in the app.
+  It takes only the app's own demo workspaces.
 - **Share the books with a fiduciary and take back his corrections** (docs/specs/e2e-and-fiduciary.md
   Part B, as a file for now). «Teilen» in the top bar (⇧S) saves the books as a `.vanilla` file
   for a named person: the first time the open years' books and receipts (a closed year's receipts

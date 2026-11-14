@@ -102,8 +102,13 @@ export const EXPORT_SOURCES: Sources = {
   invoiceLogo: (path) => encodePath(EXPORT_FILES.invoiceLogo(path)),
 };
 
-/** What the export's api/status.json adds to the API's status: when and from what it was made. */
+/** An export for an auditor, or the public read-only demo of one of the app's made-up companies (build:audit --demo). */
+export type ExportPurpose = 'audit' | 'demo';
+
+/** What the export's api/status.json adds to the API's status: when, from what and, for the demo, for whom it was made. */
 export interface AuditSnapshot {
+  /** Set on the public demo only: an audit export carries none. */
+  purpose?: 'demo';
   createdAt: string;
   booksSchema: number;
   appVersion: string;

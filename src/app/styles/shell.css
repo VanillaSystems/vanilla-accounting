@@ -324,6 +324,9 @@ main.full { display: flex; flex-direction: column; }
 :root:has(.auditbar) :is(.topbar, .corner) { top: calc(14px + var(--audit-h)); }
 :root:has(.auditbar) :is(.split, .aside, .dropchat) { top: var(--audit-h); }
 :root:has(.auditbar):not(.phone) .activity { top: var(--audit-h); }
+/* The public demo (build:audit --demo) says so in the audit bar's place, in the product colour, since nothing is wrong (src/app/shell/Demo.tsx). */
+.auditbar.webdemo { gap: 2px 14px; padding: 6px 16px; font-size: 12.5px; background: var(--brand); color: var(--on-brand); border-bottom-color: transparent; }
+.auditbar.webdemo a { color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; white-space: nowrap; }
 /* A demo says that it is one: a quiet line along the page's bottom edge while it is open, and once a card on what to look at (src/app/shell/Demo.tsx). */
 .demobar { position: fixed; left: var(--abw); right: var(--aiw); bottom: 0; z-index: 6; display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; gap: 2px 14px; padding: 5px 16px; font-size: 12px; line-height: 1.4; color: var(--muted); background: var(--bg); border-top: 1px solid var(--line); pointer-events: none; }
 .demobar a { color: var(--accent); white-space: nowrap; pointer-events: auto; }

@@ -149,7 +149,7 @@ before(async () => {
   cpSync(join(APP_ROOT, 'demo'), copy, { recursive: true, filter: (src) => !src.endsWith('/data') });
   const ws = workspaceAt(copy);
   entryId = addFiles(ws);
-  await buildAuditExport(ws, dir, '2026-10-09T12:00:00.000Z');
+  await buildAuditExport(ws, dir, { createdAt: '2026-10-09T12:00:00.000Z' });
   server = await serveStatic(join(tmp, 'host'));
   base = `${server.url}/export/`;
 });
