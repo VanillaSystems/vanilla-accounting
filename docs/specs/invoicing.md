@@ -382,12 +382,12 @@ Rechnungen stays one area (`src/app/areas/invoices/`) with list and detail (`Spl
   (Datum, Nr., Kunde) stay visible and clickable, Esc or «×» closes it and keeps the tab; with
   nothing selected the table stands alone. **B**, the table with fewer columns (Nr., Kunde, Status,
   Brutto, Offen) as the list and the document beside it, the first row selected, as the app's rule
-  «An area is a list and a detail beside it» says. **Recommendation: A.** The table is the overview
-  the owner asked for and keeps all its columns and totals; the document keeps a full A4 width,
-  where B shrinks the sheet to about a third and drops Fällig, Währung, gesendet and Mahnstufe. A
-  deviates from the list + detail rule (AGENTS.md «UI links»: the detail column is always there, the
-  first row is selected) for Rechnungen and Offerten · Aufträge only; it needs the owner's OK
-  before it is built. With B, the rule holds unchanged.
+  «An area is a list and a detail beside it» says. **Decided: A** (owner, 2026-11-15). The table is
+  the overview the owner asked for and keeps all its columns and totals; the document keeps a full
+  A4 width, where B shrinks the sheet to about a third and drops Fällig, Währung, gesendet and
+  Mahnstufe. A deviates from the list + detail rule (AGENTS.md «UI links»: the detail column is
+  always there, the first row is selected) for Rechnungen and Offerten · Aufträge only; when it is
+  built, AGENTS.md names these two views as the exception.
 - **Four figures** on every issued invoice, above its sheet: Betrag · erhalten · gutgeschrieben ·
   offen. «erhalten» is the sum of the matched payments, «gutgeschrieben» the sum of its credit
   notes and write-offs, «offen» the rest; a negative rest is the customer's credit («Guthaben, zu
