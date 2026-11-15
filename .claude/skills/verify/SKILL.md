@@ -152,7 +152,8 @@ The app seals its secrets with a keychain key only the app may read, and the key
 When `$V sender` says the sender is missing, unconfirmed or refused (the service forgot the token), fall back to the mail: «Teilen» › «Adresse bestätigen» shows the address (`confirm@share.<domain>`) and the subject; the owner sends it from that mailbox with that address as the only From (another From is refused as `otherAddress`), within the hour the code lives. To keep the sender for the next runs, register it from this Mac rather than in the VM (a VM's token stays sealed there), so the token lands in the file, and ask the owner for the mail of the subject it prints:
 
 ```bash
-(umask 077; curl -s -X POST https://share.vanillasystems.ch/api/senders -H 'content-type: application/json' -d '{"email":"<address>"}' | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);require("fs").writeFileSync(process.env.HOME+"/.vanilla-accounting/e2e/share-sender",JSON.stringify({service:"https://share.vanillasystems.ch",email:"<address>",token:r.senderToken}),{mode:0o600});console.log(r.confirmation.to,"·",r.confirmation.subject)})')
+# VANILLA_SHARE_SERVICE: the share service URL the release build uses (docs/releasing.md)
+(umask 077; curl -s -X POST "$VANILLA_SHARE_SERVICE/api/senders" -H 'content-type: application/json' -d '{"email":"<address>"}' | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);require("fs").writeFileSync(process.env.HOME+"/.vanilla-accounting/e2e/share-sender",JSON.stringify({service:process.env.VANILLA_SHARE_SERVICE,email:"<address>",token:r.senderToken}),{mode:0o600});console.log(r.confirmation.to,"·",r.confirmation.subject)})')
 node .claude/skills/verify/share-sender.mjs --check ~/.vanilla-accounting/e2e/share-sender   # «confirmed» once the mail arrived
 ```
 

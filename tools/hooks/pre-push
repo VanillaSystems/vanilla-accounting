@@ -4,6 +4,19 @@
 # Install once per clone: git config core.hooksPath tools/hooks
 # The secrets come from the workspace (VANILLA_WORKSPACE, or the repo itself while it is one);
 # without a real workspace only the structural half runs, and says so.
+# A worktree has no .env of its own: VANILLA_WORKSPACE is then read from the main checkout's .env,
+# so a push from an agent's worktree runs the content half too.
+if [ -z "$VANILLA_WORKSPACE" ]; then
+  main=$(dirname "$(cd "$(git rev-parse --git-common-dir)" && pwd)")
+  for env in ./.env "$main/.env"; do
+    [ -f "$env" ] || continue
+    ws=$(sed -n 's/^VANILLA_WORKSPACE=//p' "$env" | head -1)
+    if [ -n "$ws" ]; then
+      case "$ws" in /*) ;; *) ws="$(dirname "$env")/$ws" ;; esac
+      VANILLA_WORKSPACE=$ws; export VANILLA_WORKSPACE; break
+    fi
+  done
+fi
 npm run --silent check-public || exit 1
 node --import tsx --test tests/layers.test.ts || {
   echo "pre-push: the layers lint failed (message above); fix it before pushing." >&2
