@@ -1,7 +1,6 @@
 # ADR 0004: Versions across clones, and the record envelope
 
-Status: accepted (2026-10-10), revised the same day after two outside reviews (Codex); amended
-2026-11-15 (see the end). Builds on
+Status: accepted (2026-10-10), revised the same day after two outside reviews (Codex). Builds on
 the versioning in [releasing.md](../releasing.md) and `src/workspace/schema.ts`; nothing of this
 built yet.
 
@@ -177,34 +176,3 @@ uses the record's content hash as the expected state, so no counter is stored.
 - [releasing.md](../releasing.md) changes: "`npm run update` writes the new format" holds for a
   workspace with a single writer; with a contributor or a cloud instance, the migration is the
   owner's event on `main`.
-
-## Amended 2026-11-15
-
-The owner approved BaseObject (docs/specs/domain-model.md, section 8, branch `spec/domain-model`).
-It replaces the envelope above and revises two of the rejections.
-
-**What changed.** The premise of the rejections was one app migrating one workspace, with clients
-of different ages meeting only at the API and the upload format. Sharing books end to end
-([ADR 0016](0016-sharing-books-end-to-end.md)), an order API and the change log bring copies and
-clients of different ages that exchange the same records: a fiduciary a release behind, a shop
-sending orders, the share service between two firms. Git is not always there either: a
-recipient's copy and the audit export carry no history.
-
-- **A version per record type: now taken.** Each type has its own version and forward-only ladder
-  (`JournalEntryV10`, `InvoiceV3`, `PayrollRunV1`; on disk `"type": "Invoice", "v": 3`). The share
-  service and the API translate between the versions both sides know and refuse with words what
-  the receiver cannot read. Files keep their own versions for their layout. The single workspace
-  `VERSION` is not built.
-- **Change metadata in each record: now taken, as the latest only.** `createdAt`, `createdBy`,
-  `lastChangedAt`, `lastChangedBy` and `rev`, all optional. The full history is in the change log
-  (`changes.jsonl`), written in the same action. `rev` makes an edit of the same record on two
-  copies a visible conflict. It is a counter, not a lock.
-- **The envelope becomes `BaseObjectV1`:** `id` (required), and optional `createdAt`, `createdBy`,
-  `lastChangedAt`, `lastChangedBy`, `rev`, `origin` (adds `share` and `api`), `externalId`,
-  `deleted`, `customFields`. Custom field definitions live in the workspace
-  (`knowledge/custom-fields.yaml`, [ADR 0015](0015-base-cases-in-the-app-long-tail-in-the-workspace.md)).
-
-**What stays.** Closed records are not touched: no base field, `type` or `v` is added to a
-sealed record, the canonical JSON skips absent fields, and every seal verifies as before. A
-record without `type` and `v` is read by its store and its sealed shape. `createdAt` is never
-guessed. Unknown versions fail closed. The other rejections stand.
