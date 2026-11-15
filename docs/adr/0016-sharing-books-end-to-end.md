@@ -1,9 +1,53 @@
 # ADR 0016: Sharing books end to end through a host that cannot read them
 
-**Status: accepted (owner, 2026-11-14), not built.** Spec:
+**Status: amended by the owner on 2026-11-15** (see «Amendment» below: no end-to-end encryption
+for sharing by link; the service keeps the key and sends the invitation; the link is the access).
+The sections after it record the decision of 2026-11-14 as it was; where they disagree, the
+amendment holds. Spec:
 [docs/specs/e2e-and-fiduciary.md](../specs/e2e-and-fiduciary.md), Part B. Prototype: PR #530
 (`docs/0.4.0/mockups/share/`). The service lives in a private repository (`vanilla-share`); its
 protocol is that repository's `docs/protocol.md`.
+
+## Amendment (owner, 2026-11-15)
+
+In the owner's words: «lets keep it as UX friendly in the beginning as possible. we can further lock
+it down as we go along». And, the same day: «usually when I share something I remember that I forgot
+to add X, or do Y. then I want to fix it and update the share. what if the user already downloaded?»
+
+- **The service holds the key.** The app still seals every file under a new 256-bit key per share
+  (the blob format is unchanged), so the storage (R2, EU) holds ciphertext only. The key goes to the
+  service over TLS when the share is made; the service keeps it wrapped under a key derived from its
+  own secret and hands it to whoever opens the link. The operator could therefore read a share while
+  it lives. No text in the app claims «Ende-zu-Ende» or «auch der Dienst kann sie nicht lesen» any
+  more; it says «verschlüsselt gespeichert, höchstens 14 Tage; nur wer den Link aus der Einladung hat,
+  kann sie öffnen».
+- **The link is the access:** `https://share.<domain>/<id>`, no `#` key, no code, no device binding.
+  It opens as often as the recipient likes until the share ends, **14 days** after it was made or
+  last updated. No limit on openings, no «5 hours after the first opening».
+- **The service sends the invitation** itself, from «<sender> über Vanilla Accounting
+  <no-reply@share.<domain>>», Reply-To the sender's confirmed address, through its mail provider. Its
+  words are the service's own template (download, «Dennoch öffnen», the button, what he sees, how to
+  send changes back, the deadline in words); a client supplies only names, the company, the language
+  and the sender's message, which the mail shows as hers, escaped. The recipient's address is kept
+  only while the share lives, for «Nochmals senden». The app's SMTP invitation and «Im Mailprogramm
+  öffnen» are gone; «Link kopieren» stays as the second way.
+- **«Aktualisieren»** puts the whole books again into the same share (same link, same return token);
+  the 14 days start again; «<Name> Bescheid geben» sends a short note, on by default. A recipient who
+  has not opened it yet gets the newest state; one who has, gets it when he next opens his copy: the
+  copy asks its share and moves forward by itself, his changes kept, with one plain line.
+- **«Zurückziehen»** and the end delete everything the service holds at once. A copy on his Mac
+  stays; the next time it asks, it says «… hat die Freigabe zurückgezogen» and offers «Kopie
+  löschen», never deleting it for him. His changes then go back as a file only.
+- **No signatures, no pinning.** A link opens like a `.vanilla` file: a newer state of the same firm
+  moves the copy forward, an older one changes nothing and says so. What stays: the package's own
+  checks (every file's size and SHA-256, the version's checksum), the question naming the service and
+  the link's claims before a link opens, and the confirmation for a link naming another service.
+- **Kept:** the sender's one-time confirmation (now also the guard against the service being used to
+  send mail), the per-sender and per-day limits, the size caps, the service's daily mail limit told
+  plainly, and the `.vanilla` file as the way without the service.
+- **Links of 0.6.0** (with a key after the #) are refused plainly: the service ends those shares when
+  it is deployed, and their page and the app say «abgelaufen». A 0.6.0 app sharing by link is told to
+  update.
 
 ## Context
 

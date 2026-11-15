@@ -3,8 +3,8 @@
  * Part B), the transport a `.vanilla` file (B3.7); the link through the share service comes next.
  *
  *   GET  /api/handover                         the content version, a Durchsicht copy's facts, the returns kept
- *   GET  /api/handover/plan?name=&email=&full=&archive=   what a hand-over to that person would carry, with its size
- *   POST /api/handover/share                   { to, message?, full?, archive? } → the `.vanilla` file (writes a version)
+ *   GET  /api/handover/plan?name=&email=&archive=   what a hand-over to that person would carry, with its size
+ *   POST /api/handover/share                   { to, message?, archive? } → the `.vanilla` file (writes a version)
  *   POST /api/handover/open                    a `.vanilla` file (raw): a return is kept for review; a hand-over opens as a Durchsicht copy
  *   GET  /api/handover/returns/:id             the review: rows by group, the effect on the VAT figures
  *   POST /api/handover/returns/:id/decide      { row, decision?, question? }
@@ -26,7 +26,7 @@ import { buildReturn, isDurchsicht, markerOf, openPackage, planReturn, readNotes
 import { applyReturn, decide, GROUPS, HandoverRefused, listReturns, receiveReturn, reviewOf, undoReturn, type Decision, type GroupId } from '../../handover/returns.js';
 import { OwnershipError } from '../../books/store.js';
 import type { ApiRefusal } from '../../types/api-error.js';
-import { canReturnByLink, readShares, unopenedVersions } from '../../share/sharing.js';
+import { canReturnByLink, linkOfCopy, readShares } from '../../share/sharing.js';
 
 export const router = Router();
 
@@ -37,6 +37,15 @@ let before: string | undefined;
 export async function openCopy(root: string): Promise<void> {
   if (!isDurchsicht(WS.paths.root)) before = WS.paths.root;
   await openBooksAt(root);
+}
+
+/** Back from a copy to the books opened before it, when there are such (the Mac app lists the others under «Zuletzt»). */
+export async function leaveCopy(): Promise<boolean> {
+  if (!before || !existsSync(before)) return false;
+  const to = before;
+  before = undefined;
+  await openBooksAt(to);
+  return true;
 }
 
 /** The sharer of the books open now: the company's owner stands for her until this Mac knows its person (B2). */
@@ -56,7 +65,7 @@ const partyOf = (v: unknown): Party => {
 const refusal = (e: PackageError): ApiRefusal => ({ code: e.code, params: e.params } as ApiRefusal);
 /** A hand-over's refusal as the API says it; anything else as it is. */
 export function handoverRefusal(e: unknown): unknown {
-  if (e instanceof PackageError) return new RequestError(e.code === 'shareTooLarge' ? 413 : e.code === 'shareBaseMissing' || e.code === 'shareOtherCompany' || e.code === 'shareUnknownBase' ? 409 : 400, e.message, refusal(e));
+  if (e instanceof PackageError) return new RequestError(e.code === 'shareTooLarge' ? 413 : e.code === 'shareBaseMissing' || e.code === 'shareCopyNewer' || e.code === 'shareCopyOther' || e.code === 'shareOtherCompany' || e.code === 'shareUnknownBase' ? 409 : 400, e.message, refusal(e));
   if (e instanceof HandoverRefused) return new RequestError(409, e.message, { code: 'changedSince' });
   if (e instanceof OwnershipError) return new RequestError(409, e.message);
   return e;
@@ -95,6 +104,8 @@ router.get('/api/handover', (_req, res) => {
         ...(marker.sent ? { sent: marker.sent } : {}),
         changes: changesOf(WS.paths.root).length, notes: readNotes(WS.paths.root), back: !!before,
         linked: canReturnByLink(WS.paths.root),
+        byLink: !!linkOfCopy(WS.paths.root),
+        ...(linkOfCopy(WS.paths.root)?.withdrawnAt ? { withdrawnAt: linkOfCopy(WS.paths.root)!.withdrawnAt } : {}),
       },
     } : {}),
     returns: marker ? [] : listReturns(WS),
@@ -105,17 +116,14 @@ router.get('/api/handover', (_req, res) => {
 export const shareRequest = (q: Record<string, unknown>): ShareRequest => ({
   to: partyOf(q.to ?? { name: q.name, email: q.email }),
   ...(text(q.message, 2000) ? { message: text(q.message, 2000) } : {}),
-  ...(q.full === true || q.full === '1' ? { full: true } : {}),
   ...(q.archive ? { archive: String(q.archive).split(',').filter((y) => /^\d{4}$/.test(y)) } : {}),
-  // A link nobody opened did not reach the person: the next share, by link or file, builds on none of them.
-  ...(unopenedVersions(WS).length ? { notHeld: unopenedVersions(WS) } : {}),
 });
 
 router.get('/api/handover/plan', (req, res) => {
   refuseOnCopy('share');
   const plan = planShare(WS, shareRequest(req.query as Record<string, unknown>));
-  const { files: _f, held: _h, omitted, ...rest } = plan;
-  res.json({ ...rest, files: plan.files.length, held: plan.held.length, omitted: omitted.length, omittedBytes: omitted.reduce((n, f) => n + f.bytes, 0), version: currentVersion(WS.paths) });
+  const { files: _f, omitted, ...rest } = plan;
+  res.json({ ...rest, files: plan.files.length, omitted: omitted.length, omittedBytes: omitted.reduce((n, f) => n + f.bytes, 0), version: currentVersion(WS.paths) });
 });
 
 router.post('/api/handover/share', async (req, res) => {
@@ -133,7 +141,8 @@ router.post('/api/handover/open', express.raw({ type: () => true, limit: MAX }),
     res.json({ kind, ...guarded(() => receiveReturn(WS, bytes)) });
     return;
   }
-  const opened = guarded(() => openPackage(bytes));
+  // A file beside a copy from someone else opens as a new copy: nothing of the copy here is moved or overwritten.
+  const opened = guarded(() => openPackage(bytes, new Date(), undefined, { otherAsNew: true }));
   await openCopy(opened.root);
   res.json({ kind: opened.kind, firm: opened.marker.firm.name, version: opened.marker.version.n, conflicts: opened.conflicts, dropped: opened.dropped });
 });

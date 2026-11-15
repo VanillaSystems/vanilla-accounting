@@ -104,7 +104,7 @@ export function ReturnReview({ id, nav, period, canEdit }: { id: string; nav: Na
   }
   const decide = (row: string, decision: Decision | null | undefined, q?: string | null) => act(`/api/handover/returns/${id}/decide`, { row, ...(decision !== undefined ? { decision } : {}), ...(q !== undefined ? { question: q } : {}) });
   const apply = (groups: GroupId[] | 'all') => act<{ review: ReviewData; applied: number; corrections: number; version: { n: number } }>(`/api/handover/returns/${id}/apply`, { groups }, (r) => {
-    nav.toast(t('review.appliedToast', { n: r.applied + r.corrections, name, v: r.version.n }), () => void undo());
+    nav.toast(t('review.appliedToast', { n: r.applied + r.corrections, name }), () => void undo());
   });
   const undo = () => act<{ review: ReviewData; restored: number }>(`/api/handover/returns/${id}/undo`, {}, (r) => nav.toast(t('review.undoneToast', { n: r.restored })));
 
@@ -116,7 +116,7 @@ export function ReturnReview({ id, nav, period, canEdit }: { id: string; nav: Na
     <div className="detail-in chpage rv" data-testid="return-review">
       <div className="head">
         <h2 className="who">{t('review.title', { name })}
-          <small>{formatDate(data.at.slice(0, 10))} · {t('review.fromRole', { name })} · {t('review.count', { n: data.rows.length })} · {t('review.basedOn', { n: data.basedOn })}</small>
+          <small>{formatDate(data.at.slice(0, 10))} · {t('review.fromRole', { name })} · {t('review.count', { n: data.rows.length })} · {t('review.basedOn', { date: formatDate(data.basedOnAt.slice(0, 10)) })}</small>
         </h2>
       </div>
       {data.message ? <div className="msgp"><small>{t('review.writes', { name })}</small>{data.message}</div> : null}
@@ -136,7 +136,7 @@ export function ReturnReview({ id, nav, period, canEdit }: { id: string; nav: Na
         </div>
       ) : null}
       {live.length ? (
-        <div className="rvdone">{ICONS.check}<span><b>{t('review.applied')}</b> — {t('review.appliedBy', { name, date: formatDate(live.at(-1)!.at.slice(0, 10)), v: live.at(-1)!.version })}</span>
+        <div className="rvdone">{ICONS.check}<span><b>{t('review.applied')}</b> — {t('review.appliedBy', { name, date: formatDate(live.at(-1)!.at.slice(0, 10)) })}</span>
           {canEdit ? <button type="button" className="linkbtn" disabled={busy} onClick={() => void undo()}>{t('review.undo')}</button> : null}
         </div>
       ) : null}

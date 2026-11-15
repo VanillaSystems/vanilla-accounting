@@ -16,22 +16,42 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
-- **Share the books by link, end to end encrypted** (docs/specs/e2e-and-fiduciary.md B3, ADR 0016,
-  docs/share-protocol.md). «Teilen» offers «Per Link» besides the file when a share service is set
-  up: the address the invitations come from is confirmed once by one e-mail from it (sent from the
-  books' mailbox when it sends from there, else prepared for the mail program); every file of the
-  package is sealed on its own under a key that stays in the link's fragment, uploaded with its
-  progress shown, and the version is written only once the service holds it. The invitation goes
-  from the books' mailbox or the person's mail program («Link kopieren», «Im Mailprogramm öffnen»).
-  The shares are facts in the dialog (sent, opened, until when, returns fetched) with
-  «Zurückziehen». A link opens as a Durchsicht copy (pasted under «Mehr», or by the Mac app's
-  `vanilla-accounting://` scheme); «An … zurückschicken» sends the return into the same share, and
-  the sharer's app fetches it when the books open and keeps it for review. Each refusal of the
-  service is said with the limit it names. The service is a setting (`VANILLA_SHARE_SERVICE`, at
-  build time or run time, or «Teil-Dienst» in the dialog); without one, the file does every step.
-  A link to another service than the app's, and a link that would move an existing copy without
-  its sharer's signature (an Ed25519 key per books and recipient, pinned by the copy's first link),
-  opens only after the person confirmed it.
+- **Share the books by link; the share service sends the invitation** (docs/specs/e2e-and-fiduciary.md
+  B3, ADR 0016 as amended on 2026-11-15, docs/share-protocol.md). «Teilen» offers «Per Link» besides
+  the file when a share service is set up. The address the invitations reply to is confirmed once by
+  one e-mail from it (sent from the books' mailbox when it sends from there, else prepared for the
+  mail program). The dialog asks the recipient's name and e-mail; «Einladung senden» seals every
+  file, uploads it with its progress shown, writes the version only once the service holds it, and
+  the service mails the invitation from «<Name> über Vanilla Accounting», replies to you, with every
+  step for someone who never used the app, in your language. The sent screen says «Die Einladung ist
+  an … unterwegs (…)», until when, and what he will see; a mail the service did not send is said
+  with its reason and limit, with «Link kopieren» first. Each share's card says «noch nicht
+  geöffnet», «geöffnet am …» or «aktualisiert am …», with «Aktualisieren», «Nochmals senden», «Link
+  kopieren» and «Zurückziehen». The link (`https://share.…/<id>`, no key in it, no code) opens as
+  often as he likes for 14 days, as a Durchsicht copy (from the invitation, pasted under «Mehr», or
+  by the Mac app's `vanilla-accounting://`); «An … zurückschicken» sends the return into the same
+  share, and the sharer's app fetches it when the books open and keeps it for review. Each refusal
+  of the service is said with the limit it names (10 shares a day per address, 1 GB per share, 10
+  e-mails per share, 100 e-mails a day for the whole service). The service is a setting
+  (`VANILLA_SHARE_SERVICE`, at build time or run time, or «Teil-Dienst» in the dialog); without one,
+  the file does every step. A link naming another service than the app's opens only after the
+  person confirmed it. A link that would move a copy which came from someone else (another link, or
+  another sender named in the package) moves nothing by itself: the app says who the copy came from
+  and who the link claims to be from, with «Als neue Kopie öffnen» (recommended, the copy stays) and
+  «Bestehende Kopie ersetzen»; a file in that place opens as a new copy. «Aktualisieren» of the same
+  share moves the copy without a question. One share goes to one address once the invitation went
+  out, at most 20 e-mails a day per sender address; a return is at most 200 MB, and one over 25 MB
+  waits at the service until «Holen» on the share's card. «Zurückziehen» deletes the returns not
+  fetched yet too. A note of «Aktualisieren» that did not go out leaves the update done and says so,
+  with «Nochmals senden». The Mac app's server refuses a write that comes from another web page.
+- **«Aktualisieren» a share**: forgot a receipt? The whole books, as of now, go into the same link
+  again, and the 14 days start anew; «… Bescheid geben» (on by default) sends him a short note. If
+  he has not opened it yet, he gets the newest state; if he has, his copy fetches it by itself the
+  next time he opens it, his own changes kept: «… hat die Buchhaltung am … aktualisiert; deine
+  Änderungen sind noch da.»
+- **A withdrawn share on his copy**: «Zurückziehen» deletes everything the service holds at once. A
+  copy already on his Mac stays; the next time it asks, it says «… hat die Freigabe zurückgezogen»,
+  that his changes go back as a file now, and offers «Kopie löschen», which it never does by itself.
 - **A public demo in the browser** (docs/audit-export.md, «Publish the demo»). `npm run build:audit --
   <dir> --demo [--download <url>]` exports the demo company as a static, read-only site for a
   website, under any sub-path: a bar in the product colour says that the company and its figures
@@ -91,6 +111,28 @@ Two markers flag an entry you must read before you update:
   figure can move; it falls back to the full suite and says why. A clean tree that passed the full
   `npm test` is not run again (`--force` reruns). A cut release names its build `X.Y.Z` before the
   tag, so the release's dmgs are built and smoke-tested once (docs/releasing.md).
+- Sharing the books needs no knowledge of versions any more (the owner's review: «this is not good
+  ux»). Every share, by link or as a `.vanilla` file, carries all the books of the open years and
+  every receipt, statement and invoice, so it opens on any Mac: on a copy that was deleted, lost,
+  older or missing a receipt alike, with no error and nothing for either person to do. The same
+  link or file opened again heals a copy too; an older one never rolls a newer copy back, and says
+  so plainly. «Vollständig, auch wenn schon eine Version da ist» is gone, and so are «Version N»,
+  «baut auf» and «vollständige Übergabe» from the dialog, the sent screen, the share cards, the
+  recipient's copy, the review of a return and the file name (`<Firma> – Buchhaltung (Datum).vanilla`).
+  A file made by 0.6.0 as an update still opens where the copy holds the rest. The closed years'
+  receipts still stay home unless asked for under «Mehr», and the dialog says so.
+- **Sharing by link is no longer end-to-end encrypted** (the owner's decision of 2026-11-15: «lets
+  keep it as UX friendly in the beginning as possible»). The service stores every share encrypted,
+  at most 14 days, and keeps its key; the operator could read a share while it lives, and no text
+  of the app claims otherwise any more. Gone with it: the key after the # in the link, the 3
+  openings and «5 hours after the first opening», the sharer's signature on a link and the copy's
+  «kommt nicht nachweislich von … Trotzdem öffnen» question (a link opens like a `.vanilla` file
+  now: a newer state of the firm moves the copy forward, an older one changes nothing and says so;
+  every file's size and SHA-256 and the version's checksum are still checked), and the invitation
+  from the app's own mailbox or «Im Mailprogramm öffnen». Links made by 0.6.0 are refused plainly:
+  the service ends those shares, and they read «abgelaufen». **⚠ action** for the share service's
+  operator: deploy vanilla-share's matching version together with this app version (a 0.6.0 app is
+  then told to update).
 
 - The accent is Tram blue, the product colour: `#005b8c`, with its 10 % tint `#e6eff4` as the soft
   accent (before: `#0067b1` / `#e8f1f9`). White on it reads at 7.3:1, the blue on the tint at 6.3:1. The public demo's bar
@@ -110,6 +152,10 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A `.vanilla` hand-over file opens on a Mac that never opened books (#545): the Mac app declares
+  the file type, so a double-click in Finder and «Öffnen mit» open it, also when the file starts
+  the app, and a drop on the start screen opens it too. A hand-over opens as its Durchsicht copy; a
+  return with no books open says that it belongs in the books it was shared from.
 - The app no longer shows a serif (Times) while its fonts load or when they fail: every font is
   named through a token with a system sans or mono behind it, and Geist Mono's semibold and bold
   are bundled instead of faked. Run from a worktree whose `node_modules` is a link, the dev server

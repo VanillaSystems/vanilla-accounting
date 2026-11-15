@@ -10,7 +10,7 @@ import {
   decrypt, decryptFile, decryptIndex, encrypt, encryptFile, encryptIndex, generateKey, HEADER_LENGTH, newObjectId, openProof,
   sha256Hex, ShareCryptoError, TAG_LENGTH, unwrapKey, wrapKey, type ShareIndex,
 } from '../src/share/crypto/index.js';
-import { parseLink, serviceOf } from '../src/share/service.js';
+import { linkOf, parseLink, serviceOf } from '../src/share/service.js';
 
 const vectors = JSON.parse(readFileSync('tests/fixtures/share/share-v1.json', 'utf8')) as {
   openProof: { key: string; proof: string };
@@ -77,21 +77,20 @@ test('a chunk swapped, cut or changed fails; a wrong key fails; one file opens w
   await refused(decryptFile(key, { ...read.files[1], object: a }, await encryptFile(key, b, files['transactional-data/2026/receipts/a.pdf'])), 'auth');
 });
 
-test('links: the service\'s page link and the app\'s scheme; the key only in the fragment', () => {
-  const key = Buffer.from(generateKey()).toString('base64url');
+test('links: the service\'s page link and the app\'s scheme; no key in them, a 0.6.0 fragment ignored', () => {
   const id = 'abcdefghijklmnopqrstuvwxyz';
   const ours = 'https://share.example.ch';
-  assert.deepEqual(parseLink(`https://share.example.ch/${id}#${key}`, ours), { service: ours, id, key, foreign: false });
-  assert.deepEqual(parseLink(`vanilla-accounting://open?share=${id}#${key}`, ours), { service: ours, id, key, foreign: false });
+  assert.deepEqual(parseLink(`https://share.example.ch/${id}`, ours), { service: ours, id, foreign: false });
+  assert.deepEqual(parseLink(`vanilla-accounting://open?share=${id}`, ours), { service: ours, id, foreign: false });
+  assert.deepEqual(parseLink(`https://share.example.ch/${id}#TVy01taujS3sLEB8cdYcSvdx0aHHQU0DBlO9gJiG214`, ours), { service: ours, id, foreign: false }, 'a link of 0.6.0: the service says it ended');
   // Another service named in the link is marked: it opens only once the person confirmed it (review of #538).
-  assert.deepEqual(parseLink(`vanilla-accounting://open?share=${id}&service=https%3A%2F%2Fother.example#${key}`, ours), { service: 'https://other.example', id, key, foreign: true });
-  assert.deepEqual(parseLink(`https://other.example/${id}#${key}`, ours), { service: 'https://other.example', id, key, foreign: true });
-  assert.equal(parseLink(`vanilla-accounting://open?share=${id}#${key}`, undefined), undefined, 'no service known');
-  assert.equal(parseLink(`https://share.example.ch/${id}`), undefined, 'no key');
-  assert.equal(parseLink(`https://share.example.ch/${id}#short`), undefined, 'not a key');
-  assert.equal(parseLink(`http://share.example.ch/${id}#${key}`), undefined, 'http only on this computer');
-  assert.deepEqual(parseLink(`http://localhost:8787/${id}#${key}`, 'http://localhost:8787'), { service: 'http://localhost:8787', id, key, foreign: false });
-  assert.equal(parseLink(`https://share.example.ch/notanid#${key}`), undefined);
+  assert.deepEqual(parseLink(`vanilla-accounting://open?share=${id}&service=https%3A%2F%2Fother.example`, ours), { service: 'https://other.example', id, foreign: true });
+  assert.deepEqual(parseLink(`https://other.example/${id}`, ours), { service: 'https://other.example', id, foreign: true });
+  assert.equal(parseLink(`vanilla-accounting://open?share=${id}`, undefined), undefined, 'no service known');
+  assert.equal(parseLink(`http://share.example.ch/${id}`), undefined, 'http only on this computer');
+  assert.deepEqual(parseLink(`http://localhost:8787/${id}`, 'http://localhost:8787'), { service: 'http://localhost:8787', id, foreign: false });
+  assert.equal(parseLink('https://share.example.ch/notanid'), undefined);
+  assert.equal(linkOf(ours, id), `${ours}/${id}`);
   assert.equal(serviceOf('share.example.ch/'), 'https://share.example.ch');
   assert.throws(() => serviceOf('ftp://x'));
 });

@@ -34,6 +34,8 @@ import { aiSetup } from '../server/ai-setup.js';
 import { qrSvg } from './qr.js';
 import { opened, readState, writeState, type PhonePairing } from './state.js';
 import { isDurchsichtCopy } from '../handover/content.js';
+import { openPackage } from '../handover/durchsicht.js';
+import { PackageError } from '../handover/package.js';
 
 export interface DesktopServerOptions {
   /** desktop.json in the user data folder. */
@@ -130,6 +132,16 @@ export interface DesktopServer {
     /** At start: listens again when it was on. */
     resume(): Promise<PhoneInfo>;
   };
+}
+
+/**
+ * Whether a write comes from the app's own page or from no page at all: an Origin, when there is one,
+ * is this server's (`http://<host>`), and a Sec-Fetch-Site, when there is one, is same-origin or none
+ * (typed or started by the person). Cross-site, same-site (another port of localhost) and `null` are refused.
+ */
+export function sameOrigin(origin: string | undefined, site: string | string[] | undefined, host: string | undefined): boolean {
+  if (site !== undefined && site !== 'same-origin' && site !== 'none') return false;
+  return origin === undefined || (!!host && origin === `http://${host}`);
 }
 
 /** Listens on `host`, on `preferred` when it is free, else on a port the system chooses. */
@@ -385,6 +397,15 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
     if (!host || req.headers.host === host) return next();
     refuseForeignHost(res);
   });
+  // A page of any other site in the person's browser can still send this server a write (a form, a
+  // no-cors fetch to 127.0.0.1): every write must come from this server's own page (Origin), and a
+  // browser that names the request's site must call it same-origin. The main process and Node send
+  // neither header; nothing else does without them (review of #551).
+  app.use((req, res, next) => {
+    if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+    if (sameOrigin(req.headers.origin, req.headers['sec-fetch-site'], host ?? req.headers.host)) return next();
+    res.status(403).json({ error: 'Nur von der App selbst, nicht von einer anderen Seite.', code: 'foreignOrigin' } satisfies ApiErrorBody);
+  });
   app.use('/api/desktop', express.json());
   // This Mac's AI (docs/0.4.0/ai-setup.md): before any books exist, and the same while books are open.
   app.use(aiSetup);
@@ -480,6 +501,24 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   app.post('/api/desktop/demo', async (_req, res) => {
     try { res.json(await openDemo()); } catch (e) { refuse(res, e); }
   });
+  /**
+   * A `.vanilla` file dropped on the start screen or handed over by Finder (src/desktop/open-files.ts).
+   * With books open it goes where «Öffnen…» in the books sends it (a return to its review there).
+   * With none, a hand-over opens as its Durchsicht copy, which is books of its own, and a return is
+   * refused (shareWrongKind): it belongs in the books it was shared from.
+   */
+  app.post('/api/desktop/handover', (req, res, next) => {
+    if (!books) return next();
+    req.url = '/api/handover/open';
+    books(req, res, next);
+  }, express.raw({ type: () => true, limit: '1gb' }), async (req, res) => {
+    try {
+      // Beside a copy from someone else: a new copy, never the one here moved (src/handover/durchsicht.ts targetOf).
+      const opened = openPackage(new Uint8Array(Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)), new Date(), undefined, { otherAsNew: true });
+      await openBooks(opened.root);
+      res.json({ kind: opened.kind, firm: opened.marker.firm.name, version: opened.marker.version.n, conflicts: opened.conflicts, dropped: opened.dropped });
+    } catch (e) { refuse(res, e); }
+  });
   app.post('/api/desktop/upgrade', async (req, res) => {
     const root = (req.body as { root?: unknown }).root;
     if (typeof root !== 'string' || !root.trim()) return refuse(res, new WorkspaceError('No folder given.'));
@@ -541,6 +580,7 @@ function refuse(res: express.Response, e: unknown): void {
   if (e instanceof SetupError) res.status(400).json({ error: e.message, code: 'setup', params: e.refusal } satisfies ApiErrorBody);
   else if (e instanceof WorkspaceRefusal) res.status(400).json({ error: e.message, ...e.refusal } satisfies ApiErrorBody);
   else if (e instanceof WorkspaceError) res.status(400).json({ error: e.message, code: 'notWorkspace' } satisfies ApiErrorBody);
+  else if (e instanceof PackageError) res.status(e.code === 'shareTooLarge' ? 413 : 400).json({ error: e.message, code: e.code, params: e.params } as ApiErrorBody);
   else res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
 }
 

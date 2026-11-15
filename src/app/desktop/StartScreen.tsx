@@ -24,6 +24,9 @@ import { accessText } from './access-text.js';
 import { FirstRun, freeName } from '../ai/FirstRun.js';
 import { DraftConversation } from '../onboarding/DraftConversation.js';
 import { assumedOf } from '../../onboarding/model.js';
+import { installWindowDrop, setDropHandler } from '../shell/window-drop.js';
+import { formatLocation } from '../shell/route.js';
+import { isVanillaFile } from '../handover/store.js';
 import './start.css';
 
 interface BankRow { bank: string; currency: string; account: string; iban: string }
@@ -133,6 +136,33 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   /** «Neue Buchhaltung anlegen» (also the menu's /start?new): «Einrichtung», what the person wants, the AI where it has work. */
   const startNew = () => setMode({ kind: 'first', create: true });
   useEffect(() => { document.title = 'Vanilla Accounting'; }, []);
+
+  /** A file dragged over the start screen; a `.vanilla` one that did not open says why, in any mode. */
+  const [dropping, setDropping] = useState(false);
+  const [dropError, setDropError] = useState('');
+  // A `.vanilla` file dropped here opens without books open first (#545): a hand-over as its Durchsicht copy.
+  useEffect(() => {
+    installWindowDrop(window);
+    setDropHandler({
+      state: 'ready',
+      targetAt: () => 'page',
+      shown: (on) => setDropping(on !== null),
+      take: ({ files }) => {
+        setDropError('');
+        const file = files.find((f) => isVanillaFile(f.name));
+        if (!file) return setDropError(t('desktop.dropOnlyVanilla'));
+        setBusy(true);
+        api.desktop.openHandover(file).then((o) => {
+          location.assign(o.kind === 'return' ? formatLocation({ route: { area: 'changes', commit: 'return', file: o.id }, query: {} }) : '/');
+        }, (e) => {
+          setBusy(false);
+          setDropError(e instanceof ApiError && e.body.code === 'shareWrongKind' ? t('desktop.fileIsReturn') : errorText(e));
+        });
+      },
+      refuse: () => undefined,
+    });
+    return () => setDropHandler(undefined);
+  }, []);
   // /start?new has acted once it set the mode: a reload does not open the save panel again.
   useEffect(() => { if (new URLSearchParams(location.search).has('new')) history.replaceState(null, '', START_PATH); }, []);
 
@@ -161,7 +191,7 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
   };
 
   return (
-    <div className="st">
+    <div className={dropping ? 'st st-dropping' : 'st'}>
       <header className="st-top">
         <span className="seg2" role="radiogroup" aria-label={t('desktop.language')}>
           {LOCALES.map((l) => (
@@ -169,6 +199,7 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
           ))}
         </span>
       </header>
+      {dropError && <p className="warnline st-drop-error" role="alert">{dropError}</p>}
       {mode.kind === 'setup' ? <DraftConversation root={mode.root} onLeave={() => setMode({ kind: 'home' })} />
         : mode.kind === 'first' ? <FirstRun info={info} create={mode.create} onLeave={() => setMode({ kind: 'home' })} onSetup={(root) => setMode({ kind: 'setup', root })} onForm={(root) => setMode({ kind: 'form', ...(root ? { root } : {}) })} />
         : mode.kind === 'form'
@@ -205,6 +236,7 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
                 <b>{t('desktop.demo')}</b><span>{t('desktop.demoHint')}</span>
               </button>
             </div>
+            <p className="st-sub" data-drop-hint>{t('desktop.dropVanilla')}</p>
             {error && <p className="warnline" role="alert">{error}</p>}
             {upgradable && (
               <p className="st-upgrade">

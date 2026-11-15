@@ -91,7 +91,7 @@ function HandoverRows({ view, route, nav }: { view: HandoverView | undefined; ro
         return (
           <div key={r.id} className={`row chrow chsave-row${on ? ' sel' : ''}`} role="option" aria-selected={on} tabIndex={on ? 0 : -1} data-testid="return-row" onClick={() => nav.select({ area: 'changes', commit: 'return', file: r.id })}>
             <span className="t"><span className="chwho">{ICONS.share}</span>{t(r.applied ? 'review.rowApplied' : 'review.rowFrom', { name: r.from.name, n: r.changes })}</span>
-            <small className="chsub">{sayWhen(r.receivedAt)} · {t('review.basedOn', { n: r.basedOn })}{r.undone ? ` · ${t('review.rowUndone')}` : ''}</small>
+            <small className="chsub">{sayWhen(r.receivedAt)} · {t('review.basedOn', { date: formatDate(r.basedOnAt.slice(0, 10)) })}{r.undone ? ` · ${t('review.rowUndone')}` : ''}</small>
           </div>
         );
       })}

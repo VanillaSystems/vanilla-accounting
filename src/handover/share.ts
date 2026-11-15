@@ -1,12 +1,13 @@
 /**
  * «Teilen…» on the sharer's side (docs/specs/e2e-and-fiduciary.md B3.1, B3.4, B3.5): what a hand-over
- * to a person carries, and the package itself. The first hand-over to a person is `full`: the books'
- * files and every receipt and statement of the open years (a closed year's only «mit Archiv»). A
- * later one is an `update` on the version that person holds: the books' files whole again, plus
- * the receipts and statements new since. Each hand-over writes a version (B7) and keeps its index in
- * handover/sent/, so the next update knows what the person has.
+ * to a person carries, and the package itself. Every hand-over, by link or by file, is whole (`full`):
+ * the books' files and every receipt, statement and invoice of the open years (a closed year's only
+ * «mit Archiv»), so any one of them opens on any computer, on a copy that is lost, older or missing a
+ * receipt alike (the owner's decision of 2026-11-15: no update that builds on what the person is
+ * thought to hold). Each hand-over writes a version (B7) and keeps its index and records in
+ * handover/sent/: a return is merged against the version it was made on.
  */
-import fs, { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import fs, { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import git from 'isomorphic-git';
 import { isClosedYear } from '../books/years.js';
@@ -16,7 +17,7 @@ import type { Workspace } from '../workspace/workspace.js';
 import { appVersion } from '../version.js';
 import { checksumOf, contentFiles, factOf, type FileFact } from './content.js';
 import { PACKAGE_FORMAT, packageName, writePackage, type PackageIndex, type Question } from './package.js';
-import { heldBy, nextVersion, writeVersion, VERSIONS_FILE, type Party, type Version } from './versions.js';
+import { nextVersion, writeVersion, VERSIONS_FILE, type Party, type Version } from './versions.js';
 import { pendingQuestions, takeQuestions } from './returns.js';
 
 /** The sharer's own folder of hand-overs in the workspace: sent/ (each version's index), returns/ (what came back). */
@@ -29,57 +30,39 @@ const isBaseFile = (p: string) => p === 'ledger.json' || p === 'master-data/acco
 export interface ShareRequest {
   to: Party;
   message?: string;
-  /** «Vollständig»: a full package even when the person holds a version. */
-  full?: boolean;
   /** «mit Archiv <Jahr>»: closed years whose receipts and statements go along. */
   archive?: string[];
-  /** Versions handed over that never reached the person (a link withdrawn or ended unopened): the next share builds on none of them. */
-  notHeld?: number[];
 }
 
 /** What a hand-over would carry, before it is made: the dialog names it with its size. */
 export interface SharePlan {
-  kind: 'full' | 'update';
+  kind: 'full';
   to: Party;
-  /** The version the person holds, for an update. */
-  base?: Pick<Version, 'n' | 'at' | 'checksum'>;
   files: FileFact[];
-  held: FileFact[];
   omitted: FileFact[];
   /** The bytes of the files carried. */
   bytes: number;
-  /** New receipts and statements an update carries (the books' files go whole anyway). */
-  newFiles: number;
+  /** The receipts, statements and invoices carried (the books' own files go besides). */
+  documents: number;
   /** Closed years whose receipts stay home unless asked for. */
   closedYears: string[];
   /** The questions of earlier returns that go along. */
   questions: number;
 }
 
-/** The index of the version `n` as it was handed over, when it was: what that person's copy holds. */
-function sentIndex(ws: Pick<Workspace, 'paths'>, n: number): PackageIndex | undefined {
-  const file = sentFile(ws, n);
-  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as PackageIndex) : undefined;
-}
-
 export function planShare(ws: Workspace, req: ShareRequest): SharePlan {
   const closedThrough = loadBooks(ws).config.closedThrough;
   const files = contentFiles(ws.paths.root).map((f) => ({ ...f, ...factOf(ws.paths.root, f.path) }));
-  const held = req.full ? undefined : heldBy(ws.paths, req.to, new Set(req.notHeld ?? []));
-  const had = held ? sentIndex(ws, held.n) : undefined;
-  const hadFiles = had ? new Map([...had.files, ...(had.held ?? [])].map((f) => [f.path, f.sha256])) : undefined;
   const closedYears = [...new Set(files.flatMap((f) => (f.year && isClosedYear(f.year, closedThrough) ? [f.year] : [])))].sort();
   const archive = new Set(req.archive ?? []);
-  const out: SharePlan = { kind: hadFiles ? 'update' : 'full', to: req.to, files: [], held: [], omitted: [], bytes: 0, newFiles: 0, closedYears, questions: pendingQuestions(ws, req.to).length };
-  if (hadFiles && held) out.base = { n: held.n, at: held.at, checksum: held.checksum };
+  const out: SharePlan = { kind: 'full', to: req.to, files: [], omitted: [], bytes: 0, documents: 0, closedYears, questions: pendingQuestions(ws, req.to).length };
   for (const f of files) {
     const fact: FileFact = { path: f.path, sha256: f.sha256, blob: f.blob, bytes: f.bytes };
     if (f.carriage === 'whole') { out.files.push(fact); continue; }
-    if (hadFiles?.get(f.path) === f.sha256) { out.held.push(fact); continue; }
-    // A closed year's receipts and statements stay home, in a full package and in every update after it (B3.5).
+    // A closed year's receipts and statements stay home unless asked for (B3.5): their checksums go along.
     if (f.year && isClosedYear(f.year, closedThrough) && !archive.has(f.year)) { out.omitted.push(fact); continue; }
     out.files.push(fact);
-    out.newFiles++;
+    out.documents++;
   }
   out.bytes = out.files.reduce((n, f) => n + f.bytes, 0);
   return out;
@@ -134,12 +117,11 @@ export async function makeShare(ws: Workspace, req: ShareRequest, from: Party, n
 /**
  * The hand-over of the next version, built without writing anything. The link through the share
  * service commits it only once the service took the package (src/share/sharing.ts): an upload that
- * fails leaves no version the person would be thought to hold, and the next share is not an update
- * on a version he never got.
+ * fails leaves no version written.
  */
 export async function prepareShare(ws: Workspace, req: ShareRequest, from: Party, now = new Date()): Promise<PreparedShare> {
   const plan = planShare(ws, req);
-  const all = [...plan.files, ...plan.held, ...plan.omitted];
+  const all = [...plan.files, ...plan.omitted];
   const git = await gitSide(ws, all.map((f) => f.path));
   const checksum = checksumOf(all);
   const n = nextVersion(ws.paths);
@@ -149,10 +131,8 @@ export async function prepareShare(ws: Workspace, req: ShareRequest, from: Party
     firm: { name: ws.company.name, ...(ws.company.uid ? { uid: ws.company.uid } : {}) },
     from, to: { ...req.to, role: 'fiduciary' },
     version: { n, at: now.toISOString(), checksum },
-    ...(plan.base ? { base: plan.base } : {}),
     app: appVersion(), at: now.toISOString(),
     files: plan.files,
-    ...(plan.held.length ? { held: plan.held } : {}),
     ...(plan.omitted.length ? { omitted: plan.omitted } : {}),
     ...(git ? { git } : {}),
     ...(req.message?.trim() ? { message: req.message.trim().slice(0, 2000) } : {}),

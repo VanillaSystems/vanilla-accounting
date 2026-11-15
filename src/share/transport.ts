@@ -12,7 +12,7 @@ import { checkPackage, LIMITS, PackageError, type PackageContents, type PackageI
 import type { ShareClient, ShareStatus, Target } from './client.js';
 import { ShareServiceError } from './client.js';
 import {
-  decryptFile, decryptIndex, encryptedSize, encryptFile, encrypt, INDEX_OBJECT, newObjectId, openProof, sha256Hex,
+  decodeKey, decryptFile, decryptIndex, encryptedSize, encryptFile, encrypt, INDEX_OBJECT, newObjectId, sha256Hex,
   ShareCryptoError, type IndexFile, type ShareIndex,
 } from './crypto/index.js';
 import { SHARE_LIMITS } from './service.js';
@@ -21,8 +21,6 @@ import { SHARE_LIMITS } from './service.js';
 export interface PackageShareIndex extends ShareIndex {
   package: PackageIndex;
   returnToken?: string;
-  /** Where the sharer sent it, signed (src/share/signing.ts Destination): binds the package to this share. */
-  destination?: unknown;
 }
 
 /** The package as it goes out: its index and its files by path, and a return's change set. */
@@ -30,7 +28,7 @@ export interface Outgoing { index: PackageIndex; files: ReadonlyMap<string, Uint
 
 /** A return's change set travels as this file of the share. */
 export const CHANGES_FILE = 'changes.json';
-/** Room kept in the index for what the service names only once the share exists: the return token, and the signed destination (signing.ts). */
+/** Room kept in the index for what the service names only once the share exists: the return token. */
 const TOKEN_ROOM = 1024;
 const BATCH = 100;
 
@@ -39,9 +37,10 @@ export type Progress = (p: { phase: Phase; done: number; total: number }) => voi
 
 /** Refused before the service is asked: the package is past one of the service's limits. */
 export class ShareLimitError extends Error {
-  constructor(readonly limit: 'bytes' | 'objects', readonly value: number) {
+  /** `max`: the byte limit that was passed (a share's, or a return's, which is far smaller). */
+  constructor(readonly limit: 'bytes' | 'objects', readonly value: number, readonly max: number = limit === 'bytes' ? SHARE_LIMITS.bytes : SHARE_LIMITS.objects, readonly isReturn = false) {
     super(limit === 'bytes'
-      ? `Die Übergabe ist verschlüsselt ${Math.round(value / 1024 / 1024)} MB gross: der Dienst nimmt höchstens ${SHARE_LIMITS.bytes / 1024 / 1024 / 1024} GB pro Link.`
+      ? `${isReturn ? 'Die Rücksendung' : 'Die Übergabe'} ist verschlüsselt ${Math.round(value / 1024 / 1024)} MB gross: der Dienst nimmt höchstens ${max >= 1024 ** 3 ? `${max / 1024 ** 3} GB` : `${Math.round(max / 1024 / 1024)} MB`} ${isReturn ? 'pro Rücksendung' : 'pro Link'}.`
       : `Die Übergabe hat ${value} Dateien: der Dienst nimmt höchstens ${SHARE_LIMITS.objects} pro Link.`);
   }
 }
@@ -62,8 +61,8 @@ function indexText(index: PackageShareIndex, size?: number): Uint8Array {
 }
 
 /**
- * Seals the package and uploads it: `start` asks the service for the share (or the return) with the
- * exact bytes and object count, `finish` names what completing it takes (a return's wrapped key).
+ * Seals the package and uploads it: `start` asks the service for the share (a new one, its next
+ * generation, or a return) with the exact bytes and object count; the caller adds the key.
  * Files are sealed one by one just before their upload, so the package is never twice in memory.
  */
 export async function sendPackage(opts: {
@@ -72,10 +71,7 @@ export async function sendPackage(opts: {
   out: Outgoing;
   /** A hand-over makes room for the return token in its index. */
   carriesReturnToken: boolean;
-  /** Fields for the share's index once the service named the share (its id and return token): the signed destination. */
-  bind?(made: { id: string; returnToken?: string }): Promise<Record<string, unknown>>;
-  start(sizes: { bytes: number; objects: number; openProof: string }): Promise<{ id: string; revokeToken: string; returnToken?: string; batch?: number }>;
-  finish?(id: string): Promise<Record<string, unknown>>;
+  start(sizes: { bytes: number; objects: number }): Promise<{ id: string; revokeToken: string; returnToken?: string; batch?: number }>;
   progress?: Progress;
 }): Promise<{ id: string; revokeToken: string; returnToken?: string; status: ShareStatus }> {
   const { client, key, out } = opts;
@@ -92,11 +88,11 @@ export async function sendPackage(opts: {
   const bytes = indexBytes + planned.reduce((n, p) => n + encryptedSize(p.data.byteLength), 0);
   const objects = planned.length + 1;
   if (objects > SHARE_LIMITS.objects) throw new ShareLimitError('objects', objects);
-  if (bytes > SHARE_LIMITS.bytes) throw new ShareLimitError('bytes', bytes);
+  const max = out.index.kind === 'return' ? SHARE_LIMITS.returnBytes : SHARE_LIMITS.bytes;
+  if (bytes > max) throw new ShareLimitError('bytes', bytes, max, out.index.kind === 'return');
 
-  const made = await opts.start({ bytes, objects, openProof: await openProof(key) });
-  const bound = opts.bind ? await opts.bind({ id: made.id, ...(made.returnToken ? { returnToken: made.returnToken } : {}) }) : {};
-  const index = indexText({ ...shareIndex, ...(made.returnToken && opts.carriesReturnToken ? { returnToken: made.returnToken } : {}), ...bound }, room);
+  const made = await opts.start({ bytes, objects });
+  const index = indexText({ ...shareIndex, ...(made.returnToken && opts.carriesReturnToken ? { returnToken: made.returnToken } : {}) }, room);
   const blobs: Array<{ name: string; bytes: number; seal: () => Promise<Uint8Array> }> = [
     { name: INDEX_OBJECT, bytes: indexBytes, seal: () => encrypt(key, index, { kind: 'index', name: INDEX_OBJECT }) },
     ...planned.map((p) => ({ name: p.object, bytes: encryptedSize(p.data.byteLength), seal: () => encryptFile(key, p.object, p.data) })),
@@ -117,7 +113,7 @@ export async function sendPackage(opts: {
       opts.progress?.({ phase: 'upload', done, total: bytes });
     });
   }
-  const status = await client.complete(made.id, made.revokeToken, opts.finish ? await opts.finish(made.id) : {});
+  const status = await client.complete(made.id, made.revokeToken, {});
   return { id: made.id, revokeToken: made.revokeToken, ...(made.returnToken ? { returnToken: made.returnToken } : {}), status };
 }
 
@@ -132,19 +128,21 @@ async function pool<T>(items: readonly T[], width: number, fn: (x: T) => Promise
 export const MAX_INDEX_BYTES = 16 * 1024 * 1024;
 
 /**
- * Opens a share (one opening, protocol §4.5), decrypts its index and every file, and checks the
- * package as a `.vanilla` file is checked (src/handover/package.ts checkPackage). `token`: the
- * sharer's revoke token, which opening one of her returns takes.
+ * Opens a share (one opening, protocol §4.5; the service hands the key over with it), decrypts its
+ * index and every file, and checks the package as a `.vanilla` file is checked
+ * (src/handover/package.ts checkPackage). `token`: the sharer's revoke token, which opening one of
+ * her returns takes. The checks that catch real damage stay: every file's size and SHA-256 and the
+ * version's checksum.
  *
  * Nothing the service sends is trusted for its size: the index is read up to MAX_INDEX_BYTES, its
  * count and totals are held to the limits before the first file is fetched, and each file is read
  * only up to the size its sealed form must have. Each file is kept once, decrypted; its ciphertext
  * goes as soon as it is open, and no zip is built on the way.
  */
-export async function receivePackage(opts: { client: ShareClient; id: string; key: Uint8Array; token?: string; progress?: Progress }): Promise<{ contents: PackageContents; index: PackageShareIndex }> {
-  const { client, id, key } = opts;
-  const proof = await openProof(key);
-  const opened = await client.open(id, proof, opts.token);
+export async function receivePackage(opts: { client: ShareClient; id: string; token?: string; progress?: Progress }): Promise<{ contents: PackageContents; index: PackageShareIndex; generation: number; updatedAt?: string }> {
+  const { client, id } = opts;
+  const opened = await client.open(id, opts.token);
+  const key = decodeKey(opened.key);
   const index = (await decryptIndex(key, await client.get(opened.index, MAX_INDEX_BYTES))) as PackageShareIndex;
   const pkg = index.package;
   if (!pkg || typeof pkg !== 'object' || pkg.kind !== index.kind) throw new ShareCryptoError('header', 'the share holds no hand-over of this app');
@@ -152,6 +150,7 @@ export async function receivePackage(opts: { client: ShareClient; id: string; ke
   const tooLarge = (why: string, limit: string) => new PackageError(why, 'shareTooLarge', { limit });
   if (index.files.length + 1 > SHARE_LIMITS.objects) throw tooLarge(`Die Freigabe nennt ${index.files.length} Dateien: höchstens ${SHARE_LIMITS.objects}.`, String(SHARE_LIMITS.objects));
   if (total > Math.min(SHARE_LIMITS.bytes, LIMITS.totalBytes)) throw tooLarge(`Die Freigabe nennt ${Math.round(total / 1024 / 1024)} MB: höchstens 1 GB.`, '1 GB');
+  if (index.kind === 'return' && total > SHARE_LIMITS.returnBytes) throw tooLarge(`Die Rücksendung nennt ${Math.round(total / 1024 / 1024)} MB: höchstens ${SHARE_LIMITS.returnBytes / 1024 / 1024} MB.`, `${SHARE_LIMITS.returnBytes / 1024 / 1024} MB`);
   for (const f of index.files) {
     const max = f.path === CHANGES_FILE ? LIMITS.jsonBytes : LIMITS.fileBytes;
     if (f.bytes > max) throw tooLarge(`${f.path} ist ${Math.round(f.bytes / 1024 / 1024)} MB gross: höchstens ${Math.round(max / 1024 / 1024)} MB pro Datei.`, `${Math.round(max / 1024 / 1024)} MB`);
@@ -161,7 +160,7 @@ export async function receivePackage(opts: { client: ShareClient; id: string; ke
   let changes: Uint8Array | undefined;
   for (let i = 0; i < index.files.length; i += BATCH) {
     const batch = index.files.slice(i, i + BATCH);
-    const { targets } = await client.urls(id, opened.ticket, batch.map((f) => f.object), proof);
+    const { targets } = await client.urls(id, opened.ticket, batch.map((f) => f.object));
     const byObject = new Map<string, Target>(targets.map((t) => [t.object, t]));
     await pool(batch, 4, async (f) => {
       const target = byObject.get(f.object);
@@ -175,5 +174,5 @@ export async function receivePackage(opts: { client: ShareClient; id: string; ke
       opts.progress?.({ phase: 'download', done, total });
     });
   }
-  return { contents: checkPackage(pkg, files, changes), index };
+  return { contents: checkPackage(pkg, files, changes), index, generation: opened.generation ?? 1, ...(opened.updatedAt ? { updatedAt: opened.updatedAt } : {}) };
 }

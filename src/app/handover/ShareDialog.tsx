@@ -1,36 +1,34 @@
 /**
  * «Teilen…» (docs/specs/e2e-and-fiduciary.md B3.1, prototype PR #530): to whom, a short message, and
- * what goes, named by the app with its size (the first hand-over to a person carries the books of
- * the open years, a later one only what is new). Two ways: the link through the share service
- * (B3.2, B3.3: end to end encrypted, the invitation from her own mailbox), offered when a service is
- * set up and this computer keeps the link's key; and the file («Als Datei speichern», B3.7), which
+ * what goes, named by the app with its size: every hand-over carries all the books of the open years,
+ * so it opens on any computer, whatever the person's copy holds or lost. Two ways: the link through the share service
+ * (B3.2, B3.3 as decided on 2026-11-15: the service keeps it encrypted at most 14 days and sends the
+ * invitation itself; the recipient's address is needed), offered when a service is set up and this
+ * computer keeps the link's tokens; and the file («Als Datei speichern», B3.7), which
  * does every step without the service. «Öffnen…» takes a `.vanilla` file, and a link someone sent
  * opens here too.
  */
 import { useEffect, useRef, useState } from 'react';
 import './handover.css';
-import { t } from '../i18n/index.js';
+import { language, t } from '../i18n/index.js';
+import { SHARE_LIMITS } from '../../share/limits.js';
 import { errorText, request } from '../lib/api.js';
 import { postDownload } from '../areas/export/state.js';
-import { formatDate } from '../lib/utils.js';
 import { ICONS } from '../areas/icons.js';
 import { openVanilla, reloadHandover, sizeText, type Opened } from './store.js';
 import { runJob, shareSettings, type Job, type ShareSettings, type Shared } from './link.js';
 import { JobProgress, OpenLink, SenderStep, SentView, SharesList } from './LinkParts.js';
 
 interface Plan {
-  kind: 'full' | 'update';
-  base?: { n: number; at: string };
+  kind: 'full';
   files: number;
-  held: number;
   omitted: number;
   omittedBytes: number;
   bytes: number;
-  newFiles: number;
+  /** The receipts, statements and invoices carried. */
+  documents: number;
   closedYears: string[];
   questions: number;
-  /** The books' version now: the hand-over writes the next one. */
-  version?: { n: number };
 }
 
 /** The ways a hand-over goes: the link through the share service, the file by hand. */
@@ -41,6 +39,9 @@ interface Known { name: string; email?: string }
 const knownPeople = (): Known[] => { try { return JSON.parse(localStorage.getItem(PEOPLE) ?? '[]') as Known[]; } catch { return []; } };
 const keepPerson = (p: Known) => { try { localStorage.setItem(PEOPLE, JSON.stringify([p, ...knownPeople().filter((x) => x.name !== p.name)].slice(0, 8))); } catch { /* per viewer only */ } };
 
+/** «Per Link» needs the address: the service sends the invitation to it. */
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const LINK = <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></svg>;
 
 export function ShareDialog({ company, toast, onClose, onOpened }: { company?: string; toast(msg: string, undo?: () => void): void; onClose(): void; onOpened(o: Opened): void }) {
@@ -48,7 +49,6 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
   const [name, setName] = useState(last?.name ?? '');
   const [email, setEmail] = useState(last?.email ?? '');
   const [message, setMessage] = useState('');
-  const [full, setFull] = useState(false);
   const [archive, setArchive] = useState<string[]>([]);
   const [more, setMore] = useState(false);
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -57,7 +57,6 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
   const [settings, setSettings] = useState<ShareSettings | null>(null);
   const [way, setWay] = useState<Way>('file');
   const [sender, setSender] = useState<string | null>(null);
-  const [mailIt, setMailIt] = useState(true);
   const [job, setJob] = useState<Job<Shared> | null>(null);
   const [sent, setSent] = useState<Shared | null>(null);
   const [service, setService] = useState('');
@@ -71,13 +70,13 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
 
   useEffect(() => {
     if (!name.trim()) { setPlan(null); return; }
-    const q = new URLSearchParams({ name: name.trim(), ...(email.trim() ? { email: email.trim() } : {}), ...(full ? { full: '1' } : {}), ...(archive.length ? { archive: archive.join(',') } : {}) });
+    const q = new URLSearchParams({ name: name.trim(), ...(email.trim() ? { email: email.trim() } : {}), ...(archive.length ? { archive: archive.join(',') } : {}) });
     const timer = setTimeout(() => { request<Plan>('GET', `/api/handover/plan?${q}`).then((p) => { setPlan(p); setError(''); }, (e) => setError(errorText(e))); }, 250);
     return () => clearTimeout(timer);
-  }, [name, email, full, archive]);
+  }, [name, email, archive]);
 
   const to = () => ({ name: name.trim(), ...(email.trim() ? { email: email.trim() } : {}) });
-  const options = () => ({ ...(full ? { full: true } : {}), ...(archive.length ? { archive: archive.join(',') } : {}) });
+  const options = () => ({ ...(archive.length ? { archive: archive.join(',') } : {}) });
 
   async function save() {
     if (!name.trim() || busy) return;
@@ -85,8 +84,8 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
     try {
       const file = await postDownload('/api/handover/share', { to: to(), message, ...options() }, 'buchhaltung.vanilla');
       keepPerson(to());
-      const v = await reloadHandover();
-      toast(t('share.saved', { file, n: v?.version?.n ?? 0, name: to().name }));
+      await reloadHandover();
+      toast(t('share.saved', { file, name: to().name }));
       onClose();
     } catch (e) {
       setError(errorText(e));
@@ -99,7 +98,7 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
     if (!name.trim() || busy) return;
     setBusy(true); setError('');
     try {
-      const done = await runJob<Shared>('/api/share/link', { to: to(), message, ...options(), mail: mailIt && !!settings?.mailFrom && !!email.trim() }, setJob);
+      const done = await runJob<Shared>('/api/share/link', { to: to(), message, ...options(), language: language() }, setJob);
       keepPerson(to());
       setSent(done);
       await reloadHandover();
@@ -132,7 +131,7 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
           <button type="button" className="x" aria-label={t('common.close')} onClick={onClose}>×</button>
         </div>
         <div className="shbody form">
-          {sent ? <SentView sent={sent} to={sent.record.to} /> : (
+          {sent ? <SentView sent={sent} onChanged={(record) => { setSent({ ...sent, record }); setSettings((s) => (s ? { ...s, shares: s.shares.map((x) => (x.id === record.id ? record : x)) } : s)); }} /> : (
             <>
               {settings?.shares.length ? <SharesList shares={settings.shares} onShares={(shares) => setSettings({ ...settings, shares })} /> : null}
               <div className="two2">
@@ -145,13 +144,11 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
                 {plan ? (
                   <>
                     <div className="wt">
-                      <b>{plan.kind === 'update' && plan.base ? t('share.update', { date: formatDate(plan.base.at.slice(0, 10)) }) : t('share.full')}</b>
+                      <b>{t('share.full')}</b>
                       <span className="mono">{sizeText(plan.bytes)}</span>
                     </div>
                     <div className="wm">
-                      {plan.kind === 'update' && plan.base
-                        ? t('share.updateNote', { name: who, v: plan.base.n, n: plan.newFiles })
-                        : t('share.fullNote', { n: plan.newFiles })}
+                      {t('share.fullNote', { n: plan.documents, name: who })}
                       {plan.omitted ? ` ${t('share.closedStay', { years: plan.closedYears.filter((y) => !archive.includes(y)).join(', '), n: plan.omitted, size: sizeText(plan.omittedBytes) })}` : ''}
                       {plan.questions ? ` ${t('share.questions', { n: plan.questions })}` : ''}
                     </div>
@@ -161,7 +158,6 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
               <button type="button" className="linkbtn shmore" aria-expanded={more} onClick={() => setMore(!more)}>{t('share.more')} {more ? '▴' : '▾'}</button>
               {more && (
                 <div className="shopts">
-                  <label className="chk"><input type="checkbox" checked={full} onChange={(e) => setFull(e.target.checked)} /> {t('share.fullAgain')}</label>
                   {(plan?.closedYears ?? []).map((y) => (
                     <label key={y} className="chk"><input type="checkbox" checked={archive.includes(y)} onChange={(e) => setArchive(e.target.checked ? [...archive, y] : archive.filter((x) => x !== y))} /> {t('share.archive', { year: y })}</label>
                   ))}
@@ -188,12 +184,7 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
               </div>
               {needsSender ? <SenderStep kept={settings?.sender} mailFrom={settings?.mailFrom} onConfirmed={setSender} onFile={() => setWay('file')} /> : null}
               {way === 'link' && linkable && sender ? (
-                <>
-                  {settings?.mailFrom && email.trim() ? (
-                    <label className="chk shchk"><input type="checkbox" checked={mailIt} onChange={(e) => setMailIt(e.target.checked)} data-testid="share-mail" /> {t('share.mailFrom', { from: settings.mailFrom, to: email.trim() })}</label>
-                  ) : <div className="wm">{t('share.mailYourself', { from: sender })}</div>}
-                  <div className="lock">{ICONS.lock}<span>{t('share.e2e', { hours: 5, days: 10 })}</span></div>
-                </>
+                <div className="lock">{ICONS.lock}<span>{t('share.stored', { days: SHARE_LIMITS.days, from: sender })}</span></div>
               ) : null}
               <JobProgress job={job} />
             </>
@@ -203,17 +194,17 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
         <div className="xft">
           {sent ? (
             <>
-              <span className="m">{t('version.short', { n: sent.record.version })}</span>
+              <span className="m" />
               <button type="button" className="btn primary" onClick={onClose} data-testid="share-done">{t('share.done')}</button>
             </>
           ) : (
             <>
               <button type="button" className="btn ghost" disabled={busy} onClick={() => pick.current?.click()}>{t('share.open')}</button>
               <input ref={pick} type="file" accept=".vanilla" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void open(f); }} />
-              <span className="m">{plan ? t('share.version', { n: (plan.version?.n ?? 0) + 1 }) : ''}</span>
+              <span className="m" />
               <button type="button" className="btn ghost" onClick={onClose}>{t('common.cancel')}</button>
               {way === 'link' && linkable
-                ? <button type="button" className="btn primary" disabled={!name.trim() || !plan || busy || !sender} onClick={() => void send()} data-testid="share-send">{busy ? t('share.sending') : t('share.send')}</button>
+                ? <button type="button" className="btn primary" disabled={!name.trim() || !EMAIL.test(email.trim()) || !plan || busy || !sender} onClick={() => void send()} data-testid="share-send">{busy ? t('share.sending') : t('share.send')}</button>
                 : <button type="button" className="btn primary" disabled={!name.trim() || !plan || busy} onClick={() => void save()} data-testid="share-save">{busy ? t('share.busy') : t('share.saveFile')}</button>}
             </>
           )}
