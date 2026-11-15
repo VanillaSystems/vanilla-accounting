@@ -1,26 +1,25 @@
 /**
  * A mailbox's senders whose attachments are no receipts: offered to be skipped (Firma › Quellen),
  * one click. A sender is an address, not its domain: a supplier sends its invoices and its
- * newsletter from one domain. It counts when 3 or more of its documents, and nearly all of them,
- * were no receipt: quarantined by their words (the ledger says so), or marked as no receipt by a
- * person in Belege (the receipt of a delivered file). Skipping narrows the reach (the address in
+ * newsletter from one domain. It counts when 3 or more of its documents were no receipt
+ * (quarantined by their words, the ledger says so, or marked as no receipt by a person in Belege)
+ * and none of its documents stands in the books: a supplier with one real invoice among its
+ * brochures is never offered (its brochures can be kept aside by their file-name shape instead,
+ * src/platform/sources/aside.ts). Skipping narrows the reach (the address in
  * reach.mail.skip), so the new version is switched on with the person's click (src/server/routes/sources.ts).
  *
  * A person's «kein Beleg» on one collected file offers the same at once (#186, «Immer so?»): the
  * sender of that file, with what the mailbox delivered from it and which of those stand in the
  * books as receipts, shown on a card before the person keeps it.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { parseDocument } from 'yaml';
 import type { Receipt } from '../../types/index.js';
 import type { Workspace } from '../../workspace/workspace.js';
 import type { LedgerLine } from './ledger.js';
 import type { MacMailReach, MailReach, ReceiptSkipOffer, SkipOffer, SourceDecl } from './model.js';
 import { senderAllowed } from './reach.js';
+import { editSourceYaml } from './aside.js';
 
 const AT_LEAST = 3;
-const SHARE = 0.8;
 
 /** Kinds that set a file aside: a skip loses nothing the books keep. A document kept beside an invoice counts as kept. */
 const ASIDE = new Set<Receipt['kind']>(['noise', 'duplicate']);
@@ -80,31 +79,30 @@ export function receiptSkipOffer(
   return undefined;
 }
 
-export function skipOffers(lines: readonly LedgerLine[], receipts: readonly Pick<Receipt, 'originalFilename' | 'kind' | 'kindBy'>[], reach: Pick<MailReach, 'from' | 'skip'>): SkipOffer[] {
+export function skipOffers(lines: readonly LedgerLine[], receipts: readonly Pick<Receipt, 'id' | 'originalFilename' | 'kind' | 'kindBy'>[], reach: Pick<MailReach, 'from' | 'skip'>): SkipOffer[] {
+  const documents = lines.filter(isDocument);
   const noReceipt = new Set(receipts.filter((r) => r.kind === 'noise' && r.kindBy === 'human').map((r) => r.originalFilename));
-  const by = new Map<string, { all: number; bad: number }>();
-  for (const l of lines) {
-    if (!('got' in l) || l.got.kind !== 'document' || !l.got.from || l.got.duplicateOf) continue;
+  const inBooks = new Set(receipts.filter((r) => !ASIDE.has(r.kind)).map((r) => senderOfReceipt(documents, r)).filter(Boolean));
+  const bad = new Map<string, number>();
+  for (const l of documents) {
+    if (!l.got.from || l.got.quarantined?.why === 'duplicate') continue;
     const sender = l.got.from.toLowerCase();
     if (!senderAllowed(reach, sender)) continue;
-    const c = by.get(sender) ?? { all: 0, bad: 0 };
-    c.all++;
-    if (l.got.quarantined || (l.got.file && noReceipt.has(l.got.file))) c.bad++;
-    by.set(sender, c);
+    if (l.got.quarantined || (l.got.file && noReceipt.has(l.got.file))) bad.set(sender, (bad.get(sender) ?? 0) + 1);
   }
-  return [...by].filter(([, c]) => c.bad >= AT_LEAST && c.bad / c.all >= SHARE).map(([sender, c]) => ({ sender, n: c.bad })).sort((a, b) => b.n - a.n);
+  return [...bad].filter(([sender, n]) => n >= AT_LEAST && !inBooks.has(sender)).map(([sender, n]) => ({ sender, n })).sort((a, b) => b.n - a.n);
 }
 
 /** Adds the sender's address to the source's reach.mail.skip (reach.mac-mail.skip for the Mail app) in its source.yaml, comments and all. */
-export function addSkip(ws: Pick<Workspace, 'paths'>, source: string, address: string, key: 'mail' | 'mac-mail' = 'mail'): void {
+export function addSkip(ws: Pick<Workspace, 'paths'>, source: string, address: string, key: 'mail' | 'mac-mail' = 'mail', expect?: string): void {
   if (!/^[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)+$/i.test(address)) throw new Error(`${address} is no mail address`);
-  const file = join(ws.paths.root, 'sources', source, 'source.yaml');
-  const doc = parseDocument(readFileSync(file, 'utf8'));
   const pattern = address.toLowerCase();
-  const skip = doc.getIn(['reach', key, 'skip']);
-  const list = skip && typeof skip === 'object' && 'items' in (skip as object) ? (skip as { items: Array<{ value?: unknown }> }).items.map((i) => String(i.value ?? i)) : [];
-  if (list.includes(pattern)) return;
-  if (list.length) doc.addIn(['reach', key, 'skip'], pattern);
-  else doc.setIn(['reach', key, 'skip'], doc.createNode([pattern]));
-  writeFileSync(file, doc.toString());
+  editSourceYaml(ws, source, (doc) => {
+    const skip = doc.getIn(['reach', key, 'skip']);
+    const list = skip && typeof skip === 'object' && 'items' in (skip as object) ? (skip as { items: Array<{ value?: unknown }> }).items.map((i) => String(i.value ?? i)) : [];
+    if (list.includes(pattern)) return false;
+    if (list.length) doc.addIn(['reach', key, 'skip'], pattern);
+    else doc.setIn(['reach', key, 'skip'], doc.createNode([pattern]));
+    return true;
+  }, expect);
 }

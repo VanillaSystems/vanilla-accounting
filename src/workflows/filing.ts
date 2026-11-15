@@ -36,6 +36,8 @@ import { providersOf } from '../intake/sales-report-import.js';
 import { providerIssuesIn } from '../intake/pair-chain.js';
 import type { Action } from './actions.js';
 import type { Run } from './model.js';
+import { sealedVersion } from '../handover/versions.js';
+import { isDurchsichtCopy } from '../handover/content.js';
 
 /**
  * What the compute step hands on: the period, its figures by box and what is to pay (negative: a
@@ -124,12 +126,18 @@ export function releaseApproval(ws: Workspace, run: Pick<Run, 'workflow' | 'item
   if (books.config.approvedReturn?.period === key && !books.config.approvedReturn.filed) { rmSync(preparedXml(ws, key), { force: true }); hold(ws, books, key as QuarterKey, false); }
 }
 
+const refuseOnCopy = (ws: { paths: { root: string } }) => {
+  if (isDurchsichtCopy(ws.paths.root)) throw new Error('Durchsicht: einreichen und versiegeln macht, wer die Bücher geteilt hat.');
+};
+
 export const FILING_ACTIONS: Record<string, Action> = {
   'accounting.tax.vat-return': {
     outcomes: ['ok'],
     effects: [],
     emits: ['return'],
     run(input, _fx, { ws, now, run }) {
+      // A Durchsicht copy files nothing: refused before any write (docs/specs/e2e-and-fiduciary.md B4).
+      refuseOnCopy(ws);
       const key = periodOf(input);
       const books = loadBooks(ws);
       const to = derivePeriod(key)!.to;
@@ -162,6 +170,8 @@ export const FILING_ACTIONS: Record<string, Action> = {
     effects: [],
     emits: ['xml'],
     run(input, _fx, { ws, run }) {
+      // A Durchsicht copy files nothing: refused before any write (docs/specs/e2e-and-fiduciary.md B4).
+      refuseOnCopy(ws);
       const ret = input.return as PeriodReturn;
       const key = periodOf(input);
       const books = loadBooks(ws);
@@ -199,6 +209,8 @@ export const FILING_ACTIONS: Record<string, Action> = {
     effects: ['files.filings', 'books.seal'],
     emits: ['seal'],
     run(input, _fx, { ws }) {
+      // A Durchsicht copy files nothing: refused before any write (docs/specs/e2e-and-fiduciary.md B4).
+      refuseOnCopy(ws);
       const key = periodOf(input);
       const books = loadBooks(ws);
       const end = derivePeriod(key)!.to;
@@ -230,6 +242,7 @@ export const FILING_ACTIONS: Record<string, Action> = {
       if (existsSync(prepared) && !existsSync(filed)) { mkdirSync(dirname(filed), { recursive: true }); copyFileSync(prepared, filed); }
       if (lastOfYear) return { outcome: 'ok', output: { seal: { yearClose: true } satisfies SealOutput } };
       const seal = writeSeal(ws, books, key, new Date().toISOString().slice(0, 10));
+      if (seal.status === 'written') sealedVersion(ws, key);
       return { outcome: 'ok', output: { seal: { file: seal.file } satisfies SealOutput } };
     },
   },

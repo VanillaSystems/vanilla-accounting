@@ -29,6 +29,8 @@ export interface ShellKeys {
   toggleLegend(): void;
   /** ⇧E: the export dialog, preset for the page. */
   exportOpen(): void;
+  /** «Teilen…» (⇧S); false where the books are not shared from (a Durchsicht copy, read-only). */
+  shareOpen(): boolean;
   /** ⌘J: the AI sidebar, also while typing. */
   assistant(): void;
   /** ⌘B: the dock narrow or wide. */
@@ -76,6 +78,7 @@ export function useShellKeys(keys: ShellKeys) {
       if (plain(e) && !e.shiftKey && (e.key === 'a' || e.key === 'A') && k.actions()) { e.preventDefault(); return; }
       if (gPending && plain(e) && /^[a-z]$/.test(e.key)) { endG(); if (k.area(e.key)) e.preventDefault(); return; }
       if (plain(e) && e.shiftKey && e.key === 'E') { e.preventDefault(); k.exportOpen(); return; }
+      if (plain(e) && e.shiftKey && e.key === 'S' && k.shareOpen()) { e.preventDefault(); return; }
       if (k.areaKeys(e)) { e.preventDefault(); return; }
       if (!plain(e)) return;
       switch (e.key) {

@@ -7,7 +7,7 @@ import { issuedByFirm } from '../intake/own-invoice.js';
 import { accountOf, byStatement } from '../workspace/money-accounts.js';
 import { randomBytes } from 'node:crypto';
 import { periodLock, type Books } from '../books/store.js';
-import { isManualRef } from '../books/refs.js';
+import { isManualRef, isPersonsLink } from '../books/refs.js';
 import { nextManualRef } from '../books/next-ref.js';
 import { addDays, isFilingKey, parsePeriod } from '../accounting/periods.js';
 import { correctsFor } from '../accounting/correction.js';
@@ -24,6 +24,7 @@ import { agreedBasis, withoutInputTax } from '../engines/index.js';
 import { atTaxPoint, isOpenItemAccount, openItemAccounts } from '../accounting/tax-point.js';
 import type { BankTransaction, BookedBy, BookingFields, JournalEntry, Receipt } from '../types/index.js';
 import type { BookChange, ChangeNote, EntrySet, MadeChange, NewEntry, PrivatePart, ReceiptSet } from '../types/assistant.js';
+import type { DeletedEntry } from '../books/entry-input.js';
 import { APP_ROOT, type LedgerBankAccount, type Workspace } from '../workspace/workspace.js';
 import { accountsOf } from '../workspace/reads.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -104,7 +105,7 @@ export function setReceiptKind(books: Books, c: Extract<BookChange, { kind: 'rec
     for (const ref of links) carried(books, ref);
     if (links.length) before.links = links;
   }
-  for (const ref of c.links ?? []) if (books.transactions.some((t) => t.ref === ref) || withoutPayment(books, ref)) link(books, c.id, ref);
+  for (const ref of c.links ?? []) if (holdsLinks(books, ref)) link(books, c.id, ref);
   return before;
 }
 
@@ -161,6 +162,14 @@ export const withoutPayment = (books: Pick<Books, 'transactions' | 'journalEntri
   isManualRef(ref) && !books.transactions.some((t) => t.ref === ref) && books.journalEntries.some((e) => e.transactionRef === ref);
 
 /**
+ * A ref a receipt can be linked to: a payment's, or any booking's without one. That is a person's
+ * own (M2026-004, withoutPayment) or one a module or an import booked under a ref of its own (a
+ * payment provider's order, an invoice's event): whatever the app links there, a person may link
+ * too. A ref that books nothing and pays nothing holds no link.
+ */
+export const holdsLinks = (books: Pick<Books, 'transactions' | 'journalEntries'>, ref: string): boolean => refDates(books, ref).length > 0;
+
+/**
  * The receipts a booking without a payment carries, recorded on its entries (JournalEntry.receipts)
  * so that the booking deleted and put back (an undo) carries them again. Nothing for a payment's
  * ref: there `receipts` is what its booking saw.
@@ -175,13 +184,13 @@ function carried(books: Books, ref: string): void {
 }
 
 /**
- * A receipt linked to a payment, or to a booking without one (withoutPayment), of the open period.
+ * A receipt linked to a payment, or to a booking without one (holdsLinks), of the open period.
  * A receipt the owner paid privately takes no other link (assertNotPaidPrivately).
  */
 export function link(books: Books, receipt: string, payment: string, line?: number, bills?: readonly LineBill[]): BookChange | undefined {
   receiptOf(books, receipt);
   assertNotPaidPrivately(books, receipt, payment);
-  if (!books.transactions.some((t) => t.ref === payment) && !withoutPayment(books, payment)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
+  if (!holdsLinks(books, payment)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
   assertOpen(books, refDates(books, payment), 'mapping');
   if (books.mappings.some((m) => m.transactionRef === payment && m.receiptId === receipt)) return undefined;
   if (line !== undefined) assertLineFree(books, receipt, payment, line);
@@ -525,7 +534,7 @@ export function setEntry(books: Books, id: string, set: EntrySet, author: Author
  * the filed quarter whose Korrekturabrechnung declares it.
  */
 export function addEntry(books: Books, input: NewEntry): JournalEntry {
-  const { id, transactionRef, ...rest } = input;
+  const { id, transactionRef, takenLinks, ...rest } = input;
   const { corrects, date } = rest;
   if (corrects && !isFilingKey(corrects, filing().length)) throw new RequestError(400, `corrects: ${filing().length === 'half' ? 'YYYY-Hn' : 'YYYY-Qn'}.`);
   assertOpen(books, [date], 'newEntry');
@@ -538,20 +547,34 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
   if (!id) { assertPlaced(rest.accountDebit, rest.accountCredit); assertCodeTaken(rest.vatCode); assertCodeSign(rest.vatCode, rest.accountDebit, rest.accountCredit); }
   if (transactionRef) {
     const dates = refDates(books, transactionRef);
-    if (!dates.length && !isManualRef(transactionRef)) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
+    // An undo (`id`) puts a module's last booking under a ref of its own back (#524), as a person's own ref; the API takes such an
+    // undo only for a booking its deletion recorded (src/server/routes/journal.ts).
+    if (!dates.length && !isManualRef(transactionRef) && !id) throw new RequestError(404, 'Transaction not found', { code: 'gone', params: { what: 'payment' } });
     assertOpen(books, dates, 'newEntry');
   }
   const entry: JournalEntry = { id: id ?? randomBytes(8).toString('hex'), transactionRef: transactionRef ?? nextManualRef(books, date.slice(0, 4)), ...rest };
   books.journalEntries.push(entry);
   bookedAgain(books, entry.transactionRef);
-  linkCarried(books, entry);
+  linkCarried(books, entry, takenLinks);
   return entry;
 }
 
-/** A booking without a payment made or put back with the receipts it carries (`receipts`): linked to it again. */
-function linkCarried(books: Books, entry: JournalEntry): void {
-  if (!entry.receipts?.length || !withoutPayment(books, entry.transactionRef)) return;
-  for (const id of entry.receipts) if (books.receipts.some((r) => r.id === id)) link(books, id, entry.transactionRef);
+/**
+ * A booking without a payment made or put back: a person's (M2026-004) is linked again to the receipts
+ * it carries (`receipts`); a module's under a ref of its own (#524) only to `taken`, the person's links
+ * its deletion took along (DeletedEntry.takenLinks). A module's `receipts` are what it saw, its own
+ * business: never read as links, never written.
+ */
+function linkCarried(books: Books, entry: JournalEntry, taken?: readonly string[]): void {
+  const ref = entry.transactionRef;
+  if (!ref || books.transactions.some((t) => t.ref === ref)) return;
+  if (!isManualRef(ref)) {
+    const linked = new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId));
+    for (const id of taken ?? []) if (books.receipts.some((r) => r.id === id) && !linked.has(id)) link(books, id, ref);
+    return;
+  }
+  if (!entry.receipts?.length) return;
+  for (const id of entry.receipts) if (books.receipts.some((r) => r.id === id)) link(books, id, ref);
   // A receipt deleted meanwhile is no longer recorded.
   carried(books, entry.transactionRef);
 }
@@ -832,8 +855,10 @@ export function undoClearWithheld(books: Books, before: readonly JournalEntry[],
  * hand booking made since stands, and the restore is refused naming it, so the payment is never
  * booked twice and no booking is replaced unseen (r8h-23).
  */
-export function restoreSaved(books: Books, id: string, saved: JournalEntry | undefined, kept?: readonly string[]): void {
-  if (!saved) { deleteEntry(books, id); return; }
+export function restoreSaved(books: Books, id: string, deleted: DeletedEntry | undefined, kept?: readonly string[]): void {
+  if (!deleted) { deleteEntry(books, id); return; }
+  // A deletion's record names the person's links it took along (#524): they are linked again, never kept on the entry.
+  const { takenLinks, ...saved } = deleted;
   const e = books.journalEntries.find((x) => x.id === id);
   assertOpen(books, [...(e ? [e.date] : []), saved.date], 'editEntry');
   const since = kept && !e ? books.journalEntries.filter((x) => x.transactionRef === saved.transactionRef && !kept.includes(x.id)) : [];
@@ -843,7 +868,7 @@ export function restoreSaved(books: Books, id: string, saved: JournalEntry | und
   }
   books.journalEntries = e ? books.journalEntries.map((x) => (x.id === id ? saved : x)) : [...books.journalEntries, saved];
   bookedAgain(books, saved.transactionRef);
-  linkCarried(books, saved);
+  linkCarried(books, saved, takenLinks);
 }
 
 /**
@@ -851,7 +876,7 @@ export function restoreSaved(books: Books, id: string, saved: JournalEntry | und
  * deletes (by hand, or on her wish through the KI sidebar) waits for her from then on (r10h-5): no
  * run books it again until she books it or asks the app to (bookedAgain).
  */
-export function deleteEntry(books: Books, id: string): JournalEntry {
+export function deleteEntry(books: Books, id: string): DeletedEntry {
   const entry = entryOf(books, id);
   assertOpen(books, [entry.date], 'deleteEntry');
   books.journalEntries = books.journalEntries.filter((je) => je.id !== id);
@@ -860,9 +885,14 @@ export function deleteEntry(books: Books, id: string): JournalEntry {
   if (tx && !bookedInFiled(tx)) tx.waitsForPerson = { since: new Date().toISOString(), why: 'bookingDeleted' };
   // A booking without a payment takes its links along: no receipt hangs on a booking that is gone. The entry keeps them in `receipts` for its undo.
   // Each receipt is taken apart from it, so code never books from it again (a provider's fee bill, src/booking/vat-corrections.ts); the undo links it back.
-  else if (isManualRef(entry.transactionRef) && !books.journalEntries.some((je) => je.transactionRef === entry.transactionRef)) {
-    for (const m of books.mappings) if (m.transactionRef === entry.transactionRef) apart(books, m.receiptId, m.transactionRef, true);
-    books.mappings = books.mappings.filter((m) => m.transactionRef !== entry.transactionRef);
+  // A module's booking under a ref of its own (#524) takes the links a person or the AI made along, and the entry returned names them
+  // apart from its `receipts` (takenLinks) for its undo; the module's own links stay with the module, which books that ref again or takes it back.
+  else if (entry.transactionRef && (isManualRef(entry.transactionRef) || !tx) && !books.journalEntries.some((je) => je.transactionRef === entry.transactionRef)) {
+    const manual = isManualRef(entry.transactionRef);
+    const going = books.mappings.filter((m) => m.transactionRef === entry.transactionRef && (manual || isPersonsLink(m)));
+    for (const m of going) apart(books, m.receiptId, m.transactionRef, true);
+    books.mappings = books.mappings.filter((m) => !going.includes(m));
+    if (!manual && going.length) return { ...entry, takenLinks: [...new Set(going.map((m) => m.receiptId))].sort() };
   }
   return entry;
 }

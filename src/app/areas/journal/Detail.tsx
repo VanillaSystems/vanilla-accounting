@@ -23,7 +23,7 @@ import { t } from '../../i18n/index.js';
 import { useAiOff } from '../../ai/ai-off.js';
 import { ICONS } from '../icons.js';
 import type { AreaProps, Nav } from '../index.js';
-import { Paper } from '../receipts/Paper.js';
+import { FileView } from '../receipts/FileView.js';
 import { I } from '../receipts/icons.js';
 import { at, bankOf, amountOf } from '../receipts/view.js';
 import { explain } from '../codes/vat-card.js';
@@ -50,9 +50,11 @@ import { QuestionsOn } from '../../questions/Questions.js';
 import { AccountField, unknownAccountText } from './AccountField.js';
 import { StatementPaper } from '../bank/StatementPaper.js';
 import { bankFor } from '../bank/state.js';
-import { isCamt } from '../bank/model.js';
+import { fileKindOf } from '../../../core/files.js';
 import { CorrectionOffer } from '../company/RulesSection.js';
 import { LearnOffer } from '../company/LearnOffer.js';
+import { WhyField } from '../../handover/Durchsicht.js';
+import { useHandover } from '../../handover/store.js';
 import { baseCurrency, chargesVat, filing, vat, withoutInputTax } from '../../../engines/index.js';
 import { correctionName } from '../../lib/vat-words.js';
 import { TagFields, tagField, tagsOfForm } from './TagFields.js';
@@ -94,6 +96,8 @@ const quarterName = (date: string) => { const p = parsePeriod(periodContaining(d
 const filedName = (quarter: string) => { const p = parsePeriod(quarter, localToday()); return p ? periodName(p) : quarter; };
 
 function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
+  // On a Durchsicht copy: his «Warum?» for the sharer, and no «Ins Wissen übernehmen?» (rules are the sharer's to keep, B6).
+  const copy = useHandover()?.durchsicht;
   const { v, j, nav, canEdit } = props;
   const { e, tx } = v;
   const fx = useFx().convert(e);
@@ -186,8 +190,8 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
           <QuestionsOn key={`q-${e.id}`} on={{ kind: 'entry', id: e.id }} also={[...(tx ? [{ kind: 'payment' as const, id: tx.ref }] : []), ...v.receipts.map((r) => ({ kind: 'receipt' as const, id: r.id }))]} nav={nav} canEdit={canEdit} books={props.books} />
           {receipt ? (
             <div className="paper real" role="button" tabIndex={0} aria-label={t('journal.openReceipt')} onClick={() => nav.go(at({ area: 'receipts', id: receipt.id }, receipt.date))}>
-              <Paper key={receipt.id} src={sources.receipt(receipt.id)} />
-              <a className="dl float" href={sources.receipt(receipt.id)} download={receipt.filename} data-tip={t('receipts.downloadTitle', { file: receipt.filename })} onClick={(ev) => ev.stopPropagation()}>{I.dl}<span>{t('receipts.download')}</span></a>
+              <FileView key={receipt.id} src={sources.receipt(receipt)} file={receipt.filename} size={receipt.fileSize} />
+              <a className="dl float" href={sources.receipt(receipt)} download={receipt.filename} data-tip={t('receipts.downloadTitle', { file: receipt.filename })} onClick={(ev) => ev.stopPropagation()}>{I.dl}<span>{t('receipts.download')}</span></a>
             </div>
           ) : tx ? (
             <Excerpt {...props} tx={tx} />
@@ -208,7 +212,8 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
             </Sec>
           )}
           <EntryForm {...props} edit={edit} />
-          {edit && (e.by?.kind === 'person' || e.by?.kind === 'assistant') && e.by.was ? <div className="jlearn"><LearnOffer payment={e.transactionRef} nav={nav} /></div> : null}
+          {copy && props.canEdit ? <WhyField d={copy} entry={e.id} /> : null}
+          {edit && !copy && (e.by?.kind === 'person' || e.by?.kind === 'assistant') && e.by.was ? <div className="jlearn"><LearnOffer payment={e.transactionRef} nav={nav} /></div> : null}
           <Sec k="herkunft" val={e.by ? t(`journal.by.${e.by.kind}`) : t(`journal.origin.${e.origin ?? 'other'}`)}>
             <dl className="kv">
               <dt>{t('journal.entryId')}</dt><dd className="mono" style={{ fontSize: 11.5 }}>{e.id}</dd>
@@ -455,7 +460,8 @@ function Excerpt({ books, nav, tx }: Props & { tx: BankTransaction }) {
   const [page, setPage] = useState('');
   const b = bankFor(books, ws?.bankAccounts);
   const s = b.statementOf(tx);
-  const src = s?.file && !isCamt(s.file) && sources.statement(s.file.bank, s.file.filename);
+  // An excerpt is drawn from a PDF; the bank's XML or a CSV shows whole in Kontoauszüge (#523).
+  const src = s?.file && fileKindOf(s.file.filename).view === 'pdf' && sources.statement(s.file.bank, s.file.filename);
   const toStatement = () => nav.go(at({ area: 'bank', payment: tx.ref }, tx.date));
   const link = <button type="button" data-tip={t('journal.openPaymentKey')} onClick={toStatement}>{t('journal.statementOf', { month: monthName(tx.date) })}</button>;
   if (!src) return <div className="src">{t('journal.noReceiptSource')} {link}</div>;

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { DEFAULT_LANGUAGE, setLanguage, supportedLanguage } from '../i18n/index.js';
 import { useWorkspace } from '../hooks/use-workspace.js';
 import { desktop } from '../desktop/bridge.js';
+import { DEMO } from '../lib/api.js';
 import { store, stored } from './storage.js';
 import { ZOOM_STEPS, phone, tight, type Theme } from './look.js';
 import { NAV_WIDE_CLASS, keepNavWide, navWideStored } from './nav-width.js';
@@ -109,7 +110,9 @@ export function useNavWide(): [boolean, () => void] {
 
 /**
  * The UI language: the one picked in the top bar (localStorage), else the workspace's
- * company.language, else the browser's, else German. Links carry no language (docs/urls.md rule 3).
+ * company.language, else the browser's, else German. The public demo (build:audit --demo) skips the
+ * browser's: its made-up company is Swiss, so it opens in German until the viewer picks another.
+ * Links carry no language (docs/urls.md rule 3).
  */
 /** `books`: whether books are open, whose company language is the default (not on the desktop app's start screen). */
 export function useLanguage(books = true): [string, (code: string) => void] {
@@ -117,7 +120,7 @@ export function useLanguage(books = true): [string, (code: string) => void] {
   const workspace = useWorkspace(books);
   const resolved = lang
     ?? supportedLanguage(workspace?.company.language)
-    ?? navigator.languages.map(supportedLanguage).find(Boolean)
+    ?? (DEMO ? undefined : navigator.languages.map(supportedLanguage).find(Boolean))
     ?? DEFAULT_LANGUAGE;
   setLanguage(resolved);
   return [resolved, (code) => { setLang(code); store('language', code); }];

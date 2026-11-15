@@ -41,7 +41,7 @@ import { TwinNotice } from './TwinNotice.js';
 import { UidOffer } from './UidOffer.js';
 import { ReportCorrections } from './ReportCorrections.js';
 import { ReportHeld } from './ReportHeld.js';
-import { Paper } from './Paper.js';
+import { FileView } from './FileView.js';
 import { SkipOffer } from './SkipOffer.js';
 import { RunHistory } from '../../history/RunHistory.js';
 import { I } from './icons.js';
@@ -86,7 +86,7 @@ function PendingDetail({ file, nav, proc }: { file: InboxFile; nav: Props['nav']
         </div>
       )}
       <div className="body">
-        <div className="desk"><div className="paper real"><Paper key={file.id} src={api.inboxFile(file.id)} /></div></div>
+        <div className="desk"><div className="paper real"><FileView key={file.id} src={api.inboxFile(file.id)} file={file.filename} size={file.size} /></div></div>
         <aside className="margin" aria-label={t('receipts.details')}>
           <div className="note">{failed ? t('receipts.readFailedTip') : t('receipts.readingTip')}</div>
         </aside>
@@ -138,7 +138,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
   const rate = cur !== baseCurrency() && firstTx && rates?.on(cur, firstTx.date);
   const vat = r.hasSwissVat ? (r.vatSummary ?? []).filter((g) => g.ratePercent > 0 && g.vat) : [];
   const misfit = vatMisfit(r);
-  const src = sources.receipt(r.id);
+  const src = sources.receipt(r);
   const open = parsePeriod(l.openFrom.slice(0, 4) + '-Q' + Math.ceil(Number(l.openFrom.slice(5, 7)) / 3), localToday());
   const aiOff = useAiOff();
   const noAi = useNoAi();
@@ -237,7 +237,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
         <div className="desk">
           <QuestionsOn key={`q-${r.id}`} on={{ kind: 'receipt', id: r.id }} also={props.books.mappings.filter((m) => m.receiptId === r.id).map((m) => ({ kind: 'payment' as const, id: m.transactionRef }))} nav={nav} canEdit={props.canEdit} books={props.books} />
           <div className="paper real" role="button" tabIndex={0} aria-label={t('receipts.previewLarge')} onClick={() => setUi({ overlay: 'quick' })}>
-            <Paper key={src} src={src} />
+            <FileView key={src} src={src} file={r.filename} size={r.fileSize} />
             <a className="dl float" href={src} download={r.filename} data-tip={t('receipts.downloadTitle', { file: r.filename })} onClick={(e) => e.stopPropagation()}>{I.dl}<span>{t('receipts.download')}</span></a>
           </div>
         </div>
@@ -251,7 +251,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       </div>
 
       {s.overlay === 'link' && edit && <LinkDialog {...props} onClose={() => setUi({ overlay: null })} />}
-      {s.overlay === 'quick' && <Quick src={src} file={r.filename} />}
+      {s.overlay === 'quick' && <Quick src={src} file={r.filename} size={r.fileSize} />}
       {s.overlay === 'delete' && edit && <ConfirmDelete {...props} />}
     </div>
   );
@@ -628,7 +628,7 @@ function Datei(props: Props & { v: ReceiptView; edit: boolean }) {
   );
 }
 
-function Quick({ src, file }: { src: string; file: string }) {
+function Quick({ src, file, size }: { src: string; file: string; size?: number }) {
   // On the body, not in the detail: a column's animation or stacking never puts the dock or the bar above it (#387 review).
   return createPortal(
     <div className="quick" role="dialog" aria-label={t('receipts.previewOf', { file })} onClick={() => setUi({ overlay: null })}>
@@ -636,7 +636,7 @@ function Quick({ src, file }: { src: string; file: string }) {
         {t('receipts.quickCap', { file })}
         <a className="dl inline" href={src} download={file}>{I.dl}<span>{t('receipts.download')}</span></a>
       </span>
-      <div className="paper real" style={{ width: '70vw' }}><Paper key={src} src={src} maxWidth={1100} /></div>
+      <div className="paper real" style={{ width: '70vw' }}><FileView key={src} src={src} file={file} size={size} maxWidth={1100} /></div>
     </div>,
     document.body,
   );

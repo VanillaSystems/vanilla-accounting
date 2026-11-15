@@ -23,6 +23,7 @@ import type { DropSession } from '../src/types/drop.js';
 import { loadBooks, receiptFile, saveBooks } from '../src/books/store.js';
 import type { Receipt } from '../src/types/index.js';
 import { startApi, type ApiServer } from './support/api-server.js';
+import { screenshot } from './support/browser.js';
 import { noBrowser, openApp } from './support/e2e.js';
 import './support/jurisdiction.js';
 
@@ -206,14 +207,14 @@ test('in the app: the drop says why it booked nothing, with «Einschalten» righ
     const said = await page.$eval('[data-testid=drop-booking-waits-sum]', (e) => (e as HTMLElement).innerText);
     assert.match(said, /Die App bucht gerade nicht von selbst, weil sich knowledge\/rules\/booking\.guide\.yaml seit dem letzten Einschalten geändert hat und sie nicht nach Regeln bucht, die du noch nicht gesehen hast; mit «Einschalten» gilt die Änderung, und sie bucht dann, was nur darauf gewartet hat\./);
     assert.deepEqual(entriesOf(api, studer(api).ref), []);
-    await page.screenshot({ path: join(shots, 'drop-statement-booking-waits.png') });
+    await screenshot(page, join(shots, 'drop-statement-booking-waits.png'));
     await page.click('[data-testid=drop-close]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=drop-dialog]'));
     // Her order export: its row waits with the same words.
     await drop('orders_export_1.csv', 'text/csv');
     await page.waitForSelector('[data-testid=drop-booking-waits] [data-act=booking-switch-on]', { timeout: 120_000 });
     assert.match(await page.$eval('[data-testid=drop-booking-waits]', (e) => (e as HTMLElement).innerText), /Die App bucht gerade nicht von selbst, weil sich knowledge\/rules\/booking\.guide\.yaml/);
-    await page.screenshot({ path: join(shots, 'drop-report-booking-waits.png') });
+    await screenshot(page, join(shots, 'drop-report-booking-waits.png'));
     // One click: switched on, the payment that waited is booked, and the report's row is taken again.
     await page.click('[data-testid=drop-booking-waits] [data-act=booking-switch-on]');
     await page.waitForSelector('[data-testid=booking-waits-done]');
@@ -221,7 +222,7 @@ test('in the app: the drop says why it booked nothing, with «Einschalten» righ
     for (let i = 0; i < 100 && !entriesOf(api, studer(api).ref).length; i++) await new Promise((r) => setTimeout(r, 100));
     assert.deepEqual(entriesOf(api, studer(api).ref), ['1020/3200 V81'], 'switched on, the payment that waited is booked');
     await page.waitForFunction(() => !document.querySelector('[data-testid=drop-booking-waits]') && /Durchlaufkonto|clearing|Konto/i.test(document.querySelector('[data-testid=drop-dialog]')?.textContent ?? ''), { timeout: 30_000 });
-    await page.screenshot({ path: join(shots, 'drop-after-switch-on.png') });
+    await screenshot(page, join(shots, 'drop-after-switch-on.png'));
     console.log(`screenshots: ${shots}`);
     assert.deepEqual(app.errors, []);
   } finally {

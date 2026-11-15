@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import type { QuarterKey } from '../types/index.js';
-import type { AuditSnapshot } from './sources.js';
+import { EXPORT_FILES, type AuditSnapshot } from './sources.js';
 import { APP_ROOT } from '../workspace/workspace.js';
 
 export const MANIFEST = 'manifest.json';
@@ -25,7 +25,7 @@ export interface ExportManifest {
   seals: ExportedSeal[];
   /** Closed quarters with records but no seal (npm run seal). */
   unsealed: QuarterKey[];
-  /** Receipts and statements the books name whose PDF was not in the workspace. */
+  /** Receipts, statements and invoice documents the books name whose file was not in the workspace (an invoice's PDF also when it no longer matched its checksum). */
   missing: string[];
   files: ExportedFile[];
 }
@@ -64,7 +64,32 @@ export function verifyExport(dir: string): string[] {
     if (got !== want.sha256) problems.push(`${path}: changed (sha256 ${got}, manifest ${want.sha256})`);
   }
   for (const path of listed.keys()) problems.push(`${path}: missing (in the manifest, not in the folder)`);
-  return problems;
+  return [...problems, ...invoiceProblems(dir, manifest)];
+}
+
+/**
+ * Each invoice document's PDF in the export is the one its record names: the SHA-256 the manifest lists
+ * for it is the checksum invoices.json kept when it was issued or sent (#516). One the manifest lists in
+ * neither its files nor its `missing` (build.ts writeInvoices names them «invoice <number>: …», «sent document
+ * <id>: …») is reported.
+ */
+function invoiceProblems(dir: string, manifest: ExportManifest): string[] {
+  const file = join(dir, EXPORT_FILES.invoices());
+  if (!existsSync(file)) return [];
+  const { invoices, sent } = JSON.parse(readFileSync(file, 'utf8')) as {
+    invoices: Array<{ status: string; number?: string; pdf?: { sha256: string } }>;
+    sent: Array<{ id: string; sha256: string }>;
+  };
+  const hashes = new Map(manifest.files.map((f) => [f.path, f.sha256]));
+  const docs = [
+    ...invoices.flatMap((i) => (i.status === 'issued' && i.number && i.pdf ? [{ what: `invoice ${i.number}`, path: EXPORT_FILES.invoicePdf(i.number), sha256: i.pdf.sha256 }] : [])),
+    ...sent.map((d) => ({ what: `sent document ${d.id}`, path: EXPORT_FILES.sentPdf(d.id), sha256: d.sha256 })),
+  ];
+  return docs.flatMap(({ what, path, sha256: want }) => {
+    const got = hashes.get(path);
+    if (!got) return manifest.missing.some((m) => m.startsWith(`${what}:`)) ? [] : [`${path}: ${EXPORT_FILES.invoices()} names it, the manifest neither lists it nor names it missing`];
+    return got === want ? [] : [`${path}: not the PDF as issued (sha256 ${got}, ${EXPORT_FILES.invoices()} ${want})`];
+  });
 }
 
 /** The manifest's own hash: sent apart from the export, it proves the manifest itself was not replaced. */

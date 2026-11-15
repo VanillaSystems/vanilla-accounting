@@ -1,7 +1,7 @@
 # Audit export
 
 An audit export is a read-only copy of your books that runs without Node.js and without the
-API. It is a folder of static files: the app, the books as one `books.json`, every receipt and bank statement PDF
+API. It is a folder of static files: the app, the books as one `books.json`, every receipt, bank statement and invoice PDF
 the books name, the VAT returns as filed, and a `manifest.json` with the SHA-256 of every file.
 Give it to your Treuhänder, to an ESTV or AHV auditor, or keep it as the state of the books on
 the day you made it.
@@ -38,8 +38,10 @@ that holds other files. It replaces an earlier export in the same folder.
 | `index.html`, `assets/` | The app, built in audit mode. All paths are relative. |
 | `books.json` | Your books as the app reads them: every year's records and the config, in one file. |
 | `data/` | What the API would answer: the status with the snapshot, the chart of accounts, the company and its bank accounts, the filed returns per year, the ESTV exchange rates the foreign entries are checked against. |
-| `receipts/<id>.pdf` | Every receipt in the books, named by its id. |
-| `bank-statements/<bank>/` | Every bank statement PDF in the books. |
+| `receipts/<id>.<ext>` | Every receipt in the books, named by its id with its own extension when that is an inert type (`.pdf`, a provider's report `.csv`, an image, `.eml`, `.xlsx`, …). An HTML, SVG or XML file, or one of an unknown type, is named `<id>.bin`, so a static host never serves it as a document that runs script beside your books; the app still shows it by its real name. An export made before #523 named every receipt `.pdf`. |
+| `bank-statements/<bank>/` | Every bank statement file in the books by its name; the bank's XML (camt) with `.bin` added, for the same reason. |
+| `data/invoices.json`, `invoices/` | The invoices, credit notes, customers and sent documents as of the export's day, with every issued PDF (`invoices/<number>.pdf`) and every sent reminder or notice (`invoices/sent/<id>.pdf`) exactly as stored. `verify-audit` checks each against the checksum its record kept. Drafts are left out: an export is the record, not work in progress. |
+| `invoice-logos/` | The logos the invoices are laid out with. |
 | `manifest.json` | The SHA-256 and size of every other file, and the seals of the filed quarters at the time of the export. |
 
 ## Look at it
@@ -88,7 +90,9 @@ npm run verify-audit -- audit-2026-10-09
 ```
 
 `verify-audit` lists every file that changed, was added or is missing, and exits with 1 when
-there is one. When the folder is as it was exported, it prints `ok` and the seals.
+there is one. When the folder is as it was exported, it prints `ok` and the seals, and names
+every file the books name that was not in the export when it was made (a receipt not found, an
+invoice PDF that no longer matched its checksum), so the recipient knows what is incomplete.
 
 ## Host it
 
@@ -109,6 +113,33 @@ relative.
 ```sh
 npm run build:audit -- site --workspace demo
 ```
+
+## Publish the demo
+
+The public demo on a website is the export of a demo company with `--demo`:
+
+```sh
+npm run build:audit -- site/demo --demo --download https://example.com/accounting/
+```
+
+It is the same export, with these differences:
+
+- A bar in the product colour replaces the audit bar. It says that the company and its figures
+  are made up and that the page is only to look at.
+- `--download <url>` gives the bar an **App herunterladen** link to that page. The app names no
+  website of its own, so without the option the bar has no link.
+- On the first visit a card says what the demo shows and links to Belege, Buchungen and MWST.
+- It opens in German, whatever the browser's language. A language the viewer picks in the top
+  bar is kept in that browser, as in the app.
+- Where the export would speak of an audit or of the local server (Automatisierung, Wissen,
+  Geschäftspartner, the year close, the export dialog, the AI column), the demo says that this
+  is in the app.
+- `--demo` takes only the app's own demo workspaces (`demo/` unless `--workspace` names another
+  `demo-<name>/`) and refuses any other folder before it writes anything: the demo is meant for a
+  public URL, and real books there would publish them.
+
+The manifest is written as for an audit, but the demo has nothing to verify and the command
+prints no hash.
 
 ## Verify an export later
 

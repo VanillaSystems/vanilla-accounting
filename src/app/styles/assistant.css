@@ -48,7 +48,7 @@ html.aiover .list { padding-left: 24px; padding-right: 16px; }
 .aitools { margin-bottom: 4px; }
 .aitools > summary { font-size: 11.5px; color: var(--muted); cursor: pointer; width: max-content; }
 .aitools > summary:hover { color: var(--ink); }
-.aitool { font: 400 11px/1.5 "Geist Mono"; color: var(--muted); }
+.aitool { font: 400 11px/1.5 var(--font-mono); color: var(--muted); }
 .aitool.denied { color: var(--neg); }
 .aitext { margin-top: 2px; white-space: normal; overflow-wrap: anywhere; }
 .aitext p { margin: 0; }
@@ -339,7 +339,7 @@ a.dmove:hover, a.dmove:focus-visible { background: var(--hover); outline: none; 
 .aiterminalreq { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 8px; border-radius: 6px; background: var(--hover); }
 .aiterminalreq p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .aiterminalcmd summary { cursor: pointer; color: var(--muted); font-size: 12.5px; }
-.aiterminalcmd code { display: block; margin: 4px 0; padding: 6px 8px; border-radius: 6px; background: var(--hover); font-family: "Geist Mono", ui-monospace, monospace; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.aiterminalcmd code { display: block; margin: 4px 0; padding: 6px 8px; border-radius: 6px; background: var(--hover); font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .aiterminalinstall { display: flex; flex-direction: column; gap: 4px; }
 .aitermask { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
 .aitermask .ruleacts { flex-wrap: wrap; }

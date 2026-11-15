@@ -52,7 +52,9 @@ export type EntrySet = Partial<Pick<JournalEntry, 'date' | 'accountDebit' | 'acc
  * manual ref. `id`, `origin` and the rest of a JournalEntry come only from an undo, which puts a
  * deleted booking back as it was.
  */
-export type NewEntry = Omit<JournalEntry, 'id' | 'transactionRef'> & Partial<Pick<JournalEntry, 'id' | 'transactionRef'>>;
+export type NewEntry = Omit<JournalEntry, 'id' | 'transactionRef'> & Partial<Pick<JournalEntry, 'id' | 'transactionRef'>>
+  /** An undo of a deletion's: the person's links it took along, linked again (src/books/entry-input.ts DeletedEntry). */
+  & { takenLinks?: string[] };
 
 /**
  * One change to the books (src/server/edits.ts): a receipt's facts, a link between receipt and

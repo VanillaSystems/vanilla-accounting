@@ -5,7 +5,7 @@
  *   0.4.0-rc.56+g36b66d6   package.json says 0.4.0, the last tag is older: 56 commits towards it
  *   0.4.0-rc.1.3+g1a2b3c4  the last tag is a pre-release of this version (v0.4.0-rc.1), 3 commits after it
  *   0.3.0+56.g36b66d6      package.json still says the released 0.3.0: 56 commits past its tag
- *   0.3.0                  the tagged release itself, clean
+ *   0.3.0                  the tagged release itself, clean; or, clean, any commit once CHANGELOG.md dates 0.3.0 and before its tag
  *   ….dirty                uncommitted changes in the tree
  *
  * The count climbs with every commit and resets at every tag; the sha tells two branches at the
@@ -32,13 +32,20 @@ export interface Build {
 const LONG = /^(.*)-(\d+)-g([0-9a-f]+)(-dirty)?$/;
 const BARE = /^([0-9a-f]+)(-dirty)?$/;
 
-/** Pure: the build string from the version package.json names and what `git describe --tags --long --dirty --always` says. */
-export function versionFrom(planned: string, describe: string | undefined): string {
+/**
+ * Pure: the build string from the version package.json names and what `git describe --tags --long --dirty --always`
+ * says. `cut`: the release of that version is cut but not tagged yet (CHANGELOG.md dates it, no tag
+ * v<version> exists, describeBuild): a clean build is then named after the version already, so the dmg
+ * built and smoke-tested on the release branch is the one published, without a second build after tagging
+ * (docs/releasing.md).
+ */
+export function versionFrom(planned: string, describe: string | undefined, cut = false): string {
   const long = describe ? LONG.exec(describe) : null;
   const bare = long || !describe ? null : BARE.exec(describe);
   if (!long && !bare) return planned;
   const commit = long ? long[3] : bare![1];
   const dirty = !!(long ? long[4] : bare![2]);
+  if (cut && !dirty) return planned;
   const meta = `g${commit}${dirty ? '.dirty' : ''}`;
   if (!long) return `${planned}+${meta}`;
   const tag = long[1].replace(/^v/, '');
@@ -58,10 +65,18 @@ const git = (root: string, ...args: string[]): string | undefined => {
   }
 };
 
+/** The release of `version` is cut: CHANGELOG.md has its dated heading (`## [X.Y.Z] - YYYY-MM-DD`, the commit `Release X.Y.Z`) and no tag vX.Y.Z exists yet. */
+export function isCut(root: string, version: string): boolean {
+  const changelog = join(root, 'CHANGELOG.md');
+  if (!existsSync(changelog)) return false;
+  const heading = new RegExp(`^## \\[${version.replace(/\./g, '\\.')}\\] - \\d{4}-\\d{2}-\\d{2}`, 'm');
+  return heading.test(readFileSync(changelog, 'utf8')) && !git(root, 'tag', '-l', `v${version}`);
+}
+
 export function describeBuild(root: string): Build {
   const planned = (JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string }).version;
   const checkout = existsSync(join(root, '.git'));
-  const version = versionFrom(planned, checkout ? git(root, 'describe', '--tags', '--long', '--dirty', '--always') : undefined);
+  const version = versionFrom(planned, checkout ? git(root, 'describe', '--tags', '--long', '--dirty', '--always') : undefined, checkout && isCut(root, planned));
   const committedAt = checkout ? git(root, 'log', '-1', '--format=%cI') : undefined;
   return { version, file: version.replace(/\+/g, '-'), number: Number((checkout && git(root, 'rev-list', '--count', 'HEAD')) || 0), ...(committedAt ? { committedAt } : {}) };
 }

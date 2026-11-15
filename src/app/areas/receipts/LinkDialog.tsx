@@ -75,7 +75,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   const [byEmployee, setByEmployee] = useState(() => ui().linkStart === 'employee');
   const pass = useMemo(() => chipTest(chips, fields), [chips, fields]);
   const { best, more } = useMemo(() => candidates(v, l, chfOf(rates), q, chips.length ? (tx) => pass(rowOfTx(tx)) : undefined), [v, l, rates, q, chips.length, pass]);
-  const unpaid = useMemo(() => bookingsWithoutPayment(v, l, q, chips.length ? (u) => pass(rowOfUnpaid(u)) : undefined), [v, l, q, chips.length, pass]);
+  const { rows: unpaid, total: unpaidTotal } = useMemo(() => bookingsWithoutPayment(v, l, q, chips.length ? (u) => pass(rowOfUnpaid(u)) : undefined), [v, l, q, chips.length, pass]);
   /** The best fits without the filter that it hides: said above the list. */
   const hidden = useMemo(() => (chips.length && !q ? hiddenBest(v, l, chfOf(rates), pass) : 0), [v, l, rates, q, chips.length, pass]);
   const rows = useMemo(() => [...l.txByRef.values()].filter((tx) => linkable(v, tx)).map(rowOfTx), [v, l]);
@@ -189,6 +189,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
           {best.map(row)}
           {unpaid.length > 0 && <div className="gh">{t('receipts.bookingsWithoutPayment')}</div>}
           {unpaid.map(booking)}
+          {unpaidTotal > unpaid.length && <div className="none" data-testid="unpaid-cut">{t(q ? 'receipts.bookingsCutSearched' : 'receipts.bookingsCut', { shown: unpaid.length, total: unpaidTotal })}</div>}
           {more.length > 0 && <div className="gh">{q ? t('receipts.hits') : t('receipts.morePayments')}</div>}
           {more.map(row)}
           {!best.length && !more.length && <div className="none">{q ? t('receipts.noPaymentFits', { q }) : chips.length ? t('receipts.noPaymentInFilter') : t('receipts.noOpenPayment')}</div>}

@@ -1,6 +1,6 @@
 /* Rechnungen: the mockup's CSS. The A4 sheet itself is src/invoices/sheet.ts SHEET_CSS, the same as the PDF's. */
 .row.inv { grid-template-columns: 88px minmax(0, 1fr) auto; }
-.row.inv .draftno, .a4 .draftno { font-family: "Instrument Sans"; color: var(--muted); font-style: italic; }
+.row.inv .draftno, .a4 .draftno { font-family: var(--font-sans); color: var(--muted); font-style: italic; }
 .row.inv.st-paid .t, .row.inv.st-credit .t { color: var(--ink-2); }
 .row.inv.st-cancelled .t, .row.inv.st-cancelled .a { color: var(--faint); }
 .row.inv.st-cancelled .a { text-decoration: line-through; }
@@ -8,7 +8,7 @@
 .row.sentrow { grid-template-columns: 64px minmax(0, 1fr) auto; }
 [data-area="invoices"] .counts { flex-wrap: wrap; row-gap: 6px; }
 .vresult.static { cursor: default; }
-.vresult b small { font: 500 12px "Geist Mono"; color: var(--muted); margin-right: 6px; }
+.vresult b small { font: 500 12px var(--font-mono); color: var(--muted); margin-right: 6px; }
 .rgap { margin: -8px 0 16px; }
 
 .ivacts { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
@@ -52,13 +52,13 @@
 .lkf { display: grid; gap: 10px; font-size: 12.5px; }
 .lkmail { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
 .lkmail .m { font-size: 11.5px; }
-.isend .lkr textarea, .idlg .ibody .lkr textarea { font: 12.5px "Instrument Sans"; padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; resize: vertical; }
+.isend .lkr textarea, .idlg .ibody .lkr textarea { font: 12.5px var(--font-sans); padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; resize: vertical; }
 .lkr { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; align-items: center; }
 .lkr.top { align-items: start; }
 .lkpay { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .lkpay select { max-width: 100%; }
 .lkr > span:first-child { color: var(--muted); }
-.lkr select, .lkr textarea, .lkr > input { font: 12.5px "Instrument Sans"; padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; }
-.lkr input.mono { font-family: "Geist Mono"; }
+.lkr select, .lkr textarea, .lkr > input { font: 12.5px var(--font-sans); padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; }
+.lkr input.mono { font-family: var(--font-mono); }
 .lkr .sw { display: flex; gap: 6px; }
 .lkr .swc { width: 20px; height: 20px; border-radius: 50%; background: var(--c); box-shadow: inset 0 0 0 2px var(--bg); border: 2px solid transparent; }
 .lkr .swc.on { border-color: var(--ink); }
@@ -86,7 +86,7 @@
 .ivnote .nh { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
 .ivnote .nh .mono { color: var(--date); font-size: 11px; }
 .ivnote p { margin: 2px 0 0; font-size: 12.5px; white-space: pre-line; }
-.ivnotes textarea { font: 12.5px "Instrument Sans"; padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%; resize: vertical; box-sizing: border-box; }
+.ivnotes textarea { font: 12.5px var(--font-sans); padding: 6px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%; resize: vertical; box-sizing: border-box; }
 .ivnotes .quiet2 { justify-self: start; }
 .ivlog { display: grid; gap: 4px; font-size: 12.5px; }
 .ivlog > div { display: grid; grid-template-columns: 88px 1fr; gap: 8px; }
@@ -100,7 +100,7 @@
 .idlg .isendpdf.paper.real { max-height: 52vh; overflow: auto; padding: 6px 0 10px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
 .idlg .ihd { padding: 16px 20px 12px; border-bottom: 1px solid var(--line); }
 .idlg .ihd .lbl { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 2px; }
-.idlg .ihd b { font: 700 17px "Hanken Grotesk"; }
+.idlg .ihd b { font: 700 17px var(--font-display); }
 .idlg input.isearch { border-bottom: 1px solid var(--line); }
 .idlg .iopts { max-height: 50vh; overflow: auto; padding: 6px; }
 .idlg .opt { display: flex; justify-content: space-between; gap: 12px; width: 100%; text-align: left; padding: 9px 12px; border-radius: 9px; font-size: 13.5px; }
@@ -109,9 +109,9 @@
 .idlg .opt.alt span:first-child { color: var(--muted); }
 .idlg .ibody { padding: 16px 20px; }
 .idlg .ibody p { margin: 0 0 6px; font-size: 13px; line-height: 1.5; }
-.idlg .ibody input:not([type]), .idlg .ibody input[type=date] { width: auto; font: 12.5px "Instrument Sans"; padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); }
+.idlg .ibody input:not([type]), .idlg .ibody input[type=date] { width: auto; font: 12.5px var(--font-sans); padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); }
 .idlg .ibody .lkr > input { width: 100%; }
-.idlg .ibody input.mono { font-family: "Geist Mono"; width: 110px; text-align: right; }
+.idlg .ibody input.mono { font-family: var(--font-mono); width: 110px; text-align: right; }
 .idlg .iin { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .idlg .isum { margin-top: 6px; border-top: 1px solid var(--line); padding-top: 8px; display: grid; gap: 3px; font-size: 13px; }
 .idlg .isum > div { display: flex; justify-content: space-between; }
@@ -127,8 +127,8 @@
 .cform .ccin input { padding-right: 44px !important; }
 .cform .ccin input::-webkit-calendar-picker-indicator { display: none !important; opacity: 0; }
 .cform .ccin .cc { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); font-size: 11.5px; color: var(--faint); pointer-events: none; }
-.cform .cf input { box-sizing: border-box; width: 100%; font: 13px "Instrument Sans"; color: var(--ink); padding: 6px 9px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); }
-.cform .cf input.mono { font-family: "Geist Mono"; }
+.cform .cf input { box-sizing: border-box; width: 100%; font: 13px var(--font-sans); color: var(--ink); padding: 6px 9px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--bg); }
+.cform .cf input.mono { font-family: var(--font-mono); }
 .idlg .cform .cf input:not([type]) { width: 100%; text-align: left; }
 .cform .cf.err input { border-color: var(--warn); }
 .cform .cf em { font-style: normal; color: var(--warn); margin-left: 4px; }

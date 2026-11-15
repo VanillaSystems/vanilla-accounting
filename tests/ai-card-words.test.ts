@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { copyFileSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { browserPath, closeChrome, launchChrome } from './support/browser.js';
+import { browserPath, closeChrome, launchChrome, screenshot } from './support/browser.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'ai-card-words-'));
 const claude = join(dir, 'bin-claude');
@@ -48,7 +48,7 @@ test('after «installieren» the command stays folded; before the sign-in a pers
     await page.waitForSelector('[data-answer=install-claude]', { timeout: 20_000 });
     await page.click('[data-answer=install-claude]');
     await page.waitForSelector('.aicli[data-cli=claude][data-state=installing]', { timeout: 20_000 });
-    if (process.env.SHOTS) await page.screenshot({ path: join(process.env.SHOTS, 'ai-installing.png') });
+    if (process.env.SHOTS) await screenshot(page, join(process.env.SHOTS, 'ai-installing.png'));
     assert.equal(await visibleCommands(), 0, 'the command stays folded after the click');
     assert.ok(await page.$('.aicli[data-state=installing] .aishow summary'), '«Befehl zeigen» is there to open it');
     await page.click('.aicli[data-state=installing] .aishow summary');
@@ -67,7 +67,7 @@ test('after «installieren» the command stays folded; before the sign-in a pers
     assert.equal(await page.$eval('[data-no-account] a', (a) => (a as HTMLAnchorElement).href), 'https://claude.com/pricing', 'with the vendor\'s plans page');
     assert.match(said, /merkt die Anmeldung von selbst/);
     assert.equal(await page.$$eval('[data-no-account]', (els) => els.length), 1, 'said once');
-    if (process.env.SHOTS) await page.screenshot({ path: join(process.env.SHOTS, 'ai-signin.png') });
+    if (process.env.SHOTS) await screenshot(page, join(process.env.SHOTS, 'ai-signin.png'));
   } finally {
     await closeChrome(browser);
     server.close();

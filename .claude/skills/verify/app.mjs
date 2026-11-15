@@ -72,6 +72,8 @@ void [wait, fill, nth, pick, drop, dropLocal, ev, books];
 
 for (const s of steps) { await eval(`(async () => { ${s} })()`); await wait(400); }
 await wait(800);
+// After the webfonts settled and a frame painted with them, so the shot never catches the fallback font.
+await p.evaluate(() => document.fonts.ready.then(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)))));
 await p.screenshot({ path: `${EVIDENCE}/${name}.png` });
 const text = await p.evaluate(() => document.body.innerText);
 const from = Number(process.env.TEXT_FROM ?? 0);

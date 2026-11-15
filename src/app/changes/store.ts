@@ -3,7 +3,7 @@
  * once on focus), and the saves and diffs it opens, fetched once per revision.
  */
 import { useSyncExternalStore } from 'react';
-import { api, errorText, STATIC_EXPORT } from '../lib/api.js';
+import { api, DEMO, errorText, STATIC_EXPORT } from '../lib/api.js';
 import { t } from '../i18n/index.js';
 import type { ChangesView, FileDiff, SaveDetail, SavingCommand, SavingResult } from '../../saving/model.js';
 
@@ -15,7 +15,7 @@ const emit = () => { for (const l of listeners) l(); };
 let timer: ReturnType<typeof setTimeout> | undefined;
 
 export async function pollChanges(): Promise<void> {
-  if (STATIC_EXPORT) { if (!state.error) { state = { error: t('automation.apiOnly') }; emit(); } return; }
+  if (STATIC_EXPORT) { if (!state.error) { state = { error: t(DEMO ? 'automation.demoOff' : 'automation.apiOnly') }; emit(); } return; }
   try {
     const answer = await api.changes(state.view?.rev);
     if (!('unchanged' in answer)) { state = { view: answer }; emit(); }

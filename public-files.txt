@@ -83,6 +83,17 @@ docs/specs/mwst-form-0535-04-2024-de.pdf
 docs/specs/mwst-form-0550-03-2024-de.pdf
 docs/specs/payroll.md
 docs/specs/mockups/payroll/**
+docs/specs/invoicing.md
+docs/specs/mockups/invoicing/index.html
+docs/specs/mockups/invoicing/prototype.html
+docs/specs/mockups/invoicing/app.html
+docs/specs/mockups/invoicing/app.js
+docs/specs/mockups/invoicing/qr.js
+docs/specs/mockups/invoicing/company.js
+docs/specs/mockups/invoicing/proto.css
+docs/specs/domain-model.md
+docs/specs/e2e-and-fiduciary.md
+docs/share-protocol.md
 
 .claude/settings.json
 .claude/skills/verify/**

@@ -23,6 +23,7 @@ How the app's version is derived and which tags to set. The release procedure it
 | 0.4.0 | `v0.4.0-rc.1`, 0 | `0.4.0-rc.1+g1a2b3c4` | the tagged release candidate |
 | 0.4.0 | `v0.4.0-rc.1`, 3 | `0.4.0-rc.1.3+g1a2b3c4` | 3 commits after it |
 | 0.4.0 | `v0.4.0`, 0 | `0.4.0` | the release |
+| 0.4.0 | `v0.3.0`, 61, CHANGELOG.md dates 0.4.0, no tag `v0.4.0` yet | `0.4.0` | the cut release before its tag: the dmg is built once, already with its final name |
 | 0.3.0 | `v0.3.0`, 56 | `0.3.0+56.g36b66d6` | `package.json` was not raised after the release: raise it |
 | any | no tag (shallow clone) | `0.4.0+g36b66d6` | |
 
@@ -43,7 +44,8 @@ wrote an entry with `git log --grep 'Vanilla-Build: 0.4.0-rc.56'`). The packed M
 - Handing a build to the owner to try: commit first (no `.dirty`), build, and name the build string
   in the reply. Tag `vX.Y.Z-rc.N` only when the owner wants that build marked; N counts the
   candidates of X.Y.Z (rc.1, rc.2, …), not the commits.
-- Releasing: [releasing.md](releasing.md). The tag `vX.Y.Z` goes on the commit `Release X.Y.Z`;
-  that build is then plain `X.Y.Z`, and the next commit raises `package.json` to the next version.
+- Releasing: [releasing.md](releasing.md). From the commit `Release X.Y.Z` on, a clean build is
+  plain `X.Y.Z` until the tag `vX.Y.Z` is set (on main's commit of the release); the next commit
+  raises `package.json` to the next version.
 - A build string the owner reports names the commit (`g36b66d6`): check that commit out to
   reproduce, not the branch head.

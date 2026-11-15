@@ -12,13 +12,20 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
  * listed). An AI provider's API key (`ai:<provider>`, issue #48) belongs to this computer, not to
  * the books: every store keeps it once for all books.
  */
-export type SecretName = 'smtp' | `source:${string}:mail` | `source:${string}:api` | AiKeyName;
+export type SecretName = 'smtp' | `source:${string}:mail` | `source:${string}:api` | AiKeyName | ShareSecretName;
 
 export type AiKeyName = `ai:${'anthropic' | 'openai' | 'jev'}`;
 
+/**
+ * The share service (src/share/sharing.ts): `share:sender` is this computer's confirmed sender (its
+ * address and device token, one for all books); `share:<id>` a share's key and revoke token, kept
+ * per books, since the books' folder is often a repository and must never hold them.
+ */
+export type ShareSecretName = 'share:sender' | `share:${string}`;
+
 /** A secret of this computer, the same for every books folder. */
 export const MACHINE = '(this computer)';
-export const isMachineSecret = (name: SecretName): name is AiKeyName => name.startsWith('ai:');
+export const isMachineSecret = (name: SecretName): name is AiKeyName | 'share:sender' => name.startsWith('ai:') || name === 'share:sender';
 
 /** The secret of a mailbox's login. */
 export const mailSecret = (source: string): SecretName => `source:${source}:mail`;

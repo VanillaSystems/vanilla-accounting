@@ -7,12 +7,12 @@
  * answered, «Buchhaltung anlegen» writes the books through createWorkspace, the form's own path,
  * and the conversation goes on inside them (src/app/onboarding/state.ts opens it there).
  */
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { BANKS } from '../../workspace/banks.js';
 import { NO_VAT, PRESET_NAMES, QUESTIONS, QUESTION_ORDER, asked, hasWhere, inSetup, noVatHint, offeredAnswers, offeredLabel, optionOf, unsteered, unusualPeriod, type QuestionKey } from '../../workspace/setup.js';
 import type { BankSpec } from '../../workspace/create.js';
 import type { NetRate } from '../../workspace/vat-setup.js';
-import { DRAFT_PHASES, assumedOf, draftProgress, kindOf, draftSteps, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView, type StepMark } from '../../onboarding/draft.js';
+import { DRAFT_PHASES, assumedOf, draftProgress, kindOf, draftSteps, unsentForm, type DraftPatch, type DraftStep, type Firm, type QuestionValue, type SetupDraft, type SetupDraftView, type StepMark } from '../../onboarding/draft.js';
 import type { SetupReply, TalkRefusal } from '../../onboarding/draft-talk.js';
 import { LOCALES, t, tData } from '../i18n/index.js';
 
@@ -80,6 +80,9 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
   useFollowEnd(turnsBox, end);
   /** What an «Ändern» took back, so the step asks again with it filled in. */
   const taken = useRef<Partial<Record<string, unknown>>>({});
+  /** The rows of the open bank card as she typed them, not sent yet: they go with her words, which add to them (#496 r7-6). */
+  const cardBanks = useRef<BankSpec[]>([]);
+  const onBankRows = useCallback((rows: BankSpec[]) => { cardBanks.current = rows; }, []);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [text, setText] = useState('');
   /** Typed words need an AI; without one the buttons and fields carry the conversation (docs/0.4.0/ai-setup.md). */
@@ -111,7 +114,7 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
     setTurns((x) => [...x, { at, me: words }]);
     const settle = (turn: Partial<Turn>) => setTurns((x) => x.map((y, i) => (i === x.length - 1 ? { ...y, ...turn } : y)));
     try {
-      const { view: next, reply } = await api.desktop.setupTalk(root, words);
+      const { view: next, reply } = await api.desktop.setupTalk(root, words, unsentForm(steps, cardBanks.current));
       setView(next);
       settle({ reply, ...(reply.kind === 'read' ? { filled: reply.filled.map((m) => filledLine(m, next.draft)) } : {}) });
     } catch (e) {
@@ -158,7 +161,7 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
         <Ai><p>{t('onboarding.draft.hello')}</p><p className="obfolder mono">{root}</p></Ai>
         {view && steps.map((step) => (
           <Fragment key={stepKey(step)}>
-            <Step step={step} draft={view.draft} currency={view.baseCurrency} root={root} busy={busy} send={send} change={change} taken={taken.current} onCreate={() => void create()} turns={turnsAt(stepKey(step))} />
+            <Step step={step} draft={view.draft} currency={view.baseCurrency} root={root} busy={busy} send={send} change={change} taken={taken.current} onBankRows={onBankRows} onCreate={() => void create()} turns={turnsAt(stepKey(step))} />
           </Fragment>
         ))}
         {turnsAt('')}
@@ -185,6 +188,8 @@ interface StepProps {
   step: DraftStep; draft: SetupDraft; currency: string; root: string; busy: boolean; send: Send;
   change(key: string, patch: DraftPatch, was: unknown): void;
   taken: Partial<Record<string, unknown>>;
+  /** The bank card's rows as she types them. */
+  onBankRows(rows: BankSpec[]): void;
   onCreate(): void;
   /** Her typed messages at this step (placeTurns): under its question, above its answer or its buttons. */
   turns: ReactNode;
@@ -229,7 +234,7 @@ const Answer = ({ text, busy, fromText, assumed, onChange }: { text: string; bus
   </div>
 );
 
-function Step({ step, draft, currency, root, busy, send, change, taken, onCreate, turns }: StepProps) {
+function Step({ step, draft, currency, root, busy, send, change, taken, onBankRows, onCreate, turns }: StepProps) {
   const marked = (m: StepMark) => !!draft.fromText?.includes(m);
   switch (step.id) {
     case 'firm': return (
@@ -271,7 +276,7 @@ function Step({ step, draft, currency, root, busy, send, change, taken, onCreate
         {turns}
         {step.answer
           ? <Answer text={banksLine(step.answer)} busy={busy} fromText={marked('banks')} onChange={() => change('banks', { step: 'banks', value: null }, step.answer)} />
-          : <div className="obind"><BanksCard initial={taken.banks as BankSpec[] | undefined} currency={currency} busy={busy} send={send} /></div>}
+          : <div className="obind"><BanksCard initial={taken.banks as BankSpec[] | undefined} currency={currency} busy={busy} send={send} onRows={onBankRows} /></div>}
       </div>
     );
     case 'review': return <Review draft={draft} root={root} busy={busy} change={change} onCreate={onCreate} turns={turns} />;
@@ -361,9 +366,12 @@ function RatesCard({ initial, busy, send }: { initial?: NetRate[]; busy: boolean
 
 type BankRow = { bank: string; currency: string; iban: string };
 
-function BanksCard({ initial, currency, busy, send }: { initial?: BankSpec[]; currency: string; busy: boolean; send: Send }) {
+function BanksCard({ initial, currency, busy, send, onRows }: { initial?: BankSpec[]; currency: string; busy: boolean; send: Send; onRows(rows: BankSpec[]): void }) {
   const blank: BankRow = { bank: '', currency, iban: '' };
   const [rows, setRows] = useState<BankRow[]>(() => (initial?.length ? initial.map((b) => ({ bank: b.bank, currency: b.currency, iban: b.iban ?? '' })) : [blank]));
+  // What she typed and did not send goes with a typed message (#496 r7-6); gone with the card.
+  useEffect(() => { onRows(rows.map((r) => ({ bank: r.bank, currency: r.currency, ...(r.iban.trim() ? { iban: r.iban.trim() } : {}) }))); }, [rows, onRows]);
+  useEffect(() => () => onRows([]), [onRows]);
   const set = (i: number, k: keyof BankRow, v: string) => setRows((x) => x.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   return (
     <form className="obcard obform" noValidate onSubmit={(e) => { e.preventDefault(); void send({ step: 'banks', value: rows }); }}>

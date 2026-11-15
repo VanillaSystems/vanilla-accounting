@@ -14,6 +14,7 @@ import { at } from '../receipts/view.js';
 import { journalOf, type Journal } from './model.js';
 import { listed, setUi, ui } from './state.js';
 import { deleteEntry } from './actions.js';
+import type { DeletedEntry } from '../../../books/entry-input.js';
 import { filing } from '../../../engines/index.js';
 import { isAccrual, newYearAfter, reversalOf } from '../../../accounting/reversal.js';
 
@@ -120,9 +121,16 @@ export function runAct(p: Props, a: Act, id = p.route.id): boolean {
   if (a === 'edit') setUi({ open: { ...ui().open, buchung: true }, focus: 'accountDebit' });
   // Deleted: the detail keeps the entry's place with «Rückgängig» instead of showing the next entry under the same
   // button (r6h-28). Marked before the call: the books reload as it answers, and the list must not hand the selection on.
-  if (a === 'del') { setUi({ deleted: e }); recentlyDeleted.set(e.id, e); deleteEntry(p.nav, e).then((ok) => { if (!ok) { setUi({ deleted: undefined }); recentlyDeleted.delete(e.id); } }); }
+  if (a === 'del') { setUi({ deleted: e }); recentlyDeleted.set(e.id, e); deleteEntry(p.nav, e).then((r) => {
+    if (!r) { setUi({ deleted: undefined }); recentlyDeleted.delete(e.id); return; }
+    // Its «Rückgängig» on the place puts back the person's links the deletion took along too (#524).
+    if (!r.takenLinks?.length) return;
+    const gone: DeletedEntry = { ...e, takenLinks: r.takenLinks };
+    recentlyDeleted.set(e.id, gone);
+    if (ui().deleted?.id === e.id) setUi({ deleted: gone });
+  }); }
   return true;
 }
 
 /** The bookings deleted in this session, by id: the place of one keeps its «Rückgängig» also after the area was left and the books moved on (r7h-31, r7f-31). */
-export const recentlyDeleted = new Map<string, JournalEntry>();
+export const recentlyDeleted = new Map<string, DeletedEntry>();

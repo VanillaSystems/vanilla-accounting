@@ -5,6 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { screenshot } from './support/browser.js';
 import { noBrowser, openApp } from './support/e2e.js';
 
 test('a list or detail scrolled up ends below the top bar, at 1024 and 1280 px', { skip: noBrowser, timeout: 300_000 }, async () => {
@@ -33,7 +34,7 @@ test('a list or detail scrolled up ends below the top bar, at 1024 and 1280 px',
           }
           return { scrolled: columns.length, found: found.slice(0, 5) };
         });
-        if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/layout-${width}-${path.split('?')[0].slice(1)}.png` });
+        if (process.env.SHOTS) await screenshot(page, `${process.env.SHOTS}/layout-${width}-${path.split('?')[0].slice(1)}.png`);
         assert.ok(under.scrolled > 0, `${width} ${path}: a column scrolled`);
         assert.deepEqual(under.found, [], `${width} ${path}: nothing scrolled up stands in the bar's band`);
         // The columns start lower, and still end at the window's foot: their last rows are reachable.
@@ -67,7 +68,7 @@ test('Quick Look and a dialog opened in a column cover the whole window, above t
     await page.waitForSelector('.detail .paper.real', { visible: true, timeout: 30_000 });
     await page.click('.detail .paper.real');
     await page.waitForSelector('.quick', { visible: true, timeout: 10_000 });
-    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/review-quick.png` });
+    if (process.env.SHOTS) await screenshot(page, `${process.env.SHOTS}/review-quick.png`);
     assert.deepEqual(await covered('.quick'), [], 'Quick Look covers the window');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.quick'), { timeout: 10_000 });
@@ -76,7 +77,7 @@ test('Quick Look and a dialog opened in a column cover the whole window, above t
     await page.waitForSelector('[data-add]', { visible: true, timeout: 30_000 });
     await page.click('[data-add]');
     await page.waitForSelector('.scrim', { timeout: 10_000 });
-    if (process.env.SHOTS) await page.screenshot({ path: `${process.env.SHOTS}/review-dialog.png` });
+    if (process.env.SHOTS) await screenshot(page, `${process.env.SHOTS}/review-dialog.png`);
     // The scrim, or the dialog on it, owns every point: a click on the dock does not reach it.
     const free = await page.evaluate(() => {
       const scrim = document.querySelector('.scrim')!;

@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Page } from 'puppeteer-core';
 import { startApi } from './support/api-server.js';
-import { browserPath, closeChrome, launchChrome } from './support/browser.js';
+import { browserPath, closeChrome, launchChrome, screenshot } from './support/browser.js';
 import { devProxy } from '../src/server/app-paths.js';
 
 const EVIDENCE = process.env.EVIDENCE_DIR;
@@ -77,7 +77,7 @@ test('the opening form: its fields aligned at every width, each balance labelled
         await page.$eval('[data-testid=opening-form]', (f, w) => { (f as HTMLElement).style.width = `${w}px`; }, formWidth);
 
         // An empty account field says «kein Konto» under its input: the balance beside it stands as high.
-        if (EVIDENCE) await page.screenshot({ path: join(EVIDENCE, `opening-form-${width}-${formWidth}.png`) });
+        if (EVIDENCE) await screenshot(page, join(EVIDENCE, `opening-form-${width}-${formWidth}.png`));
         const empty = await fields(page);
         assert.deepEqual(empty.map((f) => f.name), ['account', 'amount']);
         assert.equal(rowsOf(empty).length, 1, `${at}: account and balance in one row: ${JSON.stringify(empty)}`);
@@ -93,7 +93,7 @@ test('the opening form: its fields aligned at every width, each balance labelled
         await page.type('[data-testid=opening-native]', '1200');
         await page.type('[data-testid=opening-form] input[name=amount]', '1126.5');
         await page.focus('[data-testid=opening-native]');
-        if (EVIDENCE) await page.screenshot({ path: join(EVIDENCE, `opening-form-foreign-${width}-${formWidth}.png`) });
+        if (EVIDENCE) await screenshot(page, join(EVIDENCE, `opening-form-foreign-${width}-${formWidth}.png`));
         const foreign = await fields(page);
         assert.deepEqual(foreign.map((f) => f.label), ['Konto', 'Saldo per 1.1.2026 (CHF)', 'Saldo per 1.1.2026 (EUR)']);
         if (formWidth === 760) assert.equal(rowsOf(foreign).length, 1, `${at}: the three fields in one row`);

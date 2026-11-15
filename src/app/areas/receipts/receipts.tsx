@@ -3,7 +3,6 @@
  * its paper, its payment, its details and its file on the right (the mockup's Belege).
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { QuarantinedFile } from '../../../types/drop.js';
 import { api, errorText } from '../../lib/api.js';
 import type { InboxFile } from '../../../types/index.js';
 import type { Route, RouteOf } from '../../shell/route.js';
@@ -38,6 +37,7 @@ import { EmptyTable, FirstRun, Strip } from './InflowStrip.js';
 import { ReadingWaits } from './ReadingWaits.js';
 import { InflowDialogs } from './InflowDialogs.js';
 import { ConfirmDiscard, askDiscard } from './Discard.js';
+import { Quarantine } from './Aside.js';
 import './receipts.css';
 import { useSelectionFollowsRows } from '../../hooks/use-selection-follows-rows.js';
 import { baseCurrency } from '../../../engines/index.js';
@@ -261,64 +261,6 @@ function Row({ v, proc, view, sel, picked, same, canEdit, onSelect, onClick, toa
           </>
         )}
       </span>
-    </div>
-  );
-}
-
-/**
- * data/quarantine/: what came in and is no receipt by its words, each with its reason; «Ist ein
- * Beleg» puts it into the inbox, whose run reads it, «Löschen» deletes it for good once confirmed
- * (src/server/routes/quarantine.ts).
- */
-function Quarantine({ nav, canEdit, asked }: { nav: AreaProps['nav']; canEdit: boolean; asked: boolean }) {
-  const [files, setFiles] = useState<QuarantinedFile[] | undefined>();
-  const [shown, setOpen] = useState(false);
-  const load = () => { api.quarantine().then(setFiles, () => setFiles([])); };
-  useEffect(load, []);
-  // The state chip «Quarantäne» opens the list, and says when it is empty (#211).
-  const open = shown || asked;
-  if (!files?.length) return asked && files ? <div className="empty"><h2>{t('chips.quarantineEmpty')}</h2></div> : null;
-  const why = (q: QuarantinedFile) => [
-    q.reason.kind === 'held' ? t('receipts.quarantineHeld') : q.reason.kind === 'unreadable' ? t('receipts.quarantineUnreadable') : t(`receipts.why.${q.reason.why ?? 'no-receipt'}`),
-    q.reason.kind === 'not-receipt' && q.reason.from ? t('receipts.quarantineFrom', { from: q.reason.from }) : '',
-  ].filter(Boolean).join(' · ');
-  async function take(file: string) {
-    try {
-      await api.takeFromQuarantine(file);
-      nav.toast(t('receipts.quarantineTaken', { file }));
-      load();
-      nav.refresh();
-    } catch (e) { nav.toast(errorText(e)); }
-  }
-  return (
-    <div className="quarantine" data-testid="quarantine">
-      <div className="hidden-note">
-        {t('receipts.quarantineNote', { n: files.length })} · <button type="button" onClick={() => setOpen(!shown)}>{open ? t('receipts.hideAgain') : t('receipts.show')}</button>
-      </div>
-      {open && (
-        <>
-          <p className="m qlead">{t('receipts.quarantineLead')}</p>
-          <ul className="qlist">
-            {files.map((q) => (
-              <li key={q.file} data-file={q.file}>
-                <span className="mono qfile">{q.file}</span>
-                <span className="m">{why(q)} · {formatDate(q.at.slice(0, 10))}</span>
-                <span className="qacts">
-                  <a href={`/api/quarantine/${encodeURIComponent(q.file)}`} target="_blank" rel="noreferrer">{t('receipts.quarantineOpen')}</a>
-                  {canEdit && <button type="button" className="linkbtn" onClick={() => void take(q.file)}>{t('receipts.quarantineTake')}</button>}
-                  {canEdit && <button type="button" className="linkbtn danger" data-testid="quarantine-delete" onClick={() => askDiscard({ from: 'quarantine', files: [{ id: q.file, file: q.file }] })}>{t('receipts.discard')}</button>}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {canEdit && files.length > 1 && (
-            <button type="button" className="linkbtn danger qall" data-testid="quarantine-delete-all" onClick={() => askDiscard({ from: 'quarantine', all: true, files: files.map((q) => ({ id: q.file, file: q.file })) })}>
-              {t('receipts.discardAll', { n: files.length })}
-            </button>
-          )}
-        </>
-      )}
-      <ConfirmDiscard from="quarantine" nav={nav} done={load} />
     </div>
   );
 }
