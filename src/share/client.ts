@@ -1,8 +1,10 @@
 /**
- * The app's side of the share service's API (docs/share-protocol.md; the calls as the service's
- * docs/api.md names them). Only ciphertext, sizes, object ids, open proofs and tokens pass here:
- * never a key, a path or a name. A refusal keeps the service's stable code and its limit, so the
- * person reads it in words (src/app/lib/api.ts, `shareServiceRefused`).
+ * The app's side of the share service's API (docs/share-protocol.md, version 2; the calls as the
+ * service's docs/api.md names them). Since the owner's decision of 2026-11-15 the service keeps each
+ * share's key (wrapped, so R2 holds ciphertext only) and hands it to whoever has the link; it sends
+ * the invitation itself. Paths, file names and figures still travel only sealed. A refusal keeps
+ * the service's stable code and its limit, so the person reads it in words (src/app/lib/api.ts,
+ * `shareServiceRefused`).
  */
 
 /** A refusal of the service: its code (docs/api.md «Codes»), the HTTP status, and the limit it names. */
@@ -29,16 +31,30 @@ export interface SenderRegistration {
 }
 export interface SenderState { confirmed: boolean; confirmedAt?: string | null; refusedReason?: string | null; confirmationExpiresAt?: string | null }
 
-export interface Created { id: string; revokeToken: string; returnToken?: string; state: string; shareUrl?: string; uploadExpiresAt?: string; batch?: number }
+export interface Created { id: string; revokeToken: string; returnToken?: string; state: string; shareUrl?: string; uploadExpiresAt?: string; batch?: number; generation?: number }
 
-export interface ReturnStatus { id: string; state: string; bytes: number; createdAt: string; readyAt?: string | null; expiresAt?: string | null; wrappedKey?: string | null }
+export interface ReturnStatus { id: string; state: string; bytes: number; createdAt: string; readyAt?: string | null; expiresAt?: string | null }
 export interface ShareStatus {
   id: string; kind: 'share' | 'return'; state: string; bytes: number; objects: number;
   createdAt: string; readyAt?: string | null; firstOpenedAt?: string | null; expiresAt?: string | null; endedAt?: string | null;
-  maxOpens: number; opens: string[]; returns: ReturnStatus[]; pollAfterSeconds?: number;
+  opens: string[]; returns: ReturnStatus[]; pollAfterSeconds?: number;
+  /** The share's state of the books: 1, then one more with every «Aktualisieren». */
+  generation?: number; updatedAt?: string | null;
+  invite?: { sentAt: string; count: number; updateSentAt?: string | null } | null;
 }
-export interface ShareInfo { id: string; kind: 'share' | 'return'; state: string; expiresAt?: string | null; firstOpenedAt?: string | null; opensLeft?: number; meta?: string | null; bytes?: number }
-export interface Opening { index: Target; ticket: string; wrappedKey?: string | null; opensLeft: number; expiresAt: string }
+/** What anyone with the link learns without a token: the state, the envelope and, while ready, the key. */
+export interface ShareInfo { id: string; kind: 'share' | 'return'; state: string; expiresAt?: string | null; firstOpenedAt?: string | null; meta?: string | null; bytes?: number | null; key?: string | null; generation?: number; updatedAt?: string | null }
+export interface Opening { key: string; index: Target; ticket: string; expiresAt: string; generation?: number; updatedAt?: string | null }
+/** The invitation the service sends (kind `invite`), or its short note after «Aktualisieren» (kind `update`). */
+export interface InviteRequest {
+  kind?: 'invite' | 'update';
+  to?: { name: string; email: string };
+  from?: { name: string; email: string };
+  message?: string;
+  company?: string;
+  language?: string;
+}
+export interface Invited { sentAt: string; invites: number; limit: number }
 
 export type ShareClient = ReturnType<typeof shareClient>;
 
@@ -115,9 +131,13 @@ export function shareClient(service: string, fetcher: typeof fetch = fetch) {
     service: base,
     registerSender: (email: string) => call<SenderRegistration>('POST', '/api/senders', { email }),
     sender: (token: string) => call<SenderState>('GET', '/api/senders/me', undefined, token),
-    create: (token: string, body: { bytes: number; objects: number; openProof: string; meta?: string }) => call<Created>('POST', '/api/shares', body, token),
-    createReturn: (id: string, returnToken: string, body: { bytes: number; objects: number; openProof: string; meta?: string }) =>
+    create: (token: string, body: { bytes: number; objects: number; key: string; meta?: string }) => call<Created>('POST', '/api/shares', body, token),
+    /** «Aktualisieren»: the whole books again into the same share, as its next generation (same id, link and tokens). */
+    update: (id: string, token: string, body: { bytes: number; objects: number; key: string; meta?: string }) => call<Created>('POST', `/api/shares/${id}/update`, body, token),
+    createReturn: (id: string, returnToken: string, body: { bytes: number; objects: number; key: string; meta?: string }) =>
       call<Created>('POST', `/api/shares/${id}/returns`, body, returnToken),
+    /** The service sends the invitation (or the note of an update) from «<name> über Vanilla Accounting», replies to the sender. */
+    invite: (id: string, token: string, body: InviteRequest) => call<Invited>('POST', `/api/shares/${id}/invite`, body, token),
     uploads: (id: string, token: string, objects: Array<{ name: string; bytes: number }>) =>
       call<{ targets: Target[]; expiresAt: string }>('POST', `/api/shares/${id}/uploads`, { objects }, token),
     /** One blob to its upload URL: written once, never over an object already there (`If-None-Match: *`). */
@@ -129,8 +149,8 @@ export function shareClient(service: string, fetcher: typeof fetch = fetch) {
     },
     complete: (id: string, token: string, body: Record<string, unknown> = {}) => call<ShareStatus>('POST', `/api/shares/${id}/complete`, body, token),
     info: (id: string) => call<ShareInfo>('GET', `/api/shares/${id}`),
-    open: (id: string, proof: string, token?: string) => call<Opening>('POST', `/api/shares/${id}/open`, { proof }, token),
-    urls: (id: string, ticket: string, objects: string[], proof: string) => call<{ targets: Target[] }>('POST', `/api/shares/${id}/urls`, { ticket, objects, proof }),
+    open: (id: string, token?: string) => call<Opening>('POST', `/api/shares/${id}/open`, {}, token),
+    urls: (id: string, ticket: string, objects: string[]) => call<{ targets: Target[] }>('POST', `/api/shares/${id}/urls`, { ticket, objects }),
     /**
      * One object's ciphertext, at most `max` bytes (its size as the index names it): a service that
      * sends more is cut off at once, by its Content-Length or while it streams, never read into memory.

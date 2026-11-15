@@ -140,6 +140,23 @@ Each call runs its steps, saves `$EVIDENCE/<name>.png` (the page) and prints the
 
 **Evidence** goes to `.verify/evidence/<run>/` like the sandbox's: `NN-step.png` and `.s.png` (whole screen), the page shots, and `app.log` (copied by `down`). The side effect of a step is read in the VM, for example `$V sh 'cat ~/Documents/"Buchhaltung Malerei Huber GmbH"/vanilla-accounting/belege.workspace.yaml'`.
 
+**Sharing by link without a confirmation mail.** «Teilen» › «Per Link» needs a sender the share service has confirmed, and a confirmation is a real mail from that address (docs/share-protocol.md §4). This Mac keeps one confirmed sender, `{ service, email, token }`, in `~/.vanilla-accounting/e2e/share-sender` (mode 600, beside `claude-token`, never in a repo, never printed). On the sharer's VM, before `$V app`:
+
+```bash
+$V sender     # checks the token at the service, then seals it into the VM app's secrets.json
+$V app        # starts the app with --use-mock-keychain: «Per Link» shows no confirmation step
+```
+
+The app seals its secrets with a keychain key only the app may read, and the keychain prompt takes no keys over VNC, so the sharer's app runs with Chromium's `--use-mock-keychain` (a fixed key, read by `launch.sh` from `vanilla-verify/args` in the VM). That VM then does not test the keychain path; the recipient's VM runs without the switch. `$V sender` replaces what the VM's app sealed before.
+
+When `$V sender` says the sender is missing, unconfirmed or refused (the service forgot the token), fall back to the mail: «Teilen» › «Adresse bestätigen» shows the address (`confirm@share.<domain>`) and the subject; the owner sends it from that mailbox with that address as the only From (another From is refused as `otherAddress`), within the hour the code lives. To keep the sender for the next runs, register it from this Mac rather than in the VM (a VM's token stays sealed there), so the token lands in the file, and ask the owner for the mail of the subject it prints:
+
+```bash
+# VANILLA_SHARE_SERVICE: the share service URL the release build uses (docs/releasing.md)
+(umask 077; curl -s -X POST "$VANILLA_SHARE_SERVICE/api/senders" -H 'content-type: application/json' -d '{"email":"<address>"}' | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);require("fs").writeFileSync(process.env.HOME+"/.vanilla-accounting/e2e/share-sender",JSON.stringify({service:process.env.VANILLA_SHARE_SERVICE,email:"<address>",token:r.senderToken}),{mode:0o600});console.log(r.confirmation.to,"·",r.confirmation.subject)})')
+node .claude/skills/verify/share-sender.mjs --check ~/.vanilla-accounting/e2e/share-sender   # «confirmed» once the mail arrived
+```
+
 **Cleanup.** `$V down my-vm` stops the tunnel it started, copies the app log, stops and deletes the VM; the evidence stays. `$V list` should not show it.
 
 **Gotchas.**

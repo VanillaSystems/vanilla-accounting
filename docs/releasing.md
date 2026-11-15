@@ -55,25 +55,28 @@ versions and their migration ladders. To change a format:
 
 ## Cutting a release
 
-1. Work on `main` with a clean tree.
-2. Run the gates. Each must pass:
+The full suite runs once per release and the Mac app is built and smoke-tested once, both on the
+head of the release branch. Two rules make the rest reuse them:
 
-   ```sh
-   npm test                 # types, demo golden master, every test
-   npm run test:books       # your own books: no filed figure moved
-   npm run check-processes  # 0 errors
-   npm run check-public     # 0 findings
-   npm run build
-   ```
+- **Same tree hash, same result.** A green full `npm test` on a clean tree records the tree's hash
+  (tools/test/runs.mjs, in the clone's git folder). `npm test` on a recorded tree says so and runs
+  nothing; `npm test -- --force` runs it anyway. Main's merge commit of the release branch has the
+  release head's tree when main holds nothing the branch lacks, so its gates pass from the record.
+  When main has a commit of its own, the tree differs and the suite runs, as it must.
+- **A cut release names its build.** From the commit `Release X.Y.Z` on (CHANGELOG.md dates X.Y.Z)
+  until the tag vX.Y.Z exists, a clean build is named `X.Y.Z` (src/version.ts `isCut`), so the dmg
+  built on the release branch already carries the final name. Other builds keep their rc names
+  ([versioning.md](versioning.md)).
 
-3. Move the entries under a new heading in `CHANGELOG.md`: `## [X.Y.Z] - YYYY-MM-DD`, with
+1. Cut `release/X.Y.Z` from `next` with a clean tree.
+2. Move the entries under a new heading in `CHANGELOG.md`: `## [X.Y.Z] - YYYY-MM-DD`, with
    **⚠ figures** and **⚠ action** where they apply. Optionally, write a `### Highlights`
    subsection first under the heading: three to six short bullets for a person who downloads the
    app, such as `- **Simpler setup:** only the questions the books need.` The GitHub release shows
    them under «What's new in X.Y.Z» and leaves the subsection out of the full changelog. Without
    it, the release lists the titles of the «Added» and «Changed» entries (each entry's first
    sentence up to its colon), at most six.
-4. Check the version. `package.json` already holds X.Y.Z while the work on it runs
+3. Check the version. `package.json` already holds X.Y.Z while the work on it runs
    ([versioning.md](versioning.md)); only if it does not, set it. This edits `package.json` and
    `package-lock.json` and does not commit:
 
@@ -81,16 +84,24 @@ versions and their migration ladders. To change a format:
    npm version X.Y.Z --no-git-tag-version
    ```
 
-5. Commit both changes as `Release X.Y.Z`, then tag that commit:
+4. Commit both changes as `Release X.Y.Z`. A fix found later goes onto the release branch too;
+   everything below runs on the branch's head after the last one.
+5. Run the gates once on that head. Each must pass:
 
    ```sh
-   git tag -a vX.Y.Z -m "Vanilla Accounting X.Y.Z"
+   npm test                 # types, demo golden master, every test; records the tree
+   npm run test:books       # your own books: no filed figure moved
+   npm run check-processes  # 0 errors
+   npm run check-public     # 0 findings
+   npm run build
    ```
 
-6. Push the commit and the tag (`git push --follow-tags`).
-7. Build the Mac app at this version (`npm run desktop:build`, [Building the Mac app](#building-the-mac-app))
-   and publish the GitHub release with its downloads: `npm run release:github -- --publish`
-   (step 6 of [What the owner does to publish](#what-the-owner-does-to-publish)).
+6. Build the Mac app once (`npm run desktop:build`, [Building the Mac app](#building-the-mac-app)):
+   `release/Vanilla Accounting-X.Y.Z-arm64.dmg` and `-x64.dmg`. Smoke-test each once.
+7. The VM tests (`npm run desktop:e2e`, the verify skill's fresh Mac) only when the release touches
+   installation, first start, the desktop shell, sharing or onboarding.
+   `npm run test:changed -- vW.V.U --list` (the last release's tag) ends with «VM tests before a
+   release: needed (…)» or «not needed»; the paths are `vm` in tools/test/inputs.json.
 
 `npm run update` follows the branch an adopter's copy tracks, so a pushed commit on `main` is
 what they get. Tags mark the versions that the changelog describes.
@@ -160,8 +171,10 @@ window.
 The release run prepares everything up to these steps; each one is the owner's.
 
 1. Merge the release branch into `main` and check out `main` with a clean tree.
-2. Run the gates of [Cutting a release](#cutting-a-release) once more on `main`.
-3. Tag the release commit and push it with the tag:
+2. Run `npm test` on `main`: with the release head's tree it says «same tree, same result» and
+   runs nothing; with another tree it runs the suite, and the other gates of
+   [Cutting a release](#cutting-a-release) run again too.
+3. Tag `main`'s commit and push it with the tag:
 
    ```sh
    git tag -a vX.Y.Z -m "Vanilla Accounting X.Y.Z"
@@ -170,8 +183,9 @@ The release run prepares everything up to these steps; each one is the owner's.
 
 4. Get an Apple Developer ID (Apple Developer Program), create a Developer ID Application
    certificate, export it as `.p12`, and set `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`,
-   `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`. Set `VANILLA_RELEASES=owner/repo`. Build
-   with `npm run desktop:build` and prove both `.dmg` files with the smoke test.
+   `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`. Set `VANILLA_RELEASES=owner/repo`. Set
+   them before step 6 of [Cutting a release](#cutting-a-release), so the one build there is signed;
+   there is no second build after tagging.
 5. Make the repository public. Add `homepage` to `package.json` for Help › Dokumentation.
 6. Publish the GitHub release with the downloads: check out the tagged commit and run
 
@@ -188,7 +202,8 @@ The release run prepares everything up to these steps; each one is the owner's.
    and that version's section of `CHANGELOG.md` folded under «Full changelog». When the text
    would pass GitHub's limit of 125,000 characters, it links to `CHANGELOG.md` at the tag instead. It refuses to publish when
    the tree is not clean, the tag is missing, not pushed, not the checked-out commit or not on
-   `origin/main`, a `.dmg` is missing, or the release exists already. It needs the `gh` CLI,
+   `origin/main`, a `.dmg` is missing, the `.dmg` files were built from another tree than the checked-out commit's
+   (`tree` in `out/desktop/build.json`), or the release exists already. It needs the `gh` CLI,
    logged in with write access to the repository (`VANILLA_RELEASES=owner/repo` overrides the
    repository taken from `origin`). While the repository is private, only its members see the
    release.

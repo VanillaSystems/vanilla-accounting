@@ -10,14 +10,12 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { APP_ROOT } from '../workspace/workspace.js';
-import { decodeKey } from './crypto/index.js';
 
-/** The service's limits (docs/api.md of the service): the dialog names them before the service refuses. */
-export const SHARE_LIMITS = { bytes: 1024 * 1024 * 1024, objects: 5000, sharesPerDay: 10, returnsPerShare: 5, opens: 3, hoursAfterOpen: 5, days: 10 } as const;
+export { SHARE_LIMITS } from './limits.js';
 
 /** A share's id as the service makes it: 26 characters a–z and 2–7. */
 export const SHARE_ID = /^[a-z2-7]{26}$/;
-/** The scheme the Mac app answers to: `vanilla-accounting://open?share=<id>#<key>`. */
+/** The scheme the Mac app answers to: `vanilla-accounting://open?share=<id>`. */
 export const APP_SCHEME = 'vanilla-accounting';
 
 let settingsFile: string | undefined;
@@ -48,6 +46,20 @@ function buildDefault(): string | undefined {
   } catch { return undefined; }
 }
 
+/**
+ * Where a recipient downloads the Mac app, named in the invitation: VANILLA_APP_DOWNLOAD, else the
+ * build's (package.json `share.download`, written from the same variable). None: the invitation names
+ * the share service's own start page, which offers the download.
+ */
+export function appDownload(): string | undefined {
+  const env = process.env.VANILLA_APP_DOWNLOAD?.trim();
+  const built = (() => {
+    try { return (JSON.parse(readFileSync(join(APP_ROOT, 'package.json'), 'utf8')) as { share?: { download?: unknown } }).share?.download; } catch { return undefined; }
+  })();
+  const page = env || (typeof built === 'string' ? built : '');
+  try { return page && new URL(page).protocol === 'https:' ? new URL(page).toString() : undefined; } catch { return undefined; }
+}
+
 export type ServiceSource = 'env' | 'setting' | 'build' | 'none';
 
 /** The service in use and where it was named. */
@@ -72,34 +84,33 @@ export function serviceOf(text: string): string {
 }
 
 /**
- * A share link: the service, the share's id, and its key from the fragment. `foreign`: the link
- * names another service than the one this app uses, which the person must confirm before it opens
- * (src/share/sharing.ts openLink; review of PR #538).
+ * A share link: the service and the share's id. The link is the access (the owner's decision of
+ * 2026-11-15): no key in it, no code. `foreign`: the link names another service than the one this
+ * app uses, which the person must confirm before it opens (src/share/sharing.ts openLink).
  */
-export interface ShareLink { service: string; id: string; key: string; foreign: boolean }
+export interface ShareLink { service: string; id: string; foreign: boolean }
 
 /**
- * Reads a link a person pasted or the system handed over: `https://<service>/<id>#<key>`, or the Mac
- * app's `vanilla-accounting://open?share=<id>#<key>` (with `&service=` when the page names it, else
- * the service in use). Undefined for anything else.
+ * Reads a link a person pasted or the system handed over: `https://<service>/<id>`, or the Mac app's
+ * `vanilla-accounting://open?share=<id>` (with `&service=` when the page names it, else the service
+ * in use). A `#…` after it (a link of 0.6.0) is ignored: the service says such a share has ended.
+ * Undefined for anything else.
  */
 export function parseLink(text: string, service = shareService().url): ShareLink | undefined {
   let url: URL;
   try { url = new URL(text.trim()); } catch { return undefined; }
-  const key = url.hash.slice(1);
-  try { decodeKey(key); } catch { return undefined; }
   if (url.protocol === `${APP_SCHEME}:`) {
     const id = url.searchParams.get('share') ?? '';
     let from = service;
     const named = url.searchParams.get('service');
     if (named) { try { from = serviceOf(named); } catch { return undefined; } }
-    return SHARE_ID.test(id) && from ? { service: from, id, key, foreign: from !== service } : undefined;
+    return SHARE_ID.test(id) && from ? { service: from, id, foreign: from !== service } : undefined;
   }
   let origin: string;
   try { origin = serviceOf(url.origin); } catch { return undefined; }
   const id = url.pathname.replace(/^\/+|\/+$/g, '');
-  return SHARE_ID.test(id) ? { service: origin, id, key, foreign: origin !== service } : undefined;
+  return SHARE_ID.test(id) ? { service: origin, id, foreign: origin !== service } : undefined;
 }
 
-/** The link the invitation carries: the key only after the #, which a browser never sends. */
-export const linkOf = (shareUrl: string, key: string): string => `${shareUrl.split('#')[0]}#${key}`;
+/** The link the invitation carries: the service and the share's id, nothing else. */
+export const linkOf = (service: string, id: string): string => `${service.replace(/\/+$/, '')}/${id}`;

@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="de" data-theme="light" style="--aiw: 0px; --z: 1;"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Person · Prototyp Löhne</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="proto.css">
+</head>
+<body>
+    
+    <div id="root"><a class="skip" href="#list">Zur Liste</a><main data-area="company" data-phone="list"><section class="list" id="list" aria-label="Firma"><h1>Muster Consulting GmbH</h1><div class="counts"><span>Lukas Beispiel</span></div><div class="obentry"><button type="button" class="aiact"><svg class="i bot" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2M20 14h2M15 13v2M9 13v2"></path></svg>Einrichtung öffnen</button></div><div class="rows" role="listbox" aria-label="Einstellungen"><div class="group"><span>Stammdaten</span></div><div class="row fset" role="option" aria-selected="false" tabindex="-1" data-section="profile"><span class="t">Firma</span><span class="a mono">CHE-246.813.579</span></div><div class="row fset" role="option" aria-selected="false" tabindex="0" data-section="vat"><span class="t">MWST</span><span class="a mono">effektiv</span></div><a class="row fset sel" role="option" aria-selected="true" href="1-einrichten.html#behalten"><span class="t">Löhne</span><span class="a mono">3 Personen</span></a><div class="row fset" role="option" aria-selected="false" tabindex="-1" data-section="banks"><span class="t">Geldkonten</span><span class="a mono">3</span></div><div class="row fset" role="option" aria-selected="false" tabindex="-1" data-section="invoice-layout"><span class="t">Rechnungslayout</span><span class="a mono"></span></div><div class="row fset" role="option" aria-selected="false" tabindex="-1" data-section="mail"><span class="t">E-Mail-Versand</span><span class="a mono"></span></div><div class="row fset" role="option" aria-selected="false" tabindex="-1" data-section="sources"><span class="t">Quellen</span><span class="a mono"></span></div><div class="group"><span>Buchhaltung</span></div><div class="row fset" role="option" aria-selected="false" tabindex="-1" data-section="accounts"><span class="t">Kontenplan</span><span class="a mono">26</span></div><div class="row fset" role="option" aria-selected="false" tabindex="-1" data-section="dimensions"><span class="t">Dimensionen</span><span class="a mono"></span></div><div class="row fset" role="option" aria-selected="false" tabindex="-1" data-section="rules"><span class="t">Regeln</span><span class="a mono"></span></div><div class="row fset" role="option" aria-selected="false" tabindex="-1" data-section="periods"><span class="t">Perioden und Siegel</span><span class="a mono">bis 31.03.2026</span></div><div class="row fset" role="option" aria-selected="false" tabindex="-1" data-section="opening"><span class="t">Eröffnung 2026</span><span class="a mono">5 Konten</span></div><div class="group"><span>Diese App</span></div><div class="row fset" role="option" aria-selected="false" tabindex="-1" data-section="display"><span class="t">Darstellung</span><span class="a mono">Hell</span></div><div class="row fset" role="option" aria-selected="false" tabindex="-1" data-section="ai"><span class="t">KI</span><span class="a mono"></span></div></div></section><section class="detail" aria-live="polite"><button type="button" class="phoneback">← Firma</button><div class="detail-in"><div id="person"></div></div></section><div class="split" role="separator" aria-orientation="vertical" aria-label="Spaltenbreite (ziehen: Breite ändern · Doppelklick: zurücksetzen · ←→ mit Fokus)" aria-valuenow="579" tabindex="0" style="left: 579px;"></div></main><div class="topbar open" role="toolbar" aria-label="Kontext"><span class="chip" tabindex="0"><b style="font-weight: 600;">Muster Consulting GmbH</b></span><span class="sep"></span><button type="button" class="chip">⌕ Suchen <span class="k">⌘K</span></button><span class="sep"></span><span class="zoom" role="group" aria-label="Schriftgrösse"><button type="button" class="chip" aria-label="Kleiner (⌘ −)">−</button><button type="button" class="chip mono zval" data-tip="Zurück auf 100 % (⌘ 0)" aria-label="Zurück auf 100 % (⌘ 0)">100 %</button><button type="button" class="chip" aria-label="Grösser (⌘ +)">+</button></span><span class="sep"></span><button type="button" class="chip" data-tip="Exportieren (⇧E)" aria-label="Exportieren"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path></svg></button><button type="button" class="chip" aria-label="Darstellung: System, Hell, Dunkel (T wechselt hell und dunkel)">◐</button><button type="button" class="chip" aria-label="Sprache" aria-haspopup="menu">DE</button><span class="sep"></span><label class="pin"><input type="checkbox" aria-describedby="top-pintip"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"></path><path d="M9 10.8V5h6v5.8l2.5 2.7a1 1 0 0 1-.7 1.7H7.2a1 1 0 0 1-.7-1.7z"></path><path d="M8 5h8"></path></svg><span class="ptip" id="top-pintip" role="tooltip"><b>Nicht angeheftet</b><span class="">An: die Leiste oben bleibt immer offen.</span><span class="cur">Aus: sie klappt sich ein, sobald die Maus sie verlässt. Fahr oben hin oder klick auf sie, dann geht sie wieder auf.</span></span></label></div><div class="corner"><button type="button" class="cornerbtn aibtn" data-tip="KI öffnen · ⌘J" aria-label="KI öffnen" aria-expanded="false"><svg class="i bot" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2M20 14h2M15 13v2M9 13v2"></path></svg></button></div><nav class="activity" aria-label="Bereiche"><a class="it" aria-label="Belege" data-k="b" href="3-lohnabrechnung.html"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z"></path><path d="M9 8h6M9 12h6M9 16h3"></path></svg></span><span class="nm">Belege</span></a><a class="it" aria-label="Rechnungen" data-k="i"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8M16 13H8M16 17H8"></path></svg></span><span class="nm">Rechnungen</span></a><a class="it" aria-label="Kontoauszüge, 2 offen" data-k="k" href="5-zahlung.html"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 9.5 12 4l8.5 5.5z"></path><path d="M6 10.5v7M10 10.5v7M14 10.5v7M18 10.5v7"></path><path d="M3.5 20.5h17"></path></svg><span class="mark"></span></span><span class="nm">Kontoauszüge</span></a><a class="it" aria-label="Buchungen" data-k="u" href="4-buchungen.html"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5C10 5 7 4.5 4 5v14c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5z"></path><path d="M12 6.5V20.5"></path></svg></span><span class="nm">Buchungen</span></a><a class="it" aria-label="MWST" data-k="m"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5"></rect><path d="M15 9l-6 6"></path><circle cx="9.3" cy="9.3" r="1"></circle><circle cx="14.7" cy="14.7" r="1"></circle></svg></span><span class="nm">MWST</span></a><a class="it" aria-label="Bilanz &amp; ER" data-k="r"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 20.5h17"></path><rect x="5" y="11" width="3.2" height="6.5" rx="1"></rect><rect x="10.4" y="5.5" width="3.2" height="12" rx="1"></rect><rect x="15.8" y="13.5" width="3.2" height="4" rx="1"></rect></svg></span><span class="nm">Bilanz &amp; ER</span></a><a class="it" aria-label="Abschluss" data-k="a"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path><path d="m9 15.2 2 2 4-4"></path></svg></span><span class="nm">Abschluss</span></a><a class="it" aria-label="Löhne" data-k="l" href="2-lauf.html"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13.5" rx="2.5"></rect><path d="M3 10.5h18"></path><path d="M7 3.5h10"></path><circle cx="16.5" cy="15" r="1.2"></circle></svg></span><span class="nm">Löhne</span></a><span class="div"></span><a class="it bolt" aria-label="Automatisierung"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"></path></svg></span></a><a class="it" aria-label="Geschäftspartner" data-k="p"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><path d="M15.5 4.7a3.5 3.5 0 0 1 0 6.6M18 14.3a6.5 6.5 0 0 1 3.5 5.7"></path></svg></span><span class="nm">Geschäftspartner</span></a><a class="it" aria-label="Wissen" data-k="e"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 18V5"></path><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"></path><path d="M17.707 6.294A3 3 0 1 0 12 5a3 3 0 1 0-5.707 1.294"></path><path d="M17.996 5.125a4 4 0 0 1 2.526 5.77"></path><path d="M18 18a4 4 0 0 0 2-7.465"></path><path d="M19.967 17.482a4 4 0 1 1-7.967.517 4 4 0 1 1-7.967-.517"></path><path d="M6 18a4 4 0 0 1-2-7.465"></path><path d="M6.004 5.125a4 4 0 0 0-2.526 5.77"></path></svg></span><span class="nm">Wissen</span></a><a class="it" aria-label="Änderungen" data-k="v"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l3 2"></path></svg></span><span class="nm">Änderungen</span></a><a class="it on" aria-label="Firma" data-k="f" href="1-einrichten.html" aria-current="page"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5.5A2.5 2.5 0 0 1 6.5 3h7A2.5 2.5 0 0 1 16 5.5V21"></path><path d="M16 9h2.5A1.5 1.5 0 0 1 20 10.5V21"></path><path d="M2.5 21h19"></path><path d="M8 7.5h4M8 11.5h4M8 15.5h4"></path></svg></span><span class="nm">Firma</span></a><div class="autow idle" data-testid="dock-widget"><button type="button" class="wopen" aria-expanded="false" aria-haspopup="dialog" data-k="w" aria-label="Automatisierung: Zahlungen: 35 von 35 gebucht · 0 Aufgaben für dich. Belege: 26 gelesen · 26 verbucht. Nächster Lauf morgen 00:00: Belege und Daten holen"><span class="n payments"><b>35</b><span>von 35 Zahlungen gebucht</span></span><span class="n waiting"><b>0</b><span>Aufgaben</span></span><span class="trig"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"></path></svg></span></button></div><button type="button" class="navtoggle" aria-expanded="false" aria-label="Navigation ausklappen"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button></nav></div>
+    
+  
+
+<nav class="pbar" aria-label="Prototyp"><b>Prototyp Löhne</b><span class="n">2/11</span><a href="1-einrichten.html">← Firma › Löhne: drei Personen</a><a href="index.html">Übersicht</a><a class="next" href="1b-ohne-ki.html">Ohne KI: das Formular →</a></nav>
+<script>
+
+const r05 = (n) => Math.round(n * 20) / 20;
+const r2 = (n) => Math.round(n * 100) / 100;
+const fmt = (n) => { const s = Math.abs(n).toFixed(2); const [i, d] = s.split('.'); return (n < 0 ? '−' : '') + i.replace(/\B(?=(\d{3})+(?!\d))/g, "'") + '.' + d; };
+const dmy = (d) => d.split('-').reverse().join('.');
+const MONTHNAMES = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+const valueOn = (hist, day) => hist.filter((e) => e.from <= day).at(-1);
+const sum = (xs) => r2(xs.reduce((s, x) => s + x.amount, 0));
+const R = { ahv: 5.3, alv: 1.1, fak: 1.0, vk: 1.58, bvgEntry: 22680, nbuHours: 8 };
+/** One person's payslip lines for one month of 2026; hours only for an hourly wage (null: not entered). */
+function calc(p, mm, hours) {
+  const first = '2026-' + mm + '-01';
+  if (p.start.slice(0, 7) > '2026-' + mm) return null;
+  const w = valueOn(p.wage, first);
+  const gross = [];
+  const notes = [];
+  if (p.kind === 'month') gross.push({ kind: 'Monatslohn', src: w.src + ' · gilt ab ' + dmy(w.from), base: '1 Monat', rate: fmt(w.amount), amount: w.amount });
+  else {
+    if (hours == null) return { p, mm, missing: true, w };
+    const g = r2(hours * w.amount);
+    gross.push({ kind: 'Stundenlohn', src: 'Stunden ' + MONTHNAMES[Number(mm) - 1] + ' × Stundenlohn ' + fmt(w.amount) + ' · Arbeitsvertrag', base: hours + ' Std.', rate: fmt(w.amount), amount: g, hours: true });
+    gross.push({ kind: 'Feiertagsentschädigung', src: 'Arbeitsvertrag: bezahlte Feiertage, separat ausgewiesen', base: fmt(g), rate: p.publicHoliday.toFixed(2) + ' %', amount: r05(g * p.publicHoliday / 100) });
+    gross.push({ kind: 'Ferienentschädigung', src: '4 Wochen Ferien: 4/48, separat ausgewiesen (OR Art. 329d)', base: fmt(g), rate: p.holiday.toFixed(2) + ' %', amount: r05(g * p.holiday / 100) });
+  }
+  const G = sum(gross);
+  const ahv = r05(G * R.ahv / 100), alv = r05(G * R.alv / 100);
+  const b = p.bvg ? valueOn(p.bvg, first) : null;
+  const an = [
+    { kind: 'AHV/IV/EO', base: G, rate: R.ahv, amount: ahv, src: 'Bundessatz 2026 (BSV)' },
+    { kind: 'ALV', base: G, rate: R.alv, amount: alv, src: "Bundessatz 2026, bis 148'200 im Jahr" },
+  ];
+  if (b) an.push({ kind: 'BVG', fixed: true, amount: b.an, src: b.src + ' · gilt ab ' + dmy(b.from) });
+  const ag = [
+    { kind: 'AHV/IV/EO', base: G, rate: R.ahv, amount: ahv, acct: '5700', src: 'Bundessatz 2026 (BSV)' },
+    { kind: 'ALV', base: G, rate: R.alv, amount: alv, acct: '5700', src: 'Bundessatz 2026' },
+    { kind: 'FAK Kanton Bern', base: G, rate: R.fak, amount: r05(G * R.fak / 100), acct: '5710', src: 'Beitragsverfügung 2026, Ausgleichskasse Muster' },
+    { kind: 'Verwaltungskosten', base: r2(2 * (ahv + alv)), rate: R.vk, amount: r05(2 * (ahv + alv) * R.vk / 100), acct: '5700', src: 'Beitragsverfügung 2026, Ausgleichskasse Muster' },
+  ];
+  if (b) ag.push({ kind: 'BVG', fixed: true, amount: b.ag, acct: '5720', src: b.src });
+  if (!b) notes.push({ kind: 'BVG', text: 'kein Abzug: Jahreslohn laut Vertrag rund ' + fmt(p.yearWage) + ", unter der Eintrittsschwelle 22'680 (BVG Art. 2)" });
+  if (p.kind === 'hour') {
+    const perWeek = hours * 12 / 52;
+    notes.push({ kind: 'NBU', text: perWeek < R.nbuHours ? 'nicht versichert: im Schnitt ' + perWeek.toFixed(1) + ' Std. pro Woche, unter 8 (UVG Art. 8 Abs. 2); die Berufsunfälle versichert die Firma' : 'versichert ab 8 Std. pro Woche; die Prämie trägt die Firma' });
+  } else notes.push({ kind: 'NBU', text: 'versichert; die Prämie trägt die Firma (Police 2026)' });
+  if (p.thirteenth) {
+    let acc = 0;
+    for (let m = 1; m <= Number(mm); m++) acc += valueOn(p.wage, '2026-' + String(m).padStart(2, '0') + '-01').amount;
+    notes.push({ kind: '13. Monatslohn', text: 'mit dem Lauf Dezember; bis Ende ' + MONTHNAMES[Number(mm) - 1] + ' aufgelaufen ' + fmt(r05(acc / 12)) + ' (1/12 jedes Monatslohns)' });
+  }
+  const DED = sum(an), AGS = sum(ag), NET = r2(G - DED);
+  return { p, mm, w, gross, G, an, ag, DED, AGS, NET, notes, hours };
+}
+/** The entries a released run books on its payday for one person (one ref, one line each). */
+function personEntries(s, month) {
+  const t = month + ' 2026', who = s.p.name;
+  const an = Object.fromEntries(s.an.map((l) => [l.kind, l.amount]));
+  const ag = Object.fromEntries(s.ag.map((l) => [l.kind, l.amount]));
+  const e = [{ dr: '5000', cr: '2290', amount: s.NET, text: 'Lohn ' + t + ' netto', who }];
+  e.push({ dr: '5000', cr: '2270', amount: an['AHV/IV/EO'], text: 'AHV/IV/EO Arbeitnehmer', who });
+  e.push({ dr: '5000', cr: '2270', amount: an.ALV, text: 'ALV Arbeitnehmer', who });
+  if (an.BVG) e.push({ dr: '5000', cr: '2270', amount: an.BVG, text: 'BVG Arbeitnehmer', who });
+  e.push({ dr: '5700', cr: '2270', amount: ag['AHV/IV/EO'], text: 'AHV/IV/EO Arbeitgeber', who });
+  e.push({ dr: '5700', cr: '2270', amount: ag.ALV, text: 'ALV Arbeitgeber', who });
+  e.push({ dr: '5710', cr: '2270', amount: ag['FAK Kanton Bern'], text: 'FAK Arbeitgeber', who });
+  e.push({ dr: '5700', cr: '2270', amount: ag.Verwaltungskosten, text: 'Verwaltungskosten Ausgleichskasse', who });
+  if (ag.BVG) e.push({ dr: '5720', cr: '2270', amount: ag.BVG, text: 'BVG Arbeitgeber', who });
+  return e;
+}
+
+/** The run's entries totalled per account pair, as the preview and the margin show them. */
+function accountTotals(ss, month) {
+  const rows = [
+    ['5000', '2290', 'Nettolöhne', (e) => e.cr === '2290'],
+    ['5000', '2270', 'Abzüge Arbeitnehmer: AHV/IV/EO, ALV, BVG', (e) => e.dr === '5000' && e.cr === '2270'],
+    ['5700', '2270', 'AHV/IV/EO, ALV, Verwaltungskosten Arbeitgeber', (e) => e.dr === '5700'],
+    ['5710', '2270', 'FAK Arbeitgeber', (e) => e.dr === '5710'],
+    ['5720', '2270', 'BVG Arbeitgeber', (e) => e.dr === '5720'],
+  ];
+  const all = ss.flatMap((s) => personEntries(s, month));
+  return { count: all.length, rows: rows.map(([dr, cr, text, f]) => ({ dr, cr, text, amount: r2(all.filter(f).reduce((s, e) => s + e.amount, 0)), n: all.filter(f).length })) };
+}
+
+
+const DATA = {"PEOPLE":[{"id":"lukas","name":"Lukas Beispiel","first":"Lukas","role":"Inhaber und Geschäftsführer","start":"2024-01-01","pensum":"100 %","kind":"month","born":"14.03.1984","ahv":"756.••••.••••.37","iban":"CH•• •••• •••• •••• 4471 2","addr":"Beispielweg 4\u003cbr>3006 Bern","car":true,"thirteenth":false,"wage":[{"from":"2024-01-01","amount":8200,"src":"Arbeitsvertrag"},{"from":"2026-01-01","amount":8600,"src":"Nachtrag zum Arbeitsvertrag"}],"bvg":[{"from":"2026-01-01","an":237.5,"ag":237.5,"src":"Vorsorgeausweis 2026, Muster Sammelstiftung"}]},{"id":"anna","name":"Anna Muster","first":"Anna","role":"Beraterin","start":"2025-03-01","pensum":"100 %","kind":"month","born":"02.11.1991","ahv":"756.••••.••••.81","iban":"CH•• •••• •••• •••• 2093 6","addr":"Musterstrasse 21\u003cbr>3014 Bern","thirteenth":true,"wage":[{"from":"2025-03-01","amount":6500,"src":"Arbeitsvertrag"},{"from":"2026-07-01","amount":6800,"src":"Nachtrag zum Arbeitsvertrag vom 12.06.2026"}],"bvg":[{"from":"2026-01-01","an":262.5,"ag":262.5,"src":"Vorsorgeausweis 2026, Muster Sammelstiftung"},{"from":"2026-07-01","an":276.4,"ag":276.4,"src":"Vorsorgeausweis ab 01.07.2026, Muster Sammelstiftung"}]},{"id":"nico","name":"Nico Probe","first":"Nico","role":"Aushilfe Administration","start":"2026-02-01","pensum":"im Stundenlohn, rund 25 Std. im Monat","kind":"hour","born":"09.05.2004","ahv":"756.••••.••••.52","iban":"CH•• •••• •••• •••• 7710 4","addr":"Probeweg 3\u003cbr>3012 Bern","thirteenth":false,"wage":[{"from":"2026-02-01","amount":32,"src":"Arbeitsvertrag im Stundenlohn"}],"holiday":8.33,"publicHoliday":3.59,"yearWage":10700,"hours":{"02":18,"03":26,"04":24,"05":20,"06":28,"07":12,"08":16,"09":26}}],"NEW":"\u003cdiv class=\"head\">\u003ch2 class=\"who\">Neue Person\u003csmall>Firma › Löhne\u003c/small>\u003c/h2>\u003c/div>\n\u003cdiv class=\"docbody\" style=\"max-width: 820px;\">\u003cp class=\"m\" style=\"margin: 12px 0;\">\u003ca class=\"clink\" href=\"1-einrichten.html#behalten\">← Firma › Löhne: alle Personen\u003c/a>\u003c/p>\n\u003cp class=\"lead\">Leg den Arbeitsvertrag ab: die KI liest Lohn, Pensum, Eintritt und Ferienwochen heraus, du behältst sie. Oder füll das Formular aus.\u003c/p>\n\u003cdiv class=\"pr-well\">\u003cdiv class=\"ttl\">Arbeitsvertrag hierher ziehen\u003c/div>\u003cul>\u003cli>\u003cspan class=\"doc\">\u003c/span>Arbeitsvertrag oder Nachtrag\u003cspan class=\"st\">Lohn, Pensum, Eintritt, Ferien\u003c/span>\u003c/li>\u003cli>\u003cspan class=\"doc\">\u003c/span>Vorsorgeausweis, wenn es einen gibt\u003cspan class=\"st\">BVG\u003c/span>\u003c/li>\u003c/ul>\u003cdiv class=\"acts\">\u003cspan class=\"m\">Die AHV-Nummer wird vor dem Lesen geschwärzt.\u003c/span>\u003c/div>\u003c/div>\n\u003cdiv class=\"pr-sec\">\u003ch3>Person\u003c/h3>\u003cform class=\"form pr-grid\" onsubmit=\"return false\">\n\u003clabel>Name\u003cinput value=\"\">\u003c/label>\u003clabel>Rolle\u003cinput value=\"\">\u003c/label>\n\u003clabel>Geburtsdatum\u003cinput class=\"mono\" placeholder=\"TT.MM.JJJJ\">\u003c/label>\u003clabel>Eintritt\u003cinput class=\"mono\" placeholder=\"TT.MM.JJJJ\">\u003c/label>\n\u003clabel>AHV-Nummer\u003cinput class=\"mono\" placeholder=\"756.…\">\u003cspan class=\"fhint\">Bleibt in den Büchern. Die KI sieht sie nie.\u003c/span>\u003c/label>\u003clabel>Konto für den Lohn\u003cinput class=\"mono\" placeholder=\"CH…\">\u003cspan class=\"fhint\">damit der Code die Zahlung erkennt\u003c/span>\u003c/label>\n\u003c/form>\u003c/div>\n\u003cdiv class=\"pr-sec\">\u003ch3>Lohn\u003c/h3>\u003cform class=\"form pr-grid\" onsubmit=\"return false\">\n\u003clabel>Lohnart\u003cspan class=\"seg2\" role=\"radiogroup\">\u003cbutton type=\"button\" class=\"on\">Monatslohn\u003c/button>\u003cbutton type=\"button\">Stundenlohn\u003c/button>\u003c/span>\u003c/label>\n\u003clabel>Betrag\u003cinput class=\"mono num\" placeholder=\"0.00\">\u003cspan class=\"fhint\">im Monat oder pro Stunde\u003c/span>\u003c/label>\n\u003clabel>Pensum\u003cinput placeholder=\"100 %\">\u003cspan class=\"fhint\">beim Stundenlohn: die Stunden kommen je Monat im Lauf\u003c/span>\u003c/label>\n\u003clabel>13. Monatslohn\u003cspan class=\"seg2\" role=\"radiogroup\">\u003cbutton type=\"button\" class=\"on\">nein\u003c/button>\u003cbutton type=\"button\">ja\u003c/button>\u003c/span>\u003c/label>\n\u003clabel>Ferien\u003cinput class=\"mono\" value=\"4 Wochen\">\u003cspan class=\"fhint\">beim Stundenlohn: 8.33 % Ferienentschädigung, separat ausgewiesen\u003c/span>\u003c/label>\n\u003clabel>gilt ab\u003cinput class=\"mono\" value=\"01.10.2026\">\u003cspan class=\"fhint\">der erste Monat ohne freigegebenen Lauf\u003c/span>\u003c/label>\n\u003c/form>\u003c/div>\n\u003cp class=\"m\" style=\"max-width: 70ch;\">BVG und NBU rechnet der Code aus Lohn und Stunden: unter 22'680 im Jahr kein BVG, unter 8 Std. pro Woche kein NBU. Darüber fragt er nach dem Vorsorgeausweis.\u003c/p>\n\u003cp style=\"margin-top: 18px; display: flex; gap: 8px;\">\u003ca class=\"btn primary\" href=\"1-einrichten.html#behalten\">Behalten\u003c/a>\u003ca class=\"btn\" href=\"1-einrichten.html#behalten\">Abbrechen\u003c/a>\u003c/p>\n\u003cp class=\"m src-note\">Gebucht wird erst, wenn du einen Lauf freigibst. Die neue Person ist im ersten Lauf ab ihrem Eintritt.\u003c/p>\u003c/div>"};
+// 1c-person.html: one person of Firma › Löhne (#lukas, #anna, #nico), or a new one (#neu).
+// Preceded by CALC (fmt, dmy, valueOn, calc) and DATA. Every dated value shows «ab», its Verlauf,
+// and the wage «Ändern» asks «gilt ab»: runs January to August are released, September is a draft,
+// to 31.03.2026 the quarter is closed.
+const TODAY = '2026-11-15';
+const PEOPLE = DATA.PEOPLE;
+const dayBefore = (d) => { const t = new Date(d + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() - 1); return t.toISOString().slice(0, 10); };
+const notes = {};
+function history(list, show, label) {
+  const now = list.filter((e) => e.from <= TODAY).at(-1), planned = list.filter((e) => e.from > TODAY);
+  const earlier = list.filter((e) => e.from <= TODAY && e !== now).reverse();
+  const until = (e) => { const next = list[list.indexOf(e) + 1]; return next ? ' bis ' + dmy(dayBefore(next.from)) : ''; };
+  return show(now) + ' <span class="m">ab ' + dmy(now.from) + (label ? ' · ' + label : '') + '</span>'
+    + planned.map((e) => '<div class="m">ab ' + dmy(e.from) + ': ' + show(e) + ', geplant</div>').join('')
+    + (earlier.length ? '<div class="m">Verlauf: ' + earlier.map((e) => show(e) + ' vom ' + dmy(e.from) + until(e) + ' · ' + e.src).join('; ') + '</div>' : '');
+}
+function render() {
+  const id = (location.hash || '#lukas').slice(1);
+  document.querySelectorAll('[data-person]').forEach((a) => a.classList.toggle('sel', a.dataset.person === id));
+  const el = document.getElementById('person');
+  if (id === 'neu') { el.innerHTML = DATA.NEW; return; }
+  const p = PEOPLE.find((x) => x.id === id) || PEOPLE[0];
+  const hourly = p.kind === 'hour';
+  const unit = hourly ? 'Stundenlohn' : 'Monatslohn';
+  const money = (e) => '<span class="mono">' + fmt(e.amount) + '</span>';
+  const wageLabel = hourly ? 'dazu Feiertage ' + p.publicHoliday.toFixed(2) + ' % und Ferien ' + p.holiday.toFixed(2) + ' %, separat ausgewiesen' : (p.thirteenth ? '13. Monatslohn mit dem Dezemberlohn' : 'kein 13. Monatslohn') + ' · Zahltag am 25.';
+  const bvg = p.bvg ? history(p.bvg, (e) => '<span class="mono">' + fmt(e.an) + ' + ' + fmt(e.ag) + '</span> im Monat', 'Person + Firma') : "kein BVG <span class=\"m\">Jahreslohn laut Vertrag rund " + fmt(p.yearWage) + ", unter der Eintrittsschwelle 22'680; das rechnet der Code jedes Jahr neu</span>";
+  const sep = calc(p, '09', p.hours?.['09'] ?? null);
+  el.innerHTML = '<div class="head"><h2 class="who">' + p.name + '<small>' + p.role + ' · Firma › Löhne</small></h2><div class="amount"><small>CHF</small>' + fmt(valueOn(p.wage, TODAY).amount) + '</div></div>'
+    + '<div class="facts"><span>' + unit + '</span><span>Pensum ' + p.pensum + '</span><span>Eintritt ' + dmy(p.start) + '</span><span class="pr-state ok">aktiv</span></div>'
+    + '<div class="docbody" style="max-width: 820px;"><p class="m" style="margin: 12px 0;"><a class="clink" href="1-einrichten.html#behalten">← Firma › Löhne: alle Personen</a></p>'
+    + '<dl class="kv2 wide">'
+    + '<dt>Person</dt><dd>' + p.name + ' <span class="m">' + p.role + ', seit ' + dmy(p.start) + '</span></dd>'
+    + '<dt>Geburtsdatum</dt><dd class="mono">' + p.born + '</dd>'
+    + '<dt>AHV-Nummer</dt><dd><span class="mono">' + p.ahv + '</span> <span class="m">nur in den Büchern, nie an die KI</span></dd>'
+    + '<dt>Adresse</dt><dd>' + p.addr + '</dd>'
+    + '<dt>Konto für den Lohn</dt><dd><span class="mono">' + p.iban + '</span> <span class="m">damit der Code die Zahlung erkennt</span></dd>'
+    + '<dt>' + unit + '</dt><dd id="wage"><div id="wage-show"></div>'
+    + '<form class="form pr-grid pr-hide" id="wage-form" onsubmit="return false" style="margin-top: 8px;"><label>Neuer ' + unit + '<input class="mono num" id="wage-amount" value="' + fmt(valueOn(p.wage, TODAY).amount + (hourly ? 1 : 400)) + '"></label><label>gilt ab<input class="mono" id="wage-from" value="01.09.2026"><span class="fhint">der erste Monat ohne freigegebenen Lauf</span></label><span style="display: flex; gap: 8px; align-items: end;"><button type="button" class="btn primary" id="wage-save">Behalten</button><button type="button" class="btn" id="wage-cancel">Abbrechen</button></span></form>'
+    + '<div class="pr-warn pr-hide" id="wage-warn" role="alertdialog" aria-labelledby="wage-warn-t"></div></dd>'
+    + (hourly ? '<dt>Stunden</dt><dd>je Monat im Lohnlauf eingetragen <span class="m">' + Object.entries(p.hours).filter(([mm]) => mm !== '09').map(([mm, h]) => MONTHNAMES[Number(mm) - 1].slice(0, 3) + ' ' + h).join(' · ') + ' · September: <a class="clink" href="2-lauf.html#2026-09~' + p.id + '">im Entwurf noch offen →</a></span></dd>' : '')
+    + '<dt>13. Monatslohn</dt><dd>' + (p.thirteenth ? 'ja <span class="m">mit dem Dezemberlohn; bei Austritt pro rata · Arbeitsvertrag</span>' : 'nein') + '</dd>'
+    + '<dt>Pensionskasse</dt><dd>' + bvg + '</dd>'
+    + '<dt>Unfall (NBU)</dt><dd>' + (hourly ? 'nicht versichert <span class="m">unter 8 Std. pro Woche (UVG Art. 8 Abs. 2); der Code prüft es in jedem Lauf aus den Stunden</span>' : 'versichert <span class="m">Prämie ganz von der Firma · Police 2026</span>') + '</dd>'
+    + '<dt>Kanton der Arbeit</dt><dd>Bern</dd>'
+    + '</dl>'
+    + '<p style="margin-top: 18px;">' + (sep && !sep.missing ? '<a class="clink" href="2-lauf.html#2026-09~' + p.id + '">Im Lohnlauf September →</a>  ' : '') + '<a class="clink" href="3-lohnabrechnung.html#' + p.id + '">Lohnabrechnungen →</a>  <a class="clink" href="7-jahr.html#' + p.id + '">Lohnausweis-Daten 2026 →</a></p>'
+    + '<p class="m src-note">Jeder Wert gilt ab seinem Datum. Ein neuer Vertrag oder Ausweis wird ein neuer Eintrag ab seinem Datum; der alte bleibt im Verlauf, und freigegebene Läufe behalten, womit sie gerechnet haben.</p></div>';
+  const show = () => {
+    document.getElementById('wage-show').innerHTML = history(p.wage, money, wageLabel) + ' <button type="button" class="btn ghost" id="wage-change">Ändern</button>' + (notes[p.id] ? '<div class="m" id="wage-note">' + notes[p.id] + '</div>' : '');
+    document.getElementById('wage-change').addEventListener('click', () => { document.getElementById('wage-form').classList.remove('pr-hide'); document.getElementById('wage-warn').classList.add('pr-hide'); });
+  };
+  const keepWage = (from, amount, note) => {
+    const k = p.wage.findIndex((e) => e.from > from);
+    p.wage.splice(k < 0 ? p.wage.length : k, 0, { from, amount, src: 'eingegeben am ' + dmy(TODAY) });
+    notes[p.id] = note;
+    document.getElementById('wage-form').classList.add('pr-hide');
+    document.getElementById('wage-warn').classList.add('pr-hide');
+    show();
+  };
+  const save = () => {
+    const m = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(document.getElementById('wage-from').value.trim());
+    const amount = Number(document.getElementById('wage-amount').value.replace(/'/g, ''));
+    const w = document.getElementById('wage-warn');
+    if (!m || !(amount > 0)) { w.innerHTML = '<h3 id="wage-warn-t">Datum oder Betrag fehlt</h3><p>«gilt ab» als TT.MM.JJJJ, der Lohn als Betrag.</p>'; w.classList.remove('pr-hide'); return; }
+    const from = m[3] + '-' + m[2] + '-' + m[1];
+    const old = valueOn(p.wage, from) || p.wage[0];
+    const first = from < '2026-01-01' ? 1 : Number(m[2]);
+    const dim = new Date(Date.UTC(2026, first, 0)).getUTCDate(), part = from < '2026-01-01' || m[1] === '01' || hourly ? 1 : (dim - Number(m[1]) + 1) / dim;
+    const hit = from < '2026-09-01' ? MONTHNAMES.slice(first - 1, 8).map((n, i) => ({ n, mm: first + i })).filter((h) => p.start.slice(0, 7) <= '2026-' + String(h.mm).padStart(2, '0')) : [];
+    const runName = MONTHNAMES[Math.max(8, Number(m[2]) - 1)];
+    if (!hit.length) { keepWage(from, amount, from > TODAY ? 'Gilt ab ' + dmy(from) + '; der Lauf ' + MONTHNAMES[Number(m[2]) - 1] + ' rechnet damit.' : 'Gilt ab ' + dmy(from) + '; der Lauf September (Entwurf) rechnet jetzt damit.'); return; }
+    const names = hit.map((h) => h.n).join(', ').replace(/, ([^,]*)$/, ' und $1');
+    const diff = amount - old.amount;
+    // An hourly wage: the difference per hour, times each month's hours, with the holiday surcharges.
+    const units = (h, i) => hourly ? p.hours[String(h.mm).padStart(2, '0')] * (1 + (p.holiday + p.publicHoliday) / 100) : (i === 0 ? part : 1);
+    const total = Math.round(hit.reduce((t, h, i) => t + diff * units(h, i), 0) * 20) / 20;
+    const closed = hit.filter((h) => h.mm <= 3), open = hit.filter((h) => h.mm > 3);
+    const how = hourly ? ' (' + hit.reduce((t, h) => t + p.hours[String(h.mm).padStart(2, '0')], 0) + ' Std. × ' + fmt(diff) + ', mit Feiertags- und Ferienentschädigung)' : part < 1 ? ' (' + hit[0].n + ' nach Tagen ab dem ' + Number(m[1]) + '.)' : ' (' + hit.length + ' × ' + fmt(diff) + ')';
+    w.innerHTML = '<h3 id="wage-warn-t">Für ' + names + ' freigegeben mit ' + fmt(old.amount) + '; ab ' + dmy(from) + ' gilt jetzt ' + fmt(amount) + '.</h3>'
+      + '<ul><li>Differenz im Bruttolohn von ' + p.name + ': ' + fmt(total) + how + '. AHV, ALV und die Kassen auf 2270 rechnen mit.</li>'
+      + '<li>Regel: ein freigegebener Lauf ändert sich nur durch «Wieder öffnen»; ein Lauf im abgeschlossenen Quartal (bis 31.03.2026) gar nicht mehr, dort korrigiert ein Lauf im nächsten offenen Monat.</li>'
+      + '<li>Die anderen Personen dieser Läufe bleiben, wie sie sind.</li>'
+      + '<li>Wählst du nichts davon, bleiben die Läufe wie freigegeben, und jeder zeigt die Differenz als Tatsache.</li></ul>'
+      + '<div class="acts"><button type="button" class="btn primary" id="wage-next">Differenz im ' + runName + ' nachzahlen</button>'
+      + (open.length && !closed.length ? '<button type="button" class="btn" id="wage-reopen">' + names + ' wieder öffnen</button>' : '')
+      + '<button type="button" class="btn" id="wage-leave">So lassen</button><button type="button" class="btn ghost" id="wage-back">Zurück</button></div>'
+      + '<p class="m">Was du wählst, steht im Verlauf der Läufe wie jede Aktion.</p>';
+    w.classList.remove('pr-hide');
+    document.getElementById('wage-next').addEventListener('click', () => keepWage(from, amount, 'Gilt ab ' + dmy(from) + '. Im Lauf ' + runName + ' (Entwurf), bei ' + p.name + ': «Nachzahlung ' + names + '» ' + fmt(total) + ', mit Bezug auf die Läufe.'));
+    document.getElementById('wage-reopen')?.addEventListener('click', () => keepWage(from, amount, 'Gilt ab ' + dmy(from) + '. ' + names + ' wieder geöffnet: ihre Buchungen sind zurückgenommen, bis du neu freigibst.'));
+    document.getElementById('wage-leave').addEventListener('click', () => keepWage(from, amount, 'Gilt ab ' + dmy(from) + '. ' + names + ' bleiben wie freigegeben; jeder Lauf zeigt die Differenz von ' + fmt(diff) + (hourly ? ' pro Stunde' : '') + '.'));
+    document.getElementById('wage-back').addEventListener('click', () => w.classList.add('pr-hide'));
+  };
+  document.getElementById('wage-save').addEventListener('click', save);
+  document.getElementById('wage-cancel').addEventListener('click', () => { document.getElementById('wage-form').classList.add('pr-hide'); document.getElementById('wage-warn').classList.add('pr-hide'); });
+  show();
+}
+window.addEventListener('hashchange', render);
+render();
+
+</script>
+</body>
+</html>

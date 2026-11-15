@@ -7,6 +7,8 @@ const { join } = require('node:path');
 const { excludedPaths } = require('./not-packed.cjs');
 
 const env = process.env;
+/** The type of a hand-over file (`.vanilla`, src/handover/package.ts), which the app declares as its own. */
+const HANDOVER_TYPE = 'org.vanilla-accounting.handover';
 const signed = Boolean(env.CSC_LINK);
 const notarize = signed && Boolean(env.APPLE_ID && env.APPLE_APP_SPECIFIC_PASSWORD && env.APPLE_TEAM_ID);
 /** owner/repo of the GitHub releases the app updates from; without it the app has no update feed. */
@@ -27,10 +29,17 @@ module.exports = {
   directories: { output: 'release', buildResources: 'desktop' },
   // A shared books' link opens the app (src/desktop/main.ts `open-url`, src/share/service.ts APP_SCHEME).
   protocols: [{ name: 'Vanilla Accounting', schemes: ['vanilla-accounting'] }],
+  // A hand-over file opens the app from Finder (double-click, «Öffnen mit»), also on a Mac that never
+  // opened books (#545; src/desktop/main.ts `open-file`). A file, not a bundle; the app owns the type.
+  fileAssociations: [{ ext: 'vanilla', name: 'Vanilla Accounting Buchhaltung', role: 'Editor', rank: 'Owner', isPackage: false }],
   // The share service the app offers by default (src/share/service.ts): named at build time like the
   // update feed, since the publisher's domain stays out of the app's files. Without it, the person
   // names a service herself, or shares the books as a file.
-  ...(env.VANILLA_SHARE_SERVICE ? { extraMetadata: { share: { service: env.VANILLA_SHARE_SERVICE } } } : {}),
+  // The page the invitation names for downloading the app (src/share/service.ts appDownload), likewise.
+  ...(env.VANILLA_SHARE_SERVICE || env.VANILLA_APP_DOWNLOAD ? { extraMetadata: { share: {
+    ...(env.VANILLA_SHARE_SERVICE ? { service: env.VANILLA_SHARE_SERVICE } : {}),
+    ...(env.VANILLA_APP_DOWNLOAD ? { download: env.VANILLA_APP_DOWNLOAD } : {}),
+  } } } : {}),
   // What the app reads at run time from its own folder (APP_ROOT): the bundle, the built UI and the
   // app's data files. Packages come from package.json's dependencies; the UI's own are in dist/.
   files: [
@@ -93,6 +102,13 @@ module.exports = {
     entitlements: 'desktop/entitlements.mac.plist',
     entitlementsInherit: 'desktop/entitlements.mac.plist',
     extendInfo: {
+      // The type behind `fileAssociations`: declared by the app, so macOS knows `.vanilla` files by it.
+      UTExportedTypeDeclarations: [{
+        UTTypeIdentifier: HANDOVER_TYPE,
+        UTTypeDescription: 'Vanilla Accounting Buchhaltung',
+        UTTypeConformsTo: ['public.data'],
+        UTTypeTagSpecification: { 'public.filename-extension': ['vanilla'], 'public.mime-type': ['application/x-vanilla-accounting'] },
+      }],
       // What macOS shows when the app first asks Mail for its accounts (Firma › Quellen, «Mail-Programm auf diesem Mac»).
       NSAppleEventsUsageDescription: 'Vanilla Accounting reads the invoices in your Mail accounts that you choose, and saves their attachments into your books. It never sends or changes mail.',
       // The chat's microphone (src/desktop/dictation.swift); tools/desktop/dictation.mjs puts the same texts into the helper.

@@ -33,8 +33,10 @@ import { appVersion } from '../version.js';
 import { readState, writeState, type Bounds } from './state.js';
 import { setDurchsichtHome } from '../handover/durchsicht.js';
 import { APP_SCHEME, setShareSettingsFile } from '../share/service.js';
-import { openLink, previewLink, type ShareFlowError } from '../share/sharing.js';
-import { askLines, askReplace } from '../app/handover/ask-text.js';
+import { openLink, previewLink } from '../share/sharing.js';
+import { askLines, askOther, oneLine } from '../app/handover/ask-text.js';
+import type { PackageError } from '../handover/package.js';
+import { heldUntilReady, isVanillaPath, openVanillaFile, refusedText, vanillaPaths } from './open-files.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** tools/desktop/smoke.mjs: the fused release build has no inspector, so the page reaches the menu (preload.ts). */
@@ -54,7 +56,7 @@ const DICTATION = process.platform !== 'darwin' ? undefined
 app.commandLine.appendSwitch('font-render-hinting', 'none');
 
 /**
- * Links of shared books (`vanilla-accounting://open?share=<id>#<key>`, the share page's «Buchhaltung
+ * Links of shared books (`vanilla-accounting://open?share=<id>`, the share page's «Buchhaltung
  * öffnen»): macOS hands them over by `open-url`, also when the link starts the app, so they are
  * taken before the app is ready and opened once the server listens (src/share/sharing.ts openLink).
  */
@@ -68,6 +70,20 @@ app.on('open-url', (e, url) => {
 });
 // The packed app's Info.plist names the scheme (desktop/electron-builder.config.cjs `protocols`); this makes it the handler.
 if (app.isPackaged) app.setAsDefaultProtocolClient(APP_SCHEME);
+
+/**
+ * `.vanilla` files (#545): a double-click in Finder, «Öffnen mit», a drop on the Dock icon. macOS
+ * hands them over by `open-file`, also when the file starts the app and before it is ready, so they
+ * are held until the server listens (src/desktop/open-files.ts), with or without books open.
+ * The Info.plist names the type (desktop/electron-builder.config.cjs `fileAssociations`).
+ */
+const handedFiles = heldUntilReady<string>();
+app.on('open-file', (e, path) => {
+  e.preventDefault();
+  if (isVanillaPath(path)) handedFiles.add(path);
+});
+// Elsewhere than on the Mac a file comes as an argument of the start.
+for (const path of process.platform === 'darwin' ? [] : vanillaPaths(process.argv.slice(1))) handedFiles.add(path);
 
 if (!app.requestSingleInstanceLock()) app.quit();
 // A start that fails says so and ends: never a running app without a window.
@@ -113,7 +129,10 @@ async function start(): Promise<void> {
   // A second start, a click on the Dock icon, `open -a`: the window in front. Listening before the
   // first wait of the start, so a start that hangs later (books that do not open, a login shell
   // that does not answer) still gives the person a window.
-  app.on('second-instance', () => bringUp(win, show, waiting));
+  app.on('second-instance', (_e, argv) => {
+    if (process.platform !== 'darwin') for (const path of vanillaPaths(argv.slice(1))) handedFiles.add(path);
+    bringUp(win, show, waiting);
+  });
   app.on('activate', () => bringUp(win, show, waiting));
   await app.whenReady();
   const { homepage } = appPackage();
@@ -248,6 +267,14 @@ async function start(): Promise<void> {
     const r = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
     return r.response === 0;
   };
+  /** «Als neue Kopie öffnen» (the default, keeps the copy here), «Bestehende Kopie ersetzen», or nothing. */
+  const askCopy = async (p: Record<string, string>): Promise<'new' | 'replace' | undefined> => {
+    const t = textsIn(language);
+    const detail = [askOther((k, v) => t(k, v), p), t('share.ask.otherChoice', { was: oneLine(p.was), now: oneLine(p.now) })].join('\n\n');
+    const options = { type: 'warning' as const, message: t('desktop.shareAskTitle'), detail, buttons: [t('share.ask.asNew'), t('share.ask.replace'), t('common.cancel')], defaultId: 0, cancelId: 2 };
+    const r = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+    return r.response === 0 ? 'new' : r.response === 1 ? 'replace' : undefined;
+  };
   /** The link's service and claims first; `trust` only for the service the person saw named. */
   const askShare = async (link: string): Promise<{ yes: boolean; trust: boolean }> => {
     const t = textsIn(language);
@@ -264,12 +291,12 @@ async function start(): Promise<void> {
           win?.setProgressBar(2);
           let opened;
           try { opened = await openLink(link, { trust }); } catch (e) {
-            // The package would move a copy here it does not continue: asked again with that copy's real facts (no second download).
-            const refusal = e as ShareFlowError;
+            // A copy of the firm here from someone else: never moved without her answer (review of #551).
+            const refusal = e as PackageError;
             if (refusal?.code !== 'shareCopyOther') throw e;
-            const t = textsIn(language);
-            if (!(await ask(askReplace((k, v) => t(k, v), refusal.params), t('share.ask.replaceYes')))) { if (!win || win.isDestroyed()) lastBooks(); return; }
-            opened = await openLink(link, { trust, replace: true });
+            const copy = await askCopy(refusal.params);
+            if (!copy) { if (!win || win.isDestroyed()) lastBooks(); return; }
+            opened = await openLink(link, { trust, copy });
           }
           show(pathOf(await server.open(opened.root)));
         })
@@ -277,9 +304,23 @@ async function start(): Promise<void> {
         .finally(() => { if (win && !win.isDestroyed()) win.setProgressBar(-1); });
     }
   };
-  // Started by a link: it opens instead of the books opened last (those open when the person says no).
+  /** A handed-over file opens as «Öffnen…» in the app opens it: a hand-over as its copy, a return to its review. */
+  const openFile = (path: string) => {
+    win?.setProgressBar(2);
+    void openVanillaFile(path, base!)
+      .then((page) => show(page))
+      .catch(async (e: unknown) => {
+        const t = textsIn(language);
+        await dialog.showMessageBox({ type: 'warning', message: t('desktop.fileOpenFailed', { file: basename(path) }), detail: refusedText(t, e) });
+        if (!win || win.isDestroyed()) lastBooks();
+      })
+      .finally(() => { if (win && !win.isDestroyed()) win.setProgressBar(-1); });
+  };
+  // Started by a link or a file: it opens instead of the books opened last (those open when the person says no, or it fails).
+  const startedWith = shareLinks.length > 0 || handedFiles.held > 0;
+  handedFiles.ready(openFile);
   if (shareLinks.length) openShares();
-  else lastBooks();
+  if (!startedWith) lastBooks();
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   void checkForUpdates();
 }
