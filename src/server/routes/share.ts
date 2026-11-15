@@ -10,14 +10,15 @@
  *   DELETE /api/share/sender          forgets it («Andere Adresse»)
  *   POST   /api/share/link            { to: { name, email }, message?, archive?, language? } → a job: seal, upload, version; the service sends the invitation
  *   POST   /api/share/preview         { link }: what it holds, from its envelope
- *   POST   /api/share/open            { link, trust? } → a job: fetch, decrypt, open as a Durchsicht copy
+ *   POST   /api/share/open            { link, trust?, copy? } → a job: fetch, decrypt, open as a Durchsicht copy (`copy`: the answer to shareCopyOther, new | replace)
  *   POST   /api/share/return          { message? } on a copy that came by link → a job: the return into the same share
  *   POST   /api/share/check           on a copy that came by link: a newer state moves it forward, a withdrawn share is noted
  *   POST   /api/share/copy/delete     «Kopie löschen» on a copy whose share was withdrawn
  *   GET    /api/share/jobs/:id        a job's phase and progress, its result or its refusal
  *   POST   /api/share/refresh         asks the service about every running share; returns that arrived are kept for review
  *   GET    /api/share/:id/link        a share's link again («Link kopieren»)
- *   POST   /api/share/:id/invite      «Nochmals senden»: the service sends the invitation again
+ *   POST   /api/share/:id/invite      «Nochmals senden»: the service sends the invitation again (after a note of «Aktualisieren» that did not go out: the note)
+ *   POST   /api/share/:id/returns/:rid/fetch   «Holen»: a return too large to be fetched by itself, fetched now and kept for review
  *   POST   /api/share/:id/update      { notify?, message?, language? } → a job: «Aktualisieren», the whole books again into the same share
  *   DELETE /api/share/:id             «Zurückziehen»
  */
@@ -32,7 +33,7 @@ import { ShareServiceError, ShareUnreachable } from '../../share/client.js';
 import { ShareCryptoError } from '../../share/crypto/index.js';
 import { setService, shareService } from '../../share/service.js';
 import {
-  checkCopy, deleteCopy, forgetSender, inviteAgain, linkFor, openLink, previewLink, readShares, refreshShares, registerSender, returnByLink, revokeShare,
+  checkCopy, deleteCopy, fetchReturn, forgetSender, inviteAgain, linkFor, openLink, previewLink, readShares, refreshShares, registerSender, returnByLink, revokeShare,
   senderState, shareByLink, ShareFlowError, updateByLink,
 } from '../../share/sharing.js';
 import { ShareLimitError, type Phase } from '../../share/transport.js';
@@ -51,7 +52,7 @@ function asRefusal(e: unknown): unknown {
     return new RequestError(e.status >= 500 ? 502 : e.status === 401 ? 403 : e.status, e.message, { code: 'shareServiceRefused', params });
   }
   if (e instanceof ShareUnreachable) return new RequestError(502, e.message, { code: 'shareUnreachable', params: { service: e.service } });
-  if (e instanceof ShareLimitError) return new RequestError(413, e.message, { code: 'shareServiceRefused', params: { reason: e.limit === 'bytes' ? 'tooLarge' : 'tooManyObjects', limit: String(e.limit === 'bytes' ? 1024 ** 3 : 5000) } });
+  if (e instanceof ShareLimitError) return new RequestError(413, e.message, { code: 'shareServiceRefused', params: { reason: e.limit === 'objects' ? 'tooManyObjects' : e.isReturn ? 'returnTooLarge' : 'tooLarge', limit: String(e.max) } });
   if (e instanceof ShareFlowError) return new RequestError(e.code === 'shareLinkInvalid' ? 400 : 409, e.message, { code: e.code, ...(Object.keys(e.params).length ? { params: e.params } : {}) } as ApiRefusal);
   if (e instanceof ShareCryptoError) return new RequestError(400, `Der Link ist beschädigt oder gehört zu einem anderen Schlüssel (${e.message}).`, { code: 'shareTampered', params: { path: e.code } });
   return handoverRefusal(e);
@@ -144,12 +145,13 @@ const linkOfBody = (body: unknown): string => {
 /** What a link holds, without spending an opening: the person sees whose books, from whom, through which service, and confirms. */
 router.post('/api/share/preview', (req, res) => answer(res, () => previewLink(linkOfBody(req.body))));
 
-/** `trust` only as the person confirmed it after the preview: a link naming another service. */
+/** `trust` only as the person confirmed it after the preview: a link naming another service; `copy` only as she answered shareCopyOther. */
 router.post('/api/share/open', (req, res) => {
   const link = linkOfBody(req.body);
-  const b = req.body as { trust?: unknown };
+  const b = req.body as { trust?: unknown; copy?: unknown };
+  const copy = b.copy === 'new' || b.copy === 'replace' ? b.copy : undefined;
   const job = startJob('open', async (progress) => {
-    const opened = await openLink(link, { progress, trust: b.trust === true });
+    const opened = await openLink(link, { progress, trust: b.trust === true, ...(copy ? { copy } : {}) });
     await openCopy(opened.root);
     return { kind: opened.kind, firm: opened.marker.firm.name, version: opened.marker.version.n, conflicts: opened.conflicts, dropped: opened.dropped };
   });
@@ -203,5 +205,10 @@ router.post('/api/share/:id/update', (req, res) => {
   }));
   res.status(202).json(job);
 });
+
+router.post('/api/share/:id/returns/:rid/fetch', (req, res) => answer(res, async () => {
+  const done = await fetchReturn(WS, req.params.id, req.params.rid);
+  return done.record;
+}));
 
 router.delete('/api/share/:id', (req, res) => answer(res, () => revokeShare(WS, req.params.id)));

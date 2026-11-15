@@ -65,7 +65,7 @@ const partyOf = (v: unknown): Party => {
 const refusal = (e: PackageError): ApiRefusal => ({ code: e.code, params: e.params } as ApiRefusal);
 /** A hand-over's refusal as the API says it; anything else as it is. */
 export function handoverRefusal(e: unknown): unknown {
-  if (e instanceof PackageError) return new RequestError(e.code === 'shareTooLarge' ? 413 : e.code === 'shareBaseMissing' || e.code === 'shareCopyNewer' || e.code === 'shareOtherCompany' || e.code === 'shareUnknownBase' ? 409 : 400, e.message, refusal(e));
+  if (e instanceof PackageError) return new RequestError(e.code === 'shareTooLarge' ? 413 : e.code === 'shareBaseMissing' || e.code === 'shareCopyNewer' || e.code === 'shareCopyOther' || e.code === 'shareOtherCompany' || e.code === 'shareUnknownBase' ? 409 : 400, e.message, refusal(e));
   if (e instanceof HandoverRefused) return new RequestError(409, e.message, { code: 'changedSince' });
   if (e instanceof OwnershipError) return new RequestError(409, e.message);
   return e;
@@ -141,7 +141,8 @@ router.post('/api/handover/open', express.raw({ type: () => true, limit: MAX }),
     res.json({ kind, ...guarded(() => receiveReturn(WS, bytes)) });
     return;
   }
-  const opened = guarded(() => openPackage(bytes));
+  // A file beside a copy from someone else opens as a new copy: nothing of the copy here is moved or overwritten.
+  const opened = guarded(() => openPackage(bytes, new Date(), undefined, { otherAsNew: true }));
   await openCopy(opened.root);
   res.json({ kind: opened.kind, firm: opened.marker.firm.name, version: opened.marker.version.n, conflicts: opened.conflicts, dropped: opened.dropped });
 });

@@ -37,9 +37,10 @@ export type Progress = (p: { phase: Phase; done: number; total: number }) => voi
 
 /** Refused before the service is asked: the package is past one of the service's limits. */
 export class ShareLimitError extends Error {
-  constructor(readonly limit: 'bytes' | 'objects', readonly value: number) {
+  /** `max`: the byte limit that was passed (a share's, or a return's, which is far smaller). */
+  constructor(readonly limit: 'bytes' | 'objects', readonly value: number, readonly max: number = limit === 'bytes' ? SHARE_LIMITS.bytes : SHARE_LIMITS.objects, readonly isReturn = false) {
     super(limit === 'bytes'
-      ? `Die Übergabe ist verschlüsselt ${Math.round(value / 1024 / 1024)} MB gross: der Dienst nimmt höchstens ${SHARE_LIMITS.bytes / 1024 / 1024 / 1024} GB pro Link.`
+      ? `${isReturn ? 'Die Rücksendung' : 'Die Übergabe'} ist verschlüsselt ${Math.round(value / 1024 / 1024)} MB gross: der Dienst nimmt höchstens ${max >= 1024 ** 3 ? `${max / 1024 ** 3} GB` : `${Math.round(max / 1024 / 1024)} MB`} ${isReturn ? 'pro Rücksendung' : 'pro Link'}.`
       : `Die Übergabe hat ${value} Dateien: der Dienst nimmt höchstens ${SHARE_LIMITS.objects} pro Link.`);
   }
 }
@@ -87,7 +88,8 @@ export async function sendPackage(opts: {
   const bytes = indexBytes + planned.reduce((n, p) => n + encryptedSize(p.data.byteLength), 0);
   const objects = planned.length + 1;
   if (objects > SHARE_LIMITS.objects) throw new ShareLimitError('objects', objects);
-  if (bytes > SHARE_LIMITS.bytes) throw new ShareLimitError('bytes', bytes);
+  const max = out.index.kind === 'return' ? SHARE_LIMITS.returnBytes : SHARE_LIMITS.bytes;
+  if (bytes > max) throw new ShareLimitError('bytes', bytes, max, out.index.kind === 'return');
 
   const made = await opts.start({ bytes, objects });
   const index = indexText({ ...shareIndex, ...(made.returnToken && opts.carriesReturnToken ? { returnToken: made.returnToken } : {}) }, room);
@@ -148,6 +150,7 @@ export async function receivePackage(opts: { client: ShareClient; id: string; to
   const tooLarge = (why: string, limit: string) => new PackageError(why, 'shareTooLarge', { limit });
   if (index.files.length + 1 > SHARE_LIMITS.objects) throw tooLarge(`Die Freigabe nennt ${index.files.length} Dateien: höchstens ${SHARE_LIMITS.objects}.`, String(SHARE_LIMITS.objects));
   if (total > Math.min(SHARE_LIMITS.bytes, LIMITS.totalBytes)) throw tooLarge(`Die Freigabe nennt ${Math.round(total / 1024 / 1024)} MB: höchstens 1 GB.`, '1 GB');
+  if (index.kind === 'return' && total > SHARE_LIMITS.returnBytes) throw tooLarge(`Die Rücksendung nennt ${Math.round(total / 1024 / 1024)} MB: höchstens ${SHARE_LIMITS.returnBytes / 1024 / 1024} MB.`, `${SHARE_LIMITS.returnBytes / 1024 / 1024} MB`);
   for (const f of index.files) {
     const max = f.path === CHANGES_FILE ? LIMITS.jsonBytes : LIMITS.fileBytes;
     if (f.bytes > max) throw tooLarge(`${f.path} ist ${Math.round(f.bytes / 1024 / 1024)} MB gross: höchstens ${Math.round(max / 1024 / 1024)} MB pro Datei.`, `${Math.round(max / 1024 / 1024)} MB`);

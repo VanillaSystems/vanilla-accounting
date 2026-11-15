@@ -26,7 +26,7 @@ import { sendText, sendingAddress } from '../invoices/mail.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { prepareShare, HANDOVER_DIR, type ShareRequest } from '../handover/share.js';
 import { readPackage, writePackage } from '../handover/package.js';
-import { buildReturn, durchsichtHome, isDurchsicht, markerOf, openPackage, type Opened } from '../handover/durchsicht.js';
+import { buildReturn, durchsichtHome, isDurchsicht, markerOf, openPackage, type CopyChoice, type Opened } from '../handover/durchsicht.js';
 import { receiveReturn } from '../handover/returns.js';
 import { DURCHSICHT_MARKER } from '../handover/content.js';
 import type { Party } from '../handover/versions.js';
@@ -34,11 +34,12 @@ import { shareClient, ShareServiceError, type ShareClient } from './client.js';
 import { decodeKey, decryptMeta, encodeKey, encryptMeta, generateKey } from './crypto/index.js';
 import { linkOf, parseLink, shareService } from './service.js';
 import { receivePackage, sendPackage, type Progress } from './transport.js';
+import { SHARE_LIMITS } from './limits.js';
 
 /** A step of the flow refused before or beside the service: the UI says it by its code. */
 export type ShareFlowRefusal =
   | 'shareNoService' | 'shareNoSecretStore' | 'shareSenderMissing' | 'shareSenderUnconfirmed' | 'shareLinkInvalid' | 'shareNoLink' | 'shareUnknown'
-  | 'shareForeignService' | 'shareConfirmationOdd' | 'shareCopyNewer' | 'shareEmailMissing' | 'shareWithdrawn' | 'shareNotCopy';
+  | 'shareForeignService' | 'shareConfirmationOdd' | 'shareCopyNewer' | 'shareEmailMissing' | 'shareWithdrawn' | 'shareNotCopy' | 'shareReturnFailed';
 
 export class ShareFlowError extends Error {
   constructor(message: string, readonly code: ShareFlowRefusal, readonly params: Record<string, string> = {}) { super(message); }
@@ -171,6 +172,8 @@ export interface ShareRecord {
   /** When «Aktualisieren» last put the books into this share again, and when he was told. */
   updatedAt?: string;
   notifiedAt?: string;
+  /** The note of the last «Aktualisieren» did not go out (the update itself is done): why, as the service said it. Its «Nochmals senden» sends the note. */
+  notifyError?: string;
   revokedAt?: string;
   checkedAt?: string;
   /** The last check's failure, as a fact. */
@@ -302,11 +305,18 @@ async function invite(ws: Workspace, r: ShareRecord, revokeToken: string, sender
   return changeShare(ws, r.id, (x) => { x.invitedAt = done.sentAt; x.invites = done.invites; }) ?? r;
 }
 
-/** «Nochmals senden»: the service sends the invitation again, to the same address. */
+/**
+ * «Nochmals senden»: the service sends the invitation again, to the same address (it takes no other
+ * once one went out). After an «Aktualisieren» whose note did not go out (notifyError), the note.
+ */
 export async function inviteAgain(ws: Workspace, id: string, from: Party): Promise<ShareRecord> {
   const r = readShares(ws).find((x) => x.id === id);
   const keys = r ? await keysOf(id) : undefined;
   if (!r || !keys) throw new ShareFlowError('Diesen Link kennt die App nicht (mehr).', 'shareUnknown');
+  if (r.notifyError) {
+    const done = await shareClient(r.service).invite(id, keys.revokeToken, { kind: 'update' });
+    return changeShare(ws, id, (x) => { x.notifiedAt = done.sentAt; x.invites = done.invites; delete x.notifyError; }) ?? r;
+  }
   const sender = await confirmedSender(r.service);
   return invite(ws, r, keys.revokeToken, sender.email, from);
 }
@@ -347,9 +357,13 @@ async function updateNow(ws: Workspace, id: string, from: Party, opts: ShareOpti
     if (sent.status.expiresAt) x.expiresAt = sent.status.expiresAt;
   }) ?? r;
   if (opts.notify) {
-    // The note is a courtesy: a refusal (the day's mails, say) leaves the update done, and is said.
-    const done = await client.invite(id, keys.revokeToken, { kind: 'update', ...(message ? { message } : {}), language: languageOf(opts.language) });
-    next = changeShare(ws, id, (x) => { x.notifiedAt = done.sentAt; x.invites = done.invites; }) ?? next;
+    // The note is a courtesy: a refusal (the day's mails, say) leaves the update done, and is said (notifyError).
+    try {
+      const done = await client.invite(id, keys.revokeToken, { kind: 'update', ...(message ? { message } : {}), language: languageOf(opts.language) });
+      next = changeShare(ws, id, (x) => { x.notifiedAt = done.sentAt; x.invites = done.invites; delete x.notifyError; }) ?? next;
+    } catch (e) {
+      next = changeShare(ws, id, (x) => { x.notifyError = (e as Error).message.slice(0, 300); }) ?? next;
+    }
   }
   return next;
 }
@@ -411,15 +425,10 @@ async function refreshNow(ws: Workspace, now = new Date(), client: (service: str
       });
       const received = new Set(r.returns.filter((x) => x.received).map((x) => x.id));
       for (const ret of s.returns) {
-        if (received.has(ret.id) || ret.state !== 'ready') continue;
-        try {
-          const { contents } = await receivePackage({ client: c, id: ret.id, token: keys.revokeToken });
-          const got = receiveReturn(ws, writePackage(contents), now);
-          changeShare(ws, r.id, (x) => { const k = x.returns.find((y) => y.id === ret.id); if (k) { k.received = got.id; delete k.error; } });
-          arrived.push({ share: r.id, ...got });
-        } catch (e) {
-          changeShare(ws, r.id, (x) => { const k = x.returns.find((y) => y.id === ret.id); if (k) k.error = (e as Error).message.slice(0, 300); });
-        }
+        // A large return waits at the service until she fetches it (fetchReturn): a check never fills the disk.
+        if (received.has(ret.id) || ret.state !== 'ready' || ret.bytes > SHARE_LIMITS.returnFetchedAlone) continue;
+        const got = await fetchOne(ws, r.id, ret.id, c, keys.revokeToken, now);
+        if (got) arrived.push(got);
       }
     } catch (e) {
       changeShare(ws, r.id, (x) => {
@@ -430,6 +439,40 @@ async function refreshNow(ws: Workspace, now = new Date(), client: (service: str
     }
   }
   return { shares: readShares(ws), arrived };
+}
+
+/** Fetches one return and keeps it for review; a failure is kept on the return as a fact. */
+async function fetchOne(ws: Workspace, share: string, id: string, c: ShareClient, token: string, now: Date): Promise<Arrived | undefined> {
+  try {
+    const { contents } = await receivePackage({ client: c, id, token });
+    const got = receiveReturn(ws, writePackage(contents), now);
+    changeShare(ws, share, (x) => { const k = x.returns.find((y) => y.id === id); if (k) { k.received = got.id; delete k.error; } });
+    return { share, ...got };
+  } catch (e) {
+    changeShare(ws, share, (x) => { const k = x.returns.find((y) => y.id === id); if (k) k.error = (e as Error).message.slice(0, 300); });
+    return undefined;
+  }
+}
+
+/**
+ * «Holen»: a return larger than refreshShares fetches by itself (SHARE_LIMITS.returnFetchedAlone),
+ * fetched now that the sharer asks for it, and kept for review.
+ */
+export function fetchReturn(ws: Workspace, share: string, id: string, now = new Date(), client: (service: string) => ShareClient = shareClient): Promise<{ record: ShareRecord; arrived?: Arrived }> {
+  return oneAtATime(ws, async () => {
+    const r = readShares(ws).find((x) => x.id === share);
+    const keys = r ? await keysOf(share) : undefined;
+    const ret = r?.returns.find((x) => x.id === id);
+    if (!r || !keys || !ret) throw new ShareFlowError('Diesen Link kennt die App nicht (mehr).', 'shareUnknown');
+    if (ret.received) return { record: r };
+    const arrived = await fetchOne(ws, share, id, client(r.service), keys.revokeToken, now);
+    const record = readShares(ws).find((x) => x.id === share) ?? r;
+    if (!arrived) {
+      const why = record.returns.find((x) => x.id === id)?.error ?? '';
+      throw new ShareFlowError(`Die Rücksendung kam nicht an: ${why}`, 'shareReturnFailed', { why });
+    }
+    return { record, arrived };
+  });
 }
 
 // ─── the recipient's copy ───────────────────────────────────────────────────
@@ -491,16 +534,24 @@ export async function previewLink(text: string, opts: { client?: (service: strin
  * Opens a link (pasted, or handed over by the system's `vanilla-accounting://`): the service hands
  * the key over with the opening, every file is decrypted and checked, then the package opens as a
  * Durchsicht copy exactly as the `.vanilla` file would (src/handover/durchsicht.ts openPackage): a
- * new copy, or an existing one moved forward with his changes kept. Only a link naming another
- * service than this app's waits for the person (`trust`).
+ * new copy, or an existing one moved forward with his changes kept. Waits for the person:
+ * - a link naming another service than this app's (`trust`);
+ * - a link whose package would move a copy that came from someone else, by another link or from
+ *   another sender (shareCopyOther, nothing written, the copy's link kept): any confirmed sender can
+ *   name any firm and any sender in a package, so only the person decides (`copy`). A copy of this
+ *   same share moves forward without a question: that is «Aktualisieren».
+ * `into`: this copy and no other (checkCopy).
  */
-export async function openLink(text: string, opts: { at?: string; progress?: Progress; now?: Date; client?: (service: string) => ShareClient; trust?: boolean } = {}): Promise<Opened> {
+export async function openLink(text: string, opts: { at?: string; progress?: Progress; now?: Date; client?: (service: string) => ShareClient; trust?: boolean; copy?: CopyChoice; into?: string } = {}): Promise<Opened> {
   const link = parseLink(text);
   if (!link) throw new ShareFlowError('Das ist kein Link einer geteilten Buchhaltung.', 'shareLinkInvalid');
   const host = new URL(link.service).host;
   if (link.foreign && !opts.trust) throw new ShareFlowError(`Der Link führt zu ${host}, nicht zum Teil-Dienst dieser App.`, 'shareForeignService', { host });
   const got = await receivePackage({ client: (opts.client ?? shareClient)(link.service), id: link.id, progress: opts.progress });
-  const opened = openPackage(got.contents, opts.now ?? new Date(), opts.at ?? durchsichtHome());
+  const opened = openPackage(got.contents, opts.now ?? new Date(), opts.at ?? durchsichtHome(), {
+    link: { service: link.service, id: link.id }, ...(opts.copy ? { copy: opts.copy } : {}), ...(opts.into ? { root: opts.into } : {}),
+  });
+  // Written only once the copy is this link's (its own share, or as the person answered).
   keepLinkFacts(opened.root, {
     service: link.service, id: link.id, ...(got.index.returnToken ? { returnToken: got.index.returnToken } : {}),
     generation: got.generation, ...(got.updatedAt ? { updatedAt: got.updatedAt } : {}), at: (opts.now ?? new Date()).toISOString(),
@@ -539,7 +590,8 @@ export async function checkCopy(root: string, opts: { now?: Date; client?: (serv
   }
   const generation = 'generation' in info && typeof info.generation === 'number' ? info.generation : 1;
   if (info.state !== 'ready' || generation <= (facts.generation ?? 1)) return { state: 'current' };
-  const opened = await openLink(linkOf(facts.service, facts.id), { at: dirname(root), now, client: opts.client, trust: true });
+  // Into this copy: a newer state never opens a second copy beside it (the firm's name changed, say); another firm is refused.
+  const opened = await openLink(linkOf(facts.service, facts.id), { at: dirname(root), into: root, now, client: opts.client, trust: true });
   const at = linkOfCopy(opened.root)?.updatedAt ?? now.toISOString();
   return { state: 'updated', at, name, conflicts: opened.conflicts, dropped: opened.dropped };
 }

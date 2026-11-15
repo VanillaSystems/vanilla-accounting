@@ -34,7 +34,8 @@ import { readState, writeState, type Bounds } from './state.js';
 import { setDurchsichtHome } from '../handover/durchsicht.js';
 import { APP_SCHEME, setShareSettingsFile } from '../share/service.js';
 import { openLink, previewLink } from '../share/sharing.js';
-import { askLines } from '../app/handover/ask-text.js';
+import { askLines, askOther, oneLine } from '../app/handover/ask-text.js';
+import type { PackageError } from '../handover/package.js';
 import { heldUntilReady, isVanillaPath, openVanillaFile, refusedText, vanillaPaths } from './open-files.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -266,6 +267,14 @@ async function start(): Promise<void> {
     const r = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
     return r.response === 0;
   };
+  /** «Als neue Kopie öffnen» (the default, keeps the copy here), «Bestehende Kopie ersetzen», or nothing. */
+  const askCopy = async (p: Record<string, string>): Promise<'new' | 'replace' | undefined> => {
+    const t = textsIn(language);
+    const detail = [askOther((k, v) => t(k, v), p), t('share.ask.otherChoice', { was: oneLine(p.was), now: oneLine(p.now) })].join('\n\n');
+    const options = { type: 'warning' as const, message: t('desktop.shareAskTitle'), detail, buttons: [t('share.ask.asNew'), t('share.ask.replace'), t('common.cancel')], defaultId: 0, cancelId: 2 };
+    const r = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
+    return r.response === 0 ? 'new' : r.response === 1 ? 'replace' : undefined;
+  };
   /** The link's service and claims first; `trust` only for the service the person saw named. */
   const askShare = async (link: string): Promise<{ yes: boolean; trust: boolean }> => {
     const t = textsIn(language);
@@ -280,7 +289,15 @@ async function start(): Promise<void> {
         .then(async ({ yes, trust }) => {
           if (!yes) { if (!win || win.isDestroyed()) lastBooks(); return; }
           win?.setProgressBar(2);
-          const opened = await openLink(link, { trust });
+          let opened;
+          try { opened = await openLink(link, { trust }); } catch (e) {
+            // A copy of the firm here from someone else: never moved without her answer (review of #551).
+            const refusal = e as PackageError;
+            if (refusal?.code !== 'shareCopyOther') throw e;
+            const copy = await askCopy(refusal.params);
+            if (!copy) { if (!win || win.isDestroyed()) lastBooks(); return; }
+            opened = await openLink(link, { trust, copy });
+          }
           show(pathOf(await server.open(opened.root)));
         })
         .catch(async (e: unknown) => { await dialog.showMessageBox({ type: 'warning', message: textsIn(language)('desktop.shareOpenFailed'), detail: (e as Error).message }); })

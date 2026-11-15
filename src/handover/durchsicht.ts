@@ -99,37 +99,133 @@ function markerFrom(index: PackageIndex, now: Date): Marker {
 
 export interface Opened { root: string; kind: 'full' | 'update'; marker: Marker; conflicts: number; dropped: number }
 
+/** Where a package goes when a copy of its firm is here already but came from someone else (shareCopyOther): the person's answer. */
+export type CopyChoice = 'new' | 'replace';
+
+export interface OpenOptions {
+  /** The link the package came by: a copy that came by this same share moves forward without a question («Aktualisieren»). */
+  link?: { service: string; id: string };
+  /** The person's answer to shareCopyOther: a new copy beside the one here, or that one moved to this package. */
+  copy?: CopyChoice;
+  /** A file's package (no link): instead of asking, it opens as a new copy beside one from someone else. */
+  otherAsNew?: boolean;
+  /** This copy and no other (a copy asking its own share, checkCopy): never a second copy beside it. */
+  root?: string;
+}
+
+/** The link a copy came by, as src/share/sharing.ts keeps it there (data/durchsicht/link.json). */
+const linkOfRoot = (root: string): { service?: string; id?: string } | undefined => {
+  const f = join(dirname(markerFile(root)), 'link.json');
+  if (!existsSync(f)) return undefined;
+  try { return JSON.parse(readFileSync(f, 'utf8')) as { service?: string; id?: string }; } catch { return {}; }
+};
+
+/** The same person, as a package names its sender: by address when both have one, else by name. */
+const fold = (s: string | undefined) => (s ?? '').normalize('NFC').trim().toLowerCase();
+export const sameParty = (a: Party, b: Party): boolean => (a.email && b.email ? fold(a.email) === fold(b.email) : fold(a.name) === fold(b.name));
+
+/** The folders of a firm's copies here: its own name, then `<name>-2`, `<name>-3` (a new copy beside another, shareCopyOther); only copies of that firm. */
+function copiesOf(at: string, name: string): string[] {
+  if (!existsSync(at)) return [];
+  const numbered = (f: string): number | undefined => (f === name ? 1 : f.startsWith(`${name}-`) && /^\d+$/.test(f.slice(name.length + 1)) ? Number(f.slice(name.length + 1)) : undefined);
+  return readdirSync(at).filter((f) => numbered(f) !== undefined).sort((a, b) => numbered(a)! - numbered(b)!).map((f) => join(at, f))
+    .filter((root) => { recover(root); const m = markerOf(root); return !!m && slug(m) === name; });
+}
+
+/** A folder an update left beside a copy (`.next-<pid>`, `.old-<pid>`): never a copy to move. */
+const aside = (f: string) => /\.(?:next|old)-\d+$/.test(f);
+
+/** The first folder of the firm's name that is free (nothing there at all: a folder without a marker is never written over). */
+function freeRoot(at: string, name: string): string {
+  for (let n = 1; ; n++) {
+    const root = join(at, n === 1 ? name : `${name}-${n}`);
+    if (!existsSync(root) && !existsSync(`${root}.old-${process.pid}`)) return root;
+  }
+}
+
+type Target = { root: string } | { other: string; had: Marker };
+
+/**
+ * Which copy a package moves, or where a new one goes. A copy that came by the same share, or from the
+ * same sender with no link of another share, moves; a copy from someone else is never moved without the
+ * person's answer (review of #551: a package names any firm and any sender its maker likes).
+ */
+function targetOf(p: PackageContents, at: string, opts: OpenOptions): Target {
+  const name = slug(p.index);
+  if (opts.link) {
+    // By the share it came from, wherever its folder is (the firm's name may have changed since).
+    for (const f of existsSync(at) ? readdirSync(at).filter((x) => !aside(x)) : []) {
+      const l = linkOfRoot(join(at, f));
+      if (l?.service === opts.link.service && l.id === opts.link.id && markerOf(join(at, f))) return { root: join(at, f) };
+    }
+  }
+  const copies = copiesOf(at, name);
+  const same = copies.find((root) => {
+    const l = linkOfRoot(root);
+    return sameParty(markerOf(root)!.sharer, p.index.from) && (!opts.link || !l || (l.service === opts.link.service && l.id === opts.link.id));
+  });
+  if (same) return { root: same };
+  if (copies.length) return { other: copies[0]!, had: markerOf(copies[0]!)! };
+  return { root: freeRoot(at, name) };
+}
+
+const copyOther = (had: Marker, index: PackageIndex, otherLink: boolean) => new PackageError(
+  `Hier liegt schon eine Kopie von ${had.firm.name}, die von ${had.sharer.name} kam. Diese Übergabe ist laut eigenen Angaben von ${index.from.name}${otherLink ? ' und kam über einen anderen Link' : ''}; wer sie gemacht hat, kann die App nicht prüfen.`,
+  'shareCopyOther', { firm: had.firm.name, was: had.sharer.name, now: index.from.name.slice(0, 120), version: String(had.version.n) },
+);
+
 /**
  * Opens a hand-over package as a copy (B4): on a firm the recipient has no copy of it makes a new
- * one; on an existing copy it moves the copy forward and keeps his changes. Forward only: a package
- * older than the copy changes nothing (shareCopyNewer). An `update` (written by 0.6.0 only, which
- * left out what the person was thought to hold) opens where the copy holds every file it names;
- * otherwise it is refused (shareBaseMissing) and the next hand-over, always whole, brings everything.
+ * one; on an existing copy of the same share or sender it moves the copy forward and keeps his
+ * changes. A copy that came from someone else (another sender, another link) is moved only on the
+ * person's answer (`copy`: «Als neue Kopie öffnen» beside it, or «Bestehende Kopie ersetzen»);
+ * without one the package is refused (shareCopyOther) and nothing is written. Forward only: a
+ * package older than the copy changes nothing (shareCopyNewer), unless the person chose to replace
+ * a copy from another sender by it. An `update` (written by 0.6.0 only, which left out what the person was thought to hold)
+ * opens where the copy holds every file it names; otherwise it is refused (shareBaseMissing) and
+ * the next hand-over, always whole, brings everything.
  */
-export function openPackage(bytes: Uint8Array | PackageContents, now = new Date(), at: string = durchsichtHome(), opts: { replace?: boolean } = {}): Opened {
+export function openPackage(bytes: Uint8Array | PackageContents, now = new Date(), at: string = durchsichtHome(), opts: OpenOptions = {}): Opened {
   // A link's files come checked and decrypted already (src/share/transport.ts, checkPackage); a file is read here.
   const p = bytes instanceof Uint8Array ? readPackage(bytes) : bytes;
   if (p.index.kind === 'return') throw new PackageError('Das ist eine Rücksendung: sie gehört in die Bücher, aus denen geteilt wurde.', 'shareWrongKind');
-  const root = join(at, slug(p.index));
+  let root: string;
+  let replace = false;
+  if (opts.root) root = opts.root;
+  else {
+    const target = targetOf(p, at, opts);
+    if ('root' in target) root = target.root;
+    else if (opts.copy === 'replace') { root = target.other; replace = true; }
+    else if (opts.copy === 'new' || opts.otherAsNew) root = freeRoot(at, slug(p.index));
+    else throw copyOther(target.had, p.index, !!opts.link && !!linkOfRoot(target.other));
+  }
   recover(root);
   const had = markerOf(root);
   if (had && had.firm.uid && p.index.firm.uid && had.firm.uid !== p.index.firm.uid) throw new PackageError(`Diese Übergabe ist von ${p.index.firm.name}, die Kopie hier von ${had.firm.name}.`, 'shareOtherCompany', { firm: p.index.firm.name });
-  // `replace`: a copy to be made anew whatever version it holds.
-  if (had && !opts.replace && p.index.version.n < had.version.n) {
+  // Versions compare within one sender's books only: a copy the person chose to replace by someone else's has no order to keep.
+  if (had && !(replace && !sameParty(had.sharer, p.index.from)) && p.index.version.n < had.version.n) {
     throw new PackageError(`Die Kopie von ${had.firm.name} hier ist neuer als diese Übergabe: sie bleibt, wie sie ist.`, 'shareCopyNewer', { firm: had.firm.name, name: p.index.from.name });
   }
   if (!had) {
     if (p.index.kind === 'update') throw legacyUpdate(p.index);
-    rmSync(root, { recursive: true, force: true });
-    writeFiles(root, p.files);
-    // The copy proves the version: its files plus the omitted ones make the version's checksum (B3.5, B7).
-    const got = checksumOf([...contentFiles(root).map((f) => factOf(root, f.path)), ...(p.index.omitted ?? [])]);
-    if (got !== p.index.version.checksum) { rmSync(root, { recursive: true, force: true }); throw new PackageError('Die Übergabe ergibt nicht die Prüfsumme ihrer Version.', 'shareTampered', { path: 'checksum' }); }
-    writeBase(root, p.files);
-    keepGit(root, p.index);
-    const marker = markerFrom(p.index, now);
-    writeMarker(root, marker);
-    return { root, kind: 'full', marker, conflicts: 0, dropped: 0 };
+    // Never over a folder that is not a copy: only into one that is not there (freeRoot), built beside it and moved in whole.
+    if (existsSync(root)) throw new PackageError(`Im Ordner ${basename(root)} liegt etwas, das keine Kopie ist; die App schreibt nicht darüber.`, 'shareUpdateFailed', { why: basename(root) });
+    const next = `${root}.next-${process.pid}`;
+    rmSync(next, { recursive: true, force: true });
+    try {
+      writeFiles(next, p.files);
+      // The copy proves the version: its files plus the omitted ones make the version's checksum (B3.5, B7).
+      const got = checksumOf([...contentFiles(next).map((f) => factOf(next, f.path)), ...(p.index.omitted ?? [])]);
+      if (got !== p.index.version.checksum) throw new PackageError('Die Übergabe ergibt nicht die Prüfsumme ihrer Version.', 'shareTampered', { path: 'checksum' });
+      writeBase(next, p.files);
+      keepGit(next, p.index);
+      writeMarker(next, markerFrom(p.index, now));
+      renameSync(next, root);
+    } catch (e) {
+      rmSync(next, { recursive: true, force: true });
+      throw e;
+    }
+    return { root, kind: 'full', marker: markerOf(root)!, conflicts: 0, dropped: 0 };
   }
   return moveForward(root, had, p, now);
 }
@@ -189,6 +285,8 @@ export function recover(root: string): void {
     if (old) renameSync(old, root);
   }
   if (existsSync(root)) for (const f of [...beside('next'), ...beside('old')]) rmSync(f, { recursive: true, force: true });
+  // A new copy half made (built beside, never moved in): nothing of the person's is in it.
+  else for (const f of beside('next')) rmSync(f, { recursive: true, force: true });
 }
 
 /** moveForward's work on the folder `root` (the copy's sibling), with his change set read from the copy before. */

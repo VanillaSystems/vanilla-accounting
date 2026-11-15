@@ -37,6 +37,8 @@ export type ApiRefusal =
   | { code: 'shareBaseMissing'; params: { name: string } }
   /** A hand-over older than the copy it would move: the copy stays as it is (forward only). */
   | { code: 'shareCopyNewer'; params: { firm: string; name: string } }
+  /** A copy of this firm is here from someone else (another sender or link): moved only on the person's answer, «Als neue Kopie öffnen» or «Bestehende Kopie ersetzen». */
+  | { code: 'shareCopyOther'; params: { firm: string; was: string; now: string; version: string } }
   | { code: 'shareNotPackage' }
   /** A hand-over file past a limit (its size, a file's size, its number of files): the limit is named. */
   | { code: 'shareTooLarge'; params: { limit: string } }
@@ -75,6 +77,9 @@ export type ApiRefusal =
   | { code: 'shareEmailMissing' }
   /** The sharer withdrew the share: «Aktualisieren» on it, or his return through it. */
   | { code: 'shareWithdrawn' }
+  /** A write to the Mac app's server from a page that is not the app's own (a cross-site request). */
+  | { code: 'foreignOrigin' }
+  | { code: 'shareReturnFailed'; params: { why: string } }
   /** «Kopie löschen» on books that are no copy. */
   | { code: 'shareNotCopy' }
   /** The service asked for a confirmation e-mail the app does not send (another domain, another subject). */

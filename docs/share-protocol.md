@@ -163,8 +163,10 @@ The page decrypts it with the key from the share's info to say who shares what b
    `https://share.<domain>/<id>`, the end date in words, and the sender's message, escaped and marked as
    hers («Nachricht von …:», at most 2000 characters). No image, no remote resource, no tracking. The
    first call keeps `{to, from, message, company, language}` on the share while it lives; «Nochmals
-   senden» sends `{}` (or fields that replace the kept ones). At most 10 e-mails per share (invitations
-   and update notices together) and 100 per day for the whole service (Resend's account limit). Without
+   senden» sends `{}` (or fields that replace the kept ones, but never another recipient address once an
+   e-mail went out: `recipientFixed`). At most 10 e-mails per share (invitations and update notices
+   together), 20 per sender address and day over all her shares (`tooManyMails`), and 100 per day for the
+   whole service (Resend's account limit). Without
    the service's mail key the app offers «Link kopieren» (`503 mailOff`).
 5. **Open**: `POST /api/shares/<id>/open` needs nothing but the id. It returns the key, the index's URL
    (readable twice per opening, for a retry) and a ticket; `POST /api/shares/<id>/urls` (the ticket)
@@ -187,7 +189,7 @@ The page decrypts it with the key from the share's info to say who shares what b
    aktualisiert»; an app that already opened the share fetches the new state by itself.
 8. **End**: **14 days** after the upload (or the latest update) completed, or at once by
    «Zurückziehen» (`DELETE /api/shares/<id>`), the service deletes every object, the wrapped key and the
-   kept invitation. A copy already opened stays where it was opened; nothing can recall it. The row
+   kept invitation, and «Zurückziehen» ends the share's returns the same way. A copy already opened stays where it was opened; nothing can recall it. The row
    stays 30 days without them, so the page can say «abgelaufen» or «zurückgezogen»; after that the id
    is unknown (`404`). An app treats both as «zurückgezogen / nicht mehr da».
 
@@ -209,7 +211,17 @@ The recipient sends his changes back into the same share, without a confirmation
 3. The sharer's status lists the return; her app opens it with her revoke token
    (`POST /api/shares/<returnId>/open`) and gets the return key with the ticket. Nobody else can open a
    return, and its page info hands out no key. Returns live 14 days after their upload; they are accepted
-   for 30 days after the share's newest state and refused after «Zurückziehen».
+   for 30 days after the share's newest state, at most 200 MB each, and refused (and the ones there
+   deleted) after «Zurückziehen». The sharer's app fetches a return of up to 25 MB when it checks its
+   shares; a larger one waits at the service until she fetches it («Holen»).
+
+**Which copy a link moves.** A link moves the copy that came by the same share («Aktualisieren»)
+without a question. Any confirmed sender can name any firm and any sender in a package, so a link
+whose package would move a copy that came by another link, or from another sender, moves nothing by
+itself: the app names who the copy came from and who the link claims to be from, and offers «Als
+neue Kopie öffnen» (recommended: a second copy beside it, the first one and its link kept) and
+«Bestehende Kopie ersetzen» (the copy follows this link, his changes kept, his return then goes to
+it). A `.vanilla` file in that place opens as a new copy.
 
 ## 6. What the service sees
 

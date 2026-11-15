@@ -160,7 +160,7 @@ const SHARE_UPLOAD = new Set(['busy', 'sizeChanged', 'exists', 'notUploading', '
 const SHARE_GUARD = new Set(['sharesPerDay', 'opensPerDay', 'classAPerMonth', 'classBPerMonth']);
 const SHARE_OWN = new Set(['badEmail', 'indexAlreadyRead', 'senderUnknown', 'senderNotConfirmed', 'wrongToken', 'notFound', 'tooLarge', 'tooManyObjects',
   'tooManyShares', 'tooManyConfirmations', 'tooManyReturns', 'storageFull', 'notReady', 'expired', 'revoked', 'returnClosed', 'ticketExpired', 'internal', 'oversized',
-  'appTooOld', 'notSender', 'tooManyInvites', 'mailsPerDay', 'mailOff', 'mailFailed', 'tooManyUpdates']);
+  'appTooOld', 'notSender', 'tooManyInvites', 'mailsPerDay', 'mailOff', 'mailFailed', 'tooManyUpdates', 'tooManyMails', 'recipientFixed', 'returnTooLarge']);
 /** A byte limit as a size («1 GB»), any other as the number. */
 const limitText = (limit: string | undefined): string => {
   const n = Number(limit);
@@ -191,6 +191,9 @@ export function errorText(e: unknown): string {
     case 'shareOtherCompany': return t('error.shareOtherCompany', { firm: b.params.firm });
     case 'shareBaseMissing': return t('error.shareBaseMissing', { name: b.params.name });
     case 'shareCopyNewer': return t('error.shareCopyNewer', { firm: b.params.firm });
+    case 'shareCopyOther': return t('error.shareCopyOther', { firm: b.params.firm, was: b.params.was, now: b.params.now });
+    case 'shareReturnFailed': return t('share.card.returnFailed', { why: b.params.why });
+    case 'foreignOrigin': return t('error.foreignOrigin');
     case 'shareNotPackage': return t('error.shareNotPackage');
     case 'shareTooLarge': return t('error.shareTooLarge', { limit: b.params.limit });
     case 'shareUnknownBase': return t('error.shareUnknownBase', { name: b.params.name });

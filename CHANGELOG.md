@@ -35,7 +35,15 @@ Two markers flag an entry you must read before you update:
   e-mails per share, 100 e-mails a day for the whole service). The service is a setting
   (`VANILLA_SHARE_SERVICE`, at build time or run time, or «Teil-Dienst» in the dialog); without one,
   the file does every step. A link naming another service than the app's opens only after the
-  person confirmed it.
+  person confirmed it. A link that would move a copy which came from someone else (another link, or
+  another sender named in the package) moves nothing by itself: the app says who the copy came from
+  and who the link claims to be from, with «Als neue Kopie öffnen» (recommended, the copy stays) and
+  «Bestehende Kopie ersetzen»; a file in that place opens as a new copy. «Aktualisieren» of the same
+  share moves the copy without a question. One share goes to one address once the invitation went
+  out, at most 20 e-mails a day per sender address; a return is at most 200 MB, and one over 25 MB
+  waits at the service until «Holen» on the share's card. «Zurückziehen» deletes the returns not
+  fetched yet too. A note of «Aktualisieren» that did not go out leaves the update done and says so,
+  with «Nochmals senden». The Mac app's server refuses a write that comes from another web page.
 - **«Aktualisieren» a share**: forgot a receipt? The whole books, as of now, go into the same link
   again, and the 14 days start anew; «… Bescheid geben» (on by default) sends him a short note. If
   he has not opened it yet, he gets the newest state; if he has, his copy fetches it by itself the

@@ -11,8 +11,9 @@ import { formatDate } from '../lib/utils.js';
 import { ICONS } from '../areas/icons.js';
 import { sizeText } from './store.js';
 import { mailto, refreshShares, runJob, running, type Job, type Registered, type SenderView, type ShareRecord, type Shared } from './link.js';
+import { reloadHandover } from './store.js';
 import type { LinkPreview } from '../../share/sharing.js';
-import { askLines } from './ask-text.js';
+import { askLines, askOther, oneLine } from './ask-text.js';
 import { SHARE_LIMITS } from '../../share/limits.js';
 
 /** «15.11. 19:04»: a moment as a person reads it, in this computer's time. */
@@ -174,7 +175,9 @@ function ShareActions({ s, onChanged, copyFirst = false }: { s: ShareRecord; onC
       const next = await runJob<ShareRecord>(`/api/share/${s.id}/update`, { notify, ...(note.trim() ? { message: note.trim() } : {}), language: language() }, setJob as (j: Job<ShareRecord>) => void);
       onChanged(next);
       setUpdating(false); setNote('');
-      setSaid(t(next.notifiedAt && notify ? 'share.update.doneNotified' : 'share.update.done', { name: s.to.name }));
+      // The update is done either way; a note that did not go out is said, «Nochmals senden» sends it.
+      if (notify && next.notifyError) setError(t('share.update.notifyFailed', { name: s.to.name, why: next.notifyError }));
+      else setSaid(t(next.notifiedAt && notify ? 'share.update.doneNotified' : 'share.update.done', { name: s.to.name }));
     } catch (e) { setError(errorText(e)); } finally { setJob(null); }
   };
   const revoke = async () => {
@@ -218,6 +221,14 @@ function ShareActions({ s, onChanged, copyFirst = false }: { s: ShareRecord; onC
 /** One share as facts: to whom, when sent, its state in words, until when, returns; and what it offers. */
 function ShareRow({ s, onChanged }: { s: ShareRecord; onChanged(next: ShareRecord): void }) {
   const back = s.returns.filter((r) => r.received).length;
+  // A return larger than the app fetches by itself waits at the service until she fetches it.
+  const waiting = s.returns.filter((r) => !r.received && !r.error && r.state === 'ready' && r.bytes > SHARE_LIMITS.returnFetchedAlone);
+  const [fetching, setFetching] = useState('');
+  const [fetchError, setFetchError] = useState('');
+  const fetchOne = async (id: string) => {
+    setFetching(id); setFetchError('');
+    try { onChanged(await request<ShareRecord>('POST', `/api/share/${s.id}/returns/${id}/fetch`)); await reloadHandover(); } catch (e) { setFetchError(errorText(e)); } finally { setFetching(''); }
+  };
   return (
     <div className="shcard" data-testid="share-card">
       <div className="wt"><b>{t('share.card.to', { name: s.to.name })}</b><span className="mono">{sizeText(s.bytes)}</span></div>
@@ -229,6 +240,13 @@ function ShareRow({ s, onChanged }: { s: ShareRecord; onChanged(next: ShareRecor
         {s.error ? ` · ${t('share.card.unchecked')}` : ''}
       </div>
       {s.returns.some((r) => r.error) ? <div className="err">{t('share.card.returnFailed', { why: s.returns.find((r) => r.error)!.error! })}</div> : null}
+      {waiting.map((r) => (
+        <div key={r.id} className="acts" data-testid="share-return-waiting">
+          <span className="wm">{t('share.card.returnWaiting', { size: sizeText(r.bytes), at: atText(r.at), limit: sizeText(SHARE_LIMITS.returnFetchedAlone) })}</span>
+          <button type="button" className="linkbtn" disabled={!!fetching} onClick={() => void fetchOne(r.id)} data-testid="share-return-fetch">{fetching === r.id ? t('share.card.returnFetching') : t('share.card.returnFetch')}</button>
+        </div>
+      ))}
+      {fetchError ? <div className="err" role="alert">{fetchError}</div> : null}
       <ShareActions s={s} onChanged={onChanged} />
     </div>
   );
@@ -269,12 +287,18 @@ export function OpenLink({ onOpened }: { onOpened(o: { kind: 'full' | 'update'; 
     try { setPreview(await request<LinkPreview>('POST', '/api/share/preview', { link: text.trim() })); } catch (e) { setError(errorText(e)); }
   };
   const ask = preview ? askLines((k, v) => t(k, v as never), preview) : null;
-  const open = async () => {
+  // A copy of this firm here from someone else: the package says so after the download, and the person decides (shareCopyOther).
+  const [other, setOther] = useState<{ firm: string; was: string; now: string; trust: boolean } | null>(null);
+  const open = async (copy?: 'new' | 'replace') => {
     setError('');
+    const trust = other?.trust ?? !!preview?.foreign;
     try {
-      onOpened(await runJob<Parameters<typeof onOpened>[0]>('/api/share/open', { link: text.trim(), trust: !!preview?.foreign }, setJob as (j: Job<unknown>) => void));
+      onOpened(await runJob<Parameters<typeof onOpened>[0]>('/api/share/open', { link: text.trim(), trust, ...(copy ? { copy } : {}) }, setJob as (j: Job<unknown>) => void));
+      setOther(null);
     } catch (e) {
       setJob(null);
+      const body = e instanceof ApiError ? e.body : undefined;
+      if (!copy && body && 'code' in body && body.code === 'shareCopyOther') { setOther({ ...body.params, trust }); setPreview(null); return; }
       setError(errorText(e));
     }
   };
@@ -290,6 +314,18 @@ export function OpenLink({ onOpened }: { onOpened(o: { kind: 'full' | 'update'; 
           <div className="acts">
             <button type="button" className="btn ghost" onClick={() => setPreview(null)}>{t('common.cancel')}</button>
             <button type="button" className="btn" disabled={!!job} onClick={() => void open()} data-testid="share-open-yes">{t('share.ask.open')}</button>
+          </div>
+        </div>
+      ) : null}
+      {other ? (
+        <div className="what shask" data-testid="share-open-other">
+          <div className="wt"><b>{t('share.ask.title')}</b></div>
+          <div className="err">{askOther((k, v) => t(k, v as never), other)}</div>
+          <div className="wm">{t('share.ask.otherChoice', { was: oneLine(other.was), now: oneLine(other.now) })}</div>
+          <div className="acts">
+            <button type="button" className="btn ghost" disabled={!!job} onClick={() => setOther(null)}>{t('common.cancel')}</button>
+            <button type="button" className="btn" disabled={!!job} onClick={() => void open('replace')} data-testid="share-open-replace">{t('share.ask.replace')}</button>
+            <button type="button" className="btn primary" disabled={!!job} onClick={() => void open('new')} data-testid="share-open-new">{t('share.ask.asNew')}</button>
           </div>
         </div>
       ) : null}

@@ -209,6 +209,8 @@ export async function startShareService(): Promise<FakeShareService> {
       if (req.method === 'DELETE' && rest === '') {
         if (bearer !== sh.revokeToken) return no(403, 'wrongToken');
         sh.state = 'revoked'; sh.endedAt = new Date().toISOString(); sh.current.stored.clear(); delete sh.pending; delete sh.invite; sh.current.key = '';
+        // Its returns end with it, as the service does them (its api.ts end()).
+        for (const r of sh.returns.map((id) => shares.get(id)!)) if (r.state === 'ready' || r.state === 'uploading') { r.state = 'revoked'; r.endedAt = sh.endedAt; r.current.stored.clear(); r.current.key = ''; }
         return send(200, status(sh));
       }
       if (req.method === 'POST' && rest === 'returns') {

@@ -76,8 +76,12 @@ test('1: a link naming another service opens only when confirmed; then it opens 
   await assert.rejects(sharing.openLink(scheme, { at: home }), code('shareForeignService'), 'not without the person');
   assert.ok(entriesOf(copy.root).includes('ECHTE BUCHUNG') && !entriesOf(copy.root).includes('ANDERER'), 'the copy is as it was');
   assert.equal(readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8'), linkBefore);
-  // Confirmed by the person, it opens as a file would: a newer state of the same firm moves the copy forward.
-  await sharing.openLink(scheme, { at: home, trust: true });
+  // The service confirmed, the link still does not move the copy, which came by another link (review of #551): she is asked.
+  await assert.rejects(sharing.openLink(scheme, { at: home, trust: true }), code('shareCopyOther'));
+  assert.ok(entriesOf(copy.root).includes('ECHTE BUCHUNG') && !entriesOf(copy.root).includes('ANDERER'), 'the copy is as it was');
+  assert.equal(readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8'), linkBefore);
+  // «Bestehende Kopie ersetzen», her answer: then it moves.
+  await sharing.openLink(scheme, { at: home, trust: true, copy: 'replace' });
   assert.equal(sharing.linkOfCopy(copy.root)!.service, evil.url);
   assert.ok(entriesOf(copy.root).includes('ANDERER INHALT'));
 });
@@ -264,17 +268,19 @@ test('R4-2: an older state moves no copy back, and says so plainly', async () =>
   const f = join(real.paths.root, 'transactional-data/2026/books/entries.jsonl');
   writeFileSync(f, readFileSync(f, 'utf8').replace('VERSION EINS', 'VERSION ZWEI'));
   const v2 = await sharing.shareByLink(real, { to: ERNST }, SANDRA, { now: new Date(Date.now() + 1000) });
-  await sharing.openLink(v2.link, { at: home });
+  // A new share (not «Aktualisieren»): another link than the copy's, so she answers once.
+  await sharing.openLink(v2.link, { at: home, copy: 'replace' });
   assert.equal(markerOf(copy.root)!.version.n, 2);
-  // Her first link, opened again: older than the copy, said plainly, nothing rolls back.
-  await assert.rejects(sharing.openLink(v1.link, { at: home }), code('shareCopyNewer'));
+  // Her first link, opened again: another link than the copy's, so asked first; replacing, older than the copy, said plainly, nothing rolls back.
+  await assert.rejects(sharing.openLink(v1.link, { at: home }), code('shareCopyOther'));
+  await assert.rejects(sharing.openLink(v1.link, { at: home, copy: 'replace' }), code('shareCopyNewer'));
   assert.equal(markerOf(copy.root)!.version.n, 2);
   assert.ok(entriesOf(copy.root).includes('VERSION ZWEI'));
 });
 
 // ─── the owner's verdict of 2026-11-15: sharing heals itself ────────────────
 
-const { rmSync, existsSync, mkdirSync } = await import('node:fs');
+const { rmSync, existsSync, mkdirSync, readdirSync } = await import('node:fs');
 
 /** Books with receipt files of the open year, like the owner's: a link carries them all every time. */
 function booksWithReceipts(desc: string) {
@@ -315,6 +321,125 @@ test('H2: a copy missing one receipt heals with the next link, and with the same
   assert.equal(readFileSync(b, 'utf8'), '%PDF-1.4 b');
   rmSync(b);
   const next = await sharing.shareByLink(real, { to: ERNST }, SANDRA, { now: new Date(Date.now() + 1000) });
-  await sharing.openLink(next.link, { at: home });
+  // A new share, not «Aktualisieren» of the first: asked once (review of #551), «Bestehende Kopie ersetzen» heals it.
+  await assert.rejects(sharing.openLink(next.link, { at: home }), code('shareCopyOther'));
+  await sharing.openLink(next.link, { at: home, copy: 'replace' });
   assert.equal(readFileSync(b, 'utf8'), '%PDF-1.4 b');
+});
+
+// ─── review of #551: a link never takes over a copy silently ────────────────
+
+test('551-1: a package from any confirmed sender, naming the firm and the real sharer, takes no copy over: asked, nothing written; her «Aktualisieren» still moves the copy', async () => {
+  const svc = await serviceWithSender('sandra@example.ch');
+  const home = mkdtempSync(join(tmpdir(), 'share-review-551-'));
+  const real = books('ECHTE BUCHUNG');
+  const shared = await sharing.shareByLink(real, { to: ERNST }, SANDRA);
+  const copy = await sharing.openLink(shared.link, { at: home });
+  const linkBefore = readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8');
+  const markerBefore = readFileSync(join(copy.root, 'data/durchsicht/marker.json'), 'utf8');
+
+  // Another confirmed sender of the same service: the same firm, her name as sender, a far higher version.
+  await sharing.registerSender(books('x'), 'mallory@example.org');
+  const fake = books('UNTERGESCHOBEN');
+  for (let i = 0; i < 5; i++) writeVersion(fake.paths, { reason: 'sealed', period: '2026-Q3' });
+  const planted = await sharing.shareByLink(fake, { to: ERNST }, SANDRA, { now: new Date(Date.now() + 1000) });
+  assert.ok(readVersions(fake.paths).at(-1)!.n > markerOf(copy.root)!.version.n);
+
+  await assert.rejects(sharing.openLink(planted.link, { at: home }), (e: Error & { code?: string; params?: Record<string, string> }) =>
+    e.code === 'shareCopyOther' && e.params?.was === SANDRA.name && e.params?.now === SANDRA.name);
+  assert.ok(entriesOf(copy.root).includes('ECHTE BUCHUNG') && !entriesOf(copy.root).includes('UNTERGESCHOBEN'), 'the copy is as it was');
+  assert.equal(readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8'), linkBefore, 'his return still goes to her share');
+  assert.equal(readFileSync(join(copy.root, 'data/durchsicht/marker.json'), 'utf8'), markerBefore);
+
+  // Her «Aktualisieren» into the same share moves the copy forward without a question.
+  const f = join(real.paths.root, 'transactional-data/2026/books/entries.jsonl');
+  writeFileSync(f, readFileSync(f, 'utf8').replace('ECHTE BUCHUNG', 'ECHTE BUCHUNG NEU'));
+  await sharing.updateByLink(real, shared.record.id, SANDRA, { now: new Date(Date.now() + 2000) });
+  const checked = await sharing.checkCopy(copy.root);
+  assert.equal(checked.state, 'updated');
+  assert.ok(entriesOf(copy.root).includes('ECHTE BUCHUNG NEU'));
+  assert.equal(sharing.linkOfCopy(copy.root)!.id, shared.record.id);
+
+  // «Als neue Kopie öffnen»: a second copy beside it; hers and its link stay.
+  const beside = await sharing.openLink(planted.link, { at: home, copy: 'new' });
+  assert.notEqual(beside.root, copy.root);
+  assert.ok(entriesOf(beside.root).includes('UNTERGESCHOBEN'));
+  assert.ok(entriesOf(copy.root).includes('ECHTE BUCHUNG NEU'));
+  assert.equal(sharing.linkOfCopy(copy.root)!.id, shared.record.id);
+  assert.equal(sharing.linkOfCopy(beside.root)!.id, planted.record.id);
+  // Each link goes on to its own copy: opened again, no question.
+  await sharing.openLink(planted.link, { at: home });
+  await sharing.openLink(shared.link, { at: home });
+  assert.ok(svc.shares.size >= 2);
+});
+
+test('551-1b: a file of another sender beside a copy opens as a new copy; the copy here is not moved', async () => {
+  await serviceWithSender('sandra@example.ch');
+  const home = mkdtempSync(join(tmpdir(), 'share-review-551b-'));
+  const { makeShare } = await import('../src/handover/share.js');
+  const { openPackage } = await import('../src/handover/durchsicht.js');
+  const mine = openPackage((await makeShare(books('VON SANDRA'), { to: ERNST }, SANDRA)).bytes, new Date(), home);
+  const other = await makeShare(books('VON JEMAND ANDEREM'), { to: ERNST }, { name: 'Jemand Anderes' });
+  assert.throws(() => openPackage(other.bytes, new Date(), home), code('shareCopyOther'));
+  const beside = openPackage(other.bytes, new Date(), home, { otherAsNew: true });
+  assert.notEqual(beside.root, mine.root);
+  assert.ok(entriesOf(mine.root).includes('VON SANDRA'));
+});
+
+test('551-6: a newer state whose firm name changed moves the copy in its folder, never a second copy beside it; a folder that is no copy is never written over', async () => {
+  await serviceWithSender('sandra@example.ch');
+  const home = mkdtempSync(join(tmpdir(), 'share-review-5516-'));
+  const real = books('STAND');
+  const ws = real as { company: { name: string; uid?: string } };
+  ws.company = { ...ws.company, name: 'Alpha GmbH', uid: undefined };
+  // Something of the person's in the folder the copy would take: it stays, the copy goes beside it.
+  mkdirSync(join(home, 'alpha-gmbh'), { recursive: true });
+  writeFileSync(join(home, 'alpha-gmbh', 'mine.txt'), 'meins');
+  const shared = await sharing.shareByLink(real, { to: ERNST }, SANDRA);
+  const copy = await sharing.openLink(shared.link, { at: home });
+  assert.equal(copy.root, join(home, 'alpha-gmbh-2'));
+  assert.equal(readFileSync(join(home, 'alpha-gmbh', 'mine.txt'), 'utf8'), 'meins');
+  ws.company = { ...ws.company, name: 'Beta AG' };
+  await sharing.updateByLink(real, shared.record.id, SANDRA, { now: new Date(Date.now() + 1000) });
+  assert.equal((await sharing.checkCopy(copy.root)).state, 'updated');
+  assert.deepEqual(readdirSync(home).sort(), ['alpha-gmbh', 'alpha-gmbh-2']);
+  assert.equal(markerOf(copy.root)!.firm.name, 'Beta AG');
+});
+
+test('551-7: a note of «Aktualisieren» that does not go out leaves the update done and says why; «Nochmals senden» sends the note', async () => {
+  const svc = await serviceWithSender('sandra@example.ch');
+  const real = books('STAND');
+  const shared = await sharing.shareByLink(real, { to: ERNST }, SANDRA);
+  svc.refuse(/\/invite$/, 503, { error: 'Der Dienst hat heute schon 100 Einladungen verschickt.', code: 'mailsPerDay', limit: 100, per: 'day' });
+  const done = await sharing.updateByLink(real, shared.record.id, SANDRA, { notify: true, now: new Date(Date.now() + 1000) });
+  assert.ok(done.updatedAt, 'the update is done');
+  assert.equal(done.version, 2);
+  assert.match(done.notifyError ?? '', /100 Einladungen/);
+  const again = await sharing.inviteAgain(real, shared.record.id, SANDRA);
+  assert.equal(again.notifyError, undefined);
+  assert.ok(again.notifiedAt);
+  assert.equal(svc.mails.at(-1)!.kind, 'update');
+});
+
+test('551-4: a check fetches a small return by itself; a larger one waits at the service until the sharer fetches it', async () => {
+  await serviceWithSender('sandra@example.ch');
+  const real = books('STAND');
+  const shared = await sharing.shareByLink(real, { to: ERNST }, SANDRA);
+  const opened: string[] = [];
+  const big = 30 * 1024 * 1024;
+  const stub = (() => ({
+    status: async () => ({ state: 'ready', opens: [], returns: [
+      { id: 'small', state: 'ready', bytes: 4000, createdAt: new Date().toISOString() },
+      { id: 'large', state: 'ready', bytes: big, createdAt: new Date().toISOString() },
+    ] }),
+    open: async (id: string) => { opened.push(id); throw new ShareServiceError('nicht da', 'notFound', 404); },
+  })) as unknown as Parameters<typeof sharing.refreshShares>[2];
+  await sharing.refreshShares(real, new Date(), stub);
+  assert.deepEqual(opened, ['small'], 'only the small return is fetched by the check');
+  const large = sharing.readShares(real).find((r) => r.id === shared.record.id)!.returns.find((r) => r.id === 'large')!;
+  assert.equal(large.received, undefined);
+  assert.equal(large.bytes, big);
+  // «Holen»: fetched now that she asks; its failure is said in words.
+  await assert.rejects(sharing.fetchReturn(real, shared.record.id, 'large', new Date(), stub), code('shareReturnFailed'));
+  assert.deepEqual(opened, ['small', 'large']);
 });
