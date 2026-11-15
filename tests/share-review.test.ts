@@ -8,8 +8,8 @@
  * 2. Checking the shares and sharing at the same time lose no share from shares.json.
  * 3. A service that sends more than an object's size is cut off, by Content-Length or while streaming.
  * 4. The service chooses neither whom the confirmation e-mail goes to, nor its subject, nor its words.
- * 5. A link nobody opened is not a version the person holds: the next share is full; two shares at
- *    once each get their own version, and a share whose version was taken meanwhile is withdrawn.
+ * 5. Every share is whole, opened or not; two shares at once each get their own version, and a share
+ *    whose version was taken meanwhile is withdrawn.
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -80,7 +80,7 @@ test('1: a link naming another service opens only when confirmed, and moves no c
 
   await assert.rejects(sharing.openLink(scheme, { at: home }), code('shareForeignService'), 'not without the person');
   await assert.rejects(sharing.openLink(scheme, { at: home, trust: true }), (e: Error & { code?: string; params?: Record<string, string> }) =>
-    e.code === 'shareCopyOther' && e.params?.was === SANDRA.name && e.params?.version === String(markerOf(copy.root)!.version.n), 'the copy it would move, by its real facts: not without the person');
+    e.code === 'shareCopyOther' && e.params?.was === SANDRA.name && e.params?.firm === markerOf(copy.root)!.firm.name && !/Version \d/.test(e.message), 'the copy it would move, by its real facts: not without the person');
   assert.ok(entriesOf(copy.root).includes('ECHTE BUCHUNG') && !entriesOf(copy.root).includes('ANGREIFER'), 'the copy is as it was');
   assert.equal(readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8'), linkBefore, 'its link too: the return still goes to the real service');
   assert.equal(markerOf(copy.root)!.sharer.name, SANDRA.name);
@@ -181,18 +181,18 @@ test('4: the confirmation e-mail goes only to the service\'s own domain, with it
   assert.ok(!smtp.data().includes('ATTACKER') && !reg.confirmation!.text.includes('ATTACKER'), 'the words are the app\'s own');
 });
 
-test('5: a link withdrawn unopened is no version he holds; shares at once get their own versions; a share whose version was taken is withdrawn', async () => {
+test('5: every share is whole, withdrawn, opened or not; shares at once get their own versions; a share whose version was taken is withdrawn', async () => {
   const svc = await serviceWithSender('sandra@example.ch');
   const ws = books('v');
   const first = await sharing.shareByLink(ws, { to: ERNST }, SANDRA);
   await sharing.revokeShare(ws, first.record.id);
   const home = mkdtempSync(join(tmpdir(), 'share-review-home5-'));
   const second = await sharing.shareByLink(ws, { to: ERNST }, SANDRA, { now: new Date(Date.now() + 1000) });
-  assert.equal(second.record.kind, 'full', 'the withdrawn link never reached him');
+  assert.equal(second.record.kind, 'full');
   await sharing.openLink(second.link, { at: home });
   await sharing.refreshShares(ws);
   const third = await sharing.shareByLink(ws, { to: ERNST }, SANDRA, { now: new Date(Date.now() + 2000) });
-  assert.equal(third.record.kind, 'update', 'once opened, the next is an update');
+  assert.equal(third.record.kind, 'full', 'once opened, the next is whole too');
 
   const [a, b] = await Promise.all([sharing.shareByLink(ws, { to: { name: 'A' } }, SANDRA), sharing.shareByLink(ws, { to: { name: 'B' } }, SANDRA)]);
   assert.notEqual(a.record.version, b.record.version, 'one after the other');
@@ -251,7 +251,7 @@ test('R2-1b: naming the real sharer in the package does not pass either; her own
   await secrets.set('share:sign:ernst@example.ch', kept);
   const f = join(real.paths.root, 'transactional-data/2026/books/entries.jsonl');
   writeFileSync(f, readFileSync(f, 'utf8').replace('ECHTE BUCHUNG', 'ZWEITER STAND der Kundin'));
-  const next = await sharing.shareByLink(real, { to: ERNST, full: true }, SANDRA, { now: new Date(Date.now() + 1000) });
+  const next = await sharing.shareByLink(real, { to: ERNST }, SANDRA, { now: new Date(Date.now() + 1000) });
   await sharing.openLink(next.link, { at: home });
   assert.ok(entriesOf(copy.root).includes('ZWEITER STAND'), 'signed by the pinned key: the copy moves forward');
 });
@@ -317,7 +317,7 @@ test('R3-1: a link seen once reveals no secret: its signature and public key let
   const c = shareClient(svc.url);
   const reg = await c.registerSender('mallory@example.org');
   const plant = async (fill: (index: typeof peek) => Promise<void>) => {
-    const prepared = await prepareShare(books('ANGREIFER INHALT'), { to: ERNST, full: true }, SANDRA);
+    const prepared = await prepareShare(books('ANGREIFER INHALT'), { to: ERNST }, SANDRA);
     await fill(prepared.index);
     const k = generateKey();
     const sent = await sendPackage({ client: c, key: k, out: { index: prepared.index, files: prepared.files }, carriesReturnToken: true, start: (s) => c.create(reg.senderToken, s) });
@@ -385,7 +385,7 @@ test('R4-1: a genuine signed package re-uploaded as another share moves no copy 
   const copy = await sharing.openLink(first.link, { at: home });
   const linkBefore = readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8');
   // Her next version, re-uploaded by someone else: newer, signed by the pinned key, but not for that share.
-  const second = await sharing.shareByLink(real, { to: ERNST, full: true }, SANDRA, { now: new Date(Date.now() + 1000) });
+  const second = await sharing.shareByLink(real, { to: ERNST }, SANDRA, { now: new Date(Date.now() + 1000) });
   const planted = await replay(svc.url, second.link);
   await assert.rejects(sharing.openLink(planted.link, { at: home }), code('shareCopyOther'));
   assert.equal(readFileSync(join(copy.root, 'data/durchsicht/link.json'), 'utf8'), linkBefore, 'his returns still go into her share');
@@ -402,11 +402,58 @@ test('R4-2: an older signed version moves no copy back without a question', asyn
   const copy = await sharing.openLink(v1.link, { at: home });
   const f = join(real.paths.root, 'transactional-data/2026/books/entries.jsonl');
   writeFileSync(f, readFileSync(f, 'utf8').replace('VERSION EINS', 'VERSION ZWEI'));
-  const v2 = await sharing.shareByLink(real, { to: ERNST, full: true }, SANDRA, { now: new Date(Date.now() + 1000) });
+  const v2 = await sharing.shareByLink(real, { to: ERNST }, SANDRA, { now: new Date(Date.now() + 1000) });
   await sharing.openLink(v2.link, { at: home });
   assert.equal(markerOf(copy.root)!.version.n, 2);
-  // Her own first link, opened again (an opening is left): signed for its share, but older.
-  await assert.rejects(sharing.openLink(v1.link, { at: home }), code('shareCopyOther'));
+  // Her own first link, opened again (an opening is left): signed for its share, but older: said plainly, nothing rolls back.
+  await assert.rejects(sharing.openLink(v1.link, { at: home }), code('shareCopyNewer'));
   assert.equal(markerOf(copy.root)!.version.n, 2);
   assert.ok(entriesOf(copy.root).includes('VERSION ZWEI'));
+});
+
+// ─── the owner's verdict of 2026-11-15: sharing heals itself ────────────────
+
+const { rmSync, existsSync, mkdirSync } = await import('node:fs');
+
+/** Books with receipt files of the open year, like the owner's: a link carries them all every time. */
+function booksWithReceipts(desc: string) {
+  const ws = books(desc);
+  const dir = join(ws.paths.root, 'transactional-data/2026/receipts');
+  mkdirSync(dir, { recursive: true });
+  for (const r of ['a', 'b', 'c']) writeFileSync(join(dir, `${r}.pdf`), `%PDF-1.4 ${r}`);
+  return ws;
+}
+
+test('H1: his copy deleted, the next link opens on this computer with no error; the sharer did nothing special', async () => {
+  await serviceWithSender('sandra@example.ch');
+  const home = mkdtempSync(join(tmpdir(), 'share-review-h1-'));
+  const real = booksWithReceipts('ERSTER STAND');
+  const first = await sharing.shareByLink(real, { to: ERNST }, SANDRA);
+  const copy = await sharing.openLink(first.link, { at: home });
+  rmSync(copy.root, { recursive: true, force: true });
+  const f = join(real.paths.root, 'transactional-data/2026/books/entries.jsonl');
+  writeFileSync(f, readFileSync(f, 'utf8').replace('ERSTER STAND', 'ZWEITER STAND'));
+  // Her plain next share: no option, no question.
+  const next = await sharing.shareByLink(real, { to: ERNST }, SANDRA, { now: new Date(Date.now() + 1000) });
+  const opened = await sharing.openLink(next.link, { at: home });
+  assert.ok(entriesOf(opened.root).includes('ZWEITER STAND'));
+  for (const r of ['a', 'b', 'c']) assert.ok(existsSync(join(opened.root, `transactional-data/2026/receipts/${r}.pdf`)), `${r}.pdf is there`);
+  assert.ok(sharing.linkOfCopy(opened.root)?.returnToken, 'his return goes into the new share');
+});
+
+test('H2: a copy missing one receipt heals with the next link, and with the same link opened again', async () => {
+  await serviceWithSender('sandra@example.ch');
+  const home = mkdtempSync(join(tmpdir(), 'share-review-h2-'));
+  const real = booksWithReceipts('STAND');
+  const first = await sharing.shareByLink(real, { to: ERNST }, SANDRA);
+  const copy = await sharing.openLink(first.link, { at: home });
+  const b = join(copy.root, 'transactional-data/2026/receipts/b.pdf');
+  rmSync(b);
+  // The same link again (an opening is left): the copy is whole again, no question.
+  await sharing.openLink(first.link, { at: home });
+  assert.equal(readFileSync(b, 'utf8'), '%PDF-1.4 b');
+  rmSync(b);
+  const next = await sharing.shareByLink(real, { to: ERNST }, SANDRA, { now: new Date(Date.now() + 1000) });
+  await sharing.openLink(next.link, { at: home });
+  assert.equal(readFileSync(b, 'utf8'), '%PDF-1.4 b');
 });

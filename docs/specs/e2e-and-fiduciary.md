@@ -481,9 +481,11 @@ A chip «Teilen» in the top bar next to Export, in every area (⇧S). Its dialo
 - **Nachricht (freiwillig):** one short text. It goes into the invitation, which the sharer's own
   mail account sends.
 - **Was:** decided by the app and named with its size:
-  - «Die Buchhaltung, Stand jetzt (64 MB)»: the first share with this person (`full`, B3.4).
-  - «Neu seit der letzten Übergabe am 16.11. (12 MB)»: every later share (`update`): 9 bookings,
-    14 receipts, the November statement. «Vollständig» stays a choice under «Mehr».
+  - «Die ganze Buchhaltung, Stand jetzt (64 MB)»: every share (`full`, B3.4). The owner's
+    decision of 2026-11-15: there is no incremental `update` and no «Vollständig» choice; every
+    share by link or file carries everything of the open years, so it opens on any computer, on a
+    copy that was lost, deleted, older or missing a receipt alike. The closed years' receipts stay
+    home unless asked for under «Mehr», and the dialog says so.
 - The fact line: «Ende-zu-Ende verschlüsselt: nur Ernst Bühler kann den Inhalt lesen, der Server
   nicht. Der Link gilt bis 5 Stunden nach dem ersten Öffnen, höchstens 10 Tage. Ernst Bühler
   bekommt eine E-Mail von dir, mit einem Link, ohne Konto, ohne PIN.»
@@ -599,15 +601,15 @@ the developer tools has none, and running the `/usr/bin/git` stub opens Apple's 
 
 | Kind | Made by | Carries | Typical size |
 |---|---|---|---|
-| `full`, the first share with this person | «Teilen» when this recipient holds no earlier version, or «Vollständig» | the books' files and every receipt and statement except the closed years' (B3.5) | about 60 MB in April (Q1's receipts and statements); up to about 250 MB at year end; up to about 300 MB while the previous year is still open |
-| `update`, every later share | «Teilen» when the recipient holds an earlier version | the books' files, plus the receipts and statements new since that version | tens of MB (one quarter is about 60 MB of receipts) |
+| `full`, every share | «Teilen», by link or file | the books' files and every receipt and statement except the closed years' (B3.5) | about 60 MB in April (Q1's receipts and statements); up to about 250 MB at year end; up to about 300 MB while the previous year is still open |
+| `update` (written by 0.6.0 only) | – | the books' files, plus the receipts and statements new since a version | read still, where the copy holds the rest |
 | `return` | «An Sandra Huber zurücksenden» on the recipient's Mac | his change set (B5.1) | kilobytes for bookings, plus any receipt he adds |
 
-The sharer's app keeps, per recipient, the newest version that recipient holds: the newest one his
-app fetched (the service reports the opening by the app) or that his return was based on. An
-`update` whose receipts build on a version his Mac lacks (his import failed, a new computer) is
-refused there without changing anything: «Diese Übergabe baut auf Version 11 auf, die auf diesem
-Mac fehlt. Bitte Sandra Huber um eine vollständige Übergabe.»
+A whole package on an existing copy moves it forward and keeps his changes; on no copy it makes a
+new one; the same version again heals a copy (a deleted or changed receipt comes back); an older one
+changes nothing («Die Kopie von … hier ist schon auf einem neueren Stand: sie bleibt, wie sie
+ist.», `shareCopyNewer`). Only a 0.6.0 `update` whose files his Mac lacks is refused, in plain
+words: the next share brings everything.
 
 ### B3.5 Closed years stay out, and stay provable
 
@@ -924,9 +926,9 @@ The memory rule applies: state facts, never remind of chores.
   made-up receipts:
   - `full` leaves out 2025's receipts and statements, `omitted` matches the trees, the seals
     verify on the copy, and the checksum is the same on both sides.
-  - A second share is an `update` on the version the recipient holds and carries only the new
-    receipts. Applied on a copy without its base, it is refused (`shareBaseMissing`) and nothing
-    changes.
+  - A second share is whole again; it opens on a deleted copy as on a new computer, heals a copy
+    missing a receipt, and an older one never rolls a copy back (tests/handover.test.ts,
+    tests/share-review.test.ts H1, H2).
   - A save on the sparse copy keeps every omitted path in the tree.
   - The index's tree objects rebuild the exact commit on the copy.
   - Refused: another company's UID, a file whose hash does not match the index.

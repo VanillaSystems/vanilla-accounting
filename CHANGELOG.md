@@ -85,6 +85,25 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- Sharing the books needs no knowledge of versions any more (the owner's review: «this is not good
+  ux»). Every share, by link or as a `.vanilla` file, carries all the books of the open years and
+  every receipt, statement and invoice, so it opens on any Mac: on a copy that was deleted, lost,
+  older or missing a receipt alike, with no error and nothing for either person to do. The same
+  link or file opened again heals a copy too; an older one never rolls a newer copy back, and says
+  so plainly. «Vollständig, auch wenn schon eine Version da ist» is gone, and so are «Version N»,
+  «baut auf» and «vollständige Übergabe» from the dialog, the sent screen, the share cards, the
+  recipient's copy, the review of a return and the file name (`<Firma> – Buchhaltung (Datum).vanilla`).
+  A file made by 0.6.0 as an update still opens where the copy holds the rest. The closed years'
+  receipts still stay home unless asked for under «Mehr», and the dialog says so.
+- After «Senden» by link the dialog says plainly that one step is left and that it is yours, and
+  why (a mail from your own address arrives and the service never learns the key or the
+  recipient): «Im Mailprogramm öffnen» first, with the whole mail ready, «Link kopieren» second; the
+  deadline in words; what the recipient will see; and, without outgoing mail, where to set it up.
+- The invitation carries every step for someone who never used the app: download, «Dennoch öffnen»
+  under Systemeinstellungen › Datenschutz & Sicherheit, the link, the return, the deadline, and that
+  nothing is needed beyond the app. In the sharer's language (de, fr, it, en). The download page is
+  `VANILLA_APP_DOWNLOAD` at build time; without it, the share service's own page.
+
 - The accent is Tram blue, the product colour: `#005b8c`, with its 10 % tint `#e6eff4` as the soft
   accent (before: `#0067b1` / `#e8f1f9`). White on it reads at 7.3:1, the blue on the tint at 6.3:1. The public demo's bar
   takes the same colour; the dark theme keeps its grey accent.

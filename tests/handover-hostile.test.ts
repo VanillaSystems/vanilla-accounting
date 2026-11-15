@@ -45,7 +45,7 @@ const tampered = (code: string) => (e: unknown) => e instanceof PackageError && 
 
 /** A genuine return on a real hand-over, then its change set and files replaced. */
 async function hostileReturn(ws: Workspace, changes: unknown[], files: Record<string, string> = {}): Promise<Uint8Array> {
-  const made = await makeShare(ws, { to: ERNST, full: true }, SANDRA);
+  const made = await makeShare(ws, { to: ERNST }, SANDRA);
   const copy = workspaceAt(openPackage(made.bytes, new Date(), home()).root);
   const p = readPackage(buildReturn(copy, 'x').bytes);
   const fm = new Map(Object.entries(files).map(([k, v]) => [k, strToU8(v)]));
@@ -316,7 +316,7 @@ test('N5: a correction into a filed quarter and a changed code are rows the revi
 });
 
 test('API 2: on a copy invoices, customers and mail sources are the sharer\'s; his bookings and his return work', async () => {
-  const res = await api.fetch('/api/handover/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: { name: 'E' }, full: true }) });
+  const res = await api.fetch('/api/handover/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: { name: 'E' } }) });
   const file = new Uint8Array(await res.arrayBuffer());
   assert.equal((await api.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file })).status, 200);
   const entries = (await api.send('GET', '/books.json')).json.journalEntries as Array<{ id: string; date: string; transactionRef: string }>;
@@ -503,7 +503,7 @@ test('F3: a copy a crash left between the two renames comes back, with his chang
   renameSync(o.root, `${o.root}.old-99999`);
   mkdirSync(`${o.root}.next-99999`);
   const second = await makeShare(workspaceAt(ws.paths.root), { to: ERNST }, SANDRA);
-  assert.equal(openPackage(second.bytes, new Date(), at).kind, 'update');
+  assert.equal(openPackage(second.bytes, new Date(), at).kind, 'full');
   assert.deepEqual(readdirSync(at).filter((f) => f.includes('.old-') || f.includes('.next-')), []);
   assert.equal(markerOf(o.root)?.version.n, 2);
   assert.equal(loadBooks(workspaceAt(o.root)).journalEntries.find((e) => e.id === 'e1')?.accountDebit, '6510');

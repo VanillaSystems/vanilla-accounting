@@ -91,19 +91,6 @@ export function writeVersion(paths: Pick<WorkspacePaths, 'root'>, v: Omit<Versio
   return line;
 }
 
-/** The newest version `email` (or, without one, `name`) holds: the newest handed to them or that their return was based on. */
-export function heldBy(paths: Pick<WorkspacePaths, 'root'>, who: Party, notHeld: ReadonlySet<number> = new Set()): Version | undefined {
-  const same = (p: Party | undefined) => !!p && (who.email && p.email ? p.email.toLowerCase() === who.email.toLowerCase() : p.name === who.name);
-  const all = readVersions(paths);
-  let held: Version | undefined;
-  for (const v of all) {
-    // `notHeld`: hand-overs that never reached the person (a link nobody opened, src/share/sharing.ts unopenedVersions).
-    const got = v.reason === 'handover' && same(v.to) && !notHeld.has(v.n) ? v : v.reason === 'return-applied' && same(v.from) && v.basedOn ? all.find((x) => x.n === v.basedOn) : undefined;
-    if (got && (!held || got.n > held.n)) held = got;
-  }
-  return held;
-}
-
 /**
  * A quarter sealed by the app's own steps (the filing, `npm run seal`, the year close) is a named
  * version: «Version 15 · Q3 2026 eingereicht». Never fails the seal: a version that cannot be

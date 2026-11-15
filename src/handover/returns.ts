@@ -288,7 +288,7 @@ function checkedChanges(ws: Workspace, p: PackageContents, hers: Books = loadBoo
   return out;
 }
 
-export interface ReturnSummary { id: string; from: Party; at: string; receivedAt: string; changes: number; basedOn: number; applied: boolean; undone: boolean; message?: string }
+export interface ReturnSummary { id: string; from: Party; at: string; receivedAt: string; changes: number; basedOn: number; /** When the hand-over it was made on was made: what the person reads. */ basedOnAt: string; applied: boolean; undone: boolean; message?: string }
 
 /** The returns kept, newest first. */
 export function listReturns(ws: Workspace): ReturnSummary[] {
@@ -297,7 +297,7 @@ export function listReturns(ws: Workspace): ReturnSummary[] {
     const { index, changes } = packageOf(ws, id);
     const s = readState(ws, id);
     const live = s.applied.filter((a) => !a.undone && !a.pending);
-    return { id, from: index.from, at: index.at, receivedAt: s.receivedAt, changes: changes?.length ?? 0, basedOn: index.version.n, applied: live.length > 0, undone: s.applied.length > 0 && !live.length, ...(index.message ? { message: index.message } : {}) };
+    return { id, from: index.from, at: index.at, receivedAt: s.receivedAt, changes: changes?.length ?? 0, basedOn: index.version.n, basedOnAt: index.version.at, applied: live.length > 0, undone: s.applied.length > 0 && !live.length, ...(index.message ? { message: index.message } : {}) };
   }).sort((a, b) => (a.receivedAt < b.receivedAt ? 1 : -1));
 }
 
@@ -344,6 +344,7 @@ export interface Review {
   from: Party;
   at: string;
   basedOn: number;
+  basedOnAt: string;
   message?: string;
   rows: ReviewRow[];
   effect: VatEffect[];
@@ -515,7 +516,7 @@ export function reviewOf(ws: Workspace, id: string, books: Books = loadBooks(ws)
     return true;
   }).slice(0, 5);
   return {
-    id, from: p.index.from, at: p.index.at, basedOn: p.index.version.n, ...(p.index.message ? { message: p.index.message } : {}),
+    id, from: p.index.from, at: p.index.at, basedOn: p.index.version.n, basedOnAt: p.index.version.at, ...(p.index.message ? { message: p.index.message } : {}),
     rows, effect: effectOf(rows, books), applied, learn,
   };
 }

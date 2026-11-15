@@ -28,4 +28,4 @@ export function askLines(say: Say, p: LinkPreview): { what: string; warnings: st
 
 /** The question when a link would move an existing copy without continuing its hand-overs (the refusal's params). */
 export const askReplace = (say: Say, p: Record<string, string>): string =>
-  say('share.ask.replaceReal', { firm: oneLine(p.firm), version: oneLine(p.version, 12), was: oneLine(p.was), now: oneLine(p.now), claimed: oneLine(p.claimed), host: oneLine(p.host) });
+  say('share.ask.replaceReal', { firm: oneLine(p.firm), was: oneLine(p.was), now: oneLine(p.now), claimed: oneLine(p.claimed), host: oneLine(p.host) });

@@ -12,8 +12,7 @@ import { dirname, join } from 'node:path';
 import { APP_ROOT } from '../workspace/workspace.js';
 import { decodeKey } from './crypto/index.js';
 
-/** The service's limits (docs/api.md of the service): the dialog names them before the service refuses. */
-export const SHARE_LIMITS = { bytes: 1024 * 1024 * 1024, objects: 5000, sharesPerDay: 10, returnsPerShare: 5, opens: 3, hoursAfterOpen: 5, days: 10 } as const;
+export { SHARE_LIMITS } from './limits.js';
 
 /** A share's id as the service makes it: 26 characters a–z and 2–7. */
 export const SHARE_ID = /^[a-z2-7]{26}$/;
@@ -46,6 +45,20 @@ function buildDefault(): string | undefined {
     const pkg = JSON.parse(readFileSync(join(APP_ROOT, 'package.json'), 'utf8')) as { share?: { service?: unknown } };
     return typeof pkg.share?.service === 'string' && pkg.share.service ? pkg.share.service : undefined;
   } catch { return undefined; }
+}
+
+/**
+ * Where a recipient downloads the Mac app, named in the invitation: VANILLA_APP_DOWNLOAD, else the
+ * build's (package.json `share.download`, written from the same variable). None: the invitation names
+ * the share service's own start page, which offers the download.
+ */
+export function appDownload(): string | undefined {
+  const env = process.env.VANILLA_APP_DOWNLOAD?.trim();
+  const built = (() => {
+    try { return (JSON.parse(readFileSync(join(APP_ROOT, 'package.json'), 'utf8')) as { share?: { download?: unknown } }).share?.download; } catch { return undefined; }
+  })();
+  const page = env || (typeof built === 'string' ? built : '');
+  try { return page && new URL(page).protocol === 'https:' ? new URL(page).toString() : undefined; } catch { return undefined; }
 }
 
 export type ServiceSource = 'env' | 'setting' | 'build' | 'none';

@@ -1,8 +1,9 @@
 /**
  * «Durchsicht»: the recipient's side of a hand-over (docs/specs/e2e-and-fiduciary.md B4). Opening a
- * `full` package makes a copy of the books as a workspace of its own (like a demo copy: it never
- * mixes with books the recipient keeps himself); an `update` moves that copy forward and keeps what
- * he changed. The copy remembers what it got in data/durchsicht/: the index (marker.json) and the
+ * package makes a copy of the books as a workspace of its own (like a demo copy: it never mixes with
+ * books the recipient keeps himself) when there is none, and on an existing copy moves it forward and
+ * keeps what he changed. Every package is whole, so a copy that is lost, older or missing a receipt
+ * comes right with the next one, never refused for what it lacks. The copy remembers what it got in data/durchsicht/: the index (marker.json) and the
  * books' own files as they came (base/), against which his changes are the change set of his
  * return (B5.1). Filed quarters stay sealed: the seals come along and the write door holds them.
  */
@@ -101,11 +102,13 @@ function markerFrom(index: PackageIndex, now: Date): Marker {
 export interface Opened { root: string; kind: 'full' | 'update'; marker: Marker; conflicts: number; dropped: number }
 
 /**
- * Opens a `full` or `update` package as a copy (B4). A `full` package on a firm the recipient has no
- * copy of makes a new one; on an existing copy, like an `update`, it moves the copy forward and keeps
- * his changes. An update on a version his copy lacks is refused (shareBaseMissing), changing nothing.
+ * Opens a hand-over package as a copy (B4): on a firm the recipient has no copy of it makes a new
+ * one; on an existing copy it moves the copy forward and keeps his changes. Forward only: a package
+ * older than the copy changes nothing (shareCopyNewer). An `update` (written by 0.6.0 only, which
+ * left out what the person was thought to hold) opens where the copy holds every file it names;
+ * otherwise it is refused (shareBaseMissing) and the next hand-over, always whole, brings everything.
  */
-export function openPackage(bytes: Uint8Array | PackageContents, now = new Date(), at: string = durchsichtHome()): Opened {
+export function openPackage(bytes: Uint8Array | PackageContents, now = new Date(), at: string = durchsichtHome(), opts: { replace?: boolean } = {}): Opened {
   // A link's files come checked and decrypted already (src/share/transport.ts, checkPackage); a file is read here.
   const p = bytes instanceof Uint8Array ? readPackage(bytes) : bytes;
   if (p.index.kind === 'return') throw new PackageError('Das ist eine Rücksendung: sie gehört in die Bücher, aus denen geteilt wurde.', 'shareWrongKind');
@@ -113,8 +116,12 @@ export function openPackage(bytes: Uint8Array | PackageContents, now = new Date(
   recover(root);
   const had = markerOf(root);
   if (had && had.firm.uid && p.index.firm.uid && had.firm.uid !== p.index.firm.uid) throw new PackageError(`Diese Übergabe ist von ${p.index.firm.name}, die Kopie hier von ${had.firm.name}.`, 'shareOtherCompany', { firm: p.index.firm.name });
+  // `replace`: the person confirmed books of another sharer for this copy (src/share/sharing.ts openLink), whose versions count apart.
+  if (had && !opts.replace && p.index.version.n < had.version.n) {
+    throw new PackageError(`Die Kopie von ${had.firm.name} hier ist neuer als diese Übergabe: sie bleibt, wie sie ist.`, 'shareCopyNewer', { firm: had.firm.name, name: p.index.from.name });
+  }
   if (!had) {
-    if (p.index.kind === 'update') throw new PackageError(`Diese Übergabe baut auf Version ${p.index.base?.n} auf, die auf diesem Computer fehlt. Bitte ${p.index.from.name} um eine vollständige Übergabe.`, 'shareBaseMissing', { version: String(p.index.base?.n ?? ''), name: p.index.from.name });
+    if (p.index.kind === 'update') throw legacyUpdate(p.index);
     rmSync(root, { recursive: true, force: true });
     writeFiles(root, p.files);
     // The copy proves the version: its files plus the omitted ones make the version's checksum (B3.5, B7).
@@ -129,6 +136,12 @@ export function openPackage(bytes: Uint8Array | PackageContents, now = new Date(
   return moveForward(root, had, p, now);
 }
 
+/** A 0.6.0 update whose files the copy lacks: the person reads what happened and what to do, in plain words. */
+const legacyUpdate = (index: PackageIndex) => new PackageError(
+  `Diese Datei kommt von einer älteren App-Version und enthält nur, was damals neu war; der Rest fehlt auf diesem Computer. Teilt ${index.from.name} die Buchhaltung noch einmal, kommt alles mit.`,
+  'shareBaseMissing', { name: index.from.name },
+);
+
 function keepGit(root: string, index: PackageIndex): void {
   if (index.git) writeFileSync(join(dirOf(root), 'git.json'), JSON.stringify(index.git) + '\n');
 }
@@ -142,9 +155,7 @@ function moveForward(root: string, had: Marker, p: PackageContents, now: Date): 
   const index = p.index;
   if (index.kind === 'update') {
     const missing = (index.held ?? []).filter((f) => !existsSync(join(root, f.path)) || sha256(readFileSync(join(root, f.path))) !== f.sha256);
-    if (index.base?.n !== had.version.n || missing.length) {
-      throw new PackageError(`Diese Übergabe baut auf Version ${index.base?.n} auf, die auf diesem Computer fehlt. Bitte ${index.from.name} um eine vollständige Übergabe.`, 'shareBaseMissing', { version: String(index.base?.n ?? ''), name: index.from.name });
-    }
+    if (index.base?.n !== had.version.n || missing.length) throw legacyUpdate(index);
   }
   const oldBase = recordsInFolder(baseDir(root));
   const mine = diffRecords(oldBase, recordsInFolder(root));

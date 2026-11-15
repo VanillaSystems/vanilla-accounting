@@ -22,7 +22,7 @@ export function DurchsichtBar({ d, onClose }: { d: DurchsichtFacts; onClose?: ()
   useTopBarHeight(bar);
   return (
     <div ref={bar} role="status" className="auditbar shrecv" data-testid="durchsicht-bar">
-      <span><b>{t('durchsicht.books', { firm: d.firm.name })}</b> · {t('version.short', { n: d.version.n })} · {formatDate(d.version.at.slice(0, 10))} · {t('durchsicht.from', { name: d.sharer.name })}</span>
+      <span><b>{t('durchsicht.books', { firm: d.firm.name })}</b> · {t('durchsicht.asOf', { date: formatDate(d.version.at.slice(0, 10)) })} · {t('durchsicht.from', { name: d.sharer.name })}</span>
       <span className="mode">{PEN}{t('durchsicht.mode')}</span>
       <span className="m">{t('durchsicht.fact', { name: d.sharer.name })}</span>
       {onClose ? <button type="button" className="linkbtn" onClick={onClose}>{t('durchsicht.close')}</button> : null}
@@ -133,7 +133,7 @@ function ReturnDialog({ d, toast, onClose }: { d: DurchsichtFacts; toast(msg: st
           {error ? <div className="err" role="alert">{error}</div> : null}
         </div>
         <div className="xft">
-          <span className="m">{plan ? `${t('durchsicht.summary', { n: plan.changes.length, files: plan.files })} · ${sizeText(plan.bytes)} · ${t('durchsicht.basedOn', { n: d.version.n, sum: shortSum(d.version.checksum) })}` : ''}</span>
+          <span className="m">{plan ? `${t('durchsicht.summary', { n: plan.changes.length, files: plan.files })} · ${sizeText(plan.bytes)} · ${t('durchsicht.basedOn', { date: formatDate(d.version.at.slice(0, 10)) })}` : ''}</span>
           <button type="button" className="btn ghost" onClick={onClose}>{t('common.cancel')}</button>
           {d.linked ? (
             <>

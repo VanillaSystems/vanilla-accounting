@@ -13,6 +13,7 @@ import { sizeText } from './store.js';
 import { mailto, refreshShares, runJob, running, type Job, type Registered, type SenderView, type ShareRecord, type Shared } from './link.js';
 import type { LinkPreview } from '../../share/sharing.js';
 import { askLines, askReplace } from './ask-text.js';
+import { SHARE_LIMITS } from '../../share/limits.js';
 
 /** «15.11. 19:04»: a moment as a person reads it, in this computer's time. */
 export function atText(iso: string): string {
@@ -117,31 +118,41 @@ export function SenderStep({ kept, mailFrom, onConfirmed, onFile }: { kept?: str
   );
 }
 
-/** What was sent: the version, the link, and the invitation, sent from her mailbox or ready for her mail program. */
-export function SentView({ sent, to }: { sent: Shared; to: { name: string; email?: string } }) {
+/**
+ * What was sent (the owner's review of 2026-11-15: say plainly what is left). Sent from her mailbox:
+ * the invitation is on its way. Otherwise one step is left and it is hers: the app never sends the
+ * link through the service (the key in it stays between the two of them), so «Im Mailprogramm öffnen»
+ * comes first with the whole mail ready, «Link kopieren» second. Then the deadlines in plain words and
+ * what the recipient will see, and where the app could send the invitation itself next time.
+ */
+export function SentView({ sent, to, mailSetUp }: { sent: Shared; to: { name: string; email?: string }; mailSetUp: boolean }) {
   const [copied, setCopied] = useState(false);
   const copy = () => void navigator.clipboard?.writeText(sent.link).then(() => setCopied(true), () => undefined);
+  const until = sent.record.expiresAt ? formatDate(sent.record.expiresAt.slice(0, 10)) : '';
   return (
     <div className="what shsent" data-testid="share-sent">
-      <div className="wt"><b>{ICONS.check} {t('share.sent.title', { n: sent.record.version, name: to.name })}</b><span className="mono">{sizeText(sent.record.bytes)}</span></div>
-      <div className="wm">{t('share.sent.until', { date: sent.record.expiresAt ? atText(sent.record.expiresAt) : '', hours: 5 })}</div>
-      {sent.mailed ? <div className="wm">{t('share.sent.mailed', { to: to.email ?? to.name })}</div> : (
+      <div className="wt"><b>{ICONS.check} {t(sent.mailed ? 'share.sent.titleMailed' : 'share.sent.title', { name: to.name })}</b><span className="mono">{sizeText(sent.record.bytes)}</span></div>
+      {sent.mailed ? <div className="wm">{t('share.sent.mailed', { to: to.email ?? to.name, name: to.name })}</div> : (
         <>
           {sent.mailError ? <div className="err">{t('share.sender.mailFailed', { why: sent.mailError })}</div> : null}
-          <div className="wm">{t('share.sent.yourself', { name: to.name })}</div>
-          <input readOnly value={sent.link} onFocus={(e) => e.target.select()} data-testid="share-link" />
+          <div className="wm">{t('share.sent.why', { name: to.name })}</div>
           <div className="acts">
-            <button type="button" className="btn" onClick={copy}>{copied ? t('share.copied') : t('share.copyLink')}</button>
-            <a className="btn" href={mailto(to.email ?? '', sent.invitation.subject, sent.invitation.text)}>{t('share.mailProgram')}</a>
+            <a className="btn primary" href={mailto(to.email ?? '', sent.invitation.subject, sent.invitation.text)} data-testid="share-mailto">{t('share.mailProgram')}</a>
+            <button type="button" className="btn" onClick={copy} data-testid="share-copy">{copied ? t('share.copied') : t('share.copyLink')}</button>
           </div>
+          <div className="wm">{t('share.sent.mailHint', { name: to.name })}</div>
+          <input readOnly value={sent.link} onFocus={(e) => e.target.select()} data-testid="share-link" />
         </>
       )}
+      <div className="wm">{t('share.sent.until', { name: to.name, date: until, hours: SHARE_LIMITS.hoursAfterOpen, opens: SHARE_LIMITS.opens })}</div>
+      <div className="wm">{t('share.sent.theySee', { name: to.name })}</div>
+      {!sent.mailed && !mailSetUp ? <div className="wm" data-testid="share-setup-mail">{t('share.sent.setupMail')}</div> : null}
       <div className="lock">{ICONS.lock}<span>{t('share.sent.back', { name: to.name })}</span></div>
     </div>
   );
 }
 
-/** One share as facts: to whom, which version, when sent, opened or not, until when, returns; «Link kopieren», «Zurückziehen». */
+/** One share as facts: to whom, when sent, opened or not, until when, returns; «Link kopieren», «Zurückziehen». */
 function ShareRow({ s, onChanged }: { s: ShareRecord; onChanged(next: ShareRecord): void }) {
   const [confirm, setConfirm] = useState(false);
   const [error, setError] = useState('');
@@ -156,7 +167,7 @@ function ShareRow({ s, onChanged }: { s: ShareRecord; onChanged(next: ShareRecor
   const back = s.returns.filter((r) => r.received).length;
   return (
     <div className="shcard" data-testid="share-card">
-      <div className="wt"><b>{t('share.card.to', { name: s.to.name, n: s.version })}</b><span className="mono">{sizeText(s.bytes)}</span></div>
+      <div className="wt"><b>{t('share.card.to', { name: s.to.name })}</b><span className="mono">{sizeText(s.bytes)}</span></div>
       <div className="wm">
         {t('share.card.sent', { at: atText(s.at) })}
         {' · '}{s.revokedAt ? t('share.card.revoked', { at: atText(s.revokedAt) }) : s.firstOpenedAt ? t('share.card.opened', { at: atText(s.firstOpenedAt), n: s.opens.length }) : t('share.card.notOpened')}
