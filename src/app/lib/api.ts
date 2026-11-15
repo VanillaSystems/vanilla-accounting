@@ -36,6 +36,7 @@ import type { PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
 import type { AiAvailability, DesktopInfo, FolderLook, HomeFolders, KnownBooks, PhoneInfo } from '../../types/desktop.js';
+import type { Opened } from '../handover/store.js';
 import { DesktopCallError } from '../desktop/bridge.js';
 import { accessText, type AccessKey } from '../desktop/access-text.js';
 import { setAiOff } from '../ai/ai-off.js';
@@ -721,6 +722,8 @@ export const api = {
     open: (root: string) => request<KnownBooks>('POST', '/api/desktop/open', { root }),
     create: (setup: SetupRequest & { assumed?: Assumed }) => request<KnownBooks>('POST', '/api/desktop/create', setup),
     demo: () => request<KnownBooks>('POST', '/api/desktop/demo'),
+    /** A `.vanilla` file, also with no books open (#545): a hand-over opens as its Durchsicht copy, a return goes to the books open. */
+    openHandover: (file: Blob) => upload<Opened>('/api/desktop/handover', file, 'application/octet-stream'),
     /** Books in the layout before 0.4.0: moved into vanilla-accounting/ as npm run update does, then opened. */
     upgrade: (root: string) => request<KnownBooks>('POST', '/api/desktop/upgrade', { root }),
     ai: () => request<AiAvailability>('GET', '/api/desktop/ai'),

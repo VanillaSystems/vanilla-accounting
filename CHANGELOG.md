@@ -122,6 +122,10 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- A `.vanilla` hand-over file opens on a Mac that never opened books (#545): the Mac app declares
+  the file type, so a double-click in Finder and «Öffnen mit» open it, also when the file starts
+  the app, and a drop on the start screen opens it too. A hand-over opens as its Durchsicht copy; a
+  return with no books open says that it belongs in the books it was shared from.
 - The app no longer shows a serif (Times) while its fonts load or when they fail: every font is
   named through a token with a system sans or mono behind it, and Geist Mono's semibold and bold
   are bundled instead of faked. Run from a worktree whose `node_modules` is a link, the dev server

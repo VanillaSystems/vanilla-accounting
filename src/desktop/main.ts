@@ -35,6 +35,7 @@ import { setDurchsichtHome } from '../handover/durchsicht.js';
 import { APP_SCHEME, setShareSettingsFile } from '../share/service.js';
 import { openLink, previewLink, type ShareFlowError } from '../share/sharing.js';
 import { askLines, askReplace } from '../app/handover/ask-text.js';
+import { heldUntilReady, isVanillaPath, openVanillaFile, refusedText, vanillaPaths } from './open-files.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** tools/desktop/smoke.mjs: the fused release build has no inspector, so the page reaches the menu (preload.ts). */
@@ -68,6 +69,20 @@ app.on('open-url', (e, url) => {
 });
 // The packed app's Info.plist names the scheme (desktop/electron-builder.config.cjs `protocols`); this makes it the handler.
 if (app.isPackaged) app.setAsDefaultProtocolClient(APP_SCHEME);
+
+/**
+ * `.vanilla` files (#545): a double-click in Finder, «Öffnen mit», a drop on the Dock icon. macOS
+ * hands them over by `open-file`, also when the file starts the app and before it is ready, so they
+ * are held until the server listens (src/desktop/open-files.ts), with or without books open.
+ * The Info.plist names the type (desktop/electron-builder.config.cjs `fileAssociations`).
+ */
+const handedFiles = heldUntilReady<string>();
+app.on('open-file', (e, path) => {
+  e.preventDefault();
+  if (isVanillaPath(path)) handedFiles.add(path);
+});
+// Elsewhere than on the Mac a file comes as an argument of the start.
+for (const path of process.platform === 'darwin' ? [] : vanillaPaths(process.argv.slice(1))) handedFiles.add(path);
 
 if (!app.requestSingleInstanceLock()) app.quit();
 // A start that fails says so and ends: never a running app without a window.
@@ -113,7 +128,10 @@ async function start(): Promise<void> {
   // A second start, a click on the Dock icon, `open -a`: the window in front. Listening before the
   // first wait of the start, so a start that hangs later (books that do not open, a login shell
   // that does not answer) still gives the person a window.
-  app.on('second-instance', () => bringUp(win, show, waiting));
+  app.on('second-instance', (_e, argv) => {
+    if (process.platform !== 'darwin') for (const path of vanillaPaths(argv.slice(1))) handedFiles.add(path);
+    bringUp(win, show, waiting);
+  });
   app.on('activate', () => bringUp(win, show, waiting));
   await app.whenReady();
   const { homepage } = appPackage();
@@ -277,9 +295,23 @@ async function start(): Promise<void> {
         .finally(() => { if (win && !win.isDestroyed()) win.setProgressBar(-1); });
     }
   };
-  // Started by a link: it opens instead of the books opened last (those open when the person says no).
+  /** A handed-over file opens as «Öffnen…» in the app opens it: a hand-over as its copy, a return to its review. */
+  const openFile = (path: string) => {
+    win?.setProgressBar(2);
+    void openVanillaFile(path, base!)
+      .then((page) => show(page))
+      .catch(async (e: unknown) => {
+        const t = textsIn(language);
+        await dialog.showMessageBox({ type: 'warning', message: t('desktop.fileOpenFailed', { file: basename(path) }), detail: refusedText(t, e) });
+        if (!win || win.isDestroyed()) lastBooks();
+      })
+      .finally(() => { if (win && !win.isDestroyed()) win.setProgressBar(-1); });
+  };
+  // Started by a link or a file: it opens instead of the books opened last (those open when the person says no, or it fails).
+  const startedWith = shareLinks.length > 0 || handedFiles.held > 0;
+  handedFiles.ready(openFile);
   if (shareLinks.length) openShares();
-  else lastBooks();
+  if (!startedWith) lastBooks();
   app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
   void checkForUpdates();
 }

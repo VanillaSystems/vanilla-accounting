@@ -64,3 +64,6 @@
 .st-badge { flex: none; font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--ink-2); }
 .st-noai { font-size: 13px; line-height: 1.5; margin: -16px 0 24px; padding: 10px 12px; border-left: 3px solid var(--warn); background: var(--warn-soft); border-radius: 0 8px 8px 0; color: var(--ink); }
 .st-byhand { margin-right: auto; font-size: 13px; color: var(--muted); }
+/* A file dragged over the start screen (#545): a `.vanilla` hand-over opens when dropped. */
+.st.st-dropping { outline: 2px dashed var(--accent); outline-offset: -8px; }
+.st-drop-error { max-width: 640px; margin: 8px auto 0; }
