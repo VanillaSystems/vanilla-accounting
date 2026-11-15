@@ -463,7 +463,7 @@ Kept as hard rules, each for its reason:
 ### 4.12 Values that change over time (owner, 2026-11-15)
 
 The owner asked whether the app takes change into account: a price, a customer's terms or the
-firm's IBAN all change. It does, by the rule of docs/specs/domain-model.md §7 (branch
+firm's IBAN all change. It does, by the rule of docs/specs/domain-model.md §5 (branch
 `spec/domain-model`). Each such value is a dated history (`Dated<T>`: `validFrom`, optional
 `validUntil`, never overwritten). A document reads the value valid on its own date, and an issued
 document keeps what it printed.
