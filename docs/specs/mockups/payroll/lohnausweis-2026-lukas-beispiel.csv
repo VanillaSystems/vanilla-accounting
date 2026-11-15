@@ -1,0 +1,24 @@
+﻿Person;Lukas Beispiel;;
+Zeitraum;01.01.2026–30.09.2026;;
+Ziffer;Feld;Betrag CHF;Herkunft
+1;Lohn;77400.00;9 Läufe, Monatslohn 8'600.00
+2.1;Gehaltsnebenleistungen: Verpflegung, Unterkunft;;
+2.2;Gehaltsnebenleistungen: Privatanteil Geschäftsfahrzeug;;September ohne Kaufpreis freigegeben: fehlt hier
+2.3;Gehaltsnebenleistungen: übrige;;
+3;Unregelmässige Leistungen;;
+4;Kapitalleistungen;;
+5;Beteiligungsrechte;;
+6;Verwaltungsratsentschädigungen;;
+7;Andere Leistungen;;
+8;Bruttolohn total;77400.00;Ziffern 1 bis 7
+9;Beiträge AHV/IV/EO/ALV/NBUV;4953.60;AHV/IV/EO 4'102.20 + ALV 851.40; NBU trägt die Firma
+10.1;Berufliche Vorsorge: ordentliche Beiträge;2137.50;9 × 237.50 laut Vorsorgeausweis
+10.2;Berufliche Vorsorge: Beiträge für den Einkauf;;
+11;Nettolohn;70308.90;Ziffer 8 − 9 − 10; gleich den 9 Zahlungen
+12;Quellensteuerabzug;;
+13.1;Spesenvergütungen: effektive;;Spesen über 2451 erstattet, nicht im Lohn
+13.2;Spesenvergütungen: pauschale;;
+15;Bemerkungen;;
+
+Lohnbescheinigung Ausgleichskasse;AHV-Lohn 01.01.–30.09.2026;77400.00;9 Läufe
+Lohnbescheinigung Ausgleichskasse;ALV-Lohn 01.01.–30.09.2026;77400.00;9 Läufe

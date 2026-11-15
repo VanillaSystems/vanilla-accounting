@@ -1,0 +1,134 @@
+/* New parts of the payroll prototype. App tokens only (tokens.css). */
+a.row, a.row:visited, a.pay { color: inherit; text-decoration: none; }
+.pr-lines li .mono { white-space: nowrap; }
+a.btn { text-decoration: none; }
+a.clink, a.golink { text-decoration: none; cursor: pointer; }
+.activity a.it:not([href]) { cursor: default; }
+.pbar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 60; display: flex; gap: 4px; align-items: center; padding: 5px 6px 5px 12px; border-radius: 12px; background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--glass-line); box-shadow: var(--shadow); font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+.pbar b { font-weight: 600; color: var(--ink); margin-right: 6px; }
+.pbar .n { font-family: "Geist Mono", monospace; color: var(--muted); margin-right: 6px; }
+.pbar a { color: var(--ink); text-decoration: none; padding: 4px 9px; border-radius: 8px; }
+.pbar a:hover { background: var(--hover); }
+.pbar a.next { background: var(--accent); color: var(--on-accent); }
+.pbar a.off { color: var(--faint); pointer-events: none; }
+.pr-sec { padding: 16px 0 4px; border-top: 1px solid var(--line); margin-top: 16px; }
+.pr-sec:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+.pr-sec > h3 { margin: 0 0 10px; font: 600 11px "Instrument Sans"; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.pr-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; max-width: 640px; }
+.pr-grid .wide { grid-column: 1 / -1; }
+.pr-grid input.num { text-align: right; }
+.pr-well { border: 1.5px dashed var(--line-2); border-radius: 14px; padding: 18px; display: grid; gap: 10px; max-width: 640px; }
+.pr-well .ttl { font-weight: 600; }
+.pr-well ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.pr-well li { display: flex; gap: 10px; align-items: center; color: var(--ink-2); font-size: 13px; }
+.pr-well li .doc { width: 26px; height: 32px; border-radius: 4px; border: 1px solid var(--line-2); background: var(--paper-bg); flex: none; }
+.pr-well li .st { margin-left: auto; font-size: 12px; color: var(--muted); }
+.pr-well li .st.ok { color: var(--pos); }
+.pr-well .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pr-card { border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; max-width: 760px; background: var(--bg); }
+.pr-card > header { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line); font-weight: 600; }
+.pr-card > header small { margin-left: auto; font-weight: 500; font-size: 11px; color: var(--ai); background: var(--accent-soft); padding: 2px 8px; border-radius: 999px; }
+.pr-card > header svg { width: 15px; height: 15px; stroke: var(--ai); fill: none; stroke-width: 1.7; }
+.pr-card .pv { padding: 9px 14px; background: var(--hover); color: var(--ink-2); font-size: 12.5px; border-top: 1px solid var(--line); }
+.pr-card .pv b { color: var(--ink); }
+.pr-card .pa { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--line); flex-wrap: wrap; align-items: center; }
+.pr-card .pa .m { margin-left: auto; color: var(--muted); font-size: 12px; }
+table.pr-t { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.pr-t th.pr-r { text-align: right; }
+table.pr-t th { text-align: left; font: 600 10.5px "Instrument Sans"; letter-spacing: .07em; text-transform: uppercase; color: var(--faint); padding: 8px 10px 6px; border-bottom: 1px solid var(--line); }
+table.pr-t td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.pr-t tr:last-child td { border-bottom: 0; }
+table.pr-t .pr-r { text-align: right; white-space: nowrap; font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
+table.pr-t .mono { font-family: "Geist Mono", monospace; }
+table.pr-t .pr-src { color: var(--muted); font-size: 12px; }
+table.pr-t .pr-app { color: var(--muted); font-size: 11px; border: 1px solid var(--line-2); border-radius: 5px; padding: 0 5px; white-space: nowrap; }
+table.pr-t .pr-ai { color: var(--ai); font-size: 11px; border: 1px solid color-mix(in srgb, var(--ai) 40%, transparent); border-radius: 5px; padding: 0 5px; white-space: nowrap; }
+table.pr-t tr.pr-sum td { font-weight: 600; border-top: 1px solid var(--line-2); }
+table.pr-t tr.pr-net td { font-weight: 700; font-size: 14px; border-top: 1.5px solid var(--ink); }
+table.pr-t tr.pr-grp td { padding-top: 14px; font: 600 11px "Instrument Sans"; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--line); }
+table.pr-t tr.pr-dim td { color: var(--muted); }
+table.pr-t a { color: var(--accent); text-decoration: none; }
+.pr-fine { margin-top: 14px; font-size: 11.5px; color: var(--faint); max-width: 70ch; line-height: 1.5; }
+.pr-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; font-size: 12.5px; color: var(--ink-2); }
+.pr-checks li { display: grid; grid-template-columns: 16px 1fr; gap: 6px; }
+.pr-checks li::before { content: "✓"; color: var(--pos); font-weight: 600; }
+.pr-checks li.wait::before { content: "·"; color: var(--muted); }
+.pr-lines { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 12px; }
+.pr-lines li { display: grid; grid-template-columns: 104px 1fr auto; gap: 8px; color: var(--ink-2); }
+.pr-lines li .mono { font-family: "Geist Mono", monospace; }
+.pr-lines li .r { text-align: right; font-family: "Geist Mono", monospace; }
+.pr-lines li.on { color: var(--ink); font-weight: 600; }
+.pr-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--warn-soft); color: var(--warn); }
+.pr-state.ok { background: var(--pos-soft); color: var(--pos); }
+.pr-sheet { width: 420px; height: 594px; overflow: hidden; position: relative; border-radius: 4px; box-shadow: 0 1px 2px rgba(11,18,32,.06), 0 0 0 1px var(--line), 0 24px 48px -28px rgba(11,18,32,.28); background: var(--paper-bg); }
+.pr-sheet iframe { width: 794px; height: 1123px; border: 0; transform: scale(.529); transform-origin: 0 0; pointer-events: none; }
+.pr-sheet a.cover { position: absolute; inset: 0; }
+.pr-deskhead { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--muted); margin-bottom: 10px; }
+.pr-deskhead a { color: var(--accent); text-decoration: none; }
+.pr-badge { font-size: 11px; color: var(--muted); border: 1px solid var(--line-2); border-radius: 5px; padding: 0 5px; margin-left: 6px; }
+.pr-row-new .t::after { content: "neu"; margin-left: 8px; font-size: 10.5px; color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); border-radius: 5px; padding: 0 4px; vertical-align: 1px; }
+.pr-note { margin: 8px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--hover); font-size: 12.5px; color: var(--ink-2); line-height: 1.5; max-width: 760px; }
+.pr-note b { color: var(--ink); }
+.pr-hide { display: none !important; }
+.pr-tools { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; font-size: 12px; color: var(--muted); max-width: 760px; }
+.pr-tools > span { font-family: "Geist Mono", monospace; white-space: nowrap; }
+.pr-scroll { overflow-x: auto; max-width: 100%; }
+.desk { min-width: 0; }
+.pr-agr { display: block; color: var(--muted); font-size: 11px; }
+table.pr-run td, table.pr-run th { padding-left: 6px; padding-right: 6px; }
+table.pr-run td:first-child { padding-left: 0; }
+table.pr-run.pr-withag { table-layout: fixed; }
+table.pr-run.pr-withag th:nth-child(2) { width: 72px; } table.pr-run.pr-withag th:nth-child(3) { width: 74px; } table.pr-run.pr-withag th:nth-child(4) { width: 80px; } table.pr-run.pr-withag th:nth-child(5) { width: 70px; }
+table.pr-run td.pr-r { white-space: nowrap; }
+table.pr-run th { white-space: nowrap; overflow: hidden; }
+table.pr-run td { overflow-wrap: anywhere; }
+table.pr-run .pr-src { font-size: 11.5px; }
+.pr-seg { margin-left: auto; display: flex; gap: 2px; background: var(--hover); border-radius: 8px; padding: 2px; }
+.pr-seg button { font: inherit; font-size: 12px; padding: 3px 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.pr-seg button.on { background: var(--bg); color: var(--ink); box-shadow: var(--shadow); }
+table.pr-run .pr-ag, table.pr-run tr.pr-agonly { display: none; }
+table.pr-run.pr-withag .pr-ag { display: table-cell; }
+table.pr-run.pr-withag tr.pr-agonly { display: table-row; }
+table.pr-run th.pr-ag, table.pr-run td.pr-ag { background: var(--hover); }
+table.pr-t tr.pr-miss td { color: var(--neg); }
+table.pr-t tr.pr-miss .pr-src { color: var(--neg); }
+.pr-tag { display: inline-block; white-space: nowrap; margin-left: 8px; font-size: 10.5px; color: var(--neg); border: 1px solid color-mix(in srgb, var(--neg) 45%, transparent); border-radius: 5px; padding: 0 5px; vertical-align: 1px; }
+.pr-fill { height: 22px; font-size: 11px; padding: 0 6px; }
+table.pr-t tr.pr-add td { border-bottom: 0; padding-top: 2px; }
+table.pr-t tr.pr-add .btn { height: 24px; font-size: 12px; color: var(--muted); }
+.pr-state.pr-bad { background: color-mix(in srgb, var(--neg) 12%, transparent); color: var(--neg); }
+.pr-checks li.warn { color: var(--neg); }
+.pr-checks li.warn::before { content: "!"; color: var(--neg); font-weight: 700; }
+.pr-preview { margin-top: 18px; }
+.pr-card > header small.plain { color: var(--muted); background: var(--hover); }
+.pr-warn { margin: 12px 0 4px; max-width: 760px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: var(--warn-soft); border-radius: 12px; padding: 12px 16px; font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+.pr-warn h3 { margin: 0 0 6px; font: 600 14px "Hanken Grotesk", sans-serif; color: var(--ink); }
+.pr-warn ul { margin: 6px 0; padding-left: 18px; }
+.pr-warn p { margin: 4px 0; }
+.pr-warn .m { color: var(--muted); font-size: 12px; }
+.pr-warn .acts { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.pr-hist { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.pr-hist .mono { font-family: "Geist Mono", monospace; color: var(--muted); margin-right: 6px; }
+table.pr-people tr.pr-pick { cursor: pointer; }
+table.pr-people tr.pr-pick:hover td { background: var(--hover); }
+table.pr-people tr.pr-on td { background: var(--accent-soft); }
+table.pr-people td a { color: var(--ink); font-weight: 600; }
+table.pr-people tr.pr-miss td a { color: var(--neg); }
+table.pr-people tr.pr-dim td a { color: var(--muted); }
+table.pr-people .pr-src { font-weight: 400; }
+.pr-hours { display: inline-flex; gap: 6px; align-items: center; }
+.pr-hours input { width: 64px; height: 24px; box-sizing: border-box; text-align: right; font: 12.5px "Geist Mono", monospace; color: var(--ink); background: var(--bg); border: 1px solid var(--neg); border-radius: 6px; padding: 0 6px; }
+.pr-hours input[aria-invalid="true"] { box-shadow: 0 0 0 2px color-mix(in srgb, var(--neg) 30%, transparent); }
+.pr-runtop { margin: 14px 0 6px; max-width: 820px; }
+.pr-runtop table.pr-people td:first-child { min-width: 220px; }
+.pr-say { margin: 4px 0 12px; font-size: 14px; color: var(--ink-2); max-width: 760px; line-height: 1.55; }
+.pr-say b { color: var(--ink); font-family: "Geist Mono", monospace; font-weight: 600; }
+h3.pr-h { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; margin: 22px 0 8px; font: 600 14px "Hanken Grotesk", sans-serif; color: var(--ink); max-width: 760px; }
+h3.pr-h .m { font: 400 12.5px "Instrument Sans", sans-serif; color: var(--muted); }
+h3.pr-h .m a, .pr-pers a { color: var(--accent); text-decoration: none; }
+.pr-state.pr-neutral { background: var(--hover); color: var(--ink-2); }
+.pr-pers { display: flex; gap: 4px; flex-wrap: wrap; margin: 0 0 10px; }
+.pr-pers a { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--line-2); color: var(--ink-2); }
+.pr-pers a.sel { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--ink); }
+.pr-tbl-in input { width: 100%; box-sizing: border-box; height: 28px; font: inherit; font-size: 12.5px; color: var(--ink); background: var(--bg); border: 1px solid var(--line-2); border-radius: 7px; padding: 0 7px; }
+.pr-tbl-in input.num { text-align: right; font-family: "Geist Mono", monospace; }

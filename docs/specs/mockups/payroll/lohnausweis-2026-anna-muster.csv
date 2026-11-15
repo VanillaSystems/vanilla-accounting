@@ -1,0 +1,24 @@
+﻿Person;Anna Muster;;
+Zeitraum;01.01.2026–30.09.2026;;
+Ziffer;Feld;Betrag CHF;Herkunft
+1;Lohn;59400.00;9 Läufe: 6 × 6'500.00, 3 × 6'800.00 ab 01.07.2026
+2.1;Gehaltsnebenleistungen: Verpflegung, Unterkunft;;
+2.2;Gehaltsnebenleistungen: Privatanteil Geschäftsfahrzeug;;
+2.3;Gehaltsnebenleistungen: übrige;;
+3;Unregelmässige Leistungen;;13. Monatslohn kommt mit dem Lauf Dezember in Ziffer 1
+4;Kapitalleistungen;;
+5;Beteiligungsrechte;;
+6;Verwaltungsratsentschädigungen;;
+7;Andere Leistungen;;
+8;Bruttolohn total;59400.00;Ziffern 1 bis 7
+9;Beiträge AHV/IV/EO/ALV/NBUV;3801.60;AHV/IV/EO 3'148.20 + ALV 653.40; NBU trägt die Firma
+10.1;Berufliche Vorsorge: ordentliche Beiträge;2404.20;6 × 262.50 + 3 × 276.40 laut Vorsorgeausweisen
+10.2;Berufliche Vorsorge: Beiträge für den Einkauf;;
+11;Nettolohn;53194.20;Ziffer 8 − 9 − 10; gleich den 9 Zahlungen
+12;Quellensteuerabzug;;
+13.1;Spesenvergütungen: effektive;;
+13.2;Spesenvergütungen: pauschale;;
+15;Bemerkungen;;
+
+Lohnbescheinigung Ausgleichskasse;AHV-Lohn 01.01.–30.09.2026;59400.00;9 Läufe
+Lohnbescheinigung Ausgleichskasse;ALV-Lohn 01.01.–30.09.2026;59400.00;9 Läufe
