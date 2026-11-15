@@ -34,6 +34,8 @@ import { aiSetup } from '../server/ai-setup.js';
 import { qrSvg } from './qr.js';
 import { opened, readState, writeState, type PhonePairing } from './state.js';
 import { isDurchsichtCopy } from '../handover/content.js';
+import { openPackage } from '../handover/durchsicht.js';
+import { PackageError } from '../handover/package.js';
 
 export interface DesktopServerOptions {
   /** desktop.json in the user data folder. */
@@ -480,6 +482,23 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   app.post('/api/desktop/demo', async (_req, res) => {
     try { res.json(await openDemo()); } catch (e) { refuse(res, e); }
   });
+  /**
+   * A `.vanilla` file dropped on the start screen or handed over by Finder (src/desktop/open-files.ts).
+   * With books open it goes where «Öffnen…» in the books sends it (a return to its review there).
+   * With none, a hand-over opens as its Durchsicht copy, which is books of its own, and a return is
+   * refused (shareWrongKind): it belongs in the books it was shared from.
+   */
+  app.post('/api/desktop/handover', (req, res, next) => {
+    if (!books) return next();
+    req.url = '/api/handover/open';
+    books(req, res, next);
+  }, express.raw({ type: () => true, limit: '1gb' }), async (req, res) => {
+    try {
+      const opened = openPackage(new Uint8Array(Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)));
+      await openBooks(opened.root);
+      res.json({ kind: opened.kind, firm: opened.marker.firm.name, version: opened.marker.version.n, conflicts: opened.conflicts, dropped: opened.dropped });
+    } catch (e) { refuse(res, e); }
+  });
   app.post('/api/desktop/upgrade', async (req, res) => {
     const root = (req.body as { root?: unknown }).root;
     if (typeof root !== 'string' || !root.trim()) return refuse(res, new WorkspaceError('No folder given.'));
@@ -541,6 +560,7 @@ function refuse(res: express.Response, e: unknown): void {
   if (e instanceof SetupError) res.status(400).json({ error: e.message, code: 'setup', params: e.refusal } satisfies ApiErrorBody);
   else if (e instanceof WorkspaceRefusal) res.status(400).json({ error: e.message, ...e.refusal } satisfies ApiErrorBody);
   else if (e instanceof WorkspaceError) res.status(400).json({ error: e.message, code: 'notWorkspace' } satisfies ApiErrorBody);
+  else if (e instanceof PackageError) res.status(e.code === 'shareTooLarge' ? 413 : 400).json({ error: e.message, code: e.code, params: e.params } as ApiErrorBody);
   else res.status(500).json({ error: e instanceof Error ? e.message : String(e) });
 }
 

@@ -2585,6 +2585,10 @@ export const messages = {
   'invoiceLayout.mailHint': 'Für Rechnungen, Mahnungen und Storno-Mitteilungen; {document} und {company} werden eingesetzt.',
   // Release track B: the desktop app (start screen, native menu, claude CLI).
   'desktop.welcome': 'Wähle die Buchhaltung, mit der du arbeiten willst.',
+  'desktop.fileOpenFailed': "«{file}» liess sich nicht öffnen.",
+  'desktop.fileIsReturn': "Das ist eine Rücksendung: sie gehört in die Buchhaltung, aus der geteilt wurde. Öffne zuerst diese Buchhaltung, dann die Datei.",
+  'desktop.dropOnlyVanilla': "Hier öffnet die App nur eine geteilte Buchhaltung (eine .vanilla-Datei). Belege und Kontoauszüge ziehst du in eine geöffnete Buchhaltung.",
+  'desktop.dropVanilla': "Eine geteilte Buchhaltung (.vanilla-Datei) öffnest du, indem du sie hierher ziehst oder im Finder doppelt anklickst.",
   'desktop.switchBooks': 'Offen ist {name}. Wähle eine andere Buchhaltung.',
   'desktop.backTo': 'Zurück zu {name}',
   'desktop.open': 'Bestehende Buchhaltung öffnen',

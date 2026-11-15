@@ -2588,6 +2588,10 @@ export default {
     'invoiceLayout.mailHint': 'For invoices, reminders and cancellation notices; {document} and {company} are filled in.',
     // Release track B: the desktop app (start screen, native menu, claude CLI).
     'desktop.welcome': 'Choose the books you want to work on.',
+    'desktop.fileOpenFailed': "«{file}» could not be opened.",
+    'desktop.fileIsReturn': "This is a return: it belongs in the books it was shared from. Open those books first, then the file.",
+    'desktop.dropOnlyVanilla': "Here the app opens shared books only (a .vanilla file). Drag receipts and bank statements into open books.",
+    'desktop.dropVanilla': "To open shared books (a .vanilla file), drag it here or double-click it in the Finder.",
     'desktop.switchBooks': '{name} is open. Choose other books.',
     'desktop.backTo': 'Back to {name}',
     'desktop.open': 'Open existing books',

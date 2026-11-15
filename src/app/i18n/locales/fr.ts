@@ -2588,6 +2588,10 @@ export default {
     'invoiceLayout.mailHint': 'Pour factures, rappels et avis d’annulation ; {document} et {company} sont remplacés.',
     // Release track B: the desktop app (start screen, native menu, claude CLI).
     'desktop.welcome': 'Choisis la comptabilité avec laquelle tu veux travailler.',
+    'desktop.fileOpenFailed': "«{file}» n’a pas pu être ouvert.",
+    'desktop.fileIsReturn': "C’est un retour : il va dans la comptabilité depuis laquelle elle a été partagée. Ouvre d’abord cette comptabilité, puis le fichier.",
+    'desktop.dropOnlyVanilla': "Ici, l’app n’ouvre qu’une comptabilité partagée (un fichier .vanilla). Glisse les justificatifs et les relevés dans une comptabilité ouverte.",
+    'desktop.dropVanilla': "Pour ouvrir une comptabilité partagée (fichier .vanilla), glisse-la ici ou double-clique dessus dans le Finder.",
     'desktop.switchBooks': '{name} est ouverte. Choisis une autre comptabilité.',
     'desktop.backTo': 'Retour à {name}',
     'desktop.open': 'Ouvrir une comptabilité existante',
