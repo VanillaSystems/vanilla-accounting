@@ -4,7 +4,8 @@
  */
 import type { Response } from 'express';
 import type { Index, Receipt } from '../types/index.js';
-import { ClosedPeriodError, loadBooks, periodLock, receiptFile, saveBooks, StaleBooksError, update, updateSaved, PERSON, type Books } from '../books/store.js';
+import { ClosedPeriodError, loadBooks, periodLock, receiptFile, saveBooks, StaleBooksError, update, updateSaved, PERSON, type Actor, type Books } from '../books/store.js';
+import { markerOf, recipientActor } from '../handover/durchsicht.js';
 import type { ApiRefusal, ClosedReason } from '../types/api-error.js';
 import { locateWorkspace, openWorkspace, openWorkspaceAt } from '../workspace/workspace.js';
 import { demoCopy } from '../workspace/demo-copy.js';
@@ -58,13 +59,22 @@ type Sync<T> = T extends PromiseLike<unknown> ? never : T;
  * `fn` also writes elsewhere (a file, the invoice book) uses updateBooksWithEffects.
  */
 export function updateBooks<T>(fn: (books: Books) => Sync<T>): T {
-  return updateSaved(WS, PERSON, fn, readBooks);
+  return updateSaved(WS, actorNow(), fn, readBooks);
+}
+
+/**
+ * Who changes the books through the API: the person using the app. On a Durchsicht copy
+ * (src/handover/durchsicht.ts) that person is the recipient, named, as a person-type actor.
+ */
+export function actorNow(): Actor {
+  const m = markerOf(WS.paths.root);
+  return m ? recipientActor(m) : PERSON;
 }
 
 /** updateBooks for an `fn` that writes outside the books too: never run twice, a stale save is refused (409 booksChanged). */
 export function updateBooksWithEffects<T>(fn: (books: Books) => Sync<T>): T {
   const books = readBooks();
-  const result = update(books, PERSON, fn);
+  const result = update(books, actorNow(), fn);
   saveBooks(WS, books);
   return result;
 }
@@ -156,3 +166,12 @@ export function stringField(b: Record<string, unknown>, key: string): string {
   if (typeof b[key] !== 'string') throw new RequestError(400, `${key} muss ein Text sein.`);
   return b[key] as string;
 }
+
+/**
+ * Opens other books for the rest of the process: a Durchsicht copy a hand-over made, or back to the
+ * books opened before it. The Mac app sets its own (src/desktop/server.ts), which also lists them
+ * under the recent books.
+ */
+let opener: (root: string) => Promise<void> = async (root) => reopenWorkspace(root);
+export const setBooksOpener = (fn: (root: string) => Promise<void>): void => { opener = fn; };
+export const openBooksAt = (root: string): Promise<void> => opener(root);

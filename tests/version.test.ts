@@ -4,8 +4,11 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { appVersion, describeBuild, versionFrom } from '../src/version.js';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { appVersion, describeBuild, isCut, versionFrom } from '../src/version.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
 
 const cases: Array<[planned: string, describe: string | undefined, version: string]> = [
@@ -28,6 +31,45 @@ const cases: Array<[planned: string, describe: string | undefined, version: stri
 for (const [planned, describe, version] of cases) {
   test(`${planned} with "${describe}" is ${version}`, () => assert.equal(versionFrom(planned, describe), version));
 }
+
+// Cut but not tagged (CHANGELOG.md dates the version, no tag yet): the release's name, so its dmg is built and smoke-tested once.
+const cut: Array<[planned: string, describe: string, version: string]> = [
+  ['0.6.0', 'v0.5.0-41-g1a2b3c4', '0.6.0'],
+  ['0.6.0', 'v0.6.0-rc.2-4-g1a2b3c4', '0.6.0'],
+  ['0.6.0', '1a2b3c4', '0.6.0'],
+  // never a dirty build
+  ['0.6.0', 'v0.5.0-41-g1a2b3c4-dirty', '0.6.0-rc.41+g1a2b3c4.dirty'],
+];
+for (const [planned, describe, version] of cut) {
+  test(`${planned} cut, with "${describe}", is ${version}`, () => assert.equal(versionFrom(planned, describe, true), version));
+}
+
+test('a release is cut while CHANGELOG.md dates its version and no tag names it', () => {
+  const repo = mkdtempSync(join(tmpdir(), 'version-cut-'));
+  const sh = (...a: string[]) => execFileSync('git', ['-C', repo, ...a], { stdio: 'ignore' });
+  sh('init', '-q');
+  writeFileSync(join(repo, 'package.json'), JSON.stringify({ version: '0.6.0' }));
+  writeFileSync(join(repo, 'CHANGELOG.md'), '## [Unreleased]\n\n## [0.5.0] - 2026-11-13\n');
+  sh('add', '.');
+  sh('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qm', 'work towards 0.6.0');
+  sh('tag', '-a', 'v0.5.0', '-m', 'v0.5.0');
+  assert.equal(isCut(repo, '0.6.0'), false);
+  assert.match(describeBuild(repo).version, /^0\.6\.0\+g[0-9a-f]+$|^0\.6\.0-rc\.0\+g/);
+  writeFileSync(join(repo, 'CHANGELOG.md'), '## [Unreleased]\n\n## [0.6.0] - 2026-11-14\n\n## [0.5.0] - 2026-11-13\n');
+  sh('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-qam', 'Release 0.6.0');
+  assert.equal(isCut(repo, '0.6.0'), true);
+  assert.equal(describeBuild(repo).version, '0.6.0');
+  assert.equal(describeBuild(repo).file, '0.6.0');
+  writeFileSync(join(repo, 'stray.txt'), 'x');
+  sh('add', 'stray.txt');
+  assert.match(describeBuild(repo).version, /\.dirty$/);
+  sh('rm', '-q', '--cached', 'stray.txt');
+  rmSync(join(repo, 'stray.txt'));
+  sh('tag', '-a', 'v0.6.0', '-m', 'v0.6.0');
+  assert.equal(isCut(repo, '0.6.0'), false);
+  assert.equal(describeBuild(repo).version, '0.6.0');
+  rmSync(repo, { recursive: true, force: true });
+});
 
 test('this checkout: the version package.json names, a file name without +, a climbing number', () => {
   const { version: planned } = JSON.parse(readFileSync(`${APP_ROOT}/package.json`, 'utf8')) as { version: string };

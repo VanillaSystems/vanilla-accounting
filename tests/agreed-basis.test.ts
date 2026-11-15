@@ -399,6 +399,22 @@ test('a prepayment of the whole invoice, matched by its reference before the inv
   setJurisdiction(ch, EFFECTIVE_QUARTERLY);
 });
 
+test('#524 a receipt a person linked to an invoice\'s event: a prepayment of part keeps it on the event booked for the rest; one of the whole takes it along with the event', () => {
+  setJurisdiction(ch, AGREED);
+  for (const [paid, stays] of [[500, true], [1081, false]] as const) {
+    const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [], sent: [] };
+    const inv = issued(book, draft('i1', '2026-10-20', 1000));
+    const b = books('2026-06-30', [tx('p1', '2026-09-28', paid, 'CRDT', { reference: inv.reference })]);
+    bookInvoiceEvents(b, book, ctx);
+    const ref = eventRef(inv, 'issue');
+    b.mappings.push({ transactionRef: ref, receiptId: 'hers', by: 'human' });
+    assert.deepEqual(matchPayments(b, book, ctx).paid.map((p) => p.transactionRef), ['p1']);
+    assert.deepEqual(b.journalEntries.filter((e) => e.transactionRef === ref).map((e) => e.amount), stays ? [1081 - paid] : [], `${paid}: the event for the rest`);
+    assert.equal(b.mappings.some((m) => m.transactionRef === ref && m.receiptId === 'hers'), stays, `${paid}: her link goes only with the event`);
+  }
+  setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+});
+
 test('a prepayment a person booked with revenue is kept when confirmed: the event keeps the rest, nothing is refused', () => {
   setJurisdiction(ch, AGREED);
   const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [], sent: [] };

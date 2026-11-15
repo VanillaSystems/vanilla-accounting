@@ -37,7 +37,7 @@ Two sandboxes can run side by side because each one has its own ports, data, and
 $S doctor my-run
 ```
 
-The doctor is read-only. Every line must say `ok`. It checks that the PIDs are alive, that each port is owned by our PID and the API's only on loopback, that the API's cwd and `VANILLA_WORKSPACE` are the sandbox, that the API keeps its local state beside the sandbox, and that it finds the refusing `claude` shim. It also checks `/api/status`, that the UI serves and compiles the app (its Vite config is `.verify/vite.<run>.config.mjs` in the repo, so it resolves the repo's node_modules) and proxies `/api` to this sandbox, that the UI serves the same books as the sandbox API (by SHA), a sandbox receipt PDF and a sandbox bank statement PDF (byte for byte), and that **the real workspace's books (`ledger.json` and every `books/*.jsonl`) are unchanged since `up`**. It prints the workspace's `closedThrough`. Run it first, and again whenever something looks off. If a line is `FAIL`, run `down` and then `up` instead of driving a half-working instance.
+The doctor is read-only. Every line must say `ok`. It checks that the PIDs are alive, that each port is owned by our PID and the API's only on loopback, that the API's cwd and `VANILLA_WORKSPACE` are the sandbox, that the API keeps its local state beside the sandbox, and that it finds the refusing `claude` shim. It also checks `/api/status`, that the UI serves and compiles the app (its Vite config is `.verify/vite.<run>.config.mjs` in the repo, so it resolves the repo's node_modules) and its bundled fonts (a worktree's linked node_modules is on Vite's allow list) and proxies `/api` to this sandbox, that the UI serves the same books as the sandbox API (by SHA), a sandbox receipt PDF and a sandbox bank statement PDF (byte for byte), and that **the real workspace's books (`ledger.json` and every `books/*.jsonl`) are unchanged since `up`**. It prints the workspace's `closedThrough`. Run it first, and again whenever something looks off. If a line is `FAIL`, run `down` and then `up` instead of driving a half-working instance.
 
 ## Drive
 
@@ -52,9 +52,12 @@ $B snapshot -i -c                            # interactive elements as @e refs
 $B click @e14 ; $B fill <sel> "text" ; $B press Enter
 $B js "<expr>"                               # read DOM state / dispatch events
 $B dialog                                    # alert() texts (the app reports API errors via alert, auto-accepted)
+$B js "document.fonts.ready.then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))).then(() => [...document.fonts].filter(f => f.status === 'error').length + ' fonts failed')"
 $B screenshot --viewport "$EVIDENCE/<feature>/NN-step.png"
 $B closetab
 ```
+
+**Fonts before every screenshot.** Run the `document.fonts.ready` line above right before each `screenshot`: the app's webfonts load after its first paint, and a capture before them shows the fallback fonts. It must answer `0 fonts failed`; more means Vite refused the font files (doctor's `UI serves the app's fonts`), and the shot shows system fonts instead of the app's. `app.mjs`, `tools/desktop/smoke.mjs` and a test's `screenshot(page, path)` (tests/support/browser.ts) wait the same way; tests/css-fonts.test.ts holds every capture to it.
 
 These are the stable handles. They come from the source, not from coordinates.
 
@@ -136,6 +139,23 @@ node $A 05-drop "await pick('PDFs hierher ziehen', ['swisscom_juli.pdf'])" "awai
 Each call runs its steps, saves `$EVIDENCE/<name>.png` (the page) and prints the URL and the visible text. The steps and their helpers are in the head of `app.mjs`.
 
 **Evidence** goes to `.verify/evidence/<run>/` like the sandbox's: `NN-step.png` and `.s.png` (whole screen), the page shots, and `app.log` (copied by `down`). The side effect of a step is read in the VM, for example `$V sh 'cat ~/Documents/"Buchhaltung Malerei Huber GmbH"/vanilla-accounting/belege.workspace.yaml'`.
+
+**Sharing by link without a confirmation mail.** «Teilen» › «Per Link» needs a sender the share service has confirmed, and a confirmation is a real mail from that address (docs/share-protocol.md §4). This Mac keeps one confirmed sender, `{ service, email, token }`, in `~/.vanilla-accounting/e2e/share-sender` (mode 600, beside `claude-token`, never in a repo, never printed). On the sharer's VM, before `$V app`:
+
+```bash
+$V sender     # checks the token at the service, then seals it into the VM app's secrets.json
+$V app        # starts the app with --use-mock-keychain: «Per Link» shows no confirmation step
+```
+
+The app seals its secrets with a keychain key only the app may read, and the keychain prompt takes no keys over VNC, so the sharer's app runs with Chromium's `--use-mock-keychain` (a fixed key, read by `launch.sh` from `vanilla-verify/args` in the VM). That VM then does not test the keychain path; the recipient's VM runs without the switch. `$V sender` replaces what the VM's app sealed before.
+
+When `$V sender` says the sender is missing, unconfirmed or refused (the service forgot the token), fall back to the mail: «Teilen» › «Adresse bestätigen» shows the address (`confirm@share.<domain>`) and the subject; the owner sends it from that mailbox with that address as the only From (another From is refused as `otherAddress`), within the hour the code lives. To keep the sender for the next runs, register it from this Mac rather than in the VM (a VM's token stays sealed there), so the token lands in the file, and ask the owner for the mail of the subject it prints:
+
+```bash
+# VANILLA_SHARE_SERVICE: the share service URL the release build uses (docs/releasing.md)
+(umask 077; curl -s -X POST "$VANILLA_SHARE_SERVICE/api/senders" -H 'content-type: application/json' -d '{"email":"<address>"}' | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);require("fs").writeFileSync(process.env.HOME+"/.vanilla-accounting/e2e/share-sender",JSON.stringify({service:process.env.VANILLA_SHARE_SERVICE,email:"<address>",token:r.senderToken}),{mode:0o600});console.log(r.confirmation.to,"·",r.confirmation.subject)})')
+node .claude/skills/verify/share-sender.mjs --check ~/.vanilla-accounting/e2e/share-sender   # «confirmed» once the mail arrived
+```
 
 **Cleanup.** `$V down my-vm` stops the tunnel it started, copies the app log, stops and deletes the VM; the evidence stays. `$V list` should not show it.
 

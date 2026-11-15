@@ -83,8 +83,15 @@ export interface ReceiptSkipOffer {
   receipts: Array<{ id: string; filename: string; date?: string }>;
 }
 
-/** A source as the Quellen page shows it: its verdict, whether each channel's secret is there (never its value), the senders it could skip. */
-export interface SourceRow { verdict: SourceVerdict; secrets: Array<{ channel: 'mail' | 'api'; present: boolean }>; skipOffers?: SkipOffer[] }
+/**
+ * «Immer beiseite» (src/platform/sources/aside.ts): a sender's files of one file-name shape, two or
+ * more set aside and none in the books. `files`: every file of the group the mailbox brought, with
+ * its day and whether it was set aside; `inBooks` is always 0, shown so the person sees it.
+ */
+export interface AsideOffer { sender: string; shape: string; files: Array<{ name: string; date: string; aside: boolean }>; inBooks: 0 }
+
+/** A source as the Quellen page shows it: its verdict, whether each channel's secret is there (never its value), the senders it could skip, the groups it could keep aside. */
+export interface SourceRow { verdict: SourceVerdict; secrets: Array<{ channel: 'mail' | 'api'; present: boolean }>; skipOffers?: SkipOffer[]; asideOffers?: AsideOffer[] }
 
 /**
  * Firma › Quellen: the sources, whether the app keeps a password it is given (the desktop app's

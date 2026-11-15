@@ -92,8 +92,11 @@ cmd_up() {
 
   API_PORT="$(claim_port 3556)"; UI_PORT="$(claim_port 5273)"
   # The Vite config lives in the repo (gitignored .verify/), so it and its plugins resolve the
-  # repo's node_modules; the sandbox holds no code.
+  # repo's node_modules; the sandbox holds no code. A worktree's node_modules is often a link to
+  # the main checkout's: Vite then serves the bundled fonts only when the link's target is on its
+  # allow list (without it they answer 403 and the app shows its fallback fonts).
   VITE_CONFIG="$REPO/.verify/vite.$RUN.config.mjs"; mkdir -p "$REPO/.verify"
+  local NM; NM="$(cd "$REPO/node_modules" && pwd -P)"
   cat > "$VITE_CONFIG" <<EOF
 import react from '@vitejs/plugin-react';
 import { devProxy } from '$REPO/src/server/app-paths.ts';
@@ -104,6 +107,7 @@ export default {
   resolve: { alias: { '@': '$REPO/src' } },
   server: {
     port: $UI_PORT, strictPort: true, host: '127.0.0.1',
+    fs: { allow: ['$REPO', '$NM'] },
     proxy: devProxy('http://127.0.0.1:$API_PORT'),
   },
 };
@@ -185,6 +189,7 @@ cmd_doctor() {
   check "GET /api/status ok"                      "get $API/api/status | grep -q '\"ok\":true'"
   check "UI serves index.html"                    "get $UI/ | grep -q '<div id=\"root\"'"
   check "UI compiles the app"                     "get $UI/src/app/main.tsx >/dev/null"
+  check "UI serves the app's fonts"               "get $UI/@fs\$(cd $REPO/node_modules && pwd -P)/@fontsource/instrument-sans/files/instrument-sans-latin-400-normal.woff2 >/dev/null"
   check "UI proxies /api to this sandbox"         "get $UI/api/status >/dev/null"
   check "UI serves the sandbox books"             "[[ \"\$(get $UI/books.json | shasum -a 256 | cut -d' ' -f1)\" == \"\$(get $API/books.json | shasum -a 256 | cut -d' ' -f1)\" ]]"
   check "UI serves the sandbox receipts"          "served receipts"

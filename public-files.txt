@@ -89,6 +89,9 @@ docs/specs/mockups/invoicing/app.js
 docs/specs/mockups/invoicing/qr.js
 docs/specs/mockups/invoicing/company.js
 docs/specs/mockups/invoicing/proto.css
+docs/specs/domain-model.md
+docs/specs/e2e-and-fiduciary.md
+docs/share-protocol.md
 
 .claude/settings.json
 .claude/skills/verify/**

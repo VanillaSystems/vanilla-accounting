@@ -6,7 +6,7 @@
  */
 import { RequestError, WS, assertOpen, readBooks, updateBooks } from './books.js';
 import { mergeBankFiles, reconcileWithFiles, unreferencedFiles, unreferencedLine } from '../books/bank-import.js';
-import { keptPdfs, keptReads, pairLines, readBeside, removeBeside, writeBeside, type KeptPdf } from '../books/pdf-reads.js';
+import { keptPdfs, pairLines, readBeside, removeBeside, takeBackReadFacts, writeBeside, type KeptPdf, type KeptRead } from '../books/pdf-reads.js';
 import { checkStatement, hasBalances, isBlank, parsePdfTable } from '../books/statement-check.js';
 import { differenceAccountOf } from '../books/year-close.js';
 import { periodLock, type Books } from '../books/store.js';
@@ -18,8 +18,16 @@ import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { unserved } from '../llm/resolve.js';
 import type { PdfFactsView, StatementReadsView } from '../types/statement-read.js';
 
-const remerge = () => {
+/** The table kept beside a PDF now, if any: what it gave the payments is taken back when it goes or is replaced (remerge). */
+const tableOf = (p: KeptPdf): Pick<KeptRead, 'statement' | 'account'> | undefined => {
+  const was = readBeside(p.path);
+  return was && 'statement' in was ? { statement: was.statement, account: p.account } : undefined;
+};
+
+/** Merges the bank side again; `gone`, a kept PDF's table that went or was replaced, first takes back what it gave the payments. */
+const remerge = (gone?: Pick<KeptRead, 'statement' | 'account'>) => {
   updateBooks((b) => {
+    if (gone) takeBackReadFacts(b.transactions, gone, periodLock(b).isClosed);
     mergeBankFiles(WS, b);
     reconcileWithFiles(WS, b, differenceAccountOf(WS));
   });
@@ -149,22 +157,24 @@ export function saveTable(file: string, raw: unknown): PdfFactsView {
   if (!statement) throw new RequestError(400, 'Eine Zeile hat kein Datum oder keinen Betrag, oder ein Saldo fehlt.', { code: 'statementRead', params: { why: 'line' } });
   if (isBlank(statement)) throw new RequestError(400, 'Der Auszug ist leer: keine Bewegung, beide Saldi 0.00.', { code: 'statementRead', params: { why: 'blank' } });
   if (statement.currency !== p.account.currency) throw new RequestError(400, `Der Auszug ist in ${statement.currency}, das Konto in ${p.account.currency}.`, { code: 'statementRead', params: { why: 'currency', currency: p.account.currency } });
+  const was = tableOf(p);
   writeBeside(p.path, { by: 'hand', statement });
-  remerge();
+  remerge(was);
   return pdfFacts(file);
 }
 
 /**
  * «Neu lesen»: the read beside the PDF goes (the model's or a person's), so the next reading asks
  * again. A person's table goes only once she confirmed it (`confirmed`, after the app named what goes).
- * A balance it gave stays until another replaces it.
+ * A balance it gave stays until another replaces it; its references and foreign amounts go with it.
  */
 export function forgetRead(file: string, confirmed = false): PdfFactsView {
   const books = readBooks();
   const p = keptPdf(file, books);
   assertOpen(books, [p.to], 'newStatement');
   if (!confirmed && readBeside(p.path)?.by === 'hand') throw new RequestError(409, 'Diese Tabelle ist von Hand erfasst: erst bestätigen, dass sie gehen soll.', { code: 'statementRead', params: { why: 'hand' } });
+  const was = tableOf(p);
   removeBeside(p.path);
-  remerge();
+  remerge(was);
   return pdfFacts(file);
 }

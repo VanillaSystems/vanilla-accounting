@@ -5,7 +5,7 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
-import { issuedPdfUrl, sentPdfUrl, type Draft, type Invoice, type Issued } from '../../../invoices/model.js';
+import { type Draft, type Invoice, type Issued } from '../../../invoices/model.js';
 import { defaultTexts, senderFor } from '../../../invoices/documents.js';
 import { missingForIssue, openAmount, openFees, paidAmount, refundDue, reminderDraft, totals, type Missing } from '../../../invoices/rules.js';
 import { prettyReference } from '../../../providers/qr-bill/reference.js';
@@ -14,7 +14,7 @@ import { at } from '../receipts/view.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { RouteOf } from '../../shell/route.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
-import { api, missingText, type DraftChange, type InvoiceList } from '../../lib/api.js';
+import { api, missingText, sources, type DraftChange, type InvoiceList } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { language, t } from '../../i18n/index.js';
 import { chargesVat } from '../../../engines/index.js';
@@ -152,11 +152,11 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
   const awaits = inv.status === 'issued' && (state === 'open' || state === 'overdue' || (state === 'credit' && refundDue(inv, d.invoices) > 0));
   useEffect(() => {
     setProposals([]);
-    if (!awaits) return;
+    if (!awaits || !canEdit) return;
     let live = true;
     api.paymentProposals().then((p) => { if (live) setProposals(p.filter((x) => x.invoiceId === inv.id)); }, () => undefined);
     return () => { live = false; };
-  }, [inv.id, awaits]);
+  }, [inv.id, awaits, canEdit]);
 
   if (inv.status === 'draft') {
     const later = issuedLater(d.invoices, inv);
@@ -278,7 +278,7 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
   const { d, ws, inv, state, reminderLevel, nav, canEdit } = props;
   const s = useUi();
   const dl = inv.status === 'issued'
-    ? <a className="dl inline" href={issuedPdfUrl(inv.number)} download={`${inv.number}.pdf`} data-tip={t('invoices.downloadTip')}>{I.dl}<span>{t('invoices.downloadInstead')}</span></a>
+    ? <a className="dl inline" href={sources.invoicePdf(inv.number)} download={`${inv.number}.pdf`} data-tip={t('invoices.downloadTip')}>{I.dl}<span>{t('invoices.downloadInstead')}</span></a>
     : null;
   if (!canEdit) return <div className="ivacts">{dl}</div>;
   const preview = <button type="button" className="btn ghost" data-act="preview" aria-pressed={s.preview} onClick={() => setUi({ preview: !s.preview })}>{s.preview ? t('invoices.edit') : t('invoices.preview')}</button>;
@@ -356,7 +356,7 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
       </div>
       {/* A firm not registered issues invoices without VAT (#347): said as a fact, with its place. */}
       {!chargesVat() && <p className="m ivhint" data-testid="invoice-no-vat">{t('invoices.noVat')} · <button type="button" className="quiet2" onClick={() => nav.go({ route: { area: 'company', section: 'vat' }, query: {} })}>{t('invoices.toVat')}</button></p>}
-      {own && <p className="m ivhint">{t('invoices.ownTexts')} · <button type="button" className="quiet2" onClick={() => void saveDraft(nav, inv, { intro: null, closing: null })}>{t('invoices.resetTexts')}</button></p>}
+      {own && <p className="m ivhint">{t('invoices.ownTexts')}{canEdit && <> · <button type="button" className="quiet2" data-act="reset-texts" onClick={() => void saveDraft(nav, inv, { intro: null, closing: null })}>{t('invoices.resetTexts')}</button></>}</p>}
       <p className="lkfoot"><button type="button" className="quiet2" onClick={() => nav.go({ route: { area: 'company', section: 'invoice-layout' }, query: {} })}>{t('invoices.toLayout')}</button></p>
     </Sec>
   );
@@ -498,7 +498,7 @@ function SentDetail({ d, route, nav }: Props & { d: InvoiceList }) {
   const doc = d.sent.find((x) => x.id === route.id);
   if (!doc) return <div className="detail-empty"><div>{route.id ? t('invoices.docGone') : t('invoices.nothingSent')}</div></div>;
   const inv = d.invoices.find((i) => i.id === doc.invoiceId);
-  const src = sentPdfUrl(doc.id);
+  const src = sources.sentPdf(doc.id);
   return (
     <div className="detail-in" data-for={doc.id}>
       <div className="head"><h2 className="who">{doc.title}<small>{inv ? customerOf(d, inv)?.name : ''}</small></h2></div>

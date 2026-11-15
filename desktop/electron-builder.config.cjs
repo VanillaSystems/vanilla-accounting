@@ -25,6 +25,12 @@ module.exports = {
   productName: 'Vanilla Accounting',
   buildVersion: String(build.number),
   directories: { output: 'release', buildResources: 'desktop' },
+  // A shared books' link opens the app (src/desktop/main.ts `open-url`, src/share/service.ts APP_SCHEME).
+  protocols: [{ name: 'Vanilla Accounting', schemes: ['vanilla-accounting'] }],
+  // The share service the app offers by default (src/share/service.ts): named at build time like the
+  // update feed, since the publisher's domain stays out of the app's files. Without it, the person
+  // names a service herself, or shares the books as a file.
+  ...(env.VANILLA_SHARE_SERVICE ? { extraMetadata: { share: { service: env.VANILLA_SHARE_SERVICE } } } : {}),
   // What the app reads at run time from its own folder (APP_ROOT): the bundle, the built UI and the
   // app's data files. Packages come from package.json's dependencies; the UI's own are in dist/.
   files: [

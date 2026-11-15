@@ -153,7 +153,7 @@ test('the link picker offers the open bookings without a payment of the receipt\
   b.transactions.push({ ref: 'T1', bank: 'Raiffeisen', date: DAY, amount: 80, currency: 'CHF', direction: 'DBIT', description: 'Bank' });
   b.journalEntries.push({ id: 'jt', transactionRef: 'T1', date: DAY, accountDebit: '6000', accountCredit: '1020', amount: 80, description: 'Bank' });
   const l = ledgerOf(b, '2026-07-01');
-  assert.deepEqual(bookingsWithoutPayment(l.byId.get('accrual')!, l).map((x) => x.ref), ['M2026-004']);
-  assert.deepEqual(bookingsWithoutPayment(l.byId.get('accrual')!, l, 'abschreib').map((x) => x.ref), ['M2026-005']);
-  assert.deepEqual(bookingsWithoutPayment(l.byId.get('accrual')!, l, 'abgrenzung').map((x) => x.ref), ['M2026-004'], 'the filed M2026-001 is never offered');
+  assert.deepEqual(bookingsWithoutPayment(l.byId.get('accrual')!, l).rows.map((x) => x.ref), ['M2026-004']);
+  assert.deepEqual(bookingsWithoutPayment(l.byId.get('accrual')!, l, 'abschreib').rows.map((x) => x.ref), ['M2026-005']);
+  assert.deepEqual(bookingsWithoutPayment(l.byId.get('accrual')!, l, 'abgrenzung').rows.map((x) => x.ref), ['M2026-004'], 'the filed M2026-001 is never offered');
 });

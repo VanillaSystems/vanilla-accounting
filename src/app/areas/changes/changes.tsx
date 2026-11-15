@@ -21,6 +21,10 @@ import { ICONS } from '../icons.js';
 import { RuleDraft } from '../company/RulesSection.js';
 import { at } from '../receipts/view.js';
 import type { Area, AreaProps, LegendItem, Nav } from '../index.js';
+import { ReturnReview } from '../../handover/Review.js';
+import { shortSum, useHandover, type HandoverView } from '../../handover/store.js';
+import { periodName } from '../../lib/period-label.js';
+import type { Version } from '../../../handover/versions.js';
 
 type Props = AreaProps<RouteOf<'changes'>>;
 type R = RouteOf<'changes'>;
@@ -52,6 +56,7 @@ function sayWhen(iso: string): string {
 
 function List({ route, nav }: Props) {
   const { view, error } = useChanges();
+  const handover = useHandover();
   return (
     <>
       <h1>{t('area.changes')}</h1>
@@ -59,6 +64,7 @@ function List({ route, nav }: Props) {
       {error ? <p className="warnline">{error}</p> : null}
       {view && !view.repository ? <p className="m">{t('changes.noRepository')}</p> : null}
       <div className="rows" role="listbox" aria-label={t('area.changes')}>
+        <HandoverRows view={handover} route={route} nav={nav} />
         {view?.history.length ? <div className="group"><span>{t('changes.history')}</span></div> : null}
         {(view?.history ?? []).map((s) => {
           const on = route.commit === s.oid;
@@ -74,8 +80,46 @@ function List({ route, nav }: Props) {
   );
 }
 
-function Detail({ route, nav }: Props) {
+/** Returns from a recipient and the books' versions (docs/specs/e2e-and-fiduciary.md B5.2, B7): rows of Verlauf. */
+function HandoverRows({ view, route, nav }: { view: HandoverView | undefined; route: R; nav: Nav }) {
+  if (!view || (!view.returns.length && !view.versions.length)) return null;
+  return (
+    <>
+      {view.returns.length ? <div className="group"><span>{t('review.returns')}</span></div> : null}
+      {view.returns.map((r) => {
+        const on = route.commit === 'return' && route.file === r.id;
+        return (
+          <div key={r.id} className={`row chrow chsave-row${on ? ' sel' : ''}`} role="option" aria-selected={on} tabIndex={on ? 0 : -1} data-testid="return-row" onClick={() => nav.select({ area: 'changes', commit: 'return', file: r.id })}>
+            <span className="t"><span className="chwho">{ICONS.share}</span>{t(r.applied ? 'review.rowApplied' : 'review.rowFrom', { name: r.from.name, n: r.changes })}</span>
+            <small className="chsub">{sayWhen(r.receivedAt)} · {t('review.basedOn', { n: r.basedOn })}{r.undone ? ` · ${t('review.rowUndone')}` : ''}</small>
+          </div>
+        );
+      })}
+      {view.versions.length ? <div className="group"><span>{t('version.list')}</span></div> : null}
+      {view.versions.slice(0, 8).map((v) => (
+        <div key={v.n} className="row chrow chsave-row chversion" role="option" aria-selected={false} tabIndex={-1} data-testid="version-row"
+          onClick={() => { if (v.ret) nav.select({ area: 'changes', commit: 'return', file: v.ret }); }}>
+          <span className="t"><span className="chwho">{ICONS.check}</span>{versionText(v)}</span>
+          <small className="chsub">{sayWhen(v.at)} · <span className="mono">{shortSum(v.checksum)}</span></small>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/** «Version 12 · an Ernst Bühler übergeben», «Version 15 · Q3 2026 eingereicht». */
+function versionText(v: Version): string {
+  const p = v.period ? parsePeriod(v.period, localToday()) : null;
+  const what = v.reason === 'handover' ? t('version.handover', { name: v.to?.name ?? t('share.recipient') })
+    : v.reason === 'return-applied' ? t('version.returnApplied', { name: v.from?.name ?? t('share.recipient') })
+      : v.reason === 'return-undone' ? t('version.returnUndone', { name: v.from?.name ?? t('share.recipient') })
+        : t('version.sealed', { period: p ? periodName(p) : v.period ?? '' });
+  return `${t('version.short', { n: v.n })} · ${what}`;
+}
+
+function Detail({ route, nav, period, canEdit }: Props) {
   const { view, error } = useChanges();
+  if (route.commit === 'return' && route.file) return <ReturnReview id={route.file} nav={nav} period={period} canEdit={canEdit} />;
   if (!view) return <div className="detail-empty">{error ? null : <div>{t('changes.loading')}</div>}</div>;
   if (!route.commit) return <SavePanel view={view} nav={nav} />;
   const back = <button type="button" className="linkbtn chback" onClick={() => nav.select(route.file && route.commit !== 'draft' && route.commit !== 'outside' ? { area: 'changes', commit: route.commit } : { area: 'changes' })}>{t('changes.back')}</button>;

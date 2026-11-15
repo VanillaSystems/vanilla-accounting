@@ -9,12 +9,12 @@
 
 .kw .kwstats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 2px 0 6px; }
 .kw .kwstat { padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px; display: grid; gap: 1px; align-content: start; }
-.kw .kwstat b { font-family: "Geist Mono", ui-monospace, monospace; font-size: 20px; font-weight: 600; color: var(--ink); }
+.kw .kwstat b { font-family: var(--font-mono); font-size: 20px; font-weight: 600; color: var(--ink); }
 .kw .kwstat span { font-size: 12px; color: var(--muted); }
 
 .kw .kwtable { width: 100%; max-width: 520px; border-collapse: collapse; font-size: 13px; }
 .kw .kwtable td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
-.kw .kwtable td.num { text-align: right; font-family: "Geist Mono", ui-monospace, monospace; white-space: nowrap; }
+.kw .kwtable td.num { text-align: right; font-family: var(--font-mono); white-space: nowrap; }
 
 .kw .kwgaplist { list-style: none; margin: 6px 0 0; padding: 0; display: grid; }
 .kw .kwgaplist li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
@@ -30,7 +30,7 @@
 .kw details.kwapp { border-bottom: 1px solid var(--line); }
 .kw details.kwapp > ul { margin: 0 0 10px 21px; padding-left: 16px; font-size: 12.5px; color: var(--muted); display: grid; gap: 3px; }
 .kw .kwstep { margin: 0 0 10px 21px; font-size: 12.5px; color: var(--muted); }
-.kw .kwstep h4 { margin: 8px 0 2px; font-family: "Geist Mono", monospace; font-size: 12px; font-weight: 500; color: var(--ink-2); }
+.kw .kwstep h4 { margin: 8px 0 2px; font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--ink-2); }
 .kw .kwstep p { margin: 0 0 4px; color: var(--ink-2); }
 .kw .kwstep ul { margin: 0; padding-left: 16px; display: grid; gap: 3px; }
 

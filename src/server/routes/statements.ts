@@ -334,7 +334,7 @@ export async function importStatement(body: Buffer, given: string, accountHint?:
       const asked = (books.statementAsks ?? []).length;
       if (placed.structured && books.statementAsks) {
         // Their tables stay theirs (#243): kept beside each PDF, so the books take its balance and references and no model reads it again.
-        for (const a of books.statementAsks.filter((x) => x.account === placed.account.account)) keepAskTable(a);
+        for (const a of books.statementAsks.filter((x) => x.account === placed.account.account)) keepAskTable(a, books);
         books.statementAsks = books.statementAsks.filter((a) => a.account !== placed.account.account);
         if (!books.statementAsks.length) delete books.statementAsks;
       }

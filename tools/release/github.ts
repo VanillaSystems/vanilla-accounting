@@ -34,6 +34,10 @@ function blockers(): string[] {
   if (!run('git', ['branch', '-r', '--contains', tag]).split('\n').some((b) => b.trim() === 'origin/main')) {
     found.push(`${tag} is not on origin/main: merge and push main first`);
   }
+  // The dmgs are built once, on the release branch (docs/releasing.md): main's commit of the same tree is the same app.
+  const built = join(root, 'out', 'desktop', 'build.json');
+  const builtTree = existsSync(built) ? (JSON.parse(readFileSync(built, 'utf8')) as { tree?: string }).tree : undefined;
+  if (builtTree && builtTree !== run('git', ['rev-parse', 'HEAD^{tree}'])) found.push(`the dmgs were built from another tree (${builtTree.slice(0, 12)}): build again on this commit, or on the release branch head of the same tree`);
   return found;
 }
 const blocked = blockers();
@@ -53,7 +57,7 @@ const app = join(dir, 'mac-arm64', 'Vanilla Accounting.app');
 const codesign = spawnSync('codesign', ['-dv', '--verbose=2', app], { encoding: 'utf8' });
 const signed = /Authority=Developer ID Application/.test(`${codesign.stdout}${codesign.stderr}`);
 
-const notes = releaseNotes({ changelog: readFileSync(join(root, 'CHANGELOG.md'), 'utf8'), version, assets, signed });
+const notes = releaseNotes({ changelog: readFileSync(join(root, 'CHANGELOG.md'), 'utf8'), version, assets, signed, repo });
 
 console.log(`${publish ? 'Publishing' : 'Dry run (add --publish to create it)'}: ${repo} ${tag}, ${signed ? 'signed' : 'unsigned'}`);
 for (const a of assets) console.log(`  ${a.name}  ${a.sha256}`);

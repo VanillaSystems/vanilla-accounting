@@ -48,7 +48,7 @@
 .detail-in.doc .who { max-width: 34ch; }
 .docbody { max-width: 680px; margin-top: 18px; }
 .docbody section { padding: 16px 0; border-top: 1px solid var(--line); }
-.docbody h3 { margin: 0 0 6px; font: 600 11px "Instrument Sans"; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.docbody h3 { margin: 0 0 6px; font: 600 11px var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
 .docbody p { margin: 0; line-height: 1.55; color: var(--ink-2); max-width: 64ch; }
 .docbody p.m { color: var(--muted); }
 .docbody .zf { display: grid; grid-template-columns: 44px 1fr; gap: 4px 10px; margin: 0; }
