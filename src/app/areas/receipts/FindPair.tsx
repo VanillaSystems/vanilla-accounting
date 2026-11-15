@@ -15,6 +15,7 @@ import { baseCurrency } from '../../../engines/index.js';
 import type { Nav } from '../index.js';
 import { amountOf, at, bankOf, txLine } from './view.js';
 import { useAiOff } from '../../ai/ai-off.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 type On = { receipt: string } | { payment: string };
 
@@ -64,9 +65,9 @@ export function FindPair({ on, books, nav, compact }: { on: On; books: Index; na
   }
 
   const button = (
-    <button type="button" className="golink findpair-go" data-testid={forReceipt ? 'find-payment' : 'find-receipt'} disabled={state === 'busy'} onClick={() => void search()}>
+    <AsyncButton type="button" className="golink findpair-go" data-testid={forReceipt ? 'find-payment' : 'find-receipt'} disabled={state === 'busy'} onClick={() => search()}>
       {state === 'busy' ? t('pair.searching') : t(forReceipt ? 'pair.findPayment' : 'pair.findReceipt')}
-    </button>
+    </AsyncButton>
   );
   if (state === 'idle' || state === 'busy') return button;
 
@@ -80,7 +81,7 @@ export function FindPair({ on, books, nav, compact }: { on: On; books: Index; na
       <div className={cls} data-testid="find-result" data-outcome={state.outcome} role="status">
         <span className={state.outcome === 'linked' ? 'findpair-ok' : ''}>{t(state.outcome === 'filed' ? 'pair.filed' : forReceipt ? 'pair.linked.payment' : 'pair.linked.receipt', { what })}</span>
         <span className="findpair-note">{byText(state.by, state.signals)}</span>
-        {state.outcome === 'linked' ? <button type="button" className="golink" onClick={() => { api.removeMapping({ receiptId: state.receipt, transactionRef: state.payment }).then(() => { setState('idle'); nav.refresh(); }, (e) => nav.toast(errorText(e))); }}>{t('pair.unlink')}</button> : null}
+        {state.outcome === 'linked' ? <AsyncButton type="button" className="golink" onClick={() => { return api.removeMapping({ receiptId: state.receipt, transactionRef: state.payment }).then(() => { setState('idle'); nav.refresh(); }, (e) => nav.toast(errorText(e))); }}>{t('pair.unlink')}</AsyncButton> : null}
       </div>
     );
   }
@@ -115,7 +116,7 @@ export function FindPair({ on, books, nav, compact }: { on: On; books: Index; na
               <span className="findpair-score" data-tip={t('pair.scoreTip', { max: WEIGHTS.amount.same + WEIGHTS.day[0].points + WEIGHTS.name.more + WEIGHTS.number })}>{c.score}</span>
               {c.filed
                 ? <span className="findpair-note">{t('pair.filedMark')}</span>
-                : <button type="button" className="btn ghost" data-testid="find-pick" onClick={() => void pick(c.receipt, c.payment)}>{t('pair.pick')}</button>}
+                : <AsyncButton type="button" className="btn ghost" data-testid="find-pick" onClick={() => pick(c.receipt, c.payment)}>{t('pair.pick')}</AsyncButton>}
             </li>
           );
         })}

@@ -8,6 +8,7 @@ import type { AreaProps } from '../index.js';
 import type { Ledger, ReceiptView } from './model.js';
 import { answerTwin } from './actions.js';
 import { at } from './view.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'receipts'>> & { v: ReceiptView; l: Ledger };
 
@@ -28,8 +29,8 @@ export function TwinNotice(props: Props) {
       <span>{before}{link}{after}</span>
       {canEdit && !v.locked && (
         <>
-          <button type="button" className="btn" onClick={() => void answerTwin(nav, v, 'same', other.r.id, name)}>{t('receipts.twin.same')}</button>
-          <button type="button" className="btn ghost" onClick={() => void answerTwin(nav, v, 'distinct', other.r.id, name)}>{t('receipts.twin.distinct')}</button>
+          <AsyncButton type="button" className="btn" onClick={() => answerTwin(nav, v, 'same', other.r.id, name)}>{t('receipts.twin.same')}</AsyncButton>
+          <AsyncButton type="button" className="btn ghost" onClick={() => answerTwin(nav, v, 'distinct', other.r.id, name)}>{t('receipts.twin.distinct')}</AsyncButton>
         </>
       )}
     </div>

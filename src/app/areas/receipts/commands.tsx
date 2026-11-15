@@ -16,7 +16,7 @@ export function Kbd({ keys, tip }: { keys: string[]; tip: string }) {
 /** An action on the selected receipt, from a row's button or a key; a locked receipt refuses some with the reason. */
 export type Act = 'link' | 'edit' | 'del' | 'mark' | 'notreceipt';
 
-export function runAct(p: Props, a: Act, id = p.route.id): void {
+export function runAct(p: Props, a: Act, id = p.route.id): Promise<unknown> | void {
   if (!id || !p.canEdit) return;
   const v = ledgerFor(p.books).byId.get(id);
   if (!v) return;
@@ -26,7 +26,7 @@ export function runAct(p: Props, a: Act, id = p.route.id): void {
   if (a === 'link') { openSection('zahlung'); setUi({ overlay: 'link', linkStart: undefined }); }
   if (a === 'edit') openSection('angaben', 'date');
   if (a === 'del') setUi({ overlay: 'delete' });
-  if (a === 'mark' || a === 'notreceipt') setKind(p.nav, v, a === 'mark' ? 'invoice' : 'noise');
+  if (a === 'mark' || a === 'notreceipt') return setKind(p.nav, v, a === 'mark' ? 'invoice' : 'noise');
 }
 
 /** Takes the suggested payment and moves on to the next receipt that needs you. */

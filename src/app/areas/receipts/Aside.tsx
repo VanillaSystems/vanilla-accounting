@@ -15,6 +15,7 @@ import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
 import { ConfirmDiscard, askDiscard } from './Discard.js';
 import { asideGroups } from './aside-groups.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 /** What a group is, in words: its header. */
 function groupTitle(r: QuarantineReason): string {
@@ -74,7 +75,7 @@ export function Quarantine({ nav, canEdit, asked }: { nav: AreaProps['nav']; can
               <div className="qghead">
                 <b>{groupTitle(g.reason)}</b> <span className="m">{t('receipts.asideCount', { n: g.files.length })}</span>
                 {canEdit && g.files.length > 1 && (
-                  <button type="button" className="linkbtn" data-testid="aside-keep-group" onClick={() => void take(g.files.map((q) => q.file))}>{t('receipts.asideKeepAll', { n: g.files.length })}</button>
+                  <AsyncButton type="button" className="linkbtn" data-testid="aside-keep-group" onClick={() => take(g.files.map((q) => q.file))}>{t('receipts.asideKeepAll', { n: g.files.length })}</AsyncButton>
                 )}
               </div>
               <ul className="qlist">
@@ -84,7 +85,7 @@ export function Quarantine({ nav, canEdit, asked }: { nav: AreaProps['nav']; can
                     <span className="m">{fileWhy(q)}</span>
                     <span className="qacts">
                       <a href={`/api/quarantine/${encodeURIComponent(q.file)}`} target="_blank" rel="noreferrer">{t('receipts.quarantineOpen')}</a>
-                      {canEdit && <button type="button" className="linkbtn" onClick={() => void take([q.file])}>{t('receipts.quarantineTake')}</button>}
+                      {canEdit && <AsyncButton type="button" className="linkbtn" onClick={() => take([q.file])}>{t('receipts.quarantineTake')}</AsyncButton>}
                       {canEdit && <button type="button" className="linkbtn danger" data-testid="quarantine-delete" onClick={() => askDiscard({ from: 'quarantine', files: [{ id: q.file, file: q.file }] })}>{t('receipts.discard')}</button>}
                     </span>
                   </li>

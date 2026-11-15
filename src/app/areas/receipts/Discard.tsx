@@ -9,6 +9,7 @@ import { useWorkspace } from '../../hooks/use-workspace.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
 import { setUi, useUi, type Discard } from './state.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 /** Opens the confirmation for `d`. */
 export const askDiscard = (d: Discard) => setUi({ overlay: 'discard', discard: d });
@@ -45,7 +46,7 @@ export function ConfirmDiscard({ from, nav, done }: { from: Discard['from']; nav
         )}
         <div className="acts">
           <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')} <span className="k">{t('receipts.escKey')}</span></button>
-          <button type="button" className="btn danger" autoFocus onClick={() => void run()}>{t('common.delete')} <span className="k">↵</span></button>
+          <AsyncButton type="button" className="btn danger" autoFocus onClick={() => run()}>{t('common.delete')} <span className="k">↵</span></AsyncButton>
         </div>
       </div>
     </>

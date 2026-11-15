@@ -17,6 +17,7 @@ import { at } from '../receipts/view.js';
 import { fileKey, payText, signed, type Statement } from './model.js';
 import { forgetPages } from './StatementPaper.js';
 import { startIntake } from '../../automation/intake.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 /** The file of a statement's PDF in the books: `<bank>/<file name>`; none for a bank export or a month without a file. */
 export const pdfOf = (s: Statement): string | undefined => (s.file && /\.pdf$/i.test(s.file.filename) ? `${s.file.bank}/${s.file.filename}` : undefined);
@@ -78,7 +79,7 @@ export function NoMovements({ s, nav, edit }: { s: Statement; nav: Nav; edit: bo
   return (
     <span className="notice" style={{ margin: 0 }} data-testid="no-movements">
       {t('bank.noMovements', { month: monthName(s.from) })}{' '}
-      {file && edit ? <button type="button" className="linkbtn" data-testid="no-movements-read" onClick={() => void readPdf(nav, file)}>{t('statementActions.readPdfShort')}</button> : null}
+      {file && edit ? <AsyncButton type="button" className="linkbtn" data-testid="no-movements-read" onClick={() => readPdf(nav, file)}>{t('statementActions.readPdfShort')}</AsyncButton> : null}
     </span>
   );
 }

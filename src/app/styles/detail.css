@@ -21,8 +21,8 @@
 .sug .conf { font: 500 12px var(--font-mono); color: var(--muted); }
 .notice { margin-top: 8px; display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
 .notice.warn { color: var(--warn); }
-.notice a { color: var(--accent); text-decoration: none; }
-[data-theme="dark"] .notice a { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.notice a, .notice .linkbtn { color: var(--accent); text-decoration: none; }
+[data-theme="dark"] .notice a, [data-theme="dark"] .notice .linkbtn { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
 
 .body { margin-top: 14px; display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 40px; align-items: start; }
 .desk { position: relative; }

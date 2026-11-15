@@ -5,6 +5,7 @@ import { BotIcon } from '../areas/automation/Graph.js';
 import { setupCount } from '../../onboarding/conversation.js';
 import { loadSetup, openSetup, useSetup } from './state.js';
 import './onboarding.css';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 export function SetupEntry() {
   const { view } = useSetup();
@@ -14,9 +15,9 @@ export function SetupEntry() {
   const going = !!view.progress.started && n < of;
   return (
     <div className="obentry">
-      <button type="button" className="aiact" data-tip={going ? t('onboarding.progress', { n, of }) : undefined} onClick={() => void openSetup()}>
+      <AsyncButton type="button" className="aiact" data-tip={going ? t('onboarding.progress', { n, of }) : undefined} onClick={() => openSetup()}>
         <BotIcon />{t(going ? 'onboarding.entry.continue' : 'onboarding.entry.start')}{going ? <small className="mono">{n}/{of}</small> : null}
-      </button>
+      </AsyncButton>
     </div>
   );
 }

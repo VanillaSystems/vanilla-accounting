@@ -121,7 +121,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
     const i = k++;
     const w = why(c);
     return (
-      <div key={c.tx.ref} className={`o tx2${i === at ? ' on' : ''}${c.filed ? ' filed' : ''}`} role="option" aria-selected={i === at} data-ref={c.tx.ref} data-filed={c.filed ? '' : undefined} onMouseMove={() => pick(i)} onClick={() => choose(c)}>
+      <div key={c.tx.ref} className={`o tx2${i === at ? ' on' : ''}${c.filed ? ' filed' : ''}`} role="option" aria-selected={i === at} data-ref={c.tx.ref} data-filed={c.filed ? '' : undefined} onMouseMove={() => pick(i)} data-busy-exempt="the dialog closes at once; the receipt shows the link" onClick={() => choose(c)}>
         <span className="d mono">{formatDate(c.tx.date)}</span>
         <span className="t"><span>{c.tx.description}</span><small>{bankOf(c.tx)}{w && ` · ${w}`}{i === at && c.fit?.kind === 'off' && <> · <b className="off">{fitText(c.fit)}</b></>}</small></span>
         <span className="a mono">{c.tx.currency !== baseCurrency() && <i>{c.tx.currency}</i>}{fmt(signed(c.tx))}</span>
@@ -131,7 +131,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
   const booking = (u: Unpaid) => {
     const i = k++;
     return (
-      <div key={u.ref} className={`o tx2${i === at ? ' on' : ''}`} role="option" aria-selected={i === at} data-ref={u.ref} onMouseMove={() => pick(i)} onClick={() => choose(u)}>
+      <div key={u.ref} className={`o tx2${i === at ? ' on' : ''}`} role="option" aria-selected={i === at} data-ref={u.ref} onMouseMove={() => pick(i)} data-busy-exempt="the dialog closes at once; the receipt shows the link" onClick={() => choose(u)}>
         <span className="d mono">{formatDate(u.date)}</span>
         <span className="t"><span>{u.description}</span><small>{u.ref}{u.sameAmount && ` · ${t('receipts.whySameAmount')}`}</small></span>
         <span className="a mono">{u.currency !== baseCurrency() && <i>{u.currency}</i>}{fmt(u.amount)}</span>
@@ -194,7 +194,7 @@ export function LinkDialog({ v, l, nav, books, onClose }: Props) {
           {more.map(row)}
           {!best.length && !more.length && <div className="none">{q ? t('receipts.noPaymentFits', { q }) : chips.length ? t('receipts.noPaymentInFilter') : t('receipts.noOpenPayment')}</div>}
           <div className="gh">{t('receipts.withoutBank')}</div>
-          <div className={`o tx2${privateAt === at ? ' on' : ''}`} role="option" aria-selected={privateAt === at} data-ref="private" onMouseMove={() => pick(privateAt)} onClick={() => choose('private')}>
+          <div className={`o tx2${privateAt === at ? ' on' : ''}`} role="option" aria-selected={privateAt === at} data-ref="private" onMouseMove={() => pick(privateAt)} data-busy-exempt="the dialog closes at once; the receipt shows the link" onClick={() => choose('private')}>
             <span className="d mono">{owner}</span>
             <span className="t"><span>{t('receipts.privatePaid')}</span><small>{t('receipts.privatePaidHint')}</small></span>
             <span className="a" />

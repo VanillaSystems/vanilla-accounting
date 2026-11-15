@@ -26,6 +26,7 @@ import { useAiSetup } from './useAiSetup.js';
 import { useFollowEnd } from '../onboarding/follow-end.js';
 import '../onboarding/onboarding.css';
 import './ai-setup.css';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 /** `name`, or `name 2`, `name 3`, … when a folder of that name is there already. */
 export function freeName(name: string, taken: readonly string[]): string {
@@ -62,11 +63,11 @@ export function FirstRun({ info, create, onSetup, onForm, onLeave }: { info: Des
   const push = (s: Said) => setSaid((was) => [...was, s]);
   /** «Ohne KI weiter» holds until she acts on an AI (installs, signs in, saves a key): looking at the cards and going back keeps it. */
   const wantsAi = () => { if (view?.noAi) void ai.choose({ noAi: false }); };
-  const install = (c: TerminalCli) => { wantsAi(); push({ kind: 'install', cli: c }); void ai.install(c); };
-  const signIn = (c: TerminalCli) => { wantsAi(); push({ kind: 'signIn', cli: c }); void ai.signIn(c); };
+  const install = (c: TerminalCli) => { wantsAi(); push({ kind: 'install', cli: c }); return ai.install(c); };
+  const signIn = (c: TerminalCli) => { wantsAi(); push({ kind: 'signIn', cli: c }); return ai.signIn(c); };
   const toHome = () => { setSaid([]); setStage('home'); };
   /** «Ohne KI weiter»: kept on this Mac (decision 6), and back to the choices. */
-  const noAi = () => { void ai.choose({ noAi: true }); toHome(); };
+  const noAi = () => { const chosen = ai.choose({ noAi: true }); toHome(); return chosen; };
   const setUp = () => setStage('ai');
 
   const looked = !!view && FIRST_RUN_CLIS.every((c) => ai.cards[c]);
@@ -83,11 +84,11 @@ export function FirstRun({ info, create, onSetup, onForm, onLeave }: { info: Des
   const wantsInstall = !!card && (card.kind === 'missing' || card.kind === 'silent' || card.kind === 'installing' || (card.kind === 'notFound' && card.waited === 'install'));
   const foundLine = !!card && leg?.by === 'install' && 'version' in card && !!card.version && (card.kind === 'signedOut' || card.kind === 'signingIn' || card.kind === 'testing'
     || card.kind === 'refused' || (card.kind === 'notFound' && card.waited === 'signIn') || card.kind === 'ready');
-  const NoAiButton = <button type="button" className="btn" data-answer="no-ai" onClick={noAi}>{t('aiSetup.answer.noAi')}<small>{t('aiSetup.answer.noAiHint')}</small></button>;
+  const NoAiButton = <AsyncButton type="button" className="btn" data-answer="no-ai" onClick={noAi}>{t('aiSetup.answer.noAi')}<small>{t('aiSetup.answer.noAiHint')}</small></AsyncButton>;
   const installButton = (c: TerminalCli, primary: boolean) => view?.opens ? (
-    <button key={c} type="button" className={primary ? 'btn primary' : 'btn'} data-answer={`install-${c}`} onClick={() => install(c)}>
+    <AsyncButton key={c} type="button" className={primary ? 'btn primary' : 'btn'} data-answer={`install-${c}`} onClick={() => install(c)}>
       {t('aiSetup.answer.install', { cli: name(c) })}<small>{t('aiSetup.answer.installHint', { vendor: AI_CLIS[c].vendor, plan: AI_CLIS[c].minPlan })}</small>
-    </button>
+    </AsyncButton>
   ) : null;
   // The other CLI, offered quietly while the conversation follows one.
   const OtherButton = other && !done ? <button type="button" className="btn" data-answer={`switch-${other}`} onClick={() => push({ kind: 'switch', cli: other })}>{t('aiSetup.answer.switch', { cli: name(other) })}</button> : null;
@@ -155,7 +156,7 @@ export function FirstRun({ info, create, onSetup, onForm, onLeave }: { info: Des
                     {foundLine && 'version' in card ? <Ai><p>{t('aiSetup.say.found', { cli: name(cli), version: card.version ?? '' })}</p>{card.kind === 'signedOut' ? <NoAccount cli={cli} /> : null}</Ai> : null}
                     {(card.kind === 'signedOut' || (card.kind === 'notFound' && card.waited === 'signIn')) && !leg.signIn && !done ? (
                       <Answers>
-                        {view.opens ? <button type="button" className="btn primary" data-answer="sign-in" onClick={() => signIn(cli)}>{t('aiSetup.signIn')}<small>{t('aiSetup.answer.signInHint', { vendor: AI_CLIS[cli].vendor })}</small></button> : null}
+                        {view.opens ? <AsyncButton type="button" className="btn primary" data-answer="sign-in" onClick={() => signIn(cli)}>{t('aiSetup.signIn')}<small>{t('aiSetup.answer.signInHint', { vendor: AI_CLIS[cli].vendor })}</small></AsyncButton> : null}
                         {OtherButton}
                         {NoAiButton}
                       </Answers>
@@ -186,7 +187,7 @@ export function FirstRun({ info, create, onSetup, onForm, onLeave }: { info: Des
                         </Ai>
                         <Answers>
                           <a className="btn" href={AI_CLIS[cli].plans} target="_blank" rel="noopener noreferrer">{t('aiSetup.plans', { vendor: AI_CLIS[cli].vendor })}{ICONS.external}</a>
-                          {view.opens ? <button type="button" className="btn" onClick={() => signIn(cli)}>{t('aiSetup.otherAccount')}</button> : null}
+                          {view.opens ? <AsyncButton type="button" className="btn" onClick={() => signIn(cli)}>{t('aiSetup.otherAccount')}</AsyncButton> : null}
                           <button type="button" className="btn" onClick={() => ai.again(cli)}>{t('aiSetup.again')}</button>
                           {OtherButton}
                           {NoAiButton}
@@ -311,16 +312,16 @@ function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }:
     <div className="obstep" data-step="folder">
       {ask ? <Ai><p>{t('aiSetup.folder.ask')}</p></Ai> : null}
       <Answers>
-        <button type="button" className="btn primary" data-answer="create" disabled={busy || waiting} onClick={() => void create()}>{t('aiSetup.folder.create')}<small>{t('aiSetup.folder.createHint')}</small></button>
-        {desktop ? <button type="button" className="btn" data-answer="open" disabled={busy} onClick={() => void open()}>{t('aiSetup.folder.open')}<small>{t('aiSetup.folder.openHint')}</small></button> : null}
+        <AsyncButton type="button" className="btn primary" data-answer="create" disabled={busy || waiting} onClick={() => create()}>{t('aiSetup.folder.create')}<small>{t('aiSetup.folder.createHint')}</small></AsyncButton>
+        {desktop ? <AsyncButton type="button" className="btn" data-answer="open" disabled={busy} onClick={() => open()}>{t('aiSetup.folder.open')}<small>{t('aiSetup.folder.openHint')}</small></AsyncButton> : null}
         <button type="button" className="btn" data-answer="switch" disabled={busy} onClick={() => setSwitching(true)}>{t('aiSetup.folder.switch')}<small>{t('aiSetup.folder.switchHint')}</small></button>
-        <button type="button" className="btn" data-answer="demo" disabled={busy} onClick={() => void demo()}>{t('aiSetup.folder.demo')}<small>{t('aiSetup.folder.demoHint')}</small></button>
+        <AsyncButton type="button" className="btn" data-answer="demo" disabled={busy} onClick={() => demo()}>{t('aiSetup.folder.demo')}<small>{t('aiSetup.folder.demoHint')}</small></AsyncButton>
       </Answers>
       {switching ? (
         <>
           <Me text={t('aiSetup.folder.switch')} />
           <Ai><p>{t('aiSetup.folder.switchSay')}</p></Ai>
-          <Answers><button type="button" className="btn primary" data-answer="create-switch" disabled={busy || waiting} onClick={() => void create()}>{t('aiSetup.folder.create')}<small>{t('aiSetup.folder.createHint')}</small></button></Answers>
+          <Answers><AsyncButton type="button" className="btn primary" data-answer="create-switch" disabled={busy || waiting} onClick={() => create()}>{t('aiSetup.folder.create')}<small>{t('aiSetup.folder.createHint')}</small></AsyncButton></Answers>
         </>
       ) : null}
       {waiting ? (
@@ -337,10 +338,10 @@ function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }:
               : <p className="warnline" role="alert">{access === 'locked' ? accessText(sayAccess, { folder: 'documents', why: 'rights' }, info?.booksHome ?? '') : t('aiSetup.folder.accessRefused')}</p>}
           </Ai>
           <Answers>
-            <button type="button" className="btn primary" data-answer={access === 'ask' ? 'allow' : 'again'} disabled={busy} onClick={() => void allow()}>
+            <AsyncButton type="button" className="btn primary" data-answer={access === 'ask' ? 'allow' : 'again'} disabled={busy} onClick={() => allow()}>
               {t(access === 'ask' ? 'aiSetup.folder.accessGo' : 'aiSetup.folder.accessAgain')}{access === 'ask' ? <small>{t('aiSetup.folder.accessGoHint')}</small> : null}
-            </button>
-            <button type="button" className="btn" data-answer="elsewhere" disabled={busy} onClick={() => { setAccess(undefined); void createIn(name, true); }}>{t('aiSetup.folder.elsewhere')}<small>{t('aiSetup.folder.elsewhereHint')}</small></button>
+            </AsyncButton>
+            <AsyncButton type="button" className="btn" data-answer="elsewhere" disabled={busy} onClick={() => { setAccess(undefined); return createIn(name, true); }}>{t('aiSetup.folder.elsewhere')}<small>{t('aiSetup.folder.elsewhereHint')}</small></AsyncButton>
           </Answers>
         </div>
       ) : null}
@@ -350,7 +351,7 @@ function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }:
           <p className="warnline" role="alert">{taken.look.holds === 'books' ? t('aiSetup.folder.takenBooks', { name: taken.look.name ?? '' }) : t(taken.look.holds === 'setup' ? 'aiSetup.folder.takenSetup' : 'aiSetup.folder.takenFiles')}</p>
           <p className="obfolder mono">{taken.root}</p>
           {taken.look.holds === 'files' ? null : (
-            <Answers><button type="button" className="btn" data-answer="open-taken" disabled={busy} onClick={() => void openTaken(taken.root)}>{t(taken.look.holds === 'books' ? 'aiSetup.folder.takenOpen' : 'aiSetup.folder.takenContinue')}</button></Answers>
+            <Answers><AsyncButton type="button" className="btn" data-answer="open-taken" disabled={busy} onClick={() => openTaken(taken.root)}>{t(taken.look.holds === 'books' ? 'aiSetup.folder.takenOpen' : 'aiSetup.folder.takenContinue')}</AsyncButton></Answers>
           )}
         </div>
       ) : null}

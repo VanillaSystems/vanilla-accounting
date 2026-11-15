@@ -15,6 +15,7 @@ import type { VatFacts } from '../../../types/index.js';
 import { payText, signed } from '../bank/model.js';
 import { at } from '../receipts/view.js';
 import type { Nav } from '../index.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 /** The receipt's facts as the person answered: its whole amount at `rate`, or no Swiss VAT. */
 export function answeredFacts(gross: number, rate: number | undefined): VatFacts {
@@ -47,8 +48,8 @@ export function UnreadTask({ item, nav, canEdit, onRate }: { item: WaitingPaymen
       <p>{t('receiptUnread.lead')}</p>
       <span className="wfactions">
         {first ? <button type="button" className="btn ghost" data-testid="receipt-unread-photo" onClick={() => nav.go(at({ area: 'receipts', id: first.id }, first.date ?? tx.date))}>{t('receiptUnread.photo')}</button> : null}
-        {canEdit && offer?.usual ? <button type="button" className="btn" data-testid="receipt-unread-usual" onClick={() => void answer(offer.usual)}>{t('receiptUnread.usual', { rate: String(offer.usual) })}</button> : null}
-        {canEdit ? <button type="button" className="btn" data-testid="receipt-unread-none" onClick={() => void answer(undefined)}>{t('receiptDue.withoutInputTax')}</button> : null}
+        {canEdit && offer?.usual ? <AsyncButton type="button" className="btn" data-testid="receipt-unread-usual" onClick={() => answer(offer.usual)}>{t('receiptUnread.usual', { rate: String(offer.usual) })}</AsyncButton> : null}
+        {canEdit ? <AsyncButton type="button" className="btn" data-testid="receipt-unread-none" onClick={() => answer(undefined)}>{t('receiptDue.withoutInputTax')}</AsyncButton> : null}
       </span>
     </div>
   );
@@ -61,7 +62,7 @@ export function UnreadRuleOffer({ offer, rate, nav }: { offer: UnreadOffer; rate
   const [error, setError] = useState<string>();
   const draft = () => {
     setBusy(true);
-    api.draftUnread(offer.ref, rate).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
+    return api.draftUnread(offer.ref, rate).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
   };
   return (
     <div className="ruledraft" data-testid="unread-rule-offer">
@@ -70,7 +71,7 @@ export function UnreadRuleOffer({ offer, rate, nav }: { offer: UnreadOffer; rate
       <span className="ruleacts">
         {path
           ? <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'changes' }, query: {} })}>{t('receiptUnread.toChanges')}</button>
-          : <button type="button" className="btn" disabled={busy} data-testid="unread-rule-draft" onClick={draft}>{t('receiptUnread.draft')}</button>}
+          : <AsyncButton type="button" className="btn" disabled={busy} data-testid="unread-rule-draft" onClick={draft}>{t('receiptUnread.draft')}</AsyncButton>}
       </span>
     </div>
   );

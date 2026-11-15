@@ -30,6 +30,7 @@ import { contextOf, draftData, issuedData, reminderData } from './sheets.js';
 import { Sheet } from './Sheet.js';
 import { hrefOf } from '../../shell/history.js';
 import { countryName } from './address.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
 
@@ -220,13 +221,13 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
         <div key={p.transactionRef} className="notice ivpay" data-testid="linked-payment">
           <span>{t(inv.kind === 'credit-note' ? 'invoices.linkedRefund' : 'invoices.linkedPayment', { date: formatDate(p.date), amount: `${inv.currency} ${fmt(p.amount)}` })}</span>
           <button type="button" className="golink" onClick={() => nav.go(at({ area: 'bank', payment: p.transactionRef }, p.date))}>{p.transactionRef}</button>
-          <button type="button" className="btn ghost" data-tip={t('invoices.releasePaymentTip')} onClick={() => void releasePayment(nav, inv, p.transactionRef)}>{t('invoices.releasePayment')}</button>
+          <AsyncButton type="button" className="btn ghost" data-tip={t('invoices.releasePaymentTip')} onClick={() => releasePayment(nav, inv, p.transactionRef)}>{t('invoices.releasePayment')}</AsyncButton>
         </div>
       ))}
       {proposals.map((p) => (
         <div key={p.transactionRef} className="notice ivpay">
           <span>{t(p.direction === 'DBIT' ? 'invoices.refundProposal' : 'invoices.proposal', { date: formatDate(p.date), amount: `${p.currency} ${fmt(p.amount)}`, payer: p.payer })}{p.booked && <> {t('invoices.proposalBooked')}</>}</span>
-          {canEdit && <button type="button" className="btn ghost" onClick={() => void confirmPayment(nav, inv, p.transactionRef)}>{t(p.booked ? 'invoices.linkPayment' : 'invoices.confirmPayment')}</button>}
+          {canEdit && <AsyncButton type="button" className="btn ghost" onClick={() => confirmPayment(nav, inv, p.transactionRef)}>{t(p.booked ? 'invoices.linkPayment' : 'invoices.confirmPayment')}</AsyncButton>}
         </div>
       ))}
       {canEdit && awaits && inv.kind === 'invoice' && (() => {
@@ -240,7 +241,7 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
                 {others.map((x) => <option key={x.ref} value={x.ref}>{formatDate(x.date)} · {x.currency} {fmt(x.amount)} · {x.counterparty || x.description}</option>)}
               </select>
             </label>
-            <button type="button" className="btn ghost" disabled={!pick} onClick={() => void confirmPayment(nav, inv, pick).then((ok) => { if (ok) setPick(''); })}>{t('invoices.linkPayment')}</button>
+            <AsyncButton type="button" className="btn ghost" disabled={!pick} onClick={() => confirmPayment(nav, inv, pick).then((ok) => { if (ok) setPick(''); })}>{t('invoices.linkPayment')}</AsyncButton>
           </div>
         ) : null;
       })()}
@@ -254,7 +255,7 @@ function MissingList({ d, inv, nav, missing }: DetailProps & { inv: Draft; missi
     if ('company' in f) nav.go({ route: { area: 'company', section: f.company }, query: {} });
     else if ('customer' in f) { if (f.customer === 'edit') setUi({ dialog: { kind: 'customer', id: inv.customerId } }); else setUi({ focus: 'customer', preview: false }); }
     else if ('field' in f) setUi({ focus: f.field, preview: false });
-    else void saveDraft(nav, inv, { lines: [...inv.lines, firstLine(false)] });
+    else return saveDraft(nav, inv, { lines: [...inv.lines, firstLine(false)] });
   };
   return (
     <div className="notice warn ivmissing" id="ivmissing" role="note">
@@ -265,7 +266,7 @@ function MissingList({ d, inv, nav, missing }: DetailProps & { inv: Draft; missi
           return (
             <span key={`${m.field}${m.line ?? ''}`}>
               {i > 0 && ', '}
-              {f ? <button type="button" className="golink" onClick={() => fix(f)}>{missingText(m)}</button> : missingText(m)}
+              {f ? <AsyncButton type="button" className="golink" onClick={() => fix(f)}>{missingText(m)}</AsyncButton> : missingText(m)}
             </span>
           );
         })}
@@ -291,16 +292,16 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
         nav.toast(t('invoices.missing', { list: missing.map(missingText).join(', ') }));
         return;
       }
-      void issue(nav, inv, props.period);
+      return issue(nav, inv, props.period);
     };
     return (
       <div className="ivacts">
         {preview}
-        <button type="button" className="btn primary" data-act="issue" aria-describedby={missing.length ? 'ivmissing' : undefined} onClick={tryIssue}>{t(inv.kind === 'credit-note' ? 'invoices.issueCredit' : 'invoices.issue')}</button>
-        <button type="button" className="btn ghost danger" data-act="delete" onClick={() => {
+        <AsyncButton type="button" className="btn primary" data-act="issue" aria-describedby={missing.length ? 'ivmissing' : undefined} onClick={tryIssue}>{t(inv.kind === 'credit-note' ? 'invoices.issueCredit' : 'invoices.issue')}</AsyncButton>
+        <AsyncButton type="button" className="btn ghost danger" data-act="delete" onClick={() => {
           const i = d.invoices.indexOf(inv);
-          void deleteDraft(nav, inv, d.invoices[i + 1] ?? d.invoices[i - 1]);
-        }}>{t('common.delete')}</button>
+          return deleteDraft(nav, inv, d.invoices[i + 1] ?? d.invoices[i - 1]);
+        }}>{t('common.delete')}</AsyncButton>
         {missing.length > 0 && <MissingList {...props} inv={inv} missing={missing} />}
       </div>
     );
@@ -319,7 +320,7 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
   }
   const sentOnce = d.sent.some((x) => x.invoiceId === inv.id && (x.kind === 'invoice' || x.kind === 'credit-note'));
   const sendBtn = <button type="button" className={`btn ${sentOnce || state === 'overdue' ? 'ghost' : 'primary'}`} data-act="send" data-tip={t('invoices.sendTip')} onClick={() => setUi({ dialog: { kind: 'send' } })}>{sentOnce ? t('invoices.resend') : t('invoices.send')}</button>;
-  const copy = <button type="button" className="btn ghost" data-act="copy" data-tip={t('invoices.copyTip')} onClick={() => void copyAsDraft(nav, inv)}>{t('invoices.copy')}</button>;
+  const copy = <AsyncButton type="button" className="btn ghost" data-act="copy" data-tip={t('invoices.copyTip')} onClick={() => copyAsDraft(nav, inv)}>{t('invoices.copy')}</AsyncButton>;
   const credit = <button type="button" className="btn ghost" data-act="credit" onClick={() => setUi({ dialog: { kind: 'credit' } })}>{t('invoices.credit')}</button>;
   const cancel = <button type="button" className="btn ghost danger" data-act="cancel" onClick={() => setUi({ dialog: { kind: 'cancel' } })}>{t('invoices.cancel')}</button>;
   const next = state === 'open' || state === 'overdue' ? reminderDraft(inv, d.invoices, localToday()).level : 0;
@@ -345,18 +346,18 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
       <div className="lkf">
         <div className="lkr"><span>{t('invoices.language')}</span>
           <span className="seg2" role="radiogroup" aria-label={t('invoices.language')}>
-            {LANGS.map((l) => <button key={l} type="button" role="radio" aria-checked={inv.language === l} className={inv.language === l ? 'on' : ''} disabled={!canEdit} onClick={() => void saveDraft(nav, inv, { language: l })}>{l.toUpperCase()}</button>)}
+            {LANGS.map((l) => <AsyncButton key={l} type="button" role="radio" aria-checked={inv.language === l} className={inv.language === l ? 'on' : ''} disabled={!canEdit} onClick={() => saveDraft(nav, inv, { language: l })}>{l.toUpperCase()}</AsyncButton>)}
           </span>
         </div>
         <div className="lkr"><span>{t('invoices.currency')}</span>
           <span className="seg2" role="radiogroup" aria-label={t('invoices.currency')}>
-            {(['CHF', 'EUR'] as const).map((c) => <button key={c} type="button" role="radio" aria-checked={inv.currency === c} className={inv.currency === c ? 'on' : ''} disabled={!canEdit || !ws.invoicing?.payTo[c]} data-tip={ws.invoicing?.payTo[c] ? undefined : t('invoices.currencyNeedsPayTo', { currency: c })} onClick={() => void saveDraft(nav, inv, { currency: c })}>{c}</button>)}
+            {(['CHF', 'EUR'] as const).map((c) => <AsyncButton key={c} type="button" role="radio" aria-checked={inv.currency === c} className={inv.currency === c ? 'on' : ''} disabled={!canEdit || !ws.invoicing?.payTo[c]} data-tip={ws.invoicing?.payTo[c] ? undefined : t('invoices.currencyNeedsPayTo', { currency: c })} onClick={() => saveDraft(nav, inv, { currency: c })}>{c}</AsyncButton>)}
           </span>
         </div>
       </div>
       {/* A firm not registered issues invoices without VAT (#347): said as a fact, with its place. */}
       {!chargesVat() && <p className="m ivhint" data-testid="invoice-no-vat">{t('invoices.noVat')} · <button type="button" className="quiet2" onClick={() => nav.go({ route: { area: 'company', section: 'vat' }, query: {} })}>{t('invoices.toVat')}</button></p>}
-      {own && <p className="m ivhint">{t('invoices.ownTexts')}{canEdit && <> · <button type="button" className="quiet2" data-act="reset-texts" onClick={() => void saveDraft(nav, inv, { intro: null, closing: null })}>{t('invoices.resetTexts')}</button></>}</p>}
+      {own && <p className="m ivhint">{t('invoices.ownTexts')}{canEdit && <> · <AsyncButton type="button" className="quiet2" data-act="reset-texts" onClick={() => saveDraft(nav, inv, { intro: null, closing: null })}>{t('invoices.resetTexts')}</AsyncButton></>}</p>}
       <p className="lkfoot"><button type="button" className="quiet2" onClick={() => nav.go({ route: { area: 'company', section: 'invoice-layout' }, query: {} })}>{t('invoices.toLayout')}</button></p>
     </Sec>
   );
@@ -433,7 +434,7 @@ function Comments({ inv, nav, canEdit }: DetailProps) {
           <>
             <textarea rows={2} value={text} placeholder={t('invoices.commentPlaceholder')} aria-label={t('invoices.sec.comments')} onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void add(); } }} />
-            <button type="button" className="quiet2" onClick={() => void add()}>{t('invoices.addComment')} <span className="m">⌘↵</span></button>
+            <AsyncButton type="button" className="quiet2" onClick={() => add()}>{t('invoices.addComment')} <span className="m">⌘↵</span></AsyncButton>
           </>
         )}
       </div>

@@ -17,6 +17,7 @@ import { amountOf, checkStatement, hasBalances, isBlank, parsePdfTable, parseRea
 import type { DropAction, DropRow } from '../../types/drop.js';
 import type { Route } from './route.js';
 import type { BalanceGap, CsvColumns, PdfTable, StatementRead as Read } from '../../types/statement-read.js';
+import { AsyncButton, AsyncForm } from './AsyncButton.js';
 
 /** A line as typed: amounts stay text until the check reads them. */
 interface Line { date: string; amount: string; counterparty: string; text: string; reference: string; page?: number; valueDate?: string; original?: { amount: number; currency: string }; payment?: string }
@@ -186,14 +187,14 @@ export function StatementRead({ read, pdf, act, go, asReceipt, columns, aside, s
       {facts ? (
         <div className="dread-acts">
           <small className="m">{t('drop.read.factsSave')}</small>
-          <button type="button" className="btn primary" data-testid="drop-read-save" disabled={!statement || blank || busy} onClick={() => void save()}>{t('common.save')}</button>
+          <AsyncButton type="button" className="btn primary" data-testid="drop-read-save" disabled={!statement || blank || busy} onClick={() => save()}>{t('common.save')}</AsyncButton>
         </div>
       ) : <div className="dread-acts">
         {asReceipt ? <button type="button" className="linkbtn" onClick={asReceipt}>{t('drop.isReceipt')}</button> : null}
         {wayOut && columns && !stuck ? <button type="button" className="linkbtn" data-testid="drop-read-columns" disabled={busy} onClick={columns}>{t('drop.read.columns')}</button> : null}
         {wayOut && aside ? <button type="button" className={stuck ? 'btn primary' : 'btn'} data-testid="drop-read-aside" disabled={busy} onClick={aside}>{t('drop.read.aside')}</button> : null}
-        {pdf ? <button type="button" className={stuck ? 'btn primary' : 'btn'} data-testid="drop-read-keep" disabled={busy} data-tip={t('drop.read.keepTip')} onClick={() => void keep()}>{t('drop.read.keep')}</button> : null}
-        {stuck ? null : <button type="button" className="btn primary" data-testid="drop-read-import" disabled={!check?.ok || busy} data-tip={check?.ok ? undefined : t('drop.read.importBlocked')} onClick={() => void importIt()}>{t('drop.read.import')}</button>}
+        {pdf ? <AsyncButton type="button" className={stuck ? 'btn primary' : 'btn'} data-testid="drop-read-keep" disabled={busy} data-tip={t('drop.read.keepTip')} onClick={() => keep()}>{t('drop.read.keep')}</AsyncButton> : null}
+        {stuck ? null : <AsyncButton type="button" className="btn primary" data-testid="drop-read-import" disabled={!check?.ok || busy} data-tip={check?.ok ? undefined : t('drop.read.importBlocked')} onClick={() => importIt()}>{t('drop.read.import')}</AsyncButton>}
       </div>}
     </div>
   );
@@ -208,7 +209,7 @@ export function CsvColumnsForm({ r, act }: { r: DropRow; act(action: DropAction)
   const [account, setAccount] = useState(csv.account ?? (csv.accounts.length === 1 ? csv.accounts[0].account : ''));
   const ready = columns.date !== undefined && (columns.amount !== undefined || columns.debit !== undefined || columns.credit !== undefined) && !!account;
   return (
-    <form className="dread dcsv" data-testid="drop-csv" onSubmit={(e) => { e.preventDefault(); if (ready) void act({ kind: 'csv', columns: columns as CsvColumns, account }); }}>
+    <AsyncForm className="dread dcsv" data-testid="drop-csv" onSubmit={(e) => { e.preventDefault(); if (ready) return act({ kind: 'csv', columns: columns as CsvColumns, account }); }}>
       <small>{t('drop.csv.ask', { rows: csv.rows })}</small>
       <div className="dcsv-map">
         <label>{t('drop.csv.account')}
@@ -236,8 +237,8 @@ export function CsvColumnsForm({ r, act }: { r: DropRow; act(action: DropAction)
       {r.message ? <small className="dwhy">{r.message}</small> : null}
       <div className="dread-acts">
         <small className="m">{t('drop.csv.kept')}</small>
-        <button type="submit" className="btn primary" data-testid="drop-csv-read" disabled={!ready}>{t('drop.csv.read')}</button>
+        <AsyncButton type="submit" className="btn primary" data-testid="drop-csv-read" disabled={!ready}>{t('drop.csv.read')}</AsyncButton>
       </div>
-    </form>
+    </AsyncForm>
   );
 }

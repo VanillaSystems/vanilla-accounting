@@ -42,6 +42,7 @@ import { useFx } from '../../hooks/use-fx.js';
 import { AccountField } from '../journal/AccountField.js';
 import { DimensionsSection } from './DimensionsSection.js';
 import { AdjustmentsSection } from './AdjustmentsSection.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'company'>>;
 
@@ -220,14 +221,14 @@ function Profile({ ws, nav, canEdit }: Props & { ws: CompanyInfo }) {
         </Kv>
       </dl>
       {edit ? (
-        <form className="form inline" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEdit(false); } }}>
+        <AsyncForm className="form inline" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEdit(false); } }}>
           {input('name', 'wide')}{input('uid')}{input('owner')}{input('business', 'wide')}
           {input('street')}{input('number')}{input('postcode')}{input('town')}{input('country')}
           <div className="acts">
-            <button type="submit" className="btn primary">{t('common.save')}</button>
+            <AsyncButton type="submit" className="btn primary">{t('common.save')}</AsyncButton>
             <button type="button" className="btn ghost" onClick={() => setEdit(false)}>{t('common.cancel')}</button>
           </div>
-        </form>
+        </AsyncForm>
       ) : canEdit && <div className="fedit"><button type="button" className="btn" onClick={begin}>{I.edit}{t('company.edit')}</button></div>}
       <p className="m src-note">{t('company.profileSource')}</p>
     </>
@@ -318,7 +319,7 @@ function Vat({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
         )}
       </dl>
       {edit ? (
-        <form className="form inline" data-testid="vat-form" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEdit(false); } }}>
+        <AsyncForm className="form inline" data-testid="vat-form" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEdit(false); } }}>
           <label className="wide"><input type="checkbox" name="registered" checked={f.registered} onChange={(e) => setF({ ...f, registered: e.target.checked })} /> {t('company.vatEditRegistered')}</label>
           {f.registered && (
             <>
@@ -351,10 +352,10 @@ function Vat({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
           )}
           {err && <div className="err wide" role="alert" data-testid="vat-refused">{err}</div>}
           <div className="acts">
-            <button type="submit" className="btn primary" disabled={!next}>{t('common.save')}</button>
+            <AsyncButton type="submit" className="btn primary" disabled={!next}>{t('common.save')}</AsyncButton>
             <button type="button" className="btn ghost" onClick={() => setEdit(false)}>{t('common.cancel')}</button>
           </div>
-        </form>
+        </AsyncForm>
       ) : canEdit && <div className="fedit"><button type="button" className="btn" onClick={() => { setF(was()); setErr(''); setEdit(true); }}>{I.edit}{t('company.edit')}</button></div>}
       {v.registered && <AdjustmentsSection books={books} nav={nav} canEdit={canEdit} />}
       <p>
@@ -396,7 +397,7 @@ function Banks({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
     { addBank: { bank: b.bank, currency: b.currency, account: b.account, label: b.label, ...(b.iban ? { iban: b.iban } : {}) } });
   return (
     <>
-      <form onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape' && edit) { e.stopPropagation(); setEdit(false); } }}>
+      <AsyncForm onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape' && edit) { e.stopPropagation(); setEdit(false); } }}>
         <div className="ftab banks">
           <div className="fh"><span>{t('yearClose.colAccount')}</span><span>{t('company.bank')}</span><span>{t('company.iban')}</span><span className="r">{t('company.statementBalance')}</span></div>
           {ws.bankAccounts.map((b) => {
@@ -407,7 +408,7 @@ function Banks({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
                 <span className="mono">{b.account}</span>
                 <input aria-label={t('company.field.label')} value={f[k].label} onChange={(e) => setF({ ...f, [k]: { ...f[k], label: e.target.value } })} />
                 <input aria-label={t('company.iban')} className="mono" value={f[k].iban} disabled={!TAKES_IBAN.includes(b.role)} onChange={(e) => setF({ ...f, [k]: { ...f[k], iban: e.target.value } })} />
-                <span className="r m">{b.bank} {b.currency}{b.role !== 'owner' && <> <button type="button" className="linkbtn" data-testid="remove-bank" data-bank={b.account} data-tip={t('company.removeBankTip')} onClick={() => void remove(b).then((ok) => { if (ok) setEdit(false); })}>{t('company.removeBank')}</button></>}</span>
+                <span className="r m">{b.bank} {b.currency}{b.role !== 'owner' && <> <AsyncButton type="button" className="linkbtn" data-testid="remove-bank" data-bank={b.account} data-tip={t('company.removeBankTip')} onClick={() => remove(b).then((ok) => { if (ok) setEdit(false); })}>{t('company.removeBank')}</AsyncButton></>}</span>
               </div>
             ) : (
               <div key={k} className="fr go" role="link" tabIndex={0} data-bank={b.account} onClick={goBank} onKeyDown={(e) => { if (e.key === 'Enter') goBank(); }}>
@@ -425,7 +426,7 @@ function Banks({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
           <div className="fedit">
             {edit ? (
               <>
-                <button type="submit" className="btn primary">{t('common.save')}</button>
+                <AsyncButton type="submit" className="btn primary">{t('common.save')}</AsyncButton>
                 <button type="button" className="btn ghost" onClick={() => setEdit(false)}>{t('common.cancel')}</button>
               </>
             ) : (
@@ -436,7 +437,7 @@ function Banks({ ws, books, nav, canEdit }: Props & { ws: CompanyInfo }) {
             )}
           </div>
         )}
-      </form>
+      </AsyncForm>
       {adding && <AddBank nav={nav} onDone={() => setAdding(false)} />}
       <p className="m src-note">{t('company.banksSource')}</p>
     </>
@@ -453,18 +454,18 @@ function AddBank({ nav, onDone }: { nav: Nav; onDone(): void }) {
     if (valid && await patch(nav, { addBank: { ...f, iban: f.iban.trim() || undefined } }, t('company.bankAdded', { label: f.label.trim() }), { removeBank: { bank: f.bank.trim(), currency: f.currency.trim().toUpperCase() } })) onDone();
   }
   return (
-    <form className="form inline" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onDone(); } }}>
+    <AsyncForm className="form inline" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onDone(); } }}>
       <label>{t('company.bank')}<input value={f.bank} onChange={set('bank')} autoFocus /></label>
       <label>{t('company.currency')}<input className="mono" value={f.currency} onChange={set('currency')} /></label>
       <label>{t('yearClose.colAccount')}<input className="mono" inputMode="numeric" value={f.account} onChange={set('account')} /></label>
       <label>{t('company.field.label')}<input value={f.label} onChange={set('label')} /></label>
       <label className="wide">{t('company.iban')}<input className="mono" value={f.iban} onChange={set('iban')} /></label>
       <div className="acts">
-        <button type="submit" className="btn primary" disabled={!valid}>{t('company.addBank')}</button>
+        <AsyncButton type="submit" className="btn primary" disabled={!valid}>{t('company.addBank')}</AsyncButton>
         <button type="button" className="btn ghost" onClick={onDone}>{t('common.cancel')}</button>
         <span className="m">{t('company.addBankHint')}</span>
       </div>
-    </form>
+    </AsyncForm>
   );
 }
 
@@ -499,16 +500,16 @@ function Accounts({ books, nav, canEdit }: Props) {
   return (
     <>
       {canEdit && (
-        <form className="form inline" onSubmit={save}>
+        <AsyncForm className="form inline" onSubmit={save}>
           <label>{t('yearClose.colAccount')}<input className="mono" inputMode="numeric" value={f.number} onChange={(e) => { const number = e.target.value.trim(); setF({ number, name: names[number] ?? (f.number in names ? '' : f.name) }); }} /></label>
           <label className="wide">{t('company.accountName')}<input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
           <div className="acts">
-            <button type="submit" className="btn" disabled={unplaced || !/^\d{4}$/.test(f.number) || !f.name.trim() || f.name.trim() === names[f.number]}>{exists ? t('company.rename') : t('company.addAccount')}</button>
+            <AsyncButton type="submit" className="btn" disabled={unplaced || !/^\d{4}$/.test(f.number) || !f.name.trim() || f.name.trim() === names[f.number]}>{exists ? t('company.rename') : t('company.addAccount')}</AsyncButton>
             {unplaced
               ? <span className="m warn" role="alert" data-testid="account-unplaced">{t('error.accountOutsideStatements', { account: f.number, classes: chart().placedClasses })}</span>
               : <span className="m">{t('company.accountsHint')}</span>}
           </div>
-        </form>
+        </AsyncForm>
       )}
       <div className="ftab konten">
         {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((k) => {
@@ -652,14 +653,14 @@ function Opening({ books, nav, canEdit }: Props) {
     if (problem) { setErr(problem); return; }
     // Taken back, a foreign account's older opening without its balance in its currency comes back so (native: null).
     const nativeBefore = cur && openings[account] !== undefined ? natives[account]?.amount ?? null : natives[account]?.amount;
-    void put(account, amount === 0 ? null : amount, openings[account], native ?? undefined, nativeBefore).then((ok) => { if (ok) setN(n + 1); });
+    return put(account, amount === 0 ? null : amount, openings[account], native ?? undefined, nativeBefore).then((ok) => { if (ok) setN(n + 1); });
   }
 
   if (!rows.length && !typing) return <p className="m">{lock === 'closed' ? t('company.openingClosed', { year }) : t('company.noOpening', { year })}</p>;
   return (
     <>
       {typing && (
-        <form key={n} ref={form} className="form inline" autoComplete="off" onSubmit={save} onInput={(e) => readAccount(e.currentTarget)} data-testid="opening-form">
+        <AsyncForm key={n} ref={form} className="form inline" autoComplete="off" onSubmit={save} onInput={(e) => readAccount(e.currentTarget)} data-testid="opening-form">
           <AccountField name="account" label={t('yearClose.colAccount')} defaultValue="" onPick={() => readAccount(form.current)} />
           <label>{t('company.openingBalanceOn', { date: `1.1.${year}`, currency: baseCurrency() })}<input className="mono num" name="amount" inputMode="decimal" onBlur={inAppFormat} /></label>
           {currency ? <label>{t('company.openingBalanceOn', { date: `1.1.${year}`, currency })}<input className="mono num" name="native" inputMode="decimal" onBlur={inAppFormat} data-testid="opening-native" /></label> : null}
@@ -672,11 +673,11 @@ function Opening({ books, nav, canEdit }: Props) {
             </p>
           ) : null}
           <div className="acts">
-            <button type="submit" className="btn">{t('company.openingSetButton')} <span className="k">↵</span></button>
+            <AsyncButton type="submit" className="btn">{t('company.openingSetButton')} <span className="k">↵</span></AsyncButton>
             <span className="m">{t('company.openingHint', { equity })}</span>
           </div>
           <div className="err" role="alert">{err}</div>
-        </form>
+        </AsyncForm>
       )}
       {rows.length ? (
         <>
@@ -685,7 +686,7 @@ function Opening({ books, nav, canEdit }: Props) {
             {rows.map(([a, v]) => (
               <div key={a} className="fr" data-account={a}>
                 <button type="button" className="mono clink" onClick={() => open(a)}>{a}</button><span>{names[a] ?? a}{a === equity ? <span className="m"> · {t('company.openingPlug')}</span> : null}</span>
-                <span>{typing && a !== equity ? <button type="button" className="quiet2" aria-label={t('company.openingRemove', { account: a })} onClick={() => void put(a, null, v, undefined, foreign.has(a) ? natives[a]?.amount ?? null : undefined)}>×</button> : null}</span>
+                <span>{typing && a !== equity ? <AsyncButton type="button" className="quiet2" aria-label={t('company.openingRemove', { account: a })} onClick={() => put(a, null, v, undefined, foreign.has(a) ? natives[a]?.amount ?? null : undefined)}>×</AsyncButton> : null}</span>
                 <span className="r mono">{fmt(v)}{natives[a] ? <small className="m"> · {natives[a].currency} {fmt(natives[a].amount)}</small> : null}</span>
               </div>
             ))}

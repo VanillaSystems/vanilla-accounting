@@ -22,6 +22,7 @@ import { answerQuestion, askQuestion, closeQuestion, setMe, undoAnswer, useQuest
 import { RuleDraft } from '../areas/company/RulesSection.js';
 import type { SaleRuleOffer } from '../../saving/sale-rule.js';
 import { codeLabel } from '../areas/codes/names.js';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 /** The domestic sale at the normal rate; on the net tax rate method the firm's code and approved rate, which the answer books. */
 function saleDomesticText(): string {
@@ -93,7 +94,7 @@ function AlwaysSo({ q, nav }: { q: Question; nav: Nav }) {
   if (offer?.kind === 'rule') return <RuleDraft path={offer.path} nav={nav} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} title={t('questions.sale.ruleTitle')} />;
   const ask = () => {
     setBusy(true);
-    api.draftSaleRule(q.id).then(setOffer, (e) => nav.toast(errorText(e))).finally(() => setBusy(false));
+    return api.draftSaleRule(q.id).then(setOffer, (e) => nav.toast(errorText(e))).finally(() => setBusy(false));
   };
   return (
     <div className="ruledraft" data-sale-rule={q.id}>
@@ -102,7 +103,7 @@ function AlwaysSo({ q, nav }: { q: Question; nav: Nav }) {
         : (
           <>
             <span>{t('questions.sale.always')}</span>
-            <span className="ruleacts"><button type="button" className="btn" disabled={busy} data-act="sale-always" onClick={ask}>{t('rules.share.draft')}</button></span>
+            <span className="ruleacts"><AsyncButton type="button" className="btn" disabled={busy} data-act="sale-always" onClick={ask}>{t('rules.share.draft')}</AsyncButton></span>
           </>
         )}
     </div>
@@ -202,13 +203,13 @@ export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question
           {canEdit ? (
             <div className="qacts">
               {mine ? null : <>
-                {q.choices.map((c) => { const proposed = !zero && c === q.proposal?.choice; return <button key={c} type="button" className={proposed ? 'btn primary' : 'btn'} data-choice={c} onClick={() => void answer({ choice: c })}>{choiceText(c)}{proposed ? ` · ${t('questions.proposed')}` : ''}</button>; })}
+                {q.choices.map((c) => { const proposed = !zero && c === q.proposal?.choice; return <AsyncButton key={c} type="button" className={proposed ? 'btn primary' : 'btn'} data-choice={c} onClick={() => answer({ choice: c })}>{choiceText(c)}{proposed ? ` · ${t('questions.proposed')}` : ''}</AsyncButton>; })}
                 {q.topic === 'saleVat' && q.choices.includes('saleAbroad') && saleVatCode('saleAbroad') ? <button type="button" className="btn" data-choice="saleAbroadForeignTax" aria-expanded={foreign} onClick={() => setForeign(!foreign)}>{t('questions.choice.saleAbroadForeignTax')}</button> : null}
                 <input className="qinput" value={text} placeholder={t('questions.answerPlaceholder')} aria-label={t('questions.answerPlaceholder')} onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && text.trim()) void answer({ text: text.trim() }).then((ok) => ok && setText('')); }} />
-                <button type="button" className="btn ghost" disabled={!text.trim()} onClick={() => void answer({ text: text.trim() }).then((ok) => ok && setText(''))}>{t('questions.reply')}</button>
+                <AsyncButton type="button" className="btn ghost" disabled={!text.trim()} onClick={() => answer({ text: text.trim() }).then((ok) => ok && setText(''))}>{t('questions.reply')}</AsyncButton>
               </>}
-              {mine ? <button type="button" className="linkbtn" onClick={() => void run(nav, closeQuestion(q.id, 'withdrawn'), t('questions.withdrawn'))}>{t('questions.withdraw')}</button> : null}
+              {mine ? <AsyncButton type="button" className="linkbtn" onClick={() => run(nav, closeQuestion(q.id, 'withdrawn'), t('questions.withdrawn'))}>{t('questions.withdraw')}</AsyncButton> : null}
             </div>
           ) : null}
           {canEdit && !mine && foreign ? (
@@ -225,8 +226,8 @@ export function QuestionCard({ q, nav, canEdit, books, showItem }: { q: Question
           {canEdit && q.status === 'answered' && q.topic === 'saleVat' && q.answer.acted && 'vatCode' in q.answer.acted && !q.answer.acted.rule && !q.answer.from && undoable(q, books) ? <AlwaysSo q={q} nav={nav} /> : null}
           {canEdit && q.status === 'answered' ? (
             <div className="qacts">
-              {mine || q.origin === 'assistant' ? <button type="button" className="btn" onClick={() => void run(nav, closeQuestion(q.id, 'done'))}>{t('questions.done')}</button> : null}
-              {q.answer.acted && !('refused' in q.answer.acted) && undoable(q, books) ? <button type="button" className="btn ghost" data-tip={t('questions.undoTip')} onClick={() => void run(nav, undoAnswer(q.id), t('questions.undone'))}>{t('questions.undo')}</button> : null}
+              {mine || q.origin === 'assistant' ? <AsyncButton type="button" className="btn" onClick={() => run(nav, closeQuestion(q.id, 'done'))}>{t('questions.done')}</AsyncButton> : null}
+              {q.answer.acted && !('refused' in q.answer.acted) && undoable(q, books) ? <AsyncButton type="button" className="btn ghost" data-tip={t('questions.undoTip')} onClick={() => run(nav, undoAnswer(q.id), t('questions.undone'))}>{t('questions.undo')}</AsyncButton> : null}
             </div>
           ) : null}
         </>
@@ -259,7 +260,7 @@ function AskForm({ on, nav, onDone }: { on: QuestionTarget; nav: Nav; onDone(): 
         onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); void send(); } if (e.key === 'Escape') onDone(); }} />
       <label className="qcheck"><input type="checkbox" checked={choices} onChange={(e) => setChoices(e.target.checked)} />{t('questions.withChoices')}</label>
       <div className="qacts">
-        <button type="button" className="btn primary" disabled={!text.trim()} onClick={() => void send()}>{t('questions.send')} <span className="m">⌘↵</span></button>
+        <AsyncButton type="button" className="btn primary" disabled={!text.trim()} onClick={() => send()}>{t('questions.send')} <span className="m">⌘↵</span></AsyncButton>
         <button type="button" className="linkbtn" onClick={onDone}>{t('questions.cancel')}</button>
       </div>
     </div>

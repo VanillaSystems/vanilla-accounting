@@ -19,6 +19,7 @@ import type { Route } from '../../shell/route.js';
 import { takeOpening } from '../bank/actions.js';
 import { fileKey } from '../bank/model.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 type Filter = 'all' | 'unreviewed' | 'check' | 'you' | 'error';
 const FILTERS: Filter[] = ['all', 'unreviewed', 'check', 'you', 'error'];
@@ -148,7 +149,7 @@ function LineRow({ l, go, nav }: { l: Line; go(route: Route): void; nav: Nav }) 
         <tr className="rline"><td /><td /><td />
           <td className="res" colSpan={2}>
             {t('runs.line.openingOffer', { amount: `${l.a.currency} ${fmt(o.amount)}`, date: swiss(o.date) })}{' '}
-            <button type="button" className="btn primary" onClick={() => void takeOpening(nav, o)}>{t('runs.line.openingTake')}</button>
+            <AsyncButton type="button" className="btn primary" onClick={() => takeOpening(nav, o)}>{t('runs.line.openingTake')}</AsyncButton>
           </td></tr>
       ) : null}
       {l.startMissing ? (
@@ -201,7 +202,7 @@ export function RunsHome({ view, books, nav }: { view: AutomationView; books: In
   const todays = rows.filter((x) => sameDay(new Date(x.r.startedAt), today));
   const arrivedToday = todays.flatMap((x) => x.r.arrived ?? []);
   const toggle = (id: string) => setOpen((was) => { const next = new Set(was); if (!next.delete(id)) next.add(id); return next; });
-  const review = (id: string, on: boolean) => void automationCommand({ kind: 'review', run: id, on }).then((res) => { if (!res.ok) nav.toast(commandRefusalText(res)); });
+  const review = (id: string, on: boolean) => automationCommand({ kind: 'review', run: id, on }).then((res) => { if (!res.ok) nav.toast(commandRefusalText(res)); });
   const sum = [
     arrivedToday.some((a) => a.kind === 'statement') ? t('runs.in.statements', { n: arrivedToday.filter((a) => a.kind === 'statement').length }) : '',
     arrivedToday.some((a) => a.kind === 'receipt') ? t('runs.in.receipts', { n: arrivedToday.filter((a) => a.kind === 'receipt').length }) : '',
@@ -250,8 +251,8 @@ export function RunsHome({ view, books, nav }: { view: AutomationView; books: In
                     <td className="res"><b>{outHead}</b>{outSmall ? <small className={lines.some((l) => (l.kind === 'statement' && (l.balance.kind === 'differs' || l.withoutVat.length > 0)) || l.kind === 'poorScan') ? 'warn-t' : ''}>{outSmall}</small> : null}</td>
                     <td className="st" onClick={(e) => e.stopPropagation()}>
                       <span className={`rpill ${stand}`}>{t(`runs.st.${stand}` as 'runs.st.ok')}</span>
-                      {stand === 'ok' || stand === 'check' ? <button type="button" className="linkbtn rreview" onClick={() => review(r.id, true)}>{t('runs.review')}</button> : null}
-                      {stand === 'reviewed' ? <button type="button" className="linkbtn rreview m" onClick={() => review(r.id, false)}>{t('runs.unreview')}</button> : null}
+                      {stand === 'ok' || stand === 'check' ? <AsyncButton type="button" className="linkbtn rreview" onClick={() => review(r.id, true)}>{t('runs.review')}</AsyncButton> : null}
+                      {stand === 'reviewed' ? <AsyncButton type="button" className="linkbtn rreview m" onClick={() => review(r.id, false)}>{t('runs.unreview')}</AsyncButton> : null}
                     </td>
                   </tr>
                   {isOpen ? (

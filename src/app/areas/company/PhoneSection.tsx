@@ -9,6 +9,7 @@ import { api, errorText } from '../../lib/api.js';
 import { desktop } from '../../desktop/bridge.js';
 import type { PhoneInfo } from '../../../types/desktop.js';
 import type { Nav } from '../index.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 export function PhoneSection({ nav }: { nav: Nav }) {
   const [info, setInfo] = useState<PhoneInfo>();
@@ -37,7 +38,7 @@ export function PhoneSection({ nav }: { nav: Nav }) {
         <dt>{t('phone.state')}</dt>
         <dd>
           {info.on ? t('phone.isOn', { port: info.port ?? '' }) : <span className="m">{t('phone.isOff')}</span>}{' '}
-          <button type="button" className="btn" disabled={busy} onClick={() => act(() => api.desktop.setPhone(!info.on))}>{t(info.on ? 'phone.switchOff' : 'phone.switchOn')}</button>
+          <AsyncButton type="button" className="btn" disabled={busy} onClick={() => act(() => api.desktop.setPhone(!info.on))}>{t(info.on ? 'phone.switchOff' : 'phone.switchOn')}</AsyncButton>
         </dd>
         {info.on && first ? <><dt>{t('phone.address')}</dt><dd className="mono">{first}:{info.port}</dd></> : null}
         {info.on && others.length ? <><dt>{t('phone.others')}</dt><dd className="mono">{others.map((a) => `${a}:${info.port}`).join(', ')}</dd></> : null}
@@ -59,7 +60,7 @@ export function PhoneSection({ nav }: { nav: Nav }) {
       {renewing ? (
         <p className="phonerenew" role="alertdialog" aria-label={t('phone.renew')}>
           <span>{t('phone.renewAsk')}</span>{' '}
-          <button type="button" className="btn primary" autoFocus disabled={busy} onClick={() => { setRenewing(false); void act(api.desktop.renewPhone, t('phone.renewed')); }}>{t('phone.renewYes')}</button>{' '}
+          <AsyncButton type="button" className="btn primary" autoFocus disabled={busy} onClick={() => { setRenewing(false); return act(api.desktop.renewPhone, t('phone.renewed')); }}>{t('phone.renewYes')}</AsyncButton>{' '}
           <button type="button" className="btn ghost" onClick={() => setRenewing(false)}>{t('common.cancel')}</button>
         </p>
       ) : (

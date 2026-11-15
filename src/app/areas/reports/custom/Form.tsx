@@ -17,6 +17,7 @@ import type { ReportResult } from '../../../../reports/result.js';
 import { ReportView, uiWords } from './ReportView.js';
 import { editing, reloadSaved, undoWrite, useEditing } from './store.js';
 import { useWorkspace } from '../../../hooks/use-workspace.js';
+import { AsyncButton } from '../../../shell/AsyncButton.js';
 
 type Props = AreaProps<Extract<RouteOf<'reports'>, { report: 'custom' }>>;
 
@@ -137,8 +138,8 @@ export function ReportForm({ period, nav }: Props) {
         })}
       </div>
       <div className="ruleacts">
-        <button type="button" className="btn ghost" disabled={busy} data-testid="f-preview" onClick={() => void preview()}>{t('custom.form.preview')}</button>
-        <button type="button" className="btn primary" disabled={busy} data-testid="f-save" onClick={() => void save()}>{t('custom.save')}</button>
+        <AsyncButton type="button" className="btn ghost" disabled={busy} data-testid="f-preview" onClick={() => preview()}>{t('custom.form.preview')}</AsyncButton>
+        <AsyncButton type="button" className="btn primary" disabled={busy} data-testid="f-save" onClick={() => save()}>{t('custom.save')}</AsyncButton>
         <button type="button" className="btn ghost" onClick={() => editing.set(null)}>{t('custom.form.cancel')}</button>
       </div>
       {error ? <p className="warnline" data-testid="form-error">{error}</p> : null}

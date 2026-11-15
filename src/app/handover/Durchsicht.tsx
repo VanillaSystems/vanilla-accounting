@@ -14,6 +14,7 @@ import { useTopBarHeight } from '../shell/AuditBar.js';
 import { reloadHandover, shortSum, sizeText, type DurchsichtFacts } from './store.js';
 import { checkCopy, runJob, type Job } from './link.js';
 import { JobProgress } from './LinkParts.js';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 const PEN = <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" /></svg>;
 
@@ -72,7 +73,7 @@ export function CopyStatus({ d }: { d: DurchsichtFacts }) {
             <div className="acts">
               <span className="wm">{t('durchsicht.deleteAsk')}</span>
               <button type="button" className="btn ghost" onClick={() => setAsk(false)}>{t('common.cancel')}</button>
-              <button type="button" className="btn" onClick={() => void remove()} data-testid="copy-delete-yes">{t('durchsicht.deleteYes')}</button>
+              <AsyncButton type="button" className="btn" onClick={() => remove()} data-testid="copy-delete-yes">{t('durchsicht.deleteYes')}</AsyncButton>
             </div>
           ) : <div className="acts"><button type="button" className="linkbtn" onClick={() => setAsk(true)} data-testid="copy-delete">{t('durchsicht.deleteCopy')}</button></div>}
         </div>
@@ -189,10 +190,10 @@ function ReturnDialog({ d, toast, onClose }: { d: DurchsichtFacts; toast(msg: st
           <button type="button" className="btn ghost" onClick={onClose}>{t('common.cancel')}</button>
           {d.linked ? (
             <>
-              <button type="button" className="btn ghost" disabled={!plan?.changes.length || busy} onClick={() => void send()} data-testid="return-save">{t('durchsicht.saveFile')}</button>
-              <button type="button" className="btn primary" disabled={!plan?.changes.length || busy} onClick={() => void sendBack()} data-testid="return-send">{busy ? t('share.sending') : t('durchsicht.sendLink', { name: d.sharer.name })}</button>
+              <AsyncButton type="button" className="btn ghost" disabled={!plan?.changes.length || busy} onClick={() => send()} data-testid="return-save">{t('durchsicht.saveFile')}</AsyncButton>
+              <AsyncButton type="button" className="btn primary" disabled={!plan?.changes.length || busy} onClick={() => sendBack()} data-testid="return-send">{busy ? t('share.sending') : t('durchsicht.sendLink', { name: d.sharer.name })}</AsyncButton>
             </>
-          ) : <button type="button" className="btn primary" disabled={!plan?.changes.length || busy} onClick={() => void send()} data-testid="return-save">{t('durchsicht.saveFile')}</button>}
+          ) : <AsyncButton type="button" className="btn primary" disabled={!plan?.changes.length || busy} onClick={() => send()} data-testid="return-save">{t('durchsicht.saveFile')}</AsyncButton>}
         </div>
       </div>
     </>

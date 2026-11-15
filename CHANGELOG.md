@@ -14,6 +14,10 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Changed
+
+- Every button that waits for something (saving, booking, sending, opening, a job) shows a spinner after a moment, keeps its size and takes no second click until the action is done.
+
 ## [0.6.1] - 2026-11-15
 
 No figure changes: the demo goldens and the books schema are as in 0.6.0.

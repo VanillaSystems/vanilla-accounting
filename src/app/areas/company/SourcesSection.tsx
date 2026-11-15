@@ -15,6 +15,7 @@ import type { AsideOffer, MailCheck, Reach, SourcePreview, SourcesView } from '.
 import { shapeText } from '../../lib/name-shape.js';
 import type { Nav } from '../index.js';
 import { clearMailDraft, peekMailDraft, type MailDraft } from './mail-draft.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 /** A long list folded to its first lines; the rest opens on a click. */
 function Lines({ lines, first = 6 }: { lines: string[]; first?: number }) {
@@ -60,7 +61,7 @@ function AddMailbox({ view, start, done, cancel }: { view: SourcesView; start?: 
     <label className="wide">{t(`sources.field.${k}`)}<input name={k} value={f[k]} placeholder={placeholder} autoComplete="off" onChange={(e) => setF({ ...f, [k]: e.target.value })} /></label>
   );
   return (
-    <form className="form inline srcadd" data-testid="add-mailbox" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cancel(); } }}>
+    <AsyncForm className="form inline srcadd" data-testid="add-mailbox" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); cancel(); } }}>
       {field('address', t('sources.field.addressExample'))}
       {field('host', t('sources.field.hostExample'))}
       {field('account', f.address || t('sources.field.accountSame'))}
@@ -69,11 +70,11 @@ function AddMailbox({ view, start, done, cancel }: { view: SourcesView; start?: 
       )}
       <p className="fhint wide">{view.secretsInApp ? t('sources.passwordHintApp') : t('sources.passwordHint', { where: view.secretsWhere })}</p>
       <div className="acts">
-        <button type="submit" className="btn primary">{t('sources.addMailbox')}</button>
+        <AsyncButton type="submit" className="btn primary">{t('sources.addMailbox')}</AsyncButton>
         <button type="button" className="btn ghost" onClick={cancel}>{t('common.cancel')}</button>
       </div>
       <div className="err wide" role="alert">{err}</div>
-    </form>
+    </AsyncForm>
   );
 }
 
@@ -90,11 +91,11 @@ export function PasswordField({ id, present, done, channel = 'mail' }: { id: str
     try { await api.saveSourcePassword(id, value, channel); setValue(''); setOpen(false); done(); } catch (x) { setErr(errorText(x)); }
   }
   return (
-    <form className="srcpw" onSubmit={save}>
+    <AsyncForm className="srcpw" onSubmit={save}>
       <input type="password" name={`${channel === 'api' ? 'token' : 'password'}-${id}`} aria-label={t(channel === 'api' ? 'sources.field.token' : 'sources.field.password')} autoComplete="new-password" value={value} placeholder={t(channel === 'api' ? 'sources.field.token' : 'sources.field.password')} onChange={(e) => setValue(e.target.value)} />
-      <button type="submit" className="btn" disabled={!value}>{t(channel === 'api' ? 'sources.tokenSave' : 'sources.passwordSave')}</button>
+      <AsyncButton type="submit" className="btn" disabled={!value}>{t(channel === 'api' ? 'sources.tokenSave' : 'sources.passwordSave')}</AsyncButton>
       {err && <span className="warnline">{err}</span>}
-    </form>
+    </AsyncForm>
   );
 }
 
@@ -112,7 +113,7 @@ export function Check({ id, auto = false, macMail = false }: { id: string; auto?
   return (
     <div className="srccheck" data-testid={`check-${id}`}>
       {macMail && !res ? <p className="m" data-testid="mac-mail-ask">{t('sources.macMail.ask')}</p> : null}
-      <button type="button" className="btn ghost" disabled={busy} onClick={() => void run()}>{busy ? t('sources.checking') : t('sources.check')}</button>
+      <AsyncButton type="button" className="btn ghost" disabled={busy} onClick={() => run()}>{busy ? t('sources.checking') : t('sources.check')}</AsyncButton>
       {err && <p className="warnline">{err}</p>}
       {res && !res.ok && <p className="warnline">{res.reason === 'mail-app' ? t(`sources.macMail.problem.${res.problem}`) : t(`sources.checkFail.${res.reason}`)}{res.detail ? ` (${res.detail})` : ''}</p>}
       {res?.ok && (
@@ -173,7 +174,7 @@ export function Preview({ id, signIn }: { id: string; signIn?: () => void }) {
   };
   return (
     <div className="srccheck" data-testid={`preview-${id}`}>
-      <button type="button" className="btn ghost" disabled={busy} onClick={() => void run()}>{busy ? t('sources.checking') : t('sources.preview')}</button>
+      <AsyncButton type="button" className="btn ghost" disabled={busy} onClick={() => run()}>{busy ? t('sources.checking') : t('sources.preview')}</AsyncButton>
       {err ? <p className="warnline">{err}</p> : null}
       {res && !res.ok ? (
         <p className="warnline">
@@ -241,14 +242,14 @@ export function SourcesSection({ nav, canEdit }: { nav: Nav; canEdit: boolean })
                 {verdict.kind === 'pending' ? (
                   <div className="srcon">
                     {verdict.reachDiff.added.length ? <div className="m">{t('sources.newReachTitle')}<Lines lines={verdict.reachDiff.added.map((l) => `${l.channel} · ${l.what}`)} /></div> : null}
-                    <button type="button" className="btn primary" onClick={() => api.approveSource(verdict.decl.id, verdict.decl.version).then(reload, (e) => setError(errorText(e)))}>{t('sources.approve')}</button>
+                    <AsyncButton type="button" className="btn primary" onClick={() => api.approveSource(verdict.decl.id, verdict.decl.version).then(reload, (e) => setError(errorText(e)))}>{t('sources.approve')}</AsyncButton>
                     <span className="m">{t('sources.approveWhy')}</span>
                   </div>
                 ) : null}
                 {(skipOffers ?? []).map((o) => (
                   <div key={o.sender} className="srcon">
                     <span>{t('sources.skipOffer', { n: o.n, sender: o.sender })}</span>
-                    <button type="button" className="btn" onClick={() => api.skipSender(verdict.decl.id, o.sender, verdict.decl.version).then(reload, (e) => setError(errorText(e)))}>{t('sources.skipSender')}</button>
+                    <AsyncButton type="button" className="btn" onClick={() => api.skipSender(verdict.decl.id, o.sender, verdict.decl.version).then(reload, (e) => setError(errorText(e)))}>{t('sources.skipSender')}</AsyncButton>
                   </div>
                 ))}
                 {canEdit && (asideOffers ?? []).map((o) => (

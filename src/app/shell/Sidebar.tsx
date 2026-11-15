@@ -59,6 +59,7 @@ import {
   attachFiles, removeFile, uploading, type ComposerFile,
   addContext, closeAssistant, hideConversations, newConversation, openConversation, removeContext, sendMessage, settleHeld, showConversations, stopAnswer, undoAll, undoChange, useAssistant, wroteDraft,
 } from '../assistant/store.js';
+import { AsyncButton } from './AsyncButton.js';
 
 /** `onGoTo`: to a place with its period, for a link to an object of another period than the one shown. */
 interface Props { page: ContextRef | undefined; books: Index; onGo(route: Route): void; onGoTo(loc: Location): void }
@@ -188,7 +189,7 @@ function Changes({ changes, books, onGo, onGoTo }: { changes: MadeChange[]; book
             <span className="aichangeacts">
               {d.href ? <a className="linkbtn" href={d.href} download>{t('assistant.download')}</a> : null}
               {d.go && !c.undone ? <button type="button" className="linkbtn" onClick={() => onGo(d.go!)}>{t('assistant.show')}</button> : null}
-              {c.undone ? <small>{t('assistant.undone')}</small> : c.undo ? <button type="button" className="linkbtn" onClick={() => void undoChange(c)}>{t('assistant.undo')}</button> : null}
+              {c.undone ? <small>{t('assistant.undone')}</small> : c.undo ? <AsyncButton type="button" className="linkbtn" onClick={() => undoChange(c)}>{t('assistant.undo')}</AsyncButton> : null}
             </span>
           </li>
           {mailbox ? <li className="aimailbox"><MailboxCard {...mailbox} onSources={() => onGo({ area: 'company', section: 'sources' })} /></li> : null}
@@ -211,13 +212,13 @@ function ReportCard({ result, period, onGo }: { result: ReportResult; period?: s
   const [undone, setUndone] = useState(false);
   const save = () => {
     setError('');
-    api.saveReport(specData({ ...result.spec, period: period ?? result.spec.period })).then((w) => { setSaved(w); setUndone(false); return reloadSaved(); })
+    return api.saveReport(specData({ ...result.spec, period: period ?? result.spec.period })).then((w) => { setSaved(w); setUndone(false); return reloadSaved(); })
       .catch((e: unknown) => setError(errorText(e)));
   };
-  const undo = () => { if (saved) undoWrite(saved).then(() => setUndone(true), (e: unknown) => setError(errorText(e))); };
+  const undo = () => { if (saved) return undoWrite(saved).then(() => setUndone(true), (e: unknown) => setError(errorText(e))); };
   const file = (format: 'pdf' | 'csv') => {
     setError('');
-    postDownload('/api/reports/file', { spec: specData(result.spec), period: period ?? result.spec.period, format, language: language() }, `report.${format}`)
+    return postDownload('/api/reports/file', { spec: specData(result.spec), period: period ?? result.spec.period, format, language: language() }, `report.${format}`)
       .catch((e: unknown) => setError(t('assistant.report.fileFailed', { why: errorText(e) })));
   };
   return (
@@ -226,13 +227,13 @@ function ReportCard({ result, period, onGo }: { result: ReportResult; period?: s
       <span className="m">{spanOf(result)}</span>
       <ReportView result={result} preview go={(loc) => onGo(loc.route)} />
       <span className="ruleacts">
-        <button type="button" className="btn ghost" onClick={() => file('pdf')}>{t('assistant.report.pdf')}</button>
-        <button type="button" className="btn ghost" onClick={() => file('csv')}>{t('assistant.report.csv')}</button>
-        {!saved || undone ? <button type="button" className="btn primary" data-testid="report-save" onClick={save}>{t('custom.save')}</button> : (
+        <AsyncButton type="button" className="btn ghost" onClick={() => file('pdf')}>{t('assistant.report.pdf')}</AsyncButton>
+        <AsyncButton type="button" className="btn ghost" onClick={() => file('csv')}>{t('assistant.report.csv')}</AsyncButton>
+        {!saved || undone ? <AsyncButton type="button" className="btn primary" data-testid="report-save" onClick={save}>{t('custom.save')}</AsyncButton> : (
           <>
             <span className="m" data-testid="report-saved">{t('custom.savedCard')}</span>
             <button type="button" className="linkbtn" onClick={() => onGo({ area: 'reports', report: 'custom', saved: saved.slug })}>{t('custom.show')}</button>
-            <button type="button" className="linkbtn" onClick={undo}>{t('custom.undo')}</button>
+            <AsyncButton type="button" className="linkbtn" onClick={undo}>{t('custom.undo')}</AsyncButton>
           </>
         )}
       </span>
@@ -275,7 +276,7 @@ function HeldCard({ held, turn, standing, books, onGo }: { held: HeldChanges; tu
   // The card of the open period changes nothing: it is no change to propose.
   const proposed = held.changes.filter((c) => c.kind !== 'openPeriod');
   const others = proposed.filter((c) => !isBookChange(c)).map((c, i) => described({ id: String(i), change: c }, books).text);
-  const settle = (take: boolean) => { setBusy(true); void settleHeld(turn, take).finally(() => setBusy(false)); };
+  const settle = (take: boolean) => { setBusy(true); return settleHeld(turn, take).finally(() => setBusy(false)); };
   return (
     <div className={`ruledraft aiheld ${held.status}`} data-testid="held" data-status={held.status}>
       <b>{held.rows.length ? t('assistant.held.title', { n: held.rows.length }) : t('assistant.held.titleOther', { n: proposed.length })}</b>
@@ -293,13 +294,13 @@ function HeldCard({ held, turn, standing, books, onGo }: { held: HeldChanges; tu
       </ul>
       {held.status === 'held' ? (
         <span className="ruleacts">
-          <button type="button" className="btn primary" disabled={busy} onClick={() => settle(true)}>{t('assistant.held.take')}</button>
-          <button type="button" className="btn ghost" disabled={busy} onClick={() => settle(false)}>{t('assistant.held.drop')}</button>
+          <AsyncButton type="button" className="btn primary" disabled={busy} onClick={() => settle(true)}>{t('assistant.held.take')}</AsyncButton>
+          <AsyncButton type="button" className="btn ghost" disabled={busy} onClick={() => settle(false)}>{t('assistant.held.drop')}</AsyncButton>
         </span>
       ) : held.status === 'taken' ? (
         <span className="ruleacts">
           <span className="m">{t(standing ? 'assistant.held.taken' : 'assistant.held.undone')}</span>
-          {standing ? <button type="button" className="linkbtn" onClick={() => void undoAll(turn)}>{t('assistant.held.undoAll')}</button> : null}
+          {standing ? <AsyncButton type="button" className="linkbtn" onClick={() => undoAll(turn)}>{t('assistant.held.undoAll')}</AsyncButton> : null}
         </span>
       ) : <span className="m">{t('assistant.held.dropped')}</span>}
     </div>
@@ -345,7 +346,7 @@ function FileChip({ f }: { f: ComposerFile }) {
     <span className={`aichip aifile${f.attachment ? '' : ' uploading'}`} data-tip={f.attachment ? f.name : t('assistant.uploading', { name: f.name })} data-testid="attachment-chip">
       {f.preview ? <img src={f.preview} alt="" /> : <span className="aifilekind">{ATTACHMENT_TYPES[f.type]}</span>}
       {f.name}
-      <button type="button" aria-label={t('assistant.removeContext', { label: f.name })} onClick={() => removeFile(f.key)}>×</button>
+      <button type="button" aria-label={t('assistant.removeContext', { label: f.name })} data-busy-exempt="the chip goes at once; the upload is forgotten in the background" onClick={() => removeFile(f.key)}>×</button>
     </span>
   );
 }
@@ -374,7 +375,7 @@ function SentFile({ a, conversation }: { a: Attachment; conversation: string | u
         {a.name}
       </a>
       {state === 'handed' ? <small>{t('assistant.asReceiptDone')}</small>
-        : <button type="button" className="linkbtn" disabled={!url || state === 'busy'} onClick={() => void asReceipt()}>{t('assistant.asReceipt')}</button>}
+        : <AsyncButton type="button" className="linkbtn" disabled={!url || state === 'busy'} onClick={() => asReceipt()}>{t('assistant.asReceipt')}</AsyncButton>}
     </span>
   );
 }
@@ -511,7 +512,7 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
           {withoutChanges(turn.text) ? <div className={turn.done ? 'aitext' : 'aitext pending'}><AnswerText text={withoutChanges(turn.text)} /></div> : !turn.done ? <div className="m">{t('assistant.thinking')}</div> : null}
           {turn.held ? <HeldCard held={turn.held} turn={i} standing={(turn.changes ?? []).filter((c) => !c.undone && c.undo).length} books={books} onGo={onGo} /> : null}
           {turn.changes?.length ? <Changes changes={turn.changes} books={books} onGo={onGo} onGoTo={onGoTo} /> : null}
-          {!turn.held && (turn.changes ?? []).filter((c) => !c.undone && c.undo).length > 1 ? <button type="button" className="linkbtn" data-act="undo-all" onClick={() => void undoAll(i)}>{t('assistant.undoAll', { n: (turn.changes ?? []).filter((c) => !c.undone && c.undo).length })}</button> : null}
+          {!turn.held && (turn.changes ?? []).filter((c) => !c.undone && c.undo).length > 1 ? <AsyncButton type="button" className="linkbtn" data-act="undo-all" onClick={() => undoAll(i)}>{t('assistant.undoAll', { n: (turn.changes ?? []).filter((c) => !c.undone && c.undo).length })}</AsyncButton> : null}
           {turn.done && turn.terminal ? <TerminalCard request={turn.terminal} /> : null}
           {turn.done && turn.changes?.length ? <ShareOffers refs={[...new Set(turn.changes.filter((c) => !c.undone && c.payment).map((c) => c.payment!))]} onRules={() => onGo({ area: 'company', section: 'rules' })} /> : null}
           {turn.refused ? <div className="warnline">{t('assistant.refused', { why: errorText(new ApiError({ error: turn.refused, ...turn.refusal })) })}</div> : null}
@@ -543,10 +544,10 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
       <header className="aihead">
         {setup ? <SetupTitle /> : <b><BotIcon /> {t('assistant.title')}</b>}
         <span className="aiacts">
-          <button
+          <AsyncButton
             type="button" className="aiact" aria-pressed={s.listing} data-tip={t(s.listing ? 'assistant.backToConversation' : 'assistant.pastConversations')}
-            onClick={() => (s.listing ? hideConversations() : void showConversations())}
-          >{ICONS.clock}{t('assistant.conversations')}</button>
+            onClick={() => (s.listing ? hideConversations() : showConversations())}
+          >{ICONS.clock}{t('assistant.conversations')}</AsyncButton>
           <button type="button" className="aiact" disabled={s.sending} onClick={newConversation}>{ICONS.plus}{t('assistant.new')}</button>
           <button type="button" className="aiact icon" aria-label={t('assistant.close')} data-tip={`${t('assistant.close')} · ⌘J`} onClick={closeAssistant}>×</button>
         </span>
@@ -558,10 +559,10 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
           <h2>{t('assistant.pastConversations')}</h2>
           {(s.conversations ?? []).length === 0 ? <p className="m">{t('assistant.noConversations')}</p> : null}
           {(s.conversations ?? []).map((c) => (
-            <button key={c.id} type="button" className="aiconv" onClick={() => void openConversation(c.id)}>
+            <AsyncButton key={c.id} type="button" className="aiconv" onClick={() => openConversation(c.id)}>
               <b>{c.title}</b>
               <small>{formatDate(c.at.slice(0, 10))}{c.context.length ? ` · ${c.context.join(', ')}` : ''}</small>
-            </button>
+            </AsyncButton>
           ))}
         </div>
       ) : (
@@ -635,6 +636,7 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
               {listening && !preparing ? <Recording since={recordingSince} label={t(ear?.online ? 'assistant.dictation.online' : 'assistant.dictation.recording')} /> : null}
               {ear ? (
                 <button
+                  data-busy-exempt="dictation shows its own recording state; the click only starts or stops it"
                   ref={mic} type="button" className={`aimic${listening ? ' on' : ''}${listening && measured ? ' level' : ''}`} aria-pressed={!!listening} data-testid="dictate"
                   aria-label={t(listening ? 'assistant.dictation.stop' : 'assistant.dictation.start')}
                   onClick={listen}

@@ -8,6 +8,7 @@ import { automationCommand } from '../../automation/store.js';
 import { hasAi, textIn, type AutomationView, type RunSummary, type WorkflowDecl } from '../../../workflows/model.js';
 import type { Nav } from '../index.js';
 import { BotIcon } from './Graph.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 /** «11:48» today, «07.10.» before. */
@@ -56,7 +57,7 @@ export function QueuePage({ view, nav }: { view: AutomationView; nav: Nav }) {
     <div className="detail-in wfpage qpage">
       <div className="head">
         <h2 className="who">{t('automation.queue')}<small>{t('automation.queueLead', { ai: view.limits.ai, other: view.limits.other })}</small></h2>
-        <button type="button" className="btn ghost" onClick={() => void automationCommand({ kind: 'pause', on: !view.paused })}>{view.paused ? t('automation.unpause') : `❚❚ ${t('automation.pause')}`}</button>
+        <AsyncButton type="button" className="btn ghost" onClick={() => automationCommand({ kind: 'pause', on: !view.paused })}>{view.paused ? t('automation.unpause') : `❚❚ ${t('automation.pause')}`}</AsyncButton>
       </div>
       {view.paused ? <div className="chbanner"><b>{t('automation.pausedTitle')}</b><span>{t('automation.pausedLead')}</span></div> : null}
 
@@ -84,7 +85,7 @@ export function QueuePage({ view, nav }: { view: AutomationView; nav: Nav }) {
             <span className="pos mono">{i + 1}</span>
             <span className="qi"><span className="mono">{itemOf(r, wf(r.workflow))}</span>{chip(r)}</span>
             <span className="m qwhy">{r.reason ? t(`automation.queuedBecause.${r.reason}` as 'automation.queuedBecause.slot') : t('automation.queuedNext')}</span>
-            <button type="button" className="x" aria-label={t('automation.queueRemove')} onClick={(e) => { e.stopPropagation(); void automationCommand({ kind: 'discard', run: r.id, reason: t('automation.queueRemoved') }); }}>×</button>
+            <AsyncButton type="button" className="x" aria-label={t('automation.queueRemove')} onClick={(e) => { e.stopPropagation(); return automationCommand({ kind: 'discard', run: r.id, reason: t('automation.queueRemoved') }); }}>×</AsyncButton>
           </div>
         )) : <p className="m">{t('automation.queueNone')}</p>}
       </section>

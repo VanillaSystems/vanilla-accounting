@@ -41,6 +41,7 @@ import { at } from '../receipts/view.js';
 import { TagFields, tagsOfForm } from './TagFields.js';
 import { RuleWay } from './RuleWay.js';
 import type { Dimension } from '../../../books/tags.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 const parseAmount = (s: string) => { const n = Number(s.replace(/['’\s]/g, '').replace(',', '.')); return Number.isFinite(n) && s.trim() ? n : null; };
 const FIELDS = ['accountDebit', 'accountCredit', 'vatCode', 'amount', 'description'] as const;
@@ -184,7 +185,7 @@ function Unattached({ nav, payment, typed, onBooked }: Props & { typed: Unattach
           <span className="mono">{formatDate(u.entries[0].date)}</span>
           <span>{u.entries.map((e) => `${e.accountDebit || '–'} / ${e.accountCredit || '–'}${e.vatCode ? ` ${codeLabel(e.vatCode)}` : ''} · ${fmt(e.amount)}`).join(' + ')}</span>
           <span className="m">{u.entries.map((e) => e.description).filter(Boolean).join(' · ')}</span>
-          <button type="button" className="btn" onClick={() => void attach(u.ref)}>{t('journal.unattached.attach', { ref: u.ref })}</button>
+          <AsyncButton type="button" className="btn" onClick={() => attach(u.ref)}>{t('journal.unattached.attach', { ref: u.ref })}</AsyncButton>
         </div>
       ))}
     </div>
@@ -324,8 +325,8 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
   const own = draft.ownInvoice;
 
   return (
-    <form ref={setForm} className={`form pbook${narrow ? ' narrow' : ''}`} autoComplete="off" aria-label={t('journal.byHand.title')} data-testid="payment-booking"
-      onKeyDown={onKeyDown} onInput={chose} onSubmit={(e) => { e.preventDefault(); void book(); }}>
+    <AsyncForm ref={setForm} className={`form pbook${narrow ? ' narrow' : ''}`} autoComplete="off" aria-label={t('journal.byHand.title')} data-testid="payment-booking"
+      onKeyDown={onKeyDown} onInput={chose} onSubmit={(e) => { e.preventDefault(); return book(); }}>
       <div className="pbh">
         <b>{t('journal.byHand.title')}</b>
         <span className="m">{t(draft.notes.some((n) => n.kind === 'taxPoint') ? 'journal.byHand.leadPaid' : 'journal.byHand.lead', { date: formatDate(draft.date), currency: draft.currency })}</span>
@@ -398,8 +399,8 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
         <div className="pbq" data-testid="sale-question">
           <span>{t('journal.byHand.saleAsk')}</span>
           {SALE_ANSWERS.filter(answerable).map((a) => (
-            <button key={a} type="button" className="btn" aria-expanded={a === 'saleAbroadForeignTax' ? foreign : undefined} data-choice={a}
-              onClick={() => (a === 'saleAbroadForeignTax' ? setForeign(!foreign) : void answerSale(a))}>{saleAnswerText(a)}</button>
+            <AsyncButton key={a} type="button" className="btn" aria-expanded={a === 'saleAbroadForeignTax' ? foreign : undefined} data-choice={a}
+              onClick={() => (a === 'saleAbroadForeignTax' ? setForeign(!foreign) : answerSale(a))}>{saleAnswerText(a)}</AsyncButton>
           ))}
           <p className="m">{t('journal.byHand.saleAskDoes')}</p>
           {foreign ? <ForeignTaxForm payment={payment} books={books} onCancel={() => setForeign(false)} onAnswer={(a) => void answerSale('saleAbroad', a.foreignTax)} /> : null}
@@ -418,9 +419,9 @@ function BookingForm({ books, nav, payment, narrow, onForm, onBooked, accounts, 
             : rest < 0 ? t('journal.byHand.over', { currency: draft.currency, amount: fmt(-rest) })
               : t('journal.byHand.adds', { currency: draft.currency, amount: fmt(restOf(books, payment, [], accounts)) })}
         </span>
-        <button type="submit" className="btn primary">{t(links.length ? 'journal.byHand.submitLink' : 'journal.byHand.submit')} <span className="k">↵</span></button>
+        <AsyncButton type="submit" className="btn primary">{t(links.length ? 'journal.byHand.submitLink' : 'journal.byHand.submit')} <span className="k">↵</span></AsyncButton>
       </div>
       <div className="err" role="alert">{err}</div>
-    </form>
+    </AsyncForm>
   );
 }

@@ -23,6 +23,7 @@ import type { MailMessage } from '../../../invoices/mail.js';
 import type { MailStatus } from '../../../types/api-error.js';
 import { cancel, creditNote, newDraftFor, saveCustomer, saveDraft, send, sendReminder } from './actions.js';
 import { COUNTRIES, addressRule, countryName, countryOf, languageFor, numberFirst, vatRule } from './address.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
 
@@ -77,11 +78,11 @@ function NewInvoice({ customers, nav }: Props & { customers: Customer[] }) {
         }} />
       <div className="iopts" role="listbox">
         {list.map((c, k) => (
-          <button key={c.id} type="button" role="option" aria-selected={k === at} className={`opt${k === at ? ' on' : ''}`} onClick={() => pick(k)}>
+          <button data-busy-exempt="the dialog closes at once; the new draft opens when made" key={c.id} type="button" role="option" aria-selected={k === at} className={`opt${k === at ? ' on' : ''}`} onClick={() => pick(k)}>
             <span>{c.name}</span><span className="d">{c.address.town}{c.address.country !== 'CH' ? `, ${c.address.country}` : ''} · {t(`invoices.lang.${c.language}`)}</span>
           </button>
         ))}
-        <button type="button" role="option" aria-selected={at === list.length} className={`opt alt${at === list.length ? ' on' : ''}`} onClick={() => pick(list.length)}>
+        <button data-busy-exempt="the dialog closes at once; the new draft opens when made" type="button" role="option" aria-selected={at === list.length} className={`opt alt${at === list.length ? ' on' : ''}`} onClick={() => pick(list.length)}>
           <span>＋ {t('invoices.newCustomer')}</span><span className="d">{t('invoices.newCustomerHint')}</span>
         </button>
       </div>
@@ -185,13 +186,13 @@ function CustomerDialog({ customer, nav }: Props & { customer?: Customer }) {
       label={customer ? t('customer.edit') : t('invoices.newCustomer')}
       title={f.name || t('customer.namePlaceholder')}
       foot={<>
-        {!customer && !then && <button type="button" className="btn ghost" onClick={() => void save('invoice')}>{t('customer.createAndInvoice')}</button>}
+        {!customer && !then && <AsyncButton type="button" className="btn ghost" onClick={() => save('invoice')}>{t('customer.createAndInvoice')}</AsyncButton>}
         <span style={{ flex: 1 }} />
         <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button>
-        <button type="button" className="btn primary" data-act="save-customer" onClick={() => void save('close')}>{customer ? t('common.save') : t('customer.create')}</button>
+        <AsyncButton type="button" className="btn primary" data-act="save-customer" onClick={() => save('close')}>{customer ? t('common.save') : t('customer.create')}</AsyncButton>
       </>}
     >
-      <form className="ibody cform" onSubmit={(e) => { e.preventDefault(); void save('close'); }} noValidate>
+      <AsyncForm className="ibody cform" onSubmit={(e) => { e.preventDefault(); return save('close'); }} noValidate>
         {field('name', t('customer.name'), t('customer.namePh'), 'w2')}
         {field('attn', t('customer.attn'), t('customer.optional'), 'w2')}
         <label className={`cf s2${errors.countryText ? ' err' : ''}`}>
@@ -217,8 +218,8 @@ function CustomerDialog({ customer, nav }: Props & { customer?: Customer }) {
         <label className={`cf s1${errors.terms ? ' err' : ''}`}><span>{t('customer.terms')}{errors.terms && <em>{errors.terms}</em>}</span>
           <span className="iin"><input className="mono" value={f.terms} onChange={(e) => set('terms', e.target.value)} style={{ width: 56 }} /> {t('customer.days')}</span>
         </label>
-        <button type="submit" hidden />
-      </form>
+        <AsyncButton type="submit" hidden />
+      </AsyncForm>
     </Frame>
   );
 }
@@ -277,8 +278,8 @@ function SendDialog({ inv, nav, reminder, issued }: Props & { inv: Issued; remin
   const foot = (
     <>
       <button type="button" className="btn ghost" data-act="later" onClick={close}>{t(issued ? 'invoices.later' : 'common.cancel')}</button>
-      <button type="button" className={`btn ${mail.ready ? 'ghost' : 'primary'}`} data-act="download" disabled={busy} onClick={() => void go()}>{t('invoices.downloadInstead')}</button>
-      {mail.ready && <button type="button" className="btn primary" data-act="mail" disabled={busy || !value.to.trim()} onClick={() => void go(value)}>{busy ? t('invoices.mailing') : t('invoices.mailSend')}</button>}
+      <AsyncButton type="button" className={`btn ${mail.ready ? 'ghost' : 'primary'}`} data-act="download" disabled={busy} onClick={() => go()}>{t('invoices.downloadInstead')}</AsyncButton>
+      {mail.ready && <AsyncButton type="button" className="btn primary" data-act="mail" disabled={busy || !value.to.trim()} onClick={() => go(value)}>{busy ? t('invoices.mailing') : t('invoices.mailSend')}</AsyncButton>}
     </>
   );
   return (
@@ -311,7 +312,7 @@ function CancelDialog({ inv, nav }: Props & { inv: Issued }) {
   }
   const run = async () => { if (await cancel(nav, inv, { date, reason, notify }, notify && mail.ready ? m ?? mail.defaults : undefined)) close(); };
   return (
-    <Frame label={label} title={title} foot={<><button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button><button type="button" className="btn primary danger" data-act="cancel-ok" onClick={() => void run()}>{t('invoices.cancelOk')}</button></>}>
+    <Frame label={label} title={title} foot={<><button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button><AsyncButton type="button" className="btn primary danger" data-act="cancel-ok" onClick={() => run()}>{t('invoices.cancelOk')}</AsyncButton></>}>
       <div className="ibody lkf">
         <label className="lkr"><span>{t('invoices.reason')}</span><input autoFocus value={reason} placeholder={t('invoices.cancelReasonPh')} onChange={(e) => setReason(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void run(); }} /></label>
         <label className="lkr"><span>{t('invoices.date')}</span><span className="iin"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></span></label>
@@ -351,7 +352,7 @@ function CreditDialog({ inv, invoices, nav }: Props & { inv: Issued; invoices: I
   };
   return (
     <Frame className="icredit" label={t('invoices.creditTitle', { number: inv.number })} title={`${inv.customer.name} · ${inv.currency} ${fmt(gross)}`}
-      foot={<><button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button><button type="button" className="btn primary" data-act="credit-ok" disabled={!ok} onClick={() => void run()}>{t('invoices.creditOk')}</button></>}>
+      foot={<><button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button><AsyncButton type="button" className="btn primary" data-act="credit-ok" disabled={!ok} onClick={() => run()}>{t('invoices.creditOk')}</AsyncButton></>}>
       <div className="ibody lkf">
         <div className="lkr"><span>{t('invoices.scope')}</span>{seg(scope, setScope, [['all', t('invoices.scopeAll')], ['part', t('invoices.scopePart')]])}</div>
         {scope === 'part' && <label className="lkr"><span>{t('invoices.amount')}</span><span className="iin"><input className="mono" autoFocus value={amount} placeholder="0.00" onChange={(e) => setAmount(e.target.value)} /> <span className="m">{t('invoices.inclVat', { currency: inv.currency })}</span></span></label>}

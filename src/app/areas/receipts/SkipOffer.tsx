@@ -10,6 +10,7 @@ import { language, t } from '../../i18n/index.js';
 import type { ReceiptSkipOffer } from '../../../platform/sources/model.js';
 import { textIn } from '../../../workflows/model.js';
 import type { Nav } from '../index.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 export function SkipOffer({ receipt, nav }: { receipt: string; nav: Nav }) {
   const [offer, setOffer] = useState<ReceiptSkipOffer | null>(null);
@@ -26,7 +27,7 @@ export function SkipOffer({ receipt, nav }: { receipt: string; nav: Nav }) {
   if (!offer) return null;
   const keep = () => {
     setBusy(true);
-    api.skipSender(offer.source, offer.sender, offer.version).then(() => {
+    return api.skipSender(offer.source, offer.sender, offer.version).then(() => {
       nav.toast(t('receipts.skip.done', { sender: offer.sender }));
       setOffer(null);
     }, (e) => setError(errorText(e))).finally(() => setBusy(false));
@@ -50,7 +51,7 @@ export function SkipOffer({ receipt, nav }: { receipt: string; nav: Nav }) {
       <span className="m">{t('receipts.skip.stays')}</span>
       {error ? <span className="warnline">{error}</span> : null}
       <span className="skipacts">
-        <button type="button" className="btn primary" disabled={busy} data-testid="skip-keep" onClick={keep}>{t('receipts.skip.keep')}</button>
+        <AsyncButton type="button" className="btn primary" disabled={busy} data-testid="skip-keep" onClick={keep}>{t('receipts.skip.keep')}</AsyncButton>
         <button type="button" className="btn ghost" disabled={busy} onClick={() => setOpen(false)}>{t('common.cancel')}</button>
       </span>
     </div>

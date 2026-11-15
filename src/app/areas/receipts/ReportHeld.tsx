@@ -13,6 +13,7 @@ import { isKey, t, tWith } from '../../i18n/index.js';
 import { heldReasonText } from '../../lib/held-reason.js';
 import { baseCurrency, invoiceRates } from '../../../engines/index.js';
 import { I } from './icons.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 type Held = NonNullable<NonNullable<Receipt['report']>['held']>[number];
 
@@ -58,7 +59,7 @@ function SplitForm({ receipt, held, onDone, onCancel }: { receipt: string; held:
   const set = (i: number, patch: Partial<(typeof parts)[number]>) => setParts((was) => was.map((p, k) => (k === i ? { ...p, ...patch } : p)));
   const book = () => {
     setBusy(true);
-    api.heldOrder(receipt, held.order, filled.map((p) => ({ amount: cents(p.amount)! / 100, rate: p.rate })))
+    return api.heldOrder(receipt, held.order, filled.map((p) => ({ amount: cents(p.amount)! / 100, rate: p.rate })))
       .then(() => onDone(t('receipts.report.splitDone', { order: held.order }), true), (e: unknown) => onDone(errorText(e), false))
       .finally(() => setBusy(false));
   };
@@ -74,7 +75,7 @@ function SplitForm({ receipt, held, onDone, onCancel }: { receipt: string; held:
       ))}
       <span className="m">{t('receipts.report.splitOne')}</span>
       <span className="m" data-testid="held-split-sum">{t(sum === gross ? 'receipts.report.splitEven' : 'receipts.report.splitSum', { sum: `${cur} ${fmt(sum / 100)}`, gross: `${cur} ${fmt(gross / 100)}` })}</span>
-      <button type="button" className="btn" disabled={!ready || busy} data-testid="held-split-book" onClick={book}>{t('receipts.report.splitBook')}</button>
+      <AsyncButton type="button" className="btn" disabled={!ready || busy} data-testid="held-split-book" onClick={book}>{t('receipts.report.splitBook')}</AsyncButton>
       <button type="button" className="btn ghost" onClick={onCancel}>{t('common.cancel')}</button>
     </span>
   );

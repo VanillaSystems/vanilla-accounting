@@ -14,6 +14,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { Go, entryAt } from '../vat/links.js';
 import { I } from '../receipts/icons.js';
 import type { Nav } from '../index.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 interface Form { period: string; ziffer: string; amount: string; entries: string; reason: string }
 
@@ -103,7 +104,7 @@ export function AdjustmentsSection({ books, nav, canEdit }: { books: Index; nav:
     e ? <Go key={id} to={entryAt(e, current)} nav={nav} className="mono clink" title={`${formatDate(e.date)} ${e.description ?? ''}`}>{id}</Go> : <span key={id} className="mono warn">{id}</span>;
 
   const form = (
-    <form className="form inline" data-testid="adj-form" autoComplete="off" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEditing(null); } }}>
+    <AsyncForm className="form inline" data-testid="adj-form" autoComplete="off" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEditing(null); } }}>
       <label>{t('company.adjPeriod')}
         <select name="period" value={f.period} onChange={(e) => setF({ ...f, period: e.target.value })}>
           {[...new Set([...periods, f.period])].map((k) => <option key={k} value={k}>{t('company.adjPeriodOption', { period: k, date: formatDate(derivePeriod(k)!.to) })}</option>)}
@@ -124,11 +125,11 @@ export function AdjustmentsSection({ books, nav, canEdit }: { books: Index; nav:
       <label className="wide">{t('company.adjReason')}<textarea name="reason" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} /></label>
       {err && <div className="err wide" role="alert" data-testid="adj-refused">{err}</div>}
       <div className="acts">
-        <button type="submit" className="btn primary">{t('common.save')}</button>
+        <AsyncButton type="submit" className="btn primary">{t('common.save')}</AsyncButton>
         <button type="button" className="btn ghost" onClick={() => setEditing(null)}>{t('common.cancel')}</button>
       </div>
       <p className="m wide">{t('company.adjHint')}</p>
-    </form>
+    </AsyncForm>
   );
 
   return (
@@ -156,7 +157,7 @@ export function AdjustmentsSection({ books, nav, canEdit }: { books: Index; nav:
                 {editable(a) && editing === null ? (
                   <>
                     <button type="button" className="quiet2" onClick={() => start(a)}>{t('company.edit')}</button>{' '}
-                    <button type="button" className="quiet2" aria-label={t('company.adjRemove', { period: a.period, ziffer: a.ziffer })} onClick={() => void remove(a)}>×</button>
+                    <AsyncButton type="button" className="quiet2" aria-label={t('company.adjRemove', { period: a.period, ziffer: a.ziffer })} onClick={() => remove(a)}>×</AsyncButton>
                   </>
                 ) : null}
               </span>

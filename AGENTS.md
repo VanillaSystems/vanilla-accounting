@@ -142,6 +142,7 @@ UI texts (src/app/):
 - Every text a user reads goes through `t('key')` and the dictionaries in src/app/i18n/locales/ (de is the source; fr, it, en must match it). See docs/i18n.md. tests/i18n.test.ts fails on text written straight into a component.
 - An API refusal the UI shows carries a `code` (src/types/api-error.ts) besides its German `error`; add one when a new refusal needs words in the UI.
 - Every numerical limit (files per drop, attachments per message, pages, batch sizes, caps) tells the person when it is hit, naming the limit and what was left out («50 Dateien angehängt, 12 weitere nicht: höchstens 50 pro Nachricht»); never cut silently. Example: `leftOut` in src/app/lib/folder-drop.ts.
+- A button whose action waits (an API call, a job, an upload, a file to open) is an `AsyncButton`, its form an `AsyncForm` (src/app/shell/AsyncButton.tsx): the handler returns its promise, and the button shows a spinner after 150 ms, keeps its width, sets aria-busy and takes no second click. tests/async-buttons.test.ts refuses a plain `<button>` with a waiting handler; `data-busy-exempt="<why>"` only for a click nobody waits for.
 
 UI links (src/app/):
 - Every object listed in a sidebar or panel links to its detail view. Build the link with `hrefOf` (src/app/shell/history.ts) on a location whose period holds the object's date (as `at` in src/app/areas/receipts/view.ts and `entryAt` in src/app/areas/vat/links.tsx): it works in the static export.

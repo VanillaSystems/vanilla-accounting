@@ -20,6 +20,7 @@ import '../../ai/ai-setup.css';
 import { TIERS } from '../../../llm/steps.js';
 import { formatDate } from '../../lib/utils.js';
 import { setAiOff } from '../../ai/ai-off.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 const fits = (step: AiStepView, can: readonly string[]) => step.needs.every((n) => can.includes(n));
 const usable = (p: AiProviderView) => p.state === 'ready' || p.state === 'set';
@@ -162,7 +163,7 @@ function Programs({ setup, ai, canEdit, apply }: { setup: AiSetup; ai: AiView; c
           </dd>
         </dl>
       ) : null}
-      {view.noAi && !ready.length ? <p className="m">{t('aiSetup.firma.noAiKept')} <button type="button" className="linkbtn" onClick={() => void setup.choose({ noAi: false })}>{t('aiSetup.firma.noAiUndo')}</button></p> : null}
+      {view.noAi && !ready.length ? <p className="m">{t('aiSetup.firma.noAiKept')} <AsyncButton type="button" className="linkbtn" onClick={() => setup.choose({ noAi: false })}>{t('aiSetup.firma.noAiUndo')}</AsyncButton></p> : null}
     </>
   );
 }
@@ -211,15 +212,15 @@ function ProviderRow({ p, view, canEdit, test, onKey }: { p: AiProviderView; vie
         {p.state === 'set' ? (
           <span className="aikey">
             <span>{t('ai.key.set')}</span>
-            {canEdit && view.keysInApp ? <button type="button" className="btn ghost" onClick={() => void onKey(null)}>{t('ai.key.remove')}</button> : null}
+            {canEdit && view.keysInApp ? <AsyncButton type="button" className="btn ghost" onClick={() => onKey(null)}>{t('ai.key.remove')}</AsyncButton> : null}
           </span>
         ) : view.keysInApp ? (
           canEdit ? (
-            <form className="aikey" onSubmit={save}>
+            <AsyncForm className="aikey" onSubmit={save}>
               <input type="password" name={`${p.id}-key`} autoComplete="off" spellCheck={false} aria-label={t('ai.key.label', { provider: name })}
                 placeholder={t('ai.key.placeholder')} value={key} onChange={(e) => setKey(e.target.value)} />
-              <button type="submit" className="btn" disabled={!key.trim()}>{t('common.save')}</button>
-            </form>
+              <AsyncButton type="submit" className="btn" disabled={!key.trim()}>{t('common.save')}</AsyncButton>
+            </AsyncForm>
           ) : <span className="m">{t('ai.key.unset')}</span>
         ) : <span className="m">{t('ai.key.where', { where: view.keysWhere[p.id] ?? '' })}</span>}
         {isSetupKey(p.id) ? testLine(p.id, test) : null}
@@ -244,7 +245,7 @@ function CodexTiers({ view, canEdit, recheck }: { view: AiView; canEdit: boolean
         return <span key={tier} className="aitier">{c.from ? t('ai.codex.borrowed', { tier: name, model: c.model, from: t(`ai.tier.${c.from}`) }) : t('ai.codex.tier', { tier: name, model: c.model })}</span>;
       })}
       <small className="m">{checkedAt ? t('ai.codex.checked', { date: formatDate(checkedAt.slice(0, 10)) }) : t('ai.codex.unchecked')}</small>
-      {canEdit ? <span className="ruleacts"><button type="button" className="linkbtn" onClick={() => void recheck()}>{t('ai.codex.recheck')}</button></span> : null}
+      {canEdit ? <span className="ruleacts"><AsyncButton type="button" className="linkbtn" onClick={() => recheck()}>{t('ai.codex.recheck')}</AsyncButton></span> : null}
     </div>
   );
 }

@@ -33,6 +33,7 @@ import { announceBooksChanged, onBooksChanged } from '../../assistant/store.js';
 import { AccountField } from '../journal/AccountField.js';
 import type { HandSeed } from '../journal/rule-seed.js';
 import type { WageOffer } from '../../../saving/wage-rule.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 /** The page reads the books again: through its nav, or, from the AI sidebar's card, as after an answer. */
 const refreshFor = (nav?: Nav) => { if (nav) nav.refresh(); else announceBooksChanged(); };
@@ -106,8 +107,8 @@ export function RulesSection({ nav, canEdit, payment, by }: { nav: Nav; canEdit:
             <span className="ruleacts">
               {row.off ? <span className="wfpill muted">{t('rules.isOff')}</span> : null}
               {!row.off && view.waiting.some((w) => w.files.includes(row.file)) ? <span className="wfpill warn">{t('rules.waitingPill')}</span> : null}
-              {canEdit && row.kind === 'rule' ? <button type="button" className="btn ghost" disabled={busy} onClick={() => void act(row, row.off ? 'on' : 'off')}>{t(row.off ? 'rules.switchOn' : 'rules.switchOff')}</button> : null}
-              {canEdit ? <button type="button" className="btn ghost" disabled={busy} onClick={() => void act(row, 'delete')}>{t('rules.delete')}</button> : null}
+              {canEdit && row.kind === 'rule' ? <AsyncButton type="button" className="btn ghost" disabled={busy} onClick={() => act(row, row.off ? 'on' : 'off')}>{t(row.off ? 'rules.switchOn' : 'rules.switchOff')}</AsyncButton> : null}
+              {canEdit ? <AsyncButton type="button" className="btn ghost" disabled={busy} onClick={() => act(row, 'delete')}>{t('rules.delete')}</AsyncButton> : null}
             </span>
           </li>
         ))}
@@ -157,7 +158,7 @@ function HandRuleForm({ view, nav, payment, by, seed, inline, onKept }: { view: 
   }
   const businesses = Object.entries(view.names.businesses).sort((a, b) => a[1].localeCompare(b[1]));
   return (
-    <form ref={form} className="form inline handrule" data-testid="rule-form" autoComplete="off" onSubmit={preview} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); reset(); } }}>
+    <AsyncForm ref={form} className="form inline handrule" data-testid="rule-form" autoComplete="off" onSubmit={preview} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); reset(); } }}>
       <label>{t('rules.hand.match')}
         <select value={f.match} onChange={set('match')}>
           {businesses.length ? <option value="business">{t('rules.hand.byBusiness')}</option> : null}
@@ -202,11 +203,11 @@ function HandRuleForm({ view, nav, payment, by, seed, inline, onKept }: { view: 
       ))}
       {error ? <span className="warnline wide">{error}</span> : null}
       <div className="acts">
-        <button type="submit" className="btn primary" disabled={busy}>{t('rules.hand.preview')}</button>
+        <AsyncButton type="submit" className="btn primary" disabled={busy}>{t('rules.hand.preview')}</AsyncButton>
         <button type="button" className="btn ghost" onClick={reset}>{t('common.cancel')}</button>
         <span className="m">{t('rules.hand.hint')}</span>
       </div>
-    </form>
+    </AsyncForm>
   );
 }
 
@@ -279,7 +280,7 @@ export function LastKept({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
       {lines.map((k) => (
         <div key={k.id} className="ruledraft done" data-testid="last-kept" data-keep={k.id}>
           <KeptLine keep={k} nav={nav} lead />
-          {holds(k.id) ? null : <span className="ruleacts"><button type="button" className="linkbtn" onClick={() => close(k.id)}>{t('common.close')}</button></span>}
+          {holds(k.id) ? null : <span className="ruleacts"><button type="button" className="linkbtn" data-busy-exempt="the line goes at once; the call runs after" onClick={() => close(k.id)}>{t('common.close')}</button></span>}
         </div>
       ))}
     </>
@@ -313,14 +314,14 @@ export function WageRuleOffer({ nav, books }: { nav: Nav; books?: { journalEntri
   const draft = () => {
     setBusy(true);
     setError(undefined);
-    api.draftHand(offer.rule).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
+    return api.draftHand(offer.rule).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
   };
   return (
     <div className="ruledraft" data-testid="wage-rule-offer" data-n={open.length}>
       <b>{t('rules.wages.line', { n: open.length })}</b>
       <span className="m">{t('rules.wages.lead', { text: offer.text, account: offer.account })}</span>
       {error ? <span className="warnline">{error}</span> : null}
-      <span className="ruleacts"><button type="button" className="btn primary" disabled={busy} data-act="wage-rule" onClick={draft}>{t('rules.wages.go', { n: open.length })}</button></span>
+      <span className="ruleacts"><AsyncButton type="button" className="btn primary" disabled={busy} data-act="wage-rule" onClick={draft}>{t('rules.wages.go', { n: open.length })}</AsyncButton></span>
     </div>
   );
 }
@@ -375,10 +376,10 @@ export function KeptLine({ keep, nav, lead }: { keep: KeptView; nav?: Nav; lead?
               ? (
                 <>
                   <span className="m" data-testid="rule-undo-later">{t('rules.kept.blockedBy', { n: k.blockedBy.length })}</span>
-                  <button type="button" className="linkbtn" data-act="rule-undo-all" disabled={busy} onClick={() => void undo(true)}>{t('rules.kept.undoAll', { n: k.blockedBy.length + 1 })}</button>
+                  <AsyncButton type="button" className="linkbtn" data-act="rule-undo-all" disabled={busy} onClick={() => undo(true)}>{t('rules.kept.undoAll', { n: k.blockedBy.length + 1 })}</AsyncButton>
                 </>
               )
-              : <button type="button" className="linkbtn" data-act="rule-undo" disabled={busy} onClick={() => void undo()}>{t('rules.kept.undoUntil', { date: formatDate(k.until) })}</button>}
+              : <AsyncButton type="button" className="linkbtn" data-act="rule-undo" disabled={busy} onClick={() => undo()}>{t('rules.kept.undoUntil', { date: formatDate(k.until) })}</AsyncButton>}
         </>
       )}
     </span>
@@ -554,15 +555,15 @@ export function RuleDraft({ path, nav, onRules, onDone, title, reveal }: { path:
           <span>{a.seen.length ? t('rules.draft.vatAsk.mixed', { seen: a.seen.map((s) => t('rules.draft.vatSeen', { rate: s.rate ? t('rules.draft.vatRate', { rate: String(s.rate) }) : t('rules.draft.vatZero'), n: String(s.receipts) })).join(', ') }) : t('rules.draft.vatAsk.none')}</span>
           <span className="m">{t('rules.draft.vatAsk.how')}</span>
           <span className="ruleacts">
-            {a.choices.map((rate) => <button key={rate} type="button" className="btn ghost" disabled={busy} onClick={() => void chooseVat(a.step, a.id, rate)}>{rate ? t('rules.draft.vatRate', { rate: String(rate) }) : t('rules.draft.vatZero')}</button>)}
+            {a.choices.map((rate) => <AsyncButton key={rate} type="button" className="btn ghost" disabled={busy} onClick={() => chooseVat(a.step, a.id, rate)}>{rate ? t('rules.draft.vatRate', { rate: String(rate) }) : t('rules.draft.vatZero')}</AsyncButton>)}
           </span>
         </div>
       ))}
       {d.refused.filter((r) => !asked(r)).map((r) => <span key={`x${r.id}`} className="warnline">{t('rules.draft.refused', { id: r.id || '?', why: refusalText(r) })}</span>)}
       {error ? <span className="warnline">{error}</span> : null}
       <span className="ruleacts">
-        {d.keepable ? <button type="button" className="btn primary" disabled={busy} onClick={() => void go('keep')}>{t(onlyRemoval ? 'rules.draft.remove' : d.confirm ? 'rules.draft.keepAnyway' : 'rules.draft.keep')}</button> : null}
-        <button type="button" className="btn ghost" disabled={busy} onClick={() => void go('discard')}>{t('rules.draft.discard')}</button>
+        {d.keepable ? <AsyncButton type="button" className="btn primary" disabled={busy} onClick={() => go('keep')}>{t(onlyRemoval ? 'rules.draft.remove' : d.confirm ? 'rules.draft.keepAnyway' : 'rules.draft.keep')}</AsyncButton> : null}
+        <AsyncButton type="button" className="btn ghost" disabled={busy} onClick={() => go('discard')}>{t('rules.draft.discard')}</AsyncButton>
         {nav && !d.keepable && !d.vatAsks.length ? <button type="button" className="linkbtn" onClick={() => nav.go({ route: { area: 'changes', commit: 'draft', file: path }, query: {} })}>{t('rules.draft.diff')}</button> : null}
       </span>
     </div>
@@ -601,7 +602,7 @@ function NoteOfferLine({ row, offer, onDrafted }: { row: RuleRow; offer: NoteOff
       ) : null}
       {offer.offer === 'rule' && offer.otherwise ? <span className="warnline" data-testid="note-rebooks">{t('rules.note.rebooks', { n: offer.otherwise })}</span> : null}
       {error ? <span className="warnline">{error}</span> : null}
-      {offer.offer === 'ask' && row.business ? <span className="ruleacts"><button type="button" className="btn" disabled={busy} data-act="note-to-ask" onClick={() => void toAsk()}>{t('rules.note.toAsk')}</button></span> : null}
+      {offer.offer === 'ask' && row.business ? <span className="ruleacts"><AsyncButton type="button" className="btn" disabled={busy} data-act="note-to-ask" onClick={() => toAsk()}>{t('rules.note.toAsk')}</AsyncButton></span> : null}
     </div>
   );
 }
@@ -616,10 +617,10 @@ function ShareOfferCard({ offer, onRules }: { offer: ShareOffer; onRules?(): voi
   if (gone) return null;
   const who = offer.business?.name ?? t('rules.share.payer', { payer: offer.payerName ?? offer.payer ?? '' });
   // The setup's offer is hers to put off (#402): «Nicht jetzt» for this business, «Nie» for the share.
-  const dismiss = (never: boolean) => { setBusy(true); api.dismissShare(offer.ref, never).then(() => setGone(true), (e) => setError(errorText(e))).finally(() => setBusy(false)); };
+  const dismiss = (never: boolean) => { setBusy(true); return api.dismissShare(offer.ref, never).then(() => setGone(true), (e) => setError(errorText(e))).finally(() => setBusy(false)); };
   const draft = () => {
     setBusy(true);
-    api.draftShare(offer.ref).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
+    return api.draftShare(offer.ref).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
   };
   return (
     <div className="ruledraft" data-share={offer.ref}>
@@ -627,9 +628,9 @@ function ShareOfferCard({ offer, onRules }: { offer: ShareOffer; onRules?(): voi
         ? (offer.setup.said ? t('rules.share.askSetup.phone', { who, percent: String(offer.percent), account: offer.booking.account, said: offer.setup.said }) : t('rules.share.askSetupBare', { who, percent: String(offer.percent), account: offer.booking.account }))
         : t(offer.booking.ownUse ? 'rules.share.askOwnUse' : 'rules.share.ask', { who, percent: String(offer.percent), account: offer.booking.account })}</span>
       {error ? <span className="warnline">{error}</span> : null}
-      <span className="ruleacts"><button type="button" className="btn" disabled={busy} onClick={draft}>{t('rules.share.draft')}</button>
-        {offer.setup ? <><button type="button" className="btn ghost" disabled={busy} data-act="share-later" onClick={() => dismiss(false)}>{t('rules.share.notNow')}</button>
-          <button type="button" className="btn ghost" disabled={busy} data-act="share-never" onClick={() => dismiss(true)}>{t('rules.share.never')}</button></> : null}</span>
+      <span className="ruleacts"><AsyncButton type="button" className="btn" disabled={busy} onClick={draft}>{t('rules.share.draft')}</AsyncButton>
+        {offer.setup ? <><AsyncButton type="button" className="btn ghost" disabled={busy} data-act="share-later" onClick={() => dismiss(false)}>{t('rules.share.notNow')}</AsyncButton>
+          <AsyncButton type="button" className="btn ghost" disabled={busy} data-act="share-never" onClick={() => dismiss(true)}>{t('rules.share.never')}</AsyncButton></> : null}</span>
     </div>
   );
 }
@@ -655,13 +656,13 @@ export function GroupedOffer({ payment, onRules }: { payment: string; onRules?()
   if (!offer) return null;
   const draft = () => {
     setBusy(true);
-    api.draftGrouped(offer.ref).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
+    return api.draftGrouped(offer.ref).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
   };
   return (
     <div className="ruledraft" data-grouped={offer.ref}>
       <span>{t('rules.grouped.ask', { name: offer.business.name, n: offer.payments })}</span>
       {error ? <span className="warnline">{error}</span> : null}
-      <span className="ruleacts"><button type="button" className="btn" disabled={busy} data-testid="grouped-draft" onClick={draft}>{t('rules.grouped.draft')}</button></span>
+      <span className="ruleacts"><AsyncButton type="button" className="btn" disabled={busy} data-testid="grouped-draft" onClick={draft}>{t('rules.grouped.draft')}</AsyncButton></span>
     </div>
   );
 }
@@ -687,14 +688,14 @@ export function CorrectionOffer({ payment, onRules }: { payment: string; onRules
   if (!offer) return null;
   const draft = () => {
     setBusy(true);
-    api.draftCorrection(offer.ref).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
+    return api.draftCorrection(offer.ref).then((r) => setPath(r.path), (e) => setError(errorText(e))).finally(() => setBusy(false));
   };
   const who = offer.business?.name ?? offer.rule;
   return (
     <div className="ruledraft" data-correction={offer.ref}>
       <span>{t(offer.to.vat !== offer.from.vat ? 'rules.correction.askVat' : 'rules.correction.ask', { who, from: offer.from.account, to: offer.to.account, vat: offer.to.vat ? codeLabel(offer.to.vat) : t('journal.noVat') })}</span>
       {error ? <span className="warnline">{error}</span> : null}
-      <span className="ruleacts"><button type="button" className="btn" disabled={busy} data-testid="correction-draft" onClick={draft}>{t('rules.correction.draft')}</button></span>
+      <span className="ruleacts"><AsyncButton type="button" className="btn" disabled={busy} data-testid="correction-draft" onClick={draft}>{t('rules.correction.draft')}</AsyncButton></span>
     </div>
   );
 }

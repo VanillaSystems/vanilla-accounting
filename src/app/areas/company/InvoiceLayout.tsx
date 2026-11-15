@@ -24,6 +24,7 @@ import { contextOf, screenOf } from '../invoices/sheets.js';
 import { Sheet } from '../invoices/Sheet.js';
 import '../invoices/invoices.css';
 import { invoiceRates } from '../../../engines/index.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 const LANGS: InvoiceLanguage[] = ['de', 'fr', 'it', 'en'];
 const ACCENTS: Array<[string, 'black' | 'blue' | 'green' | 'bordeaux' | 'ochre']> = [['#141a26', 'black'], ['#1d4ed8', 'blue'], ['#0f766e', 'green'], ['#9f1239', 'bordeaux'], ['#b45309', 'ochre']];
@@ -43,7 +44,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
     if (next) setLocal(next);
     try { await api.patchWorkspace({ invoicing: change }); reloadWorkspace(); } catch (e) { setLocal(settings!.layout); nav.toast(errorText(e)); }
   }
-  const setLayout = <K extends keyof InvoiceLayout>(key: K, value: InvoiceLayout[K]) => void patch({ layout: { [key]: value } }, { ...layout, [key]: value });
+  const setLayout = <K extends keyof InvoiceLayout>(key: K, value: InvoiceLayout[K]) => patch({ layout: { [key]: value } }, { ...layout, [key]: value });
   const setShow = (k: LayoutElement, on: boolean) => void patch({ layout: { show: { [k]: on } } }, { ...layout, show: { ...layout.show, [k]: on } });
 
   async function upload(file: File) {
@@ -65,8 +66,9 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
   }
   function resetTexts() {
     const was = { ...own };
-    void patch({ texts: { [lang]: { salutation: null, intro: null, closing: null, mailSubject: null, mailBody: null } } });
+    const reset = patch({ texts: { [lang]: { salutation: null, intro: null, closing: null, mailSubject: null, mailBody: null } } });
     nav.toast(t('invoiceLayout.textsReset'), () => { void patch({ texts: { [lang]: was } }); });
+    return reset;
   }
 
   const seg = <T extends string>(value: T, opts: Array<[T, string]>, onPick: (v: T) => void, label: string) => (
@@ -90,7 +92,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
           <div className="lkr"><span>{t('invoiceLayout.accent')}</span>
             <span className="sw">
               {[...ACCENTS.map(([c, name]) => [c, t(`invoiceLayout.colour.${name}`)]), ...(ACCENTS.some(([c]) => c === layout.accent) ? [] : [[layout.accent, layout.accent]])].map(([c, name]) => (
-                <button key={c} type="button" className={`swc${layout.accent === c ? ' on' : ''}`} style={{ ['--c' as string]: c }} disabled={!canEdit} aria-label={name} aria-pressed={layout.accent === c} onClick={() => setLayout('accent', c)} />
+                <AsyncButton key={c} type="button" className={`swc${layout.accent === c ? ' on' : ''}`} style={{ ['--c' as string]: c }} disabled={!canEdit} aria-label={name} aria-pressed={layout.accent === c} onClick={() => setLayout('accent', c)} />
               ))}
             </span>
           </div>
@@ -98,7 +100,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
             <span className="lklogo">
               {layout.logo ? <img src={api.logoUrl(layout.logo)} alt="" /> : <span className="m">{t('invoiceLayout.wordmark')}</span>}
               {canEdit && <label className="quiet2">{t('invoiceLayout.upload')}<input type="file" accept="image/png,image/svg+xml,image/jpeg" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); e.target.value = ''; }} /></label>}
-              {canEdit && layout.logo && <button type="button" className="quiet2" onClick={() => { const { logo: _, ...rest } = layout; void patch({ layout: { logo: null } }, rest); }}>{t('invoiceLayout.removeLogo')}</button>}
+              {canEdit && layout.logo && <AsyncButton type="button" className="quiet2" onClick={() => { const { logo: _, ...rest } = layout; return patch({ layout: { logo: null } }, rest); }}>{t('invoiceLayout.removeLogo')}</AsyncButton>}
             </span>
           </div>
           <div className="lkr"><span>{t('invoiceLayout.place')}</span>{seg(layout.logoPosition, [['left', t('invoiceLayout.left')], ['center', t('invoiceLayout.center')], ['right', t('invoiceLayout.right')]], (v) => setLayout('logoPosition', v), t('invoiceLayout.place'))}</div>
@@ -126,7 +128,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
       </div>
       <div className="lkprevw">
         {load.state === 'ready' && <Preview ws={ws} layout={layout} lang={lang} texts={texts} guide={guide} canEdit={canEdit} onText={saveText} />}
-        <p className="m ivhint">{t('invoiceLayout.daysHint', { days: DAYS })}{changed > 0 && <> · {t('invoiceLayout.nChanged', { n: changed })}{canEdit && <> · <button type="button" className="quiet2" onClick={resetTexts}>{t('invoiceLayout.reset')}</button></>}</>}</p>
+        <p className="m ivhint">{t('invoiceLayout.daysHint', { days: DAYS })}{changed > 0 && <> · {t('invoiceLayout.nChanged', { n: changed })}{canEdit && <> · <AsyncButton type="button" className="quiet2" onClick={resetTexts}>{t('invoiceLayout.reset')}</AsyncButton></>}</>}</p>
       </div>
     </div>
   );
@@ -174,7 +176,7 @@ function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boole
                 {needsIban && (
                   <>
                     <input className="mono wide" value={ibans[c] ?? ''} placeholder={t('invoiceLayout.ibanExample')} aria-label={t('invoiceLayout.iban')} disabled={!canEdit} onChange={(e) => setIbans({ ...ibans, [c]: e.target.value })} />
-                    <button type="button" className="btn" disabled={!canEdit || !ibans[c]?.trim()} onClick={() => void set(c, picked, ibans[c]!.trim())}>{t('common.save')}</button>
+                    <AsyncButton type="button" className="btn" disabled={!canEdit || !ibans[c]?.trim()} onClick={() => set(c, picked, ibans[c]!.trim())}>{t('common.save')}</AsyncButton>
                   </>
                 )}
               </span>
@@ -255,7 +257,7 @@ function InvoicingSetup({ ws, nav, canEdit, onDone }: { ws: CompanyInfo; nav: Na
         </select>
       </label>
       <label>{t('invoiceLayout.days')}<input className="mono" inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.replace(/\D/g, ''))} disabled={!canEdit} /></label>
-      <button type="button" className="btn primary" disabled={!canEdit || busy || !account || !revenueAccount || !days || (!banks.find((a) => a.account === account)?.iban && !iban.trim())} onClick={() => void setup()}>{t('invoiceLayout.setup')}</button>
+      <AsyncButton type="button" className="btn primary" disabled={!canEdit || busy || !account || !revenueAccount || !days || (!banks.find((a) => a.account === account)?.iban && !iban.trim())} onClick={() => setup()}>{t('invoiceLayout.setup')}</AsyncButton>
     </div>
   );
 }

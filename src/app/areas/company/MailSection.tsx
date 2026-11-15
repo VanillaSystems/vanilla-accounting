@@ -12,6 +12,7 @@ import { MAIL_SECURITY, type MailSecurity, type OutgoingMail } from '../../../in
 import type { MailStatus } from '../../../types/api-error.js';
 import type { Nav } from '../index.js';
 import { I } from '../receipts/icons.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 const FIELDS = ['host', 'port', 'user', 'fromName', 'fromAddress', 'replyTo'] as const;
 type Field = (typeof FIELDS)[number];
@@ -84,7 +85,7 @@ export function MailSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; c
         </dl>
       ) : <p className="m">{t('mail.none')}</p>}
       {edit ? (
-        <form className="form inline" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEdit(false); } }}>
+        <AsyncForm className="form inline" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); setEdit(false); } }}>
           {input('host', 'wide')}{input('port')}
           <label>{t('mail.field.security')}
             <select name="security" value={f.security} onChange={(e) => setF({ ...f, security: e.target.value as MailSecurity })}>
@@ -101,14 +102,14 @@ export function MailSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; c
           {input('fromName')}{input('fromAddress')}{input('replyTo', 'wide')}
           <p className="fhint wide">{status?.inApp ? t('mail.passwordHintApp') : t('mail.passwordHint', { where: status?.where ?? 'VANILLA_SMTP_PASSWORD' })}</p>
           <div className="acts">
-            <button type="submit" className="btn primary">{t('common.save')}</button>
+            <AsyncButton type="submit" className="btn primary">{t('common.save')}</AsyncButton>
             <button type="button" className="btn ghost" onClick={() => setEdit(false)}>{t('common.cancel')}</button>
           </div>
-        </form>
+        </AsyncForm>
       ) : canEdit && (
         <div className="fedit">
           <button type="button" className="btn" onClick={begin}>{I.edit}{m ? t('company.edit') : t('mail.setUp')}</button>
-          {m && <button type="button" className="btn ghost" disabled={checking} onClick={() => void check()}>{checking ? t('mail.checking') : t('mail.check')}</button>}
+          {m && <AsyncButton type="button" className="btn ghost" disabled={checking} onClick={() => check()}>{checking ? t('mail.checking') : t('mail.check')}</AsyncButton>}
         </div>
       )}
       <p className="m src-note">{t('mail.source')}</p>

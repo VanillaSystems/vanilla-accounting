@@ -15,6 +15,7 @@ import { bookingWaitsText } from '../lib/booking-waits.js';
 import type { AutomationView } from '../../workflows/model.js';
 import type { PayoutsBooked } from '../../types/drop.js';
 import type { Route } from '../shell/route.js';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 export const BOOKING_WORKFLOW = 'booking';
 
@@ -57,7 +58,7 @@ export function BookingWaits({ files, go, onOn }: { files?: readonly string[]; g
   return (
     <span className="wfsaid" role="status" data-testid="booking-waits">
       {bookingWaitsText(waits, bookingBroken(view))}{' '}
-      {bookingBroken(view) ? null : <><button type="button" className="btn" data-act="booking-switch-on" disabled={busy} onClick={(e) => { e.stopPropagation(); void on(); }}>{t('automation.pending.approve')}</button>{' '}</>}
+      {bookingBroken(view) ? null : <><AsyncButton type="button" className="btn" data-act="booking-switch-on" disabled={busy} onClick={(e) => { e.stopPropagation(); return on(); }}>{t('automation.pending.approve')}</AsyncButton>{' '}</>}
       <button type="button" className="linkbtn" data-act="booking-look" onClick={(e) => { e.stopPropagation(); go(BOOKING_SWITCH_ON); }}>{t('bookingWaits.look')}</button>
     </span>
   );

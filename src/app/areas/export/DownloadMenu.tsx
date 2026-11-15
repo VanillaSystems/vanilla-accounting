@@ -12,6 +12,7 @@ import { periodName } from '../../lib/period-label.js';
 import { useShellUi } from '../../shell/ui.js';
 import { ICONS } from '../icons.js';
 import { download } from './state.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 interface Props {
   account: string;
@@ -72,9 +73,9 @@ export function DownloadMenu({ account, label, period, toast }: Props) {
           <div className="menu dlpop" role="menu" ref={ref} onKeyDown={onKeyDown}>
             <div className="mh">{t('export.downloadHead', { account: label, period: periodName(period) })}</div>
             {FORMATS.map(([f, name, note]) => (
-              <button key={f} type="button" role="menuitem" onClick={() => void get(f)}>
+              <AsyncButton key={f} type="button" role="menuitem" onClick={() => get(f)}>
                 <b>{t(name)}</b><span className="s">{note.startsWith('.') ? note : t(note as 'export.downloadCsv')}</span>
-              </button>
+              </AsyncButton>
             ))}
             <div className="sep2" />
             <button type="button" role="menuitem" onClick={() => { close(); ui.openExport({ period: period.token, items: { ledger: ['pdf', 'csv'] }, sums: false, oneBook: false, preset: null, periodChosen: false }); }}>

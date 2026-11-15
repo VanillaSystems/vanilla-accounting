@@ -26,6 +26,7 @@ import { countOf, FILTERS, linkedOf, partnerRules, passes, type PartnerFilter } 
 import { once, readPartners, refreshKnowledge, useFetched } from './data.js';
 import { ChangedNotePrompt, DetailGroup, DetailsBlock, Go, linesOf, NoteRulePanel, NotesBlock, SelfBlock } from './page.js';
 import { noteMarks } from '../../../knowledge/note-rules.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'partners'>>;
 
@@ -211,7 +212,7 @@ function LearnedName({ partner, name, canEdit, nav }: { partner: string; name: s
   return (
     <>
       {t('partners.match.tx')} <span className="mono">{name}</span> <span className="m">{t('partners.match.learned')}</span>
-      {canEdit ? <> <button type="button" className="linkbtn" disabled={busy} data-tip={t('partners.match.removeTip')} onClick={remove}>{t('partners.match.remove')}</button></> : null}
+      {canEdit ? <> <AsyncButton type="button" className="linkbtn" disabled={busy} data-tip={t('partners.match.removeTip')} onClick={remove}>{t('partners.match.remove')}</AsyncButton></> : null}
     </>
   );
 }

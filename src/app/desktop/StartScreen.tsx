@@ -28,6 +28,7 @@ import { installWindowDrop, setDropHandler } from '../shell/window-drop.js';
 import { formatLocation } from '../shell/route.js';
 import { isVanillaFile } from '../handover/store.js';
 import './start.css';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 interface BankRow { bank: string; currency: string; account: string; iban: string }
 
@@ -219,41 +220,41 @@ export function StartScreen({ language, onLanguage }: { language: string; onLang
                   ? t('desktop.access.openAsk', { folder: t(`desktop.access.folder.${unasked.folder}`), name: unasked.name })
                   : t('desktop.access.openAskOther', { name: unasked.name })}</p>
                 <p>{t('desktop.access.openAskNo')}</p>
-                <button type="button" className="st-choice" data-act="open-unasked" disabled={busy} onClick={() => void run(() => api.desktop.open(unasked.root))}>
+                <AsyncButton type="button" className="st-choice" data-act="open-unasked" disabled={busy} onClick={() => run(() => api.desktop.open(unasked.root))}>
                   <b>{t('desktop.access.openGo')}</b>
                   <span>{named(unasked.folder) ? t('desktop.access.openGoHint', { folder: t(`desktop.access.folder.${unasked.folder}`) }) : t('desktop.access.openGoHintOther')}</span>
-                </button>
+                </AsyncButton>
               </div>
             ) : null}
             <div className="st-choices">
-              <button type="button" className="st-choice" data-act="open" disabled={busy} onClick={() => void chooseAndOpen()}>
+              <AsyncButton type="button" className="st-choice" data-act="open" disabled={busy} onClick={() => chooseAndOpen()}>
                 <b>{t('desktop.open')}</b><span>{t('desktop.openHint')}</span>
-              </button>
+              </AsyncButton>
               <button type="button" className="st-choice" data-act="new" disabled={busy} onClick={startNew}>
                 <b>{t('desktop.new')}</b><span>{t('desktop.newHint')}</span>
               </button>
-              <button type="button" className="st-choice" data-act="demo" disabled={busy} onClick={() => void run(api.desktop.demo)}>
+              <AsyncButton type="button" className="st-choice" data-act="demo" disabled={busy} onClick={() => run(api.desktop.demo)}>
                 <b>{t('desktop.demo')}</b><span>{t('desktop.demoHint')}</span>
-              </button>
+              </AsyncButton>
             </div>
             <p className="st-sub" data-drop-hint>{t('desktop.dropVanilla')}</p>
             {error && <p className="warnline" role="alert">{error}</p>}
             {upgradable && (
               <p className="st-upgrade">
-                <button type="button" className="st-choice" data-act="upgrade" disabled={busy} onClick={() => void run(() => api.desktop.upgrade(upgradable))}>
+                <AsyncButton type="button" className="st-choice" data-act="upgrade" disabled={busy} onClick={() => run(() => api.desktop.upgrade(upgradable))}>
                   <b>{t('desktop.upgrade')}</b><span>{t('desktop.upgradeHint')}</span>
-                </button>
+                </AsyncButton>
               </p>
             )}
             {!!info?.recent.length && (
               <section className="st-recent">
                 <h2>{t('desktop.recent')}</h2>
                 {info.recent.map((b) => (
-                  <button key={b.root} type="button" className="st-book" data-tip={b.root} disabled={busy || (!b.name && !b.problem && !b.setup && !b.noAccess && !b.unasked)} onClick={() => (b.unasked ? setUnasked({ root: b.root, name: b.demo ? t('desktop.demoName') : b.name ?? b.root, folder: b.unasked }) : void run(() => api.desktop.open(b.root)))}>
+                  <AsyncButton key={b.root} type="button" className="st-book" data-tip={b.root} disabled={busy || (!b.name && !b.problem && !b.setup && !b.noAccess && !b.unasked)} onClick={() => (b.unasked ? setUnasked({ root: b.root, name: b.demo ? t('desktop.demoName') : b.name ?? b.root, folder: b.unasked }) : run(() => api.desktop.open(b.root)))}>
                     <b>{b.demo ? t('desktop.demoName') : b.name ?? (b.unasked ? b.root.split('/').filter(Boolean).pop() : t(b.setup ? 'desktop.flow.unnamed' : b.noAccess ? 'desktop.access.refusedShort' : b.problem ? 'desktop.unreadable' : 'desktop.missing'))}</b>{b.setup ? <span className="st-badge">{t('desktop.flow.inProgress')}</span> : null}{b.noAccess && b.name ? <span className="st-badge" data-no-access>{t('desktop.access.refusedShort')}</span> : null}<span className="mono">{b.root}</span>
                     {b.problem && <small className="st-problem">{b.problem}</small>}
                     {b.noAccess && <small className="st-problem">{accessText(sayAccess, b.noAccess, b.root)}</small>}
-                  </button>
+                  </AsyncButton>
                 ))}
               </section>
             )}
@@ -397,7 +398,7 @@ function CreateForm({ info, root: picked, proposed, language, busy, error, onCan
           <label className="cf s4"><span>{t('desktop.folder')}</span>
             <span className="st-row">
               <input name="root" className="mono" value={root} onChange={(e) => set('root', e.target.value)} />
-              {desktop && <button type="button" className="btn ghost" onClick={() => void chooseFolder()}>{t('desktop.chooseButton')}</button>}
+              {desktop && <AsyncButton type="button" className="btn ghost" onClick={() => chooseFolder()}>{t('desktop.chooseButton')}</AsyncButton>}
             </span>
           </label>
           {folderError && <p className="st-stop" role="alert">{folderError}</p>}

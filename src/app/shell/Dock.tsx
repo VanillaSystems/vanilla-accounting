@@ -19,6 +19,7 @@ import { whenText } from '../areas/automation/Home.js';
 import { booksOpenPeriod, localToday, type Period } from '../../accounting/periods.js';
 import { chargesVat, filing } from '../../engines/index.js';
 import { stepOf, textIn, type AutomationView } from '../../workflows/model.js';
+import { AsyncButton } from './AsyncButton.js';
 
 const AUTOMATION: AreaId = 'automation';
 
@@ -157,7 +158,7 @@ export function Dock({ current, books, keys, wide, onToggle, nav, canEdit, href,
         </button>
         {wide ? (
           'run' in action
-            ? <button type="button" className="wbtn" disabled={busyRunNow} onClick={() => void runNow()}>{PLAY}{action.label}</button>
+            ? <AsyncButton type="button" className="wbtn" disabled={busyRunNow} onClick={() => runNow()}>{PLAY}{action.label}</AsyncButton>
             : <a className={`wbtn${w.state === 'waiting' ? ' ask' : ''}`} href={hrefOf(action.go)} onClick={goTo(action.go)}>{action.label}</a>
         ) : null}
       </div>
