@@ -557,7 +557,7 @@ hand-over.
 - **The invitation** is an HTML and plain-text e-mail from the service's own template, in the
   sharer's language: from «Sandra Huber über Vanilla Accounting <no-reply@share.<domain>>», Reply-To
   her confirmed address, so Ernst's «Antworten» reaches her. It carries every step for someone who
-  never used the app: download (https://vanillasystems.ch/buchhaltung/download), «Dennoch öffnen»
+  never used the app: download (`<domain>/buchhaltung/download`), «Dennoch öffnen»
   once, the button «Buchhaltung öffnen» with the link, what he sees, how to send changes back, and
   the deadline in words. Her message is escaped plain text under «Nachricht von Sandra Huber:». A
   client supplies only names, the company, the language and the message: nobody can put words in
