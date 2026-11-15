@@ -1,0 +1,24 @@
+﻿Person;Nico Probe;;
+Zeitraum;01.02.2026–30.09.2026;;
+Ziffer;Feld;Betrag CHF;Herkunft
+1;Lohn;6088.45;8 Läufe, 170 Std. × 32.00, mit Feiertags- und Ferienentschädigung 648.45
+2.1;Gehaltsnebenleistungen: Verpflegung, Unterkunft;;
+2.2;Gehaltsnebenleistungen: Privatanteil Geschäftsfahrzeug;;
+2.3;Gehaltsnebenleistungen: übrige;;
+3;Unregelmässige Leistungen;;
+4;Kapitalleistungen;;
+5;Beteiligungsrechte;;
+6;Verwaltungsratsentschädigungen;;
+7;Andere Leistungen;;
+8;Bruttolohn total;6088.45;Ziffern 1 bis 7
+9;Beiträge AHV/IV/EO/ALV/NBUV;389.70;AHV/IV/EO 322.65 + ALV 67.05; kein NBU (unter 8 Std. pro Woche)
+10.1;Berufliche Vorsorge: ordentliche Beiträge;;unter der Eintrittsschwelle 22'680: kein BVG
+10.2;Berufliche Vorsorge: Beiträge für den Einkauf;;
+11;Nettolohn;5698.75;Ziffer 8 − 9 − 10; gleich den 8 Zahlungen
+12;Quellensteuerabzug;;
+13.1;Spesenvergütungen: effektive;;
+13.2;Spesenvergütungen: pauschale;;
+15;Bemerkungen;;Stundenlohn; Ferien- und Feiertagsentschädigung im Lohn enthalten
+
+Lohnbescheinigung Ausgleichskasse;AHV-Lohn 01.02.–30.09.2026;6088.45;8 Läufe
+Lohnbescheinigung Ausgleichskasse;ALV-Lohn 01.02.–30.09.2026;6088.45;8 Läufe

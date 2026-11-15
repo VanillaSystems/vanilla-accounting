@@ -1,0 +1,23 @@
+﻿Ziffer;Feld;Lukas Beispiel CHF;Anna Muster CHF;Nico Probe CHF
+1;Lohn;77400.00;59400.00;6088.45
+2.1;Gehaltsnebenleistungen: Verpflegung, Unterkunft;;;
+2.2;Gehaltsnebenleistungen: Privatanteil Geschäftsfahrzeug;;;
+2.3;Gehaltsnebenleistungen: übrige;;;
+3;Unregelmässige Leistungen;;;
+4;Kapitalleistungen;;;
+5;Beteiligungsrechte;;;
+6;Verwaltungsratsentschädigungen;;;
+7;Andere Leistungen;;;
+8;Bruttolohn total;77400.00;59400.00;6088.45
+9;Beiträge AHV/IV/EO/ALV/NBUV;4953.60;3801.60;389.70
+10.1;Berufliche Vorsorge: ordentliche Beiträge;2137.50;2404.20;
+10.2;Berufliche Vorsorge: Beiträge für den Einkauf;;;
+11;Nettolohn;70308.90;53194.20;5698.75
+12;Quellensteuerabzug;;;
+13.1;Spesenvergütungen: effektive;;;
+13.2;Spesenvergütungen: pauschale;;;
+15;Bemerkungen;;;
+
+Lohnbescheinigung Ausgleichskasse;Zeitraum;01.01.2026–30.09.2026;01.01.2026–30.09.2026;01.02.2026–30.09.2026
+Lohnbescheinigung Ausgleichskasse;AHV-Lohn;77400.00;59400.00;6088.45
+Lohnbescheinigung Ausgleichskasse;ALV-Lohn;77400.00;59400.00;6088.45

@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lohnabrechnung September 2026 · Prototyp Löhne</title>
+<title>Lohnabrechnung September 2026, Nico Probe · Prototyp Löhne</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&family=Instrument+Sans:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
 <style>
@@ -18,10 +18,12 @@ h1 { font: 700 20px "Hanken Grotesk", sans-serif; margin: 40px 0 4px; }
 .meta span b { color: #0b1220; font-weight: 500; }
 table { width: 100%; border-collapse: collapse; margin-top: 22px; }
 th { text-align: left; font: 600 9.5px "Instrument Sans"; letter-spacing: .08em; text-transform: uppercase; color: #8a91a0; padding: 6px 0; border-bottom: 1px solid #d3d8e1; }
-th.r, th.pr-r, td.r { text-align: right; font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
+th.r, td.r { text-align: right; font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
 td { padding: 5px 0; border-bottom: 1px solid #eef0f4; }
+td.g { font: 600 9.5px "Instrument Sans"; letter-spacing: .08em; text-transform: uppercase; color: #8a91a0; padding-top: 10px; }
 tr.sum td { font-weight: 600; border-bottom: 1px solid #d3d8e1; }
 tr.net td { font-weight: 700; font-size: 14px; border-top: 1.5px solid #0b1220; border-bottom: 0; padding-top: 8px; }
+tr.dim td { color: #6e7685; }
 .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 26px; }
 .cols h2 { font: 600 9.5px "Instrument Sans"; letter-spacing: .08em; text-transform: uppercase; color: #8a91a0; margin: 0 0 6px; }
 .cols dl { display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; margin: 0; }
@@ -37,38 +39,41 @@ html.embed { background: #fff; } html.embed body { padding: 0; } html.embed .bac
 <script>if (window.top !== window.self) document.documentElement.classList.add('embed');</script>
 </head>
 <body>
-<div class="back"><a href="3-lohnabrechnung.html">← zurück zum Beleg</a></div>
+<div class="back"><a href="3-lohnabrechnung.html#nico">← zurück zum Beleg</a></div>
 <div class="sheet">
   <div class="top">
     <div class="firm"><b>Muster Consulting GmbH</b>Beispielgasse 8<br>3011 Bern<br>CHE-246.813.579</div>
-    <div class="firm" style="text-align:right">Zahltag 25.09.2026<br>Lauf LR-2026-09</div>
+    <div class="firm" style="text-align:right">Zahltag 25.09.2026<br>Lauf LR-2026-09-nico</div>
   </div>
-  <div class="to">Lukas Beispiel<br>Beispielweg 4<br>3006 Bern</div>
+  <div class="to">Nico Probe<br>Probeweg 3<br>3012 Bern</div>
   <h1>Lohnabrechnung September 2026</h1>
-  <div class="meta"><span>AHV-Nr. <b>756.••••.••••.37</b></span><span>Eintritt <b>01.01.2024</b></span><span>Pensum <b>100 %</b></span><span>Kanton <b>BE</b></span></div>
+  <div class="meta"><span>AHV-Nr. <b>756.••••.••••.52</b></span><span>Eintritt <b>01.02.2026</b></span><span>Pensum <b>Stundenlohn</b></span><span>Kanton <b>BE</b></span></div>
   <table>
-    <thead><tr><th>Lohnart</th><th class="pr-r">Grundlage</th><th class="pr-r">× Satz</th><th class="pr-r">= CHF</th></tr></thead>
+    <thead><tr><th>Lohnart</th><th class="r">Grundlage</th><th class="r">× Satz</th><th class="r">= CHF</th></tr></thead>
     <tbody>
-      <tr><td colspan="4" style="font:600 9.5px 'Instrument Sans';letter-spacing:.08em;text-transform:uppercase;color:#8a91a0;padding-top:10px">Zählt zum Bruttolohn (AHV-pflichtig)</td></tr>
-      <tr><td>Monatslohn</td><td class="r">1 Monat</td><td class="r">8'600.00</td><td class="r">8'600.00</td></tr>
-      <tr class="sum"><td>Bruttolohn</td><td></td><td></td><td class="r">8'600.00</td></tr>
-      <tr><td>AHV/IV/EO</td><td class="r">8'600.00</td><td class="r">5.30 %</td><td class="r">−455.80</td></tr><tr><td>ALV</td><td class="r">8'600.00</td><td class="r">1.10 %</td><td class="r">−94.60</td></tr><tr><td>BVG</td><td class="r"></td><td class="r">fest</td><td class="r">−237.50</td></tr>
-      <tr class="sum"><td>Total Abzüge</td><td></td><td></td><td class="r">−787.90</td></tr>
-      <tr class="net"><td>Nettolohn</td><td></td><td></td><td class="r">7'812.10</td></tr>
+      <tr><td colspan="4" class="g">Stunden × Stundenlohn = Grundlohn; Feiertags- und Ferienentschädigung auf dem Grundlohn</td></tr>
+      <tr><td>Stundenlohn</td><td class="r">26 Std.</td><td class="r">32.00</td><td class="r">832.00</td></tr><tr><td>Feiertagsentschädigung</td><td class="r">832.00</td><td class="r">3.59 %</td><td class="r">29.85</td></tr><tr><td>Ferienentschädigung</td><td class="r">832.00</td><td class="r">8.33 %</td><td class="r">69.30</td></tr>
+      <tr class="sum"><td>Bruttolohn</td><td></td><td></td><td class="r">931.15</td></tr>
+      <tr><td colspan="4" class="g">Abzüge</td></tr>
+      <tr><td>AHV/IV/EO</td><td class="r">931.15</td><td class="r">5.30 %</td><td class="r">−49.35</td></tr><tr><td>ALV</td><td class="r">931.15</td><td class="r">1.10 %</td><td class="r">−10.25</td></tr>
+      <tr class="sum"><td>Total Abzüge</td><td></td><td></td><td class="r">−59.60</td></tr>
+      <tr class="net"><td>Nettolohn</td><td></td><td></td><td class="r">871.55</td></tr>
+      <tr><td colspan="4" class="g">Ohne Abzug</td></tr>
+      <tr class="dim"><td>BVG</td><td colspan="3">kein Abzug: Jahreslohn laut Vertrag rund 10'700.00, unter der Eintrittsschwelle 22'680 (BVG Art. 2)</td></tr><tr class="dim"><td>NBU</td><td colspan="3">nicht versichert: im Schnitt 6.0 Std. pro Woche, unter 8 (UVG Art. 8 Abs. 2); die Berufsunfälle versichert die Firma</td></tr>
     </tbody>
   </table>
-  <p style="color:#4a5263;margin-top:8px;">Auszahlung auf CH•• •••• •••• •••• 4471 2 am 25.09.2026.</p>
+  <p style="color:#4a5263;margin-top:8px;">Auszahlung auf CH•• •••• •••• •••• 7710 4 am 25.09.2026.</p>
   <div class="cols">
-    <div><h2>Beiträge der Firma (zur Information)</h2><table style="margin-top:0"><tbody><tr><td>AHV/IV/EO</td><td class="r">8'600.00</td><td class="r">5.30 %</td><td class="r">455.80</td></tr><tr><td>ALV</td><td class="r">8'600.00</td><td class="r">1.10 %</td><td class="r">94.60</td></tr><tr><td>FAK Kanton Bern</td><td class="r">8'600.00</td><td class="r">1.00 %</td><td class="r">86.00</td></tr><tr><td>Verwaltungskosten</td><td class="r">1'100.80</td><td class="r">1.58 %</td><td class="r">17.40</td></tr><tr><td>BVG</td><td class="r"></td><td class="r">fest</td><td class="r">237.50</td></tr><tr class="sum"><td>Total</td><td></td><td></td><td class="r">891.30</td></tr></tbody></table></div>
-    <div><h2>Januar bis September 2026</h2><dl>
-      <dt>Bruttolohn</dt><dd>77'400.00</dd>
-      <dt>AHV-pflichtiger Lohn</dt><dd>77'400.00</dd>
-      <dt>ALV-pflichtiger Lohn</dt><dd>77'400.00</dd>
-      <dt>Abzüge AHV/IV/EO/ALV</dt><dd>4'953.60</dd>
-      <dt>BVG</dt><dd>2'137.50</dd>
-      <dt>Nettolohn</dt><dd>70'308.90</dd>
-    </dl>
-    <p style="color:#6e7685;margin-top:10px;">UVG und Nichtberufsunfall: Prämie trägt die Firma.</p></div>
+    <div><h2>Beiträge der Firma (zur Information)</h2><table style="margin-top:0"><tbody><tr><td>AHV/IV/EO</td><td class="r">931.15</td><td class="r">5.30 %</td><td class="r">49.35</td></tr><tr><td>ALV</td><td class="r">931.15</td><td class="r">1.10 %</td><td class="r">10.25</td></tr><tr><td>FAK Kanton Bern</td><td class="r">931.15</td><td class="r">1.00 %</td><td class="r">9.30</td></tr><tr><td>Verwaltungskosten</td><td class="r">119.20</td><td class="r">1.58 %</td><td class="r">1.90</td></tr><tr class="sum"><td>Total</td><td></td><td></td><td class="r">70.80</td></tr></tbody></table></div>
+    <div><h2>Februar bis September 2026</h2><dl>
+      <dt>Stunden</dt><dd>170</dd>
+      <dt>Bruttolohn</dt><dd>6'088.45</dd>
+      <dt>AHV-pflichtiger Lohn</dt><dd>6'088.45</dd>
+      <dt>ALV-pflichtiger Lohn</dt><dd>6'088.45</dd>
+      <dt>Abzüge AHV/IV/EO/ALV</dt><dd>389.70</dd>
+      <dt>BVG</dt><dd>0.00</dd>
+      <dt>Nettolohn</dt><dd>5'698.75</dd>
+    </dl></div>
   </div>
   <div class="foot"><span>Berechnung aus den erfassten Sätzen, vom Treuhänder zu prüfen.</span><span>Erstellt mit Vanilla Accounting · freigegeben 22.09.2026</span></div>
 </div>

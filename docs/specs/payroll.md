@@ -1070,7 +1070,7 @@ Each choice is an ordinary action, recorded in the run's history like any other.
   writes the entry, and shows the card («Monatslohn 9'000 ab 01.01.2027; bisher 8'600 ab
   01.01.2026»). The person keeps it. A dropped certificate («neuer Vorsorgeausweis») is read the
   same way into a `pension` entry from its date, with the certificate as its source.
-- Prototype: [1-einrichten.html#behalten](mockups/payroll/1-einrichten.html#behalten) shows the
+- Prototype: [1c-person.html#lukas](mockups/payroll/1c-person.html#lukas) (one page per person) shows the
   wage with «ab 01.01.2026», its history and «Ändern» with «gilt ab», including the warning for a
   date before the released July and August runs.
 
