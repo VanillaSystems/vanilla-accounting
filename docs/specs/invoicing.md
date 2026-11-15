@@ -2,7 +2,8 @@
 
 Status: decided (2026-11-14), on `0.4.2`; amended 2026-11-15. The owner accepted all twelve
 recommendations of the draft of 2026-11-13, and on 2026-11-15 the patterns of a market review and
-the rule «warn, then the person decides»; section 7 records both. Asked: «can we on the start speccing out the
+the rule «warn, then the person decides»; section 7 records both. Values that change over time
+(4.12) were added the same day. Asked: «can we on the start speccing out the
 invoicing for the personas in question? I want a fully fledged invoicing tool». A clickable
 prototype of phases 1 to 3 is in [mockups/invoicing/](mockups/invoicing/index.html).
 
@@ -195,6 +196,9 @@ version and a ladder step in `src/workspace/schema.ts`: one `invoices.json` step
 | Settings: `numbering: { invoice: 'YYYY-NNN', quote: 'OF-YYYY-NNN', … }` (a pattern with `YYYY` and `N…`, digits enough for QRR's 26), `quoteValidDays`, `skonto?: { percent, days }` (printed in the terms and applied on payment), `dunning: { levels: [{ afterDays, fee? }], interest?: 5 }`, `writeOffAccount: { skonto: '3800', loss: '3805' }` | `belege.workspace.yaml` `invoicing:` | **step** (manifest) |
 | A new booking ref on the agreed basis: `RE-<number>-wo-<n>` for a write-off. Same entry shape as today; a new ref pattern that `refs.ts` must name. A set-off needs no ref of its own: the deduction line is on the invoice (decision 7.6) | books (journal entries) | no `schema` step: no shape change (decision 7.2). Named in `src/books/refs.ts` and in the CHANGELOG |
 | `paidAtIssue?: { means: 'cash' | 'twint' | 'card' | 'bank', account }` on an invoice: the Quittung (decision 7.11), printed with the title «Quittung» and no QR-bill | `invoices.json` | **step** (phase 3) |
+| Dated histories (4.12): a customer's address, terms, discount and revenue account; the firm's name and address, `payTo` per currency, payment term, Skonto, dunning levels and fees, interest and accounts | `invoices.json` (customers), `belege.workspace.yaml` | **step** in phase 1, one for each file: a single value becomes `[{ validFrom: <first day of the books>, value }]` |
+| An article's `price` as a dated history from its start (phase 3, 4.12) | `invoices.json` | **step** (phase 3, new field) |
+| `Issued.terms`: the due date's basis, Skonto and dunning terms as printed (4.12; customer, sender and layout are kept already) | `invoices.json` | **step** (phase 1) |
 
 Nothing here changes a filed figure. Write-offs and set-offs are new events dated in the open
 period (golden rule 1).
@@ -367,6 +371,9 @@ Rechnungen stays one area (`src/app/areas/invoices/`) with list and detail (`Spl
   `hrefOf`).
 - **Mahnlauf:** a dialog (an action, not a place) with the proposed list, the totals and one
   «Senden». Limits are named when hit («40 Mahnungen, 12 weitere nicht: höchstens 40 pro Lauf»).
+- **Dated values** (4.12): an article's price, a customer's terms and address, and the firm's
+  address, IBAN and terms each show the current value with «ab TT.MM.JJJJ», a planned entry, and a
+  small «Verlauf». «Ändern» asks «gilt ab» (default: today).
 - **Firma › Rechnungslayout** gains the number patterns, Skonto, dunning levels, interest and
   write-off accounts. A new firm's first invoice asks only what Art. 26 and the QR-bill need
   (exists).
@@ -399,6 +406,10 @@ Rechnungen stays one area (`src/app/areas/invoices/`) with list and detail (`Spl
   open-items list sums the same «offen».
 - Warnings (4.11): each one names the fact, the rule and what follows, and «Trotzdem …» does the
   action and records it as an ordinary entry of the log, with no override field.
+- Dated values (4.12): a draft reads the price, terms and IBAN valid on its date; an issued
+  invoice is byte for byte the same after a later change; a recurring line from an article takes
+  the new price on the first invoice dated after the change; a backdated price change names
+  exactly the issued invoices that carry the old price.
 - UI: `tests/invoices-area.test.ts` for the new views. One e2e walk (`tests/e2e-invoices.test.ts`):
   quote → two partial invoices → final → payment with Skonto.
 - **Golden master:** only `demo/` books invoice entries today. The new demo data (below) changes
@@ -431,6 +442,7 @@ third party rejects outright, or a write the golden rules forbid.
 | A QR-IBAN under EUR (F1) | «Seit v2.4 nur für CHF» · SIX IG v2.4, v2.3 valid until November 2027 · banks refuse it after November 2027 | «Trotzdem speichern» |
 | A follow-up of an expired or declined quote | «Abgelaufen am …» or «abgelehnt am …» · the quote's own `validUntil`, or the customer's answer in the log · the old prices and rates go into the draft, the quote becomes accepted | «Trotzdem erstellen» |
 | A write-off above what is open | «Mehr als offen» · the open amount · the invoice shows a credit balance | «Trotzdem ausbuchen» |
+| A price, terms or IBAN changed with a «gilt ab» before issued invoices (4.12) | «2 Rechnungen seit 01.08.2026 mit 28 ausgestellt; ab 01.08.2026 gilt jetzt 29» · an issued invoice is kept as issued · they stay as they are; new lines take the new value | «Nachbelastung als Entwurf» (or «Gutschrift als Entwurf» for a lower price), «So lassen» |
 
 Kept as hard rules, each for its reason:
 
@@ -448,6 +460,76 @@ Kept as hard rules, each for its reason:
   Kept as a guard of the one gapless series; the owner may confirm or turn it into a warning.
 - **Security boundaries**: the SMTP password, the mailbox, a workspace's private data.
 
+### 4.12 Values that change over time (owner, 2026-11-15)
+
+The owner asked whether the app takes change into account: a price, a customer's terms or the
+firm's IBAN all change. It does, by the rule of docs/specs/domain-model.md §7 (branch
+`spec/domain-model`). Each such value is a dated history (`Dated<T>`: `validFrom`, optional
+`validUntil`, never overwritten). A document reads the value valid on its own date, and an issued
+document keeps what it printed.
+
+**What is dated in this area:**
+
+| Value | Typical change | Read on |
+|---|---|---|
+| An article's price | a new price list from 1 January | the invoice's date, when the line is added; a recurring invoice's date for a line from an article |
+| A customer's address, payment term, discount, revenue account | a move; 20 days instead of 30 from a new contract | the document's date |
+| The firm's name and address (letterhead), UID | a move, a new name | the document's date |
+| `payTo` per currency: IBAN, QR-IBAN, ledger account | a new bank | the document's date |
+| Payment term, Skonto, dunning levels and fees, interest, write-off and fee accounts | a new policy | the document's date; a reminder reads its own date, and a write-off its own |
+| The VAT setup | a switch of method or basis, held for whole years | the document's date (it is already per year) |
+
+Not dated: the layout, the texts and the number patterns. An issued document keeps its own copy,
+and a draft takes them as they are now. An article's VAT rate is its kind (normal, reduced,
+accommodation, none). The percent comes from `modules/ch/rates.yaml` for the day of the supply,
+so a change in the law needs no change to any article (MWSTG Art. 115: a new rate applies to
+supplies made from its start).
+
+**What an issued document keeps.** Its lines with prices and rates, the customer (address,
+terms), the sender (name, address, UID, `payTo`), the layout and the PDF with its SHA-256. All of
+these are kept today (`Issued.customer`, `sender`, `layout`, `pdf`). Phase 1 adds `terms` (the
+due date's basis, Skonto, dunning terms), so a later change of the terms never changes the
+reminders of an earlier invoice. A reminder computes from the printed due date, and Skonto is
+recognised by the printed Skonto.
+
+**Drafts.** A line from an article copies the article's price valid on the draft's date when it
+is added, as today. If the draft's date moves, or a new price starts before the issue, the
+preview names the difference as a fact on the line: «Artikelpreis ab 01.12.2026: 29; Zeile:
+28». The line's price is the person's to keep or change. The letterhead, the IBAN and the terms
+are read on the document's date at issue.
+
+**Recurring invoices.** A template line from an article takes the price valid on each new
+invoice's date, so a new price from 1 January reaches the January invoice by itself. A line typed
+by hand keeps its price. The template shows the coming change as a fact: «ab 01.01.2027:
+Hausmischung 29 statt 28».
+
+**A change dated before issued documents.** When the new entry's days cover issued documents
+that carry another value, the card says so before it saves (4.11):
+
+- **Price.** «2 Rechnungen seit 01.08.2026 mit 28 ausgestellt; ab 01.08.2026 gilt jetzt 29».
+  They stay as issued. The ways on are «Nachbelastung als Entwurf» (one draft per customer with
+  the difference per invoice; a credit note draft when the new price is lower) or «So lassen». A
+  quote sent at the old price stays as sent, and its follow-up copies the quote's lines, with the
+  difference named on the draft.
+- **IBAN or QR-IBAN.** Open invoices keep the QR-bill they printed. Code still matches their
+  payments by reference, whichever of the firm's accounts receives them. The card names the open
+  invoices with the old account. The ways on are «Zahlungsaufforderung mit neuer IBAN» (an
+  instalment notice with a new QR-bill and the same reference, 4.4) or «So lassen».
+- **Terms or address.** Issued invoices keep theirs. The card names them, and nothing else
+  follows.
+
+The choice is an ordinary action (a draft, a sent notice, or nothing), recorded like any other.
+The entry carries no warning mark. A filed period stays as filed: a credit note or supplementary
+invoice is dated in the open period (golden rule 1).
+
+**UI and the AI.** The article's detail shows «CHF 28 ab 01.07.2026», a planned price below
+it, and «Verlauf» with the earlier prices. «Ändern» asks for the price and «gilt ab» (default:
+today). The customer's «Vorgaben» and Firma › Rechnungslayout show their values the same way. A
+wish in the sidebar («Hausmischung ab Januar 29 Franken», «Müller zahlt ab jetzt in 20 Tagen»)
+becomes `{ path, value, validFrom }`. Code writes the entry and shows the card, and the person
+keeps it. Prototype: the article «Hausmischung Espresso» (`#/invoices/articles/a1` in
+[mockups/invoicing/app.html](mockups/invoicing/app.html)).
+
 ---
 
 ## 5. Phases
@@ -462,8 +544,8 @@ Scope: F1 (QR-IBAN/QRR CHF only), F2, F3 (`activity` on lines for two net rates)
 the terms** recognised on payment, **open-items list** (Offene Posten, by customer, with age,
 printable, CSV), **the four figures** on every invoice (Betrag · erhalten · gutgeschrieben · offen,
 from what the records hold today), **the warnings of 4.11** for what this phase touches,
-**units** m², m, m³, l, kg, month, **title and subtotal lines**, and the
-`invoicing:` section in the three demos that lack it. One `invoices.json` step (2→3: `writeOffs`,
+**units** m², m, m³, l, kg, month, **title and subtotal lines**, **dated customer and firm
+values** with `Issued.terms` (4.12), and the `invoicing:` section in the three demos that lack it. One `invoices.json` step (2→3: `writeOffs`,
 line `kind`, `activity`, units) and one manifest step (Skonto, write-off accounts).
 
 Why first: it closes what is wrong or stuck today (F1 is in force from today's SIC release, F4
@@ -483,6 +565,7 @@ Acceptance (persona `invoices.md`, Sandra, and the consultant):
 | P1.7 | Treuhänderin without AI | P1.2–P1.5 done by hand, no AI asked |
 | P1.8 | The four figures | on every invoice of the demos Betrag − erhalten − gutgeschrieben = offen; a credit note and a write-off each show in «gutgeschrieben» |
 | P1.9 | Cancel a paid invoice | a warning with the payment, the rule and what follows; «Gutschrift statt Storno» offered; «Trotzdem stornieren» releases the payment, which waits unmatched; the log holds it as an ordinary entry |
+| P1.10 | New IBAN from 01.12.2026, entered on 15.11. | invoices dated before 01.12. print the old IBAN, those from 01.12. the new one; the card names the open invoices with the old IBAN; their payments are still matched by reference |
 
 ### Phase 2: quotes, partial and final invoices, retention
 
@@ -509,7 +592,7 @@ Acceptance (Sandra and the Schreinerei):
 Scope: recurring templates (draft, issue or send on their day), the lines import contract (paste
 or CSV), «Spesen weiterverrechnen» from receipts, the article list with rate and price, customer
 defaults (currency, account, discount, number, contacts), set-off of credit notes as a deduction
-line (F5), the Quittung (an invoice paid at issue). Further `invoices.json` step (`articles`,
+line (F5), the Quittung (an invoice paid at issue), the article's dated price (4.12). Further `invoices.json` step (`articles`,
 `recurring`, customer fields, `offsets`, line `source`, `paidAtIssue`).
 
 Acceptance (the consultant and the webshop):
@@ -522,6 +605,7 @@ Acceptance (the consultant and the webshop):
 | P3.4 | Wholesale invoice: coffee 2.6 % and grinders 8.1 % from the article list | both rates right on paper and in the books |
 | P3.5 | Credit note set off against the next invoice | the next invoice carries the deduction line; both documents show it |
 | P3.6 | Coiffeur: a wedding party paid in cash after the appointment | a Quittung with the next invoice number, no VAT, «bezahlt in bar», no QR-bill; on the cash basis 1000 / revenue on the issue day; nothing left open |
+| P3.7 | Hausmischung 29 from 01.01.2027, entered in November | the December invoice still at 28; the January abo invoice at 29 without a click; the same change dated 01.08.2026 names the issued invoices with 28 and offers the supplementary draft |
 
 ### Phase 4: dunning run, interest, currencies, import, delivery channels
 
@@ -599,6 +683,9 @@ The owner accepted the recommendation of each of the twelve questions of the dra
 14. **Warn, then the person decides** (4.11): every refusal of this area becomes a warning with
     «Trotzdem …», recorded like any other action, except security boundaries. The filed-quarter
     lock of golden rule 1 stays as it is until the owner rewrites that rule.
+15. **Values that change over time** (4.12): prices, terms, the letterhead and the IBAN are dated
+    histories; a document reads them on its own date and keeps what it printed; a change dated
+    before issued documents warns and offers a supplementary draft, and the person decides.
 
 ### Patterns taken from the market review (2026-11-15)
 
@@ -611,7 +698,7 @@ where this app is ahead.
 
 ## Sources
 
-- MWSTG Art. 8, 18, 23, 24, 26, 27, 37, 40, 41, 42, 70, as published (via
+- MWSTG Art. 8, 18, 23, 24, 26, 27, 37, 40, 41, 42, 70, 115, as published (via
   justement.ch, text of fedlex).
 - MWSTV Art. 45, 57, 106.
 - OR (SR 220) Art. 102, 104, 958f. GeBüV (SR 221.431) Art. 9.

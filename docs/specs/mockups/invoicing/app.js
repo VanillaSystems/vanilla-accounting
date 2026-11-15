@@ -147,7 +147,8 @@ function baseline() {
         sent: [{ date: '2026-11-06', time: '13:15', to: 'buchhaltung@bistro.example', title: 'Offerte OF-2026-004' }], log: [['2026-11-06', 'erstellt'], ['2026-11-06', 'gesendet: Offerte OF-2026-004']] },
     ],
     articles: [
-      { id: 'a1', no: 'HM-1000', text: 'Hausmischung Espresso, Bohnen 1 kg', unit: 'pcs', price: 28, rate: 2.6 },
+      { id: 'a1', no: 'HM-1000', text: 'Hausmischung Espresso, Bohnen 1 kg', unit: 'pcs', price: 28, rate: 2.6,
+        prices: [{ from: '2025-01-01', price: 26, src: 'Preisliste 2025' }, { from: '2026-07-01', price: 28, src: 'Preisliste Juli 2026' }] },
       { id: 'a2', no: 'EM-1000', text: 'Espresso-Mischung, Bohnen 1 kg', unit: 'pcs', price: 27, rate: 2.6 },
       { id: 'a3', no: 'FG-500', text: 'Filterkaffee Guji, Bohnen 500 g', unit: 'pcs', price: 16.5, rate: 2.6 },
       { id: 'a4', no: 'BS-TAG', text: 'Barista-Schulung, Gruppe bis 6 Personen', unit: 'day', price: 680, rate: 8.1 },
@@ -754,13 +755,32 @@ function customerDetail(c) {
     <div class="body"><div class="desk"><div class="rows">${rows || '<p class="m">Noch keine Dokumente.</p>'}</div></div><aside class="margin">${sec('cust', 'Kunde', '', custKv(c))}${sec('defaults', 'Vorgaben', '', kv([['Kundennummer', c.no, true], ['Währung', c.currency ?? 'CHF', true], ['Ertragskonto', c.id === 'c2' ? '3300 Ertrag Grosshandel' : 'wie Firma', true], ['Rabatt', c.discount ? `${c.discount} %` : 'keiner', true], ['Kontakte', esc((c.contacts ?? [c.email]).join(' · ')), true]]) + `<label class="nw" style="display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12.5px"><input type="checkbox" data-act="no-remind" data-id="${c.id}"${c.noReminders ? ' checked' : ''}> nie mahnen (Mahnlauf lässt den Kunden aus)</label>`, true, true)}</aside></div></div>`;
 }
 
+// An article's price is a dated history: «ab», a planned entry, «Verlauf»; «Ändern» asks «gilt ab» (docs/specs/invoicing.md 4.12).
+const priceHist = (a) => a.prices ?? [{ from: '2026-01-01', price: a.price, src: 'Artikelliste' }];
+const priceOn = (a, day) => priceHist(a).filter((e) => e.from <= day).at(-1)?.price;
+const dayBefore = (iso) => { const t = new Date(`${iso}T12:00:00Z`); t.setUTCDate(t.getUTCDate() - 1); return t.toISOString().slice(0, 10); };
+const artPrefix = (a) => a.text.split(',')[0];
+// Only lines that took the article's price then; a customer's own price (from a quote) is not the article's.
+const issuedWith = (a, from, price) => D().docs.filter((d) => d.kind === 'invoice' && d.status === 'issued' && d.date >= from).flatMap((d) => d.lines.filter((l) => l.text.startsWith(artPrefix(a)) && l.p !== price && l.p === priceOn(a, d.date)).map((l) => ({ d, l })));
+function priceSec(a) {
+  const h = priceHist(a), now = h.filter((e) => e.from <= TODAY).at(-1), planned = h.filter((e) => e.from > TODAY), earlier = h.filter((e) => e.from <= TODAY && e !== now).reverse();
+  const until = (e) => { const n = h[h.indexOf(e) + 1]; return n ? ` bis ${dmy(dayBefore(n.from))}` : ''; };
+  const ui = S.ui.ap?.id === a.id ? S.ui.ap : null;
+  const form = ui ? `<div class="lkf nw" style="margin-top:10px"><div class="lkr"><span>Neuer Preis</span><span class="inl"><input class="mono" style="width:110px" id="ap-price" value="${ui.price ?? fmt(now.price + 1)}"></span></div><div class="lkr"><span>gilt ab</span><span class="inl"><input class="mono" style="width:110px" id="ap-from" value="${ui.from ?? dmy(TODAY)}"></span></div>${ui.warn ? `<div class="lkr"><span></span><div class="warnbox" role="alert"><b>${ui.warn.hits.length} ${ui.warn.hits.length === 1 ? 'Rechnung' : 'Rechnungen'} seit ${dmy(ui.warn.from)} mit dem alten Preis ausgestellt; ab ${dmy(ui.warn.from)} gilt jetzt ${fmt(ui.warn.price)}.</b><span>${ui.warn.hits.map(({ d, l }) => `${d.number} vom ${dmy(d.date)}: ${l.q} × ${fmt(l.p)}`).join(' · ')}</span><span>Regel: eine ausgestellte Rechnung bleibt, wie sie ausgestellt ist (OR Art. 958f); neue Zeilen nehmen den neuen Preis.</span><span>Was folgt: die Rechnungen bleiben; die Differenz von CHF ${fmt(ui.warn.diff)} verrechnest du nur, wenn du willst.</span><span class="acts"><button type="button" class="btn ghost" data-act="ap-back">Zurück</button><button type="button" class="btn ghost" data-act="ap-leave">So lassen</button><button type="button" class="btn primary" data-act="ap-draft">${ui.warn.diff > 0 ? 'Nachbelastung' : 'Gutschrift'} als Entwurf</button></span></div></div>` : `<div class="lkr"><span></span><span class="acts"><button type="button" class="btn ghost" data-act="ap-cancel">Abbrechen</button><button type="button" class="btn primary" data-act="ap-save">Behalten</button></span></div>`}</div>` : '';
+  return `<p><span class="mono">CHF ${fmt(now.price)}</span> <span class="m">ab ${dmy(now.from)}</span>${ui ? '' : ' <button type="button" class="btn ghost" data-act="ap-change" data-id="' + a.id + '">Ändern</button>'}</p>`
+    + planned.map((e) => `<p class="m">ab ${dmy(e.from)}: CHF ${fmt(e.price)}, geplant</p>`).join('')
+    + (earlier.length ? `<p class="m">Verlauf: ${earlier.map((e) => `${fmt(e.price)} vom ${dmy(e.from)}${until(e)} · ${esc(e.src)}`).join('; ')}</p>` : '')
+    + (S.ui.apNote?.id === a.id ? `<p class="m">${esc(S.ui.apNote.text)}</p>` : '') + form;
+}
+
 function articleDetail(a) {
   const used = D().docs.filter((d) => d.lines.some((l) => l.text.startsWith(a.text.split(',')[0])));
-  return `<div class="detail-in"><div class="head"><h2 class="who">${esc(a.text)}<small>${esc(a.no)}</small></h2><div class="amount"><small>CHF</small>${fmt(a.price)}</div></div>
-    <div class="facts"><span>pro ${UNITS[a.unit]}</span>${F().vat ? `<span>MWST ${a.rate} %</span>` : ''}<span>Konto ${a.rate === 8.1 ? '3600' : F().revenue[0][0]}</span></div>
+  const now = priceHist(a).filter((e) => e.from <= TODAY).at(-1);
+  return `<div class="detail-in"><div class="head"><h2 class="who">${esc(a.text)}<small>${esc(a.no)}</small></h2><div class="amount"><small>CHF</small>${fmt(now.price)}</div></div>
+    <div class="facts"><span>pro ${UNITS[a.unit]}</span><span class="nw">ab ${dmy(now.from)}</span>${F().vat ? `<span>MWST ${a.rate} %</span>` : ''}<span>Konto ${a.rate === 8.1 ? '3600' : F().revenue[0][0]}</span></div>
     <div class="ivacts"><button type="button" class="btn ghost" data-act="noop">Bearbeiten</button></div>
     <div class="body"><div class="desk"><div class="rows">${used.map((d) => `<div class="row inv st-${stateOf(d)}" data-href="${hrefOf(d)}"><span class="d mono">${d.number ?? 'Entwurf'}</span><span class="t">${esc(cust(d.cu).name)} <small>${esc(d.subject ?? '')}</small></span><span class="a mono">${fmt(gross(d))}</span></div>`).join('') || '<p class="m">Noch auf keiner Rechnung.</p>'}</div></div>
-    <aside class="margin">${sec('art', 'Artikel', '', kv([['Nummer', a.no, true], ['Text', esc(a.text), true], ['Einheit', UNITS[a.unit], true], ['Preis', `CHF ${fmt(a.price)}${F().vat ? ' exkl. MWST' : ''}`, true], ...(F().vat ? [['MWST-Satz', `${a.rate} %`, true]] : [])]) + '<p class="m ivhint nw">Preis und Satz, kein Lagerbestand. Eine Rechnung kopiert die Werte; eine spätere Preisänderung gilt für neue Zeilen.</p>', true, true)}</aside></div></div>`;
+    <aside class="margin">${sec('price', 'Preis', `ab ${dmy(now.from)}`, priceSec(a), true, true)}${sec('art', 'Artikel', '', kv([['Nummer', a.no, true], ['Text', esc(a.text), true], ['Einheit', UNITS[a.unit], true], ['Preis', `CHF ${fmt(now.price)}${F().vat ? ' exkl. MWST' : ''}`, true], ...(F().vat ? [['MWST-Satz', `${a.rate} %`, true]] : [])]) + '<p class="m ivhint nw">Preis und Satz, kein Lagerbestand. Eine Rechnung nimmt den Preis, der an ihrem Datum gilt, und behält ihn; eine spätere Preisänderung gilt für neue Zeilen.</p>', true, true)}</aside></div></div>`;
 }
 
 function recurringDetail(t) {
@@ -947,6 +967,12 @@ function fit() {
 // ---------------------------------------------------------------- actions
 const toastEl = () => $('.toast');
 let toastTimer;
+function keepPrice(a, from, price, note) {
+  a.prices = [...priceHist(a), { from, price, src: `eingegeben am ${dmy(TODAY)}` }].sort((x, y) => x.from.localeCompare(y.from));
+  a.price = priceOn(a, TODAY);
+  S.ui.ap = null; S.ui.apNote = { id: a.id, text: note };
+  render();
+}
 function toast(msg) { const t = toastEl(); t.innerHTML = `<span>${esc(msg)}</span>`; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 3200); }
 const current = () => { const r = route(); return r.view === 'list' || r.view === 'quotes' ? byRoute(r.id) : null; };
 
@@ -1133,6 +1159,23 @@ document.addEventListener('click', (e) => {
     case 'oi-csv': toast('CSV: Kunde; Nr.; Datum; Fällig; Tage; Offen; Währung'); break;
     case 'pdf': toast('Im Prototyp gibt es kein PDF; die App lädt das abgelegte PDF.'); break;
     case 'set-interest': case 'set-skonto': case 'eur-qr': break;
+    case 'ap-change': S.ui.ap = { id: b.dataset.id }; S.ui.apNote = null; render(); break;
+    case 'ap-cancel': case 'ap-back': S.ui.ap = act === 'ap-back' ? { ...S.ui.ap, warn: null } : null; render(); break;
+    case 'ap-save': {
+      const a = D().articles.find((x) => x.id === S.ui.ap.id), pv = $('#ap-price').value.trim(), fv = $('#ap-from').value.trim();
+      const m = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(fv), price = Number(pv.replace(/'/g, ''));
+      if (!m || !(price > 0)) { toast('«gilt ab» als TT.MM.JJJJ und ein Preis'); break; }
+      const from = `${m[3]}-${m[2]}-${m[1]}`, hits = issuedWith(a, from, price);
+      S.ui.ap = { ...S.ui.ap, price: pv, from: fv };
+      if (hits.length) { S.ui.ap.warn = { from, price, hits, diff: hits.reduce((t, { l }) => t + (price - l.p) * l.q, 0) }; render(); break; }
+      keepPrice(a, from, price, from > TODAY ? `Gilt ab ${dmy(from)}; bis dann bleibt der alte Preis.` : `Gilt ab ${dmy(from)}; neue Zeilen nehmen ihn.`); break;
+    }
+    case 'ap-leave': case 'ap-draft': {
+      const a = D().articles.find((x) => x.id === S.ui.ap.id), w = S.ui.ap.warn;
+      keepPrice(a, w.from, w.price, act === 'ap-leave' ? `Gilt ab ${dmy(w.from)}. ${w.hits.map((x) => x.d.number).join(', ')} bleiben wie ausgestellt.` : `Gilt ab ${dmy(w.from)}. ${w.diff > 0 ? 'Nachbelastung' : 'Gutschrift'} über CHF ${fmt(Math.abs(w.diff))} als Entwurf angelegt; ${w.hits.map((x) => x.d.number).join(', ')} bleiben wie ausgestellt.`);
+      if (act === 'ap-draft') toast(`Entwurf: ${w.diff > 0 ? 'Nachbelastung' : 'Gutschrift'} CHF ${fmt(Math.abs(w.diff))}`);
+      break;
+    }
     case 'eur-qr-keep': S.settings.eurQr = 'kept'; toast('QR-IBAN für EUR gespeichert'); render(); break;
     case 'eur-qr-drop': S.settings.eurQr = ''; render(); break;
     default: if (act.startsWith('noop')) toast('Wie heute in der App; im Prototyp nicht nachgebaut.');
