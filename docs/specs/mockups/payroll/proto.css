@@ -70,3 +70,42 @@ table.pr-t a { color: var(--accent); text-decoration: none; }
 .pr-note { margin: 8px 0 0; padding: 10px 12px; border-radius: 10px; background: var(--hover); font-size: 12.5px; color: var(--ink-2); line-height: 1.5; max-width: 760px; }
 .pr-note b { color: var(--ink); }
 .pr-hide { display: none !important; }
+.pr-tools { display: flex; align-items: center; gap: 12px; margin: 0 0 8px; font-size: 12px; color: var(--muted); max-width: 760px; }
+.pr-tools > span { font-family: "Geist Mono", monospace; white-space: nowrap; }
+.pr-scroll { overflow-x: auto; max-width: 100%; }
+.desk { min-width: 0; }
+.pr-agr { display: block; color: var(--muted); font-size: 11px; }
+table.pr-run td, table.pr-run th { padding-left: 6px; padding-right: 6px; }
+table.pr-run td:first-child { padding-left: 0; }
+table.pr-run.pr-withag { table-layout: fixed; }
+table.pr-run.pr-withag th:nth-child(2) { width: 72px; } table.pr-run.pr-withag th:nth-child(3) { width: 74px; } table.pr-run.pr-withag th:nth-child(4) { width: 80px; } table.pr-run.pr-withag th:nth-child(5) { width: 70px; }
+table.pr-run td.pr-r { white-space: nowrap; }
+table.pr-run th { white-space: nowrap; overflow: hidden; }
+table.pr-run td { overflow-wrap: anywhere; }
+table.pr-run .pr-src { font-size: 11.5px; }
+.pr-seg { margin-left: auto; display: flex; gap: 2px; background: var(--hover); border-radius: 8px; padding: 2px; }
+.pr-seg button { font: inherit; font-size: 12px; padding: 3px 10px; border: 0; border-radius: 6px; background: none; color: var(--muted); cursor: pointer; }
+.pr-seg button.on { background: var(--bg); color: var(--ink); box-shadow: var(--shadow); }
+table.pr-run .pr-ag, table.pr-run tr.pr-agonly { display: none; }
+table.pr-run.pr-withag .pr-ag { display: table-cell; }
+table.pr-run.pr-withag tr.pr-agonly { display: table-row; }
+table.pr-run th.pr-ag, table.pr-run td.pr-ag { background: var(--hover); }
+table.pr-t tr.pr-miss td { color: var(--neg); }
+table.pr-t tr.pr-miss .pr-src { color: var(--neg); }
+.pr-tag { display: inline-block; white-space: nowrap; margin-left: 8px; font-size: 10.5px; color: var(--neg); border: 1px solid color-mix(in srgb, var(--neg) 45%, transparent); border-radius: 5px; padding: 0 5px; vertical-align: 1px; }
+.pr-fill { height: 22px; font-size: 11px; padding: 0 6px; }
+table.pr-t tr.pr-add td { border-bottom: 0; padding-top: 2px; }
+table.pr-t tr.pr-add .btn { height: 24px; font-size: 12px; color: var(--muted); }
+.pr-state.pr-bad { background: color-mix(in srgb, var(--neg) 12%, transparent); color: var(--neg); }
+.pr-checks li.warn { color: var(--neg); }
+.pr-checks li.warn::before { content: "!"; color: var(--neg); font-weight: 700; }
+.pr-preview { margin-top: 18px; }
+.pr-card > header small.plain { color: var(--muted); background: var(--hover); }
+.pr-warn { margin: 12px 0 4px; max-width: 760px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); background: var(--warn-soft); border-radius: 12px; padding: 12px 16px; font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+.pr-warn h3 { margin: 0 0 6px; font: 600 14px "Hanken Grotesk", sans-serif; color: var(--ink); }
+.pr-warn ul { margin: 6px 0; padding-left: 18px; }
+.pr-warn p { margin: 4px 0; }
+.pr-warn .m { color: var(--muted); font-size: 12px; }
+.pr-warn .acts { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.pr-hist { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.pr-hist .mono { font-family: "Geist Mono", monospace; color: var(--muted); margin-right: 6px; }

@@ -1,6 +1,7 @@
 # Spec: payroll (Lohnbuchhaltung)
 
-Status: decided by the owner, 2026-11-14 (§13). No code yet. A clickable prototype of B0 is in
+Status: decided by the owner, 2026-11-14 (§13); patterns from the market review and the rule
+«warn, then the person decides» added 2026-11-15 (§14, §15). No code yet. A clickable prototype of B0 is in
 [mockups/payroll/](mockups/payroll/index.html). Builds on
 [ADR 0011](../adr/0011-payroll.md) (payroll: book what others calculate, a narrow helper for the
 owner's salary) and is judged by [MISSION.md](../../MISSION.md) and
@@ -514,7 +515,8 @@ until a firm asks (§13, decision 3).
 - *Employee:* receives the payslip PDF by mail from the firm's mailbox (the invoicing mail path),
   in their language.
 - *Auditor:* every payslip figure traces to a rate with its source and to the run that produced it.
-  A released run is never changed.
+  A released run changes only by «Wieder öffnen», and the run's history keeps each release and
+  each reopening with its date and who did it.
 
 ### 6.3 What code, the AI and the person decide
 
@@ -523,10 +525,10 @@ until a firm asks (§13, decision 3).
 | Federal rates, thresholds, ceilings, age rules, pro rata, cumulative ALV ceiling, BVG entry by annual wage, rounding | ✓ (from `modules/ch/payroll/<year>.yaml`) | – | overrides with a reason (kept on the run) |
 | Fund and insurer rates (admin cost, FAK, BVG plan, UVG/NBU/KTG) | checks plausibility (range per kind in the module) | reads the certificate or policy the person drops and **proposes** the figures with the document | confirms them on a card: nothing is used before she keeps it |
 | Master data (entry date, pensum, wage, 13th, holiday weeks) | validates (minimum wage warning where the canton's or GAV's minimum is known as data) | reads an employment contract and proposes | enters or confirms |
-| Quellensteuer tariff code | looks up the amount in the tariff file | – | enters the code from the employee's declaration. Code refuses a run without it for a person marked `taxAtSource` |
+| Quellensteuer tariff code | looks up the amount in the tariff file | – | enters the code from the employee's declaration. Without it, the run shows the Quellensteuer line «unvollständig» and «Freigeben» warns that no tax is withheld and that the employer is liable for it (DBG Art. 88); she may release anyway (§15) |
 | Family allowance claim | adds it to the payslip once confirmed | – | enters what the fund confirmed |
-| Each run | computes it, makes the payslip and the entries, matches the payment | explains a figure when asked («wieso isch de Lohn tüüfer?») | releases it (`Freigeben`), and only then is anything booked |
-| Corrections | a correction run in the next open month, never a change of a released run | – | asks for it |
+| Each run | computes it, makes the payslip and the entries, matches the payment | explains a figure when asked («wieso isch de Lohn tüüfer?») | sees the bookings the run will make, then releases it (`Freigeben`); only then is anything booked |
+| Corrections | in an open period: reopens the run, takes back its entries and books it again on the next release; in a closed period: a correction run in the next open month | – | reopens the run (`Wieder öffnen`) after a plain warning, or asks for a correction run |
 | GAV rules (minimum by age or class, Parifonds deduction, 13th mandatory) | executes them as data | drafts them into `knowledge/rules/payroll.guide.yaml` from the GAV text with the person | keeps them |
 
 «Possible without the AI»: every AI row has a form. B0 and B1 work entirely without an AI.
@@ -539,7 +541,7 @@ until a firm asks (§13, decision 3).
 | `modules/ch/payroll.yaml`: the kinds (AHV/IV/EO, ALV, BVG, UVG-BU, UVG-NBU, KTG, FAK, QST), who pays what by law, which wage each applies to, the Lohnausweis field each feeds, payslip labels de/fr/it/en | GAV rules of one branch (painters, joiners): `knowledge/rules/payroll.guide.yaml`, written by the AI with the person |
 | `modules/ch/payroll/<year>.yaml`: federal figures with sources | A cantonal FAK amount above the federal minimum (the canton's figure, kept by the firm with its fund's letter) |
 | The fetch of tariff files and the tariff lookup (a documented public format) | Which canton's tariff, and the employees' codes |
-| Invariants: a released run is immutable, closed periods, the write door (`update(books, moduleActor('payroll'), …)`), seals | The fund's or insurer's portal and its upload format (a source the AI writes, ADR 0014) |
+| Invariants: a released run changes only through «Wieder öffnen» (its history kept), closed periods, the write door (`update(books, moduleActor('payroll'), …)`), seals | The fund's or insurer's portal and its upload format (a source the AI writes, ADR 0014) |
 | Payslip and Lohnausweis PDF layout (one base layout, like src/invoices/pdf.ts) | The firm's letterhead (the invoice layout's logo reused) |
 | The base errors: missing rate, missing tariff code, a wage under a known minimum, the BVG threshold crossed mid-year, the ALV ceiling reached | – |
 
@@ -550,13 +552,34 @@ keyed by canton, as data.
 ### 6.5 A run
 
 1. **Draft** (code): for the month, per active employee: the last run's figures with this month's
-   changes. A run's lines: gross parts (wage, hours × rate, holiday surcharge, 13th share, bonus),
-   allowances, deductions per kind (rate × the base that kind applies to, with ceilings
-   cumulated over the year), expenses, net. Employer contributions per kind. Every line carries
-   `{ kind, base, rate, source }`.
-2. **Check** (code): the base errors above. Each is a task in the run's detail, said plainly.
-3. **Release** (person): `Freigeben`. The run becomes immutable (like an issued invoice,
-   src/invoices/events.ts). At release:
+   changes. Every line carries `{ kind, base, rate, source }` and shows **base × rate = amount**
+   (a monthly wage: 1 month × the monthly wage; AHV/IV/EO: the AHV wage × the federal rate; a
+   fixed BVG contribution: «fest», with the certificate as its source). A switch beside the table shows the
+   employer's share of each kind next to the employee's (rate and amount), and the kinds only the
+   employer pays (FAK, administration cost). Off by default: the payslip is the employee's view.
+   The lines come in groups named by their effect:
+   - **«Zählt zum Bruttolohn (AHV-pflichtig)»**: wage, hours × rate, holiday surcharge, 13th share,
+     bonus, and wage in kind (the private share of a company car, Lohnausweis field 2.2);
+   - **deductions** per kind (rate × the base that kind applies to, with ceilings cumulated over
+     the year), allowances;
+   - **«Ausserhalb des Bruttolohns»**: expenses, an advance and its repayment, a wage garnishment
+     (Lohnpfändung) paid to the debt collection office. None of them is in the AHV wage; each
+     books on its own account (§6.5 step 4 lists them).
+   Then the net, and the employer's contributions per kind.
+2. **Check** (code): the base errors above. A missing input is **its own line**, in red, marked
+   «unvollständig», saying what is missing («Kaufpreis fehlt»), with a field to enter it in place.
+   Code computes no amount for it, never a guessed one. It is a warning, not a block: the run can
+   be released with it (step 3). The other checks are listed beside the run as facts.
+3. **Preview** (code): the draft shows, below the lines, every entry the release will book (debit,
+   credit, text, amount, the payday and the ref), and the later payment D 2290 / C bank. Nothing is
+   booked yet. The preview is the same function that books (one source), so what it shows is what
+   the release writes.
+4. **Release** (person): `Freigeben`. With a line «unvollständig», the click first says what is
+   off, which rule it touches and what follows («Privatanteil Geschäftsfahrzeug hat keinen
+   Kaufpreis. Regel: der Privatanteil zählt zum AHV-pflichtigen Lohn und gehört in Ziffer 2.2.
+   Gibst du trotzdem frei, sind AHV, ALV und Ziffer 2.2 um ihn zu tief; der Nettolohn bleibt
+   wie berechnet»), then «Trotzdem freigeben» or «Zurück zum Entwurf». The release is recorded like any
+   other (who, when); there is no override flag on the run. At release:
    - the payslip PDF per employee goes into `transactional-data/<year>/receipts/` as a receipt of
      kind `payslip`, linked to the run (so level A's code reads it the same way, and `fundShare`
      can take its deductions from the run directly instead of from text);
@@ -564,24 +587,42 @@ keyed by canton, as data.
      D 5000 / C 2290 «Lohnverbindlichkeiten» (net, a new account; §13, decision 12), D 5000 / C 2270
      (social deductions), D 5000 / C 2279 (QST), D 2270 / C 2290 (allowances paid through), D
      57xx / C 2270 (the employer's contributions accrued per kind, so 2270 holds the whole debt
-     to each fund). Stamped `by: { kind: 'code', check: 'payroll' }`, `run: <runId>`;
+     to each fund). Outside the gross: expenses D 5820/5830 / C 2290, an advance D 1xxx
+     (receivable from the employee) / C 2290 and its repayment the reverse, a garnishment D 2290 /
+     C 2xxx (the debt collection office, paid from there). Stamped `by: { kind: 'code', check:
+     'payroll' }`, `run: <runId>`;
    - the bank payment of the net is later matched by code (amount + employee name/IBAN) and books
      D 2290 / C bank.
-4. **Funds:** the Akonto and final bills are paid against 2270 only, since the expense was
+5. **Funds:** the Akonto and final bills are paid against 2270 only, since the expense was
    accrued in the run. The fund reconciliation per kind: accrued by runs − paid = open, shown on
    the Löhne area per fund. The final statement's difference is booked by code once its bill is
    linked: D/C 57xx against 2270 (the difference between the Akonto basis and the real wage
    sum).
-5. **Correction:** a released run with a mistake gets a correction run in the next open month
-   (lines «Korrektur Juli», with `corrects: <runId>`). Never an edit, and never in a closed
-   period (golden rule 1 applies by analogy: payroll carries no VAT, but the books are sealed
-   per quarter).
+6. **Reopen** (person): a released run in an open period has «Wieder öffnen». The click first
+   says plainly what follows, then «Wieder öffnen» or «Abbrechen»:
+   - the run's entries (its ref) are taken back, and the next release books them again;
+   - the payslip stays in Belege; the new release's payslip replaces it, and a payslip already
+     sent stays in the sending log;
+   - a payment already made stays matched to the run. If the new net differs, the difference is
+     an open amount on 2290, shown as a fact on the run and on the payment, never a reminder;
+   - the funds on 2270 count with the new run.
+   The reopening is recorded in the run's history like any other action (who, when). No override
+   flag, no «despite the warning» mark. Taking the entries back goes through the write door as
+   the person, so a person's own change of a run entry stays (it is hers).
+7. **Correction in a closed period:** a run whose payday lies on or before `closedThrough` has no
+   «Wieder öffnen». It gets a correction run in the next open month (lines «Korrektur Juli», with
+   `corrects: <runId>`). This follows AGENTS.md golden rule 1 and the period lock as they stand:
+   payroll carries no VAT, but the books are sealed per quarter. The owner's rule «warn, then the
+   person decides» (§15) would let a person reopen such a run after a warning
+   («Der Lauf liegt im eingereichten Quartal Q1 2026. Wieder öffnen ändert Buchungen, die versiegelt
+   und der ESTV gemeldet sind …»); the app keeps the hard lock until the owner rewrites golden rule 1.
 
 Accruing the employer's share in the run (step 3) differs from level A, where it is expensed at
 payment. Both are correct. The run's way gives monthly expense and a 2270 that matches the funds.
-A firm switching from A to B mid-year must not book the share twice: code refuses a contribution
-payment's employer line on 57xx for a period whose runs accrued it, and books it against 2270
-instead.
+A firm switching from A to B mid-year must not book the share twice: code books a contribution
+payment's employer line against 2270 for a period whose runs accrued it, never on 57xx. A person
+who books it on 57xx by hand is warned that the share is then expensed twice (rule: one expense
+per contribution, §13 decision 9) and may keep it (§15).
 
 ### 6.6 Year end (B1)
 
@@ -597,8 +638,9 @@ instead.
 
 - The employee gets `taxAtSource: { canton, code, church, since }`. The run looks up the tariff in
   `data/qst/<year>/<canton>.txt` (fetched by `npm run fetch-qst -- <canton> <year>`, checksummed,
-  with the ESTV's source date). Without the file, the run waits and says «Tarif <canton> <year>
-  fehlt». It never guesses.
+  with the ESTV's source date). Without the file, the Quellensteuer line is «unvollständig»: «Tarif
+  <canton> <year> fehlt». Code never guesses an amount. Releasing anyway follows §6.5 step 4: the
+  warning says that no tax is withheld and that the employer is liable for it.
 - The monthly or annual model per canton (data). Annualisation for irregular pay (QStV).
 - Settlement list per canton and period (the canton's form fields), the Bezugsprovision booked
   C 2279 → C <provision account> on settlement.
@@ -657,7 +699,8 @@ interface PayrollStore {
     taxAtSource?: { canton: string; code: string; church: boolean; since: string };  // B2
   }>;
 }
-// Per year: transactional-data/<year>/payroll/runs.jsonl — one released run per line, immutable:
+// Per year: transactional-data/<year>/payroll/runs.jsonl — append-only: one line per release, and a line
+// { id, reopenedAt, reopenedBy } per reopening; the last release of an id is the run, the earlier ones its history:
 interface PayrollRun { id: string; period: 'YYYY-MM'; payday: string; releasedAt: string; releasedBy: 'person';
   corrects?: string; slips: Array<{ employee: string; lines: Array<{ kind: string; label: string;
   base?: number; rate?: number; amount: number; party: 'employee'|'employer'|'paid'; source: string }>;
@@ -709,6 +752,11 @@ It is not acceptable once a bookkeeper or an employee who scans receipts has acc
 
 ## 9. UI
 
+- **The run's detail** (prototype: [2-lauf.html](mockups/payroll/2-lauf.html)): the lines as base ×
+  rate = amount in the two groups, the switch «Arbeitnehmer | + Arbeitgeber», a line
+  «unvollständig» in red (`var(--neg)`) with its field, the preview «Bucht beim Freigeben», the
+  warning above the table when «Freigeben» or «Wieder öffnen» is clicked (a panel in the page,
+  not a modal dialog), and the run's history («Verlauf») in the margin.
 - **New area «Löhne»** (src/app/areas/payroll/, registered in src/app/areas/index.ts; list + detail
   per the shell, docs/redesign/architecture.md). The list holds the runs per month in the period
   (draft, released, correction). The detail shows the run's payslips, each line with its source
@@ -765,9 +813,14 @@ It is not acceptable once a bookkeeper or an employee who scans receipts has acc
   - VAV helper of an Einzelfirma;
   - B2: one tariff code per canton file version, checked against the ESTV file.
 - **Property tests:** net = gross − deductions + allowances + expenses; Σ runs = Lohnausweis
-  field 8; 2270 = accrued − paid per kind; a released run never changes (books-store write door).
+  field 8; 2270 = accrued − paid per kind; a released run changes only through a reopening, which
+  takes back exactly its own entries (books-store write door) and appends to its history; the preview
+  of a draft equals the entries its release books.
 - **Period lock:** a row in tests/period-lock.test.ts for every new route that writes
-  (`POST /api/payroll/runs/:id/release`, corrections). A run dated in a closed period is refused.
+  (`POST /api/payroll/runs/:id/release`, `…/reopen`, corrections). A run dated in a closed period is
+  refused (golden rule 1 as it stands, §6.5 step 7).
+- **Warnings, not blocks:** a run with a line «unvollständig» is released after the warning, with
+  the line left out of every figure; the release carries no flag (tests assert the absence).
 - **Level A tests:** payslip kind recognition (de/fr/it texts; a Treuhänder's invoice naming «Lohn»
   is **not** a payslip), `readPayslip` sums, A3 booking without an AI, the late-payslip rebook,
   A6 import idempotence, A8 masking (no `756.` pattern in any captured prompt).
@@ -810,7 +863,7 @@ second, and staff (B1) third.
 
 | Phase | Content | Rough effort | Acceptance (scored) |
 |---|---|---|---|
-| **B0** | ADR 0011 step 2: the owner is the only employee of a GmbH or AG. Wage from the fund's certificates, monthly run, payslip PDF, run → entries → payment match, 2270 reconciled per fund, year totals for the Lohnausweis. `payroll.json`, `modules/ch/payroll{,/2026}.yaml`, the Löhne area, Firma › Löhne. From A-1 it takes only what B0 needs: the document kind `payslip` (A1, so a run's payslip is never an own invoice or a bill) and booking the gross wage by code, without an AI (A3 for the run's own payslip). Books schema 10. Before the year-end step: check whether eLohnausweis SSK imports a file (decision 8) | 4–6 weeks | consulting walk (owner-employee): salary set up in < 5 min from the fund's certificate (AI proposes, he keeps). July run figures = golden case 1 to the Rappen. The bank's net matched by code. 2270 per fund = 0 after the Q3 bills. Year totals = Σ runs, field by field. Without an AI the same by forms. Prototype: [mockups/payroll/](mockups/payroll/index.html) |
+| **B0** | ADR 0011 step 2: the owner is the only employee of a GmbH or AG. Wage from the fund's certificates, monthly run, payslip PDF, run → entries → payment match, 2270 reconciled per fund, year totals for the Lohnausweis. `payroll.json`, `modules/ch/payroll{,/2026}.yaml`, the Löhne area, Firma › Löhne. From A-1 it takes only what B0 needs: the document kind `payslip` (A1, so a run's payslip is never an own invoice or a bill) and booking the gross wage by code, without an AI (A3 for the run's own payslip). Books schema 10. Before the year-end step: check whether eLohnausweis SSK imports a file (decision 8) | 4–6 weeks | consulting walk (owner-employee): salary set up in < 5 min from the fund's certificate (AI proposes, he keeps). July run figures = golden case 1 to the Rappen. The bank's net matched by code. 2270 per fund = 0 after the Q3 bills. Year totals = Σ runs, field by field. A run with a line «unvollständig» is released after the warning; a released run of an open quarter is reopened and released again, and its entries are the same refs once. Without an AI the same by forms. Prototype: [mockups/payroll/](mockups/payroll/index.html) |
 | **A-2** | Payslips a Treuhänder or a program issues: the rest of A-1 (A2 `readPayslip` for external payslips, A3 for them, A9: #383, #359), A4 Quellensteuer on 2279, A5 `collects:` for pension, accident and sickness clearing, A8 masking | 3–4 weeks | §5.4 checks 1–3 pass with the AI **off**. Webshop walk: the pension fund's payment clears exactly the BVG share once its file is kept. A payslip with QST books 2279. No `756.` in any prompt (test). withheld-*.test.ts stay green |
 | **B1** | staff, hourly, 13th, entry/exit, thresholds, allowances, VAV, Lohnausweis PDF, payslip mail. Starts only after B0 has shipped and a persona round has scored it; ADR 0011 is amended then (decision 3) | 6–10 weeks | webshop walk: Jana's hourly run with surcharge, no BVG with the reason shown. Huber walk: «mach d Lohnabrechnig für Marco» opens the run and books it after release. Golden payroll set green. Lohnausweis field 8 = Σ runs |
 | **A-3** | A7 year-close checks for external payslips and the Lohnausweis data CSV for them; A6 payroll journal import (contract + test reference) | 2–3 weeks | §5.4 checks 4–5. Year close of demo-consulting shows 0 differences, and a broken payslip shows its CHF 10 |
@@ -860,7 +913,8 @@ decided.
    uses the compensation fund's portal for the annual wage declaration and eLohnausweis SSK for
    Form 11. Whether SSK imports a file is verified before B0's year-end step is built.
 9. **The employer's contributions are accrued in each run** (B: monthly expense, 2270 matches the
-   funds). Level A stays as it is. Code refuses double expensing when a firm switches mid-year.
+   funds). Level A stays as it is. Code never expenses a share twice when a firm switches
+   mid-year (since 2026-11-15: a person's own booking on 57xx is warned, not refused, §15).
 10. **Family allowances paid through the wage: D 2270**, with a precedent in booking.guide.yaml.
     A firm rule can override.
 11. **No payment file (pain.001) in payroll.** If the invoicing or payments spec builds a pain.001
@@ -873,6 +927,49 @@ decided.
     the run's detail and in the payslip's footer in small print, never as a dialog.
 
 ---
+
+## 14. Patterns taken from the market review (2026-11-15)
+
+A review of a Swiss market leader's payroll module found five patterns that the owner approved for
+this spec and its prototype on 2026-11-15. Patterns only: no names, screens or wording copied.
+
+1. **Base × rate = amount on every line** (§6.5 step 1), with a switch to show the employer's share
+   beside the employee's. The auditor and the employee see where each franc comes from.
+2. **A missing input is its own line**, red, «unvollständig» (§6.5 step 2). A warning, not a
+   block: the run can be released after it (§6.5 step 4).
+3. **Extras in two groups named by their effect**: «Zählt zum Bruttolohn (AHV-pflichtig)» and
+   «Ausserhalb des Bruttolohns» (expenses, advance, garnishment). The group says what the line
+   does to AHV and the Lohnausweis; the person need not know the kind's code.
+4. **The bookings before the release** (§6.5 step 3): a preview of every entry, not only the
+   journal after.
+5. **«Wieder öffnen» for a released run** (§6.5 step 6) with a plain warning of what follows.
+   This replaces «a released run is never changed» for open periods. Closed periods keep the
+   correction run (step 7).
+
+What the app keeps from its own design where that product leans on manual status: the run's state,
+the payment match and the funds' balances on 2270 are set by code from the books and the bank
+statement (§6.5 steps 4 and 5), never by a person ticking «bezahlt».
+
+## 15. Warn, then the person decides (owner, 2026-11-15)
+
+Wherever this spec would stop a person, the app says what is off, which rule it touches and what
+follows, and offers «Trotzdem …». The action is recorded like any other (who, when, in the run's
+history or the journal); there is no override flag and no «despite the warning» mark. In this spec:
+
+| Where | Was | Now |
+|---|---|---|
+| A line without its input (rate, base, tariff code, Quellensteuer tariff file) | the run waits | the line is «unvollständig», «Trotzdem freigeben» after the warning (§6.5 steps 2 and 4) |
+| A released run with a mistake | correction run only | «Wieder öffnen» in an open period (§6.5 step 6) |
+| A contribution's employer share booked by hand on 57xx after runs accrued it | code refuses | warning of double expense, the person may keep it (§6.5) |
+| A wage under a known minimum (canton, GAV) | warning | unchanged: a warning |
+
+Not covered, by the owner's exception for security boundaries and by golden rule 1:
+
+- **Security boundaries stay hard:** no AHV number to any model, payslips only to the employee's
+  own address, a released run's history never rewritten (§8).
+- **Filed VAT quarters and the period lock:** the app's hard lock (AGENTS.md golden rule 1,
+  `closedThrough`, seals) stays until the owner rewrites that rule. The spec only describes the
+  warning such a reopening would show (§6.5 step 7); it is not built.
 
 ## Sources
 
