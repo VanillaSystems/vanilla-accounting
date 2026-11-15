@@ -98,3 +98,99 @@ html.mark-new .seg.gb button.nw, html.mark-new .seg2 button.nw { outline-offset:
 .edo { position: absolute; right: -16mm; top: 1.2mm; height: 4.5mm; padding: 0 1.4mm; font-size: 7pt; line-height: 4.5mm; color: #6e7685; border: .25mm solid #d3d8e1; border-radius: 2.25mm; background: #fff; }
 .edo[aria-pressed="true"] { color: #0067b1; border-color: #0067b1; }
 .idlg .ibody .warnbox { margin-bottom: 10px; }
+
+/* The overview table (owner, 2026-11-15): Rechnungen and Offerten · Aufträge, one component.
+   A: the table full width, the detail a panel over its right part. B: fewer columns, the detail beside it. */
+main[data-layout="A"] { grid-template-columns: minmax(0, 1fr); position: relative; }
+main[data-layout="A"] > .list { border-right: 0; padding-right: 40px; }
+/* With the panel over the right part, «Neue Rechnung» sits beside the title, where the panel leaves it free. */
+main[data-layout="A"] .lhead h1:has(.addbtn) { padding-right: 0; }
+main[data-layout="A"] .lhead .addbtn { position: static; transform: none; margin-left: 10px; align-self: center; }
+main[data-layout="B"] { --list: max(min(700px, 52%), 46%); }
+main[data-layout="B"] > .list { padding-left: 40px; padding-right: 24px; }
+.ivpanel { position: absolute; top: 0; right: 0; bottom: 0; width: min(920px, calc(100% - 540px)); z-index: 5; background: var(--bg); border-left: 1px solid var(--line); box-shadow: var(--shadow); padding: 28px 36px 140px; }
+.ivpanel.slide { animation: ivslide .2s ease; }
+@keyframes ivslide { from { transform: translateX(48px); opacity: 0; } to { transform: none; opacity: 1; } }
+.ivpanel .ivclose { position: sticky; top: 0; float: right; margin: -10px -16px 0 12px; width: 32px; height: 32px; border-radius: 9px; font-size: 20px; line-height: 1; color: var(--muted); background: var(--bg); z-index: 2; }
+.ivpanel .ivclose:hover { color: var(--ink); background: var(--hover); }
+
+.ivtabs { display: flex; flex-wrap: wrap; gap: 4px; margin: -8px 0 12px; }
+.ivtabs button { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 10px; border-radius: 8px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.ivtabs button:hover { background: var(--hover); color: var(--ink); }
+.ivtabs button.on { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.ivtabs .n { font: 500 12px "Geist Mono", monospace; }
+.ivtabs .sum { font: 400 11.5px "Geist Mono", monospace; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.ivtools { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.ivfilters { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.ivfilters .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); margin-right: 2px; }
+.ivfchip { display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 10px; border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; color: var(--ink-2); white-space: nowrap; }
+.ivfchip:hover:not(:disabled) { border-color: var(--line-2); color: var(--ink); }
+.ivfchip .n { font: 500 11.5px "Geist Mono", monospace; color: var(--muted); }
+.ivfchip.on { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.ivfchip.add { border-style: dashed; color: var(--muted); }
+.ivfchip:disabled { opacity: .5; cursor: default; }
+.ivsearch { margin-left: auto; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border: 1px solid var(--line-2); border-radius: 8px; color: var(--faint); background: var(--bg); }
+.ivsearch:focus-within { border-color: var(--accent); }
+.ivsearch input { border: 0; outline: 0; background: transparent; width: 180px; font-size: 13px; color: var(--ink); }
+.ivsearch input::placeholder { color: var(--faint); }
+.ivfact { font-size: 13px; color: var(--ink-2); margin: 0 0 12px; }
+.ivfact b { font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ivfact .warn { color: var(--warn); }
+
+.ivtable { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ivtable th { text-align: left; font-weight: 500; font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); border-bottom: 1px solid var(--line); padding: 6px 8px; white-space: nowrap; }
+.ivtable th button { display: inline-flex; align-items: center; gap: 3px; letter-spacing: inherit; text-transform: inherit; border-radius: 4px; }
+.ivtable th button:hover, .ivtable th[aria-sort] button { color: var(--ink-2); }
+.ivtable th .ar { font-size: 11px; min-width: 8px; }
+.ivtable th.n button { flex-direction: row-reverse; }
+.ivtable td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: baseline; color: var(--ink-2); white-space: nowrap; }
+.ivtable .n { text-align: right; }
+.ivtable td.n { font-family: "Geist Mono", monospace; font-variant-numeric: tabular-nums; }
+.ivtable td small { font-size: 12px; color: var(--muted); margin-left: 8px; }
+.ivtable td.n small { display: block; margin-left: 0; font: 11px "Geist Mono", monospace; }
+.ivtable tfoot td.cu small { margin-left: 8px; }
+.ivtable td.n .c { color: var(--muted); margin-right: 4px; }
+.ivtable td.d { font-family: "Geist Mono", monospace; font-size: 12.5px; color: var(--date); }
+.ivtable .d .late { color: var(--warn); }
+.ivtable td.cu { color: var(--ink); width: 100%; }
+.ivtable td.cu .cx { display: block; max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+.ivtable .ct { text-align: center; }
+.ivtable .cb { width: 28px; padding-right: 0; }
+.ivtable .cb input { margin: 0; vertical-align: -2px; cursor: pointer; }
+.ivtable .ac { width: 34px; padding: 4px 0; text-align: right; }
+.ivtable .rowmenu { width: 28px; height: 26px; border-radius: 7px; color: var(--muted); opacity: 0; font-size: 16px; line-height: 1; }
+.ivtable tbody tr:hover .rowmenu, .ivtable .rowmenu:focus-visible, .ivtable tr.sel .rowmenu { opacity: 1; }
+.ivtable .rowmenu:hover { background: var(--bg); color: var(--ink); }
+.ivtable tbody tr { cursor: pointer; }
+.ivtable tbody tr:hover td { background: var(--hover); }
+.ivtable tbody tr.picked td { background: var(--hover); }
+.ivtable tbody tr.sel td { background: var(--accent-soft); }
+.ivtable tbody tr.st-cancelled td { color: var(--faint); }
+.ivtable tbody tr.st-cancelled td.n { text-decoration: line-through; }
+.ivtable tbody tr.none td { color: var(--muted); cursor: default; background: transparent; padding: 18px 8px; }
+.ivtable tfoot td { border-bottom: 0; border-top: 1.5px solid var(--ink); font-weight: 600; color: var(--ink); padding-top: 8px; }
+.ivtable tfoot td small { font-weight: 400; }
+.ivtable.compact td.cu .cx { max-width: 150px; }
+.ivtable.compact td.cu small { display: none; }
+.ivtable .draftno { font-family: "Instrument Sans", sans-serif; color: var(--muted); font-style: italic; }
+.ivtick { color: var(--pos); display: inline-flex; }
+.ivtick .i { width: 15px; height: 15px; }
+
+.ivchip { display: inline-block; padding: 1px 8px; border-radius: 999px; border: 1px solid transparent; font-size: 11.5px; line-height: 18px; white-space: nowrap; }
+.ivchip.c-draft { color: var(--muted); background: var(--hover); border-color: var(--line); }
+.ivchip.c-open { color: var(--ink-2); border-color: var(--line-2); }
+.ivchip.c-sent { color: var(--accent); background: var(--accent-soft); }
+.ivchip.c-partial { color: var(--warn); border-color: var(--warn); }
+.ivchip.c-overdue { color: var(--warn); background: var(--warn-soft); }
+.ivchip.c-paid { color: var(--pos); background: var(--pos-soft); }
+.ivchip.c-credit { color: var(--ink-2); background: var(--desk); border-color: var(--line-2); }
+.ivchip.c-cancelled { color: var(--faint); border-color: var(--line); }
+
+.ivtfoot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 12px; font-size: 12.5px; color: var(--muted); }
+.ivbulk { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin: -6px 0 6px; padding: 4px 6px 4px 12px; min-height: 36px; border-radius: 10px; background: var(--accent-soft); }
+.ivbulk b { color: var(--ink); font-weight: 600; font-size: 13px; }
+.ivbulk .m { color: var(--muted); font-size: 12.5px; margin-right: auto; font-variant-numeric: tabular-nums; }
+.ivbulk .btn { height: 28px; background: var(--bg); }
+.ivfact { min-height: 24px; }
+.ivscroll { overflow-x: auto; }

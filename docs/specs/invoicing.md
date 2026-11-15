@@ -357,6 +357,37 @@ Rechnungen stays one area (`src/app/areas/invoices/`) with list and detail (`Spl
   grouped by kind and state. Offene Posten lists every invoice with something open, by customer, with age bands
   (0–30, 31–60, 61–90, > 90 days). It is printable (Debitorenliste, year end and audit) and
   exports to CSV.
+- **Overview table** (owner, 2026-11-15): Rechnungen and «Offerten · Aufträge» are one table
+  component, not a list of rows. Above it, status tabs from facts, each with its count and total:
+  «Alle · Entwürfe · Offen · Überfällig · Bezahlt · Gutschriften» (for quotes: «Alle · Entwürfe ·
+  Offen · Angenommen · Abgelehnt, abgelaufen · Aufträge · Lieferscheine»). «Eigene Filter» are saved
+  from a tab and a search (a customer, a currency, «gemahnt» as well), each shown with its count; a
+  filter is a viewer's preference, never in the books. A search over number, customer and line text.
+  One line of facts above the table: how many invoices are open and their sum per currency, and
+  how many of them are overdue and their sum. Columns: Datum · Nr. · Kunde (with the subject) · Status chip (Entwurf,
+  ausgestellt, gesendet, überfällig N Tage, teilbezahlt, bezahlt, gutgeschrieben, storniert) · Fällig ·
+  Währung · Brutto · Offen · gesendet (a tick from the sent log, its time and recipient on hover) ·
+  Mahnstufe. Every column sorts. Amounts are right-aligned in tabular figures; an EUR row shows EUR
+  and its CHF value (ESTV rate of the invoice date) in muted text. A totals row sums Brutto and
+  Offen for the current tab, filter and search, cancelled invoices left out, in CHF with the EUR
+  part named. Rows can be ticked: a bulk bar («3 gewählt», their totals) offers «Mahnen» (a dialog
+  that names each invoice it leaves out and why: not overdue, a draft, paid, «nie mahnen»), «PDF»
+  (drafts named as left out), «Export CSV» and «Als Kontext an die KI». «⋯» on a row: Öffnen, PDF,
+  Senden, the next Mahnung, Folgedokument, Als Entwurf kopieren, Als Kontext an die KI. The footer
+  says how many rows of how many and the page size (50; the rest is named when hit). ↑ ↓ move
+  through the rows while a document is open. Nothing in a row is typed: every status and figure
+  comes from the issued documents, the bank statement and the sent log.
+- **Table and detail, two layouts** (prototype, «Übersicht» A/B in the bar): **A**, the table full
+  width; a row opens the document as a panel over the right part of the table, the first columns
+  (Datum, Nr., Kunde) stay visible and clickable, Esc or «×» closes it and keeps the tab; with
+  nothing selected the table stands alone. **B**, the table with fewer columns (Nr., Kunde, Status,
+  Brutto, Offen) as the list and the document beside it, the first row selected, as the app's rule
+  «An area is a list and a detail beside it» says. **Recommendation: A.** The table is the overview
+  the owner asked for and keeps all its columns and totals; the document keeps a full A4 width,
+  where B shrinks the sheet to about a third and drops Fällig, Währung, gesendet and Mahnstufe. A
+  deviates from the list + detail rule (AGENTS.md «UI links»: the detail column is always there, the
+  first row is selected) for Rechnungen and Offerten · Aufträge only; it needs the owner's OK
+  before it is built. With B, the rule holds unchanged.
 - **Four figures** on every issued invoice, above its sheet: Betrag · erhalten · gutgeschrieben ·
   offen. «erhalten» is the sum of the matched payments, «gutgeschrieben» the sum of its credit
   notes and write-offs, «offen» the rest; a negative rest is the customer's credit («Guthaben, zu
