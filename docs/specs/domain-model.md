@@ -17,7 +17,7 @@ of the whole. Section 4 says where the definition and its history live today. Se
 setting that changes over time is kept, which the invoicing and payroll specs rely on.
 
 Changing the architecture (a common base object for every record, a version per record type, an
-append-only change log, storage beyond git) is its own project: [#552](https://github.com/VanillaSystems/vanilla-accounting/issues/552).
+append-only change log, storage beyond git) is its own project: issue #552.
 
 ## Summary
 
@@ -553,7 +553,7 @@ classDiagram
   carry record changes (src/handover/records.ts) and are taken over by record, three ways.
 
 A generated schema with a drift test, versions per record type and a change log per action are
-in [#552](https://github.com/VanillaSystems/vanilla-accounting/issues/552).
+in issue #552.
 
 ## 5. Values that change over time («gilt ab»)
 
