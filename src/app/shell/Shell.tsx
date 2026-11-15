@@ -53,6 +53,7 @@ import { installWindowDrop, setDropHandler, type DropState, type DropTarget, typ
 import { actionsNow, openActions } from '../selection/ActionsMenu.js';
 import { ShareDialog } from '../handover/ShareDialog.js';
 import { CopyStatus, DurchsichtBar, ReturnBar, Welcome } from '../handover/Durchsicht.js';
+import { useDocument } from '../handover/DocumentBar.js';
 import { isVanillaFile, openVanilla, reloadHandover, useHandover, type Opened } from '../handover/store.js';
 import { refreshShares, running } from '../handover/link.js';
 
@@ -229,10 +230,12 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   const pickedKey = picked?.ids.join(',');
   useEffect(() => { if (pickedKey) keepPage(); }, [pickedKey]);
 
-  // urls.md rule 6: the tab names the object.
+  // urls.md rule 6: the tab names the object. A copy names its Freigabe-Datei first, «ungespeichert» while his changes are not all in it.
+  const doc = useDocument();
   useEffect(() => {
-    document.title = [area.title(loc.route, books), area.label()].filter(Boolean).join(' · ');
-  }, [area, loc.route, books, language]);
+    const file = copy && doc ? `${doc.name}${doc.dirty ? ` — ${t('durchsicht.doc.unsaved')}` : ''}` : '';
+    document.title = [file, area.title(loc.route, books), area.label()].filter(Boolean).join(' · ');
+  }, [area, loc.route, books, language, copy, doc]);
 
   // The keyboard stays on the selected row as the selection moves.
   useLayoutEffect(() => {

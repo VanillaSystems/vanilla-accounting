@@ -5,7 +5,7 @@ declare global {
 }
 
 /** The calls of the bridge the page awaits. */
-export type DesktopCall = 'chooseFolder' | 'chooseNewFolder' | 'saveFile';
+export type DesktopCall = 'chooseFolder' | 'chooseNewFolder' | 'saveFile' | 'chooseSavePath';
 
 /**
  * A call into the desktop app that failed there (issue #339: nobody answered, and the button did
@@ -37,6 +37,7 @@ export function plainFailures(bridge: DesktopBridge): DesktopBridge {
     chooseFolder: plain('chooseFolder', bridge.chooseFolder),
     chooseNewFolder: plain('chooseNewFolder', bridge.chooseNewFolder),
     saveFile: plain('saveFile', bridge.saveFile),
+    chooseSavePath: plain('chooseSavePath', bridge.chooseSavePath),
   };
 }
 

@@ -203,13 +203,18 @@ test('P10: a record whose key is not its id, a key twice, a code the firm does n
 });
 
 let api: ApiServer;
-before(async () => { api = await startApi('tests/fixtures/period-lock-index.json', { VANILLA_DURCHSICHT_DIR: mkdtempSync(join(tmpdir(), 'hostile-api-')) }); });
-after(() => api?.stop());
+/** The recipient's app: the sharer's own Freigabe-Datei opens in her books as nothing to open (shareOwnBooks), never as a copy. */
+let rcpt: ApiServer;
+before(async () => {
+  api = await startApi('tests/fixtures/period-lock-index.json', { VANILLA_DURCHSICHT_DIR: mkdtempSync(join(tmpdir(), 'hostile-api-')) });
+  rcpt = await startApi('tests/fixtures/period-lock-index.json', { VANILLA_DURCHSICHT_DIR: mkdtempSync(join(tmpdir(), 'hostile-rcpt-')) });
+});
+after(async () => { await api?.stop(); await rcpt?.stop(); });
 
 test('API: on a copy the sharer\'s steps are refused however the path is spelled; a damaged file is 400', async () => {
   const res = await api.fetch('/api/handover/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: { name: 'E' } }) });
   const file = new Uint8Array(await res.arrayBuffer());
-  assert.equal((await api.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file })).status, 200);
+  assert.equal((await rcpt.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file })).status, 200);
   for (const [m, p, b] of [
     ['PATCH', '/api/workspace/', { company: { business: 'x' } }],
     ['PATCH', '/api/Workspace', { company: { business: 'x' } }],
@@ -218,14 +223,14 @@ test('API: on a copy the sharer\'s steps are refused however the path is spelled
     ['POST', '/api/automation', { kind: 'start', workflow: 'quarter-close', item: { kind: 'period', id: '2026-Q3' } }],
     ['POST', '/api/handover/returns/abcdefabcdef/apply', { groups: 'all' }],
   ] as const) {
-    const r = await api.send(m, p, b);
+    const r = await rcpt.send(m, p, b);
     assert.equal(r.status, 403, `${m} ${p}`);
     assert.equal(r.json.code, 'roleRefused');
   }
-  const bad = await api.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: new TextEncoder().encode('PK\u0003\u0004garbage') });
+  const bad = await rcpt.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: new TextEncoder().encode('PK\u0003\u0004garbage') });
   assert.equal(bad.status, 400);
   assert.equal((await bad.json() as { code: string }).code, 'shareNotPackage');
-  assert.equal((await api.send('POST', '/api/handover/close')).status, 200);
+  assert.equal((await rcpt.send('POST', '/api/handover/close')).status, 200);
 });
 
 // ─── Re-review of b1a8b197: probes N1 to N5 and the second API probe ───────
@@ -318,10 +323,10 @@ test('N5: a correction into a filed quarter and a changed code are rows the revi
 test('API 2: on a copy invoices, customers and mail sources are the sharer\'s; his bookings and his return work', async () => {
   const res = await api.fetch('/api/handover/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: { name: 'E' } }) });
   const file = new Uint8Array(await res.arrayBuffer());
-  assert.equal((await api.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file })).status, 200);
-  const entries = (await api.send('GET', '/books.json')).json.journalEntries as Array<{ id: string; date: string; transactionRef: string }>;
+  assert.equal((await rcpt.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file })).status, 200);
+  const entries = (await rcpt.send('GET', '/books.json')).json.journalEntries as Array<{ id: string; date: string; transactionRef: string }>;
   const open = entries.find((e) => e.date > '2026-06-30')!;
-  assert.equal((await api.send('PATCH', `/api/journal-entries/${open.id}`, { accountDebit: '6510' })).status, 200);
+  assert.equal((await rcpt.send('PATCH', `/api/journal-entries/${open.id}`, { accountDebit: '6510' })).status, 200);
   for (const [m, p, b] of [
     ['POST', '/API/Automation/', { kind: 'start', workflow: 'quarter-close', item: { kind: 'period', id: '2026-Q3' } }],
     ['POST', '/api/customers', { name: 'Kunde AG' }],
@@ -331,13 +336,13 @@ test('API 2: on a copy invoices, customers and mail sources are the sharer\'s; h
     ['POST', '/api/sources/mail', {}],
     ['PUT', '/api/mail/password', {}],
   ] as const) {
-    const r = await api.send(m, p, b);
+    const r = await rcpt.send(m, p, b);
     assert.equal(r.status, 403, `${m} ${p}`);
     assert.equal(r.json.code, 'roleRefused');
   }
-  const ret = await api.fetch('/api/handover/return', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  const ret = await rcpt.fetch('/api/handover/return', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   assert.equal(ret.status, 200);
-  assert.equal((await api.send('POST', '/api/handover/close')).status, 200);
+  assert.equal((await rcpt.send('POST', '/api/handover/close')).status, 200);
 });
 
 // ─── Re-review of a258d157: probes M1 to M6 ────────────────────────────────

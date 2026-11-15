@@ -49,6 +49,20 @@ to add X, or do Y. then I want to fix it and update the share. what if the user 
   it is deployed, and their page and the app say «abgelaufen». A 0.6.0 app sharing by link is told to
   update.
 
+### Amendment, second part (owner, 2026-11-15): one file, and the file is the document
+
+The owner: «wants the familiar browser download into Downloads with the browser's own progress, then
+double-click the file», and «the share file is the document».
+
+- A share is **one Freigabe-Datei** (`.vanillashare`), the hand-over package as «Als Datei» saves it,
+  uploaded with one presigned PUT and downloaded with one presigned GET straight from the storage (no
+  service CPU on the bytes; free on the service's plan). The app no longer seals the files: the storage
+  encrypts at rest, the service keeps no key; it could read a live share before as well. The file
+  carries its share (service, id, return token, generation) so a downloaded file opens linked to it.
+- The recipient's changes are saved into that file; it opens his changes anywhere, and mailed back it is
+  his return. Protocol version 3: docs/share-protocol.md. Shares of 0.6.1 (version 2) end when the
+  service moves to version 3; a 0.6.1 app is told to update.
+
 ## Context
 
 An owner books her company and wants a fiduciary to look at it: often a family member, not

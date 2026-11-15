@@ -121,8 +121,8 @@ test('3: a service that sends more than an object\'s size is cut off', async () 
   await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
   const url = `http://127.0.0.1:${(srv.address() as AddressInfo).port}`;
   const client = shareClient(url);
-  await assert.rejects(client.get({ object: 'index', method: 'GET', url: `${url}/api/shares/x/objects/index` }, 64 * 1024), (e) => e instanceof ShareServiceError && e.code === 'oversized', 'by Content-Length');
-  await assert.rejects(client.get({ object: 'index', method: 'GET', url: `${url}/api/shares/x/objects/index?chunked` }, 64 * 1024), (e) => e instanceof ShareServiceError && e.code === 'oversized', 'while streaming');
+  await assert.rejects(client.download({ object: 'package', method: 'GET', url: `${url}/storage/x` }, 64 * 1024, () => undefined), (e) => e instanceof ShareServiceError && e.code === 'oversized', 'by Content-Length');
+  await assert.rejects(client.download({ object: 'package', method: 'GET', url: `${url}/storage/x?chunked` }, 64 * 1024, () => undefined), (e) => e instanceof ShareServiceError && e.code === 'oversized', 'while streaming');
   srv.closeAllConnections(); srv.close();
   assert.ok(sent < big * 2, 'the second answer was not read to its end');
 });

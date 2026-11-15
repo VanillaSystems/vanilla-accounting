@@ -1,7 +1,8 @@
 /**
  * The recipient's side of a hand-over, «Durchsicht» (docs/specs/e2e-and-fiduciary.md B4): a fact at
  * the top (whose books, which version, from whom), the sharer's message once, and at the bottom his
- * changes with «An <Name> zurücksenden», which saves the return as a `.vanilla` file.
+ * changes with «An <Name> zurücksenden», which saves the return as a Freigabe-Datei (`.vanillashare`).
+ * The bar names the copy's own Freigabe-Datei, into which his changes are saved (DocumentBar).
  */
 import { useEffect, useRef, useState } from 'react';
 import './handover.css';
@@ -15,6 +16,7 @@ import { reloadHandover, shortSum, sizeText, type DurchsichtFacts } from './stor
 import { checkCopy, runJob, type Job } from './link.js';
 import { JobProgress } from './LinkParts.js';
 import { AsyncButton } from '../shell/AsyncButton.js';
+import { DocumentBar } from './DocumentBar.js';
 
 const PEN = <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" /></svg>;
 
@@ -26,6 +28,7 @@ export function DurchsichtBar({ d, onClose }: { d: DurchsichtFacts; onClose?: ()
       <span><b>{t('durchsicht.books', { firm: d.firm.name })}</b> · {t('durchsicht.asOf', { date: formatDate(d.version.at.slice(0, 10)) })} · {t('durchsicht.from', { name: d.sharer.name })}</span>
       <span className="mode">{PEN}{t('durchsicht.mode')}</span>
       <span className="m">{t('durchsicht.fact', { name: d.sharer.name })}</span>
+      <DocumentBar />
       {onClose ? <button type="button" className="linkbtn" onClick={onClose}>{t('durchsicht.close')}</button> : null}
     </div>
   );
@@ -51,7 +54,8 @@ export function CopyStatus({ d }: { d: DurchsichtFacts }) {
     checkCopy().then((r) => {
       if (r.state === 'withdrawn') setWithdrawn(true);
       if (r.state === 'updated') {
-        try { sessionStorage.setItem(UPDATED, t('durchsicht.updated', { name: r.name, date: formatDate(r.at.slice(0, 10)) })); } catch { /* the line is then not said */ }
+        const line = [t('durchsicht.updated', { name: r.name, date: formatDate(r.at.slice(0, 10)) }), r.file ? t('durchsicht.updatedFile', { file: r.file, n: r.carried }) : ''].filter(Boolean).join(' ');
+        try { sessionStorage.setItem(UPDATED, line); } catch { /* the line is then not said */ }
         location.assign('/');
       }
     }, () => undefined);
@@ -148,7 +152,7 @@ function ReturnDialog({ d, toast, onClose }: { d: DurchsichtFacts; toast(msg: st
   async function send() {
     setBusy(true);
     try {
-      const file = await postDownload('/api/handover/return', { message }, 'rücksendung.vanilla');
+      const file = await postDownload('/api/handover/return', { message }, 'rücksendung.vanillashare');
       await reloadHandover();
       toast(t('durchsicht.saved', { file, name: d.sharer.name }));
       onClose();

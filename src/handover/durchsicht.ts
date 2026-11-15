@@ -97,7 +97,8 @@ function markerFrom(index: PackageIndex, now: Date): Marker {
   };
 }
 
-export interface Opened { root: string; kind: 'full' | 'update'; marker: Marker; conflicts: number; dropped: number }
+/** `carried`: his changes the copy had before, kept on top of the package (a newer file opened over an older one with his changes). */
+export interface Opened { root: string; kind: 'full' | 'update'; marker: Marker; conflicts: number; dropped: number; carried: number }
 
 /** Where a package goes when a copy of its firm is here already but came from someone else (shareCopyOther): the person's answer. */
 export type CopyChoice = 'new' | 'replace';
@@ -225,7 +226,7 @@ export function openPackage(bytes: Uint8Array | PackageContents, now = new Date(
       rmSync(next, { recursive: true, force: true });
       throw e;
     }
-    return { root, kind: 'full', marker: markerOf(root)!, conflicts: 0, dropped: 0 };
+    return { root, kind: 'full', marker: markerOf(root)!, conflicts: 0, dropped: 0, carried: 0 };
   }
   return moveForward(root, had, p, now);
 }
@@ -308,33 +309,46 @@ function moveForwardIn(root: string, had: Marker, p: PackageContents, now: Date,
   keepGit(root, index);
   const newBase = recordsInFolder(baseDir(root));
   const conflicts: string[] = [];
+  const marker: Marker = { ...markerFrom(index, now), ...(had.sent ? { sent: had.sent } : {}) };
+  for (const c of mine) {
+    const theirsBefore = oldBase.get(refKey(c)), theirsNow = newBase.get(refKey(c));
+    if (JSON.stringify(theirsBefore) !== JSON.stringify(theirsNow)) conflicts.push(refKey(c));
+  }
+  const { dropped } = applyChanges(root, had, mine);
+  conflicts.splice(0, conflicts.length, ...conflicts.filter((k) => !dropped.includes(k)));
+  if (conflicts.length) marker.conflicts = conflicts;
+  if (dropped.length) marker.dropped = dropped;
+  writeMarker(root, marker);
+  return { root, kind: index.kind as 'full' | 'update', marker, conflicts: conflicts.length, dropped: dropped.length, carried: mine.length - dropped.length };
+}
+
+/**
+ * Puts his changes into the copy at `root` through the write door, as him: the books' records, and
+ * the record files (knowledge/, the chart). A change dated in a filed period cannot stay (`dropped`,
+ * by refKey); the seals hold that anyway. Used when a newer package moves the copy forward, and when
+ * a Freigabe-Datei brings the changes he saved into it (src/handover/document.ts).
+ */
+export function applyChanges(root: string, me: Pick<Marker, 'me'>, changes: readonly RecordChange[]): { dropped: string[] } {
   const dropped: string[] = [];
+  if (!changes.length) return { dropped };
   // The copy's books, read without making them the books the app has open (no switch of the engines).
   const paths = workspacePaths(root);
   const manifest = readManifest(paths.manifest);
   const ws: Workspace = { ...manifest, filingLength: filingLengthOf(manifest.company.vat, 'quarter'), paths };
-  const marker: Marker = { ...markerFrom(index, now), ...(had.sent ? { sent: had.sent } : {}) };
-  if (mine.length) {
-    const books = loadBooks(ws);
-    const lock = periodLock(books);
-    const keep = mine.filter((c) => {
-      const closed = [dateOf(c, c.before, books), dateOf(c, c.after, books)].some((d) => lock.isClosed(d));
-      if (closed) { dropped.push(refKey(c)); return false; }
-      const theirsBefore = oldBase.get(refKey(c)), theirsNow = newBase.get(refKey(c));
-      if (JSON.stringify(theirsBefore) !== JSON.stringify(theirsNow)) conflicts.push(refKey(c));
-      return true;
-    });
-    update(books, recipientActor(had), (b) => applyToBooks(b, keep.filter((c) => c.kind !== 'file')));
-    saveBooks(ws, books);
-    for (const c of keep.filter((x) => x.kind === 'file' && isRecordFile(x.key) && inside(root, x.key))) {
-      if (c.after === undefined) rmSync(join(root, c.key), { force: true });
-      else { mkdirSync(dirname(join(root, c.key)), { recursive: true }); writeFileSync(join(root, c.key), String(c.after)); }
-    }
+  const books = loadBooks(ws);
+  const lock = periodLock(books);
+  const keep = changes.filter((c) => {
+    const closed = [dateOf(c, c.before, books), dateOf(c, c.after, books)].some((d) => lock.isClosed(d));
+    if (closed) dropped.push(refKey(c));
+    return !closed;
+  });
+  update(books, recipientActor(me), (b) => applyToBooks(b, keep.filter((c) => c.kind !== 'file')));
+  saveBooks(ws, books);
+  for (const c of keep.filter((x) => x.kind === 'file' && isRecordFile(x.key) && inside(root, x.key))) {
+    if (c.after === undefined) rmSync(join(root, c.key), { force: true });
+    else { mkdirSync(dirname(join(root, c.key)), { recursive: true }); writeFileSync(join(root, c.key), String(c.after)); }
   }
-  if (conflicts.length) marker.conflicts = conflicts;
-  if (dropped.length) marker.dropped = dropped;
-  writeMarker(root, marker);
-  return { root, kind: index.kind as 'full' | 'update', marker, conflicts: conflicts.length, dropped: dropped.length };
+  return { dropped };
 }
 
 // ─── His notes and his return ───────────────────────────────────────────────
@@ -394,8 +408,16 @@ export function planReturn(ws: Workspace): ReturnPlan {
   return { changes, files, bytes: files.reduce((n, f) => n + f.bytes, 0) + Buffer.byteLength(JSON.stringify(changes)) };
 }
 
-/** «An <Name> zurücksenden» (B4): the return package, based on the version he got. */
+/** «An <Name> zurücksenden» (B4): the return package, based on the version he got; the copy notes it was sent. */
 export function buildReturn(ws: Workspace, message: string | undefined, now = new Date()): { name: string; bytes: Uint8Array; index: PackageIndex } {
+  const made = returnPackage(ws, message, now);
+  const marker = markerOf(ws.paths.root)!;
+  writeMarker(ws.paths.root, { ...marker, sent: { at: now.toISOString(), version: marker.version.n, changes: made.changes.length } });
+  return { name: made.name, bytes: made.bytes, index: made.index };
+}
+
+/** The return package of his changes as they are now, written nowhere: what «Zurückschicken» sends and what «Sichern» keeps in his Freigabe-Datei. */
+export function returnPackage(ws: Workspace, message: string | undefined, now = new Date()): { name: string; bytes: Uint8Array; index: PackageIndex; changes: ReturnChange[]; files: Map<string, Uint8Array> } {
   const marker = markerOf(ws.paths.root);
   if (!marker) throw new PackageError('Diese Bücher sind keine Durchsicht.', 'shareWrongKind');
   const changes = changesOf(ws.paths.root);
@@ -409,7 +431,6 @@ export function buildReturn(ws: Workspace, message: string | undefined, now = ne
     files: facts, changes: changes.length,
     ...(message?.trim() ? { message: message.trim().slice(0, 2000) } : {}),
   };
-  writeMarker(ws.paths.root, { ...marker, sent: { at: now.toISOString(), version: marker.version.n, changes: changes.length } });
-  return { name: packageName(index), bytes: writePackage({ index, files, changes }), index };
+  return { name: packageName(index), bytes: writePackage({ index, files, changes }), index, changes, files };
 }
 

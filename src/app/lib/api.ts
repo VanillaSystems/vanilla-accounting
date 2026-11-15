@@ -198,6 +198,8 @@ export function errorText(e: unknown): string {
     case 'shareTooLarge': return t('error.shareTooLarge', { limit: b.params.limit });
     case 'shareUnknownBase': return t('error.shareUnknownBase', { name: b.params.name });
     case 'shareUpdateFailed': return t('error.shareUpdateFailed', { why: b.params.why });
+    case 'shareOwnBooks': return t('error.shareOwnBooks', { version: b.params.version, name: b.params.name });
+    case 'shareDocMissing': case 'shareDocReadOnly': case 'shareDocOther': return t(`error.${b.code}`, { file: b.params.file });
     case 'shareWrongKind': return t('error.shareWrongKind');
     case 'shareNoRecipient': return t('error.shareNoRecipient');
     case 'shareServiceRefused': return shareRefusalText(b.params.reason, b.params.limit, b.params.per);

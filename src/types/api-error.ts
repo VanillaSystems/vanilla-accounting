@@ -29,7 +29,7 @@ export type ApiRefusal =
   | { code: 'readonly' }
   /** A Durchsicht copy (src/handover/durchsicht.ts): filing, sealing, closing the year, the company's settings and sharing onward are the sharer's, named. */
   | { code: 'roleRefused'; params: { action: string; name: string } }
-  /** A `.vanilla` file whose file `path` is missing, extra or not as its index says. */
+  /** A Freigabe-Datei whose file `path` is missing, extra or not as its index says. */
   | { code: 'shareTampered'; params: { path: string } }
   /** A hand-over or return of another firm than these books. */
   | { code: 'shareOtherCompany'; params: { firm: string } }
@@ -48,6 +48,10 @@ export type ApiRefusal =
   | { code: 'shareUpdateFailed'; params: { why: string } }
   /** A return opened on a copy, or a hand-over where a return belongs. */
   | { code: 'shareWrongKind' }
+  /** The sharer opened her own Freigabe-Datei without his changes in it: nothing to open (with them, it is a return for review). */
+  | { code: 'shareOwnBooks'; params: { version: string; name: string } }
+  /** «Sichern» of a copy's Freigabe-Datei: the file went or moved, cannot be written, or holds another state: «Sichern unter…». */
+  | { code: 'shareDocMissing' | 'shareDocReadOnly' | 'shareDocOther'; params: { file: string } }
   /** «Teilen» without a name, or with an address that is none. */
   | { code: 'shareNoRecipient' }
   /**

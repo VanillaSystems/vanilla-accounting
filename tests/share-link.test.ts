@@ -1,8 +1,9 @@
 /**
  * Sharing by link end to end through the API (src/server/routes/share.ts) against a fake of the share
- * service, version 2 (tests/support/share-service.ts, after its docs/api.md): the sender confirms her
- * address, «Einladung senden» shares the books and the service sends the invitation; the link in it
- * is the access (no key after a #, no code), opens on a fresh copy and again; «Aktualisieren» puts the
+ * service, version 3 (tests/support/share-service.ts, after its docs/api.md): the sender confirms her
+ * address, «Einladung senden» uploads one Freigabe-Datei and the service sends the invitation; the
+ * link in it is the access (no key after a #, no code), downloads the file into Downloads and opens
+ * it on a fresh copy, and again; «Aktualisieren» puts the
  * whole books into the same link, before or after he opened it, and his copy moves forward with his
  * changes kept; his return goes back into the same share; «Zurückziehen» ends it, his copy says so
  * and offers «Kopie löschen». Each refusal of the service reaches the person as a code with its limit.
@@ -16,18 +17,20 @@ import { startApi, type ApiServer } from './support/api-server.js';
 import { anywhere, startShareService, type FakeShareService } from './support/share-service.js';
 import { canReturnByLink, checkCopy, deleteCopy, linkOfCopy } from '../src/share/sharing.js';
 import { changesOf, markerOf } from '../src/handover/durchsicht.js';
+import { readPackage } from '../src/handover/package.js';
 
 let api: ApiServer;
 let svc: FakeShareService;
 const dir = mkdtempSync(join(tmpdir(), 'share-link-'));
 const copies = join(dir, 'copies');
+const downloads = join(dir, 'Downloads');
 const SANDRA = 'sandra@example.ch';
 const ERNST = { name: 'Ernst Beispiel', email: 'ernst@example.ch' };
 
 before(async () => {
   svc = await startShareService();
   api = await startApi('tests/fixtures/period-lock-index.json', {
-    VANILLA_DURCHSICHT_DIR: copies, VANILLA_SHARE_SERVICE: svc.url,
+    VANILLA_DURCHSICHT_DIR: copies, VANILLA_SHARE_SERVICE: svc.url, VANILLA_DOWNLOADS_DIR: downloads,
     VANILLA_SECRETS_FILE: join(dir, 'secrets.json'), VANILLA_SHARE_SETTINGS: join(dir, 'share.json'),
   });
 });
@@ -103,7 +106,14 @@ test('«Einladung senden»: the service sends the invitation, from her name and 
   assert.equal(mail.language, 'fr', 'in the sharer\'s language');
   assert.equal(mail.kind, 'invite');
   for (const s of svc.seen) assert.ok(!s.url.includes('#'), 'no fragment anywhere');
-  assert.ok(!anywhere(svc.seen, 'ledger.json'), 'paths travel sealed');
+  // One Freigabe-Datei, one PUT: the hand-over itself, naming the share it went into.
+  const file = svc.shares.get(shareId)!.current.file!;
+  const p = readPackage(new Uint8Array(file));
+  assert.equal(p.index.kind, 'full');
+  assert.deepEqual({ ...p.index.share, returnToken: undefined }, { service: svc.url, id: shareId, generation: 1, returnToken: undefined });
+  assert.equal(p.index.share?.returnToken, svc.shares.get(shareId)!.returnToken, 'the recipient\'s return token rides in the file');
+  assert.equal(svc.seen.filter((s) => s.method === 'PUT').length, 1, 'one upload');
+  assert.ok(!anywhere(svc.seen, 'openProof') && !svc.seen.some((s) => s.body.includes('"key"')), 'no key travels: the service keeps none');
   const view = await api.send('GET', '/api/handover');
   assert.equal((view.json.version as { n: number }).n, 1);
   assert.equal((await api.send('GET', `/api/share/${shareId}/link`)).json.link, link, '«Link kopieren» again');
@@ -136,6 +146,10 @@ test('the link opens the books on a fresh copy, with no key and no code; it open
   assert.equal(opened.phase, 'done', JSON.stringify(opened.error));
   assert.equal(opened.result?.kind, 'full');
   assert.equal(opened.result?.version, 2, 'he gets the newest state on his first opening');
+  // Downloaded as a real Freigabe-Datei into Downloads, named as the browser would name it; it is the copy's document.
+  const [saved] = readdirSync(downloads);
+  assert.match(saved, / – Buchhaltung \(\d{4}-\d{2}-\d{2}\)\.vanillashare$/);
+  assert.equal(opened.result?.document, join(downloads, saved));
   const again = await job('/api/share/open', { link });
   assert.equal(again.phase, 'done', JSON.stringify(again.error));
   assert.equal(svc.shares.get(shareId)!.opens.length, 2, 'a second opening works, and counts as a fact');
@@ -152,7 +166,8 @@ test('the link opens the books on a fresh copy, with no key and no code; it open
   const back = await job('/api/share/return', { message: 'Ein Punkt' });
   assert.equal(back.phase, 'done', JSON.stringify(back.error));
   assert.equal(back.result?.changes, 1);
-  assert.ok(!anywhere(svc.seen, 'von Ernst korrigiert'), 'his change travels sealed');
+  const ret = [...svc.shares.values()].find((x) => x.parent === shareId)!;
+  assert.equal(readPackage(new Uint8Array(ret.current.file!)).index.kind, 'return', 'his return is one Freigabe-Datei too');
   assert.equal((await api.send('POST', '/api/handover/close')).status, 200);
 });
 
@@ -215,7 +230,7 @@ test('an invitation the service does not send leaves the share standing, says wh
 test('«Zurückziehen» after he downloaded: the link opens no more; his copy stays, says so, offers «Kopie löschen», returns go as a file', async () => {
   const revoked = await api.send('DELETE', `/api/share/${shareId}`);
   assert.equal(revoked.json.state, 'revoked');
-  assert.equal(svc.shares.get(shareId)!.current.stored.size, 0, 'everything deleted at the service');
+  assert.equal(svc.shares.get(shareId)!.current.file, undefined, 'everything deleted at the service');
   const late = await job('/api/share/open', { link });
   assert.equal(late.error?.code, 'shareServiceRefused');
   assert.equal(late.error?.params?.reason, 'revoked');

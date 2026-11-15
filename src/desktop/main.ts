@@ -32,10 +32,11 @@ import { answerKey, developerIdOf } from './build-key.js';
 import { appVersion } from '../version.js';
 import { readState, writeState, type Bounds } from './state.js';
 import { setDurchsichtHome } from '../handover/durchsicht.js';
-import { APP_SCHEME, setShareSettingsFile } from '../share/service.js';
-import { openLink, previewLink } from '../share/sharing.js';
-import { askLines, askOther, oneLine } from '../app/handover/ask-text.js';
-import type { PackageError } from '../handover/package.js';
+import { APP_SCHEME, setDownloadsDir, setShareSettingsFile } from '../share/service.js';
+import { downloadShare, previewLink } from '../share/sharing.js';
+import { progressWindow } from './progress-window.js';
+import { progressLine } from './progress-text.js';
+import { askLines } from '../app/handover/ask-text.js';
 import { heldUntilReady, isVanillaPath, openVanillaFile, refusedText, vanillaPaths } from './open-files.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -121,6 +122,15 @@ async function start(): Promise<void> {
       // A new window appears once the page has painted, not as an empty frame.
       opened.once('ready-to-show', () => opened.show());
       load = windowLoader(opened, loadFailed);
+      // A copy whose Freigabe-Datei she saved into before: his changes go into it when the window closes (src/handover/document.ts).
+      let closingSaved = false;
+      opened.on('close', (e) => {
+        if (closingSaved || !base) return;
+        e.preventDefault();
+        const done = () => { closingSaved = true; if (!opened.isDestroyed()) opened.close(); };
+        void fetch(`${base}/api/handover/document/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: true }), signal: AbortSignal.timeout(10_000) })
+          .catch(() => undefined).finally(done);
+      });
     }
     void load!(base + path, !started);
     started = true;
@@ -151,6 +161,8 @@ async function start(): Promise<void> {
   setDurchsichtHome(join(app.getPath('userData'), 'Durchsicht'));
   // This Mac's share service address, when the person names one («Teilen › Mehr»).
   setShareSettingsFile(join(app.getPath('userData'), 'share.json'));
+  // A share's Freigabe-Datei the app downloads («In der App öffnen») lands where the browser's would.
+  setDownloadsDir(app.getPath('downloads'));
   const server = desktopServer({
     stateFile,
     demoRoot: join(app.getPath('userData'), 'Demo'),
@@ -223,6 +235,12 @@ async function start(): Promise<void> {
   if (SMOKE) smokeHandles();
   ipcMain.handle(ASK.chooseFolder, (_e, title: unknown, at: unknown) => chooseFolder(typeof title === 'string' ? title : '', at === 'home'));
   ipcMain.handle(ASK.chooseNewFolder, (_e, choice: unknown) => chooseNewFolder(choice));
+  ipcMain.handle(ASK.chooseSavePath, async (_e, name: unknown) => {
+    const file = typeof name === 'string' && name.trim() ? basename(name) : 'Buchhaltung.vanillashare';
+    const options = { defaultPath: join(app.getPath('downloads'), file), filters: [{ name: 'Vanilla Accounting', extensions: ['vanillashare'] }] };
+    const r = win && !win.isDestroyed() ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+    return r.canceled || !r.filePath ? null : r.filePath;
+  });
   ipcMain.handle(ASK.saveFile, async (e, url: unknown, name: unknown) => {
     const href = typeof url === 'string' ? sameOrigin(url, e.sender.getURL()) : undefined;
     if (!href) return false;
@@ -267,41 +285,33 @@ async function start(): Promise<void> {
     const r = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
     return r.response === 0;
   };
-  /** «Als neue Kopie öffnen» (the default, keeps the copy here), «Bestehende Kopie ersetzen», or nothing. */
-  const askCopy = async (p: Record<string, string>): Promise<'new' | 'replace' | undefined> => {
-    const t = textsIn(language);
-    const detail = [askOther((k, v) => t(k, v), p), t('share.ask.otherChoice', { was: oneLine(p.was), now: oneLine(p.now) })].join('\n\n');
-    const options = { type: 'warning' as const, message: t('desktop.shareAskTitle'), detail, buttons: [t('share.ask.asNew'), t('share.ask.replace'), t('common.cancel')], defaultId: 0, cancelId: 2 };
-    const r = win && !win.isDestroyed() ? await dialog.showMessageBox(win, options) : await dialog.showMessageBox(options);
-    return r.response === 0 ? 'new' : r.response === 1 ? 'replace' : undefined;
-  };
   /** The link's service and claims first; `trust` only for the service the person saw named. */
-  const askShare = async (link: string): Promise<{ yes: boolean; trust: boolean }> => {
+  const askShare = async (link: string): Promise<{ yes: boolean; trust: boolean; from: string }> => {
     const t = textsIn(language);
     const preview = await previewLink(link);
     const { what, warnings } = askLines((k, v) => t(k, v), preview);
-    return { yes: await ask([what, ...warnings].join('\n\n'), t('share.ask.open')), trust: preview.foreign };
+    // Said before macOS may ask about the Downloads folder (#373): the file is saved there, as the browser would.
+    return { yes: await ask([what, ...warnings, t('desktop.shareSavedTo')].join('\n\n'), t('share.ask.open')), trust: preview.foreign, from: preview.senderName ?? preview.host };
   };
+  /**
+   * «In der App öffnen» (`vanilla-accounting://open?share=<id>`): after the person said yes, the
+   * share's Freigabe-Datei is downloaded into Downloads with a small window showing how far («Lädt
+   * die Buchhaltung von … 84 von 196 MB»), then opened exactly as a double-click on that file opens
+   * it (openFile): his copy, whose document the file is.
+   */
   openShares = () => {
     for (let url = shareLinks.shift(); url; url = shareLinks.shift()) {
       const link = url;
       void askShare(link)
-        .then(async ({ yes, trust }) => {
+        .then(async ({ yes, trust, from }) => {
           if (!yes) { if (!win || win.isDestroyed()) lastBooks(); return; }
-          win?.setProgressBar(2);
-          let opened;
-          try { opened = await openLink(link, { trust }); } catch (e) {
-            // A copy of the firm here from someone else: never moved without her answer (review of #551).
-            const refusal = e as PackageError;
-            if (refusal?.code !== 'shareCopyOther') throw e;
-            const copy = await askCopy(refusal.params);
-            if (!copy) { if (!win || win.isDestroyed()) lastBooks(); return; }
-            opened = await openLink(link, { trust, copy });
-          }
-          show(pathOf(await server.open(opened.root)));
+          const t = textsIn(language);
+          const shown = progressWindow(win, t('desktop.shareLoading', { name: from }), (done, total) => progressLine(done, total, (v) => t('desktop.shareLoadingOf', v)));
+          let got;
+          try { got = await downloadShare(link, { trust, saveTo: app.getPath('downloads'), progress: (p) => shown.set(p.done, p.total) }); } finally { shown.close(); }
+          if (got.path) openFile(got.path);
         })
-        .catch(async (e: unknown) => { await dialog.showMessageBox({ type: 'warning', message: textsIn(language)('desktop.shareOpenFailed'), detail: (e as Error).message }); })
-        .finally(() => { if (win && !win.isDestroyed()) win.setProgressBar(-1); });
+        .catch(async (e: unknown) => { await dialog.showMessageBox({ type: 'warning', message: textsIn(language)('desktop.shareOpenFailed'), detail: (e as Error).message }); if (!win || win.isDestroyed()) lastBooks(); });
     }
   };
   /** A handed-over file opens as «Öffnen…» in the app opens it: a hand-over as its copy, a return to its review. */

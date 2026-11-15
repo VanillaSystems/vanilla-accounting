@@ -25,7 +25,7 @@ export interface ShareSettings {
 /** A share made: its link, and whether the service sent the invitation (`inviteError`: why not, in words by errorText). */
 export interface Shared { record: ShareRecord; link: string; invited: boolean; inviteError?: ApiErrorBody }
 
-export type JobPhase = 'pack' | 'encrypt' | 'upload' | 'download' | 'decrypt' | 'done' | 'failed';
+export type JobPhase = 'pack' | 'upload' | 'download' | 'done' | 'failed';
 export interface Job<T> { id: string; phase: JobPhase; done: number; total: number; result?: T; error?: ApiErrorBody }
 
 /** Starts a job and follows it until it ends; `onProgress` sees each step. A refused job rejects with its refusal. */
