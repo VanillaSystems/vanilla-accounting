@@ -1,0 +1,280 @@
+{
+  "$comment": "The threat zones of a release (tools/release/zones.ts, npx tsx tools/release/zones.ts [<base>] [<head>] [--all]): each zone names the paths that belong to it, the VM scenarios that exercise it on a fresh Mac and the persona walks and feature recipes of .claude/skills/verify that walk it. A changed file selects every zone whose paths match it; a file of no zone is quiet (no person walks it) or falls back to the install scenario (app code no zone names yet); anything else selects everything. Paths are globs (node:path matchesGlob) from the repository root. tests/release-zones.test.ts checks every glob matches a file, every tracked file has a place, every scenario, persona and feature exists and each is used.",
+  "scenarios": {
+    "install": {
+      "title": "Install and first start",
+      "how": "npm run desktop:e2e -- --fresh (a throwaway clone of vanilla-clean: install, the smoke test through every area, new books, a restart). By hand on vm.sh up: the dmg, Gatekeeper, the move to Applications, Einrichtung and the start screen (features/desktop-install.md)."
+    },
+    "update": {
+      "title": "Update from the previous version",
+      "how": "npm run desktop:e2e on the persistent VM vanilla-e2e: the new app goes over the previous one, as an update does, and opens the books the previous version wrote (a books format step migrates them once)."
+    },
+    "permissions": {
+      "title": "macOS asks for access after the app's words",
+      "how": "vm.sh up (fresh): «Neue Buchhaltung anlegen» › «Weiter» in Documents: the app's words come first, then macOS asks; refuse once and read the app's text; drop a file from Downloads (#373, SKILL.md Gotchas)."
+    },
+    "setup": {
+      "title": "New books through setup",
+      "how": "vm.sh up (fresh) or --from huber-setup: «Neue Buchhaltung anlegen», the form with the persona's UID and IBAN, the setup conversation, then read the written belege.workspace.yaml in the VM (features/desktop-setup.md)."
+    },
+    "statement-import": {
+      "title": "A bank statement into the packed app",
+      "how": "vm.sh up --from huber-setup: drop $PERSONA_CAMT (and the CSV the bank offers first): the account is recognised, the payments show in Kontoauszüge, the balance check holds (features/desktop-drop.md)."
+    },
+    "receipt-drop": {
+      "title": "Receipts dropped into the packed app",
+      "how": "vm.sh up --from huber-setup: drop the persona's supplier PDFs, a till photo, the duplicate and the wrong files: taken, read, linked to their payment, the duplicate and the wrong file refused, «Rückgängig» (features/desktop-drop.md)."
+    },
+    "ai-sidebar": {
+      "title": "Booking with Claude Code in the packed app",
+      "how": "vm.sh up --from huber-q3, vm.sh claude, vm.sh app: the app finds Claude Code, a receipt is read and booked, ⌘J takes a wish and the books show it (features/ai-sidebar.md)."
+    },
+    "vat-return": {
+      "title": "A return filed, with its XML",
+      "how": "vm.sh up --from huber-q3: «Abrechnung erstellen» › the task «Abrechnung <q> prüfen» › «Freigegeben» › «Eingereicht»: the XML saved where the person chose, filings/ holds it and seal-<q>.json, closedThrough moved (features/README.md, Not mapped yet)."
+    },
+    "year-close": {
+      "title": "The year close",
+      "how": "vm.sh up --from huber-q3, the year's last quarter filed: Abschluss through its steps; closedThrough reaches 31.12., the next year opens with its opening balances (features/close-and-company.md)."
+    },
+    "invoicing": {
+      "title": "An invoice with its PDF and mail",
+      "how": "vm.sh up --from huber-q3: Rechnungen › a new invoice, «Ausstellen»: the PDF printed by the packed browser with its QR-bill, «Senden» opens Mail with the PDF attached (features/invoices.md)."
+    },
+    "share-link": {
+      "title": "Sharing by link, opened on another Mac",
+      "how": "Two VMs: on the sharer's, vm.sh sender and vm.sh app, «Teilen» › «Per Link»; on a fresh second VM the link (clicked, and pasted under «Einen Link bekommen?») opens the books (SKILL.md, Sharing by link)."
+    },
+    "share-update": {
+      "title": "«Aktualisieren» keeps the recipient's change",
+      "how": "After share-link: the recipient changes something; the sharer changes the books and «Aktualisieren»: the recipient gets the new state and still has her change."
+    },
+    "share-return": {
+      "title": "A return of the recipient's changes",
+      "how": "After share-link: the recipient sends her changes back; the sharer's card shows «Rücksendung abgeholt», the Durchsicht takes or refuses each change."
+    },
+    "share-withdraw": {
+      "title": "«Zurückziehen»",
+      "how": "After share-link: the sharer's «Zurückziehen»: the service deletes the share; the recipient's app says it was withdrawn and offers the return as a file only."
+    },
+    "file-open": {
+      "title": "A .vanilla file double-clicked on a fresh Mac",
+      "how": "A fresh VM that never opened books: vm.sh put <books>.vanilla, double-click it in Finder (vm.sh dclick, or vm.sh sh 'open ~/Downloads/<books>.vanilla'): the app starts and opens it."
+    }
+  },
+  "zones": [
+    {
+      "id": "install",
+      "title": "Installation, first start, the desktop shell and the frame of every area",
+      "paths": [
+        "desktop/**", "tools/desktop/**", "src/desktop/**", "src/app/desktop/**", "src/secrets/**",
+        "src/version.ts", "src/workspace/demo-copy.ts", "src/workspace/workspace.ts",
+        "src/platform/login-path.ts", "src/platform/git-program.ts", "src/platform/browser/**",
+        "src/server/main.ts", "src/server/api.ts", "src/server/app-paths.ts", "src/server/app-map.ts", "src/server/background.ts",
+        "src/app/main.tsx", "src/app/shell/**", "src/app/styles/**", "src/app/hooks/**", "src/app/lib/**", "src/app/ai/**",
+        "src/app/areas/index.ts", "src/app/areas/icons.tsx",
+        "index.html", "vite.config.ts", "public/**", "package.json", "package-lock.json",
+        "demo/**", "demo-consulting/**"
+      ],
+      "vm": ["install"],
+      "personas": [],
+      "features": ["desktop-install.md"]
+    },
+    {
+      "id": "books-format",
+      "title": "The books' format and what a new version does with books an older one wrote",
+      "paths": [
+        "src/workspace/schema.ts", "src/workspace/migrate.ts", "src/workspace/upgrade.ts", "src/workspace/layout.ts",
+        "src/books/store.ts", "src/books/seal.ts"
+      ],
+      "vm": ["update"],
+      "personas": [],
+      "features": ["journal-entries.md"]
+    },
+    {
+      "id": "setup",
+      "title": "Setup and onboarding, the books' folder and Firma",
+      "paths": [
+        "src/onboarding/**", "src/app/onboarding/**", "src/server/routes/onboarding.ts", "src/server/routes/config.ts",
+        "src/server/workspace-edits.ts", "src/workspace/**", "src/app/areas/company/**",
+        "src/app/desktop/access-text.ts", "src/desktop/new-folder.ts", "desktop/entitlements.mac.plist",
+        "modules/ch/setup.yaml", "modules/ch/registration.yaml", "modules/ch/module.yaml", "help/**", "tools/help/**"
+      ],
+      "vm": ["setup", "permissions"],
+      "personas": ["first-run.md", "first-run-webshop.md", "first-run-consulting.md", "other-firms.md"],
+      "features": ["setup.md", "desktop-setup.md", "close-and-company.md"]
+    },
+    {
+      "id": "statements",
+      "title": "Bank statements: reading, import, balances",
+      "paths": [
+        "src/providers/camt053/**", "src/providers/statement-read/**", "src/providers/statement-files.ts", "src/providers/banana/**",
+        "src/books/bank-import.ts", "src/server/routes/statements.ts", "src/server/statement-reads.ts", "src/server/statement-asks.ts",
+        "src/app/areas/bank/**", "src/app/shell/StatementRead.tsx", "src/workspace/bank-statements.ts", "src/workspace/banks.ts",
+        "src/workspace/money-accounts.ts", "modules/ch/statements.yaml", "processes/bank-import.*", "workflows/bank-import/**"
+      ],
+      "vm": ["statement-import"],
+      "personas": ["first-run.md", "mistakes.md", "quarter-close.md"],
+      "features": ["bank.md", "drop.md", "desktop-drop.md"]
+    },
+    {
+      "id": "receipts",
+      "title": "Receipts: the drop, reading, duplicates, matching, collection",
+      "paths": [
+        "src/intake/**", "src/parsers/**", "src/collect/**", "src/platform/sources/**", "sources/**",
+        "src/app/areas/receipts/**", "src/app/shell/DropDialog.tsx", "src/app/shell/drop-*.ts", "src/app/shell/window-drop.ts",
+        "src/app/shell/FileDetails.tsx", "src/app/lib/folder-drop.ts",
+        "src/server/routes/drop.ts", "src/server/routes/receipts.ts", "src/server/routes/quarantine.ts", "src/server/routes/twins.ts",
+        "src/server/routes/pairing.ts", "src/server/routes/sources.ts", "src/server/routes/mail.ts",
+        "src/server/files.ts", "src/server/mail-evidence.ts", "src/server/collection-now.ts",
+        "modules/ch/documents.yaml", "processes/receipt-*", "processes/evidence.*",
+        "workflows/collect/**", "workflows/collection/**", "workflows/receipt-intake/**", "workflows/evidence/**"
+      ],
+      "vm": ["receipt-drop"],
+      "personas": ["first-run.md", "duplicates-noise.md", "misreads.md", "mistakes.md"],
+      "features": ["receipts.md", "drop.md", "desktop-drop.md"]
+    },
+    {
+      "id": "phone",
+      "title": "Receipts from the phone",
+      "paths": ["ios/**", "src/server/scan.html", "src/server/routes/scan.ts", "src/server/phone.ts", "src/app/areas/company/PhoneSection.tsx"],
+      "vm": [],
+      "personas": ["phone-sync.md"],
+      "features": []
+    },
+    {
+      "id": "providers",
+      "title": "Payment providers: payouts, the sales report, the clearing account",
+      "paths": [
+        "src/booking/providers.ts", "src/booking/provider-issues.ts", "src/booking/order-pages.ts", "src/booking/sales-report.ts",
+        "src/intake/sales-report-import.ts", "src/knowledge/provider.ts", "src/server/provider-payouts.ts", "src/server/routes/payouts.ts",
+        "src/app/lib/payouts.ts", "src/app/lib/order-pages.ts", "src/booking/vat-corrections.ts"
+      ],
+      "vm": [],
+      "personas": ["first-run-webshop.md"],
+      "features": ["drop.md", "bank.md"]
+    },
+    {
+      "id": "booking",
+      "title": "Booking: rules, classification, the journal, knowledge and automation",
+      "paths": [
+        "src/booking/**", "src/books/**", "src/saving/**", "src/knowledge/**", "src/questions/**", "src/workflows/**",
+        "src/server/routes/journal.ts", "src/server/routes/classify.ts", "src/server/routes/rules.ts", "src/server/routes/transactions.ts",
+        "src/server/routes/batch.ts", "src/server/routes/questions.ts", "src/server/routes/mappings.ts", "src/server/routes/automation.ts",
+        "src/server/routes/knowledge.ts", "src/server/routes/vat-adjustments.ts",
+        "src/server/batch.ts", "src/server/booking-waits.ts", "src/server/books.ts", "src/server/edits.ts", "src/server/questions.ts",
+        "src/server/open-work.ts", "src/server/waiting-reports.ts", "src/server/refusals.ts", "src/server/link-history.ts", "src/server/reconcile.ts",
+        "src/app/areas/journal/**", "src/app/areas/partners/**", "src/app/areas/knowledge/**", "src/app/areas/automation/**",
+        "src/app/automation/**", "src/app/selection/**", "src/app/questions/**", "src/app/history/**", "processes/**", "workflows/**", "examples/**",
+        "modules/ch/decisions.yaml", "modules/ch/accounts.yaml", "modules/ch/chart.yaml", "src/engines/chart.ts"
+      ],
+      "vm": [],
+      "personas": ["wishes.md", "sidebar-wishes.md", "misreads.md", "treuhaender.md", "first-run-consulting.md"],
+      "features": ["journal-entries.md", "partners.md", "knowledge.md", "automation.md"]
+    },
+    {
+      "id": "ai",
+      "title": "The AI: the sidebar, model calls, finding Claude Code or Codex",
+      "paths": [
+        "src/llm/**", "src/assistant/**", "src/platform/ai-cli.ts", "src/platform/ai-setup.ts", "src/platform/terminal.ts",
+        "src/platform/terminal-open.ts", "src/workspace/terminal-agents.ts", "src/app/assistant/**", "src/app/ai/**",
+        "src/server/routes/ai.ts", "src/server/routes/assistant.ts", "src/server/routes/terminal.ts", "src/server/ai-setup.ts",
+        "src/desktop/dictation.ts", "src/desktop/dictation.swift", "src/app/areas/company/AiSection.tsx"
+      ],
+      "vm": ["ai-sidebar"],
+      "personas": ["sidebar-wishes.md", "wishes.md"],
+      "features": ["ai-sidebar.md"]
+    },
+    {
+      "id": "vat",
+      "title": "The figures: tax codes, the return's boxes, the other kinds of firm",
+      "paths": [
+        "src/accounting/**", "src/engines/**", "src/reconcile/**", "src/core/**", "src/app/areas/vat/**", "src/app/areas/codes/**",
+        "src/app/lib/vat-words.ts", "src/app/lib/fx-text.ts", "modules/ch/tax-codes.yaml", "modules/ch/rates.yaml", "modules/ch/return.yaml",
+        "modules/ch/return-net-rate.yaml", "modules/ch/periods.yaml", "reference/**", "demo-coiffeur/**", "demo-schreinerei/**"
+      ],
+      "vm": [],
+      "personas": ["quarter-close.md", "other-firms.md"],
+      "features": ["vat-report.md", "journal-entries.md"]
+    },
+    {
+      "id": "filing",
+      "title": "Filing a return: approval, the XML, the seal",
+      "paths": [
+        "src/workflows/filing.ts", "src/providers/ech0217/**", "src/books/seal.ts", "src/cli/vat-ech0217.ts", "src/cli/seal.ts",
+        "processes/vat-filing.*", "workflows/vat-filing/**", "src/desktop/save-file.ts"
+      ],
+      "vm": ["vat-return"],
+      "personas": ["quarter-close.md"],
+      "features": ["vat-report.md"]
+    },
+    {
+      "id": "year-close",
+      "title": "The year close and the opening of the next year",
+      "paths": [
+        "src/server/routes/year-close.ts", "src/app/areas/close/**", "modules/ch/year-end.yaml", "src/accounting/opening-balance.ts",
+        "processes/year-close.*", "workflows/year-close/**", "src/cli/year-close.ts", "src/cli/year-open.ts"
+      ],
+      "vm": ["year-close"],
+      "personas": ["treuhaender.md"],
+      "features": ["close-and-company.md"]
+    },
+    {
+      "id": "invoicing",
+      "title": "Invoices: the sheet, the PDF, the QR-bill, sending",
+      "paths": [
+        "src/invoices/**", "src/app/areas/invoices/**", "src/app/areas/company/InvoiceLayout.tsx", "src/server/routes/invoices.ts",
+        "modules/ch/invoicing.yaml", "src/providers/qr-bill/**", "src/desktop/print.ts", "src/desktop/qr.ts", "src/platform/browser/**"
+      ],
+      "vm": ["invoicing"],
+      "personas": ["invoices.md", "first-run-consulting.md"],
+      "features": ["invoices.md"]
+    },
+    {
+      "id": "sharing",
+      "title": "Sharing the books: by link, as a .vanilla file, the return",
+      "paths": [
+        "src/share/**", "src/handover/**", "src/app/handover/**", "src/server/routes/share.ts", "src/server/routes/handover.ts",
+        "src/assistant/handover.ts", "src/desktop/open-files.ts"
+      ],
+      "vm": ["share-link", "share-update", "share-return", "share-withdraw", "file-open"],
+      "personas": ["treuhaender.md"],
+      "features": ["close-and-company.md"]
+    },
+    {
+      "id": "changes",
+      "title": "Änderungen: drafts of rules and settings, saving them, the returns to review",
+      "paths": ["src/app/areas/changes/**", "src/app/changes/**", "src/server/routes/changes.ts"],
+      "vm": ["share-return"],
+      "personas": ["wishes.md"],
+      "features": []
+    },
+    {
+      "id": "reports",
+      "title": "Reports, the export and the audit export",
+      "paths": [
+        "src/reports/**", "src/export/**", "src/audit/**", "src/server/routes/reports.ts", "src/server/routes/export.ts",
+        "src/app/areas/reports/**", "src/app/areas/export/**", "src/cli/build-audit.ts", "src/cli/verify-audit.ts"
+      ],
+      "vm": [],
+      "personas": ["quarter-close.md", "treuhaender.md"],
+      "features": ["reports.md", "export.md", "audit-export.md"]
+    }
+  ],
+  "quiet": {
+    "paths": [
+      "docs/**", "*.md", "LICENSE", "*/.gitattributes", "*/.gitignore", ".claude/**", ".github/**", ".gitignore", ".env.example", "tsconfig.json", "public-files.txt",
+      "tests/**", "tools/**", "src/cli/**", "src/publish/**", "src/types/**", "src/app/i18n/**"
+    ],
+    "why": "no person walks it: docs and specs, tests and tooling, the command line, types, the dictionaries (tests/i18n.test.ts; their words are read in whatever walk the code that shows them selects)"
+  },
+  "fallback": {
+    "paths": ["src/**", "desktop/**", "index.html", "vite.config.ts", "public/**"],
+    "vm": ["install"],
+    "why": "app code no zone names yet: the install scenario's smoke test drives every area of the packed app (give the file a zone in tools/release/zones.json)"
+  },
+  "onRequest": {
+    "personas": ["regression.md"],
+    "why": "the regression of round 1: run on request, not chosen by a change"
+  }
+}
