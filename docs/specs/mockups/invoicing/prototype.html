@@ -36,6 +36,11 @@ iframe { width: 100%; height: 100%; border: 0; background: #fff; }
   <button type="button" data-basis="received" aria-pressed="true">vereinnahmt</button>
   <button type="button" data-basis="agreed" aria-pressed="false">vereinbart</button>
   <span class="sep"></span>
+  <span class="lbl">Übersicht</span>
+  <button type="button" data-layout="A" aria-pressed="true" title="Tabelle über die ganze Breite, das Dokument als Panel rechts darüber (Esc schliesst)">A · Tabelle + Panel</button>
+  <button type="button" data-layout="B" aria-pressed="false" title="Tabelle mit weniger Spalten links, das Dokument daneben, wie die Regel Liste + Detail">B · Tabelle + Detail</button>
+  <button type="button" data-layout="list" aria-pressed="false" title="Die Liste, wie sie heute in der App ist">Liste heute</button>
+  <span class="sep"></span>
   <button type="button" data-cmd="import">camt.053 vom 14.11. einlesen</button>
   <button type="button" data-cmd="mark" aria-pressed="true">Neues markieren</button>
   <button type="button" data-cmd="reset">Von vorn</button>
@@ -46,15 +51,17 @@ iframe { width: 100%; height: 100%; border: 0; background: #fff; }
 const frame = document.getElementById('app');
 frame.src = 'app.html' + (location.hash || '#/invoices');
 const send = (m) => frame.contentWindow.postMessage(m, '*');
-const state = { firm: 'kaffee', basis: 'received', mark: true };
+const state = { firm: 'kaffee', basis: 'received', mark: true, layout: (/[?&]layout=(A|B|list)/.exec(location.hash) || [, 'A'])[1] };
 const press = () => {
   document.querySelectorAll('[data-firm]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.firm === state.firm)));
   document.querySelectorAll('[data-basis]').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.basis === state.basis)); b.disabled = state.firm === 'salon'; });
+  document.querySelectorAll('[data-layout]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.layout === state.layout)));
   document.querySelector('[data-cmd="mark"]').setAttribute('aria-pressed', String(state.mark));
   document.querySelector('[data-cmd="import"]').disabled = state.firm === 'salon';
 };
 document.querySelectorAll('[data-firm]').forEach((b) => b.addEventListener('click', () => { state.firm = b.dataset.firm; press(); send({ firm: state.firm }); }));
 document.querySelectorAll('[data-basis]').forEach((b) => b.addEventListener('click', () => { state.basis = b.dataset.basis; press(); send({ basis: state.basis }); }));
+document.querySelectorAll('[data-layout]').forEach((b) => b.addEventListener('click', () => { state.layout = b.dataset.layout; press(); send({ layout: state.layout }); }));
 document.querySelector('[data-cmd="import"]').addEventListener('click', () => send({ import: true }));
 document.querySelector('[data-cmd="mark"]').addEventListener('click', () => { state.mark = !state.mark; press(); send({ mark: state.mark }); });
 document.querySelector('[data-cmd="reset"]').addEventListener('click', () => send({ reset: true }));
@@ -63,6 +70,7 @@ const HINTS = [
   [/^#\/invoices\/draft-/, 'Tipp: auf dem Blatt tippen · «Aus Artikelliste» · «Vorschau» zeigt den QR-Zahlteil · «Ausstellen»'],
   [/^#\/invoices\/quotes\/OF-2026-003/, 'Tipp: abgelaufen · «Folgedokument erstellen» warnt, dann «Trotzdem erstellen»'],
   [/^#\/invoices\/quotes\/(AB|LS)-/, 'Tipp: die Kette oben · «Folgedokument erstellen» übernimmt alle Positionen'],
+  [/^#\/invoices\/quotes(\?|$)/, 'Tipp: Reiter nach Stand · Spalten sortieren · eine Zeile öffnet das Dokument'],
   [/^#\/invoices\/quotes/, 'Tipp: «In Rechnung umwandeln» fragt, welche Optionen mitkommen · «Folgedokument erstellen»'],
   [/^#\/invoices\/2026-001/, 'Tipp: bezahlt · «Stornieren» warnt und bietet «Gutschrift statt Storno»'],
   [/^#\/invoices\/2026-00[26]$/, 'Tipp: Betrag · erhalten · gutgeschrieben · offen · die Kette der Dokumente'],
@@ -75,6 +83,7 @@ const HINTS = [
   [/^#\/invoices\/2026-004/, 'Tipp: die Gutschrift steht als Abzugszeile im Entwurf an Muster Hotel GmbH'],
   [/^#\/invoices\/2026-005/, 'Tipp: EUR: IBAN mit RF-Referenz, kein QR-Zahlteil · nach «camt.053 einlesen»: Gebühr ausbuchen'],
   [/^#\/invoices\/2026-008/, 'Tipp: von der Vorlage ausgestellt · nach «camt.053 einlesen»: Skonto vom Code ausgebucht'],
+  [/^#\/invoices(\?|$)/, 'Tipp: oben A, B oder «Liste heute» · Reiter mit Anzahl und Summe · Spalten sortieren · Zeilen anhaken, dann «Mahnen»'],
   [/^#\/invoices/, 'Tipp: «Neue Rechnung» · oben «camt.053 vom 14.11. einlesen» · «vereinbart» zeigt die andere Buchung'],
 ];
 const hintFor = (h) => {
@@ -87,6 +96,7 @@ window.addEventListener('message', (e) => {
   if (!m.route) return;
   if (m.firm) state.firm = m.firm;
   if (m.basis) state.basis = m.basis;
+  if (m.layout) state.layout = m.layout;
   press();
   history.replaceState(null, '', m.route);
   document.getElementById('hint').textContent = hintFor(m.route);

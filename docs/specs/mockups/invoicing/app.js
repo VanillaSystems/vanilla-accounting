@@ -116,7 +116,8 @@ function baseline() {
       { id: 'i5', kind: 'invoice', number: '2026-005', status: 'issued', cu: 'c4', subject: 'Espresso-Mischung, Export', date: '2026-09-21', due: '2026-10-21', cur: 'EUR', lang: 'de', ref: 'RF49 2026 005', exemption: 'export',
         lines: [L('Espresso-Mischung, Bohnen 1 kg', 40, 'pcs', 19.5, 0), L('Transport bis Grenze', 1, 'flat', 85, 0)], sent: [{ date: '2026-09-21', time: '15:00', to: 'einkauf@kaffeehaus-beispiel.example', title: 'Rechnung 2026-005' }], log: [['2026-09-21', 'ausgestellt, Nr. 2026-005'], ['2026-09-21', 'gesendet: Rechnung 2026-005']] },
       { id: 'i6', kind: 'invoice', number: '2026-006', status: 'issued', cu: 'c3', subject: 'Mélange maison et formation', date: '2026-09-29', due: '2026-10-29', cur: 'CHF', lang: 'fr', ref: '00 00000 00000 00000 00202 60068', from: { kind: 'order', id: 'o1' },
-        lines: [L('Mélange espresso maison, grains 1 kg', 15, 'pcs', 29, 2.6), L('Formation barista sur place', 4, 'h', 120, 8.1)], sent: [{ date: '2026-09-29', time: '17:20', to: 'compta@cafe-exemple.example', title: 'Facture 2026-006' }], log: [['2026-09-29', 'Folgedokument von Auftragsbestätigung AB-2026-001'], ['2026-09-29', 'ausgestellt, Nr. 2026-006'], ['2026-09-29', 'gesendet: Facture 2026-006']] },
+        lines: [L('Mélange espresso maison, grains 1 kg', 15, 'pcs', 29, 2.6), L('Formation barista sur place', 4, 'h', 120, 8.1)], reminders: [{ level: 1, date: '2026-11-09' }],
+        sent: [{ date: '2026-09-29', time: '17:20', to: 'compta@cafe-exemple.example', title: 'Facture 2026-006' }, { date: '2026-11-09', time: '08:00', to: 'compta@cafe-exemple.example', title: '1. Mahnung 2026-006', reminder: { level: 1, fee: 0 } }], log: [['2026-09-29', 'Folgedokument von Auftragsbestätigung AB-2026-001'], ['2026-09-29', 'ausgestellt, Nr. 2026-006'], ['2026-09-29', 'gesendet: Facture 2026-006'], ['2026-11-09', '1. Mahnung gesendet']] },
       { id: 'i7', kind: 'invoice', number: '2026-007', status: 'issued', cu: 'c2', subject: 'Filterkaffee Oktober', date: '2026-10-01', due: '2026-10-21', cur: 'CHF', lang: 'de', ref: '00 00000 00000 00000 00202 60079', cancelled: { date: '2026-10-02', reason: 'doppelt erfasst' },
         lines: [L('Filterkaffee Guji, Bohnen 500 g', 24, 'pcs', 16.5, 2.6)], log: [['2026-10-01', 'ausgestellt, Nr. 2026-007'], ['2026-10-02', 'storniert: doppelt erfasst']] },
       { id: 'i8', kind: 'invoice', number: '2026-008', status: 'issued', cu: 'c2', subject: 'Kaffee-Abo November', date: '2026-11-01', due: '2026-11-21', cur: 'CHF', lang: 'de', ref: '00 00000 00000 00000 00202 60082', recurring: 'r1', skonto: { percent: 2, days: 10 },
@@ -195,7 +196,7 @@ function baseline() {
 }
 
 const S = {
-  firm: 'kaffee', basis: 'received', imported: false, mark: true,
+  firm: 'kaffee', basis: 'received', imported: false, mark: true, layout: 'A', filters: null,
   settings: { interest: false, rate: 5, skonto: true, skontoPct: 2, skontoDays: 10, limit: 5, fees: [0, 20, 30], afterDays: [10, 20, 30], eurQr: '' },
   data: baseline(),
   ui: { open: {}, preview: false, reminder: null, dialog: null, oiCu: null },
@@ -450,7 +451,7 @@ function route() {
 const go = (h) => { if (location.hash === h) render(); else location.hash = h; };
 
 // ---------------------------------------------------------------- list column
-const listHead = (title, addLabel, addAct, extra = '') => `<header class="lhead"><h1>${title}${title === 'Rechnungen' ? '<button type="button" class="period" data-act="noop" data-tip="Periode wählen">Q4 2026 <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>' : ''}${addLabel ? `<button type="button" class="addbtn${addAct !== 'dlg-new' ? ' nw' : ''}" data-act="${addAct}">${I.plus}<span>${addLabel}</span><span class="kb">N</span></button>` : ''}</h1>${extra}</header>`;
+const listHead = (title, addLabel, addAct, extra = '', period = 'Q4 2026') => `<header class="lhead"><h1>${title}${title === 'Rechnungen' ? `<button type="button" class="period" data-act="noop" data-tip="Periode wählen">${period}` + ' <svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button>' : ''}${addLabel ? `<button type="button" class="addbtn${addAct !== 'dlg-new' ? ' nw' : ''}" data-act="${addAct}">${I.plus}<span>${addLabel}</span><span class="kb">N</span></button>` : ''}</h1>${extra}</header>`;
 const views = (on) => `<span class="seg gb" role="tablist" aria-label="Ansicht">${VIEWS.filter(([k]) => S.firm === 'kaffee' || !['recurring'].includes(k)).map(([k, l]) => `<button type="button" role="tab" aria-selected="${on === k}" class="${on === k ? 'on' : ''}${NEW_VIEWS.has(k) ? ' nw' : ''}" data-href="#/invoices${k === 'list' ? '' : `/${k}`}">${l}</button>`).join('')}</span>`;
 const row = (cls, href, sel, d, t, a) => `<div class="row ${cls}${sel ? ' sel' : ''}" role="option" aria-selected="${sel}" tabindex="${sel ? 0 : -1}" data-href="${href}"><span class="d mono">${d}</span><span class="t">${t}</span><span class="a mono">${a}</span></div>`;
 const group = (label, n) => `<button type="button" class="group" aria-expanded="true"><span>${I.gch}${esc(label)}</span><span class="mono">${n}</span></button>`;
@@ -569,6 +570,195 @@ function sentList(r) {
     html += `<div class="row sentrow${r.id === s.id ? ' sel' : ''}" role="option" aria-selected="${r.id === s.id}" data-href="#/invoices/sent/${s.id}"><span class="d mono">${dmy(s.date).slice(0, 6)}</span><span class="t">${esc(s.title)} <small>${esc(cust(s.d.cu).name)} · ${s.reminder ? 'Mahnung' : kindOf(s.d)}${s.by ? ' · von der Vorlage' : ''}</small></span><span class="a mono">${s.time}</span></div>`;
   }
   return { html: `<div class="page">${listHead('Rechnungen', '', '', `<div class="counts"><span class="n">${all.length}</span>&nbsp;gesendet${views('sent')}</div>`)}<div class="rows" role="listbox" aria-label="Versand">${html}</div></div>`, all };
+}
+
+// ---------------------------------------------------------------- overview table (owner, 2026-11-15)
+// One component for Rechnungen and for Offerten · Aufträge: status tabs from facts with count and total,
+// saved filters, a search, sortable columns, totals, multi-select with a bulk bar, a menu per row.
+// Layout A: the table full width, the detail a panel over its right part (Esc closes).
+// Layout B: the table with fewer columns as the list, the detail beside it, as the app's rule says.
+// «list»: the list as it is in the app today, for comparison.
+const tableMode = () => S.layout !== 'list';
+const EUR_FALLBACK = 0.9361;
+const chfOf = (d, x) => (d.cur === 'EUR' ? r2(x * (EUR_RATE[d.date] ?? EUR_FALLBACK)) : x);
+const TS = (k) => ((S.ui.tbl ??= {})[k] ??= { q: '', sort: { k: 'date', dir: -1 }, sel: [] });
+const matches = (d, q) => [d.number, cust(d.cu).name, d.subject, ...d.lines.map((l) => l.text)].join(' ').toLowerCase().includes(q.trim().toLowerCase());
+const baseFilters = () => [
+  { id: 'f1', table: 'invoices', name: 'Beispiel Bistro AG, überfällig', status: 'overdue', cu: 'c1' },
+  { id: 'f2', table: 'invoices', name: 'EUR', cur: 'EUR' },
+  { id: 'f3', table: 'invoices', name: 'Gemahnt', reminded: true },
+  { id: 'f4', table: 'quotes', name: 'Offen, läuft in 30 Tagen ab', status: 'sent', expiresIn: 30 },
+];
+const firstSent = (d) => (d.sent ?? []).find((s) => !s.reminder);
+const amountCell = (d, x, compact) => `${compact && d.cur !== 'CHF' ? `<span class="c">${d.cur}</span>` : ''}${fmt(x)}${d.cur !== 'CHF' ? `<small>CHF ${fmt(chfOf(d, x))}</small>` : ''}`;
+const sumCell = (rows, val) => {
+  const live = rows.filter((d) => !d.cancelled && d.kind !== 'delivery-note');
+  const chf = r2(live.reduce((s, d) => s + chfOf(d, val(d)), 0));
+  const eur = r2(live.filter((d) => d.cur === 'EUR').reduce((s, d) => s + val(d), 0));
+  return `CHF ${fmt(chf)}${eur ? `<small>darin EUR ${fmt(eur)}</small>` : ''}`;
+};
+
+function invChip(d) {
+  const st = stateOf(d);
+  if (st === 'draft') return ['draft', 'Entwurf'];
+  if (st === 'cancelled') return ['cancelled', 'storniert'];
+  if (st === 'credit') return ['credit', d.offsetIn ? 'verrechnet' : d.settlement === 'refund' ? 'zurückzuzahlen' : 'zu verrechnen'];
+  const f = figures(d), part = paid(d) > 0;
+  if (st === 'paid') return f.got === 0 && f.credited > 0 ? ['credit', 'gutgeschrieben'] : ['paid', d.paidAtIssue ? 'bezahlt, Quittung' : 'bezahlt'];
+  if (st === 'overdue') return ['overdue', `überfällig ${days(d.due, TODAY)} Tage${part ? ', teilbezahlt' : ''}`];
+  if (part) return ['partial', 'teilbezahlt'];
+  return firstSent(d) ? ['sent', 'gesendet'] : ['open', 'ausgestellt'];
+}
+function preChip(d) {
+  const st = stateOf(d);
+  if (st === 'draft') return ['draft', 'Entwurf'];
+  if (d.kind !== 'quote') { const s = d.sent?.at(-1); return ['open', s ? (s.to === 'heruntergeladen' ? 'heruntergeladen' : 'gesendet') : 'ausgestellt']; }
+  return { sent: ['sent', `gesendet, noch ${days(TODAY, d.validUntil)} Tage`], accepted: ['paid', 'angenommen'], declined: ['cancelled', 'abgelehnt'], expired: ['credit', 'abgelaufen'] }[st];
+}
+const RANK = { overdue: 0, partial: 1, open: 2, sent: 3, draft: 4, paid: 5, credit: 6, cancelled: 7 };
+const chipHtml = ([k, label]) => `<span class="ivchip c-${k}">${esc(label)}</span>`;
+const sentCell = (d) => {
+  const s = firstSent(d);
+  return s ? `<span class="ivtick" title="${esc(`${s.to === 'heruntergeladen' ? 'heruntergeladen' : 'gesendet'} ${dmy(s.date)} ${s.time}${s.to === 'heruntergeladen' ? '' : ` an ${s.to}`}${s.by ? ', von der Vorlage' : ''} (Versandprotokoll)`)}" aria-label="gesendet ${dmy(s.date)}">${I.check}</span>` : '<span class="m" title="Nicht im Versandprotokoll">–</span>';
+};
+
+const TABLES = {
+  invoices: {
+    base: '#/invoices', noun: ['Rechnung', 'Rechnungen'], add: ['Neue Rechnung', 'dlg-new'], docs: (d) => !pre(d), chip: invChip, view: 'list',
+    tabs: [
+      ['', 'Alle', () => true, 'gross'],
+      ['draft', 'Entwürfe', (d) => stateOf(d) === 'draft', 'gross'],
+      ['open', 'Offen', (d) => ['open', 'overdue'].includes(stateOf(d)), 'open'],
+      ['overdue', 'Überfällig', (d) => stateOf(d) === 'overdue', 'open'],
+      ['paid', 'Bezahlt', (d) => stateOf(d) === 'paid', 'gross'],
+      ['credit', 'Gutschriften', (d) => d.kind === 'credit-note' && d.status === 'issued', 'gross'],
+    ],
+    cols: [
+      { k: 'date', label: 'Datum', cls: 'd', wide: true, sort: (d) => d.date, cell: (d) => dmy(d.date) },
+      { k: 'no', label: 'Nr.', sort: (d) => d.number ?? '', cell: (d) => (d.number ? esc(d.number) : '<span class="draftno">Entwurf</span>') },
+      { k: 'cu', label: 'Kunde', cls: 'cu', sort: (d) => cust(d.cu).name, cell: (d) => `<span class="cx">${esc(cust(d.cu).name)}<small>${esc(d.kind === 'credit-note' ? `Gutschrift ${d.subject}` : d.subject ?? '')}</small></span>` },
+      { k: 'st', label: 'Status', sort: (d) => RANK[invChip(d)[0]], cell: (d) => chipHtml(invChip(d)) },
+      { k: 'due', label: 'Fällig', cls: 'd', wide: true, sort: (d) => d.due ?? '', cell: (d) => (d.due && !d.paidAtIssue && d.kind === 'invoice' ? `<span class="${stateOf(d) === 'overdue' ? 'late' : ''}">${dmy(d.due)}</span>` : '') },
+      { k: 'cur', label: 'Währung', wide: true, sort: (d) => d.cur, cell: (d) => d.cur },
+      { k: 'gross', label: 'Brutto', cls: 'n', sort: (d) => chfOf(d, gross(d)), cell: (d, c) => amountCell(d, gross(d), c), foot: (rows) => sumCell(rows, gross) },
+      { k: 'open', label: 'Offen', cls: 'n', sort: (d) => chfOf(d, openOf(d)), cell: (d, c) => (openOf(d) > 0 ? amountCell(d, openOf(d), c) : ''), foot: (rows) => sumCell(rows, openOf) },
+      { k: 'sent', label: 'gesendet', cls: 'ct', wide: true, sort: (d) => firstSent(d)?.date ?? '', cell: sentCell },
+      { k: 'lvl', label: 'Mahnstufe', wide: true, sort: (d) => d.reminders?.length ?? 0, cell: (d) => (d.reminders?.length ? `<span title="gesendet ${dmy(d.reminders.at(-1).date)} (Versandprotokoll)">${d.reminders.length}. Mahnung</span>` : '') },
+    ],
+    fact(all) {
+      const open = all.filter((d) => ['open', 'overdue'].includes(stateOf(d))), over = open.filter((d) => stateOf(d) === 'overdue');
+      const money = (arr) => ['CHF', 'EUR'].map((c) => [c, r2(arr.filter((d) => d.cur === c).reduce((s, d) => s + openOf(d), 0))]).filter(([, x]) => x).map(([c, x]) => `${c} ${fmt(x)}`).join(' + ') || 'CHF 0.00';
+      return `Offen: <b>${open.length} ${open.length === 1 ? 'Rechnung' : 'Rechnungen'}, ${money(open)}</b>${over.length ? `; <span class="warn">davon überfällig ${over.length}, ${money(over)}</span>` : ''}`;
+    },
+  },
+  quotes: {
+    base: '#/invoices/quotes', noun: ['Dokument', 'Dokumente'], add: ['Neue Offerte', 'dlg-newquote'], docs: pre, chip: preChip, view: 'quotes',
+    tabs: [
+      ['', 'Alle', () => true],
+      ['draft', 'Entwürfe', (d) => d.status === 'draft'],
+      ['sent', 'Offen', (d) => d.kind === 'quote' && stateOf(d) === 'sent'],
+      ['accepted', 'Angenommen', (d) => d.kind === 'quote' && stateOf(d) === 'accepted'],
+      ['lost', 'Abgelehnt, abgelaufen', (d) => d.kind === 'quote' && ['declined', 'expired'].includes(stateOf(d))],
+      ['order', 'Aufträge', (d) => d.kind === 'order' && d.status !== 'draft'],
+      ['delivery', 'Lieferscheine', (d) => d.kind === 'delivery-note' && d.status !== 'draft'],
+    ],
+    cols: [
+      { k: 'date', label: 'Datum', cls: 'd', wide: true, sort: (d) => d.date, cell: (d) => dmy(d.date) },
+      { k: 'no', label: 'Nr.', sort: (d) => d.number ?? '', cell: (d) => (d.number ? esc(d.number) : '<span class="draftno">Entwurf</span>') },
+      { k: 'kind', label: 'Art', wide: true, sort: (d) => KIND[d.kind], cell: (d) => KIND[d.kind] },
+      { k: 'cu', label: 'Kunde', cls: 'cu', sort: (d) => cust(d.cu).name, cell: (d) => `<span class="cx">${esc(cust(d.cu).name)}<small>${esc(d.subject ?? '')}</small></span>` },
+      { k: 'st', label: 'Status', sort: (d) => preChip(d)[1], cell: (d) => chipHtml(preChip(d)) },
+      { k: 'valid', label: 'Gültig bis', cls: 'd', wide: true, sort: (d) => d.validUntil ?? '', cell: (d) => (d.validUntil ? dmy(d.validUntil) : '') },
+      { k: 'cur', label: 'Währung', wide: true, sort: (d) => d.cur, cell: (d) => d.cur },
+      { k: 'gross', label: 'Brutto', cls: 'n', sort: (d) => (d.kind === 'delivery-note' ? -1e9 : chfOf(d, gross(d))), cell: (d, c) => (d.kind === 'delivery-note' ? '<small class="m">ohne Preise</small>' : amountCell(d, gross(d), c)), foot: (rows) => sumCell(rows, gross) },
+      { k: 'sent', label: 'gesendet', cls: 'ct', wide: true, sort: (d) => firstSent(d)?.date ?? '', cell: sentCell },
+    ],
+    fact(all) {
+      const open = all.filter((d) => d.kind === 'quote' && stateOf(d) === 'sent');
+      const next = open.map((d) => d.validUntil).sort()[0];
+      return `Offen offeriert: <b>${open.length} ${open.length === 1 ? 'Offerte' : 'Offerten'}, CHF ${fmt(open.reduce((s, d) => s + chfOf(d, gross(d)), 0))}</b>${next ? `; die nächste gilt bis ${dmy(next)}` : ''}`;
+    },
+  },
+};
+
+const tq = (r) => (r.q.filter ? `?filter=${encodeURIComponent(r.q.filter)}` : r.q.status ? `?status=${encodeURIComponent(r.q.status)}` : '');
+function tableRows(kind, r) {
+  const cfg = TABLES[kind], ts = TS(kind);
+  const all = D().docs.filter(cfg.docs);
+  const f = r.q.filter ? S.filters.find((x) => x.id === r.q.filter && x.table === kind) : null;
+  const tabKey = f ? f.status ?? '' : r.q.status ?? '';
+  const tab = cfg.tabs.find((t) => t[0] === tabKey) ?? cfg.tabs[0];
+  const pass = (x) => (d) => (!x.cu || d.cu === x.cu) && (!x.cur || d.cur === x.cur) && (!x.reminded || d.reminders?.length) && (!x.q || matches(d, x.q)) && (!x.expiresIn || (d.validUntil && days(TODAY, d.validUntil) <= x.expiresIn));
+  let rows = all.filter(tab[2]);
+  if (f) rows = rows.filter(pass(f));
+  if (ts.q.trim()) rows = rows.filter((d) => matches(d, ts.q));
+  const col = cfg.cols.find((c) => c.k === ts.sort.k) ?? cfg.cols[0];
+  rows = [...rows].sort((a, b) => { const x = col.sort(a), y = col.sort(b); return (x < y ? -1 : x > y ? 1 : 0) * ts.sort.dir || (b.date ?? '').localeCompare(a.date ?? ''); });
+  const filterCount = (x) => all.filter((d) => (cfg.tabs.find((t) => t[0] === (x.status ?? '')) ?? cfg.tabs[0])[2](d)).filter(pass(x)).length;
+  return { all, rows, tab, f, filterCount, pass };
+}
+
+function tableView(kind, r) {
+  const cfg = TABLES[kind], ts = TS(kind), compact = S.layout === 'B';
+  const { all, rows, tab, f, filterCount } = tableRows(kind, r);
+  S.ui.order = { kind, ids: rows.map(rid), q: tq(r) };
+  const cols = cfg.cols.filter((c) => !(compact && c.wide));
+  const tabSum = (t, arr) => r2(arr.reduce((s, d) => s + (d.cancelled || d.kind === 'delivery-note' ? 0 : chfOf(d, t[3] === 'open' ? openOf(d) : gross(d))), 0));
+  const tabs = cfg.tabs.map((t) => {
+    const arr = all.filter(t[2]), on = !f && t === tab;
+    if (!arr.length && t[0] && !on) return '';
+    return `<button type="button" role="tab" aria-selected="${on}" class="${on ? 'on' : ''}" data-href="${cfg.base}${t[0] ? `?status=${t[0]}` : ''}"><span class="n">${arr.length}</span>${t[1]}${arr.some((d) => d.kind !== 'delivery-note') ? `<span class="sum" title="${t[3] === 'open' ? 'offen' : 'brutto'}, CHF; EUR zum ESTV-Kurs des Rechnungsdatums">${fmt(tabSum(t, arr))}</span>` : ''}</button>`;
+  }).join('');
+  const mine = S.filters.filter((x) => x.table === kind);
+  const chips = `<div class="ivfilters nw" aria-label="Eigene Filter"><span class="lbl">Eigene Filter</span>${mine.map((x) => `<button type="button" class="ivfchip${f?.id === x.id ? ' on' : ''}" data-href="${f?.id === x.id ? cfg.base : `${cfg.base}?filter=${x.id}`}" aria-pressed="${f?.id === x.id}">${esc(x.name)}<span class="n">${filterCount(x)}</span>${f?.id === x.id ? '<span aria-hidden="true">×</span>' : ''}</button>`).join('')}<button type="button" class="ivfchip add" data-act="dlg-savefilter"${!f && (tab[0] || ts.q.trim()) ? '' : ' disabled title="Erst einen Reiter wählen oder suchen"'}>＋ Filter speichern</button></div>`;
+  const th = (c) => {
+    const on = ts.sort.k === c.k;
+    return `<th class="${c.cls ?? ''}"${on ? ` aria-sort="${ts.sort.dir > 0 ? 'ascending' : 'descending'}"` : ''}><button type="button" data-act="sort" data-k="${c.k}">${c.label}<span class="ar" aria-hidden="true">${on ? (ts.sort.dir > 0 ? '↑' : '↓') : ''}</span></button></th>`;
+  };
+  const sel = new Set(ts.sel), shownSel = rows.filter((d) => sel.has(d.id));
+  const allOn = rows.length > 0 && shownSel.length === rows.length;
+  const tr = (d) => {
+    const on = rid(d) === r.id, ch = sel.has(d.id), [ck] = cfg.chip(d);
+    return `<tr class="st-${ck}${on ? ' sel' : ''}${ch ? ' picked' : ''}" data-href="${hrefOf(d)}${tq(r)}" aria-selected="${on}"><td class="cb"><input type="checkbox" data-act="sel" data-id="${d.id}"${ch ? ' checked' : ''} aria-label="${esc(d.number ?? 'Entwurf')} wählen"></td>${cols.map((c) => `<td class="${c.cls ?? ''}">${c.cell(d, compact)}</td>`).join('')}<td class="ac"><button type="button" class="rowmenu" data-act="rowmenu" data-id="${d.id}" aria-label="Aktionen zu ${esc(d.number ?? 'Entwurf')}" aria-haspopup="menu">⋯</button></td></tr>`;
+  };
+  const foot = `<tr><td></td>${cols.map((c) => (c.k === 'cu' ? `<td class="cu">Total<small>${rows.length} ${rows.length === 1 ? cfg.noun[0] : cfg.noun[1]}${rows.some((d) => d.cancelled) ? ', ohne Stornierte' : ''}</small></td>` : `<td class="${c.cls ?? ''}">${c.foot ? c.foot(rows) : ''}</td>`)).join('')}<td></td></tr>`;
+  const bulk = shownSel.length ? `<div class="ivbulk nw" role="toolbar" aria-label="Gewählte"><b>${shownSel.length} gewählt</b><span class="m">${sumCell(shownSel, gross).replace(/<small>.*<\/small>/, '')} brutto${kind === 'invoices' ? ` · ${sumCell(shownSel, openOf).replace(/<small>.*<\/small>/, '')} offen` : ''}</span>${kind === 'invoices' ? '<button type="button" class="btn ghost" data-act="bulk-remind">Mahnen</button>' : ''}<button type="button" class="btn ghost" data-act="bulk-pdf">PDF</button><button type="button" class="btn ghost" data-act="bulk-csv">Export CSV</button><button type="button" class="btn ghost" data-act="bulk-ai">Als Kontext an die KI</button><button type="button" class="btn ghost" data-act="bulk-clear">Auswahl aufheben</button></div>` : '';
+  const proposals = kind === 'invoices' ? D().docs.filter((d) => d.proposal || d.feeProposal).length : 0;
+  const head = listHead('Rechnungen', cfg.add[0], cfg.add[1], `<div class="counts">${views(cfg.view)}</div>`, '2026');
+  return `<div class="page ivtbl">${head}
+    <div class="ivtabs nw" role="tablist" aria-label="${kind === 'invoices' ? 'Rechnungen' : 'Offerten und Aufträge'} nach Stand">${tabs}</div>
+    <div class="ivtools">${chips}<label class="ivsearch nw"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg><input type="search" data-act="tsearch" data-t="${kind}" value="${esc(ts.q)}" placeholder="Nr., Kunde, Text" aria-label="Suchen in Nr., Kunde, Text"></label></div>
+    ${bulk || `<p class="ivfact nw">${cfg.fact(all)}</p>`}
+    ${proposals ? `<div class="notice rgap nw">${I.dot}<span>${proposals === 1 ? '1 Zahlung wartet' : `${proposals} Zahlungen warten`} auf dich: Vorschlag prüfen</span></div>` : ''}
+    <div class="ivscroll"><table class="ivtable nw${compact ? ' compact' : ''}" aria-label="${kind === 'invoices' ? 'Rechnungen' : 'Offerten und Aufträge'}"><thead><tr><th class="cb"><input type="checkbox" data-act="selall" data-t="${kind}"${allOn ? ' checked' : ''} aria-label="Alle sichtbaren wählen"></th>${cols.map(th).join('')}<th class="ac"><span class="sr">Aktionen</span></th></tr></thead>
+    <tbody>${rows.map(tr).join('') || `<tr class="none"><td colspan="${cols.length + 2}">Keine ${cfg.noun[1]} in diesem Filter${ts.q.trim() ? ` mit «${esc(ts.q.trim())}»` : ''}.</td></tr>`}</tbody>
+    ${rows.length ? `<tfoot>${foot}</tfoot>` : ''}</table></div>
+    <div class="ivtfoot nw"><span>${rows.length} von ${all.length} ${cfg.noun[1]} · eine Seite, 50 pro Seite</span><button type="button" class="btn ghost" data-act="t-csv" data-t="${kind}">${I.dl}<span>Export CSV</span></button></div></div>`;
+}
+
+function rowMenuHtml() {
+  const m = S.ui.menu;
+  if (!m) return '';
+  const d = doc(m.id);
+  if (!d) return '';
+  const st = stateOf(d), issued = d.status === 'issued';
+  const items = [['m-open', 'Öffnen'], issued && ['m-pdf', 'PDF herunterladen'], issued && !d.cancelled && ['m-send', firstSent(d) ? 'Nochmals senden' : 'Senden'],
+    st === 'overdue' && !cust(d.cu).noReminders && ['m-remind', `${(d.reminders?.length ?? 0) + 1}. Mahnung`], issued && FOLLOW[d.kind] && st !== 'cancelled' && ['m-follow', 'Folgedokument erstellen'],
+    issued && ['m-copy', 'Als Entwurf kopieren'], ['m-ai', 'Als Kontext an die KI']].filter(Boolean);
+  return `<div class="scrim" data-act="menu-close"></div><div class="menu actmenu" role="menu" aria-label="Aktionen zu ${esc(d.number ?? 'Entwurf')}" style="left:${m.x}px; top:${m.y}px">${items.map(([a, l]) => `<button type="button" role="menuitem" data-act="${a}" data-id="${d.id}">${esc(l)}</button>`).join('')}</div>`;
+}
+const csvToast = (n) => toast(`CSV mit ${n} ${n === 1 ? 'Zeile' : 'Zeilen'}: Datum; Nr.; Kunde; Status; Fällig; Währung; Brutto; Offen; Brutto CHF; gesendet; Mahnstufe`);
+const aiToast = (n) => toast(`${n} ${n === 1 ? 'Dokument' : 'Dokumente'} als Kontext an die KI: Nummer, Kunde, Beträge, Stand und Verlauf. Frag z. B. «Wen soll ich zuerst mahnen?»`);
+const pdfToast = (arr) => { const ok = arr.filter((d) => d.status === 'issued'), no = arr.length - ok.length; toast(`${ok.length} PDF${ok.length === 1 ? '' : 's'} als ZIP, so wie ausgestellt${no ? `; ${no} nicht: ${no === 1 ? 'ein Entwurf hat' : 'Entwürfe haben'} noch kein PDF` : ''}`); };
+function remindable(d) {
+  if (d.kind !== 'invoice') return d.kind === 'credit-note' ? 'Gutschrift' : KIND[d.kind];
+  const st = stateOf(d);
+  if (st === 'draft') return 'Entwurf';
+  if (st === 'cancelled') return 'storniert';
+  if (st === 'paid') return 'bezahlt';
+  if (st === 'open') return `nicht überfällig, fällig ${dmy(d.due)}`;
+  if (cust(d.cu).noReminders) return 'Kunde: nie mahnen';
+  return null;
 }
 
 // ---------------------------------------------------------------- detail column
@@ -903,6 +1093,17 @@ function dialogHtml() {
       `<div class="ibody lkf">${pdf}${issuedNote}<label class="lkr"><span>An</span><input name="to" type="email" value="${esc(c.email)}"></label><label class="lkr"><span>Betreff</span><input name="subject" value="${esc(what)} · ${esc(F().name)}"></label><label class="lkr top"><span>Text</span><textarea rows="5">Guten Tag\n\nIm Anhang finden Sie ${esc(what)}.\n\nFreundliche Grüsse\n${esc(F().name)}</textarea></label><p class="m ivhint">Angehängt: ${esc(what.replace(/ /g, '-'))}.pdf, Byte für Byte so abgelegt.</p></div>`,
       `<button type="button" class="btn ghost" data-act="close">${g.issued ? 'Später' : 'Abbrechen'}</button><button type="button" class="btn ghost" data-act="send-do" data-v="download">Herunterladen</button><button type="button" class="btn primary" data-act="send-do" data-v="mail">Per E-Mail senden</button>`, 'isend withpdf');
   }
+  if (g.kind === 'bulkremind') {
+    const ds = g.ids.map(doc), go = ds.filter((d) => !remindable(d)), left = ds.filter((d) => remindable(d));
+    const line = (d, why) => { const lv = (d.reminders?.length ?? 0) + 1, fee = S.settings.fees[lv - 1]; return `<label><span>${why ? '' : I.check}</span><span>${esc(d.number ?? 'Entwurf')} · ${esc(cust(d.cu).name)} <span class="d">${why ? esc(why) : `${lv}. Mahnung · ${fee ? `Gebühr CHF ${fmt(fee)}` : 'ohne Gebühr'} · überfällig ${days(d.due, TODAY)} Tage`}</span></span><span class="mono">${d.cur} ${fmt(openOf(d) || gross(d))}</span><span></span></label>`; };
+    return frame('Mahnen', `${go.length} von ${ds.length} gewählten`, `<div class="ibody"><div class="picks">${go.map((d) => line(d)).join('')}</div>${left.length ? `<div class="lkhead">Nicht gemahnt</div><div class="picks">${left.map((d) => line(d, remindable(d))).join('')}</div>` : ''}<p class="m ivhint">Jede Mahnung geht an die E-Mail des Kunden und steht im Versandprotokoll, mit Stufe und Datum. Gebühren und Verzugszins aus Firma › Rechnungslayout${S.settings.interest ? ' (Verzugszins an)' : ' (Verzugszins aus)'}.</p></div>`,
+      `${close}<button type="button" class="btn primary" data-act="bulk-remind-do"${go.length ? '' : ' disabled'}>${go.length === 1 ? '1 Mahnung senden' : `${go.length} Mahnungen senden`}</button>`);
+  }
+  if (g.kind === 'savefilter') {
+    const r = route(), cfg = TABLES[g.table], tab = cfg.tabs.find((t) => t[0] === (r.q.status ?? '')) ?? cfg.tabs[0], q = TS(g.table).q.trim();
+    const name = [tab[0] ? tab[1] : '', q ? `«${q}»` : ''].filter(Boolean).join(', ');
+    return frame('Filter speichern', esc(cfg === TABLES.invoices ? 'Rechnungen' : 'Offerten · Aufträge'), `<div class="ibody lkf"><label class="lkr"><span>Name</span><input id="sf-name" value="${esc(name)}"></label><p class="m ivhint">Hält fest: Reiter «${esc(tab[1])}»${q ? ` und die Suche «${esc(q)}»` : ''}. Steht unter «Eigene Filter», mit seiner Anzahl, für dich auf diesem Gerät.</p></div>`, `${close}<button type="button" class="btn primary" data-act="sf-do">Speichern</button>`);
+  }
   return '';
 }
 
@@ -921,7 +1122,25 @@ function render() {
     main.innerHTML = companyPage() + '<div class="split" role="separator" style="left: 579px;"></div>';
   } else {
     main.dataset.area = 'invoices';
-    if (r.view === 'list') {
+    const table = tableMode() && (r.view === 'list' || r.view === 'quotes') ? (r.view === 'list' ? 'invoices' : 'quotes') : null;
+    if (table) {
+      if (r.id === 'new') { S.ui.dialog = { kind: 'new' }; history.replaceState(null, '', '#/invoices'); return render(); }
+      // B keeps the app's rule: with nothing selected, the first visible row is selected. A shows the overview alone.
+      if (!r.id && S.layout === 'B') { const first = tableRows(table, r).rows[0]; if (first) { history.replaceState(null, '', `${hrefOf(first)}${tq(r)}`); return render(); } }
+      const d = r.id ? byRoute(r.id) : null;
+      const fits = d && (table === 'quotes' ? pre(d) : !pre(d));
+      list = tableView(table, r);
+      detail = fits ? docDetail(d) : r.id ? empty(`Kein Dokument ${r.id}.`) : '';
+      if (S.layout === 'A') {
+        main.dataset.layout = 'A';
+        const panel = detail ? `<section class="detail ivpanel nw${S.ui.panelOpen ? '' : ' slide'}" aria-label="Dokument" aria-live="polite"><button type="button" class="ivclose" data-act="panel-close" aria-label="Schliessen (Esc)" title="Schliessen (Esc)">×</button>${detail}</section>` : '';
+        S.ui.panelOpen = !!detail;
+        main.innerHTML = `<section class="list" id="list" aria-label="Rechnungen">${list}</section>${panel}`;
+      } else {
+        main.dataset.layout = 'B';
+        main.innerHTML = `<section class="list" id="list" aria-label="Rechnungen">${list}</section><section class="detail" aria-live="polite">${detail || empty('Keine Rechnung gewählt.')}</section>`;
+      }
+    } else if (r.view === 'list') {
       if (r.id === 'new') { S.ui.dialog = { kind: 'new' }; history.replaceState(null, '', '#/invoices'); return render(); }
       const d = r.id ? byRoute(r.id) : null;
       if (!r.id) { const first = $$('.row', document.createRange().createContextualFragment(invoiceList(r)))[0]; if (first) { history.replaceState(null, '', first.dataset.href); return render(); } }
@@ -950,12 +1169,16 @@ function render() {
       if (!r.id && s.all.length) { history.replaceState(null, '', `#/invoices/sent/${s.all[0].id}`); return render(); }
       list = s.html; detail = sentDetail(s.all.find((x) => x.id === r.id));
     }
-    main.innerHTML = `<section class="list" id="list" aria-label="Rechnungen">${list}</section><section class="detail" aria-live="polite">${detail}</section><div class="split" role="separator" aria-orientation="vertical" style="left: 579px;"></div>`;
+    if (!table) {
+      delete main.dataset.layout;
+      main.innerHTML = `<section class="list" id="list" aria-label="Rechnungen">${list}</section><section class="detail" aria-live="polite">${detail}</section><div class="split" role="separator" aria-orientation="vertical" style="left: 579px;"></div>`;
+    }
   }
-  $('#dlg').innerHTML = dialogHtml();
+  $('#dlg').innerHTML = dialogHtml() + rowMenuHtml();
   fit();
+  if (S.ui.refocus) { const el = $(S.ui.refocus.sel); if (el) { el.focus(); el.setSelectionRange(S.ui.refocus.pos, S.ui.refocus.pos); } S.ui.refocus = null; }
   const key = location.hash;
-  if (key !== lastKey) { lastKey = key; parent.postMessage({ route: location.hash, firm: S.firm, basis: S.basis }, '*'); }
+  if (key !== lastKey) { lastKey = key; parent.postMessage({ route: location.hash, firm: S.firm, basis: S.basis, layout: S.layout }, '*'); }
 }
 function fit() {
   for (const a of $$('.ivsheet > .a4')) {
@@ -1115,7 +1338,44 @@ document.addEventListener('click', (e) => {
     case 'q-decline': d.qstatus = 'declined'; d.log.push([TODAY, 'abgelehnt']); render(); break;
     case 'q-send': d.number = nextNumber('quote'); d.status = 'issued'; d.qstatus = 'sent'; d.log.push([TODAY, `Nummer ${d.number}`]); S.ui.dialog = { kind: 'send', docId: d.id, issued: true }; go(`#/invoices/quotes/${d.number}`); break;
     case 'q-resend': S.ui.dialog = { kind: 'send', docId: d.id }; render(); break;
-    case 'copy': { const nd = { ...clone(d), id: `n${Date.now().toString(36)}`, kind: pre(d) ? d.kind : 'invoice', status: 'draft', number: undefined, date: TODAY, payments: [], writeOffs: [], sent: [], reminders: [], cancelled: undefined, qstatus: undefined, log: [[TODAY, `kopiert aus ${d.number}`]] }; if (nd.kind === 'quote') nd.validUntil = addDays(TODAY, 30); delete nd.ref; delete nd.due; delete nd.recurring; delete nd.from; delete nd.invoicedAs; delete nd.unlinked; delete nd.qrIbanEur; D().docs.push(nd); go(hrefOf(nd)); break; }
+    case 'copy': copyDoc(d); break;
+    // The overview table.
+    case 'sort': { const ts = TS(tableOf(r)), k = b.dataset.k; ts.sort = ts.sort.k === k ? { k, dir: -ts.sort.dir } : { k, dir: ['date', 'due', 'gross', 'open', 'sent', 'lvl', 'valid'].includes(k) ? -1 : 1 }; render(); break; }
+    case 'sel': { const ts = TS(tableOf(r)), id = b.dataset.id; ts.sel = ts.sel.includes(id) ? ts.sel.filter((x) => x !== id) : [...ts.sel, id]; render(); break; }
+    case 'selall': { const t = b.dataset.t, ts = TS(t), ids = tableRows(t, r).rows.map((x) => x.id), all = ids.every((x) => ts.sel.includes(x)); ts.sel = all ? ts.sel.filter((x) => !ids.includes(x)) : [...new Set([...ts.sel, ...ids])]; render(); break; }
+    case 'bulk-clear': TS(tableOf(r)).sel = []; render(); break;
+    case 'bulk-remind': S.ui.dialog = { kind: 'bulkremind', ids: selected(r).map((x) => x.id) }; render(); break;
+    case 'bulk-remind-do': {
+      const ds = S.ui.dialog.ids.map(doc), go2 = ds.filter((x) => !remindable(x)), now = new Date().toTimeString().slice(0, 5);
+      for (const x of go2) { const lv = (x.reminders?.length ?? 0) + 1; (x.reminders ??= []).push({ level: lv, date: TODAY }); (x.sent ??= []).push({ date: TODAY, time: now, to: cust(x.cu).email, title: `${lv}. Mahnung ${x.number}`, reminder: { level: lv, fee: S.settings.fees[lv - 1] } }); x.log.push([TODAY, `${lv}. Mahnung gesendet`]); }
+      const left = ds.length - go2.length;
+      S.ui.dialog = null; TS(tableOf(r)).sel = [];
+      toast(`${go2.length === 1 ? '1 Mahnung' : `${go2.length} Mahnungen`} gesendet${left ? `, ${left} nicht gemahnt (nicht überfällig, Entwurf, bezahlt oder «nie mahnen»)` : ''}`); render(); break;
+    }
+    case 'bulk-pdf': pdfToast(selected(r)); break;
+    case 'bulk-csv': csvToast(selected(r).length); break;
+    case 't-csv': csvToast(tableRows(b.dataset.t, r).rows.length); break;
+    case 'bulk-ai': aiToast(selected(r).length); break;
+    case 'dlg-savefilter': S.ui.dialog = { kind: 'savefilter', table: tableOf(r) }; render(); break;
+    case 'sf-do': {
+      const t = S.ui.dialog.table, name = $('#sf-name').value.trim() || 'Eigener Filter', ts = TS(t), id = `u${Date.now().toString(36)}`;
+      S.filters.push({ id, table: t, name, status: r.q.status || undefined, q: ts.q.trim() || undefined });
+      ts.q = ''; S.ui.dialog = null; toast(`Filter «${name}» gespeichert`); go(`${TABLES[t].base}?filter=${id}`); break;
+    }
+    case 'panel-close': go(`${TABLES[tableOf(r)].base}${tq(r)}`); break;
+    case 'rowmenu': { const rc = b.getBoundingClientRect(); S.ui.menu = { id: b.dataset.id, x: Math.max(8, Math.round(rc.right - 240)), y: Math.round(Math.min(rc.bottom + 4, innerHeight - 280)) }; render(); break; }
+    case 'menu-close': S.ui.menu = null; render(); break;
+    case 'm-open': case 'm-pdf': case 'm-send': case 'm-remind': case 'm-follow': case 'm-copy': case 'm-ai': {
+      const x = doc(b.dataset.id), href = `${hrefOf(x)}${tq(r)}`;
+      S.ui.menu = null;
+      if (act === 'm-pdf') { pdfToast([x]); render(); break; }
+      if (act === 'm-ai') { aiToast(1); render(); break; }
+      if (act === 'm-copy') { copyDoc(x); break; }
+      if (act === 'm-send') S.ui.dialog = { kind: 'send', docId: x.id };
+      if (act === 'm-follow') S.ui.dialog = { kind: 'follow', docId: x.id };
+      if (act === 'm-remind') { S.ui.after = { reminder: x.id }; if (location.hash === href) S.ui.reminder = x.id; }
+      go(href); break;
+    }
     case 'addline': d.lines.splice(firstDedIndex(d), 0, L('', 1, 'pcs', 0, F().vat ? 8.1 : 0)); render(); break;
     case 'addtitle': d.lines.splice(firstDedIndex(d), 0, L('Titel', 0, '', 0, 0, { kind: 'title' })); render(); break;
     case 'addsub': d.lines.splice(firstDedIndex(d), 0, L('Zwischentotal', 0, '', 0, 0, { kind: 'sub' })); render(); break;
@@ -1182,6 +1442,14 @@ document.addEventListener('click', (e) => {
   }
 });
 const firstDedIndex = (d) => { const i = d.lines.findIndex((l) => l.kind === 'ded'); return i < 0 ? d.lines.length : i; };
+const tableOf = (r) => (r.view === 'quotes' ? 'quotes' : 'invoices');
+const selected = (r) => { const t = tableOf(r), ts = TS(t); return tableRows(t, r).rows.filter((x) => ts.sel.includes(x.id)); };
+function copyDoc(d) {
+  const nd = { ...clone(d), id: `n${Date.now().toString(36)}`, kind: pre(d) ? d.kind : 'invoice', status: 'draft', number: undefined, date: TODAY, payments: [], writeOffs: [], sent: [], reminders: [], cancelled: undefined, qstatus: undefined, log: [[TODAY, `kopiert aus ${d.number}`]] };
+  if (nd.kind === 'quote') nd.validUntil = addDays(TODAY, 30);
+  for (const k of ['ref', 'due', 'recurring', 'from', 'invoicedAs', 'unlinked', 'qrIbanEur', 'offsetIn']) delete nd[k];
+  D().docs.push(nd); go(hrefOf(nd));
+}
 
 document.addEventListener('change', (e) => {
   const el = e.target;
@@ -1195,10 +1463,24 @@ document.addEventListener('focusout', (e) => { const el = e.target; if (el.isCon
 document.addEventListener('keydown', (e) => {
   const el = e.target;
   if (el.isContentEditable && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); el.blur(); }
-  if (e.key === 'Escape' && S.ui.dialog) { S.ui.dialog = null; render(); }
+  const listy = (r) => r.area === 'invoices' && (r.view === 'list' || r.view === 'quotes');
+  if (e.key === 'Escape') {
+    const r = route();
+    if (S.ui.menu) { S.ui.menu = null; render(); } else if (S.ui.dialog) { S.ui.dialog = null; render(); } else if (S.layout === 'A' && listy(r) && r.id) go(`${TABLES[tableOf(r)].base}${tq(r)}`);
+  }
+  // ↑ ↓ move the selection through the table's rows, the detail follows.
+  if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && tableMode() && !S.ui.dialog && !S.ui.menu && !el.closest?.('input, textarea, select, [contenteditable]')) {
+    const r = route(), o = S.ui.order;
+    if (listy(r) && o && o.kind === tableOf(r)) {
+      const i = o.ids.indexOf(r.id), j = r.id && i >= 0 ? i + (e.key === 'ArrowDown' ? 1 : -1) : 0;
+      if (o.ids[j]) { e.preventDefault(); go(`${hrefOf(byRoute(o.ids[j]))}${o.q}`); }
+    }
+  }
   if (e.key.toLowerCase() === 'n' && !el.closest?.('input, textarea, [contenteditable]') && !S.ui.dialog && route().area === 'invoices') { S.ui.dialog = { kind: route().view === 'quotes' ? 'newquote' : 'new' }; render(); }
 });
-document.addEventListener('input', (e) => { if (e.target.classList.contains('isearch')) { const q = e.target.value.toLowerCase(); $$('.iopts .opt:not(.alt)').forEach((o) => { o.style.display = o.textContent.toLowerCase().includes(q) ? '' : 'none'; }); } });
+document.addEventListener('input', (e) => {
+  if (e.target.dataset.act === 'tsearch') { const t = e.target.dataset.t; TS(t).q = e.target.value; S.ui.refocus = { sel: `[data-act="tsearch"][data-t="${t}"]`, pos: e.target.selectionStart }; render(); return; }
+  if (e.target.classList.contains('isearch')) { const q = e.target.value.toLowerCase(); $$('.iopts .opt:not(.alt)').forEach((o) => { o.style.display = o.textContent.toLowerCase().includes(q) ? '' : 'none'; }); } });
 function edit(key, value) {
   const d = current();
   if (!d || d.status !== 'draft') return;
@@ -1219,15 +1501,16 @@ function edit(key, value) {
   render();
 }
 
-window.addEventListener('hashchange', () => { S.ui.reminder = null; S.ui.preview = false; render(); });
+window.addEventListener('hashchange', () => { S.ui.reminder = S.ui.after?.reminder ?? null; S.ui.after = null; S.ui.preview = false; render(); });
 window.addEventListener('resize', fit);
 window.addEventListener('message', (e) => {
   const m = e.data || {};
   if (m.firm && m.firm !== S.firm) { S.firm = m.firm; S.ui = { open: {}, preview: false, reminder: null, dialog: null }; location.hash = m.firm === 'salon' ? '#/invoices/draft-sd1' : '#/invoices'; }
   if (m.basis) S.basis = m.basis;
   if (m.mark !== undefined) S.mark = m.mark;
+  if (m.layout) { S.layout = m.layout; S.ui.panelOpen = false; S.ui.menu = null; }
   if (m.import) { importPayments(); return; }
-  if (m.reset) { S.data = baseline(); S.imported = false; S.settings.interest = false; S.ui = { open: {}, preview: false, reminder: null, dialog: null }; toast('Von vorn: die Daten des Demos'); }
+  if (m.reset) { S.data = baseline(); S.imported = false; S.settings.interest = false; S.filters = baseFilters(); S.ui = { open: {}, preview: false, reminder: null, dialog: null }; toast('Von vorn: die Daten des Demos'); }
   render();
 });
 
@@ -1238,7 +1521,13 @@ window.addEventListener('message', (e) => {
   if (q.firm === 'salon' || q.firm === 'kaffee') S.firm = q.firm;
   if (q.basis === 'agreed' || q.basis === 'received') S.basis = q.basis;
   if (q.interest === '1') S.settings.interest = true;
+  if (['A', 'B', 'list'].includes(q.layout)) S.layout = q.layout;
+  S.filters = baseFilters();
   if (q.import === '1' && S.firm === 'kaffee') { S.imported = true; importNow(); }
-  if (q.firm || q.basis || q.import || q.interest) history.replaceState(null, '', location.hash.replace(/[?&](firm|basis|import|interest)=[^&]*/g, '').replace(/\?$/, '').replace(/\?&/, '?'));
+  if (q.firm || q.basis || q.import || q.interest || q.layout) {
+    const [p, qs] = location.hash.split('?'), keep = new URLSearchParams(qs);
+    for (const k of ['firm', 'basis', 'import', 'interest', 'layout']) keep.delete(k);
+    history.replaceState(null, '', `${p}${keep.toString() ? `?${keep}` : ''}`);
+  }
   render();
 })();
