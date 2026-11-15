@@ -66,3 +66,35 @@ html.mark-new .seg.gb button.nw, html.mark-new .seg2 button.nw { outline-offset:
 
 /* The QR-bill's font (Liberation Sans in the app's PDF); Arimo has the same metrics. */
 .qrb text, .qrb tspan { font-family: "Liberation Sans", Arimo, Arial, sans-serif; }
+
+/* Patterns of the market review (2026-11-15). */
+/* Betrag · erhalten · gutgeschrieben · offen: four figures on every invoice. */
+.ivfig { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 12px; max-width: 760px; }
+.ivfig > div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: grid; gap: 1px; min-width: 0; }
+.ivfig span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.ivfig b { font: 500 15px "Geist Mono", monospace; color: var(--ink); }
+.ivfig small { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ivfig .open b { color: var(--accent); }
+.ivfig .warn { border-color: var(--warn); background: var(--warn-soft); }
+.ivfig .warn b, .ivfig .warn small { color: var(--warn); }
+
+/* The chain of documents: Offerte → Auftragsbestätigung → Lieferschein → Rechnung. */
+.ivchain { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin-top: 10px; font-size: 12.5px; color: var(--ink-2); }
+.ivchain .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-right: 2px; }
+.ivchain b { color: var(--ink); font-weight: 600; }
+.ivchain .ar { color: var(--faint); }
+.ivchain a { color: var(--accent); text-decoration: none; }
+
+/* Warn, then the person decides: what is off, the rule, what follows. */
+.warnbox { border: 1px solid var(--warn); background: var(--warn-soft); border-radius: 10px; padding: 10px 12px; display: grid; gap: 6px; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+.warnbox b { color: var(--warn); font-weight: 600; }
+.warnbox .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+.lkf .lkr .warnbox { max-width: 520px; }
+
+/* Optional lines on a quote: priced and shown, not in the total. Paper colours on the sheet. */
+.a4 tr.opt td { color: #6e7685; }
+.a4 .optl { display: inline-block; font-size: 7pt; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; border: .25mm solid currentColor; border-radius: 1mm; padding: 0 1mm; margin-right: 1mm; vertical-align: .3mm; }
+.a4 .sum .optsum { color: #6e7685; font-size: 8.5pt; }
+.edo { position: absolute; right: -16mm; top: 1.2mm; height: 4.5mm; padding: 0 1.4mm; font-size: 7pt; line-height: 4.5mm; color: #6e7685; border: .25mm solid #d3d8e1; border-radius: 2.25mm; background: #fff; }
+.edo[aria-pressed="true"] { color: #0067b1; border-color: #0067b1; }
+.idlg .ibody .warnbox { margin-bottom: 10px; }

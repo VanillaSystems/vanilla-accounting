@@ -1,7 +1,8 @@
 # Spec: invoicing for the personas
 
-Status: decided (2026-11-14), on `0.4.2`. The owner accepted all twelve recommendations of the
-draft of 2026-11-13; section 7 records them. Asked: «can we on the start speccing out the
+Status: decided (2026-11-14), on `0.4.2`; amended 2026-11-15. The owner accepted all twelve
+recommendations of the draft of 2026-11-13, and on 2026-11-15 the patterns of a market review and
+the rule «warn, then the person decides»; section 7 records both. Asked: «can we on the start speccing out the
 invoicing for the personas in question? I want a fully fledged invoicing tool». A clickable
 prototype of phases 1 to 3 is in [mockups/invoicing/](mockups/invoicing/index.html).
 
@@ -64,9 +65,12 @@ run, eBill, and a list of open items.
   say: «For invoicing in euros (EUR), only the combination IBAN/SCOR reference and
   IBAN/unstructured message is possible». The change log names chapters 2.8, 2.10, 2.12, 4.2.2 and
   4.3.2. Version 2.3 remains valid until November 2027. Today `manifest.ts:161` accepts a `qrIban`
-  under `payTo.EUR`, and `referenceFor` (`reference.ts`) then gives a QRR reference to a EUR
-  invoice. Fix: refuse `qrIban` under any currency but CHF, with words. On a EUR invoice, use the
-  plain IBAN and SCOR even if a QR-IBAN is set. Also check that `swissqrbill` ^4.4.2 writes only
+  under `payTo.EUR` without a word, and `referenceFor` (`reference.ts`) then gives a QRR reference
+  to a EUR invoice. Fix: a `qrIban` under any currency but CHF brings a warning (4.11): what is
+  off, the rule (v2.4, chapters above; v2.3 valid until November 2027) and what follows (banks
+  accept such a EUR QR-bill until November 2027, then refuse it). The person keeps it with
+  «Trotzdem speichern»; without it, a EUR invoice uses the plain IBAN and SCOR. An issued invoice
+  keeps what it printed. Also check that `swissqrbill` ^4.4.2 writes only
   structured addresses (type S). Combined addresses were removed in v2.3 (chapter 4.2.2).
 - **F2 Citation.** The code says the supply date is Art. 26 Abs. 2 lit. d MWSTG
   (`model.ts:89`). The law has it under lit. c; lit. d is «Art, Gegenstand und Umfang der
@@ -175,8 +179,9 @@ version and a ladder step in `src/workspace/schema.ts`: one `invoices.json` step
 
 | Addition | Where | Step |
 |---|---|---|
-| `kind` gains `quote` and `delivery-note` (beside `invoice`, `credit-note`). A quote has its own number series (`OF-YYYY-NNN`), `validUntil`, and `status` `draft` → `sent` → `accepted` / `declined` / `expired`. A delivery note has its own series (`LS-…`), no prices on paper, no reference and no booking. | `invoices.json` | **step** (INVOICES 2→3) |
-| `from?: { id, kind }` on an invoice: the quote or order it came from. `ordered?: string` (the customer's order reference, printed) | `invoices.json` | **step** (same) |
+| `kind` gains `quote`, `order` and `delivery-note` (beside `invoice`, `credit-note`): one record shape and one editor for every kind (4.4). A quote has its own number series (`OF-YYYY-NNN`), `validUntil`, and `status` `draft` → `sent` → `accepted` / `declined` / `expired`. An order confirmation has its own series (`AB-YYYY-NNN`), prices and no booking. A delivery note has its own series (`LS-…`), no prices on paper, no reference and no booking. | `invoices.json` | **step** (INVOICES 2→3) |
+| `from?: { id, kind }` on any document: the document it was made from by «Folgedokument erstellen». The chain shown on each document is derived from `from` (and `creditFor`), never stored twice. `ordered?: string` (the customer's order reference, printed) | `invoices.json` | **step** (same) |
+| `InvoiceLine.optional?: true` on a quote or an order confirmation: priced and printed, marked «Option», never in a total, a VAT figure or a QR amount. An invoice or credit note has no optional line: a follow-up turns a picked option into an ordinary line and leaves the others out | `invoices.json` | **step** (same) |
 | `role?: 'partial' | 'final'` on an invoice (Akonto / Schlussrechnung). A final invoice's deduction lines carry `deducts: <invoice id>` and a negative price at the deducted invoice's rate, so totals, QR amount and booking work as they do today | `invoices.json` `InvoiceLine.deducts` | **step** (same) |
 | `schedule?: Array<{ amount, dueDate, label }>` on an issued invoice: the retention or instalments. The QR-bill asks for what is due first. A later instalment is sent as a payment notice (a sent document of kind `instalment`) with its own QR-bill and the same reference | `invoices.json`; `SENT_KINDS` gains `instalment` | **step** (same) |
 | `writeOffs: Array<{ date, amount, reason: 'skonto' | 'discount' | 'loss' | 'fee' | 'rounding', note? }>` on an issued invoice. `openAmount` subtracts it | `invoices.json` | **step** (same) |
@@ -197,9 +202,9 @@ period (golden rule 1).
 ### 4.4 Flows
 
 ```
-quote ──accept──► (order confirmation = the quote re-sent as «Auftragsbestätigung»)
-   │                 │
-   └──convert────────┴──► invoice draft ──issue──► invoice ──send──► customer
+quote ──Folgedokument──► order confirmation ──Folgedokument──► delivery note
+   │                           │                                    │
+   └──convert (options?)───────┴────────────Folgedokument──────────┴──► invoice draft ──issue──► invoice ──send──► customer
                           (whole, or partial: Akonto 1..n, then final with deductions)
                                                      │
               recurring template ──on its day──► draft (or issued and sent, if the person chose so)
@@ -211,8 +216,30 @@ quote ──accept──► (order confirmation = the quote re-sent as «Auftrag
                  rest open ──person──► write-off (Skonto, loss, fee) │ credit note │ cancellation
 ```
 
-- **Quote → invoice.** «In Rechnung umwandeln» copies the lines into a draft with `from`. A
-  quote can become several partial invoices. The quote shows what is invoiced of it.
+- **One editor for every kind.** Quote, order confirmation, delivery note, invoice and credit note
+  are the same record and the same A4 editor (today's `Sheet.tsx`): lines, title and subtotal
+  lines, preview, issue, send. The kind decides the title, the number series, what the paper shows
+  (a delivery note has no prices) and whether anything is booked (only invoices and credit notes).
+- **Folgedokument erstellen.** On any issued document, one click makes the next document of the
+  chain as a draft, every line copied with text, quantity, unit, price, rate and tags, and `from`
+  set. From a quote: order confirmation, delivery note or invoice. From an order confirmation:
+  delivery note or invoice. From a delivery note: invoice. From an invoice: delivery note or credit
+  note (all lines with a minus; the person deletes what is not credited). A quote that gets an
+  order confirmation or an invoice is `accepted` by that fact. Each document shows its chain
+  (OF-2026-002 → AB-2026-001 → LS-2026-001 → 2026-006), each step a link.
+- **Quote → invoice.** «In Rechnung umwandeln» is the follow-up «invoice» of a quote. A quote can
+  become several partial invoices. The quote shows what is invoiced of it.
+- **Optional lines.** A line of a quote or order confirmation can be marked optional: it is priced
+  and printed with «Option» and its amount in brackets, and the sheet names the sum of the options
+  below the total; it is never in the total, the VAT or the QR amount. On «In Rechnung umwandeln»
+  (and any follow-up) the person picks which options come along: the picked ones become ordinary
+  lines, the others stay on the quote.
+- **Facts stay by code.** A document is «gesendet» because the sent log holds it (time,
+  recipient, Message-ID or download, checksum), and «bezahlt» or «offen» because the bank statement
+  was matched (ADR 0010). There is no click «als versendet markieren» or «als bezahlt markieren»,
+  where a tool without its own mailbox and bank matching needs one. Only what the customer alone
+  knows is a click: a quote «angenommen» or «abgelehnt» (or a follow-up says it). Money the app
+  never saw (cash in hand) is booked by hand as a payment, which is then a fact like any other.
 - **Partial and final invoice.** A partial invoice is an ordinary invoice with `role: 'partial'`.
   The final invoice lists the whole work. «Akontos abziehen» adds one deduction line per partial
   invoice that is issued and not cancelled, at its rates, gross or net as the partial invoice was.
@@ -263,6 +290,7 @@ Cash basis = `company.vat.reporting: received`. Agreed = `agreed`. The codes are
 | Event | Cash basis | Agreed basis |
 |---|---|---|
 | Quote, order confirmation, delivery note | nothing | nothing |
+| Optional line of a quote or order confirmation | nothing (never in a total) | nothing |
 | Invoice issued (also partial or final) | nothing (open item in `invoices.json`) | `RE-<n>`: 1100 / revenue, the sale codes per rate (V81, V26, V38; V0-E / V0 abroad or export; F1 or F2 by `activity` on the net rate; no code when not registered), its date. Exists, plus `activity` |
 | Final invoice with deductions | its payment books the revenue split of its own lines, deductions included (the remainder) | `RE-<n>` for its total, which is already the remainder |
 | Payment | bank / revenue with the codes, split like the invoice (exists) | bank / 1100, exchange difference on 6960 (exists) |
@@ -307,7 +335,7 @@ Every action has a button: the AI is never the only way (Treuhänderin persona).
 | Article list and units | The firm's articles and prices |
 | A **lines import contract**: a table of date, text, quantity, unit, price and optional tags, from a pasted table or a CSV | A source that turns one tracker's or one shop system's export into that table, written by the AI with the person |
 | A **delivery channel contract** for documents beyond e-mail and download (`deliver(doc) → { to, channel, id }`, as `Deliver` in `service.ts`) | An eBill or portal source for one network partner, written on site |
-| Import of customers and open invoices from a table (the switch from another tool) | The mapping of one tool's export columns (bexio, Banana, a spreadsheet) |
+| Import of customers and open invoices from a table (the switch from another tool) | The mapping of one tool's export columns (another bookkeeping tool, a spreadsheet) |
 
 No branch for one bank, tracker, eBill partner or tool goes into the app.
 
@@ -320,11 +348,19 @@ Rechnungen stays one area (`src/app/areas/invoices/`) with list and detail (`Spl
   `recurring`, `open-items`. A quote is `/invoices/OF-2026-004`. A delivery note is
   `/invoices/LS-2026-002`. A recurring template is `/invoices/recurring/<id>`. `status` gains
   `quote-open`, `accepted`.
-- **List:** the tabs Rechnungen · Offerten · Kunden · Artikel · Wiederkehrend · Offene Posten ·
-  Versendet. Offene Posten lists every invoice with something open, by customer, with age bands
+- **List:** the tabs Rechnungen · Offerten · Aufträge · Kunden · Artikel · Wiederkehrend · Offene
+  Posten · Versendet. «Offerten · Aufträge» lists quotes, order confirmations and delivery notes,
+  grouped by kind and state. Offene Posten lists every invoice with something open, by customer, with age bands
   (0–30, 31–60, 61–90, > 90 days). It is printable (Debitorenliste, year end and audit) and
   exports to CSV.
-- **Detail:** the A4 sheet as today. New buttons by state: «In Rechnung umwandeln» (quote),
+- **Four figures** on every issued invoice, above its sheet: Betrag · erhalten · gutgeschrieben ·
+  offen. «erhalten» is the sum of the matched payments, «gutgeschrieben» the sum of its credit
+  notes and write-offs, «offen» the rest; a negative rest is the customer's credit («Guthaben, zu
+  verrechnen»). Each figure names where it comes from (the statement's date, the credit note's
+  number) and none is typed. The same figures feed the open-items list.
+- **Chain** on every document that has one: each step a link (`hrefOf`), the current one bold.
+- **Detail:** the A4 sheet as today. New buttons by state: «Folgedokument erstellen» (any issued
+  document), «In Rechnung umwandeln» (quote),
   «Akontos abziehen» (final), «Rest ausbuchen» (open), «Zahlungsaufforderung» (retention due),
   «Lieferschein» (from an invoice or a quote). The margin shows `from`, the partial invoices of a
   final invoice, the write-offs, and the bookings each event made (links to `/journal/<id>` with
@@ -356,6 +392,13 @@ Rechnungen stays one area (`src/app/areas/invoices/`) with list and detail (`Spl
   each row of 4.5, on cash and agreed basis, each VAT setup (effective, net rate, none), and a
   write-off of an invoice of a filed period (dated open, `corrects` where due).
 - API: a row in `tests/period-lock.test.ts` for every new route that writes the books.
+- Follow-up and options: a follow-up copies every line and sets `from`; the chain is the same seen
+  from each of its documents; an optional line changes no total, VAT figure or QR amount; picked
+  options become ordinary lines, unpicked ones are left out.
+- Four figures: Betrag − erhalten − gutgeschrieben = offen for every invoice of the demos, and the
+  open-items list sums the same «offen».
+- Warnings (4.11): each one names the fact, the rule and what follows, and «Trotzdem …» does the
+  action and records it as an ordinary entry of the log, with no override field.
 - UI: `tests/invoices-area.test.ts` for the new views. One e2e walk (`tests/e2e-invoices.test.ts`):
   quote → two partial invoices → final → payment with Skonto.
 - **Golden master:** only `demo/` books invoice entries today. The new demo data (below) changes
@@ -370,6 +413,41 @@ Rechnungen stays one area (`src/app/areas/invoices/`) with list and detail (`Spl
 - **Personas:** `invoices.md` gets the checkpoints of section 5 per phase, and a persona file each
   for the consultant's and the Schreinerei's invoicing (or sections in `other-firms.md`).
 
+### 4.11 Warn, then the person decides (owner, 2026-11-15)
+
+Where this area refuses a person today, it warns instead: it says what is off, which rule it
+touches and what follows, and offers «Trotzdem …». The action is recorded like any other (log,
+sent log, books), with no override flag and no «trotz Warnung» mark. The exception is a security
+boundary. Code still refuses what is not the person's to decide in the first place: a format a
+third party rejects outright, or a write the golden rules forbid.
+
+| Refused (today, or as first written in this spec) | The warning: what is off · rule · what follows | The person's way on |
+|---|---|---|
+| Issue with something Art. 26 asks missing (`missingForIssue`) | «Es fehlt: …» · MWSTG Art. 26 Abs. 2 lit. a–f, the letter named · the customer may not deduct the input tax on it; once issued it changes only by credit note or cancellation | «Trotzdem ausstellen»; the missing item links to where it is fixed (exists) |
+| Issue with a line without text or price | «Eine Position ohne Text oder Preis» · Art. 26 Abs. 2 lit. d, e · it prints as 0.00 | «Trotzdem ausstellen» |
+| No account to pay to | «Kein Konto für CHF» · QR-bill needs an IBAN · the invoice prints without a payment part | «Trotzdem ausstellen» (bank details by hand in the text) |
+| Cancel a paid invoice (refused today) | «2026-001 ist bezahlt» · a cancellation undoes the invoice, the money stays received · the payment is released and waits unmatched until matched or paid back; a filed quarter stays as filed, the reversal is booked in the open one | «Gutschrift statt Storno», or «Trotzdem stornieren» |
+| A credit note above what is still credited of its invoice (refused today) | «Gutschrift über dem Rechnungsbetrag» · MWSTG Art. 41: the tax follows the consideration · the VAT reduction is larger than the supply | «Trotzdem ausstellen» |
+| A QR-IBAN under EUR (F1) | «Seit v2.4 nur für CHF» · SIX IG v2.4, v2.3 valid until November 2027 · banks refuse it after November 2027 | «Trotzdem speichern» |
+| A follow-up of an expired or declined quote | «Abgelaufen am …» or «abgelehnt am …» · the quote's own `validUntil`, or the customer's answer in the log · the old prices and rates go into the draft, the quote becomes accepted | «Trotzdem erstellen» |
+| A write-off above what is open | «Mehr als offen» · the open amount · the invoice shows a credit balance | «Trotzdem ausbuchen» |
+
+Kept as hard rules, each for its reason:
+
+- **A filed VAT quarter** (AGENTS.md golden rule 1). A write-off, credit note or cancellation
+  that touches a filed period is dated in the open period, with `corrects` where due; nothing in
+  the filed quarter changes. The app's hard lock stays exactly as it is until the owner rewrites
+  that rule. If he does, the warning would read: «Q3 2026 ist bei der ESTV eingereicht · Regel 1:
+  eine eingereichte Abrechnung ändert sich nicht mehr · eine Änderung hier macht die Zahlen der
+  Abrechnung ungleich der eingereichten; die Korrekturabrechnung (0535) zeigt die Differenz» with
+  «Trotzdem ändern». This spec builds no such switch.
+- **An issued document is kept** (OR Art. 958f, GeBüV): it is never deleted or printed again;
+  cancellation and credit note are the ways on. Treated like golden rule 1: it stays until the
+  owner rules otherwise.
+- **Who issues on which device** (decision 7.4): two devices issuing would give one number twice.
+  Kept as a guard of the one gapless series; the owner may confirm or turn it into a warning.
+- **Security boundaries**: the SMTP password, the mailbox, a workspace's private data.
+
 ---
 
 ## 5. Phases
@@ -382,7 +460,9 @@ Each phase ends with a persona walk in the `verify` skill, scored 0/1/2 per chec
 Scope: F1 (QR-IBAN/QRR CHF only), F2, F3 (`activity` on lines for two net rates), **write-off**
 («Rest ausbuchen»: skonto, discount, loss, fee; booked on the agreed basis as in 4.5), **Skonto in
 the terms** recognised on payment, **open-items list** (Offene Posten, by customer, with age,
-printable, CSV), **units** m², m, m³, l, kg, month, **title and subtotal lines**, and the
+printable, CSV), **the four figures** on every invoice (Betrag · erhalten · gutgeschrieben · offen,
+from what the records hold today), **the warnings of 4.11** for what this phase touches,
+**units** m², m, m³, l, kg, month, **title and subtotal lines**, and the
 `invoicing:` section in the three demos that lack it. One `invoices.json` step (2→3: `writeOffs`,
 line `kind`, `activity`, units) and one manifest step (Skonto, write-off accounts).
 
@@ -394,20 +474,23 @@ Acceptance (persona `invoices.md`, Sandra, and the consultant):
 
 | # | Checkpoint | 2 means |
 |---|---|---|
-| P1.1 | EUR invoice with a QR-IBAN set | the setting is refused with words; an EUR invoice prints SCOR with the plain IBAN |
+| P1.1 | EUR invoice with a QR-IBAN set | saving it warns with the rule and what follows; without «Trotzdem speichern» an EUR invoice prints SCOR with the plain IBAN; an issued invoice keeps what it printed |
 | P1.2 | Painter's invoice by m² with a title line per room and a subtotal | sheet and PDF correct, totals per rate right, Art. 26 check passes |
 | P1.3 | Payment 2 % short within the Skonto days | the invoice reads «bezahlt», the Skonto written off by code; on the agreed basis a `-V81` entry on 3800 equals 2 % of the gross |
 | P1.4 | Customer gone bankrupt | «Rest ausbuchen» as loss in three clicks; cash basis: no entry; agreed: 3805 / 1100 with `-V81`; the MWST tab shows the reduction in the open quarter |
 | P1.5 | Offene Posten on 31.12. | matches the year-end receivables proposal to the Rappen; prints and exports |
 | P1.6 | Schreinerei with two net rates | a line marked as the second activity books F2; the half year's form shows it in the second rate's row (333; the box numbers are marked uncertain in AGENTS.md) |
 | P1.7 | Treuhänderin without AI | P1.2–P1.5 done by hand, no AI asked |
+| P1.8 | The four figures | on every invoice of the demos Betrag − erhalten − gutgeschrieben = offen; a credit note and a write-off each show in «gutgeschrieben» |
+| P1.9 | Cancel a paid invoice | a warning with the payment, the rule and what follows; «Gutschrift statt Storno» offered; «Trotzdem stornieren» releases the payment, which waits unmatched; the log holds it as an ordinary entry |
 
 ### Phase 2: quotes, partial and final invoices, retention
 
-Scope: `quote` with its series, sending, accept or decline, «In Rechnung umwandeln»; order
-confirmation as the quote re-sent under its title; partial and final invoices with «Akontos
-abziehen»; retention and instalment notices (`schedule`); delivery note. `invoices.json` step
-for the new kinds, `from`, `role`, `deducts`, `schedule`.
+Scope: one editor for every kind; `quote` with its series, sending, accept or decline, optional
+lines and «In Rechnung umwandeln» with the pick of options; `order` (Auftragsbestätigung) with its
+series; delivery note; «Folgedokument erstellen» and the chain on each document; partial and final
+invoices with «Akontos abziehen»; retention and instalment notices (`schedule`). `invoices.json`
+step for the new kinds, `from`, `optional`, `role`, `deducts`, `schedule`.
 
 Acceptance (Sandra and the Schreinerei):
 
@@ -417,6 +500,9 @@ Acceptance (Sandra and the Schreinerei):
 | P2.2 | Two Akonto invoices, then the final invoice | the final invoice lists the whole work, deducts both partial invoices with their VAT, its QR-bill asks for the remainder; agreed basis: three events whose sum is the whole; cash basis: the three payments' revenue is the whole |
 | P2.3 | Retention 5 % until acceptance | QR-bill for 95 %; on the due day a fact in the list; the instalment notice with its own QR-bill pays the rest, matched by the same reference |
 | P2.4 | Final invoice while an Akonto is unpaid | the unpaid partial invoice stays open on its own; nothing is counted twice |
+| P2.5 | Quote with two options, one taken | the quote's total leaves both out and names them; «In Rechnung umwandeln» asks; the invoice holds the taken one as an ordinary line, its total and QR amount include it |
+| P2.6 | Quote → order confirmation → delivery note → invoice | each step one click, every line copied; each document shows the same chain; the delivery note prints no prices; only the invoice books |
+| P2.7 | Follow-up of an expired quote | a warning with the date and what follows; «Trotzdem erstellen» makes the draft |
 
 ### Phase 3: recurring, hours, re-billed costs, articles
 
@@ -503,6 +589,25 @@ The owner accepted the recommendation of each of the twelve questions of the dra
     paid on its day (4.5). It comes in phase 3.
 12. **Currencies beyond CHF and EUR** come in phase 4. No persona has a client outside CHF and EUR
     today.
+
+### Decisions (owner, 2026-11-15)
+
+13. **Patterns of the market review** go into the spec and the prototype: one editor and
+    «Folgedokument erstellen» with the chain (4.4, phase 2), the four figures (4.8, phase 1),
+    optional lines on quotes (4.3, 4.4, phase 2), and facts kept by code where other tools set a
+    status by hand (4.4).
+14. **Warn, then the person decides** (4.11): every refusal of this area becomes a warning with
+    «Trotzdem …», recorded like any other action, except security boundaries. The filed-quarter
+    lock of golden rule 1 stays as it is until the owner rewrites that rule.
+
+### Patterns taken from the market review (2026-11-15)
+
+A review of a Swiss market leader's invoicing (an internal teardown; nothing of its look, names or
+words is copied) gave four patterns: one editor for every document kind with a one-click follow-up
+that copies all lines and shows the chain; a strip of four figures per invoice; optional lines on
+quotes, picked on conversion; and statuses a person sets by hand. The first three are taken. The
+fourth is not: here «gesendet» and «bezahlt» stay facts from the sent log and the bank, which is
+where this app is ahead.
 
 ## Sources
 

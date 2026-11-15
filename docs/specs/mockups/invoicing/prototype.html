@@ -61,7 +61,11 @@ document.querySelector('[data-cmd="reset"]').addEventListener('click', () => sen
 const HINTS = [
   [/draft-sd1|^#\/invoices\/2026-00[3]$/, null],
   [/^#\/invoices\/draft-/, 'Tipp: auf dem Blatt tippen · «Aus Artikelliste» · «Vorschau» zeigt den QR-Zahlteil · «Ausstellen»'],
-  [/^#\/invoices\/quotes/, 'Tipp: «In Rechnung umwandeln» macht einen Rechnungsentwurf mit allen Positionen'],
+  [/^#\/invoices\/quotes\/OF-2026-003/, 'Tipp: abgelaufen · «Folgedokument erstellen» warnt, dann «Trotzdem erstellen»'],
+  [/^#\/invoices\/quotes\/(AB|LS)-/, 'Tipp: die Kette oben · «Folgedokument erstellen» übernimmt alle Positionen'],
+  [/^#\/invoices\/quotes/, 'Tipp: «In Rechnung umwandeln» fragt, welche Optionen mitkommen · «Folgedokument erstellen»'],
+  [/^#\/invoices\/2026-001/, 'Tipp: bezahlt · «Stornieren» warnt und bietet «Gutschrift statt Storno»'],
+  [/^#\/invoices\/2026-00[26]$/, 'Tipp: Betrag · erhalten · gutgeschrieben · offen · die Kette der Dokumente'],
   [/^#\/invoices\/open-items/, 'Tipp: einen Kunden wählen · die Nummern führen zur Rechnung'],
   [/^#\/invoices\/recurring/, 'Tipp: «Am Stichtag» umschalten · «Nächste jetzt als Entwurf anlegen»'],
   [/^#\/invoices\/customers/, 'Tipp: «Gemeinde Beispielwil» ist «nie mahnen» · «Neue Offerte»'],

@@ -32,12 +32,14 @@ const UNITS = { h: 'h', day: 'Tag', pcs: 'Stk.', flat: 'pauschal', km: 'km', m2:
 const NEW_UNITS = ['m2', 'm', 'm3', 'l', 'kg', 'month'];
 const T = {
   de: {
-    invoice: 'Rechnung', credit: 'Gutschrift', quote: 'Offerte', receipt: 'Quittung', draft: 'Entwurf', reminder: (n) => `${n}. Mahnung`,
+    invoice: 'Rechnung', credit: 'Gutschrift', quote: 'Offerte', order: 'Auftragsbestätigung', delivery: 'Lieferschein', receipt: 'Quittung', draft: 'Entwurf', reminder: (n) => `${n}. Mahnung`,
     date: 'Datum', due: 'zahlbar bis', valid: 'gültig bis', forInvoice: 'zu Rechnung', yourVat: 'Ihre MWST-Nr.', supplied: 'Leistung',
     desc: 'Beschreibung', qty: 'Menge', price: 'Preis', vat: 'MWST', amount: 'Betrag', incl: 'inkl.',
     net: 'Total netto', vatOn: (r, n) => `MWST ${r} % auf ${n}`, total: 'Total', sub: 'Zwischentotal',
     intro: 'Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:',
     quoteIntro: 'Gerne offerieren wir Ihnen folgende Leistungen:',
+    orderIntro: 'Wir danken für Ihren Auftrag und bestätigen ihn wie folgt:', deliveryIntro: 'Wir liefern Ihnen:',
+    deliveryClosing: 'Ware erhalten, Datum und Unterschrift:', option: 'Option', optNote: 'Optionen, nicht im Total', fromDoc: (k, no) => `zu ${k} ${no}`,
     receiptIntro: 'Vielen Dank für Ihren Besuch. Wir bestätigen den Erhalt von:',
     closing: (d, who, skonto) => `Zahlbar innert ${d} Tagen${skonto ? `, mit ${skonto.percent} % Skonto innert ${skonto.days} Tagen` : ''}.\nFreundliche Grüsse, ${who}`,
     quoteClosing: (who) => `Wir freuen uns auf Ihren Auftrag.\nFreundliche Grüsse, ${who}`,
@@ -53,12 +55,14 @@ const T = {
     units: UNITS,
   },
   fr: {
-    invoice: 'Facture', credit: 'Note de crédit', quote: 'Offre', receipt: 'Quittance', draft: 'Projet', reminder: (n) => `${n}e rappel`,
+    invoice: 'Facture', credit: 'Note de crédit', quote: 'Offre', order: 'Confirmation de commande', delivery: 'Bulletin de livraison', receipt: 'Quittance', draft: 'Projet', reminder: (n) => `${n}e rappel`,
     date: 'Date', due: 'payable jusqu’au', valid: 'valable jusqu’au', forInvoice: 'pour la facture', yourVat: 'Votre no TVA', supplied: 'Prestation',
     desc: 'Description', qty: 'Quantité', price: 'Prix', vat: 'TVA', amount: 'Montant', incl: 'incl.',
     net: 'Total net', vatOn: (r, n) => `TVA ${r} % sur ${n}`, total: 'Total', sub: 'Sous-total',
     intro: 'Nous vous remercions de votre mandat et vous facturons les prestations suivantes :',
-    quoteIntro: 'Nous avons le plaisir de vous proposer :', receiptIntro: 'Merci de votre visite. Nous confirmons avoir reçu :',
+    quoteIntro: 'Nous avons le plaisir de vous proposer :', orderIntro: 'Nous vous remercions de votre commande et la confirmons comme suit :', deliveryIntro: 'Nous vous livrons :',
+    deliveryClosing: 'Marchandise reçue, date et signature :', option: 'Option', optNote: 'Options, non comprises dans le total', fromDoc: (k, no) => `selon ${k} ${no}`,
+    receiptIntro: 'Merci de votre visite. Nous confirmons avoir reçu :',
     closing: (d, who, skonto) => `Payable dans les ${d} jours${skonto ? `, escompte de ${skonto.percent} % dans les ${skonto.days} jours` : ''}.\nMeilleures salutations, ${who}`,
     quoteClosing: (who) => `Dans l’attente de votre commande.\nMeilleures salutations, ${who}`, thanks: (who) => `Meilleures salutations, ${who}`,
     reminderIntro: (no, d, due) => `Notre facture ${no} du ${d} était payable le ${due}. À ce jour, nous n’avons reçu aucun paiement. Nous vous prions de verser le montant ouvert dans les 10 jours.`,
@@ -111,8 +115,8 @@ function baseline() {
         lines: [L('2 Pakete Filterkaffee beschädigt geliefert', 1, '', -33.86, 2.6, { incl: true })], sent: [{ date: '2026-09-02', time: '16:40', to: 'kueche@musterhotel.example', title: 'Gutschrift 2026-004' }], log: [['2026-09-02', 'ausgestellt, Nr. 2026-004'], ['2026-09-02', 'gesendet: Gutschrift 2026-004']] },
       { id: 'i5', kind: 'invoice', number: '2026-005', status: 'issued', cu: 'c4', subject: 'Espresso-Mischung, Export', date: '2026-09-21', due: '2026-10-21', cur: 'EUR', lang: 'de', ref: 'RF49 2026 005', exemption: 'export',
         lines: [L('Espresso-Mischung, Bohnen 1 kg', 40, 'pcs', 19.5, 0), L('Transport bis Grenze', 1, 'flat', 85, 0)], sent: [{ date: '2026-09-21', time: '15:00', to: 'einkauf@kaffeehaus-beispiel.example', title: 'Rechnung 2026-005' }], log: [['2026-09-21', 'ausgestellt, Nr. 2026-005'], ['2026-09-21', 'gesendet: Rechnung 2026-005']] },
-      { id: 'i6', kind: 'invoice', number: '2026-006', status: 'issued', cu: 'c3', subject: 'Mélange maison et formation', date: '2026-09-29', due: '2026-10-29', cur: 'CHF', lang: 'fr', ref: '00 00000 00000 00000 00202 60068', from: { kind: 'quote', id: 'q2' },
-        lines: [L('Mélange espresso maison, grains 1 kg', 15, 'pcs', 29, 2.6), L('Formation barista sur place', 4, 'h', 120, 8.1)], sent: [{ date: '2026-09-29', time: '17:20', to: 'compta@cafe-exemple.example', title: 'Facture 2026-006' }], log: [['2026-09-29', 'aus Offerte OF-2026-002 erstellt'], ['2026-09-29', 'ausgestellt, Nr. 2026-006'], ['2026-09-29', 'gesendet: Facture 2026-006']] },
+      { id: 'i6', kind: 'invoice', number: '2026-006', status: 'issued', cu: 'c3', subject: 'Mélange maison et formation', date: '2026-09-29', due: '2026-10-29', cur: 'CHF', lang: 'fr', ref: '00 00000 00000 00000 00202 60068', from: { kind: 'order', id: 'o1' },
+        lines: [L('Mélange espresso maison, grains 1 kg', 15, 'pcs', 29, 2.6), L('Formation barista sur place', 4, 'h', 120, 8.1)], sent: [{ date: '2026-09-29', time: '17:20', to: 'compta@cafe-exemple.example', title: 'Facture 2026-006' }], log: [['2026-09-29', 'Folgedokument von Auftragsbestätigung AB-2026-001'], ['2026-09-29', 'ausgestellt, Nr. 2026-006'], ['2026-09-29', 'gesendet: Facture 2026-006']] },
       { id: 'i7', kind: 'invoice', number: '2026-007', status: 'issued', cu: 'c2', subject: 'Filterkaffee Oktober', date: '2026-10-01', due: '2026-10-21', cur: 'CHF', lang: 'de', ref: '00 00000 00000 00000 00202 60079', cancelled: { date: '2026-10-02', reason: 'doppelt erfasst' },
         lines: [L('Filterkaffee Guji, Bohnen 500 g', 24, 'pcs', 16.5, 2.6)], log: [['2026-10-01', 'ausgestellt, Nr. 2026-007'], ['2026-10-02', 'storniert: doppelt erfasst']] },
       { id: 'i8', kind: 'invoice', number: '2026-008', status: 'issued', cu: 'c2', subject: 'Kaffee-Abo November', date: '2026-11-01', due: '2026-11-21', cur: 'CHF', lang: 'de', ref: '00 00000 00000 00000 00202 60082', recurring: 'r1', skonto: { percent: 2, days: 10 },
@@ -126,13 +130,20 @@ function baseline() {
         lines: [L('Hausmischung Espresso, Bohnen 1 kg, pro Monat', 25, 'pcs', 27, 2.6), L('Filterkaffee Guji, Bohnen 500 g, pro Monat', 20, 'pcs', 16.5, 2.6)], invoicedAs: ['r1'],
         sent: [{ date: '2026-08-03', time: '11:10', to: 'kueche@musterhotel.example', title: 'Offerte OF-2026-001' }], log: [['2026-08-03', 'gesendet'], ['2026-08-10', 'angenommen'], ['2026-10-28', 'als wiederkehrende Rechnung angelegt']] },
       { id: 'q2', kind: 'quote', number: 'OF-2026-002', status: 'issued', qstatus: 'accepted', cu: 'c3', subject: 'Mélange maison et formation', date: '2026-09-15', validUntil: '2026-10-15', cur: 'CHF', lang: 'fr',
-        lines: [L('Mélange espresso maison, grains 1 kg', 15, 'pcs', 29, 2.6), L('Formation barista sur place', 4, 'h', 120, 8.1)], invoicedAs: ['i6'],
-        sent: [{ date: '2026-09-15', time: '08:45', to: 'compta@cafe-exemple.example', title: 'Offre OF-2026-002' }], log: [['2026-09-15', 'gesendet'], ['2026-09-22', 'angenommen'], ['2026-09-29', 'in Rechnung 2026-006 umgewandelt']] },
+        lines: [L('Mélange espresso maison, grains 1 kg', 15, 'pcs', 29, 2.6), L('Formation barista sur place', 4, 'h', 120, 8.1), L('Moulin manuel «Muster», inox', 1, 'pcs', 89, 8.1, { optional: true })],
+        sent: [{ date: '2026-09-15', time: '08:45', to: 'compta@cafe-exemple.example', title: 'Offre OF-2026-002' }], log: [['2026-09-15', 'gesendet'], ['2026-09-22', 'Folgedokument: Auftragsbestätigung AB-2026-001, ohne die Option']] },
+      { id: 'o1', kind: 'order', number: 'AB-2026-001', status: 'issued', cu: 'c3', subject: 'Mélange maison et formation', date: '2026-09-22', cur: 'CHF', lang: 'fr', from: { kind: 'quote', id: 'q2' },
+        lines: [L('Mélange espresso maison, grains 1 kg', 15, 'pcs', 29, 2.6), L('Formation barista sur place', 4, 'h', 120, 8.1)],
+        sent: [{ date: '2026-09-22', time: '10:02', to: 'compta@cafe-exemple.example', title: 'Confirmation de commande AB-2026-001' }], log: [['2026-09-22', 'Folgedokument von Offerte OF-2026-002'], ['2026-09-22', 'gesendet: Confirmation de commande AB-2026-001']] },
+      { id: 'n1', kind: 'delivery-note', number: 'LS-2026-001', status: 'issued', cu: 'c3', subject: 'Mélange maison', date: '2026-09-26', cur: 'CHF', lang: 'fr', from: { kind: 'order', id: 'o1' },
+        lines: [L('Mélange espresso maison, grains 1 kg', 15, 'pcs', 29, 2.6)],
+        sent: [{ date: '2026-09-26', time: '07:30', to: 'heruntergeladen', title: 'Bulletin de livraison LS-2026-001' }], log: [['2026-09-26', 'Folgedokument von Auftragsbestätigung AB-2026-001, eine Position'], ['2026-09-26', 'heruntergeladen: mit der Ware geliefert']] },
       { id: 'q3', kind: 'quote', number: 'OF-2026-003', status: 'issued', qstatus: 'expired', cu: 'c4', subject: 'Espresso-Mischung 2027', date: '2026-09-15', validUntil: '2026-10-15', cur: 'EUR', lang: 'de', exemption: 'export',
         lines: [L('Espresso-Mischung, Bohnen 1 kg', 120, 'pcs', 18.9, 0)], sent: [{ date: '2026-09-15', time: '09:30', to: 'einkauf@kaffeehaus-beispiel.example', title: 'Offerte OF-2026-003' }], log: [['2026-09-15', 'gesendet'], ['2026-10-16', 'abgelaufen']] },
       { id: 'q4', kind: 'quote', number: 'OF-2026-004', status: 'issued', qstatus: 'sent', cu: 'c1', subject: 'Filiale Thun: Eröffnung', date: '2026-11-06', validUntil: '2026-12-06', cur: 'CHF', lang: 'de',
         lines: [L('Kaffee', 0, '', 0, 0, { kind: 'title' }), L('Hausmischung Espresso, Bohnen 1 kg', 40, 'pcs', 28, 2.6), L('Filterkaffee Guji, Bohnen 500 g', 20, 'pcs', 16.5, 2.6), L('Zwischentotal Kaffee', 0, '', 0, 0, { kind: 'sub' }),
-          L('Schulung', 0, '', 0, 0, { kind: 'title' }), L('Barista-Schulung Eröffnungsteam', 1, 'day', 680, 8.1), L('Kursmaterial und Milch', 1, 'flat', 45, 8.1), L('Zwischentotal Schulung', 0, '', 0, 0, { kind: 'sub' })],
+          L('Schulung', 0, '', 0, 0, { kind: 'title' }), L('Barista-Schulung Eröffnungsteam', 1, 'day', 680, 8.1), L('Kursmaterial und Milch', 1, 'flat', 45, 8.1), L('Zwischentotal Schulung', 0, '', 0, 0, { kind: 'sub' }),
+          L('Handmühle «Muster», Edelstahl, für die Bar', 2, 'pcs', 89, 8.1, { optional: true }), L('Wartung Siebträgermaschine, erstes Jahr', 1, 'flat', 180, 8.1, { optional: true })],
         sent: [{ date: '2026-11-06', time: '13:15', to: 'buchhaltung@bistro.example', title: 'Offerte OF-2026-004' }], log: [['2026-11-06', 'erstellt'], ['2026-11-06', 'gesendet: Offerte OF-2026-004']] },
     ],
     articles: [
@@ -184,7 +195,7 @@ function baseline() {
 
 const S = {
   firm: 'kaffee', basis: 'received', imported: false, mark: true,
-  settings: { interest: false, rate: 5, skonto: true, skontoPct: 2, skontoDays: 10, limit: 5, fees: [0, 20, 30], afterDays: [10, 20, 30], eurQr: false },
+  settings: { interest: false, rate: 5, skonto: true, skontoPct: 2, skontoDays: 10, limit: 5, fees: [0, 20, 30], afterDays: [10, 20, 30], eurQr: '' },
   data: baseline(),
   ui: { open: {}, preview: false, reminder: null, dialog: null, oiCu: null },
 };
@@ -195,12 +206,20 @@ const doc = (id) => D().docs.find((d) => d.id === id);
 const byRoute = (rid) => D().docs.find((d) => (d.status === 'draft' ? `draft-${d.id}` : d.number) === rid);
 const rid = (d) => (d.status === 'draft' ? `draft-${d.id}` : d.number);
 const isItem = (l) => !l.kind || l.kind === 'ded';
+// One editor for every kind (spec 4.4): the kinds before the invoice have their own series and live in «Offerten · Aufträge».
+const PRE = new Set(['quote', 'order', 'delivery-note']);
+const pre = (d) => PRE.has(d.kind);
+const KIND = { quote: 'Offerte', order: 'Auftragsbestätigung', 'delivery-note': 'Lieferschein', invoice: 'Rechnung', 'credit-note': 'Gutschrift' };
+const kindOf = (d) => (d.paidAtIssue ? 'Quittung' : KIND[d.kind]);
+const docTitle = (d) => { const Lx = T[d.lang] ?? T.de; return `${d.paidAtIssue ? Lx.receipt : Lx[{ quote: 'quote', order: 'order', 'delivery-note': 'delivery', 'credit-note': 'credit' }[d.kind] ?? 'invoice']} ${d.number ?? ''}`.trim(); };
+const hrefOf = (d) => `#/invoices/${pre(d) ? 'quotes/' : ''}${rid(d)}`;
+const SERIES = { quote: 'OF-2026-', order: 'AB-2026-', 'delivery-note': 'LS-2026-', invoice: '2026-', 'credit-note': '2026-' };
 
 // ---------------------------------------------------------------- figures (src/invoices/rules.ts totals)
 const lineAmount = (l) => r2(l.q * l.p);
 function totals(lines) {
   const by = {};
-  for (const l of lines.filter(isItem)) {
+  for (const l of lines.filter((x) => isItem(x) && !x.optional)) {
     const a = lineAmount(l), k = String(l.rate);
     by[k] ??= { rate: l.rate, netEx: 0, grossIn: 0 };
     if (l.incl && l.rate > 0) by[k].grossIn += a; else by[k].netEx += a;
@@ -222,16 +241,26 @@ const openOf = (d) => (d.kind === 'invoice' && d.status === 'issued' && !d.cance
 function stateOf(d) {
   if (d.kind === 'quote') return d.status === 'draft' ? 'draft' : d.qstatus;
   if (d.status === 'draft') return 'draft';
+  if (pre(d)) return 'done';
   if (d.cancelled) return 'cancelled';
   if (d.kind === 'credit-note') return 'credit';
   if (openOf(d) <= 0) return 'paid';
   return d.due && d.due < TODAY ? 'overdue' : 'open';
 }
 const nextNumber = (kind) => {
-  const pre = kind === 'quote' ? 'OF-2026-' : '2026-';
-  const n = D().docs.filter((d) => d.number?.startsWith(pre) && (kind === 'quote') === (d.kind === 'quote')).map((d) => Number(d.number.slice(pre.length)));
-  return `${pre}${String(Math.max(0, ...n) + 1).padStart(3, '0')}`;
+  const p = SERIES[kind];
+  const n = D().docs.filter((d) => d.number && SERIES[d.kind] === p).map((d) => Number(d.number.slice(p.length)));
+  return `${p}${String(Math.max(0, ...n) + 1).padStart(3, '0')}`;
 };
+// Four figures of an invoice (spec 4.8): what was asked, received (bank, by code), credited (credit notes and write-offs), open.
+function figures(d) {
+  const credits = D().docs.filter((x) => x.kind === 'credit-note' && x.status === 'issued' && x.creditFor === d.id);
+  const credited = r2(-credits.reduce((s, x) => s + gross(x), 0) + writtenOff(d));
+  const elsewhere = r2(-credits.filter((x) => x.offsetIn).reduce((s, x) => s + gross(x), 0));
+  const amount = gross(d), got = paid(d);
+  const open = d.cancelled ? 0 : r2(amount - got - credited + elsewhere);
+  return { amount, got, credited, open, credits, elsewhere };
+}
 const rateCode = (rate, d) => (!F().vat ? '' : rate === 2.6 ? 'V26' : rate === 8.1 ? 'V81' : rate === 3.8 ? 'V38' : d.exemption === 'abroad' ? 'V0-E' : 'V0');
 const EUR_RATE = { '2026-11-12': 0.9361, '2026-09-21': 0.9447 };
 
@@ -240,6 +269,7 @@ const editable = (key, html, ph = '', cls = '') => `<span class="ed${cls ? ` ${c
 const pick = (key, options, value, cls = '') => `<select class="ed edsel${cls}" data-ed="${esc(key)}">${options.map(([v, l]) => `<option value="${esc(v)}"${String(v) === String(value) ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
 const COLS = '<colgroup><col class="cd"><col class="cq"><col class="cp"><col class="cv"><col class="ca"></colgroup>';
 const COLS_NOVAT = '<colgroup><col class="cd"><col class="cq"><col class="cp"><col class="ca"></colgroup>';
+const COLS_DN = '<colgroup><col class="cd"><col class="cq"></colgroup>';
 
 function qrBill(Lx, o) {
   const q = Lx.qr;
@@ -257,24 +287,36 @@ function sheet(d, mode = 'view', opts = {}) {
   const f = F(), c = cust(d.cu), Lx = T[d.lang] ?? T.de, edit = mode === 'edit';
   const withVat = f.vat;
   const t = totals(d.lines);
-  const vatCol = withVat;
+  const dn = d.kind === 'delivery-note';
+  const vatCol = withVat && !dn;
   const receipt = !!d.paidAtIssue && d.kind === 'invoice';
-  const base = d.kind === 'credit-note' ? Lx.credit : d.kind === 'quote' ? Lx.quote : receipt ? Lx.receipt : Lx.invoice;
+  const base = d.kind === 'credit-note' ? Lx.credit : d.kind === 'quote' ? Lx.quote : d.kind === 'order' ? Lx.order : dn ? Lx.delivery : receipt ? Lx.receipt : Lx.invoice;
   const title = opts.reminder ? `${Lx.reminder(opts.reminder.level)} · ${Lx.invoice}` : base;
   const no = d.number ? esc(d.number) : `<span class="draftno">${Lx.draft}</span>`;
   const rdate = opts.reminder ? TODAY : d.date;
   const meta = [`<span>${Lx.date} ${edit ? editable('date', dmy(d.date)) : dmy(rdate)}</span>`];
   if (d.kind === 'quote') meta.push(`<span class="${d.status === 'draft' ? 'nw' : ''}">${Lx.valid} ${dmy(d.validUntil)}</span>`);
   else if (d.kind === 'credit-note') meta.push(`<span>${Lx.forInvoice} ${esc(doc(d.creditFor)?.number ?? '')}</span>`);
+  else if (d.kind === 'order' || dn) { const src = d.from && doc(d.from.id); if (src?.number) meta.push(`<span class="nw">${esc(Lx.fromDoc((T[d.lang] ?? T.de)[{ quote: 'quote', order: 'order', invoice: 'invoice' }[src.kind] ?? 'invoice'], src.number))}</span>`); }
   else if (opts.reminder) meta.push(`<span>${Lx.due} ${dmy(addDays(TODAY, 10))}</span>`);
   else if (!receipt) meta.push(`<span>${Lx.due} ${dmy(d.due ?? addDays(d.date, c.terms))}</span>`);
   if (c.country !== 'CH' && c.vatId) meta.push(`<span>${Lx.yourVat} ${esc(c.vatId)}</span>`);
-  const intro = opts.reminder ? Lx.reminderIntro(d.number, dmy(d.date), dmy(d.due)) : d.kind === 'quote' ? Lx.quoteIntro : receipt ? Lx.receiptIntro : Lx.intro;
-  const head = `<table class="tb">${vatCol ? COLS : COLS_NOVAT}<thead><tr><th class="">${Lx.desc}</th><th class="r">${Lx.qty}</th><th class="r">${Lx.price}</th>${vatCol ? `<th class="r">${Lx.vat}</th>` : ''}<th class="r">${Lx.amount} ${d.cur}</th></tr></thead></table>`;
+  const intro = opts.reminder ? Lx.reminderIntro(d.number, dmy(d.date), dmy(d.due)) : d.kind === 'quote' ? Lx.quoteIntro : d.kind === 'order' ? Lx.orderIntro : dn ? Lx.deliveryIntro : receipt ? Lx.receiptIntro : Lx.intro;
+  const head = dn ? `<table class="tb">${COLS_DN}<thead><tr><th class="">${Lx.desc}</th><th class="r">${Lx.qty}</th></tr></thead></table>`
+    : `<table class="tb">${vatCol ? COLS : COLS_NOVAT}<thead><tr><th class="">${Lx.desc}</th><th class="r">${Lx.qty}</th><th class="r">${Lx.price}</th>${vatCol ? `<th class="r">${Lx.vat}</th>` : ''}<th class="r">${Lx.amount} ${d.cur}</th></tr></thead></table>`;
   const rows = [];
-  let run = 0;
+  let run = 0, optSum = 0;
+  const canOpt = edit && (d.kind === 'quote' || d.kind === 'order');
   d.lines.forEach((l, k) => {
-    const cols = vatCol ? COLS : COLS_NOVAT;
+    const cols = dn ? COLS_DN : vatCol ? COLS : COLS_NOVAT;
+    if (dn) {
+      if (l.kind === 'sub') return;
+      const rmx = edit ? `<button type="button" class="edx scr" data-act="rmline" data-k="${k}" title="Zeile entfernen" aria-label="Zeile entfernen">×</button>` : '';
+      if (l.kind === 'title') { rows.push(`<table class="tb">${cols}<tbody><tr class="ttl"><td colspan="2">${edit ? editable(`l:${k}:text`, esc(l.text), 'Titel', 'blocked') : esc(l.text)}${rmx}</td></tr></tbody></table>`); return; }
+      const unit = l.unit ? ` ${Lx.units[l.unit] ?? l.unit}` : '';
+      rows.push(`<table class="tb">${cols}<tbody><tr><td>${edit ? editable(`l:${k}:text`, esc(l.text), Lx.desc, 'blocked') : esc(l.text)}</td><td class="r">${edit ? editable(`l:${k}:q`, esc(qty(l.q))) : ''}${edit ? unit : esc(`${qty(l.q)}${unit}`)}${rmx}</td></tr></tbody></table>`);
+      return;
+    }
     if (l.kind === 'title') {
       rows.push(`<table class="tb nw">${cols}<tbody><tr class="ttl"><td colspan="${vatCol ? 5 : 4}">${edit ? editable(`l:${k}:text`, esc(l.text), 'Titel', 'blocked') : esc(l.text)}${edit ? `<button type="button" class="edx scr" data-act="rmline" data-k="${k}" title="Zeile entfernen" aria-label="Zeile entfernen">×</button>` : ''}</td></tr></tbody></table>`);
       run = 0; return;
@@ -283,7 +325,8 @@ function sheet(d, mode = 'view', opts = {}) {
       rows.push(`<table class="tb nw">${cols}<tbody><tr class="sub"><td colspan="${vatCol ? 4 : 3}">${edit ? editable(`l:${k}:text`, esc(l.text), Lx.sub, 'blocked') : esc(l.text)}</td><td class="r">${fmt(run)}${edit ? `<button type="button" class="edx scr" data-act="rmline" data-k="${k}" title="Zeile entfernen" aria-label="Zeile entfernen">×</button>` : ''}</td></tr></tbody></table>`);
       run = 0; return;
     }
-    const a = lineAmount(l); run = r2(run + a);
+    const a = lineAmount(l);
+    if (l.optional) optSum = r2(optSum + a); else run = r2(run + a);
     const unit = l.unit ? ` ${Lx.units[l.unit] ?? l.unit}` : '';
     const rateTxt = `${l.rate} %${l.incl && l.rate > 0 ? ` ${Lx.incl}` : ''}`;
     const unitOpts = [['', '–'], ...Object.keys(UNITS).map((u) => [u, Lx.units[u]])];
@@ -292,7 +335,10 @@ function sheet(d, mode = 'view', opts = {}) {
       ? { text: editable(`l:${k}:text`, esc(l.text), Lx.desc, 'blocked'), q: `${editable(`l:${k}:q`, esc(qty(l.q)))} ${pick(`l:${k}:unit`, unitOpts, l.unit ?? '')}`, p: editable(`l:${k}:p`, fmt(l.p)), v: pick(`l:${k}:rate`, rateOpts, `${l.incl && l.rate ? 'incl:' : ''}${l.rate}`) }
       : { text: esc(l.text), q: esc(`${qty(l.q)}${unit}`), p: fmt(l.p), v: rateTxt };
     const rm = edit ? `<button type="button" class="edx scr" data-act="rmline" data-k="${k}" title="Zeile entfernen" aria-label="Zeile entfernen">×</button>` : '';
-    rows.push(`<table class="tb${l.kind === 'ded' || l.source ? ' nw' : ''}">${cols}<tbody><tr${l.kind === 'ded' ? ' class="ded"' : ''}><td>${cells.text}</td><td class="r">${cells.q}</td><td class="r">${cells.p}</td>${vatCol ? `<td class="r">${cells.v}</td>` : ''}<td class="r">${fmt(a)}${rm}</td></tr></tbody></table>`);
+    const opt = canOpt && l.kind !== 'ded' ? `<button type="button" class="edo scr nw" data-act="optline" data-k="${k}" aria-pressed="${!!l.optional}" title="${l.optional ? 'Wieder ins Total nehmen' : 'Als Option: gezeigt, nicht im Total'}">${l.optional ? 'Option' : 'opt.'}</button>` : '';
+    const optTag = l.optional ? `<span class="optl">${esc(Lx.option)}</span> ` : '';
+    const amt = l.optional ? `(${fmt(a)})` : fmt(a);
+    rows.push(`<table class="tb${l.kind === 'ded' || l.source || l.optional ? ' nw' : ''}">${cols}<tbody><tr class="${[l.kind === 'ded' ? 'ded' : '', l.optional ? 'opt' : ''].filter(Boolean).join(' ')}"><td>${optTag}${cells.text}</td><td class="r">${cells.q}</td><td class="r">${cells.p}</td>${vatCol ? `<td class="r">${cells.v}</td>` : ''}<td class="r">${amt}${opt}${rm}</td></tr></tbody></table>`);
   });
   const add = edit ? `<div class="edadd scr"><button type="button" data-act="addline">＋ Neue Position</button><button type="button" class="nw" data-act="addtitle">＋ Titel</button><button type="button" class="nw" data-act="addsub">＋ Zwischentotal</button>${D().articles.length ? '<button type="button" class="nw" data-act="dlg-articles">＋ Aus Artikelliste</button>' : ''}${S.firm === 'kaffee' ? '<button type="button" class="nw" data-act="dlg-hours">＋ Stunden übernehmen</button><button type="button" class="nw" data-act="dlg-expenses">＋ Spesen weiterverrechnen</button>' : ''}</div>` : '';
   const rates = withVat ? t.byRate.filter((b) => b.rate > 0).map((b) => `<div><span>${esc(Lx.vatOn(String(b.rate), fmt(b.net)))}</span><span>${fmt(b.vat)}</span></div>`).join('') : '';
@@ -301,19 +347,21 @@ function sheet(d, mode = 'view', opts = {}) {
     const open = openOf(d), fee = opts.reminder.fee || 0, int = opts.reminder.interest;
     due = `${paid(d) ? `<div><span>${Lx.paidSoFar}</span><span>${fmt(-paid(d))}</span></div>` : ''}${fee ? `<div><span>${Lx.fee}</span><span>${fmt(fee)}</span></div>` : ''}${int ? `<div class="nw interest"><span>${esc(Lx.interest(S.settings.rate, dmy(d.due), int.days))}</span><span>${fmt(int.amount)}</span></div>` : ''}<div class="tot"><span>${Lx.openNow} ${d.cur}</span><span>${fmt(open + fee + (int?.amount ?? 0))}</span></div>`;
   }
-  const sum = `<div class="sum">${withVat ? `<div><span>${Lx.net}</span><span>${fmt(t.net)}</span></div>` : ''}${rates}<div class="tot"><span>${Lx.total} ${d.cur}</span><span>${fmt(t.gross)}</span></div>${due}</div>`;
+  const optLine = optSum ? `<div class="optsum nw"><span>${esc(Lx.optNote)}</span><span>(${fmt(optSum)})</span></div>` : '';
+  const sum = dn ? '' : `<div class="sum">${withVat ? `<div><span>${Lx.net}</span><span>${fmt(t.net)}</span></div>` : ''}${rates}<div class="tot"><span>${Lx.total} ${d.cur}</span><span>${fmt(t.gross)}</span></div>${optLine}${due}</div>`;
   let settle = '';
   if (d.kind === 'credit-note' && d.settlement === 'offset') {
     const inv = doc(d.creditFor);
     settle = `<div class="settle"><div><span>${esc(Lx.ofInvoice(inv.number, dmy(inv.date)))}</span><span>${fmt(gross(inv))}</span></div><div><span>${Lx.credit}</span><span>${fmt(t.gross)}</span></div></div><p class="settled">${esc(Lx.offset(`${d.cur} ${fmt(-t.gross)}`))}</p>`;
   }
   const exempt = d.exemption ? (edit ? `<p class="abroad">${pick('exemption', [['abroad', Lx.exemption.abroad], ['export', Lx.exemption.export]], d.exemption)}</p>` : `<p class="abroad">${esc(Lx.exemption[d.exemption])}</p>`) : '';
-  const eur = d.cur === 'EUR';
-  const iban = eur ? f.ibanEUR : (f.qrIban ?? f.ibanCHF);
+  // A QR-IBAN kept for EUR after the warning (spec 4.11): v2.3 allows it until November 2027; issued documents keep what they printed.
+  const eur = d.cur === 'EUR' && !(eurQrKept() && (!d.number || d.qrIbanEur));
+  const iban = d.cur === 'EUR' && !eur ? f.qrIban : eur ? f.ibanEUR : (f.qrIban ?? f.ibanCHF);
   const showRef = d.ref ?? (mode === 'preview' ? previewRef(d) : '');
   const payinfo = eur && d.kind === 'invoice' && !receipt && (d.number || mode === 'preview') ? `<p class="payinfo${mode === 'preview' ? ' nw' : ''}">${Lx.payment}: ${Lx.iban} ${esc(f.ibanEUR)}${showRef ? `, ${Lx.reference} ${esc(showRef)}` : ''}</p>` : '';
   const paidNote = receipt ? `<p class="paidnote nw">${esc(Lx.paidNote(dmy(d.date), Lx.means[d.paidAtIssue]))}</p>` : '';
-  const closingText = d.kind === 'quote' ? Lx.quoteClosing(f.owner) : d.kind === 'credit-note' || receipt ? Lx.thanks(f.owner) : opts.reminder ? Lx.reminderClosing(f.owner) : Lx.closing(c.terms, f.owner, d.skonto ?? (d.status === 'draft' && S.firm === 'kaffee' && S.settings.skonto && !eur ? { percent: S.settings.skontoPct, days: S.settings.skontoDays } : null));
+  const closingText = dn ? `${Lx.deliveryClosing}\n\n______________________________\n${Lx.thanks(f.owner)}` : d.kind === 'order' ? Lx.thanks(f.owner) : d.kind === 'quote' ? Lx.quoteClosing(f.owner) : d.kind === 'credit-note' || receipt ? Lx.thanks(f.owner) : opts.reminder ? Lx.reminderClosing(f.owner) : Lx.closing(c.terms, f.owner, d.skonto ?? (d.status === 'draft' && S.firm === 'kaffee' && S.settings.skonto && !eur ? { percent: S.settings.skontoPct, days: S.settings.skontoDays } : null));
   const closing = `<p class="closing${(d.skonto || (d.status === 'draft' && S.firm === 'kaffee' && S.settings.skonto && !eur)) && d.kind === 'invoice' && !receipt && !opts.reminder ? ' nw' : ''}">${esc(closingText)}</p>`;
   // QR-bill: CHF only on a Swiss IBAN; a draft keeps its place, the preview and an issued invoice print it.
   const qrPossible = d.kind === 'invoice' && !receipt && !d.cancelled && !eur;
@@ -340,7 +388,8 @@ function sheet(d, mode = 'view', opts = {}) {
   const page2 = own ? `<div class="a4 has-qr" style="${style}" lang="${d.lang}">${phead}${qr}</div>` : '';
   return `<div class="ivsheet${edit ? ' editing' : ''}">${page1}${page2}</div>`;
 }
-const previewRef = (d) => (d.cur === 'EUR' ? `RF${String(10 + Number(nextNumber('invoice').slice(-3)) % 89)} 2026 ${nextNumber('invoice').slice(-3)}` : `00 00000 00000 00000 00202 6${nextNumber('invoice').slice(-3)}${(Number(nextNumber('invoice').slice(-3)) * 7) % 10}`);
+const eurQrKept = () => S.firm === 'kaffee' && S.settings.eurQr === 'kept';
+const previewRef = (d) => (d.cur === 'EUR' && !eurQrKept() ? `RF${String(10 + Number(nextNumber('invoice').slice(-3)) % 89)} 2026 ${nextNumber('invoice').slice(-3)}` : `00 00000 00000 00000 00202 6${nextNumber('invoice').slice(-3)}${(Number(nextNumber('invoice').slice(-3)) * 7) % 10}`);
 
 // ---------------------------------------------------------------- bookings per basis (spec 4.5)
 function bookings(d) {
@@ -350,7 +399,7 @@ function bookings(d) {
   const rev = (rate) => f.revenue[rate] ?? f.revenue[0];
   const chf = (amount, date) => (d.cur === 'EUR' ? r2(amount * (EUR_RATE[date] ?? 0.94)) : amount);
   const cur = d.cur === 'EUR' ? 'CHF ' : '';
-  if (d.kind === 'quote') return [{ none: 'Keine Buchung: eine Offerte bucht nichts.' }];
+  if (pre(d)) return [{ none: `Keine Buchung: ${d.kind === 'quote' ? 'eine Offerte' : d.kind === 'order' ? 'eine Auftragsbestätigung' : 'ein Lieferschein'} bucht nichts.` }];
   if (d.status === 'draft') return [{ none: agreed ? 'Beim Ausstellen: Debitoren / Ertrag mit den Verkaufscodes, am Rechnungsdatum.' : d.paidAtIssue ? `Beim Ausstellen: ${MEANS_ACC[d.paidAtIssue].join(' ')} / ${rev(0).join(' ')}, am selben Tag.` : 'Noch keine Buchung: vereinnahmt bucht erst die Zahlung.' }];
   if (d.kind === 'credit-note') {
     const inv = d.offsetIn ? doc(d.offsetIn) : null;
@@ -358,6 +407,7 @@ function bookings(d) {
       ? [{ date: d.date, ref: `GS-${d.number}`, acc: `${rev(2.6)[0]} / 1100 Debitoren`, amount: `${fmt(-g)}`, code: '−V26' }]
       : [{ none: inv ? `Keine Buchung der Gutschrift selbst: als Abzugszeile auf ${inv.number} verrechnet; deren Zahlung ist um ${fmt(-g)} kleiner.` : 'Keine Buchung: sie wird mit der nächsten Rechnung verrechnet, deren Zahlung um diesen Betrag kleiner ist.' }];
   }
+  if (d.cancelled && d.unlinked) return [{ none: `Storniert am ${dmy(d.cancelled.date)}. Die Zahlung vom ${dmy(d.unlinked.at(-1).date)} ist gelöst und wartet ohne Rechnung bei den Zahlungen; ihre Buchung wird im offenen Quartal zurückgenommen.` }];
   if (d.cancelled) return [{ none: agreed ? `RE-${d.number} und RE-${d.number}-storno heben sich auf.` : 'Keine Buchung: storniert, bevor etwas bezahlt war.' }];
   if (agreed) for (const s of split(g)) rows.push({ date: d.date, ref: `RE-${d.number}`, acc: `1100 Debitoren / ${rev(s.rate).join(' ')}`, amount: `${cur}${fmt(chf(s.amount, d.date))}`, code: rateCode(s.rate, d) });
   for (const p of d.payments ?? []) {
@@ -384,7 +434,7 @@ function bookingsHtml(d) {
 const WO = { skonto: 'Skonto', discount: 'Rabatt', loss: 'Verlust', fee: 'Gebühr', rounding: 'Rundung' };
 
 // ---------------------------------------------------------------- routes
-const VIEWS = [['list', 'Rechnungen'], ['quotes', 'Offerten'], ['open-items', 'Offene Posten'], ['recurring', 'Wiederkehrend'], ['customers', 'Kunden'], ['articles', 'Artikel'], ['sent', 'Versand']];
+const VIEWS = [['list', 'Rechnungen'], ['quotes', 'Offerten · Aufträge'], ['open-items', 'Offene Posten'], ['recurring', 'Wiederkehrend'], ['customers', 'Kunden'], ['articles', 'Artikel'], ['sent', 'Versand']];
 const NEW_VIEWS = new Set(['quotes', 'open-items', 'recurring', 'articles']);
 function route() {
   const h = decodeURIComponent(location.hash.replace(/^#/, '')) || '/invoices';
@@ -414,7 +464,7 @@ function inPeriod(d) {
 }
 const STATE_LABEL = { overdue: 'Überfällig', open: 'Offen', draft: 'Entwürfe', paid: 'Bezahlt', credit: 'Gutschriften', cancelled: 'Storniert' };
 function invoiceList(r) {
-  const docs = D().docs.filter((d) => d.kind !== 'quote' && inPeriod(d));
+  const docs = D().docs.filter((d) => !pre(d) && inPeriod(d));
   const st = r.q.status;
   const n = { all: docs.length, open: docs.filter((d) => ['open', 'overdue'].includes(stateOf(d))).length, overdue: docs.filter((d) => stateOf(d) === 'overdue').length, draft: docs.filter((d) => stateOf(d) === 'draft').length, paid: docs.filter((d) => stateOf(d) === 'paid').length };
   const shown = docs.filter((d) => !st || (st === 'open' ? ['open', 'overdue'].includes(stateOf(d)) : stateOf(d) === st));
@@ -442,20 +492,33 @@ function invoiceList(r) {
     <div class="rows" role="listbox" aria-label="Rechnungen">${rowsHtml || '<div class="empty"><p>Keine Rechnungen in diesem Filter.</p></div>'}</div></div>`;
 }
 
-const Q_LABEL = { sent: 'Gesendet', draft: 'Entwürfe', accepted: 'Angenommen', declined: 'Abgelehnt', expired: 'Abgelaufen' };
+const Q_LABEL = { sent: 'Gesendet', draft: 'Entwürfe', accepted: 'Angenommen', declined: 'Abgelehnt', expired: 'Abgelaufen', done: 'Ausgestellt' };
 function quoteList(r) {
-  const qs = D().docs.filter((d) => d.kind === 'quote');
+  const qs = D().docs.filter(pre);
+  const groups = [
+    ['Entwürfe', (d) => d.status === 'draft'],
+    ['Offerten gesendet', (d) => d.kind === 'quote' && stateOf(d) === 'sent'],
+    ['Auftragsbestätigungen', (d) => d.kind === 'order' && d.status !== 'draft'],
+    ['Lieferscheine', (d) => d.kind === 'delivery-note' && d.status !== 'draft'],
+    ['Offerten angenommen', (d) => d.kind === 'quote' && stateOf(d) === 'accepted'],
+    ['Offerten abgelehnt oder abgelaufen', (d) => d.kind === 'quote' && ['declined', 'expired'].includes(stateOf(d))],
+  ];
   let rowsHtml = '';
-  for (const g of ['sent', 'draft', 'accepted', 'declined', 'expired']) {
-    const gs = qs.filter((d) => stateOf(d) === g);
+  for (const [label, test] of groups) {
+    const gs = qs.filter(test);
     if (!gs.length) continue;
-    rowsHtml += group(Q_LABEL[g], gs.length);
-    for (const d of gs) rowsHtml += row(`inv st-${g === 'sent' ? 'open' : g === 'accepted' ? 'paid' : g === 'draft' ? 'draft' : 'cancelled'}`, `#/invoices/quotes/${rid(d)}`, rid(d) === r.id, d.status === 'draft' ? '<span class="draftno">Entwurf</span>' : d.number, `${esc(cust(d.cu).name)} <small>${esc(d.subject)}</small>`, `${d.cur !== 'CHF' ? `<span class="c">${d.cur}</span>` : ''}${fmt(gross(d))}`);
+    rowsHtml += group(label, gs.length);
+    for (const d of gs) {
+      const st = stateOf(d);
+      const cls = st === 'draft' ? 'draft' : st === 'sent' ? 'open' : st === 'accepted' || st === 'done' ? 'paid' : 'cancelled';
+      const kindTag = d.kind === 'quote' ? '' : ` <small class="nw">· ${KIND[d.kind]}</small>`;
+      rowsHtml += row(`inv st-${cls}`, hrefOf(d), rid(d) === r.id, d.status === 'draft' ? '<span class="draftno">Entwurf</span>' : d.number, `${esc(cust(d.cu).name)} <small>${esc(d.subject)}</small>${d.status === 'draft' ? ` <small class="nw">· ${KIND[d.kind]}</small>` : kindTag}`, d.kind === 'delivery-note' ? '<small class="m">ohne Preise</small>' : `${d.cur !== 'CHF' ? `<span class="c">${d.cur}</span>` : ''}${fmt(gross(d))}`);
+    }
   }
-  const open = qs.filter((d) => d.qstatus === 'sent');
-  return `<div class="page">${listHead('Rechnungen', 'Neue Offerte', 'dlg-newquote', `<div class="counts"><span class="n">${qs.length}</span>&nbsp;Offerten · eigene Nummern OF-2026-…${views('quotes')}</div>`)}
+  const open = qs.filter((d) => d.kind === 'quote' && d.qstatus === 'sent');
+  return `<div class="page">${listHead('Rechnungen', 'Neue Offerte', 'dlg-newquote', `<div class="counts"><span class="n">${qs.length}</span>&nbsp;Dokumente · eigene Nummern OF-, AB-, LS-${views('quotes')}</div>`)}
     <div class="vresult static"><span>Offen offeriert</span><b class="mono"><small>CHF</small>${fmt(open.reduce((s, d) => s + gross(d), 0))}</b></div>
-    <div class="rows" role="listbox" aria-label="Offerten">${rowsHtml}</div></div>`;
+    <div class="rows" role="listbox" aria-label="Offerten und Aufträge">${rowsHtml}</div></div>`;
 }
 
 function customerList(r) {
@@ -502,7 +565,7 @@ function sentList(r) {
   for (const s of all) {
     const m = s.date.slice(0, 7);
     if (m !== month) { html += `<div class="group"><span>${MONTHS[Number(m.slice(5)) - 1]} ${m.slice(0, 4)}</span></div>`; month = m; }
-    html += `<div class="row sentrow${r.id === s.id ? ' sel' : ''}" role="option" aria-selected="${r.id === s.id}" data-href="#/invoices/sent/${s.id}"><span class="d mono">${dmy(s.date).slice(0, 6)}</span><span class="t">${esc(s.title)} <small>${esc(cust(s.d.cu).name)} · ${s.reminder ? 'Mahnung' : s.d.kind === 'quote' ? 'Offerte' : s.d.kind === 'credit-note' ? 'Gutschrift' : s.d.paidAtIssue ? 'Quittung' : 'Rechnung'}${s.by ? ' · von der Vorlage' : ''}</small></span><span class="a mono">${s.time}</span></div>`;
+    html += `<div class="row sentrow${r.id === s.id ? ' sel' : ''}" role="option" aria-selected="${r.id === s.id}" data-href="#/invoices/sent/${s.id}"><span class="d mono">${dmy(s.date).slice(0, 6)}</span><span class="t">${esc(s.title)} <small>${esc(cust(s.d.cu).name)} · ${s.reminder ? 'Mahnung' : kindOf(s.d)}${s.by ? ' · von der Vorlage' : ''}</small></span><span class="a mono">${s.time}</span></div>`;
   }
   return { html: `<div class="page">${listHead('Rechnungen', '', '', `<div class="counts"><span class="n">${all.length}</span>&nbsp;gesendet${views('sent')}</div>`)}<div class="rows" role="listbox" aria-label="Versand">${html}</div></div>`, all };
 }
@@ -527,24 +590,58 @@ function head(d) {
   if (d.kind === 'quote') facts.push(`<span class="nw">gültig bis ${dmy(d.validUntil)}</span>`);
   else if (d.due && !d.paidAtIssue) facts.push(`<span data-tip="Zahlbar bis">fällig ${dmy(d.due)}</span>`);
   if (d.ref) facts.push(`<span data-tip="Zahlungsreferenz">${esc(d.ref)}</span>`);
-  if (F().vat) facts.push(`<span>MWST ${t.vat ? fmt(t.vat) : '0 %'}</span>`); else facts.push('<span>ohne MWST</span>');
-  const sub = d.kind === 'credit-note' ? `Gutschrift ${d.number ?? ''} ${d.subject ?? ''}` : d.subject ?? '';
-  return `<div class="head"><h2 class="who">${esc(c.name)}<small>${esc(sub)}</small></h2><div class="amount"><small>${d.cur}</small>${fmt(t.gross)}</div></div><div class="facts">${facts.join('')}</div>`;
+  if (d.kind === 'delivery-note') facts.push('<span class="nw">ohne Preise</span>');
+  else if (F().vat) facts.push(`<span>MWST ${t.vat ? fmt(t.vat) : '0 %'}</span>`); else facts.push('<span>ohne MWST</span>');
+  const sub = d.kind === 'invoice' && !d.paidAtIssue ? d.subject ?? '' : `${kindOf(d)} ${d.number ?? ''} ${d.subject ?? ''}`;
+  const amount = d.kind === 'delivery-note' ? '' : `<div class="amount"><small>${d.cur}</small>${fmt(t.gross)}</div>`;
+  return `<div class="head"><h2 class="who">${esc(c.name)}<small>${esc(sub)}</small></h2>${amount}</div><div class="facts">${facts.join('')}</div>`;
+}
+
+// The chain of documents a document belongs to (spec 4.4 «Folgedokument»), from the first to the last, each a link.
+function chainOf(d) {
+  let root = d;
+  const seen = new Set();
+  while (root.from && doc(root.from.id) && !seen.has(root.id)) { seen.add(root.id); root = doc(root.from.id); }
+  const out = [];
+  const walk = (x) => { out.push(x); D().docs.filter((y) => y.id !== x.id && (y.from?.id === x.id || (y.kind === 'credit-note' && y.creditFor === x.id))).sort((a, b) => a.date.localeCompare(b.date)).forEach(walk); };
+  walk(root);
+  return out;
+}
+function chainHtml(d) {
+  const c = chainOf(d);
+  if (c.length < 2) return '';
+  const label = (x) => `${kindOf(x)} ${x.number ?? 'Entwurf'}`;
+  return `<nav class="ivchain nw" aria-label="Dokumentkette"><span class="lbl">Kette</span>${c.map((x) => (x.id === d.id ? `<b aria-current="page">${esc(label(x))}</b>` : `<a class="golink" href="${hrefOf(x)}">${esc(label(x))}</a>`)).join('<span class="ar" aria-hidden="true">→</span>')}</nav>`;
+}
+
+// Betrag · erhalten · gutgeschrieben · offen: every figure from the books' facts, none set by a click.
+function figuresHtml(d) {
+  if (d.kind !== 'invoice' || d.status !== 'issued') return '';
+  const f = figures(d), last = d.payments?.at(-1);
+  const got = d.paidAtIssue ? 'bei Ausstellung' : last ? `aus dem Kontoauszug, ${dmy(last.date)}` : 'noch nichts eingegangen';
+  const cr = [...f.credits.map((x) => `Gutschrift ${x.number}`), ...(d.writeOffs ?? []).map((w) => `${WO[w.reason]} ausgebucht`)].join(' · ') || 'keine Gutschrift';
+  const openNote = d.cancelled ? 'storniert' : f.open < 0 ? 'Guthaben des Kunden, zu verrechnen' : f.open === 0 ? (f.elsewhere ? `Guthaben verrechnet mit ${doc(f.credits.find((x) => x.offsetIn).offsetIn).number}` : 'nichts offen') : stateOf(d) === 'overdue' ? `fällig seit ${days(d.due, TODAY)} Tagen` : `fällig ${dmy(d.due)}`;
+  const cell = (label, v, note, cls = '') => `<div class="${cls}"><span>${label}</span><b class="mono">${fmt(v)}</b><small>${esc(note)}</small></div>`;
+  return `<div class="ivfig nw" role="group" aria-label="Betrag, erhalten, gutgeschrieben, offen">${cell(`Betrag ${d.cur}`, f.amount, `ausgestellt ${dmy(d.date)}`)}${cell('erhalten', f.got, got)}${cell('gutgeschrieben', f.credited, cr)}${cell('offen', f.open, openNote, f.open > 0 && stateOf(d) === 'overdue' ? 'warn' : f.open > 0 ? 'open' : '')}</div>`;
 }
 
 function statusHtml(d) {
   const st = stateOf(d), parts = [];
   if (d.kind === 'quote') {
     const label = { draft: 'Offerte als Entwurf · erhält die Nummer OF-… beim Senden', sent: `Offerte · gesendet ${dmy(d.sent?.[0]?.date)} · gültig bis ${dmy(d.validUntil)}, noch ${days(TODAY, d.validUntil)} Tage`, accepted: 'Angenommen', declined: 'Abgelehnt', expired: `Abgelaufen am ${dmy(d.validUntil)}` }[st];
-    const inv = (d.invoicedAs ?? []).map((id) => (id.startsWith('r') ? `<a class="golink" href="#/invoices/recurring/${id}">Vorlage «${esc(D().recurring.find((x) => x.id === id).name)}»</a>` : `<a class="golink" href="#/invoices/${rid(doc(id))}">${doc(id).number ? `Rechnung ${doc(id).number}` : 'Rechnungsentwurf'}</a>`)).join(', ');
+    const inv = (d.invoicedAs ?? []).map((id) => `<a class="golink" href="#/invoices/recurring/${id}">Vorlage «${esc(D().recurring.find((x) => x.id === id).name)}»</a>`).join(', ');
     return `<div class="status"><span class="notice nw">${esc(label)}${inv ? ` · in ${inv}` : ''}</span></div>`;
   }
+  if (pre(d) && st === 'done') {
+    const s0 = d.sent?.at(-1);
+    return `<div class="status"><span class="notice nw">${KIND[d.kind]} · ${s0 ? `${s0.to === 'heruntergeladen' ? 'heruntergeladen' : 'gesendet'} ${dmy(s0.date)} (aus dem Versandprotokoll)` : 'ausgestellt, noch nicht gesendet'} · bucht nichts</span></div>`;
+  }
   if (st === 'draft') {
-    parts.push(`<span class="notice">${d.kind === 'credit-note' ? 'Gutschrift als Entwurf' : 'Entwurf'} · erhält die Nummer beim Ausstellen</span>`);
+    parts.push(`<span class="notice">${d.kind === 'invoice' ? 'Entwurf' : `${KIND[d.kind]} als Entwurf`} · erhält die Nummer${d.kind === 'order' ? ' AB-…' : d.kind === 'delivery-note' ? ' LS-…' : ''} beim Ausstellen</span>`);
     if (d.paidAtIssue) parts.push(`<div class="notice nw" role="note">${I.dot}<span>Wird als Quittung ausgestellt: bezahlt ${T.de.means[d.paidAtIssue]} am Ausstellungstag, kein QR-Zahlteil.</span></div>`);
     const ded = d.lines.find((l) => l.kind === 'ded');
     if (ded) parts.push(`<div class="notice nw" role="note">${I.dot}<span>Gutschrift <a class="golink" href="#/invoices/${doc(ded.deducts).number}">${doc(ded.deducts).number}</a> abgezogen: ${d.cur} ${fmt(-lineAmount(ded))} waren mit der nächsten Rechnung zu verrechnen. «×» auf der Zeile nimmt sie heraus.</span></div>`);
-    if (d.from) parts.push(`<div class="notice nw">${I.dot}<span>aus Offerte <a class="golink" href="#/invoices/quotes/${doc(d.from.id).number}">${doc(d.from.id).number}</a></span></div>`);
+    if (d.from) { const src = doc(d.from.id); parts.push(`<div class="notice nw">${I.dot}<span>Folgedokument von <a class="golink" href="${hrefOf(src)}">${KIND[src.kind]} ${src.number}</a>: alle Positionen übernommen${src.lines.some((l) => l.optional) ? ', die Optionen nach deiner Wahl' : ''}</span></div>`); }
     return `<div class="status">${parts.join('')}</div>`;
   }
   if (S.ui.reminder === d.id) return `<div class="status"><span class="notice">${(d.reminders?.length ?? 0) + 1}. Mahnung · Entwurf · neu fällig ${dmy(addDays(TODAY, 10))}</span></div>`;
@@ -553,7 +650,7 @@ function statusHtml(d) {
   if (st === 'cancelled') parts.push(`<span class="notice">Storniert am ${dmy(d.cancelled.date)} · ${esc(d.cancelled.reason)}</span>`);
   else if (st === 'credit') {
     const into = d.offsetIn ? doc(d.offsetIn) : D().docs.find((x) => x.status === 'draft' && x.lines.some((l) => l.deducts === d.id));
-    parts.push(`<span class="notice nw">Gutschrift zu <a class="golink" href="#/invoices/${doc(d.creditFor).number}">Rechnung ${doc(d.creditFor).number}</a> · ${d.offsetIn ? `verrechnet mit <a class="golink" href="#/invoices/${into.number}">Rechnung ${into.number}</a>` : into ? `zu verrechnen: Abzugszeile im <a class="golink" href="#/invoices/${rid(into)}">Entwurf ${esc(into.subject)}</a>` : 'zu verrechnen mit der nächsten Rechnung'}</span>`);
+    parts.push(`<span class="notice nw">Gutschrift zu <a class="golink" href="#/invoices/${doc(d.creditFor).number}">Rechnung ${doc(d.creditFor).number}</a> · ${d.offsetIn ? `verrechnet mit <a class="golink" href="#/invoices/${into.number}">Rechnung ${into.number}</a>` : d.settlement === 'refund' ? 'zurückzuzahlen an den Kunden' : into ? `zu verrechnen: Abzugszeile im <a class="golink" href="#/invoices/${rid(into)}">Entwurf ${esc(into.subject)}</a>` : 'zu verrechnen mit der nächsten Rechnung'}</span>`);
   } else if (st === 'paid') {
     const last = d.payments?.at(-1);
     const wo = (d.writeOffs ?? []).map((w) => ` · ${WO[w.reason]} ${d.cur} ${fmt(w.amount)} ausgebucht${w.by === 'Code' ? ' (von Code, wie in den Bedingungen)' : ''}`).join('');
@@ -575,16 +672,18 @@ function actions(d) {
   const st = stateOf(d), b = [];
   const pdf = d.status === 'issued' ? '<button type="button" class="dl inline" data-act="pdf" data-tip="Das PDF, genau so, wie es ausgestellt wurde (D)">' + I.dl + '<span>PDF herunterladen</span></button>' : '';
   const preview = `<button type="button" class="btn ghost" data-act="preview" aria-pressed="${S.ui.preview}">${S.ui.preview ? 'Bearbeiten' : 'Vorschau'}</button>`;
+  const followBtn = (primary = false) => `<button type="button" class="btn ${primary ? 'primary' : 'ghost'} nw" data-act="dlg-follow">Folgedokument erstellen</button>`;
   if (d.kind === 'quote') {
     if (st === 'draft') b.push(preview, '<button type="button" class="btn primary nw" data-act="q-send">Senden</button>', '<button type="button" class="btn ghost danger" data-act="delete">Löschen</button>');
-    if (st === 'sent') b.push('<button type="button" class="btn primary nw" data-act="convert">In Rechnung umwandeln</button>', '<button type="button" class="btn ghost nw" data-act="q-accept">Angenommen</button>', '<button type="button" class="btn ghost nw" data-act="q-decline">Abgelehnt</button>', '<button type="button" class="btn ghost" data-act="q-resend">Nochmals senden</button>');
-    if (st === 'accepted') b.push('<button type="button" class="btn ghost nw" data-act="convert">Weitere Rechnung daraus (Akonto)</button>');
-    if (st === 'expired' || st === 'declined') b.push('<button type="button" class="btn ghost" data-act="copy">Als Entwurf kopieren</button>');
+    if (st === 'sent') b.push('<button type="button" class="btn primary nw" data-act="convert">In Rechnung umwandeln</button>', followBtn(), '<button type="button" class="btn ghost nw" data-act="q-accept">Angenommen</button>', '<button type="button" class="btn ghost nw" data-act="q-decline">Abgelehnt</button>', '<button type="button" class="btn ghost" data-act="q-resend">Nochmals senden</button>');
+    if (st === 'accepted') b.push(followBtn(true));
+    if (st === 'expired' || st === 'declined') b.push(followBtn(), '<button type="button" class="btn ghost" data-act="copy">Als Entwurf kopieren</button>');
     return `<div class="ivacts">${b.join('')}${pdf}</div>`;
   }
   if (st === 'draft') {
-    return `<div class="ivacts">${preview}<button type="button" class="btn primary" data-act="issue">${d.paidAtIssue ? 'Quittung ausstellen' : d.kind === 'credit-note' ? 'Gutschrift ausstellen' : 'Ausstellen'}</button><button type="button" class="btn ghost danger" data-act="delete">Löschen</button></div>`;
+    return `<div class="ivacts">${preview}<button type="button" class="btn primary" data-act="issue">${d.paidAtIssue ? 'Quittung ausstellen' : d.kind === 'invoice' ? 'Ausstellen' : `${KIND[d.kind]} ausstellen`}</button><button type="button" class="btn ghost danger" data-act="delete">Löschen</button></div>`;
   }
+  if (pre(d)) return `<div class="ivacts">${followBtn(true)}<button type="button" class="btn ghost" data-act="send">Nochmals senden</button><button type="button" class="btn ghost" data-act="copy">Als Entwurf kopieren</button>${pdf}</div>`;
   if (S.ui.reminder === d.id) {
     const lv = (d.reminders?.length ?? 0) + 1;
     return `<div class="ivacts">${preview}<button type="button" class="btn primary" data-act="remind-send">${lv}. Mahnung senden</button><button type="button" class="btn ghost" data-act="remind-cancel">Abbrechen</button></div>`;
@@ -593,8 +692,8 @@ function actions(d) {
   if (st === 'overdue' && !cust(d.cu).noReminders) b.push(`<button type="button" class="btn primary" data-act="remind">${lv}. Mahnung</button>`);
   if (st === 'open' || st === 'overdue') b.push(`<button type="button" class="btn ${st === 'overdue' || d.sent?.length ? 'ghost' : 'primary'}" data-act="send">${d.sent?.length ? 'Nochmals senden' : 'Senden'}</button>`, '<button type="button" class="btn ghost nw" data-act="dlg-writeoff">Rest ausbuchen</button>');
   if (st === 'credit') b.push('<button type="button" class="btn ghost" data-act="send">Nochmals senden</button>');
-  if (st !== 'credit' && st !== 'cancelled') b.push('<button type="button" class="btn ghost" data-act="copy">Als Entwurf kopieren</button>');
-  if (['open', 'overdue', 'paid'].includes(st)) b.push('<button type="button" class="btn ghost" data-act="noop" data-tip="Wie heute">Gutschrift</button>', '<button type="button" class="btn ghost danger" data-act="noop" data-tip="Wie heute">Stornieren</button>');
+  if (st !== 'credit' && st !== 'cancelled') b.push(followBtn(st === 'paid'), '<button type="button" class="btn ghost" data-act="copy">Als Entwurf kopieren</button>');
+  if (['open', 'overdue', 'paid'].includes(st)) b.push('<button type="button" class="btn ghost danger" data-act="cancel">Stornieren</button>');
   return `<div class="ivacts">${b.join('')}${pdf}</div>`;
 }
 
@@ -606,14 +705,19 @@ function interestFor(d) {
 
 function margin(d) {
   const c = cust(d.cu), out = [];
-  if (d.status === 'draft' && d.kind !== 'quote') {
+  if (d.status === 'draft' && !pre(d) && d.kind !== 'credit-note') {
     const curOpts = [['CHF', 'CHF'], ...(F().ibanEUR ? [['EUR', 'EUR']] : [])];
     const means = [['', 'Nein'], ['cash', 'Bar'], ['twint', 'TWINT'], ['card', 'Karte']];
-    const eurNote = d.cur === 'EUR' ? `<p class="m ivhint nw">EUR: kein QR-Zahlteil. Die QR-IBAN gilt seit der QR-Rechnung v2.4 nur für CHF; die Rechnung nennt die IBAN ${esc(F().ibanEUR)} mit einer SCOR-Referenz (RF…), keine QR-Referenz.</p>` : '';
+    const eurNote = d.cur === 'EUR' && eurQrKept() ? '<p class="m ivhint nw">EUR mit QR-IBAN und QR-Referenz, wie in Firma › Rechnungslayout gespeichert (QR-Rechnung v2.3, von Banken bis November 2027 angenommen).</p>' : d.cur === 'EUR' ? `<p class="m ivhint nw">EUR: kein QR-Zahlteil. Die QR-IBAN gilt seit der QR-Rechnung v2.4 nur für CHF; die Rechnung nennt die IBAN ${esc(F().ibanEUR)} mit einer SCOR-Referenz (RF…), keine QR-Referenz.</p>` : '';
     const mean = d.paidAtIssue ? `<p class="m ivhint nw">Gebucht am Ausstellungstag: ${MEANS_ACC[d.paidAtIssue].join(' ')}${d.paidAtIssue === 'cash' && S.firm === 'salon' ? ' (neu im Kontenplan, beim ersten Mal angelegt)' : ''} / ${F().revenue[0].join(' ')}${F().vat ? ', mit den Verkaufscodes' : ', ohne MWST-Code (nicht registriert)'}. Nichts bleibt offen.</p>` : '';
     out.push(sec('draft', 'Rechnung', `Deutsch · ${d.cur}`, `<div class="lkf"><div class="lkr"><span>Sprache</span>${seg2('Sprache', [['de', 'DE'], ['fr', 'FR'], ['it', 'IT'], ['en', 'EN']], d.lang, 'lang')}</div><div class="lkr"><span>Währung</span>${seg2('Währung', curOpts, d.cur, 'cur')}</div><div class="lkr nw"><span>Bezahlt bei Ausstellung</span>${seg2('Bezahlt bei Ausstellung', means, d.paidAtIssue ?? '', 'means')}</div></div>${eurNote}${mean}<p class="lkfoot"><a class="quiet2" href="#/company/invoice-layout">Schrift, Logo, Skonto und Mahnwesen: Firma › Rechnungslayout →</a></p>`));
   } else if (d.kind === 'quote') {
-    out.push(sec('quote', 'Offerte', `gültig bis ${dmy(d.validUntil)}`, kv([['Nummer', esc(d.number ?? 'beim Senden'), true], ['Gültig', `${dmy(d.date)} – ${dmy(d.validUntil)} (Firma › Rechnungslayout: 30 Tage)`, true], ['Stand', esc(Q_LABEL[stateOf(d)] ?? ''), true], ['Bucht', 'nichts', true]]) + '<p class="m ivhint nw">Eigene Nummernreihe: abgelehnte Offerten lassen in der Rechnungsnummer keine Lücke.</p>', true, true));
+    const nOpt = d.lines.filter((l) => l.optional).length;
+    out.push(sec('quote', 'Offerte', `gültig bis ${dmy(d.validUntil)}`, kv([['Nummer', esc(d.number ?? 'beim Senden'), true], ['Gültig', `${dmy(d.date)} – ${dmy(d.validUntil)} (Firma › Rechnungslayout: 30 Tage)`, true], ['Stand', esc(Q_LABEL[stateOf(d)] ?? ''), true], ['Optionen', nOpt ? `${nOpt}, gezeigt, nicht im Total` : 'keine', true], ['Bucht', 'nichts', true]]) + '<p class="m ivhint nw">Eigene Nummernreihe: abgelehnte Offerten lassen in der Rechnungsnummer keine Lücke.</p><p class="m ivhint nw">«Gesendet» schreibt der Versand selbst, mit Zeit und Empfänger. «Angenommen» oder «abgelehnt» weiss nur der Kunde: das sagst du mit einem Klick, oder ein Folgedokument sagt es.</p>', true, true));
+  } else if (pre(d)) {
+    out.push(sec('pre', KIND[d.kind], d.number ?? 'Entwurf', kv([['Nummer', esc(d.number ?? `beim Ausstellen, ${SERIES[d.kind]}…`), true], ['Auf Papier', d.kind === 'delivery-note' ? 'Positionen und Mengen, keine Preise' : 'wie die Offerte, mit Preisen', true], ['Bucht', 'nichts', true]]) + '<p class="m ivhint nw">Derselbe Editor wie für Rechnungen: das Blatt bearbeiten, «Vorschau», ausstellen, senden.</p>', true, true));
+  } else if (d.kind === 'credit-note' && d.status === 'draft') {
+    out.push(sec('cn', 'Gutschrift', `zu ${doc(d.creditFor).number}`, kv([['Zu Rechnung', `<a class="golink" href="${hrefOf(doc(d.creditFor))}">${doc(d.creditFor).number}</a>`], ['Höchstens', `${d.cur} ${fmt(gross(doc(d.creditFor)))}`]]) + '<p class="m ivhint">Alle Positionen der Rechnung mit Minus übernommen; streiche, was nicht gutgeschrieben wird.</p>', true));
   } else if (S.ui.reminder === d.id) {
     const lv = (d.reminders?.length ?? 0) + 1, fee = S.settings.fees[lv - 1], int = interestFor(d);
     out.push(sec('rem', `${lv}. Mahnung`, `neu fällig ${dmy(addDays(TODAY, 10))}`, kv([['Gebühr', fee ? `CHF ${fmt(fee)} (ohne MWST)` : 'keine'], ['Verzugszins', int ? `${S.settings.rate} % ab ${dmy(d.due)}: CHF ${fmt(int.amount)}, ohne MWST` : 'aus', true]]) + `<p class="m ivhint nw">${int ? 'Eingeschaltet in Firma › Rechnungslayout.' : 'Für neue Firmen aus. Wer ihn verrechnet, schaltet ihn in Firma › Rechnungslayout ein (OR Art. 104: 5 % ab Fälligkeit).'} <a class="quiet2" href="#/company/invoice-layout">Mahnwesen →</a></p>`));
@@ -621,11 +725,12 @@ function margin(d) {
     out.push(sec('look', 'Gestaltung', `${d.lang === 'fr' ? 'Französisch' : 'Deutsch'} · Inter`, '<p class="m">Beim Ausstellen festgehalten. Eine ausgestellte Rechnung ändert sich nicht mehr; «Als Entwurf kopieren» macht eine neue.</p>', false));
   }
   if (d.from || d.recurring) {
-    const from = d.recurring ? `<a class="golink" href="#/invoices/recurring/${d.recurring}">Vorlage «${esc(D().recurring.find((x) => x.id === d.recurring).name)}»</a>, am ${dmy(d.date)} vom Code ausgestellt und gesendet` : `<a class="golink" href="#/invoices/quotes/${doc(d.from.id).number}">Offerte ${doc(d.from.id).number}</a>`;
-    out.push(sec('from', 'Herkunft', d.recurring ? 'Vorlage' : 'Offerte', `<p class="m">${from}</p>`, true, true));
+    const src = d.from && doc(d.from.id);
+    const from = d.recurring ? `<a class="golink" href="#/invoices/recurring/${d.recurring}">Vorlage «${esc(D().recurring.find((x) => x.id === d.recurring).name)}»</a>, am ${dmy(d.date)} vom Code ausgestellt und gesendet` : `<a class="golink" href="${hrefOf(src)}">${KIND[src.kind]} ${src.number}</a>`;
+    out.push(sec('from', 'Herkunft', d.recurring ? 'Vorlage' : KIND[src.kind], `<p class="m">${from}</p>`, true, true));
   }
   out.push(sec('customer', 'Kunde', c.town.replace(/^\d+ /, ''), custKv(c) + (d.status === 'issued' ? '<p class="m ivhint">So beim Ausstellen festgehalten; eine spätere Änderung am Kunden gilt für neue Rechnungen.</p>' : ''), false));
-  if (d.status === 'issued' || d.status === 'draft') out.push(sec('book', 'Buchungen', S.basis === 'agreed' && F().vat ? 'vereinbart' : F().vat ? 'vereinnahmt' : 'ohne MWST', bookingsHtml(d), d.status === 'issued' && d.kind !== 'quote', true));
+  if (d.status === 'issued' || d.status === 'draft') out.push(sec('book', 'Buchungen', S.basis === 'agreed' && F().vat ? 'vereinbart' : F().vat ? 'vereinnahmt' : 'ohne MWST', bookingsHtml(d), d.status === 'issued' && !pre(d), true));
   if (d.status === 'issued') out.push(sec('sent', 'Gesendet', String(d.sent?.length ?? 0), sentHtml(d), true));
   out.push(sec('comments', 'Kommentare', '', '<div class="ivnotes"></div>', false));
   out.push(sec('log', 'Verlauf', String(d.log?.length ?? 0), logHtml(d), false));
@@ -635,13 +740,14 @@ function margin(d) {
 function docDetail(d) {
   const mode = d.status === 'draft' ? (S.ui.preview ? 'preview' : 'edit') : 'view';
   const reminder = S.ui.reminder === d.id ? { level: (d.reminders?.length ?? 0) + 1, fee: S.settings.fees[d.reminders?.length ?? 0], interest: interestFor(d) } : null;
-  return `<div class="detail-in" data-for="${d.id}">${head(d)}${statusHtml(d)}${actions(d)}<div class="body"><div class="desk">${sheet(d, mode, { reminder })}</div>${margin(d)}</div></div>`;
+  return `<div class="detail-in" data-for="${d.id}">${head(d)}${chainHtml(d)}${figuresHtml(d)}${statusHtml(d)}${actions(d)}<div class="body"><div class="desk">${sheet(d, mode, { reminder })}</div>${margin(d)}</div></div>`;
 }
 
 function customerDetail(c) {
   const docs = D().docs.filter((d) => d.cu === c.id && d.status === 'issued');
+  const lbl = (d) => (pre(d) || d.kind === 'credit-note' ? kindOf(d) : STATE_LABEL[stateOf(d)] ?? '');
   const o = docs.reduce((s, d) => s + openOf(d), 0);
-  const rows = docs.map((d) => `<div class="row inv st-${stateOf(d)}" data-href="#/invoices/${d.kind === 'quote' ? `quotes/${d.number}` : d.number}"><span class="d mono">${d.number}</span><span class="t">${esc(d.subject ?? '')} <small>${d.kind === 'quote' ? 'Offerte' : d.kind === 'credit-note' ? 'Gutschrift' : STATE_LABEL[stateOf(d)] ?? ''}</small></span><span class="a mono">${fmt(gross(d))}</span></div>`).join('');
+  const rows = docs.map((d) => `<div class="row inv st-${stateOf(d)}" data-href="${hrefOf(d)}"><span class="d mono">${d.number}</span><span class="t">${esc(d.subject ?? '')} <small>${lbl(d)}</small></span><span class="a mono">${d.kind === 'delivery-note' ? '' : fmt(gross(d))}</span></div>`).join('');
   return `<div class="detail-in"><div class="head"><h2 class="who">${esc(c.name)}<small>${esc(c.town)}</small></h2><div class="amount"><small>${c.currency ?? 'CHF'}</small>${fmt(o)}</div></div>
     <div class="facts"><span class="nw">Nr. ${c.no}</span><span>${c.lang.toUpperCase()}</span><span>${c.terms} Tage</span></div>
     <div class="ivacts"><button type="button" class="btn primary" data-act="new-for" data-id="${c.id}">Neue Rechnung</button><button type="button" class="btn ghost nw" data-act="newquote-for" data-id="${c.id}">Neue Offerte</button><button type="button" class="btn ghost" data-act="noop">Bearbeiten</button></div>
@@ -653,7 +759,7 @@ function articleDetail(a) {
   return `<div class="detail-in"><div class="head"><h2 class="who">${esc(a.text)}<small>${esc(a.no)}</small></h2><div class="amount"><small>CHF</small>${fmt(a.price)}</div></div>
     <div class="facts"><span>pro ${UNITS[a.unit]}</span>${F().vat ? `<span>MWST ${a.rate} %</span>` : ''}<span>Konto ${a.rate === 8.1 ? '3600' : F().revenue[0][0]}</span></div>
     <div class="ivacts"><button type="button" class="btn ghost" data-act="noop">Bearbeiten</button></div>
-    <div class="body"><div class="desk"><div class="rows">${used.map((d) => `<div class="row inv st-${stateOf(d)}" data-href="#/invoices/${d.kind === 'quote' ? `quotes/${rid(d)}` : rid(d)}"><span class="d mono">${d.number ?? 'Entwurf'}</span><span class="t">${esc(cust(d.cu).name)} <small>${esc(d.subject ?? '')}</small></span><span class="a mono">${fmt(gross(d))}</span></div>`).join('') || '<p class="m">Noch auf keiner Rechnung.</p>'}</div></div>
+    <div class="body"><div class="desk"><div class="rows">${used.map((d) => `<div class="row inv st-${stateOf(d)}" data-href="${hrefOf(d)}"><span class="d mono">${d.number ?? 'Entwurf'}</span><span class="t">${esc(cust(d.cu).name)} <small>${esc(d.subject ?? '')}</small></span><span class="a mono">${fmt(gross(d))}</span></div>`).join('') || '<p class="m">Noch auf keiner Rechnung.</p>'}</div></div>
     <aside class="margin">${sec('art', 'Artikel', '', kv([['Nummer', a.no, true], ['Text', esc(a.text), true], ['Einheit', UNITS[a.unit], true], ['Preis', `CHF ${fmt(a.price)}${F().vat ? ' exkl. MWST' : ''}`, true], ...(F().vat ? [['MWST-Satz', `${a.rate} %`, true]] : [])]) + '<p class="m ivhint nw">Preis und Satz, kein Lagerbestand. Eine Rechnung kopiert die Werte; eine spätere Preisänderung gilt für neue Zeilen.</p>', true, true)}</aside></div></div>`;
 }
 
@@ -695,7 +801,7 @@ function sentDetail(s) {
   const d = s.d;
   return `<div class="detail-in"><div class="head"><h2 class="who">${esc(s.title)}<small>${esc(cust(d.cu).name)}</small></h2><div class="amount"><small>${d.cur}</small>${fmt(gross(d))}</div></div>
     <div class="facts"><span>${dmy(s.date)} ${s.time}</span><span>an ${esc(s.to)}</span><span>${s.by ? 'von der Vorlage gesendet' : 'per E-Mail'}</span></div>
-    <div class="ivacts"><a class="btn ghost" href="#/invoices/${d.kind === 'quote' ? `quotes/${d.number}` : d.number}">${d.kind === 'quote' ? 'Zur Offerte' : 'Zum Dokument'}</a><button type="button" class="dl inline" data-act="pdf">${I.dl}<span>PDF, wie gesendet</span></button></div>
+    <div class="ivacts"><a class="btn ghost" href="${hrefOf(d)}">Zum Dokument</a><button type="button" class="dl inline" data-act="pdf">${I.dl}<span>PDF, wie gesendet</span></button></div>
     <div class="body"><div class="desk">${sheet(d, 'view', s.reminder ? { reminder: s.reminder } : {})}</div><aside class="margin">${sec('sentm', 'Gesendet', '', kv([['An', esc(s.to)], ['Zeit', `${dmy(s.date)} ${s.time}`], ['Prüfsumme', `SHA-256 ${(d.id + s.date).split('').map((ch) => ch.charCodeAt(0).toString(16)).join('').slice(0, 16)}…`]]))}</aside></div></div>`;
 }
 
@@ -714,13 +820,14 @@ function companyPage() {
     <div class="lkf nw"><div class="lkr top"><span>Mahnwesen</span><span class="lvls">${lv}</span></div>
       <div class="lkr"><span>Verzugszins</span><span class="inl"><input type="checkbox" data-act="set-interest"${s.interest ? ' checked' : ''}> auf Mahnungen verrechnen, <input class="mono" value="${s.rate}"${s.interest ? '' : ' disabled'}> % im Jahr ab Fälligkeit (OR Art. 104) · ${s.interest ? 'an' : 'aus, wie für jede neue Firma'}</span></div></div>
     <div class="lkf nw"><div class="lkr"><span>Quittung</span><span class="inl">Bar → <input class="mono" value="1000"> TWINT → <input class="mono" value="${F().bankAcc.CHF[0]}"> Karte → <input class="mono" value="${F().bankAcc.CHF[0]}"></span></div></div>
-    ${S.firm === 'kaffee' ? `<div class="lkf nw"><div class="lkr"><span>QR-IBAN in EUR</span><span class="inl"><input class="mono wide" style="width:220px" value="${s.eurQr ? 'CH44 3199 9123 0008 8901 2' : ''}" placeholder="QR-IBAN für EUR" data-act="eur-qr"></span></div>${s.eurQr ? '<div class="lkr"><span></span><span class="refused">Nicht möglich: seit der QR-Rechnung v2.4 (SIX, gültig ab dem SIC-Release vom 13.11.2026) gelten QR-IBAN und QR-Referenz nur für CHF. Eine EUR-Rechnung nennt die IBAN mit SCOR-Referenz (RF…).</span></div>' : '<div class="lkr"><span></span><span class="m">Gib eine QR-IBAN ein, um zu sehen, was die App antwortet.</span></div>'}</div>` : ''}`;
+    ${S.firm === 'kaffee' ? `<div class="lkf nw"><div class="lkr"><span>QR-IBAN in EUR</span><span class="inl"><input class="mono wide" style="width:220px" value="${s.eurQr ? 'CH44 3199 9123 0008 8901 2' : ''}" placeholder="QR-IBAN für EUR" data-act="eur-qr"${s.eurQr === 'kept' ? ' readonly' : ''}></span></div>${s.eurQr === 'warned' ? `<div class="lkr"><span></span><div class="warnbox" role="alert"><b>Seit der QR-Rechnung v2.4 gilt die QR-IBAN nur für CHF.</b><span>Regel: SIX Implementation Guidelines QR-Rechnung v2.4 (24.02.2026), Kap. 2.8 und 4.3.2: in EUR nur IBAN mit SCOR-Referenz oder Mitteilung. Version 2.3 gilt noch bis November 2027.</span><span>Was folgt: neue EUR-Rechnungen tragen die QR-IBAN und eine QR-Referenz. Bis November 2027 nehmen Banken sie an, danach weisen sie sie zurück. Ausgestellte Rechnungen bleiben, wie sie sind.</span><span class="acts"><button type="button" class="btn ghost" data-act="eur-qr-drop">Nicht speichern</button><button type="button" class="btn primary" data-act="eur-qr-keep">Trotzdem speichern</button></span></div></div>` : s.eurQr === 'kept' ? '<div class="lkr"><span></span><span class="m">Gespeichert. Neue EUR-Rechnungen tragen die QR-IBAN mit QR-Referenz (v2.3, bis November 2027). <button type="button" class="quiet2" data-act="eur-qr-drop">Entfernen</button></span></div>' : '<div class="lkr"><span></span><span class="m">Gib eine QR-IBAN ein, um zu sehen, was die App antwortet.</span></div>'}</div>` : ''}`;
   const preview = S.firm === 'kaffee' ? sheet(doc('d2'), 'preview') : sheet(doc('sd1') ?? D().docs[0], 'preview');
   return `<section class="list" id="list" aria-label="Firma">${list.replace(/^<section[^>]*>/, '').replace(/<\/section>$/, '')}</section>
     <section class="detail" aria-live="polite"><div class="detail-in"><div class="head"><h2 class="who">Rechnungslayout<small>${esc(F().name)}</small></h2></div><div class="docbody"><div class="lkpage"><div>${form}${added}<p class="m src-note">Gilt für alle Entwürfe. Ausgestellte Rechnungen behalten die Gestaltung, mit der sie ausgestellt wurden.</p></div><div class="lkprevw">${preview.replace('class="ivsheet', 'class="ivsheet lkprev')}</div></div></div></div></section>`;
 }
 
 // ---------------------------------------------------------------- dialogs
+const FOLLOW = { quote: ['order', 'delivery-note', 'invoice'], order: ['delivery-note', 'invoice'], 'delivery-note': ['invoice'], invoice: ['delivery-note', 'credit-note'] };
 function frame(label, title, body, foot, cls = '') {
   return `<div class="scrim" style="background: color-mix(in srgb, var(--bg) 45%, transparent)" data-act="close"></div><div class="palette idlg ${cls}" role="dialog" aria-label="${esc(label)}"><div class="ihd"><span class="lbl">${esc(label)}</span><b>${title}</b></div>${body}${foot ? `<div class="ift">${foot}</div>` : ''}</div>`;
 }
@@ -754,12 +861,25 @@ function dialogHtml() {
       : `<b>Vereinnahmt:</b> keine Buchung. Was nie einging, war nie versteuert. Die Ausbuchung steht mit Datum, Grund und dir auf der Rechnung und in den Offenen Posten.`;
     return frame('Rest ausbuchen', `${d.number} · ${esc(cust(d.cu).name)}`, `<div class="ibody wob"><div class="lkr"><span>Betrag</span><span class="iin"><input class="mono" value="${fmt(o)}" style="width:96px"> ${d.cur} von ${fmt(o)} offen</span></div><div class="lkr"><span>Datum</span><input type="text" class="mono" value="${dmy(TODAY)}" style="width:110px"></div><div class="lkr"><span>Grund</span>${seg2('Grund', Object.entries(WO), reason, 'wo-reason')}</div><div class="lkr"><span>Notiz</span><input placeholder="${reason === 'loss' ? 'z.B. Konkurs eröffnet am …' : 'z.B. Kunde zog ab, telefonisch vereinbart'}"></div><div class="howbook">${how}</div></div>`, `${close}<button type="button" class="btn primary" data-act="wo-do" data-v="${reason}">Ausbuchen</button>`);
   }
+  if (g.kind === 'follow') {
+    const src = doc(g.docId), targets = FOLLOW[src.kind], target = g.target ?? targets[0];
+    const opts = src.lines.map((l, k) => [l, k]).filter(([l]) => l.optional);
+    const n = src.lines.filter((l) => isItem(l) && !l.optional).length;
+    const st = stateOf(src), late = src.kind === 'quote' && (st === 'expired' || st === 'declined');
+    const picks = opts.length && target !== 'credit-note' ? `<div class="lkhead">Welche Optionen kommen mit?</div><div class="picks">${opts.map(([l, k]) => `<label><input type="checkbox" data-optk="${k}"${(g.picks ?? []).includes(k) ? ' checked' : ''}><span>${esc(l.text)} <span class="d">${qty(l.q)} ${UNITS[l.unit] ?? ''}${F().vat ? ` · ${l.rate} %` : ''}</span></span><span class="mono">${fmt(lineAmount(l))}</span><span></span></label>`).join('')}</div><p class="m ivhint">Gewählte Optionen werden gewöhnliche Positionen und zählen ins Total; die anderen bleiben auf der Offerte und kommen nicht mit.</p>` : '';
+    const warn = late ? `<div class="warnbox" role="alert"><b>${st === 'expired' ? `Die Offerte ist am ${dmy(src.validUntil)} abgelaufen.` : 'Der Kunde hat die Offerte abgelehnt.'}</b><span>Regel: ${st === 'expired' ? `sie galt bis ${dmy(src.validUntil)} (Firma › Rechnungslayout: Offerten gültig 30 Tage); danach bindet sie dich nicht mehr` : `abgelehnt am ${dmy(src.log.find((x) => /abgelehnt/.test(x[1]))?.[0] ?? TODAY)}, im Verlauf festgehalten`}.</span><span>Was folgt: die Preise und Sätze von damals gehen ins Folgedokument, die Offerte gilt danach als angenommen. Prüfe die Preise im Entwurf.</span></div>` : '';
+    const what = { order: 'Bestätigt den Auftrag, mit Preisen; bucht nichts.', 'delivery-note': 'Positionen und Mengen ohne Preise, für die Ware; bucht nichts.', invoice: 'Die Rechnung, in der Rechnungsreihe nummeriert; bucht wie jede Rechnung.', 'credit-note': 'Alle Positionen mit Minus; streiche, was nicht gutgeschrieben wird.' }[target];
+    return frame('Folgedokument erstellen', `aus ${esc(KIND[src.kind])} ${esc(src.number)}`, `<div class="ibody wob"><div class="lkr"><span>Folgt als</span>${seg2('Folgedokument', targets.map((k) => [k, KIND[k]]), target, 'follow-target')}</div><p class="m ivhint">${esc(what)} Alle ${n} Positionen werden mit Text, Menge, Einheit, Preis und Satz übernommen, als Entwurf im selben Editor.</p>${picks}${warn}</div>`, `${close}<button type="button" class="btn primary" data-act="follow-do">${late ? 'Trotzdem erstellen' : `${KIND[target]} erstellen`}</button>`);
+  }
+  if (g.kind === 'warn') {
+    return frame(g.label, esc(g.title), `<div class="ibody"><div class="warnbox" role="alert"><b>${esc(g.what)}</b><span>Regel: ${esc(g.rule)}</span><span>Was folgt: ${esc(g.follows)}</span></div><p class="m ivhint">Du entscheidest. Was du tust, steht im Verlauf wie jede andere Handlung.</p></div>`, `${close}${g.alt ? `<button type="button" class="btn ghost" data-act="${g.alt.act}">${esc(g.alt.label)}</button>` : ''}<button type="button" class="btn primary" data-act="${g.go}">${esc(g.goLabel)}</button>`);
+  }
   if (g.kind === 'send') {
     const d = doc(g.docId), c = cust(d.cu), Lx = T[d.lang] ?? T.de;
-    const what = g.reminder ? `${g.reminder.level}. Mahnung zu ${d.number}` : d.kind === 'quote' ? `Offerte ${d.number}` : d.paidAtIssue ? `Quittung ${d.number}` : `${Lx.invoice} ${d.number}`;
+    const what = g.reminder ? `${g.reminder.level}. Mahnung zu ${d.number}` : docTitle(d);
     const issuedNote = g.issued ? '<p class="m ivhint">Das PDF ist fertig und abgelegt. Speichern und selbst verschicken, oder per E-Mail senden.</p>' : '';
     const pdf = `<div class="isendpdf paper real" style="max-height:340px;overflow:auto">${sheet(d, 'view', g.reminder ? { reminder: g.reminder } : {})}</div>`;
-    return frame(g.reminder ? 'Mahnung senden' : g.issued ? (d.kind === 'quote' ? 'Offerte gesendet?' : 'Ausgestellt') : 'Senden', `${esc(c.name)} · ${d.cur} ${fmt(gross(d))}`,
+    return frame(g.reminder ? 'Mahnung senden' : g.issued ? (d.kind === 'quote' ? 'Offerte gesendet?' : pre(d) ? `${KIND[d.kind]} ausgestellt` : 'Ausgestellt') : 'Senden', `${esc(c.name)} · ${d.cur} ${fmt(gross(d))}`,
       `<div class="ibody lkf">${pdf}${issuedNote}<label class="lkr"><span>An</span><input name="to" type="email" value="${esc(c.email)}"></label><label class="lkr"><span>Betreff</span><input name="subject" value="${esc(what)} · ${esc(F().name)}"></label><label class="lkr top"><span>Text</span><textarea rows="5">Guten Tag\n\nIm Anhang finden Sie ${esc(what)}.\n\nFreundliche Grüsse\n${esc(F().name)}</textarea></label><p class="m ivhint">Angehängt: ${esc(what.replace(/ /g, '-'))}.pdf, Byte für Byte so abgelegt.</p></div>`,
       `<button type="button" class="btn ghost" data-act="close">${g.issued ? 'Später' : 'Abbrechen'}</button><button type="button" class="btn ghost" data-act="send-do" data-v="download">Herunterladen</button><button type="button" class="btn primary" data-act="send-do" data-v="mail">Per E-Mail senden</button>`, 'isend withpdf');
   }
@@ -786,7 +906,7 @@ function render() {
       const d = r.id ? byRoute(r.id) : null;
       if (!r.id) { const first = $$('.row', document.createRange().createContextualFragment(invoiceList(r)))[0]; if (first) { history.replaceState(null, '', first.dataset.href); return render(); } }
       list = invoiceList(r);
-      detail = d && d.kind !== 'quote' ? docDetail(d) : empty(r.id ? `Kein Dokument ${r.id}.` : 'Keine Rechnung gewählt.');
+      detail = d && !pre(d) ? docDetail(d) : empty(r.id ? `Kein Dokument ${r.id}.` : 'Keine Rechnung gewählt.');
     } else if (r.view === 'quotes') {
       const d = r.id ? byRoute(r.id) : D().docs.find((x) => x.kind === 'quote' && x.qstatus === 'sent') ?? D().docs.find((x) => x.kind === 'quote');
       if (!r.id && d) { history.replaceState(null, '', `#/invoices/quotes/${rid(d)}`); return render(); }
@@ -839,23 +959,46 @@ function newDraft(cid, kind = 'invoice') {
   if (credit && kind === 'invoice') { d.lines.push(L(`Gutschrift ${credit.number} vom ${dmy(credit.date)}, verrechnet`, 1, '', gross(credit), 2.6, { incl: true, kind: 'ded', deducts: credit.id })); d.log.push([TODAY, `Gutschrift ${credit.number} als Abzug übernommen`]); }
   D().docs.push(d);
   S.ui.dialog = null; S.ui.preview = false;
-  go(kind === 'quote' ? `#/invoices/quotes/draft-${id}` : `#/invoices/draft-${id}`);
+  go(hrefOf(d));
 }
 
-function issue(d) {
-  if (d.lines.filter(isItem).some((l) => !l.text.trim() || !(l.p || l.kind === 'ded'))) { toast('Ausstellen geht noch nicht: eine Position hat keinen Text oder keinen Preis.'); return; }
+function issue(d, force = false) {
+  const dn = d.kind === 'delivery-note';
+  const bad = d.lines.filter(isItem).filter((l) => !l.text.trim() || (!dn && !(l.p || l.kind === 'ded')));
+  if (bad.length && !force) {
+    const tax = d.kind === 'invoice' || d.kind === 'credit-note';
+    S.ui.dialog = { kind: 'warn', docId: d.id, label: `${kindOf(d)} ausstellen`, title: `${bad.length === 1 ? 'Eine Position' : `${bad.length} Positionen`} ohne Text oder Preis`,
+      what: `${bad.length === 1 ? 'Eine Position hat' : `${bad.length} Positionen haben`} keinen Text${dn ? '' : ' oder keinen Preis'}.`,
+      rule: tax ? 'MWSTG Art. 26 Abs. 2 lit. d und e: Art, Gegenstand und Umfang der Leistung und das Entgelt stehen auf der Rechnung.' : `für ${KIND[d.kind] === 'Lieferschein' ? 'einen Lieferschein' : 'eine Auftragsbestätigung'} keine Vorschrift; der Kunde liest die Zeile so.`,
+      follows: `die Zeile steht so auf dem PDF${dn ? '' : ', mit 0.00'}. Ausgestellt ist ausgestellt: ändern geht danach nur mit ${tax ? 'einer Gutschrift oder einem Storno' : 'einem neuen Dokument'}.`, go: 'issue-force', goLabel: 'Trotzdem ausstellen' };
+    render(); return;
+  }
   const c = cust(d.cu);
-  d.number = nextNumber('invoice'); d.status = 'issued';
-  if (!d.paidAtIssue) { d.due = addDays(d.date, c.terms); d.ref = d.cur === 'EUR' ? `RF${String(10 + Number(d.number.slice(-3)) % 89)} 2026 ${d.number.slice(-3)}` : `00 00000 00000 00000 00202 6${d.number.slice(-3)}${(Number(d.number.slice(-3)) * 7) % 10}`; }
-  if (S.firm === 'kaffee' && S.settings.skonto && d.cur === 'CHF' && !d.paidAtIssue) d.skonto = { percent: S.settings.skontoPct, days: S.settings.skontoDays };
+  d.number = nextNumber(d.kind); d.status = 'issued';
+  if (d.cur === 'EUR' && eurQrKept()) d.qrIbanEur = true;
+  if (d.kind === 'invoice' && !d.paidAtIssue) { d.due = addDays(d.date, c.terms); d.ref = d.cur === 'EUR' && !d.qrIbanEur ? `RF${String(10 + Number(d.number.slice(-3)) % 89)} 2026 ${d.number.slice(-3)}` : `00 00000 00000 00000 00202 6${d.number.slice(-3)}${(Number(d.number.slice(-3)) * 7) % 10}`; }
+  if (d.kind === 'invoice' && S.firm === 'kaffee' && S.settings.skonto && d.cur === 'CHF' && !d.paidAtIssue) d.skonto = { percent: S.settings.skontoPct, days: S.settings.skontoDays };
   d.log.push([TODAY, `${d.paidAtIssue ? 'als Quittung ' : ''}ausgestellt, Nr. ${d.number}`]);
   if (d.paidAtIssue) { d.payments = [{ date: d.date, amount: gross(d), by: `bei Ausstellung, ${T.de.means[d.paidAtIssue]}` }]; d.log.push([TODAY, `bezahlt ${T.de.means[d.paidAtIssue]}`]); }
   for (const l of d.lines.filter((x) => x.deducts)) { const cn = doc(l.deducts); cn.offsetIn = d.id; cn.log.push([TODAY, `verrechnet mit Rechnung ${d.number}`]); }
-  if (d.from) { const q = doc(d.from.id); q.log.push([TODAY, `in Rechnung ${d.number} umgewandelt`]); }
+  if (d.from) { const q = doc(d.from.id); q.log.push([TODAY, `Folgedokument ausgestellt: ${KIND[d.kind]} ${d.number}`]); }
   S.ui.preview = false;
   S.ui.dialog = { kind: 'send', docId: d.id, issued: true };
-  toast(`${d.paidAtIssue ? 'Quittung' : 'Rechnung'} ${d.number} ausgestellt`);
-  go(`#/invoices/${d.number}`);
+  toast(`${kindOf(d)} ${d.number} ausgestellt`);
+  go(hrefOf(d));
+}
+
+// «Folgedokument erstellen»: the next document of the chain, every line copied; picked options become ordinary lines.
+function follow(src, kind, picks = []) {
+  const lines = src.lines.filter((l, k) => (!l.optional || picks.includes(k)) && !(kind === 'delivery-note' && l.kind === 'ded')).map((l) => { const x = clone(l); delete x.optional; if (kind === 'credit-note' && isItem(x)) x.p = -x.p; return x; });
+  const nd = { id: `n${Date.now().toString(36)}`, kind, status: 'draft', cu: src.cu, subject: src.subject, date: TODAY, cur: src.cur, lang: src.lang, exemption: src.exemption, lines, from: { kind: src.kind, id: src.id }, log: [[TODAY, `Folgedokument von ${KIND[src.kind]} ${src.number}${picks.length ? `, mit ${picks.length === 1 ? 'einer Option' : `${picks.length} Optionen`}` : ''}`]] };
+  if (kind === 'credit-note') { nd.creditFor = src.id; nd.subject = `zu Rechnung ${src.number}`; nd.settlement = 'refund'; }
+  src.log.push([TODAY, `Folgedokument: ${KIND[kind]} als Entwurf`]);
+  if (src.kind === 'quote' && kind !== 'delivery-note' && src.qstatus !== 'accepted') { src.qstatus = 'accepted'; src.log.push([TODAY, `angenommen (${KIND[kind]} daraus erstellt)`]); }
+  D().docs.push(nd);
+  S.ui.dialog = null; S.ui.preview = false;
+  toast(`${KIND[kind]} aus ${src.number}: ${lines.filter(isItem).length} Positionen übernommen`);
+  go(hrefOf(nd));
 }
 
 function importPayments() {
@@ -894,11 +1037,11 @@ document.addEventListener('click', (e) => {
     case 'newquote-for': newDraft(b.dataset.id, 'quote'); break;
     case 'preview': S.ui.preview = !S.ui.preview; render(); break;
     case 'issue': issue(d); break;
-    case 'delete': { D().docs.splice(D().docs.indexOf(d), 1); toast('Entwurf gelöscht'); go(d.kind === 'quote' ? '#/invoices/quotes' : '#/invoices'); break; }
+    case 'delete': { D().docs.splice(D().docs.indexOf(d), 1); toast('Entwurf gelöscht'); go(pre(d) ? '#/invoices/quotes' : '#/invoices'); break; }
     case 'send': S.ui.dialog = { kind: 'send', docId: d.id }; render(); break;
     case 'send-do': {
       const g = S.ui.dialog, x = doc(g.docId), c = cust(x.cu), now = new Date().toTimeString().slice(0, 5);
-      const title = g.reminder ? `${g.reminder.level}. Mahnung ${x.number}` : x.kind === 'quote' ? `Offerte ${x.number}` : x.paidAtIssue ? `Quittung ${x.number}` : `${(T[x.lang] ?? T.de).invoice} ${x.number}`;
+      const title = g.reminder ? `${g.reminder.level}. Mahnung ${x.number}` : docTitle(x);
       (x.sent ??= []).push({ date: TODAY, time: now, to: v === 'mail' ? c.email : 'heruntergeladen', title, reminder: g.reminder });
       if (g.reminder) { (x.reminders ??= []).push({ level: g.reminder.level, date: TODAY }); x.log.push([TODAY, `${g.reminder.level}. Mahnung gesendet${g.reminder.interest ? `, mit Verzugszins CHF ${fmt(g.reminder.interest.amount)}` : ''}`]); S.ui.reminder = null; }
       else x.log.push([TODAY, `${v === 'mail' ? 'gesendet' : 'heruntergeladen'}: ${title}`]);
@@ -920,16 +1063,33 @@ document.addEventListener('click', (e) => {
     }
     case 'confirm-pay': { (d.payments ??= []).push({ date: d.proposal.date, amount: d.proposal.amount, by: 'deine Zuordnung' }); d.log.push([TODAY, `Zahlung vom ${dmy(d.proposal.date)} (CHF ${fmt(d.proposal.amount)}) zugeordnet; Rest CHF ${fmt(openOf(d))} offen`]); delete d.proposal; toast(`Zugeordnet. Rest CHF ${fmt(openOf(d))} bleibt offen.`); render(); break; }
     case 'fee-wo': { (d.writeOffs ??= []).push({ date: TODAY, amount: d.feeProposal.amount, reason: 'fee', by: 'Anna Muster' }); d.log.push([TODAY, `Rest EUR ${fmt(d.feeProposal.amount)} als Gebühr ausgebucht`]); delete d.feeProposal; S.ui.open.book = true; toast('Ausgebucht. Die Rechnung ist bezahlt.'); render(); break; }
-    case 'convert': {
-      const nd = { id: `n${Date.now().toString(36)}`, kind: 'invoice', status: 'draft', cu: d.cu, subject: d.subject, date: TODAY, cur: d.cur, lang: d.lang, exemption: d.exemption, lines: clone(d.lines), from: { kind: 'quote', id: d.id }, log: [[TODAY, `aus Offerte ${d.number} erstellt`]] };
-      D().docs.push(nd); d.qstatus = 'accepted'; (d.invoicedAs ??= []).push(nd.id); d.log.push([TODAY, 'angenommen; in eine Rechnung umgewandelt']);
-      toast(`Rechnungsentwurf aus ${d.number}: Positionen übernommen`); go(`#/invoices/draft-${nd.id}`); break;
+    case 'convert': if (d.lines.some((l) => l.optional)) { S.ui.dialog = { kind: 'follow', docId: d.id, target: 'invoice' }; render(); } else follow(d, 'invoice'); break;
+    case 'dlg-follow': S.ui.dialog = { kind: 'follow', docId: d.id }; render(); break;
+    case 'follow-target': S.ui.dialog.picks = $$('[data-optk]:checked').map((x) => Number(x.dataset.optk)); S.ui.dialog.target = v; render(); break;
+    case 'follow-do': { const g = S.ui.dialog, src = doc(g.docId); follow(src, g.target ?? FOLLOW[src.kind][0], $$('[data-optk]:checked').map((x) => Number(x.dataset.optk))); break; }
+    case 'follow-credit': S.ui.dialog = { kind: 'follow', docId: S.ui.dialog.docId, target: 'credit-note' }; render(); break;
+    case 'issue-force': { const x = doc(S.ui.dialog.docId); S.ui.dialog = null; issue(x, true); break; }
+    case 'optline': { const l = d.lines[Number(b.dataset.k)]; l.optional = !l.optional; if (!l.optional) delete l.optional; render(); break; }
+    case 'cancel': {
+      if (stateOf(d) !== 'paid') { toast('Wie heute in der App: Datum, Grund, auf Wunsch eine Mitteilung an den Kunden.'); break; }
+      const last = d.payments.at(-1);
+      S.ui.dialog = { kind: 'warn', docId: d.id, label: 'Stornieren', title: `${d.number} ist bezahlt`, what: `Bezahlt am ${dmy(last.date)}, ${d.cur} ${fmt(paid(d))}, zugeordnet über ${last.by}.`,
+        rule: 'ein Storno hebt die Rechnung auf, als wäre sie nie gestellt; das Geld ist aber eingegangen. Für bezahlte Leistungen ist die Gutschrift der übliche Weg (sie zeigt, was zurückgeht).',
+        follows: `die Zahlung wird von der Rechnung gelöst und steht ohne Rechnung bei den Zahlungen, bis du sie zuordnest oder zurückzahlst; ihre Buchung wird zurückgenommen. Liegt die Zahlung in einem eingereichten Quartal, bleibt es unverändert: die Rücknahme wird im offenen Quartal gebucht.`,
+        alt: { act: 'follow-credit', label: 'Gutschrift statt Storno' }, go: 'cancel-force', goLabel: 'Trotzdem stornieren' };
+      render(); break;
+    }
+    case 'cancel-force': {
+      const x = doc(S.ui.dialog.docId);
+      x.unlinked = x.payments; x.payments = []; x.cancelled = { date: TODAY, reason: 'storniert nach der Zahlung' };
+      x.log.push([TODAY, `storniert; Zahlung vom ${dmy(x.unlinked.at(-1).date)} gelöst, sie wartet bei den Zahlungen`]);
+      S.ui.dialog = null; toast(`${x.number} storniert; die Zahlung wartet bei den Zahlungen`); render(); break;
     }
     case 'q-accept': d.qstatus = 'accepted'; d.log.push([TODAY, 'angenommen']); render(); break;
     case 'q-decline': d.qstatus = 'declined'; d.log.push([TODAY, 'abgelehnt']); render(); break;
     case 'q-send': d.number = nextNumber('quote'); d.status = 'issued'; d.qstatus = 'sent'; d.log.push([TODAY, `Nummer ${d.number}`]); S.ui.dialog = { kind: 'send', docId: d.id, issued: true }; go(`#/invoices/quotes/${d.number}`); break;
     case 'q-resend': S.ui.dialog = { kind: 'send', docId: d.id }; render(); break;
-    case 'copy': { const nd = { ...clone(d), id: `n${Date.now().toString(36)}`, kind: d.kind === 'quote' ? 'quote' : 'invoice', status: 'draft', number: undefined, date: TODAY, payments: [], writeOffs: [], sent: [], reminders: [], cancelled: undefined, qstatus: undefined, log: [[TODAY, `kopiert aus ${d.number}`]] }; if (nd.kind === 'quote') nd.validUntil = addDays(TODAY, 30); delete nd.ref; delete nd.due; delete nd.recurring; delete nd.from; delete nd.invoicedAs; D().docs.push(nd); go(nd.kind === 'quote' ? `#/invoices/quotes/draft-${nd.id}` : `#/invoices/draft-${nd.id}`); break; }
+    case 'copy': { const nd = { ...clone(d), id: `n${Date.now().toString(36)}`, kind: pre(d) ? d.kind : 'invoice', status: 'draft', number: undefined, date: TODAY, payments: [], writeOffs: [], sent: [], reminders: [], cancelled: undefined, qstatus: undefined, log: [[TODAY, `kopiert aus ${d.number}`]] }; if (nd.kind === 'quote') nd.validUntil = addDays(TODAY, 30); delete nd.ref; delete nd.due; delete nd.recurring; delete nd.from; delete nd.invoicedAs; delete nd.unlinked; delete nd.qrIbanEur; D().docs.push(nd); go(hrefOf(nd)); break; }
     case 'addline': d.lines.splice(firstDedIndex(d), 0, L('', 1, 'pcs', 0, F().vat ? 8.1 : 0)); render(); break;
     case 'addtitle': d.lines.splice(firstDedIndex(d), 0, L('Titel', 0, '', 0, 0, { kind: 'title' })); render(); break;
     case 'addsub': d.lines.splice(firstDedIndex(d), 0, L('Zwischentotal', 0, '', 0, 0, { kind: 'sub' })); render(); break;
@@ -973,6 +1133,8 @@ document.addEventListener('click', (e) => {
     case 'oi-csv': toast('CSV: Kunde; Nr.; Datum; Fällig; Tage; Offen; Währung'); break;
     case 'pdf': toast('Im Prototyp gibt es kein PDF; die App lädt das abgelegte PDF.'); break;
     case 'set-interest': case 'set-skonto': case 'eur-qr': break;
+    case 'eur-qr-keep': S.settings.eurQr = 'kept'; toast('QR-IBAN für EUR gespeichert'); render(); break;
+    case 'eur-qr-drop': S.settings.eurQr = ''; render(); break;
     default: if (act.startsWith('noop')) toast('Wie heute in der App; im Prototyp nicht nachgebaut.');
   }
 });
@@ -983,7 +1145,7 @@ document.addEventListener('change', (e) => {
   if (el.dataset.act === 'set-interest') { S.settings.interest = el.checked; toast(el.checked ? 'Verzugszins an: 5 % ab Fälligkeit, auf jeder neuen Mahnung' : 'Verzugszins aus'); render(); return; }
   if (el.dataset.act === 'set-skonto') { S.settings.skonto = el.checked; render(); return; }
   if (el.dataset.act === 'no-remind') { cust(el.dataset.id).noReminders = el.checked; toast(el.checked ? 'Wird nie gemahnt' : 'Wird wieder gemahnt'); render(); return; }
-  if (el.dataset.act === 'eur-qr') { S.settings.eurQr = !!el.value.trim(); render(); return; }
+  if (el.dataset.act === 'eur-qr') { if (S.settings.eurQr !== 'kept') S.settings.eurQr = el.value.trim() ? 'warned' : ''; render(); return; }
   if (el.tagName === 'SELECT' && el.dataset.ed) edit(el.dataset.ed, el.value);
 });
 document.addEventListener('focusout', (e) => { const el = e.target; if (el.isContentEditable && el.dataset.ed) edit(el.dataset.ed, el.innerText.trim()); });
