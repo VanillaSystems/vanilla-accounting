@@ -1,7 +1,8 @@
 # Spec: payroll (Lohnbuchhaltung)
 
 Status: decided by the owner, 2026-11-14 (§13); patterns from the market review and the rule
-«warn, then the person decides» added 2026-11-15 (§14, §15). No code yet. A clickable prototype of B0 is in
+«warn, then the person decides» added 2026-11-15 (§14, §15), and values that change over time
+(§16) the same day. No code yet. A clickable prototype of B0 is in
 [mockups/payroll/](mockups/payroll/index.html). Builds on
 [ADR 0011](../adr/0011-payroll.md) (payroll: book what others calculate, a narrow helper for the
 owner's salary) and is judged by [MISSION.md](../../MISSION.md) and
@@ -15,7 +16,8 @@ The owner asked: «and how about Lohnbuchhaltung?». This spec answers on two le
   (B1) follows once B0 has shipped and a persona round has scored it.
 
 Sections 1 to 3 are findings: what exists, who needs what, what the law requires. Sections 4 to
-12 are the proposal. Section 13 holds the owner's decisions. The order is **B0 first**, then A-2,
+12 are the proposal. Section 13 holds the owner's decisions; sections 14 to 16 what was added on
+2026-11-15. The order is **B0 first**, then A-2,
 then B1 (§12).
 
 ---
@@ -382,9 +384,9 @@ said.
 | UVG max insured earnings | rarely | UVV Art. 22 | same file |
 | Family allowance minimums | Y | FamZG Art. 5 / Federal Council | same file. A cantonal amount and the FAK rate are **company** data |
 | VAV limits and flat tax | Y | BGSA / DBG Art. 37a | same file |
-| Administration cost, FAK rate, BVG plan, UVG/NBU/KTG premium rates | Y per contract | the firm's fund, insurer, pension fund | the workspace (payroll plan, §5.3), each with the document it is read from |
+| Administration cost, FAK rate, BVG plan, UVG/NBU/KTG premium rates | Y per contract, sometimes mid-year | the firm's fund, insurer, pension fund | the workspace (payroll plan, §7.2), each a dated entry with the document it is read from (§16) |
 | Quellensteuer tariffs | Y, corrections during the year | ESTV / cantons | fetched on demand like `npm run fetch-rates` (src/cli/fetch-estv-rates.ts), into the workspace's `data/` per canton and year, with checksum and source date, never in git |
-| Minimum wages, GAV minima, 13th salary, holiday weeks | K/G | canton, GAV | workspace knowledge (`knowledge/rules/payroll.guide.yaml`) and the employee's contract |
+| Minimum wages, GAV minima, 13th salary, holiday weeks | K/G | canton, GAV | workspace knowledge (`knowledge/rules/payroll.guide.yaml`) and the employee's contract (dated, §16) |
 
 A test (like tests/vat-golden) fails once a year has wages but `modules/ch/payroll/<year>.yaml`
 is missing. In December, a task says «Lohnsätze 2027 fehlen in der App» to the developer, not
@@ -551,8 +553,8 @@ keyed by canton, as data.
 
 ### 6.5 A run
 
-1. **Draft** (code): for the month, per active employee: the last run's figures with this month's
-   changes. Every line carries `{ kind, base, rate, source }` and shows **base × rate = amount**
+1. **Draft** (code): for the month, per employee with a contract in it: the values that hold in
+   the month (§16), split by days where one changes within it. Every line carries `{ kind, base, rate, source }` and shows **base × rate = amount**
    (a monthly wage: 1 month × the monthly wage; AHV/IV/EO: the AHV wage × the federal rate; a
    fixed BVG contribution: «fest», with the certificate as its source). A switch beside the table shows the
    employer's share of each kind next to the employee's (rate and amount), and the kinds only the
@@ -574,7 +576,7 @@ keyed by canton, as data.
    credit, text, amount, the payday and the ref), and the later payment D 2290 / C bank. Nothing is
    booked yet. The preview is the same function that books (one source), so what it shows is what
    the release writes.
-4. **Release** (person): `Freigeben`. With a line «unvollständig», the click first says what is
+4. **Release** (person): `Freigeben`. The run keeps the dated entries it read (`used`, §16). With a line «unvollständig», the click first says what is
    off, which rule it touches and what follows («Privatanteil Geschäftsfahrzeug hat keinen
    Kaufpreis. Regel: der Privatanteil zählt zum AHV-pflichtigen Lohn und gehört in Ziffer 2.2.
    Gibst du trotzdem frei, sind AHV, ALV und Ziffer 2.2 um ihn zu tief; der Nettolohn bleibt
@@ -673,38 +675,41 @@ setup lives in its own store. Decided: `payroll.json`, not a `company.payroll` m
 (§13, decision 6).
 
 ```ts
+// Dated<T> and DatedEntry<T>: docs/specs/domain-model.md §7.2 (validFrom, validUntil?, value, enteredAt, source?).
 interface PayrollStore {
   schema: 1;
-  plan: {                                   // per year, the firm's contracts
-    [year: string]: {
-      canton: string;                       // of work (one, B1)
-      funds: Array<{ kind: string; business: string;          // knowledge file id
-                     rates: Record<string, number>;           // e.g. { adminCost: 2.5, fak: 1.1 } in %
-                     source: { receiptId?: string; note: string; keptAt: string } }>;
-      pension?: { business: string; perEmployee: true };      // figures per employee below
-      accident: { business: string; bu: number; nbu: number; nbuPaidBy: 'employee' | 'employer' | 'split'; source: …};
-      sickness?: { business: string; rate: number; employeeShare: number; source: … };
-      vav?: true;                                               // simplified procedure (Einzelfirma only)
-    };
+  plan: {                                   // the firm's contracts; each a history, read on the run's days
+    canton: Dated<string>;                  // of work (one, B1)
+    funds: Array<{ kind: string; business: string;          // knowledge file id
+                   rates: Dated<Record<string, number>> }>; // e.g. { adminCost: 2.5, fak: 1.1 } in %, one entry per Beitragsverfügung
+    pension?: { business: string; perEmployee: true };      // figures per employee below
+    accident?: { business: string; rates: Dated<{ bu: number; nbu: number; nbuPaidBy: 'employee' | 'employer' | 'split' }> };
+    sickness?: { business: string; rates: Dated<{ rate: number; employeeShare: number }> };
+    vav?: Dated<boolean>;                   // simplified procedure (Einzelfirma only)
   };
   employees: Array<{
-    id: string; name: string; address: string; language: 'de'|'fr'|'it'|'en';
+    id: string; language: 'de'|'fr'|'it'|'en';
     ahvNumber?: string;                    // AHVN13; masked in every UI list, never to the model
-    birthDate: string; entry: string; exit?: string; isOwner?: true;
-    iban?: string;                         // for matching the net payment
-    contract: Array<{ from: string; kind: 'monthly' | 'hourly'; amount: number; pensum?: number;
+    birthDate: string; isOwner?: true;
+    name: Dated<string>; address: Dated<Address>;
+    iban?: Dated<string>;                  // for matching the net payment, the one valid on the payday
+    // Entry = the first contract entry's validFrom; exit = the last one's validUntil; a re-entry is a new entry after a gap.
+    contract: Dated<{ kind: 'monthly' | 'hourly'; amount: number; pensum?: number;
                       thirteenth?: boolean; holidayWeeks: number; publicHolidaySurcharge?: number }>;
-    pension?: Array<{ from: string; employee: number; employer: number; source: … }>;  // CHF per month, from the certificate
-    allowances?: Array<{ from: string; to?: string; kind: 'child' | 'education'; amount: number }>;
-    taxAtSource?: { canton: string; code: string; church: boolean; since: string };  // B2
+    pension?: Dated<{ employee: number; employer: number }>;  // CHF per month, source: the certificate
+    allowances?: Dated<{ kind: 'child' | 'education'; amount: number }>;  // validUntil when it stops
+    taxAtSource?: Dated<{ canton: string; code: string; church: boolean }>;  // B2
   }>;
 }
 // Per year: transactional-data/<year>/payroll/runs.jsonl — append-only: one line per release, and a line
 // { id, reopenedAt, reopenedBy } per reopening; the last release of an id is the run, the earlier ones its history:
 interface PayrollRun { id: string; period: 'YYYY-MM'; payday: string; releasedAt: string; releasedBy: 'person';
   corrects?: string; slips: Array<{ employee: string; lines: Array<{ kind: string; label: string;
-  base?: number; rate?: number; amount: number; party: 'employee'|'employer'|'paid'; source: string }>;
-  net: number; receiptId: string }>; entries: string[] }
+  base?: number; rate?: number; amount: number; party: 'employee'|'employer'|'paid'; source: string;
+  days?: { from: string; to: string } }>;   // a part of the month, when a value changed within it
+  net: number; receiptId: string }>; entries: string[];
+  used: Array<{ path: string; validFrom: string; enteredAt: string }>;  // every dated entry the run read, federal rows included
+}
 ```
 
 LAYOUT (src/workspace/workspace.ts) gains `top['payroll.json']` and `year['payroll']`. `npm run
@@ -714,7 +719,11 @@ doctor` names them.
 
 - `modules/ch/payroll.yaml`: kinds, legal splits, bases, Lohnausweis fields, labels (de/fr/it/en),
   plausibility ranges.
-- `modules/ch/payroll/2026.yaml`: §3l's federal rows, each `{ value, source, validFrom }`.
+- `modules/ch/payroll/2026.yaml`: §3l's federal rows, each `{ value, source, validFrom }`, read by the
+  same `valueOn` as the firm's dated values (§16). A mid-year change of a federal figure is a
+  second row with its own `validFrom`.
+- `modules/ch/payroll.yaml` also holds how a month is split by days when a value changes within
+  it (calendar days by default, 30 days a month as the other choice), as data.
 - `src/core/modules/schema.ts`: the types of both. `modules/ch/module.yaml` `provides:
   accounting.payroll.runs@1` (the capability is already named in docs/0.4.0/inspiration/capabilities.yaml).
 
@@ -761,17 +770,19 @@ It is not acceptable once a bookkeeper or an employee who scans receipts has acc
   per the shell, docs/redesign/architecture.md). The list holds the runs per month in the period
   (draft, released, correction). The detail shows the run's payslips, each line with its source
   on hover, the checks as tasks, `Freigeben`, and the PDF. A second list holds the employees,
-  each with a detail (contract history, pension figures, allowances, year totals). URLs:
+  each with a detail (contract, pension figures, allowances, address, IBAN, each with «ab» and its
+  history, §16; year totals). URLs:
   `/payroll/<runId>?period=2026-Q3`, `/payroll/employee/<id>` (docs/urls.md, built by `hrefOf`).
   The area shows only when `employs(profile)` (B) or payslips exist (A: the «Lohnausweis-Daten»
   page alone).
-- **Firma › Löhne:** the year's plan (funds, insurers, rates with their documents), the canton,
-  VAV on/off. Like Firma › MWST.
+- **Firma › Löhne:** the plan (funds, insurers, rates with their documents), the canton, VAV
+  on/off, each value with «ab TT.MM.JJJJ», its history and «Ändern» («gilt ab», §16). Like Firma ›
+  MWST.
 - **Abschluss:** the steps of §5.2 A7 and §6.6.
 - **Journal / Bank:** a wage entry links to its payslip and run. A fund payment shows «Kasse X:
   aufgelaufen … bezahlt … offen …».
 - **Sidebar wishes:** «mach d Lohnabrechnig für Marco» opens the draft run; «Marco verdient ab
-  September 5'400» drafts a contract line on a card; «wieso isch de Lohn tüüfer» explains from the
+  September 5'400» and «Mein Lohn ab Januar 9'000» draft a dated contract entry on a card (§16); «wieso isch de Lohn tüüfer» explains from the
   run's lines.
 - Colours and classes per UI theming (tokens.css). The payslip and Lohnausweis sheets keep paper
   colours, like the invoice sheet.
@@ -811,6 +822,11 @@ It is not acceptable once a bookkeeper or an employee who scans receipts has acc
   - an exit on 15 March (13th pro rata, BVG pro rata);
   - wages under 2,500 a year (AHV exempt unless asked);
   - VAV helper of an Einzelfirma;
+  - a raise within the month (5,000 to 5,400 from 16 May): two wage lines split by days, each
+    with its `days`;
+  - a backdated change after release (a BVG rate of 7.8 % instead of 7.5 % from 1 September,
+    entered after September was released): the warning names the run, and the correction line in October equals the
+    difference to the Rappen;
   - B2: one tariff code per canton file version, checked against the ESTV file.
 - **Property tests:** net = gross − deductions + allowances + expenses; Σ runs = Lohnausweis
   field 8; 2270 = accrued − paid per kind; a released run changes only through a reopening, which
@@ -962,6 +978,7 @@ history or the journal); there is no override flag and no «despite the warning�
 | A released run with a mistake | correction run only | «Wieder öffnen» in an open period (§6.5 step 6) |
 | A contribution's employer share booked by hand on 57xx after runs accrued it | code refuses | warning of double expense, the person may keep it (§6.5) |
 | A wage under a known minimum (canton, GAV) | warning | unchanged: a warning |
+| A change dated before a released run (§16) | – | warning naming each run, its value and the new one; «Wieder öffnen», «Differenz im nächsten Lauf» or «So lassen» |
 
 Not covered, by the owner's exception for security boundaries and by golden rule 1:
 
@@ -970,6 +987,104 @@ Not covered, by the owner's exception for security boundaries and by golden rule
 - **Filed VAT quarters and the period lock:** the app's hard lock (AGENTS.md golden rule 1,
   `closedThrough`, seals) stays until the owner rewrites that rule. The spec only describes the
   warning such a reopening would show (§6.5 step 7); it is not built.
+
+## 16. Values that change over time (owner, 2026-11-15)
+
+The owner asked: «are we also taking change into consideration? all of those fees and
+everything, they can be changed, right? So a Lohn can be changed, a Beitrag can be changed».
+Yes. Payroll follows the rule of docs/specs/domain-model.md §7 (branch `spec/domain-model`).
+Every value a run reads is a dated history (`Dated<T>`: `validFrom`, optional `validUntil`, never
+overwritten), and a released run keeps the entries it used.
+
+### 16.1 What is dated
+
+| Value | Typical change | Its entry |
+|---|---|---|
+| Contract: monthly or hourly, amount, pensum, 13th salary, holidays | a raise from January; a pensum of 80 % from 1 May | `contract`, from the day the contract or its amendment names |
+| Entry and exit | a start on 1 March, an exit on 15 September | the first contract entry's `validFrom`; the last one's `validUntil`. Not stored twice |
+| Pension figures (BVG) | a new certificate after a raise or a plan change, mid-year too | `pension`, from the certificate's date, `source.receiptId` the certificate |
+| A fund's rates (FAK, administration cost) | a new Beitragsverfügung, mostly from 1 January | `plan.funds[].rates`, one entry per decision |
+| UVG/NBU, KTG rates | a new policy year, or a new insurer | `plan.accident.rates`, `plan.sickness.rates` |
+| Allowances | a child's allowance from the month of birth, ending at 16 or with education | `allowances`, with `validUntil` |
+| Address, IBAN, name | a move, a new bank, a marriage | each its own history; the payslip prints the address valid on the payday, and code matches the net by the IBAN valid on it |
+| Canton of work, VAV | rarely | `plan.canton`, `plan.vav` |
+| Federal figures | each year, sometimes mid-year | `modules/ch/payroll/<year>.yaml` rows with `validFrom` (app data, §3l), read by the same `valueOn` |
+
+The plan is no longer stored per year. The year view of Firma › Löhne shows the values that hold
+in that year. A new year's certificate is a new entry from 1 January, kept beside the old one.
+
+### 16.2 How a run reads them
+
+- **A run reads the values that hold in its month.** Most hold for the whole month. When one
+  changes within it (a raise from the 16th, an entry on the 10th, an exit on the 15th), the run
+  makes one line per part, each with its `days`, and splits the monthly amount by days.
+  Calendar days are the default; 30 days a month is the other choice, set as data in
+  `modules/ch/payroll.yaml`. A part without a value is a line «unvollständig» (§6.5 step 2).
+- **A planned entry shows before it applies.** A raise entered in November for January shows as
+  «ab 01.01.2027: 9'000, geplant» on the contract. The December run does not read it, and the
+  January run does.
+- **The release keeps what it used.** Each line keeps base, rate and source, as today, and the
+  run keeps `used` (§7.2): every dated entry it read, by `(path, validFrom, enteredAt)`. A later
+  entry never changes a released run.
+
+### 16.3 A change dated before a released run
+
+When a person (or the AI on her wish) adds an entry whose days a released run covers, code
+recomputes those runs with the new entry and compares. If nothing differs (a new address after
+the payday), it saves. If a figure differs, the card says so before it saves:
+
+> **Für September freigegeben mit 7.5 %; ab 01.09.2026 gilt jetzt 7.8 %.**
+> BVG Arbeitnehmerbeitrag September (Lukas Beispiel): 7.8 % statt 7.5 % auf dem versicherten
+> Lohn von 6'395, also rund 499 statt 480 Franken, Differenz rund 19.
+> Regel: ein freigegebener Lauf ändert sich nur durch «Wieder öffnen» (§6.5 step 6).
+> Was folgt: wählst du nichts davon, bleibt September wie freigegeben, und der Lauf zeigt die
+> Differenz als Tatsache.
+
+The ways on are «Lauf wieder öffnen» (an open period only, §6.5 step 6), «Differenz im nächsten
+Lauf» and «So lassen»:
+
+- **«Differenz im nächsten Lauf»** adds a correction line to the next draft run: «Korrektur
+  September: BVG 7.8 % statt 7.5 %», or for a backdated raise «Nachzahlung Juli–August», with
+  `corrects: <runId>` on the line. The line counts in the year of the run that pays it, like any
+  wage paid then.
+- **Several runs** (a raise dated three months back) are listed on one card, and one choice
+  covers them all.
+- **A run of a closed period** offers only the correction in the next open month (golden rule 1,
+  §6.5 step 7).
+- **«So lassen»** keeps the entry. The run shows the fact «berechnet mit 7.5 %; seit 15.11.2026
+  gilt für September 7.8 %» in its margin, and the choice stays there for later. It is no
+  reminder: it is not on the home screen and nags nobody.
+- **The draft run** is not released, so it simply reads the new value.
+
+Each choice is an ordinary action, recorded in the run's history and the change log (domain
+model §6.3). The entry carries no warning mark, and there is no override flag (§15).
+
+### 16.4 UI and the AI
+
+- **Every dated value** in Firma › Löhne and on an employee's detail shows the current value with
+  «ab TT.MM.JJJJ», a planned entry below it, and a small fold «Verlauf» with the earlier entries,
+  each with its document. No history screen of its own.
+- **«Ändern»** asks for the new value and «gilt ab». The default is the first day of the first
+  month without a released run (with September still a draft: 01.09.2026). An earlier date shows
+  the card of 16.3 before anything is saved.
+- **The sidebar:** «Mein Lohn ab Januar 9'000» becomes the proposal `{ path:
+  employees.lukas.contract, value: { …, amount: 9000 }, validFrom: 2027-01-01 }`. Code checks it,
+  writes the entry, and shows the card («Monatslohn 9'000 ab 01.01.2027; bisher 8'600 ab
+  01.01.2026»). The person keeps it. A dropped certificate («neuer Vorsorgeausweis») is read the
+  same way into a `pension` entry from its date, with the certificate as its source.
+- Prototype: [1-einrichten.html#behalten](mockups/payroll/1-einrichten.html#behalten) shows the
+  wage with «ab 01.01.2026», its history and «Ändern» with «gilt ab», including the warning for a
+  date before the released July and August runs.
+
+### 16.5 Data and tests
+
+- `payroll.json` starts at `PAYROLL_SCHEMA = 1` with the histories, so there is no migration.
+  §7.2 has the shapes.
+- Tests: `valueOn` at the edges (the day before, on, and after `validFrom` and `validUntil`;
+  two entries of the same `validFrom`); a released run unchanged after a later entry (its lines
+  and `used` byte for byte); the golden cases of §10 for a change within the month and for a
+  backdated change; a withdrawn planned entry that no run has used; the refusal to withdraw one
+  that a run used.
 
 ## Sources
 

@@ -62,7 +62,13 @@
   <dl class="kv2 wide">
 <dt>Person</dt><dd>Lukas Beispiel <span class="m">Inhaber und Geschäftsführer, seit 01.01.2024</span></dd>
 <dt>AHV-Nummer</dt><dd><span class="mono">756.••••.••••.37</span> <span class="m">nur in den Büchern, nie an die KI</span></dd>
-<dt>Monatslohn</dt><dd><span class="mono">8'600.00</span> <span class="m">kein 13. Monatslohn · Zahltag am 25.</span></dd>
+<dt>Monatslohn</dt><dd id="wage"><div id="wage-show"></div>
+<form class="form pr-grid pr-hide" id="wage-form" onsubmit="return false" style="margin-top: 8px;">
+  <label>Neuer Monatslohn<input class="mono num" id="wage-amount" value="9'000.00"></label>
+  <label>gilt ab<input class="mono" id="wage-from" value="01.09.2026"><span class="fhint">der erste Monat ohne freigegebenen Lauf</span></label>
+  <span style="display: flex; gap: 8px; align-items: end;"><button type="button" class="btn primary" id="wage-save">Behalten</button><button type="button" class="btn" id="wage-cancel">Abbrechen</button></span>
+</form>
+<div class="pr-warn pr-hide" id="wage-warn" role="alertdialog" aria-labelledby="wage-warn-t"></div></dd>
 <dt>Kanton der Arbeit</dt><dd>Bern</dd>
 <dt>AHV/IV/EO, ALV</dt><dd>5.30 % und 1.10 % je Seite <span class="m">Bundessätze 2026, von der App</span></dd>
 <dt>Ausgleichskasse</dt><dd>Ausgleichskasse Muster <span class="m">FAK 1.00 % · Verwaltungskosten 1.58 % · Akonto vierteljährlich · Beitragsverfügung 2026</span></dd>
@@ -71,7 +77,7 @@
 <dt>Konten</dt><dd><span class="mono">2290</span> Lohnverbindlichkeiten, <span class="mono">5710</span> FAK <span class="m">neu im Kontenplan</span></dd>
 </dl>
   <p style="margin-top: 18px;"><a class="clink" href="2-lauf.html">Lohnlauf September vorbereiten →</a>  <a class="clink" href="1b-ohne-ki.html">Sätze ändern →</a></p>
-  <p class="m src-note">Die Sätze gelten für 2026. Für 2027 legst du die neuen Ausweise ab; die Bundessätze 2027 bringt die App. Wer diese Buchhaltung öffnet, sieht den Lohn.</p>
+  <p class="m src-note">Jeder Wert gilt ab seinem Datum. Ein neuer Ausweis oder eine neue Verfügung wird ein neuer Eintrag ab ihrem Datum; der alte bleibt im Verlauf, und freigegebene Läufe behalten, womit sie gerechnet haben. Die Bundessätze 2027 bringt die App. Wer diese Buchhaltung öffnet, sieht den Lohn.</p>
 </div>
 </div></div></section><div class="split" role="separator" aria-orientation="vertical" aria-label="Spaltenbreite (ziehen: Breite ändern · Doppelklick: zurücksetzen · ←→ mit Fokus)" aria-valuenow="579" tabindex="0" style="left: 579px;"></div></main><div class="topbar open" role="toolbar" aria-label="Kontext"><span class="chip" tabindex="0"><b style="font-weight: 600;">Muster Consulting GmbH</b></span><span class="sep"></span><button type="button" class="chip">⌕ Suchen <span class="k">⌘K</span></button><span class="sep"></span><span class="zoom" role="group" aria-label="Schriftgrösse"><button type="button" class="chip" aria-label="Kleiner (⌘ −)">−</button><button type="button" class="chip mono zval" data-tip="Zurück auf 100 % (⌘ 0)" aria-label="Zurück auf 100 % (⌘ 0)">100 %</button><button type="button" class="chip" aria-label="Grösser (⌘ +)">+</button></span><span class="sep"></span><button type="button" class="chip" data-tip="Exportieren (⇧E)" aria-label="Exportieren"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V3"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path></svg></button><button type="button" class="chip" aria-label="Darstellung: System, Hell, Dunkel (T wechselt hell und dunkel)">◐</button><button type="button" class="chip" aria-label="Sprache" aria-haspopup="menu">DE</button><span class="sep"></span><label class="pin"><input type="checkbox" aria-describedby="top-pintip"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17v5"></path><path d="M9 10.8V5h6v5.8l2.5 2.7a1 1 0 0 1-.7 1.7H7.2a1 1 0 0 1-.7-1.7z"></path><path d="M8 5h8"></path></svg><span class="ptip" id="top-pintip" role="tooltip"><b>Nicht angeheftet</b><span class="">An: die Leiste oben bleibt immer offen.</span><span class="cur">Aus: sie klappt sich ein, sobald die Maus sie verlässt. Fahr oben hin oder klick auf sie, dann geht sie wieder auf.</span></span></label></div><div class="corner"><button type="button" class="cornerbtn aibtn" data-tip="KI öffnen · ⌘J" aria-label="KI öffnen" aria-expanded="false"><svg class="i bot" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8V4H8"></path><rect x="4" y="8" width="16" height="12" rx="2"></rect><path d="M2 14h2M20 14h2M15 13v2M9 13v2"></path></svg></button></div><nav class="activity" aria-label="Bereiche"><a class="it" aria-label="Belege" data-k="b" href="3-lohnabrechnung.html"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4L6 21z"></path><path d="M9 8h6M9 12h6M9 16h3"></path></svg></span><span class="nm">Belege</span></a><a class="it" aria-label="Rechnungen" data-k="i"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path><path d="M10 9H8M16 13H8M16 17H8"></path></svg></span><span class="nm">Rechnungen</span></a><a class="it" aria-label="Kontoauszüge, 2 offen" data-k="k" href="5-zahlung.html"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 9.5 12 4l8.5 5.5z"></path><path d="M6 10.5v7M10 10.5v7M14 10.5v7M18 10.5v7"></path><path d="M3.5 20.5h17"></path></svg><span class="mark"></span></span><span class="nm">Kontoauszüge</span></a><a class="it" aria-label="Buchungen" data-k="u" href="4-buchungen.html"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5C10 5 7 4.5 4 5v14c3-.5 6 0 8 1.5 2-1.5 5-2 8-1.5V5c-3-.5-6 0-8 1.5z"></path><path d="M12 6.5V20.5"></path></svg></span><span class="nm">Buchungen</span></a><a class="it" aria-label="MWST" data-k="m"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5"></rect><path d="M15 9l-6 6"></path><circle cx="9.3" cy="9.3" r="1"></circle><circle cx="14.7" cy="14.7" r="1"></circle></svg></span><span class="nm">MWST</span></a><a class="it" aria-label="Bilanz &amp; ER" data-k="r"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 20.5h17"></path><rect x="5" y="11" width="3.2" height="6.5" rx="1"></rect><rect x="10.4" y="5.5" width="3.2" height="12" rx="1"></rect><rect x="15.8" y="13.5" width="3.2" height="4" rx="1"></rect></svg></span><span class="nm">Bilanz &amp; ER</span></a><a class="it" aria-label="Abschluss" data-k="a"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="3"></rect><path d="M3.5 10h17M8 3v4M16 3v4"></path><path d="m9 15.2 2 2 4-4"></path></svg></span><span class="nm">Abschluss</span></a><a class="it" aria-label="Löhne" data-k="l" href="2-lauf.html"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="6" width="18" height="13.5" rx="2.5"></rect><path d="M3 10.5h18"></path><path d="M7 3.5h10"></path><circle cx="16.5" cy="15" r="1.2"></circle></svg></span><span class="nm">Löhne</span></a><span class="div"></span><a class="it bolt" aria-label="Automatisierung"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"></path></svg></span></a><a class="it" aria-label="Geschäftspartner" data-k="p"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0 1 13 0"></path><path d="M15.5 4.7a3.5 3.5 0 0 1 0 6.6M18 14.3a6.5 6.5 0 0 1 3.5 5.7"></path></svg></span><span class="nm">Geschäftspartner</span></a><a class="it" aria-label="Wissen" data-k="e"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 18V5"></path><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4"></path><path d="M17.707 6.294A3 3 0 1 0 12 5a3 3 0 1 0-5.707 1.294"></path><path d="M17.996 5.125a4 4 0 0 1 2.526 5.77"></path><path d="M18 18a4 4 0 0 0 2-7.465"></path><path d="M19.967 17.482a4 4 0 1 1-7.967.517 4 4 0 1 1-7.967-.517"></path><path d="M6 18a4 4 0 0 1-2-7.465"></path><path d="M6.004 5.125a4 4 0 0 0-2.526 5.77"></path></svg></span><span class="nm">Wissen</span></a><a class="it" aria-label="Änderungen" data-k="v"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l3 2"></path></svg></span><span class="nm">Änderungen</span></a><a class="it on" aria-label="Firma" data-k="f" href="1-einrichten.html" aria-current="page"><span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21V5.5A2.5 2.5 0 0 1 6.5 3h7A2.5 2.5 0 0 1 16 5.5V21"></path><path d="M16 9h2.5A1.5 1.5 0 0 1 20 10.5V21"></path><path d="M2.5 21h19"></path><path d="M8 7.5h4M8 11.5h4M8 15.5h4"></path></svg></span><span class="nm">Firma</span></a><div class="autow idle" data-testid="dock-widget"><button type="button" class="wopen" aria-expanded="false" aria-haspopup="dialog" data-k="w" aria-label="Automatisierung: Zahlungen: 35 von 35 gebucht · 0 Aufgaben für dich. Belege: 26 gelesen · 26 verbucht. Nächster Lauf morgen 00:00: Belege und Daten holen"><span class="n payments"><b>35</b><span>von 35 Zahlungen gebucht</span></span><span class="n waiting"><b>0</b><span>Aufgaben</span></span><span class="trig"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"></path></svg></span></button></div><button type="button" class="navtoggle" aria-expanded="false" aria-label="Navigation ausklappen"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg></button></nav></div>
     
@@ -89,6 +95,65 @@ function render() {
 }
 window.addEventListener('hashchange', render);
 render();
+
+// The wage is a dated history: «ab», a small Verlauf, «Ändern» asks «gilt ab». Runs January to August are released, September is a draft; to 31.03.2026 the quarter is closed.
+const WAGE = [{ from: '2024-01-01', amount: 8200, src: 'Arbeitsvertrag' }, { from: '2026-01-01', amount: 8600, src: 'Nachtrag zum Arbeitsvertrag' }];
+const TODAY = '2026-11-15';
+const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+const fmtW = (n) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, "'");
+const dmy = (d) => d.split('-').reverse().join('.');
+const dayBefore = (d) => { const t = new Date(d + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() - 1); return t.toISOString().slice(0, 10); };
+let wageNote = '';
+function showWage() {
+  const now = WAGE.filter((e) => e.from <= TODAY).at(-1), planned = WAGE.filter((e) => e.from > TODAY);
+  const earlier = WAGE.filter((e) => e.from <= TODAY && e !== now).reverse();
+  const until = (e) => { const next = WAGE[WAGE.indexOf(e) + 1]; return next ? ' bis ' + dmy(dayBefore(next.from)) : ''; };
+  document.getElementById('wage-show').innerHTML = '<span class="mono">' + fmtW(now.amount) + '</span> <span class="m">ab ' + dmy(now.from) + ' · kein 13. Monatslohn · Zahltag am 25.</span> <button type="button" class="btn ghost" id="wage-change">Ändern</button>'
+    + planned.map((e) => '<div class="m">ab ' + dmy(e.from) + ': <span class="mono">' + fmtW(e.amount) + '</span>, geplant</div>').join('')
+    + (earlier.length ? '<div class="m">Verlauf: ' + earlier.map((e) => '<span class="mono">' + fmtW(e.amount) + '</span> vom ' + dmy(e.from) + until(e) + ' · ' + e.src).join('; ') + '</div>' : '')
+    + (wageNote ? '<div class="m" id="wage-note">' + wageNote + '</div>' : '');
+  document.getElementById('wage-change').addEventListener('click', () => { document.getElementById('wage-form').classList.remove('pr-hide'); document.getElementById('wage-warn').classList.add('pr-hide'); });
+}
+function keepWage(from, amount, note) {
+  const k = WAGE.findIndex((e) => e.from > from);
+  WAGE.splice(k < 0 ? WAGE.length : k, 0, { from, amount, src: 'eingegeben am ' + dmy(TODAY) });
+  wageNote = note;
+  document.getElementById('wage-form').classList.add('pr-hide');
+  document.getElementById('wage-warn').classList.add('pr-hide');
+  showWage();
+}
+function saveWage() {
+  const m = /^(\d\d)\.(\d\d)\.(\d{4})$/.exec(document.getElementById('wage-from').value.trim());
+  const amount = Number(document.getElementById('wage-amount').value.replace(/'/g, ''));
+  const w = document.getElementById('wage-warn');
+  if (!m || !(amount > 0)) { w.innerHTML = '<h3 id="wage-warn-t">Datum oder Betrag fehlt</h3><p>«gilt ab» als TT.MM.JJJJ, der Lohn als Betrag.</p>'; w.classList.remove('pr-hide'); return; }
+  const from = m[3] + '-' + m[2] + '-' + m[1];
+  const old = WAGE.filter((e) => e.from <= from).at(-1);
+  const first = from < '2026-01-01' ? 1 : Number(m[2]);
+  const dim = new Date(Date.UTC(2026, first, 0)).getUTCDate(), part = from < '2026-01-01' || m[1] === '01' ? 1 : (dim - Number(m[1]) + 1) / dim;
+  const hit = from < '2026-09-01' ? MONTHS.slice(first - 1, 8).map((n, i) => ({ n, mm: first + i })) : [];
+  if (!hit.length) { keepWage(from, amount, from > TODAY ? 'Gilt ab ' + dmy(from) + '; der Lauf ' + MONTHS[Number(m[2]) - 1] + ' rechnet damit.' : 'Gilt ab ' + dmy(from) + '; der Lauf September (Entwurf) rechnet jetzt damit.'); return; }
+  const names = hit.map((h) => h.n).join(', ').replace(/, ([^,]*)$/, ' und $1');
+  const diff = amount - (old ? old.amount : 0), total = Math.round(diff * (hit.length - 1 + part) * 20) / 20;
+  const closed = hit.filter((h) => h.mm <= 3), open = hit.filter((h) => h.mm > 3);
+  w.innerHTML = '<h3 id="wage-warn-t">Für ' + names + ' freigegeben mit ' + fmtW(old.amount) + '; ab ' + dmy(from) + ' gilt jetzt ' + fmtW(amount) + '.</h3>'
+    + '<ul><li>Differenz im Bruttolohn: ' + fmtW(total) + (part < 1 ? ' (' + hit[0].n + ' nach Tagen ab dem ' + Number(m[1]) + '.)' : ' (' + hit.length + ' × ' + fmtW(diff) + ')') + '. AHV, ALV und die Kassen auf 2270 rechnen mit.</li>'
+    + '<li>Regel: ein freigegebener Lauf ändert sich nur durch «Wieder öffnen»; ein Lauf im abgeschlossenen Quartal (bis 31.03.2026) gar nicht mehr, dort korrigiert ein Lauf im nächsten offenen Monat.</li>'
+    + '<li>Wählst du nichts davon, bleiben die Läufe wie freigegeben, und jeder zeigt die Differenz als Tatsache.</li></ul>'
+    + '<div class="acts"><button type="button" class="btn primary" id="wage-next">Differenz im September nachzahlen</button>'
+    + (open.length && !closed.length ? '<button type="button" class="btn" id="wage-reopen">' + names + ' wieder öffnen</button>' : '')
+    + '<button type="button" class="btn" id="wage-leave">So lassen</button><button type="button" class="btn ghost" id="wage-back">Zurück</button></div>'
+    + '<p class="m">Was du wählst, steht im Verlauf der Läufe wie jede Aktion.</p>';
+  w.classList.remove('pr-hide');
+  document.getElementById('wage-next').addEventListener('click', () => keepWage(from, amount, 'Gilt ab ' + dmy(from) + '. Im Lauf September (Entwurf): «Nachzahlung ' + names + '» ' + fmtW(total) + ', mit Bezug auf die Läufe.'));
+  document.getElementById('wage-reopen')?.addEventListener('click', () => keepWage(from, amount, 'Gilt ab ' + dmy(from) + '. ' + names + ' wieder geöffnet: ihre Buchungen sind zurückgenommen, bis du neu freigibst.'));
+  document.getElementById('wage-leave').addEventListener('click', () => keepWage(from, amount, 'Gilt ab ' + dmy(from) + '. ' + names + ' bleiben wie freigegeben; jeder Lauf zeigt die Differenz von ' + fmtW(diff) + '.'));
+  document.getElementById('wage-back').addEventListener('click', () => w.classList.add('pr-hide'));
+}
+document.getElementById('wage-save').addEventListener('click', saveWage);
+document.getElementById('wage-cancel').addEventListener('click', () => { document.getElementById('wage-form').classList.add('pr-hide'); document.getElementById('wage-warn').classList.add('pr-hide'); });
+showWage();
+
 
 </script>
 </body>
