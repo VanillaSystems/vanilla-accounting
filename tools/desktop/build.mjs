@@ -4,6 +4,7 @@
  * dependency in package.json, since electron-builder packs only those. A package the app does not
  * pack (desktop/not-packed.cjs) may only be imported dynamically, on a path the app does not take.
  */
+import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { builtinModules, createRequire } from 'node:module';
 import { build } from 'esbuild';
@@ -22,7 +23,10 @@ const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
 // The packed app has no git: its build is baked in, and electron-builder names the dmg after it.
 const app = describeBuild(process.cwd());
 mkdirSync('out/desktop', { recursive: true });
-writeFileSync('out/desktop/build.json', JSON.stringify(app));
+// The tree it was built from: npm run release:github publishes these dmgs only from a commit of the same tree.
+let tree;
+try { tree = execFileSync('git', ['rev-parse', 'HEAD^{tree}'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { tree = undefined; }
+writeFileSync('out/desktop/build.json', JSON.stringify({ ...app, ...(tree ? { tree } : {}) }));
 const results = await Promise.all(bundles(app).map((options) => build(options)));
 
 const builtin = new Set(builtinModules);
