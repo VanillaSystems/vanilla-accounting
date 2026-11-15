@@ -1,29 +1,33 @@
 /**
  * Sharing by link end to end through the API (src/server/routes/share.ts) against a fake of the share
- * service (tests/support/share-service.ts, after its docs/api.md): the sender confirms her address,
- * shares the books, the recipient opens the link as a Durchsicht copy, changes an entry and sends it
- * back into the same share, and the sharer's app fetches the return and shows it for review. The
- * service sees ciphertext, sizes and tokens only: never the key, a path or a name. Each refusal of
- * the service reaches the person as a code with the limit it names.
+ * service, version 2 (tests/support/share-service.ts, after its docs/api.md): the sender confirms her
+ * address, «Einladung senden» shares the books and the service sends the invitation; the link in it
+ * is the access (no key after a #, no code), opens on a fresh copy and again; «Aktualisieren» puts the
+ * whole books into the same link, before or after he opened it, and his copy moves forward with his
+ * changes kept; his return goes back into the same share; «Zurückziehen» ends it, his copy says so
+ * and offers «Kopie löschen». Each refusal of the service reaches the person as a code with its limit.
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { anywhere, startShareService, type FakeShareService } from './support/share-service.js';
+import { canReturnByLink, checkCopy, deleteCopy, linkOfCopy } from '../src/share/sharing.js';
+import { changesOf, markerOf } from '../src/handover/durchsicht.js';
 
 let api: ApiServer;
 let svc: FakeShareService;
 const dir = mkdtempSync(join(tmpdir(), 'share-link-'));
+const copies = join(dir, 'copies');
 const SANDRA = 'sandra@example.ch';
 const ERNST = { name: 'Ernst Beispiel', email: 'ernst@example.ch' };
 
 before(async () => {
   svc = await startShareService();
   api = await startApi('tests/fixtures/period-lock-index.json', {
-    VANILLA_DURCHSICHT_DIR: join(dir, 'copies'), VANILLA_SHARE_SERVICE: svc.url,
+    VANILLA_DURCHSICHT_DIR: copies, VANILLA_SHARE_SERVICE: svc.url,
     VANILLA_SECRETS_FILE: join(dir, 'secrets.json'), VANILLA_SHARE_SETTINGS: join(dir, 'share.json'),
   });
 });
@@ -40,6 +44,18 @@ async function job(path: string, body: unknown): Promise<Job> {
   }
   throw new Error(`${path}: the job did not end`);
 }
+
+/** The one copy this test's recipient holds, as his app keeps it. */
+const copyRoot = (): string => { const [slug] = readdirSync(copies); return join(copies, slug); };
+/** Whether any file of the copy holds `text`. */
+function copyHolds(root: string, text: string): boolean {
+  for (const name of readdirSync(root)) {
+    const f = join(root, name);
+    if (statSync(f).isDirectory()) { if (copyHolds(f, text)) return true; } else if (readFileSync(f).includes(text)) return true;
+  }
+  return false;
+}
+const entries = async () => (await api.send('GET', '/books.json')).json.journalEntries as Array<{ id: string; date: string; description: string }>;
 
 let link = '';
 let shareId = '';
@@ -62,24 +78,34 @@ test('the sender confirms her address once; until then sharing by link is refuse
   assert.equal(me.json.email, SANDRA);
 });
 
-test('«Teilen» by link: sealed, uploaded, Version 1 written only then; the service never sees the key, a path or a name', async () => {
-  const done = await job('/api/share/link', { to: ERNST, message: 'Bitte Q3 ansehen' });
+test('«Einladung senden»: the service sends the invitation, from her name and replying to her; the link carries no key', async () => {
+  assert.equal((await job('/api/share/link', { to: { name: ERNST.name } })).error?.code, 'shareEmailMissing', 'by link the address is needed');
+  const done = await job('/api/share/link', { to: ERNST, message: 'Bitte Q3 ansehen', language: 'fr' });
   assert.equal(done.phase, 'done', JSON.stringify(done.error));
-  const r = done.result as { link: string; record: { id: string; version: number; state: string }; invitation: { subject: string; text: string; html: string }; mailed: boolean };
+  const r = done.result as { link: string; invited: boolean; record: { id: string; version: number; state: string; invitedAt?: string; expiresAt?: string } };
   link = r.link;
   shareId = r.record.id;
-  assert.match(link, new RegExp(`^${svc.url}/[a-z2-7]{26}#[A-Za-z0-9_-]{43}$`));
+  assert.equal(link, `${svc.url}/${shareId}`, 'the link is the service and the id: no # and no key');
+  assert.match(shareId, /^[a-z2-7]{26}$/);
+  assert.equal(r.invited, true);
+  assert.ok(r.record.invitedAt);
   assert.equal(r.record.version, 1);
   assert.equal(r.record.state, 'ready');
-  assert.ok(r.invitation.text.includes(link) && r.invitation.html.includes(link), 'the invitation carries the link');
-  assert.match(r.invitation.subject, /hat dir die Buchhaltung geschickt/);
-  const key = link.split('#')[1];
-  assert.ok(!anywhere(svc.seen, key), 'the key never reached the service');
-  assert.ok(!anywhere(svc.seen, Buffer.from(key, 'base64url').toString('hex')), 'not even as hex');
-  for (const plain of ['ledger.json', 'Ernst Beispiel', ERNST.email, 'Bitte Q3 ansehen']) assert.ok(!anywhere(svc.seen, plain), `${plain} never reached the service`);
+  assert.ok(Date.parse(r.record.expiresAt!) - Date.now() > 13 * 86400_000, 'open 14 days');
+  assert.equal(svc.mails.length, 1);
+  const mail = svc.mails[0];
+  assert.deepEqual(mail.to, ERNST);
+  assert.equal(mail.from.email, SANDRA, 'the confirmed address');
+  assert.equal(mail.replyTo, SANDRA);
+  assert.ok(mail.from.name);
+  assert.equal(mail.link, link);
+  assert.equal(mail.message, 'Bitte Q3 ansehen');
+  assert.equal(mail.language, 'fr', 'in the sharer\'s language');
+  assert.equal(mail.kind, 'invite');
+  for (const s of svc.seen) assert.ok(!s.url.includes('#'), 'no fragment anywhere');
+  assert.ok(!anywhere(svc.seen, 'ledger.json'), 'paths travel sealed');
   const view = await api.send('GET', '/api/handover');
   assert.equal((view.json.version as { n: number }).n, 1);
-  assert.equal((view.json.shares as unknown[]).length, 1);
   assert.equal((await api.send('GET', `/api/share/${shareId}/link`)).json.link, link, '«Link kopieren» again');
 });
 
@@ -91,52 +117,115 @@ test('a refusal of the service names its limit, and writes no version', async ()
   assert.equal(((await api.send('GET', '/api/handover')).json.version as { n: number }).n, 1, 'no version for a share the service did not take');
 });
 
-test('the link opens as a Durchsicht copy; his change goes back into the same share', async () => {
+test('«Aktualisieren» before he opened it: the same link, the newest state, and a short note when asked', async () => {
+  const done = await job(`/api/share/${shareId}/update`, { notify: true, message: 'Beleg nachgereicht' });
+  assert.equal(done.phase, 'done', JSON.stringify(done.error));
+  const r = done.result as { id: string; version: number; updatedAt?: string; notifiedAt?: string };
+  assert.equal(r.id, shareId, 'the same share');
+  assert.equal(r.version, 2);
+  assert.ok(r.updatedAt && r.notifiedAt);
+  assert.equal(svc.mails.length, 2);
+  assert.equal(svc.mails[1].kind, 'update');
+  assert.equal(svc.mails[1].link, link, 'the same link');
+  assert.equal(svc.mails[1].to.email, ERNST.email, 'to the address the service keeps for the share');
+});
+
+test('the link opens the books on a fresh copy, with no key and no code; it opens again; his change goes back into the same share', async () => {
   assert.equal((await job('/api/share/open', { link: 'https://example.ch/nothing' })).error?.code, 'shareLinkInvalid');
   const opened = await job('/api/share/open', { link });
   assert.equal(opened.phase, 'done', JSON.stringify(opened.error));
   assert.equal(opened.result?.kind, 'full');
-  const d = (await api.send('GET', '/api/handover')).json.durchsicht as { me: { name: string }; linked: boolean; message?: string };
+  assert.equal(opened.result?.version, 2, 'he gets the newest state on his first opening');
+  const again = await job('/api/share/open', { link });
+  assert.equal(again.phase, 'done', JSON.stringify(again.error));
+  assert.equal(svc.shares.get(shareId)!.opens.length, 2, 'a second opening works, and counts as a fact');
+  const d = (await api.send('GET', '/api/handover')).json.durchsicht as { me: { name: string }; linked: boolean; byLink: boolean };
   assert.equal(d.me.name, ERNST.name);
   assert.equal(d.linked, true);
-  assert.equal(d.message, 'Bitte Q3 ansehen');
+  assert.equal(d.byLink, true);
+  assert.equal((await api.send('POST', '/api/share/check')).json.state, 'current', 'nothing newer');
   // Sharing onward is the sharer's.
   assert.equal((await api.send('POST', '/api/share/link', { to: { name: 'Jemand' } })).json.code, 'roleRefused');
-  const entries = (await api.send('GET', '/books.json')).json.journalEntries as Array<{ id: string; date: string }>;
-  const open = entries.find((e) => e.date > '2026-06-30')!;
+  const open = (await entries()).find((e) => e.date > '2026-06-30')!;
   assert.equal((await api.send('PATCH', `/api/journal-entries/${open.id}`, { description: 'von Ernst korrigiert' })).status, 200);
   await api.send('PUT', '/api/handover/notes', { key: `entry:${open.id}`, text: 'Falsches Konto' });
   const back = await job('/api/share/return', { message: 'Ein Punkt' });
   assert.equal(back.phase, 'done', JSON.stringify(back.error));
   assert.equal(back.result?.changes, 1);
-  assert.ok(!anywhere(svc.seen, 'von Ernst korrigiert'), 'his change travels encrypted');
+  assert.ok(!anywhere(svc.seen, 'von Ernst korrigiert'), 'his change travels sealed');
   assert.equal((await api.send('POST', '/api/handover/close')).status, 200);
 });
 
 test('the sharer\'s app fetches the return and shows it for review; nothing is taken over', async () => {
-  const before = (await api.send('GET', '/books.json')).json.journalEntries as Array<{ description: string }>;
+  const before = await entries();
   const r = await api.send('POST', '/api/share/refresh');
   assert.equal(r.status, 200, JSON.stringify(r.json));
   const arrived = r.json.arrived as Array<{ id: string; from: { name: string }; changes: number; basedOn: number }>;
   assert.equal(arrived.length, 1);
   assert.equal(arrived[0].from.name, ERNST.name);
-  assert.equal(arrived[0].basedOn, 1);
-  const share = (r.json.shares as Array<{ opens: string[]; returns: Array<{ received?: string }> }>)[0];
-  assert.equal(share.opens.length, 1, 'the opening is a fact on the card');
+  const share = (r.json.shares as Array<{ id: string; opens: string[]; returns: Array<{ received?: string }> }>).find((s) => s.id === shareId)!;
+  assert.equal(share.opens.length, 2, 'the openings are facts on the card');
   assert.equal(share.returns[0].received, arrived[0].id);
   const review = await api.send('GET', `/api/handover/returns/${arrived[0].id}`);
   assert.equal(review.status, 200);
   assert.ok(JSON.stringify(review.json).includes('von Ernst korrigiert'), 'the review shows his change');
   assert.ok(JSON.stringify(review.json).includes('Falsches Konto'), 'and his «Warum?»');
-  const after = (await api.send('GET', '/books.json')).json.journalEntries as Array<{ description: string }>;
-  assert.deepEqual(after.map((e) => e.description), before.map((e) => e.description), 'the books are as they were until she takes it over');
+  assert.deepEqual((await entries()).map((e) => e.description), before.map((e) => e.description), 'the books are as they were until she takes it over');
   assert.equal(((await api.send('POST', '/api/share/refresh')).json.arrived as unknown[]).length, 0, 'fetched once');
 });
 
-test('«Zurückziehen»: the service deletes the share; the link opens no more', async () => {
+test('«Aktualisieren» after he downloaded: his copy moves forward by itself when it opens, his change kept', async () => {
+  const open = (await entries()).find((e) => e.date > '2026-06-30')!;
+  const added = await api.send('POST', '/api/journal-entries', { date: open.date, accountDebit: '6500', accountCredit: '1020', amount: 12.5, description: 'von Sandra nachgetragen' });
+  assert.equal(added.status, 200, JSON.stringify(added.json));
+  const done = await job(`/api/share/${shareId}/update`, {});
+  assert.equal(done.phase, 'done', JSON.stringify(done.error));
+  assert.equal(svc.mails.length, 2, 'without «Bescheid geben» no mail');
+  const root = copyRoot();
+  assert.equal(markerOf(root)!.version.n, 2);
+  const found = await checkCopy(root);
+  assert.equal(found.state, 'updated', JSON.stringify(found));
+  assert.equal(markerOf(root)!.version.n, 3, 'on the newest state');
+  assert.ok(copyHolds(root, 'von Sandra nachgetragen'), 'with what she added');
+  assert.ok(copyHolds(root, 'von Ernst korrigiert'), 'and his own change still there');
+  assert.equal(changesOf(root).length >= 1, true);
+  assert.equal((await checkCopy(root)).state, 'current', 'once only');
+});
+
+test('an invitation the service does not send leaves the share standing, says why with its limit; «Nochmals senden» sends it later', async () => {
+  svc.refuse(/\/invite$/, 503, { error: 'Der Dienst hat heute schon 100 Einladungen verschickt.', code: 'mailsPerDay', limit: 100, per: 'day' });
+  const done = await job('/api/share/link', { to: { name: 'Pius Muster', email: 'pius@example.ch' } });
+  assert.equal(done.phase, 'done', JSON.stringify(done.error));
+  const r = done.result as { invited: boolean; inviteError?: { code: string; params: Record<string, string> }; record: { id: string; state: string } };
+  assert.equal(r.invited, false);
+  assert.equal(r.record.state, 'ready', 'the share stands');
+  assert.equal(r.inviteError?.code, 'shareServiceRefused');
+  assert.deepEqual(r.inviteError?.params, { reason: 'mailsPerDay', limit: '100', per: 'day' });
+  const again = await api.send('POST', `/api/share/${r.record.id}/invite`);
+  assert.equal(again.status, 200, JSON.stringify(again.json));
+  assert.ok(again.json.invitedAt);
+  assert.equal(svc.mails.at(-1)!.to.email, 'pius@example.ch');
+  // 14 days later the service has deleted it: the link says so in words.
+  svc.expire(r.record.id);
+  const late = await job('/api/share/open', { link: `${svc.url}/${r.record.id}` });
+  assert.equal(late.error?.code, 'shareServiceRefused');
+  assert.equal(late.error?.params?.reason, 'expired');
+});
+
+test('«Zurückziehen» after he downloaded: the link opens no more; his copy stays, says so, offers «Kopie löschen», returns go as a file', async () => {
   const revoked = await api.send('DELETE', `/api/share/${shareId}`);
   assert.equal(revoked.json.state, 'revoked');
+  assert.equal(svc.shares.get(shareId)!.current.stored.size, 0, 'everything deleted at the service');
   const late = await job('/api/share/open', { link });
   assert.equal(late.error?.code, 'shareServiceRefused');
   assert.equal(late.error?.params?.reason, 'revoked');
+  assert.equal((await job(`/api/share/${shareId}/update`, {})).error?.code, 'shareUnknown', 'nothing to update');
+  const root = copyRoot();
+  const found = await checkCopy(root);
+  assert.equal(found.state, 'withdrawn');
+  assert.ok(existsSync(root), 'never deleted for him');
+  assert.ok(linkOfCopy(root)?.withdrawnAt);
+  assert.equal(canReturnByLink(root), false, 'his changes go back as a file now');
+  deleteCopy(root);
+  assert.ok(!existsSync(root), '«Kopie löschen» when he says so');
 });

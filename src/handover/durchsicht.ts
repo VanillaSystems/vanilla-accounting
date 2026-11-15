@@ -48,8 +48,6 @@ export interface Marker {
   dropped?: string[];
   /** The version's git commit, when the package carried its objects (data/durchsicht/git.json). */
   commit?: string;
-  /** The sharer's public key the copy is pinned to: set by src/share/sharing.ts openLink for a link whose signature it verified (src/share/signing.ts), never from a package's word alone. */
-  signer?: string;
   /** When he last sent a return, and on which version. */
   sent?: { at: string; version: number; changes: number };
 }
@@ -116,7 +114,7 @@ export function openPackage(bytes: Uint8Array | PackageContents, now = new Date(
   recover(root);
   const had = markerOf(root);
   if (had && had.firm.uid && p.index.firm.uid && had.firm.uid !== p.index.firm.uid) throw new PackageError(`Diese Übergabe ist von ${p.index.firm.name}, die Kopie hier von ${had.firm.name}.`, 'shareOtherCompany', { firm: p.index.firm.name });
-  // `replace`: the person confirmed books of another sharer for this copy (src/share/sharing.ts openLink), whose versions count apart.
+  // `replace`: a copy to be made anew whatever version it holds.
   if (had && !opts.replace && p.index.version.n < had.version.n) {
     throw new PackageError(`Die Kopie von ${had.firm.name} hier ist neuer als diese Übergabe: sie bleibt, wie sie ist.`, 'shareCopyNewer', { firm: had.firm.name, name: p.index.from.name });
   }

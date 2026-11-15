@@ -1,18 +1,18 @@
 /**
  * The parts of «Teilen» that go through the share service (docs/specs/e2e-and-fiduciary.md B3.1,
- * B3.3): this computer's sender confirming her address once, the share sent (its link, the
- * invitation from her mailbox or her mail program), the shares as facts with «Zurückziehen», and a
+ * B3.3): this computer's sender confirming her address once, the share sent (the service sends the
+ * invitation), the shares as facts with «Aktualisieren», «Nochmals senden», «Zurückziehen», and a
  * link someone else sent, opened here. Every fact is a time or a state, never a reminder.
  */
 import { useEffect, useRef, useState } from 'react';
-import { t } from '../i18n/index.js';
-import { errorText, request } from '../lib/api.js';
+import { language, t } from '../i18n/index.js';
+import { ApiError, errorText, request } from '../lib/api.js';
 import { formatDate } from '../lib/utils.js';
 import { ICONS } from '../areas/icons.js';
 import { sizeText } from './store.js';
 import { mailto, refreshShares, runJob, running, type Job, type Registered, type SenderView, type ShareRecord, type Shared } from './link.js';
 import type { LinkPreview } from '../../share/sharing.js';
-import { askLines, askReplace } from './ask-text.js';
+import { askLines } from './ask-text.js';
 import { SHARE_LIMITS } from '../../share/limits.js';
 
 /** «15.11. 19:04»: a moment as a person reads it, in this computer's time. */
@@ -119,78 +119,117 @@ export function SenderStep({ kept, mailFrom, onConfirmed, onFile }: { kept?: str
 }
 
 /**
- * What was sent (the owner's review of 2026-11-15: say plainly what is left). Sent from her mailbox:
- * the invitation is on its way. Otherwise one step is left and it is hers: the app never sends the
- * link through the service (the key in it stays between the two of them), so «Im Mailprogramm öffnen»
- * comes first with the whole mail ready, «Link kopieren» second. Then the deadlines in plain words and
- * what the recipient will see, and where the app could send the invitation itself next time.
+ * What was sent (the owner's decision of 2026-11-15): the service sends the invitation itself, so the
+ * screen says it is on its way, and to which address. «Nochmals senden», «Link kopieren» as a second
+ * way, «Aktualisieren» and «Zurückziehen» sit on the share's card (ShareActions). When the service
+ * did not send it (its limit of the day, say), the reason in words and «Link kopieren» first.
  */
-export function SentView({ sent, to, mailSetUp }: { sent: Shared; to: { name: string; email?: string }; mailSetUp: boolean }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => void navigator.clipboard?.writeText(sent.link).then(() => setCopied(true), () => undefined);
-  const until = sent.record.expiresAt ? formatDate(sent.record.expiresAt.slice(0, 10)) : '';
+export function SentView({ sent, onChanged }: { sent: Shared; onChanged(next: ShareRecord): void }) {
+  const to = sent.record.to;
   return (
     <div className="what shsent" data-testid="share-sent">
-      <div className="wt"><b>{ICONS.check} {t(sent.mailed ? 'share.sent.titleMailed' : 'share.sent.title', { name: to.name })}</b><span className="mono">{sizeText(sent.record.bytes)}</span></div>
-      {sent.mailed ? <div className="wm">{t('share.sent.mailed', { to: to.email ?? to.name, name: to.name })}</div> : (
-        <>
-          {sent.mailError ? <div className="err">{t('share.sender.mailFailed', { why: sent.mailError })}</div> : null}
-          <div className="wm">{t('share.sent.why', { name: to.name })}</div>
-          <div className="acts">
-            <a className="btn primary" href={mailto(to.email ?? '', sent.invitation.subject, sent.invitation.text)} data-testid="share-mailto">{t('share.mailProgram')}</a>
-            <button type="button" className="btn" onClick={copy} data-testid="share-copy">{copied ? t('share.copied') : t('share.copyLink')}</button>
-          </div>
-          <div className="wm">{t('share.sent.mailHint', { name: to.name })}</div>
-          <input readOnly value={sent.link} onFocus={(e) => e.target.select()} data-testid="share-link" />
-        </>
-      )}
-      <div className="wm">{t('share.sent.until', { name: to.name, date: until, hours: SHARE_LIMITS.hoursAfterOpen, opens: SHARE_LIMITS.opens })}</div>
+      <div className="wt"><b>{ICONS.check} {sent.invited ? t('share.sent.title', { name: to.name, email: to.email ?? '' }) : t('share.sent.notSent', { email: to.email ?? '', why: errorText(new ApiError(sent.inviteError ?? { error: '' })) })}</b><span className="mono">{sizeText(sent.record.bytes)}</span></div>
+      <div className="wm" data-testid="share-state">{stateText(sent.record)}</div>
+      <div className="wm">{t('share.sent.until', { name: to.name, date: sent.record.expiresAt ? formatDate(sent.record.expiresAt.slice(0, 10)) : '' })}</div>
       <div className="wm">{t('share.sent.theySee', { name: to.name })}</div>
-      {!sent.mailed && !mailSetUp ? <div className="wm" data-testid="share-setup-mail">{t('share.sent.setupMail')}</div> : null}
+      <ShareActions s={sent.record} onChanged={onChanged} copyFirst={!sent.invited} />
       <div className="lock">{ICONS.lock}<span>{t('share.sent.back', { name: to.name })}</span></div>
     </div>
   );
 }
 
-/** One share as facts: to whom, when sent, opened or not, until when, returns; «Link kopieren», «Zurückziehen». */
-function ShareRow({ s, onChanged }: { s: ShareRecord; onChanged(next: ShareRecord): void }) {
+/** The share's state in plain words: not opened yet, opened on …, updated on …, withdrawn. */
+function stateText(s: ShareRecord): string {
+  if (s.revokedAt) return t('share.card.revoked', { at: atText(s.revokedAt) });
+  const parts = [s.firstOpenedAt ? t('share.card.opened', { at: atText(s.opens.at(-1) ?? s.firstOpenedAt), n: s.opens.length }) : t('share.card.notOpened')];
+  if (s.updatedAt) parts.push(t('share.card.updated', { at: atText(s.updatedAt) }));
+  return parts.join(' · ');
+}
+
+/**
+ * What a running share offers: «Aktualisieren» (the whole books again into the same link, with
+ * «<Name> Bescheid geben»), «Nochmals senden», «Link kopieren», «Zurückziehen» (asked once).
+ */
+function ShareActions({ s, onChanged, copyFirst = false }: { s: ShareRecord; onChanged(next: ShareRecord): void; copyFirst?: boolean }) {
   const [confirm, setConfirm] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [notify, setNotify] = useState(true);
+  const [note, setNote] = useState('');
+  const [job, setJob] = useState<Job<unknown> | null>(null);
+  const [said, setSaid] = useState('');
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
-  const live = running(s) && s.state !== 'revoked' && s.state !== 'expired' && s.state !== 'spent';
+  const live = running(s) && s.state !== 'revoked' && s.state !== 'expired' && s.state !== 'gone';
+  if (!live) return null;
   const copy = async () => {
     try { const { link } = await request<{ link: string }>('GET', `/api/share/${s.id}/link`); await navigator.clipboard?.writeText(link); setCopied(true); } catch (e) { setError(errorText(e)); }
+  };
+  const again = async () => {
+    setError(''); setSaid('');
+    try { onChanged(await request<ShareRecord>('POST', `/api/share/${s.id}/invite`)); setSaid(t('share.againDone', { email: s.to.email ?? s.to.name })); } catch (e) { setError(errorText(e)); }
+  };
+  const update = async () => {
+    setError(''); setSaid('');
+    try {
+      const next = await runJob<ShareRecord>(`/api/share/${s.id}/update`, { notify, ...(note.trim() ? { message: note.trim() } : {}), language: language() }, setJob as (j: Job<ShareRecord>) => void);
+      onChanged(next);
+      setUpdating(false); setNote('');
+      setSaid(t(next.notifiedAt && notify ? 'share.update.doneNotified' : 'share.update.done', { name: s.to.name }));
+    } catch (e) { setError(errorText(e)); } finally { setJob(null); }
   };
   const revoke = async () => {
     try { onChanged(await request<ShareRecord>('DELETE', `/api/share/${s.id}`)); setConfirm(false); } catch (e) { setError(errorText(e)); }
   };
+  return (
+    <>
+      {updating ? (
+        <div className="what shupd" data-testid="share-update">
+          <div className="wt"><b>{t('share.update.title', { name: s.to.name })}</b></div>
+          <div className="wm">{t('share.update.note', { name: s.to.name, days: SHARE_LIMITS.days })}</div>
+          <label>{t('share.message')}<textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} /></label>
+          <label className="chk"><input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} data-testid="share-update-notify" /> {t('share.update.notify', { name: s.to.name })}</label>
+          <div className="acts">
+            <button type="button" className="btn ghost" disabled={!!job} onClick={() => setUpdating(false)}>{t('common.cancel')}</button>
+            <button type="button" className="btn primary" disabled={!!job} onClick={() => void update()} data-testid="share-update-go">{job ? t('share.update.busy') : t('share.update.go')}</button>
+          </div>
+          <JobProgress job={job} />
+        </div>
+      ) : confirm ? (
+        <div className="acts">
+          <span className="wm">{t('share.card.revokeNote', { name: s.to.name })}</span>
+          <button type="button" className="btn ghost" onClick={() => setConfirm(false)}>{t('common.cancel')}</button>
+          <button type="button" className="btn" onClick={() => void revoke()} data-testid="share-revoke-yes">{t('share.card.revoke')}</button>
+        </div>
+      ) : (
+        <div className="acts">
+          {copyFirst ? <button type="button" className="btn primary" onClick={() => void copy()} data-testid="share-copy">{copied ? t('share.copied') : t('share.copyLink')}</button> : null}
+          <button type="button" className="linkbtn" onClick={() => setUpdating(true)} data-testid="share-update-open">{t('share.update.open')}</button>
+          {s.to.email ? <button type="button" className="linkbtn" onClick={() => void again()} data-testid="share-again">{t('share.again')}</button> : null}
+          {copyFirst ? null : <button type="button" className="linkbtn" onClick={() => void copy()} data-testid="share-copy">{copied ? t('share.copied') : t('share.copyLink')}</button>}
+          <button type="button" className="linkbtn" onClick={() => setConfirm(true)} data-testid="share-revoke">{t('share.card.revoke')}</button>
+        </div>
+      )}
+      {said ? <div className="wm" role="status">{said}</div> : null}
+      {error ? <div className="err" role="alert">{error}</div> : null}
+    </>
+  );
+}
+
+/** One share as facts: to whom, when sent, its state in words, until when, returns; and what it offers. */
+function ShareRow({ s, onChanged }: { s: ShareRecord; onChanged(next: ShareRecord): void }) {
   const back = s.returns.filter((r) => r.received).length;
   return (
     <div className="shcard" data-testid="share-card">
       <div className="wt"><b>{t('share.card.to', { name: s.to.name })}</b><span className="mono">{sizeText(s.bytes)}</span></div>
       <div className="wm">
         {t('share.card.sent', { at: atText(s.at) })}
-        {' · '}{s.revokedAt ? t('share.card.revoked', { at: atText(s.revokedAt) }) : s.firstOpenedAt ? t('share.card.opened', { at: atText(s.firstOpenedAt), n: s.opens.length }) : t('share.card.notOpened')}
+        {' · '}{stateText(s)}
         {!s.revokedAt && s.expiresAt ? ` · ${t(Date.parse(s.expiresAt) > Date.now() ? 'share.card.until' : 'share.card.ended', { at: atText(s.expiresAt) })}` : ''}
         {back ? ` · ${t('share.card.returns', { n: back })}` : ''}
         {s.error ? ` · ${t('share.card.unchecked')}` : ''}
       </div>
       {s.returns.some((r) => r.error) ? <div className="err">{t('share.card.returnFailed', { why: s.returns.find((r) => r.error)!.error! })}</div> : null}
-      {live ? (
-        confirm ? (
-          <div className="acts">
-            <span className="wm">{t('share.card.revokeNote', { name: s.to.name })}</span>
-            <button type="button" className="btn ghost" onClick={() => setConfirm(false)}>{t('common.cancel')}</button>
-            <button type="button" className="btn" onClick={() => void revoke()} data-testid="share-revoke-yes">{t('share.card.revoke')}</button>
-          </div>
-        ) : (
-          <div className="acts">
-            <button type="button" className="linkbtn" onClick={() => void copy()}>{copied ? t('share.copied') : t('share.copyLink')}</button>
-            <button type="button" className="linkbtn" onClick={() => setConfirm(true)} data-testid="share-revoke">{t('share.card.revoke')}</button>
-          </div>
-        )
-      ) : null}
-      {error ? <div className="err" role="alert">{error}</div> : null}
+      <ShareActions s={s} onChanged={onChanged} />
     </div>
   );
 }
@@ -217,8 +256,8 @@ export function SharesList({ shares, onShares }: { shares: ShareRecord[]; onShar
 
 /**
  * «Einen Link bekommen?»: a link pasted here opens like a link in the invitation, as a copy for
- * «Durchsicht». First the app says whose books, from whom and through which service (no opening
- * spent); the link opens only on «Öffnen», with what the person confirmed there.
+ * «Durchsicht». First the app says whose books, from whom and through which service; the link
+ * opens on «Öffnen», with what the person confirmed there.
  */
 export function OpenLink({ onOpened }: { onOpened(o: { kind: 'full' | 'update'; firm: string; version: number; conflicts: number; dropped: number }): void }) {
   const [text, setText] = useState('');
@@ -229,17 +268,13 @@ export function OpenLink({ onOpened }: { onOpened(o: { kind: 'full' | 'update'; 
     setError(''); setPreview(null);
     try { setPreview(await request<LinkPreview>('POST', '/api/share/preview', { link: text.trim() })); } catch (e) { setError(errorText(e)); }
   };
-  const [replace, setReplace] = useState<Record<string, string> | null>(null);
   const ask = preview ? askLines((k, v) => t(k, v as never), preview) : null;
-  // The copy question comes from the package itself (shareCopyOther), after the download, which the server keeps for the answer.
-  const open = async (moves = false) => {
+  const open = async () => {
     setError('');
     try {
-      onOpened(await runJob<Parameters<typeof onOpened>[0]>('/api/share/open', { link: text.trim(), trust: !!preview?.foreign, ...(moves ? { replace: true } : {}) }, setJob as (j: Job<unknown>) => void));
+      onOpened(await runJob<Parameters<typeof onOpened>[0]>('/api/share/open', { link: text.trim(), trust: !!preview?.foreign }, setJob as (j: Job<unknown>) => void));
     } catch (e) {
       setJob(null);
-      const body = (e as { body?: { code?: string; params?: Record<string, string> } }).body;
-      if (!moves && body?.code === 'shareCopyOther' && body.params) { setReplace(body.params); setPreview(null); return; }
       setError(errorText(e));
     }
   };
@@ -255,16 +290,6 @@ export function OpenLink({ onOpened }: { onOpened(o: { kind: 'full' | 'update'; 
           <div className="acts">
             <button type="button" className="btn ghost" onClick={() => setPreview(null)}>{t('common.cancel')}</button>
             <button type="button" className="btn" disabled={!!job} onClick={() => void open()} data-testid="share-open-yes">{t('share.ask.open')}</button>
-          </div>
-        </div>
-      ) : null}
-      {replace ? (
-        <div className="what shask" data-testid="share-open-replace">
-          <div className="wt"><b>{t('share.ask.title')}</b></div>
-          <div className="err">{askReplace((k, v) => t(k, v as never), replace)}</div>
-          <div className="acts">
-            <button type="button" className="btn ghost" onClick={() => setReplace(null)}>{t('common.cancel')}</button>
-            <button type="button" className="btn" disabled={!!job} onClick={() => { setReplace(null); void open(true); }} data-testid="share-open-replace-yes">{t('share.ask.replaceYes')}</button>
           </div>
         </div>
       ) : null}

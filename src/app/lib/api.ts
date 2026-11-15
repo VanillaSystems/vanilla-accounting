@@ -155,11 +155,12 @@ export function leftText(r: Pick<PaymentRefusal, 'refusal'>): string | undefined
 export const sayAccess = (key: AccessKey, vars: Record<string, string>): string => t(key as 'desktop.access.refused', vars as { folder: string });
 
 /** The service's refusal codes (docs/share-protocol.md, its api.md «Codes»), grouped where one sentence says them. */
-const SHARE_BAD = new Set(['badSize', 'badObjects', 'badMeta', 'badWrappedKey', 'badProof', 'badJson']);
-const SHARE_UPLOAD = new Set(['sizeChanged', 'exists', 'notUploading', 'missingObjects', 'overDeclared', 'undeclared', 'sizeMismatch', 'unexpectedObjects', 'notAPackage']);
+const SHARE_BAD = new Set(['badSize', 'badObjects', 'badMeta', 'badKey', 'badJson', 'badRecipient', 'badSender', 'badLanguage', 'badKind', 'badInvite', 'tooLong', 'notAShare']);
+const SHARE_UPLOAD = new Set(['busy', 'sizeChanged', 'exists', 'notUploading', 'missingObjects', 'overDeclared', 'undeclared', 'sizeMismatch', 'unexpectedObjects', 'notAPackage']);
 const SHARE_GUARD = new Set(['sharesPerDay', 'opensPerDay', 'classAPerMonth', 'classBPerMonth']);
-const SHARE_OWN = new Set(['badEmail', 'wrongProof', 'indexAlreadyRead', 'senderUnknown', 'senderNotConfirmed', 'wrongToken', 'notFound', 'tooLarge', 'tooManyObjects',
-  'tooManyShares', 'tooManyConfirmations', 'tooManyReturns', 'storageFull', 'notReady', 'spent', 'expired', 'revoked', 'returnClosed', 'ticketExpired', 'internal', 'oversized']);
+const SHARE_OWN = new Set(['badEmail', 'indexAlreadyRead', 'senderUnknown', 'senderNotConfirmed', 'wrongToken', 'notFound', 'tooLarge', 'tooManyObjects',
+  'tooManyShares', 'tooManyConfirmations', 'tooManyReturns', 'storageFull', 'notReady', 'expired', 'revoked', 'returnClosed', 'ticketExpired', 'internal', 'oversized',
+  'appTooOld', 'notSender', 'tooManyInvites', 'mailsPerDay', 'mailOff', 'mailFailed', 'tooManyUpdates']);
 /** A byte limit as a size («1 GB»), any other as the number. */
 const limitText = (limit: string | undefined): string => {
   const n = Number(limit);
@@ -168,12 +169,12 @@ const limitText = (limit: string | undefined): string => {
 };
 /** A refusal of the share service in words, with the limit it names (the service's numbers; its known defaults where it names none). */
 export function shareRefusalText(reason: string, limit?: string, per?: string): string {
-  const perText = per && ['sender-day', 'ip-day', 'day', 'month'].includes(per) ? t(`share.per.${per}` as 'share.per.day') : per ?? '';
-  const known = { hours: 5, days: reason === 'returnClosed' ? 30 : 10 };
+  const perText = per && ['sender-day', 'ip-day', 'day', 'month', 'share'].includes(per) ? t(`share.per.${per}` as 'share.per.day') : per ?? '';
+  const known = { days: reason === 'returnClosed' ? 30 : 14 };
   if (SHARE_BAD.has(reason)) return t('share.refused.bad', { reason });
   if (SHARE_UPLOAD.has(reason)) return t('share.refused.upload', { reason });
   if (SHARE_GUARD.has(reason)) return t('share.refused.guard', { limit: limitText(limit), per: perText });
-  if (SHARE_OWN.has(reason)) return t(`share.refused.${reason}` as 'share.refused.tooManyShares', { limit: limitText(limit ?? (reason === 'spent' ? '3' : '')), per: perText, ...known });
+  if (SHARE_OWN.has(reason)) return t(`share.refused.${reason}` as 'share.refused.tooManyShares', { limit: limitText(limit ?? ''), per: perText, ...known });
   return t('share.refused.bad', { reason });
 }
 
@@ -206,7 +207,9 @@ export function errorText(e: unknown): string {
     case 'shareNoLink': return t('error.shareNoLink');
     case 'shareUnknown': return t('error.shareUnknown');
     case 'shareForeignService': return t('error.shareForeignService', { host: b.params.host });
-    case 'shareCopyOther': return t('error.shareCopyOther', b.params);
+    case 'shareEmailMissing': return t('error.shareEmailMissing');
+    case 'shareWithdrawn': return t('error.shareWithdrawn');
+    case 'shareNotCopy': return t('error.shareNotCopy');
     case 'shareConfirmationOdd': return t('error.shareConfirmationOdd', { host: b.params.host });
     case 'localOnly': return t('error.localOnly');
     case 'foreignHost': return t('error.foreignHost');

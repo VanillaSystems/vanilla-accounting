@@ -12,7 +12,7 @@ import { formatDate } from '../lib/utils.js';
 import { ICONS } from '../areas/icons.js';
 import { useTopBarHeight } from '../shell/AuditBar.js';
 import { reloadHandover, shortSum, sizeText, type DurchsichtFacts } from './store.js';
-import { runJob, type Job } from './link.js';
+import { checkCopy, runJob, type Job } from './link.js';
 import { JobProgress } from './LinkParts.js';
 
 const PEN = <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" /></svg>;
@@ -26,6 +26,58 @@ export function DurchsichtBar({ d, onClose }: { d: DurchsichtFacts; onClose?: ()
       <span className="mode">{PEN}{t('durchsicht.mode')}</span>
       <span className="m">{t('durchsicht.fact', { name: d.sharer.name })}</span>
       {onClose ? <button type="button" className="linkbtn" onClick={onClose}>{t('durchsicht.close')}</button> : null}
+    </div>
+  );
+}
+
+const UPDATED = 'handover.updated';
+
+/**
+ * A copy that came by link asks its share once each time it opens (src/share/sharing.ts checkCopy):
+ * a newer state the sharer put there moves the copy forward by itself, his changes kept, and the
+ * books are read anew with one plain line; a withdrawn share is a fact with «Kopie löschen», never
+ * done for him. No answer from the service: nothing is said.
+ */
+export function CopyStatus({ d }: { d: DurchsichtFacts }) {
+  const [line, setLine] = useState(() => { try { const v = sessionStorage.getItem(UPDATED); sessionStorage.removeItem(UPDATED); return v ?? ''; } catch { return ''; } });
+  const [withdrawn, setWithdrawn] = useState(!!d.withdrawnAt);
+  const [ask, setAsk] = useState(false);
+  const [error, setError] = useState('');
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current || !d.byLink) return;
+    asked.current = true;
+    checkCopy().then((r) => {
+      if (r.state === 'withdrawn') setWithdrawn(true);
+      if (r.state === 'updated') {
+        try { sessionStorage.setItem(UPDATED, t('durchsicht.updated', { name: r.name, date: formatDate(r.at.slice(0, 10)) })); } catch { /* the line is then not said */ }
+        location.assign('/');
+      }
+    }, () => undefined);
+  }, [d.byLink]);
+  const remove = async () => {
+    try {
+      const r = await request<{ back: boolean }>('POST', '/api/share/copy/delete');
+      location.assign(r.back ? '/' : '/start');
+    } catch (e) { setError(errorText(e)); }
+  };
+  if (!line && !withdrawn) return null;
+  return (
+    <div className="shcheck" role="status" data-testid="copy-status">
+      {line ? <div className="wm" data-testid="copy-updated">{line}</div> : null}
+      {withdrawn ? (
+        <div data-testid="copy-withdrawn">
+          <div className="wm">{t('durchsicht.withdrawn', { name: d.sharer.name })}</div>
+          {ask ? (
+            <div className="acts">
+              <span className="wm">{t('durchsicht.deleteAsk')}</span>
+              <button type="button" className="btn ghost" onClick={() => setAsk(false)}>{t('common.cancel')}</button>
+              <button type="button" className="btn" onClick={() => void remove()} data-testid="copy-delete-yes">{t('durchsicht.deleteYes')}</button>
+            </div>
+          ) : <div className="acts"><button type="button" className="linkbtn" onClick={() => setAsk(true)} data-testid="copy-delete">{t('durchsicht.deleteCopy')}</button></div>}
+        </div>
+      ) : null}
+      {error ? <div className="err" role="alert">{error}</div> : null}
     </div>
   );
 }

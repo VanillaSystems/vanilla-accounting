@@ -33,8 +33,8 @@ import { appVersion } from '../version.js';
 import { readState, writeState, type Bounds } from './state.js';
 import { setDurchsichtHome } from '../handover/durchsicht.js';
 import { APP_SCHEME, setShareSettingsFile } from '../share/service.js';
-import { openLink, previewLink, type ShareFlowError } from '../share/sharing.js';
-import { askLines, askReplace } from '../app/handover/ask-text.js';
+import { openLink, previewLink } from '../share/sharing.js';
+import { askLines } from '../app/handover/ask-text.js';
 import { heldUntilReady, isVanillaPath, openVanillaFile, refusedText, vanillaPaths } from './open-files.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -55,7 +55,7 @@ const DICTATION = process.platform !== 'darwin' ? undefined
 app.commandLine.appendSwitch('font-render-hinting', 'none');
 
 /**
- * Links of shared books (`vanilla-accounting://open?share=<id>#<key>`, the share page's «Buchhaltung
+ * Links of shared books (`vanilla-accounting://open?share=<id>`, the share page's «Buchhaltung
  * öffnen»): macOS hands them over by `open-url`, also when the link starts the app, so they are
  * taken before the app is ready and opened once the server listens (src/share/sharing.ts openLink).
  */
@@ -280,15 +280,7 @@ async function start(): Promise<void> {
         .then(async ({ yes, trust }) => {
           if (!yes) { if (!win || win.isDestroyed()) lastBooks(); return; }
           win?.setProgressBar(2);
-          let opened;
-          try { opened = await openLink(link, { trust }); } catch (e) {
-            // The package would move a copy here it does not continue: asked again with that copy's real facts (no second download).
-            const refusal = e as ShareFlowError;
-            if (refusal?.code !== 'shareCopyOther') throw e;
-            const t = textsIn(language);
-            if (!(await ask(askReplace((k, v) => t(k, v), refusal.params), t('share.ask.replaceYes')))) { if (!win || win.isDestroyed()) lastBooks(); return; }
-            opened = await openLink(link, { trust, replace: true });
-          }
+          const opened = await openLink(link, { trust });
           show(pathOf(await server.open(opened.root)));
         })
         .catch(async (e: unknown) => { await dialog.showMessageBox({ type: 'warning', message: textsIn(language)('desktop.shareOpenFailed'), detail: (e as Error).message }); })

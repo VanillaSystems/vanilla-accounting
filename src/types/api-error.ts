@@ -58,7 +58,7 @@ export type ApiRefusal =
   | { code: 'shareUnreachable'; params: { service: string } }
   /** No share service set up: the `.vanilla` file does it. */
   | { code: 'shareNoService' }
-  /** No secret store that keeps a link's key on this computer. */
+  /** No secret store that keeps a link's tokens on this computer. */
   | { code: 'shareNoSecretStore' }
   /** «Teilen» by link before this computer's sender registered, or while its address waits for its confirmation e-mail. */
   | { code: 'shareSenderMissing' }
@@ -67,12 +67,16 @@ export type ApiRefusal =
   | { code: 'shareLinkInvalid' }
   /** «Zurückschicken» by link on a copy that came as a file. */
   | { code: 'shareNoLink' }
-  /** A share this computer keeps no key of. */
+  /** A share this computer keeps no tokens of. */
   | { code: 'shareUnknown' }
   /** A link to another service than this app's, not confirmed by the person. */
   | { code: 'shareForeignService'; params: { host: string } }
-  /** A link that would move an existing copy to another sharer or service, not confirmed by the person. */
-  | { code: 'shareCopyOther'; params: { firm: string; was: string; now: string; claimed: string; host: string } }
+  /** «Einladung senden» without the recipient's address: the service mails the invitation to it. */
+  | { code: 'shareEmailMissing' }
+  /** The sharer withdrew the share: «Aktualisieren» on it, or his return through it. */
+  | { code: 'shareWithdrawn' }
+  /** «Kopie löschen» on books that are no copy. */
+  | { code: 'shareNotCopy' }
   /** The service asked for a confirmation e-mail the app does not send (another domain, another subject). */
   | { code: 'shareConfirmationOdd'; params: { host: string } }
   | { code: 'localOnly' }

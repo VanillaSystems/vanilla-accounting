@@ -49,11 +49,7 @@ export interface PackageIndex {
   message?: string;
   /** «Frage zurück» of earlier returns, for the recipient. */
   questions?: Question[];
-  /**
-   * A link's signature (src/share/signing.ts): the sharer's Ed25519 public key for this person (SPKI,
-   * base64) and her signature over the rest of the index, files' hashes included. A copy pins the key
-   * of its first link and moves forward without a question only for a package signed by it.
-   */
+  /** Written by links of 0.6.0 (a signature the copy pinned): read past, never checked since the owner's decision of 2026-11-15. */
   signer?: string;
   signature?: string;
   /** A return: how many records it changes. */

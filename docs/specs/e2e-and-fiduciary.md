@@ -464,9 +464,10 @@ that comes back passes the sharer's review (B6).
 ## B3. Sharing by link
 
 The books reach the fiduciary as **a link in an e-mail, not a file sent around** (owner decision
-1, ADR 0016). The sharer's app sends that e-mail from her own mail account; the service stores
-only ciphertext and never sees the key. The `.vanilla` file stays as the offline way (B3.7), with
-the same format.
+1, ADR 0016). Since the owner's decision of 2026-11-15 (ADR 0016 «Amendment»: «lets keep it as UX
+friendly in the beginning as possible. we can further lock it down as we go along») the share
+service sends that e-mail itself and keeps the share's key; the link in it is the access. The
+`.vanilla` file stays as the offline way (B3.7), with the same format.
 
 **UI wording is neutral.** No text of the app, the page or the invitation uses a family word. It
 names the other person by name («Ernst Bühler hat 14 Änderungen geschickt», «An Sandra Huber
@@ -477,101 +478,102 @@ prototype's «Papa» (PR #530) is a persona's word and goes into no UI text.
 
 A chip «Teilen» in the top bar next to Export, in every area (⇧S). Its dialog asks for:
 
-- **An wen:** the recipient's name and e-mail, proposed from Firma › Personen or earlier shares.
-- **Nachricht (freiwillig):** one short text. It goes into the invitation, which the sharer's own
-  mail account sends.
+- **An wen:** the recipient's name and e-mail, proposed from earlier shares. «Per Link» needs the
+  e-mail: the service sends the invitation there.
+- **Nachricht (freiwillig):** one short text. It goes into the invitation, marked as hers.
 - **Was:** decided by the app and named with its size:
   - «Die ganze Buchhaltung, Stand jetzt (64 MB)»: every share (`full`, B3.4). The owner's
     decision of 2026-11-15: there is no incremental `update` and no «Vollständig» choice; every
     share by link or file carries everything of the open years, so it opens on any computer, on a
     copy that was lost, deleted, older or missing a receipt alike. The closed years' receipts stay
     home unless asked for under «Mehr», and the dialog says so.
-- The fact line: «Ende-zu-Ende verschlüsselt: nur Ernst Bühler kann den Inhalt lesen, der Server
-  nicht. Der Link gilt bis 5 Stunden nach dem ersten Öffnen, höchstens 10 Tage. Ernst Bühler
-  bekommt eine E-Mail von dir, mit einem Link, ohne Konto, ohne PIN.»
+- The fact line: «Verschlüsselt gespeichert, höchstens 14 Tage; nur wer den Link aus der Einladung
+  hat, kann sie öffnen. Die Einladung kommt von «Du über Vanilla Accounting», Antworten gehen an
+  sandra@…».
 
-«Senden» encrypts, uploads, and sends the invitation from the sharer's mail account (B3.3). The
-chip then reads «Bei Ernst Bühler», and its card shows the share's state as facts: «Gesendet
-14.11. 16:42 · 64 MB», «Verfügbar bis 24.11.» (after the first opening: «Verfügbar bis 15.11.
-00:04»), «Noch nicht geöffnet» or «Geöffnet am 15.11. 19:04», «Ende-zu-Ende verschlüsselt», and
-the buttons «Zurückziehen» and «Neu teilen». The card says: «Du buchst weiter wie immer. Was Ernst
-Bühler ändert, kommt als Vorschlag zurück; du entscheidest.»
+«Einladung senden» encrypts, uploads, and asks the service to send the invitation (B3.3). The sent
+screen says «Die Einladung ist an Ernst Bühler unterwegs (ernst@…)», until when he can open it, what
+he will see, and offers «Aktualisieren», «Nochmals senden», «Link kopieren» and «Zurückziehen». When
+the service did not send it (its mail limit of the day, say), the screen says why with the limit and
+offers «Link kopieren» first. The share's card shows its state as facts: «Gesendet 14.11. 16:42 ·
+Noch nicht geöffnet» or «Geöffnet am 15.11. 19:04 · aktualisiert am 16.11. 09:12», «Verfügbar bis
+30.11.», and the same buttons. The card says: «Du buchst weiter wie immer. Was Ernst Bühler ändert,
+kommt als Vorschlag zurück; du entscheidest.»
 
-Sharing writes a content version (B7): the card, the invitation and the page say «Version 12».
+**«Aktualisieren»** (owner, 2026-11-15: «I remember that I forgot to add X … then I want to fix it
+and update the share»): the whole books, as of now, go again into the same share: same link, no new
+one, the 14 days start again. «Ernst Bühler Bescheid geben» (on by default) has the service send a
+short note («Sandra Huber hat die Buchhaltung aktualisiert»); without it, no mail. Not opened yet:
+he gets the newest state on his first opening. Opened already: his copy asks its share whenever it
+opens and moves forward by itself, his changes kept (B4), with one line «Sandra Huber hat die
+Buchhaltung am 16.11.2026 aktualisiert; deine Änderungen sind noch da.» Conflicts as with any
+hand-over.
 
 ### B3.2 Encryption and the service
 
-- **End to end.** The app makes a random 256-bit key per share. Every file of the package is
-  encrypted on its own with AES-GCM (a key per file derived from the share key and the file's id,
-  large files in chunks with the chunk's index and the final flag in the associated data, so a
-  chunk cut, swapped or dropped fails the tag). An **encrypted index** lists the files (B3.4). The
-  service stores only ciphertext under random object ids, so it sees neither paths nor names.
-- **The link** is `https://share.<domain>/<id>#<key>`: one origin for every share, with a free
-  certificate. The key is in the fragment after `#`, which a browser never sends to a server.
-- **Isolation between shares without an origin each** (owner decision). Everything that shows a
-  share's content (the read-only viewer, receipt previews) runs inside an
-  `<iframe sandbox="allow-scripts">` without `allow-same-origin`, so it has an opaque origin of its
-  own: it can read no cookie, no storage and no other frame of `share.<domain>`, and no other
-  share's frame can read it. The outer page reads the key from the fragment, fetches the
-  ciphertext, and passes the key or the decrypted files into the frame by `postMessage` (checking
-  `event.source`; the frame answers only its parent). Keys and decrypted data are **never written
-  to browser storage** (no `localStorage`, IndexedDB, cache or service worker); they live in
-  memory for the page's life. The service sends a strict Content-Security-Policy (scripts only
-  from the page's own files with hashes, `connect-src` only the service, no inline script, no
-  third-party resource, `frame-ancestors 'none'`), `Referrer-Policy: no-referrer`, and
-  `X-Content-Type-Options: nosniff`. A receipt PDF is shown from a `blob:` URL inside the
-  sandboxed frame, never as a page of the outer origin.
-- **The service never receives the key** and sends no e-mail containing it: the invitation goes
-  out from the sharer's own account (B3.3). The service has no e-mail provider in v1.
-- **What the service does see:** the sharer's confirmed e-mail address (B3.3), the size and number
-  of objects, and the times of upload, opening and withdrawal. Never a recipient's address, a
-  name, a message, a booking, a receipt or a figure.
-- **No PIN, no login, no accounts.** Whoever has the e-mail can open the books. The protections:
-  - **5 hours after the first opening** the service deletes the ciphertext, **at the latest after
-    10 days** if nobody opens it.
-  - **At most 3 openings**, all within those 5 hours. An opening is a fetch of the index; the
-    receipts a browser view loads lazily afterwards do not count.
-  - **«Geöffnet am …»**: the sharer sees each opening (time only).
-  - **«Zurückziehen»** deletes the ciphertext at once; the link then shows «zurückgezogen». It
-    **cannot take back a copy already opened**: the card says so («Hat Ernst Bühler sie schon
-    geöffnet, bleibt seine Kopie auf seinem Mac»). The app never claims more.
+- **Encrypted at rest, the key with the service.** The app makes a random 256-bit key per share
+  (and per update). Every file of the package is encrypted on its own with AES-GCM (a key per file
+  derived from the share key and the file's id, large files in chunks with the chunk's index and the
+  final flag in the associated data, so a chunk cut, swapped or dropped fails the tag). An
+  **encrypted index** lists the files (B3.4). The storage (R2, EU) holds only ciphertext under random
+  object ids. The key goes to the service over TLS with the share; the service keeps it wrapped
+  under a key derived from its own secret and hands it over with each opening. **The operator could
+  read a share while it lives**; the app says so honestly and claims no end-to-end encryption.
+- **The link is the access:** `https://share.<domain>/<id>`, one origin for every share. No key
+  after a `#`, no code, no device binding (the owner wants none of that for now). It opens as often
+  as the recipient likes until the share ends.
+- **Isolation between shares without an origin each** (owner decision of 2026-11-14, unchanged).
+  Everything that shows a share's content in the browser (the read-only viewer, receipt previews)
+  runs inside an `<iframe sandbox="allow-scripts allow-downloads">` without `allow-same-origin`, fed
+  over a `MessageChannel`. Keys and decrypted data are never written to browser storage. The
+  service's CSP, `Referrer-Policy: no-referrer` and `nosniff` stay.
+- **What the service sees and keeps:** the sharer's confirmed address as a keyed hash, and in the
+  clear for the invitation's Reply-To while the share lives; the recipient's name and address, the
+  sender's name, the company and the message while the share lives (for «Nochmals senden»); the
+  wrapped key; sizes, object ids and times of upload, each opening, update and withdrawal. It logs
+  ids and status codes only, never a key, a token or an address.
+- **Lifetime:** a share is open **14 days** from its upload or its last «Aktualisieren», with no
+  limit on openings. **«Geöffnet am …»**: the sharer sees each opening (time only).
+  **«Zurückziehen»** and the end delete everything the service holds at once (objects, key, the
+  invitation's addresses); the link then shows «zurückgezogen» or «abgelaufen». It **cannot take
+  back a copy already opened**: the copy stays on his Mac, and the next time his app asks, it says
+  «Sandra Huber hat die Freigabe zurückgezogen» and offers «Kopie löschen» (never automatic); his
+  changes then go back only as a file. The card says so.
 - **Free, within Cloudflare's free tier, with hard caps:** **1 GB per share, 10 shares per sender
-  address per day, 5 GB stored in total.** Beyond a cap the service refuses with a reason the app
-  shows as a fact, and the dialog offers the `.vanilla` file (B3.7). The free tier's own limits (R2
-  storage and operations, Worker requests) stay above these caps.
+  address per day, 5 GB stored in total, 100 e-mails per day for the whole service** (the mail
+  provider's account limit), at most 10 e-mails per share. Beyond a cap the service refuses with a
+  reason and the limit, which the app shows as a fact, and the dialog offers «Link kopieren» or the
+  `.vanilla` file (B3.7).
 - **The app's side of the protocol** is a small client (`src/share/client.ts`): confirm the
-  sender, create a share, upload objects, read the state (opened, returned), withdraw, fetch a
-  return. It talks only to the share service and is tested against a fake service in the test
-  process (B12). The protocol itself is `docs/protocol.md` of `vanilla-share`.
+  sender, create a share, upload objects, ask for the invitation, update, read the state (opened,
+  returned), withdraw, fetch a return. It is tested against a fake service in the test process
+  (B12). The protocol itself is `docs/protocol.md` of `vanilla-share` (copied as
+  docs/share-protocol.md).
+- **Links of 0.6.0** (a key after the #) are refused plainly: the service ends those shares when it
+  is deployed, and their page and the app say «abgelaufen».
 
-### B3.3 The invitation from the sharer's account, and the sender's confirmation
+### B3.3 The invitation from the service, and the sender's confirmation
 
-- **The invitation** is an HTML and plain-text e-mail from a template that `vanilla-share`
-  provides (the app bundles a copy and fills it in): «Sandra Huber hat dir die Buchhaltung Malerei
-  Huber GmbH geteilt · Version 12», the message, one button «Öffnen» with the link, «Gilt bis 5
-  Stunden nach dem ersten Öffnen, höchstens bis 24.11.2026». It comes from the sharer's own
-  address, so Ernst's «Antworten» reaches her without a Reply-To trick.
-- **How the app sends it:** through the mail account the app already uses for receipt import. On
-  that account's channel (ADR 0014): over SMTP with the account's stored secret, or through Mail on
-  this Mac (the mail program channel), which puts it into the account's «Gesendet» like any mail.
-  A workspace without a sending account gets «Link kopieren» and «Im Mailprogramm öffnen»
-  (`mailto:` with subject and text), and the sharer sends it herself. The key then still never
-  passes the service.
-- **The sender confirms her address once, by sending one e-mail.** The simplest proof that needs no
-  outgoing e-mail at the service: the app sends, from the same account, a short e-mail with a
-  one-time token to `confirm@share.<domain>`. Cloudflare Email Routing hands it to the Worker,
-  which accepts it only when the From domain passes DKIM (or SPF) alignment, and from then on
-  accepts uploads for that address from this app installation (a device token). It guards the
-  upload API against use as free anonymous storage; it is once per Mac and address and needs no
-  typing. A provider whose mail fails alignment is refused with that reason, and the dialog offers
-  the `.vanilla` file. Without a sending account, «Im Mailprogramm öffnen» does the same with a
-  prepared confirmation e-mail.
+- **The invitation** is an HTML and plain-text e-mail from the service's own template, in the
+  sharer's language: from «Sandra Huber über Vanilla Accounting <no-reply@share.<domain>>», Reply-To
+  her confirmed address, so Ernst's «Antworten» reaches her. It carries every step for someone who
+  never used the app: download (https://vanillasystems.ch/buchhaltung/download), «Dennoch öffnen»
+  once, the button «Buchhaltung öffnen» with the link, what he sees, how to send changes back, and
+  the deadline in words. Her message is escaped plain text under «Nachricht von Sandra Huber:». A
+  client supplies only names, the company, the language and the message: nobody can put words in
+  the service's mouth. «Nochmals senden» sends it again to the same address.
+- **The sender confirms her address once, by sending one e-mail** (unchanged): the app sends, from
+  the same account, a short e-mail with a one-time token to `confirm@share.<domain>`. Cloudflare
+  Email Routing hands it to the Worker, which accepts it only when the From domain passes DKIM (or
+  SPF) alignment, and from then on accepts shares for that address from this app installation (a
+  device token). Now that the service sends mail, it is also the guard against the service being
+  used to send mail to anyone. Without a sending account, «Im Mailprogramm öffnen» prepares that
+  one confirmation e-mail.
 - **The return** needs no e-mail. The recipient's app encrypts his change set under a new key,
-  stores that key wrapped under the share's key, and uploads both to the same share (the package
-  carries a return token for that share, so he needs no confirmation of his own). The sharer's app
-  sees it on the share card («Ernst Bühler hat 14 Änderungen geschickt») and fetches it: it holds
-  the share's key. A return lives under the same rules (5 hours after it is fetched, 10 days at
-  most).
+  which goes to the service like a share's, and uploads it into the same share (the package carries
+  a return token, so he needs no confirmation of his own). The sharer's app sees it on the share
+  card («Ernst Bühler hat 14 Änderungen geschickt») and fetches it with her token. A return is
+  refused once the share was withdrawn.
 
 ### B3.4 The package: incremental, file by file
 
@@ -638,8 +640,8 @@ removes nothing.
 
 ### B3.6 The page `share.<domain>/<id>`
 
-The invitation's button opens one page (prototype: `web.html`). The page reads the key from the
-fragment in the browser and never sends it. It offers two ways, both in v1:
+The invitation's button opens one page (prototype: `web.html`). The page gets the key from the
+service with the share's state. It offers two ways, both in v1:
 
 **A. In the browser, read-only, on any device.** «Im Browser ansehen» loads the app's read-only
 UI (the build of the audit export, `READONLY`) into the sandboxed frame (B3.2). The outer page
@@ -658,14 +660,14 @@ starts again from the link. This is the way for Windows, a phone, and a quick lo
    Programme, start. **While the app is unsigned** a further picture shows «Systemeinstellungen ›
    Datenschutz & Sicherheit › Dennoch öffnen»: right-click › Öffnen no longer opens an unsigned app
    since macOS 15. «Schon installiert? Direkt öffnen» skips the step.
-2. **Buchhaltung öffnen.** A button to `vanilla-accounting://open?share=<id>#<key>`. The page
+2. **Buchhaltung öffnen.** A button to `vanilla-accounting://open?share=<id>`. The page
    says: «Fragt der Browser, ob die Seite die App öffnen darf: Erlauben.» The app registers the
    scheme (`protocols` in `desktop/electron-builder.config.cjs`, the `open-url` event), fetches and
    decrypts the index and the files, verifies them, and opens the copy (B4). After that the page
    says «Sandra Huber sieht, dass du sie geöffnet hast».
 
 States of the page, each a plain fact: expired («Dieser Link galt bis 15.11. 00:04. Bitte Sandra
-Huber um einen neuen.»), withdrawn, spent (3 openings).
+Huber um einen neuen.»), withdrawn.
 
 **The general download page** `<domain>/app` offers step B1 without a share.
 
@@ -994,6 +996,21 @@ Outside this repository and worth naming: an Apple Developer ID (signing and not
 Phase 2, not in this spec's phases: the fiduciary's account with all mandates (B3.8).
 
 ---
+
+## Decided by the owner on 2026-11-15
+
+These replace the points of 2026-11-14 below that they name (ADR 0016 «Amendment»):
+
+- **No end-to-end encryption for sharing by link**: the service keeps the key (wrapped) and the
+  storage holds ciphertext only; the link is the access, no `#` key, no code, no device binding
+  (B3.2).
+- **The service sends the invitation** from «<sender> über Vanilla Accounting», Reply-To the
+  sender's confirmed address; the app's SMTP invitation and «Im Mailprogramm öffnen» for links are
+  gone (B3.3).
+- **Lifetime:** open 14 days from sharing or the last update, no limit on openings (B3.2).
+- **«Aktualisieren»** into the same share; the recipient's copy moves forward by itself; a withdrawn
+  share is said on his copy, with «Kopie löschen», never automatic (B3.1, B3.2).
+- **No signatures, no pinning:** a link opens like a `.vanilla` file (B3.2).
 
 ## Decided by the owner on 2026-11-14
 

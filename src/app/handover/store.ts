@@ -21,6 +21,10 @@ export interface DurchsichtFacts extends Pick<Marker, 'firm' | 'sharer' | 'me' |
   back: boolean;
   /** The copy came by link: its return goes back into the same share (src/share/sharing.ts). */
   linked?: boolean;
+  /** The copy came by link: it asks its share for a newer state when it opens. */
+  byLink?: boolean;
+  /** The sharer withdrew the share, as the copy last saw it. */
+  withdrawnAt?: string;
 }
 
 export interface HandoverView {

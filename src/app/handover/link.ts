@@ -6,15 +6,14 @@
  */
 import { ApiError, request } from '../lib/api.js';
 import type { ApiErrorBody } from '../../types/api-error.js';
-import type { ShareRecord, SenderView, Registered, Arrived } from '../../share/sharing.js';
-import type { Invitation } from '../../share/invitation.js';
+import type { ShareRecord, SenderView, Registered, Arrived, CopyCheck } from '../../share/sharing.js';
 import { reloadHandover } from './store.js';
 
-export type { ShareRecord, SenderView, Registered, Arrived };
+export type { ShareRecord, SenderView, Registered, Arrived, CopyCheck };
 
 export interface ShareSettings {
   service: { url?: string; source: 'env' | 'setting' | 'build' | 'none' };
-  /** Whether this computer keeps a link's key (a secret store that the app writes). */
+  /** Whether this computer keeps a link's tokens (a secret store that the app writes). */
   keeps: boolean;
   /** This computer's sender as kept (its confirmation is asked of the service separately). */
   sender?: string;
@@ -23,7 +22,8 @@ export interface ShareSettings {
   shares: ShareRecord[];
 }
 
-export interface Shared { record: ShareRecord; link: string; invitation: Invitation; mailed: boolean; mailError?: string }
+/** A share made: its link, and whether the service sent the invitation (`inviteError`: why not, in words by errorText). */
+export interface Shared { record: ShareRecord; link: string; invited: boolean; inviteError?: ApiErrorBody }
 
 export type JobPhase = 'pack' | 'encrypt' | 'upload' | 'download' | 'decrypt' | 'done' | 'failed';
 export interface Job<T> { id: string; phase: JobPhase; done: number; total: number; result?: T; error?: ApiErrorBody }
@@ -52,9 +52,12 @@ export async function refreshShares(): Promise<{ shares: ShareRecord[]; arrived:
 /** A share still running at the service: worth asking about. */
 export const running = (s: ShareRecord): boolean => !s.revokedAt && s.state !== 'gone' && Date.now() - Date.parse(s.at) < 31 * 86400_000;
 
-/** `mailto:` with the subject and the text, for the person's own mail program. */
+/** `mailto:` with the subject and the text, for the person's own mail program (the sender's one confirmation e-mail). */
 export const mailto = (to: string, subject: string, body: string): string =>
   `mailto:${encodeURIComponent(to).replace(/%40/g, '@')}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
 /** Whether a pasted text looks like a share link (the server decides). */
-export const looksLikeLink = (text: string): boolean => /^(https?:\/\/[^\s#]+\/[a-z2-7]{26}|vanilla-accounting:\/\/open\?)\S*#\S{20,}$/.test(text.trim());
+export const looksLikeLink = (text: string): boolean => /^(https?:\/\/[^\s#]+\/[a-z2-7]{26}|vanilla-accounting:\/\/open\?share=[a-z2-7]{26})\S*$/.test(text.trim());
+
+/** Asks the share of a copy that came by link: a newer state moves it forward, a withdrawn share is noted (src/share/sharing.ts checkCopy). */
+export const checkCopy = (): Promise<CopyCheck> => request<CopyCheck>('POST', '/api/share/check');

@@ -26,7 +26,7 @@ import { buildReturn, isDurchsicht, markerOf, openPackage, planReturn, readNotes
 import { applyReturn, decide, GROUPS, HandoverRefused, listReturns, receiveReturn, reviewOf, undoReturn, type Decision, type GroupId } from '../../handover/returns.js';
 import { OwnershipError } from '../../books/store.js';
 import type { ApiRefusal } from '../../types/api-error.js';
-import { canReturnByLink, readShares } from '../../share/sharing.js';
+import { canReturnByLink, linkOfCopy, readShares } from '../../share/sharing.js';
 
 export const router = Router();
 
@@ -37,6 +37,15 @@ let before: string | undefined;
 export async function openCopy(root: string): Promise<void> {
   if (!isDurchsicht(WS.paths.root)) before = WS.paths.root;
   await openBooksAt(root);
+}
+
+/** Back from a copy to the books opened before it, when there are such (the Mac app lists the others under «Zuletzt»). */
+export async function leaveCopy(): Promise<boolean> {
+  if (!before || !existsSync(before)) return false;
+  const to = before;
+  before = undefined;
+  await openBooksAt(to);
+  return true;
 }
 
 /** The sharer of the books open now: the company's owner stands for her until this Mac knows its person (B2). */
@@ -95,6 +104,8 @@ router.get('/api/handover', (_req, res) => {
         ...(marker.sent ? { sent: marker.sent } : {}),
         changes: changesOf(WS.paths.root).length, notes: readNotes(WS.paths.root), back: !!before,
         linked: canReturnByLink(WS.paths.root),
+        byLink: !!linkOfCopy(WS.paths.root),
+        ...(linkOfCopy(WS.paths.root)?.withdrawnAt ? { withdrawnAt: linkOfCopy(WS.paths.root)!.withdrawnAt } : {}),
       },
     } : {}),
     returns: marker ? [] : listReturns(WS),

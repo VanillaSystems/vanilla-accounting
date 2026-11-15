@@ -52,7 +52,7 @@ import { clearSelection, selectAll, selectionNow, useSelection } from '../select
 import { installWindowDrop, setDropHandler, type DropState, type DropTarget, type Dropped } from './window-drop.js';
 import { actionsNow, openActions } from '../selection/ActionsMenu.js';
 import { ShareDialog } from '../handover/ShareDialog.js';
-import { DurchsichtBar, ReturnBar, Welcome } from '../handover/Durchsicht.js';
+import { CopyStatus, DurchsichtBar, ReturnBar, Welcome } from '../handover/Durchsicht.js';
 import { isVanillaFile, openVanilla, reloadHandover, useHandover, type Opened } from '../handover/store.js';
 import { refreshShares, running } from '../handover/link.js';
 
@@ -372,7 +372,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       <Dock current={loc.route.area} books={books} keys={dockKeys} wide={navWide} onToggle={toggleNav} nav={nav} canEdit={canEdit} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} />
       {workspace && (DEMO || workspace.demo) ? <Demo name={workspace.company.name} href={(id) => hrefOf({ route: AREA_HOME[id], query: {} })} onGo={goArea} /> : null}
       {toastNode}
-      {copy && !readonly ? <><Welcome d={copy} /><ReturnBar d={copy} toast={toast} /></> : null}
+      {copy && !readonly ? <><Welcome d={copy} /><CopyStatus d={copy} /><ReturnBar d={copy} toast={toast} /></> : null}
       {legend && (
         <div className="legend">
           {t('shell.edges')}<br />
