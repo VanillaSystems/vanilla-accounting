@@ -5,7 +5,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { strToU8, unzipSync, zipSync } from 'fflate';
@@ -13,8 +13,8 @@ import { ClosedPeriodError, OwnershipError, PERSON, loadBooks, moduleActor, save
 import { writeSeal } from '../src/books/seal.js';
 import { workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { checksumOf, contentChecksum, contentFiles, shortChecksum } from '../src/handover/content.js';
-import { currentVersion, heldBy, readVersions, sealedVersion, writeVersion } from '../src/handover/versions.js';
-import { PackageError, readPackage } from '../src/handover/package.js';
+import { currentVersion, readVersions, sealedVersion, writeVersion } from '../src/handover/versions.js';
+import { PackageError, readPackage, writePackage } from '../src/handover/package.js';
 import { makeShare, planShare } from '../src/handover/share.js';
 import { buildReturn, changesOf, markerOf, openPackage, recipientActor, setNote } from '../src/handover/durchsicht.js';
 import { applyReturn, decide, HandoverRefused, receiveReturn, reviewOf, undoReturn } from '../src/handover/returns.js';
@@ -84,8 +84,6 @@ test('the content version: share, take-over and seal each add one line; a plain 
   assert.equal(readVersions(ws.paths).length, 1, 'a plain save writes no version');
   assert.equal(sealedVersion(ws, '2026-Q1')?.n, 2);
   assert.equal(readVersions(ws.paths)[1].period, '2026-Q1');
-  assert.equal(heldBy(ws.paths, ERNST)?.n, 1);
-  assert.equal(heldBy(ws.paths, { name: 'Jemand' }), undefined);
   assert.equal(shortChecksum('sha256:a3f9c21e07bd99'), 'a3f9 c21e 07bd');
   // The checksum is the books' content: the version log itself does not count.
   assert.equal(contentChecksum(ws.paths).checksum, checksumOf(contentFiles(ws.paths.root).map((f) => ({ path: f.path, sha256: f.path ? readSha(ws, f.path) : '' }))));
@@ -98,7 +96,7 @@ test('a full package: the books and the open years\' receipts, the closed year\'
   const made = await makeShare(ws, { to: ERNST, message: 'Kannst du Q3 durchsehen?' }, SANDRA, new Date('2026-11-14T15:42:00Z'));
   assert.equal(made.index.kind, 'full');
   assert.equal(made.version.n, 1);
-  assert.equal(made.name, `${ws.company.name} – Buchhaltung v1 (2026-11-14).vanilla`);
+  assert.equal(made.name, `${ws.company.name} – Buchhaltung (2026-11-14).vanilla`, 'the name a person sees carries no version number');
   const carried = made.index.files.map((f) => f.path);
   assert.ok(carried.includes('transactional-data/2026/receipts/r1.pdf'));
   assert.ok(carried.includes('transactional-data/2026/filings/seal-Q1.json'), 'seals go along');
@@ -145,32 +143,91 @@ test('Durchsicht: the copy proves its version, keeps the seals, and writes as th
   assert.equal(made.index.to.role, 'fiduciary');
 });
 
-test('an update carries the books and only the new receipts; on a copy without its base it is refused, changing nothing', async () => {
-  const ws = sandrasBooks();
-  const first = await makeShare(ws, { to: ERNST }, SANDRA);
-  const at = home();
-  const opened = openPackage(first.bytes, new Date(), at);
-  ernstCorrects(workspaceAt(opened.root));
-  // Sandra keeps booking: a new receipt and a payment.
+/** Sandra keeps booking after the first hand-over: a new receipt and a payment. */
+function sandraBooksOn(ws: Workspace): void {
   writeFileSync(join(ws.paths.root, 'transactional-data/2026/receipts/r9.pdf'), '%PDF-1.4 r9');
   const books = loadBooks(ws);
   update(books, PERSON, (b) => { b.receipts.push(receipt('r9', '2026-09-01')); b.transactions.push(tx('T9', '2026-09-01', 9)); b.journalEntries.push(entry('e9', 'T9', '2026-09-01', '6500', 9, 'I81')); });
   saveBooks(ws, books);
+}
+
+test('every hand-over is whole: the next one to the same person carries every receipt again and moves his copy, keeping his changes', async () => {
+  const ws = sandrasBooks();
+  const first = await makeShare(ws, { to: ERNST }, SANDRA);
+  const at = home();
+  ernstCorrects(workspaceAt(openPackage(first.bytes, new Date(), at).root));
+  sandraBooksOn(ws);
   const plan = planShare(reopen(ws), { to: ERNST });
-  assert.equal(plan.kind, 'update');
-  assert.equal(plan.base?.n, 1);
-  assert.deepEqual(plan.files.filter((f) => f.path.includes('/receipts/')).map((f) => f.path), ['transactional-data/2026/receipts/r9.pdf']);
+  assert.equal(plan.kind, 'full');
+  assert.deepEqual(plan.files.filter((f) => f.path.includes('/receipts/')).map((f) => f.path).sort(), ['transactional-data/2026/receipts/r1.pdf', 'transactional-data/2026/receipts/r9.pdf', 'transactional-data/2026/receipts/rq1.pdf']);
   const second = await makeShare(reopen(ws), { to: ERNST }, SANDRA);
-  assert.equal(second.index.kind, 'update');
-  assert.throws(() => openPackage(second.bytes, new Date(), home()), (e) => e instanceof PackageError && e.code === 'shareBaseMissing');
+  assert.equal(second.index.kind, 'full');
+  assert.equal(second.index.held, undefined, 'nothing is left out for what the person is thought to hold');
   const moved = openPackage(second.bytes, new Date(), at);
-  assert.equal(moved.kind, 'update');
   const copy = workspaceAt(moved.root);
   const now = loadBooks(copy);
   assert.ok(now.journalEntries.some((e) => e.id === 'e9'), 'her new booking arrived');
   assert.equal(now.journalEntries.find((e) => e.id === 'e1')?.accountDebit, '6510', 'his change stayed');
   assert.ok(existsSync(join(copy.paths.root, 'transactional-data/2026/receipts/r9.pdf')));
   assert.equal(markerOf(copy.paths.root)?.version.n, 2);
+});
+
+test('his copy deleted: the next hand-over opens on this computer as if it were the first, with no error', async () => {
+  const ws = sandrasBooks();
+  const at = home();
+  const first = openPackage((await makeShare(ws, { to: ERNST }, SANDRA)).bytes, new Date(), at);
+  rmSync(first.root, { recursive: true, force: true });
+  sandraBooksOn(ws);
+  const opened = openPackage((await makeShare(reopen(ws), { to: ERNST }, SANDRA)).bytes, new Date(), at);
+  const copy = workspaceAt(opened.root);
+  assert.equal(markerOf(copy.paths.root)?.version.n, 2);
+  for (const r of ['r1', 'rq1', 'r9']) assert.ok(existsSync(join(copy.paths.root, `transactional-data/2026/receipts/${r}.pdf`)), `${r} is there`);
+  assert.deepEqual(sealsOf(loadBooks(copy)).checks.map((c) => `${c.quarter} ${c.status}`), ['2026-Q1 intact']);
+});
+
+test('a copy missing a receipt, or holding a changed one, heals with the next hand-over or the same one opened again', async () => {
+  const ws = sandrasBooks();
+  const at = home();
+  const made = await makeShare(ws, { to: ERNST }, SANDRA);
+  const opened = openPackage(made.bytes, new Date(), at);
+  ernstCorrects(workspaceAt(opened.root));
+  const r1 = join(opened.root, 'transactional-data/2026/receipts/r1.pdf');
+  const rq1 = join(opened.root, 'transactional-data/2026/receipts/rq1.pdf');
+  rmSync(r1);
+  writeFileSync(rq1, 'broken');
+  // The same file opened again: the copy is whole again, his changes stay.
+  openPackage(made.bytes, new Date(), at);
+  assert.equal(readFileSync(r1, 'utf8'), '%PDF-1.4 r1');
+  assert.equal(readFileSync(rq1, 'utf8'), '%PDF-1.4 rq1');
+  assert.equal(loadBooks(workspaceAt(opened.root)).journalEntries.find((e) => e.id === 'e1')?.accountDebit, '6510');
+  // And the next hand-over heals it just as well.
+  rmSync(r1);
+  sandraBooksOn(ws);
+  openPackage((await makeShare(reopen(ws), { to: ERNST }, SANDRA)).bytes, new Date(), at);
+  assert.equal(readFileSync(r1, 'utf8'), '%PDF-1.4 r1');
+});
+
+test('forward only: an older hand-over never rolls a newer copy back', async () => {
+  const ws = sandrasBooks();
+  const at = home();
+  const first = await makeShare(ws, { to: ERNST }, SANDRA);
+  sandraBooksOn(ws);
+  const second = await makeShare(reopen(ws), { to: ERNST }, SANDRA);
+  const opened = openPackage(second.bytes, new Date(), at);
+  assert.throws(() => openPackage(first.bytes, new Date(), at), (e) => e instanceof PackageError && e.code === 'shareCopyNewer' && !/Version \d/.test(e.message));
+  assert.equal(markerOf(opened.root)?.version.n, 2);
+  assert.ok(loadBooks(workspaceAt(opened.root)).journalEntries.some((e) => e.id === 'e9'));
+});
+
+test('a 0.6.0 update file whose base is missing is refused in plain words, naming no version', async () => {
+  const ws = sandrasBooks();
+  const made = await makeShare(ws, { to: ERNST }, SANDRA);
+  // As 0.6.0 wrote it: the receipts the person was thought to hold named as held, not carried.
+  const p = readPackage(made.bytes);
+  const held = p.index.files.filter((f) => f.path.includes('/receipts/'));
+  const index = { ...p.index, kind: 'update' as const, base: p.index.version, files: p.index.files.filter((f) => !held.includes(f)), held };
+  const files = new Map([...p.files].filter(([path]) => !held.some((f) => f.path === path)));
+  assert.throws(() => openPackage(writePackage({ index, files }), new Date(), home()), (e) => e instanceof PackageError && e.code === 'shareBaseMissing' && !/Version \d|vollständig|baut auf/.test(e.message));
 });
 
 interface Scene { ws: Workspace; ret: Uint8Array }

@@ -27,7 +27,7 @@ test('«Teilen»: the plan names what goes, the share is a .vanilla file and Ver
   assert.equal((await api.send('POST', '/api/handover/share', { to: { name: '' } })).status, 400, 'a name is needed');
   const res = await api.fetch('/api/handover/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: { name: 'Ernst Beispiel', email: 'ernst@example.ch' }, message: 'Bitte Q3 ansehen' }) });
   assert.equal(res.status, 200);
-  assert.match(decodeURIComponent(res.headers.get('content-disposition') ?? ''), /Buchhaltung v1 \(\d{4}-\d{2}-\d{2}\)\.vanilla/);
+  assert.match(decodeURIComponent(res.headers.get('content-disposition') ?? ''), /Buchhaltung \(\d{4}-\d{2}-\d{2}\)\.vanilla/);
   file = new Uint8Array(await res.arrayBuffer());
   assert.equal(readPackage(file).index.message, 'Bitte Q3 ansehen');
   const view = await api.send('GET', '/api/handover');

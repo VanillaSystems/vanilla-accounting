@@ -30,7 +30,11 @@ module.exports = {
   // The share service the app offers by default (src/share/service.ts): named at build time like the
   // update feed, since the publisher's domain stays out of the app's files. Without it, the person
   // names a service herself, or shares the books as a file.
-  ...(env.VANILLA_SHARE_SERVICE ? { extraMetadata: { share: { service: env.VANILLA_SHARE_SERVICE } } } : {}),
+  // The page the invitation names for downloading the app (src/share/service.ts appDownload), likewise.
+  ...(env.VANILLA_SHARE_SERVICE || env.VANILLA_APP_DOWNLOAD ? { extraMetadata: { share: {
+    ...(env.VANILLA_SHARE_SERVICE ? { service: env.VANILLA_SHARE_SERVICE } : {}),
+    ...(env.VANILLA_APP_DOWNLOAD ? { download: env.VANILLA_APP_DOWNLOAD } : {}),
+  } } } : {}),
   // What the app reads at run time from its own folder (APP_ROOT): the bundle, the built UI and the
   // app's data files. Packages come from package.json's dependencies; the UI's own are in dist/.
   files: [

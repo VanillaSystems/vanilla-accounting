@@ -103,7 +103,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   useEffect(() => {
     if (askedShares.current || !canEdit || !handover?.shares?.some(running)) return;
     askedShares.current = true;
-    refreshShares().then((r) => { for (const a of r.arrived) toast(t('share.returnArrived', { name: a.from.name, n: a.changes, v: a.basedOn })); }, () => undefined);
+    refreshShares().then((r) => { for (const a of r.arrived) toast(t('share.returnArrived', { name: a.from.name, n: a.changes })); }, () => undefined);
   }, [handover, canEdit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const area = areaOf(loc.route);
@@ -271,11 +271,11 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
   /** What «Öffnen…» of a `.vanilla` did: a return opens its review; a hand-over is now the books open here. */
   const opened = (o: Opened) => {
     if (o.kind === 'return') {
-      toast(t('share.returnArrived', { name: o.from.name, n: o.changes, v: o.basedOn }));
+      toast(t('share.returnArrived', { name: o.from.name, n: o.changes }));
       nav.go({ route: { area: 'changes', commit: 'return', file: o.id }, query: {} });
       return;
     }
-    toast(o.conflicts || o.dropped ? t('share.copyMoved', { firm: o.firm, n: o.version, conflicts: o.conflicts, dropped: o.dropped }) : t('share.copyOpened', { firm: o.firm, n: o.version }));
+    toast(o.conflicts || o.dropped ? t('share.copyMoved', { firm: o.firm, conflicts: o.conflicts, dropped: o.dropped }) : t('share.copyOpened', { firm: o.firm }));
     // Other books: everything is read anew.
     setTimeout(() => location.assign('/'), 400);
   };

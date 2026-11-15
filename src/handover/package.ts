@@ -32,14 +32,14 @@ export interface PackageIndex {
   to: Party & { role?: Role };
   /** The version the package holds (full, update) or the one a return was made on. */
   version: VersionRef;
-  /** An update's base: the version the recipient holds already. */
+  /** An update's base (0.6.0 only; the app writes whole packages since): the version the recipient held. */
   base?: VersionRef;
   app: string;
   /** ISO time the package was made. */
   at: string;
   /** The files carried, each a member `files/<path>`. */
   files: FileFact[];
-  /** Files of the version the recipient holds already (an update): not carried, checked on his copy. */
+  /** An update's files the recipient held already (0.6.0 only): not carried, checked on his copy. */
   held?: FileFact[];
   /** Files left out on purpose (a full package without a closed year's archive, B3.5): never carried, counted in the checksum. */
   omitted?: FileFact[];
@@ -71,7 +71,7 @@ export interface PackageContents {
   changes?: ReturnChange[];
 }
 
-export type PackageRefusal = 'shareTampered' | 'shareOtherCompany' | 'shareBaseMissing' | 'shareNotPackage' | 'shareWrongKind' | 'shareTooLarge' | 'shareUnknownBase' | 'shareUpdateFailed';
+export type PackageRefusal = 'shareTampered' | 'shareOtherCompany' | 'shareBaseMissing' | 'shareNotPackage' | 'shareWrongKind' | 'shareTooLarge' | 'shareUnknownBase' | 'shareUpdateFailed' | 'shareCopyNewer';
 
 export class PackageError extends Error {
   constructor(message: string, readonly code: PackageRefusal, readonly params: Record<string, string> = {}) { super(message); }
@@ -201,11 +201,11 @@ export function checkPackage(parsed: unknown, members: ReadonlyMap<string, Uint8
   return { index, files, changes };
 }
 
-/** The file name a person sees: `<Firma> – Buchhaltung v12 (2026-11-14).vanilla`, or for a return `… – Änderungen von <Name> (…)`. */
+/** The file name a person sees: `<Firma> – Buchhaltung (2026-11-14).vanilla`, or for a return `… – Änderungen von <Name> (…)`. */
 export function packageName(index: Pick<PackageIndex, 'kind' | 'firm' | 'version' | 'from' | 'at'>): string {
   const clean = (s: string) => s.replace(/[/\\:*?"<>|]/g, '-').trim();
   const day = index.at.slice(0, 10);
   return index.kind === 'return'
     ? `${clean(index.firm.name)} – Änderungen von ${clean(index.from.name)} (${day})${PACKAGE_EXT}`
-    : `${clean(index.firm.name)} – Buchhaltung v${index.version.n} (${day})${PACKAGE_EXT}`;
+    : `${clean(index.firm.name)} – Buchhaltung (${day})${PACKAGE_EXT}`;
 }

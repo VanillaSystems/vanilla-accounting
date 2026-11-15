@@ -8,7 +8,7 @@
  *   GET    /api/share/sender          the sender as the service sees it now (confirmed, refused and why)
  *   POST   /api/share/sender          { email }: registers it; sends the confirmation e-mail from the books' mailbox when it sends from that address
  *   DELETE /api/share/sender          forgets it («Andere Adresse»)
- *   POST   /api/share/link            { to, message?, full?, archive?, mail? } → a job: seal, upload, version, invitation
+ *   POST   /api/share/link            { to, message?, archive?, mail?, language? } → a job: seal, upload, version, invitation
  *   POST   /api/share/preview         { link }: what it holds, from its envelope, without an opening
  *   POST   /api/share/open            { link, trust?, replace? } → a job: fetch, decrypt, open as a Durchsicht copy
  *   POST   /api/share/return          { message? } on a copy that came by link → a job: the return into the same share
@@ -32,9 +32,12 @@ import {
   ShareFlowError,
 } from '../../share/sharing.js';
 import { ShareLimitError, type Phase } from '../../share/transport.js';
+import { invitationTexts } from '../invitation-texts.js';
 import { handoverRefusal, openCopy, sharerOf, shareRequest } from './handover.js';
 
 export const router = Router();
+
+
 
 /** Any failure of the flow as the API says it: a refusal with a code the UI words, never a bare 500 for what the service said. */
 function asRefusal(e: unknown): unknown {
@@ -120,7 +123,8 @@ router.post('/api/share/link', (req, res) => {
   const b = (req.body ?? {}) as Record<string, unknown>;
   const request = shareRequest(b);
   const ws = WS;
-  const job = startJob('share', (progress) => shareByLink(ws, request, sharerOf(), { mail: b.mail === true, progress }));
+  const language = typeof b.language === 'string' ? b.language.slice(0, 8) : undefined;
+  const job = startJob('share', (progress) => shareByLink(ws, request, sharerOf(), { mail: b.mail === true, progress, invitation: invitationTexts(language) }));
   res.status(202).json(job);
 });
 

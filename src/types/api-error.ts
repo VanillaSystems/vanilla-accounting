@@ -34,7 +34,9 @@ export type ApiRefusal =
   /** A hand-over or return of another firm than these books. */
   | { code: 'shareOtherCompany'; params: { firm: string } }
   /** An update on a version this copy lacks: `name` is asked for a full hand-over. */
-  | { code: 'shareBaseMissing'; params: { version: string; name: string } }
+  | { code: 'shareBaseMissing'; params: { name: string } }
+  /** A hand-over older than the copy it would move: the copy stays as it is (forward only). */
+  | { code: 'shareCopyNewer'; params: { firm: string; name: string } }
   | { code: 'shareNotPackage' }
   /** A hand-over file past a limit (its size, a file's size, its number of files): the limit is named. */
   | { code: 'shareTooLarge'; params: { limit: string } }
@@ -70,7 +72,7 @@ export type ApiRefusal =
   /** A link to another service than this app's, not confirmed by the person. */
   | { code: 'shareForeignService'; params: { host: string } }
   /** A link that would move an existing copy to another sharer or service, not confirmed by the person. */
-  | { code: 'shareCopyOther'; params: { firm: string; version: string; was: string; now: string; claimed: string; host: string } }
+  | { code: 'shareCopyOther'; params: { firm: string; was: string; now: string; claimed: string; host: string } }
   /** The service asked for a confirmation e-mail the app does not send (another domain, another subject). */
   | { code: 'shareConfirmationOdd'; params: { host: string } }
   | { code: 'localOnly' }
