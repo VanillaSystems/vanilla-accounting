@@ -1,6 +1,7 @@
 # Spec: the whole domain model, and how changes are stored
 
-Status: draft for the owner, 2026-11-15. No code yet. Judged by [MISSION.md](../../MISSION.md),
+Status: draft for the owner, 2026-11-15, with section 7 (values that change over time) and
+section 8 (BaseObject, approved by the owner) added the same day. No code yet. Judged by [MISSION.md](../../MISSION.md),
 [ADR 0004](../adr/0004-versions-and-record-envelope.md) (versions and the record envelope),
 [ADR 0013](../adr/0013-workspace-layout-and-ownership.md) (workspace layout),
 [ADR 0015](../adr/0015-base-cases-in-the-app-long-tail-in-the-workspace.md) (app and workspace)
@@ -19,15 +20,18 @@ The question has two meanings, and both are answered here:
   and kept traceable (section 6).
 
 Sections 1 to 3 are the model itself: what exists, what the invoicing and payroll specs add, and
-one picture of the whole.
+one picture of the whole. Section 7 adds the owner's question of the same day: how a setting that
+changes over time is kept. Section 8 sets the base every stored object shares.
 
 ## Summary
 
 | Question | Recommendation |
 |---|---|
 | Where the definition lives | The TypeScript types stay the source. A registry names every stored file with its root type, version, ladder and owner. A generator writes a JSON Schema per file and the diagrams of [docs/data-model.md](../data-model.md); a test fails when they drift. |
-| How definition changes are stored | Per-file versions and forward-only ladders, as today, all in the one registry. A fixed rule says when a change needs a step. Every step gets a fixture test, generated from one pattern. |
+| How definition changes are stored | Per-file versions for the files' layout, and a version per record type (section 8), each with a forward-only ladder, all in the one registry. A fixed rule says when a change needs a step. Every step gets a fixture test, generated from one pattern. |
 | How data changes are stored | State files stay the truth, and git stays the history and the transport. Add an append-only change log per year (`changes.jsonl`, «Änderungsprotokoll»), written by the write door: who, when, which record, the fields before and after. No event sourcing. |
+| The base of every record | `BaseObjectV1`: `id`, and optional `createdAt`/`createdBy`, `lastChangedAt`/`lastChangedBy`, `rev`, `origin`, `externalId`, `deleted`, `customFields`. A version per type (`InvoiceV3`; on disk `"type"`, `"v"`), each with its own ladder; the share service and the API translate. Sealed records keep their shape (section 8). |
+| Values that change over time | Every setting a document or run reads for its day is a dated history (`Dated<T>`: `validFrom`, optional `validUntil`, never overwritten), stored inline in its file. Documents and runs read on their own date and keep what they used. A change dated in the past warns and offers the ways on; the person decides (section 7). |
 
 ## 1. Inventory: what the app stores today
 
@@ -73,6 +77,9 @@ Records of a year lie in the year of their date (src/books/years.ts). Records da
 | Secret terms for the leak guard | `secret-terms.txt` | src/publish/leak-guard.ts | none | person |
 | Setup checklist / Einrichtung | `onboarding.json` | src/onboarding/store.ts | `SCHEMA = 1`, local, no ladder | module, person |
 | Workspace overlays of modules and workflows | `modules/`, `workflows/` | src/core/modules/load.ts, src/workflows/ | the module's own version | AI with the person |
+
+Each setting here is one current value, and a change overwrites it. Section 7 turns those a
+document or run reads for its day into dated histories.
 
 ### 1.3 Knowledge
 
@@ -139,7 +146,7 @@ phases 2 and 3), settings in the manifest's `invoicing:` (one `WORKSPACE_SCHEMA`
 | Credit note / Gutschrift | as today; set off as a deduction line (`InvoiceLine.deducts`) on the next invoice | as today |
 | Write-off / Abschreibung, Skonto, Debitorenverlust | `writeOffs: [{ date, amount, reason, note }]` on an issued invoice | cash basis: nothing; agreed: `RE-<n>-wo-<k>` |
 | Recurring invoice / Abo | `recurring: [Envelope & { customerId, template, every, next, until, issue }]` | as each invoice it makes |
-| Article / Artikel | `articles: [Envelope & { number, text, unit, price, vatRate, account }]` | nothing |
+| Article / Artikel | `articles: [Envelope & { number, text, unit, price: Dated, vatRate, account }]` | nothing |
 | Line kinds | `InvoiceLine.kind` title, subtotal, text; `discount`, `articleId`, `activity`, `tags`, `source` | as the invoice |
 
 ### 2.2 Payroll (docs/specs/payroll.md on `spec/payroll`, decided 2026-11-14)
@@ -148,8 +155,8 @@ phases 2 and 3), settings in the manifest's `invoicing:` (one `WORKSPACE_SCHEMA`
 |---|---|---|
 | Payslip from outside / Lohnabrechnung (level A) | a `Receipt` of kind `payslip`; its figures derived on every read, not stored | `BOOKS_SCHEMA` 10 for `by.check: 'payslip' \| 'payrollJournal' \| 'payroll'` (one step) |
 | Employee / Mitarbeiterin (name, AHV number, birth date, entry, exit, IBAN, language) | `payroll.json` `employees` | new `PAYROLL_SCHEMA = 1` |
-| Wage settings / Lohnvereinbarung (contract lines from a date: monthly or hourly, pensum, 13th salary, holidays; pension per employee; allowances; tax at source) | `payroll.json` `employees[].contract`, `pension`, `allowances`, `taxAtSource` | same |
-| Funds and the firm's rates / Kassen und Sätze (per year: canton, AHV fund, pension, accident, sickness, each with its source document) | `payroll.json` `plan.<year>` | same |
+| Wage settings / Lohnvereinbarung (dated contract entries: monthly or hourly, pensum, 13th salary, holidays; pension per employee; allowances; tax at source) | `payroll.json` `employees[].contract`, `pension`, `allowances`, `taxAtSource`, each `Dated` (section 7) | same |
+| Funds and the firm's rates / Kassen und Sätze (canton, AHV fund, pension, accident, sickness, each entry with its source document) | `payroll.json` `plan`, each rate set `Dated` (section 7) | same |
 | Payroll run / Lohnlauf, with its payslips and lines `{ kind, base, rate, amount, party, source }` | `transactional-data/<year>/payroll/runs.jsonl`, one released run per line, immutable; a correction is a new run with `corrects` | same |
 | Payslip PDF of a run | a `Receipt` of kind `payslip` in `…/receipts/`, linked to the run | books |
 | Bookings of a run | `LR-<yyyy>-<mm>-<employee>`, `by: { kind: 'code', check: 'payroll' }`, `run` | books |
@@ -241,6 +248,9 @@ The code name is English, the UI name German. One name per thing, in code, docs 
 | Version | Version | A named state of the books (hand-over, take-over, seal) |
 | Return | Rücksendung | A fiduciary's changes, sent back |
 | ChangeLine (new) | Änderung, Änderungsprotokoll | One record changed by one action (section 6) |
+| Dated (new) | gilt ab, Verlauf | A setting's values, each with the days it holds (section 7) |
+| BaseObject (new) | – | The fields every stored record shares: id, who and when, `rev`, origin, external id, deleted, custom fields (section 8) |
+| CustomField (new) | Eigenes Feld | A field a company defines for its records (section 8.3) |
 
 ### 3.2 The whole model in one picture
 
@@ -464,7 +474,9 @@ classDiagram
     +entry, exit [0..1], iban [0..1]
   }
   class WageSettings {
-    +from, kind: monthly | hourly
+    «dated»
+    +validFrom, validUntil [0..1]
+    +kind: monthly | hourly
     +amount, pensum, thirteenth, holidayWeeks
   }
   class Fund {
@@ -475,6 +487,7 @@ classDiagram
     <<year/payroll/runs.jsonl · planned>>
     +id, period, payday, releasedAt
     +corrects [0..1], entries
+    +used «the dated entries it read»
   }
   class Payslip {
     +employee, lines, net, receiptId
@@ -604,7 +617,8 @@ comments of past steps.
 
 ### 5.2 What to add
 
-1. **Every versioned file in the registry** (4.3), with a ladder even when it has no step yet.
+1. **Every versioned file and every record type in the registry** (4.3), with a ladder even when
+   it has no step yet. A record type's version is its `v` (section 8).
    `onboarding.json` and the question lines move into it; the new stores (`payroll.json`, orders,
    `changes.jsonl`) start there at 1.
 2. **One rule for when a change needs a step**, in docs/releasing.md, from ADR 0004:
@@ -616,6 +630,7 @@ comments of past steps.
    | A wider enum (a new unit, a new receipt kind, a new `by.check`) | yes: an older reader must refuse it |
    | A new ref prefix in the books with the same entry shape (`RE-…-wo-`, `LR-`) | no; named in src/books/refs.ts and the CHANGELOG (invoicing decision 7.2) |
    | A new file | no step elsewhere; the file starts at its own 1 |
+   | A single value becomes a dated history (section 7) | yes: an older app would read the list as the value |
    | A change to the shape of a sealed record | MAJOR, with its own plan; never through a ladder |
 
 3. **A fixture per step**: `tests/migrations/<store>/<n>.in.*` and `<n>.out.*`. One generic test
@@ -748,23 +763,313 @@ merge without a conflict, and readers sort by `at` and drop a repeated `act`+`ke
 2. History on the detail of a booking, a receipt and a payment; undo from the log; `data/trash/`
    retired.
 3. The other stores (invoices, manifest, knowledge, payroll, orders) through the same helper.
+   An entry added to a dated field is logged as that entry (7.7).
 4. Returns carry and append lines (e2e spec Part B).
 
 No existing file changes shape, so no ladder step of the books or the manifest: the log is a new
 file with its own `schema: 1`, as `versions.jsonl` was (e2e spec B7).
 
-## 7. Open questions for the owner
+## 7. Values that change over time («gilt ab»)
 
-Each is pre-decided. A plain «ok» accepts all four.
+The owner asked on 2026-11-15: «are we also taking change into consideration? all of those fees
+and everything, they can be changed, right? So a Lohn can be changed, a Beitrag can be changed».
+
+Today only law data changes by date: `modules/ch/payroll/<year>.yaml` (one file per year, rows
+`{ value, source, validFrom }`) and the VAT rates of `modules/ch/rates.yaml` (`superseded`). The
+firm's own settings are single current values: a wage, a fund's rate, an article's price, a
+customer's terms, the firm's address and IBAN. A change overwrites the old value, and nothing
+can tell what held on an earlier day. `company.vat.reportingSince` is the one exception, and it
+is a dated history in all but name.
+
+This section sets one rule for every store. The invoicing and payroll specs apply it (invoicing
+4.12, payroll §16).
+
+### 7.1 The rule
+
+1. **A setting that can change is a dated history.** This applies to every value that a
+   document, a run or a booking reads for its own day. Each entry says from when it holds
+   (`validFrom`) and, optionally, until when (`validUntil`). A change is a new entry, whether it
+   is dated today, in the past or in the future («gilt ab»). An entry is never overwritten.
+2. **The value on day D** is the entry with the latest `validFrom` on or before D. Two entries
+   with the same `validFrom` are decided by the later `enteredAt`. If that entry's `validUntil`
+   lies before D, there is no value on D. A missing value is a fact («kein Vertrag ab
+   01.04.2026»), never a guess, and the reader treats it as a missing input (a line
+   «unvollständig», a base error).
+3. **Documents and runs read on their own date, and keep what they used.** An invoice reads on
+   its date. A run over a period reads every entry that holds within the period (payroll splits
+   a month by days, payroll §16). What a document or run used is copied into it when it is issued
+   or released, so a later change never alters it.
+4. **A change dated before something already issued or released warns.** Code finds every
+   issued document and released run that used another value for a day the change now covers.
+   It names them («Für September freigegeben mit 7.5 %; ab 01.09.2026 gilt jetzt 7.8 %») and
+   offers the area's ways on (payroll: reopen the run, or the difference in the next run;
+   invoicing: a supplementary invoice or a credit note as a draft). It also offers «So lassen».
+   The person decides. There is no override flag, and a filed period stays as filed (golden
+   rule 1).
+
+### 7.2 The shape
+
+One generic type, in the app's core (no jurisdiction in it):
+
+```ts
+/** One value and the days it holds. Days are YYYY-MM-DD, both ends inclusive. */
+interface DatedEntry<T> {
+  validFrom: string;
+  /** Absent: until the next entry begins, or open-ended. Set for an end with nothing after it (an exit, an allowance that stops). */
+  validUntil?: string;
+  value: T;
+  /** When it was entered (ISO time). Decides between two entries of the same validFrom; the change log says who. */
+  enteredAt: string;
+  /** The document the value was read from: a pension certificate, a policy, a price list. */
+  source?: { receiptId?: string; note?: string };
+}
+/** Sorted by validFrom, then enteredAt. An entry is addressed by (validFrom, enteredAt). */
+type Dated<T> = readonly DatedEntry<T>[];
+```
+
+- **One history per thing that changes together.** Whatever one document sets is one entry with
+  an object value. A fund's Beitragsverfügung sets `{ adminCost, fak }`, a contract sets
+  `{ kind, amount, pensum, thirteenth, holidayWeeks }`, an address is one value. Things that
+  change independently get histories of their own (an employee's IBAN beside the contract).
+- **The reader** is one module, `src/core/dated.ts`: `valueOn(h, day)`, `entriesWithin(h, from,
+  to)` (a run's month), `current(h, today)`, `planned(h, today)` (entries after today), and
+  `addEntry(h, entry)`, the only writer. `addEntry` appends and sorts. It refuses only a
+  malformed day or a `validUntil` before `validFrom`. Overlaps are not an error, because the
+  latest `validFrom` decides.
+- **The type makes the old read fail.** A `Dated<number>` is not a `number`, so every place that
+  read the single value stops compiling once the field becomes a history. Each reader must name
+  its day. That makes the change of the type the to-do list of the migration.
+- **Withdrawing.** An entry that no document or run has used yet can be removed (a planned raise
+  that is dropped). Code checks that no copy names it. An entry that was used stays. A wrong
+  value is corrected by a new entry with the same `validFrom`, which wins by `enteredAt`. The
+  change log keeps both.
+- **Law data takes the same shape.** The VAT rates of `modules/ch/rates.yaml` gain `validFrom` and
+  `validUntil` in place of `superseded`, and the federal payroll rows already have `validFrom`.
+  The same `valueOn` reads them, so the app has one way of saying «valid on D». They stay app
+  data with their sources, maintained with each release.
+
+### 7.3 Where it is stored
+
+Inline, in the file that holds the setting: the field holds its list instead of one value. There
+is no separate history file. A history lives and travels with its record, it is merged by the
+record like any other field (returns, src/handover/records.ts), and git shows each added entry as
+a few added lines.
+
+| Store | Dated fields (the specs name each one) | Not dated, and why |
+|---|---|---|
+| `belege.workspace.yaml` (Firma) | name and address of the firm, `payTo` per currency (IBAN, QR-IBAN), `company.vat` (with yearly `validFrom`; `reportingSince` folds into it), the invoicing defaults (payment term, Skonto, dunning levels and fees, interest), the account choices (revenue, fees, write-offs) | layout, texts, number patterns, mail and sources: an issued document keeps its own copy, and nothing reads them for a past day |
+| `invoices.json` | a customer's address, terms, discount, revenue account; an article's price | a customer's number and language; an article's number and text (a new text is a new article, or simply a line typed by hand) |
+| `payroll.json` | an employee's contract, pension figures, allowances, tax at source, address, IBAN; the firm's plan (canton, each fund's and insurer's rates, VAV) | birth date and AHV number (one per life); entry and exit, which are derived from the contract's history |
+| `master-data/accounts.json`, knowledge, rules | none | a booking keeps the account it used, and a rule acts when it runs; an entry it booked stands |
+
+A dated field in YAML reads like this:
+
+```yaml
+company:
+  address:
+    - validFrom: 2024-01-01
+      enteredAt: 2024-01-03T09:12:00+01:00
+      value: { street: Musterweg 1, zip: "3000", town: Bern, country: CH }
+    - validFrom: 2026-12-01
+      enteredAt: 2026-11-15T10:02:11+01:00
+      value: { street: Beispielstrasse 4, zip: "3011", town: Bern, country: CH }
+```
+
+### 7.4 What a document or run keeps
+
+A document or run copies the values it used when it is issued or released. It does not copy the
+whole history.
+
+- **Issued invoice, credit note, reminder.** It keeps its lines with prices and rates, the
+  customer (address, terms), the sender (name, address, UID, `payTo`), the layout and the PDF
+  with its SHA-256. Most of this exists today (`Issued.customer`, `Issued.sender`,
+  `Issued.layout` in src/invoices/model.ts). The terms (due date, Skonto) join it.
+- **Released payroll run.** Each line keeps base, rate and source (exists). The run gains
+  `used: Array<{ path; validFrom; enteredAt }>`, which names each dated entry it read. With it,
+  code can tell exactly which runs a later change touches.
+- **A booking** is its own copy: account, code and amount are on the entry.
+
+A draft copies nothing yet. It reads the values on its date, and again whenever that date
+changes.
+
+### 7.5 A change dated in the past
+
+When a new entry is saved, code compares it with every copy (7.4) whose day it now covers:
+
+- **No copy differs:** the entry is saved, and the next draft or run reads it.
+- **A copy differs:** before the save, the card names each document or run, what it used, and what
+  holds now, and offers the area's ways on (7.1, point 4). The choice is an ordinary action: a
+  reopening, a correction line in the next run, a draft of a supplementary invoice, or nothing.
+  The entry itself carries no mark of the warning.
+- **«So lassen»** leaves a fact on the document or run, never a reminder: «berechnet mit 7.5 %;
+  seit 15.11.2026 gilt für September 7.8 %». The person can act on it later from there.
+- **A filed or sealed period** never changes. A correction is dated in the open period (payroll:
+  the correction run; invoicing: the credit note or the supplementary invoice), with `corrects`
+  where golden rule 1 asks for it.
+
+### 7.6 UI and the AI
+
+- **One field component for every dated setting.** It shows the current value with «ab
+  TT.MM.JJJJ», a planned entry below it («ab 01.01.2027: 9'500, geplant»), and a small fold
+  «Verlauf» with the earlier entries, each with its source document. No history screen of its
+  own.
+- **«Ändern»** asks for the new value and «gilt ab». The default is today. Payroll uses the first
+  day of the first month without a released run. A date that reaches a copy shows the warning of
+  7.5 on the same card, before anything is saved.
+- **The AI sidebar** proposes `{ path, value, validFrom }` («Mein Lohn ab Januar 9'000» → the
+  contract from 01.01.2027 with the amount 9'000). Code checks the proposal, writes the entry
+  through `addEntry`, and shows it on a card with the old and the new value. The person keeps the
+  card. Without the AI, the same form does the same.
+
+### 7.7 Migration and the change log
+
+- **One ladder step per store** that changes a single value into a history. The step writes
+  `[{ validFrom: <first day of the books>, enteredAt: <the step's time>, value }]`. The first day
+  of the books is the first day of the earliest year under `transactional-data/`. The step is
+  pure, and an older app refuses the file (5.2: the meaning of the field changed). The manifest
+  takes it in its next step (`WORKSPACE_SCHEMA` 5) and `invoices.json` in the step of invoicing
+  phase 1. `payroll.json` starts with histories at 1, so it needs no step. `company.vat.reportingSince`
+  becomes the first entry of the VAT setup's history.
+- **The history models the value. The change log records the edit.** Adding an entry is one
+  action, and the change log (6.3) writes one line for it, with who and when. For a dated field
+  that line holds only the added or withdrawn entry, not the whole list:
+  `"fields": { "contract": { "added": { "validFrom": "2027-01-01", "value": { … } } } }`. The
+  history answers «what held on D». The log answers «who entered that, and when». A reopening or
+  a correction that follows a warning is an action of its own, with its own lines.
+- **The registry** (4.3) tags a dated field (`@dated`), the generated JSON Schema has one
+  `$defs/Dated`, and the diagrams show the field as `«dated»`.
+
+## 8. BaseObject: the base of every stored object
+
+Approved by the owner on 2026-11-15. ADR 0004 is amended to match (its section «Amended
+2026-11-15»).
+
+Sharing (ADR 0016), an order API (2.3) and the change log (section 6) bring copies and clients
+of different ages that meet over the same records: a fiduciary's app a release behind, a shop
+sending orders, the share service passing records between two firms. ADR 0004 kept the envelope
+small because one app migrated one workspace. That premise no longer holds, so every stored
+object gets one common base, with a version per type. The pattern follows the base object of SAP
+Field Service Management's data API (its `SyncObjectDTO`, version 12). The name and the fields
+are our own.
+
+### 8.1 The shape
+
+```ts
+type Actor =
+  | { kind: 'person'; name?: string; email?: string; role?: 'owner' | 'fiduciary' }
+  | { kind: 'module'; id: string }          // classify, intake, invoicing, payroll, year-close …
+  | { kind: 'ai'; conversation?: string }   // the sidebar, acting on a person's wish
+  | { kind: 'share'; from: string }         // taken over from another copy (a return, a share)
+  | { kind: 'api'; client: string };        // a source or client of the API (a shop, a tracker)
+
+interface BaseObjectV1 {
+  id: string;                    // stable and random; existing ids (M2026-001, a receipt's SHA-256, a bank ref) stay
+  createdAt?: string;            // ISO time, only when known; never guessed from the booking date
+  createdBy?: Actor;
+  lastChangedAt?: string;
+  lastChangedBy?: Actor;         // a normal action; there is no override flag
+  rev?: number;                  // +1 per save of this record
+  origin?: 'import' | 'classify' | 'manual' | 'correction' | 'share' | 'api';
+  externalId?: string;           // the id in the source system: a bank ref, a shop order, the fiduciary's id; 1–512 characters
+  deleted?: boolean;             // nothing vanishes; a deletion against a change stays a visible conflict
+  customFields?: Record<string, CustomFieldValue>;   // the company's own fields (8.3)
+}
+// Later, with hosting and teams: owners?: PersonId[]; scope?: ScopeId[] (permissions, not data).
+
+interface JournalEntryV10 extends BaseObjectV1 { /* the entry's own fields */ }
+interface InvoiceV3 extends BaseObjectV1 { /* … */ }
+interface PayrollRunV1 extends BaseObjectV1 { /* … */ }
+```
+
+On disk a record names its type and version:
+
+```json
+{"type":"Invoice","v":3,"id":"inv_4Rk2…","createdAt":"2026-11-15T10:02:11+01:00","createdBy":{"kind":"person","name":"Sandra Huber"},"rev":4, …}
+```
+
+- **Only `id` is required.** Every other base field is optional, and an absent field means
+  unknown. Records of filed quarters keep their sealed shape: no migration adds a base field,
+  `type` or `v` to them, and the seal's canonical JSON skips absent fields, so their hashes stay
+  as they are. A record without `type` and `v` takes its type from the store it lies in and is
+  read as that type's version at the time it was sealed (the registry keeps the reader).
+- **A version per type, a ladder per type.** `JournalEntry`, `Invoice`, `PayrollRun` and every
+  other type has its own version and its own forward-only, pure ladder in the registry (4.3).
+  The version is in the type's name in code (`InvoiceV3`) and in `v` on disk. A file's own
+  version (`BOOKS_SCHEMA`, `INVOICES_SCHEMA`) stays for the file's layout. The step rule of 5.2
+  applies per type.
+- **Translation at the edges.** The share service and the API translate a record between the
+  versions both sides know, in both directions, through the same ladder. A record of a type
+  version the receiver cannot read is refused with words («Rechnung in Version 4, diese App
+  liest bis 3: bitte aktualisieren»). Nothing is written half.
+- **`rev` makes a conflict visible.** When two copies change the same record, the take-over sees
+  two records with the same `rev` base and different content. It shows both, and the person
+  decides (the three-way merge of returns, src/handover/records.ts). `rev` is a counter of saves,
+  not a lock.
+
+### 8.2 BaseObject, the change log and the dated values
+
+| | Holds | Answers |
+|---|---|---|
+| BaseObject | only the latest: who created it, who changed it last, when, `rev` | «wer hat das zuletzt geändert?» on the record itself, also in a copy without the log or git |
+| Change log (section 6) | every change, field by field, with who and when | «was hat sich wann geändert, und wer war es?» |
+| `Dated<T>` (section 7) | the value of a setting per day | «was galt am 1. September?» |
+
+The write door sets `lastChangedAt`, `lastChangedBy` and `rev` in the same action that writes the
+change-log line, so the two never disagree. Adding a dated entry changes its record like any
+other edit: one log line, `rev` + 1, `lastChangedBy` set.
+
+### 8.3 Custom fields («Eigene Felder»)
+
+A company may add fields of its own (a project code on an invoice, a cost centre on a booking, a
+personnel number on an employee). Following ADR 0015, the definitions live in the workspace,
+in `knowledge/custom-fields.yaml`:
+
+```yaml
+- name: kostenstelle
+  label: Kostenstelle
+  type: text            # text | number | date | boolean | choice
+  on: [JournalEntry, Invoice]
+- name: personalnummer
+  label: Personalnummer
+  type: text
+  on: [Employee]
+```
+
+The values sit in the record's `customFields`. The app shows them on the detail under «Eigene
+Felder», lets a person and the AI fill them, exports them, and checks each value against its
+definition. A value for a field the workspace does not define is kept and shown as unknown,
+never dropped. Custom fields take part in no figure and no VAT rule. A field that should drive
+a booking is a rule's condition or a dimension (`dimensions`, #127), not a custom field.
+
+### 8.4 What was taken from SAP's base object
+
+| SAP field or idea | Here |
+|---|---|
+| Stable random id | taken (`id`); existing ids stay |
+| Created and last changed, with who | taken (`createdAt`, `createdBy`, `lastChangedAt`, `lastChangedBy`); all optional, never guessed |
+| Revision counter | taken (`rev`), for visible conflicts between copies |
+| External id | taken (`externalId`) |
+| Soft delete | taken (`deleted`), as ADR 0004 already had |
+| User-defined fields | adapted: `customFields`, with definitions in the workspace |
+| DTO version per type, server translates | adapted: the version per type is in the name and on disk; the share service and the API translate, as there is no central server |
+| Owners, groups, organisational level | later, as permissions (`owners`, `scope`) once hosting and teams exist |
+| Branches, location, sync KPIs, sync status | skipped: no branch offices, no field locations, and sync state belongs to the transport, not to the record |
+
+## 9. Open questions for the owner
+
+Each is pre-decided. A plain «ok» accepts all four. Section 7 answers the owner's own question
+and asks nothing; section 8 is approved.
 
 1. **The change log (section 6.3): build it?** *Recommendation:* yes, in the order of 6.4. It is a
    new file with its own version; neither the books nor the manifest change format.
 2. **Q-B2 (e2e spec): the person in the books (`by.who`, `BOOKS_SCHEMA` 10)?**
-   *Recommendation:* no. The change log names the person on every line, and the books stay as
-   they are.
-3. **ADR 0004's one workspace `VERSION`.** *Recommendation:* keep the per-file versions as built
-   and drop the single version. The registry gives the workspace's format as the list of its
-   files' versions, which is what an app checks before it writes. ADR 0004 gets an amendment, and
+   *Recommendation:* no `by.who` of its own. The change log names the person on every line, and
+   BaseObject's optional `createdBy` and `lastChangedBy` (section 8) carry the latest on the record.
+   The entry's type version takes that field (`JournalEntryV10`), not a books step for `by.who`.
+3. **ADR 0004's one workspace `VERSION`.** *Recommendation:* drop the single version. Files keep
+   their versions for their layout, and records their per-type versions (section 8). The registry
+   gives the workspace's format as the list of those versions, which is what an app checks
+   before it writes. ADR 0004 gets an amendment, and
    the reserved `VERSION` leaves LAYOUT.
 4. **Orders (section 2.3): a store of their own per year (`orders/orders.jsonl`), not
    `invoices.json`?** *Recommendation:* yes. A shop's orders are many and belong to a year; an
