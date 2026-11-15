@@ -157,6 +157,16 @@ When `$V sender` says the sender is missing, unconfirmed or refused (the service
 node .claude/skills/verify/share-sender.mjs --check ~/.vanilla-accounting/e2e/share-sender   # «confirmed» once the mail arrived
 ```
 
+**A release's scoped pass.** A release runs the VM scenarios and persona walks of the zones its diff touches, not the whole set (docs/releasing.md, step 7):
+
+```bash
+npx tsx tools/release/zones.ts            # zones touched, «VM: these scenarios», «Personas: these walks», each with its reason
+$V scenario                               # every scenario of tools/release/zones.json
+$V scenario share-update                  # its steps
+```
+
+`install` is `npm run desktop:e2e -- --fresh` (plus the Gatekeeper path of features/desktop-install.md by hand), `update` is `npm run desktop:e2e` on the persistent VM; every other scenario is the few steps `$V scenario <id>` prints, driven with `$V` and `$A` as above. The share scenarios run on two VMs (macOS allows two), `share-link` first: `share-update`, `share-return` and `share-withdraw` go on from it, `file-open` needs a VM that never opened books. The full set only on request: `npx tsx tools/release/zones.ts --all`.
+
 **Cleanup.** `$V down my-vm` stops the tunnel it started, copies the app log, stops and deletes the VM; the evidence stays. `$V list` should not show it.
 
 **Gotchas.**
