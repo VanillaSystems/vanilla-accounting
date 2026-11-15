@@ -85,6 +85,13 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- **Checks run what a change can break** (for the people who work on the app): `npm run
+  test:changed` runs the types and the test files a change reaches by its imports and named paths
+  (tools/test/select.ts, tools/test/inputs.json), the guards, and the VAT golden master when a
+  figure can move; it falls back to the full suite and says why. A clean tree that passed the full
+  `npm test` is not run again (`--force` reruns). A cut release names its build `X.Y.Z` before the
+  tag, so the release's dmgs are built and smoke-tested once (docs/releasing.md).
+
 - The accent is Tram blue, the product colour: `#005b8c`, with its 10 % tint `#e6eff4` as the soft
   accent (before: `#0067b1` / `#e8f1f9`). White on it reads at 7.3:1, the blue on the tint at 6.3:1. The public demo's bar
   takes the same colour; the dark theme keeps its grey accent.

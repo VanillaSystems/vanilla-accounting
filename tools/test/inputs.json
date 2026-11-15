@@ -1,0 +1,49 @@
+{
+  "$comment": "Which tests a changed file can break, for what the import graph of tools/test/select.ts cannot see. Paths are globs (node:path matchesGlob) from the repository root. tests/test-select.test.ts checks every glob matches a file and every target exists.",
+  "full": [
+    { "paths": ["package.json", "package-lock.json", "tsconfig.json"], "why": "the packages and the compiler settings of every test" },
+    { "paths": ["tools/test/**"], "why": "the test runner and this selector" },
+    { "paths": ["tests/support/exit-with-parent.ts"], "why": "loaded into every test process by tools/test/run.sh" }
+  ],
+  "guards": {
+    "tests": ["tests/layers.test.ts", "tests/i18n.test.ts", "tests/check-public.test.ts"],
+    "why": "cheap guards, about a second each: the layers lint, the dictionaries, the leak guard's structural half"
+  },
+  "golden": {
+    "paths": [
+      "src/accounting/**", "src/books/**", "src/engines/**", "src/cli/vat-*", "src/providers/ech0217/**",
+      "modules/ch/tax-codes.yaml", "modules/ch/rates.yaml", "modules/ch/return.yaml", "modules/ch/return-net-rate.yaml",
+      "src/app/areas/vat/**/*.ts", "src/app/areas/vat/**/*.tsx",
+      "demo/**", "demo-*/**", "tests/golden/**", "tests/support/golden.ts"
+    ],
+    "tests": ["tests/vat-golden.test.ts", "tests/statements-golden.test.ts", "tests/classify-force.test.ts"],
+    "why": "the VAT golden master: a figure of a return, a statement or a booking may move"
+  },
+  "inputs": [
+    { "paths": ["modules/**"], "via": ["src/core/modules/load.ts"], "why": "jurisdiction modules, read by the module loader" },
+    { "paths": ["processes/**"], "via": ["src/knowledge/layers.ts", "src/cli/check-processes.ts"], "why": "flows and guides, read by the knowledge layers and check-processes" },
+    { "paths": ["workflows/**"], "via": ["src/workflows/load.ts"], "why": "the app's workflows, read by the workflow loader" },
+    { "paths": ["sources/**"], "via": ["src/platform/sources/index.ts", "src/platform/sources/ways.ts"], "why": "the app's own receipt sources" },
+    { "paths": ["examples/**"], "via": ["src/knowledge/cases.ts"], "why": "the casebook's cases and scenarios" },
+    { "paths": ["help/**"], "via": ["tools/help/build.ts"], "why": "the help pages" },
+    { "paths": ["reference/**"], "via": ["src/accounting/fx-rates.ts"], "why": "exchange rates and reference tables" },
+    { "paths": ["src/app/i18n/locales/**"], "tests": ["tests/i18n.test.ts"], "why": "the dictionaries" },
+    { "paths": ["desktop/**", "tools/desktop/**", "src/desktop/**"], "tests": ["tests/desktop*.test.ts"], "why": "the Mac app" },
+    { "paths": ["public-files.txt", "src/publish/**"], "tests": ["tests/check-public.test.ts", "tests/public-demo.test.ts"], "why": "what the public repository may hold" },
+    { "paths": ["index.html", "vite.config.ts", "public/**"], "via": ["tests/support/e2e.ts"], "why": "the UI build every browser test serves" },
+    { "paths": ["demo/**", "demo-*/**"], "via": ["tests/support/demo-workspace.ts"], "why": "the process's workspace of the suite (VANILLA_WORKSPACE)" }
+  ],
+  "noTest": {
+    "paths": ["docs/**", "*.md", "LICENSE", ".claude/**", ".github/**", ".gitignore", ".env.example", "ios/**", "tools/hooks/**", "tools/brand/**", "tools/eval/**", "tools/cases/**", "tools/layers/*.py"],
+    "why": "no test reads it"
+  },
+  "vm": {
+    "paths": [
+      "desktop/**", "src/desktop/**", "tools/desktop/**", "src/app/desktop/**",
+      "src/onboarding/**", "src/app/onboarding/**",
+      "src/share/**", "src/handover/**", "src/app/handover/**",
+      "src/secrets/**", "src/workspace/demo-copy.ts"
+    ],
+    "why": "installation, first start, the desktop shell, sharing or onboarding: run the VM tests (npm run desktop:e2e) before the release"
+  }
+}

@@ -6,7 +6,27 @@
 # next run and every server it starts reuse the compiled files.
 # A run ends after TEST_TIME_LIMIT seconds (1200, 20 minutes, unless set): it stops the processes it started (the test
 # runners, their test files and every browser and server those started), releases the lock and says so, with exit code 124.
+# A clean tree that passed the full suite before is not run again (tools/test/runs.mjs: same tree hash, same
+# result); `npm test -- --force` runs it anyway, and a green full run on a clean tree is recorded.
+# Test files as arguments (npm run test:changed passes its selection) run only those: nothing is looked up or recorded.
 set -e
+here=$(dirname "$0")
+force=
+files=
+for a in "$@"; do
+  case "$a" in
+    --force) force=1 ;;
+    *) files="$files $a" ;;
+  esac
+done
+tree=
+if [ -z "$files" ]; then
+  tree=$(node "$here/runs.mjs" tree 2>/dev/null || true)
+  if [ -z "$force" ] && [ -n "$tree" ] && node "$here/runs.mjs" check "$tree"; then exit 0; fi
+fi
+started=$(date +%s)
+# The types first (what package.json's pretest did); incremental, so an unchanged program takes seconds.
+if [ -z "$files" ]; then nice -n 10 npx tsc --noEmit --incremental --tsBuildInfoFile "$(git rev-parse --git-dir)/vanilla-tsc.tsbuildinfo"; fi
 base=${TMPDIR:-/tmp}
 base=${base%/}
 lock="$base/vanilla-test.lock"
@@ -69,11 +89,24 @@ suite() {
   shift
   VANILLA_WORKSPACE=$ws nice -n 10 node --import tsx --import ./tests/support/exit-with-parent.ts --test --test-concurrency="${TEST_CONCURRENCY:-3}" "$@"
 }
+# The other demo workspaces run the golden tests among the selection (all of them in a full run).
+among() { for f in "$@"; do case " $files " in *" $f "*) printf '%s ' "$f" ;; esac; done; }
 suites() {
-  suite demo "tests/**/*.test.ts"
-  suite demo-consulting tests/vat-golden.test.ts tests/statements-golden.test.ts tests/classify-force.test.ts
-  suite demo-schreinerei tests/vat-golden.test.ts tests/statements-golden.test.ts tests/classify-force.test.ts
-  suite demo-coiffeur tests/statements-golden.test.ts tests/classify-force.test.ts
+  if [ -z "$files" ]; then
+    suite demo "tests/**/*.test.ts"
+    suite demo-consulting tests/vat-golden.test.ts tests/statements-golden.test.ts tests/classify-force.test.ts
+    suite demo-schreinerei tests/vat-golden.test.ts tests/statements-golden.test.ts tests/classify-force.test.ts
+    suite demo-coiffeur tests/statements-golden.test.ts tests/classify-force.test.ts
+    return
+  fi
+  # shellcheck disable=SC2086
+  suite demo $files
+  g=$(among tests/vat-golden.test.ts tests/statements-golden.test.ts tests/classify-force.test.ts)
+  # shellcheck disable=SC2086
+  if [ -n "$g" ]; then suite demo-consulting $g; suite demo-schreinerei $g; fi
+  g=$(among tests/statements-golden.test.ts tests/classify-force.test.ts)
+  # shellcheck disable=SC2086
+  if [ -n "$g" ]; then suite demo-coiffeur $g; fi
 }
 # Both in the background: the shell runs a trap only once a command in the foreground has ended, so it waits instead.
 (sleep "$limit" && kill -USR1 $$) &
@@ -83,4 +116,8 @@ work=$!
 status=0
 wait "$work" || status=$?
 work=
+if [ "$status" -eq 0 ] && [ -z "$files" ]; then
+  if [ -n "$tree" ]; then (TMPDIR=$base node "$here/runs.mjs" record "$tree" "$started") || true
+  else echo "npm test: green, not recorded: the tree had uncommitted changes" >&2; fi
+fi
 exit "$status"

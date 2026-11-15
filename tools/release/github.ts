@@ -34,6 +34,10 @@ function blockers(): string[] {
   if (!run('git', ['branch', '-r', '--contains', tag]).split('\n').some((b) => b.trim() === 'origin/main')) {
     found.push(`${tag} is not on origin/main: merge and push main first`);
   }
+  // The dmgs are built once, on the release branch (docs/releasing.md): main's commit of the same tree is the same app.
+  const built = join(root, 'out', 'desktop', 'build.json');
+  const builtTree = existsSync(built) ? (JSON.parse(readFileSync(built, 'utf8')) as { tree?: string }).tree : undefined;
+  if (builtTree && builtTree !== run('git', ['rev-parse', 'HEAD^{tree}'])) found.push(`the dmgs were built from another tree (${builtTree.slice(0, 12)}): build again on this commit, or on the release branch head of the same tree`);
   return found;
 }
 const blocked = blockers();
