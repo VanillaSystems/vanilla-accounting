@@ -172,9 +172,8 @@ Elsewhere:
 6. **Year end.** No check that 2270 is explained at 31.12. (Schlussabrechnung against the Akontos),
    no check that 5000 equals the sum of the payslips' gross, no per-employee year totals, no
    Lohnausweis data.
-7. **No import of a payroll program's journal.** Bexio, Abacus, Sage, Run my Accounts and the
-   Treuhänder all export a «Lohnjournal» or «Buchungsjournal». Today only their PDFs reach the
-   app.
+7. **No import of a payroll program's journal.** Payroll programs and the Treuhänder all
+   export a «Lohnjournal» or «Buchungsjournal». Today only their PDFs reach the app.
 8. **Salary data and the AI.** Payslips go through the model like any receipt (prompts carry their
    text). AHV numbers and salaries reach the model provider. Nothing marks them.
 9. **#383** (the wage rule from a task books nothing when kept) and **#359** (without an AI, book
@@ -675,7 +674,7 @@ setup lives in its own store. Decided: `payroll.json`, not a `company.payroll` m
 (§13, decision 6).
 
 ```ts
-// Dated<T> and DatedEntry<T>: docs/specs/domain-model.md §7.2 (validFrom, validUntil?, value, enteredAt, source?).
+// Dated<T> and DatedEntry<T>: docs/specs/domain-model.md §5.2 (validFrom, validUntil?, value, enteredAt, source?).
 interface PayrollStore {
   schema: 1;
   plan: {                                   // the firm's contracts; each a history, read on the run's days
@@ -992,7 +991,7 @@ Not covered, by the owner's exception for security boundaries and by golden rule
 
 The owner asked: «are we also taking change into consideration? all of those fees and
 everything, they can be changed, right? So a Lohn can be changed, a Beitrag can be changed».
-Yes. Payroll follows the rule of docs/specs/domain-model.md §7 (branch `spec/domain-model`).
+Yes. Payroll follows the rule of docs/specs/domain-model.md §5 (branch `spec/domain-model`).
 Every value a run reads is a dated history (`Dated<T>`: `validFrom`, optional `validUntil`, never
 overwritten), and a released run keeps the entries it used.
 
@@ -1056,8 +1055,7 @@ Lauf» and «So lassen»:
   reminder: it is not on the home screen and nags nobody.
 - **The draft run** is not released, so it simply reads the new value.
 
-Each choice is an ordinary action, recorded in the run's history and the change log (domain
-model §6.3). The entry carries no warning mark, and there is no override flag (§15).
+Each choice is an ordinary action, recorded in the run's history like any other. The entry carries no warning mark, and there is no override flag (§15).
 
 ### 16.4 UI and the AI
 
@@ -1107,8 +1105,9 @@ Figures 2026 (checked 2026-11-13):
   Helvetia Kennzahlen Säule 2: https://www.helvetia.com/ch/consulta/de/home/gut-zu-wissen/kennzahlen-saeule-2.html;
   Raiffeisen Sozialversicherungskennzahlen 2026 (2027 values):
   https://www.raiffeisen.ch/winterthur/de/ueber-uns/news/rb/sozialversicherungskennzahlen-2026.html
-- Family allowances: bexio summary of FamZG Art. 5 (215/268 from 1.1.2026),
-  https://www.bexio.com/de-CH/blog/view/familienzulagen. Verify against the FamZV text on fedlex.
+- Family allowances: FamZV (Verordnung über die Familienzulagen), which adjusts the minimums
+  of FamZG Art. 5 to prices (215/268 from 1.1.2026), on fedlex.admin.ch. The figures are to
+  verify against the FamZV text.
 - ESTV Quellensteuer: https://www.estv.admin.ch/de/quellensteuer; tariff files:
   https://www.estv.admin.ch/de/quellensteuertarife-fuer-uebrige-einkuenfte; publication 2026:
   https://www.estv.admin.ch/de/newnsb/zvrg4CYct6xo; record format (2025):
