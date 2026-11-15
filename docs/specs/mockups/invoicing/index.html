@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:,">
+<title>Invoicing · Prototype</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@700;800&family=Instrument+Sans:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+:root { --bg: #ffffff; --ink: #0b1220; --ink-2: #4a5263; --muted: #6e7685; --line: #e7eaf0; --accent: #0067b1; --page: #eceff4; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--page); color: var(--ink); font: 400 15px/1.55 "Instrument Sans", system-ui, sans-serif; }
+.doc { max-width: 1180px; margin: 0 auto; padding: 48px 16px 120px; display: grid; gap: 26px; }
+h1 { font: 800 34px/1.1 "Hanken Grotesk", system-ui, sans-serif; margin: 0; }
+h2 { font: 700 22px/1.2 "Hanken Grotesk", system-ui, sans-serif; margin: 0; }
+p, li { color: var(--ink-2); max-width: 82ch; }
+p { margin: 0; }
+a { color: var(--accent); font-weight: 600; text-decoration: none; }
+a:hover { text-decoration: underline; }
+.shot { display: grid; gap: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+.frame { position: relative; width: 100%; aspect-ratio: 1440 / 900; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; container-type: inline-size; }
+.frame iframe { position: absolute; top: 0; left: 0; width: 1440px; height: 900px; border: 0; transform-origin: 0 0; transform: scale(calc(100cqw / 1440px)); pointer-events: none; }
+code { font-family: "Geist Mono", ui-monospace, monospace; font-size: 13px; }
+ol, ul { margin: 0; padding-left: 22px; display: grid; gap: 10px; }
+ol li b { color: var(--ink); }
+.go { white-space: nowrap; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--ink-2); }
+th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+</style>
+</head>
+<body>
+<div class="doc">
+  <h1>Invoicing · Prototype</h1>
+  <p>A clickable prototype of <a href="../../invoicing.md">docs/specs/invoicing.md</a>, phases 1 to 3, for the owner to click through. It is built from a capture of the real Rechnungen area: the app's dev server ran read-only on the demo workspace (Muster Kaffee GmbH), and its rendered shell and CSS were saved as <code>app.html</code>. <code>app.js</code> plays the list, the A4 sheet, the margin and the dialogs with the app's own class names. Only the parts the spec adds are written by hand, with the app's tokens. With «Neues markieren» on, each new part wears a dashed blue outline. Nothing talks to the app, and all data are demo data.</p>
+
+  <div class="shot">
+    <h2>Open the prototype</h2>
+    <p>The dark bar above the app switches the firm (Muster Kaffee GmbH, or Salon Beispiel for the coiffeur), the VAT basis (vereinnahmt or vereinbart, which changes what the margin's «Buchungen» and the write-off dialog say), reads a simulated bank statement of 14.11.2026, and starts over. The margin of a document is faint until the mouse is over it, as in the app.</p>
+    <a href="prototype.html#/invoices">Open the prototype →</a>
+    <div class="frame"><iframe src="app.html#/invoices" title="Rechnungen, Vorschau" tabindex="-1" loading="lazy"></iframe></div>
+  </div>
+
+  <h2>Walk-through</h2>
+  <ol>
+    <li><b>The list and its open items.</b> Rechnungen as today, with three overdue invoices, plus the new views: Offerten, Offene Posten, Wiederkehrend, Artikel. Offene Posten groups by customer with age bands and prints or exports the Debitorenliste (P1.5). <a class="go" href="prototype.html#/invoices">List →</a> · <a class="go" href="prototype.html#/invoices/open-items">Offene Posten →</a></li>
+    <li><b>A new invoice.</b> «Neue Rechnung», pick Beispiel Bistro AG, then «＋ Aus Artikelliste» (Hausmischung at 2.6 %, Barista-Schulung at 8.1 %), «＋ Titel» and «＋ Zwischentotal» (P1.2). The totals split per rate. «Vorschau» shows the QR-bill in CHF with the QR-IBAN and a QR reference. «Ausstellen» gives the number 2026-009 and opens the send dialog with the PDF and the mail. <a class="go" href="prototype.html#/invoices/new">New invoice →</a></li>
+    <li><b>A EUR invoice.</b> 2026-005 to Kaffeehaus Beispiel GmbH: the IBAN with an RF (SCOR) reference and no QR-bill. In Firma › Rechnungslayout, typing a QR-IBAN for EUR brings a warning: what is off (since QR-bill v2.4 the QR-IBAN is for CHF only), the rule (SIX IG v2.4, v2.3 valid until November 2027) and what follows; «Trotzdem speichern» keeps it, and new EUR invoices then carry it, issued ones stay as they were (F1, P1.1, spec 4.11). A new invoice for Kaffeehaus Beispiel starts in EUR, at 0 % with the export note. <a class="go" href="prototype.html#/invoices/2026-005">EUR invoice →</a> · <a class="go" href="prototype.html#/company/invoice-layout">Settings →</a></li>
+    <li><b>A quote in its own series, with optional lines.</b> OF-2026-004 for the Thun branch, with title and subtotal lines and two lines marked «Option»: priced and shown, in brackets, not in the total. «In Rechnung umwandeln» asks which options come along; the picked ones become ordinary lines, the rest stay on the quote. The draft names its origin and the chain; issuing it takes the next invoice number, so the invoice series has no gaps (decision 7.5). In a new quote draft, «opt.» beside a line marks it optional. <a class="go" href="prototype.html#/invoices/quotes/OF-2026-004">Quote →</a></li>
+    <li><b>Payments matched.</b> «camt.053 vom 14.11. einlesen»: 2026-006 is paid by its QR reference; 2026-008 was paid within 10 days less 2 % and code writes the Skonto off (P1.3); 2026-005 is paid EUR 2.50 short, below the CHF 5 limit, so the app proposes «als Gebühr ausbuchen». <a class="go" href="prototype.html#/invoices/2026-008?import=1">After the import →</a></li>
+    <li><b>A short payment written off.</b> 2026-003 was paid CHF 840.00 of 861.84 with the number in the text: a proposal, «Zuordnen». The rest of 21.84 is above the limit, so the app asks: «Rest ausbuchen» with a reason. On the cash basis nothing is booked; switch the bar to «vereinbart» and the dialog and the margin show <code>RE-2026-003-wo-1</code>, 3800 / 1100 with −V26, in Q4 2026, box 235 (P1.4). <a class="go" href="prototype.html#/invoices/2026-003?import=1">Cash basis →</a> · <a class="go" href="prototype.html#/invoices/2026-003?import=1&amp;basis=agreed">Agreed basis →</a></li>
+    <li><b>A reminder, default interest off.</b> «1. Mahnung» on 2026-003 shows the reminder on the sheet; its margin says «Verzugszins: aus» and links to the setting (decision 7.10). Switch it on in Firma › Rechnungslayout and the next reminder carries 5 % from the due date as a line without VAT. <a class="go" href="prototype.html#/invoices/2026-003">Reminder →</a> · <a class="go" href="prototype.html#/invoices/2026-003?interest=1">With interest on →</a></li>
+    <li><b>A credit note set off as a deduction line.</b> Credit note 2026-004 (settlement «verrechnen») stands as a deduction line «Gutschrift 2026-004 … verrechnet» on the next invoice to Muster Hotel GmbH; the QR amount is the remainder; issuing records the set-off on both documents (F5, decision 7.6, P3.5). <a class="go" href="prototype.html#/invoices/draft-d2">Draft with deduction →</a> · <a class="go" href="prototype.html#/invoices/2026-004">Credit note →</a></li>
+    <li><b>A recurring invoice.</b> «Kaffee-Abo Hotelküche», monthly, «ausstellen und senden»; code issued and sent 2026-008 on 01.11. Only the device that holds the books issues (decision 7.4) (P3.1). <a class="go" href="prototype.html#/invoices/recurring/r1">Template →</a></li>
+    <li><b>Articles, hours, re-billed costs, customer defaults.</b> The article list (price and rate, no stock), «＋ Stunden übernehmen» (a pasted table or CSV, grouped by text or one line per row), «＋ Spesen weiterverrechnen» (receipts tagged with the customer, each offered once) (P3.2 to P3.4), and customers with number, currency, contacts and «nie mahnen». <a class="go" href="prototype.html#/invoices/articles">Articles →</a> · <a class="go" href="prototype.html#/invoices/customers/c5">Customer «nie mahnen» →</a></li>
+    <li><b>A Quittung for the coiffeur.</b> Salon Beispiel, not registered: no VAT column. In the draft for Nina Muster, «Bezahlt bei Ausstellung: Bar», then «Quittung ausstellen»: title «Quittung», the next invoice number, «Bezahlt am … in bar», no QR-bill, booked 1000 Kasse / 3400 on the day, nothing left open (decision 7.11, P3.6). <a class="go" href="prototype.html#/invoices/draft-sd1?firm=salon">Quittung →</a></li>
+    <li><b>One editor, the next document in one click.</b> Every kind (Offerte, Auftragsbestätigung, Lieferschein, Rechnung, Gutschrift) is the same A4 editor. «Folgedokument erstellen» makes the next document of the chain with every line copied: from a quote an order confirmation, a delivery note or an invoice; from an order confirmation a delivery note or an invoice; from an invoice a delivery note or a credit note. Each document shows its chain, each step a link: OF-2026-002 → AB-2026-001 → LS-2026-001 → 2026-006. The delivery note prints no prices and books nothing. <a class="go" href="prototype.html#/invoices/2026-006">Chain →</a> · <a class="go" href="prototype.html#/invoices/quotes/AB-2026-001">Order confirmation →</a> · <a class="go" href="prototype.html#/invoices/quotes/LS-2026-001">Delivery note →</a></li>
+    <li><b>Four figures on every invoice.</b> Betrag · erhalten · gutgeschrieben · offen, each from the facts: received from the bank statement (matched by code), credited from credit notes and write-offs, open as the rest. 2026-002 shows the credit note 2026-004 and the customer's credit of 33.86 still to set off; after the import, 2026-003 shows 840.00 received and 21.84 open. <a class="go" href="prototype.html#/invoices/2026-002">Credit in the figures →</a> · <a class="go" href="prototype.html#/invoices/2026-003?import=1">Short payment →</a></li>
+    <li><b>Warn, then the person decides.</b> Where the app used to refuse, it now says what is off, which rule it touches and what follows, and offers «Trotzdem …»; the action is recorded like any other, with no override mark. Try it: «Stornieren» on the paid 2026-001 (or «Gutschrift statt Storno»), «Folgedokument erstellen» on the expired OF-2026-003, «Ausstellen» on a new invoice with an empty line, and the QR-IBAN for EUR in the settings. <a class="go" href="prototype.html#/invoices/2026-001">Paid invoice →</a> · <a class="go" href="prototype.html#/invoices/quotes/OF-2026-003">Expired quote →</a></li>
+    <li><b>Facts stay by code.</b> «gesendet» comes from the sent log (time, recipient, checksum), «bezahlt» and «offen» from the bank statement; there is no button to mark a document sent or paid. Only what the customer alone knows (a quote accepted or declined by phone) is a click, and a follow-up document says it too. <a class="go" href="prototype.html#/invoices/quotes/OF-2026-004">Quote margin →</a></li>
+  </ol>
+
+  <h2>What is real and what is new</h2>
+  <table>
+    <thead><tr><th>From the app as it is</th><th>Added by hand for the spec</th></tr></thead>
+    <tbody>
+      <tr><td>Shell, navigation, top bar, list with counts and groups, open sum, the A4 sheet with logo, address window and table, the QR-bill (its QR code is the one of the captured invoice 2026-006), margin sections, send dialog, the demo's customers and invoices 2026-001 to 2026-007</td><td>Views Offerten, Offene Posten, Wiederkehrend, Artikel; quote OF-2026-004; invoice 2026-008 from a template; «Rest ausbuchen» and its bookings per basis; the payment proposal and fee proposal; Skonto in the terms; title and subtotal lines; units m², m, m³, l, kg, Monat; the deduction line of a credit note; «Bezahlt bei Ausstellung» and the Quittung; the new rows of Firma › Rechnungslayout; the coiffeur's invoices; from the market review of 2026-11-15: order confirmation AB-2026-001 and delivery note LS-2026-001, «Folgedokument erstellen» and the chain, optional lines on quotes, the four figures, the warnings with «Trotzdem …»</td></tr>
+    </tbody>
+  </table>
+  <p>The market review of 2026-11-15 compared the spec with a Swiss market leader's invoicing; only patterns were taken, nothing of its look or words. Not in this prototype: partial and final invoices with retention (phase 2), the dunning run, currencies beyond CHF and EUR, the import of open invoices and delivery channels (phase 4), and the second net tax rate (F3). The bookings and the EUR rates shown are worked by hand for the demo, not by the engine.</p>
+</div>
+</body>
+</html>
