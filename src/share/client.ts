@@ -66,6 +66,9 @@ export interface Invited { sentAt: string; invites: number; limit: number }
 
 export type ShareClient = ReturnType<typeof shareClient>;
 
+/** Every opening names the protocol it speaks: the service answers an app of an older one «appTooOld» (426) instead of a download it would read as a broken link. */
+export const OPEN = { v: 3 } as const;
+
 /** The most an API answer may be, and how long a call and an object's transfer may take. */
 const ANSWER_BYTES = 1024 * 1024;
 const CALL_MS = 60_000;
@@ -181,7 +184,7 @@ export function shareClient(service: string, fetcher: typeof fetch = fetch) {
     complete: (id: string, token: string) => call<ShareStatus>('POST', `/api/shares/${id}/complete`, {}, token),
     info: (id: string) => call<ShareInfo>('GET', `/api/shares/${id}`),
     /** One opening (counted for the sharer's card): the file's short-lived download. A return's needs the sharer's revoke token. */
-    open: (id: string, token?: string) => call<Opening>('POST', `/api/shares/${id}/open`, {}, token),
+    open: (id: string, token?: string) => call<Opening>('POST', `/api/shares/${id}/open`, OPEN, token),
     /**
      * The file from its download URL, at most `max` bytes (the size the opening named): a source that
      * sends more is cut off, by its Content-Length or while it streams. Each chunk goes to `sink`.

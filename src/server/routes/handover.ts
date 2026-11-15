@@ -81,6 +81,9 @@ export function handoverRefusal(e: unknown): unknown {
 function guarded<T>(fn: () => T): T {
   try { return fn(); } catch (e) { throw handoverRefusal(e); }
 }
+async function guardedAsync<T>(fn: () => Promise<T>): Promise<T> {
+  try { return await fn(); } catch (e) { throw handoverRefusal(e); }
+}
 
 /** The sharer: who the books are handed over by. The person of this Mac is not known yet (B2): the company's owner stands for her. */
 const sharer = (): Party => ({ name: WS.company.owner || WS.company.name });
@@ -176,16 +179,16 @@ router.get('/api/handover/document', (_req, res) => {
   res.json({ document: isDurchsicht(WS.paths.root) ? documentState(WS) ?? null : null });
 });
 
-router.post('/api/handover/document/save', (req, res) => {
+router.post('/api/handover/document/save', async (req, res) => {
   if (!isDurchsicht(WS.paths.root)) throw new RequestError(409, 'Sichern in eine Freigabe-Datei gibt es nur in einer Durchsicht.', { code: 'shareWrongKind' });
   const { to, auto } = (req.body ?? {}) as { to?: unknown; auto?: unknown };
   if (to !== undefined && (typeof to !== 'string' || !isAbsolute(to))) throw new RequestError(400, 'to: ein ganzer Pfad.');
-  res.json({ document: guarded(() => saveDocument(WS, { ...(typeof to === 'string' ? { to } : {}), ...(auto === true ? { auto: true } : {}) })) });
+  res.json({ document: await guardedAsync(() => saveDocument(WS, { ...(typeof to === 'string' ? { to } : {}), ...(auto === true ? { auto: true } : {}) })) });
 });
 
-router.post('/api/handover/document/file', (_req, res) => {
+router.post('/api/handover/document/file', async (_req, res) => {
   if (!isDurchsicht(WS.paths.root)) throw new RequestError(409, 'Nur in einer Durchsicht.', { code: 'shareWrongKind' });
-  const made = guarded(() => documentBytes(WS));
+  const made = await guardedAsync(() => documentBytes(WS));
   sendFile(res, made.name, made.bytes);
 });
 

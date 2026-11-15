@@ -100,8 +100,10 @@ The page shows it as escaped text; the download's file name is made from it (§4
    ones). At most 10 e-mails per share (invitations and update notices together) and 100 per day for the
    whole service (Resend's account limit). Without the service's mail key the app offers «Link kopieren»
    (`503 mailOff`).
-5. **Open** (`POST /api/shares/<id>/open`) needs nothing but the id. It records an opening and returns a
-   **download**: a presigned GET at the storage, which must be used within 5 minutes (the download itself
+5. **Open** (`POST /api/shares/<id>/open`, body `{"v": 3}`) needs nothing but the id. Without the
+   protocol marker (0.6.1 and older send `{}`) the service answers `appTooOld` 426 and counts no opening,
+   so an older app says «bitte aktualisieren» instead of «Link beschädigt». It records an opening and
+   returns a **download**: a presigned GET at the storage, which must be used within 60 seconds (the download itself
    may take as long as it needs), answered with `Content-Type: application/octet-stream` and
    `Content-Disposition: attachment; filename="<ASCII name>"; filename*=UTF-8''<name>`. The name is
    `<Firma> – Buchhaltung (<Datum>).vanillashare` (without a company `Buchhaltung (<Datum>).vanillashare`;
@@ -188,12 +190,24 @@ The owner's decision of 2026-11-15 («the share file is the document»; `src/han
   «Zurückschicken» would send; the hand-over's own members stay as they came, so the file still proves its
   version. The window's title names the file, «ungespeichert» while his changes are not all in it.
 - «Sichern» (⌘S) writes the file beside it and renames it over the old one, so a crash leaves the old file
-  whole. Once he saved into a file himself, the app also saves by itself when he has been idle a while and
-  when the window closes (before, macOS may ask about the file's folder, which the app does only when he
-  asked). A file that moved, went or cannot be written is said, with «Sichern unter…».
-- Opened on another Mac, the file brings his changes along. A newer file (after «Aktualisieren») opened
+  whole (a `.<name>.saving-<pid>` left by a crash goes the next time the file is opened or saved). The
+  hand-over's members are copied as they are, in chunks, never packed again, so a large copy saves without
+  holding the app. Once he saved into a file himself, the app also saves by itself when he has been idle a
+  while, when the window closes and when the app quits (⌘Q, SIGTERM: the quit waits for that save, at most
+  35 seconds) (before, macOS may ask about the file's folder, which the app does only when he asked). A file
+  that moved, went or cannot be written is said, with «Sichern unter…».
+- The app writes over the file at the document's path only when it is the file the app last wrote or
+  opened there, untouched since, or a hand-over of the copy's very version and share. Anything else put
+  there (a newer state, another share's file) stays as it is: the bar says «andere Datei am Ort», the app
+  saves there by itself no more, and «Sichern unter…» writes a new file (`shareDocOther`).
+- Opened on another Mac, the file brings his changes along. Opened again where the copy is, it never takes
+  back a change he made in the copy after saving the file: changes the copy holds already, or records he
+  changed since, keep the copy's version. A newer file (after «Aktualisieren») opened
   over a copy with his changes carries them over, says so, and becomes the copy's document; the older
-  file stays as it was. Changes in a period filed meanwhile are dropped, said, and the seals stay whole.
+  file stays as it was. A newer state that comes without its file (his copy asking its share when it opens,
+  a file dropped in the browser) moves the copy forward and leaves his file where it is: nothing lands in
+  Downloads unasked, and his file holds the older state («ungespeichert») until he, or the app by itself,
+  saves the new state into it. Changes in a period filed meanwhile are dropped, said, and the seals stay whole.
 - Sending back: he mails the file (any transfer), or «An <Name> zurückschicken» sends only the return
   through the share. The sharer's app knows a mailed-back file by its version (one her books wrote, of her
   firm) and shows his changes for review, never a copy of her own books; her own file without his changes

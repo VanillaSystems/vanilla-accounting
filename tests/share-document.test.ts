@@ -13,13 +13,16 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { startApi, type ApiServer } from './support/api-server.js';
-import { readPackage, SAVED_MEMBER } from '../src/handover/package.js';
+import { readPackage, SAVED_MEMBER, writePackage, type ShareTag } from '../src/handover/package.js';
 import { writeAtomically, type DocumentState } from '../src/handover/document.js';
 import { isVanillaPath } from '../src/desktop/open-files.js';
 import { shareClient } from '../src/share/client.js';
-import { receivePackage } from '../src/share/transport.js';
+import { receivePackage, sendPackage } from '../src/share/transport.js';
+import type { ShareClient } from '../src/share/client.js';
+import { crc32 } from 'node:zlib';
+import { unzipSync } from 'fflate';
 import { progressLine } from '../src/desktop/progress-text.js';
 import { textsIn } from '../src/app/i18n/texts-in.js';
 
@@ -28,14 +31,18 @@ const ERNST = { name: 'Ernst Beispiel', email: 'ernst@example.ch' };
 let sandra: ApiServer;
 let ernst: ApiServer;
 let ernst2: ApiServer;
+let ernst3: ApiServer;
+let ernst4: ApiServer;
 
 before(async () => {
   const fixture = 'tests/fixtures/period-lock-index.json';
   sandra = await startApi(fixture, { VANILLA_DURCHSICHT_DIR: join(dir, 'sandra-copies') });
   ernst = await startApi(fixture, { VANILLA_DURCHSICHT_DIR: join(dir, 'ernst-copies') });
   ernst2 = await startApi(fixture, { VANILLA_DURCHSICHT_DIR: join(dir, 'ernst2-copies') });
+  ernst3 = await startApi(fixture, { VANILLA_DURCHSICHT_DIR: join(dir, 'ernst3-copies') });
+  ernst4 = await startApi(fixture, { VANILLA_DURCHSICHT_DIR: join(dir, 'ernst4-copies') });
 });
-after(async () => { await sandra?.stop(); await ernst?.stop(); await ernst2?.stop(); });
+after(async () => { await sandra?.stop(); await ernst?.stop(); await ernst2?.stop(); await ernst3?.stop(); await ernst4?.stop(); });
 
 const downloads = join(dir, 'Downloads');
 mkdirSync(downloads, { recursive: true });
@@ -53,6 +60,12 @@ async function shareFile(name: string): Promise<string> {
 /** A double-click in Finder: the file's bytes and its path, as the Mac app sends them (src/desktop/open-files.ts). */
 async function open(api: ApiServer, path: string): Promise<{ status: number; json: Record<string, unknown> }> {
   const res = await api.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Vanilla-File': encodeURIComponent(path) }, body: new Uint8Array(readFileSync(path)) });
+  return { status: res.status, json: await res.json() as Record<string, unknown> };
+}
+
+/** A drop in the browser: the bytes only, no path (the copy's document stays as it was). */
+async function drop(api: ApiServer, path: string): Promise<{ status: number; json: Record<string, unknown> }> {
+  const res = await api.fetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: new Uint8Array(readFileSync(path)) });
   return { status: res.status, json: await res.json() as Record<string, unknown> };
 }
 
@@ -206,4 +219,118 @@ test('the progress window says how far in the person\'s words: «84 von 196 MB»
   assert.equal(line(84 * 1024 * 1024, 196 * 1024 * 1024), '84 von 196 MB');
   assert.equal(line(1.5 * 1024 * 1024, 4 * 1024 * 1024), '1.5 von 4.0 MB');
   assert.equal(de('desktop.shareLoading', { name: 'Anna Muster' }), 'Lädt die Buchhaltung von Anna Muster');
+});
+
+test('559-1: another file put at the document\'s path (a newer state) is never written over, by itself or by «Sichern»; «Sichern unter…» still works', async () => {
+  const mine = join(dir, 'r1', 'Muster – Buchhaltung.vanillashare');
+  mkdirSync(join(dir, 'r1'), { recursive: true });
+  writeFileSync(mine, readFileSync(await shareFile('r1-v2.vanillashare')));
+  assert.equal((await open(ernst3, mine)).status, 200);
+  const id = (await entries(ernst3)).find((e) => e.date > '2026-06-30')!.id;
+  await ernst3.send('PATCH', `/api/journal-entries/${id}`, { description: 'Ernst r1 A' });
+  assert.equal((await ernst3.send('POST', '/api/handover/document/save', {})).status, 200);
+  // A newer state replaces the file at the same path (Finder, a sync, a second download).
+  const newer = readFileSync(await shareFile('r1-v3.vanillashare'));
+  writeFileSync(mine, newer);
+  await ernst3.send('PATCH', `/api/journal-entries/${id}`, { description: 'Ernst r1 B' });
+  const auto = await ernst3.send('POST', '/api/handover/document/save', { auto: true });
+  assert.equal(auto.status, 409, JSON.stringify(auto.json));
+  assert.equal(auto.json.code, 'shareDocOther');
+  assert.deepEqual(readFileSync(mine), newer, 'the newer file stays as it was');
+  const d = (await doc(ernst3))!;
+  assert.equal(d.other, true, 'the bar says so');
+  assert.equal((await ernst3.send('POST', '/api/handover/document/save', { auto: true })).status, 200, 'by itself: nothing more is tried');
+  const by = await ernst3.send('POST', '/api/handover/document/save', {});
+  assert.equal(by.json.code, 'shareDocOther');
+  assert.deepEqual(readFileSync(mine), newer);
+  const elsewhere = join(dir, 'r1', 'Kopie.vanillashare');
+  assert.equal((await ernst3.send('POST', '/api/handover/document/save', { to: elsewhere })).status, 200);
+  assert.ok(JSON.stringify(readPackage(readPackage(readFileSync(elsewhere)).saved!).changes).includes('Ernst r1 B'));
+  assert.equal((await doc(ernst3))!.other, undefined, 'the new file is the document');
+});
+
+test('559-2: reopening his own file keeps the changes he made after saving it (saved A, unsaved B: B stays)', async () => {
+  const mine = join(dir, 'r2', 'Muster – Buchhaltung.vanillashare');
+  mkdirSync(join(dir, 'r2'), { recursive: true });
+  writeFileSync(mine, readFileSync(await shareFile('r2.vanillashare')));
+  assert.equal((await open(ernst4, mine)).status, 200);
+  const id = (await entries(ernst4)).find((e) => e.date > '2026-06-30')!.id;
+  await ernst4.send('PATCH', `/api/journal-entries/${id}`, { description: 'Fassung A' });
+  assert.equal((await ernst4.send('POST', '/api/handover/document/save', {})).status, 200);
+  await ernst4.send('PATCH', `/api/journal-entries/${id}`, { description: 'Fassung B' });
+  const again = await open(ernst4, mine);
+  assert.equal(again.status, 200, JSON.stringify(again.json));
+  assert.equal((await entries(ernst4)).find((e) => e.id === id)?.description, 'Fassung B', 'the newer change in the copy stays');
+  assert.equal((await doc(ernst4))!.dirty, true, 'and is still unsaved');
+  // A file saved elsewhere (his other Mac) whose change he has overwritten here since: the copy's version stays too.
+  const other = readPackage(readFileSync(mine));
+  assert.ok(other.saved);
+});
+
+test('559-9: a newer hand-over dropped without its file moves the copy forward; «Sichern» brings his own file to that state', async () => {
+  const mine = (await doc(ernst4))!.path;
+  const newer = await shareFile('r9-newer.vanillashare');
+  const dropped = await drop(ernst4, newer);
+  assert.equal(dropped.status, 200, JSON.stringify(dropped.json));
+  const v = readPackage(readFileSync(newer)).index.version.n;
+  assert.equal((await doc(ernst4))!.path, mine, 'the document is still his file');
+  assert.equal((await doc(ernst4))!.dirty, true, 'which holds the older state');
+  assert.equal((await ernst4.send('POST', '/api/handover/document/save', {})).status, 200);
+  const now = readPackage(readFileSync(mine));
+  assert.equal(now.index.version.n, v, 'his file holds the copy\'s state now');
+  assert.ok(JSON.stringify(readPackage(now.saved!).changes).includes('Fassung B'));
+  const file = await ernst4.fetch('/api/handover/document/file', { method: 'POST' });
+  assert.equal(file.status, 200);
+  assert.equal(readPackage(new Uint8Array(await file.arrayBuffer())).index.version.n, v, '«Sichern unter…» in the browser writes the same state');
+});
+
+test('559-8: a save left half way (.<name>.saving-<pid>) is cleared when the file is opened again', async () => {
+  const mine = (await doc(ernst4))!.path;
+  const stale = join(dirname(mine), `.${basename(mine)}.saving-99999999`);
+  writeFileSync(stale, 'half');
+  assert.equal((await open(ernst4, mine)).status, 200);
+  assert.ok(!existsSync(stale));
+});
+
+test('559-10: two downloads of the same share at once land in two files, never one', async () => {
+  const size = 512 * 1024 + 3;
+  const srv = createServer((req, res) => {
+    if (req.url === '/api/shares/abc/open') { res.writeHead(200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify({ download: { object: 'package', method: 'GET', url: `http://127.0.0.1:${(srv.address() as AddressInfo).port}/storage`, headers: {} }, filename: 'Muster‮gnp.vanillashare', bytes: size, expiresAt: new Date().toISOString() })); return; }
+    res.writeHead(200, { 'Content-Length': String(size) });
+    setTimeout(() => res.end(Buffer.alloc(size, 1)), 30);
+  });
+  await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+  const saveTo = join(dir, 'twice');
+  const client = shareClient(`http://127.0.0.1:${(srv.address() as AddressInfo).port}`);
+  const [a, b] = await Promise.all([receivePackage({ client, id: 'abc', saveTo }), receivePackage({ client, id: 'abc', saveTo })]);
+  srv.close();
+  assert.notEqual(a.path, b.path);
+  assert.deepEqual(readdirSync(saveTo).sort(), ['Mustergnp 2.vanillashare', 'Mustergnp.vanillashare'], 'no bidi control in the name, no .part left');
+  assert.equal(readFileSync(a.path!).length, size);
+  assert.equal(readFileSync(b.path!).length, size);
+});
+
+test('559-8: a share is packed once; the share\'s own tag goes into the index in place, with its CRC', async () => {
+  const files = new Map([['ledger.json', new TextEncoder().encode('{"x":1}')], ['transactional-data/2026/receipts/a.pdf', new Uint8Array(4096).fill(3)]]);
+  const index = readPackage(readFileSync(first)).index;
+  let builds = 0;
+  const client = {
+    upload: async () => ({ target: { object: 'p', method: 'PUT', url: 'http://x' }, bytes: 0, expiresAt: '' }),
+    put: async () => undefined,
+    complete: async () => ({ id: 'a'.repeat(26), kind: 'share', state: 'ready', bytes: 0, createdAt: '', opens: [], returns: [] }),
+  } as unknown as ShareClient;
+  const tagged = (tag: ShareTag) => ({ ...index, share: tag });
+  const sent = await sendPackage({
+    client,
+    hand: { service: 'https://share.example.ch', index: (tag) => JSON.stringify(tagged(tag), null, 1), build: (tag, room) => { builds++; return writePackage({ index: tagged(tag), files }, { indexRoom: room }); } },
+    start: async () => ({ id: 'b'.repeat(26), revokeToken: 'r', returnToken: 'T'.repeat(43), generation: 2 }),
+  });
+  assert.equal(builds, 1, 'packed once');
+  const zip = Buffer.from(sent.bytes);
+  // index.json is the first member: its local header's CRC is the CRC of what it holds now.
+  const nameLength = zip.readUInt16LE(26), extra = zip.readUInt16LE(28), size = zip.readUInt32LE(18);
+  const data = zip.subarray(30 + nameLength + extra, 30 + nameLength + extra + size);
+  assert.equal(zip.readUInt32LE(14), crc32(data) >>> 0);
+  assert.deepEqual(JSON.parse(data.toString('utf8')).share, { service: 'https://share.example.ch', id: 'b'.repeat(26), returnToken: 'T'.repeat(43), generation: 2 });
+  assert.deepEqual(unzipSync(sent.bytes)['index.json'], new Uint8Array(data), 'a zip reader reads the same');
 });

@@ -71,7 +71,7 @@ export function DocumentBar() {
     };
     const timer = setInterval(() => {
       void lookAtDocument().then((d) => {
-        if (d?.auto && d.dirty && !d.missing && Date.now() - idleSince.current > IDLE_MS) void save({ auto: true });
+        if (d?.auto && d.dirty && !d.missing && !d.other && Date.now() - idleSince.current > IDLE_MS) void save({ auto: true });
       });
     }, LOOK_MS);
     const focus = () => void lookAtDocument();
@@ -85,10 +85,12 @@ export function DocumentBar() {
   return (
     <span className="shdoc" data-testid="document-bar">
       <span className="name" data-tip={doc.path}>{doc.name}</span>
-      {doc.missing ? <span className="warn">{t('durchsicht.doc.missing')}</span> : doc.dirty ? <span className="warn" data-testid="document-unsaved">{t('durchsicht.doc.unsaved')}</span> : <span className="m">{t('durchsicht.doc.saved')}</span>}
-      {doc.dirty && !doc.missing ? <AsyncButton type="button" className="linkbtn" onClick={() => save()} data-testid="document-save">{t('durchsicht.doc.save')}</AsyncButton> : null}
+      {doc.missing ? <span className="warn">{t('durchsicht.doc.missing')}</span>
+        : doc.other ? <span className="warn" data-testid="document-other" data-tip={t('durchsicht.doc.otherWhy', { file: doc.name })}>{t('durchsicht.doc.other')}</span>
+        : doc.dirty ? <span className="warn" data-testid="document-unsaved">{t('durchsicht.doc.unsaved')}</span> : <span className="m">{t('durchsicht.doc.saved')}</span>}
+      {doc.dirty && !doc.missing && !doc.other ? <AsyncButton type="button" className="linkbtn" onClick={() => save()} data-testid="document-save">{t('durchsicht.doc.save')}</AsyncButton> : null}
       <AsyncButton type="button" className="linkbtn" onClick={() => saveAs()} data-testid="document-save-as">{t('durchsicht.doc.saveAs')}</AsyncButton>
-      {error ? <span className="err" role="alert">{error}</span> : null}
+      {error ? <span className="err" role="alert">{error}</span> : doc.other ? <span className="err" role="alert">{t('durchsicht.doc.otherWhy', { file: doc.name })}</span> : null}
     </span>
   );
 }

@@ -54,7 +54,7 @@ export function CopyStatus({ d }: { d: DurchsichtFacts }) {
     checkCopy().then((r) => {
       if (r.state === 'withdrawn') setWithdrawn(true);
       if (r.state === 'updated') {
-        const line = [t('durchsicht.updated', { name: r.name, date: formatDate(r.at.slice(0, 10)) }), r.file ? t('durchsicht.updatedFile', { file: r.file, n: r.carried }) : ''].filter(Boolean).join(' ');
+        const line = [t('durchsicht.updated', { name: r.name, date: formatDate(r.at.slice(0, 10)) }), r.file ? t(r.auto ? 'durchsicht.updatedFileAuto' : 'durchsicht.updatedFile', { file: r.file, n: r.carried }) : ''].filter(Boolean).join(' ');
         try { sessionStorage.setItem(UPDATED, line); } catch { /* the line is then not said */ }
         location.assign('/');
       }

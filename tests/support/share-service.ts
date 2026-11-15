@@ -206,6 +206,8 @@ export async function startShareService(): Promise<FakeShareService> {
         const state = live(sh);
         if (state === 'revoked' || state === 'expired') return no(410, state);
         if (state !== 'ready') return no(409, 'notReady');
+        // 0.6.1 and older open with {}: told to update, the opening not counted (the service's api.ts open).
+        if (json().v !== 3) return no(426, 'appTooOld');
         if (sh.kind === 'return' && bearer !== shares.get(sh.parent!)!.revokeToken) return no(403, 'wrongToken');
         sh.opens.push(new Date().toISOString());
         sh.firstOpenedAt ??= sh.opens[0];

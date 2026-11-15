@@ -28,7 +28,7 @@ import type { Workspace } from '../workspace/workspace.js';
 import { prepareShare, HANDOVER_DIR, type ShareRequest } from '../handover/share.js';
 import { readPackage, writePackage, PackageError, type PackageContents, type ShareTag } from '../handover/package.js';
 import { buildReturn, durchsichtHome, isDurchsicht, markerOf, openPackage, type CopyChoice, type Opened } from '../handover/durchsicht.js';
-import { attachDocument, restoreSaved } from '../handover/document.js';
+import { attachDocument, documentOf, keepHandOver, restoreSaved, savedHash } from '../handover/document.js';
 import { receiveReturn } from '../handover/returns.js';
 import { readVersions } from '../handover/versions.js';
 import { DURCHSICHT_MARKER } from '../handover/content.js';
@@ -255,11 +255,12 @@ const envelope = (senderName: string, direction: Envelope['direction'], company:
   ...(note ? { note: note.slice(0, 1000) } : {}), ...(now ? { asOf: now.toISOString().slice(0, 10) } : {}),
 });
 
-/** The hand-over's Freigabe-Datei, naming the share it goes into (`tag`), its index kept at `room` bytes. */
-function handOverFile(prepared: { index: PackageContents['index']; files: ReadonlyMap<string, Uint8Array> }, tag: ShareTag | undefined, room: number | undefined): { bytes: Uint8Array; indexBytes: number } {
-  const index = { ...prepared.index, ...(tag ? { share: tag } : {}) };
-  return { bytes: writePackage({ index, files: new Map(prepared.files) }, room === undefined ? {} : { indexRoom: room }), indexBytes: Buffer.byteLength(JSON.stringify(index, null, 1)) };
-}
+/** The hand-over's Freigabe-Datei for sendPackage: its index naming the share it goes into (`tag`), and the file with that index kept at `room` bytes. */
+const handOver = (service: string, prepared: { index: PackageContents['index']; files: ReadonlyMap<string, Uint8Array> }) => ({
+  service,
+  index: (tag: ShareTag) => JSON.stringify({ ...prepared.index, share: tag }, null, 1),
+  build: (tag: ShareTag, room: number) => writePackage({ index: { ...prepared.index, share: tag }, files: new Map(prepared.files) }, { indexRoom: room }),
+});
 
 const languageOf = (l: string | undefined): string => (l && ['de', 'fr', 'it', 'en'].includes(l.slice(0, 2)) ? l.slice(0, 2) : 'de');
 
@@ -276,7 +277,7 @@ async function shareNow(ws: Workspace, req: ShareRequest, from: Party, opts: Sha
   const message = prepared.index.message;
   const meta = envelope(from.name, 'send', ws.company.name, message, now);
   const sent = await sendPackage({
-    client, service, build: (tag, room) => handOverFile(prepared, tag, room),
+    client, hand: handOver(service, prepared),
     start: (bytes) => client.create(sender.token, { bytes, meta }),
     progress: opts.progress,
   });
@@ -356,7 +357,7 @@ async function updateNow(ws: Workspace, id: string, from: Party, opts: ShareOpti
   const prepared = await prepareShare(ws, { to: r.to, ...(message ? { message } : {}) }, from, now);
   const meta = envelope(from.name, 'send', ws.company.name, message, now);
   const sent = await sendPackage({
-    client, service: r.service, build: (tag, room) => handOverFile(prepared, tag, room),
+    client, hand: handOver(r.service, prepared),
     start: async (bytes) => {
       const made = await client.update(id, keys.revokeToken, { bytes, meta });
       return { id, revokeToken: keys.revokeToken, ...(keys.returnToken ? { returnToken: keys.returnToken } : {}), ...(made.generation ? { generation: made.generation } : {}) };
@@ -606,8 +607,13 @@ export function openShareFile(bytes: Uint8Array, opts: { path?: string; now?: Da
       generation: tag!.generation, at: now.toISOString(), ...(had?.id === tag!.id && had.updatedAt ? { updatedAt: had.updatedAt } : {}),
     });
   }
-  const restored = p.saved ? restoreSaved(opened.root, p.saved) : undefined;
-  if (opts.path) attachDocument(opened.root, opts.path, bytes, restored && !restored.stale ? p.saved : undefined, now);
+  // The copy holds these saved changes already (they were saved from it), or newer ones: nothing of the file goes over them (review of PR #559).
+  const had = documentOf(opened.root);
+  const known = !!p.saved && !!had && had.saved === savedHash(p.saved);
+  const restored = p.saved && !known ? restoreSaved(opened.root, p.saved) : undefined;
+  if (opts.path) attachDocument(opened.root, opts.path, bytes, known || (restored && !restored.stale) ? p.saved : undefined, p.index.version.checksum, now);
+  // Moved forward without its file (a drop in the browser, the share's newer state): the copy's document is still his file, which «Sichern» brings to this state.
+  else keepHandOver(opened.root, bytes);
   return { ...opened, ...(restored ? { restored } : {}), ...(opts.path ? { document: opts.path } : {}), linked };
 }
 
@@ -632,7 +638,7 @@ export function receiveOwnHandOver(ws: Workspace, p: PackageContents, now = new 
 /** What a copy's check of its share found (`checkCopy`). */
 export type CopyCheck =
   | { state: 'none' | 'current' }
-  | { state: 'updated'; at: string; name: string; conflicts: number; dropped: number; carried: number; file?: string }
+  | { state: 'updated'; at: string; name: string; conflicts: number; dropped: number; carried: number; file?: string; auto?: boolean }
   | { state: 'withdrawn'; at: string; name: string };
 
 /**
@@ -641,7 +647,7 @@ export type CopyCheck =
  * hand-over); a share she withdrew, or one the service no longer knows, is noted on the copy, which
  * stays as it is: his return then goes as a file. No network, no answer: the copy stays as it is.
  */
-export async function checkCopy(root: string, opts: { now?: Date; client?: (service: string) => ShareClient; saveTo?: string } = {}): Promise<CopyCheck> {
+export async function checkCopy(root: string, opts: { now?: Date; client?: (service: string) => ShareClient } = {}): Promise<CopyCheck> {
   const facts = linkOfCopy(root);
   const marker = markerOf(root);
   if (!facts || !marker || !isDurchsicht(root)) return { state: 'none' };
@@ -661,11 +667,14 @@ export async function checkCopy(root: string, opts: { now?: Date; client?: (serv
   const generation = 'generation' in info && typeof info.generation === 'number' ? info.generation : 1;
   if (info.state !== 'ready' || generation <= (facts.generation ?? 1)) return { state: 'current' };
   // Into this copy: a newer state never opens a second copy beside it (the firm's name changed, say); another firm is refused.
-  // The new Freigabe-Datei lands in Downloads and becomes the copy's document; the older file stays as it was.
-  const opened = await openLink(linkOf(facts.service, facts.id), { at: dirname(root), into: root, now, client: opts.client, trust: true, ...(opts.saveTo ? { saveTo: opts.saveTo } : {}) });
+  // Downloaded into the copy alone, unasked: nothing lands in Downloads (no folder question of macOS, no «… 2.vanillashare»,
+  // review of PR #559). The copy's document stays his file, which holds the older state until he saves (documentState `dirty`).
+  const got = await downloadShare(linkOf(facts.service, facts.id), { client: opts.client, trust: true });
+  const opened = openShareFile(got.bytes, { at: dirname(root), into: root, now, trusted: got.service });
   keepLinkFacts(opened.root, { ...linkOfCopy(opened.root)!, ...('updatedAt' in info && info.updatedAt ? { updatedAt: info.updatedAt } : {}) });
   const at = linkOfCopy(opened.root)?.updatedAt ?? now.toISOString();
-  return { state: 'updated', at, name, conflicts: opened.conflicts, dropped: opened.dropped, carried: opened.carried, ...(opened.document ? { file: basename(opened.document) } : {}) };
+  const doc = documentOf(opened.root);
+  return { state: 'updated', at, name, conflicts: opened.conflicts, dropped: opened.dropped, carried: opened.carried, ...(doc ? { file: basename(doc.path), auto: !!doc.confirmed } : {}) };
 }
 
 /**
@@ -696,7 +705,7 @@ export async function returnByLink(ws: Workspace, message: string | undefined, o
     const c = (opts.client ?? shareClient)(facts.service);
     const meta = envelope(marker.me.name, 'return', marker.firm.name, made.index.message, opts.now ?? new Date());
     const sent = await sendPackage({
-      client: c, build: () => ({ bytes: made.bytes }), isReturn: true,
+      client: c, build: () => made.bytes, isReturn: true,
       start: (bytes) => c.createReturn(facts.id, facts.returnToken!, { bytes, meta }),
       progress: opts.progress,
     });

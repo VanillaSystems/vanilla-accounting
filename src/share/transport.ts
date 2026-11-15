@@ -13,6 +13,7 @@
 import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, renameSync, rmSync, writeSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
 import { PACKAGE_EXT, type ShareTag } from '../handover/package.js';
+import { replaceStoredMember } from '../handover/zip-file.js';
 import type { ShareClient, ShareStatus, Target } from './client.js';
 import { ShareServiceError } from './client.js';
 import { SHARE_LIMITS } from './limits.js';
@@ -34,38 +35,38 @@ const PLACEHOLDER = (service: string): ShareTag => ({ service, id: 'a'.repeat(26
 const SPARE = 64;
 
 /**
- * Builds and uploads one file. `build(tag)` makes the file's bytes; a hand-over (`service` given)
- * first with a placeholder tag, to learn the size, then with the share's own, at the same size.
- * `start` asks the service for the share (a new one, its next generation, or a return) with that
- * size and answers what the tag needs. The file is in memory once at a time.
+ * Builds and uploads one file, packed once. A hand-over (`hand` given) is packed with a placeholder
+ * tag in an index of fixed size (`indexRoom`, learnt from the placeholder's index text); once
+ * `start` asked the service for the share (a new one, its next generation, or a return) with that
+ * size, the share's own tag is written into that index in place (replaceStoredMember): same size,
+ * no second packing. The file is in memory once.
  */
 export async function sendPackage(opts: {
   client: ShareClient;
-  /** A hand-over carries its share; a return carries none. */
-  service?: string;
-  build(tag: ShareTag | undefined, indexRoom: number | undefined): { bytes: Uint8Array; indexBytes?: number };
+  /** A hand-over: its service, its index's text for a tag, and its file with the index kept at `room` bytes. A return carries no tag. */
+  hand?: { service: string; index(tag: ShareTag): string; build(tag: ShareTag, room: number): Uint8Array };
+  /** A return: its file. */
+  build?(): Uint8Array;
   start(bytes: number): Promise<{ id: string; revokeToken: string; returnToken?: string; generation?: number }>;
   isReturn?: boolean;
   progress?: Progress;
 }): Promise<{ id: string; revokeToken: string; returnToken?: string; generation: number; status: ShareStatus; bytes: Uint8Array }> {
-  const { client } = opts;
+  const { client, hand } = opts;
   opts.progress?.({ phase: 'pack', done: 0, total: 0 });
-  let room: number | undefined;
-  let file: Uint8Array;
-  if (opts.service) {
-    const probe = opts.build(PLACEHOLDER(opts.service), undefined);
-    room = probe.indexBytes! + SPARE;
-    file = opts.build(PLACEHOLDER(opts.service), room).bytes;
-  } else file = opts.build(undefined, undefined).bytes;
+  const room = hand ? Buffer.byteLength(hand.index(PLACEHOLDER(hand.service))) + SPARE : 0;
+  const file = hand ? hand.build(PLACEHOLDER(hand.service), room) : opts.build!();
   const size = file.byteLength;
   const max = opts.isReturn ? SHARE_LIMITS.returnBytes : SHARE_LIMITS.bytes;
   if (size > max) throw new ShareLimitError('bytes', size, max, !!opts.isReturn);
 
   const made = await opts.start(size);
   const generation = made.generation ?? 1;
-  if (opts.service) {
-    file = opts.build({ service: opts.service, id: made.id, ...(made.returnToken ? { returnToken: made.returnToken } : {}), generation }, room).bytes;
-    if (file.byteLength !== size) throw new ShareServiceError(`Die Freigabe-Datei hat ${file.byteLength} Bytes statt der angekündigten ${size}.`, 'internal', 500);
+  if (hand) {
+    const text = Buffer.from(hand.index({ service: hand.service, id: made.id, ...(made.returnToken ? { returnToken: made.returnToken } : {}), generation }));
+    if (text.length > room) throw new ShareServiceError(`Das Verzeichnis der Freigabe-Datei hat ${text.length} Bytes statt höchstens ${room}.`, 'internal', 500);
+    const padded = Buffer.alloc(room, 0x20);
+    text.copy(padded);
+    replaceStoredMember(file, 'index.json', padded);
   }
   opts.progress?.({ phase: 'upload', done: 0, total: size });
   // An upload URL lives a few minutes; one retry with a fresh URL covers a dropped connection.
@@ -93,18 +94,33 @@ function checkedTarget(target: Target): Target {
 
 /** The download's own file name, as the service names it, made safe for a folder: no path, the share file's extension. */
 export function safeFileName(name: string | undefined): string {
-  const plain = basename((name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '-')).trim().replace(/^\.+/, '');
+  // Bidirectional controls too: «Rechnung\u202Eexe.vanillashare» would show as another kind of file.
+  const plain = basename((name ?? '').replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, '-').replace(/[\u202a-\u202e\u2066-\u2069\u200e\u200f\u061c]/g, '')).trim().replace(/^\.+/, '');
   const stem = plain.slice(0, 180).replace(/\.(vanillashare|vanilla)$/i, '') || 'Buchhaltung';
   return `${stem}${PACKAGE_EXT}`;
 }
 
-/** The first free name in `dir`: «<name>.vanillashare», then «<name> 2.vanillashare», as Finder does. */
-function freeName(dir: string, name: string): string {
-  const ext = extname(name), stem = name.slice(0, -ext.length);
+/** «<name>.vanillashare», then «<name> 2.vanillashare», as Finder names them. */
+const nth = (dir: string, name: string, n: number) => { const ext = extname(name), stem = name.slice(0, -ext.length); return join(dir, n === 1 ? name : `${stem} ${n}${ext}`); };
+
+/**
+ * The first free name in `dir`, taken at once: its `.part` is created exclusively, so two downloads
+ * of the same share at the same time never write into one file (review of PR #559).
+ */
+function reserveName(dir: string, name: string): { path: string; part: string; fd: number } {
   for (let n = 1; ; n++) {
-    const path = join(dir, n === 1 ? name : `${stem} ${n}${ext}`);
-    if (!existsSync(path)) return path;
+    const path = nth(dir, name, n);
+    if (existsSync(path)) continue;
+    try { return { path, part: `${path}.part`, fd: openSync(`${path}.part`, 'wx', 0o644) }; } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
+    }
   }
+}
+
+/** Where a whole download goes: its reserved name, or the next free one if a file took that name meanwhile. */
+function finalName(dir: string, name: string, path: string): string {
+  if (!existsSync(path)) return path;
+  for (let n = 2; ; n++) { const p = nth(dir, name, n); if (!existsSync(p) && !existsSync(`${p}.part`)) return p; }
 }
 
 /**
@@ -124,9 +140,7 @@ export async function receivePackage(opts: { client: ShareClient; id: string; to
   let path: string | undefined, part: string | undefined, fd: number | undefined;
   if (opts.saveTo) {
     mkdirSync(opts.saveTo, { recursive: true });
-    path = freeName(opts.saveTo, filename);
-    part = `${path}.part`;
-    fd = openSync(part, 'w', 0o644);
+    ({ path, part, fd } = reserveName(opts.saveTo, filename));
   }
   try {
     const got = await opts.client.download(checkedTarget(opened.download), max, (chunk) => {
@@ -136,7 +150,7 @@ export async function receivePackage(opts: { client: ShareClient; id: string; to
       opts.progress?.({ phase: 'download', done: at, total: opened.bytes });
     });
     if (got !== opened.bytes) throw new ShareServiceError(`Der Download brach nach ${got} von ${opened.bytes} Bytes ab.`, 'downloadCut', 502);
-    if (fd !== undefined) { fsyncSync(fd); closeSync(fd); fd = undefined; renameSync(part!, path!); }
+    if (fd !== undefined) { fsyncSync(fd); closeSync(fd); fd = undefined; path = finalName(opts.saveTo!, filename, path!); renameSync(part!, path); }
   } catch (e) {
     if (fd !== undefined) closeSync(fd);
     if (part) rmSync(part, { force: true });

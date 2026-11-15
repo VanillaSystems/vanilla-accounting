@@ -38,6 +38,7 @@ import { progressWindow } from './progress-window.js';
 import { progressLine } from './progress-text.js';
 import { askLines } from '../app/handover/ask-text.js';
 import { heldUntilReady, isVanillaPath, openVanillaFile, refusedText, vanillaPaths } from './open-files.js';
+import { saveBeforeQuit, saveIfDirty } from './save-on-quit.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** tools/desktop/smoke.mjs: the fused release build has no inspector, so the page reaches the menu (preload.ts). */
@@ -47,7 +48,8 @@ const DEV = devMode();
 if (DEV) {
   app.setPath('userData', DEV.userData);
   // The runner restarts it with SIGTERM, which Chromium alone takes 20 s and more to act on; app.quit() takes a moment.
-  process.on('SIGTERM', () => app.quit());
+  // A copy's last save before quitting is bounded (save-on-quit.ts); this ends the process for sure after it.
+  process.on('SIGTERM', () => { app.quit(); setTimeout(() => app.exit(0), 40_000).unref(); });
 }
 /** The chat's speech recognizer: next to the app's binary when packed, beside the bundle when run from the repo. */
 const DICTATION = process.platform !== 'darwin' ? undefined
@@ -104,6 +106,8 @@ async function start(): Promise<void> {
   let load: ReturnType<typeof windowLoader> | undefined;
   /** The start's first page is loaded; a later page that fails to load says so and ends nothing. */
   let started = false;
+  // ⌘Q, the Dock's «Beenden», SIGTERM: a copy that saves by itself saves once more, then the app quits (bounded).
+  const quit = saveBeforeQuit(app, () => (base ? saveIfDirty(base) : Promise.resolve(false)));
   const loadFailed = (reason: string, first: boolean) => {
     const t = textsIn(language);
     if (first) {
@@ -123,13 +127,13 @@ async function start(): Promise<void> {
       opened.once('ready-to-show', () => opened.show());
       load = windowLoader(opened, loadFailed);
       // A copy whose Freigabe-Datei she saved into before: his changes go into it when the window closes (src/handover/document.ts).
+      // While the app quits, the quit saves (save-on-quit.ts) and the window closes as it is.
       let closingSaved = false;
       opened.on('close', (e) => {
-        if (closingSaved || !base) return;
+        if (closingSaved || quit.quitting() || !base) return;
         e.preventDefault();
         const done = () => { closingSaved = true; if (!opened.isDestroyed()) opened.close(); };
-        void fetch(`${base}/api/handover/document/save`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: true }), signal: AbortSignal.timeout(10_000) })
-          .catch(() => undefined).finally(done);
+        void saveIfDirty(base).catch(() => undefined).finally(done);
       });
     }
     void load!(base + path, !started);

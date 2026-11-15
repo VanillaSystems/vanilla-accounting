@@ -12,12 +12,13 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { anywhere, startShareService, type FakeShareService } from './support/share-service.js';
 import { canReturnByLink, checkCopy, deleteCopy, linkOfCopy } from '../src/share/sharing.js';
 import { changesOf, markerOf } from '../src/handover/durchsicht.js';
 import { readPackage } from '../src/handover/package.js';
+import { documentOf } from '../src/handover/document.js';
 
 let api: ApiServer;
 let svc: FakeShareService;
@@ -140,6 +141,12 @@ test('«Aktualisieren» before he opened it: the same link, the newest state, an
   assert.equal(svc.mails[1].to.email, ERNST.email, 'to the address the service keeps for the share');
 });
 
+test('an app of protocol v2 (0.6.1 opens with {}) is told appTooOld, never handed a file it would call broken', async () => {
+  const res = await fetch(`${svc.url}/api/shares/${shareId}/open`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+  assert.equal(res.status, 426);
+  assert.equal(((await res.json()) as { code: string }).code, 'appTooOld');
+});
+
 test('the link opens the books on a fresh copy, with no key and no code; it opens again; his change goes back into the same share', async () => {
   assert.equal((await job('/api/share/open', { link: 'https://example.ch/nothing' })).error?.code, 'shareLinkInvalid');
   const opened = await job('/api/share/open', { link });
@@ -198,8 +205,15 @@ test('«Aktualisieren» after he downloaded: his copy moves forward by itself wh
   assert.equal(svc.mails.length, 2, 'without «Bescheid geben» no mail');
   const root = copyRoot();
   assert.equal(markerOf(root)!.version.n, 2);
+  const inDownloads = readdirSync(downloads).sort();
+  const docBefore = documentOf(root)!;
   const found = await checkCopy(root);
   assert.equal(found.state, 'updated', JSON.stringify(found));
+  // Unasked, nothing lands in Downloads (no folder question of macOS, no «… 2.vanillashare»): the copy keeps it until he saves.
+  assert.deepEqual(readdirSync(downloads).sort(), inDownloads);
+  assert.equal(documentOf(root)!.path, docBefore.path, 'the copy\'s document is still his file');
+  assert.equal((found as { file?: string }).file, basename(docBefore.path));
+  assert.equal(readPackage(readFileSync(docBefore.path)).index.version.n, 2, 'which holds the older state until he saves');
   assert.equal(markerOf(root)!.version.n, 3, 'on the newest state');
   assert.ok(copyHolds(root, 'von Sandra nachgetragen'), 'with what she added');
   assert.ok(copyHolds(root, 'von Ernst korrigiert'), 'and his own change still there');

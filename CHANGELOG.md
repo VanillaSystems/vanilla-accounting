@@ -32,7 +32,11 @@ Two markers flag an entry you must read before you update:
   never leaves half a file; a file that moved or is read-only is said, with «Sichern unter…». Opened on
   another Mac, the file brings his changes; mailed back, the sharer's app shows them for review, never as
   a copy of her own books. A newer file opened over an older one carries his changes over and says so;
-  the older file stays as it was.
+  the older file stays as it was. The app never writes over another file put at the document's path (a
+  newer state, another share's file): it says «andere Datei am Ort» and offers «Sichern unter…». Reopening
+  his own file never takes back a change he made after saving it. A newer state his copy fetches from its
+  share stays in the copy until he saves; nothing lands in Downloads unasked. ⌘Q quits with a copy open,
+  after its last save. Saving a large copy no longer holds the app.
 - The hand-over file's extension is `.vanillashare` («Freigabe-Datei»); the app registers it with macOS
   and still opens the `.vanilla` files of 0.6.x, but writes only `.vanillashare`.
 
