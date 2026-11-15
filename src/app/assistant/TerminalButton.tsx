@@ -15,6 +15,7 @@ import { chooseCli, chooseTerminalApp, type TerminalApp, type TerminalCli, type 
 import { TerminalCard } from './TerminalCard.js';
 import { useAiOff } from '../ai/ai-off.js';
 import { TerminalAppAsk, TerminalOpened, keepApp } from './TerminalAppAsk.js';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 type Shown =
   | { kind: 'install'; request: string }
@@ -63,10 +64,10 @@ export function TerminalButton({ request }: { request(): string }) {
 
   return (
     <>
-      <button
+      <AsyncButton
         ref={button} type="button" className="aimic aiterm" data-testid="terminal-composer" disabled={busy}
-        aria-label={t('terminal.title')} onClick={() => void go()}
-      >{ICONS.terminal}</button>
+        aria-label={t('terminal.title')} onClick={() => go()}
+      >{ICONS.terminal}</AsyncButton>
       {shown ? (
         <div ref={box} className="aitermpop" role="status" onKeyDown={(e) => { if (e.key === 'Escape') setShown(undefined); }}>
           {shown.kind === 'install' ? <TerminalCard request={shown.request} />

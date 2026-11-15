@@ -13,6 +13,7 @@ import type { Nav } from '../index.js';
 import { onBooksChanged } from '../../assistant/store.js';
 import { RuleDraft } from './RulesSection.js';
 import { useAiOff } from '../../ai/ai-off.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 type NoteState = 'open' | 'kept' | 'discarded';
 
@@ -37,7 +38,7 @@ export function LearnOffer({ payment, nav }: { payment: string; nav: Nav }) {
   const propose = () => {
     setBusy(true);
     setError(undefined);
-    api.proposeLearned(offer.ref).then(setProposal, (e) => setError(errorText(e))).finally(() => setBusy(false));
+    return api.proposeLearned(offer.ref).then(setProposal, (e) => setError(errorText(e))).finally(() => setBusy(false));
   };
   const keepNote = async (p: Extract<LearnProposal, { kind: 'note' }>) => {
     setBusy(true);
@@ -63,7 +64,7 @@ export function LearnOffer({ payment, nav }: { payment: string; nav: Nav }) {
           <>
             <span data-testid="learn-note">{t('rules.learn.note', { who, sentence: proposal.sentence })}</span>
             <span className="ruleacts">
-              <button type="button" className="btn primary" disabled={busy} data-act="learn-keep-note" onClick={() => void keepNote(proposal)}>{t('rules.learn.keepNote')}</button>
+              <AsyncButton type="button" className="btn primary" disabled={busy} data-act="learn-keep-note" onClick={() => keepNote(proposal)}>{t('rules.learn.keepNote')}</AsyncButton>
               <button type="button" className="btn ghost" disabled={busy} onClick={() => setNote('discarded')}>{t('rules.draft.discard')}</button>
             </span>
           </>
@@ -74,7 +75,7 @@ export function LearnOffer({ payment, nav }: { payment: string; nav: Nav }) {
         <span className="ruleacts">
           {aiOff
             ? <span className="m" data-testid="learn-ai-off">{t('rules.learn.aiOff')}</span>
-            : <button type="button" className="btn" disabled={busy} data-act="learn-ai" onClick={propose}>{busy ? t('rules.learn.thinking') : t('rules.learn.ai')}</button>}
+            : <AsyncButton type="button" className="btn" disabled={busy} data-act="learn-ai" onClick={propose}>{busy ? t('rules.learn.thinking') : t('rules.learn.ai')}</AsyncButton>}
           {self}
         </span>
       )}

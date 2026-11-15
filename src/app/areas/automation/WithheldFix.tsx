@@ -13,6 +13,7 @@ import { providerIssuesNow } from '../../lib/order-pages.js';
 import { clearWithheld } from '../journal/actions.js';
 import type { Nav } from '../index.js';
 import type { BankTransaction, Index } from '../../../types/index.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 export function WithheldFix({ books, u, nav }: { books: Index; u: Uncleared; nav: Pick<Nav, 'toast' | 'refresh'> }) {
   const p = clearingProposal((books.journalEntries ?? []).filter((e) => e.transactionRef === u.tx.ref), u.open);
@@ -20,7 +21,7 @@ export function WithheldFix({ books, u, nav }: { books: Index; u: Uncleared; nav
   return (
     <>
       {' '}<span className="m" data-testid="withheld-proposal">{t('issues.withheldProposal', { amount: `${baseCurrency()} ${fmt(p.amount)}` })}</span>
-      {' '}<button type="button" className="btn ghost" data-testid="withheld-clear" onClick={() => void clearWithheld(nav, u.tx.ref)}>{t('issues.withheldClear')}</button>
+      {' '}<AsyncButton type="button" className="btn ghost" data-testid="withheld-clear" onClick={() => clearWithheld(nav, u.tx.ref)}>{t('issues.withheldClear')}</AsyncButton>
     </>
   );
 }

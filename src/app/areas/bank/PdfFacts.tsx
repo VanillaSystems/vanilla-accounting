@@ -14,6 +14,7 @@ import { t } from '../../i18n/index.js';
 import { StatementRead } from '../../shell/StatementRead.js';
 import type { Nav } from '../index.js';
 import { tableOfPayments, type Check, type Statement } from './model.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 /** A kept PDF's facts in its statement: what it gives the books, why it gives nothing yet, and the table to fill or correct. */
 export function PdfFacts({ file, s, pays, check, edit, nav, version }: { file: string; s: Statement; pays: readonly BankTransaction[]; check: Pick<Check, 'close'> | undefined; edit: boolean; nav: Nav; version: unknown }) {
@@ -53,7 +54,7 @@ export function PdfFacts({ file, s, pays, check, edit, nav, version }: { file: s
           {view.statement
             ? <button type="button" className="linkbtn" data-testid="pdf-facts-forget" aria-expanded={forgetting} onClick={() => setForgetting(!forgetting)}>{t('bank.facts.again')}</button>
             : view.state === 'notStatement' || view.state === 'pages' || view.state === 'unreadable'
-              ? <button type="button" className="linkbtn" data-testid="pdf-facts-forget" onClick={() => void done(api.forgetStatementRead(file))}>{t('bank.facts.again')}</button> : null}
+              ? <AsyncButton type="button" className="linkbtn" data-testid="pdf-facts-forget" onClick={() => done(api.forgetStatementRead(file))}>{t('bank.facts.again')}</AsyncButton> : null}
         </div>
       ) : null}
       {forgetting && edit && view.statement ? (
@@ -61,7 +62,7 @@ export function PdfFacts({ file, s, pays, check, edit, nav, version }: { file: s
           <span>{forgetText(view, s.account.currency)}</span>
           <span className="pdffacts-acts">
             <button type="button" className="btn ghost" onClick={() => setForgetting(false)}>{t('common.cancel')}</button>
-            <button type="button" className="btn danger" data-testid="pdf-facts-forget-yes" onClick={() => void done(api.forgetStatementRead(file, true))}>{t('bank.facts.forget.yes')}</button>
+            <AsyncButton type="button" className="btn danger" data-testid="pdf-facts-forget-yes" onClick={() => done(api.forgetStatementRead(file, true))}>{t('bank.facts.forget.yes')}</AsyncButton>
           </span>
         </div>
       ) : null}
@@ -121,12 +122,12 @@ export function StatementReads({ nav, canEdit, version }: { nav: Nav; canEdit: b
         <span data-testid="statement-reads-progress">
           <span className="spin small" aria-hidden="true" /> {t('bank.reads.progress', { n: Math.min(job!.done + 1, job!.total), m: job!.total })}
           {job!.cancelling ? <span className="m"> {t('bank.reads.cancelling')}</span>
-            : canEdit ? <> <button type="button" className="linkbtn" data-testid="statement-reads-cancel" onClick={() => void act(api.cancelStatementReads())}>{t('bank.reads.cancel')}</button></> : null}
+            : canEdit ? <> <AsyncButton type="button" className="linkbtn" data-testid="statement-reads-cancel" onClick={() => act(api.cancelStatementReads())}>{t('bank.reads.cancel')}</AsyncButton></> : null}
         </span>
       ) : view.ai === 'ready' ? (
         n ? (
           <span>
-            {canEdit ? <button type="button" className="linkbtn" data-testid="statement-reads-start" onClick={() => void act(api.startStatementReads())}>{t('bank.reads.ask', { n })}</button> : t('bank.reads.unread', { n })}
+            {canEdit ? <AsyncButton type="button" className="linkbtn" data-testid="statement-reads-start" onClick={() => act(api.startStatementReads())}>{t('bank.reads.ask', { n })}</AsyncButton> : t('bank.reads.unread', { n })}
             <span className="m"> {t('bank.reads.what', { limit: view.limit })}</span>
           </span>
         ) : null

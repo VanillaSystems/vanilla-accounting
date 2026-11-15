@@ -11,6 +11,7 @@ import type { SourcesView } from '../../../platform/sources/model.js';
 import type { MailHost } from '../../../platform/sources/mail-host.js';
 import { Check, PasswordField } from './SourcesSection.js';
 import './company.css';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 export function MailboxCard({ id, address, host, onSources }: { id: string; address: string; host?: string; onSources(): void }) {
   const [view, setView] = useState<SourcesView>();
@@ -24,7 +25,7 @@ export function MailboxCard({ id, address, host, onSources }: { id: string; addr
   const { verdict } = row;
   const stored = row.secrets.some((s) => s.channel === 'mail' && s.present);
   const needs = where?.provider && where.needs && t(where.needs === 'app-password' ? 'inflow.way.imapAppPassword' : 'inflow.way.imapOn', { provider: where.provider });
-  const approve = () => { setError(''); api.approveSource(verdict.decl.id, verdict.decl.version).then(reload, (e: unknown) => setError(errorText(e))); };
+  const approve = () => { setError(''); return api.approveSource(verdict.decl.id, verdict.decl.version).then(reload, (e: unknown) => setError(errorText(e))); };
   return (
     <div className="ruledraft mailboxcard" data-testid="mailbox-card" data-state={verdict.kind}>
       <span className="rk">{t('assistant.mailbox.advanced')}</span>
@@ -40,7 +41,7 @@ export function MailboxCard({ id, address, host, onSources }: { id: string; addr
       {stored ? <Check id={id} /> : null}
       {verdict.kind === 'pending' ? (
         <span className="ruleacts">
-          <button type="button" className="btn primary" data-testid="mailbox-approve" disabled={!stored} onClick={approve}>{t('sources.approve')}</button>
+          <AsyncButton type="button" className="btn primary" data-testid="mailbox-approve" disabled={!stored} onClick={approve}>{t('sources.approve')}</AsyncButton>
           <span className="m">{t(stored ? 'sources.approveWhy' : 'assistant.mailbox.passwordFirst')}</span>
         </span>
       ) : <span className="okline">{t('assistant.mailbox.on')}</span>}

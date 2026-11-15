@@ -18,6 +18,7 @@ import { BOOKING_WORKFLOW, BookingWaits, bookingWaitsOf } from './booking-waits.
 import { bookingWaitsText } from '../lib/booking-waits.js';
 import type { BookOpen } from '../../saving/rules.js';
 import { useHandover } from '../handover/store.js';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 const OPEN = new Set(['queued', 'running', 'waiting', 'parked', 'stuck']);
 const RESTING = new Set(['done', 'waiting', 'stuck', 'parked', 'discarded']);
@@ -156,7 +157,7 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit, confirm }:
       {confirm && asking?.item === id ? (
         <span className="wfsaid" role="status" data-testid="workflow-confirm">
           {confirm}{' '}
-          <button type="button" className="linkbtn" data-act="book-anyway" onClick={() => { const w = asking.workflow; setAsking(undefined); void start(w); }}>{t('marks.bookAnyway')}</button>
+          <AsyncButton type="button" className="linkbtn" data-act="book-anyway" onClick={() => { const w = asking.workflow; setAsking(undefined); return start(w); }}>{t('marks.bookAnyway')}</AsyncButton>
         </span>
       ) : null}
       {buttons.map(({ workflow, label, ai }) => {
@@ -171,10 +172,10 @@ export function WorkflowButtons({ kind, id, facts = [], nav, canEdit, confirm }:
         // On a Durchsicht copy filing is the sharer's (docs/specs/e2e-and-fiduciary.md B4): said, not offered.
         if (copy && (workflow.id === 'vat-filing' || workflow.id === 'year-close')) return <span key={workflow.id} className="m" data-testid="files-sharer">{t('durchsicht.files', { name: copy.sharer.name })}</span>;
         return (
-          <button key={workflow.id} type="button" className="btn" disabled={!canEdit} data-tip={ai ? t('automation.ai') : undefined}
-            onClick={() => { if (confirm) setAsking({ item: id, workflow }); else void start(workflow); }}>
+          <AsyncButton key={workflow.id} type="button" className="btn" disabled={!canEdit} data-tip={ai ? t('automation.ai') : undefined}
+            onClick={() => { if (confirm) setAsking({ item: id, workflow }); else return start(workflow); }}>
             {ai ? <BotIcon /> : null}{textIn(label, language())}
-          </button>
+          </AsyncButton>
         );
       })}
     </span>

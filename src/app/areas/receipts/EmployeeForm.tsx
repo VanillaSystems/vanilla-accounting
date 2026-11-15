@@ -15,6 +15,7 @@ import type { Nav } from '../index.js';
 import { AccountField } from '../journal/AccountField.js';
 import type { ReceiptView } from './model.js';
 import { privateOutlay } from './actions.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 export function EmployeeForm({ v, nav, onBack, onDone }: { v: ReceiptView; nav: Nav; onBack(): void; onDone(): void }) {
   const ws = useWorkspace();
@@ -53,7 +54,7 @@ export function EmployeeForm({ v, nav, onBack, onDone }: { v: ReceiptView; nav: 
   }
 
   return (
-    <form className="privform" aria-label={t('actions.employee')} onSubmit={book} onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onBack(); } }}>
+    <AsyncForm className="privform" aria-label={t('actions.employee')} onSubmit={book} onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onBack(); } }}>
       <div className="lbl">{t('actions.employee')} · <span className="mono">{currency} {fmt(Math.abs(v.r.amount ?? 0))}</span></div>
       {!adding ? (
         <>
@@ -76,8 +77,8 @@ export function EmployeeForm({ v, nav, onBack, onDone }: { v: ReceiptView; nav: 
       {error && <p className="warnline">{error}</p>}
       <div className="acts">
         <button type="button" className="btn ghost" onClick={onBack}>{t('receipts.privateBack')} <span className="k">{t('receipts.escKey')}</span></button>
-        <button type="submit" className="btn primary" disabled={busy} data-testid="employee-book">{t('receipts.employeeBook')} <span className="k">↵</span></button>
+        <AsyncButton type="submit" className="btn primary" disabled={busy} data-testid="employee-book">{t('receipts.employeeBook')} <span className="k">↵</span></AsyncButton>
       </div>
-    </form>
+    </AsyncForm>
   );
 }

@@ -13,6 +13,7 @@ import type { PrivatePart } from '../../../types/assistant.js';
 import type { Nav } from '../index.js';
 import type { ReceiptView } from './model.js';
 import { privateOutlay, type HeldByHand } from './actions.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 /** A typed amount: «17.99», «17,99», «1'250.50». */
 const parseAmount = (s: string): number => Number(s.replace(/['’\s]/g, '').replace(',', '.'));
@@ -83,9 +84,9 @@ export function PrivateForm({ v, nav, onBack, onDone }: { v: ReceiptView; nav: N
       )}
       <div className="acts">
         <button type="button" className="btn ghost" onClick={onBack}>{t('receipts.privateBack')} <span className="k">{t('receipts.escKey')}</span></button>
-        <button type="button" className="btn primary" disabled={!ready} data-testid="private-book" onClick={() => void book(held?.entry)}>
+        <AsyncButton type="button" className="btn primary" disabled={!ready} data-testid="private-book" onClick={() => book(held?.entry)}>
           {held?.replaceable ? t('receipts.privateReplace', { entry: held.entry }) : t('receipts.privateBook')} <span className="k">↵</span>
-        </button>
+        </AsyncButton>
       </div>
     </div>
   );

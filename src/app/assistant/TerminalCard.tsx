@@ -11,6 +11,7 @@ import { api, errorText } from '../lib/api.js';
 import { useAiOff } from '../ai/ai-off.js';
 import { AI_CLIS, chooseCli, chooseTerminalApp, copyCommand, type TerminalApp, type TerminalCli, type TerminalView } from '../../platform/terminal.js';
 import { TerminalAppAsk, TerminalOpened, keepApp } from './TerminalAppAsk.js';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 const nameOf = (cli: TerminalCli) => t(`terminal.cli.${cli}`);
 
@@ -22,9 +23,9 @@ export function TerminalCard({ request }: { request: string }) {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<'command' | 'request'>();
   const aiOff = useAiOff();
-  const load = () => { setError(undefined); api.terminal().then(setView, (e) => setError(errorText(e))); };
-  useEffect(load, []);
-  const copy = (what: 'command' | 'request', text: string) => { void navigator.clipboard?.writeText(text).then(() => setCopied(what), () => undefined); };
+  const load = () => { setError(undefined); return api.terminal().then(setView, (e) => setError(errorText(e))); };
+  useEffect(() => { void load(); }, []);
+  const copy = (what: 'command' | 'request', text: string) => navigator.clipboard?.writeText(text).then(() => setCopied(what), () => undefined);
   const start = (cli: TerminalCli, app: TerminalApp) => {
     setBusy(true);
     setError(undefined);
@@ -50,7 +51,7 @@ export function TerminalCard({ request }: { request: string }) {
         <div className="aiterminalreq">
           <span className="rk">{t('terminal.request')}</span>
           <p>{request}</p>
-          <button type="button" className="linkbtn" onClick={() => copy('request', request)}>{t(copied === 'request' ? 'terminal.copied' : 'terminal.copyRequest')}</button>
+          <AsyncButton type="button" className="linkbtn" onClick={() => copy('request', request)}>{t(copied === 'request' ? 'terminal.copied' : 'terminal.copyRequest')}</AsyncButton>
         </div>
       ) : null}
       {aiOff ? <span className="m" data-testid="terminal-ai-off">{t('terminal.aiOff')}</span> : plan?.kind === 'open' ? (
@@ -58,8 +59,8 @@ export function TerminalCard({ request }: { request: string }) {
           {plan.signIn ? <span className="m" data-testid="terminal-sign-in">{t('terminal.signIn', { cli: nameOf(plan.cli) })}</span> : null}
           {view!.opens ? (
             <span className="ruleacts">
-              <button type="button" className="btn primary" disabled={busy} data-cli={plan.cli} onClick={() => open(plan.cli)}>{t('terminal.open')}</button>
-              {plan.other ? <button type="button" className="linkbtn" disabled={busy} data-cli={plan.other} onClick={() => open(plan.other!)}>{t('terminal.orWith', { cli: nameOf(plan.other) })}</button> : null}
+              <AsyncButton type="button" className="btn primary" busy={busy} disabled={busy} data-cli={plan.cli} onClick={() => open(plan.cli)}>{t('terminal.open')}</AsyncButton>
+              {plan.other ? <AsyncButton type="button" className="linkbtn" busy={busy} disabled={busy} data-cli={plan.other} onClick={() => open(plan.other!)}>{t('terminal.orWith', { cli: nameOf(plan.other) })}</AsyncButton> : null}
             </span>
           ) : null}
           {asking ? <TerminalAppAsk apps={asking.apps} busy={busy} onPick={pick} /> : null}
@@ -67,7 +68,7 @@ export function TerminalCard({ request }: { request: string }) {
           <details className="aiterminalcmd" open={!view!.opens}>
             <summary>{t('terminal.command', { cli: nameOf(plan.cli) })}</summary>
             <code>{copyCommand(view!.folder, plan.cli, request)}</code>
-            <button type="button" className="linkbtn" onClick={() => copy('command', copyCommand(view!.folder, plan.cli, request))}>{t(copied === 'command' ? 'terminal.copied' : 'terminal.copyCommand')}</button>
+            <AsyncButton type="button" className="linkbtn" onClick={() => copy('command', copyCommand(view!.folder, plan.cli, request))}>{t(copied === 'command' ? 'terminal.copied' : 'terminal.copyCommand')}</AsyncButton>
           </details>
         </>
       ) : plan?.kind === 'install' ? (
@@ -79,7 +80,7 @@ export function TerminalCard({ request }: { request: string }) {
             ))}
           </ul>
           <span className="m">{t('terminal.install.after')}</span>
-          <span className="ruleacts"><button type="button" className="btn" onClick={load}>{t('terminal.install.again')}</button></span>
+          <span className="ruleacts"><AsyncButton type="button" className="btn" onClick={load}>{t('terminal.install.again')}</AsyncButton></span>
         </div>
       ) : null}
       {error ? <div className="warnline">{error}</div> : null}

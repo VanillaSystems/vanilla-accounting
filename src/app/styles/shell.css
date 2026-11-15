@@ -116,6 +116,15 @@ h1 { font: 800 34px/1.1 var(--font-display); letter-spacing: -.025em; margin: 0;
 .btn.ghost { border-color: var(--line); background: transparent; color: var(--ink-2); }
 .btn.ghost:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
 .btn .k { font: 500 11px var(--font-mono); opacity: .75; }
+/* A button whose action waits (src/app/shell/AsyncButton.tsx): after 150 ms a spinner in its own colour takes the label's place at the same width; a job's progress runs along the bottom. */
+.isbusy { position: relative; cursor: progress; -webkit-text-fill-color: transparent; }
+.isbusy:disabled, .btn.isbusy:disabled { opacity: 1; cursor: progress; }
+.isbusy > :not(.busybar) { visibility: hidden; }
+.isbusy::after { content: ''; position: absolute; inset: 0; margin: auto; width: 12px; height: 12px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: busyspin .8s linear infinite; }
+.isbusy .busybar { position: absolute; left: 6px; right: 6px; bottom: 3px; height: 2px; border-radius: 1px; background: color-mix(in srgb, currentColor 25%, transparent); overflow: hidden; }
+.isbusy .busybar i { display: block; height: 100%; background: currentColor; transition: width .3s ease; }
+@keyframes busyspin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .isbusy::after { animation-duration: 2.4s; } }
 /* A button that reads as a link (accent, underlined on hover); an area's own rule may size it. */
 .linkbtn { border: 0; padding: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; text-align: left; }
 .linkbtn:hover { text-decoration: underline; text-underline-offset: 2px; }

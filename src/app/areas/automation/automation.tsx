@@ -62,6 +62,7 @@ import { LastKept, WageRuleOffer } from '../company/RulesSection.js';
 import { bookOpenAndSay } from '../../automation/marks.js';
 import { BookingWaits } from '../../automation/booking-waits.js';
 import { bookingWaitsText, changedFiles } from '../../lib/booking-waits.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'automation'>>;
 type R = RouteOf<'automation'>;
@@ -180,7 +181,7 @@ function List({ route, nav, books, canEdit }: Props) {
                     </span>
                     {on.length ? <span className="wftrig">{on.map((tr, i) => (forEachOpen(tr) && canEdit
                       // A button that runs for every open payment, not a link to the diagram (r3-noai-22).
-                      ? <button key={i} type="button" className="trig go" data-act="start-all" data-workflow={w.id} disabled={!!said?.busy} onClick={(e) => { e.stopPropagation(); void startAll(w); }}>{TRIGGER_ICON.manual}{tx(tr.label)}</button>
+                      ? <AsyncButton key={i} type="button" className="trig go" data-act="start-all" data-workflow={w.id} disabled={!!said?.busy} onClick={(e) => { e.stopPropagation(); return startAll(w); }}>{TRIGGER_ICON.manual}{tx(tr.label)}</AsyncButton>
                       : <span key={i} className="trig">{TRIGGER_ICON[tr.kind]}{tr.kind === 'manual' ? tx(tr.label) : t(`automation.trig.${tr.kind}` as 'automation.trig.schedule')}</span>))}</span> : null}
                     {said?.workflow === w.id ? (said.waits ? <BookingWaits files={said.waits} go={(route) => nav.go({ route, query: {} })} onOn={() => nav.refresh()} /> : <span className="wfsaid" role="status" data-testid="start-all-said">{said.text}</span>) : null}
                   </>
@@ -300,12 +301,12 @@ function Triggers({ w, nav }: { w: WorkflowDecl; nav: Nav }) {
         </ul>
       ) : <p className="m">{t('automation.noTriggers')}</p>}
       {schedule ? (
-        <form className="wfsched" onSubmit={(e) => { e.preventDefault(); void save(cron.trim()); }}>
+        <AsyncForm className="wfsched" onSubmit={(e) => { e.preventDefault(); return save(cron.trim()); }}>
           <label>{t('automation.schedule')}<input className="mono" value={cron} onChange={(e) => setCron(e.target.value)} placeholder="0 7 * * *" aria-describedby={`sched-${w.id}`} /></label>
-          <button type="submit" className="btn" disabled={!cron.trim() || (cron.trim() === schedule.cron && !schedule.off)}>{t('automation.scheduleSave')}</button>
-          {!schedule.off ? <button type="button" className="btn ghost" onClick={() => void save(null)}>{t('automation.scheduleOff')}</button> : null}
+          <AsyncButton type="submit" className="btn" disabled={!cron.trim() || (cron.trim() === schedule.cron && !schedule.off)}>{t('automation.scheduleSave')}</AsyncButton>
+          {!schedule.off ? <AsyncButton type="button" className="btn ghost" onClick={() => save(null)}>{t('automation.scheduleOff')}</AsyncButton> : null}
           <span id={`sched-${w.id}`} className="m">{t('automation.scheduleTip')}</span>
-        </form>
+        </AsyncForm>
       ) : null}
     </>
   );
@@ -354,8 +355,8 @@ function Pending({ w, view, nav }: { w: WorkflowDecl; view: AutomationView; nav:
         </>
       ) : <span className="m">{t('automation.pending.unchecked')}</span>}
       <span className="wfactions">
-        <button type="button" className="btn" disabled={busy} onClick={act({ kind: 'check', workflow: w.id }, t('automation.pending.checking'))}><BotIcon />{t('automation.pending.check')}</button>
-        <button type="button" className="btn primary" disabled={busy || count('running') > 0} onClick={act({ kind: 'approve', workflow: w.id }, t('automation.pending.on'), (r) => { const p = (r as { payouts?: PayoutsBooked }).payouts; return p ? t('automation.pending.onPayouts', { n: p.booked, of: p.of }) : undefined; })}>{t('automation.pending.approve')}</button>
+        <AsyncButton type="button" className="btn" disabled={busy} onClick={act({ kind: 'check', workflow: w.id }, t('automation.pending.checking'))}><BotIcon />{t('automation.pending.check')}</AsyncButton>
+        <AsyncButton type="button" className="btn primary" disabled={busy || count('running') > 0} onClick={act({ kind: 'approve', workflow: w.id }, t('automation.pending.on'), (r) => { const p = (r as { payouts?: PayoutsBooked }).payouts; return p ? t('automation.pending.onPayouts', { n: p.booked, of: p.of }) : undefined; })}>{t('automation.pending.approve')}</AsyncButton>
       </span>
       <span className="m">{t('automation.pending.why')}</span>
     </div>
@@ -637,7 +638,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
   if (error) return <RunFromLog id={id} error={error} books={books} nav={nav} />;
   if (!data) return <div className="detail-empty"><div>{t('automation.empty')}</div></div>;
   const w = view.workflows.find((x) => x.id === data.workflow);
-  const act = (cmd: AutomationCommand) => () => { void automationCommand(cmd).then((r) => { if (!r.ok) nav.toast(commandRefusalText(r)); else if (cmd.kind === 'replay' && r.run) nav.go({ route: { area: 'automation', view: 'run', run: r.run }, query: {} }); }); };
+  const act = (cmd: AutomationCommand) => () => automationCommand(cmd).then((r) => { if (!r.ok) nav.toast(commandRefusalText(r)); else if (cmd.kind === 'replay' && r.run) nav.go({ route: { area: 'automation', view: 'run', run: r.run }, query: {} }); });
   const seconds = data.finishedAt ? Math.max(1, Math.round((Date.parse(data.finishedAt) - Date.parse(data.startedAt)) / 1000)) : undefined;
   return (
     <div className="detail-in wfpage" key={id}>
@@ -654,8 +655,8 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
       {data.error ? <p className="warnline" data-testid="run-why">{refusalText(data.error, data.why)}{data.status === 'stuck' && isAppFault(data.why) ? ` ${t('automation.retryAppFault')}` : ''}<WhyGo why={data.why} nav={nav} /></p> : null}
       <div className="wfactions">
         {data.status === 'waiting' ? <button type="button" className="btn" onClick={() => nav.select({ area: 'automation', view: 'tasks', run: id })}>{t('automation.openTask')}</button> : null}
-        {data.status === 'stuck' || data.status === 'parked' ? <button type="button" className="btn" onClick={act({ kind: 'resume', run: id })}>{t('automation.resume')}</button> : null}
-        {data.status === 'done' || data.status === 'stuck' ? <button type="button" className="btn ghost" onClick={act({ kind: 'replay', run: id })}>{t('automation.replay')}</button> : null}
+        {data.status === 'stuck' || data.status === 'parked' ? <AsyncButton type="button" className="btn" onClick={act({ kind: 'resume', run: id })}>{t('automation.resume')}</AsyncButton> : null}
+        {data.status === 'done' || data.status === 'stuck' ? <AsyncButton type="button" className="btn ghost" onClick={act({ kind: 'replay', run: id })}>{t('automation.replay')}</AsyncButton> : null}
         <AskAi context={runContext(id)} />
         {data.status !== 'done' && data.status !== 'discarded' && !discarding ? <button type="button" className="btn ghost" onClick={() => setDiscarding(true)}>{t('automation.discard')}</button> : null}
       </div>
@@ -663,7 +664,7 @@ function RunPage({ id, view, nav, books }: { id: string; view: AutomationView; n
         <div className="ruledraft" data-testid="discard-ask">
           <span>{t('automation.discardAsk')}</span>
           <span className="ruleacts">
-            <button type="button" className="btn primary" onClick={() => { setDiscarding(false); act({ kind: 'discard', run: id, reason: t('automation.discardedByPerson') })(); }}>{t('automation.discardYes')}</button>
+            <AsyncButton type="button" className="btn primary" onClick={() => { setDiscarding(false); return act({ kind: 'discard', run: id, reason: t('automation.discardedByPerson') })(); }}>{t('automation.discardYes')}</AsyncButton>
             <button type="button" className="btn ghost" onClick={() => setDiscarding(false)}>{t('common.cancel')}</button>
           </span>
         </div>
@@ -775,7 +776,7 @@ function ReturnIssues({ ret, books, nav, canEdit }: { ret: PeriodReturn; books: 
 function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; nav: Nav; run?: string; books: Index; canEdit: boolean }) {
   const q = useQuestions();
   const asked = forMe(q.questions, q.me).length;
-  const send = (task: Task, outcome: string) => { void automationCommand({ kind: 'answer', run: task.run, outcome }).then((r) => { if (!r.ok) nav.toast(commandRefusalText(r)); }); };
+  const send = (task: Task, outcome: string) => automationCommand({ kind: 'answer', run: task.run, outcome }).then((r) => { if (!r.ok) nav.toast(commandRefusalText(r)); });
   const forms = useRef(new Map<string, HTMLFormElement | null>());
   const accounts = useWorkspace()?.bankAccounts ?? [];
   const booked = bookedStates(books, accounts);
@@ -787,7 +788,7 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
     if (outcome === 'filed' && confirming !== task.run) { setConfirming(task.run); return; }
     setConfirming(undefined);
     const form = outcome === 'booked' && unbooked(task) ? forms.current.get(task.run) : undefined;
-    if (!form) { send(task, outcome); return; }
+    if (!form) return send(task, outcome);
     nav.toast(t('automation.bookFirst'));
     form.scrollIntoView({ block: 'nearest' });
     const inputs = [...form.querySelectorAll<HTMLInputElement>('input')];
@@ -859,14 +860,14 @@ function TasksPage({ view, nav, run, books, canEdit }: { view: AutomationView; n
                 {confirming === task.run ? (
                   <p className="warnline" data-testid="confirm-filed">
                     {t('automation.confirmFiled', { period: String((task.reads?.return as PeriodReturn | undefined)?.period ?? task.item.id) })}{' '}
-                    <button type="button" className="btn" onClick={answer(task, 'filed')}>{t('automation.confirmFiledYes')}</button>{' '}
+                    <AsyncButton type="button" className="btn" onClick={answer(task, 'filed')}>{t('automation.confirmFiledYes')}</AsyncButton>{' '}
                     <button type="button" className="btn ghost" onClick={() => setConfirming(undefined)}>{t('common.cancel')}</button>
                   </p>
                 ) : null}
                 <span className="wfactions">
-                  {task.do === 'open-login' && task.item.kind === 'source' ? <button type="button" className="btn ghost" data-testid="task-sign-in" onClick={() => { api.signInSource(task.item.id).then(() => nav.toast(t('sources.signInOpened')), (e: unknown) => nav.toast(errorText(e))); }}>{t('sources.signIn')}</button> : null}
+                  {task.do === 'open-login' && task.item.kind === 'source' ? <AsyncButton type="button" className="btn ghost" data-testid="task-sign-in" onClick={() => { return api.signInSource(task.item.id).then(() => nav.toast(t('sources.signInOpened')), (e: unknown) => nav.toast(errorText(e))); }}>{t('sources.signIn')}</AsyncButton> : null}
                   {task.do === 'open-item' && itemRoute(task.item) ? <button type="button" className="btn ghost" onClick={() => nav.go({ route: itemRoute(task.item)!, query: {} })}>{t('automation.openItem')}</button> : null}
-                  {task.outcomes.filter((o) => o !== withheld?.outcome && !(o === 'filed' && confirming === task.run)).map((o) => <button key={o} type="button" className="btn" onClick={answer(task, o)}>{tData(`automation.outcome.${o}`)}</button>)}
+                  {task.outcomes.filter((o) => o !== withheld?.outcome && !(o === 'filed' && confirming === task.run)).map((o) => <AsyncButton key={o} type="button" className="btn" onClick={answer(task, o)}>{tData(`automation.outcome.${o}`)}</AsyncButton>)}
                   <button type="button" className="linkbtn" data-testid="task-run" onClick={() => nav.go({ route: { area: 'automation', view: 'run', run: task.run }, query: {} })}>{t('processing.toRun')}</button>
                 </span>
               </div>
@@ -937,7 +938,7 @@ function PayoutTasks({ groups, books, nav, canEdit }: { groups: PayoutGroup[]; b
   const [waits, setWaits] = useState<string>();
   const book = (g: PayoutGroup) => {
     setBusy(g.provider);
-    api.bookPayouts(g.provider).then(
+    return api.bookPayouts(g.provider).then(
       (r) => { setBusy(undefined); setWaits(r.waits ? g.provider : undefined); nav.toast(payoutsBookedText(r, g.name)); },
       (e: unknown) => { setBusy(undefined); nav.toast(errorText(e)); },
     );
@@ -950,7 +951,7 @@ function PayoutTasks({ groups, books, nav, canEdit }: { groups: PayoutGroup[]; b
           <section key={`${g.provider}-${g.why}`} className="wfunbooked" data-testid="unbooked-payouts" data-why={g.why}>
             <h3>{t('automation.payouts.title', { n: g.refs.length, provider: g.name })}</h3>
             <p className="m">{payoutLead(g)}</p>
-            {g.why === 'ready' && canEdit ? <p><button type="button" className="btn" disabled={busy === g.provider} data-testid="book-payouts" onClick={() => book(g)}>{t('automation.payouts.book', { n: g.refs.length })}</button></p> : null}
+            {g.why === 'ready' && canEdit ? <p><AsyncButton type="button" className="btn" disabled={busy === g.provider} data-testid="book-payouts" onClick={() => book(g)}>{t('automation.payouts.book', { n: g.refs.length })}</AsyncButton></p> : null}
             {waits === g.provider ? <p data-testid="book-payouts-waits"><BookingWaits go={(route) => nav.go({ route, query: {} })} onOn={() => { setWaits(undefined); nav.refresh(); }} /></p> : null}
             <details>
               <summary className="m">{t('automation.payouts.show', { n: g.refs.length })}</summary>

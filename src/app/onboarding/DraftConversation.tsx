@@ -27,6 +27,7 @@ import { placeTurns } from './turn-place.js';
 /** As src/onboarding/draft-talk.ts MAX_TEXT: the server refuses a longer message. */
 const MAX_TALK = 4000;
 import './onboarding.css';
+import { AsyncButton, AsyncForm } from '../shell/AsyncButton.js';
 
 type Send = (patch: DraftPatch) => Promise<boolean>;
 
@@ -169,16 +170,16 @@ export function DraftConversation({ root, onLeave }: { root: string; onLeave(): 
         <div ref={end} className="obend" />
       </div>
       {view && (
-        <form className="obtalk" onSubmit={(e) => { e.preventDefault(); void talk(); }}>
+        <AsyncForm className="obtalk" onSubmit={(e) => { e.preventDefault(); return talk(); }}>
           <div className={busy ? 'obtalkbox busy' : 'obtalkbox'}>
             <textarea
               name="talk" rows={2} maxLength={MAX_TALK} value={text} disabled={!aiAnswers} placeholder={t(aiAnswers ? 'onboarding.talk.placeholder' : aiOff ? 'aiOff.talk' : 'aiSetup.talkWaits')} aria-label={t('onboarding.talk.label')}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void talk(); } }}
             />
-            <button type="submit" className="aisend" data-act="setup-talk" aria-label={t('assistant.send')} disabled={busy || !aiAnswers || !text.trim()}>{ICONS.arrowUp}</button>
+            <AsyncButton type="submit" className="aisend" data-act="setup-talk" aria-label={t('assistant.send')} disabled={busy || !aiAnswers || !text.trim()}>{ICONS.arrowUp}</AsyncButton>
           </div>
-        </form>
+        </AsyncForm>
       )}
     </div>
   );
@@ -255,7 +256,7 @@ function Step({ step, draft, currency, root, busy, send, change, taken, onBankRo
           ? <Answer text={tData(`desktop.q.preset.${step.answer}`)} busy={busy} fromText={marked('preset')} onChange={() => change('preset', { step: 'preset', value: null }, step.answer)} />
           : (
             <div className="obind"><div className="qacts" role="group" aria-label={t('desktop.preset')}>
-              {PRESET_NAMES.map((p) => <button key={p} type="button" className="btn" disabled={busy} data-answer={p} onClick={() => void send({ step: 'preset', value: p })}>{tData(`desktop.q.preset.${p}`)}</button>)}
+              {PRESET_NAMES.map((p) => <AsyncButton key={p} type="button" className="btn" disabled={busy} data-answer={p} onClick={() => send({ step: 'preset', value: p })}>{tData(`desktop.q.preset.${p}`)}</AsyncButton>)}
             </div></div>
           )}
       </div>
@@ -290,7 +291,7 @@ function QuestionStep({ step, draft, busy, send, change, fromText, turns }: { st
   const multi = 'multi' in QUESTIONS[key];
   const [on, setOn] = useState<string[]>(() => list(step.suggested));
   const notes = list(step.answer).map((v) => optionOf(key, v)).filter((o) => o?.caveat);
-  const pick = (value: string) => (multi ? setOn((x) => (x.includes(value) ? x.filter((y) => y !== value) : [...x, value])) : void send({ step: 'question', key, value }));
+  const pick = (value: string) => (multi ? setOn((x) => (x.includes(value) ? x.filter((y) => y !== value) : [...x, value])) : send({ step: 'question', key, value }));
   return (
     <div className="obstep" data-step={key}>
       {key === 'vatRegistered' ? <Ai><p>{t('onboarding.draft.vat')}</p></Ai> : null}
@@ -308,15 +309,15 @@ function QuestionStep({ step, draft, busy, send, change, fromText, turns }: { st
             {/* One list draws the buttons and tells the model what they are (offeredAnswers, #398). */}
             {offeredAnswers(key).map((a) => {
               const label = offeredLabel(say, key, a);
-              if (a.kind === 'unsure') return <button key="unsure" type="button" className="btn ghost" disabled={busy} data-act="question-unsure" onClick={() => void send({ step: 'question', key, value: a.value })}>{label}</button>;
+              if (a.kind === 'unsure') return <AsyncButton key="unsure" type="button" className="btn ghost" disabled={busy} data-act="question-unsure" onClick={() => send({ step: 'question', key, value: a.value })}>{label}</AsyncButton>;
               // the answer «we file no VAT returns» (#347): «nein» to the registration, the same patch as that answer.
-              if (a.kind === 'noVat') return <button key="noVat" type="button" className="btn" disabled={busy} data-answer={NO_VAT} onClick={() => void send({ step: 'question', key: 'vatRegistered', value: 'no' })}>{label}</button>;
-              if (a.kind === 'next') return <button key="next" type="button" className="btn" disabled={busy || ('required' in QUESTIONS[key] && !on.length)} data-act="question-next" onClick={() => void send({ step: 'question', key, value: on })}>{label}</button>;
+              if (a.kind === 'noVat') return <AsyncButton key="noVat" type="button" className="btn" disabled={busy} data-answer={NO_VAT} onClick={() => send({ step: 'question', key: 'vatRegistered', value: 'no' })}>{label}</AsyncButton>;
+              if (a.kind === 'next') return <AsyncButton key="next" type="button" className="btn" disabled={busy || ('required' in QUESTIONS[key] && !on.length)} data-act="question-next" onClick={() => send({ step: 'question', key, value: on })}>{label}</AsyncButton>;
               const chosen = multi ? on.includes(a.value) : list(step.suggested).includes(a.value);
               return (
-                <button key={a.value} type="button" role={multi ? 'checkbox' : undefined} aria-checked={multi ? chosen : undefined} className={`btn${chosen ? ' primary' : ''}`} disabled={busy} data-answer={a.value} onClick={() => pick(a.value)}>
+                <AsyncButton key={a.value} type="button" role={multi ? 'checkbox' : undefined} aria-checked={multi ? chosen : undefined} className={`btn${chosen ? ' primary' : ''}`} disabled={busy} data-answer={a.value} onClick={() => pick(a.value)}>
                   {label}
-                </button>
+                </AsyncButton>
               );
             })}
           </div>
@@ -332,11 +333,11 @@ function FirmCard({ initial, busy, send }: { initial?: Partial<Firm>; busy: bool
   const [f, setF] = useState<Firm>({ name: '', owner: '', ...initial });
   const set = (k: keyof Firm) => (e: { target: { value: string } }) => setF((x) => ({ ...x, [k]: e.target.value }));
   return (
-    <form className="obcard obform" noValidate onSubmit={(e) => { e.preventDefault(); void send({ step: 'firm', value: f }); }}>
+    <AsyncForm className="obcard obform" noValidate onSubmit={(e) => { e.preventDefault(); return send({ step: 'firm', value: f }); }}>
       <label><span>{t('desktop.name')}</span><input name="name" value={f.name} placeholder={t('desktop.namePh')} onChange={set('name')} autoFocus={!initial?.name} /></label>
       <label><span>{t('desktop.owner')}</span><input name="owner" value={f.owner} onChange={set('owner')} /></label>
-      <div className="actions"><button type="submit" className="btn primary" data-act="firm-next" disabled={busy || !f.name.trim() || !f.owner.trim()}>{t('onboarding.draft.next')}</button></div>
-    </form>
+      <div className="actions"><AsyncButton type="submit" className="btn primary" data-act="firm-next" disabled={busy || !f.name.trim() || !f.owner.trim()}>{t('onboarding.draft.next')}</AsyncButton></div>
+    </AsyncForm>
   );
 }
 
@@ -350,7 +351,7 @@ function RatesCard({ initial, busy, send }: { initial?: NetRate[]; busy: boolean
     ...(r.label.trim() ? { label: r.label.trim() } : {}), ...(r.activityId.trim() ? { activityId: r.activityId.trim().toUpperCase() } : {}),
   }));
   return (
-    <form className="obcard obform" noValidate onSubmit={(e) => { e.preventDefault(); void send({ step: 'netRates', value: rates }); }}>
+    <AsyncForm className="obcard obform" noValidate onSubmit={(e) => { e.preventDefault(); return send({ step: 'netRates', value: rates }); }}>
       <span className="rk">{t('desktop.netRateHint')}</span>
       {rows.map((r, i) => (
         <div key={i} className="obrow3">
@@ -359,8 +360,8 @@ function RatesCard({ initial, busy, send }: { initial?: NetRate[]; busy: boolean
           <label><span>{t('desktop.netRateActivityId')}</span><input className="mono" maxLength={5} value={r.activityId} placeholder={t('desktop.optional')} onChange={(e) => set(i, 'activityId', e.target.value)} /></label>
         </div>
       ))}
-      <div className="actions"><button type="submit" className="btn primary" disabled={busy || !rates.length}>{t('onboarding.draft.next')}</button></div>
-    </form>
+      <div className="actions"><AsyncButton type="submit" className="btn primary" disabled={busy || !rates.length}>{t('onboarding.draft.next')}</AsyncButton></div>
+    </AsyncForm>
   );
 }
 
@@ -374,7 +375,7 @@ function BanksCard({ initial, currency, busy, send, onRows }: { initial?: BankSp
   useEffect(() => () => onRows([]), [onRows]);
   const set = (i: number, k: keyof BankRow, v: string) => setRows((x) => x.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
   return (
-    <form className="obcard obform" noValidate onSubmit={(e) => { e.preventDefault(); void send({ step: 'banks', value: rows }); }}>
+    <AsyncForm className="obcard obform" noValidate onSubmit={(e) => { e.preventDefault(); return send({ step: 'banks', value: rows }); }}>
       <datalist id="ob-banks">{Object.keys(BANKS).map((b) => <option key={b} value={b} />)}</datalist>
       {rows.map((r, i) => (
         <div key={i} className="obbankrow">
@@ -386,9 +387,9 @@ function BanksCard({ initial, currency, busy, send, onRows }: { initial?: BankSp
       ))}
       <div className="actions">
         <button type="button" className="btn ghost" onClick={() => setRows((x) => [...x, { ...blank }])}>{t('desktop.addBank')}</button>
-        <button type="submit" className="btn primary" data-act="banks-next" disabled={busy || rows.some((r) => !r.bank.trim())}>{t('onboarding.draft.next')}</button>
+        <AsyncButton type="submit" className="btn primary" data-act="banks-next" disabled={busy || rows.some((r) => !r.bank.trim())}>{t('onboarding.draft.next')}</AsyncButton>
       </div>
-    </form>
+    </AsyncForm>
   );
 }
 

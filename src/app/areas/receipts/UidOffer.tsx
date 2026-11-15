@@ -10,6 +10,7 @@ import { t } from '../../i18n/index.js';
 import { uidToKeep } from '../../../intake/own-invoice.js';
 import type { Nav } from '../index.js';
 import type { Ledger, ReceiptView } from './model.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 export function UidOffer({ v, l, nav }: { v: ReceiptView; l: Ledger; nav: Nav }) {
   const [busy, setBusy] = useState(false);
@@ -18,7 +19,7 @@ export function UidOffer({ v, l, nav }: { v: ReceiptView; l: Ledger; nav: Nav })
   if (!uid) return null;
   const keep = () => {
     setBusy(true);
-    api.patchWorkspace({ company: { uid } }).then(() => {
+    return api.patchWorkspace({ company: { uid } }).then(() => {
       reloadWorkspace();
       nav.toast(t('receipts.uidOffer.kept', { uid }), () => { api.patchWorkspace({ company: { uid: '' } }).then(reloadWorkspace, (e) => nav.toast(errorText(e))); });
     }, (e) => nav.toast(errorText(e))).finally(() => setBusy(false));
@@ -26,7 +27,7 @@ export function UidOffer({ v, l, nav }: { v: ReceiptView; l: Ledger; nav: Nav })
   return (
     <div className="notice" data-testid="uid-offer">
       <span>{t('receipts.uidOffer.ask', { uid })}</span>
-      <button type="button" className="btn" disabled={busy} onClick={keep}>{t('receipts.uidOffer.keep')}</button>
+      <AsyncButton type="button" className="btn" disabled={busy} onClick={keep}>{t('receipts.uidOffer.keep')}</AsyncButton>
     </div>
   );
 }

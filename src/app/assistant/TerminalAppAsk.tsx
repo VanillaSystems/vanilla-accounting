@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { t } from '../i18n/index.js';
 import { api } from '../lib/api.js';
 import { TERMINAL_APP_FACTS, type TerminalApp, type TerminalCli } from '../../platform/terminal.js';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 export function TerminalAppAsk({ apps, busy, onPick }: { apps: readonly TerminalApp[]; busy?: boolean; onPick(app: TerminalApp, remember: boolean): void }) {
   const [remember, setRemember] = useState(true);
@@ -41,9 +42,9 @@ export function TerminalOpened({ cli, app, suggestion, testId }: { cli: Terminal
       <span className="m">{t('terminal.openedEmpty', names)}</span>
       <span className="rk">{t('terminal.suggestion')}</span>
       <p>{suggestion}</p>
-      <button type="button" className="linkbtn" onClick={() => { void navigator.clipboard?.writeText(suggestion).then(() => setCopied(true), () => undefined); }}>
+      <AsyncButton type="button" className="linkbtn" onClick={() => { return navigator.clipboard?.writeText(suggestion).then(() => setCopied(true), () => undefined); }}>
         {t(copied ? 'terminal.copied' : 'terminal.copySuggestion')}
-      </button>
+      </AsyncButton>
     </div>
   );
 }

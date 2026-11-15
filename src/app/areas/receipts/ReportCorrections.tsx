@@ -20,6 +20,7 @@ import { baseCurrency } from '../../../engines/index.js';
 import { I } from './icons.js';
 import { at } from './view.js';
 import { hrefOf } from '../../shell/history.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 const nameOf = (key: string): string => { const p = parsePeriod(key, localToday()); return p ? periodName(p) : key; };
 
@@ -29,7 +30,7 @@ export function ReportCorrections({ receipt, books, canEdit, said }: { receipt: 
   if (!offers.length) return null;
   const book = (order: string, date: string, period: string) => {
     setBusy(true);
-    api.reportCorrection(receipt, order, date)
+    return api.reportCorrection(receipt, order, date)
       .then(() => said(t('receipts.report.corrected', { order, period }), true), (e: unknown) => said(errorText(e), false))
       .finally(() => setBusy(false));
   };
@@ -43,7 +44,7 @@ export function ReportCorrections({ receipt, books, canEdit, said }: { receipt: 
             <span key={`${f.order}-${f.date}`} data-testid="report-correction">
               {t(f.booked ? 'receipts.report.filedRefundBooked' : f.byHand ? 'receipts.report.filedRefundByHand' : 'receipts.report.filedRefund', { order: f.order, date: formatDate(f.date), amount: `${f.currency ?? baseCurrency()} ${fmt(f.amount)}`, period })}{' '}
               {f.booked ? <a className="golink" data-testid="report-correction-booked" href={hrefOf(at({ area: 'journal', id: f.booked.entry }, f.booked.date))}>{t('receipts.report.filedRefundBookedAt', { date: formatDate(f.booked.date), ref: f.booked.ref })}</a> : null}
-              {canEdit && !f.byHand && !f.booked ? <button type="button" className="linkbtn" disabled={busy} data-tip={t('receipts.report.correctionTip', { period })} onClick={() => book(f.order, f.date, period)}>{t('receipts.report.bookCorrection')}</button> : null}{' '}
+              {canEdit && !f.byHand && !f.booked ? <AsyncButton type="button" className="linkbtn" disabled={busy} data-tip={t('receipts.report.correctionTip', { period })} onClick={() => book(f.order, f.date, period)}>{t('receipts.report.bookCorrection')}</AsyncButton> : null}{' '}
             </span>
           );
         })}

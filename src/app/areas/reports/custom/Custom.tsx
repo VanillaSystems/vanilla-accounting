@@ -22,6 +22,7 @@ import { filtersInWords, refusalText } from '../../../../reports/words.js';
 import { ReportView, uiWords } from './ReportView.js';
 import { editing, reloadSaved, startEditing, undoWrite, useEditing, useSaved } from './store.js';
 import { ReportForm } from './Form.js';
+import { AsyncButton } from '../../../shell/AsyncButton.js';
 
 type Props = AreaProps<Extract<RouteOf<'reports'>, { report: 'custom' }>>;
 
@@ -86,10 +87,9 @@ export function CustomDetail(props: Props) {
   if (!saved) return <div className="detail-empty"><div>{t('custom.select')}</div></div>;
   if (!spec) return <div className="detail-empty"><div>{t('custom.unreadable', { why: 'refusal' in saved ? refusalText(saved.refusal, uiWords.t) : '' })}</div></div>;
 
-  const file = (format: 'pdf' | 'csv') => {
+  const file = (format: 'pdf' | 'csv') =>
     postDownload('/api/reports/file', { spec: specData(spec), period: token, format, language: language() }, `report.${format}`)
       .catch((e: unknown) => nav.toast(t('assistant.report.fileFailed', { why: errorText(e) })));
-  };
   const remove = async () => {
     try {
       const w = await api.deleteReport(saved.slug);
@@ -107,10 +107,10 @@ export function CustomDetail(props: Props) {
         <button type="button" className={onPage || !own ? 'on' : ''} aria-pressed={onPage || !own} data-testid="page-period" onClick={() => setOnPage(true)}>{t('custom.pagePeriod', { period: periodName(period) })}</button>
       </div>
       <div className="ruleacts cacts">
-        <button type="button" className="btn ghost" onClick={() => file('pdf')}>{t('assistant.report.pdf')}</button>
-        <button type="button" className="btn ghost" onClick={() => file('csv')}>{t('assistant.report.csv')}</button>
+        <AsyncButton type="button" className="btn ghost" onClick={() => file('pdf')}>{t('assistant.report.pdf')}</AsyncButton>
+        <AsyncButton type="button" className="btn ghost" onClick={() => file('csv')}>{t('assistant.report.csv')}</AsyncButton>
         {canEdit ? <button type="button" className="btn ghost" data-testid="report-edit" onClick={() => startEditing({ slug: saved.slug, spec })}>{t('custom.edit')}</button> : null}
-        {canEdit ? <button type="button" className="btn ghost" data-testid="report-delete" onClick={() => void remove()}>{t('custom.delete')}</button> : null}
+        {canEdit ? <AsyncButton type="button" className="btn ghost" data-testid="report-delete" onClick={() => remove()}>{t('custom.delete')}</AsyncButton> : null}
       </div>
       {error ? <p className="warnline">{error}</p> : null}
       {!result && !error ? <p className="m">{t('custom.running')}</p> : null}

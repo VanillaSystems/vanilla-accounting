@@ -22,6 +22,7 @@ import { topicRules } from '../partners/model.js';
 import { CHEV, DetailGroup, DetailsBlock, Go, linesOf, NotesBlock, SelfBlock } from '../partners/page.js';
 import { readRules } from '../partners/partners.js';
 import './knowledge.css';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'knowledge'>>;
 
@@ -94,15 +95,15 @@ function NewPage({ nav }: { nav: Nav }) {
     }
   };
   return (
-    <form className="kwnewform" onSubmit={(e) => void submit(e)}>
+    <AsyncForm className="kwnewform" onSubmit={(e) => submit(e)}>
       <label><span className="m">{t('knowledge.newPage.title')}</span>
         <input type="text" value={title} autoFocus placeholder={t('knowledge.newPage.placeholder')} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') setAdding(false); }} />
       </label>
       <span className="kwnacts">
-        <button type="submit" className="btn primary" disabled={busy}>{t('knowledge.newPage.create')}</button>
+        <AsyncButton type="submit" className="btn primary" disabled={busy}>{t('knowledge.newPage.create')}</AsyncButton>
         <button type="button" className="btn ghost" onClick={() => setAdding(false)}>{t('common.cancel')}</button>
       </span>
-    </form>
+    </AsyncForm>
   );
 }
 

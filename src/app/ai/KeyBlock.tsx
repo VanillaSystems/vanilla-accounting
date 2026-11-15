@@ -9,6 +9,7 @@ import { KEY_PAGES, SETUP_KEYS, type AiSetupView, type KeySaved, type Probation,
 import { t } from '../i18n/index.js';
 import { ApiError, errorText } from '../lib/api.js';
 import { ICONS } from '../areas/icons.js';
+import { AsyncButton, AsyncForm } from '../shell/AsyncButton.js';
 
 const providerName = (id: SetupKey) => t(`aiSetup.key.${id}`);
 
@@ -68,14 +69,14 @@ export function KeyBlock({ view, open, onSave, onKept }: {
           : set ? (
             <>
               {testLine(id, test)}
-              <span className="aikey"><span className="mono">{t('aiSetup.key.kept')}</span><button type="button" className="btn ghost" disabled={busy} onClick={() => void remove()}>{t('ai.key.remove')}</button></span>
+              <span className="aikey"><span className="mono">{t('aiSetup.key.kept')}</span><AsyncButton type="button" className="btn ghost" disabled={busy} onClick={() => remove()}>{t('ai.key.remove')}</AsyncButton></span>
             </>
           ) : (
             <>
-              <form className={refused ? 'aikey bad' : 'aikey'} onSubmit={save}>
+              <AsyncForm className={refused ? 'aikey bad' : 'aikey'} onSubmit={save}>
                 <input type="password" name="api-key" autoComplete="off" spellCheck={false} value={key} aria-label={t('aiSetup.key.placeholder', { provider: providerName(id) })} placeholder={t('aiSetup.key.placeholder', { provider: providerName(id) })} onChange={(e) => setKey(e.target.value)} />
-                <button type="submit" className="btn primary" data-act="key-save" disabled={busy || !key.trim()}>{busy ? t('aiSetup.key.checking') : t('aiSetup.key.save')}</button>
-              </form>
+                <AsyncButton type="submit" className="btn primary" data-act="key-save" disabled={busy || !key.trim()}>{busy ? t('aiSetup.key.checking') : t('aiSetup.key.save')}</AsyncButton>
+              </AsyncForm>
               {refused ? <p className="warnline" data-key-state="refused">{ICONS.warn}{refused}</p> : null}
             </>
           )}

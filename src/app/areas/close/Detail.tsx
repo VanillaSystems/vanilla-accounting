@@ -28,6 +28,7 @@ import { Go } from '../vat/links.js';
 import { at } from '../receipts/view.js';
 import { VatCodeField } from '../codes/VatCodeField.js';
 import { codeLabel } from '../codes/names.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'close'>>;
 
@@ -192,7 +193,7 @@ function YearEndBalances({ d, nav, canEdit }: StepProps) {
                     {b.stated !== undefined ? t('close.balances.change') : b.proof === 'bank' ? t('close.balances.enter') : t('close.balances.count')}
                   </button>
                 )}
-                {editable && b.document && <button type="button" className="quiet2" onClick={() => remove(b)}>{t('close.balances.remove')}</button>}
+                {editable && b.document && <AsyncButton type="button" className="quiet2" onClick={() => remove(b)}>{t('close.balances.remove')}</AsyncButton>}
               </div>
               {open === b.account && <BalanceForm d={d} b={b} nav={nav} onDone={() => setOpen(null)} />}
             </div>
@@ -221,7 +222,7 @@ function BalanceForm({ d, b, nav, onDone }: { d: YearCloseView; b: Balance; nav:
     if (ok) onDone();
   }
   return (
-    <form className="form inline" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onDone(); } }}>
+    <AsyncForm className="form inline" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onDone(); } }}>
       <label>{bank ? t('close.balances.amount', { currency: b.currency }) : t('close.balances.countAmount', { currency: b.currency })}
         <input className="mono" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} autoFocus />
       </label>
@@ -231,10 +232,10 @@ function BalanceForm({ d, b, nav, onDone }: { d: YearCloseView; b: Balance; nav:
         </label>
       )}
       <div className="acts">
-        <button type="submit" className="btn primary" disabled={!valid}>{t('close.balances.save')}</button>
+        <AsyncButton type="submit" className="btn primary" disabled={!valid}>{t('close.balances.save')}</AsyncButton>
         <button type="button" className="btn ghost" onClick={onDone}>{t('common.cancel')}</button>
       </div>
-    </form>
+    </AsyncForm>
   );
 }
 
@@ -274,11 +275,11 @@ function Entries({ d, nav, canEdit }: StepProps) {
   const editable = canEdit && !d.closed;
   const mark = (id: string, state: TemplateState | null, before: TemplateState | undefined) => {
     const label = tx(`yearClose.template.${id}`);
-    if (state) { act(nav, () => api.markYearEndEntry(d.year, id, state), state === 'na' ? t('close.markedNa', { label }) : t('close.markedDone', { label }), () => api.markYearEndEntry(d.year, id, before ?? null)); return; }
+    if (state) return act(nav, () => api.markYearEndEntry(d.year, id, state), state === 'na' ? t('close.markedNa', { label }) : t('close.markedDone', { label }), () => api.markYearEndEntry(d.year, id, before ?? null));
     // Open again: the booking the step made is removed with it (r9c-16); the undo books it back as it was and marks the step as before.
     let removed: JournalEntry[] = [];
     const booked = d.templates.find((tp) => tp.id === id)?.booked ?? [];
-    act(nav, async () => { removed = (await api.markYearEndEntry(d.year, id, null)).removed ?? []; },
+    return act(nav, async () => { removed = (await api.markYearEndEntry(d.year, id, null)).removed ?? []; },
       booked.length ? t('close.reopenedUnbooked', { label, refs: booked.map((b) => b.transactionRef).join(', ') }) : t('close.markedOpen', { label }),
       async () => {
         for (const e of removed) await api.createJournalEntry({ id: e.id, transactionRef: e.transactionRef, date: e.date, accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, description: e.description ?? '', ...(e.vatCode && { vatCode: e.vatCode }), origin: e.origin });
@@ -290,7 +291,7 @@ function Entries({ d, nav, canEdit }: StepProps) {
     const label = tx(`yearClose.template.${tp.id}`);
     const description = tp.id === 'receivables' ? t('close.receivablesText', { year: d.year, numbers: d.receivables.invoices.map((i) => i.number).join(', ') }) : label;
     let result: { removed: JournalEntry[]; entry?: JournalEntry } = { removed: [] };
-    act(nav, async () => { result = await api.rebookYearEndEntry(d.year, tp.id, description); },
+    return act(nav, async () => { result = await api.rebookYearEndEntry(d.year, tp.id, description); },
       tp.stale!.now > 0 ? t('close.rebooked', { label, now: fmt(tp.stale!.now), booked: fmt(tp.stale!.booked) }) : t('close.rebookedGone', { label, refs: (tp.booked ?? []).map((b) => b.transactionRef).join(', ') }),
       async () => {
         if (result.entry) await api.deleteJournalEntry(result.entry.id);
@@ -310,18 +311,18 @@ function Entries({ d, nav, canEdit }: StepProps) {
               {tp.stale ? (
                 <>
                   <span className="st stale" data-testid="stale-figure">{t('close.staleFigure', { booked: fmt(tp.stale.booked), now: fmt(tp.stale.now) })}</span>
-                  {editable && <button type="button" className="btn" onClick={() => rebook(tp)}>{t('close.rebook')}</button>}
+                  {editable && <AsyncButton type="button" className="btn" onClick={() => rebook(tp)}>{t('close.rebook')}</AsyncButton>}
                 </>
               ) : tp.state ? (
                 <>
                   <span className={`st${tp.state === 'na' ? ' na' : ''}`}>{tp.state === 'na' ? t('yearClose.stateNa') : <>{I.check}{t('close.booked')}</>}</span>
                   {tp.booked && !d.state.templates[tp.id]
                     ? <span className="m" data-testid="booked-by">{t('close.bookedAs')} {tp.booked.map((b, i) => <Fragment key={b.id}>{i > 0 && ', '}<button type="button" className="golink" onClick={() => nav.go({ route: { area: 'journal', id: b.id }, query: { period: parsePeriod(d.year, localToday())! } })}>{b.transactionRef}</button></Fragment>)}</span>
-                    : editable && <button type="button" className="quiet2" onClick={() => mark(tp.id, null, tp.state)}>{t('close.undoMark')}</button>}
+                    : editable && <AsyncButton type="button" className="quiet2" onClick={() => mark(tp.id, null, tp.state)}>{t('close.undoMark')}</AsyncButton>}
                 </>
               ) : editable && (
                 <>
-                  <button type="button" className="btn ghost" onClick={() => mark(tp.id, 'na', undefined)}>{t('yearClose.markNa')}</button>
+                  <AsyncButton type="button" className="btn ghost" onClick={() => mark(tp.id, 'na', undefined)}>{t('yearClose.markNa')}</AsyncButton>
                   <button type="button" className="btn" onClick={() => setOpen(open === tp.id ? null : tp.id)}>{t('yearClose.book')}</button>
                 </>
               )}
@@ -359,7 +360,7 @@ function EntryForm({ d, tp, nav, onDone }: { d: YearCloseView; tp: EntryTemplate
     if (ok) onDone();
   }
   return (
-    <form className="form inline" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onDone(); } }}>
+    <AsyncForm className="form inline" onSubmit={save} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onDone(); } }}>
       <AccountList />
       <label>{t('yearClose.form.date')}<input type="date" value={f.date} onChange={set('date')} autoFocus /></label>
       <label>{t('yearClose.form.debit')}<input className="mono" list="close-accounts" value={f.accountDebit} onChange={set('accountDebit')} /></label>
@@ -368,7 +369,7 @@ function EntryForm({ d, tp, nav, onDone }: { d: YearCloseView; tp: EntryTemplate
       <VatCodeField name="vatCode" label={t('yearClose.form.vatCode')} defaultValue={f.vatCode} onValue={(vatCode) => setF((was) => ({ ...was, vatCode }))} />
       <label className="wide">{t('yearClose.form.description')}<input value={f.description} onChange={set('description')} /></label>
       <div className="acts">
-        <button type="submit" className="btn primary" disabled={!valid}>{t('yearClose.form.save')}</button>
+        <AsyncButton type="submit" className="btn primary" disabled={!valid}>{t('yearClose.form.save')}</AsyncButton>
         <button type="button" className="btn ghost" onClick={onDone}>{t('common.cancel')}</button>
         <span className="m">{tp.id === 'receivables' ? t('close.receivablesHint') : ''}</span>
       </div>
@@ -379,10 +380,10 @@ function EntryForm({ d, tp, nav, onDone }: { d: YearCloseView; tp: EntryTemplate
       ) : null}
       {tp.id === 'receivables' && !d.accounts.receivables.inChart && (
         <p className="warnline" data-testid="receivables-account-missing">{I.dot}{t('close.receivablesAccountMissing', { account: d.accounts.receivables.account })}{' '}
-          <button type="button" className="btn ghost" onClick={() => act(nav, () => api.setAccountName(d.accounts.receivables.account, t('close.receivablesAccountName')), t('close.accountAdded', { account: d.accounts.receivables.account }))}>{t('close.addAccount', { account: d.accounts.receivables.account })}</button>
+          <AsyncButton type="button" className="btn ghost" onClick={() => act(nav, () => api.setAccountName(d.accounts.receivables.account, t('close.receivablesAccountName')), t('close.accountAdded', { account: d.accounts.receivables.account }))}>{t('close.addAccount', { account: d.accounts.receivables.account })}</AsyncButton>
         </p>
       )}
-    </form>
+    </AsyncForm>
   );
 }
 
@@ -428,7 +429,7 @@ function Close({ d, nav, canEdit }: StepProps) {
         </div>
       )}
       {canEdit && toBook && !locked && (
-        <p><button type="button" className="btn" onClick={() => act(nav, () => api.bookRevaluation(d.year), t('close.fxBookedToast'))}>{t('yearClose.fxBook')}</button> <span className="m">{t('close.fxRebook')}</span></p>
+        <p><AsyncButton type="button" className="btn" onClick={() => act(nav, () => api.bookRevaluation(d.year), t('close.fxBookedToast'))}>{t('yearClose.fxBook')}</AsyncButton> <span className="m">{t('close.fxRebook')}</span></p>
       )}
       <h3>{t('yearClose.sectionResult')}</h3>
       <p className="m">{t(chargesVat() ? 'yearClose.resultIntro' : 'yearClose.resultIntroNoVat')}</p>
@@ -519,9 +520,9 @@ function Open({ d, books, nav, canEdit }: StepProps) {
       {o.causes.map((c, i) => <p key={i} className="warnline">{I.dot}{causeText(c)}</p>)}
       {d.opened && <p className="okline">{I.check}{t('yearClose.openedNote', { date: formatDate(d.state.openedAt) })}</p>}
       {canEdit && (
-        <p><button type="button" className="btn primary" disabled={o.residual !== 0} onClick={() => act(nav, () => api.openYear(d.year), t('close.openedToast', { year: next }))}>
+        <p><AsyncButton type="button" className="btn primary" disabled={o.residual !== 0} onClick={() => act(nav, () => api.openYear(d.year), t('close.openedToast', { year: next }))}>
           {d.opened ? t('yearClose.update') : t('yearClose.open')}
-        </button></p>
+        </AsyncButton></p>
       )}
     </>
   );
@@ -571,12 +572,12 @@ function Profit({ d, nav, canEdit }: StepProps) {
       </div>
       {a.missing.length > 0 && (
         <p className="warnline" data-testid="allocation-accounts-missing">{I.dot}{t('close.allocationAccountsMissing', { accounts: a.missing.map((m) => m.account).join(', ') })}{' '}
-          {a.missing.map((m) => <Fragment key={m.account}><button type="button" className="btn ghost" onClick={() => act(nav, () => api.setAccountName(m.account, tx(`close.allocationAccountName.${m.role}`)), t('close.accountAdded', { account: m.account }))}>{t('close.addAccount', { account: m.account })}</button>{' '}</Fragment>)}
+          {a.missing.map((m) => <Fragment key={m.account}><AsyncButton type="button" className="btn ghost" onClick={() => act(nav, () => api.setAccountName(m.account, tx(`close.allocationAccountName.${m.role}`)), t('close.accountAdded', { account: m.account }))}>{t('close.addAccount', { account: m.account })}</AsyncButton>{' '}</Fragment>)}
         </p>
       )}
       {a.dividend && <p className="m">{t('close.withholdingDue')}</p>}
       <p>
-        <button type="button" className="btn" disabled={!ready} onClick={book}>{t('yearClose.allocation.book')}</button>{' '}
+        <AsyncButton type="button" className="btn" disabled={!ready} onClick={book}>{t('yearClose.allocation.book')}</AsyncButton>{' '}
         {!d.closed && <span className="m">{t('close.afterResolution')}</span>}
       </p>
     </>

@@ -59,6 +59,7 @@ import { baseCurrency, chargesVat, filing, vat, withoutInputTax } from '../../..
 import { correctionName } from '../../lib/vat-words.js';
 import { TagFields, tagField, tagsOfForm } from './TagFields.js';
 import { sameTags, valueLabel } from '../../../books/tags.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -80,12 +81,12 @@ function OneEntry(props: Props) {
 
 /** The place of an entry just deleted: nothing moves under the pointer, and the undo stays while its place is shown, also after leaving and coming back (r6h-28, r7h-31). */
 function Deleted({ e, nav }: { e: JournalEntry; nav: AreaProps<RouteOf<'journal'>>['nav'] }) {
-  const back = () => { createEntry(nav, undoInput(e)).then((entry) => { if (entry) { setUi({ deleted: undefined }); recentlyDeleted.delete(e.id); selectNew(nav, entry.id); } }); };
+  const back = () => createEntry(nav, undoInput(e)).then((entry) => { if (entry) { setUi({ deleted: undefined }); recentlyDeleted.delete(e.id); selectNew(nav, entry.id); } });
   return (
     <div className="detail-empty" data-testid="deleted">
       <div>
         <p>{t('journal.deletedHere', { text: e.description ?? e.transactionRef })}</p>
-        <p><button type="button" className="btn" onClick={back}>{t('changes.handUndo')}</button></p>
+        <p><AsyncButton type="button" className="btn" onClick={back}>{t('changes.handUndo')}</AsyncButton></p>
         <p className="m">{t('journal.deletedHint')}</p>
       </div>
     </div>
@@ -113,7 +114,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
   const payment = tx ? (j.byRef.get(tx.ref) ?? []).map((x) => x.e) : [];
   const hers = payment.filter((x) => x.origin === 'manual');
   const [asking, setAsking] = useState(false);
-  const rebook = (overwrite: boolean) => { setAsking(false); if (tx) void reclassify(nav, tx.ref, payment, overwrite).then((es) => es?.[0] && selectNew(nav, es[0].id)); };
+  const rebook = (overwrite: boolean) => { setAsking(false); if (tx) return reclassify(nav, tx.ref, payment, overwrite).then((es) => { if (es?.[0]) selectNew(nav, es[0].id); }); };
   const seen = whySeen(e, props.books.receipts);
   // Input tax on other proof than a receipt (#134): the person's words, kept on the payment.
   const proof = !v.receipts.length && e.vatCode ? tx?.inputTaxProof : undefined;
@@ -172,7 +173,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
       {v.evidence && (
         <div className="notice warn" data-testid="evidence">
           {I.dot}<span>{evidenceText(e, v.evidence)}</span>
-          {edit && clickable(v.evidence) && <a href="#" data-testid="evidence-book" onClick={(ev) => { ev.preventDefault(); void fixEvidence(nav, e, v.evidence!); }}>{t(v.evidence.kind === 'vatWithoutReceipt' ? 'journal.evidence.bookWithoutReceipt' : 'journal.evidence.bookByReceipt')}</a>}
+          {edit && clickable(v.evidence) && <AsyncButton type="button" className="linkbtn" data-testid="evidence-book" onClick={() => fixEvidence(nav, e, v.evidence!)}>{t(v.evidence.kind === 'vatWithoutReceipt' ? 'journal.evidence.bookWithoutReceipt' : 'journal.evidence.bookByReceipt')}</AsyncButton>}
         </div>
       )}
 
@@ -181,7 +182,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
         : v.locked && (
           <div className="notice">
             {ICONS.lock}<span>{t(chargesVat() ? 'journal.lockedNotice' : 'journal.lockedNoticeClosed', { period: quarterName(e.date) })}</span>
-            {canEdit && open && <a href="#" onClick={(ev) => { ev.preventDefault(); runAct(props, 'correct'); }}>{t('journal.correctIn', { period: correctionPeriodName(props.books) })}</a>}
+            {canEdit && open && <a href="#" data-busy-exempt="opens the correction form" onClick={(ev) => { ev.preventDefault(); runAct(props, 'correct'); }}>{t('journal.correctIn', { period: correctionPeriodName(props.books) })}</a>}
           </div>
         )}
 
@@ -232,8 +233,8 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
             <AskAi context={{ kind: 'entry', id: e.id, label: e.description ?? e.id }} />
             {edit && (
               <div className="dangers">
-                {tx && <button type="button" data-tip={t(aiOff ? 'journal.reclassifyTipOff' : 'journal.reclassifyTip')} onClick={() => (hers.length ? setAsking(true) : rebook(false))}>{t('journal.reclassify')}</button>}
-                <button type="button" className="del" onClick={() => runAct(props, 'del')}>{t('common.delete')}</button>
+                {tx && <AsyncButton type="button" data-tip={t(aiOff ? 'journal.reclassifyTipOff' : 'journal.reclassifyTip')} onClick={() => (hers.length ? setAsking(true) : rebook(false))}>{t('journal.reclassify')}</AsyncButton>}
+                <button type="button" className="del" data-busy-exempt="the place shows the deletion at once" onClick={() => runAct(props, 'del')}>{t('common.delete')}</button>
               </div>
             )}
           </Sec>
@@ -249,7 +250,7 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
 function BookedByText({ e, nav }: { e: JournalEntry; nav: Props['nav'] }) {
   return (
     <>{bookedByText(e, say)}{e.by?.kind === 'rule' && <> · <button type="button" className="golink" data-testid="to-rules" onClick={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })}>{t('area.company')} › {t('company.rules')}</button></>}
-      {e.by?.kind === 'assistant' && <> · <button type="button" className="golink" data-testid="to-conversation" onClick={() => void showConversation((e.by as { conversation: string }).conversation)}>{t('journal.toConversation')}</button></>}</>
+      {e.by?.kind === 'assistant' && <> · <AsyncButton type="button" className="golink" data-testid="to-conversation" onClick={() => showConversation((e.by as { conversation: string }).conversation)}>{t('journal.toConversation')}</AsyncButton></>}</>
   );
 }
 
@@ -267,7 +268,7 @@ function LinkReceipt({ books, nav, entries }: Props & { entries: JournalEntry[] 
           {options.map((r) => <option key={r.id} value={r.id}>{name(r)}</option>)}
         </select>
       </label>
-      {' '}<button type="button" className="golink" onClick={() => void linkReceipt(nav, chosen.id, entries[0].transactionRef, name(chosen))}>{t('receipts.linkVerbShort')}</button>
+      {' '}<AsyncButton type="button" className="golink" onClick={() => linkReceipt(nav, chosen.id, entries[0].transactionRef, name(chosen))}>{t('receipts.linkVerbShort')}</AsyncButton>
     </span>
   );
 }
@@ -290,9 +291,9 @@ export function EvidenceFix({ e, check, nav }: { e: JournalEntry; check: Evidenc
   if (check.decided) return <span className="m" data-testid="evidence-decided">{t('journal.evidence.decided')}</span>;
   if (!clickable(check)) return null;
   return (
-    <button type="button" className="btn ghost" data-testid="evidence-book" onClick={() => void fixEvidence(nav, e, check)}>
+    <AsyncButton type="button" className="btn ghost" data-testid="evidence-book" onClick={() => fixEvidence(nav, e, check)}>
       {t(check.kind === 'vatWithoutReceipt' ? 'journal.evidence.bookWithoutReceipt' : 'journal.evidence.bookByReceipt')}
-    </button>
+    </AsyncButton>
   );
 }
 
@@ -305,11 +306,11 @@ function EntryActions(props: Props & { v: EntryView; j: Journal }) {
   const newYear = newYearAfter(e.date);
   return (
     <div className="jacts" data-testid="entry-actions">
-      {!v.locked && <button type="button" className="quiet2" data-tip={t('journal.reverseTip')} onClick={() => runAct(props, 'reverse')}>{t('journal.reverse')}</button>}
-      <button type="button" className="quiet2" data-tip={t('journal.copyTip')} onClick={() => runAct(props, 'copy')}>{t('journal.copy')}</button>
+      {!v.locked && <button type="button" data-busy-exempt="opens the new entry form" className="quiet2" data-tip={t('journal.reverseTip')} onClick={() => runAct(props, 'reverse')}>{t('journal.reverse')}</button>}
+      <button type="button" data-busy-exempt="opens the new entry form" className="quiet2" data-tip={t('journal.copyTip')} onClick={() => runAct(props, 'copy')}>{t('journal.copy')}</button>
       {accrual && (back
         ? <button type="button" className="golink" data-testid="reversed" onClick={() => nav.select({ area: 'journal', id: back.id })}>{t('journal.reversedOn', { date: formatDate(back.date) })}</button>
-        : <button type="button" className="quiet2" data-testid="reverse-new-year" data-tip={t('journal.reverseNewYearTip')} onClick={() => runAct(props, 'reverseNewYear')}>{t('journal.reverseNewYear', { date: formatDate(newYear) })}</button>)}
+        : <button type="button" data-busy-exempt="opens the new entry form" className="quiet2" data-testid="reverse-new-year" data-tip={t('journal.reverseNewYearTip')} onClick={() => runAct(props, 'reverseNewYear')}>{t('journal.reverseNewYear', { date: formatDate(newYear) })}</button>)}
     </div>
   );
 }
@@ -422,16 +423,16 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
     if (!changed.length) return;
     const patch = Object.fromEntries(changed.map((k) => [k, k === 'tags' ? nextTags ?? null : next[k as Exclude<Field, 'tags'>]]));
     // Refused (a held period, a code against the money's direction): the field shows the booked value again, not the refused one.
-    void saveEntry(nav, e, patch, changed).then((saved) => { if (!saved) reset(true); });
+    return saveEntry(nav, e, patch, changed).then((saved) => { if (!saved) reset(true); });
   }
 
   return (
     <Sec k="buchung" val={edit ? t('journal.editable') : t('journal.readOnly')}>
-      <form
+      <AsyncForm
         ref={form}
         className="form"
         autoComplete="off"
-        onSubmit={(ev) => { ev.preventDefault(); save(); }}
+        onSubmit={(ev) => { ev.preventDefault(); return save(); }}
         onBlur={save}
         onKeyDown={(ev) => { if (ev.key === 'Enter' && !ev.defaultPrevented) { ev.preventDefault(); save(); } }}
       >
@@ -449,7 +450,7 @@ function EntryForm(props: Props & { v: EntryView; edit: boolean }) {
         <div className="err" role="alert">{err}</div>
         {note && <div className="fhint" data-testid="vat-from-rate">{note}</div>}
         {edit && <div className="fhint">{t('journal.saveHint')}</div>}
-      </form>
+      </AsyncForm>
     </Sec>
   );
 }

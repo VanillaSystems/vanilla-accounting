@@ -65,6 +65,7 @@ import { PdfFacts } from './PdfFacts.js';
 import { SelectionView } from '../../selection/SelectionView.js';
 import { paymentRows } from '../../selection/rows.js';
 import { clickRow, useSelection, useShown } from '../../selection/store.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'bank'>>;
 
@@ -301,7 +302,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
                 <dt>{t('bank.statement')}</dt><dd className="mono" style={{ fontSize: 11.5 }} data-tip={s.file.filename}>{s.file.filename}</dd>
                 <dt>{t('bank.account')}</dt><dd className="mono">{s.account.account}</dd>
               </dl>
-              {canEdit && !closed ? <button type="button" className="linkbtn" data-testid="remove-statement" data-tip={t('bank.removeStatementTip')} onClick={() => void removeStatement(nav, s)}>{t('bank.removeStatement')}</button> : null}
+              {canEdit && !closed ? <AsyncButton type="button" className="linkbtn" data-testid="remove-statement" data-tip={t('bank.removeStatementTip')} onClick={() => removeStatement(nav, s)}>{t('bank.removeStatement')}</AsyncButton> : null}
             </Sec>
           )}
         </aside>
@@ -345,12 +346,12 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
       ) : saleWithoutVat ? (
         <> · <span className="wn" data-testid="sale-without-vat">{t('bank.saleNoVat')}</span>{edit && <>
           {' '}<button type="button" className="golink" data-tip={t('bank.uploadInvoiceTip')} onClick={() => intakeAdd.run(props)}>{t('bank.uploadInvoice')}</button>
-          {' · '}<button type="button" className="golink" data-tip={t('bank.noVatTip')} onClick={() => setNoReceipt(nav, tx, true)}>{t('bank.noVat')}</button>
+          {' · '}<AsyncButton type="button" className="golink" data-tip={t('bank.noVatTip')} onClick={() => setNoReceipt(nav, tx, true)}>{t('bank.noVat')}</AsyncButton>
         </>}</>
       ) : b.needsReceipt(tx) ? (
-        <> · <span className="wn">{t('bank.noReceipt')}</span>{edit && <> <button type="button" className="golink" data-testid="no-receipt-needed" onClick={() => setNoReceipt(nav, tx, true, false, !!tx.amount && b.unbooked(tx))}>{t('bank.noReceiptNeeded')}</button> · <FindPair key={tx.ref} on={{ payment: tx.ref }} books={props.books} nav={nav} compact /></>}</>
+        <> · <span className="wn">{t('bank.noReceipt')}</span>{edit && <> <AsyncButton type="button" className="golink" data-testid="no-receipt-needed" onClick={() => setNoReceipt(nav, tx, true, false, !!tx.amount && b.unbooked(tx))}>{t('bank.noReceiptNeeded')}</AsyncButton> · <FindPair key={tx.ref} on={{ payment: tx.ref }} books={props.books} nav={nav} compact /></>}</>
       ) : tx.noReceiptNeeded ? (
-        <> · {t('bank.noReceiptNotNeeded')}{edit && <> <button type="button" className="golink" data-tip={t('bank.resetTip')} onClick={() => setNoReceipt(nav, tx, false)}>{t('bank.reset')}</button></>}</>
+        <> · {t('bank.noReceiptNotNeeded')}{edit && <> <AsyncButton type="button" className="golink" data-tip={t('bank.resetTip')} onClick={() => setNoReceipt(nav, tx, false)}>{t('bank.reset')}</AsyncButton></>}</>
       ) : null}
       {bookedInFiled(tx) ? <> · <FiledTwin tx={tx} books={props.books} nav={nav} edit={edit} /></> : null}
       {entry ? (
@@ -405,7 +406,7 @@ function ReceiptSetOffer({ books, b, tx, nav }: Props & { b: Bank; tx: BankTrans
     const vars = { n: s.receipts.length, sum: `${s.currency} ${fmt(s.sum)}`, paid: `${s.currency} ${fmt(s.paid)}` };
     return (
       <span key={s.receipts.join()}> · <span className="m" data-testid="receipt-set" data-tip={names}>{t(s.exact ? 'bank.receiptSet.exact' : s.rounding ? 'bank.receiptSet.rounding' : 'bank.receiptSet.close', vars)}{offers.length > 1 ? ` (${names})` : ''}</span>
-        {' '}<button type="button" className="golink" data-act="link-receipt-set" data-tip={names} onClick={() => void linkReceiptSet(nav, s)}>{t('bank.receiptSet.link')}</button></span>
+        {' '}<AsyncButton type="button" className="golink" data-act="link-receipt-set" data-tip={names} onClick={() => linkReceiptSet(nav, s)}>{t('bank.receiptSet.link')}</AsyncButton></span>
     );
   }), more, told];
 }
@@ -425,7 +426,7 @@ function LinkInvoice({ tx, nav }: { tx: BankTransaction; nav: Props['nav'] }) {
           {open.map((i) => <option key={i.id} value={i.id}>{i.number} · {i.customer.name} · {i.currency} {fmt(openAmount(i, invoices))}</option>)}
         </select>
       </label>
-      {' '}<button type="button" className="golink" onClick={() => void confirmPayment(nav, chosen, tx.ref)}>{t('invoices.linkPayment')}</button>
+      {' '}<AsyncButton type="button" className="golink" onClick={() => confirmPayment(nav, chosen, tx.ref)}>{t('invoices.linkPayment')}</AsyncButton>
     </span></>
   );
 }
@@ -524,11 +525,11 @@ function FiledTwin({ tx, books, nav, edit }: { tx: BankTransaction; books: Props
   const read = tx.waitsForPerson?.why === 'filedTwin' ? tx.waitsForPerson.read : undefined;
   const twin = books.transactions.find((x) => x.ref === read);
   const date = twin ? formatDate(twin.date) : '';
-  const anyway = () => void api.bookFiledTwinAnyway(tx.ref).then(() => nav.refresh(), (e) => nav.toast(errorText(e)));
+  const anyway = () => api.bookFiledTwinAnyway(tx.ref).then(() => nav.refresh(), (e) => nav.toast(errorText(e)));
   return (
     <span data-testid="filed-twin">
       <span className="m">{twin ? t('bank.filedTwinOf', { date }) : t('bank.filedTwin')}</span>
-      {edit ? <>{' '}<button type="button" className="golink" data-testid="filed-twin-anyway" data-tip={t('bank.filedTwinAnywayTip', { date: date || '…' })} onClick={anyway}>{t('bank.filedTwinAnyway')}</button></> : null}
+      {edit ? <>{' '}<AsyncButton type="button" className="golink" data-testid="filed-twin-anyway" data-tip={t('bank.filedTwinAnywayTip', { date: date || '…' })} onClick={anyway}>{t('bank.filedTwinAnyway')}</AsyncButton></> : null}
     </span>
   );
 }

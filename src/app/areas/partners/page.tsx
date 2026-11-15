@@ -23,6 +23,7 @@ import type { Nav } from '../index.js';
 import { proseBlocks, sentenceRuns, type Inline } from './model.js';
 import { refreshKnowledge } from './data.js';
 import './partners.css';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 const words = ((key: string, vars: Record<string, string>) => (t as (k: string, v: Record<string, string>) => string)(key, vars)) as RuleWords;
 const money = (n: number) => fmt(n).replace(/\.00$/, '');
@@ -113,7 +114,7 @@ export function NotesBlock({ note, target, canEdit, nav, empty, title, marks, pr
         <textarea value={draft} rows={12} aria-label={t('partners.notes.title')} autoFocus onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Escape') setDraft(undefined); if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) void save(); }} />
         <div className="kwnacts">
-          <button type="button" className="btn primary" disabled={busy} onClick={() => void save()}>{t('common.save')}</button>
+          <AsyncButton type="button" className="btn primary" disabled={busy} onClick={() => save()}>{t('common.save')}</AsyncButton>
           <button type="button" className="btn ghost" disabled={busy} onClick={() => setDraft(undefined)}>{t('common.cancel')}</button>
           <span className="m">{t('partners.notes.hint')}</span>
         </div>
@@ -175,7 +176,7 @@ export function SelfBlock({ lines, canEdit, nav, empty, children, changed = [], 
                   l.asked ? t('rules.asked', { n: l.asked }) : '',
                 ].filter(Boolean).join(' · ')}
               </span>
-              {canEdit ? <button type="button" className="btn ghost" disabled={busy} onClick={() => void act(l)}>{t(l.row.off ? 'rules.switchOn' : 'rules.switchOff')}</button> : null}
+              {canEdit ? <AsyncButton type="button" className="btn ghost" disabled={busy} onClick={() => act(l)}>{t(l.row.off ? 'rules.switchOn' : 'rules.switchOff')}</AsyncButton> : null}
               {changed.filter((c) => c.row.id === l.row.id && c.row.file === l.row.file).map((c) => <div key="changed" className="kwchanged">{adjust?.(c)}</div>)}
             </li>
           ))}
@@ -251,7 +252,7 @@ export function NoteRulePanel({ partner, name, notes, sentence, view, nav, onClo
     } catch (x) { setError(errorText(x)); } finally { setBusy(false); }
   };
   return (
-    <form className="form inline handrule kwnoterule" data-testid="note-rule" onSubmit={preview} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+    <AsyncForm className="form inline handrule kwnoterule" data-testid="note-rule" onSubmit={preview} onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
       <span className="wide kwquote">{t('partners.noteRule.lead', { sentence })}</span>
       <label>{t('rules.hand.account')}<input className="mono" list="note-rule-accounts" value={account} onChange={(e) => setAccount(e.target.value)} autoFocus /></label>
       <datalist id="note-rule-accounts">{Object.entries(view.names.accounts).map(([n, label]) => <option key={n} value={n}>{label}</option>)}</datalist>
@@ -261,11 +262,11 @@ export function NoteRulePanel({ partner, name, notes, sentence, view, nav, onClo
       <label>{t('partners.noteRule.private')}<input className="mono" inputMode="decimal" value={share} onChange={(e) => setShare(e.target.value)} /></label>
       {error ? <span className="warnline wide">{error}</span> : null}
       <div className="acts">
-        <button type="submit" className="btn primary" disabled={busy}>{t('rules.hand.preview')}</button>
+        <AsyncButton type="submit" className="btn primary" disabled={busy}>{t('rules.hand.preview')}</AsyncButton>
         <button type="button" className="btn ghost" onClick={onClose}>{t('common.cancel')}</button>
-        <button type="button" className="linkbtn" onClick={() => { askAi(t('partners.noteRule.aiPrompt', { name, sentence }), notes, name); onClose(); }}>{t('partners.noteRule.askAi')}</button>
+        <button data-busy-exempt="the AI sidebar opens and shows the answer coming" type="button" className="linkbtn" onClick={() => { askAi(t('partners.noteRule.aiPrompt', { name, sentence }), notes, name); onClose(); }}>{t('partners.noteRule.askAi')}</button>
       </div>
-    </form>
+    </AsyncForm>
   );
 }
 
@@ -303,8 +304,8 @@ export function ChangedNotePrompt({ c, partner, name, notes, view, nav }: { c: C
       {error ? <span className="warnline">{error}</span> : null}
       {c.now ? (
         <span className="ruleacts">
-          <button type="button" className="btn" disabled={busy} data-act="adjust-rule" onClick={() => void adjust()}>{t('partners.changed.adjust')}</button>
-          <button type="button" className="linkbtn" onClick={() => askAi(t('partners.noteRule.adjustPrompt', { name, rule: c.row.id, sentence: c.now! }), notes, name)}>{t('partners.noteRule.askAi')}</button>
+          <AsyncButton type="button" className="btn" disabled={busy} data-act="adjust-rule" onClick={() => adjust()}>{t('partners.changed.adjust')}</AsyncButton>
+          <button data-busy-exempt="the AI sidebar opens and shows the answer coming" type="button" className="linkbtn" onClick={() => askAi(t('partners.noteRule.adjustPrompt', { name, rule: c.row.id, sentence: c.now! }), notes, name)}>{t('partners.noteRule.askAi')}</button>
         </span>
       ) : null}
     </>
