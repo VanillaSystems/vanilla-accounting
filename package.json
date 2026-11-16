@@ -70,6 +70,7 @@
     "test:books:init": "tsx --env-file-if-exists=.env tests/support/freeze-books.ts",
     "mine-cases": "tsx tools/cases/mine.ts",
     "eval:pairing": "tsx tools/eval/pairing.ts",
+    "replay": "tsx tools/replay/main.ts",
     "secret": "tsx src/cli/secret.ts",
     "browser": "tsx src/cli/browser.ts",
     "desktop:e2e": "sh tools/desktop/vm-e2e.sh",

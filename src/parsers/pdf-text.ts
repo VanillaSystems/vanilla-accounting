@@ -66,8 +66,27 @@ export async function pdfRuns(pdf: string | Uint8Array, pages = Infinity): Promi
   return (await pdfRunsCounted(pdf, pages)).runs;
 }
 
+/**
+ * One document at a time. pdf.js runs here without a worker, on this thread, so reading two at once
+ * gains nothing; and with several open at once one of them could wait for ever (a parcel service's
+ * invoice in the inbox run's batch of five, 2026-11), which stalled the run and every one behind it.
+ */
+let reading: Promise<unknown> = Promise.resolve();
+
+/** A document still not read after this long is given up, so it holds up no other: its caller takes it as unreadable. */
+const READ_MS = 60_000;
+
 /** The runs of a PDF's first `pages`, and how many pages it has in all: the count costs nothing more. */
-export async function pdfRunsCounted(pdf: string | Uint8Array, pages = Infinity): Promise<{ runs: PageRuns[]; pages: number }> {
+export function pdfRunsCounted(pdf: string | Uint8Array, pages = Infinity): Promise<{ runs: PageRuns[]; pages: number }> {
+  const run = reading.then(() => new Promise<{ runs: PageRuns[]; pages: number }>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`pdf.js read nothing in ${READ_MS / 1000} s`)), READ_MS);
+    readRuns(pdf, pages).then(resolve, reject).finally(() => clearTimeout(timer));
+  }));
+  reading = run.catch(() => undefined);
+  return run;
+}
+
+async function readRuns(pdf: string | Uint8Array, pages: number): Promise<{ runs: PageRuns[]; pages: number }> {
   const { getDocument, VerbosityLevel } = await loadPdfjs();
   const data = typeof pdf === 'string' ? new Uint8Array(readFileSync(pdf)) : new Uint8Array(pdf);
   const doc = await getDocument({ data, ...FONT_OPTIONS, verbosity: VerbosityLevel.ERRORS }).promise;

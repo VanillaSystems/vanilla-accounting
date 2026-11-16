@@ -49,6 +49,11 @@ export interface Usage {
   cacheRead: number;
   output: number;
   turns: number;
+  /**
+   * Per model id, when the provider reports it (the claude CLI's `modelUsage`): a call may use more
+   * than the model it named (the CLI's own helper model), and the totals above then sum them all.
+   */
+  models?: Record<string, Omit<Usage, 'turns' | 'models'>>;
 }
 
 export const NO_USAGE: Usage = { input: 0, cacheCreate: 0, cacheRead: 0, output: 0, turns: 0 };

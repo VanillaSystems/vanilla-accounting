@@ -12,7 +12,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
-import { AiRefused, CallFailed, isPlanLimit, isSignedOut, NO_USAGE, type Call, type Provider } from '../provider.js';
+import { AiRefused, CallFailed, isPlanLimit, isSignedOut, NO_USAGE, type Call, type Provider, type Usage } from '../provider.js';
 import type { StepId } from '../steps.js';
 import { claudeBin, knownPath, probeCli } from '../../platform/ai-cli.js';
 import { gate } from '../off.js';
@@ -68,6 +68,23 @@ function args(call: Call): string[] {
 
 const EVERY = ['text', 'json', 'typed', 'pdf', 'image', 'agent'] as const;
 
+/** One model's part of a call as the CLI's `modelUsage` reports it. */
+type ModelUsage = { inputTokens?: number; outputTokens?: number; cacheReadInputTokens?: number; cacheCreationInputTokens?: number };
+
+/**
+ * A call's usage. `usage` counts the model the call named; `modelUsage` every model the CLI used for
+ * it (its own helper model too), by id: when it is there, the totals are its sums and each model is
+ * kept, so the ledger misses no token of the call.
+ */
+export function usageOf(u: { input_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number; output_tokens?: number }, byModel: Record<string, ModelUsage> | undefined, turns: number): Usage {
+  const named: Usage = { input: u.input_tokens ?? 0, cacheCreate: u.cache_creation_input_tokens ?? 0, cacheRead: u.cache_read_input_tokens ?? 0, output: u.output_tokens ?? 0, turns };
+  const ids = Object.entries(byModel ?? {});
+  if (!ids.length) return named;
+  const models = Object.fromEntries(ids.map(([id, m]) => [id, { input: m.inputTokens ?? 0, cacheCreate: m.cacheCreationInputTokens ?? 0, cacheRead: m.cacheReadInputTokens ?? 0, output: m.outputTokens ?? 0 }]));
+  const sum = (k: 'input' | 'cacheCreate' | 'cacheRead' | 'output') => Object.values(models).reduce((n, m) => n + m[k], 0);
+  return { input: Math.max(named.input, sum('input')), cacheCreate: Math.max(named.cacheCreate, sum('cacheCreate')), cacheRead: Math.max(named.cacheRead, sum('cacheRead')), output: Math.max(named.output, sum('output')), turns, models };
+}
+
 export const claudeCli: Provider = {
   id: 'claude-cli',
   billing: 'subscription',
@@ -95,13 +112,10 @@ export const claudeCli: Provider = {
         let parsed: {
           result?: string; is_error?: boolean; num_turns?: number;
           usage?: { input_tokens?: number; cache_creation_input_tokens?: number; cache_read_input_tokens?: number; output_tokens?: number };
+          modelUsage?: Record<string, ModelUsage>;
         } | undefined;
         try { parsed = JSON.parse(out); } catch { /* not JSON: the CLI failed before answering */ }
-        const u = parsed?.usage ?? {};
-        const usage = {
-          input: u.input_tokens ?? 0, cacheCreate: u.cache_creation_input_tokens ?? 0,
-          cacheRead: u.cache_read_input_tokens ?? 0, output: u.output_tokens ?? 0, turns: parsed?.num_turns ?? 0,
-        };
+        const usage = usageOf(parsed?.usage ?? {}, parsed?.modelUsage, parsed?.num_turns ?? 0);
         if (code === 0 && parsed && !parsed.is_error) return done({ text: (parsed.result ?? '').trim(), usage });
         const said = (parsed?.result ?? (err || out)).slice(0, 300);
         const message = `claude exited ${code}: ${said}`;

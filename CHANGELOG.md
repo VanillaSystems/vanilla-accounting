@@ -14,6 +14,18 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Added
+
+- **Replay benchmark** (`npm run replay`, tools/replay/README.md): replays one period of a workspace's books from a clean slate on a copy, with an oracle playing the person from the real books, and counts the payments closed untouched and correct, the touches by kind, the silent errors, the period's figures against the real ones, and the model tokens per step and model.
+
+### Fixed
+
+- **An inbox run no longer stalls on one PDF:** the receipts' text is read one document at a time, and a document pdf.js has not read after a minute is given up (read like a scan); before, reading five at once could leave one waiting for ever, and the run and every run behind it with it.
+
+### Changed
+
+- **The model ledger counts every model of a call:** when the claude CLI reports the models it used (`modelUsage`), `data/llm-ledger.jsonl` keeps each one's tokens beside the call, and the call's totals sum them.
+
 ## [0.6.2] - 2026-11-16
 
 No figure changes: the demo goldens and the books schema are as in 0.6.1.

@@ -169,3 +169,23 @@ test('#175: with Claude Code signed in, a key serves only the steps set to it', 
   assert.equal((await resolveStep('classify')).provider.id, 'anthropic');
   assert.equal((await resolveStep('receipt-vision')).provider.id, 'claude-cli');
 });
+
+test('a claude CLI call that used a second model ledgers both, and the totals sum them', async () => {
+  const two = join(dir, 'two-models-claude');
+  const out = {
+    type: 'result', result: '{}', is_error: false, num_turns: 2,
+    usage: { input_tokens: 100, cache_creation_input_tokens: 10, cache_read_input_tokens: 1000, output_tokens: 50 },
+    modelUsage: {
+      'claude-sonnet-x': { inputTokens: 100, cacheCreationInputTokens: 10, cacheReadInputTokens: 1000, outputTokens: 50 },
+      'claude-haiku-x': { inputTokens: 300, cacheCreationInputTokens: 0, cacheReadInputTokens: 0, outputTokens: 20 },
+    },
+  };
+  writeFileSync(two, `#!/bin/sh\ncase "$1" in --version) echo 2.1.0; exit 0;; auth) echo '{"loggedIn":true}'; exit 0;; esac\ncat >/dev/null; echo '${JSON.stringify(out)}'\n`, { mode: 0o755 });
+  process.env.CLAUDE_BIN = two;
+  forgetCli();
+  await ask('{}', { step: 'classify' });
+  const row = ledger().at(-1)!;
+  assert.deepEqual([row.provider, row.input, row.cacheCreate, row.cacheRead, row.output, row.turns], ['claude-cli', 400, 10, 1000, 70, 2]);
+  assert.deepEqual(Object.keys(row.models ?? {}).sort(), ['claude-haiku-x', 'claude-sonnet-x']);
+  assert.equal(row.models!['claude-haiku-x'].output, 20);
+});
