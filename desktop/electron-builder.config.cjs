@@ -36,9 +36,10 @@ module.exports = {
   protocols: [{ name: 'Vanilla Accounting', schemes: ['vanilla-accounting'] }],
   // A hand-over file opens the app from Finder (double-click, «Öffnen mit»), also on a Mac that never
   // opened books (#545; src/desktop/main.ts `open-file`). A file, not a bundle; the app owns the type.
+  // Its icon is a page with the app's icon on it (tools/desktop/icns.mjs).
   fileAssociations: [
-    { ext: 'vanillashare', name: 'Vanilla Accounting Freigabe-Datei', role: 'Editor', rank: 'Owner', isPackage: false },
-    { ext: 'vanilla', name: 'Vanilla Accounting Freigabe-Datei (0.6)', role: 'Editor', rank: 'Owner', isPackage: false },
+    { ext: 'vanillashare', name: 'Vanilla Accounting Freigabe-Datei', role: 'Editor', rank: 'Owner', isPackage: false, icon: 'desktop/document.icns' },
+    { ext: 'vanilla', name: 'Vanilla Accounting Freigabe-Datei (0.6)', role: 'Editor', rank: 'Owner', isPackage: false, icon: 'desktop/document.icns' },
   ],
   // The share service the app offers by default (src/share/service.ts): named at build time like the
   // update feed, since the publisher's domain stays out of the app's files. Without it, the person
@@ -103,7 +104,9 @@ module.exports = {
   },
   mac: {
     category: 'public.app-category.finance',
-    icon: 'desktop/icon.png',
+    // Made by iconutil from desktop/icon.png (tools/desktop/icns.mjs), never by electron-builder: its own
+    // icns keeps the small sizes as PNGs that macOS draws as pixel noise.
+    icon: 'desktop/icon.icns',
     // electron-updater on macOS installs from a zip; built only when there is a feed to publish it to.
     target: [{ target: 'dmg', arch: ['arm64', 'x64'] }, ...(releases?.length === 2 ? [{ target: 'zip', arch: ['arm64', 'x64'] }] : [])],
     hardenedRuntime: true,

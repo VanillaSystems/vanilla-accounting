@@ -1,4 +1,4 @@
-/** Renders desktop/icon.svg to desktop/icon.png (1024 px), the source electron-builder makes the .icns from. */
+/** Renders desktop/icon.svg to desktop/icon.png (1024 px), the source tools/desktop/icns.mjs makes desktop/icon.icns from. */
 import { readFileSync } from 'node:fs';
 import puppeteer from 'puppeteer-core';
 import { findBrowser } from '../../src/invoices/pdf.ts';

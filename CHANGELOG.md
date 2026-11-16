@@ -14,6 +14,12 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Fixed
+
+- Mac: a downloaded `.vanillashare` file showed as coloured pixel noise in Chrome's download list.
+  The app's icon is now built with Apple's `iconutil`, and a Freigabe-Datei (`.vanillashare`,
+  `.vanilla`) has its own icon: a page with the Vanilla wave.
+
 ## [0.6.2] - 2026-11-16
 
 No figure changes: the demo goldens and the books schema are as in 0.6.1.

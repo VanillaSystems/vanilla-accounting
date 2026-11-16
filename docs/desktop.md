@@ -141,6 +141,13 @@ copied to `desktop/icon.svg` and `desktop/icon.png`; its `web/` set is `public/f
 `desktop:build` refuse an icon that is not pinned or a retired one anywhere in the repository, so
 the old receipt icon cannot come back through a merge.
 
+The Mac build takes `desktop/icon.icns` (the app) and `desktop/document.icns` (a Freigabe-Datei:
+a page with the app's icon, from `desktop/document.svg`), both made with Apple's `iconutil` by
+`node tools/desktop/icns.mjs` on a Mac; run it again after the icon changes. electron-builder's own
+icns from a PNG stores the 16, 32 and 64 px images as PNGs under `icp4`/`icp5`/`icp6`, which macOS
+draws as pixel noise at those sizes (a `.vanillashare` in Chrome's download list, 0.6.2);
+tests/desktop-icns.test.ts refuses such an entry and any image whose size is not its type's.
+
 **Run it in a VM, never on your own desktop:** `npm run desktop:e2e` installs the built app into
 the Tart VM `vanilla-e2e` over the copy there (as an update would) and runs the smoke test inside
 it, with no window on the host; `-- --fresh` uses a throwaway clone of `vanilla-clean` for a first
