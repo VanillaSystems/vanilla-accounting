@@ -57,18 +57,35 @@ Two arms (`--arm`):
 - Corrections of filed periods dated in the period on no payment of it are counted, not replayed: they
   belong to the 0535 of the period they correct, not to this return.
 
-## What counts as right (compare.ts)
+## What counts as right (compare.ts, judge.ts)
 
-Per payment, two things:
+Per payment, two things, judged apart:
 
-- its booking lines: date, debit account, credit account, VAT code and amount in the books' currency,
-  to the cent. A negative amount is the same line the other way round. Lines with the same date,
-  accounts and code are summed first: one line of 100 equals two of 60 and 40. Descriptions, exchange
-  rates and who booked it do not count.
-- its receipt links: the same set of receipts, by id (a receipt's id is the hash of its file, so a
-  dropped file has the id the real books gave it). One exception: a bank statement's PDF the real books
-  keep as a receipt too (a card line's proof) is read by the drop as the statement it is and held once;
-  a link to it is not asked of the replay.
+- **its booking**: the lines' date, debit account, credit account, VAT code and amount in the books'
+  currency, to the cent. A negative amount is the same line the other way round; lines with the same
+  date, accounts and code are summed first (one line of 100 equals two of 60 and 40). Then:
+  - a code that moves no figure of the return (a zero rate on a purchase, as the VAT engine says)
+    equals no code;
+  - a line the key has on the payment that the replay has, the same, under a ref of no payment (a
+    provider's bill, a report, the app's own ref), counts as there, and so the other way round; each
+    such line once;
+  - lines that still differ but move every account and every figure of the return alike (the tax on
+    a line of its own instead of in the gross line's code, with the same tax) are the same booking.
+  A booking that is wrong is told by what it moves otherwise: `account` (other accounts), `vat`
+  (other return figures), `amount` (the same accounts by other amounts), `split` (a line more or less
+  on accounts the other side has); one wrong in two ways counts under each.
+- **its receipt links**: the same set of receipts, by id (a receipt's id is the hash of its file, so a
+  dropped file has the id the real books gave it). A bank statement's PDF the real books keep as a
+  receipt too is read by the drop as the statement it is; a link to it is not asked of the replay.
+
+So a payment is: booking right and links right, booking right with the links alone differing, booking
+wrong (by kind), or not booked (the app asked, or left it open).
+
+`npm run replay -- score <folder>` judges a finished run again by today's comparison, from the folder
+alone (no server, no model call): from the lines each payment's saved diff names on each side, and the
+app's lines of refs of no payment as its own runs left them. It writes `result-rescored.json` and
+`summary-rescored.md`, with the period's figures at the end and without the app's entries on refs the
+key does not know.
 
 ## The run (drive.ts)
 
@@ -84,9 +101,10 @@ through the app's API, so through the write door and the runs:
 3. **oracle-1**: where the app left each payment is recorded (right, wrong, asked, open), then the
    oracle links the receipts the key links and unlinks the others, says «needs no receipt» where the key's
    payment needs none and the app waits for one, and answers the app's sale question by the key's
-   booking. It enters the hand movements with their receipts and the period's VAT adjustments.
+   booking. It enters the hand movements with their receipts (not one whose booking the app made already under a
+   ref of its own, such as a provider's bill's input tax) and the period's VAT adjustments.
 4. **run-2**: «Eingang verarbeiten» again.
-5. **oracle-2**: a payment whose lines still differ is booked as the key books it (by hand when the app
+5. **oracle-2**: a payment whose booking still differs is booked as the key books it (by hand when the app
    booked nothing, else in place of the app's lines), links put right again; the same for the hand
    movements and the other refs.
 6. The period's figures (`vat().figures`) against the key's.

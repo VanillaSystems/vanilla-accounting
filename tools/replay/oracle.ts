@@ -10,7 +10,7 @@
  * when the app booked nothing, else in place of the app's lines), and the links are put right again.
  */
 import type { BankTransaction, JournalEntry } from '../../src/types/index.js';
-import { canonical, compare, type Verdict } from './compare.js';
+import { canonical, compare, type CompareOptions, type Verdict } from './compare.js';
 
 /** How a person touched a payment. */
 export type TouchKind = 'answer' | 'correction' | 'hand' | 'link' | 'noReceipt' | 'private';
@@ -42,8 +42,8 @@ export interface KeySide {
  */
 export type Pass = 'right' | 'wrong' | 'asked' | 'open';
 
-export function passOf(view: CaseView, key: KeySide): { pass: Pass; verdict: Verdict } {
-  const verdict = compare(view, key);
+export function passOf(view: CaseView, key: KeySide, opts?: CompareOptions): { pass: Pass; verdict: Verdict } {
+  const verdict = compare(view, key, opts);
   if (view.question || view.task) return { pass: 'asked', verdict };
   if (!view.entries.length) return { pass: 'open', verdict };
   return { pass: verdict.ok ? 'right' : 'wrong', verdict };
@@ -83,9 +83,9 @@ export function planFirst(view: CaseView, key: KeySide, ctx: Context): Action[] 
 }
 
 /** Round two: the booking as the key has it, and the links once more. */
-export function planSecond(view: CaseView, key: KeySide, ctx: Context): Action[] {
+export function planSecond(view: CaseView, key: KeySide, ctx: Context, opts?: CompareOptions): Action[] {
   const out: Action[] = [];
-  if (!compare(view, key).lines) out.push({ kind: 'book', entries: key.entries, replace: view.entries.map((e) => e.id) });
+  if (!compare(view, key, opts).lines) out.push({ kind: 'book', entries: key.entries, replace: view.entries.map((e) => e.id) });
   return [...out, ...linkAction(view, key, ctx)];
 }
 

@@ -21,7 +21,8 @@ import { ownerAccountNumber } from '../../src/accounting/bank-accounts.js';
 import type { LedgerRow } from '../../src/llm/ask.js';
 import type { Marker } from './cut.js';
 import type { AnswerKey } from './key.js';
-import { compare, type Verdict } from './compare.js';
+import { compare, type CompareOptions, type Verdict } from './compare.js';
+import { effectJudge, poolOf, returnCodeKey } from './judge.js';
 import { passOf, planFirst, planSecond, touchOf, TOUCH_KINDS, type Action, type CaseView, type Context, type KeySide, type Pass, type TouchKind } from './oracle.js';
 import { score, summaryMarkdown, type Phase } from './report.js';
 
@@ -312,6 +313,20 @@ export async function replay(dir: string, marker: Marker, opts: { model: 'stub' 
     // as the statement it is and holds it once, so a link to it as a receipt is not asked of the replay.
     const asStatement = new Set(Object.entries(key.receipts).filter(([id, r]) => r.kind === 'statement' && !s1.books.receipts.some((x) => x.id === id)).map(([id]) => id));
     const sideOf = (c: { tx: BankTransaction; entries: JournalEntry[]; receipts: string[] }): KeySide => ({ tx: c.tx, entries: c.entries, receipts: c.receipts.filter((r) => !asStatement.has(r)) });
+    // How the comparison reads the books at one moment: codes as the return sees them, and the lines of refs of no
+    // payment (a payment's line may lie there); for the movements and other refs, of refs the key does not name.
+    const codeKey = returnCodeKey(key.period, key.from);
+    const effect = effectJudge(key.period);
+    const keyRefs = new Set([...key.other.map((o) => o.ref), ...key.manual.map((m) => m.ref)]);
+    const keyElsewhere = () => poolOf([...key.other, ...key.manual].flatMap((o) => o.entries), () => false, key.from, key.to, codeKey);
+    const casesAt = (s: State): CompareOptions => {
+      const paid = new Set(s.books.transactions.map((t) => t.ref));
+      return { codeKey, effect, appElsewhere: poolOf(s.books.journalEntries, (ref) => paid.has(ref), key.from, key.to, codeKey), keyElsewhere: keyElsewhere() };
+    };
+    const othersAt = (s: State, own: ReadonlySet<string>): CompareOptions => {
+      const paid = new Set(s.books.transactions.map((t) => t.ref));
+      return { codeKey, effect, appElsewhere: poolOf(s.books.journalEntries, (ref) => paid.has(ref) || keyRefs.has(ref) || own.has(ref), key.from, key.to, codeKey) };
+    };
 
     begin('oracle-1');
     for (const c of key.cases) {
@@ -323,7 +338,13 @@ export async function replay(dir: string, marker: Marker, opts: { model: 'stub' 
     }
     // The movements a person entered by hand: entered now, with their receipts, for the next run to book.
     const manualRef = new Map<string, string>();
+    const bookedElsewhere = othersAt(s1, new Set()).appElsewhere!;
     for (const m of key.manual) {
+      // A movement whose booking the app made already under a ref of its own (a provider's bill's input tax): not entered twice.
+      if (m.entries.length && compare({ entries: [], receipts: [] }, { entries: m.entries, receipts: [] }, { codeKey, effect, appElsewhere: bookedElsewhere }).lines) {
+        outside.push({ ref: m.ref, kind: 'manual', did: 'booked by the app under its own ref' });
+        continue;
+      }
       const bank = ws.bankAccounts.find((b) => b.bank === m.tx.bank);
       const r = await api.send<{ ok?: boolean; ref?: string }>('POST', '/api/transactions/manual', {
         date: m.tx.date, description: m.tx.description, amount: m.tx.amount, direction: m.tx.direction, currency: m.tx.currency, ...(bank && bank.role !== 'owner' ? { account: bank.account } : {}),
@@ -349,11 +370,12 @@ export async function replay(dir: string, marker: Marker, opts: { model: 'stub' 
 
     begin('oracle-2');
     const s2 = await stateOf(api, ws);
+    const opts2 = casesAt(s2);
     for (const c of key.cases) {
       const ref = refIn(s2.books, c.tx);
       if (!ref) continue;
       const view = viewOf(s2, ref);
-      for (const a of planSecond(view, sideOf(c), ctxOf(s2))) { touch(c.ref, touchOf(a, first.get(c.ref)!, view, ctxOf(s2))); err(c.ref, await perform(api, ref, a)); }
+      for (const a of planSecond(view, sideOf(c), ctxOf(s2), opts2)) { touch(c.ref, touchOf(a, first.get(c.ref)!, view, ctxOf(s2))); err(c.ref, await perform(api, ref, a)); }
     }
     for (const m of key.manual) {
       const ref = manualRef.get(m.ref);
@@ -367,9 +389,10 @@ export async function replay(dir: string, marker: Marker, opts: { model: 'stub' 
     // Entries without a payment: a provider report's (the app books them from the dropped report), a person's by hand.
     // What the app lacks is booked as a person books an entry of no payment: under a ref the app gives it.
     const otherRef = new Map<string, string>();
+    const others2 = othersAt(s2, new Set(manualRef.values()));
     for (const o of key.other) {
       const view = viewOf(s2, o.ref);
-      if (compare(view, o).lines) continue;
+      if (compare(view, o, others2).lines) continue;
       const e = await perform(api, undefined, { kind: 'book', entries: o.entries, replace: view.entries.map((x) => x.id) }, (r) => otherRef.set(o.ref, r));
       outside.push({ ref: o.ref, kind: o.kind, did: view.entries.length ? 'correction' : 'hand', ...(e ? { error: e } : {}) });
     }
@@ -377,13 +400,16 @@ export async function replay(dir: string, marker: Marker, opts: { model: 'stub' 
 
     // What the books hold at the end.
     const sf = await stateOf(api, ws);
+    const opts1 = casesAt(s1);
+    const optsF = casesAt(sf);
     const results: CaseResult[] = key.cases.map((c) => {
       const ref = refIn(sf.books, c.tx);
-      const { pass, verdict } = passOf(first.get(c.ref)!, sideOf(c));
-      return { ref: c.ref, ...(ref && ref !== c.ref ? { as: ref } : {}), pass, first: verdict, touches: touches.get(c.ref) ?? [], final: compare(viewOf(sf, ref), sideOf(c)), errors: errors.get(c.ref) ?? [] };
+      const { pass, verdict } = passOf(first.get(c.ref)!, sideOf(c), opts1);
+      return { ref: c.ref, ...(ref && ref !== c.ref ? { as: ref } : {}), pass, first: verdict, touches: touches.get(c.ref) ?? [], final: compare(viewOf(sf, ref), sideOf(c), optsF), errors: errors.get(c.ref) ?? [] };
     });
-    const otherFinal = key.other.map((o) => ({ ref: o.ref, kind: o.kind, ok: compare(viewOf(sf, otherRef.get(o.ref) ?? o.ref), o).lines }));
-    const manualFinal = key.manual.map((m) => ({ ref: m.ref, ok: !!manualRef.get(m.ref) && compare(viewOf(sf, manualRef.get(m.ref)), m).lines }));
+    const othersF = othersAt(sf, new Set([...manualRef.values(), ...otherRef.values()]));
+    const otherFinal = key.other.map((o) => ({ ref: o.ref, kind: o.kind, ok: compare(viewOf(sf, otherRef.get(o.ref) ?? o.ref), o, othersF).lines }));
+    const manualFinal = key.manual.map((m) => ({ ref: m.ref, ok: compare(viewOf(sf, manualRef.get(m.ref)), m, othersF).lines }));
     const figures = vat().figures(sf.books.journalEntries, key.period as never, sf.books.config.vatAdjustments ?? []) as unknown as { ziffern: Record<string, number>; payable: number };
     end();
     const result = score({

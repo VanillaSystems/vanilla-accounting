@@ -8,6 +8,7 @@ import type { Marker } from './cut.js';
 import type { AnswerKey } from './key.js';
 import type { CaseResult, Outside } from './drive.js';
 import type { Pass, TouchKind } from './oracle.js';
+import { WRONG_KINDS, type WrongKind } from './compare.js';
 
 export interface Phase { name: string; startedAt: string; ledgerFrom: number; ledgerTo: number; ms: number }
 
@@ -45,6 +46,30 @@ export function tokensOf(rows: readonly LedgerRow[], phases: readonly Phase[]) {
     }
   });
   return { rows: rowsOut, byModel, total, ...(Object.keys(ids).length ? { modelIds: ids } : {}) };
+}
+
+/**
+ * Where the app's own runs left the payments, by what matters: not booked (it asked, or left it
+ * open), booking right (with its links right, or the links alone differing), or booking wrong, by
+ * kind (another account, VAT code, amount, or other lines: a split). A booking wrong in two ways
+ * counts under each; `combined` counts the payments by their kinds together.
+ */
+export function categoriesOf(results: ReadonlyArray<{ ref: string; pass: Pass; first: { lines: boolean; links: boolean; wrong?: WrongKind[] } }>) {
+  const booked = results.filter((c) => c.pass === 'right' || c.pass === 'wrong');
+  const wrong = booked.filter((c) => !c.first.lines);
+  const combined: Record<string, number> = {};
+  for (const c of wrong) { const k = (c.first.wrong ?? []).join('+') || 'other'; combined[k] = (combined[k] ?? 0) + 1; }
+  return {
+    asked: results.filter((c) => c.pass === 'asked').length,
+    open: results.filter((c) => c.pass === 'open').length,
+    bookingRight: booked.filter((c) => c.first.lines && c.first.links).length,
+    linkOnly: booked.filter((c) => c.first.lines && !c.first.links).length,
+    bookingWrong: wrong.length,
+    wrongByKind: Object.fromEntries(WRONG_KINDS.map((k) => [k, wrong.filter((c) => c.first.wrong?.includes(k)).length])) as Record<WrongKind, number>,
+    combined,
+    /** Of the wrong bookings, those whose links differ too. */
+    wrongAndLinks: wrong.filter((c) => !c.first.links).length,
+  };
 }
 
 export interface ScoreInput {
@@ -87,6 +112,7 @@ export function score(i: ScoreInput) {
       /** Booked by the app, nothing asked, and not as the key has it: corrected by the oracle. */
       silentErrors: { count: passes.wrong, linesWrong: r.filter((c) => c.pass === 'wrong' && !c.first.lines).length, linksOnly: r.filter((c) => c.pass === 'wrong' && c.first.lines).length, refs: r.filter((c) => c.pass === 'wrong').map((c) => ({ ref: c.ref, diff: c.first.diff })) },
       afterAppRuns: passes,
+      categories: categoriesOf(r),
       /** The oracle must close every payment: those it could not, with why. */
       notClosed: r.filter((c) => !c.final.ok).map((c) => ({ ref: c.ref, diff: c.final.diff, errors: c.errors })),
       untouchedRefs: untouched.map((c) => c.ref),
@@ -113,6 +139,21 @@ export function score(i: ScoreInput) {
 export type Result = ReturnType<typeof score>;
 
 const n = (x: number) => x.toLocaleString('en-US');
+
+export function categoryLines(k: ReturnType<typeof categoriesOf>): string[] {
+  return [
+    '| after the app\'s own runs | payments |',
+    '|---|---:|',
+    `| booking right, links right | ${k.bookingRight} |`,
+    `| booking right, link only differs | ${k.linkOnly} |`,
+    `| booking wrong | ${k.bookingWrong} (links differ too: ${k.wrongAndLinks}) |`,
+    ...Object.entries(k.wrongByKind).map(([w, v]) => `| · ${w} | ${v} |`),
+    `| not booked: asked / open | ${k.asked} / ${k.open} |`,
+    '',
+    `Wrong bookings by their kinds together: ${Object.entries(k.combined).sort((a, b) => b[1] - a[1]).map(([w, v]) => `${w} ${v}`).join(', ') || 'none'}.`,
+    '',
+  ];
+}
 const mins = (ms: number) => `${(ms / 60000).toFixed(1)} min`;
 
 export function summaryMarkdown(res: Result): string {
@@ -132,6 +173,8 @@ export function summaryMarkdown(res: Result): string {
     `| not closed by the oracle | ${c.notClosed.length} |`,
     '',
     `After the app's own runs: right ${c.afterAppRuns.right}, wrong ${c.afterAppRuns.wrong}, asked ${c.afterAppRuns.asked}, open ${c.afterAppRuns.open}.`,
+    '',
+    ...categoryLines(c.categories),
     `Outside the payments: ${res.outside.manual.ok}/${res.outside.manual.total} hand movements right at the end, ${res.outside.other.ok}/${res.outside.other.total} other refs right at the end (${res.outside.other.report} of a provider report, ${res.outside.other.reportByApp} of them booked by the app untouched), ${res.outside.actions.length} oracle actions; ${res.intake.touches.length} answers at the drop; ${res.outside.correctionsOfFiledNotReplayed} corrections of filed periods not replayed.`,
     '',
     `## Figures (${res.figures.keyFiled ? 'key: filed' : 'key: booked, not filed'})`,

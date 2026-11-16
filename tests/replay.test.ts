@@ -12,7 +12,9 @@ import type { JournalEntry } from '../src/types/index.js';
 import { loadBooks } from '../src/books/store.js';
 import { workspaceAt } from '../src/workspace/workspace.js';
 import { DEMO_REPO, DEMO_ROOT } from './support/workspace.js';
-import { compare } from '../tools/replay/compare.js';
+import { compare, lineOf, parseLine, Pool, showLine } from '../tools/replay/compare.js';
+import { effectJudge, returnCodeKey } from '../tools/replay/judge.js';
+import { categoriesOf } from '../tools/replay/report.js';
 import { decideCut, keyOf, prepare } from '../tools/replay/cut.js';
 import { passOf, planFirst, planSecond, touchOf, type CaseView, type Context, type KeySide } from '../tools/replay/oracle.js';
 
@@ -140,4 +142,30 @@ test('prepare makes a copy whose filed books load (their seals hold) with the pe
   } finally {
     rmSync(join(out, '..'), { recursive: true, force: true });
   }
+});
+
+test('a zero code equals no code, and the tax on a line of its own equals it in the gross line, where the return and the accounts come out alike', () => {
+  const effect = effectJudge('2026-Q2');
+  const codeKey = returnCodeKey('2026-Q2', '2026-04-01');
+  const line = (debit: string, credit: string, vatCode: string, amount: number) => ({ date: '2026-05-04', accountDebit: debit, accountCredit: credit, vatCode, amount });
+  assert.equal(compare({ entries: [line('6940', '1020', '', 5)], receipts: [] }, { entries: [line('6940', '1020', 'I0', 5)], receipts: [] }, { codeKey, effect }).ok, true);
+  // The input tax of 108.10 at 8.1 % is 8.10: on the gross line's code, or on a line of its own.
+  const own = compare({ entries: [line('6500', '1020', '', 108.1), line('', '6500', 'I81-2', 8.1)], receipts: [] }, { entries: [line('6500', '1020', 'I81', 108.1)], receipts: [] }, { codeKey, effect });
+  assert.equal(own.lines, true);
+  const less = compare({ entries: [line('6500', '1020', '', 108.1), line('', '6500', 'I81-2', 7.5)], receipts: [] }, { entries: [line('6500', '1020', 'I81', 108.1)], receipts: [] }, { codeKey, effect });
+  assert.deepEqual([less.lines, less.wrong], [false, ['vat']], 'another tax is a VAT difference');
+  const elsewhere = compare({ entries: [line('6500', '1020', '', 108.1)], receipts: [] }, { entries: [line('6500', '1020', '', 108.1), line('6501', '1020', '', 3)], receipts: [] }, { codeKey, effect });
+  assert.deepEqual([elsewhere.lines, elsewhere.wrong], [false, ['split']], 'a line the key has on the payment and the replay lacks');
+  const pooled = compare({ entries: [line('6500', '1020', '', 108.1)], receipts: [] }, { entries: [line('6500', '1020', '', 108.1), line('6501', '1020', '', 3)], receipts: [] }, { codeKey, effect, appElsewhere: new Pool([lineOf(line('6501', '1020', '', 3))]) });
+  assert.equal(pooled.lines, true, 'the same line under a ref of no payment counts as there');
+  const account = compare({ entries: [line('4010', '1020', '', 20)], receipts: [] }, { entries: [line('6513', '1020', '', 20)], receipts: [] }, { codeKey, effect });
+  assert.deepEqual(account.wrong, ['account']);
+});
+
+test('a booking right whose links differ is a link-only difference; a saved diff line reads back as written', () => {
+  const [e] = key.entries;
+  const v = compare(view({ receipts: [] }), key);
+  const cats = categoriesOf([{ ref: 'a', pass: 'wrong', first: v }, { ref: 'b', pass: 'right', first: compare(view(), key) }]);
+  assert.deepEqual([cats.linkOnly, cats.bookingRight, cats.bookingWrong], [1, 1, 0]);
+  for (const l of [lineOf(e), lineOf({ ...e, accountDebit: '', vatCode: undefined })]) assert.deepEqual(parseLine(showLine(l)), l);
 });
