@@ -14,6 +14,17 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-16
+
+No figure changes: the demo goldens and the books schema are as in 0.6.1.
+
+### Highlights
+
+- **One file per share:** the link's page downloads one `.vanillashare` file, with the browser's own progress; double-click it to open the books.
+- **The file is his document:** his changes are saved into the file he opened (⌘S, or by itself), and the file brings them along to another Mac or back to you.
+- **Buttons that wait show it:** a spinner after a moment, and no second click until the action is done.
+- **Links of 0.6.1 end when the service moves to version 3:** update to 0.6.2 to share by link.
+
 ### Changed
 
 - **⚠ action** **A share is one Freigabe-Datei, downloaded like any file** (docs/share-protocol.md,
@@ -39,7 +50,6 @@ Two markers flag an entry you must read before you update:
   after its last save. Saving a large copy no longer holds the app.
 - The hand-over file's extension is `.vanillashare` («Freigabe-Datei»); the app registers it with macOS
   and still opens the `.vanilla` files of 0.6.x, but writes only `.vanillashare`.
-
 - Every button that waits for something (saving, booking, sending, opening, a job) shows a spinner after a moment, keeps its size and takes no second click until the action is done.
 
 ## [0.6.1] - 2026-11-15
