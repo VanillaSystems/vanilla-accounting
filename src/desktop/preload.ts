@@ -14,6 +14,11 @@ const bridge: DesktopBridge = {
     ipcRenderer.on(PUSH.menu, handler);
     return () => { ipcRenderer.off(PUSH.menu, handler); };
   },
+  onFullScreen(listener) {
+    const handler = (_e: IpcRendererEvent, on: boolean) => listener(on);
+    ipcRenderer.on(PUSH.fullScreen, handler);
+    return () => { ipcRenderer.off(PUSH.fullScreen, handler); };
+  },
   setLanguage: (code) => ipcRenderer.send(TELL.language, code),
   saveFile: (url, name) => ipcRenderer.invoke(ASK.saveFile, url, name),
   chooseSavePath: (name) => ipcRenderer.invoke(ASK.chooseSavePath, name),

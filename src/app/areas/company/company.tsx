@@ -15,7 +15,7 @@ import { LOCALES, t } from '../../i18n/index.js';
 import { api, errorText } from '../../lib/api.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { fmt, formatDate } from '../../lib/utils.js';
-import { dispatchBar, useBar, type BarId } from '../../shell/bars.js';
+import { setPinned, useBarMode } from '../../shell/bars.js';
 import { useShellUi } from '../../shell/ui.js';
 import { moveKey } from '../../shell/keyboard.js';
 import type { Theme } from '../../shell/prefs.js';
@@ -705,14 +705,14 @@ function Opening({ books, nav, canEdit }: Props) {
 
 const isBalanceSheet = (a: string) => { const side = chart().sideOf(a); return side === 'assets' || side === 'liabilities'; };
 
-/** The pin of a bar, the same state the bar's own pin edits (src/app/shell/bars.ts). */
-function BarSetting({ id }: { id: BarId }) {
-  const state = useBar(id);
+/** The top bar's pin, the same state the bar's own pin edits (src/app/shell/bars.ts). */
+function BarSetting() {
+  const mode = useBarMode();
   return (
     <>
-      <dt>{t(id === 'top' ? 'display.topBar' : 'display.dock')}</dt>
+      <dt>{t('display.topBar')}</dt>
       <dd>
-        <label><input type="checkbox" checked={state.mode === 'always'} onChange={(e) => dispatchBar(id, { kind: 'pin', on: e.target.checked })} /> {t('display.barAlways')}</label>{' '}
+        <label><input type="checkbox" checked={mode === 'always'} onChange={(e) => setPinned(e.target.checked)} /> {t('display.barAlways')}</label>{' '}
         <span className="m">{t('display.barHint')}</span>
       </dd>
     </>
@@ -737,7 +737,7 @@ function Display() {
         <dd>{LOCALES.find((l) => l.code === ui.language)?.name} <span className="m">{t('display.languageHint')}</span></dd>
         <dt>{t('shell.zoom')}</dt>
         <dd><span className="mono">{Math.round(ui.zoom * 100)} %</span> <span className="m">{t('display.zoomHint')}</span></dd>
-        {(['top'] as const).map((id) => <BarSetting key={id} id={id} />)}
+        <BarSetting />
       </dl>
       <p className="m src-note">{t('display.local')}</p>
     </>

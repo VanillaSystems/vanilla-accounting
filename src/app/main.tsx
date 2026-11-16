@@ -30,6 +30,8 @@ if (noTitleBar) {
   bar.className = 'dragbar';
   bar.setAttribute('aria-hidden', 'true');
   document.body.prepend(bar);
+  // In fullscreen the window's buttons go away, and with them the room kept for them (shell.css --tl-inset).
+  desktop?.onFullScreen((on) => document.documentElement.classList.toggle('fullscreen', on));
 }
 
 /** A new language remounts the app, so every text, including module-level ones, is read again. */
