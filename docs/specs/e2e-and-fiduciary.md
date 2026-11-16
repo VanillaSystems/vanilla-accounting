@@ -466,8 +466,9 @@ that comes back passes the sharer's review (B6).
 The books reach the fiduciary as **a link in an e-mail, not a file sent around** (owner decision
 1, ADR 0016). Since the owner's decision of 2026-11-15 (ADR 0016 «Amendment»: «lets keep it as UX
 friendly in the beginning as possible. we can further lock it down as we go along») the share
-service sends that e-mail itself and keeps the share's key; the link in it is the access. The
-`.vanilla` file stays as the offline way (B3.7), with the same format.
+service sends that e-mail itself; the link in it is the access. Since the second decision of that day
+the link downloads one Freigabe-Datei (`.vanillashare`), the same file as the offline way (B3.7), and
+that file is the recipient's document (docs/share-protocol.md §8).
 
 **UI wording is neutral.** No text of the app, the page or the invitation uses a family word. It
 names the other person by name («Ernst Bühler hat 14 Änderungen geschickt», «An Sandra Huber
@@ -997,9 +998,26 @@ Phase 2, not in this spec's phases: the fiduciary's account with all mandates (B
 
 ---
 
-## Decided by the owner on 2026-11-15
+## Decided by the owner on 2026-11-15 (later the same day: one file, the file is the document)
 
-These replace the points of 2026-11-14 below that they name (ADR 0016 «Amendment»):
+These replace the points below that they name (ADR 0016 «Amendment», second part; docs/share-protocol.md v3):
+
+- **One Freigabe-Datei per share** (`.vanillashare`; 0.6's `.vanilla` still opens): the app uploads the
+  whole hand-over package as one file (per «Aktualisieren», per return too); the share's page offers
+  «Herunterladen (196 MB)», a plain browser download into Downloads with the browser's own progress, then
+  «Danach die Freigabe-Datei doppelklicken». «In der App öffnen» downloads the same file in the app with
+  a progress window and saves it into Downloads. The file carries the share (service, id, return token,
+  generation), so double-clicked it opens linked to the share. No app-side encryption any more: the
+  storage encrypts at rest; the service keeps no key (B3.2, B3.4).
+- **The file is the recipient's document** (docs/share-protocol.md §8): his changes are saved into the
+  file he opened (`return.vanillashare` inside it), atomically, with «Sichern» (⌘S), on idle and on
+  closing once he saved himself; the title names the file, «ungespeichert» until saved; «Sichern unter…»
+  when it moved or is read-only. The same file opens his changes on another Mac. Mailed back, the
+  sharer's app shows his changes for review (never a copy of her books). A newer file opened over an
+  older one with changes carries them over and says so; the older file stays. Filed periods: changes
+  there are dropped, said; seals untouched (B4, B5).
+
+Earlier the same day:
 
 - **No end-to-end encryption for sharing by link**: the service keeps the key (wrapped) and the
   storage holds ciphertext only; the link is the access, no `#` key, no code, no device binding

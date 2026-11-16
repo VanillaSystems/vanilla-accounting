@@ -76,7 +76,7 @@ test('«Neue Buchhaltung erstellen»: the save panel names a new folder in Docum
 test('a call the desktop app does not answer is said in a plain sentence, not in Electron\'s words', async () => {
   const none = async () => null;
   const dead = async (): Promise<never> => { throw new Error("Error invoking remote method 'desktop:chooseNewFolder': Error: No handler registered for 'desktop:chooseNewFolder'"); };
-  const raw: DesktopBridge = { chooseFolder: none, chooseNewFolder: dead, onMenu: () => () => undefined, setLanguage: () => undefined, saveFile: dead, dictate: () => () => undefined };
+  const raw: DesktopBridge = { chooseFolder: none, chooseNewFolder: dead, onMenu: () => () => undefined, setLanguage: () => undefined, saveFile: dead, chooseSavePath: dead, dictate: () => () => undefined };
   const logged = console.error;
   console.error = () => undefined;
   try {

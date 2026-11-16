@@ -96,7 +96,7 @@ test('a full package: the books and the open years\' receipts, the closed year\'
   const made = await makeShare(ws, { to: ERNST, message: 'Kannst du Q3 durchsehen?' }, SANDRA, new Date('2026-11-14T15:42:00Z'));
   assert.equal(made.index.kind, 'full');
   assert.equal(made.version.n, 1);
-  assert.equal(made.name, `${ws.company.name} – Buchhaltung (2026-11-14).vanilla`, 'the name a person sees carries no version number');
+  assert.equal(made.name, `${ws.company.name} – Buchhaltung (2026-11-14).vanillashare`, 'the name a person sees carries no version number');
   const carried = made.index.files.map((f) => f.path);
   assert.ok(carried.includes('transactional-data/2026/receipts/r1.pdf'));
   assert.ok(carried.includes('transactional-data/2026/filings/seal-Q1.json'), 'seals go along');

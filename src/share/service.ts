@@ -7,7 +7,7 @@
  * link is not offered and the `.vanilla` file does every step.
  */
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { APP_ROOT } from '../workspace/workspace.js';
 
@@ -22,6 +22,16 @@ let settingsFile: string | undefined;
 /** This computer's share settings; the Mac app names a file in its own folder (src/desktop/main.ts). */
 export const shareSettingsFile = (): string => settingsFile ?? process.env.VANILLA_SHARE_SETTINGS ?? join(homedir(), '.vanilla-accounting', 'share.json');
 export const setShareSettingsFile = (file: string): void => { settingsFile = file; };
+
+let downloads: string | undefined;
+/**
+ * Where a share's Freigabe-Datei is saved when the app downloads it («In der App öffnen», a link
+ * pasted, a newer state of a copy): the person's Downloads, as the browser would; the Mac app names
+ * its own (app.getPath('downloads')). A test run keeps its own.
+ */
+export const downloadsDir = (): string => downloads ?? process.env.VANILLA_DOWNLOADS_DIR
+  ?? (process.env.NODE_TEST_CONTEXT ? join(tmpdir(), `vanilla-downloads-${process.pid}`) : join(homedir(), 'Downloads'));
+export const setDownloadsDir = (dir: string): void => { downloads = dir; };
 
 interface Settings { service?: string }
 

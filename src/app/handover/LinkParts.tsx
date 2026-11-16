@@ -27,7 +27,7 @@ export function atText(iso: string): string {
 /** The progress of a job: what it does and how far, in bytes. */
 export function JobProgress({ job }: { job: Job<unknown> | null }) {
   if (!job) return null;
-  const phase = job.phase === 'download' || job.phase === 'decrypt' ? 'download' : job.phase === 'upload' || job.phase === 'encrypt' ? 'upload' : 'pack';
+  const phase = job.phase === 'download' ? 'download' : job.phase === 'upload' ? 'upload' : 'pack';
   return (
     <div className="shprog" role="status" data-testid="share-progress">
       <span>{t(`share.progress.${phase}`)}{job.total ? ` · ${sizeText(job.done)} / ${sizeText(job.total)}` : ''}</span>

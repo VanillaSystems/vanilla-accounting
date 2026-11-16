@@ -1,11 +1,13 @@
 /**
  * Sharing the books with a fiduciary and taking back his corrections (docs/specs/e2e-and-fiduciary.md
- * Part B), the transport a `.vanilla` file (B3.7); the link through the share service comes next.
+ * Part B), the transport a Freigabe-Datei (`.vanillashare`, B3.7) or the link (src/server/routes/share.ts).
  *
  *   GET  /api/handover                         the content version, a Durchsicht copy's facts, the returns kept
  *   GET  /api/handover/plan?name=&email=&archive=   what a hand-over to that person would carry, with its size
- *   POST /api/handover/share                   { to, message?, archive? } → the `.vanilla` file (writes a version)
- *   POST /api/handover/open                    a `.vanilla` file (raw): a return is kept for review; a hand-over opens as a Durchsicht copy
+ *   POST /api/handover/share                   { to, message?, archive? } → the Freigabe-Datei `.vanillashare` (writes a version)
+ *   POST /api/handover/open                    a Freigabe-Datei (raw; `.vanillashare`, or `.vanilla` of 0.6.x): a return is kept for review;
+ *                                              her own hand-over with his saved changes too; a hand-over opens as a Durchsicht copy, whose
+ *                                              document the file is when the Mac app names it (header X-Vanilla-File)
  *   GET  /api/handover/returns/:id             the review: rows by group, the effect on the VAT figures
  *   POST /api/handover/returns/:id/decide      { row, decision?, question? }
  *   POST /api/handover/returns/:id/apply       { groups: [..] | 'all' } → one save through the write door, a version
@@ -15,18 +17,24 @@
  *   POST /api/handover/return                  { message? } → the return's `.vanilla` file
  *   PUT  /api/handover/notes                   { key, text }: his «Warum?» on a record
  *   POST /api/handover/close                   back to the books opened before the copy
+ *   GET  /api/handover/document                the copy's Freigabe-Datei: its name, whether his changes are all in it
+ *   POST /api/handover/document/save           { to?, auto? }: «Sichern» (⌘S) into it; `to`: «Sichern unter…»; `auto`: idle or closing,
+ *                                              only into a file she saved into herself before
+ *   POST /api/handover/document/file           the file as «Sichern» would write it (the browser's «Sichern unter…»)
  */
 import express, { Router, type Response } from 'express';
 import { existsSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import { RequestError, WS, openBooksAt, readBooks } from '../books.js';
 import { currentVersion, readVersions, type Party } from '../../handover/versions.js';
 import { makeShare, planShare, type ShareRequest } from '../../handover/share.js';
 import { PackageError, readPackage } from '../../handover/package.js';
-import { buildReturn, isDurchsicht, markerOf, openPackage, planReturn, readNotes, setNote, changesOf } from '../../handover/durchsicht.js';
+import { buildReturn, isDurchsicht, markerOf, planReturn, readNotes, setNote, changesOf } from '../../handover/durchsicht.js';
+import { documentBytes, documentState, fileOf, saveDocument } from '../../handover/document.js';
 import { applyReturn, decide, GROUPS, HandoverRefused, listReturns, receiveReturn, reviewOf, undoReturn, type Decision, type GroupId } from '../../handover/returns.js';
 import { OwnershipError } from '../../books/store.js';
 import type { ApiRefusal } from '../../types/api-error.js';
-import { canReturnByLink, linkOfCopy, readShares } from '../../share/sharing.js';
+import { canReturnByLink, linkOfCopy, openShareFile, ownHandOver, readShares, receiveOwnHandOver } from '../../share/sharing.js';
 
 export const router = Router();
 
@@ -65,13 +73,16 @@ const partyOf = (v: unknown): Party => {
 const refusal = (e: PackageError): ApiRefusal => ({ code: e.code, params: e.params } as ApiRefusal);
 /** A hand-over's refusal as the API says it; anything else as it is. */
 export function handoverRefusal(e: unknown): unknown {
-  if (e instanceof PackageError) return new RequestError(e.code === 'shareTooLarge' ? 413 : e.code === 'shareBaseMissing' || e.code === 'shareCopyNewer' || e.code === 'shareCopyOther' || e.code === 'shareOtherCompany' || e.code === 'shareUnknownBase' ? 409 : 400, e.message, refusal(e));
+  if (e instanceof PackageError) return new RequestError(e.code === 'shareTooLarge' ? 413 : e.code === 'shareBaseMissing' || e.code === 'shareCopyNewer' || e.code === 'shareCopyOther' || e.code === 'shareOtherCompany' || e.code === 'shareUnknownBase' || e.code === 'shareOwnBooks' || e.code === 'shareDocMissing' || e.code === 'shareDocReadOnly' || e.code === 'shareDocOther' ? 409 : 400, e.message, refusal(e));
   if (e instanceof HandoverRefused) return new RequestError(409, e.message, { code: 'changedSince' });
   if (e instanceof OwnershipError) return new RequestError(409, e.message);
   return e;
 }
 function guarded<T>(fn: () => T): T {
   try { return fn(); } catch (e) { throw handoverRefusal(e); }
+}
+async function guardedAsync<T>(fn: () => Promise<T>): Promise<T> {
+  try { return await fn(); } catch (e) { throw handoverRefusal(e); }
 }
 
 /** The sharer: who the books are handed over by. The person of this Mac is not known yet (B2): the company's owner stands for her. */
@@ -106,6 +117,7 @@ router.get('/api/handover', (_req, res) => {
         linked: canReturnByLink(WS.paths.root),
         byLink: !!linkOfCopy(WS.paths.root),
         ...(linkOfCopy(WS.paths.root)?.withdrawnAt ? { withdrawnAt: linkOfCopy(WS.paths.root)!.withdrawnAt } : {}),
+        ...(documentState(WS) ? { document: documentState(WS) } : {}),
       },
     } : {}),
     returns: marker ? [] : listReturns(WS),
@@ -133,18 +145,51 @@ router.post('/api/handover/share', async (req, res) => {
   sendFile(res, made.name, made.bytes);
 });
 
+/** What opening a Freigabe-Datei did: a return (or her own hand-over with his changes) kept for review, or the copy it opened as. */
+export type OpenedAnswer =
+  | { kind: 'return'; id: string; from: Party; changes: number; basedOn: number }
+  | { kind: 'full' | 'update'; firm: string; version: number; conflicts: number; dropped: number; carried: number; restored?: { applied: number; dropped: number; stale: boolean }; document?: string };
+
+/**
+ * A Freigabe-Datei opened with the books open here: a return goes to its review; the sharer's own
+ * hand-over goes there too when he saved changes into it (mailed back), never as a copy of her own
+ * books; any other hand-over opens as a Durchsicht copy (beside a copy from someone else, a new one).
+ */
+export async function openHandoverBytes(bytes: Uint8Array, path?: string): Promise<OpenedAnswer> {
+  const p = guarded(() => readPackage(bytes));
+  if (p.index.kind === 'return') {
+    refuseOnCopy('return');
+    return { kind: 'return', ...guarded(() => receiveReturn(WS, bytes)) };
+  }
+  if (ownHandOver(WS, p)) return { kind: 'return', ...guarded(() => receiveOwnHandOver(WS, p)) };
+  const opened = guarded(() => openShareFile(bytes, { otherAsNew: true, ...(path ? { path } : {}) }));
+  await openCopy(opened.root);
+  return {
+    kind: opened.kind, firm: opened.marker.firm.name, version: opened.marker.version.n, conflicts: opened.conflicts, dropped: opened.dropped, carried: opened.carried,
+    ...(opened.restored ? { restored: opened.restored } : {}), ...(opened.document ? { document: opened.document } : {}),
+  };
+}
+
 router.post('/api/handover/open', express.raw({ type: () => true, limit: MAX }), async (req, res) => {
   const bytes = new Uint8Array(req.body as Buffer);
-  const kind = guarded(() => readPackage(bytes).index.kind);
-  if (kind === 'return') {
-    refuseOnCopy('return');
-    res.json({ kind, ...guarded(() => receiveReturn(WS, bytes)) });
-    return;
-  }
-  // A file beside a copy from someone else opens as a new copy: nothing of the copy here is moved or overwritten.
-  const opened = guarded(() => openPackage(bytes, new Date(), undefined, { otherAsNew: true }));
-  await openCopy(opened.root);
-  res.json({ kind: opened.kind, firm: opened.marker.firm.name, version: opened.marker.version.n, conflicts: opened.conflicts, dropped: opened.dropped });
+  res.json(await openHandoverBytes(bytes, fileOf(req.get('X-Vanilla-File'), bytes)));
+});
+
+router.get('/api/handover/document', (_req, res) => {
+  res.json({ document: isDurchsicht(WS.paths.root) ? documentState(WS) ?? null : null });
+});
+
+router.post('/api/handover/document/save', async (req, res) => {
+  if (!isDurchsicht(WS.paths.root)) throw new RequestError(409, 'Sichern in eine Freigabe-Datei gibt es nur in einer Durchsicht.', { code: 'shareWrongKind' });
+  const { to, auto } = (req.body ?? {}) as { to?: unknown; auto?: unknown };
+  if (to !== undefined && (typeof to !== 'string' || !isAbsolute(to))) throw new RequestError(400, 'to: ein ganzer Pfad.');
+  res.json({ document: await guardedAsync(() => saveDocument(WS, { ...(typeof to === 'string' ? { to } : {}), ...(auto === true ? { auto: true } : {}) })) });
+});
+
+router.post('/api/handover/document/file', async (_req, res) => {
+  if (!isDurchsicht(WS.paths.root)) throw new RequestError(409, 'Nur in einer Durchsicht.', { code: 'shareWrongKind' });
+  const made = await guardedAsync(() => documentBytes(WS));
+  sendFile(res, made.name, made.bytes);
 });
 
 router.post('/api/handover/close', async (_req, res) => {

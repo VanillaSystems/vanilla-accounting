@@ -7,8 +7,13 @@ const { join } = require('node:path');
 const { excludedPaths } = require('./not-packed.cjs');
 
 const env = process.env;
-/** The type of a hand-over file (`.vanilla`, src/handover/package.ts), which the app declares as its own. */
-const HANDOVER_TYPE = 'org.vanilla-accounting.handover';
+/**
+ * The type of a Freigabe-Datei (`.vanillashare`, src/handover/package.ts), a flat file, which the app
+ * declares as its own; and the `.vanilla` share zip of 0.6.x, which it still opens. (The publisher's
+ * domain stays out of the app's files: the identifiers use the app's own name.)
+ */
+const SHARE_TYPE = 'org.vanilla-accounting.vanillashare';
+const LEGACY_TYPE = 'org.vanilla-accounting.handover';
 const signed = Boolean(env.CSC_LINK);
 const notarize = signed && Boolean(env.APPLE_ID && env.APPLE_APP_SPECIFIC_PASSWORD && env.APPLE_TEAM_ID);
 /** owner/repo of the GitHub releases the app updates from; without it the app has no update feed. */
@@ -31,7 +36,10 @@ module.exports = {
   protocols: [{ name: 'Vanilla Accounting', schemes: ['vanilla-accounting'] }],
   // A hand-over file opens the app from Finder (double-click, «Öffnen mit»), also on a Mac that never
   // opened books (#545; src/desktop/main.ts `open-file`). A file, not a bundle; the app owns the type.
-  fileAssociations: [{ ext: 'vanilla', name: 'Vanilla Accounting Buchhaltung', role: 'Editor', rank: 'Owner', isPackage: false }],
+  fileAssociations: [
+    { ext: 'vanillashare', name: 'Vanilla Accounting Freigabe-Datei', role: 'Editor', rank: 'Owner', isPackage: false },
+    { ext: 'vanilla', name: 'Vanilla Accounting Freigabe-Datei (0.6)', role: 'Editor', rank: 'Owner', isPackage: false },
+  ],
   // The share service the app offers by default (src/share/service.ts): named at build time like the
   // update feed, since the publisher's domain stays out of the app's files. Without it, the person
   // names a service herself, or shares the books as a file.
@@ -102,10 +110,15 @@ module.exports = {
     entitlements: 'desktop/entitlements.mac.plist',
     entitlementsInherit: 'desktop/entitlements.mac.plist',
     extendInfo: {
-      // The type behind `fileAssociations`: declared by the app, so macOS knows `.vanilla` files by it.
+      // The types behind `fileAssociations`: declared by the app, so macOS knows `.vanillashare` (and 0.6's `.vanilla`) files by them. Flat files (public.data), never a bundle.
       UTExportedTypeDeclarations: [{
-        UTTypeIdentifier: HANDOVER_TYPE,
-        UTTypeDescription: 'Vanilla Accounting Buchhaltung',
+        UTTypeIdentifier: SHARE_TYPE,
+        UTTypeDescription: 'Vanilla Accounting Freigabe-Datei',
+        UTTypeConformsTo: ['public.data'],
+        UTTypeTagSpecification: { 'public.filename-extension': ['vanillashare'], 'public.mime-type': ['application/x-vanillashare'] },
+      }, {
+        UTTypeIdentifier: LEGACY_TYPE,
+        UTTypeDescription: 'Vanilla Accounting Freigabe-Datei (0.6)',
         UTTypeConformsTo: ['public.data'],
         UTTypeTagSpecification: { 'public.filename-extension': ['vanilla'], 'public.mime-type': ['application/x-vanilla-accounting'] },
       }],

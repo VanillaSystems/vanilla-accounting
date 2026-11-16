@@ -16,7 +16,7 @@ import { isApiPath, isAppPath } from '../server/app-paths.js';
 import { lanAddresses, newPhoneToken, pairingUrl, phoneApp, refuseForeignHost, usePhoneToken } from '../server/phone.js';
 import { SetupError, createWorkspace, type SetupRequest } from '../workspace/create.js';
 import { readManifest } from '../workspace/manifest.js';
-import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, WorkspaceRefusal, appFolderIn, openWorkspaceAt, workspaceAt } from '../workspace/workspace.js';
+import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, WorkspaceError, WorkspaceRefusal, appFolderIn, openWorkspaceAt, workspaceAt, workspacePaths } from '../workspace/workspace.js';
 import { bundledDemo, nameDemoCopy } from '../workspace/demo-copy.js';
 import { assumedOf, parseAssumed, stillAssumed } from '../onboarding/model.js';
 import { withLater } from '../workspace/setup.js';
@@ -34,8 +34,9 @@ import { aiSetup } from '../server/ai-setup.js';
 import { qrSvg } from './qr.js';
 import { opened, readState, writeState, type PhonePairing } from './state.js';
 import { isDurchsichtCopy } from '../handover/content.js';
-import { openPackage } from '../handover/durchsicht.js';
-import { PackageError } from '../handover/package.js';
+import { PackageError, readPackage, type PackageContents } from '../handover/package.js';
+import { openShareFile, ownHandOver } from '../share/sharing.js';
+import { fileOf } from '../handover/document.js';
 
 export interface DesktopServerOptions {
   /** desktop.json in the user data folder. */
@@ -501,22 +502,45 @@ export function desktopServer(opts: DesktopServerOptions): DesktopServer {
   app.post('/api/desktop/demo', async (_req, res) => {
     try { res.json(await openDemo()); } catch (e) { refuse(res, e); }
   });
+  /** Books among the recent ones that made this hand-over themselves (the sharer's, src/share/sharing.ts ownHandOver). */
+  const ownBooksOf = (p: PackageContents): string | undefined => recent().map((b) => b.root).find((root) => {
+    const folder = appFolderIn(root) ?? root;
+    if (isDurchsichtCopy(folder)) return false;
+    try { return ownHandOver({ paths: workspacePaths(folder), company: readManifest(join(folder, MANIFEST_FILE)).company }, p); } catch { return false; }
+  });
   /**
-   * A `.vanilla` file dropped on the start screen or handed over by Finder (src/desktop/open-files.ts).
-   * With books open it goes where «Öffnen…» in the books sends it (a return to its review there).
-   * With none, a hand-over opens as its Durchsicht copy, which is books of its own, and a return is
-   * refused (shareWrongKind): it belongs in the books it was shared from.
+   * A Freigabe-Datei (`.vanillashare`, or `.vanilla` of 0.6.x) dropped on the start screen or handed
+   * over by Finder (src/desktop/open-files.ts). With books open it goes where «Öffnen…» in the books
+   * sends it (a return to its review there). With none: the sharer's own hand-over with his changes
+   * saved into it (mailed back) opens her books, found among the recent ones, and its review there,
+   * never a copy of her own books; any other hand-over opens as its Durchsicht copy, whose document
+   * the file is (X-Vanilla-File); a return is refused (shareWrongKind): it belongs in the books it was
+   * shared from.
    */
   app.post('/api/desktop/handover', (req, res, next) => {
     if (!books) return next();
     req.url = '/api/handover/open';
     books(req, res, next);
-  }, express.raw({ type: () => true, limit: '1gb' }), async (req, res) => {
+  }, express.raw({ type: () => true, limit: '1gb' }), async (req, res, next) => {
     try {
+      const bytes = new Uint8Array(Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0));
+      const p = readPackage(bytes);
+      const own = p.index.kind === 'return' ? undefined : ownBooksOf(p);
+      if (own) {
+        await openBooks(own);
+        // The body is read already: the books' route takes it as it is.
+        req.url = '/api/handover/open';
+        books!(req, res, next);
+        return;
+      }
       // Beside a copy from someone else: a new copy, never the one here moved (src/handover/durchsicht.ts targetOf).
-      const opened = openPackage(new Uint8Array(Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0)), new Date(), undefined, { otherAsNew: true });
+      const path = fileOf(req.get('X-Vanilla-File'), bytes);
+      const opened = openShareFile(bytes, { otherAsNew: true, ...(path ? { path } : {}) });
       await openBooks(opened.root);
-      res.json({ kind: opened.kind, firm: opened.marker.firm.name, version: opened.marker.version.n, conflicts: opened.conflicts, dropped: opened.dropped });
+      res.json({
+        kind: opened.kind, firm: opened.marker.firm.name, version: opened.marker.version.n, conflicts: opened.conflicts, dropped: opened.dropped, carried: opened.carried,
+        ...(opened.restored ? { restored: opened.restored } : {}), ...(opened.document ? { document: opened.document } : {}),
+      });
     } catch (e) { refuse(res, e); }
   });
   app.post('/api/desktop/upgrade', async (req, res) => {

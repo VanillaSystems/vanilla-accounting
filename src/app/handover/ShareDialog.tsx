@@ -83,7 +83,7 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
     if (!name.trim() || busy) return;
     setBusy(true);
     try {
-      const file = await postDownload('/api/handover/share', { to: to(), message, ...options() }, 'buchhaltung.vanilla');
+      const file = await postDownload('/api/handover/share', { to: to(), message, ...options() }, 'buchhaltung.vanillashare');
       keepPerson(to());
       await reloadHandover();
       toast(t('share.saved', { file, name: to().name }));
@@ -201,7 +201,7 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
           ) : (
             <>
               <button type="button" className="btn ghost" disabled={busy} onClick={() => pick.current?.click()}>{t('share.open')}</button>
-              <input ref={pick} type="file" accept=".vanilla" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void open(f); }} />
+              <input ref={pick} type="file" accept=".vanillashare,.vanilla" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void open(f); }} />
               <span className="m" />
               <button type="button" className="btn ghost" onClick={onClose}>{t('common.cancel')}</button>
               {way === 'link' && linkable

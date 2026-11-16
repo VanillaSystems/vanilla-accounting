@@ -1,20 +1,19 @@
 /**
- * A fake of the share service in the test process, following its docs/api.md, version 2
- * (docs/share-protocol.md here): senders, shares with the key the app hands over, uploads by PUT to
- * itself, completion, generations («Aktualisieren»), openings without any proof (the link is the
- * access; the key comes with the opening), reads through its own origin, the invitation it sends
- * (kept in `mails`, as it would go to its mail provider), status, withdrawal and returns. It keeps
- * every request it got, so a test can prove what reached it. `refuse` makes the next call of a
+ * A fake of the share service in the test process, following its docs/api.md, version 3
+ * (docs/share-protocol.md here): senders, shares of one Freigabe-Datei each, its upload by one PUT
+ * to a «storage» path of the fake (as R2 would take it: exact size, If-None-Match), completion,
+ * generations («Aktualisieren»), openings that hand out a short-lived download of the file from the
+ * «storage» path, the invitation it sends (kept in `mails`), status, withdrawal and returns. It
+ * keeps every request it got, so a test can prove what reached it. `refuse` makes the next call of a
  * route answer with a refusal, as the real service would.
  */
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { createHash, randomBytes } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
-import { parseHeader } from '../../src/share/crypto/index.js';
 
 export interface Seen { method: string; url: string; headers: Record<string, string | string[] | undefined>; body: Buffer }
 
-interface Generation { n: number; key: string; bytes: number; objects: number; meta?: string; declared: Map<string, number>; stored: Map<string, Buffer> }
+interface Generation { n: number; bytes: number; meta?: Record<string, unknown>; file?: Buffer }
 interface Share {
   id: string; kind: 'share' | 'return'; parent?: string; sender?: string;
   revokeToken: string; returnToken?: string;
@@ -22,7 +21,7 @@ interface Share {
   current: Generation; pending?: Generation;
   state: 'uploading' | 'ready' | 'expired' | 'revoked';
   createdAt: string; readyAt?: string; firstOpenedAt?: string; expiresAt?: string; endedAt?: string; updatedAt?: string;
-  opens: string[]; tickets: Map<string, number>; returns: string[];
+  opens: string[]; returns: string[];
   invite?: { to: { name: string; email: string }; from: { name: string; email: string }; message?: string; company?: string; language?: string };
   invites: number; inviteSentAt?: string;
 }
@@ -35,6 +34,8 @@ export interface FakeShareService {
   seen: Seen[];
   shares: Map<string, Share>;
   mails: Mail[];
+  /** Downloads of each share's file, by share id: what the storage served. */
+  downloads: Map<string, number>;
   /** Moves the fake's clock: a share past its end reads as expired. */
   expire(id: string): void;
   /** Senders confirm at once unless set false; then `confirm(email)` does it, `refuseSender` refuses. */
@@ -50,6 +51,13 @@ const ID = () => [...randomBytes(26)].map((b) => 'abcdefghijklmnopqrstuvwxyz2345
 const token = () => randomBytes(32).toString('base64url');
 /** The live service's codes are base64url: this prefix makes every fake one carry its `-` and `_`. */
 const CODE_PREFIX = 'a-b_';
+/** A filename as the service names the download (its api.ts): company and day, the share file's extension. */
+const filenameOf = (sh: Share): string => {
+  const m = (sh.current.meta ?? {}) as { company?: string; senderName?: string; asOf?: string };
+  const day = m.asOf ?? (sh.readyAt ?? sh.createdAt).slice(0, 10);
+  const clean = (x: string) => x.replace(/[/\\:*?"<>|]/g, '-');
+  return sh.kind === 'return' ? `${clean(m.company ?? '')} – Änderungen von ${clean(m.senderName ?? '')} (${day}).vanillashare` : `${m.company ? `${clean(m.company)} – ` : ''}Buchhaltung (${day}).vanillashare`;
+};
 const body = (req: IncomingMessage) => new Promise<Buffer>((resolve) => { const parts: Buffer[] = []; req.on('data', (c) => parts.push(c)); req.on('end', () => resolve(Buffer.concat(parts))); });
 
 export async function startShareService(): Promise<FakeShareService> {
@@ -58,6 +66,10 @@ export async function startShareService(): Promise<FakeShareService> {
   const senders = new Map<string, { email: string; confirmed: boolean; refusedReason?: string }>();
   const refusals: Array<{ path: RegExp; status: number; body: Record<string, unknown> }> = [];
   const mails: Mail[] = [];
+  const downloads = new Map<string, number>();
+  /** Upload and download «signatures» of the storage: a token naming what it may write or read (and until when). */
+  const puts = new Map<string, string>();
+  const gets = new Map<string, { key: string; at: number; filename: string }>();
   let base = '';
   const fake = { autoConfirm: true } as FakeShareService;
 
@@ -71,17 +83,44 @@ export async function startShareService(): Promise<FakeShareService> {
     if (refusal >= 0) { const [r] = refusals.splice(refusal, 1); send(r.status, r.body); return; }
     const json = (): Record<string, unknown> => { try { return raw.length ? JSON.parse(raw.toString('utf8')) : {}; } catch { return {}; } };
     const bearer = (req.headers.authorization ?? '').replace(/^Bearer /, '');
-    const live = (s: Share) => { if ((s.state === 'ready' || s.state === 'uploading') && s.expiresAt && Date.parse(s.expiresAt) <= Date.now()) { s.state = 'expired'; s.current.stored.clear(); } return s.state; };
+    const live = (s: Share) => { if ((s.state === 'ready' || s.state === 'uploading') && s.expiresAt && Date.parse(s.expiresAt) <= Date.now()) { s.state = 'expired'; delete s.current.file; } return s.state; };
     const status = (s: Share) => ({
-      id: s.id, kind: s.kind, state: live(s), bytes: s.current.bytes, objects: s.current.objects, createdAt: s.createdAt, readyAt: s.readyAt ?? null,
+      id: s.id, kind: s.kind, state: live(s), bytes: s.current.bytes, createdAt: s.createdAt, readyAt: s.readyAt ?? null,
       firstOpenedAt: s.firstOpenedAt ?? null, expiresAt: s.expiresAt ?? null, endedAt: s.endedAt ?? null, opens: s.opens,
       generation: s.current.n, updatedAt: s.updatedAt ?? null, invite: s.inviteSentAt ? { sentAt: s.inviteSentAt, count: s.invites } : null,
       returns: s.returns.map((id) => shares.get(id)!).map((r) => ({ id: r.id, state: live(r), bytes: r.current.bytes, createdAt: r.createdAt, readyAt: r.readyAt ?? null, expiresAt: r.expiresAt ?? null })),
       pollAfterSeconds: 900,
     });
-    const key = (b: Record<string, unknown>) => (typeof b.key === 'string' && /^[A-Za-z0-9_-]{43}$/.test(b.key) ? b.key : undefined);
-    const generation = (n: number, b: Record<string, unknown>, k: string): Generation => ({ n, key: k, bytes: b.bytes as number, objects: b.objects as number, ...(b.meta ? { meta: String(b.meta) } : {}), declared: new Map(), stored: new Map() });
+    /** A body of protocol v1 or v2 (a key, objects): refused as the service does. */
+    const old = (b: Record<string, unknown>) => b.key !== undefined || b.objects !== undefined || b.openProof !== undefined;
+    const declared = (b: Record<string, unknown>) => typeof b.bytes === 'number' && b.bytes >= 22 && !!b.meta && typeof b.meta === 'object';
+    const generation = (n: number, b: Record<string, unknown>): Generation => ({ n, bytes: b.bytes as number, ...(b.meta ? { meta: b.meta as Record<string, unknown> } : {}) });
     const p = url.pathname.split('/').filter(Boolean);
+
+    // «The storage»: what R2 takes and serves with a presigned URL (here a path of the fake, valid while the token in it is known).
+    if (p[0] === 'storage') {
+      const [, id, gen, tokenOf] = p;
+      const sh = shares.get(id ?? '');
+      if (!sh) return no(404, 'NoSuchKey');
+      if (req.method === 'PUT') {
+        const g = sh.pending?.n === Number(gen) ? sh.pending : sh.current.n === Number(gen) && sh.state === 'uploading' ? sh.current : undefined;
+        if (!g || puts.get(tokenOf ?? '') !== `${sh.id}/${gen}`) return no(403, 'SignatureDoesNotMatch');
+        if (req.headers['if-none-match'] !== '*') return no(400, 'MissingIfNoneMatch');
+        if (Number(req.headers['content-length']) !== g.bytes || raw.length !== g.bytes) return no(400, 'SizeMismatch');
+        if (g.file) return no(412, 'PreconditionFailed');
+        g.file = raw;
+        res.writeHead(200); res.end(); return;
+      }
+      if (req.method === 'GET') {
+        const ok = gets.get(tokenOf ?? '');
+        if (!ok || ok.at < Date.now() || ok.key !== `${sh.id}/${gen}`) return no(403, 'AccessDenied');
+        const file = sh.current.n === Number(gen) ? sh.current.file : undefined;
+        if (!file || live(sh) !== 'ready') return no(404, 'NoSuchKey');
+        downloads.set(sh.id, (downloads.get(sh.id) ?? 0) + 1);
+        res.writeHead(200, { 'Content-Type': 'application/octet-stream', 'Content-Length': String(file.length), 'Content-Disposition': `attachment; filename*=UTF-8''${encodeURIComponent(ok.filename)}` });
+        res.end(file); return;
+      }
+    }
 
     if (req.method === 'POST' && url.pathname === '/api/senders') {
       const email = String(json().email ?? '');
@@ -100,53 +139,37 @@ export async function startShareService(): Promise<FakeShareService> {
       if (!s) return no(401, 'senderUnknown');
       if (!s.confirmed) return no(403, 'senderNotConfirmed');
       const b = json();
-      const k = key(b);
-      if (!k) return no(426, 'appTooOld');
+      if (old(b)) return no(426, 'appTooOld');
+      if (!declared(b)) return no(400, 'badSize');
       if ((b.bytes as number) > 1024 ** 3) return no(413, 'tooLarge', { limit: 1024 ** 3, bytes: b.bytes });
       const sh: Share = {
-        id: ID(), kind: 'share', sender: s.email, revokeToken: token(), returnToken: token(), current: generation(1, b, k),
-        state: 'uploading', createdAt: new Date().toISOString(), opens: [], tickets: new Map(), returns: [], invites: 0,
+        id: ID(), kind: 'share', sender: s.email, revokeToken: token(), returnToken: token(), current: generation(1, b),
+        state: 'uploading', createdAt: new Date().toISOString(), opens: [], returns: [], invites: 0,
       };
       shares.set(sh.id, sh);
-      return send(201, { id: sh.id, revokeToken: sh.revokeToken, returnToken: sh.returnToken, state: sh.state, shareUrl: `${base}/${sh.id}`, uploadExpiresAt: new Date(Date.now() + 6 * 3600_000).toISOString(), batch: 100 });
+      return send(201, { id: sh.id, revokeToken: sh.revokeToken, returnToken: sh.returnToken, state: sh.state, shareUrl: `${base}/${sh.id}`, uploadExpiresAt: new Date(Date.now() + 6 * 3600_000).toISOString() });
     }
     if (p[0] === 'api' && p[1] === 'shares' && p[2]) {
       const sh = shares.get(p[2]);
       if (!sh) return no(404, 'notFound');
       const rest = p.slice(3).join('/');
-      // Uploads go into the pending generation of an update, else into the share's first.
+      // The upload goes into the pending generation of an update, else into the share's first.
       const target = () => sh.pending ?? (sh.state === 'uploading' ? sh.current : undefined);
-      if (req.method === 'PUT' && p[3] === 'put') {
-        const name = p[4];
-        const g = target();
-        if (!g) return no(409, 'notUploading');
-        if (req.headers['if-none-match'] !== '*') return no(400, 'badJson', { why: 'If-None-Match: * missing' });
-        if (g.stored.has(name)) return no(412, 'exists');
-        if (g.declared.get(name) !== raw.length) return no(400, 'sizeMismatch');
-        g.stored.set(name, raw);
-        res.writeHead(200); res.end(); return;
-      }
-      if (req.method === 'POST' && rest === 'uploads') {
+      if (req.method === 'POST' && rest === 'upload') {
         if (bearer !== sh.revokeToken) return no(403, 'wrongToken');
         const g = target();
         if (!g) return no(409, 'notUploading');
-        const list = (json().objects ?? []) as Array<{ name: string; bytes: number }>;
-        for (const o of list) {
-          if (g.declared.has(o.name) && g.declared.get(o.name) !== o.bytes) return no(409, 'sizeChanged');
-          g.declared.set(o.name, o.bytes);
-        }
-        if ([...g.declared.values()].reduce((n, x) => n + x, 0) > g.bytes || g.declared.size > g.objects) return no(400, 'overDeclared');
-        return send(200, { targets: list.map((o) => ({ object: o.name, method: 'PUT', url: `${base}/api/shares/${sh.id}/put/${o.name}`, headers: { 'If-None-Match': '*' } })), expiresAt: new Date(Date.now() + 600_000).toISOString() });
+        const t = token();
+        puts.set(t, `${sh.id}/${g.n}`);
+        return send(200, { target: { object: 'package', method: 'PUT', url: `${base}/storage/${sh.id}/${g.n}/${t}`, headers: { 'If-None-Match': '*' } }, bytes: g.bytes, generation: g.n, expiresAt: new Date(Date.now() + 600_000).toISOString() });
       }
       if (req.method === 'POST' && rest === 'complete') {
         if (bearer !== sh.revokeToken) return no(403, 'wrongToken');
         const g = target();
         if (!g) return send(200, status(sh));
-        const missing = [...g.declared.keys()].filter((n) => !g.stored.has(n));
-        if (missing.length) return no(409, 'missingObjects', { missing });
-        if (g.declared.size !== g.objects) return no(400, 'undeclared');
-        try { parseHeader(g.stored.get('index')!, 'index'); } catch { return no(400, 'notAPackage'); }
-        if (sh.pending) { sh.current = sh.pending; delete sh.pending; sh.updatedAt = new Date().toISOString(); for (const t of sh.tickets.keys()) sh.tickets.delete(t); }
+        if (!g.file) return no(409, 'notUploaded');
+        if (g.file.subarray(0, 4).toString('latin1') !== 'PK\x03\x04') { delete g.file; return no(400, 'notAPackage'); }
+        if (sh.pending) { sh.current = sh.pending; delete sh.pending; sh.updatedAt = new Date().toISOString(); }
         sh.state = 'ready'; sh.readyAt ??= new Date().toISOString(); sh.expiresAt = new Date(Date.now() + 14 * 86400_000).toISOString();
         return send(200, status(sh));
       }
@@ -154,10 +177,10 @@ export async function startShareService(): Promise<FakeShareService> {
         if (bearer !== sh.revokeToken) return no(403, 'wrongToken');
         if (live(sh) !== 'ready') return no(410, sh.state);
         const b = json();
-        const k = key(b);
-        if (!k) return no(400, 'badKey');
-        sh.pending = generation(sh.current.n + 1, b, k);
-        return send(201, { id: sh.id, generation: sh.pending.n, state: 'uploading', uploadExpiresAt: new Date(Date.now() + 6 * 3600_000).toISOString(), batch: 100 });
+        if (old(b)) return no(426, 'appTooOld');
+        if (!declared(b)) return no(400, 'badSize');
+        sh.pending = generation(sh.current.n + 1, b);
+        return send(201, { id: sh.id, generation: sh.pending.n, state: 'uploading', uploadExpiresAt: new Date(Date.now() + 6 * 3600_000).toISOString() });
       }
       if (req.method === 'POST' && rest === 'invite') {
         if (bearer !== sh.revokeToken) return no(403, 'wrongToken');
@@ -176,31 +199,22 @@ export async function startShareService(): Promise<FakeShareService> {
       }
       if (req.method === 'GET' && rest === '') {
         const state = live(sh);
-        return send(200, { id: sh.id, kind: sh.kind, state, expiresAt: sh.expiresAt ?? null, firstOpenedAt: sh.firstOpenedAt ?? null, meta: state === 'ready' ? sh.current.meta ?? null : null, bytes: sh.current.bytes, key: state === 'ready' ? sh.current.key : null, generation: sh.current.n, updatedAt: sh.updatedAt ?? null });
+        const shown = state === 'ready' && sh.kind === 'share';
+        return send(200, { id: sh.id, kind: sh.kind, state, expiresAt: sh.expiresAt ?? null, firstOpenedAt: sh.firstOpenedAt ?? null, meta: shown ? sh.current.meta ?? null : null, bytes: shown ? sh.current.bytes : null, filename: shown ? filenameOf(sh) : null, generation: sh.current.n, updatedAt: sh.updatedAt ?? null });
       }
       if (req.method === 'POST' && rest === 'open') {
         const state = live(sh);
         if (state === 'revoked' || state === 'expired') return no(410, state);
         if (state !== 'ready') return no(409, 'notReady');
+        // 0.6.1 and older open with {}: told to update, the opening not counted (the service's api.ts open).
+        if (json().v !== 3) return no(426, 'appTooOld');
         if (sh.kind === 'return' && bearer !== shares.get(sh.parent!)!.revokeToken) return no(403, 'wrongToken');
-        const ticket = token();
-        sh.tickets.set(ticket, sh.current.n);
         sh.opens.push(new Date().toISOString());
         sh.firstOpenedAt ??= sh.opens[0];
-        return send(200, { key: sh.current.key, index: { object: 'index', method: 'GET', url: `/api/shares/${sh.id}/objects/index?ticket=${ticket}`, headers: {} }, ticket, expiresAt: sh.expiresAt, generation: sh.current.n, updatedAt: sh.updatedAt ?? null });
-      }
-      if (req.method === 'POST' && rest === 'urls') {
-        const b = json();
-        if (sh.tickets.get(String(b.ticket)) !== sh.current.n) return no(403, 'ticketExpired');
-        const objects = (b.objects ?? []) as string[];
-        if (objects.includes('index') || objects.length > 100) return no(400, 'badObjects');
-        return send(200, { targets: objects.map((o) => ({ object: o, method: 'GET', url: `/api/shares/${sh.id}/objects/${o}?ticket=${b.ticket}`, headers: {} })) });
-      }
-      if (req.method === 'GET' && p[3] === 'objects') {
-        if (sh.tickets.get(url.searchParams.get('ticket') ?? '') !== sh.current.n) return no(403, 'ticketExpired');
-        const blob = sh.current.stored.get(p[4]);
-        if (!blob) return no(404, 'notFound');
-        res.writeHead(200, { 'Content-Type': 'application/octet-stream' }); res.end(blob); return;
+        const t = token();
+        const filename = filenameOf(sh);
+        gets.set(t, { key: `${sh.id}/${sh.current.n}`, at: Date.now() + 300_000, filename });
+        return send(200, { download: { object: 'package', method: 'GET', url: `${base}/storage/${sh.id}/${sh.current.n}/${t}`, headers: {} }, filename, bytes: sh.current.bytes, urlExpiresAt: new Date(Date.now() + 300_000).toISOString(), expiresAt: sh.expiresAt, generation: sh.current.n, updatedAt: sh.updatedAt ?? null });
       }
       if (req.method === 'GET' && rest === 'status') {
         if (bearer !== sh.revokeToken) return no(403, 'wrongToken');
@@ -208,9 +222,9 @@ export async function startShareService(): Promise<FakeShareService> {
       }
       if (req.method === 'DELETE' && rest === '') {
         if (bearer !== sh.revokeToken) return no(403, 'wrongToken');
-        sh.state = 'revoked'; sh.endedAt = new Date().toISOString(); sh.current.stored.clear(); delete sh.pending; delete sh.invite; sh.current.key = '';
+        sh.state = 'revoked'; sh.endedAt = new Date().toISOString(); delete sh.current.file; delete sh.pending; delete sh.invite;
         // Its returns end with it, as the service does them (its api.ts end()).
-        for (const r of sh.returns.map((id) => shares.get(id)!)) if (r.state === 'ready' || r.state === 'uploading') { r.state = 'revoked'; r.endedAt = sh.endedAt; r.current.stored.clear(); r.current.key = ''; }
+        for (const r of sh.returns.map((id) => shares.get(id)!)) if (r.state === 'ready' || r.state === 'uploading') { r.state = 'revoked'; r.endedAt = sh.endedAt; delete r.current.file; }
         return send(200, status(sh));
       }
       if (req.method === 'POST' && rest === 'returns') {
@@ -219,15 +233,16 @@ export async function startShareService(): Promise<FakeShareService> {
         if (sh.state === 'uploading') return no(409, 'notReady');
         if (sh.returns.length >= 5) return no(429, 'tooManyReturns', { limit: 5 });
         const b = json();
-        const k = key(b);
-        if (!k) return no(426, 'appTooOld');
+        if (old(b)) return no(426, 'appTooOld');
+        if (!declared(b)) return no(400, 'badSize');
+        if ((b.bytes as number) > 200 * 1024 * 1024) return no(413, 'tooLarge', { limit: 200 * 1024 * 1024 });
         const r: Share = {
-          id: ID(), kind: 'return', parent: sh.id, revokeToken: token(), current: generation(1, b, k),
-          state: 'uploading', createdAt: new Date().toISOString(), opens: [], tickets: new Map(), returns: [], invites: 0,
+          id: ID(), kind: 'return', parent: sh.id, revokeToken: token(), current: generation(1, b),
+          state: 'uploading', createdAt: new Date().toISOString(), opens: [], returns: [], invites: 0,
         };
         shares.set(r.id, r);
         sh.returns.push(r.id);
-        return send(201, { id: r.id, revokeToken: r.revokeToken, state: r.state, uploadExpiresAt: new Date(Date.now() + 6 * 3600_000).toISOString(), batch: 100 });
+        return send(201, { id: r.id, revokeToken: r.revokeToken, state: r.state, uploadExpiresAt: new Date(Date.now() + 6 * 3600_000).toISOString() });
       }
     }
     no(404, 'notFound');
@@ -235,7 +250,7 @@ export async function startShareService(): Promise<FakeShareService> {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   return Object.assign(fake, {
-    url: base, seen, shares, mails,
+    url: base, seen, shares, mails, downloads,
     expire: (id: string) => { const sh = shares.get(id); if (sh) sh.expiresAt = new Date(Date.now() - 1000).toISOString(); },
     confirm: (email: string) => { for (const s of senders.values()) if (s.email === email) { s.confirmed = true; delete s.refusedReason; } },
     refuseSender: (email: string, reason: string) => { for (const s of senders.values()) if (s.email === email) s.refusedReason = reason; },

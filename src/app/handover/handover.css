@@ -161,3 +161,10 @@
 .shcheck { position: fixed; left: var(--page-mid); bottom: 72px; transform: translateX(-50%); z-index: 22; display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; border-radius: 14px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); font-size: 13px; max-width: min(560px, calc(100vw - 32px)); }
 .shcheck .acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .shupd { margin-top: 8px; }
+
+/* The copy's Freigabe-Datei in the Durchsicht bar (DocumentBar.tsx): its name, «ungespeichert», «Sichern». */
+.shdoc { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.shdoc .name { font-weight: 600; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shdoc .warn { color: var(--warn); }
+.shdoc .m { color: var(--muted); }
+.shdoc .err { color: var(--neg); }

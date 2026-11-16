@@ -1,5 +1,5 @@
 /**
- * `.vanilla` files handed to the app by macOS (#545): a double-click in Finder, «Öffnen mit», a drop
+ * Freigabe-Dateien (`.vanillashare`, and the `.vanilla` of 0.6.x) handed to the app by macOS (#545): a double-click in Finder, «Öffnen mit», a drop
  * on the Dock icon. macOS sends them by `open-file`, also when the file starts the app, so they are
  * held until the server listens and then opened one after the other through the server's
  * POST /api/desktop/handover (src/desktop/server.ts), the same door as a drop on the start screen.
@@ -10,10 +10,10 @@ import type { ApiErrorBody } from '../types/api-error.js';
 import type { Key } from '../app/i18n/types.js';
 import { formatLocation } from '../app/shell/route.js';
 
-/** Whether a path is a hand-over file. */
-export const isVanillaPath = (path: string): boolean => path.toLowerCase().endsWith('.vanilla');
+/** Whether a path is a Freigabe-Datei: `.vanillashare`, or `.vanilla` as 0.6.x wrote it (both known by their content when read). */
+export const isVanillaPath = (path: string): boolean => /\.(vanillashare|vanilla)$/i.test(path);
 
-/** The `.vanilla` files among a start's arguments (another platform than the Mac passes them so). */
+/** The Freigabe-Dateien among a start's arguments (another platform than the Mac passes them so). */
 export const vanillaPaths = (argv: readonly string[]): string[] => argv.filter((a) => !a.startsWith('-') && isVanillaPath(a));
 
 /** Items that may arrive before the one who takes them is there: held, then given in their order. */
@@ -37,18 +37,20 @@ type Opened = { kind: 'return'; id: string } | { kind: 'full' | 'update' };
 
 /**
  * Sends the file at `path` to the server and answers the page to show: a return's review in the
- * books open, the start page of a hand-over's Durchsicht copy. Throws FileRefused for a refusal.
+ * books open (also the sharer's own hand-over with his changes saved into it), the start page of a
+ * hand-over's Durchsicht copy, whose document the file then is (its path in X-Vanilla-File: his
+ * changes are saved into it). Throws FileRefused for a refusal.
  */
 export async function openVanillaFile(path: string, base: string, send: typeof fetch = fetch): Promise<string> {
   const bytes = await readFile(path);
-  const res = await send(`${base}/api/desktop/handover`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: new Uint8Array(bytes) });
+  const res = await send(`${base}/api/desktop/handover`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'X-Vanilla-File': encodeURIComponent(path) }, body: new Uint8Array(bytes) });
   if (!res.ok) throw new FileRefused(((await res.json().catch(() => null)) as ApiErrorBody | null) ?? { error: `HTTP ${res.status}` });
   const opened = await res.json() as Opened;
   return opened.kind === 'return' ? formatLocation({ route: { area: 'changes', commit: 'return', file: opened.id }, query: {} }) : '/';
 }
 
 /** The refusals of a package (src/handover/package.ts PackageRefusal) the dialog says in the person's words. */
-const PACKAGE_REFUSALS = new Set(['shareTampered', 'shareOtherCompany', 'shareBaseMissing', 'shareNotPackage', 'shareTooLarge', 'shareUnknownBase', 'shareUpdateFailed']);
+const PACKAGE_REFUSALS = new Set(['shareTampered', 'shareOtherCompany', 'shareBaseMissing', 'shareNotPackage', 'shareTooLarge', 'shareUnknownBase', 'shareUpdateFailed', 'shareOwnBooks']);
 
 /** Why a file did not open, in the person's language; a return with no books to take it says where it belongs. */
 export function refusedText(t: (key: Key, values?: Record<string, string>) => string, e: unknown): string {
