@@ -19,6 +19,16 @@ Two markers flag an entry you must read before you update:
 - Mac: a downloaded `.vanillashare` file showed as coloured pixel noise in Chrome's download list.
   The app's icon is now built with Apple's `iconutil`, and a Freigabe-Datei (`.vanillashare`,
   `.vanilla`) has its own icon: a page with the Vanilla wave.
+- Mac: the bar along the top of a copy opened from a Freigabe-Datei (Durchsicht) and of the
+  read-only mode started under the window's close, minimize and zoom buttons, which covered its
+  first letters. It now starts right of them (in fullscreen, where they go away, at the edge), and
+  it moves the window like the rest of the top strip. The caption of the receipt preview too.
+
+### Changed
+
+- The top bar (company, search, period, zoom, export, theme, language) stays open: it no longer
+  folds away by itself after three uses, which left most people not knowing it is there. Its pin
+  still lets it fold, and that choice is kept. Everyone starts with it open once after this update.
 
 ## [0.6.2] - 2026-11-16
 

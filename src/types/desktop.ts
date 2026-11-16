@@ -19,6 +19,12 @@ export interface DesktopBridge {
   chooseNewFolder(choice: { title: string; name: string; button: string; elsewhere?: boolean }): Promise<string | null>;
   /** Calls `listener` for each menu command; returns the unsubscribe. */
   onMenu(listener: (command: MenuCommand) => void): () => void;
+  /**
+   * Calls `listener` whenever the window goes into fullscreen or out of it, and once at the start: the
+   * window's buttons go away in fullscreen, and the page's top edge gives up the room it kept for them
+   * (shell.css --tl-inset). Returns the unsubscribe.
+   */
+  onFullScreen(listener: (on: boolean) => void): () => void;
   /** The UI's language, so the native menu speaks it too. */
   setLanguage(code: string): void;
   /** Saves a file of the local server (`url`) through the system's Save dialog; false when the person cancelled. */

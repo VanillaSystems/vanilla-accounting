@@ -28,4 +28,5 @@ export const TELL = {
 export const PUSH = {
   menu: 'desktop:menu',
   dictationEvent: 'dictation:event',
+  fullScreen: 'desktop:fullScreen',
 } as const;

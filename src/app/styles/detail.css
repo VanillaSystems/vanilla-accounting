@@ -92,6 +92,8 @@
 .quick { position: fixed; inset: 0; z-index: 38; background: color-mix(in srgb, var(--desk) 88%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); display: grid; place-items: center; animation: fade .18s ease; cursor: zoom-out; }
 .quick .paper { width: auto; height: 88vh; max-width: none; cursor: zoom-out; font-size: 15px; }
 .quick .cap { position: fixed; top: 18px; left: 24px; color: var(--muted); font-size: 12.5px; }
+/* In the Mac app the caption starts right of the window's buttons (shell.css --tl-inset). */
+html.no-titlebar .quick .cap { left: max(24px, calc((var(--tl-inset) + 16px) / var(--z, 1))); }
 .paper.real { aspect-ratio: auto; background: transparent; box-shadow: none; padding: 0; overflow: visible; display: flex; flex-direction: column; align-items: center; gap: 18px; }
 .paper.real .pg { display: block; max-width: 100%; border-radius: 4px; background: #fff; box-shadow: 0 1px 2px rgba(11,18,32,.06), 0 0 0 1px var(--line), 0 24px 48px -28px rgba(11,18,32,.28); }
 [data-theme="dark"] .paper.real { filter: none; }

@@ -41,22 +41,29 @@ and the icon follows from that.
 A workflow without an AI step shows no icon (the VAT filing's «Abrechnung erstellen»). The icon
 says "an AI is involved", never "this is uncertain": confidence is a separate signal.
 
-## Both bars: collapsed, never hidden, each with its own pin
+## The top bar: open by default, folded only by its pin
 
-The app has two bars that fold away: the **top bar** (company, search ⌘K, period, zoom, export,
-theme, language; as in 0.3) and the **dock** at the bottom (the areas). Both behave the same way,
-and each has its own pin, because they are used differently: the dock all the time, the top bar
-now and then. A person may pin one and not the other.
+The **top bar** (company, version, search ⌘K, period, zoom, export, theme, language) stands open
+and the pages start below it, so it covers nothing. People did not find it while it folded by
+itself after three uses (0.6.2), so it no longer does.
 
-- **Folded, a bar is a small pill**, never nothing: the top bar shows "Beispiel GmbH · 2026-Q4 ▾"
-  (so the period stays visible), the dock shows the current area and the open count. Hover, a
-  click or keyboard focus opens it.
-- **New users see both open** until they have used each three times; then that bar folds once,
-  with a tip that points at its pin.
-- **The pin** at the right end of each bar: a checkbox and a pin icon. Ticked: the bar stays
-  open. Unticked: it folds when the mouse leaves. Hovering or focusing it shows a tooltip that
-  explains both states, the current one emphasized.
-- Both bars belong to the page and stay centred on it when the AI sidebar is open.
+- **The pin** at its right end: a checkbox and a pin icon, ticked by default. Unticked, the bar
+  folds to a small pill ("Beispiel GmbH · 2026-Q4 ▾", so the period stays visible) when the mouse
+  leaves; hover, a click or keyboard focus opens it. Hovering or focusing the pin shows a tooltip
+  that explains both states, the current one emphasized. The same choice is in Firma ›
+  Darstellung, kept per viewer in the browser's storage (`bar.top.pin`).
+- It belongs to the page and stays centred on it when the AI sidebar is open.
+- In the Mac app it starts right of the window's buttons (see "The Mac window's title bar").
+
+## The Mac window's title bar
+
+The Mac app has no title bar of its own (`titleBarStyle: 'hidden'`): the page reaches the window's
+top edge and the three window buttons stand over it. Electron's window controls overlay
+(`titleBarOverlay`) tells the page where they end, as the CSS variable `env(titlebar-area-x)`;
+`--tl-inset` in shell.css reads it, and is 0 in fullscreen, where the buttons go away. Whatever
+stands at the top left starts after it: the amber bar of a read-only copy, Durchsicht's bar, the
+top bar when the AI sidebar is open. A strip along the top edge, and every bar at the top, moves
+the window; their buttons and links stay clickable.
 
 ## Navigation at the bottom
 

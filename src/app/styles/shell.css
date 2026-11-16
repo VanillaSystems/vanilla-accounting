@@ -180,11 +180,11 @@ main { margin-left: var(--abw); }
 /* While the AI sidebar is open the bar starts at the page's left edge instead of its middle, so it never lies under the
    corner's buttons, which stand at the sidebar's edge (src/app/assistant/store.ts sets .aiopen, #342). */
 html.aiopen:not(.phone) .topbar { left: calc(var(--abw) + 16px); transform: none; }
-/* In the Mac app the window's three buttons stand at the top left, over the narrow dock and a little beyond it (src/desktop/main.ts,
-   titleBarStyle hidden): the bar starts right of them, whatever the zoom. */
-html.no-titlebar.aiopen:not(.phone) .topbar { left: max(calc(var(--abw) + 16px), calc(92px / var(--z, 1))); }
+/* In the Mac app the window's three buttons stand at the top left, over the narrow dock and a little beyond it: the bar starts
+   right of them (--tl-inset, below), whatever the zoom. */
+html.no-titlebar.aiopen:not(.phone) .topbar { left: max(calc(var(--abw) + 16px), calc((var(--tl-inset) + 16px) / var(--z, 1))); }
 
-/* folded bars: a pill (docs/0.4.0/views.md, "Both bars") */
+/* the folded top bar: a pill (docs/0.4.0/views.md, "The top bar") */
 .topbar.folded { padding: 4px; border-radius: 999px; }
 .barpill { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 12px; border: 0; border-radius: 999px; background: none; color: var(--ink-2); font: 500 12px var(--font-sans); cursor: pointer; white-space: nowrap; }
 .barpill:hover, .barpill:focus-visible { color: var(--ink); background: var(--hover); outline: none; }
@@ -199,10 +199,6 @@ html.no-titlebar.aiopen:not(.phone) .topbar { left: max(calc(var(--abw) + 16px),
 .pin:hover .ptip, .pin:focus-within .ptip { display: flex; }
 .pin .ptip span { opacity: .7; }
 .pin .ptip span.cur { opacity: 1; font-weight: 600; }
-.bartip { position: absolute; left: 50%; transform: translateX(-50%); width: 320px; padding: 12px 14px; border-radius: 12px; background: var(--ink); color: var(--bg); font-size: 12.5px; box-shadow: var(--shadow); z-index: 30; }
-.topbar .bartip { top: calc(100% + 12px); }
-.bartip p { margin: 0 0 10px; }
-.bartip span { display: flex; justify-content: flex-end; gap: 6px; }
 
 /* menus, palette, toast, overlays */
 .menu { position: fixed; z-index: 40; min-width: 240px; padding: 6px; border-radius: 12px; background: var(--glass); backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4); border: 1px solid var(--glass-line); box-shadow: var(--shadow); animation: pop .16s ease; }
@@ -359,6 +355,14 @@ html.phone:has(.demobar) .toast.droplost { bottom: 156px; }
    The strip takes no mouse events of the page (pointer-events: none): Electron moves the window from the drag region itself, and a
    control under the strip (the first screen's language switch) gets its click (issue #363); the no-drag rules below cut the controls out of the region. */
 .dragbar { position: fixed; top: 0; left: 0; right: 0; height: 36px; -webkit-app-region: drag; z-index: 15; pointer-events: none; }
+/* Where the window's three buttons end (src/desktop/main.ts, titleBarOverlay): Electron's window controls overlay gives it as
+   env(titlebar-area-x), in the window's px, so a rule divides it by the zoom (--z) as other px of the window. 0 in a browser and
+   in fullscreen, where the buttons go away (main.ts tells the page, html.fullscreen). */
+:root { --tl-inset: 0px; }
+html.no-titlebar:not(.fullscreen) { --tl-inset: env(titlebar-area-x, 0px); }
+/* A bar along the top edge (read-only, Durchsicht, src/app/shell/AuditBar.tsx) starts right of the buttons and moves the window
+   like the strip, however high its text wraps; its links and buttons stay clickable (the no-drag rule below). */
+html.no-titlebar .auditbar { padding-left: max(16px, calc((var(--tl-inset) + 8px) / var(--z, 1))); -webkit-app-region: drag; }
 /* .drop only while it shows: hidden, it still spans the window, and its no-drag switched off moving the window everywhere. */
 .no-titlebar :is(.topbar, .menu, .scrim, .palette, .drop.show, .corner, .aside) { -webkit-app-region: no-drag; }
 /* Whatever can be clicked stays clickable inside the title bar zone. */
@@ -366,10 +370,6 @@ html.phone:has(.demobar) .toast.droplost { bottom: 156px; }
 
 /* Fixed elements centre on the page, not the window: the AI sidebar (when open) is not page. */
 :root { --audit-h: 0px; --aiw: 0px; --abw: 52px; --page-mid: calc(var(--abw) + (100% - var(--abw) - var(--aiw)) / 2); }
-.bartip .btn { background: transparent; color: var(--bg); border: 1px solid color-mix(in srgb, var(--bg) 40%, transparent); }
-.bartip .btn:last-child { background: var(--bg); color: var(--ink); border-color: var(--bg); }
-.bartip .btn:hover:not(:disabled) { background: color-mix(in srgb, var(--bg) 16%, transparent); color: var(--bg); }
-.bartip .btn:last-child:hover:not(:disabled) { background: var(--bg); color: var(--ink); filter: brightness(.94); }
 
 /* the status corner (docs/0.4.0/views.md "Status, top right") */
 .corner { position: fixed; top: 14px; right: calc(16px + var(--aiw)); z-index: 22; display: flex; align-items: flex-start; gap: 8px; }

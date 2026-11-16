@@ -402,13 +402,19 @@ function createWindow(stateFile: string): BrowserWindow {
     // The colour of tokens.css's page for the system's theme, so no white flashes before it paints.
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
     // On the Mac the page runs up to the top edge under the traffic lights; no title bar.
-    ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const } : {}),
+    // titleBarOverlay hands the page where the buttons end (env(titlebar-area-x), shell.css --tl-inset).
+    ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const, titleBarOverlay: true } : {}),
     webPreferences: {
       preload: join(HERE, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true,
       additionalArguments: [...(SMOKE ? ['--vanilla-smoke'] : []), ...(DICTATION ? ['--vanilla-dictation'] : [])],
     },
   });
   if (saved?.maximized) win.maximize();
+  // Fullscreen hides the window's buttons: the page gives up the room it keeps for them at the top left (src/app/main.tsx).
+  const tellFullScreen = () => { if (!win.isDestroyed()) win.webContents.send(PUSH.fullScreen, win.isFullScreen()); };
+  win.on('enter-full-screen', tellFullScreen);
+  win.on('leave-full-screen', tellFullScreen);
+  win.webContents.on('did-finish-load', tellFullScreen);
   if (DEV) markDev(win);
   void win.webContents.setVisualZoomLevelLimits(1, 1);
   win.on('close', () => {
