@@ -41,6 +41,7 @@ async function render(svg, png) {
     const page = await browser.newPage();
     await page.setViewport({ width: 1024, height: 1024 });
     await page.setContent(`<style>html,body{margin:0;background:transparent}</style>${readFileSync(svg, 'utf8')}`);
+    await page.evaluate(() => document.fonts.ready.then(() => new Promise((ok) => requestAnimationFrame(() => requestAnimationFrame(ok)))));
     await page.screenshot({ path: png, omitBackground: true, clip: { x: 0, y: 0, width: 1024, height: 1024 } });
   } finally {
     await browser.close();
