@@ -49,7 +49,7 @@ test('the first screen asks what the person wants; the AI is one line, its cards
     // The Mac app's bridge, as a string: tsx would wrap the functions of a callback in a helper the page does not have.
     await page.evaluateOnNewDocument(`
       const none = async () => null;
-      window.vanilla = { chooseFolder: none, chooseNewFolder: none, onMenu: () => () => undefined, setLanguage: () => undefined, saveFile: async () => false };
+      window.vanilla = { chooseFolder: none, chooseNewFolder: none, onMenu: () => () => undefined, onFullScreen: () => () => undefined, setLanguage: () => undefined, saveFile: async () => false };
       try { localStorage.setItem('language', 'de'); } catch { /* about:blank has no storage */ }
     `);
     const visibleCommands = () => page.evaluate(() => [...document.querySelectorAll('.aicmd')].filter((e) => e.checkVisibility()).length);

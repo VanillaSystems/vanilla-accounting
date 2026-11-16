@@ -105,7 +105,7 @@ test('a steady count, help where the answer stands, no VAT answer steered, assum
       await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: motion }]);
       await page.evaluateOnNewDocument(`
         const none = async () => null;
-        window.vanilla = { chooseFolder: none, chooseNewFolder: none, onMenu: () => () => undefined, setLanguage: () => undefined, saveFile: async () => false };
+        window.vanilla = { chooseFolder: none, chooseNewFolder: none, onMenu: () => () => undefined, onFullScreen: () => () => undefined, setLanguage: () => undefined, saveFile: async () => false };
         try { localStorage.setItem('language', 'de'); } catch { /* about:blank has no storage */ }
       `);
 
