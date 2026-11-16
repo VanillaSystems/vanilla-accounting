@@ -98,10 +98,23 @@ head of the release branch. Two rules make the rest reuse them:
 
 6. Build the Mac app once (`npm run desktop:build`, [Building the Mac app](#building-the-mac-app)):
    `release/Vanilla Accounting-X.Y.Z-arm64.dmg` and `-x64.dmg`. Smoke-test each once.
-7. The VM tests (`npm run desktop:e2e`, the verify skill's fresh Mac) only when the release touches
-   installation, first start, the desktop shell, sharing or onboarding.
-   `npm run test:changed -- vW.V.U --list` (the last release's tag) ends with «VM tests before a
-   release: needed (…)» or «not needed»; the paths are `vm` in tools/test/inputs.json.
+7. The walks by hand, scoped to the release's threat zone as `npm run test:changed` scopes the
+   unit tests. On the release branch's head:
+
+   ```sh
+   npx tsx tools/release/zones.ts           # against the newest release tag; or name it: … v0.6.0
+   ```
+
+   It prints the zones the diff touches, each with its files, then «VM: these scenarios» and
+   «Personas: these walks» (and the feature recipes of the web sandbox), each with the zones that
+   chose it, or «none». The release runs exactly those: each VM scenario on a fresh Mac
+   (`.claude/skills/verify/vm.sh scenario <id>` prints its steps; `install` and `update` are
+   `npm run desktop:e2e -- --fresh` and `npm run desktop:e2e`), each persona walk as its file says
+   (.claude/skills/verify/personas/README.md). Docs, specs, tests, tooling and a version bump
+   select nothing; app code no zone names falls back to `install`; a file the map does not place
+   selects everything until it gets a zone. The full set runs only on request: `… --all`. The map
+   is tools/release/zones.json (tests/release-zones.test.ts holds it to the repository); a new
+   area, scenario or persona gets its place there.
 
 `npm run update` follows the branch an adopter's copy tracks, so a pushed commit on `main` is
 what they get. Tags mark the versions that the changelog describes.

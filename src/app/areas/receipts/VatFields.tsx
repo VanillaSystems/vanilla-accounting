@@ -13,6 +13,7 @@ import type { Nav } from '../index.js';
 import type { ReceiptView } from './model.js';
 import { saveVat } from './actions.js';
 import { I } from './icons.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 /** `guess`: the figure was worked out from the amount here, not typed or read off the receipt. */
 interface Line { rate: number; vat: string; guess?: boolean }
@@ -85,7 +86,7 @@ export function VatFields({ v, nav, edit, title }: { v: ReceiptView; nav: Nav; e
     setD(f && f !== 'wrong' && f.hasSwissVat ? { ...next, lines: next.lines.map((l, i) => ({ ...l, vat: fmt(f.vatSummary[i].vat) })) } : next);
     setErr(f === 'wrong' ? t('receipts.errVat') : '');
     if (!f || f === 'wrong' || key(f) === key(r)) return;
-    void saveVat(nav, v, f);
+    return saveVat(nav, v, f);
   }
 
   const choose = (on: boolean) => commit({ ...d, on, lines: on && !d.lines.length ? [{ rate: rates[0], vat: taxIn(r.amount, rates[0]), guess: r.amount != null }] : d.lines });
@@ -121,10 +122,10 @@ export function VatFields({ v, nav, edit, title }: { v: ReceiptView; nav: Nav; e
       <div className="lbl">{t('receipts.field.vat')}{r.vatBy === 'human' && <ByHand />}</div>
       <span className="seg2" role="radiogroup" aria-label={t('receipts.field.vat')} onKeyDown={onRadioKey}>
         {([false, true] as const).map((on) => (
-          <button key={String(on)} type="button" role="radio" aria-checked={d.on === on} className={d.on === on ? 'on' : ''} disabled={!edit}
+          <AsyncButton key={String(on)} type="button" role="radio" aria-checked={d.on === on} className={d.on === on ? 'on' : ''} disabled={!edit}
             tabIndex={(d.on ?? false) === on ? 0 : -1} data-on={String(on)} onClick={() => d.on !== on && choose(on)}>
             {t(on ? 'receipts.vatYes' : 'receipts.vatNone')}
-          </button>
+          </AsyncButton>
         ))}
       </span>
       {d.on && d.lines.map((l, i) => (
@@ -135,14 +136,14 @@ export function VatFields({ v, nav, edit, title }: { v: ReceiptView; nav: Nav; e
           <input className="mono" aria-label={t('receipts.vatAmount')} value={l.vat} readOnly={!edit} style={{ textAlign: 'right' }}
             onChange={(e) => setD(line(i, { vat: e.target.value, guess: false }))} onBlur={() => commit(d)} onKeyDown={onEnter} />
           {edit && d.lines.length > 1
-            ? <button type="button" className="rm" aria-label={t('receipts.vatRemoveRate')} onClick={() => commit({ ...d, lines: d.lines.filter((_, j) => j !== i) })}>×</button>
+            ? <AsyncButton type="button" className="rm" aria-label={t('receipts.vatRemoveRate')} onClick={() => commit({ ...d, lines: d.lines.filter((_, j) => j !== i) })}>×</AsyncButton>
             : <span />}
         </div>
       ))}
       {err && <div className="err" role="alert">{err}</div>}
       {edit && d.on && d.lines.length === 1 && d.lines[0].guess && <div className="fhint">{t('receipts.vatFromAmount')}</div>}
       {d.on && edit && free !== undefined && (
-        <button type="button" className="addlink" onClick={() => commit({ ...d, lines: [...d.lines, { rate: free, vat: '' }] })}>{I.plus}{t('receipts.vatAddRate')}</button>
+        <AsyncButton type="button" className="addlink" onClick={() => commit({ ...d, lines: [...d.lines, { rate: free, vat: '' }] })}>{I.plus}{t('receipts.vatAddRate')}</AsyncButton>
       )}
       {d.on !== undefined && (
         <label>{t('receipts.vatId')}

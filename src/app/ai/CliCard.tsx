@@ -12,6 +12,7 @@ import { planName, type CardState } from '../../platform/ai-setup.js';
 import { AI_CLIS, type TerminalCli } from '../../platform/terminal.js';
 import { t } from '../i18n/index.js';
 import { ICONS } from '../areas/icons.js';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 export interface CardActions {
   install(): void;
@@ -42,7 +43,7 @@ export function Command({ cli }: { cli: TerminalCli }) {
   return (
     <div className="aicmd">
       <code>{install}</code>
-      <button type="button" className="linkbtn" onClick={() => void navigator.clipboard?.writeText(install).then(() => setCopied(true), () => undefined)}>{t(copied ? 'terminal.copied' : 'aiSetup.copy')}</button>
+      <AsyncButton type="button" className="linkbtn" onClick={() => navigator.clipboard?.writeText(install).then(() => setCopied(true), () => undefined)}>{t(copied ? 'terminal.copied' : 'aiSetup.copy')}</AsyncButton>
     </div>
   );
 }

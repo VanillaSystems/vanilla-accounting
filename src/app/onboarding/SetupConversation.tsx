@@ -23,6 +23,7 @@ import { kindsOfAnswer } from '../../onboarding/model.js';
 import { salesKinds, type SalesKind } from '../../workspace/setup.js';
 import { say } from './words.js';
 import { useAiLookFailed, useAiState } from '../ai/no-ai.js';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 /**
  * Whether an AI answers on this Mac (#364): the conversation offers only what works there. `unknown`
@@ -127,9 +128,9 @@ function Question({ step, onGo }: { step: SetupStep; onGo: Go }) {
         <div className="obind">
           <div className="qacts" role="group" aria-label={say(step.say.at(-1)!)}>
             {step.choices.map((c) => (
-              <button key={c.value} type="button" className={`btn${c.primary ? ' primary' : ''}`} disabled={busy} data-answer={c.value} onClick={() => void answer(step.id as QuestionId, c.value)}>
+              <AsyncButton key={c.value} type="button" className={`btn${c.primary ? ' primary' : ''}`} disabled={busy} data-answer={c.value} onClick={() => answer(step.id as QuestionId, c.value)}>
                 {say(c.label)}{c.sub ? <small>{say(c.sub)}</small> : null}
-              </button>
+              </AsyncButton>
             ))}
           </div>
         </div>
@@ -151,7 +152,7 @@ function Toggles({ step }: { step: SetupStep }) {
           {say(c.label)}{c.sub ? <small>{say(c.sub)}</small> : null}
         </button>
       ))}
-      <button type="button" className="btn" disabled={busy || !kinds.length} data-tip={kinds.length ? undefined : t('onboarding.sellsCard.none')} data-act="sells-next" onClick={() => void keepSells(kinds)}>{t('onboarding.sellsCard.next')}</button>
+      <AsyncButton type="button" className="btn" disabled={busy || !kinds.length} data-tip={kinds.length ? undefined : t('onboarding.sellsCard.none')} data-act="sells-next" onClick={() => keepSells(kinds)}>{t('onboarding.sellsCard.next')}</AsyncButton>
     </div>
   );
 }
@@ -167,7 +168,7 @@ function Answered({ step, onGo }: { step: SetupStep; onGo: Go }) {
     <div className="obstep" data-answered={step.id}>
       {chosen ? (
         <div className="obme">
-          <button type="button" className="linkbtn" disabled={busy} onClick={() => void answer(step.id as QuestionId, null)}>{t('onboarding.change')}</button>
+          <AsyncButton type="button" className="linkbtn" disabled={busy} onClick={() => answer(step.id as QuestionId, null)}>{t('onboarding.change')}</AsyncButton>
           <div className="msg me">{typeof chosen.label === 'string' ? chosen.label : say(chosen.label)}</div>
         </div>
       ) : null}
@@ -235,7 +236,7 @@ function CompanyCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'company
         {rows.map(([k, v], i) => <Fragment key={k}><dt>{k}</dt><dd>{v}</dd><dd>{i === 0 ? <span className="obbadge">{t(`onboarding.origin.${origin}`)}</span> : null}</dd></Fragment>)}
       </dl>
       {card.assumed ? <AssumedList a={card.assumed} onGo={onGo} /> : null}
-      {card.change ? <div className="actions"><button type="button" className="linkbtn" disabled={busy} data-answer="fix" onClick={() => void answer('company', 'fix')}>{t('onboarding.q.company.fix')}</button></div> : null}
+      {card.change ? <div className="actions"><AsyncButton type="button" className="linkbtn" disabled={busy} data-answer="fix" onClick={() => answer('company', 'fix')}>{t('onboarding.q.company.fix')}</AsyncButton></div> : null}
     </div>
   );
 }
@@ -263,8 +264,8 @@ function VatCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'vat' }>; on
       {card.state === 'proposed' ? <span className="m">{t('onboarding.vatCard.lead')}</span> : <span className="okline">{ICONS.check}{t('onboarding.vatCard.kept')}</span>}
       <span className="ruleacts">
         {card.state === 'proposed'
-          ? <button type="button" className="btn primary" disabled={busy || !next} onClick={() => void run(() => keepVat(next!, card.from))}>{t('onboarding.vatCard.take')}</button>
-          : kept ? <button type="button" className="linkbtn" disabled={busy} onClick={() => void run(() => undoVat(kept.before))}>{t('assistant.undo')}</button> : null}
+          ? <AsyncButton type="button" className="btn primary" disabled={busy || !next} onClick={() => run(() => keepVat(next!, card.from))}>{t('onboarding.vatCard.take')}</AsyncButton>
+          : kept ? <AsyncButton type="button" className="linkbtn" disabled={busy} onClick={() => run(() => undoVat(kept.before))}>{t('assistant.undo')}</AsyncButton> : null}
         <button type="button" className="linkbtn" onClick={() => onGo({ area: 'company', section: 'vat' })}>{t('assistant.show')}</button>
       </span>
       {error ? <span className="warnline">{error}</span> : null}
@@ -283,7 +284,7 @@ function SellsCard({ card }: { card: Extract<SetupCard, { kind: 'sells' }> }) {
         <dt>{t('onboarding.sellsCard.sales')}</dt><dd>{card.sales.map((s) => `${t(`onboarding.sellsCard.kind.${s.kind}`)} → ${s.account}`).join(' · ')}</dd><dd />
       </dl>
       {card.state === 'proposed'
-        ? <><span className="m">{t('onboarding.sellsCard.lead')}</span><span className="ruleacts"><button type="button" className="btn primary" disabled={busy} onClick={() => void keepSells(card.kinds)}>{t('onboarding.sellsCard.take')}</button></span></>
+        ? <><span className="m">{t('onboarding.sellsCard.lead')}</span><span className="ruleacts"><AsyncButton type="button" className="btn primary" disabled={busy} onClick={() => keepSells(card.kinds)}>{t('onboarding.sellsCard.take')}</AsyncButton></span></>
         : <span className="okline">{ICONS.check}{t('onboarding.sellsCard.kept')}</span>}
     </div>
   );
@@ -302,7 +303,7 @@ function SourcesCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'sources
       {ai === 'none' ? <span className="rk" data-testid="sources-no-ai">{t('onboarding.sources.noAi')}{failed ? ` ${t('onboarding.sources.lookFailed', { why: failed })}` : ''}</span> : null}
       <div className="actions">
         {ai === 'none' ? <button type="button" className="aiact" data-act="ai-set-up" onClick={() => onGo({ area: 'company', section: 'ai' })}>{t('aiSetup.line.setUp')}</button> : null}
-        {ai === 'ready' ? <button type="button" className="aiact primary" data-act="sources-ask" onClick={() => void sendMessage(t('onboarding.sources.askText'), undefined)}>{t('onboarding.sources.ask')}</button> : null}
+        {ai === 'ready' ? <AsyncButton type="button" className="aiact primary" data-act="sources-ask" onClick={() => sendMessage(t('onboarding.sources.askText'), undefined)}>{t('onboarding.sources.ask')}</AsyncButton> : null}
         <button type="button" className="aiact" onClick={() => onGo({ area: 'company', section: 'sources' })}>{t('onboarding.sources.show')}</button>
       </div>
     </div>
@@ -316,7 +317,7 @@ function ClearRow({ p, onGo }: { p: ClearPartner; onGo: Go }) {
   const [error, setError] = useState<string>();
   const make = () => {
     setError(undefined);
-    api.draftHand({ match: { kind: 'business', id: p.id }, account: p.account, vat: p.vat ?? null }).then((r) => setDraft(r.path), (e: unknown) => setError(errorText(e)));
+    return api.draftHand({ match: { kind: 'business', id: p.id }, account: p.account, vat: p.vat ?? null }).then((r) => setDraft(r.path), (e: unknown) => setError(errorText(e)));
   };
   return (
     <li>
@@ -328,7 +329,7 @@ function ClearRow({ p, onGo }: { p: ClearPartner; onGo: Go }) {
         <div className="obrowmore">
           {draft ? <RuleDraft path={draft} onRules={() => onGo({ area: 'company', section: 'rules' })} /> : (
             <span className="actions">
-              <button type="button" className="aiact" onClick={make}>{t('onboarding.partners.draft')}</button>
+              <AsyncButton type="button" className="aiact" onClick={make}>{t('onboarding.partners.draft')}</AsyncButton>
               <button type="button" className="linkbtn" onClick={() => onGo({ area: 'partners', id: p.id })}>{t('onboarding.partners.page')}</button>
             </span>
           )}
@@ -396,7 +397,7 @@ function AssumedList({ a, onGo }: { a: AssumedCard; onGo: Go }) {
           <li key={x.key} data-assumed={x.key}>
             <span>{tData(`desktop.q.${x.key}.ask`).replace(/[\s\u00a0]*\?$/, '')}: {answerWords(x.key, x.value)} <span className="obbadge assumed" data-tip={why}>{t('onboarding.draft.assumed')}</span></span>
             <span className="obassumedacts">
-              <button type="button" className="linkbtn" data-confirm={x.key} disabled={busy} onClick={() => void confirmAssumed(x.key)}>{t('onboarding.assumedOk')}</button>
+              <AsyncButton type="button" className="linkbtn" data-confirm={x.key} disabled={busy} onClick={() => confirmAssumed(x.key)}>{t('onboarding.assumedOk')}</AsyncButton>
               {x.go ? <button type="button" className="linkbtn" data-go={x.key} onClick={() => onGo(x.go!)}>{x.what ? t(`onboarding.assumedGo.${x.what}`, { place: placeOf(x.go) }) : t('onboarding.change')}</button> : null}
             </span>
           </li>
@@ -429,8 +430,8 @@ function SummaryCard({ card, onGo }: { card: Extract<SetupCard, { kind: 'summary
       <h4>{t('onboarding.summary.first')}</h4>
       <span className="lead" data-first>{say(card.first)}</span>
       <div className="actions">
-        <button type="button" className="aiact primary" data-testid="setup-statement" onClick={() => { end(); onGo({ area: 'bank' }); }}>{t('onboarding.summary.statement')}</button>
-        <button type="button" className="aiact" data-testid="setup-go" onClick={end}>{t('onboarding.summary.go')}</button>
+        <button type="button" className="aiact primary" data-testid="setup-statement" data-busy-exempt="closes the assistant at once; nothing to wait for" onClick={() => { end(); onGo({ area: 'bank' }); }}>{t('onboarding.summary.statement')}</button>
+        <button type="button" className="aiact" data-testid="setup-go" data-busy-exempt="closes the assistant at once; nothing to wait for" onClick={end}>{t('onboarding.summary.go')}</button>
       </div>
       <details className="obmore">
         <summary>{t('onboarding.summary.more')}</summary>

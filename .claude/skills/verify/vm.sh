@@ -30,6 +30,8 @@
 #                           port, the token from ~/.claude-token; log in /tmp/va.log
 #   vm.sh down [run]        stop and delete the VM and the tunnel; the evidence stays
 #   vm.sh list
+#   vm.sh scenario [ID]     a release's VM scenarios (tools/release/zones.json): the list, or ID's steps;
+#                           npx tsx tools/release/zones.ts names the ones a release needs
 #
 # Needs: tart, the VM `vanilla-clean` (user admin, password admin, Screen Sharing on), a built dmg
 # (npm run desktop:build), the SSH key ~/.vanilla-accounting/e2e/id_ed25519, expect, python3.
@@ -200,5 +202,10 @@ down)
   rm -rf "$D"; echo "down $RUN; evidence in $EVIDENCE"
   ;;
 list) ls "$ROOT" 2>/dev/null | grep -v '^venv$' || true ;;
-*) sed -n '2,20p' "$0"; exit 1 ;;
+scenario)
+  node -e 'const m=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")).scenarios, id=process.argv[2];
+    if (!id) { for (const [k,v] of Object.entries(m)) console.log(k.padEnd(18)+v.title); process.exit(0); }
+    if (!m[id]) { console.error("no scenario "+id+": "+Object.keys(m).join(" ")); process.exit(1); }
+    console.log(m[id].title+"\n\n"+m[id].how)' "$REPO/tools/release/zones.json" "${1:-}" ;;
+*) sed -n '2,37p' "$0"; exit 1 ;;
 esac

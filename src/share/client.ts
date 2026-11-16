@@ -1,10 +1,10 @@
 /**
- * The app's side of the share service's API (docs/share-protocol.md, version 2; the calls as the
- * service's docs/api.md names them). Since the owner's decision of 2026-11-15 the service keeps each
- * share's key (wrapped, so R2 holds ciphertext only) and hands it to whoever has the link; it sends
- * the invitation itself. Paths, file names and figures still travel only sealed. A refusal keeps
- * the service's stable code and its limit, so the person reads it in words (src/app/lib/api.ts,
- * `shareServiceRefused`).
+ * The app's side of the share service's API (docs/share-protocol.md, version 3; the calls as the
+ * service's docs/api.md names them). A share is one Freigabe-Datei (`.vanillashare`), the app's own
+ * hand-over package: uploaded with one PUT straight to the storage, downloaded with one GET from
+ * there, the browser's or the app's (owner decision 2026-11-15). The service keeps no key; the
+ * storage encrypts at rest. A refusal keeps the service's stable code and its limit, so the person
+ * reads it in words (src/app/lib/api.ts, `shareServiceRefused`).
  */
 
 /** A refusal of the service: its code (docs/api.md «Codes»), the HTTP status, and the limit it names. */
@@ -31,20 +31,28 @@ export interface SenderRegistration {
 }
 export interface SenderState { confirmed: boolean; confirmedAt?: string | null; refusedReason?: string | null; confirmationExpiresAt?: string | null }
 
-export interface Created { id: string; revokeToken: string; returnToken?: string; state: string; shareUrl?: string; uploadExpiresAt?: string; batch?: number; generation?: number }
+export interface Created { id: string; revokeToken: string; returnToken?: string; state: string; shareUrl?: string; uploadExpiresAt?: string; generation?: number }
+
+/** The envelope the share's page shows (who shares which books) and the download is named by: plain JSON, at most a few lines. */
+export interface Envelope { v: 2; senderName: string; direction: 'send' | 'return'; company?: string; note?: string; asOf?: string }
+/** What a share, its next state or a return declares: the file's exact size and its envelope. */
+export interface Declared { bytes: number; meta: Envelope }
 
 export interface ReturnStatus { id: string; state: string; bytes: number; createdAt: string; readyAt?: string | null; expiresAt?: string | null }
 export interface ShareStatus {
-  id: string; kind: 'share' | 'return'; state: string; bytes: number; objects: number;
+  id: string; kind: 'share' | 'return'; state: string; bytes: number;
   createdAt: string; readyAt?: string | null; firstOpenedAt?: string | null; expiresAt?: string | null; endedAt?: string | null;
   opens: string[]; returns: ReturnStatus[]; pollAfterSeconds?: number;
   /** The share's state of the books: 1, then one more with every «Aktualisieren». */
   generation?: number; updatedAt?: string | null;
   invite?: { sentAt: string; count: number; updateSentAt?: string | null } | null;
 }
-/** What anyone with the link learns without a token: the state, the envelope and, while ready, the key. */
-export interface ShareInfo { id: string; kind: 'share' | 'return'; state: string; expiresAt?: string | null; firstOpenedAt?: string | null; meta?: string | null; bytes?: number | null; key?: string | null; generation?: number; updatedAt?: string | null }
-export interface Opening { key: string; index: Target; ticket: string; expiresAt: string; generation?: number; updatedAt?: string | null }
+/** What anyone with the link learns without a token: the state and, while ready, the envelope, the file's size and name. */
+export interface ShareInfo { id: string; kind: 'share' | 'return'; state: string; expiresAt?: string | null; firstOpenedAt?: string | null; meta?: Envelope | null; bytes?: number | null; filename?: string | null; generation?: number; updatedAt?: string | null }
+/** One opening: a short-lived download of the file, its name and size. */
+export interface Opening { download: Target; filename: string; bytes: number; urlExpiresAt?: string; expiresAt: string; generation?: number; updatedAt?: string | null }
+/** Where the file goes: one upload URL, valid a few minutes; asking again gives a new one. */
+export interface Upload { target: Target; bytes: number; generation?: number; expiresAt: string }
 /** The invitation the service sends (kind `invite`), or its short note after «Aktualisieren» (kind `update`). */
 export interface InviteRequest {
   kind?: 'invite' | 'update';
@@ -58,10 +66,16 @@ export interface Invited { sentAt: string; invites: number; limit: number }
 
 export type ShareClient = ReturnType<typeof shareClient>;
 
+/** Every opening names the protocol it speaks: the service answers an app of an older one «appTooOld» (426) instead of a download it would read as a broken link. */
+export const OPEN = { v: 3 } as const;
+
 /** The most an API answer may be, and how long a call and an object's transfer may take. */
 const ANSWER_BYTES = 1024 * 1024;
 const CALL_MS = 60_000;
-const OBJECT_MS = 10 * 60_000;
+/** The file's transfer may take long (1 GB on a slow line); one that stalls this long is cut off. */
+const STALL_MS = 2 * 60_000;
+/** Progress is told per this many bytes. */
+const STEP = 256 * 1024;
 
 /**
  * A body read up to `max` bytes: refused by its Content-Length, or cut off while it streams, never
@@ -120,49 +134,85 @@ export function shareClient(service: string, fetcher: typeof fetch = fetch) {
     return data;
   }
 
-  /** A read goes only to a URL of the service itself (protocol §4.5): a relative one is resolved against it, another host is refused. */
-  const readUrl = (url: string): string => {
-    const full = new URL(url, base + '/');
-    if (full.origin !== new URL(base).origin) throw new ShareServiceError(`Lese-Adresse ausserhalb des Dienstes: ${full.origin}`, 'internal', 500);
-    return full.toString();
+  /**
+   * A transfer that ends only when it stalls: each chunk resets the clock. A file of 1 GB on a slow
+   * line may take an hour; one that sends nothing for STALL_MS is cut off.
+   */
+  const transfer = async (url: string, init: RequestInit): Promise<{ res: Response; alive(): void; done(): void }> => {
+    const ctl = new AbortController();
+    let timer = setTimeout(() => ctl.abort(), STALL_MS);
+    const alive = () => { clearTimeout(timer); timer = setTimeout(() => ctl.abort(), STALL_MS); };
+    const done = () => clearTimeout(timer);
+    try { return { res: await fetcher(url, { ...init, redirect: 'error', referrerPolicy: 'no-referrer', signal: ctl.signal }), alive, done }; } catch (e) { done(); throw new ShareUnreachable(base, (e as Error).message); }
   };
 
   return {
     service: base,
     registerSender: (email: string) => call<SenderRegistration>('POST', '/api/senders', { email }),
     sender: (token: string) => call<SenderState>('GET', '/api/senders/me', undefined, token),
-    create: (token: string, body: { bytes: number; objects: number; key: string; meta?: string }) => call<Created>('POST', '/api/shares', body, token),
+    create: (token: string, body: Declared) => call<Created>('POST', '/api/shares', body, token),
     /** «Aktualisieren»: the whole books again into the same share, as its next generation (same id, link and tokens). */
-    update: (id: string, token: string, body: { bytes: number; objects: number; key: string; meta?: string }) => call<Created>('POST', `/api/shares/${id}/update`, body, token),
-    createReturn: (id: string, returnToken: string, body: { bytes: number; objects: number; key: string; meta?: string }) =>
-      call<Created>('POST', `/api/shares/${id}/returns`, body, returnToken),
+    update: (id: string, token: string, body: Declared) => call<Created>('POST', `/api/shares/${id}/update`, body, token),
+    createReturn: (id: string, returnToken: string, body: Declared) => call<Created>('POST', `/api/shares/${id}/returns`, body, returnToken),
     /** The service sends the invitation (or the note of an update) from «<name> über Vanilla Accounting», replies to the sender. */
     invite: (id: string, token: string, body: InviteRequest) => call<Invited>('POST', `/api/shares/${id}/invite`, body, token),
-    uploads: (id: string, token: string, objects: Array<{ name: string; bytes: number }>) =>
-      call<{ targets: Target[]; expiresAt: string }>('POST', `/api/shares/${id}/uploads`, { objects }, token),
-    /** One blob to its upload URL: written once, never over an object already there (`If-None-Match: *`). */
-    async put(target: Target, blob: Uint8Array): Promise<void> {
-      const res = await reach(target.url, { method: target.method || 'PUT', headers: { 'If-None-Match': '*', ...(target.headers ?? {}) }, body: blob as BodyInit }, OBJECT_MS);
-      await res.body?.cancel().catch(() => undefined);
-      // 412: the object is there already (a retry after a lost answer); its size was checked when it was declared.
-      if (!res.ok && res.status !== 412) throw new ShareServiceError(`Hochladen von ${target.object}: HTTP ${res.status}`, res.status === 403 ? 'ticketExpired' : 'internal', res.status);
-    },
-    complete: (id: string, token: string, body: Record<string, unknown> = {}) => call<ShareStatus>('POST', `/api/shares/${id}/complete`, body, token),
-    info: (id: string) => call<ShareInfo>('GET', `/api/shares/${id}`),
-    open: (id: string, token?: string) => call<Opening>('POST', `/api/shares/${id}/open`, {}, token),
-    urls: (id: string, ticket: string, objects: string[]) => call<{ targets: Target[] }>('POST', `/api/shares/${id}/urls`, { ticket, objects }),
+    /** Where the file goes now: one URL, a few minutes; asked again for a retry. */
+    upload: (id: string, token: string) => call<Upload>('POST', `/api/shares/${id}/upload`, {}, token),
     /**
-     * One object's ciphertext, at most `max` bytes (its size as the index names it): a service that
-     * sends more is cut off at once, by its Content-Length or while it streams, never read into memory.
+     * The file to its upload URL, in one PUT with its exact size: written once, never over a file
+     * already there (`If-None-Match: *`). `progress` sees the bytes sent.
      */
-    async get(target: Target, max: number): Promise<Uint8Array> {
-      const res = await reach(readUrl(target.url), { method: 'GET', headers: target.headers ?? {} }, OBJECT_MS);
-      if (!res.ok) {
-        let data: { error?: string; code?: string } = {};
-        try { data = JSON.parse(new TextDecoder().decode(await capped(res, ANSWER_BYTES, target.object))); } catch { /* no words */ }
-        throw new ShareServiceError(data.error ?? `HTTP ${res.status}`, data.code ?? 'internal', res.status);
-      }
-      return capped(res, max, target.object);
+    async put(target: Target, file: Uint8Array, progress?: (sent: number) => void): Promise<void> {
+      let sent = 0;
+      let t: Awaited<ReturnType<typeof transfer>> | undefined;
+      const body = new ReadableStream<Uint8Array>({
+        pull(c) {
+          if (sent >= file.byteLength) { c.close(); return; }
+          const chunk = file.subarray(sent, sent + STEP);
+          sent += chunk.byteLength;
+          t?.alive();
+          c.enqueue(chunk);
+          progress?.(sent);
+        },
+      });
+      t = await transfer(target.url, { method: target.method || 'PUT', headers: { 'If-None-Match': '*', ...(target.headers ?? {}), 'Content-Length': String(file.byteLength) }, body, duplex: 'half' } as RequestInit);
+      t.done();
+      await t.res.body?.cancel().catch(() => undefined);
+      // 412: the file is there already (a retry after a lost answer); `complete` checks its size.
+      if (!t.res.ok && t.res.status !== 412) throw new ShareServiceError(`Hochladen: HTTP ${t.res.status}`, t.res.status === 403 ? 'uploadExpired' : 'internal', t.res.status);
+    },
+    complete: (id: string, token: string) => call<ShareStatus>('POST', `/api/shares/${id}/complete`, {}, token),
+    info: (id: string) => call<ShareInfo>('GET', `/api/shares/${id}`),
+    /** One opening (counted for the sharer's card): the file's short-lived download. A return's needs the sharer's revoke token. */
+    open: (id: string, token?: string) => call<Opening>('POST', `/api/shares/${id}/open`, OPEN, token),
+    /**
+     * The file from its download URL, at most `max` bytes (the size the opening named): a source that
+     * sends more is cut off, by its Content-Length or while it streams. Each chunk goes to `sink`.
+     */
+    async download(target: Target, max: number, sink: (chunk: Uint8Array) => void | Promise<void>): Promise<number> {
+      const t = await transfer(target.url, { method: 'GET', headers: target.headers ?? {} });
+      try {
+        const { res } = t;
+        if (!res.ok) {
+          let data: { error?: string; code?: string } = {};
+          try { data = JSON.parse(new TextDecoder().decode(await capped(res, ANSWER_BYTES, 'download'))); } catch { /* no words */ }
+          throw new ShareServiceError(data.error ?? `HTTP ${res.status}`, data.code ?? (res.status === 403 ? 'downloadExpired' : 'internal'), res.status);
+        }
+        const declared = Number(res.headers.get('content-length') ?? NaN);
+        const oversized = () => new ShareServiceError(`Der Download ist grösser als die angekündigten ${max} Bytes.`, 'oversized', 502, { limit: max });
+        if (Number.isFinite(declared) && declared > max) { await res.body?.cancel().catch(() => undefined); throw oversized(); }
+        let total = 0;
+        const reader = res.body!.getReader();
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          t.alive();
+          total += value.byteLength;
+          if (total > max) { await reader.cancel().catch(() => undefined); throw oversized(); }
+          await sink(value);
+        }
+        return total;
+      } finally { t.done(); }
     },
     status: (id: string, token: string) => call<ShareStatus>('GET', `/api/shares/${id}/status`, undefined, token),
     revoke: (id: string, token: string) => call<ShareStatus>('DELETE', `/api/shares/${id}`, undefined, token),

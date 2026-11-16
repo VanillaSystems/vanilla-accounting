@@ -19,6 +19,7 @@ import { download, ownPresets, periodOf, saveOwnPresets } from './state.js';
 import { filing } from '../../../engines/index.js';
 import { periodWord } from '../../lib/vat-words.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 interface Props {
   initial: DialogConfig;
@@ -242,9 +243,9 @@ export function ExportDialog({ initial, books, company, page, account, quarters,
           ) : (
             <button type="button" className="btn ghost" disabled={!summary.files} onClick={() => setNaming(true)}>{t('export.saveAs')}</button>
           )}
-          <button type="button" className="btn primary" disabled={!summary.files || busy || STATIC_EXPORT} onClick={() => void run()}>
+          <AsyncButton type="button" className="btn primary" disabled={!summary.files || busy || STATIC_EXPORT} onClick={() => run()}>
             {busy ? t('export.busy') : <>{t('export.run')} <span className="k">⌘↵</span></>}
-          </button>
+          </AsyncButton>
         </div>
       </div>
       {picker && (

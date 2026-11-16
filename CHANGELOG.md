@@ -14,6 +14,44 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-11-16
+
+No figure changes: the demo goldens and the books schema are as in 0.6.1.
+
+### Highlights
+
+- **One file per share:** the link's page downloads one `.vanillashare` file, with the browser's own progress; double-click it to open the books.
+- **The file is his document:** his changes are saved into the file he opened (⌘S, or by itself), and the file brings them along to another Mac or back to you.
+- **Buttons that wait show it:** a spinner after a moment, and no second click until the action is done.
+- **Links of 0.6.1 end when the service moves to version 3:** update to 0.6.2 to share by link.
+
+### Changed
+
+- **⚠ action** **A share is one Freigabe-Datei, downloaded like any file** (docs/share-protocol.md,
+  version 3). «Einladung senden» and «Aktualisieren» upload the books as one `.vanillashare` file; the
+  share's page offers «Herunterladen (196 MB)», a plain browser download into Downloads with the
+  browser's own progress, then «Danach die Freigabe-Datei doppelklicken». «In der App öffnen» downloads
+  the same file in the app with a small progress window («Lädt die Buchhaltung von … 84 von 196 MB») and
+  saves it into Downloads before opening it. The file names its share, so double-clicked it opens linked
+  to it: «Zurückschicken» and the next «Aktualisieren» keep working. A return is one file too. The app no
+  longer seals the files itself: the service stores the file encrypted at rest and keeps no key. Links of
+  0.6.1 end when the service moves to version 3; 0.6.1 is told to update (action: update to this version
+  to share by link).
+- **The Freigabe-Datei is the recipient's document.** His changes are saved into the file he opened
+  («Sichern», ⌘S; by itself when idle and on closing, once he saved himself); the window's title names
+  the file, «ungespeichert» until it holds them. Saving writes beside the file and renames it, so a crash
+  never leaves half a file; a file that moved or is read-only is said, with «Sichern unter…». Opened on
+  another Mac, the file brings his changes; mailed back, the sharer's app shows them for review, never as
+  a copy of her own books. A newer file opened over an older one carries his changes over and says so;
+  the older file stays as it was. The app never writes over another file put at the document's path (a
+  newer state, another share's file): it says «andere Datei am Ort» and offers «Sichern unter…». Reopening
+  his own file never takes back a change he made after saving it. A newer state his copy fetches from its
+  share stays in the copy until he saves; nothing lands in Downloads unasked. ⌘Q quits with a copy open,
+  after its last save. Saving a large copy no longer holds the app.
+- The hand-over file's extension is `.vanillashare` («Freigabe-Datei»); the app registers it with macOS
+  and still opens the `.vanilla` files of 0.6.x, but writes only `.vanillashare`.
+- Every button that waits for something (saving, booking, sending, opening, a job) shows a spinner after a moment, keeps its size and takes no second click until the action is done.
+
 ## [0.6.1] - 2026-11-15
 
 No figure changes: the demo goldens and the books schema are as in 0.6.0.

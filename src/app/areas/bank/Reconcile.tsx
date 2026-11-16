@@ -15,6 +15,7 @@ import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
 import { covers } from '../../../books/reconcile.js';
 import { payText, signed } from './model.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 const OWN = 'own';
 /** A read movement on a day the bank's file does not cover, left for the export of its day. */
@@ -101,7 +102,7 @@ export function ReconcilePanel({ r, books, label, closedThrough, edit, nav }: { 
       {edit ? (
         <div className="reconcile-acts">
           {undecided ? <span className="m">{t('reconcile.undecided', { n: undecided })}</span> : null}
-          <button type="button" className="btn primary" disabled={busy || undecided > 0} data-testid="reconcile-confirm" onClick={() => void go()}>{t('reconcile.confirm')}</button>
+          <AsyncButton type="button" className="btn primary" disabled={busy || undecided > 0} data-testid="reconcile-confirm" onClick={() => go()}>{t('reconcile.confirm')}</AsyncButton>
         </div>
       ) : null}
     </div>

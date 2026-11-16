@@ -57,6 +57,7 @@ import { processingText } from '../automation/processing.js';
 import { useNoAi } from '../ai/no-ai.js';
 import { statementSigns } from '../../parsers/receipt-text.js';
 import { INTAKE_STEPS, INTAKE_WORKFLOW, inProcess, runProcessing } from '../../workflows/processing.js';
+import { AsyncButton, AsyncForm } from './AsyncButton.js';
 
 const drop = dropStore(
   { open: api.dropOpen, add: api.dropAdd, close: api.dropClose },
@@ -111,7 +112,7 @@ function Lost({ inDialog }: { inDialog?: boolean }) {
   return (
     <div className={inDialog ? 'warnline droplost' : 'toast show droplost'} role="alert" data-testid="drop-lost">
       <span>{tWith(line.key, line.vars)}</span>
-      <button type="button" className={inDialog ? 'linkbtn' : undefined} data-act="drop-retry" onClick={() => void drop.retry()}>{t('drop.lost.retry')}</button>
+      <AsyncButton type="button" className={inDialog ? 'linkbtn' : undefined} data-act="drop-retry" onClick={() => drop.retry()}>{t('drop.lost.retry')}</AsyncButton>
       <button type="button" className={inDialog ? 'linkbtn' : undefined} data-act="drop-dismiss" onClick={drop.dismiss}>{t('drop.lost.dismiss')}</button>
     </div>
   );
@@ -167,9 +168,9 @@ function ChooseAccount({ r, session }: { r: DropRow; session: DropSession }) {
       <small>{choice.iban ? t('drop.whichAccountIban', { currency: choice.currency, iban: groupIban(choice.iban) }) : t('drop.whichAccount', { currency: choice.currency })}</small>
       <span className="dacts dchoose">
         {accounts.map((a) => (
-          <button key={a.account} type="button" className={a === proposed ? 'btn primary' : 'btn'} data-testid={a === proposed ? 'drop-proposed' : undefined} disabled={busy} onClick={() => void pick(a)}>
+          <AsyncButton key={a.account} type="button" className={a === proposed ? 'btn primary' : 'btn'} data-testid={a === proposed ? 'drop-proposed' : undefined} disabled={busy} onClick={() => pick(a)}>
             {a === proposed ? <span className="dprop">{t('drop.proposal')}</span> : null}{a.label} <span className="mono">{a.account}</span>
-          </button>
+          </AsyncButton>
         ))}
       </span>
       {proposed ? <small>{t('drop.proposalWhy', { label: proposed.label })}</small> : null}
@@ -177,7 +178,7 @@ function ChooseAccount({ r, session }: { r: DropRow; session: DropSession }) {
       {r.unknownAccount ? (adding ? <AddAccount r={r} session={session} onCancel={() => setAdding(false)} /> : (
         <span className="dacts">
           <button type="button" className="linkbtn" data-testid="drop-firm-account" onClick={() => setAdding(true)}>{t('drop.otherAccount')}</button>
-          <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'private' })}>{t('drop.privateAccount')}</button>
+          <AsyncButton type="button" className="linkbtn" onClick={() => act(session, r, { kind: 'private' })}>{t('drop.privateAccount')}</AsyncButton>
         </span>
       )) : null}
     </>
@@ -199,11 +200,11 @@ function AddAccount({ r, session, onCancel }: { r: DropRow; session: DropSession
   // Added already (the statement's read failed after the account was saved): the row reads it into that account, no form again.
   const there = banks.find((a) => a.iban && compactOf(a.iban) === compactOf(d.iban));
   if (there) {
-    const read = () => { setBusy(true); api.dropRow(session.id, r.key, { kind: 'firmAccount' }).then(drop.answered, (e) => set({ error: errorText(e) })).finally(() => setBusy(false)); };
+    const read = () => { setBusy(true); return api.dropRow(session.id, r.key, { kind: 'firmAccount' }).then(drop.answered, (e) => set({ error: errorText(e) })).finally(() => setBusy(false)); };
     return (
       <span className="dacts">
         <small>{t('drop.addAccount.there', { label: there.label, account: there.account })}</small>
-        <button type="button" className="btn primary" data-testid="drop-read-into" disabled={busy} onClick={read}>{t('drop.addAccount.readNow')}</button>
+        <AsyncButton type="button" className="btn primary" data-testid="drop-read-into" disabled={busy} onClick={read}>{t('drop.addAccount.readNow')}</AsyncButton>
       </span>
     );
   }
@@ -231,15 +232,15 @@ function AddAccountForm({ d, banks, r, session, onCancel }: { d: NonNullable<Dro
     }
   };
   return (
-    <form className="dpw dadd" data-testid="drop-add-account" onSubmit={(e) => { e.preventDefault(); if (valid && !busy) void save(); }}>
+    <AsyncForm className="dpw dadd" data-testid="drop-add-account" onSubmit={(e) => { e.preventDefault(); if (valid && !busy) return save(); }}>
       <small>{t('drop.addAccount.read', { currency: d.currency, iban: groupIban(d.iban) })}</small>
       <label>{t('company.bank')}<input value={f.bank} onChange={(e) => setF({ ...f, bank: e.target.value })} autoFocus /></label>
       <label>{t('yearClose.colAccount')}<input className="mono" inputMode="numeric" value={f.account} onChange={(e) => setF({ ...f, account: e.target.value })} /></label>
       <span className="dacts">
-        <button type="submit" className="btn primary" disabled={!valid || busy}>{t('drop.addAccount.save')}</button>
+        <AsyncButton type="submit" className="btn primary" disabled={!valid || busy}>{t('drop.addAccount.save')}</AsyncButton>
         <button type="button" className="linkbtn" disabled={busy} onClick={onCancel}>{t('common.cancel')}</button>
       </span>
-    </form>
+    </AsyncForm>
   );
 }
 
@@ -275,7 +276,7 @@ function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
     setAnswer(got);
     if (!last) { setAt(at + 1); return; }
     const create = !!propose?.name && got.account === propose.account;
-    void act(session, r, {
+    return act(session, r, {
       kind: 'provider', ...(got.account ? { account: got.account } : {}), ...(create ? { create: true } : {}),
       ...(ask.missing === 'fees' ? { vat: vat.trim() } : {}), ...(ask.since !== undefined && day ? { since: day } : {}), ...(got.revenue ? { revenue: got.revenue } : {}),
     });
@@ -283,7 +284,7 @@ function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
   const ready = step !== 'since' || !!day;
   const sells = (ask.revenue?.sells ?? []).map((k) => t(`desktop.q.sells.${k}` as 'desktop.q.sells.traded')).join(', ');
   return (
-    <form className="dpq" data-testid="drop-provider" data-step={step} onSubmit={(e) => { e.preventDefault(); if (ready) next(e.currentTarget); }}>
+    <AsyncForm className="dpq" data-testid="drop-provider" data-step={step} onSubmit={(e) => { e.preventDefault(); if (ready) return next(e.currentTarget); }}>
       {steps.length > 1 ? <small className="dpn">{t('drop.provider.stepOf', { n: at + 1, of: steps.length })}</small> : null}
       {step === 'account' ? (
         <>
@@ -295,7 +296,7 @@ function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
           <span className="dpw">
             <AccountField key="account" name="account" prefer={ask.missing === 'revenue' ? 'revenue' : ask.missing === 'fees' ? 'expense' : 'asset'} label={t(ask.missing === 'fees' ? 'drop.provider.label.fees' : ask.missing === 'revenue' ? 'drop.provider.label.revenue' : 'drop.provider.label.clearing')} defaultValue={answer.account ?? propose?.account ?? ''} offer={propose?.name ? { number: propose.account, name: propose.name } : undefined} />
             {ask.missing === 'fees' && !propose?.vat ? <input value={vat} onChange={(e) => setVat(e.target.value)} placeholder={t('drop.provider.vat')} aria-label={t('drop.provider.vat')} /> : null}
-            <button type="submit" className="btn">{last ? t('drop.provider.keep') : t('drop.provider.next')}</button>
+            <AsyncButton type="submit" className="btn">{last ? t('drop.provider.keep') : t('drop.provider.next')}</AsyncButton>
           </span>
         </>
       ) : step === 'since' ? (
@@ -304,7 +305,7 @@ function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
           <small>{t('drop.provider.why.since', { date: ask.since ? formatDate(ask.since) : '' })}</small>
           <span className="dpw">
             <label className="acf">{t('drop.provider.sinceLabel')}<input name="since" value={answer.since} placeholder={t('period.dateFormat')} onChange={(e) => setAnswer({ ...answer, since: e.target.value })} aria-invalid={!day} /></label>
-            <button type="submit" className="btn" disabled={!ready}>{last ? t('drop.provider.keep') : t('drop.provider.next')}</button>
+            <AsyncButton type="submit" className="btn" disabled={!ready}>{last ? t('drop.provider.keep') : t('drop.provider.next')}</AsyncButton>
           </span>
           {!day && answer.since ? <small className="wn">{t('period.invalidDate')}</small> : null}
         </>
@@ -314,11 +315,11 @@ function ProviderAccount({ r, session }: { r: DropRow; session: DropSession }) {
           <small>{sells ? t('drop.provider.why.revenue', { account: ask.revenue!.account, sells }) : t('drop.provider.why.revenueDefault', { account: ask.revenue!.account })}</small>
           <span className="dpw">
             <AccountField key="revenue" name="revenue" label={t('drop.provider.label.revenue')} prefer="revenue" defaultValue={answer.revenue ?? ask.revenue!.account} />
-            <button type="submit" className="btn">{t('drop.provider.keep')}</button>
+            <AsyncButton type="submit" className="btn">{t('drop.provider.keep')}</AsyncButton>
           </span>
         </>
       )}
-    </form>
+    </AsyncForm>
   );
 }
 
@@ -335,7 +336,7 @@ function PayoutUnseenRow({ r, session, go }: { r: DropRow; session: DropSession;
       <small>{t('drop.unseen.why', { provider: u.name, through: formatDate(u.through), since: formatDate(u.since), banks: u.banks.join(', ') || '–' })}</small>
       <small>{t('drop.unseen.hint', { provider: u.name, file: u.file })}</small>
       <span className="dacts">
-        <button type="button" className="linkbtn" data-testid="drop-anyway" onClick={() => void act(session, r, { kind: 'anyway' })}>{t('drop.unseen.anyway')}</button>
+        <AsyncButton type="button" className="linkbtn" data-testid="drop-anyway" onClick={() => act(session, r, { kind: 'anyway' })}>{t('drop.unseen.anyway')}</AsyncButton>
         <button type="button" className="linkbtn" onClick={() => go({ area: 'partners', id: u.provider })}>{t('drop.unseen.open', { provider: u.name })}</button>
       </span>
     </>
@@ -411,7 +412,7 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
               {adding || there ? <AddAccount r={r} session={session} onCancel={() => setAdding(false)} /> : (
                 <>
                   <button type="button" className="linkbtn" data-testid="drop-firm-account" onClick={() => setAdding(true)}>{t('drop.firmAccount')}</button>
-                  <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'private' })}>{t('drop.privateAccount')}</button>
+                  <AsyncButton type="button" className="linkbtn" onClick={() => act(session, r, { kind: 'private' })}>{t('drop.privateAccount')}</AsyncButton>
                 </>
               )}
             </>
@@ -425,21 +426,21 @@ function Waiting({ r, session, go }: { r: DropRow; session: DropSession; go(rout
           : r.message ? <small>{r.message}</small> : r.reason ? <small>{t(`drop.reason.${r.reason}` as 'drop.reason.duplicate')}</small> : null}
           {asked ? (
             <span className="dacts">
-              <button type="button" className="linkbtn" data-testid="drop-twin-same" onClick={() => void act(session, r, { kind: 'twin', answer: 'same' })}>{t('drop.twin.same')}</button>
-              <button type="button" className="linkbtn" data-testid="drop-twin-distinct" onClick={() => void act(session, r, { kind: 'twin', answer: 'distinct' })}>{t('drop.twin.distinct')}</button>
+              <AsyncButton type="button" className="linkbtn" data-testid="drop-twin-same" onClick={() => act(session, r, { kind: 'twin', answer: 'same' })}>{t('drop.twin.same')}</AsyncButton>
+              <AsyncButton type="button" className="linkbtn" data-testid="drop-twin-distinct" onClick={() => act(session, r, { kind: 'twin', answer: 'distinct' })}>{t('drop.twin.distinct')}</AsyncButton>
             </span>
           ) : r.kind === 'statement-pdf' && r.reason === 'not-imported' && !r.chooseAccount && !r.unknownAccount && !r.read
-            ? <button type="button" className="linkbtn" onClick={() => void act(session, r, { kind: 'as', as: 'receipt' })}>{t('drop.isReceipt')}</button>
+            ? <AsyncButton type="button" className="linkbtn" onClick={() => act(session, r, { kind: 'as', as: 'receipt' })}>{t('drop.isReceipt')}</AsyncButton>
           : (r.state === 'duplicate' || r.state === 'quarantine') && r.kind !== 'camt' && r.kind !== 'statement-pdf' && (r.kind !== 'statement-csv' || r.reason === 'csv-known' || r.reason === 'provider-export') && r.reason !== 'unreadable'
-            ? <button type="button" className="linkbtn" data-testid={r.otherExport ? 'drop-read-anyway' : undefined} onClick={() => void act(session, r, { kind: 'take' })}>{r.state === 'quarantine' && r.reason === 'not-receipt' ? t('drop.isReceipt') : r.otherExport ? t('drop.otherExport.readAnyway') : t('drop.takeAnyway')}</button> : null}
+            ? <AsyncButton type="button" className="linkbtn" data-testid={r.otherExport ? 'drop-read-anyway' : undefined} onClick={() => act(session, r, { kind: 'take' })}>{r.state === 'quarantine' && r.reason === 'not-receipt' ? t('drop.isReceipt') : r.otherExport ? t('drop.otherExport.readAnyway') : t('drop.takeAnyway')}</AsyncButton> : null}
           {r.state === 'locked' ? (
-            <form className="dpw" onSubmit={(e) => { e.preventDefault(); if (password) void act(session, r, { kind: 'unlock', password }).then(() => setPassword('')); }}>
+            <AsyncForm className="dpw" onSubmit={(e) => { e.preventDefault(); if (password) return act(session, r, { kind: 'unlock', password }).then(() => setPassword('')); }}>
               <input type="password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('drop.password')} aria-label={t('drop.password')} />
-              <button type="submit" className="btn" disabled={!password}>{t('drop.unlock')}</button>
-            </form>
+              <AsyncButton type="submit" className="btn" disabled={!password}>{t('drop.unlock')}</AsyncButton>
+            </AsyncForm>
           ) : null}
         </div>
-        {r.state === 'take' || r.state === 'undone' ? <span /> : <button type="button" className="dx" aria-label={t('drop.remove', { name: r.name })} onClick={() => void act(session, r, { kind: 'remove' })}>×</button>}
+        {r.state === 'take' || r.state === 'undone' ? <span /> : <AsyncButton type="button" className="dx" aria-label={t('drop.remove', { name: r.name })} onClick={() => act(session, r, { kind: 'remove' })}>×</AsyncButton>}
       </div>
       {details && open ? <FileDetails d={details} name={r.from ? `${r.from} › ${r.name}` : r.name} /> : null}
       {table ? <StatementRead key={`${r.read!.by}-${r.read!.statement.movements.length}-${r.read!.statement.closing.amount}`} read={r.read!} pdf={r.kind === 'statement-pdf'} act={(a) => act(session, r, a)} go={go}
@@ -686,18 +687,18 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   const missing = maybeTx ? t('near.dropMaybe', { what: txLine(maybeTx) }) : x.kind !== 'waits' && x.kind !== 'stuck' ? '' : lacks ? t('drop.p.missing', { what: lacks }) : proposed ? t('drop.p.payment') : t('drop.p.noPayment');
   const shown = !!receipt && open;
   // The books changed under the page: Belege must not show the receipt any more.
-  const undo = () => { setBusy(true); void act(session, r, { kind: 'undo' }).finally(() => setBusy(false)); };
+  const undo = () => { setBusy(true); return act(session, r, { kind: 'undo' }).finally(() => setBusy(false)); };
   // «schon da?» of a photo the run read (#361): answered as Belege answers it, the copy then set aside, or the pair not asked again.
   const twin = (answer: 'same' | 'distinct', of: string) => {
     setBusy(true);
-    api.answerTwin(receipt!.id, answer, of).then(refresh, (e) => set({ error: errorText(e) })).finally(() => setBusy(false));
+    return api.answerTwin(receipt!.id, answer, of).then(refresh, (e) => set({ error: errorText(e) })).finally(() => setBusy(false));
   };
   // A statement PDF kept as the statement, its movements not read in (#254): «Aktionen» reads them.
   const keptPdf = r.kind === 'statement-pdf' && !!r.statement?.file.toLowerCase().endsWith('.pdf');
   // Taken onto the one account of the bank it names (#273): said in the row, with «ändern».
   const byBank = r.byBank?.accounts.find((a) => a.account === r.statement?.account);
   const [menu, setMenu] = useState<DOMRect | null>(null);
-  const readPdf = () => { setBusy(true); void act(session, r, { kind: 'readPdf' }).finally(() => setBusy(false)); };
+  const readPdf = () => { setBusy(true); return act(session, r, { kind: 'readPdf' }).finally(() => setBusy(false)); };
   const statementAt = statementLocation(r, books);
   // A card statement taken as a receipt (#401): what the app did with it, in its row.
   const card = receipt && !r.report ? cardStatementOf(receipt, books) : undefined;
@@ -708,7 +709,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   // «Ist doch ein Beleg» (#361): the person's word, as Belege takes it; the run then reads the file again, never asking whether it is one.
   const isReceipt = () => {
     setBusy(true);
-    api.patchReceipt(receipt!.id, { kind: 'invoice' }).then(() => { refresh(); void startIntake(); }, (e) => set({ error: errorText(e) })).finally(() => setBusy(false));
+    return api.patchReceipt(receipt!.id, { kind: 'invoice' }).then(() => { refresh(); void startIntake(); }, (e) => set({ error: errorText(e) })).finally(() => setBusy(false));
   };
   return (
     <>
@@ -737,22 +738,22 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
           <span className="dacts">
             {x.kind === 'twin' && receipt ? (
               <>
-                <button type="button" className="linkbtn" data-testid="drop-twin-same" disabled={busy} onClick={() => twin('same', x.of)}>{t('drop.twin.same')}</button>
-                <button type="button" className="linkbtn" data-testid="drop-twin-distinct" disabled={busy} onClick={() => twin('distinct', x.of)}>{t('drop.twin.distinct')}</button>
+                <AsyncButton type="button" className="linkbtn" data-testid="drop-twin-same" disabled={busy} onClick={() => twin('same', x.of)}>{t('drop.twin.same')}</AsyncButton>
+                <AsyncButton type="button" className="linkbtn" data-testid="drop-twin-distinct" disabled={busy} onClick={() => twin('distinct', x.of)}>{t('drop.twin.distinct')}</AsyncButton>
               </>
             ) : null}
-            {byBank ? <button type="button" className="linkbtn" data-testid="drop-other-account" disabled={running || busy} data-tip={t('drop.byBankChangeTip')} onClick={() => { setBusy(true); void act(session, r, { kind: 'otherAccount' }).finally(() => setBusy(false)); }}>{t('drop.byBankChange')}</button> : null}
+            {byBank ? <AsyncButton type="button" className="linkbtn" data-testid="drop-other-account" disabled={running || busy} data-tip={t('drop.byBankChangeTip')} onClick={() => { setBusy(true); return act(session, r, { kind: 'otherAccount' }).finally(() => setBusy(false)); }}>{t('drop.byBankChange')}</AsyncButton> : null}
             {statementAt ? <button type="button" className="linkbtn" data-testid="drop-open-file" onClick={() => { closeDrop(); onGo(statementAt); }}>{t('drop.openStatement')}</button> : null}
             {x.kind === 'supporting' && x.of ? <button type="button" className="linkbtn" data-testid="drop-open-invoice" onClick={() => go({ area: 'receipts', id: x.of!.id }, books.receipts.find((y) => y.id === x.of!.id)?.date)}>{t('drop.p.openInvoice')}</button> : null}
             {x.kind === 'balanceSheet' && x.sheet?.opens ? <button type="button" className="linkbtn" data-testid="drop-to-opening" onClick={() => go({ area: 'company', section: 'opening' })}>{t('reports.openingSet')}</button> : null}
-            {(x.kind === 'none' || x.kind === 'supporting' || x.kind === 'balanceSheet') && receipt && receipt.kind !== 'statement' && receipt.kind !== 'duplicate' ? <button type="button" className="linkbtn" data-testid="drop-is-receipt" disabled={busy} onClick={isReceipt}>{t(markLabel(receipt))}</button> : null}
+            {(x.kind === 'none' || x.kind === 'supporting' || x.kind === 'balanceSheet') && receipt && receipt.kind !== 'statement' && receipt.kind !== 'duplicate' ? <AsyncButton type="button" className="linkbtn" data-testid="drop-is-receipt" disabled={busy} onClick={isReceipt}>{t(markLabel(receipt))}</AsyncButton> : null}
             {x.kind === 'stuck' ? <button type="button" className="linkbtn" data-testid="drop-stuck-run" onClick={() => go({ area: 'automation', view: 'run', run: x.run })}>{t('processing.toRun')}</button> : null}
             {receipt ? <button type="button" className="linkbtn" onClick={() => go({ area: 'receipts', id: receipt.id }, receipt.date)}>{t(x.kind === 'unread' ? 'drop.p.typeIn' : 'drop.openReceipt')}</button> : null}
             {/* A file that could be a statement (#384): not read, read as one, or read without a total or with a statement's signs; never a receipt read with its total, nor one linked to its payment, nor a card statement (#401). */}
             {(r.kind === 'receipt' || r.kind === 'photo') && !r.report && !card && (x.kind === 'unread' || (x.kind === 'none' && receipt?.kind === 'statement')
-              || ((x.kind === 'read' || x.kind === 'waits') && !!receipt && (receipt.amount == null || statementSigns(receipt.extractedText ?? '')))) ? <button type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); void act(session, r, { kind: 'statement' }).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</button> : null}
+              || ((x.kind === 'read' || x.kind === 'waits') && !!receipt && (receipt.amount == null || statementSigns(receipt.extractedText ?? '')))) ? <AsyncButton type="button" className="linkbtn" data-testid="drop-as-statement" disabled={busy} onClick={() => { setBusy(true); return act(session, r, { kind: 'statement' }).finally(() => setBusy(false)); }}>{t('drop.asStatement')}</AsyncButton> : null}
             {keptPdf ? <button type="button" className="linkbtn" data-act="actions" data-testid="drop-actions" aria-haspopup="menu" aria-expanded={!!menu} disabled={busy} onClick={(e) => setMenu(e.currentTarget.getBoundingClientRect())}>{t('actions.label')}</button> : null}
-            {r.statement?.again ? null : <button type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</button>}
+            {r.statement?.again ? null : <AsyncButton type="button" className="linkbtn" disabled={running || busy} data-tip={running ? t('drop.undoBusy') : undefined} onClick={undo}>{t('drop.undo')}</AsyncButton>}
           </span>
           {/* The dialog is moved and blurred, which would shift a fixed menu inside it: the menu goes to the page. */}
           {menu ? createPortal(<Menu anchor={menu} items={[{ label: <span data-action="readPdf">{t('statementActions.readPdf')}</span>, run: readPdf }]} onClose={() => setMenu(null)} />, document.body) : null}

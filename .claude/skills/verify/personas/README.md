@@ -23,7 +23,9 @@ outlays reimbursed, the phone's private share, a credit card the app does not re
 every round, so the scores stay comparable with `docs/0.4.0/usability/first-run-scores.md`; run the
 webshop when a change touches payment providers, sales reports, the drop of CSVs or imports, and the
 consultancy when it touches sales and their questions, Bezugsteuer, foreign currency, the owner's
-account or rules; run all three before a release. `vm.sh up <run> --persona webshop|consulting` puts
+account or rules. Before a release, run the walks `npx tsx tools/release/zones.ts` lists for its
+diff (docs/releasing.md, step 7; each file is mapped to its zones in tools/release/zones.json), all
+of them only on request (`--all`). `vm.sh up <run> --persona webshop|consulting` puts
 their files into the VM (`persona-files.mjs`, one module per persona under `persona-files/`), and
 `answer-key.md` beside the env holds the figures the books should end with, computed by the generator.
 

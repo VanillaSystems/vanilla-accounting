@@ -18,6 +18,7 @@ import { MAIL_CLIENTS, mailWays, type MailClient, type MailWay } from './inflow.
 import { closeInflow, openInflow, switchPhone, useInflow, type InflowDialog } from './inflow-state.js';
 import { askSetup, W } from './InflowStrip.js';
 import { intakeAdd } from './intake.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 /** The search a forwarding filter starts from: the words receipts carry, in the four languages. */
 const FILTER_QUERY = 'rechnung OR invoice OR facture OR fattura OR beleg OR quittung OR receipt';
@@ -82,7 +83,7 @@ function Install() {
         <div className="form">
           <p><b>{t('inflow.pair.scanStore')}</b> {t('inflow.pair.opensStore')}</p>
           <p className="hint">{t('inflow.pair.orBrowser')}</p>
-          {app ? <div className="url"><code>{app.url.replace(/^https:\/\//, '')}</code><button type="button" className="aiact" onClick={copy}>{t(copied ? 'inflow.pair.copied' : 'inflow.pair.copy')}</button></div> : null}
+          {app ? <div className="url"><code>{app.url.replace(/^https:\/\//, '')}</code><button data-busy-exempt="a copy to the clipboard; the label says Kopiert" type="button" className="aiact" onClick={copy}>{t(copied ? 'inflow.pair.copied' : 'inflow.pair.copy')}</button></div> : null}
           <p className="hint">{t('inflow.pair.free')}</p>
         </div>
       </div>
@@ -159,16 +160,16 @@ function AddWay(props: AreaProps) {
   }
   const withAi = (e: MouseEvent<HTMLElement>) => { closeInflow(); askSetup(e); };
   const back = <button type="button" className="aiact back" onClick={() => setStep({ at: 'address' })}>{t('inflow.back')}</button>;
-  const extra = <button type="button" className="aiact" onClick={withAi}><BotIcon />{t('inflow.withAi')}</button>;
+  const extra = <button data-busy-exempt="opens the AI sidebar, which shows its own progress" type="button" className="aiact" onClick={withAi}><BotIcon />{t('inflow.withAi')}</button>;
 
   if (step.at === 'address') {
     return (
       <Frame title={t('inflow.addWay')} extra={extra}>
-        <form className="form" noValidate onSubmit={(e) => void next(e)}>
+        <AsyncForm className="form" noValidate onSubmit={(e) => next(e)}>
           <label>{t('inflow.add.askAddress')}<input type="email" name="address" autoFocus autoComplete="email" placeholder={t('inflow.add.addressExample')} value={address} onChange={(e) => setAddress(e.target.value)} /></label>
           {err ? <p className="err" role="alert">{err}</p> : null}
-          <div className="acts"><button type="submit" className="aiact primary" disabled={busy} data-testid="add-next">{busy ? <span className="spin small" /> : null}{busy ? t('inflow.add.looking') : t('inflow.add.next')}</button></div>
-        </form>
+          <div className="acts"><AsyncButton type="submit" className="aiact primary" disabled={busy} data-testid="add-next">{busy ? <span className="spin small" /> : null}{busy ? t('inflow.add.looking') : t('inflow.add.next')}</AsyncButton></div>
+        </AsyncForm>
         <h3>{t('inflow.add.noMail')}</h3>
         <div className="tiles">
           <Tile icon={W.phone} title={t('inflow.way.phone')} text={t('inflow.way.phoneText')} onClick={() => openInflow({ kind: 'pair', step: 'install' })} />
@@ -256,14 +257,14 @@ function Forward({ nav, address, host }: { nav: Nav; address: string; host?: Mai
         <li><b>{t('inflow.fwd.step2')}</b><div>{t('inflow.fwd.step2Text')}<pre>{FILTER_QUERY}</pre>{t('inflow.fwd.check')}</div></li>
         <li><b>{t('inflow.fwd.step3')}</b><div>{t('inflow.fwd.step3Text')}</div></li>
       </ol>
-      <form className="form" noValidate onSubmit={(e) => void connect(e)}>
+      <AsyncForm className="form" noValidate onSubmit={(e) => connect(e)}>
         <label>{t('inflow.fwd.target')}<input type="email" name="target" value={target} placeholder={t('inflow.add.addressExample')} onChange={(e) => setTarget(e.target.value)} /></label>
         {err ? <p className="err" role="alert">{err}</p> : null}
         <div className="acts">
           <button type="button" className="aiact back" onClick={() => openInflow({ kind: 'add' })}>{t('inflow.back')}</button>
-          <button type="submit" className="aiact primary" disabled={busy}>{t('inflow.fwd.connect')}</button>
+          <AsyncButton type="submit" className="aiact primary" disabled={busy}>{t('inflow.fwd.connect')}</AsyncButton>
         </div>
-      </form>
+      </AsyncForm>
     </Frame>
   );
 }

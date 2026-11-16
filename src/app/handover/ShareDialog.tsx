@@ -18,6 +18,7 @@ import { ICONS } from '../areas/icons.js';
 import { openVanilla, reloadHandover, sizeText, type Opened } from './store.js';
 import { runJob, shareSettings, type Job, type ShareSettings, type Shared } from './link.js';
 import { JobProgress, OpenLink, SenderStep, SentView, SharesList } from './LinkParts.js';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 interface Plan {
   kind: 'full';
@@ -82,7 +83,7 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
     if (!name.trim() || busy) return;
     setBusy(true);
     try {
-      const file = await postDownload('/api/handover/share', { to: to(), message, ...options() }, 'buchhaltung.vanilla');
+      const file = await postDownload('/api/handover/share', { to: to(), message, ...options() }, 'buchhaltung.vanillashare');
       keepPerson(to());
       await reloadHandover();
       toast(t('share.saved', { file, name: to().name }));
@@ -164,7 +165,7 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
                   {settings && settings.service.source !== 'env' ? (
                     <div className="shsvc">
                       <label>{t('share.service')}<input value={service} onChange={(e) => setService(e.target.value)} placeholder={t('share.serviceHint')} data-testid="share-service" /></label>
-                      <button type="button" className="btn ghost" onClick={() => void saveService()}>{t('share.serviceSave')}</button>
+                      <AsyncButton type="button" className="btn ghost" onClick={() => saveService()}>{t('share.serviceSave')}</AsyncButton>
                     </div>
                   ) : null}
                   <OpenLink onOpened={(o) => { onOpened(o); onClose(); }} />
@@ -200,12 +201,12 @@ export function ShareDialog({ company, toast, onClose, onOpened }: { company?: s
           ) : (
             <>
               <button type="button" className="btn ghost" disabled={busy} onClick={() => pick.current?.click()}>{t('share.open')}</button>
-              <input ref={pick} type="file" accept=".vanilla" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void open(f); }} />
+              <input ref={pick} type="file" accept=".vanillashare,.vanilla" hidden onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void open(f); }} />
               <span className="m" />
               <button type="button" className="btn ghost" onClick={onClose}>{t('common.cancel')}</button>
               {way === 'link' && linkable
-                ? <button type="button" className="btn primary" disabled={!name.trim() || !EMAIL.test(email.trim()) || !plan || busy || !sender} onClick={() => void send()} data-testid="share-send">{busy ? t('share.sending') : t('share.send')}</button>
-                : <button type="button" className="btn primary" disabled={!name.trim() || !plan || busy} onClick={() => void save()} data-testid="share-save">{busy ? t('share.busy') : t('share.saveFile')}</button>}
+                ? <AsyncButton type="button" className="btn primary" disabled={!name.trim() || !EMAIL.test(email.trim()) || !plan || busy || !sender} onClick={() => send()} data-testid="share-send">{busy ? t('share.sending') : t('share.send')}</AsyncButton>
+                : <AsyncButton type="button" className="btn primary" disabled={!name.trim() || !plan || busy} onClick={() => save()} data-testid="share-save">{busy ? t('share.busy') : t('share.saveFile')}</AsyncButton>}
             </>
           )}
         </div>

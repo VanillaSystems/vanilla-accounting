@@ -1,5 +1,5 @@
 /**
- * A `.vanilla` file on a Mac that never opened books (#545): the packed app declares the type, a
+ * A Freigabe-Datei (`.vanillashare`, or 0.6's `.vanilla`) on a Mac that never opened books (#545): the packed app declares the type, a
  * file macOS hands over before the server listens is held and opened then, and the desktop server
  * opens a hand-over with no books open (a return says where it belongs). Its own process: the
  * server's workspace is chosen once, when the first books open.
@@ -26,15 +26,17 @@ const dist = join(home, 'dist');
 mkdirSync(dist);
 writeFileSync(join(dist, 'index.html'), '<!doctype html><title>app</title>');
 
-test('the packed app declares .vanilla files as its own type (Finder opens them with it)', () => {
+test('the packed app declares .vanillashare files (and 0.6\'s .vanilla) as its own flat types (Finder opens them with it)', () => {
   const config = createRequire(import.meta.url)('../desktop/electron-builder.config.cjs') as {
     fileAssociations?: Array<{ ext: string; isPackage?: boolean; role?: string }>;
     mac: { extendInfo: { UTExportedTypeDeclarations?: Array<{ UTTypeTagSpecification: Record<string, string[]> }> } };
   };
-  const vanilla = config.fileAssociations?.find((f) => f.ext === 'vanilla');
-  assert.ok(vanilla, 'fileAssociations names vanilla');
-  assert.equal(vanilla.isPackage, false, 'a file, not a bundle');
-  assert.ok(config.mac.extendInfo.UTExportedTypeDeclarations?.some((u) => u.UTTypeTagSpecification['public.filename-extension']?.includes('vanilla')), 'the type is exported');
+  for (const ext of ['vanillashare', 'vanilla']) {
+    const found = config.fileAssociations?.find((f) => f.ext === ext);
+    assert.ok(found, `fileAssociations names ${ext}`);
+    assert.equal(found.isPackage, false, 'a file, not a bundle');
+    assert.ok(config.mac.extendInfo.UTExportedTypeDeclarations?.some((u) => u.UTTypeTagSpecification['public.filename-extension']?.includes(ext)), `the type of ${ext} is exported`);
+  }
 });
 
 test('files handed over before the app is ready are held and opened in their order, later ones at once', () => {

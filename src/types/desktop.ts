@@ -23,6 +23,8 @@ export interface DesktopBridge {
   setLanguage(code: string): void;
   /** Saves a file of the local server (`url`) through the system's Save dialog; false when the person cancelled. */
   saveFile(url: string, name: string): Promise<boolean>;
+  /** «Sichern unter…» of a copy's Freigabe-Datei: the path the person chose in the system's Save dialog (`name` prefilled), null when cancelled. */
+  chooseSavePath(name: string): Promise<string | null>;
   /**
    * Listens on the microphone and recognizes the words on this Mac (src/desktop/dictation.swift);
    * returns the stop. Absent where the app has no recognizer (not a Mac, or a build without it).

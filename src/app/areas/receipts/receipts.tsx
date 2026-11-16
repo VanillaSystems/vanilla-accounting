@@ -45,6 +45,7 @@ import { Pick } from '../../selection/Pick.js';
 import { SelectionView } from '../../selection/SelectionView.js';
 import { receiptRows } from '../../selection/rows.js';
 import { clickRow, useSelection, useShown } from '../../selection/store.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'receipts'>>;
 
@@ -273,9 +274,9 @@ function RunInbox({ go }: { go(route: Route): void }) {
   const [clicked, setClicked] = useState(false);
   return (
     <>
-      <button type="button" className="runinbox" data-testid="run-inbox" disabled={running} data-tip={t('intake.runTip')} onClick={() => { setClicked(true); void startIntake(); }}>
+      <AsyncButton type="button" className="runinbox" data-testid="run-inbox" disabled={running} data-tip={t('intake.runTip')} onClick={() => { setClicked(true); return startIntake(); }}>
         {I.spark}{running ? t('intake.running') : t('intake.run')}
-      </button>
+      </AsyncButton>
       {clicked && !running && bookingWaitsOf(view) ? <BookingWaits go={go} /> : null}
     </>
   );

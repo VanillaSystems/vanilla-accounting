@@ -1,10 +1,15 @@
 /**
  * The hand-over package (docs/specs/e2e-and-fiduciary.md B3.4, B3.7): an index and the files, each
  * a member of its own, so that the coming encryption wraps each file on its own and a viewer can
- * load a receipt when it is opened. On disk it is a `.vanilla` file: one zip holding `index.json`,
- * `files/<path>` for every file carried and, for a return, `changes.json`. The index names the firm,
- * the people, the version, the base, the kind and the SHA-256 of every file; reading a package
- * checks each file against it.
+ * load a receipt when it is opened. On disk it is a Freigabe-Datei (`.vanillashare`; 0.6.x wrote
+ * `.vanilla`, still read): one zip holding `index.json`, `files/<path>` for every file carried and,
+ * for a return, `changes.json`. The index names the firm, the people, the version, the base, the kind
+ * and the SHA-256 of every file; reading a package checks each file against it.
+ *
+ * A hand-over the recipient works on is his document (the owner's decision of 2026-11-15, «the share
+ * file is the document»): his changes are saved into the same file as one more member,
+ * `return.vanillashare`, the return package he would send (src/handover/document.ts). The members of the
+ * hand-over itself stay as they came, so the file still proves its version.
  */
 import { strFromU8, strToU8, unzipSync, zipSync, type Zippable } from 'fflate';
 import type { Party } from './versions.js';
@@ -12,7 +17,22 @@ import { carriageOf, checksumOf, sha256, type FileFact } from './content.js';
 import type { RecordChange } from './records.js';
 
 export const PACKAGE_FORMAT = 1;
-export const PACKAGE_EXT = '.vanilla';
+/** The Freigabe-Datei's extension. The app writes only this one. */
+export const PACKAGE_EXT = '.vanillashare';
+/** The extension 0.6.x wrote: such files still open (they are known by their content, a zip with index.json). */
+export const LEGACY_EXT = '.vanilla';
+/** Whether a file name is a Freigabe-Datei, new or of 0.6.x. */
+export const isShareFileName = (name: string): boolean => /\.(vanillashare|vanilla)$/i.test(name.trim());
+/** The member of a hand-over that holds the recipient's saved changes: a whole return package. */
+export const SAVED_MEMBER = 'return.vanillashare';
+
+/**
+ * The share a package came through (src/share/sharing.ts): written into a hand-over uploaded to the
+ * share service, so the downloaded file, double-clicked, opens linked to its share: «Zurückschicken»
+ * and the next «Aktualisieren» keep working. Whoever has the file has its return token, as whoever
+ * has the link does.
+ */
+export interface ShareTag { service: string; id: string; returnToken?: string; generation: number }
 
 export type PackageKind = 'full' | 'update' | 'return';
 export type Role = 'fiduciary';
@@ -54,6 +74,8 @@ export interface PackageIndex {
   signature?: string;
   /** A return: how many records it changes. */
   changes?: number;
+  /** A hand-over uploaded to the share service: the share it belongs to. */
+  share?: ShareTag;
 }
 
 /** One record of a return's change set (B5.1): its kind and key, before and after, his «Warum?». */
@@ -65,9 +87,11 @@ export interface PackageContents {
   files: Map<string, Uint8Array>;
   /** A return's change set. */
   changes?: ReturnChange[];
+  /** A hand-over the recipient saved his changes into: the bytes of that return package (SAVED_MEMBER). */
+  saved?: Uint8Array;
 }
 
-export type PackageRefusal = 'shareTampered' | 'shareOtherCompany' | 'shareBaseMissing' | 'shareNotPackage' | 'shareWrongKind' | 'shareTooLarge' | 'shareUnknownBase' | 'shareUpdateFailed' | 'shareCopyNewer' | 'shareCopyOther';
+export type PackageRefusal = 'shareOwnBooks' | 'shareDocMissing' | 'shareDocReadOnly' | 'shareDocOther' | 'shareTampered' | 'shareOtherCompany' | 'shareBaseMissing' | 'shareNotPackage' | 'shareWrongKind' | 'shareTooLarge' | 'shareUnknownBase' | 'shareUpdateFailed' | 'shareCopyNewer' | 'shareCopyOther';
 
 export class PackageError extends Error {
   constructor(message: string, readonly code: PackageRefusal, readonly params: Record<string, string> = {}) { super(message); }
@@ -94,19 +118,39 @@ export const isReturnFile = (p: string): boolean => safePath(p) && RETURN_FILE.t
 export const LIMITS = { files: 20000, fileBytes: 300 * 1024 * 1024, totalBytes: 1024 * 1024 * 1024, jsonBytes: 64 * 1024 * 1024 };
 const mb = (n: number) => `${Math.round(n / 1024 / 1024)} MB`;
 
-/** The `.vanilla` file's bytes. Receipts are already compressed: every member is stored, the JSON deflated. */
-export function writePackage(p: PackageContents): Uint8Array {
-  const zip: Zippable = { 'index.json': [strToU8(JSON.stringify(p.index, null, 1)), { level: 6 }] };
+/**
+ * The Freigabe-Datei's bytes. Receipts are already compressed: every member is stored, the JSON
+ * deflated. `indexRoom`: index.json stored (not deflated) and padded with spaces to exactly that many
+ * bytes, so the file's size is known before what the index names last (the share's id and return
+ * token, which the service gives only once it was told the size) is filled in.
+ */
+export function writePackage(p: PackageContents, opts: { indexRoom?: number } = {}): Uint8Array {
+  const text = strToU8(JSON.stringify(p.index, null, 1));
+  let index: Zippable[string] = [text, { level: 6 }];
+  if (opts.indexRoom !== undefined) {
+    if (text.length > opts.indexRoom) throw new Error(`index.json is ${text.length} bytes, more than the ${opts.indexRoom} kept for it`);
+    const padded = new Uint8Array(opts.indexRoom).fill(0x20);
+    padded.set(text);
+    index = [padded, { level: 0 }];
+  }
+  const zip: Zippable = { 'index.json': index };
   if (p.changes) zip['changes.json'] = [strToU8(JSON.stringify(p.changes)), { level: 6 }];
   for (const [path, data] of p.files) zip[`files/${path}`] = [data, { level: path.endsWith('.jsonl') || path.endsWith('.json') ? 6 : 0 }];
+  if (p.saved) zip[SAVED_MEMBER] = [p.saved, { level: 0 }];
   return zipSync(zip);
 }
 
-const notPackage = (why: string) => new PackageError(`Keine Übergabe-Datei (.vanilla): ${why}.`, 'shareNotPackage', {});
+const notPackage = (why: string) => new PackageError(`Keine Freigabe-Datei (.vanillashare): ${why}.`, 'shareNotPackage', {});
 const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
 const isFact = (x: unknown): x is FileFact => isObj(x) && typeof x.path === 'string' && typeof x.sha256 === 'string' && /^[0-9a-f]{64}$/.test(x.sha256) && typeof x.bytes === 'number';
 const isParty = (x: unknown) => isObj(x) && typeof x.name === 'string' && !!x.name.trim() && (x.email === undefined || typeof x.email === 'string');
 const isVersion = (x: unknown) => isObj(x) && Number.isInteger(x.n) && (x.n as number) > 0 && typeof x.at === 'string' && typeof x.checksum === 'string';
+
+const isShareTag = (x: unknown): x is ShareTag => isObj(x)
+  && typeof x.service === 'string' && x.service.length <= 200 && /^https?:\/\/[^/\s]+$/.test(x.service)
+  && typeof x.id === 'string' && /^[a-z2-7]{26}$/.test(x.id)
+  && (x.returnToken === undefined || (typeof x.returnToken === 'string' && /^[A-Za-z0-9_-]{16,200}$/.test(x.returnToken)))
+  && Number.isInteger(x.generation) && (x.generation as number) > 0;
 
 /** The index as it must be, or shareNotPackage. */
 function checkedIndex(raw: unknown): PackageIndex {
@@ -121,6 +165,7 @@ function checkedIndex(raw: unknown): PackageIndex {
   if (!Array.isArray(raw.files)) throw notPackage('die Liste der Dateien fehlt');
   if (raw.kind !== 'update' && (raw.held as unknown[] | undefined)?.length) throw new PackageError('Eine vollständige Übergabe oder Rücksendung nennt keine Dateien, die schon da sein sollen.', 'shareTampered', { path: 'held' });
   if (raw.kind === 'update' && !raw.base) throw notPackage('der Übergabe fehlt ihre Basis');
+  if (raw.share !== undefined && !isShareTag(raw.share)) throw notPackage('die Angaben zur Freigabe sind unlesbar');
   return raw as unknown as PackageIndex;
 }
 
@@ -153,11 +198,18 @@ export function readPackage(bytes: Uint8Array): PackageContents {
   try { parsed = JSON.parse(strFromU8(raw)); } catch { throw notPackage('das Verzeichnis ist kein JSON'); }
   const files = new Map<string, Uint8Array>();
   for (const [name, data] of Object.entries(members)) {
-    if (name === 'index.json' || name === 'changes.json' || name.endsWith('/')) continue;
+    if (name === 'index.json' || name === 'changes.json' || name === SAVED_MEMBER || name.endsWith('/')) continue;
     if (!name.startsWith('files/')) throw new PackageError(`Die Übergabe enthält ${name}, das ihr Verzeichnis nicht nennt.`, 'shareTampered', { path: name.slice(0, 200) });
     files.set(name.slice('files/'.length), data);
   }
-  return checkPackage(parsed, files, members['changes.json']);
+  const saved = members[SAVED_MEMBER];
+  const p = checkPackage(parsed, files, members['changes.json']);
+  if (saved) {
+    // Only a hand-over holds his saved changes; they are read (and checked as a return) where they are used.
+    if (p.index.kind === 'return') throw new PackageError(`Die Rücksendung enthält ${SAVED_MEMBER}, das ihr Verzeichnis nicht nennt.`, 'shareTampered', { path: SAVED_MEMBER });
+    p.saved = saved;
+  }
+  return p;
 }
 
 /**
@@ -197,7 +249,7 @@ export function checkPackage(parsed: unknown, members: ReadonlyMap<string, Uint8
   return { index, files, changes };
 }
 
-/** The file name a person sees: `<Firma> – Buchhaltung (2026-11-14).vanilla`, or for a return `… – Änderungen von <Name> (…)`. */
+/** The file name a person sees: `<Firma> – Buchhaltung (2026-11-14).vanillashare`, or for a return `… – Änderungen von <Name> (…)`. */
 export function packageName(index: Pick<PackageIndex, 'kind' | 'firm' | 'version' | 'from' | 'at'>): string {
   const clean = (s: string) => s.replace(/[/\\:*?"<>|]/g, '-').trim();
   const day = index.at.slice(0, 10);

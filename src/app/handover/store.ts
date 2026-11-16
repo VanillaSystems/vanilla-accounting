@@ -9,6 +9,7 @@ import type { Marker } from '../../handover/durchsicht.js';
 import type { ReturnSummary } from '../../handover/returns.js';
 import type { ShareRecord } from '../../share/sharing.js';
 import type { ApiErrorBody } from '../../types/api-error.js';
+import type { DocumentState } from '../../handover/document.js';
 
 export interface DurchsichtFacts extends Pick<Marker, 'firm' | 'sharer' | 'me' | 'version' | 'receivedAt' | 'message' | 'sent'> {
   questions: NonNullable<Marker['questions']>;
@@ -25,6 +26,8 @@ export interface DurchsichtFacts extends Pick<Marker, 'firm' | 'sharer' | 'me' |
   byLink?: boolean;
   /** The sharer withdrew the share, as the copy last saw it. */
   withdrawnAt?: string;
+  /** The copy's Freigabe-Datei, into which his changes are saved. */
+  document?: DocumentState;
 }
 
 export interface HandoverView {
@@ -59,12 +62,12 @@ export const handoverNow = (): HandoverView | undefined => view;
 /** The version's checksum as a person reads it: «a3f9 c21e 07bd». */
 export const shortSum = (checksum: string): string => (checksum.replace(/^sha256:/, '').slice(0, 12).match(/.{4}/g) ?? []).join(' ');
 
-/** What «Öffnen…» of a `.vanilla` file did. */
+/** What «Öffnen…» of a Freigabe-Datei did. */
 export type Opened =
   | { kind: 'return'; id: string; from: { name: string }; changes: number; basedOn: number }
-  | { kind: 'full' | 'update'; firm: string; version: number; conflicts: number; dropped: number };
+  | { kind: 'full' | 'update'; firm: string; version: number; conflicts: number; dropped: number; carried?: number };
 
-/** Sends a `.vanilla` file to the server: a return is kept for review, a hand-over opens as a Durchsicht copy. */
+/** Sends a Freigabe-Datei to the server: a return (or her own hand-over with his saved changes) is kept for review, a hand-over opens as a Durchsicht copy. */
 export async function openVanilla(file: Blob): Promise<Opened> {
   const res = await apiFetch('/api/handover/open', { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file });
   if (!res.ok) {
@@ -76,8 +79,8 @@ export async function openVanilla(file: Blob): Promise<Opened> {
   return out;
 }
 
-/** Whether a dropped or chosen file is a hand-over file. */
-export const isVanillaFile = (name: string): boolean => name.toLowerCase().endsWith('.vanilla');
+/** Whether a dropped or chosen file is a Freigabe-Datei: `.vanillashare`, or the `.vanilla` of 0.6.x. */
+export const isVanillaFile = (name: string): boolean => /\.(vanillashare|vanilla)$/i.test(name);
 
 /** «8.4 MB», «48 KB»: the size the dialogs tell. */
 export function sizeText(bytes: number): string {

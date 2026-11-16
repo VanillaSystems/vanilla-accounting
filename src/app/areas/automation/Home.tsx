@@ -30,6 +30,7 @@ import { paymentWords, readsInWords } from './words.js';
 import { OpenFact, usePeriodIssues } from './Issues.js';
 import { periodsAround } from './periods.js';
 import { countIssues, unbookedOpen, type IssueCounts } from './period-issues.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 const tx = (v: Text) => textIn(v, language());
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -76,7 +77,7 @@ export function HomePage({ view, books, nav, query, canEdit }: { view: Automatio
   const booked = bookedStates(books, ws?.bankAccounts ?? []);
   const label = (id: string) => { const w = view.workflows.find((x) => x.id === id); return w ? tx(w.label) : id; };
   const at = (to: Location['route'], extra: Partial<Query> = {}): Location => ({ route: to, query: { period, ...extra } });
-  const send = (task: Task, outcome: string) => () => { void automationCommand({ kind: 'answer', run: task.run, outcome }).then((r) => { if (!r.ok) nav.toast(commandRefusalText(r)); }); };
+  const send = (task: Task, outcome: string) => () => automationCommand({ kind: 'answer', run: task.run, outcome }).then((r) => { if (!r.ok) nav.toast(commandRefusalText(r)); });
   const fresh = f.collected === 0 && !view.runs.some((r) => r.mode === 'live');
 
   return (
@@ -106,7 +107,7 @@ export function HomePage({ view, books, nav, query, canEdit }: { view: Automatio
               <div key={task.run} className="task hot" data-testid="home-task">
                 <b>{fillTask(tx(task.title), task.item, readsInWords(task.reads))}{paymentWords(task) ? <span className="wfpay" data-testid="task-payment"> · {paymentWords(task)}</span> : null}</b>
                 <span className="acts">
-                  {quick.map((o) => <button key={o} type="button" className={o === 'accept' ? 'btn primary' : 'btn'} onClick={send(task, o)}>{t(`automation.outcome.${o}` as 'automation.outcome.accept')}</button>)}
+                  {quick.map((o) => <AsyncButton key={o} type="button" className={o === 'accept' ? 'btn primary' : 'btn'} onClick={send(task, o)}>{t(`automation.outcome.${o}` as 'automation.outcome.accept')}</AsyncButton>)}
                   <Go to={{ route: { area: 'automation', view: 'tasks', run: task.run }, query: {} }} nav={nav} className="btn ghost">{t('automation.home.open')}</Go>
                 </span>
                 <span className="d">{label(task.workflow)} · {t('automation.since', { date: formatDate(task.since.slice(0, 10)) })}</span>

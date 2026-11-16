@@ -15,6 +15,7 @@ import { reloadHandover } from './store.js';
 import type { LinkPreview } from '../../share/sharing.js';
 import { askLines, askOther, oneLine } from './ask-text.js';
 import { SHARE_LIMITS } from '../../share/limits.js';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 /** «15.11. 19:04»: a moment as a person reads it, in this computer's time. */
 export function atText(iso: string): string {
@@ -26,7 +27,7 @@ export function atText(iso: string): string {
 /** The progress of a job: what it does and how far, in bytes. */
 export function JobProgress({ job }: { job: Job<unknown> | null }) {
   if (!job) return null;
-  const phase = job.phase === 'download' || job.phase === 'decrypt' ? 'download' : job.phase === 'upload' || job.phase === 'encrypt' ? 'upload' : 'pack';
+  const phase = job.phase === 'download' ? 'download' : job.phase === 'upload' ? 'upload' : 'pack';
   return (
     <div className="shprog" role="status" data-testid="share-progress">
       <span>{t(`share.progress.${phase}`)}{job.total ? ` · ${sizeText(job.done)} / ${sizeText(job.total)}` : ''}</span>
@@ -87,14 +88,14 @@ export function SenderStep({ kept, mailFrom, onConfirmed, onFile }: { kept?: str
         <>
           <div className="wm">{t('share.sender.why')}</div>
           <label>{t('share.sender.email')}<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('share.emailHint')} data-testid="share-sender-email" /></label>
-          <div className="acts"><button type="button" className="btn" disabled={busy || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())} onClick={() => void register()} data-testid="share-sender-confirm">{t('share.sender.confirm')}</button></div>
+          <div className="acts"><AsyncButton type="button" className="btn" disabled={busy || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())} onClick={() => register()} data-testid="share-sender-confirm">{t('share.sender.confirm')}</AsyncButton></div>
         </>
       ) : refused ? (
         <>
           <div className="err" role="alert">{t(`share.sender.refused.${refused}` as 'share.sender.refused.otherAddress', { email: address })}</div>
           <div className="acts">
             {refused === 'notAuthenticated' ? <button type="button" className="btn" onClick={onFile}>{t('share.way.file')}</button> : null}
-            <button type="button" className="btn ghost" onClick={() => void (refused === 'codeExpired' ? register() : other())}>{t(refused === 'codeExpired' ? 'share.sender.again' : 'share.sender.other')}</button>
+            <AsyncButton type="button" className="btn ghost" onClick={() => (refused === 'codeExpired' ? register() : other())}>{t(refused === 'codeExpired' ? 'share.sender.again' : 'share.sender.other')}</AsyncButton>
           </div>
         </>
       ) : reg && !reg.confirmed && !reg.mailed ? (
@@ -104,14 +105,14 @@ export function SenderStep({ kept, mailFrom, onConfirmed, onFile }: { kept?: str
           {reg.mailError ? <div className="err">{t('share.sender.mailFailed', { why: reg.mailError })}</div> : null}
           <div className="acts">
             <a className="btn" href={mailto(reg.confirmation!.to, reg.confirmation!.subject, reg.confirmation!.text)} data-testid="share-sender-mailto">{t('share.mailProgram')}</a>
-            <button type="button" className="linkbtn" onClick={() => void other()}>{t('share.sender.other')}</button>
+            <AsyncButton type="button" className="linkbtn" onClick={() => other()}>{t('share.sender.other')}</AsyncButton>
           </div>
           <div className="wm">{t('share.sender.waiting')}</div>
         </>
       ) : (
         <>
           <div className="wm">{reg?.mailed ? t('share.sender.mailed', { email: address }) : t('share.sender.waitingFor', { email: address })}</div>
-          <div className="acts"><button type="button" className="linkbtn" onClick={() => void other()}>{t('share.sender.other')}</button></div>
+          <div className="acts"><AsyncButton type="button" className="linkbtn" onClick={() => other()}>{t('share.sender.other')}</AsyncButton></div>
         </>
       )}
       {error ? <div className="err" role="alert">{error}</div> : null}
@@ -193,7 +194,7 @@ function ShareActions({ s, onChanged, copyFirst = false }: { s: ShareRecord; onC
           <label className="chk"><input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} data-testid="share-update-notify" /> {t('share.update.notify', { name: s.to.name })}</label>
           <div className="acts">
             <button type="button" className="btn ghost" disabled={!!job} onClick={() => setUpdating(false)}>{t('common.cancel')}</button>
-            <button type="button" className="btn primary" disabled={!!job} onClick={() => void update()} data-testid="share-update-go">{job ? t('share.update.busy') : t('share.update.go')}</button>
+            <AsyncButton type="button" className="btn primary" disabled={!!job} onClick={() => update()} data-testid="share-update-go">{job ? t('share.update.busy') : t('share.update.go')}</AsyncButton>
           </div>
           <JobProgress job={job} />
         </div>
@@ -201,14 +202,14 @@ function ShareActions({ s, onChanged, copyFirst = false }: { s: ShareRecord; onC
         <div className="acts">
           <span className="wm">{t('share.card.revokeNote', { name: s.to.name })}</span>
           <button type="button" className="btn ghost" onClick={() => setConfirm(false)}>{t('common.cancel')}</button>
-          <button type="button" className="btn" onClick={() => void revoke()} data-testid="share-revoke-yes">{t('share.card.revoke')}</button>
+          <AsyncButton type="button" className="btn" onClick={() => revoke()} data-testid="share-revoke-yes">{t('share.card.revoke')}</AsyncButton>
         </div>
       ) : (
         <div className="acts">
-          {copyFirst ? <button type="button" className="btn primary" onClick={() => void copy()} data-testid="share-copy">{copied ? t('share.copied') : t('share.copyLink')}</button> : null}
+          {copyFirst ? <AsyncButton type="button" className="btn primary" onClick={() => copy()} data-testid="share-copy">{copied ? t('share.copied') : t('share.copyLink')}</AsyncButton> : null}
           <button type="button" className="linkbtn" onClick={() => setUpdating(true)} data-testid="share-update-open">{t('share.update.open')}</button>
-          {s.to.email ? <button type="button" className="linkbtn" onClick={() => void again()} data-testid="share-again">{t('share.again')}</button> : null}
-          {copyFirst ? null : <button type="button" className="linkbtn" onClick={() => void copy()} data-testid="share-copy">{copied ? t('share.copied') : t('share.copyLink')}</button>}
+          {s.to.email ? <AsyncButton type="button" className="linkbtn" onClick={() => again()} data-testid="share-again">{t('share.again')}</AsyncButton> : null}
+          {copyFirst ? null : <AsyncButton type="button" className="linkbtn" onClick={() => copy()} data-testid="share-copy">{copied ? t('share.copied') : t('share.copyLink')}</AsyncButton>}
           <button type="button" className="linkbtn" onClick={() => setConfirm(true)} data-testid="share-revoke">{t('share.card.revoke')}</button>
         </div>
       )}
@@ -243,7 +244,7 @@ function ShareRow({ s, onChanged }: { s: ShareRecord; onChanged(next: ShareRecor
       {waiting.map((r) => (
         <div key={r.id} className="acts" data-testid="share-return-waiting">
           <span className="wm">{t('share.card.returnWaiting', { size: sizeText(r.bytes), at: atText(r.at), limit: sizeText(SHARE_LIMITS.returnFetchedAlone) })}</span>
-          <button type="button" className="linkbtn" disabled={!!fetching} onClick={() => void fetchOne(r.id)} data-testid="share-return-fetch">{fetching === r.id ? t('share.card.returnFetching') : t('share.card.returnFetch')}</button>
+          <AsyncButton type="button" className="linkbtn" disabled={!!fetching} onClick={() => fetchOne(r.id)} data-testid="share-return-fetch">{fetching === r.id ? t('share.card.returnFetching') : t('share.card.returnFetch')}</AsyncButton>
         </div>
       ))}
       {fetchError ? <div className="err" role="alert">{fetchError}</div> : null}
@@ -264,7 +265,7 @@ export function SharesList({ shares, onShares }: { shares: ShareRecord[]; onShar
   };
   return (
     <div className="shlist" data-testid="share-list">
-      <div className="gh"><span>{t('share.card.title')}</span><button type="button" className="linkbtn" disabled={busy} onClick={() => void ask()}>{t('share.card.ask')}</button></div>
+      <div className="gh"><span>{t('share.card.title')}</span><AsyncButton type="button" className="linkbtn" disabled={busy} onClick={() => ask()}>{t('share.card.ask')}</AsyncButton></div>
       {shares.slice(0, LIMIT).map((s) => <ShareRow key={s.id} s={s} onChanged={(next) => onShares(shares.map((x) => (x.id === next.id ? next : x)))} />)}
       {shares.length > LIMIT ? <div className="wm">{t('share.card.more', { n: shares.length - LIMIT, limit: LIMIT })}</div> : null}
       {error ? <div className="err" role="alert">{error}</div> : null}
@@ -305,7 +306,7 @@ export function OpenLink({ onOpened }: { onOpened(o: { kind: 'full' | 'update'; 
   return (
     <div className="shopen">
       <label>{t('share.openLink')}<input value={text} onChange={(e) => { setText(e.target.value); setPreview(null); }} placeholder={t('share.openLinkHint')} data-testid="share-open-link" /></label>
-      <button type="button" className="btn" disabled={!text.trim() || !!job} onClick={() => void look()} data-testid="share-open-go">{t('share.openGo')}</button>
+      <AsyncButton type="button" className="btn" disabled={!text.trim() || !!job} onClick={() => look()} data-testid="share-open-go">{t('share.openGo')}</AsyncButton>
       {preview && ask ? (
         <div className="what shask" data-testid="share-open-ask">
           <div className="wt"><b>{t('share.ask.title')}</b></div>
@@ -313,7 +314,7 @@ export function OpenLink({ onOpened }: { onOpened(o: { kind: 'full' | 'update'; 
           {ask.warnings.map((w) => <div key={w} className="err">{w}</div>)}
           <div className="acts">
             <button type="button" className="btn ghost" onClick={() => setPreview(null)}>{t('common.cancel')}</button>
-            <button type="button" className="btn" disabled={!!job} onClick={() => void open()} data-testid="share-open-yes">{t('share.ask.open')}</button>
+            <AsyncButton type="button" className="btn" disabled={!!job} onClick={() => open()} data-testid="share-open-yes">{t('share.ask.open')}</AsyncButton>
           </div>
         </div>
       ) : null}
@@ -324,8 +325,8 @@ export function OpenLink({ onOpened }: { onOpened(o: { kind: 'full' | 'update'; 
           <div className="wm">{t('share.ask.otherChoice', { was: oneLine(other.was), now: oneLine(other.now) })}</div>
           <div className="acts">
             <button type="button" className="btn ghost" disabled={!!job} onClick={() => setOther(null)}>{t('common.cancel')}</button>
-            <button type="button" className="btn" disabled={!!job} onClick={() => void open('replace')} data-testid="share-open-replace">{t('share.ask.replace')}</button>
-            <button type="button" className="btn primary" disabled={!!job} onClick={() => void open('new')} data-testid="share-open-new">{t('share.ask.asNew')}</button>
+            <AsyncButton type="button" className="btn" disabled={!!job} onClick={() => open('replace')} data-testid="share-open-replace">{t('share.ask.replace')}</AsyncButton>
+            <AsyncButton type="button" className="btn primary" disabled={!!job} onClick={() => open('new')} data-testid="share-open-new">{t('share.ask.asNew')}</AsyncButton>
           </div>
         </div>
       ) : null}

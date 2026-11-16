@@ -33,6 +33,7 @@ demo-schreinerei/**
 tools/demo/**
 tools/cases/**
 tools/eval/**
+tools/merge/**
 tools/vat-codes/**
 tools/help/**
 help/**

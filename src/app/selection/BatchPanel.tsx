@@ -20,6 +20,7 @@ import { journalFor } from '../areas/journal/commands.js';
 import type { SelectKind } from './model.js';
 import type { SelRow } from './SelectionView.js';
 import { changeLines, doneIds, leftLines, preview, runBatch, runEach, type Line } from './batch.js';
+import { AsyncButton } from '../shell/AsyncButton.js';
 
 /** What a batch can be: one the server runs, or one made of single requests. */
 export type BatchId = 'notReceipt' | 'findPayment' | 'private' | 'readAgain' | 'delete' | 'noReceiptNeeded' | 'book' | 'rule' | 'account' | 'vatCode' | 'tag';
@@ -154,7 +155,7 @@ function ServerBatch({ which, kind, books, ids, nav, name, onClose }: { which: E
       {action && !answer && !error && <p className="m">{t('batch.previewing')}</p>}
       {answer && <PreviewLines change={changeLines(answer.changes, name)} left={leftLines(answer.left, name)} kind={kind} />}
       <div className="acts">
-        <button type="button" className="btn primary" data-act="batch-run" disabled={!answer || !doneIds(answer).length || busy} onClick={() => void run()}>{t('batch.run', { n: answer ? doneIds(answer).length : 0 })}</button>
+        <AsyncButton type="button" className="btn primary" data-act="batch-run" disabled={!answer || !doneIds(answer).length || busy} onClick={() => run()}>{t('batch.run', { n: answer ? doneIds(answer).length : 0 })}</AsyncButton>
         <button type="button" className="btn ghost" onClick={onClose}>{t('common.cancel')}</button>
       </div>
     </div>
@@ -213,9 +214,9 @@ function EachBatch({ which, books, rows, nav, name, onClose }: { which: 'findPay
       <PreviewLines change={change} left={leftOut} kind="receipt" />
       {which === 'readAgain' && <p className="m">{t('batch.readAgainNote')}</p>}
       <div className="acts">
-        <button type="button" className={`btn primary${which === 'delete' ? ' danger' : ''}`} data-act="batch-run" disabled={!ids.length || busy} onClick={() => void run()}>
+        <AsyncButton type="button" className={`btn primary${which === 'delete' ? ' danger' : ''}`} data-act="batch-run" disabled={!ids.length || busy} onClick={() => run()}>
           {t(which === 'delete' ? 'batch.runDelete' : 'batch.run', { n: ids.length })}
-        </button>
+        </AsyncButton>
         <button type="button" className="btn ghost" onClick={onClose}>{t('common.cancel')}</button>
       </div>
     </div>

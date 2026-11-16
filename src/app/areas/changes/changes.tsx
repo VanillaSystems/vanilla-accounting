@@ -25,6 +25,7 @@ import { ReturnReview } from '../../handover/Review.js';
 import { shortSum, useHandover, type HandoverView } from '../../handover/store.js';
 import { periodName } from '../../lib/period-label.js';
 import type { Version } from '../../../handover/versions.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'changes'>>;
 type R = RouteOf<'changes'>;
@@ -300,7 +301,7 @@ function SyncLine({ view, nav }: { view: ChangesView; nav: Nav }) {
   return (
     <p className="chsync">
       {view.sync.ahead ? <span className="wfpill warn">{t('changes.notSynced', { n: view.sync.ahead })}</span> : <><span className="wfpill st-done">{t('changes.synced')}</span>{last}</>}
-      {view.sync.ahead ? <button type="button" className="btn ghost" disabled={!!busy} onClick={() => void go({ kind: 'sync' })}>{t('changes.sync')}</button> : null}
+      {view.sync.ahead ? <AsyncButton type="button" className="btn ghost" disabled={!!busy} onClick={() => go({ kind: 'sync' })}>{t('changes.sync')}</AsyncButton> : null}
     </p>
   );
 }
@@ -309,11 +310,11 @@ function UndoButton({ oid, kind, nav }: { oid: string; kind: 'draft' | 'reverse'
   const [busy, go] = useCommand(nav);
   return (
     <p className="chundo">
-      <button type="button" className="btn ghost" disabled={!!busy} onClick={() => void go({ kind: 'undo', oid }).then((r) => {
+      <AsyncButton type="button" className="btn ghost" disabled={!!busy} onClick={() => go({ kind: 'undo', oid }).then((r) => {
         if (!r?.ok) return;
         nav.toast(kind === 'draft' ? t('changes.undoneToast') : t('changes.reversedToast', { n: r.reversed ?? 0 }));
         if (kind === 'draft') nav.select({ area: 'changes' });
-      })}>{t('changes.undo')}</button>
+      })}>{t('changes.undo')}</AsyncButton>
       <span className="m">{kind === 'draft' ? t('changes.undoDraft') : t('changes.undoReverse')}</span>
     </p>
   );
@@ -364,7 +365,7 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
                           <button type="button" className="golink" onClick={() => nav.go(h.deleted ? at({ area: 'bank', payment: h.ref }, h.date) : at({ area: 'journal', id: h.id }, h.date))}>
                             <span className="chwho">{h.ai ? <BotIcon /> : PERSON}</span>{h.text} · {h.deleted ? t('changes.handDeleted') : t(h.answer ? 'changes.answerBooked' : h.ai ? (h.saved ? 'changes.aiChanged' : 'changes.aiBooked') : h.saved ? 'changes.handChanged' : 'changes.handBooked', { when: sayWhen(h.at) })}
                           </button>
-                          <button type="button" className="quiet2" data-tip={t(h.deleted ? 'changes.handRestoreTip' : h.answer ? 'changes.answerUndoTip' : h.saved ? 'changes.handUndoTip' : 'changes.handRemoveTip')} onClick={() => void restoreSaved(h.id, nav)}>{t('changes.handUndo')}</button>
+                          <AsyncButton type="button" className="quiet2" data-tip={t(h.deleted ? 'changes.handRestoreTip' : h.answer ? 'changes.answerUndoTip' : h.saved ? 'changes.handUndoTip' : 'changes.handRemoveTip')} onClick={() => restoreSaved(h.id, nav)}>{t('changes.handUndo')}</AsyncButton>
                         </div>
                       ))}
                     </div>
@@ -380,7 +381,7 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
                             <span className="chwho">{PERSON}</span>{c.text} · {recordText(c)}
                           </button>
                           {'undo' in c
-                            ? <button type="button" className="quiet2" data-tip={t(`changes.record.undoTip.${c.undo.kind}`)} onClick={() => void undoRecordChange(c, nav)}>{t('changes.handUndo')}</button>
+                            ? <AsyncButton type="button" className="quiet2" data-tip={t(`changes.record.undoTip.${c.undo.kind}`)} onClick={() => undoRecordChange(c, nav)}>{t('changes.handUndo')}</AsyncButton>
                             : <span className="m">{t(`changes.record.blocked.${c.blocked}`)}</span>}
                         </div>
                       ))}
@@ -398,7 +399,7 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
                           </button>
                           {c.kind === 'privateOutlay' && c.blocked
                             ? <span className="m">{t('changes.outlayBlocked')}</span>
-                            : <button type="button" className="quiet2" data-tip={receiptUndoTip(c)} onClick={() => void undoReceiptChange(c, nav)}>{t('changes.handUndo')}</button>}
+                            : <AsyncButton type="button" className="quiet2" data-tip={receiptUndoTip(c)} onClick={() => undoReceiptChange(c, nav)}>{t('changes.handUndo')}</AsyncButton>}
                         </div>
                       ))}
                     </div>
@@ -426,7 +427,7 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
               </>
             ) : null}
             <div className="chsave">
-              {thinking ? <span className="wfpill st-running">{t('changes.preparing')}</span> : <button type="button" className="btn primary" disabled={!view.repository} onClick={() => void go({ kind: 'prepare' })}><BotIcon />{t('changes.prepare')}</button>}
+              {thinking ? <span className="wfpill st-running">{t('changes.preparing')}</span> : <AsyncButton type="button" className="btn primary" disabled={!view.repository} onClick={() => go({ kind: 'prepare' })}><BotIcon />{t('changes.prepare')}</AsyncButton>}
               <span className="m">{t('changes.prepareTip')}</span>
             </div>
           </>
@@ -446,7 +447,7 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
         <div className="chbanner">
           <b>{t('changes.staleBanner', { files: moved.join(', ') })}</b>
           <span>{t('changes.staleLead')}</span>
-          <button type="button" className="btn ghost" disabled={thinking} onClick={() => void go({ kind: 'refresh' })}><BotIcon />{t('changes.refresh')}</button>
+          <AsyncButton type="button" className="btn ghost" disabled={thinking} onClick={() => go({ kind: 'refresh' })}><BotIcon />{t('changes.refresh')}</AsyncButton>
         </div>
       ) : null}
       <p className="m" data-testid="ready-lead">{t(p.plain ? 'changes.readyPlain' : 'changes.readyLead', { n: p.saves.length })}</p>
@@ -474,14 +475,14 @@ function SavePanel({ view, nav }: { view: ChangesView; nav: Nav }) {
       <div className="chcomposer">
         <textarea rows={2} value={text} placeholder={t(aiOff ? 'changes.askOff' : 'changes.ask')} aria-label={t('changes.ask')} disabled={thinking || aiOff}
           onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }} />
-        <button type="button" className="btn" disabled={thinking || aiOff || !text.trim()} onClick={() => void send()}><BotIcon />{t('changes.send')}</button>
+        <AsyncButton type="button" className="btn" disabled={thinking || aiOff || !text.trim()} onClick={() => send()}><BotIcon />{t('changes.send')}</AsyncButton>
       </div>
       <div className="chsave">
         {thinking ? <span className="wfpill st-running">{t('changes.preparing')}</span> : null}
-        <button type="button" className={`btn${canSync ? '' : ' primary'}`} disabled={!!busy || !p.ready || !ready.length} onClick={() => void go({ kind: 'save' })}>{t('changes.save')}</button>
-        {canSync ? <button type="button" className="btn primary" disabled={!!busy || !p.ready || !ready.length} onClick={() => void go({ kind: 'save', sync: true })}>{t('changes.saveSync')}</button> : null}
+        <AsyncButton type="button" className={`btn${canSync ? '' : ' primary'}`} disabled={!!busy || !p.ready || !ready.length} onClick={() => go({ kind: 'save' })}>{t('changes.save')}</AsyncButton>
+        {canSync ? <AsyncButton type="button" className="btn primary" disabled={!!busy || !p.ready || !ready.length} onClick={() => go({ kind: 'save', sync: true })}>{t('changes.saveSync')}</AsyncButton> : null}
         {!p.ready ? <span className="m">{t('changes.firstRefresh')}</span> : p.saves.length > ready.length ? <span className="m">{t('changes.heldNote', { n: p.saves.length - ready.length })}</span> : null}
-        <button type="button" className="linkbtn" disabled={!!busy} onClick={() => void go({ kind: 'discard' })}>{t('changes.discard')}</button>
+        <AsyncButton type="button" className="linkbtn" disabled={!!busy} onClick={() => go({ kind: 'discard' })}>{t('changes.discard')}</AsyncButton>
       </div>
     </div>
   );

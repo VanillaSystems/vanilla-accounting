@@ -25,6 +25,7 @@ import { loadPhone, openInflow, switchPhone, useInflow } from './inflow-state.js
 import { pollInbox, useUi } from './state.js';
 import { useIntakeRunning } from '../../automation/intake.js';
 import { intakeAdd } from './intake.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 const svg = (d: ReactNode) => <svg className="i" viewBox="0 0 24 24" aria-hidden="true">{d}</svg>;
 export const W = {
@@ -102,7 +103,7 @@ export function FirstRun(props: AreaProps) {
           <div>
             <b>{t('area.automation')}</b><span>{t('inflow.autoText')}</span>
             <span className="btns">
-              <button type="button" className="aiact primary" data-testid="inflow-ai" onClick={askSetup}><BotIcon />{t('inflow.withAi')}</button>
+              <button data-busy-exempt="opens the AI sidebar, which shows its own progress" type="button" className="aiact primary" data-testid="inflow-ai" onClick={askSetup}><BotIcon />{t('inflow.withAi')}</button>
               <button type="button" className="linkbtn" onClick={() => openInflow({ kind: 'add' })}>{t('inflow.byHand')}</button>
             </span>
           </div>
@@ -221,7 +222,7 @@ export function Strip(props: AreaProps) {
         </button>
         {way === 'on'
           ? <Go to={{ route: { area: 'company', section: 'phone' }, query: {} }} nav={nav} className="seg phone on">{phoneText}</Go>
-          : <button type="button" className={`seg phone ${way}`} data-testid="inflow-phone" onClick={() => (way === 'off' ? void phoneOn() : openInflow({ kind: 'pair', step: 'install' }))}>{phoneText}</button>}
+          : <AsyncButton type="button" className={`seg phone ${way}`} data-testid="inflow-phone" onClick={() => (way === 'off' ? phoneOn() : openInflow({ kind: 'pair', step: 'install' }))}>{phoneText}</AsyncButton>}
         <div className={`seg auto ${none ? 'none' : run.kind === 'done' ? (run.failed ? 'fail' : 'ok') : run.kind}`}>
           <button type="button" className="segmain" aria-expanded={open} data-testid="inflow-auto" onClick={toggle}>
             {W.automation}
@@ -229,8 +230,8 @@ export function Strip(props: AreaProps) {
             {W.chev}
           </button>
           {none
-            ? <button type="button" className="aiact fetchbtn" data-testid="inflow-setup" onClick={askSetup}><BotIcon />{t('inflow.setUp')}</button>
-            : <button type="button" className="aiact fetchbtn" data-testid="inflow-fetch" disabled={run.kind === 'running'} data-tip={t('inflow.fetchTip')} onClick={() => void fetchNow()}>{t('inflow.fetch')}</button>}
+            ? <button data-busy-exempt="opens the AI sidebar, which shows its own progress" type="button" className="aiact fetchbtn" data-testid="inflow-setup" onClick={askSetup}><BotIcon />{t('inflow.setUp')}</button>
+            : <AsyncButton type="button" className="aiact fetchbtn" data-testid="inflow-fetch" disabled={run.kind === 'running'} data-tip={t('inflow.fetchTip')} onClick={() => fetchNow()}>{t('inflow.fetch')}</AsyncButton>}
         </div>
       </div>
       {reading ? <div className="sline"><span className="spin small" />{t('inflow.reading', { n: reading })}</div>

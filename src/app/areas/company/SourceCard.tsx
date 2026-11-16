@@ -10,6 +10,7 @@ import { api, errorText } from '../../lib/api.js';
 import type { SourcesView } from '../../../platform/sources/model.js';
 import { PasswordField, Preview, plainReach } from './SourcesSection.js';
 import './company.css';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 export function SourceCard({ id, onSources }: { id: string; onSources(): void }) {
   const [view, setView] = useState<SourcesView>();
@@ -22,7 +23,7 @@ export function SourceCard({ id, onSources }: { id: string; onSources(): void })
   const { verdict } = row;
   const { decl } = verdict;
   const missing = row.secrets.filter((s) => !s.present);
-  const approve = () => { setError(''); api.approveSource(decl.id, decl.version).then(reload, (e: unknown) => setError(errorText(e))); };
+  const approve = () => { setError(''); return api.approveSource(decl.id, decl.version).then(reload, (e: unknown) => setError(errorText(e))); };
   const signIn = decl.reach.web ? () => { api.signInSource(decl.id).then(() => setOpened(true), (e: unknown) => setError(errorText(e))); } : undefined;
   return (
     <div className="ruledraft mailboxcard" data-testid="source-card" data-state={verdict.kind}>
@@ -41,7 +42,7 @@ export function SourceCard({ id, onSources }: { id: string; onSources(): void })
       <Preview id={id} signIn={signIn} />
       {verdict.kind === 'pending' ? (
         <span className="ruleacts">
-          <button type="button" className="btn primary" data-testid="source-approve" disabled={missing.length > 0} onClick={approve}>{t('sources.approve')}</button>
+          <AsyncButton type="button" className="btn primary" data-testid="source-approve" disabled={missing.length > 0} onClick={approve}>{t('sources.approve')}</AsyncButton>
           <span className="m">{t('sources.approveWhy')}</span>
         </span>
       ) : <span className="okline">{t('assistant.mailbox.on')}</span>}

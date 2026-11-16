@@ -37,6 +37,7 @@ import { chargesVat } from '../../../engines/index.js';
 import type { Location } from '../../shell/route.js';
 import type { Nav } from '../index.js';
 import type { Index, JournalEntry } from '../../../types/index.js';
+import { AsyncButton } from '../../shell/AsyncButton.js';
 
 function goOf(books: Index, i: PeriodIssue): Location | undefined {
   switch (i.kind) {
@@ -261,7 +262,7 @@ export function ReceiptDueTasks({ items, nav, canEdit, books }: { items: readonl
             <button type="button" className="btn ghost" data-testid="receipt-due-find" onClick={() => nav.go(at({ area: 'bank', payment: item.tx.ref }, item.tx.date))}>{t('receiptDue.find')}</button>
             {canEdit ? <FindPair key={`find-${item.tx.ref}`} on={{ payment: item.tx.ref }} books={books} nav={nav} /> : null}
             {canEdit ? <button type="button" className="btn ghost" data-testid="receipt-due-proof" data-tip={t('receiptDue.otherProofTip')} onClick={() => nav.go(at({ area: 'bank', payment: item.tx.ref }, item.tx.date))}>{t('receiptDue.otherProof')}</button> : null}
-            {canEdit ? <button type="button" className="btn" data-testid="receipt-due-book" onClick={() => void bookWithoutInputTax(nav, item.tx)}>{t('receiptDue.withoutInputTax')}</button> : null}
+            {canEdit ? <AsyncButton type="button" className="btn" data-testid="receipt-due-book" onClick={() => bookWithoutInputTax(nav, item.tx)}>{t('receiptDue.withoutInputTax')}</AsyncButton> : null}
           </span>
         </div>
       )))}
@@ -352,8 +353,8 @@ export function TwinTasks({ books, nav, canEdit }: { books: Index; nav: Nav; can
               <button type="button" className="linkbtn" onClick={() => nav.go(at({ area: 'receipts', id: v.r.id }, v.day))}>{t('issues.twin', { file: v.r.filename, of: other.r.filename, why: t(`drop.twin.why.${v.twin!.why}`) })}</button>
               {canEdit ? (
                 <>
-                  <button type="button" className="btn ghost" onClick={() => void answerTwin(nav, v, 'same', other.r.id, other.r.filename)}>{t('receipts.twin.same')}</button>
-                  <button type="button" className="btn ghost" onClick={() => void answerTwin(nav, v, 'distinct', other.r.id, other.r.filename)}>{t('receipts.twin.distinct')}</button>
+                  <AsyncButton type="button" className="btn ghost" onClick={() => answerTwin(nav, v, 'same', other.r.id, other.r.filename)}>{t('receipts.twin.same')}</AsyncButton>
+                  <AsyncButton type="button" className="btn ghost" onClick={() => answerTwin(nav, v, 'distinct', other.r.id, other.r.filename)}>{t('receipts.twin.distinct')}</AsyncButton>
                 </>
               ) : null}
             </li>

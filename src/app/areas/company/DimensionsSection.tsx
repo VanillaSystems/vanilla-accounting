@@ -8,6 +8,7 @@ import { useState, type FormEvent } from 'react';
 import { dimensionId, offeredValues, tagValue, usesOf, type Dimension } from '../../../books/tags.js';
 import type { JournalEntry } from '../../../types/index.js';
 import { t } from '../../i18n/index.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 export function DimensionsSection({ dimensions, entries, canEdit, save }: {
   dimensions: readonly Dimension[];
@@ -37,10 +38,10 @@ export function DimensionsSection({ dimensions, entries, canEdit, save }: {
           onRemove={() => save(list.filter((_, j) => j !== i), t('dimensions.removed', { name: d.label }))} />
       ))}
       {canEdit && (
-        <form className="form inline dimadd" onSubmit={add}>
+        <AsyncForm className="form inline dimadd" onSubmit={add}>
           <label>{t('dimensions.new')}<input value={name} placeholder={t('dimensions.newPlaceholder')} onChange={(e) => setName(e.target.value)} /></label>
-          <button type="submit" className="btn" disabled={!name.trim()}>{t('dimensions.add')}</button>
-        </form>
+          <AsyncButton type="submit" className="btn" disabled={!name.trim()}>{t('dimensions.add')}</AsyncButton>
+        </AsyncForm>
       )}
     </div>
   );
@@ -87,16 +88,16 @@ function DimensionCard({ d, entries, canEdit, onSave, onRemove }: { d: Dimension
             <span className="mono">{v.value}</span>
             <span className="m">{t('dimensions.unlisted')}</span>
             <span className="m">{t('common.entryCount', { n: count(v.value) })}</span>
-            {canEdit && <button type="button" className="golink" onClick={() => void addValue(v.value)}>{t('dimensions.list')}</button>}
+            {canEdit && <AsyncButton type="button" className="golink" onClick={() => addValue(v.value)}>{t('dimensions.list')}</AsyncButton>}
           </div>
         ))}
         {!d.values.length && !unlisted.length && <p className="m">{t('dimensions.noValues')}</p>}
       </div>
       {canEdit && (
-        <form className="dimaddval" onSubmit={(e) => { e.preventDefault(); void addValue(value).then((ok) => { if (ok) setValue(''); }); }}>
+        <AsyncForm className="dimaddval" onSubmit={(e) => { e.preventDefault(); return addValue(value).then((ok) => { if (ok) setValue(''); }); }}>
           <input value={value} placeholder={t('dimensions.newValue')} aria-label={t('dimensions.newValue')} onChange={(e) => setValue(e.target.value)} />
-          <button type="submit" className="btn" disabled={!tagValue(value)}>{t('dimensions.addValue')}</button>
-        </form>
+          <AsyncButton type="submit" className="btn" disabled={!tagValue(value)}>{t('dimensions.addValue')}</AsyncButton>
+        </AsyncForm>
       )}
     </section>
   );

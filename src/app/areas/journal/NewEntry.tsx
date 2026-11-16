@@ -30,6 +30,7 @@ import { correctionName } from '../../lib/vat-words.js';
 import { chfAmount } from '../../../accounting/ledger.js';
 import type { JournalEntry } from '../../../types/index.js';
 import { TagFields, tagsOfForm } from './TagFields.js';
+import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
 
@@ -191,7 +192,7 @@ export function NewEntry(props: Props) {
             </div>
           )}
         </div>
-        <form key={round} ref={form} className="form" autoComplete="off" onKeyDown={onKeyDown} onInput={() => { followPrivate(); redraw((n) => n + 1); setSure(false); if (err === t('journal.movesBankAgain')) setErr(''); }} onSubmit={(e) => { e.preventDefault(); book(); }}>
+        <AsyncForm key={round} ref={form} className="form" autoComplete="off" onKeyDown={onKeyDown} onInput={() => { followPrivate(); redraw((n) => n + 1); setSure(false); if (err === t('journal.movesBankAgain')) setErr(''); }} onSubmit={(e) => { e.preventDefault(); return book(); }}>
           {!filed && <PaymentField books={books} picked={tx} amount={d.amount} onPick={pickPayment} />}
           <div className="two">
             <label>{t('journal.field.date')}<input className="mono" name="date" defaultValue={formatDate(d.date ?? localToday())} readOnly={!!tx} data-tip={tx ? t('journal.payment.dateIs') : undefined} autoFocus={!round} /></label>
@@ -240,9 +241,9 @@ export function NewEntry(props: Props) {
           <div className="err" role="alert">{err}</div>
           <div className="dacts">
             <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')} <span className="k">{t('codes.escKey')}</span></button>
-            <button type="submit" className="btn primary">{t('journal.book')} <span className="k">↵</span></button>
+            <AsyncButton type="submit" className="btn primary">{t('journal.book')} <span className="k">↵</span></AsyncButton>
           </div>
-        </form>
+        </AsyncForm>
       </div>
     </>
   );
