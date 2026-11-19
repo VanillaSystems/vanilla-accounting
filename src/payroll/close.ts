@@ -31,7 +31,7 @@ export interface ClosePlan {
 }
 
 export class PayrollRefusal extends Error {
-  constructor(readonly code: 'notFound' | 'alreadyClosed' | 'notClosed' | 'notLatest' | 'unknownWageType' | 'badAmount', message: string) { super(message); }
+  constructor(readonly code: 'notFound' | 'alreadyClosed' | 'notClosed' | 'notLatest' | 'unknownWageType' | 'badAmount' | 'badInput' | 'unknownInsurance' | 'noExpenseAccount' | 'nothingAccrued', message: string) { super(message); }
 }
 
 /** The plan of closing `employee`'s `month`: the draft, the entries it books, what to say first. */

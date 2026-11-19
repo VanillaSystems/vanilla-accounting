@@ -12,6 +12,9 @@ import { ClosedPeriodError, periodLock, receiptFile, type Books } from '../../bo
 import { PayrollRefusal, planClose } from '../../payroll/close.js';
 import { addCorrection, chartNumbers, closePayslip, payrollContext, reopenPayslip, type BooksWriter } from '../../payroll/service.js';
 import { monthView, payslipView, employeeRows, yearStrip } from '../../payroll/views.js';
+import { paymentRows } from '../../payroll/payments.js';
+import { insurerRows, settlementEntry } from '../../payroll/insurers.js';
+import { closedPayslips } from '../../payroll/service.js';
 import { idSource } from '../../invoices/store.js';
 import { loadPayroll, updatePayroll } from '../../payroll/store.js';
 import { employs } from '../../workspace/setup.js';
@@ -47,7 +50,7 @@ function assertMonthOpen(month: string): void {
 const run = (fn: (req: Request, res: Response) => Promise<void> | void) => (req: Request, res: Response, next: NextFunction) => {
   Promise.resolve().then(() => fn(req, res)).catch((e) => {
     if (e instanceof PayrollRefusal) {
-      const status = e.code === 'notFound' ? 404 : e.code === 'badAmount' || e.code === 'unknownWageType' ? 400 : 409;
+      const status = e.code === 'notFound' || e.code === 'unknownInsurance' ? 404 : e.code === 'badAmount' || e.code === 'unknownWageType' || e.code === 'badInput' ? 400 : 409;
       res.status(status).json({ error: e.message, code: 'payroll', params: { why: e.code } } satisfies ApiErrorBody);
     } else next(e);
   });
@@ -186,4 +189,41 @@ router.put('/api/payroll/months/:month/text', run((req, res) => {
     s.monthTexts = texts;
   });
   res.json({ month, text });
+}));
+
+// ─── Lohnzahlungen and the insurers ────────────────────────────────────────────
+
+/** The month's Lohnzahlungen: person, IBAN, payout, purpose, value date, and the bank line that paid it. */
+router.get('/api/payroll/payments/:month', run((req, res) => {
+  const month = monthParam(req);
+  res.json({ month, rows: paymentRows(readBooks(), closedPayslips(WS), month) });
+}));
+
+/** Per insurance: what the payslips accrued, what was paid, what is open, from the books. */
+router.get('/api/payroll/insurances', run((req, res) => {
+  const year = typeof req.query.year === 'string' && /^\d{4}$/.test(req.query.year) ? req.query.year : today().slice(0, 4);
+  const ctx = payrollContext(WS);
+  res.json({ year, rows: insurerRows(readBooks(), ctx.data, ctx.store, year) });
+}));
+
+/**
+ * A final statement (Schlussabrechnung): the year's total the statement shows; code books its difference to
+ * what the payslips accrued on the employer's contribution account against the insurance's liability, on `date`
+ * (the statement's day, in an open period).
+ */
+router.post('/api/payroll/insurances/:id/settle', run((req, res) => {
+  const b = body(req);
+  const year = String(b.year ?? '');
+  const date = String(b.date ?? '');
+  const total = typeof b.total === 'number' && Number.isFinite(b.total) ? b.total : NaN;
+  if (!/^\d{4}$/.test(year) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(total)) throw new PayrollRefusal('badInput', 'Jahr, Datum und Total der Schlussabrechnung.');
+  const ctx = payrollContext(WS);
+  const out = updateBooksWithEffects((books) => {
+    const lock = periodLock(books);
+    if (lock.isClosed(date)) throw new ClosedPeriodError(`${lock.closedText(date)} Neue Buchungen müssen in der offenen Periode liegen.`, lock.closedThrough, 'newEntry');
+    const entry = settlementEntry(books, ctx.data, ctx.store, String(req.params.id), year, total, date, () => idSource.bytes(8).toString('hex'));
+    if (entry) books.journalEntries.push(entry);
+    return entry ? { booked: entry.id, amount: entry.amount, debit: entry.accountDebit, credit: entry.accountCredit } : { booked: null };
+  });
+  res.json(out);
 }));

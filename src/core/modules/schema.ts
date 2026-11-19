@@ -432,6 +432,8 @@ export interface PayrollData {
   contributions: ContributionDef[];
   rounding: number[];
   wageTypes: WageTypeDef[];
+  /** The clearing account every payslip's payout passes (Lohndurchlaufkonto): credited by the close, cleared by the bank payment. */
+  clearing: string;
   /** How a social security number looks (a regular expression) and what stands for it in a text sent to a model. */
   socialSecurityNumber: { pattern: string; masked: string };
   /** The words of the payroll's documents, in each language. */
