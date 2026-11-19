@@ -1065,10 +1065,13 @@ listed here and updated with phase 2's build:
     the library's own encoder (tests/invoice-qr-v24.test.ts); nothing to fix.
 35. **`activity` on a position (F3).** 1 is the default and is not stored; 2 is. The picker sits under
     the rate on screen, on a firm with two approved rates only, and not on a 0 % line (its code is the
-    exemption's). A 2 on a firm with one rate is refused where a draft comes in and at issue
-    (`line.activity`). A credit note for part of the total splits each rate over its activities by
-    their share, so a credit of activity 2 takes back F2. The default from the Artikel or Tätigkeit
-    (4.4.3) comes with those in phase 2.
+    exemption's; a 0 % line keeps no activity). A 2 on a firm with one rate (a draft or an invoice from
+    before it went back to one) is never refused: a draft drops it at its next save, so it stays
+    editable, and booking takes the first rate (`netRateCode(activity) ?? netRateCode(1)`), so a
+    statement import never stops on it. A credit note for part of the total splits each rate over its
+    activities on a firm with two rates, each line named by the first position of its activity, so a
+    credit of activity 2 takes back F2; on any other firm one line per rate as before. The default
+    from the Artikel or Tätigkeit (4.4.3) comes with those in phase 2.
 36. **Format.** `activity` rides on the one invoices.json step 2→3 of phase 1 (introduced by the
     positions slice); this slice adds no step of its own.
 

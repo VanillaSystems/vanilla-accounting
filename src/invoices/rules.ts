@@ -212,8 +212,6 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
     if (!l.text.trim()) out.push({ field: 'line.text', line });
     if (!Number.isFinite(l.quantity) || l.quantity === 0 || !Number.isFinite(l.price)) out.push({ field: 'line.quantity', line });
     if (!invoiceRates().includes(l.vatRate)) out.push({ field: 'line.vatRate', line });
-    // The second activity only on a firm approved for two net rates (a draft kept from before a change of the setup).
-    if (l.activity === 2 && !invoiceActivities().length) out.push({ field: 'line.activity', line });
   });
   // A firm not registered charges no VAT: a line at 0 % needs no reason.
   if (chargesVat() && draft.lines.some((l) => l.vatRate === 0) && !draft.exemption) out.push({ field: 'exemption' });
@@ -311,14 +309,18 @@ export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Enve
     const text = reason || `${TEXTS[inv.language].credit} ${inv.number}`;
     const rates = req.vatRate === undefined ? t.byRate : t.byRate.filter((r) => r.rate === req.vatRate);
     if (rates.length === 0) throw new InvoiceRuleError('incomplete', `Rechnung ${inv.number} hat keine Position mit ${req.vatRate} %.`);
-    // A rate whose lines belong to both activities of a firm with two net rates is credited in both, by their share (#504).
-    const parts = rates.flatMap((r) => [...groupBy(inv.lines.filter((l) => l.vatRate === r.rate), (l) => l.activity ?? 1)].map(([activity, ls]) => ({ rate: r.rate, activity, account: ls[0].account, gross: totals(ls).gross })));
+    // A rate whose lines belong to both activities of a firm with two net rates is credited in both, by their
+    // share (#504), each line named by the first position of its activity; on any other firm, and at 0 %, one line per rate.
+    const split = invoiceActivities().length > 0;
+    const parts = rates.flatMap((r) => [...groupBy(inv.lines.filter((l) => l.vatRate === r.rate), (l) => (split && r.rate > 0 ? l.activity ?? 1 : 1))]
+      .map(([activity, ls], _i, all) => ({ rate: r.rate, activity, account: ls[0].account, gross: totals(ls).gross, of: all.length > 1 ? ls[0].text : undefined })));
     const base = parts.reduce((s, r) => s + toRappen(r.gross), 0);
     let left = gross;
     lines = parts.map((r, k) => {
       const share = k === parts.length - 1 ? left : Math.round(gross * toRappen(r.gross) / base);
       left -= share;
-      return { text: rates.length > 1 ? `${text} (${r.rate} %)` : text, quantity: 1, price: -fromRappen(share), vatRate: r.rate, ...(r.rate > 0 ? { vatIncluded: true as const } : {}), ...(r.account ? { account: r.account } : {}), ...(r.activity === 2 ? { activity: 2 as const } : {}) };
+      const named = [rates.length > 1 ? `${r.rate} %` : '', r.of ?? ''].filter(Boolean).join(', ');
+      return { text: named ? `${text} (${named})` : text, quantity: 1, price: -fromRappen(share), vatRate: r.rate, ...(r.rate > 0 ? { vatIncluded: true as const } : {}), ...(r.account ? { account: r.account } : {}), ...(r.activity === 2 ? { activity: 2 as const } : {}) };
     }).filter((l) => l.price !== 0);
   }
   return {
@@ -379,13 +381,14 @@ export function allocate(inv: Issued, invoices: readonly Invoice[], amount: numb
 
 /**
  * The VAT code a rate books revenue with (on either basis): the rate's sale code; on the net tax
- * rate method the code of the line's activity, its first or second approved rate (#504); none for
- * a firm not registered.
+ * rate method the code of the line's activity, its first or second approved rate (#504), the first
+ * when the firm has no second (a line of 2 kept from before it went back to one rate: never a throw
+ * in a statement import); none for a firm not registered.
  */
 export function revenueVatCode(rate: VatRate, exemption: Exemption | undefined, activity: 1 | 2 = 1): string | undefined {
   if (!vatSetup().registered) return undefined;
-  const code = rate === 0 ? vat().codes.deductedIn(invoicing().exemptions[exemption ?? 'export']) : vat().codes.saleAt(rate) ?? vat().codes.netRateCode(activity);
-  if (!code) throw new Error(`the jurisdiction has no code for a sale at ${rate} %${exemption ? ` (${exemption})` : ''}${activity === 2 ? ' of the second activity' : ''}`);
+  const code = rate === 0 ? vat().codes.deductedIn(invoicing().exemptions[exemption ?? 'export']) : vat().codes.saleAt(rate) ?? vat().codes.netRateCode(activity) ?? vat().codes.netRateCode(1);
+  if (!code) throw new Error(`the jurisdiction has no code for a sale at ${rate} %${exemption ? ` (${exemption})` : ''}`);
   return code;
 }
 

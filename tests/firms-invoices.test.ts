@@ -36,8 +36,8 @@ const customer = {
   language: 'de' as const, paymentTermsDays: 30,
 };
 const line = (price: number, vatRate: InvoiceLine['vatRate']): InvoiceLine => ({ text: 'Haarschnitt', quantity: 1, price, vatRate });
-const draft = (lines: InvoiceLine[]): Draft => ({
-  id: 'in_d', createdAt: '2026-10-01T09:00:00Z', origin: 'manual', deleted: false, status: 'draft', kind: 'invoice', customerId: 'cu_1', date: '2026-10-05', currency: 'CHF', language: 'de', lines, comments: [],
+const draft = (lines: InvoiceLine[], over: Partial<Draft> = {}): Draft => ({
+  id: 'in_d', createdAt: '2026-10-01T09:00:00Z', origin: 'manual', deleted: false, status: 'draft', kind: 'invoice', customerId: 'cu_1', date: '2026-10-05', currency: 'CHF', language: 'de', lines, comments: [], ...over,
 });
 const WORDS = { newCustomer: '+', chooseCustomer: 'Kunde', addLine: '+', removeLine: '×', intro: 'Einleitung', closing: 'Schluss', desc: 'Text', noExemption: 'Grund für 0 % wählen …', supplied: 'Leistung' };
 const html = (lines: InvoiceLine[], draft = false): string => {
@@ -151,17 +151,45 @@ test('two net rates on the agreed basis: the invoice\'s event books F1 and F2 on
   assert.deepEqual(coded(b.journalEntries).slice(2), [['2026-10-10', '3400', '1100', 108.1, '-F1'], ['2026-10-10', '3400', '1100', 54.05, '-F2']]);
 });
 
-test('the activity is checked where a draft comes in: 1 or 2, the second only on a firm with two net rates; issue refuses a second activity the firm no longer has', () => {
+test('the activity is checked where a draft comes in: 1 or 2; a 2 on a firm with one net rate (a draft from before it went back) is dropped, so the line stays editable and books the first', () => {
   const book: InvoiceBook = { schema: 2, customers: [customer], invoices: [], sent: [] } as InvoiceBook;
   const refusal = (body: unknown) => { try { parseDraftPatch(body, book); } catch (e) { return [(e as InvoiceRuleError).code, (e as InvoiceRuleError).missing?.[0]?.field]; } return undefined; };
   setJurisdiction(ch, TWO_RATES);
   assert.deepEqual(parseDraftPatch({ lines: [work(10, 2), work(10, 1)] }, book).lines!.map((l) => l.activity), [2, undefined], 'the first is the default and not kept');
   assert.deepEqual(refusal({ lines: [{ ...work(10), activity: 3 }] }), ['incomplete', 'line.activity']);
+  assert.equal(parseDraftPatch({ lines: [{ ...work(10, 2), vatRate: 0 }] }, book).lines![0].activity, undefined, 'a line at 0 % has no activity');
   setJurisdiction(ch, NET_RATE);
-  assert.deepEqual(refusal({ lines: [work(10, 2)] }), ['incomplete', 'line.activity'], 'one approved rate: no second activity');
-  assert.deepEqual(missingForIssue(draft([work(10, 2)]), { customer, sender, invoices: [] }).map((m) => [m.field, m.line]), [['line.activity', 0]]);
+  // The draft kept a 2 from when the firm had two rates: the next save of any field drops it.
+  const stale = draft([work(10, 2), work(20)]);
+  assert.deepEqual(missingForIssue(stale, { customer, sender, invoices: [] }), [], 'it can be issued');
+  assert.deepEqual(parseDraftPatch({ lines: stale.lines.map((l, k) => (k === 1 ? { ...l, price: 25 } : l)) }, book).lines!.map((l) => [l.price, l.activity]), [[10, undefined], [25, undefined]]);
   setJurisdiction(ch, EFFECTIVE_QUARTERLY);
-  assert.deepEqual(refusal({ lines: [work(10, 2)] }), ['incomplete', 'line.activity']);
+  assert.equal(parseDraftPatch({ lines: [work(10, 2)] }, book).lines![0].activity, undefined);
+});
+
+test('a payment read in after the firm went back to one net rate, for an invoice issued with a second activity: booked at the first, never a stop of the import', () => {
+  setJurisdiction(ch, TWO_RATES);
+  const book: InvoiceBook = { schema: 2, customers: [customer], invoices: [], sent: [] } as InvoiceBook;
+  const inv = issuedTwo(book, draft([work(1000, 1), work(500, 2)]));
+  setJurisdiction(ch, NET_RATE);
+  assert.equal(revenueVatCode(8.1, undefined, 2), 'F1');
+  const b = emptyBooks();
+  b.transactions.push({ ref: 'p1', bank: 'Raiffeisen', date: '2027-01-20', amount: 1621.5, currency: 'CHF', direction: 'CRDT', description: 'Zahlung', reference: inv.reference });
+  const paid = matchPayments(b, book, payCtx);
+  assert.deepEqual(paid.paid.map((p) => [p.transactionRef, p.booked]), [['p1', true]]);
+  assert.deepEqual(coded(b.journalEntries), [['2027-01-20', '1020', '3400', 1081, 'F1'], ['2027-01-20', '1020', '3400', 540.5, 'F1']]);
+});
+
+test('a credit note for part of the total: on a firm with one rate one line per rate, whatever the lines\' activity; with two, one per activity, named by its first position', () => {
+  setJurisdiction(ch, TWO_RATES);
+  const book: InvoiceBook = { schema: 2, customers: [customer], invoices: [], sent: [] } as InvoiceBook;
+  const inv = issuedTwo(book, draft([work(1000, 1), { ...work(500, 2), text: 'Beschläge' }, { ...work(100), vatRate: 0 }], { exemption: 'abroad' }));
+  const env = { id: 'c1', createdAt: '2026-10-10T08:00:00Z', origin: 'manual' as const, deleted: false };
+  const two = creditNoteDraft(inv, { amount: 172.15, reason: 'Kulanz' }, env, '2026-10-10').lines;
+  assert.deepEqual(two.map((l) => [l.text, l.vatRate, l.activity ?? 1]), [['Kulanz (8.1 %, Schreinerarbeit)', 8.1, 1], ['Kulanz (8.1 %, Beschläge)', 8.1, 2], ['Kulanz (0 %)', 0, 1]]);
+  setJurisdiction(ch, NET_RATE);
+  const one = creditNoteDraft(inv, { amount: 172.15, reason: 'Kulanz' }, env, '2026-10-10').lines;
+  assert.deepEqual(one.map((l) => [l.text, l.vatRate, l.activity]), [['Kulanz (8.1 %)', 8.1, undefined], ['Kulanz (0 %)', 0, undefined]], 'the same code: one line per rate');
 });
 
 test('the activity picker: on screen beside the rate, labelled with the firm\'s rates, only with two rates; never on paper (MWSTG Art. 37 Abs. 2)', () => {

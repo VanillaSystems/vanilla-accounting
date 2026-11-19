@@ -155,7 +155,7 @@ function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boole
   }
   return (
     <div className="lkf" data-testid="pay-to">
-      <div className="lkr"><span>{t('invoiceLayout.payToTitle')}</span><span className="m">{t('invoiceLayout.payToHint')}</span></div>
+      <div className="lkr lkstack"><span>{t('invoiceLayout.payToTitle')}</span><span className="m">{t('invoiceLayout.payToHint')}</span></div>
       {INVOICE_CURRENCIES.map((c) => {
         const own = banks.filter((a) => a.currency === c);
         const current = ws.invoicing?.payTo[c]?.account ?? '';
@@ -184,7 +184,7 @@ function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boole
               </span>
             )}
           </label>
-          {current && <QrIban ws={ws} nav={nav} canEdit={canEdit} currency={c} account={current} />}
+          {current && <QrIban key={current} ws={ws} nav={nav} canEdit={canEdit} currency={c} account={current} />}
           </Fragment>
         );
       })}
@@ -216,20 +216,25 @@ function QrIban({ ws, nav, canEdit, currency, account }: { ws: CompanyInfo; nav:
   }
   const fact = !!stored && !qrIbanTakes(currency) && !changed;
   return (
-    <div className={`lkr${warned || fact ? ' top' : ''}`} data-qr-iban={currency}>
-      <span>{t('invoiceLayout.qrIban')}</span>
-      <span className="lkpay">
-        <input className="mono wide" value={value} placeholder={t('invoiceLayout.qrIbanPlaceholder')} aria-label={t('invoiceLayout.qrIbanIn', { currency })} disabled={!canEdit}
-          onChange={(e) => { setValue(e.target.value); setWarned(false); }} />
-        {changed && <AsyncButton type="button" className="btn" disabled={!canEdit} onClick={() => save(false)}>{t('common.save')}</AsyncButton>}
-        {(warned || fact) && (
+    <>
+      <label className="lkr lkqr" data-qr-iban={currency}>
+        <span>{t('invoiceLayout.qrIban')}</span>
+        <span className="lkpay">
+          <input className="mono wide" value={value} placeholder={t('invoiceLayout.qrIbanPlaceholder')} aria-label={t('invoiceLayout.qrIbanIn', { currency })} disabled={!canEdit}
+            onChange={(e) => { setValue(e.target.value); setWarned(false); }} />
+          {changed && <AsyncButton type="button" className="btn" disabled={!canEdit} onClick={() => save(false)}>{t('common.save')}</AsyncButton>}
+        </span>
+      </label>
+      {(warned || fact) && (
+        <div className="lkr" data-qr-warning={currency}>
+          <span />
           <span className="warnline qrwarn" role={warned ? 'alert' : undefined}>
             {t('invoiceLayout.qrIbanNotChf', { currency })}
             {warned && <AsyncButton type="button" className="btn" disabled={!canEdit} onClick={() => save(true)}>{t('invoiceLayout.saveAnyway')}</AsyncButton>}
           </span>
-        )}
-      </span>
-    </div>
+        </div>
+      )}
+    </>
   );
 }
 
