@@ -40,7 +40,7 @@ export function Children({ e, settings, common }: { e: Employee; settings: Setti
   const types = allowanceTypes(settings);
   const children = e.children ?? [];
   return (
-    <div data-testid="children">
+    <div className="psub" data-testid="children">
       {!children.length ? <p className="m">{t('payroll.children.none')}</p> : children.map((c) => <ChildRow key={c.id} e={e} c={c} types={types} common={common} />)}
       {common.canEdit ? <AddChild e={e} types={types} nav={common.nav} defaultFrom={common.defaultFrom} /> : null}
       <p className="m">{t('payroll.children.lead')}</p>
@@ -102,7 +102,7 @@ function absenceText(a: Absence): string {
 export function Absences({ e, common }: { e: Employee; common: Common }) {
   const list = e.absences ?? [];
   return (
-    <div data-testid="absences">
+    <div className="psub" data-testid="absences">
       {!list.length ? <p className="m">{t('payroll.absence.none')}</p> : (
         <ul className="plain pabsences">
           {list.map((a) => <AbsenceRow key={a.id} e={e} a={a} common={common} />)}

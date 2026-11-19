@@ -120,7 +120,7 @@ function PaymentFile({ month, plan }: { month: string; plan: Payments['file'] })
           <p className="m">{t('payroll.payfile.lead', { n: plan.included.length, amount: fmt(total), date: formatDate(plan.executionDate) })}</p>
           {plan.accounts.length > 1 ? (
             <label className="pswitch">{t('payroll.payfile.from')} <select value={account} onChange={(e) => setAccount(e.target.value)}>{plan.accounts.map((a) => <option key={a.account} value={a.account}>{a.account} {a.label}</option>)}</select></label>
-          ) : <p className="m mono">{t('payroll.payfile.fromOne', { account: `${plan.accounts[0].account} ${plan.accounts[0].label}`, iban: iban(plan.accounts[0].iban) })}</p>}
+          ) : <p className="m">{t('payroll.payfile.fromOne', { account: `${plan.accounts[0].account} ${plan.accounts[0].label}`, iban: iban(plan.accounts[0].iban) })}</p>}
           <div className="acts"><a className="btn" href={files.paymentFile(month, account)} download>{t('payroll.payfile.download')}</a></div>
         </>
       )}

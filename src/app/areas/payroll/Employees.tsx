@@ -54,7 +54,7 @@ export function EmployeeList(props: Props) {
                 <div key={r.id} className={`row emp${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={r.id}
                   onClick={() => nav.select({ area: 'payroll', view: 'employees', id: r.id })}>
                   <span className={`d pstate ${r.status}`}>{statusText(r.status)}</span>
-                  <span className="t">{r.name}<small>{[r.isOwner ? t('payroll.employee.owner') : '', t('payroll.employee.pensum', { pensum: r.pensum ?? 100 }), r.since ? t('payroll.dated.from', { date: formatDate(r.since) }) : ''].filter(Boolean).join(' · ')}</small></span>
+                  <span className="t">{r.name}<small>{[r.isOwner ? t('payroll.employee.owner') : '', r.kind === 'hourly' ? t('payroll.kind.hourly') : t('payroll.employee.pensum', { pensum: r.pensum ?? 100 }), r.since ? t('payroll.dated.from', { date: formatDate(r.since) }) : ''].filter(Boolean).join(' · ')}</small></span>
                   <span className="a mono">{r.amount !== undefined ? fmt(r.amount) : ''}</span>
                 </div>
               );
@@ -125,7 +125,7 @@ const employmentSpec = (): ValueSpec<Employment> => ({
   to: employmentOf,
   show: (v) => [
     `${t(v.kind === 'monthly' ? 'payroll.kind.monthly' : 'payroll.kind.hourly')} ${fmt(v.amount)}`,
-    t('payroll.employee.pensum', { pensum: v.pensum ?? 100 }),
+    v.kind === 'hourly' ? '' : t('payroll.employee.pensum', { pensum: v.pensum ?? 100 }),
     v.hoursPerWeek !== undefined ? t('payroll.employee.hours', { n: v.hoursPerWeek }) : '',
     v.holidayDays !== undefined ? t('payroll.employee.holidays', { n: v.holidayDays }) : '',
     v.thirteenth ? t('payroll.employee.thirteenth', { months: v.thirteenth.months.map((m) => monthShort(`2026-${String(m).padStart(2, '0')}`)).join(', ') }) : '',
@@ -309,7 +309,7 @@ function Person({ d, settings, nav, canEdit }: Props & { d: EmployeeDetail; sett
   return (
     <div className="detail-in person" data-for={e.id}>
       <div className="head">
-        <h2 className="who">{name ? `${name.first} ${name.last}` : e.id}<small>{[e.isOwner ? t('payroll.employee.owner') : '', job ? t('payroll.employee.pensum', { pensum: job.pensum ?? 100 }) : ''].filter(Boolean).join(' · ')}</small></h2>
+        <h2 className="who">{name ? `${name.first} ${name.last}` : e.id}<small>{[e.isOwner ? t('payroll.employee.owner') : '', job ? (job.kind === 'hourly' ? t('payroll.kind.hourly') : t('payroll.employee.pensum', { pensum: job.pensum ?? 100 })) : ''].filter(Boolean).join(' · ')}</small></h2>
       </div>
       <Zeitachse d={d} nav={nav} />
       <Section title={t('payroll.sec.person')}>

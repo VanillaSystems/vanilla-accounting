@@ -275,7 +275,8 @@ export function pensionWages(employees: readonly PayrollEmployee[], closes: read
     if (!spans.length) return [];
     const on = spans[0].from;
     const job = entryOn(e.employment, on)!.value;
-    const insured = !!kind && !!(entryOn(e.insurances, on)?.value as Record<string, unknown> | undefined)?.[kind[0]];
+    // Insured in the fund at any day of the year (a certificate may start after the 1 January).
+    const insured = !!kind && entriesWithin(e.insurances, on, `${year}-12-31`).some((x) => !!(x.entry?.value as Record<string, unknown> | undefined)?.[kind[0]]);
     let monthly: number | undefined;
     if (job.kind === 'monthly') monthly = round2(job.amount * (job.pensum ?? 100) / 100);
     else {

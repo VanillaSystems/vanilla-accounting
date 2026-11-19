@@ -85,6 +85,16 @@ Two markers flag an entry you must read before you update:
   document states plainly, the AI on your click the rest (without salaries, the AHV number masked);
   you check and keep it, and every rate kept names its document.
 
+- Löhne for staff (phase B1, docs/specs/payroll.md §22 decisions 60–71): an hourly wage gets its holiday
+  surcharge (4/48, 5/47, 6/46 by the holiday weeks) on its own line and a public-holiday surcharge where the
+  contract names one; the holiday balance in days on every payslip; Mitarbeitende › Kinder (the allowance the
+  family compensation fund decided, paid with the wage and booked against its account) and › Abwesenheiten
+  (illness, accident, maternity, military, unpaid leave, holidays: the days' wage taken off, the insurer's daily
+  allowance, the rest of the continued pay; no diagnosis); «Nachzahlung» for a person who left; a wage under
+  2,500 a year without AHV, ALV and FAK unless the person asks. Dokumente: Familienzulagen against the fund,
+  the pension fund's expected wages, and the persons exempt on the annual declarations. Lohnzahlungen:
+  «Zahlungsdatei», the month's payouts not paid yet as a pain.001 file for e-banking. demo-schreinerei runs its
+  payroll in the app from October.
 - Buchungen › Neue Buchung von Hand: «+ Zeile» makes it a Sammelbuchung, one account against
   several lines (for example Haben 1020 against Soll 6500 and 6570). The last line holds the rest of
   the total until you type there, and ↵ books only once the lines add up. The lines are booked
