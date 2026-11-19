@@ -5,7 +5,7 @@ clone the app, `npm install`, `npm run init`. It is rewritten when the plugin ex
 
 ## Problem
 
-A company starts either from scratch (a new GmbH) or from existing bookkeeping (Banana, Bexio,
+A company starts either from scratch (a new GmbH) or from existing bookkeeping (another program,
 spreadsheets, a Treuhänder's books). Today's path assumes a developer: install Node, poppler and
 Claude Code, clone the app repository, run the wizard in a terminal. The wizard itself
 (`npm run init`: profiles, fourteen questions, bank accounts, opening balances from Banana) is

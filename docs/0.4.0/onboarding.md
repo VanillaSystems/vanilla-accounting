@@ -240,7 +240,7 @@ books' counts, the partner bins and the number of rules. `kept` belongs to the V
 ## Still missing
 
 - The UID lookup in the public register: the company card shows what the setup form saved.
-- The import of the old program (Bexio, Banana, Abacus, a spreadsheet, an accountant's export) as
+- The import of the old program (another program, a spreadsheet, an accountant's export) as
   evidence and opening balances, with its place by hand; with it, the quarter comparison before
   sealing a quarter filed before the switch, and «So nicht übernehmen» for patterns of the history
   the app's rules forbid. Until it exists the setup asks nothing about the old program.

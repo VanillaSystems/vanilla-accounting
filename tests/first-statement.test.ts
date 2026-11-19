@@ -366,7 +366,7 @@ test('the shipped wage wording: a wage by the payment\'s own text, in any langua
   const wage = (s: string) => wages.some((w) => w.test(s));
   for (const s of ['Lohn Juli 2026', 'LOHNZAHLUNG 09/2026', 'Löhne September', '13. Monatslohn', 'Nettolohn August', 'Salär Oktober', 'Gehalt Juli', 'Salaire septembre', 'Salaire juillet 2026', 'Stipendio luglio', 'Stipendi settembre 2026', 'Salary July', 'Zahlung Lohn 2026', 'Lohn']) assert.ok(wage(s), s);
   for (const s of [
-    'Lohn Aushilfe KW 36 Rechnung 88121 Adecco', 'Lohn- und Finanzbuchhaltung Q3 Treuhand', 'bexio Lohn Abo', 'Landi Lohn SH', 'Peter Lohn Elektro', 'Lohn AG Rechnung 12',
+    'Lohn Aushilfe KW 36 Rechnung 88121 Adecco', 'Lohn- und Finanzbuchhaltung Q3 Treuhand', 'Cloudbuch Lohn Abo', 'Landi Lohn SH', 'Peter Lohn Elektro', 'Lohn AG Rechnung 12',
     'Gestion des salaires facture 2026-118', 'BVG Beiträge Lohn Juli', 'AHV Lohn Juli 2026', 'Quellensteuer Lohn August',
     'Lohnbuchhaltung Treuhand Beispiel AG Rechnung 4411', 'Lohnausweis Software Abo', 'Lohnsoftware Lizenz 2026', 'Rechnung FM-77812', 'Salaris Restaurant', 'Belohnung Wettbewerb', 'Material Lohn', 'Lohn GmbH',
   ]) assert.equal(wage(s), false, s);

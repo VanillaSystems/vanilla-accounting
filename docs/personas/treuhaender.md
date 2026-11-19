@@ -1,7 +1,7 @@
 # Treuhänder (accountant)
 
 An external accountant or fiduciary firm with many clients. Knows Swiss accounting and VAT
-thoroughly, usually works in their own software (Banana, Abacus, Bexio), bills by the hour,
+thoroughly, usually works in their own software, bills by the hour,
 and signs off the annual accounts.
 
 ## Jobs
