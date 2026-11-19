@@ -38,7 +38,7 @@ function withInvoice(root: string): void {
   // A third, of the open quarter, never sent: it goes back to draft (spec 4.4.2; a filed event refuses it: tests/invoice-revise-api.test.ts).
   const third = issue({ ...draft, id: 'in_d', date: '2026-07-05' }, { customer: { id: 'cu_p', createdAt: '', origin: 'manual', deleted: false, ...customer }, sender, layout: DEFAULT_LAYOUT, invoices: [{ ...issued, pdf: { file: '', sha256: '' } }, { ...second, pdf: { file: '', sha256: '' } }], now: '2026-07-05T09:00:00Z' });
   const stored = { file: 'transactional-data/2026/invoices/2026-001.pdf', sha256: createHash('sha256').update(pdf).digest('hex') };
-  const book: InvoiceBook = { schema: 1, customers: [], invoices: [{ ...issued, pdf: stored }, { ...second, pdf: stored, writeOffs: [{ id: 'wo-1', date: '2026-06-30', amount: 1, reason: 'fee', by: 'person' }] }, { ...third, pdf: { file: 'transactional-data/2026/invoices/2026-003.pdf', sha256: stored.sha256 } }], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [], invoices: [{ ...issued, pdf: stored }, { ...second, pdf: stored, writeOffs: [{ id: 'wo-1', date: '2026-06-30', amount: 1, reason: 'fee', by: 'person' }] }, { ...third, pdf: { file: 'transactional-data/2026/invoices/2026-003.pdf', sha256: stored.sha256 } }], sent: [] };
   mkdirSync(join(root, 'transactional-data/2026/invoices'), { recursive: true });
   writeFileSync(join(root, 'transactional-data/2026/invoices/2026-001.pdf'), pdf);
   writeFileSync(join(root, 'transactional-data/2026/invoices/2026-003.pdf'), pdf);

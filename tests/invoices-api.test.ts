@@ -12,6 +12,7 @@ import { issuedPdfUrl, sentPdfUrl } from '../src/invoices/model.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { browserPath } from './support/browser.js';
+import { contactBody } from './support/invoice-fixtures.js';
 
 const skip = browserPath ? false : 'no Chromium-based browser installed (Chrome, Edge, Brave or Chromium; or set CHROME_PATH)';
 let api: ApiServer;
@@ -22,33 +23,33 @@ before(async () => {
 });
 after(() => api?.stop());
 
-const customer = { name: 'Café Exemple Sàrl', address: { street: 'Rue du Marché', number: '12', postcode: '1204', town: 'Genève', country: 'CH' }, language: 'fr', email: 'compta@cafe.example' };
+const customer = { name: 'Café Exemple Sàrl', address: { street: 'Rue du Marché', number: '12', postcode: '1204', town: 'Genève', country: 'CH' }, language: 'fr' as const, email: 'compta@cafe.example' };
 const lines = [{ text: 'Mélange maison 1 kg', quantity: 15, unit: 'pcs', price: 29, vatRate: 2.6 }];
 
-test('customers: created with the workspace terms; an address without town is refused', async () => {
-  const { status, json } = await api.send('POST', '/api/customers', customer);
+test('contacts: created paying in the firm\'s terms; an address without town is refused; a Swiss UID is checked', async () => {
+  const { status, json } = await api.send('POST', '/api/contacts', contactBody(customer));
   assert.equal(status, 200, String(json.error));
-  assert.equal(json.paymentTermsDays, 30);
+  assert.deepEqual([json.type, json.paymentTerms, (json.addresses as Array<{ billing?: boolean }>)[0].billing, json.emails], ['firm', undefined, true, ['compta@cafe.example']], 'no terms of its own: the firm\'s');
   assert.match(String(json.id), /^cu_/);
-  const bad = await api.send('POST', '/api/customers', { ...customer, address: { postcode: '1204', country: 'CH' } });
+  const bad = await api.send('POST', '/api/contacts', contactBody({ ...customer, address: { postcode: '1204', country: 'CH' } as never }));
   assert.equal(bad.status, 400);
   assert.equal(bad.json.invoiceRefusal, 'incomplete');
   assert.deepEqual(bad.json.missing, [{ field: 'customer.address' }], 'the UI names what is missing, never «address braucht postcode»');
   // A Swiss UID has a check digit (r8c-18): 333 is wrong, 338 right; a foreign VAT number is any text.
-  const wrongUid = await api.send('POST', '/api/customers', { ...customer, vatId: 'CHE-111.222.333 MWST' });
+  const wrongUid = await api.send('POST', '/api/contacts', contactBody({ ...customer, vatId: 'CHE-111.222.333 MWST' }));
   assert.equal(wrongUid.status, 400);
   assert.equal(wrongUid.json.invoiceRefusal, 'uid');
   // Built from pieces: the leak guard reads a whole UID in a test as a company's; this one is the wrong one above with its digit put right.
   const right = `${'CHE'}-111.222.338 MWST`;
-  const rightUid = await api.send('POST', '/api/customers', { ...customer, name: 'Muster UID AG', vatId: right });
+  const rightUid = await api.send('POST', '/api/contacts', contactBody({ ...customer, name: 'Muster UID AG', vatId: right }));
   assert.equal(rightUid.status, 200, String(rightUid.json.error));
   assert.equal(rightUid.json.vatId, right);
-  const foreign = await api.send('POST', '/api/customers', { ...customer, name: 'Muster DE GmbH', vatId: 'DE999999999' });
+  const foreign = await api.send('POST', '/api/contacts', contactBody({ ...customer, name: 'Muster DE GmbH', vatId: 'DE999999999' }));
   assert.equal(foreign.status, 200, String(foreign.json.error));
 });
 
 test('drafts: created in the customer language, changed, deleted; a draft has no number', async () => {
-  const c = (await api.send('GET', '/api/customers')).json as unknown as Array<{ id: string }>;
+  const c = (await api.send('GET', '/api/contacts')).json as unknown as Array<{ id: string }>;
   const { json: d } = await api.send('POST', '/api/invoices', { customerId: c[0].id, lines });
   assert.deepEqual([d.status, d.language, d.number], ['draft', 'fr', undefined]);
   const patched = await api.send('PATCH', `/api/invoices/${d.id}`, { subject: 'Café', dueDate: '2026-12-01' });
@@ -105,4 +106,17 @@ test('payments without a reference: the proposals list answers', async () => {
   const { status, json } = await api.send('GET', '/api/invoices/payments');
   assert.equal(status, 200);
   assert.ok(Array.isArray(json.proposals));
+});
+
+test('the contacts import takes a table of its 2000 rows; a body over a limit is refused with the limit named', async () => {
+  const rows = Array.from({ length: 2000 }, (_, i) => `Kunde Nummer ${i} mit einem langen Namen AG;Bahnhofstrasse;${i};8000;Zürich;CH;buchhaltung${i}@kunde.example;Gastro, Stammkunde`);
+  const csv = ['Firma;Strasse;Haus-Nr.;PLZ;Ort;Land;E-Mail;Kategorie', ...rows].join('\n');
+  assert.ok(csv.length > 200_000, 'well over the 100 kB of an ordinary request');
+  const ok = await api.send('POST', '/api/contacts/import/preview', { csv });
+  assert.equal(ok.status, 200, String(ok.json.error));
+  assert.equal((ok.json.rows as unknown[]).length, 2000);
+  const huge = await api.send('POST', '/api/contacts/import/preview', { csv: 'x'.repeat(9 * 1024 * 1024) });
+  assert.deepEqual([huge.status, huge.json.code, huge.json.params], [413, 'importTooLarge', { limit: '8 MB', rows: 2000 }]);
+  const big = await api.send('POST', '/api/contacts', { name: 'x'.repeat(200 * 1024) });
+  assert.deepEqual([big.status, big.json.code, big.json.params], [413, 'bodyTooLarge', { limit: '100 kB' }]);
 });

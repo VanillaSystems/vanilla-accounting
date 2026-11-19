@@ -4,13 +4,13 @@
  * saves. Pure: the sheet reports, Detail.tsx saves or says why not.
  */
 import { parseSwissDate } from '../../../accounting/periods.js';
-import { DEFAULT_UNITS, isItem, type Customer, type Draft, type InvoiceLine, type UnitDef } from '../../../invoices/model.js';
+import { DEFAULT_UNITS, isItem, type Contact, type Draft, type InvoiceLine, type UnitDef } from '../../../invoices/model.js';
 import type { Missing } from '../../../invoices/rules.js';
 import { invoicing } from '../../../engines/index.js';
 import type { DraftChange } from '../../lib/api.js';
 import { customerChange } from './model.js';
 
-/** A change to save, nothing to save, a value refused (the field goes back), or a new customer to create first. */
+/** A change to save, nothing to save, a value refused (the field goes back), or a new contact to create first. */
 export type SheetEdit = { change: DraftChange } | { refused: 'date' | 'number' | 'value' } | { newCustomer: true } | undefined;
 
 /** A number typed the Swiss way or another: 1’200.50, 1 200,50, −3. */
@@ -19,7 +19,7 @@ export const parseNumber = (s: string): number | null => {
   return s.trim() && Number.isFinite(n) ? n : null;
 };
 
-export function sheetEdit(inv: Draft, key: string, value: string, ctx: { customers: readonly Customer[]; defaultTexts: { intro: string; closing: string }; units?: readonly UnitDef[] }): SheetEdit {
+export function sheetEdit(inv: Draft, key: string, value: string, ctx: { contacts: readonly Contact[]; defaultTexts: { intro: string; closing: string }; units?: readonly UnitDef[] }): SheetEdit {
   const changed = (change: DraftChange): SheetEdit => ({ change });
   if (key === 'intro' || key === 'closing') {
     const def = ctx.defaultTexts[key];
@@ -45,7 +45,7 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { custome
   if (key === 'customer') {
     if (value === '+') return { newCustomer: true };
     if (value === inv.customerId) return undefined;
-    const next = ctx.customers.find((x) => x.id === value);
+    const next = ctx.contacts.find((x) => x.id === value);
     return next ? changed(customerChange(inv, next)) : { refused: 'value' };
   }
   const m = /^l:(\d+):(\w+)$/.exec(key);
@@ -165,7 +165,7 @@ export const repriced = (lines: readonly InvoiceLine[]): InvoiceLine[] =>
   lines.map((l) => { if (!isItem(l) || l.vatIncluded === undefined) return l; const { vatIncluded: _, ...rest } = l; return rest; });
 
 /** Where a person fixes what an invoice still lacks: a part of Firma, the customer, or a field on the sheet. */
-export type Fix = { company: 'profile' | 'invoice-layout' } | { customer: 'edit' | 'choose' } | { field: string } | { addLine: true };
+export type Fix = { company: 'profile' | 'invoice-layout' } | { customer: 'edit' | 'choose' | 'pick' } | { field: string } | { addLine: true };
 
 export function fixFor(m: Missing): Fix | undefined {
   switch (m.field) {
@@ -173,6 +173,7 @@ export function fixFor(m: Missing): Fix | undefined {
     case 'payTo': return { company: 'invoice-layout' };
     case 'customer': return { customer: 'choose' };
     case 'customer.name': case 'customer.address': return { customer: 'edit' };
+    case 'customer.person': case 'customer.addressGone': return { customer: 'pick' };
     case 'date': return { field: 'date' };
     case 'lines': return { addLine: true };
     case 'line.text': return { field: `l:${m.line ?? 0}:text` };

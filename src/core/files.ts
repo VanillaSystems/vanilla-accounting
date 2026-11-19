@@ -82,30 +82,37 @@ export function decodeText(bytes: Uint8Array): string {
 }
 
 /** The rows of a CSV file: its separator found on the header line (comma, semicolon or tab), quotes as RFC 4180 writes them. */
-export function csvRows(text: string): string[][] {
-  const body = text.replace(/^﻿/, '');
+export const csvRows = (text: string): string[][] => csvLines(text).map((r) => r.cells);
+
+/** The rows of a CSV file with the line of the file each starts on (from 1): empty lines are skipped, a quoted cell may span lines. */
+export function csvLines(text: string): Array<{ cells: string[]; line: number }> {
+  const body = text.replace(/^\uFEFF/, '');
   const nl = body.search(/\r?\n/);
   const head = nl < 0 ? body : body.slice(0, nl);
   const sep = [',', ';', '\t'].map((c) => ({ c, n: head.split(c).length })).sort((a, b) => b.n - a.n)[0].c;
-  const rows: string[][] = [];
+  const rows: Array<{ cells: string[]; line: number }> = [];
   let row: string[] = [];
   let cell = '';
   let quoted = false;
+  let line = 1;
+  let start = 1;
   for (let i = 0; i < body.length; i++) {
     const ch = body[i];
     if (quoted) {
-      if (ch === '"' && body[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') quoted = false; else cell += ch;
+      if (ch === '"' && body[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') quoted = false; else { if (ch === '\n') line++; cell += ch; }
       continue;
     }
     if (ch === '"' && cell === '') quoted = true;
     else if (ch === sep) { row.push(cell); cell = ''; } else if (ch === '\n' || ch === '\r') {
       if (ch === '\r' && body[i + 1] === '\n') i++;
       row.push(cell); cell = '';
-      if (row.some((c) => c.trim())) rows.push(row);
+      if (row.some((c) => c.trim())) rows.push({ cells: row, line: start });
       row = [];
+      line++;
+      start = line;
     } else cell += ch;
   }
   row.push(cell);
-  if (row.some((c) => c.trim())) rows.push(row);
+  if (row.some((c) => c.trim())) rows.push({ cells: row, line: start });
   return rows;
 }

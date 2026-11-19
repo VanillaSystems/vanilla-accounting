@@ -24,10 +24,11 @@ import { issued, sentDoc } from './support/invoice-fixtures.js';
 import { saveInvoices } from '../src/invoices/store.js';
 import { tempWorkspace, writeIndex } from './support/workspace.js';
 import './support/jurisdiction.js';
+import { invoiceBookOf } from '../src/invoices/store.js';
 
 const TODAY = '2026-10-20';
-const book = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as InvoiceBook;
-const d = { today: TODAY, invoices: book.invoices, customers: book.customers, sent: book.sent };
+const book = invoiceBookOf(JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as Record<string, unknown>, 'invoices.json');
+const d = { today: TODAY, invoices: book.invoices, contacts: book.contacts, sent: book.sent };
 const year = parsePeriod('2026', TODAY)!;
 const no = (r: { id: string }) => r.id.startsWith('draft-') ? 'draft' : r.id;
 
@@ -86,7 +87,7 @@ test('P1.11: eight issued Rechnungen, five sent by mail, one downloaded, two not
     ...invs.slice(0, 5).map((inv, i) => sentDoc(`m${i}`, inv, { sentAt: `2026-10-1${i}T09:0${i}:00Z`, to: `k${i}@kunde.example` })),
     sentDoc('dl', invs[5], { sentAt: '2026-10-16T14:00:00Z', to: 'download', channel: 'download', messageId: undefined }),
   ];
-  const fx = { today: '2026-10-20', invoices: invs, customers: [], sent };
+  const fx = { today: '2026-10-20', invoices: invs, contacts: [], sent };
   const rows = docRows(fx, 'invoice', parsePeriod('2026-Q4', '2026-10-20')!, undefined, '2026-10-20');
   const unsent = tabCounts(rows, 'invoice').find((c) => c.tab === 'unsent')!;
   assert.deepEqual([unsent.n, unsent.sums], [2, [{ currency: 'CHF', gross: 1500, open: 1500 }]], '700 + 800');
@@ -115,7 +116,7 @@ test('Versendet: the log newest first, filtered by contact, kind and channel', (
   assert.equal(all.length, book.sent.length);
   assert.ok(all.every((x, i) => i === 0 || all[i - 1].sentAt >= x.sentAt));
   assert.deepEqual(sentRows(d, undefined, { kind: 'reminder' }).map((x) => x.title), ['1. Mahnung · Rechnung 2026-006']);
-  const bistro = book.customers.find((c) => c.name.includes('Bistro'))!;
+  const bistro = book.contacts.find((c) => c.name.includes('Bistro'))!;
   assert.ok(sentRows(d, undefined, { customer: bistro.id }).every((x) => book.invoices.find((i) => i.id === x.invoiceId)?.customerId === bistro.id));
   assert.deepEqual([sentRows(d, undefined, { channel: 'email' }).length, sentRows(d, undefined, { channel: 'download' }).length], [14, 4],
     'the demo sent its documents by e-mail; 2026-014 and 2026-016 were downloaded, and so were the Mahnung and the Storno notice');
@@ -143,7 +144,7 @@ test('P1.10 on harder cases: a part paid before and the rest after 31.12., a Gut
   const cn = issued('n', '2026-003', { kind: 'credit-note', creditFor: 'b', date: '2026-12-15', lines: [{ text: 'Gutschrift', quantity: 1, price: -200, vatRate: 0 }] });
   const late = issued('c', '2026-004', { date: '2026-12-20', cancelled: { date: '2027-01-03', reason: 'x' } });
   const next = issued('e', '2027-001', { date: '2027-01-02' });
-  saveInvoices(ws, { schema: 2, customers: [], invoices: [a, b, cn, late, next], sent: [] });
+  saveInvoices(ws, { schema: 2, contacts: [], invoices: [a, b, cn, late, next], sent: [] });
   const proposal = receivablesOf(ws, '2026', ratesOf(), loadBooks(ws));
   const items = openItems([a, b, cn, late, next], '2026-12-31');
   assert.deepEqual(items.map((x) => [x.inv.number, x.open]), [['2026-001', 834.55], ['2026-002', 800], ['2026-004', 1000]]);
@@ -161,13 +162,17 @@ test('links: an issued invoice by its number, a draft by draft-<id>; another id 
 
 test('a draft follows its customer: abroad 0 % for a service abroad (EUR for the neighbours), back home the normal rate', () => {
   const lines = [{ text: 'Beratung', quantity: 2, price: 100, vatRate: 8.1 as const }];
-  const de = { id: 'c1', language: 'de' as const, address: { country: 'DE' } };
-  const us = { id: 'c2', language: 'en' as const, address: { country: 'US' } };
-  const ch = { id: 'c3', language: 'fr' as const, address: { country: 'CH' } };
-  assert.deepEqual(customerChange({ lines, currency: 'CHF' }, de), { customerId: 'c1', language: 'de', lines: [{ ...lines[0], vatRate: 0 }], exemption: 'abroad', currency: 'EUR' });
+  const at = (country: string) => [{ id: 'a-1', postcode: '1', town: 'X', country }];
+  const de = { id: 'c1', language: 'de' as const, addresses: at('DE') };
+  const us = { id: 'c2', language: 'en' as const, addresses: at('US') };
+  const ch = { id: 'c3', language: 'fr' as const, addresses: at('CH') };
+  // Another contact: none of the person and address of the one before.
+  const fresh = { personId: null, addressId: null };
+  assert.deepEqual(customerChange({ lines, currency: 'CHF' }, de), { customerId: 'c1', language: 'de', ...fresh, lines: [{ ...lines[0], vatRate: 0 }], exemption: 'abroad', currency: 'EUR' });
   assert.equal(customerChange({ lines, currency: 'CHF' }, us).currency, undefined, 'a US customer keeps the currency');
-  assert.deepEqual(customerChange({ lines: [{ ...lines[0], vatRate: 0 }], currency: 'EUR' }, ch), { customerId: 'c3', language: 'fr', lines, exemption: null, currency: 'CHF' });
-  assert.deepEqual(customerChange({ lines, currency: 'CHF' }, ch), { customerId: 'c3', language: 'fr' }, 'a Swiss draft keeps its rates');
+  assert.deepEqual(customerChange({ lines: [{ ...lines[0], vatRate: 0 }], currency: 'EUR' }, ch), { customerId: 'c3', language: 'fr', ...fresh, lines, exemption: null, currency: 'CHF' });
+  assert.deepEqual(customerChange({ lines, currency: 'CHF' }, ch), { customerId: 'c3', language: 'fr', ...fresh }, 'a Swiss draft keeps its rates');
+  assert.equal(customerChange({ lines, currency: 'CHF' }, { ...ch, currency: 'EUR' }).currency, 'EUR', 'a contact of its own currency gives it to the draft');
 });
 
 test('the customer form per country: the postcode\'s name and shape, a state, the number first, the VAT number, the language', () => {

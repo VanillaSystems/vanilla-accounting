@@ -1381,8 +1381,73 @@ listed here and updated with phase 2's build:
     (`sourceCancelled`). Every «Trotzdem» names its own warning: the request carries a list of codes, and
     a code confirms only its warning (`paid` never passes `orderDelivered`). A Rechnung and a Gutschrift
     need an account to pay to before issue, as before; the other kinds none.
-74. **Formats of phase 2.** `invoices.json` step 3 → 4 (no transform; the contacts slice G1 joins it)
+74. **Formats of phase 2.** `invoices.json` step 3 → 4 (nothing to add for the kinds; slice G1 maps `customers` to `contacts` in it, decision 76)
     and manifest step 5 → 6 (`invoicing.numbering`; `invoicing.prices` takes the new kinds).
+
+75. **Contacts in invoices.json (slice G1, schema 4).** `contacts` replace `customers`; a document keeps
+    the field `customerId`, which now names a contact, so no document changes. A contact's `name` is
+    stored for a person too (its first and last name, derived on every save), so lists, payment
+    matching and the bookings' texts read one field.
+76. **The step 3 → 4** maps each customer to a firm contact under the same id: its address the one
+    address, marked billing; its `attn` a line of that address (a free text such as «Küche, z. H. Herr
+    Beispiel» is not parsed into a person); its e-mail the first of `emails`; its days `paymentDays`. Issued documents keep their frozen `customer`; tests/contacts.test.ts proves on the demo,
+    the schema-2 fixture and a mixed file that every document, the sent log and every draft's printed
+    sheet stay as they were.
+77. **What a document prints of its contact** (`recipientOf`, src/invoices/contacts.ts): the name (a
+    person's with the salutation before it), the picked address or else the billing address (the first
+    when none is marked), its line, and «z. Hd. <person>» in the document's language after that line;
+    the picked person's e-mail, else the contact's first. At issue this is frozen as `Issued.customer`
+    in the shape it always had, so the PDF, reminders and bookings read it as before.
+78. **Terms of a contact.** `paymentTerms` is the id of one of the firm's terms, `paymentDays` days net
+    of its own, never both (two fields, so a migrated customer of 10 days never meets a firm's terms
+    whose id happens to be «net10»); neither, the contact pays in the firm's default. A new draft takes
+    the named terms; with own days the firm's default only when its days are those (as decision 34 did
+    for a customer's days), else plain N days net. A new default term in Firma moves the contacts whose
+    own days were the old default's, as it moved customers before.
+79. **The customer number** is `K-` and five digits, the next above the highest K-number given,
+    assigned when a contact's first document is issued (a draft takes none, as document numbers). A
+    number typed by hand may be any text up to 20 characters; one another live contact holds is
+    refused (`numberTaken`): a number names one contact. The CSV import keeps a row's number unless
+    another contact holds it.
+80. **Archive, not delete.** «Löschen» on a contact archives it while any document (a draft too)
+    names it, else deletes it (the flag of ADR 0004); the answer says which. An archived contact is
+    in the tab Archiviert, offered in no picker and refused for a new or another draft (`archived`);
+    a draft that names it already keeps it and may be issued. `archived: false` restores it.
+81. **Defaults on positions.** The contact's revenue account and standing discount fill a position
+    when it is made (the UI's «＋ Position», the AI's lines that name none); a position keeps what it
+    has, so the person removes either on the position. The contact's currency is the new draft's.
+82. **Contact persons and addresses** carry random ids (`p-…`, `a-…`): an id the contact no longer has
+    is never given again, so a draft that named a removed person never names the next one added. A
+    document names them (`personId`, `addressId`); another contact on a draft drops both. The person
+    and the address are picked in the draft's margin «Kontakt», under the contact picked on the sheet.
+    A draft whose person or address was removed since shows it in that section, and issuing warns
+    (`customer.person`, `customer.addressGone`); «Trotzdem ausstellen» issues it without «z. Hd.», to
+    the billing address. Every kind picks them so (Angebot, Auftrag, Lieferschein, Rechnung); a
+    conversion carries the source's person and address to the new draft.
+83. **A person's salutation is printed, never matched.** Payment matching reads a customer's name
+    without its salutation words (Herr, Frau, Familie, Monsieur, Madame, Signora, Mrs, … in the four
+    languages): «LEA FREI» pays «Frau Lea Frei», and a refund that says only «Frau» matches no one.
+84. **Import transport.** The import routes take a body of up to 8 MB (2000 wide rows as text); any
+    body over a limit is refused with a code that names it (`importTooLarge`, `bodyTooLarge`). The file
+    is read as UTF-8, else Windows-1252 (MacRoman cannot be told from it reliably and is not guessed).
+    A row's line is the file's line it starts on; a number over 20 characters and a contact person's
+    invalid e-mail are named and left out. Änderungen never undoes a customer number: the first issued
+    document gives it.
+85. **The business file.** `business` names a knowledge file id. Code proposes one with the routing
+    the books use (`identify`: its UID, the IBANs that paid its invoices, its name), only when exactly
+    one file answers; the person keeps it («Übernehmen») or picks another of the customers' files.
+    Geschäftspartner then shows the contact and the file as one partner (its id the file's, with the
+    contact's invoices and their payments); a link to a file that is gone is shown as such.
+86. **CSV import.** Any CSV (comma, semicolon or tab); code proposes the mapping from the header words
+    in four languages and as other tools name them; the person changes any column. A row without a name
+    and a Swiss UID with a wrong check digit are not imported; the others come in with what is wrong
+    named (no full address, a country or language not recognised, an e-mail or payment term not read).
+    A row with the name or UID of a contact already there, or of an earlier row, is proposed as the same
+    contact and not imported again unless the person says «als neuer Kontakt». At most 2000 rows per
+    import, the rest named.
+87. **Layout A for Kontakte** (decision 30 foresaw it): the table across the width, a contact as the
+    panel over its right part. The table's tabs (Alle, Firmen, Personen, Archiviert) are a view's state,
+    not in the link.
 
 ---
 

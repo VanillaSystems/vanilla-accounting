@@ -6,7 +6,7 @@
 import { fromRappen, roundCHF, toRappen } from '../accounting/rappen.js';
 import { TEXTS, formatDate } from './texts.js';
 import type {
-  Comment, Customer, CustomerFields, Draft, Envelope, Exemption, Invoice, InvoiceBook, InvoiceContent, InvoiceLayout,
+  Comment, CustomerFields, Draft, Envelope, Exemption, Invoice, InvoiceBook, InvoiceContent, InvoiceLayout,
   InvoiceLine, InvoicingSettings, Issued, IssuedTerms, ItemLine, PaymentAllocation, PaymentTerms, Prices, Reminder, ReplacedPdf, Sender, SentDocument, UnitDef, VatRate, WriteOff,
 } from './model.js';
 import { isBooked, isItem, type DocumentKind } from './model.js';
@@ -314,7 +314,7 @@ export const addDays = (iso: string, days: number): string => new Date(Date.pars
 export interface Missing { field: MissingField; line?: number }
 export type MissingField =
   | 'sender.name' | 'sender.address' | 'sender.uid' | 'payTo'
-  | 'customer' | 'customer.name' | 'customer.address'
+  | 'customer' | 'customer.name' | 'customer.address' | 'customer.person' | 'customer.addressGone'
   | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.price' | 'line.vatRate' | 'line.activity' | 'line.discount' | 'line.discountBase' | 'exemption' | 'total'
   | 'credit.invoice' | 'credit.sign' | 'credit.exceeds' | 'credit.aboveOpen' | 'numberYear' | 'line.optional';
 
@@ -406,6 +406,8 @@ export class InvoiceRuleError extends Error {
   constructor(readonly code: InvoiceRefusal, message: string, readonly missing?: Missing[], readonly params?: Record<string, string | number>) { super(message); }
 }
 /**
+ * Kontakte: `numberTaken` a customer number another contact holds, `archived` an archived contact picked,
+ * `contactGone` a contact that is not there.
  * `unconfirmed`: issuing warns (warningsForIssue) and the request did not carry the person's «Trotzdem ausstellen».
  * «Zurück zum Entwurf» (backToDraftRefusal): `sent` the document went out (MWSTG Art. 27 Abs. 2), `settled`
  * something was received, credited or written off, `applied` a credit note a payment of its invoice took,
@@ -418,7 +420,7 @@ export class InvoiceRuleError extends Error {
  * Lieferschein not made from an Auftrag; the warnings `expired`, `declined`, `overOpen`, `sentVersion`,
  * `orderDelivered`, `orderDrafts` and `sourceCancelled` (spec 4.11, «Trotzdem …»); the hard rule `orderInvoiced`.
  */
-export type InvoiceRefusal = 'incomplete' | 'unconfirmed' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid' | 'aboveOpen' | 'surplus' | 'beforeInvoice'
+export type InvoiceRefusal = 'numberTaken' | 'archived' | 'contactGone' | 'incomplete' | 'unconfirmed' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid' | 'aboveOpen' | 'surplus' | 'beforeInvoice'
   | 'sent' | 'settled' | 'applied' | 'closed' | 'numbered' | 'account' | 'credited'
   | 'refTaken' | 'numberFormat' | 'convert' | 'nothingTicked' | 'expired' | 'declined' | 'overOpen' | 'sentVersion' | 'orderDelivered' | 'orderInvoiced' | 'notReopenable' | 'notQuote'
   | 'referenceTaken' | 'deliveryFromOrder' | 'orderDrafts' | 'sourceCancelled';
@@ -432,7 +434,8 @@ export const KIND_WORD: Record<DocumentKind, string> = { quote: 'Angebot', 'sale
  * the caller once the issued invoice is rendered.
  */
 export function issue(draft: Draft, ctx: {
-  customer: Customer | undefined; sender: Sender | Omit<Sender, 'payTo'>; layout: InvoiceLayout; invoices: readonly Invoice[]; now: string;
+  /** The recipient as printed (src/invoices/contacts.ts recipientOf); an envelope with it is left out of the frozen copy. */
+  customer: (CustomerFields & Partial<Envelope>) | undefined; sender: Sender | Omit<Sender, 'payTo'>; layout: InvoiceLayout; invoices: readonly Invoice[]; now: string;
   /** The firm's units; those the positions name are frozen with the document. */
   units?: readonly UnitDef[];
   /** The person's «Trotzdem ausstellen» over what warningsForIssue names. */
@@ -892,7 +895,6 @@ export const withoutPayment = (inv: Issued, transactionRef: string): Issued => (
 export const liveInvoices = (book: InvoiceBook): Invoice[] => live(book.invoices).filter(isBooked);
 /** Every document of the book, whatever its kind, without deleted records. */
 export const liveDocuments = (book: InvoiceBook): Invoice[] => live(book.invoices);
-export const liveCustomers = (book: InvoiceBook): Customer[] => live(book.customers);
 
 /**
  * The receipts that are a cancelled document's own PDF, by receipt id (the first 16 hex digits of the

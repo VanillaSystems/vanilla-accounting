@@ -48,13 +48,14 @@ import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { AiRefused } from '../llm/provider.js';
 import { aiOff } from '../llm/off.js';
 import { NETWORK_PATHS, fromThisComputer, loopbackPeer, phoneGate, refuseForeignHost } from './phone.js';
+import { IMPORT_LIMIT } from '../invoices/contact-import.js';
 
 export const app = express();
 
 const MAIL_STATUS: Record<MailRefusal, number> = { notConfigured: 409, noPassword: 409, recipient: 400, failed: 502 };
 
 const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
-  incomplete: 400, unconfirmed: 409, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409, uid: 400, aboveOpen: 409, surplus: 409, beforeInvoice: 400,
+  numberTaken: 409, archived: 409, contactGone: 404, incomplete: 400, unconfirmed: 409, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409, uid: 400, aboveOpen: 409, surplus: 409, beforeInvoice: 400,
   sent: 409, settled: 409, applied: 409, closed: 403, numbered: 409, account: 400, credited: 409,
   refTaken: 409, numberFormat: 400, convert: 400, nothingTicked: 400, expired: 409, declined: 409, overOpen: 409, sentVersion: 409, orderDelivered: 409, orderInvoiced: 409, notReopenable: 409, notQuote: 409,
   referenceTaken: 409, deliveryFromOrder: 400, orderDrafts: 409, sourceCancelled: 409,
@@ -69,6 +70,9 @@ app.use((req, res, next) => {
   res.status(403).json({ error: 'Nur von diesem Computer aus erreichbar.', code: 'localOnly' } satisfies ApiErrorBody);
 });
 app.use(phoneGate);
+/** A contacts table of IMPORT_LIMIT rows, sent as text inside JSON: room for wide rows, said when hit. */
+const IMPORT_BODY = '8mb';
+app.use('/api/contacts/import', express.json({ limit: IMPORT_BODY }));
 app.use(express.json());
 
 // Read-only mode (READONLY=1): block all mutations so an auditor can navigate the
@@ -97,8 +101,8 @@ const SHARER_ONLY: Array<[string, RegExp, string]> = [
   // The link through the share service: sharing, the sender, withdrawing and fetching returns are the sharer's.
   ['POST', /^\/api\/share\/(link|sender|refresh)$/, 'share'],
   ['DELETE', /^\/api\/share\/(sender|[a-z2-7]{26})$/, 'share'],
-  // Invoices and customers are issued and sent by the firm; mailboxes and collectors are its own (a copy reads no mail).
-  ['*', /^\/api\/(invoices|customers)(\/|$)/, 'invoices'],
+  // Invoices and contacts are issued and sent by the firm; mailboxes and collectors are its own (a copy reads no mail).
+  ['*', /^\/api\/(invoices|contacts)(\/|$)/, 'invoices'],
   ['*', /^\/api\/(sources|mail)(\/|$)/, 'sources'],
   // A payslip goes to the person from the firm's mailbox, locked with the password the firm gave her: the firm's (§22 decision 38).
   ['POST', /^\/api\/payroll\/payslips\/[^/]+\/send$/, 'payroll'],
@@ -129,6 +133,12 @@ app.use(onboarding);
 app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   // A hand-over file over the upload's limit: the limit is told (body-parser's 413).
   if ((err as { type?: string }).type === 'entity.too.large' && req.path.startsWith('/api/handover')) { res.status(413).json({ error: 'Die Datei ist grösser als 1 GB: höchstens 1 GB pro Übergabe.', code: 'shareTooLarge', params: { limit: '1 GB' } } satisfies ApiErrorBody); return; }
+  // Any other body over its limit: the limit is told, never a bare 413.
+  if ((err as { type?: string }).type === 'entity.too.large') {
+    if (req.path.startsWith('/api/contacts/import')) { res.status(413).json({ error: `Die Tabelle ist grösser als 8 MB: höchstens 8 MB und ${IMPORT_LIMIT} Zeilen pro Import.`, code: 'importTooLarge', params: { limit: '8 MB', rows: IMPORT_LIMIT } } satisfies ApiErrorBody); return; }
+    const limit = `${Math.round(((err as { limit?: number }).limit ?? 102400) / 1024)} kB`;
+    res.status(413).json({ error: `Die Anfrage ist grösser als ${limit}: höchstens ${limit} auf einmal.`, code: 'bodyTooLarge', params: { limit } } satisfies ApiErrorBody); return;
+  }
   if (err instanceof ClosedPeriodError) res.status(403).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);
   else if (err instanceof EmptyRefError) res.status(409).json({ error: err.message, code: 'emptyRef', params: {} } satisfies ApiErrorBody);
   else if (err instanceof StaleBooksError) res.status(409).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);

@@ -7,7 +7,6 @@
  */
 
 import type { JournalEntry, ReceiptPatch } from '../types/index.js';
-import type { CustomerFields } from '../invoices/model.js';
 
 /** Where a change waits: the books (one item, written by runs and edits), the AI's draft, a file changed outside the app. */
 export type ChangeSource = 'draft' | 'outside' | 'books';
@@ -46,7 +45,7 @@ export type ReceiptChange = { id: string; text: string; at: string; date?: strin
 /** What «Rückgängig» of a record change does: an API call the UI makes (src/app/areas/changes/changes.tsx). */
 export type RecordUndo =
   | { kind: 'deleteDraft'; id: string }
-  | { kind: 'customerBack'; id: string; fields: Partial<CustomerFields> }
+  | { kind: 'customerBack'; id: string; fields: Record<string, unknown> }
   | { kind: 'accountRemove'; number: string }
   | { kind: 'accountRename'; number: string; name: string }
   | { kind: 'templateBack'; year: string; template: string; state: 'done' | 'na' | null }

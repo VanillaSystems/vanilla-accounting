@@ -169,7 +169,7 @@ function Detail(props: Props) {
         </SelfBlock>
         <section className="kwsec">
           <header><h3>{t('partners.linked.title')}</h3><span className="m">{t('partners.linked.lead', { year })}</span>
-            {p.layers.customer ? <Go className="linkbtn" nav={nav} to={{ route: { area: 'invoices', view: 'customers', id: p.id }, query: {} }}>{t('partners.linked.customer')}</Go> : null}
+            {p.layers.customer ? <Go className="linkbtn" nav={nav} to={{ route: { area: 'invoices', view: 'contacts', id: p.contact ?? p.id }, query: {} }}>{t('partners.linked.customer')}</Go> : null}
           </header>
           <div className="kwlinked">
             <LinkGroup title={t('partners.linked.entries')} rows={linked.entries} empty={t('partners.linked.none', { year })} item={(e) => (

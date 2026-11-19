@@ -48,8 +48,8 @@ const CANONICAL = [
   '/invoices?status=overdue',
   '/invoices/2026-006',
   '/invoices/draft-a1b2',
-  '/invoices/customers',
-  '/invoices/customers/c-17',
+  '/invoices/contacts',
+  '/invoices/contacts/c-17',
   '/invoices/sent',
   '/invoices/sent/d-42',
   '/invoices/credit-notes',
@@ -91,6 +91,14 @@ test('every path of urls.md parses and formats back to itself', () => {
     const p = parse(url);
     assert.ok(!isRedirect(p), `${url} redirected to ${isRedirect(p) && formatLocation(p.redirect)}`);
     assert.equal(formatLocation(p), url);
+  }
+});
+
+test('Kunden became Kontakte: an old /invoices/customers link leads to the same contact', () => {
+  for (const [old, now] of [['/invoices/customers', '/invoices/contacts'], ['/invoices/customers/c-17', '/invoices/contacts/c-17']]) {
+    const p = parse(old);
+    assert.ok(isRedirect(p), `${old} redirects`);
+    assert.equal(formatLocation(p.redirect), now);
   }
 });
 

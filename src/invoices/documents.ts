@@ -4,10 +4,11 @@
  * a reminder and a cancellation notice from the issued invoice.
  */
 import type { Company } from '../workspace/workspace.js';
-import { DEFAULT_LAYOUT, type Customer, type Draft, type Invoice, type InvoiceBook, type InvoiceContent, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type Issued, type Reminder, type Sender } from './model.js';
+import { DEFAULT_LAYOUT, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type Issued, type Reminder, type Sender } from './model.js';
 import { addDays, openAmount, openFees, paidAmount, skontoOffer, termsFor, totals } from './rules.js';
 import type { SheetData } from './sheet.js';
 import { TEXTS, formatDate, kindTitle } from './texts.js';
+import { recipientOf } from './contacts.js';
 
 export interface InvoicingContext { company: Company; settings: InvoicingSettings | undefined }
 
@@ -68,7 +69,7 @@ export function mailText(settings: InvoicingSettings | undefined, inv: Issued, d
 }
 
 /** The days a draft gives to pay: those of the terms it picks, else the customer's, else the firm's. */
-export function draftDays(ctx: InvoicingContext, draft: Pick<Draft, 'kind' | 'termsId' | 'language'>, customer: Pick<Customer, 'paymentTermsDays'> | undefined): number {
+export function draftDays(ctx: InvoicingContext, draft: Pick<Draft, 'kind' | 'termsId' | 'language'>, customer: Pick<CustomerFields, 'paymentTermsDays'> | undefined): number {
   const days = customer?.paymentTermsDays ?? ctx.settings?.paymentTermsDays ?? 30;
   return ctx.settings?.paymentTerms.find((x) => x.id === draft.termsId)?.days ?? days;
 }
@@ -80,7 +81,8 @@ function termsOnPaper(inv: Pick<Issued, 'date' | 'terms' | 'lines' | 'prices' | 
   return { text: inv.terms.text, ...(sk && inv.terms.skonto ? { skonto: { percent: inv.terms.skonto.percent, until: sk.until, amount: sk.amount, pays: sk.pays } } : {}) };
 }
 
-export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draft, customer: Customer | undefined, logoSrc?: string): SheetData {
+/** `customer`: the recipient as the draft prints it now (src/invoices/contacts.ts recipientOf). */
+export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draft, customer: CustomerFields | undefined, logoSrc?: string): SheetData {
   const terms = draftDays(ctx, draft, customer);
   const texts = defaultTexts(ctx, draft.kind, draft.language, terms, draft.printAs);
   const picked = ctx.settings?.paymentTerms.some((x) => x.id === draft.termsId) ? termsFor(draft, ctx.settings?.paymentTerms, terms) : undefined;
@@ -163,5 +165,5 @@ export function reminderSheet(book: InvoiceBook, inv: Issued, reminder: Omit<Rem
 /** The sheet of any invoice record: a draft with today's settings, an issued one as issued. */
 export function sheetOf(ctx: InvoicingContext, book: InvoiceBook, inv: Invoice, logoSrc?: string): SheetData {
   if (inv.status === 'issued') return issuedSheet(book, inv, logoSrc);
-  return draftSheet(ctx, book, inv, book.customers.find((c) => c.id === inv.customerId), logoSrc);
+  return draftSheet(ctx, book, inv, recipientOf(book.contacts.find((c) => c.id === inv.customerId), inv, ctx.settings), logoSrc);
 }

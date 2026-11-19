@@ -65,7 +65,7 @@ function withIssuedInvoice(root: string): void {
     customerId: 'cu_m', date: '2026-06-01', currency: 'CHF' as const, language: 'de' as const, comments: [], lines: [{ text: 'Leistung', quantity: 1, price: 100, vatRate: 8.1 as const }] };
   const sender = { name: 'Muster', uid: 'CHE-123.456.789', address: { street: 'Weg', postcode: '8000', town: 'Zürich', country: 'CH' }, payTo: { account: '1021', iban: 'CH6580808000000000001' } };
   const issued = issue(draft, { customer: { id: 'cu_m', createdAt: '', origin: 'manual', deleted: false, ...customer }, sender, layout: DEFAULT_LAYOUT, invoices: [], now: '2026-06-01T09:00:00Z' });
-  const book: InvoiceBook = { schema: 1, customers: [], invoices: [{ ...issued, pdf: { file: 'transactional-data/2026/invoices/2026-001.pdf', sha256: sha(PDF) } }], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [], invoices: [{ ...issued, pdf: { file: 'transactional-data/2026/invoices/2026-001.pdf', sha256: sha(PDF) } }], sent: [] };
   mkdirSync(join(root, 'transactional-data/2026/invoices'), { recursive: true });
   writeFileSync(join(root, 'transactional-data/2026/invoices/2026-001.pdf'), PDF);
   writeFileSync(join(root, 'invoices.json'), JSON.stringify(book));

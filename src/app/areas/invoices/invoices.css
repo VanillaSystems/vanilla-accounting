@@ -338,3 +338,31 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .lknumbers .lknr { color: var(--muted); white-space: nowrap; font-size: 12px; }
 .lknumbers .lknext { grid-column: 2 / -1; color: var(--muted); font-size: 12px; }
 .lknumbers .lknext b { color: var(--ink); font-weight: 500; }
+/* Kontakte (spec 4.4.5): the table, a contact's panel, its form and the import. */
+.ctab .ctags { white-space: normal; }
+.ctag { display: inline-block; margin: 0 4px 2px 0; padding: 1px 7px; border-radius: 999px; background: var(--hover); color: var(--ink-2); font-size: 11.5px; }
+.cpanel .cnote { margin: 10px 0 0; font-size: 13px; color: var(--warn); }
+.cpanel .csecs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px 28px; margin-top: 16px; }
+.cpanel .csec { min-width: 0; display: grid; gap: 6px; align-content: start; font-size: 13px; }
+.cpanel .csec h3 { margin: 0; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.cpanel .csec p { margin: 0; }
+.cpanel .csec .ftab { max-width: none; }
+.cpanel .csec .ftab .fr { grid-template-columns: 96px minmax(0, 1fr) auto auto; padding: 4px 6px; }
+.cpanel .caddr { display: grid; gap: 1px; }
+.cpanel .cpick { display: grid; gap: 4px; }
+.cpanel .cpick select, .cdlg.contact select, .cimport select { font: 12.5px var(--font-sans); padding: 4px 6px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); max-width: 100%; }
+.cdlg.contact { width: min(640px, 94vw); top: 5vh; }
+.cdlg.contact .ibody { max-height: 72vh; overflow: auto; }
+.cform .cfh { grid-column: span 4; margin: 10px 0 0; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.cform .cgroup { grid-column: span 4; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; min-width: 0; }
+.cform .cflags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; color: var(--ink-2); font-size: 12.5px; }
+.cform .cflags label { display: inline-flex; align-items: center; gap: 5px; }
+.cform .cflags .quiet2 { margin-left: auto; }
+.cform .cf select { box-sizing: border-box; width: 100%; padding: 6px 9px; border-radius: 8px; }
+.cimport .cmap { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; margin-bottom: 10px; }
+.cimport .cmap .lkr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.cimport .cfh { margin: 12px 0 6px; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.cimport .ibody { max-height: 72vh; overflow: auto; }
+.cimport .warn { color: var(--warn); }
+@media (max-width: 560px) { .cform .cgroup { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cform .cgroup .cf.s3, .cform .cgroup .cf.w2 { grid-column: span 2; } }
+.ivhint.warn { color: var(--warn); }

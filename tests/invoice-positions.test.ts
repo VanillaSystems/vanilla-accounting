@@ -14,7 +14,8 @@ import { setJurisdiction } from '../src/engines/index.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
 import { EFFECTIVE_QUARTERLY } from '../src/workspace/vat-setup.js';
 import { apportion, creditNoteDraft, issue, lineAmounts, missingForIssue, revenueSplit, revenueVatCode, totals, warningsForIssue, writeOffAccounts, type Totals } from '../src/invoices/rules.js';
-import { DEFAULT_LAYOUT, DEFAULT_UNITS, type Customer, type Draft, type InvoiceBook, type InvoiceLine, type Issued, type ItemLine, type VatRate } from '../src/invoices/model.js';
+import { DEFAULT_LAYOUT, DEFAULT_UNITS, type Draft, type InvoiceBook, type InvoiceLine, type Issued, type ItemLine, type VatRate } from '../src/invoices/model.js';
+import { asContact, type Customer } from './support/invoice-fixtures.js';
 import { INVOICES_MIGRATIONS, INVOICES_SCHEMA, climb, pricesOfDocument } from '../src/workspace/schema.js';
 import { bookInvoiceEvents, eventRef } from '../src/invoices/events.js';
 import type { PaymentContext } from '../src/invoices/payments.js';
@@ -133,7 +134,7 @@ test('P1.3 webshop: coffee 2.6 % and grinders 8.1 %, prices incl. VAT, 2 % Rabat
 test('P1.3 agreed basis: RE-<n> books both rates net of the Rabatt', () => {
   setJurisdiction(ch, { registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly' });
   try {
-    const book: InvoiceBook = { schema: INVOICES_SCHEMA, customers: [customer], invoices: [], sent: [] };
+    const book: InvoiceBook = { schema: INVOICES_SCHEMA, contacts: [asContact(customer)], invoices: [], sent: [] };
     const inv: Issued = { ...issue(webshop(), { customer, sender, layout: DEFAULT_LAYOUT, invoices: [], now: '2026-10-15T10:00:00Z' }), pdf: { file: 'invoices/x.pdf', sha256: 'x' } };
     book.invoices.push(inv);
     const books: Books = { receipts: [], transactions: [], mappings: [], bankStatements: [], journalEntries: [], config: { closedThrough: '2026-06-30' } };
@@ -201,7 +202,7 @@ test('an invoice of zero or less is refused (a QR-bill carries no amount below z
   const over = draft([item('A', 1, 'pcs', 100, 8.1), { kind: 'discount', text: 'R', amount: 150 }]);
   assert.deepEqual(missingForIssue(over, { customer, sender, invoices: [] }).map((m) => m.field), ['total']);
   assert.deepEqual(missingForIssue(draft([item('A', 1, 'pcs', 100, 8.1, { discount: 120 })]), { customer, sender, invoices: [] }).map((m) => [m.field, m.line]), [['line.discount', 0], ['total', undefined]]);
-  const book: InvoiceBook = { schema: INVOICES_SCHEMA, customers: [customer], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: INVOICES_SCHEMA, contacts: [asContact(customer)], invoices: [], sent: [] };
   assert.throws(() => parseDraftPatch({ lines: [{ text: 'A', quantity: 1, price: 1, vatRate: 8.1, discount: -5 }] }, book), /discount ist ein Prozentsatz von 0 bis 100/);
 });
 
@@ -231,7 +232,7 @@ test('write-off accounts: the firm\'s, else the jurisdiction\'s (KMU chart 3800 
 // ─── what a draft may hold ────────────────────────────────────────────────────
 
 test('the API reads each kind; a unit is one of the firm\'s or one the draft holds; a Rabatt has a percent or an amount', () => {
-  const book: InvoiceBook = { schema: INVOICES_SCHEMA, customers: [customer], invoices: [draft([item('Alt', 1, 'sack', 10, 8.1)], { id: 'in_old' })], sent: [] };
+  const book: InvoiceBook = { schema: INVOICES_SCHEMA, contacts: [asContact(customer)], invoices: [draft([item('Alt', 1, 'sack', 10, 8.1)], { id: 'in_old' })], sent: [] };
   const lines = parseDraftPatch({ lines: [
     { kind: 'text', text: 'Wohnzimmer', style: 'title' }, { kind: 'text', text: 'Hinweis', style: 'plain' }, { kind: 'subtotal', text: 'Total' },
     { kind: 'discount', text: 'Rabatt', percent: 3 }, { kind: 'pagebreak' }, { text: 'Wand', quantity: 4, unit: 'm2', price: 18.5, vatRate: 8.1, discount: 5 },
@@ -255,7 +256,7 @@ test('the API reads each kind; a unit is one of the firm\'s or one the draft hol
 });
 
 test('the sheet edits each kind: a title or plain text, a Rabatt\'s value and mode, a position\'s discount; positions move; the prices switch drops a legacy flag', () => {
-  const ctx = { customers: [customer], defaultTexts: { intro: '', closing: '' } };
+  const ctx = { contacts: [asContact(customer)], defaultTexts: { intro: '', closing: '' } };
   const d = draft(painter());
   const change = (key: string, value: string) => { const r = sheetEdit(d, key, value, ctx); return r && 'change' in r ? r.change.lines : r; };
   assert.deepEqual((change('l:0:style', 'plain') as InvoiceLine[])[0], { kind: 'text', text: 'Wohnzimmer' });

@@ -1,4 +1,4 @@
-/** Verkauf's views as tabs (docs/specs/invoicing.md 4.8; phases 1 and 2: Angebote · Aufträge · Lieferscheine · Rechnungen · Gutschriften · Offene Posten · Kunden · Versendet) and its search. */
+/** Verkauf's views as tabs (docs/specs/invoicing.md 4.8; phases 1 and 2: Angebote · Aufträge · Lieferscheine · Rechnungen · Gutschriften · Offene Posten · Kontakte · Versendet) and its search. */
 import type { InvoiceView, RouteOf } from '../../shell/route.js';
 import { t } from '../../i18n/index.js';
 import { ICONS } from '../icons.js';
@@ -7,7 +7,7 @@ import type { AreaProps } from '../index.js';
 type Props = AreaProps<RouteOf<'invoices'>>;
 
 /** The order of the chain (spec 4.8): Angebote · Aufträge · Lieferscheine · Rechnungen · Gutschriften, then the rest. */
-export const VIEWS: readonly InvoiceView[] = ['quotes', 'orders', 'deliveries', 'list', 'credit-notes', 'open-items', 'customers', 'sent'];
+export const VIEWS: readonly InvoiceView[] = ['quotes', 'orders', 'deliveries', 'list', 'credit-notes', 'open-items', 'contacts', 'sent'];
 
 /** The period stays when the view has periods (the document tables); the others start without filters. */
 const PERIOD_VIEWS: readonly InvoiceView[] = ['quotes', 'orders', 'deliveries', 'list', 'credit-notes'];

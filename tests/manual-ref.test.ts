@@ -57,7 +57,7 @@ test('a run log line about a deleted movement keeps its number taken', () => {
 test('an invoice payment allocation naming a deleted movement keeps its number taken', () => {
   const { again } = mintDeleteMint((ws, ref) => {
     mkdirSync(dirname(ws.paths.invoices), { recursive: true });
-    writeFileSync(ws.paths.invoices, JSON.stringify({ schema: 1, customers: [], sent: [], invoices: [{ id: 'i1', payments: [{ transactionRef: ref, date: '2026-08-04', amount: 11, by: 'confirmed' }] }] }));
+    writeFileSync(ws.paths.invoices, JSON.stringify({ schema: 1, contacts: [], sent: [], invoices: [{ id: 'i1', payments: [{ transactionRef: ref, date: '2026-08-04', amount: 11, by: 'confirmed' }] }] }));
   });
   assert.equal(again, 'M2026-004');
 });

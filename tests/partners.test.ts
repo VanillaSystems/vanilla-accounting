@@ -47,7 +47,7 @@ test('a Sammelzahlung\'s entries go to the payee of their part, not to every par
 });
 
 test('a customer of Rechnungen is a partner with its invoices and the payments that paid them; a public business only when the company works with it', () => {
-  const customers = invoices.customers.filter((c) => !c.deleted);
+  const customers = invoices.contacts.filter((c) => !c.deleted);
   for (const c of customers) assert.equal(row(c.id).role, 'customer', c.name);
   const paid = customers.map((c) => row(c.id)).find((r) => r.payments.length)!;
   assert.ok(paid.invoices.length && paid.entries.length, 'its invoices and the entries of their payments');

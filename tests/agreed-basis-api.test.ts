@@ -14,6 +14,7 @@ import { appFolderIn, MANIFEST_FILE } from '../src/workspace/workspace.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { browserPath } from './support/browser.js';
+import { contactBody } from './support/invoice-fixtures.js';
 
 const skip = browserPath ? false : 'no Chromium-based browser installed (Chrome, Edge, Brave or Chromium; or set CHROME_PATH)';
 let api: ApiServer;
@@ -27,7 +28,7 @@ before(async () => {
 after(() => api?.stop());
 
 test('agreed basis: issuing books the invoice on its date against the receivable, cancelling reverses it, and the basis holds for the year', { skip }, async () => {
-  const c = await api.send('POST', '/api/customers', { name: 'Beispiel Bistro AG', address: { street: 'Seeweg', number: '12', postcode: '3000', town: 'Bern', country: 'CH' }, language: 'de' });
+  const c = await api.send('POST', '/api/contacts', contactBody({ name: 'Beispiel Bistro AG', address: { street: 'Seeweg', number: '12', postcode: '3000', town: 'Bern', country: 'CH' }, language: 'de' }));
   assert.equal(c.status, 200, String(c.json.error));
   const d = await api.send('POST', '/api/invoices', { customerId: c.json.id, date: '2026-08-20', lines: [{ text: 'Beratung', quantity: 1, unit: 'flat', price: 1000, vatRate: 8.1 }] });
   assert.equal(d.status, 200, String(d.json.error));

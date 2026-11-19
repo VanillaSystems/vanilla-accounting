@@ -54,6 +54,22 @@ Two markers flag an entry you must read before you update:
   A change applies from the next number. A new firm starts with AN-, AU-, LS-, RE- and GS- and
   the year, five digits, new each year. An existing workspace keeps its numbers: invoices and
   credit notes continue their one series (2026-001) until you change it.
+- Verkauf › Kontakte replaces Kunden. A contact is a firm or a person, with contact persons (name,
+  role, e-mail, phone), several addresses (one Rechnungsadresse, any number of Lieferadressen), a
+  customer number (K-00001 onwards, given at its first issued document or typed by hand), language,
+  e-mails, phone, UID, its own payment terms, currency, revenue account, a standing discount every new
+  position takes, «keine Mahnungen», notes and tags. Kontakte is a table (number, name, town, what is
+  open, documents, tags; tabs Firmen, Personen, Archiviert); a row opens the contact beside it with its
+  documents and open items. Old links to `/invoices/customers` open the same contact.
+- A draft picks the contact, then the contact person («z. Hd.» on the paper, the e-mail goes to them)
+  and the address (the Rechnungsadresse unless a branch is picked).
+- A contact any document names is archived, never deleted, and picked by no new document until it is
+  restored; a contact without documents is deleted.
+- Kontakte › Importieren reads contacts from a CSV (the export of another program): the columns are
+  mapped by their names and can be changed, each row shows what comes in and what is wrong with it,
+  and a row with the name or UID of a contact already there is proposed as the same contact.
+- A contact can be linked to its Geschäftspartner file; the app proposes the file by UID, the IBAN
+  that paid or the name, and Geschäftspartner then shows the two as one partner.
 
 - Buchungen › Neue Buchung von Hand: «+ Zeile» makes it a Sammelbuchung, one account against
   several lines (for example Haben 1020 against Soll 6500 and 6570). The last line holds the rest of

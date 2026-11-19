@@ -23,7 +23,8 @@ import { qrBillData, sheetBlocks, type SheetData } from '../src/invoices/sheet.j
 import { DEFAULT_NUMBERING, LEGACY_NUMBERING, counterOf, formatNumber, nextNumberFor } from '../src/invoices/numbering.js';
 import { formatFits, numberingFits, parseReference, qrReference, referenceFor, scorReference } from '../src/providers/qr-bill/reference.js';
 import { docRef, eventRef, writeOffRef } from '../src/books/refs.js';
-import { DEFAULT_LAYOUT, type Customer, type Draft, type Invoice, type Issued } from '../src/invoices/model.js';
+import { DEFAULT_LAYOUT, type Draft, type Invoice, type Issued } from '../src/invoices/model.js';
+import { asContact, type Customer } from './support/invoice-fixtures.js';
 
 const PDF = Buffer.from('%PDF-1.4 stand-in');
 /** Prints nothing: every sheet is one page with the same bytes, the last sheet kept to look at. */
@@ -277,7 +278,7 @@ test('the tables of Angebote, Aufträge and Lieferscheine: a status per kind fro
   const order = await issued(ws, convertDocument(ws, q.id, { to: 'sales-order', lines: [{ line: 0, quantity: 10 }, { line: 1, quantity: 10 }] }, '2026-11-04T08:00:00Z'), '2026-11-04T09:00:00Z');
   await issued(ws, convertDocument(ws, order.id, { to: 'delivery-note', lines: [{ line: 1, quantity: 10 }] }, '2026-11-05T08:00:00Z'), '2026-11-05T09:00:00Z');
   const book = loadInvoices(ws);
-  const d = { today: '2026-11-19', invoices: liveDocuments(book), customers: book.customers, sent: book.sent };
+  const d = { today: '2026-11-19', invoices: liveDocuments(book), contacts: book.contacts, sent: book.sent };
   const year = parsePeriod('2026', '2026-11-19')!;
   const quotes = docRows(d, 'quote', year, undefined, '2026-11-19');
   assert.deepEqual(quotes.map((r) => r.status).sort(), ['accepted', 'draft']);
@@ -319,7 +320,7 @@ test('an Angebot, Auftrag or Lieferschein is never open money: openAmount 0, nev
   for (const d of [q, o]) {
     assert.deepEqual([openAmount(d, docs), openOn(d, docs, '2027-12-31'), isOverdue(d, docs, '2027-03-01'), status(d, docs)], [0, 0, false, 'issued']);
   }
-  assert.equal(customerOpen({ today: '2027-03-01', invoices: docs, customers: book.customers, sent: book.sent }, c.id), 0);
+  assert.equal(customerOpen({ today: '2027-03-01', invoices: docs, contacts: book.contacts, sent: book.sent }, c.id), 0);
 });
 
 test('an Auftrag\'s Storno: a Rechnung of it credited in full no longer holds it, credited in part still does; its drafts warn first and warn again at their issue; each «Trotzdem» confirms only its own warning', async () => {

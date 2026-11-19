@@ -1,41 +1,59 @@
 {
   "schema": 4,
-  "customers": [
+  "contacts": [
     {
       "id": "cu_5GQVervgd2rF",
       "createdAt": "2026-07-01T08:00:00.000Z",
       "origin": "manual",
       "deleted": false,
+      "type": "firm",
       "name": "Familie Huber-Beispiel",
-      "address": {
-        "street": "Obere Gasse",
-        "number": "17",
-        "postcode": "9008",
-        "town": "St. Gallen",
-        "country": "CH"
-      },
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Obere Gasse",
+          "number": "17",
+          "postcode": "9008",
+          "town": "St. Gallen",
+          "country": "CH",
+          "billing": true
+        }
+      ],
       "language": "de",
-      "email": "huber-beispiel@mail.example",
-      "paymentTermsDays": 30
+      "emails": [
+        "huber-beispiel@mail.example"
+      ],
+      "paymentDays": 30,
+      "number": "K-00001"
     },
     {
       "id": "cu_2KIQYfUMHYIT",
       "createdAt": "2026-07-01T08:00:00.000Z",
       "origin": "manual",
       "deleted": false,
+      "type": "firm",
       "name": "Muster Wohnbau AG",
-      "attn": "Bauleitung, z. H. Frau Muster",
-      "address": {
-        "street": "Rorschacher Strasse",
-        "number": "150",
-        "postcode": "9006",
-        "town": "St. Gallen",
-        "country": "CH"
-      },
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Rorschacher Strasse",
+          "number": "150",
+          "postcode": "9006",
+          "town": "St. Gallen",
+          "country": "CH",
+          "attn": "Bauleitung, z. H. Frau Muster",
+          "billing": true
+        }
+      ],
       "language": "de",
+      "emails": [
+        "rechnungen@muster-wohnbau.example"
+      ],
       "vatId": "CHE-579.135.791 MWST",
-      "email": "rechnungen@muster-wohnbau.example",
-      "paymentTermsDays": 30
+      "paymentDays": 30,
+      "number": "K-00002"
     }
   ],
   "invoices": [

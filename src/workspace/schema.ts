@@ -107,8 +107,7 @@ export const WORKSPACE_SCHEMA = 6;
  *    (an Auftrag's print variant); a position's `optional` and `ofLine`; a draft's `number` (an Angebot or
  *    Auftrag back to draft keeps it); sent-log kinds `quote`, `sales-order`, `delivery-note`. A file of
  *    schema 3 holds none of them: the step adds nothing. An app of schema 3 would read an Angebot as a
- *    Rechnung, list it, match payments to it and book it, so it must refuse. The contacts of phase 2
- *    (slice G1) transform `customers` in this same step.
+ *    Rechnung, list it, match payments to it and book it, so it must refuse. 
  *    Also in 4 (slice F2): `Draft.number` (a document back to draft keeps its number: one field and
  *    one rule for every kind), `replaced` and `Issued.accountChanges` (back to draft, Konten ändern).
  */
@@ -191,9 +190,33 @@ export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {
   // Every line is an item (no `kind`); each document names its prices, and a line keeps `vatIncluded` only where it
   // differs from them; an issued document freezes the words its units printed with.
   2: (doc) => ({ ...doc, invoices: Array.isArray(doc.invoices) ? doc.invoices.map((d) => unitsOfIssued(pricesOfDocument(d))) : doc.invoices }),
-  // No document is of a phase-2 kind before; the number makes an older app refuse the file.
-  3: (doc) => doc,
+  // No document is of a phase-2 kind before: nothing to add for them. Each customer becomes a firm contact; the documents stay byte for byte.
+  3: (doc) => contactsOfCustomers(doc),
 };
+
+/**
+ * Step 3 → 4: `customers` → `contacts`. A customer of schema 3 is a firm contact under the same id,
+ * so every document's `customerId` still names it: its address is the one address, marked billing,
+ * with its `attn` as that address's line (a free text, «Küche, z. H. Herr Beispiel», never parsed
+ * into a person); `email` the first of `emails`; `paymentTermsDays` its `paymentDays`, which read
+ * as N days net as before. Nothing else of the file changes.
+ */
+export function contactsOfCustomers(doc: Record<string, unknown>): Record<string, unknown> {
+  const { customers, ...rest } = doc;
+  const contacts = (Array.isArray(customers) ? customers : []).map((raw) => {
+    const { attn, address, email, paymentTermsDays, ...c } = raw as Record<string, unknown>;
+    const a = (address && typeof address === 'object' ? address : {}) as Record<string, unknown>;
+    return {
+      ...c,
+      type: 'firm',
+      persons: [],
+      addresses: [{ id: 'a-1', ...a, ...(typeof attn === 'string' && attn.trim() ? { attn } : {}), billing: true }],
+      emails: typeof email === 'string' && email.trim() ? [email] : [],
+      ...(Number.isInteger(paymentTermsDays) ? { paymentDays: paymentTermsDays as number } : {}),
+    };
+  });
+  return { contacts, ...rest };
+}
 
 /** The words the units of schema 2 printed with (src/invoices/texts.ts at 0.6.0). */
 const UNITS_OF_SCHEMA_2: Record<string, Record<'de' | 'fr' | 'it' | 'en', string>> = {

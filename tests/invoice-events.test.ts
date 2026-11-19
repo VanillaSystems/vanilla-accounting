@@ -21,7 +21,8 @@ import {
 } from '../src/invoices/payments.js';
 import { creditNoteStatus } from '../src/invoices/lists.js';
 import { cancel, figures, issue, openAmount, skontoOf, status, totals, InvoiceRuleError } from '../src/invoices/rules.js';
-import { DEFAULT_LAYOUT, type Customer, type Draft, type InvoiceBook, type Invoice, type Issued, type PaymentTerms } from '../src/invoices/model.js';
+import { DEFAULT_LAYOUT, type Draft, type InvoiceBook, type Invoice, type Issued, type PaymentTerms } from '../src/invoices/model.js';
+import { asContact, type Customer } from './support/invoice-fixtures.js';
 import { matchStatementRows, mergeIndex } from '../src/books/bank-import.js';
 import { chfAmount } from '../src/accounting/ledger.js';
 import type { Books } from '../src/books/store.js';
@@ -58,7 +59,7 @@ const ctx: PaymentContext = {
   pdfOf: (inv) => Buffer.from(`%PDF ${inv.number}`), receiptId: (pdf) => `r_${pdf.toString().slice(5)}`, indexedAt: (at) => `${at.date}T18:00:00Z`, held: () => new Set(),
 };
 
-const newBook = (): InvoiceBook => ({ schema: 3, customers: [customer], invoices: [], sent: [] });
+const newBook = (): InvoiceBook => ({ schema: 3, contacts: [asContact(customer)], invoices: [], sent: [] });
 const books = (transactions: BankTransaction[] = [], closedThrough = '2026-06-30'): Books => ({ receipts: [], transactions, mappings: [], bankStatements: [], journalEntries: [], config: { closedThrough } });
 const draft = (id: string, date: string, lines: Draft['lines'], over: Partial<Draft> = {}): Draft => ({
   id, createdAt: `${date}T08:00:00Z`, origin: 'manual', deleted: false, status: 'draft', kind: 'invoice', customerId: 'cu_1',

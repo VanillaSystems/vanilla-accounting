@@ -1,5 +1,5 @@
 /**
- * Invoicing (ADR 0010): customers, drafts, issuing, sending, cancelling, credit notes, reminders,
+ * Invoicing (ADR 0010): contacts, drafts, issuing, sending, cancelling, credit notes, reminders,
  * comments, previews and the stored PDFs. Every change goes through src/invoices/service.ts; the
  * routes that book go through the write door: a payment confirmed by a person (withBooks and
  * assertOpen), and on the agreed basis issuing and cancelling, which book the document's VAT event
@@ -10,11 +10,15 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WS, assertOpen, readBooks, receiptPath, refDates, updateBooksWithEffects, RequestError } from '../books.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
-import { liveCustomers, liveDocuments, liveInvoices, type CreditRequest } from '../../invoices/rules.js';
+import { InvoiceRuleError, liveDocuments, liveInvoices, type CreditRequest } from '../../invoices/rules.js';
 import {
-  addComment, answerQuote, backToDraft, cancelInvoice, changeAccounts, convertDocument, createCreditNote, createCustomer, createDraft, draftReminder, fileReceipts, findInvoice, issueInvoice, issuedPdf,
-  missingOf, parseCustomer, parseDraftPatch, paymentContext, previewHtml, recordSend, removeDraft, reopenDocument, replacedPdf, sendReminder, sentPdf, updateCustomer, updateDraft, viewOf,
+  addComment, answerQuote, backToDraft, cancelInvoice, changeAccounts, convertDocument, createContact, addContacts, createCreditNote, createDraft, draftReminder, fileReceipts, findInvoice, issueInvoice, issuedPdf,
+  missingOf, parseDraftPatch, paymentContext, previewHtml, recordSend, removeContact, removeDraft, reopenDocument, replacedPdf, sendReminder, sentPdf, updateContact, updateDraft, viewOf,
 } from '../../invoices/service.js';
+import { liveContacts, payerIbans, proposeBusiness } from '../../invoices/contacts.js';
+import { importContacts, previewContactImport, type ImportChoice } from '../../invoices/contact-import.js';
+import { loadKnowledge } from '../../knowledge/layers.js';
+import { APP_ROOT } from '../../workspace/workspace.js';
 import {
   allocatePayment, allocationProposal, confirmPayment, paymentProposals, recordHandPayment, releasePayment, removeHandPayment, removeWriteOff, writeOffRest,
   type AllocationPart, type PaymentContext, type PaymentReleased,
@@ -60,7 +64,7 @@ const optNumber = (b: Record<string, unknown>, k: string): number | undefined =>
 router.get('/api/invoices', (_req, res) => {
   const book = loadInvoices(WS);
   const day = today();
-  res.json({ today: day, invoices: liveDocuments(book).map((i) => viewOf(book, i, day, WS.invoicing?.shortfallLimit)), customers: liveCustomers(book), sent: book.sent.filter((d) => !d.deleted) });
+  res.json({ today: day, invoices: liveDocuments(book).map((i) => viewOf(book, i, day, WS.invoicing?.shortfallLimit)), contacts: liveContacts(book), sent: book.sent.filter((d) => !d.deleted) });
 });
 
 router.get('/api/invoices/sent', (_req, res) => {
@@ -99,15 +103,27 @@ router.get('/api/invoices/:id/reminder', (req, res) => {
   res.json(draftReminder(WS, req.params.id, String(req.query.date ?? today()), fee));
 });
 
-router.get('/api/customers', (_req, res) => {
-  res.json(liveCustomers(loadInvoices(WS)));
+router.get('/api/contacts', (_req, res) => {
+  res.json(liveContacts(loadInvoices(WS)));
 });
 
-router.get('/api/customers/:id', (req, res) => {
+/**
+ * A contact with the business file it names and the one code proposes for it (by UID, the IBANs that
+ * paid its invoices, or its name), and the customers' business files a person may pick.
+ */
+router.get('/api/contacts/:id', (req, res) => {
   const book = loadInvoices(WS);
-  const c = liveCustomers(book).find((x) => x.id === req.params.id);
-  if (!c) throw new RequestError(404, 'Kunde nicht gefunden.');
-  res.json({ ...c, invoices: liveDocuments(book).filter((i) => i.customerId === c.id).map((i) => viewOf(book, i, today())) });
+  const c = liveContacts(book).find((x) => x.id === req.params.id);
+  if (!c) throw new InvoiceRuleError('contactGone', 'Diesen Kontakt gibt es nicht (mehr).');
+  const { counterparties } = loadKnowledge(APP_ROOT, WS.paths.root);
+  const proposal = proposeBusiness(c, counterparties, payerIbans(book, c.id, readBooks().transactions));
+  const named = c.business ? counterparties.find((x) => x.id === c.business) : undefined;
+  res.json({
+    contact: c,
+    ...(c.business ? { business: { id: c.business, name: named?.name ?? c.business, known: !!named } } : {}),
+    ...(proposal ? { proposal } : {}),
+    businesses: counterparties.filter((x) => x.roles.includes('customer') || x.role === 'customer').map((x) => ({ id: x.id, name: x.name })),
+  });
 });
 
 /** A logo an invoice is laid out with: the layout's, or one an issued invoice froze; no other file. */
@@ -138,14 +154,33 @@ router.get('/invoices/sent/:file', (req, res, next) => {
   res.type('application/pdf').send(sentPdf(WS, m[1]));
 });
 
-// ─── customers and drafts ──────────────────────────────────────────────────────
+// ─── contacts and drafts ───────────────────────────────────────────────────────
 
-router.post('/api/customers', (req, res) => {
-  res.json(createCustomer(WS, parseCustomer(req.body, false)));
+router.post('/api/contacts', (req, res) => {
+  res.json(createContact(WS, req.body));
 });
 
-router.patch('/api/customers/:id', (req, res) => {
-  res.json(updateCustomer(WS, req.params.id, parseCustomer(req.body, true)));
+router.patch('/api/contacts/:id', (req, res) => {
+  res.json(updateContact(WS, req.params.id, req.body));
+});
+
+/** Archived while a document names it, else deleted (spec 4.4.5); the answer says which. */
+router.delete('/api/contacts/:id', (req, res) => {
+  res.json(removeContact(WS, req.params.id));
+});
+
+/** A CSV of contacts read with a column mapping (the proposed one when none is sent): each row as it would be imported, with its problems and its duplicates. */
+router.post('/api/contacts/import/preview', (req, res) => {
+  const b = body(req);
+  res.json(previewContactImport(String(b.csv ?? ''), b.mapping as Record<string, string> | undefined, liveContacts(loadInvoices(WS))));
+});
+
+/** The rows of the preview imported, each as its choice says (`new`, `same`: not again, `skip`). */
+router.post('/api/contacts/import', (req, res) => {
+  const b = body(req);
+  const plan = importContacts(String(b.csv ?? ''), b.mapping as Record<string, string> | undefined, (b.choices ?? {}) as Record<string, ImportChoice>, liveContacts(loadInvoices(WS)));
+  const made = addContacts(WS, plan.contacts);
+  res.json({ created: made.length, skipped: plan.skipped, ids: made.map((c) => c.id) });
 });
 
 router.post('/api/invoices', (req, res) => {

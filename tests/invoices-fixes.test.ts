@@ -10,7 +10,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parsePeriod } from '../src/accounting/periods.js';
-import { DEFAULT_LAYOUT, type Customer, type Draft, type InvoiceBook, type Issued, type ItemLine } from '../src/invoices/model.js';
+import { DEFAULT_LAYOUT, type Draft, type InvoiceBook, type Issued, type ItemLine } from '../src/invoices/model.js';
+import { asContact, type Customer } from './support/invoice-fixtures.js';
 import { creditNoteDraft, issue, missingForIssue, revenueSplit, totals, warningsForIssue } from '../src/invoices/rules.js';
 import { parseDraftPatch } from '../src/invoices/service.js';
 import { assembleSheets, oneLine, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
@@ -21,6 +22,7 @@ import { saveFile, sameOrigin } from '../src/desktop/save-file.js';
 import deLocale from '../src/app/i18n/locales/de.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import './support/jurisdiction.js';
+import { invoiceBookOf } from '../src/invoices/store.js';
 
 const customer: Customer = {
   id: 'cu_1', createdAt: '2026-07-01T08:00:00Z', origin: 'manual', deleted: false,
@@ -52,7 +54,7 @@ test('«Ausstellen» with something missing: each item says it in words and lead
 });
 
 test('the date or period of the supply: typed on the sheet, stored, printed', () => {
-  const ctx = { customers: [customer], defaultTexts: { intro: '', closing: '' } };
+  const ctx = { contacts: [asContact(customer)], defaultTexts: { intro: '', closing: '' } };
   const d = draft();
   assert.deepEqual(sheetEdit(d, 'supplied', '01.09. – 15.09.2026', ctx), { change: { supplied: { from: '2026-09-01', to: '2026-09-15' } } });
   assert.deepEqual(sheetEdit(d, 'supplied', '03.09.2026', ctx), { change: { supplied: { from: '2026-09-03' } } });
@@ -79,8 +81,8 @@ test('the Save dialog: cancelled, nothing written and nothing to record; saved, 
 });
 
 test('an invoice of an earlier period still open is listed in the current one, and counted as open', () => {
-  const book = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as InvoiceBook;
-  const d = { today: '2026-12-01', invoices: book.invoices, customers: book.customers, sent: book.sent };
+  const book = invoiceBookOf(JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as Record<string, unknown>, 'invoices.json');
+  const d = { today: '2026-12-01', invoices: book.invoices, contacts: book.contacts, sent: book.sent };
   const q4 = docRows(d, 'invoice', parsePeriod('2026-Q4', '2026-12-01')!, undefined, '2026-12-01');
   const earlier = q4.filter((r) => r.inv.date < '2026-10-01');
   assert.ok(earlier.length > 0, 'the demo has open invoices dated before Q4');
@@ -124,12 +126,12 @@ test('«CHF 500 inkl. MWST» stays 500.00: the VAT is derived from the gross, th
   assert.deepEqual([totals(inv).gross, totals(inv).vat], [3243, 243]);
   // Editing keeps the document priced with its VAT in it; the rate pick changes the rate only (the document's prices are its own switch).
   const d = { ...cn, lines: cn.lines } as Draft;
-  const ctx = { customers: [customer], defaultTexts: { intro: '', closing: '' } };
+  const ctx = { contacts: [asContact(customer)], defaultTexts: { intro: '', closing: '' } };
   assert.deepEqual(sheetEdit(d, 'l:0:price', '−450', ctx), { change: { lines: [{ ...cn.lines[0], price: -450 }] } }, 'a typed minus (U+2212) stays a minus');
   assert.deepEqual(sheetEdit(d, 'l:0:vatRate', '2.6', ctx), { change: { lines: [{ ...cn.lines[0], vatRate: 2.6 }] } });
   assert.equal(sheetEdit(d, 'l:0:vatRate', '8.1', ctx), undefined);
   assert.deepEqual(sheetEdit(draft(), 'l:0:vatRate', 'incl:8.1', ctx), { refused: 'value' }, 'no rate «incl.» per line any more');
-  const book: InvoiceBook = { schema: 3, customers: [customer], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 3, contacts: [asContact(customer)], invoices: [], sent: [] };
   assert.deepEqual(parseDraftPatch({ lines: cn.lines, prices: 'gross' }, book), { clear: [], lines: cn.lines, prices: 'gross' }, 'the API keeps the document priced with its VAT in it');
 });
 

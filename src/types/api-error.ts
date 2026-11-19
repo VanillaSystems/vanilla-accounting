@@ -42,6 +42,9 @@ export type ApiRefusal =
   | { code: 'shareNotPackage' }
   /** A hand-over file past a limit (its size, a file's size, its number of files): the limit is named. */
   | { code: 'shareTooLarge'; params: { limit: string } }
+  /** A request body over its limit: a contacts table over the import's (`importTooLarge`), any other (`bodyTooLarge`). */
+  | { code: 'importTooLarge'; params: { limit: string; rows: number } }
+  | { code: 'bodyTooLarge'; params: { limit: string } }
   /** A return based on a version never handed to its sender. */
   | { code: 'shareUnknownBase'; params: { version: string; name: string } }
   /** An update that could not be written: the copy and his changes stay as they were. */

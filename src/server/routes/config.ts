@@ -476,7 +476,7 @@ router.patch('/api/workspace', (req, res) => {
   const banksBefore = WS.bankAccounts;
   checked(() => patchManifest(WS.paths.manifest, patch));
   const days = patch.invoicing?.paymentTermsDays;
-  if (days !== undefined && terms !== undefined) setCustomerTerms(WS, (c) => (c.paymentTermsDays === terms ? days : undefined));
+  if (days !== undefined && terms !== undefined) setCustomerTerms(WS, (had) => (had === terms ? days : undefined));
   reopenWorkspace();
   chartWithBanks(patch, banksBefore);
   reopenWorkspace();

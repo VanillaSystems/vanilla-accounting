@@ -22,10 +22,10 @@ export const AUTOMATION_PAGES = ['runs', 'workflows', 'map', 'queue', 'tasks'] a
 
 /**
  * Verkauf's views (docs/specs/invoicing.md 4.8): `list` is Rechnungen (no segment), then Angebote,
- * Aufträge, Lieferscheine, Gutschriften, Offene Posten, Kunden and Versendet. A document opens under the
+ * Aufträge, Lieferscheine, Gutschriften, Offene Posten, Kontakte and Versendet. A document opens under the
  * view it is listed in; /invoices/<number> stays its link whatever its kind.
  */
-export const INVOICE_VIEWS = ['list', 'quotes', 'orders', 'deliveries', 'credit-notes', 'open-items', 'customers', 'sent'] as const;
+export const INVOICE_VIEWS = ['list', 'quotes', 'orders', 'deliveries', 'credit-notes', 'open-items', 'contacts', 'sent'] as const;
 export type InvoiceView = typeof INVOICE_VIEWS[number];
 
 /**
@@ -116,7 +116,7 @@ export interface Query {
   /** Offene Posten: the reference date (`?date=2026-12-31`); absent: today. */
   date?: IsoDate;
   vat?: string;
-  /** /invoices/new?customer=<id>: the customer of the draft to write. */
+  /** /invoices/new?customer=<id>: the contact of the draft to write. */
   customer?: string;
   /** /company/rules?payment=<ref>: the form of a new rule, started from that payment. */
   payment?: string;
@@ -197,7 +197,8 @@ function routeOf([a, b, c, d, e]: string[]): Route {
     case 'reports': return b === 'custom' ? defined({ area: 'reports', report: 'custom', saved: c }) : isOneOf(REPORTS, b) ? defined({ area: 'reports', report: b, account: c }) : { area: 'reports', report: 'income' };
     case 'close': return defined({ area: 'close', step: b });
     case 'company': return { area: 'company', section: b ?? 'profile' };
-    case 'invoices': return b !== 'list' && isOneOf(INVOICE_VIEWS, b) ? defined({ area: 'invoices', view: b, id: c }) : defined({ area: 'invoices', view: 'list', id: b });
+    // Kunden became Kontakte (phase 2): an old /invoices/customers[/<id>] link opens the same contact.
+    case 'invoices': return b === 'customers' ? defined({ area: 'invoices', view: 'contacts', id: c }) : b !== 'list' && isOneOf(INVOICE_VIEWS, b) ? defined({ area: 'invoices', view: b, id: c }) : defined({ area: 'invoices', view: 'list', id: b });
     case 'automation': return automationRoute(b, c, d);
     case 'changes': return defined({ area: 'changes', commit: b, file: b ? c : undefined });
     case 'partners': return defined({ area: 'partners', id: b });

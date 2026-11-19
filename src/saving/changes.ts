@@ -17,7 +17,8 @@ import type { BankStatement, BankTransaction, JournalEntry, Mapping, Receipt, Re
 import { latestDeletions } from '../books/receipt-trash.js';
 import { readQuestions } from '../questions/store.js';
 import { counts, type BooksChange, type HandEdit, type ChangesView, type FileChange, type FileDiff, type ReceiptChange, type RecordChange, type SaveDetail, type SaveSummary } from './model.js';
-import type { Customer, Invoice, InvoiceBook } from '../invoices/model.js';
+import type { Contact, Invoice, InvoiceBook } from '../invoices/model.js';
+import { invoiceBookOf } from '../invoices/store.js';
 import type { YearCloseState } from '../accounting/year-close.js';
 
 type Ws = Pick<Workspace, 'paths'>;
@@ -98,15 +99,17 @@ export async function booksChange(ws: Ws): Promise<BooksChange> {
 const wroteAt = (path: string) => (existsSync(path) ? statSync(path).mtime.toISOString() : '');
 const parseJson = <T>(text: string, fallback: T): T => { try { return text ? (JSON.parse(text) as T) : fallback; } catch { return fallback; } };
 
-/** The fields of a customer a person edits, as PATCH /api/customers takes them. */
-const customerFields = (c: Customer): Partial<Customer> =>
-  ({ name: c.name, attn: c.attn, address: c.address, language: c.language, vatId: c.vatId, email: c.email, paymentTermsDays: c.paymentTermsDays });
+/** The fields of a contact a person edits, as PATCH /api/contacts takes them: one it lacks as null, so the undo clears it. */
+// Not `number`: one given at the first issued document is the app's, never a person's change to undo.
+const CONTACT_EDITS = ['type', 'name', 'salutation', 'firstName', 'lastName', 'persons', 'addresses', 'language', 'emails', 'phone', 'vatId',
+  'paymentTerms', 'paymentDays', 'currency', 'revenueAccount', 'discount', 'noReminders', 'notes', 'tags', 'archived', 'business'] as const;
+const customerFields = (c: Contact): Record<string, unknown> =>
+  Object.fromEntries(CONTACT_EDITS.map((k) => [k, c[k] ?? (k === 'archived' ? false : null)]));
 
 /**
  * The records changed since the last save that are neither bookings nor receipts (r9c-6), each
  * with its undo or why there is none: invoices (a draft can be deleted; one issued or cancelled
- * keeps its number), customers (a changed one goes back as saved; one added stays, customers are
- * never deleted), statements read in (their payments belong to the books), the year close's
+ * keeps its number), contacts (a changed one goes back as saved; one added stays), statements read in (their payments belong to the books), the year close's
  * steps (marked back, which takes the step's booking with it), the chart's accounts (removed or
  * named back). Dated by the file's last write.
  */
@@ -117,12 +120,13 @@ export async function recordChanges(ws: Ws): Promise<RecordChange[]> {
   const out: RecordChange[] = [];
 
   const invPath = ws.paths.invoices;
-  const empty: InvoiceBook = { schema: 1, customers: [], invoices: [], sent: [] };
-  const now = parseJson<InvoiceBook>(read(invPath), empty);
-  const saved = parseJson<InvoiceBook>(await savedText(invPath), empty);
+  const empty: InvoiceBook = { schema: 1, contacts: [], invoices: [], sent: [] };
+  // Both brought to today's schema: the saved one may be older (customers before contacts).
+  const now = invoiceBookOf(parseJson<Record<string, unknown>>(read(invPath), { ...empty }), invPath);
+  const saved = invoiceBookOf(parseJson<Record<string, unknown>>(await savedText(invPath), { ...empty }), invPath);
   const at = wroteAt(invPath);
   const savedInvoices = new Map(saved.invoices.map((i) => [i.id, i]));
-  const title = (i: Invoice) => (i.status === 'issued' ? `${i.kind === 'credit-note' ? 'Gutschrift' : 'Rechnung'} ${i.number} ${i.customer.name}` : now.customers.find((c) => c.id === i.customerId)?.name ?? i.id);
+  const title = (i: Invoice) => (i.status === 'issued' ? `${i.kind === 'credit-note' ? 'Gutschrift' : 'Rechnung'} ${i.number} ${i.customer.name}` : now.contacts.find((c) => c.id === i.customerId)?.name ?? i.id);
   for (const i of now.invoices) {
     if (i.deleted) continue;
     const was = savedInvoices.get(i.id);
@@ -138,8 +142,8 @@ export async function recordChanges(ws: Ws): Promise<RecordChange[]> {
       for (const p of was.payments) if (!now.has(p.transactionRef)) out.push({ kind: 'invoice', id: i.id, number: i.number, date: i.date, state: 'paymentReleased', payment: p.transactionRef, text: title(i), at, undo: { kind: 'relinkPayment', id: i.id, transactionRef: p.transactionRef } });
     }
   }
-  const savedCustomers = new Map(saved.customers.map((c) => [c.id, c]));
-  for (const c of now.customers) {
+  const savedCustomers = new Map(saved.contacts.map((c) => [c.id, c]));
+  for (const c of now.contacts) {
     if (c.deleted) continue;
     const was = savedCustomers.get(c.id);
     if (!was) out.push({ kind: 'customer', id: c.id, state: 'added', text: c.name, at, blocked: 'customerNew' });

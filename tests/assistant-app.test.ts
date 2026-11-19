@@ -22,6 +22,7 @@ import { defaultTexts, draftSheet, issuedIntro } from '../src/invoices/documents
 import { invoicingContext } from '../src/invoices/service.js';
 import { sheetBlocks } from '../src/invoices/sheet.js';
 import { TEXTS } from '../src/invoices/texts.js';
+import { loadInvoices } from '../src/invoices/store.js';
 import { appMap } from '../src/server/app-map.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
@@ -75,7 +76,7 @@ async function sidebar(t: { after(fn: () => unknown): void }) {
   };
   const books = () => get<Index>('/books.json');
   const chart = () => JSON.parse(readFileSync(api.ws.paths.accounts, 'utf8')) as Array<{ number: string; name: string }>;
-  const invoices = () => JSON.parse(readFileSync(api.ws.paths.invoices, 'utf8')) as InvoiceBook;
+  const invoices = (): InvoiceBook => loadInvoices(api.ws);
   const manifest = () => readFileSync(api.ws.paths.manifest, 'utf8');
   const send = async (method: string, path: string) => {
     const res = await fetch(`http://127.0.0.1:${api.port}${path}`, { method, headers: { Connection: 'close' } });
@@ -211,7 +212,7 @@ test('an earlier answer\'s change is not taken back by a later one: its own «R�
 
 test('the payment term and the invoice texts change at once: for every customer who had the old term; the undo puts all back', async (t) => {
   const s = await sidebar(t);
-  const terms = () => Object.fromEntries(s.invoices().customers.map((c) => [c.name, c.paymentTermsDays]));
+  const terms = () => Object.fromEntries(s.invoices().contacts.map((c) => [c.name, c.paymentDays]));
   const was = terms();
   const made = await s.answer([{ kind: 'invoicing', set: { paymentTermsDays: 10, texts: { de: { intro: 'Grüezi mitenand' }, fr: { closing: null } } } }]);
   assert.equal(made.refused, undefined, made.refused?.message);
@@ -256,7 +257,7 @@ test('a greeting is a line of its own above the intro: «Grüezi» leaves the in
 
 test('an invoice draft for a customer, or for a new one; the undo drops it (and the new customer); a refused answer writes no draft', async (t) => {
   const s = await sidebar(t);
-  const customer = s.invoices().customers.find((c) => c.name === 'Beispiel Bistro AG')!;
+  const customer = s.invoices().contacts.find((c) => c.name === 'Beispiel Bistro AG')!;
   const drafts = () => s.invoices().invoices.filter((i) => i.status === 'draft' && !i.deleted);
   const n = drafts().length;
   const lines = [{ text: 'Malerarbeiten Küche', quantity: 12, unit: 'h', price: 95, vatRate: 8.1 }];
@@ -271,14 +272,15 @@ test('an invoice draft for a customer, or for a new one; the undo drops it (and 
 
   const fresh = await s.answer([{ kind: 'invoiceDraft', newCustomer: { name: 'Familie Keller', address: { street: 'Hauptstrasse', number: '1', postcode: '9500', town: 'Wil', country: 'CH' } }, draft: { lines } }]);
   assert.equal(fresh.refused, undefined, fresh.refused?.message);
-  const keller = s.invoices().customers.find((c) => c.name === 'Familie Keller')!;
-  assert.deepEqual([keller.language, keller.paymentTermsDays, keller.deleted], ['de', 30, false]);
+  const keller = s.invoices().contacts.find((c) => c.name === 'Familie Keller')!;
+  // A new contact names no terms of its own: it pays in the firm's (30 days in the demo).
+  assert.deepEqual([keller.type, keller.language, keller.paymentDays, keller.addresses[0]?.billing, keller.deleted], ['firm', 'de', undefined, true, false]);
   assert.equal(drafts().length, n + 2);
 
   assert.equal((await s.undo(fresh.made[0])).status, 200);
   assert.equal((await s.undo(one.made[0])).status, 200);
   assert.equal(drafts().length, n);
-  assert.equal(s.invoices().customers.find((c) => c.name === 'Familie Keller')!.deleted, true, 'the customer added with it goes too');
+  assert.equal(s.invoices().contacts.find((c) => c.name === 'Familie Keller')!.deleted, true, 'the customer added with it goes too');
 
   const filedReceipt = demo.receipts.find((r) => demo.mappings.some((m) => m.receiptId === r.id && demo.transactions.find((x) => x.ref === m.transactionRef)!.date <= closedThrough))!;
   const none = await s.answer([{ kind: 'invoiceDraft', customer: customer.id, draft: { lines } }, { kind: 'receipt', id: filedReceipt.id, set: { amount: 1, currency: 'CHF' } }]);
@@ -292,7 +294,7 @@ test('an invoice draft for a customer, or for a new one; the undo drops it (and 
 
   const noTown = await s.answer([{ kind: 'invoiceDraft', newCustomer: { name: 'Familie Huber', address: { street: 'Dorf', number: '2', country: 'CH' } }, draft: { lines } }]);
   assert.deepEqual(noTown.refusal, { code: 'invoice', params: { refusal: 'incomplete', missing: [{ field: 'customer.address' }] } });
-  assert.equal(s.invoices().customers.some((c) => c.name === 'Familie Huber'), false);
+  assert.equal(s.invoices().contacts.some((c) => c.name === 'Familie Huber'), false);
 });
 
 test('an account the chart cannot take is refused in plain words: four digits, a name', async (t) => {
