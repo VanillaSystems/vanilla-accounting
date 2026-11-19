@@ -1,6 +1,7 @@
 /**
  * The story of Muster Consulting GmbH, a fictional one-person IT consultancy in Bern, for
- * January to September 2026 (the shape every demo shares is in tools/demo/kit.ts). The owner
+ * January to September 2026 (the shape every demo shares is in tools/demo/kit.ts); from July it
+ * writes its invoices in the app (consulting-invoices.ts). The owner
  * is its only employee: he pays himself a salary, bills Swiss and foreign clients, and pays
  * some expenses privately and gets them back once a month.
  *
@@ -12,6 +13,9 @@ import {
   YEAR, bankDay, chf, invoicesFor, isoDate, lastDay, MONTHS, mulberry32, pad, PAID_PRIVATELY, qrReference, r2, taxIn,
   type Company, type Demo, type ManualEntry, type Payment, type Scenario, type StatementBank, type Vendor,
 } from './kit.js';
+import type { PayrollStore } from '../../src/payroll/model.js';
+import { CONSULTING_INVOICING } from './consulting-invoices.js';
+import { invoicePayments } from './invoices.js';
 
 const COMPANY: Company = {
   name: 'Muster Consulting GmbH',
@@ -158,7 +162,8 @@ function scenario(seed: number): Scenario {
 
     // The retainer of the main Swiss client, billed at the start of each month. In March its payment
     // was booked V0-E by mistake, the code of the foreign clients; the correction is booked in April.
-    sale({
+    // From July it is invoiced in the app (consulting-invoices.ts).
+    if (m <= 6) sale({
       bank: 'raiffeisen', paid: bankDay(isoDate(2026, m, 20)), client: VENDORS.treuhand, date: bankDay(isoDate(2026, m, 2)),
       number: `${YEAR}-${mm}1`, title: `Beratungsmandat IT-Sicherheit, ${month}`, currency: 'CHF', net: 6000,
       vatCode: 'V81', text: `Beispiel Treuhand, Beratungsmandat ${month}`, ...(m === 3 ? { key: 'treuhand-march', bookedAs: 'V0-E' as const } : {}),
@@ -354,8 +359,9 @@ function scenario(seed: number): Scenario {
   }
 
   // Foreign clients: services to a recipient abroad are taxed where the recipient is (Art. 8 Abs. 1
-  // MWSTG), so no Swiss MWST; they are declared as Leistungen im Ausland (Ziffer 221).
-  for (const [date, paid, number] of [['2026-01-09', '2026-02-02', '2026-013'], ['2026-04-08', '2026-04-29', '2026-043'], ['2026-07-07', '2026-07-28', '2026-073']] as const) {
+  // MWSTG), so no Swiss MWST; they are declared as Leistungen im Ausland (Ziffer 221). From July the
+  // Munich audit is invoiced in the app (consulting-invoices.ts).
+  for (const [date, paid, number] of [['2026-01-09', '2026-02-02', '2026-013'], ['2026-04-08', '2026-04-29', '2026-043']] as const) {
     sale({
       bank: 'wise-eur', paid, client: VENDORS.maschinenbau, date, number, title: 'Sicherheitsaudit Fernwartung, Quartalspauschale',
       currency: 'EUR', net: 3800, vatCode: 'V0-E', text: 'Muster Maschinenbau, Sicherheitsaudit (Leistung im Ausland)',
@@ -461,6 +467,9 @@ function scenario(seed: number): Scenario {
     source: 'receipts/20260302-muster-consulting-rechnung-2026-031.pdf',
   }];
 
+  // From July the invoices are written in the app, paid by their reference (consulting-invoices.ts).
+  payments.push(...invoicePayments(CONSULTING_INVOICING));
+
   return {
     payments,
     manual,
@@ -522,7 +531,49 @@ steps:
 `,
 };
 
+/**
+ * The owner's payroll in the app from October (docs/specs/payroll.md B0): January to September were paid
+ * and booked by hand (above), so they enter as the year's opening (through September: those months have no
+ * payslip here and never close), which books nothing and feeds the ceilings and the Lohnausweis. October to
+ * December are drafts for a person to close. Invented rates.
+ */
+const AT = '2026-10-01T08:00:00.000Z';
+const from = <T>(validFrom: string, value: T) => [{ validFrom, enteredAt: AT, value }];
+const PAYROLL: PayrollStore = {
+  schema: 1,
+  company: {
+    canton: from('2026-01-01', 'BE'), payday: from('2026-01-01', 25), postingDate: from('2026-01-01', 'month-end' as const),
+    rounding: from('2026-01-01', 0.05), proration: from('2026-01-01', 'calendar-days' as const), thirteenth: from('2026-01-01', 'twelfth' as const),
+    sender: { copyTo: 'buchhaltung@muster-consulting.example' }, contact: { name: COMPANY.owner, phone: '031 000 00 00' },
+  },
+  insurances: [
+    { id: 'ak', kind: 'ahv', business: 'ausgleichskasse', name: VENDORS.ausgleichskasse.bankName, memberNumber: '100.4711', solutions: [{ code: 'A', rates: from('2026-01-01', { adminCost: 1.9 }) }], validFrom: '2026-01-01' },
+    { id: 'fak', kind: 'fak', name: 'Familienausgleichskasse Muster', solutions: [{ code: 'A', rates: from('2026-01-01', { employer: 1.0 }) }], validFrom: '2026-01-01' },
+    { id: 'uvg', kind: 'uvg', name: 'Muster Unfallversicherung AG', contractNumber: 'UV-2026-88', solutions: [{ code: 'A1', rates: from('2026-01-01', { bu: 0.07, nbu: 0.95, nbuEmployerShare: 0 }) }], validFrom: '2026-01-01' },
+    { id: 'pk', kind: 'bvg', name: VENDORS.vorsorge.bankName, contractNumber: 'BVG-55-2026', solutions: [{ code: 'K', rates: [] }], validFrom: '2026-01-01' },
+  ],
+  wageTypes: [],
+  employees: [{
+    id: 'lukas', isOwner: true, language: 'de', birthDate: '1984-03-09', sex: 'm',
+    name: from('2026-01-01', { first: 'Lukas', last: 'Beispiel' }),
+    email: from('2026-01-01', 'lukas@muster-consulting.example'),
+    address: from('2026-01-01', { street: 'Beispielgasse', number: '8', postcode: '3011', town: 'Bern', country: 'CH' }),
+    bank: from('2026-01-01', { iban: 'CH1180808000000000003', holder: COMPANY.owner }),
+    employment: from('2026-01-01', { kind: 'monthly' as const, amount: GROSS_SALARY, pensum: 100, hoursPerWeek: 42, holidayDays: 25 }),
+    recurring: [],
+    insurances: from('2026-01-01', { bvg: { insurance: 'pk', solution: 'K', employee: BVG_EMPLOYEE, employer: BVG_EMPLOYEE }, uvg: { insurance: 'uvg', code: 'A1' } }),
+    opening: { 2026: {
+      through: '2026-09',
+      months: 9,
+      bases: { ahv: 9 * GROSS_SALARY, alv: 9 * GROSS_SALARY, uvg: 9 * GROSS_SALARY, uvgz: 9 * GROSS_SALARY, ktg: 9 * GROSS_SALARY, bvg: 9 * GROSS_SALARY, qst: 9 * GROSS_SALARY, thirteenth: 9 * GROSS_SALARY },
+      fields: { 1: 9 * GROSS_SALARY, 9: r2(9 * AHV_EMPLOYEE), '10.1': r2(9 * BVG_EMPLOYEE) },
+    } },
+  }],
+  monthLines: [],
+};
+
 export const consulting: Demo = {
+  payroll: PAYROLL,
   dir: 'demo-consulting',
   company: COMPANY,
   closedThrough: '2026-03-31',
@@ -534,4 +585,5 @@ export const consulting: Demo = {
   vendors: VENDORS,
   knowledge: KNOWLEDGE,
   scenario,
+  invoicing: CONSULTING_INVOICING,
 };

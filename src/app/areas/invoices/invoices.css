@@ -108,6 +108,10 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .ivsheet.editing:hover select.edsel { outline-color: color-mix(in srgb, var(--iva) 28%, transparent); }
 .a4 .to select.edsel { text-align: left; font-size: 10pt; }
 .a4 .abroad select.edsel { text-align: left; color: #5b6270; max-width: 100%; }
+/* the net rate a line is booked at (two approved rates): under the VAT rate, on screen only, never printed */
+/* flex-end: a label wider than the narrow rate column runs out to the left, over the price's padding, never into the amount */
+.a4 .edact { display: flex; justify-content: flex-end; line-height: 1.1; white-space: nowrap; }
+.a4 .edact select.edsel { font-size: 7pt; color: #5b6270; flex: none; }
 .a4 table.tb { position: relative; }
 .a4 .edx { position: absolute; right: -6mm; top: 1.2mm; width: 4.5mm; height: 4.5mm; line-height: 4mm; font-size: 10pt; color: #9aa1ad; border-radius: 50%; opacity: 0; }
 .a4 table.tb:hover .edx { opacity: 1; }
@@ -115,6 +119,32 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .a4 .edadd { padding: 1.5mm 0 0; }
 .a4 .edadd button { font: inherit; font-size: 8.5pt; color: #5b6270; padding: .6mm 1.5mm; border-radius: .8mm; }
 .a4 .edadd button:hover { color: #141a26; background: #eef0f3; }
+.a4 .edadd { display: flex; flex-wrap: wrap; gap: 1mm; }
+/* a position's handle: dragged onto another row, or ↑/↓ while it has the focus */
+.a4 .edmv { position: absolute; left: -6mm; top: 1.2mm; width: 4.5mm; height: 4.5mm; line-height: 4.5mm; font-size: 8pt; color: #9aa1ad; border-radius: .8mm; cursor: grab; opacity: 0; }
+.a4 table.tb:hover .edmv, .a4 .edmv:focus-visible { opacity: 1; }
+.a4 .edmv:hover { color: #141a26; background: #eef0f3; }
+.a4 .edmv:focus-visible { outline: 1px solid var(--iva); }
+.a4 tr.dropat td { box-shadow: inset 0 .5mm 0 var(--iva); }
+.a4 tr.pbreak td { border-bottom: 0; padding: 1mm; text-align: center; color: #8a909c; font-size: 7.5pt; background: repeating-linear-gradient(90deg, #c7ccd4 0 2mm, transparent 2mm 4mm) center / 100% .2mm no-repeat; }
+.a4 tr.pbreak td span { background: #fff; padding: 0 2mm; }
+.a4 .edstyle { font-weight: 400; font-size: 7.5pt; color: #8a909c; }
+.a4 .ed-off { white-space: nowrap; }
+/* a position's own discount and a text's style show when set, on hover and while typed in; else they take no room */
+.a4 td:has(> .ed-off), .a4 td:has(> .edstyle) { position: relative; }
+.a4 .ed-off:not(.on), .a4 .edstyle { position: absolute; right: 1mm; top: calc(100% - 1.2mm); z-index: 2; background: #fff; padding: 0 .8mm; border-radius: .6mm; opacity: 0; pointer-events: none; }
+.a4 .edstyle { right: auto; left: 1mm; }
+.a4 table.tb:hover .ed-off, .a4 .ed-off:focus-within, .a4 table.tb:hover .edstyle, .a4 .edstyle:focus-within { opacity: 1; pointer-events: auto; box-shadow: 0 .3mm 1mm rgba(0,0,0,.12); }
+.a4 .ed-off.on { position: static; opacity: 1; }
+.a4 .dval select.edsel { text-align: left; field-sizing: content; }
+.ivsheet.editing .a4 .ed-off .ed:empty::before { content: '0'; }
+.lkunits .lkut { width: 100%; border-collapse: collapse; font-size: 12px; }
+.lkunits .lkut th { text-align: left; font-weight: 500; color: var(--muted); padding: 2px 4px; }
+.lkunits .lkut td { padding: 2px 4px; border-top: 1px solid var(--line); }
+.lkunits .lkut td:last-child { width: 1%; white-space: nowrap; text-align: right; }
+.lkunits .lkuadd { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.lkunits .lkuadd input { min-width: 0; box-sizing: border-box; font: 12px var(--font-sans); padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); }
+.lkunits .lkuadd .btn { grid-column: 1 / -1; justify-self: end; }
 .paper.sentpdf .pages { display: grid; gap: 18px; }
 .paper.sentpdf canvas { max-width: 100%; height: auto; box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 8px 30px rgba(0,0,0,.08); }
 
@@ -126,6 +156,11 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .lkr { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; align-items: center; }
 .lkr.top { align-items: start; }
 .lkpay { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .lkpay select { max-width: 100%; }
+/* the QR-IBAN and its «Speichern» on one line, the label beside the field */
+.lkqr .lkpay { flex-wrap: nowrap; } .lkqr .lkpay input { flex: 1 1 0; min-width: 0; }
+.lkr .qrwarn { margin: 0; flex-wrap: wrap; line-height: 1.4; }
+/* a section's title over its help, where the title is wider than the label column */
+.lkr.lkstack { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 .lkr > span:first-child { color: var(--muted); }
 .lkr select, .lkr textarea, .lkr > input { font: 12.5px var(--font-sans); padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; }
 .lkr input.mono { font-family: var(--font-mono); }
@@ -216,3 +251,132 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .ivleft { margin: 8px 0; }
 .ivtake { display: grid; gap: 2px; margin: 0 0 8px; font-size: 13px; }
 .ivleft .l { display: block; }
+.ivsheet.editing .a4 .dval .ed { min-width: 2mm; }
+
+/* The four figures above an issued invoice's sheet (spec 4.8): Betrag · erhalten · gutgeschrieben · offen. */
+.ivfigs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin-top: 10px; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--line); }
+.ivfigs .fig { display: grid; gap: 2px; padding: 7px 10px; background: var(--bg); cursor: help; }
+.ivfigs .fig .lbl { font-size: 11px; color: var(--muted); }
+.ivfigs .fig .n { font-size: 13.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ivfigs .fig.open .n { color: var(--warn); }
+.ivfigs .fig.done .n { color: var(--muted); }
+.ivfigs.five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+@media (max-width: 560px) { .ivfigs, .ivfigs.five { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* The margin's payments, write-offs and the bookings their events made. */
+.ivmoney, .ivbooked { display: grid; gap: 4px; font-size: 12.5px; }
+.ivbooked { margin-top: 10px; }
+.ivmoney .mrow { display: grid; grid-template-columns: 78px minmax(0, 1fr); column-gap: 8px; align-items: baseline; }
+.ivbooked .mrow { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; }
+.ivmoney .mrow small { display: block; color: var(--muted); font-size: 11.5px; }
+.ivmoney .mrow .acts { grid-column: 2; display: flex; gap: 10px; align-items: baseline; }
+.ivmoney .mrow .acts:empty { display: none; }
+.ivbooked .mrow { color: var(--ink); text-decoration: none; border-radius: 5px; padding: 1px 2px; }
+.ivbooked .mrow:hover { background: var(--hover); }
+.status .ivpay .acts { display: flex; gap: 6px; }
+/* A payment, a proposal or a shortfall each take a row of their own under the status line. */
+.status:has(.ivpay) { flex-wrap: wrap; row-gap: 0; }
+.status .ivpay { flex-basis: 100%; }
+
+/* The Ausziffern dialog: an amount and the rest's fate per open invoice. */
+.idlg.wide { width: min(760px, calc(100vw - 32px)); }
+.idlg table.alloc { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.idlg table.alloc th { text-align: left; font-weight: 500; color: var(--muted); padding: 4px 6px; }
+.idlg table.alloc td { padding: 4px 6px; border-top: 1px solid var(--line); vertical-align: top; }
+.idlg table.alloc .r { text-align: right; }
+.idlg table.alloc input { width: 96px; box-sizing: border-box; text-align: right; font: 12.5px var(--font-mono); padding: 3px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.idlg table.alloc select { max-width: 170px; font: 12px var(--font-sans); }
+.idlg .allocleft { margin-right: auto; }
+.idlg .allocleft.warn { color: var(--warn); }
+.lkunits .lkuadd.lkterms { grid-template-columns: 2fr repeat(3, minmax(0, 1fr)); }
+.lkunits .lkuadd.lkterms input:nth-child(5) { grid-column: 1 / -1; }
+.ivtop { display: flex; gap: 4px 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.ivtop .ivfigs { flex: 1 1 100%; margin-top: 0; }
+.ivtop .ivfact { margin: 0; }
+.status .ivshort { justify-content: flex-start; gap: 10px; font-size: 12.5px; color: var(--muted); }
+.ivother { display: grid; gap: 4px; margin-top: 10px; font-size: 12.5px; }
+.ivother label { display: grid; gap: 4px; }
+.ivother select { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; font: 12px var(--font-sans); }
+.ivother label { min-width: 0; }
+.ivother { min-width: 0; overflow: hidden; }
+.ivother .acts { display: flex; gap: 10px; }
+
+/* «Konten ändern» (spec 4.4.2): a position per row, its amount and its revenue account; below, what will be booked. */
+.iaccounts { width: min(620px, 94vw); }
+.iaccounts .iacc { display: grid; gap: 2px; margin: 10px 0; }
+.iaccounts .iacc .fr { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(180px, 220px); gap: 12px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.iaccounts .iacc .fr.head { color: var(--muted); font-size: 11.5px; }
+.iaccounts .iacc .fr .tt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iaccounts .iacc select { width: 100%; min-width: 0; }
+.iaccounts .iwhat { margin-top: 10px; }
+.iaccounts .iwhat ul { margin: 6px 0 0; padding-left: 18px; }
+.iaccounts .iwhat li { margin: 3px 0; }
+@media (max-width: 560px) { .iaccounts .iacc .fr { grid-template-columns: minmax(0, 1fr) auto; } .iaccounts .iacc .fr select { grid-column: 1 / -1; } }
+/* Phase 2: the conversion dialog, the Belegkette, options (docs/specs/invoicing.md 4.4.1). */
+.idlg.iconvert { width: min(760px, 96vw); top: 8vh; }
+.iconvert .ibody { max-height: 64vh; overflow: auto; }
+.ivconv { margin: 4px 0 10px; }
+.ivconv tr.gone td { color: var(--faint); }
+.ivconv td.c-contact { white-space: normal; }
+.ivconv input.ivqty { width: 72px; text-align: right; font: 13px var(--font-mono); padding: 3px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.ivconv input.ivqty.over { border-color: var(--warn); background: var(--warn-soft); }
+.ivconv input.ivqty:disabled { opacity: .5; }
+.ivopt { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line-2); border-radius: 4px; padding: 0 4px; margin-right: 4px; }
+.ivchain { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.ivchain li { padding: 3px 0; }
+.ivchain li.on b { color: var(--ink); }
+.ivt td .full { color: var(--pos); }
+.lknumbers input.mono { font-family: var(--font-mono); width: 100%; box-sizing: border-box; }
+.lknumbers .warn { color: var(--warn); }
+@media (max-width: 640px) {
+  .ivconv th:nth-child(3), .ivconv td:nth-child(3) { display: none; }
+}
+.lknumbers .lknumrows { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 6px; }
+.lknumbers .lknum { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; font-size: 12.5px; }
+.lknumbers .lknum input.mono { min-width: 0; font-size: 12px; padding: 4px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.lknumbers .lknum input[aria-invalid="true"] { border-color: var(--warn); }
+.lknumbers .lknr { color: var(--muted); white-space: nowrap; font-size: 12px; }
+.lknumbers .lknext { grid-column: 2 / -1; color: var(--muted); font-size: 12px; }
+.lknumbers .lknext b { color: var(--ink); font-weight: 500; }
+/* Kontakte (spec 4.4.5): the table, a contact's panel, its form and the import. */
+.ctab .ctags { white-space: normal; }
+.ctag { display: inline-block; margin: 0 4px 2px 0; padding: 1px 7px; border-radius: 999px; background: var(--hover); color: var(--ink-2); font-size: 11.5px; }
+.cpanel .cnote { margin: 10px 0 0; font-size: 13px; color: var(--warn); }
+.cpanel .csecs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px 28px; margin-top: 16px; }
+.cpanel .csec { min-width: 0; display: grid; gap: 6px; align-content: start; font-size: 13px; }
+.cpanel .csec h3 { margin: 0; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.cpanel .csec p { margin: 0; }
+.cpanel .csec .ftab { max-width: none; }
+.cpanel .csec .ftab .fr { grid-template-columns: 96px minmax(0, 1fr) auto auto; padding: 4px 6px; }
+.cpanel .caddr { display: grid; gap: 1px; }
+.cpanel .cpick { display: grid; gap: 4px; }
+.cpanel .cpick select, .cdlg.contact select, .cimport select { font: 12.5px var(--font-sans); padding: 4px 6px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); max-width: 100%; }
+.cdlg.contact { width: min(640px, 94vw); top: 5vh; }
+.cdlg.contact .ibody { max-height: 72vh; overflow: auto; }
+.cform .cfh { grid-column: span 4; margin: 10px 0 0; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.cform .cgroup { grid-column: span 4; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; min-width: 0; }
+.cform .cflags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; color: var(--ink-2); font-size: 12.5px; }
+.cform .cflags label { display: inline-flex; align-items: center; gap: 5px; }
+.cform .cflags .quiet2 { margin-left: auto; }
+.cform .cf select { box-sizing: border-box; width: 100%; padding: 6px 9px; border-radius: 8px; }
+.cimport .cmap { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 16px; margin-bottom: 10px; }
+.cimport .cmap .lkr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.cimport .cfh { margin: 12px 0 6px; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+.cimport .ibody { max-height: 72vh; overflow: auto; }
+.cimport .warn { color: var(--warn); }
+@media (max-width: 560px) { .cform .cgroup { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cform .cgroup .cf.s3, .cform .cgroup .cf.w2 { grid-column: span 2; } }
+.ivhint.warn { color: var(--warn); }
+
+/* Artikel (spec 4.4.3): a position's revenue account and code on a draft's screen, the table, the form and the picker. */
+.a4 .edacc { display: block; font-size: 7pt; color: #8a909c; line-height: 1.3; }
+.a4 .edacc .ed { min-width: 8mm; display: inline-block; }
+.a4 .lcode .ed { min-width: 6mm; display: inline-block; }
+.atab td small { display: block; color: var(--muted); font-size: 11px; }
+.cpanel .csec.aedit { grid-column: 1 / -1; max-width: 640px; }
+.aform .anote { grid-column: span 4; margin: 0; font-size: 12px; }
+.aform .aacts { grid-column: span 4; margin: 0; display: flex; justify-content: flex-end; }
+.idlg .aform { padding-bottom: 4px; }
+.apick { width: min(620px, calc(100vw - 32px)); }
+.apick .apq { width: 100%; margin-bottom: 10px; }
+.apick .apl { max-height: min(55vh, 420px); overflow-y: auto; }
+.apick .apl .fr { grid-template-columns: 70px minmax(0, 1fr) auto 80px; }

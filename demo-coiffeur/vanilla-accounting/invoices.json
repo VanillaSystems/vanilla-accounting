@@ -1,0 +1,195 @@
+{
+  "schema": 4,
+  "contacts": [
+    {
+      "id": "cu_5GQVervgd2rF",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "type": "firm",
+      "name": "Lena Muster",
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Rosenweg",
+          "number": "5",
+          "postcode": "8404",
+          "town": "Winterthur",
+          "country": "CH",
+          "billing": true
+        }
+      ],
+      "language": "de",
+      "emails": [
+        "lena.muster@mail.example"
+      ],
+      "paymentDays": 20,
+      "number": "K-00001"
+    }
+  ],
+  "articles": [],
+  "invoices": [
+    {
+      "id": "in_2KIQYfUMHYIT",
+      "createdAt": "2026-06-08T18:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-06-08",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "kind": "text",
+          "text": "Hochzeit vom 6. Juni 2026",
+          "style": "title"
+        },
+        {
+          "text": "Probetermin Brautfrisur",
+          "quantity": 1,
+          "unit": "flat",
+          "price": 90,
+          "vatRate": 0
+        },
+        {
+          "text": "Brautfrisur und Make-up am Hochzeitstag",
+          "quantity": 1,
+          "unit": "flat",
+          "price": 280,
+          "vatRate": 0
+        },
+        {
+          "text": "Frisur Brautjungfern",
+          "quantity": 3,
+          "unit": "pcs",
+          "price": 85,
+          "vatRate": 0
+        },
+        {
+          "text": "Anfahrt und Einsatz vor Ort",
+          "quantity": 1,
+          "unit": "flat",
+          "price": 60,
+          "vatRate": 0
+        }
+      ],
+      "prices": "net",
+      "termsId": "net20",
+      "customerId": "cu_5GQVervgd2rF",
+      "subject": "Hochzeit Lena Muster",
+      "supplied": {
+        "from": "2026-06-06"
+      },
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 20 Tagen. Herzlichen Dank und alles Gute!\nBella Beispiel",
+      "status": "issued",
+      "number": "2026-001",
+      "issuedAt": "2026-06-08T18:00:00.000Z",
+      "dueDate": "2026-06-28",
+      "terms": {
+        "id": "net20",
+        "name": "20 Tage netto",
+        "days": 20,
+        "text": "20 Tage netto"
+      },
+      "reference": "000000000000000000020260010",
+      "customer": {
+        "name": "Lena Muster",
+        "address": {
+          "street": "Rosenweg",
+          "number": "5",
+          "postcode": "8404",
+          "town": "Winterthur",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "lena.muster@mail.example",
+        "paymentTermsDays": 20
+      },
+      "sender": {
+        "name": "Salon Beispiel",
+        "address": {
+          "postcode": "8400",
+          "town": "Winterthur",
+          "country": "CH",
+          "street": "Marktgasse",
+          "number": "3"
+        },
+        "uid": "CHE-975.310.864",
+        "payTo": {
+          "account": "1020",
+          "iban": "CH8180808000000000004",
+          "qrIban": "CH1230808000000000004",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#141a26",
+        "window": "right",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        },
+        {
+          "id": "flat",
+          "de": "pauschal",
+          "fr": "forfait",
+          "it": "forfait",
+          "en": "flat rate"
+        }
+      ],
+      "payments": [
+        {
+          "transactionRef": "90000000051",
+          "date": "2026-06-24",
+          "amount": 685,
+          "by": "reference"
+        }
+      ],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/2026-001.pdf",
+        "sha256": "acf599c008a65cb1ab9029dbed0880be66ea701ffe80500beecc53e3a39cd646"
+      }
+    }
+  ],
+  "sent": [
+    {
+      "id": "sd_MVknjIERgg_T",
+      "createdAt": "2026-06-08T18:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_2KIQYfUMHYIT",
+      "kind": "invoice",
+      "title": "Rechnung 2026-001",
+      "file": "transactional-data/2026/invoices/2026-001.pdf",
+      "sha256": "acf599c008a65cb1ab9029dbed0880be66ea701ffe80500beecc53e3a39cd646",
+      "sentAt": "2026-06-08T18:00:00.000Z",
+      "to": "lena.muster@mail.example",
+      "channel": "email",
+      "messageId": "<2026-001.2026-06-08@mail.demo.example>"
+    }
+  ]
+}

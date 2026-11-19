@@ -5,7 +5,9 @@
 # `line`: the line of the balance sheet (OR 959a) or of the income statement (OR 959b, by nature
 # of expense) it is shown on. `profiles` limits an account to a business profile (services,
 # goods); `legalForms` limits it to a legal form; `names` renames it for a legal form. An account
-# without them is in every chart. `hints` are the words a person types for an account besides its
+# without them is in every chart. `payroll: true` keeps an account to a firm that pays wages (the
+# setup's answer `employees`); Löhne › Einstellungen › Konten adds it to any other (docs/specs/payroll.md
+# §7.1). `hints` are the words a person types for an account besides its
 # name («Miete», «Benzin»): an account field finds the account by them (German, as the names are).
 # A name with a comma is quoted: unquoted, a flow mapping cuts it at the comma. Read by
 # src/workspace/chart.ts, which checks every rule here and refuses a key it does not know.
@@ -57,6 +59,7 @@ accounts:
   - { number: "1022", name: Bankguthaben USD, type: asset, line: fluessige-mittel }
   - { number: "1060", name: Wertschriften, type: asset, line: fluessige-mittel }
   - { number: "1090", name: Transferkonto, type: asset, line: fluessige-mittel }
+  - { number: "1091", name: Lohndurchlaufkonto, type: asset, line: fluessige-mittel, payroll: true }
   - { number: "1093", name: "Guthaben Zahlungsanbieter (Shopify, Stripe)", type: asset, line: fluessige-mittel, profiles: [goods] }
   - { number: "1100", name: Forderungen aus Lieferungen und Leistungen, type: asset, line: forderungen-ll }
   - { number: "1109", name: Delkredere, type: asset, line: forderungen-ll }
@@ -93,6 +96,11 @@ accounts:
   - { number: "2206", name: Geschuldete Verrechnungssteuer, type: liability, line: uebrige-kurzfristige, legalForms: [GmbH, AG] }
   - { number: "2208", name: Direkte Steuern, type: liability, line: uebrige-kurzfristige, legalForms: [GmbH, AG] }
   - { number: "2270", name: Sozialversicherungen und Vorsorgeeinrichtungen, type: liability, line: uebrige-kurzfristige }
+  - { number: "2271", name: "AHV/IV/EO/ALV (Ausgleichskasse)", type: liability, line: uebrige-kurzfristige, payroll: true }
+  - { number: "2272", name: Familienausgleichskasse, type: liability, line: uebrige-kurzfristige, payroll: true }
+  - { number: "2273", name: "Unfallversicherung (UVG, UVGZ)", type: liability, line: uebrige-kurzfristige, payroll: true }
+  - { number: "2274", name: Krankentaggeldversicherung, type: liability, line: uebrige-kurzfristige, payroll: true }
+  - { number: "2275", name: Vorsorgeeinrichtung (BVG), type: liability, line: uebrige-kurzfristige, payroll: true }
   - { number: "2279", name: Quellensteuer, type: liability, line: uebrige-kurzfristige }
   - { number: "2300", name: Noch nicht bezahlter Aufwand, type: liability, line: passive-abgrenzungen }
   - { number: "2301", name: Erhaltener Ertrag des Folgejahres, type: liability, line: passive-abgrenzungen }
@@ -143,6 +151,7 @@ accounts:
   - { number: "5820", name: Spesenentschädigung effektiv, type: expense, line: personalaufwand }
   - { number: "5830", name: Spesenentschädigung pauschal, type: expense, line: personalaufwand }
   - { number: "5880", name: Sonstiger Personalaufwand, type: expense, line: personalaufwand, hints: [Arbeitskleider, Arbeitskleidung, Berufskleider] }
+  - { number: "5890", name: Bezugsprovision Quellensteuer, type: expense, line: personalaufwand, payroll: true }
   - { number: "5900", name: Leistungen Dritter (Temporärpersonal), type: expense, line: personalaufwand }
 
   # 6 Übriger betrieblicher Aufwand, Abschreibungen, Finanzerfolg

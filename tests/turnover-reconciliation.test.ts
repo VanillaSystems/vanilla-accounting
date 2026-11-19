@@ -28,8 +28,8 @@ test('demo (effective, quarterly): every quarter\'s revenue is its Ziffer 200, a
   assert.deepEqual(r.periods.map((p) => [p.period, p.booked, p.declared, p.filed, p.differences.length, p.correction]), [
     ['2026-Q1', 38417.25, 38417.25, 38417.25, 0, 0],
     ['2026-Q2', 40588.45, 40588.45, undefined, 0, 0],
-    ['2026-Q3', 39900.5, 39900.5, undefined, 0, 0],
-    ['2026-Q4', 0, 0, undefined, 0, 0],
+    ['2026-Q3', 46162.49, 46162.49, undefined, 0, 0],
+    ['2026-Q4', 344.74, 344.74, undefined, 0, 0],
   ]);
   assert.equal(turnoverNeedsLook(r), false);
 });
@@ -50,8 +50,8 @@ test('demo: a correction of filed Q1 booked in Q3, a fixed asset sold and revenu
   // Q1: booked as before; declared today 38417.25 − 108.10 = 38309.15; the 0535 declares −108.10.
   assert.deepEqual([q1.booked, q1.declared, q1.filed, q1.correction, q1.correctionEntryIds], [38417.25, 38309.15, 38417.25, -108.1, ['t-storno']]);
   assert.deepEqual(q1.differences, [{ code: 'bookedIn', in: '2026-Q3', entryIds: ['t-storno'], amount: 108.1 }]);
-  // Q3: booked 39900.50 − 108.10 + 200 = 39992.40; declared 39900.50 + 540.50 = 40441.00; difference −448.60.
-  assert.deepEqual([q3.booked, q3.declared], [39992.4, 40441]);
+  // Q3: booked 46162.49 − 108.10 + 200 = 46254.39; declared 46162.49 + 540.50 = 46702.99; difference −448.60.
+  assert.deepEqual([q3.booked, q3.declared], [46254.39, 46702.99]);
   assert.deepEqual(q3.differences, [
     { code: 'declaredIn', in: '2026-Q1', entryIds: ['t-storno'], amount: -108.1 },
     { code: 'notRevenue', entryIds: ['t-asset'], amount: -540.5 },
@@ -69,7 +69,7 @@ test('demo-schreinerei (net tax rate, half-yearly): H1 is the filed Ziffer 200; 
   const plain = turnoverReconciliation(books, HALVES, filedReturnsOf(ws, '2026'));
   assert.deepEqual(plain.periods.map((p) => [p.period, p.booked, p.declared, p.filed, p.differences.length]), [
     ['2026-H1', 41103.35, 41103.35, 41103.35, 0],
-    ['2026-H2', 14864.15, 14864.15, undefined, 0],
+    ['2026-H2', 27858.27, 27858.27, undefined, 0],
   ]);
   const r = turnoverReconciliation([...books, je('t-f1', '2026-09-01', '3400', '1020', 500, { vatCode: '-F1', corrects: '2026-H1' })], HALVES, filedReturnsOf(ws, '2026'));
   assert.deepEqual(row(r, '2026-H1').correction, -500);

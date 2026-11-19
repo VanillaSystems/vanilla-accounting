@@ -48,13 +48,17 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/company/<section>` | `profile`, `vat`, `banks`, `invoice-layout`, `mail`, `sources`, `rules`, `accounts`, `dimensions`, `periods`, `opening`, `display` |
 | `/company/rules?payment=<ref>` | the form of a new rule, started from that payment (`&by=text`: with the payment's lasting words instead of its payer) |
 | `/invoices` | Verkauf › Rechnungen; `?status=draft\|open\|overdue\|partly-paid\|paid\|cancelled\|unsent` (`unsent`: «Nicht gesendet») |
-| `/invoices/<number>` | an issued invoice or credit note, e.g. `/invoices/2026-006`; a credit note opens in Gutschriften (`/invoices/credit-notes/<number>`) |
+| `/invoices/<number>` | an issued document of any kind, e.g. `/invoices/2026-006`, `/invoices/AN-2026-00004`; it opens in the view of its kind (a credit note in Gutschriften, `/invoices/credit-notes/<number>`; an Angebot in Angebote, …) |
+| `/invoices/quotes` and `/invoices/quotes/<number>` | Angebote and one open over the table; `?status=draft\|open\|accepted\|declined\|expired\|unsent` |
+| `/invoices/orders` and `/invoices/orders/<number>` | Aufträge; `?status=draft\|open\|partly\|done\|cancelled\|unsent` |
+| `/invoices/deliveries` and `/invoices/deliveries/<number>` | Lieferscheine; `?status=draft\|done\|cancelled\|unsent` |
 | `/invoices/credit-notes` and `/invoices/credit-notes/<number>` | Gutschriften and one open over the table; `?status=draft\|open\|partly\|settled\|unsent` |
 | `/invoices/open-items` and `/invoices/open-items/<number>` | Offene Posten on today, or on `?date=2026-12-31`, and one invoice open over it |
 | `/invoices/draft-<id>` | a draft (it has no number until it is issued) |
 | `/invoices/<number>.pdf` | the invoice as PDF, exactly as issued (app only) |
 | `/invoices/new?customer=<id>` | a new draft for that customer (app only) |
-| `/invoices/customers` and `/invoices/customers/<id>` | customers and one customer |
+| `/invoices/contacts` and `/invoices/contacts/<id>` | the contacts and one contact (`/invoices/customers[/<id>]`, the old links, lead there) |
+| `/invoices/articles` and `/invoices/articles/<id>` | the Artikel and one Artikel, its form in the panel over the table |
 | `/invoices/sent` and `/invoices/sent/<document-id>` | the log of sent documents and one of them, exactly as sent |
 | `/partners` and `/partners/<id>` | Geschäftspartner and one partner's page; the id is its knowledge file's (`gruenkaffee-muster`) or, for a customer of Rechnungen without one, the customer's (`cu_…`) |
 | `/knowledge` | Wissen, opening on its first page (Lücken) |
@@ -62,6 +66,15 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/knowledge/<topic>` | one page of Arbeitsweise, by its file's name (`knowledge/company/<topic>.md`); a topic is never named `gaps` or `app` |
 | `/automation` | Automatisierung's home: the shown period's receipts from collected to filed, what waits for you, what runs; `?period=` another filing period |
 | `/automation/runs` and `/automation/runs/<run-id>` | Läufe, the latest runs, and one run |
+| `/payroll` | Löhne › Übersicht: the year strip and the Lohnlauf of this month; `?period=2026-09` another month, `?period=2026` another year |
+| `/payroll/<yyyy-mm>` and `/payroll/<yyyy-mm>/<employeeId>` | Lohnabrechnungen: a month's Lohnlauf, and one payslip, e.g. `/payroll/2026-09/p1a2b3c`; `/payroll/payslips` is this month's |
+| `/payroll/payslips/<yyyy-mm>-<employeeId>.pdf` | a closed payslip's PDF, exactly as filed in Belege (app only) |
+| `/payroll/payments/<yyyy-mm>`, `/payroll/payments/<yyyy-mm>/<employeeId>` and `/payroll/payments/<yyyy-mm>/insurances/<insuranceId>` | Lohnzahlungen: a month's payouts with the bank line that paid each, one of them, and one insurer's balance of that month's year with its final statement; `/payroll/payments` is this month's |
+| `/payroll/employees` and `/payroll/employees/<id>` | Mitarbeitende and one person; `/payroll/employees/new` the form of a new one (app only) |
+| `/payroll/documents/<year>` and `/payroll/documents/<year>/<doc>` | Dokumente: a year's documents; `<doc>` a person's Lohnausweis by her id, `lohnkonto`, `declarations` (the figures of the annual declarations), `family` (the family allowances against the fund), `pension` (the pension fund's expected wages), `journal` (the Lohnbuchungen per month) or `tax-at-source` (the Quellensteuer settlement lists per canton and month); `/payroll/documents` is this year's |
+| `/payroll/documents/<year>/lohnausweis/<id>.pdf`, `/payroll/documents/<year>/lohnausweis.csv`, `/payroll/documents/<year>/lohnkonto.csv[?employee=<id>]`, `/payroll/documents/<year>/declarations.csv`, `/payroll/documents/<year>/family.csv`, `/payroll/documents/<year>/pension.csv`, `/payroll/documents/journal/<yyyy-mm>.csv`, `/payroll/documents/<year>/tax-at-source.csv[?month=<yyyy-mm>&region=<canton>]` | an issued Lohnausweis's PDF and the year's tables as CSV (app only) |
+| `/payroll/payments/<yyyy-mm>/payment-file.xml[?account=<number>]` | the month's payment file (pain.001) of the payouts not paid yet (app only) |
+| `/payroll/settings/<section>` | Einstellungen: `company` (Stammdaten), `insurances`, `wage-types`, `accounts` |
 
 ## Query parameters
 

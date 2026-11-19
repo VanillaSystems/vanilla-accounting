@@ -12,7 +12,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
 endobj
 5 0 obj
-<< /Length 508 >>
+<< /Length 499 >>
 stream
 BT
 /F1 10 Tf
@@ -25,7 +25,7 @@ T* (IBAN BE38967000000002, Währung EUR) Tj
 T* () Tj
 T* (Anfangssaldo 01.07.2026: 9’905.42) Tj
 T* (10.07.2026 | Card transaction of 32.43 EUR issued by Beispiel Software BERLIN | -32.43 | Ref. CARD-7000007) Tj
-T* (28.07.2026 | Received money from MUSTER MASCHINENBAU GMBH | 3’800.00 | Ref. TRANSFER-8000003) Tj
+T* (28.07.2026 | Gutschrift Muster Maschinenbau GmbH | 3’800.00 | Ref. TRANSFER-8000003) Tj
 T* (Schlusssaldo 31.07.2026: 13’672.99) Tj
 ET
 endstream
@@ -41,5 +41,5 @@ xref
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-896
+887
 %%EOF

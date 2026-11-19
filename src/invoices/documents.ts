@@ -4,10 +4,11 @@
  * a reminder and a cancellation notice from the issued invoice.
  */
 import type { Company } from '../workspace/workspace.js';
-import { DEFAULT_LAYOUT, type Customer, type Draft, type Invoice, type InvoiceBook, type InvoiceContent, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type Issued, type Reminder, type Sender } from './model.js';
-import { addDays, openAmount, openFees, paidAmount, totals } from './rules.js';
+import { DEFAULT_LAYOUT, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type Issued, type Reminder, type Sender } from './model.js';
+import { addDays, openAmount, openFees, paidAmount, skontoOffer, termsFor, totals } from './rules.js';
 import type { SheetData } from './sheet.js';
-import { TEXTS, formatDate } from './texts.js';
+import { TEXTS, formatDate, kindTitle } from './texts.js';
+import { recipientOf } from './contacts.js';
 
 export interface InvoicingContext { company: Company; settings: InvoicingSettings | undefined }
 
@@ -28,9 +29,14 @@ export function senderFor(ctx: InvoicingContext, currency: InvoiceCurrency): Omi
  * `{days}` is the payment term. `salutation`: the greeting line above the intro of an invoice, a
  * setting of its own so a greeting never replaces the intro; none unless the workspace sets one.
  */
-export function defaultTexts(ctx: InvoicingContext, kind: InvoiceContent['kind'], lang: InvoiceLanguage, days: number): { salutation: string; intro: string; closing: string } {
+export function defaultTexts(ctx: InvoicingContext, kind: InvoiceContent['kind'], lang: InvoiceLanguage, days: number, printAs?: InvoiceContent['printAs']): { salutation: string; intro: string; closing: string } {
   const L = TEXTS[lang];
   if (kind === 'credit-note') return { salutation: '', intro: '', closing: L.creditClosing };
+  // An Angebot, Auftrag and Lieferschein speak of themselves; the firm's own texts are those of its invoices.
+  if (kind !== 'invoice') {
+    const which = kind === 'sales-order' && printAs === 'proforma' ? 'proforma' : kind;
+    return { salutation: ctx.settings?.texts[lang]?.salutation ?? '', intro: L.kindIntro[which], closing: L.kindClosing[which] };
+  }
   const own = ctx.settings?.texts[lang];
   return { salutation: own?.salutation ?? '', intro: own?.intro ?? L.intro, closing: (own?.closing ?? L.closing(days)).replaceAll('{days}', String(days)) };
 }
@@ -42,7 +48,7 @@ function creditInfo(book: InvoiceBook, c: InvoiceContent): SheetData['credit'] {
   const target = book.invoices.find((i) => i.id === c.creditFor);
   if (!target || target.status !== 'issued') return undefined;
   const last = target.payments.at(-1);
-  return { number: target.number, date: target.date, gross: totals(target.lines).gross, paid: paidAmount(target), ...(last ? { paidDate: last.date } : {}), ...(c.settlement ? { settlement: c.settlement } : {}) };
+  return { number: target.number, date: target.date, gross: totals(target).gross, paid: paidAmount(target), ...(last ? { paidDate: last.date } : {}), ...(c.settlement ? { settlement: c.settlement } : {}) };
 }
 
 export type MailDocument = { kind: 'invoice' } | { kind: 'reminder'; level: number } | { kind: 'cancellation' };
@@ -54,7 +60,7 @@ export type MailDocument = { kind: 'invoice' } | { kind: 'reminder'; level: numb
 export function mailText(settings: InvoicingSettings | undefined, inv: Issued, doc: MailDocument, company: string): { subject: string; body: string } {
   const L = TEXTS[inv.language];
   const own = settings?.texts[inv.language];
-  const what = `${inv.kind === 'credit-note' ? L.credit : L.invoice} ${inv.number}`;
+  const what = `${kindTitle(L, inv.kind, inv.printAs)} ${inv.number}`;
   const document = doc.kind === 'reminder' ? `${L.reminder(doc.level)} · ${what}`
     : doc.kind === 'cancellation' ? L.cancelNotice(inv.number, formatDate(inv.date, inv.language))
     : what;
@@ -62,11 +68,27 @@ export function mailText(settings: InvoicingSettings | undefined, inv: Issued, d
   return { subject: fill(own?.mailSubject ?? L.mailSubject), body: fill(own?.mailBody ?? L.mailBody) };
 }
 
-export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draft, customer: Customer | undefined, logoSrc?: string): SheetData {
-  const terms = customer?.paymentTermsDays ?? ctx.settings?.paymentTermsDays ?? 30;
-  const texts = defaultTexts(ctx, draft.kind, draft.language, terms);
+/** The days a draft gives to pay: those of the terms it picks, else the customer's, else the firm's. */
+export function draftDays(ctx: InvoicingContext, draft: Pick<Draft, 'kind' | 'termsId' | 'language'>, customer: Pick<CustomerFields, 'paymentTermsDays'> | undefined): number {
+  const days = customer?.paymentTermsDays ?? ctx.settings?.paymentTermsDays ?? 30;
+  return ctx.settings?.paymentTerms.find((x) => x.id === draft.termsId)?.days ?? days;
+}
+
+/** What the paper says of the terms: their text, and the Skonto with its last day and amount. */
+function termsOnPaper(inv: Pick<Issued, 'date' | 'terms' | 'lines' | 'prices' | 'kind'>): SheetData['terms'] {
+  if (!inv.terms) return undefined;
+  const sk = skontoOffer(inv);
+  return { text: inv.terms.text, ...(sk && inv.terms.skonto ? { skonto: { percent: inv.terms.skonto.percent, until: sk.until, amount: sk.amount, pays: sk.pays } } : {}) };
+}
+
+/** `customer`: the recipient as the draft prints it now (src/invoices/contacts.ts recipientOf). */
+export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draft, customer: CustomerFields | undefined, logoSrc?: string): SheetData {
+  const terms = draftDays(ctx, draft, customer);
+  const texts = defaultTexts(ctx, draft.kind, draft.language, terms, draft.printAs);
+  const picked = ctx.settings?.paymentTerms.some((x) => x.id === draft.termsId) ? termsFor(draft, ctx.settings?.paymentTerms, terms) : undefined;
   return {
     kind: draft.kind,
+    ...kindFacts(draft),
     language: draft.language,
     date: draft.date,
     ...(draft.supplied ? { supplied: draft.supplied } : {}),
@@ -75,6 +97,8 @@ export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draf
     customer: customer ?? { name: '', address: { postcode: '', town: '', country: 'CH' }, language: draft.language, paymentTermsDays: terms },
     sender: senderFor(ctx, draft.currency),
     lines: draft.lines,
+    ...(draft.prices ? { prices: draft.prices } : {}),
+    ...(ctx.settings ? { units: ctx.settings.units } : {}),
     ...(draft.exemption ? { exemption: draft.exemption } : {}),
     ...(texts.salutation ? { salutation: texts.salutation } : {}),
     intro: draft.intro ?? texts.intro,
@@ -82,13 +106,22 @@ export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draf
     layout: ctx.settings?.layout ?? DEFAULT_LAYOUT,
     ...(logoSrc ? { logoSrc } : {}),
     ...(draft.kind === 'credit-note' ? { credit: creditInfo(book, draft) } : {}),
+    ...(picked ? { terms: termsOnPaper({ ...draft, terms: picked }) } : {}),
   };
 }
+
+/** What the paper names of an Angebot or Auftrag: its print variant, its last day, the customer's order reference. */
+const kindFacts = (d: InvoiceContent): Pick<SheetData, 'printAs' | 'validUntil' | 'ordered'> => ({
+  ...(d.kind === 'sales-order' && d.printAs ? { printAs: d.printAs } : {}),
+  ...(d.kind === 'quote' && d.validUntil ? { validUntil: d.validUntil } : {}),
+  ...(d.ordered ? { ordered: d.ordered } : {}),
+});
 
 /** An issued invoice or credit note as it was issued; `cancelled` shows the stamp (the cancellation notice). */
 export function issuedSheet(book: InvoiceBook, inv: Issued, logoSrc?: string): SheetData {
   return {
     kind: inv.kind,
+    ...kindFacts(inv),
     language: inv.language,
     number: inv.number,
     date: inv.date,
@@ -98,6 +131,8 @@ export function issuedSheet(book: InvoiceBook, inv: Issued, logoSrc?: string): S
     customer: inv.customer,
     sender: inv.sender,
     lines: inv.lines,
+    ...(inv.prices ? { prices: inv.prices } : {}),
+    ...(inv.units ? { units: inv.units } : {}),
     ...(inv.exemption ? { exemption: inv.exemption } : {}),
     intro: inv.intro ?? '',
     closing: inv.closing ?? '',
@@ -106,6 +141,7 @@ export function issuedSheet(book: InvoiceBook, inv: Issued, logoSrc?: string): S
     reference: inv.reference,
     ...(inv.kind === 'credit-note' ? { credit: creditInfo(book, inv) } : {}),
     ...(inv.cancelled ? { cancelled: inv.cancelled } : {}),
+    ...(inv.terms?.skonto ? { terms: termsOnPaper(inv) } : {}),
   };
 }
 
@@ -114,7 +150,7 @@ export function reminderSheet(book: InvoiceBook, inv: Issued, reminder: Omit<Rem
   const withThis = inv.reminders.some((r) => r.level === reminder.level && r.date === reminder.date) ? inv : { ...inv, reminders: [...inv.reminders, { ...reminder, documentId: '' }] };
   const open = openAmount(withThis, book.invoices);
   const fee = openFees(withThis);
-  const gross = totals(inv.lines).gross;
+  const gross = totals(inv).gross;
   return {
     ...issuedSheet(book, inv, logoSrc),
     reminderLevel: reminder.level,
@@ -129,5 +165,5 @@ export function reminderSheet(book: InvoiceBook, inv: Issued, reminder: Omit<Rem
 /** The sheet of any invoice record: a draft with today's settings, an issued one as issued. */
 export function sheetOf(ctx: InvoicingContext, book: InvoiceBook, inv: Invoice, logoSrc?: string): SheetData {
   if (inv.status === 'issued') return issuedSheet(book, inv, logoSrc);
-  return draftSheet(ctx, book, inv, book.customers.find((c) => c.id === inv.customerId), logoSrc);
+  return draftSheet(ctx, book, inv, recipientOf(book.contacts.find((c) => c.id === inv.customerId), inv, ctx.settings), logoSrc);
 }

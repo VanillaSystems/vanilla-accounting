@@ -5,9 +5,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { noBrowser, openApp } from './support/e2e.js';
+import { demoInvoices } from './support/workspace.js';
 
 /** The demo's draft for Muster Hotel GmbH: line 1 is 1 × 680, line 2 is 1 × 45. */
-const DRAFT = 'in_8rkN6yKIRdjB';
+const DRAFT = demoInvoices().draftOf('Muster Hotel GmbH');
 
 interface DraftView { lines: Array<{ quantity: number; price: number }> }
 

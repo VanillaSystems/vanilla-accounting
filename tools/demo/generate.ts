@@ -33,11 +33,13 @@ import { GITATTRIBUTES } from '../../src/workspace/scaffold.js';
 import { camt053Xml, type CamtEntry } from './camt053.js';
 import { textPdf } from './pdf.js';
 import { chf, PAID_PRIVATELY, uidChecksumValid, YEAR, type Demo, type Doc, type Payment, type StatementBank } from './kit.js';
-import { invoiceFiles, playInvoicing, withSeededIds, type DemoPayment } from './invoices.js';
+import { invoiceFiles, playInvoicing, settle, withSeededIds, type DemoPayment } from './invoices.js';
+import type { Issued } from '../../src/invoices/model.js';
 import { loadInvoices, readPdf } from '../../src/invoices/store.js';
 import { matchPayments } from '../../src/invoices/payments.js';
 import { kaffee } from './kaffee.js';
 import { consulting } from './consulting.js';
+import { PAYROLL_SCHEMA } from '../../src/workspace/schema.js';
 import { coiffeur } from './coiffeur.js';
 import { schreinerei } from './schreinerei.js';
 import { setJurisdiction, vat } from '../../src/engines/index.js';
@@ -105,8 +107,8 @@ function book(demo: Demo, payments: Payment[]): { booked: Booked[]; entries: Jou
         : payment.text.startsWith('Card') ? `CARD-${7000000 + ++seq.card}` : `TRANSFER-${8000000 + ++seq.transfer}`;
     booked.push({ ref, payment, amount: Math.abs(signed), direction: signed > 0 ? 'CRDT' : 'DBIT' });
 
-    // A part that pays an invoice is booked by the invoice matcher, after the books are read back (build).
-    payment.parts.forEach((part, pi) => part.invoice ? undefined : part.legs.forEach((leg, li) => {
+    // A part that pays an invoice is booked by the invoice matcher, after the books are read back (build), or settled by the person (settle).
+    payment.parts.forEach((part, pi) => part.invoice || part.settles ? undefined : part.legs.forEach((leg, li) => {
       const id = hashId(`${ref}#${pi}#${li}`);
       if (leg.key) keys.set(leg.key, id);
       const rate = fxRate(bank.currency, payment.date);
@@ -160,6 +162,7 @@ function statements(demo: Demo, bankId: string, booked: Booked[], tree: Tree): {
     .reduce((s, b) => s + (b.direction === 'CRDT' ? b.amount : -b.amount), bank.opening));
   const before = (date: string) => balanceAt(new Date(Date.parse(`${date}T12:00:00Z`) - 864e5).toISOString().slice(0, 10));
   const dir = `${YEAR_DIR}/bank-statements/${bank.bank}`;
+  const camts: BankStatement[] = [];
 
   for (const [from, to] of QUARTERS) {
     const created = `${new Date(Date.parse(`${to}T12:00:00Z`) + 864e5).toISOString().slice(0, 10)}T06:00:00`;
@@ -177,6 +180,8 @@ function statements(demo: Demo, bankId: string, booked: Booked[], tree: Tree): {
       ? `uuid_camt053_001_08_${bank.iban.toLowerCase()}_${created.replace(/\D/g, '')}.xml`
       : `uuid_statement_${WISE_ACCOUNT_ID}_${bank.currency}_${from}_${to}.xml`;
     tree.set(`${dir}/${file}`, xml);
+    // As the import lists a camt.053 (src/books/bank-import.ts readStatementFiles): its days and the refs of its payments.
+    camts.push({ bank: bank.bank, filename: file, fromDate: from, toDate: to, currency: bank.currency, refs: entries.map((e) => e.ref) });
   }
 
   const balances: StatementClosingBalance[] = [];
@@ -199,7 +204,7 @@ function statements(demo: Demo, bankId: string, booked: Booked[], tree: Tree): {
     balances.push({ account: bank.account, bank: bank.bank, currency: bank.currency, date: to, amount: closing, source: 'pdf', sourceFile: file });
     pdfs.push({ bank: bank.bank, filename: file, fromDate: from, toDate: to, ...(bank.bank === 'Wise' ? { currency: bank.currency } : {}) });
   }
-  return { balances, pdfs };
+  return { balances, pdfs: [...pdfs, ...camts] };
 }
 
 /** The Q1 return exactly as `npm run vat-xml` wrote it on the day of filing. */
@@ -237,7 +242,7 @@ ${demo.legalForm ? `  legalForm: ${demo.legalForm}\n` : ''}${address}  vat: ${va
 bankAccounts:
 ${accounts.join('\n')}
   - { bank: manual, currency: CHF, account: "${demo.ownerAccount.account}", label: ${demo.ownerAccount.label}, role: owner }
-${inv ? inv.manifest : ''}`;
+${inv?.cash ? `  - { bank: Kasse, currency: CHF, account: "${inv.cash.account}", label: ${inv.cash.label}, role: cash }\n` : ''}${inv ? inv.manifest : ''}`;
 }
 
 /** A demo may name a real company only when it marks it public; every other UID must fail its check digit. */
@@ -354,7 +359,9 @@ async function build(demo: Demo, seed: number): Promise<Tree> {
     const paidByInvoice = booked.flatMap((b) => b.payment.parts.filter((p) => p.invoice).map((p) => ({
       number: p.invoice!, transactionRef: b.ref, date: b.payment.date, amount: r2(p.legs.reduce((s, l) => s + l.amount, 0)),
     })));
-    await withSeededIds(seed, () => invoicing(demo, books, tree, paidByInvoice));
+    // The statement rows the person settles in the app (a hand payment's confirmation, an Ausziffern), by the step's key.
+    const rows = new Map(booked.flatMap((b) => b.payment.parts.flatMap((p) => (p.settles ? [[p.settles.step, transactions.find((t) => t.ref === b.ref)!] as const] : []))));
+    await withSeededIds(seed, () => invoicing(demo, books, tree, paidByInvoice, rows));
   }
 
   // As filed: the books on filing day knew nothing of the later correction, and the period was still open.
@@ -375,6 +382,7 @@ async function build(demo: Demo, seed: number): Promise<Tree> {
   tree.set(`${APP_FOLDER}/master-data/accounts.json`, json(demo.accounts.map(([number, name]) => ({ number, name }))));
   tree.set(`${APP_FOLDER}/belege.workspace.yaml`, manifest(demo));
   for (const [file, yaml] of Object.entries(demo.knowledge)) tree.set(`${APP_FOLDER}/knowledge/${file}`, yaml);
+  if (demo.payroll) tree.set(`${APP_FOLDER}/payroll.json`, json({ ...demo.payroll, schema: PAYROLL_SCHEMA }));
   tree.set('.gitignore', 'data/\n.env\nbeleg-import/\n');
   tree.set('.gitattributes', GITATTRIBUTES);
   return tree;
@@ -384,19 +392,27 @@ async function build(demo: Demo, seed: number): Promise<Tree> {
  * The demo's invoices, played through the app's invoicing service (tools/demo/invoices.ts), and
  * their payments booked by the app's payment matcher from the transactions read back above.
  */
-async function invoicing(demo: Demo, books: Index, tree: Tree, payments: DemoPayment[]): Promise<void> {
-  const ws = await playInvoicing(demo.invoicing!, manifest(demo), demo.company.owner, payments);
+async function invoicing(demo: Demo, books: Index, tree: Tree, payments: DemoPayment[], rows: Map<string, BankTransaction>): Promise<void> {
+  const { ws, ids } = await playInvoicing(demo.invoicing!, manifest(demo), demo.company.owner, payments);
   try {
     const book = loadInvoices(ws);
     const full = { ...books, journalEntries: books.journalEntries!, config: books.config! };
-    const paid = matchPayments(full, book, {
+    const ctx = {
       bankAccounts: ws.bankAccounts, revenueAccount: ws.invoicing!.revenueAccount, fx, openItems: openItemAccounts([]),
-      pdfOf: (inv) => readPdf(ws, inv.pdf), receiptId: hashId, indexedAt: (tx) => `${tx.date}T18:00:00.000Z`, held: () => new Set(),
-    });
+      pdfOf: (inv: Issued) => readPdf(ws, inv.pdf), receiptId: hashId, indexedAt: (tx: Pick<BankTransaction, 'date'>) => `${tx.date}T18:00:00.000Z`, held: () => new Set<string>(),
+    };
+    // A row that confirms a hand payment is no movement of its own: it comes off before the matcher (settle confirms the hand payment with it).
+    const confirming = new Set(demo.invoicing!.steps.flatMap((s) => (s.do === 'hand' && s.statement ? [rows.get(s.key)!.ref] : [])));
+    full.transactions = full.transactions.filter((t) => !confirming.has(t.ref));
+    const paid = matchPayments(full, book, ctx);
     const expected = demo.invoicing!.steps.filter((s) => s.do === 'issue' && s.paid).length;
     if (paid.paid.filter((p) => p.booked).length !== expected || paid.questions.length) {
       throw new Error(`${demo.dir}: ${expected} invoice payments should book by their reference: ${JSON.stringify(paid)}`);
     }
+    const own = settle(demo.invoicing!, full, book, ids, rows, ctx);
+    Object.assign(books, { transactions: full.transactions, journalEntries: full.journalEntries, mappings: full.mappings, receipts: full.receipts });
+    for (const f of own) tree.set(`${YEAR_DIR}/receipts/${f.filename}`, f.pdf);
+    books.transactions.sort((a, b) => a.date.localeCompare(b.date) || a.ref.localeCompare(b.ref));
     books.journalEntries!.sort((a, b) => a.date.localeCompare(b.date) || a.transactionRef.localeCompare(b.transactionRef) || a.id.localeCompare(b.id));
     books.receipts.sort((a, b) => a.filename.localeCompare(b.filename));
     for (const f of paid.files) tree.set(`${YEAR_DIR}/receipts/${f.filename}`, f.pdf);

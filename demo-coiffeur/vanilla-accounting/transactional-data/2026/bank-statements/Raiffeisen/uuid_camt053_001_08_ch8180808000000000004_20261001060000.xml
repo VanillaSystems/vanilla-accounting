@@ -17,13 +17,13 @@
       </Acct>
       <Bal>
         <Tp><CdOrPrtry><Cd>OPBD</Cd></CdOrPrtry></Tp>
-        <Amt Ccy="CHF">7253.85</Amt>
+        <Amt Ccy="CHF">7938.85</Amt>
         <CdtDbtInd>CRDT</CdtDbtInd>
         <Dt><Dt>2026-07-01</Dt></Dt>
       </Bal>
       <Bal>
         <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
-        <Amt Ccy="CHF">9028.70</Amt>
+        <Amt Ccy="CHF">9713.70</Amt>
         <CdtDbtInd>CRDT</CdtDbtInd>
         <Dt><Dt>2026-09-30</Dt></Dt>
       </Bal>
@@ -34,7 +34,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-07-01</Dt></BookgDt>
         <ValDt><Dt>2026-07-01</Dt></ValDt>
-        <AcctSvcrRef>90000000055</AcctSvcrRef>
+        <AcctSvcrRef>90000000056</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -52,7 +52,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-07-09</Dt></BookgDt>
         <ValDt><Dt>2026-07-09</Dt></ValDt>
-        <AcctSvcrRef>90000000056</AcctSvcrRef>
+        <AcctSvcrRef>90000000057</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -71,7 +71,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-07-14</Dt></BookgDt>
         <ValDt><Dt>2026-07-14</Dt></ValDt>
-        <AcctSvcrRef>90000000057</AcctSvcrRef>
+        <AcctSvcrRef>90000000058</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -89,7 +89,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-07-20</Dt></BookgDt>
         <ValDt><Dt>2026-07-20</Dt></ValDt>
-        <AcctSvcrRef>90000000058</AcctSvcrRef>
+        <AcctSvcrRef>90000000059</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -107,7 +107,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-07-20</Dt></BookgDt>
         <ValDt><Dt>2026-07-20</Dt></ValDt>
-        <AcctSvcrRef>90000000059</AcctSvcrRef>
+        <AcctSvcrRef>90000000060</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -126,7 +126,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-07-27</Dt></BookgDt>
         <ValDt><Dt>2026-07-27</Dt></ValDt>
-        <AcctSvcrRef>90000000060</AcctSvcrRef>
+        <AcctSvcrRef>90000000061</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -144,7 +144,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-07-27</Dt></BookgDt>
         <ValDt><Dt>2026-07-27</Dt></ValDt>
-        <AcctSvcrRef>90000000061</AcctSvcrRef>
+        <AcctSvcrRef>90000000062</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -162,7 +162,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-07-31</Dt></BookgDt>
         <ValDt><Dt>2026-07-31</Dt></ValDt>
-        <AcctSvcrRef>90000000062</AcctSvcrRef>
+        <AcctSvcrRef>90000000063</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -180,7 +180,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-08-03</Dt></BookgDt>
         <ValDt><Dt>2026-08-03</Dt></ValDt>
-        <AcctSvcrRef>90000000063</AcctSvcrRef>
+        <AcctSvcrRef>90000000064</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -198,7 +198,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-08-10</Dt></BookgDt>
         <ValDt><Dt>2026-08-10</Dt></ValDt>
-        <AcctSvcrRef>90000000064</AcctSvcrRef>
+        <AcctSvcrRef>90000000065</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -217,7 +217,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-08-14</Dt></BookgDt>
         <ValDt><Dt>2026-08-14</Dt></ValDt>
-        <AcctSvcrRef>90000000065</AcctSvcrRef>
+        <AcctSvcrRef>90000000066</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -235,7 +235,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-08-18</Dt></BookgDt>
         <ValDt><Dt>2026-08-18</Dt></ValDt>
-        <AcctSvcrRef>90000000066</AcctSvcrRef>
+        <AcctSvcrRef>90000000067</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -254,7 +254,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-08-20</Dt></BookgDt>
         <ValDt><Dt>2026-08-20</Dt></ValDt>
-        <AcctSvcrRef>90000000067</AcctSvcrRef>
+        <AcctSvcrRef>90000000068</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -272,7 +272,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-08-26</Dt></BookgDt>
         <ValDt><Dt>2026-08-26</Dt></ValDt>
-        <AcctSvcrRef>90000000068</AcctSvcrRef>
+        <AcctSvcrRef>90000000069</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -290,7 +290,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-08-27</Dt></BookgDt>
         <ValDt><Dt>2026-08-27</Dt></ValDt>
-        <AcctSvcrRef>90000000069</AcctSvcrRef>
+        <AcctSvcrRef>90000000070</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -308,7 +308,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-08-31</Dt></BookgDt>
         <ValDt><Dt>2026-08-31</Dt></ValDt>
-        <AcctSvcrRef>90000000070</AcctSvcrRef>
+        <AcctSvcrRef>90000000071</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -326,7 +326,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-01</Dt></BookgDt>
         <ValDt><Dt>2026-09-01</Dt></ValDt>
-        <AcctSvcrRef>90000000071</AcctSvcrRef>
+        <AcctSvcrRef>90000000072</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -344,7 +344,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-09</Dt></BookgDt>
         <ValDt><Dt>2026-09-09</Dt></ValDt>
-        <AcctSvcrRef>90000000072</AcctSvcrRef>
+        <AcctSvcrRef>90000000073</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -363,7 +363,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-14</Dt></BookgDt>
         <ValDt><Dt>2026-09-14</Dt></ValDt>
-        <AcctSvcrRef>90000000073</AcctSvcrRef>
+        <AcctSvcrRef>90000000074</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -381,7 +381,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-14</Dt></BookgDt>
         <ValDt><Dt>2026-09-14</Dt></ValDt>
-        <AcctSvcrRef>90000000074</AcctSvcrRef>
+        <AcctSvcrRef>90000000075</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -400,7 +400,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-18</Dt></BookgDt>
         <ValDt><Dt>2026-09-18</Dt></ValDt>
-        <AcctSvcrRef>90000000075</AcctSvcrRef>
+        <AcctSvcrRef>90000000076</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -419,7 +419,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-21</Dt></BookgDt>
         <ValDt><Dt>2026-09-21</Dt></ValDt>
-        <AcctSvcrRef>90000000076</AcctSvcrRef>
+        <AcctSvcrRef>90000000077</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -437,7 +437,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-28</Dt></BookgDt>
         <ValDt><Dt>2026-09-28</Dt></ValDt>
-        <AcctSvcrRef>90000000077</AcctSvcrRef>
+        <AcctSvcrRef>90000000078</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -455,7 +455,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-28</Dt></BookgDt>
         <ValDt><Dt>2026-09-28</Dt></ValDt>
-        <AcctSvcrRef>90000000078</AcctSvcrRef>
+        <AcctSvcrRef>90000000079</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -473,7 +473,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-30</Dt></BookgDt>
         <ValDt><Dt>2026-09-30</Dt></ValDt>
-        <AcctSvcrRef>90000000079</AcctSvcrRef>
+        <AcctSvcrRef>90000000080</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -491,7 +491,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-30</Dt></BookgDt>
         <ValDt><Dt>2026-09-30</Dt></ValDt>
-        <AcctSvcrRef>90000000080</AcctSvcrRef>
+        <AcctSvcrRef>90000000081</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>

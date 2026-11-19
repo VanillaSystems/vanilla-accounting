@@ -1,5 +1,11 @@
 /** Issued documents and sent-log entries for tests of Verkauf's lists, where the demo has too few states. */
-import type { Invoice, Issued, SentDocument } from '../../src/invoices/model.js';
+import type { Contact, CustomerFields, Envelope, Invoice, Issued, SentDocument } from '../../src/invoices/model.js';
+import { contactOfCustomer } from '../../src/invoices/contacts.js';
+
+/** A customer as phase 1 wrote one, with its envelope: what `issue` freezes, and as a contact through `asContact`. */
+export type Customer = CustomerFields & Envelope;
+/** The firm contact the invoices.json step 3 → 4 makes of a customer, under the same id. */
+export const asContact = (c: Customer): Contact => ({ id: c.id, createdAt: c.createdAt, origin: c.origin, deleted: c.deleted, ...contactOfCustomer(c) });
 
 export const issued = (id: string, number: string, over: Partial<Issued> = {}): Issued => ({
   id, createdAt: '2026-10-01T08:00:00Z', origin: 'manual', deleted: false, status: 'issued', kind: 'invoice', number, issuedAt: '2026-10-01T08:00:00Z',
@@ -16,3 +22,12 @@ export const sentDoc = (id: string, inv: Invoice, over: Partial<SentDocument> = 
   file: 'x.pdf', sha256: `${id}`.padEnd(64, '0'), sentAt: '2026-10-02T09:14:00Z', to: 'ap@kunde.example', channel: 'email', messageId: `<${id}@mail>`, ...over,
 });
 
+
+/** The body of POST /api/contacts for a customer as phase 1 posted it to /api/customers: a firm, its address the billing address. */
+export const contactBody = (c: Partial<CustomerFields>): Record<string, unknown> => ({
+  type: 'firm', name: c.name, language: c.language ?? 'de',
+  addresses: c.address ? [{ ...c.address, ...(c.attn ? { attn: c.attn } : {}), billing: true }] : [],
+  emails: c.email ? [c.email] : [],
+  ...(c.vatId !== undefined ? { vatId: c.vatId } : {}),
+  ...(c.paymentTermsDays !== undefined ? { paymentDays: c.paymentTermsDays } : {}),
+});

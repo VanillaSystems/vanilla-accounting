@@ -271,3 +271,7 @@ test('every PDF of the demos: no amount other than the books\' (review of #384)'
   assert.deepEqual(wrong, []);
   assert.ok(ok >= 214, `read ${ok}`);
 });
+
+test('a Swiss amount whose thousands mark the PDF reader gives as ʼ (U+02BC, a Chrome-printed invoice) is read whole', () => {
+  assert.equal(textFacts('Rechnung 2026-002\nDatum 07.07.2026\nBetrag EUR\n3ʼ800.00\nTotal EUR\n3ʼ800.00').amount, 3800);
+});

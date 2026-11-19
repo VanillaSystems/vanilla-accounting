@@ -19,7 +19,7 @@ test('the demo manifest opens: bank accounts in file order, paths on the fixed l
   const ws = workspaceAt(DEMO_REPO);
   assert.equal(ws.company.uid, 'CHE-123.456.789');
   assert.deepEqual(ws.bankAccounts.map((a) => `${a.bank} ${a.currency} ${a.account}`), [
-    'Raiffeisen CHF 1021', 'Wise EUR 1023', 'manual CHF 2451',
+    'Raiffeisen CHF 1021', 'Wise EUR 1023', 'manual CHF 2451', 'Kasse CHF 1000',
   ]);
   assert.equal(ws.paths.root, DEMO_APP, 'the repository resolves to its vanilla-accounting/');
   assert.equal(ws.paths.repository, DEMO_REPO);

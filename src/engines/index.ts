@@ -5,7 +5,7 @@
  * figures from the same data for the same kind of firm.
  */
 import type { Jurisdiction } from '../core/modules/schema.js';
-import { EFFECTIVE_QUARTERLY, basisSinceOf, filingLengthOf, methodOf, onAgreedBasis, type VatBasis, type VatMethod, type VatSetup } from '../workspace/vat-setup.js';
+import { EFFECTIVE_QUARTERLY, basisSinceOf, filingLengthOf, methodOf, netRatesOf, onAgreedBasis, type NetRate, type VatBasis, type VatMethod, type VatSetup } from '../workspace/vat-setup.js';
 import { chartEngine, type ChartEngine } from './chart.js';
 import { useDocumentWords } from '../books/statement-facts.js';
 import { returnEngine, type ReturnEngine } from './return.js';
@@ -82,6 +82,35 @@ export const ratesWithoutActivityId = (figures: Record<string, number>): string[
 /** The rates an invoice line may take: the jurisdiction's for a registered firm, 0 alone for one not registered. */
 export const invoiceRates = (): readonly number[] => (chargesVat() ? invoicing().rates : [0]);
 
+/**
+ * The percent of a VAT kind on the supply's day `date` (an Artikel's, spec 4.4.3): the
+ * jurisdiction's entry valid then, the oldest for a day before every entry; 0 for `none` and on a
+ * firm not registered, whose invoices carry no VAT.
+ */
+export function rateOfKind(kind: 'normal' | 'reduced' | 'accommodation' | 'none', date: string): number {
+  if (kind === 'none' || !chargesVat()) return 0;
+  const list = invoicing().rateKinds[kind];
+  return (list.find((r) => r.from <= date) ?? list.at(-1)!).rate;
+}
+
+/** The VAT kind a rate is, on the supply's day `date`: what an Artikel made from a position or a table row names; undefined for a rate no kind has. */
+export function kindOfRate(rate: number, date: string): 'normal' | 'reduced' | 'accommodation' | 'none' | undefined {
+  if (rate === 0) return 'none';
+  // The jurisdiction's kinds, also on a firm not registered (its Artikel keep their kind; its invoices charge 0 %).
+  const kinds = invoicing().rateKinds;
+  return (['normal', 'reduced', 'accommodation'] as const).find((k) => (kinds[k].find((r) => r.from <= date) ?? kinds[k].at(-1)!).rate === rate);
+}
+
+/**
+ * The activities an invoice line is assigned to (#504): the firm's two approved net tax rates, the
+ * first and the second; none on a firm with one rate or another method, where every line is the
+ * first. The screen offers the choice; paper never shows it (an invoice names the statutory rate).
+ */
+export const invoiceActivities = (): readonly NetRate[] => {
+  const rates = netRatesOf(vatSetup());
+  return rates.length === 2 ? rates : [];
+};
+
 /** The jurisdiction's year close: its accounts, entry forms and withholding tax. */
 export const yearEnd = (): Jurisdiction['yearEnd'] => loaded().source.yearEnd;
 
@@ -108,3 +137,12 @@ export const setup = (): Jurisdiction['setup'] => loaded().source.setup;
 
 /** The words that say what a document is: a receipt, a document beside one, or none. */
 export const documents = (): Jurisdiction['documents'] => loaded().source.documents;
+
+/** The jurisdiction's payroll: its Lohnart catalogue, insurance kinds and contributions; undefined where it has none. */
+export const payroll = (): Jurisdiction['payroll'] => loaded().source.payroll;
+
+/** The law's payroll figures by year (payroll/<year>.yaml). */
+export const payrollYears = (): Jurisdiction['payrollYears'] => loaded().source.payrollYears;
+
+/** The payroll's clearing account (Lohndurchlaufkonto): the payslips book the payout onto it, the bank payment clears it. */
+export const payrollClearing = (): string | undefined => { try { return loaded().source.payroll?.clearing; } catch { return undefined; } };

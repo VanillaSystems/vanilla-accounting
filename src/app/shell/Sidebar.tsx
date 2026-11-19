@@ -60,9 +60,11 @@ import {
   addContext, closeAssistant, hideConversations, newConversation, openConversation, removeContext, sendMessage, settleHeld, showConversations, stopAnswer, undoAll, undoChange, useAssistant, wroteDraft,
 } from '../assistant/store.js';
 import { AsyncButton } from './AsyncButton.js';
+import { totals as invoiceTotals } from '../../invoices/rules.js';
+import type { InvoiceLine } from '../../invoices/model.js';
 
 /** `onGoTo`: to a place with its period, for a link to an object of another period than the one shown. */
-interface Props { page: ContextRef | undefined; books: Index; onGo(route: Route): void; onGoTo(loc: Location): void }
+interface Props { page: ContextRef | undefined; books: Index; onGo(route: Route): void; onGoTo(loc: Location): void; /** No card of the open period before the first message (Area.noPeriodCard). */ noPeriodCard?: boolean }
 
 /** A booking's fields as they read on a card: accounts, VAT code, amount, date, text. */
 function entryWhat(set: EntrySet, withText = true): string {
@@ -135,7 +137,8 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
     case 'account': return { text: t(c.name === null ? 'assistant.c.accountGone' : 'assistant.c.account', { number: c.number, name: c.name ?? '' }), go: { area: 'company', section: 'accounts' } };
     case 'invoicing': return { text: t('assistant.c.invoicing', { what: invoicingWhat(c.set, note?.customers, undo?.kind === 'invoicing' ? undo.set : undefined) }), go: { area: 'company', section: 'invoice-layout' } };
     case 'invoiceDraft': {
-      const net = (c.draft.lines ?? []).reduce((sum, l) => sum + l.quantity * l.price, 0);
+      // The draft's own totals: its Rabatte and gross prices count as on the sheet; a line the reader would refuse counts nothing.
+      const net = draftNet(c.draft);
       const text = t('assistant.c.invoiceDraft', { customer: note?.draft?.customer ?? c.newCustomer?.name ?? '', n: c.draft.lines?.length ?? 0, net: fmt(net) });
       return { text, ...(note?.draft ? { go: { area: 'invoices', view: 'list', id: `draft-${note.draft.id}` } as Route } : {}) };
     }
@@ -380,7 +383,7 @@ function SentFile({ a, conversation }: { a: Attachment; conversation: string | u
   );
 }
 
-export function Sidebar({ page, books, onGo, onGoTo }: Props) {
+export function Sidebar({ page, books, onGo, onGoTo, noPeriodCard }: Props) {
   const columnNoAi = useColumnNoAi(() => onGo({ area: 'company', section: 'ai' }));
   const s = useAssistant();
   const [text, setText] = useState('');
@@ -569,7 +572,7 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
         <div className="aiturns">
           {noAi?.card}
           {/* Before the first message: where the open period stands, drawn by code, so it is there without an AI too (#342). */}
-          {s.turns.length === 0 && !setup ? <OpenPeriodCard books={books} onGo={onGoTo} /> : null}
+          {s.turns.length === 0 && !setup && !noPeriodCard ? <OpenPeriodCard books={books} onGo={onGoTo} /> : null}
           {s.turns.length === 0 && !noAi ? <p className="m aiempty">{t('assistant.empty')}</p> : null}
           {setup ? <SetupConversation turns={s.turns} turn={turnView} onGo={onGo} noAi={!!noAi} /> : s.turns.map(turnView)}
           {s.error ? <p className="warnline">{s.error}</p> : null}
@@ -652,4 +655,13 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
       ) : null}
     </aside>
   );
+}
+
+/** The net total of a draft the AI proposes, as the sheet computes it; 0 when its lines are not yet ones the invoices take. */
+function draftNet(draft: { lines?: unknown; prices?: unknown }): number {
+  try {
+    return invoiceTotals({ lines: (draft.lines ?? []) as InvoiceLine[], prices: draft.prices === 'gross' ? 'gross' : 'net' }).net || 0;
+  } catch {
+    return 0;
+  }
 }

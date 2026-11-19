@@ -73,6 +73,8 @@ export function PaymentBooking(props: Props) {
   const [known, setKnown] = useState<{ start: HandStart | null; books: Index; failed?: true }>();
   // A receipt she said is not the invoice this payment pays (#382): the form proposes without it.
   const [notOwn, setNotOwn] = useState<string>();
+  // A payroll insurer's payment (§22 decision 45): for months from payroll's start (the liability) or for months before it (level A).
+  const [way, setWay] = useState<'after' | 'before'>('after');
   useEffect(() => {
     let live = true;
     const books = props.books;
@@ -82,13 +84,14 @@ export function PaymentBooking(props: Props) {
     return () => { live = false; };
   }, [props.payment, props.books]);
   const start = known?.start ?? undefined;
+  const nature = start?.nature?.kind === 'payrollInsurer' ? { ...start.nature, way } : start?.nature;
   const draft = useMemo(() => (ws && known ? (known.failed ? (d?: BookingDraft) => d && withoutProposal(d) : (d?: BookingDraft) => d)(formDraft(props.books, props.payment, ws.bankAccounts, invoices, {
-    defaults: ws.defaults, rule: start?.rule, nature: start?.nature, account: start?.account, ...(start?.wages && { wages: start.wages }),
+    defaults: ws.defaults, rule: start?.rule, nature, account: start?.account, ...(start?.wages && { wages: start.wages }),
     invoiceRevenue: ws.invoicing?.revenueAccount, chart: getAccounts().map((a) => a.number), ownUid: ws.company.uid, firmName: ws.company.name,
     ...(notOwn && { notOwnInvoice: notOwn }),
     ranks: (words) => ranksByWords(getAccounts().filter((a) => chart().typeOf(a.number) === 'expense'), words, hintsOf),
     ...nearOf(props.books, props.payment, ws.company),
-  })) : undefined), [ws, known, start, props.books, props.payment, invoices, notOwn]);
+  })) : undefined), [ws, known, start, props.books, props.payment, invoices, notOwn, way]);
   // The form as it stands: the way to a rule starts with what it holds (#383).
   const formEl = useRef<HTMLFormElement | null>(null);
   const typed = useMemo(() => (ws ? unattachedFor(props.books, props.payment, ws.bankAccounts) : []), [ws, props.books, props.payment]);
@@ -97,9 +100,65 @@ export function PaymentBooking(props: Props) {
   return (
     <>
       {typed.length ? <Unattached {...props} typed={typed} /> : null}
-      <BookingForm {...props} onForm={(el) => { formEl.current = el; props.onForm?.(el); }} accounts={ws.bankAccounts} draft={draft} dimensions={ws.dimensions ?? []} defaults={defaults} pending={known!.books !== props.books} onNotOwn={setNotOwn} />
+      {start?.nature?.kind === 'payrollInsurer' ? (
+        <div className="insurerway" role="radiogroup" data-testid="insurer-way">
+          {(['after', 'before'] as const).map((w) => (
+            <label key={w}><input type="radio" name="insurer-way" checked={way === w} onChange={() => setWay(w)} /> {t(`journal.byHand.insurerWay.${w}`)}</label>
+          ))}
+          {props.canRule !== false && !start.nature.shared && way === 'after' ? <KeepWay nav={props.nav} payment={props.payment} name={start.nature.name} /> : null}
+        </div>
+      ) : null}
+      <BookingForm key={way} {...props} onForm={(el) => { formEl.current = el; props.onForm?.(el); }} accounts={ws.bankAccounts} draft={draft} dimensions={ws.dimensions ?? []} defaults={defaults} pending={known!.books !== props.books} onNotOwn={setNotOwn} />
       {props.canRule !== false && start ? <RuleWay nav={props.nav} payment={props.payment} start={start} form={() => formEl.current} lines={draft.lines} other={draft.bank && (draft.bank.side === 'accountDebit' ? 'accountCredit' : 'accountDebit')} /> : null}
     </>
+  );
+}
+
+/**
+ * «Immer so» for a payroll insurer's payments (§22 decision 59): «für Monate ab dem Lohnstart» kept in the company's
+ * file of the fund, so the next Akonto is not asked again. The payments it books at once are named before the click
+ * (as a rule's card names them); «Rückgängig» takes the way out of the file again (what it booked stays). «Davor» is
+ * chosen per payment: months before payroll ran here end, so it is never kept.
+ */
+function KeepWay({ nav, payment, name }: { nav: Nav; payment: string; name: string }) {
+  const [plan, setPlan] = useState<Awaited<ReturnType<typeof api.insurerWayPreview>> | null>(null);
+  const [kept, setKept] = useState<{ business: string; path: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.insurerWayPreview(payment).then((p) => { if (live) setPlan(p); }, () => { if (live) setPlan(null); });
+    return () => { live = false; };
+  }, [payment]);
+  const keep = async () => {
+    try {
+      const r = await api.keepInsurerWay(payment);
+      setKept({ business: r.business, path: r.path });
+      nav.toast(t('journal.byHand.insurerWay.kept', { name, path: r.path, n: r.booked.length }));
+    } catch (e) { nav.toast(errorText(e)); }
+    nav.refresh();
+  };
+  const undo = async () => {
+    if (!kept) return;
+    try { await api.forgetInsurerWay(kept.business); setKept(null); nav.toast(t('journal.byHand.insurerWay.forgotten', { name })); } catch (e) { nav.toast(errorText(e)); }
+    nav.refresh();
+  };
+  if (kept) {
+    return (
+      <span className="m" data-testid="insurer-way-kept">
+        {t('journal.byHand.insurerWay.keptNote', { name, path: kept.path })}{' '}
+        <AsyncButton type="button" className="golink" data-testid="insurer-way-undo" onClick={undo}>{t('journal.byHand.insurerWay.undo')}</AsyncButton>
+      </span>
+    );
+  }
+  if (!plan) return null;
+  return (
+    <span className="insurerkeep" data-testid="insurer-way-plan">
+      <AsyncButton type="button" className="golink" data-testid="insurer-way-keep" onClick={keep}>{t('journal.byHand.insurerWay.keepAfter', { name, n: plan.payments.length })}</AsyncButton>
+      {plan.payments.length ? (
+        <small className="m" data-testid="insurer-way-books">
+          {t('journal.byHand.insurerWay.books', { list: plan.payments.map((p) => `${formatDate(p.date)} ${p.currency} ${fmt(p.amount)}`).join(', ') })}
+        </small>
+      ) : null}
+    </span>
   );
 }
 
@@ -158,6 +217,12 @@ function noteText(n: DraftNote): string {
     case 'ownerOutlays': return t(n.judged ? 'journal.byHand.note.ownerOutlaysJudged' : 'journal.byHand.note.ownerOutlays', { amount: fmt(n.open) });
     case 'ownerForeign': return t('journal.byHand.note.ownerForeign', { currency: n.currency });
     case 'ownerWaits': return t(n.open > 0 ? 'journal.byHand.note.ownerWaitsShort' : 'journal.byHand.note.ownerWaitsNone',{ owner: n.owner, account: n.account, amount: fmt(n.open) });
+    case 'payrollInsurer': {
+      const name = getAccountMap()[n.account];
+      const vars = { name: n.name, account: name ? `${n.account} ${name}` : n.account };
+      if (n.way === 'before') return t(n.before ? 'journal.byHand.note.payrollInsurerBefore' : 'journal.byHand.note.payrollInsurerBeforeNone', vars);
+      return t(n.shared ? 'journal.byHand.note.payrollInsurerShared' : n.covered ? 'journal.byHand.note.payrollInsurer' : 'journal.byHand.note.payrollInsurerUncovered', vars);
+    }
     case 'contributions': return t(n.open <= 0 ? 'journal.byHand.note.contributionsNone' : n.takes > 0 ? 'journal.byHand.note.contributions' : 'journal.byHand.note.contributionsUnsure', { deductions: n.deductions, account: n.account, open: `${baseCurrency()} ${fmt(n.open)}`, takes: `${baseCurrency()} ${fmt(n.takes)}` });
     default: return t(`journal.byHand.note.${n.kind}`);
   }

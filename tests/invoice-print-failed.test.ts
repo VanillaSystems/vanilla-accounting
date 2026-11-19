@@ -6,6 +6,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { startApi, type ApiServer } from './support/api-server.js';
+import { contactBody } from './support/invoice-fixtures.js';
 
 let api: ApiServer;
 // A program that exists and exits at once: found as the browser, never prints.
@@ -13,7 +14,7 @@ before(async () => { api = await startApi('tests/fixtures/period-lock-index.json
 after(() => api?.stop());
 
 test('a browser that fails to print: issue is refused as printFailed, nothing issued', async () => {
-  const c = await api.send('POST', '/api/customers', { name: 'Muster Druck AG', address: { street: 'Hauptstrasse', number: '1', postcode: '3000', town: 'Bern', country: 'CH' }, language: 'de' });
+  const c = await api.send('POST', '/api/contacts', contactBody({ name: 'Muster Druck AG', address: { street: 'Hauptstrasse', number: '1', postcode: '3000', town: 'Bern', country: 'CH' }, language: 'de' }));
   assert.equal(c.status, 200, String(c.json.error));
   const d = await api.send('POST', '/api/invoices', { customerId: c.json.id, lines: [{ text: 'Beratung', quantity: 2, unit: 'h', price: 160, vatRate: 8.1 }] });
   assert.equal(d.status, 200, String(d.json.error));

@@ -101,10 +101,10 @@ export const LAYOUT = {
   top: {
     'belege.workspace.yaml': 'company', 'mail.yaml': 'company', 'secret-terms.txt': 'company', 'AGENTS.md': 'company', 'CLAUDE.md': 'company',
     knowledge: 'company', modules: 'company', workflows: 'company', sources: 'company', 'beleg-import': 'company', history: 'company',
-    VERSION: 'app', 'versions.jsonl': 'app', handover: 'app', collected: 'app', 'ledger.json': 'app', 'invoices.json': 'app', 'onboarding.json': 'app', logos: 'app', data: 'app', output: 'app', 'master-data': 'app', 'transactional-data': 'app',
+    VERSION: 'app', 'versions.jsonl': 'app', handover: 'app', collected: 'app', 'ledger.json': 'app', 'invoices.json': 'app', 'payroll.json': 'app', 'onboarding.json': 'app', logos: 'app', data: 'app', output: 'app', 'master-data': 'app', 'transactional-data': 'app',
   },
   masterData: { 'accounts.json': 'company', 'entry-templates.json': 'company' },
-  year: { books: 'app', filings: 'app', invoices: 'app', expected: 'app', 'runs.jsonl': 'app', 'questions.jsonl': 'app', receipts: 'company', 'bank-statements': 'company' },
+  year: { books: 'app', filings: 'app', invoices: 'app', payroll: 'app', expected: 'app', 'runs.jsonl': 'app', 'questions.jsonl': 'app', receipts: 'company', 'bank-statements': 'company' },
 } as const satisfies Record<string, Record<string, Owner>>;
 
 /** The names a company repository's root holds besides the apps' folders: git and agent files, the shared master-data/, own/. */
@@ -134,6 +134,8 @@ export interface WorkspacePaths {
   secretTerms: string;
   /** Customers, invoices, sent documents (src/invoices/store.ts). */
   invoices: string;
+  /** The firm's payroll: Stammdaten, Sozialversicherungen, Lohnarten, Mitarbeitende (src/payroll/store.ts). */
+  payroll: string;
   /** The logos of the invoice layout, logo-<checksum>.<ext>. */
   logos: string;
   masterData: string;
@@ -156,6 +158,8 @@ export interface YearPaths {
   filings: string;
   /** The PDFs of issued invoices (<number>.pdf), and of sent reminders and notices (sent/<id>.pdf). */
   invoices: string;
+  /** The closed payslips of the year, append-only (payslips.jsonl), and their PDFs (src/payroll/store.ts). */
+  payroll: string;
   /** The figures npm run test:books compares the books against. */
   expected: string;
   /** The run log: one line per event of a run that wrote, waited for a person, got stuck or was discarded (src/workflows/runlog.ts). */
@@ -199,6 +203,7 @@ export function workspacePaths(root: string): WorkspacePaths {
     mail: join(root, 'mail.yaml'),
     secretTerms: join(root, 'secret-terms.txt'),
     invoices: join(root, 'invoices.json'),
+    payroll: join(root, 'payroll.json'),
     logos: join(root, 'logos'),
     masterData,
     accounts: join(masterData, 'accounts.json'),
@@ -216,6 +221,7 @@ export function yearPaths(paths: Pick<WorkspacePaths, 'transactional'>, year: st
     statements: join(root, 'bank-statements'),
     filings: join(root, 'filings'),
     invoices: join(root, 'invoices'),
+    payroll: join(root, 'payroll'),
     expected: join(root, 'expected'),
     runLog: join(root, 'runs.jsonl'),
     questions: join(root, 'questions.jsonl'),

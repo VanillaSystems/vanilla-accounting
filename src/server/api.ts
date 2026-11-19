@@ -40,19 +40,27 @@ import { router as vatAdjustments } from './routes/vat-adjustments.js';
 import { router as handover } from './routes/handover.js';
 import { router as share } from './routes/share.js';
 import { router as entryTemplates } from './routes/entry-templates.js';
+import { router as payroll } from './routes/payroll.js';
+import { router as payrollSettings } from './routes/payroll-settings.js';
+import { router as payrollTariffs, tariffUploadRefusal } from './routes/payroll-tariffs.js';
 import { markerOf } from '../handover/durchsicht.js';
 import { aiSetup } from './ai-setup.js';
 import { NoClaudeError } from '../llm/providers/claude-cli.js';
 import { AiRefused } from '../llm/provider.js';
 import { aiOff } from '../llm/off.js';
 import { NETWORK_PATHS, fromThisComputer, loopbackPeer, phoneGate, refuseForeignHost } from './phone.js';
+import { IMPORT_LIMIT } from '../invoices/contact-import.js';
 
 export const app = express();
 
 const MAIL_STATUS: Record<MailRefusal, number> = { notConfigured: 409, noPassword: 409, recipient: 400, failed: 502 };
 
 const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
-  incomplete: 400, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409, uid: 400,
+  numberTaken: 409, archived: 409, contactGone: 404, incomplete: 400, unconfirmed: 409, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409, uid: 400, aboveOpen: 409, surplus: 409, beforeInvoice: 400,
+  sent: 409, settled: 409, applied: 409, closed: 403, numbered: 409, account: 400, credited: 409,
+  refTaken: 409, numberFormat: 400, convert: 400, nothingTicked: 400, expired: 409, declined: 409, overOpen: 409, sentVersion: 409, orderDelivered: 409, orderInvoiced: 409, notReopenable: 409, notQuote: 409,
+  referenceTaken: 409, deliveryFromOrder: 400, orderDrafts: 409, sourceCancelled: 409,
+  codeTaken: 409, articleGone: 404,
 };
 
 // From the network only the phone's paths answer (src/server/phone.ts), the API ones only with the
@@ -64,6 +72,10 @@ app.use((req, res, next) => {
   res.status(403).json({ error: 'Nur von diesem Computer aus erreichbar.', code: 'localOnly' } satisfies ApiErrorBody);
 });
 app.use(phoneGate);
+/** A contacts table of IMPORT_LIMIT rows, sent as text inside JSON: room for wide rows, said when hit. */
+const IMPORT_BODY = '8mb';
+app.use('/api/contacts/import', express.json({ limit: IMPORT_BODY }));
+app.use('/api/articles/import', express.json({ limit: IMPORT_BODY }));
 app.use(express.json());
 
 // Read-only mode (READONLY=1): block all mutations so an auditor can navigate the
@@ -92,9 +104,12 @@ const SHARER_ONLY: Array<[string, RegExp, string]> = [
   // The link through the share service: sharing, the sender, withdrawing and fetching returns are the sharer's.
   ['POST', /^\/api\/share\/(link|sender|refresh)$/, 'share'],
   ['DELETE', /^\/api\/share\/(sender|[a-z2-7]{26})$/, 'share'],
-  // Invoices and customers are issued and sent by the firm; mailboxes and collectors are its own (a copy reads no mail).
-  ['*', /^\/api\/(invoices|customers)(\/|$)/, 'invoices'],
+  // Invoices and contacts are issued and sent by the firm; mailboxes and collectors are its own (a copy reads no mail).
+  ['*', /^\/api\/(invoices|contacts)(\/|$)/, 'invoices'],
   ['*', /^\/api\/(sources|mail)(\/|$)/, 'sources'],
+  // A payslip goes to the person from the firm's mailbox, locked with the password the firm gave her: the firm's (§22 decision 38).
+  ['POST', /^\/api\/payroll\/payslips\/[^/]+\/send$/, 'payroll'],
+  ['POST', /^\/api\/payroll\/employees\/[^/]+\/mail-password$/, 'payroll'],
 ];
 /** The workflows that file, seal or close: the sharer's. */
 const SHARER_WORKFLOWS: ReadonlySet<string> = new Set(['vat-filing', 'year-close', 'quarter-close']);
@@ -114,20 +129,28 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY, ...(aiOff() ? { aiOff: true } : {}) } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, payouts, questions, reports, batch, vatAdjustments, handover, share, entryTemplates);
+app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, payouts, questions, reports, batch, vatAdjustments, handover, share, entryTemplates, payroll, payrollSettings, payrollTariffs);
 app.use(knowledge);
 app.use(onboarding);
 
 app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   // A hand-over file over the upload's limit: the limit is told (body-parser's 413).
   if ((err as { type?: string }).type === 'entity.too.large' && req.path.startsWith('/api/handover')) { res.status(413).json({ error: 'Die Datei ist grösser als 1 GB: höchstens 1 GB pro Übergabe.', code: 'shareTooLarge', params: { limit: '1 GB' } } satisfies ApiErrorBody); return; }
+  // A tariff file over its limit or sent as JSON: the reason with its code.
+  if (tariffUploadRefusal(err, req, res)) return;
+  // Any other body over its limit: the limit is told, never a bare 413.
+  if ((err as { type?: string }).type === 'entity.too.large') {
+    if (req.path.startsWith('/api/contacts/import') || req.path.startsWith('/api/articles/import')) { res.status(413).json({ error: `Die Tabelle ist grösser als 8 MB: höchstens 8 MB und ${IMPORT_LIMIT} Zeilen pro Import.`, code: 'importTooLarge', params: { limit: '8 MB', rows: IMPORT_LIMIT } } satisfies ApiErrorBody); return; }
+    const limit = `${Math.round(((err as { limit?: number }).limit ?? 102400) / 1024)} kB`;
+    res.status(413).json({ error: `Die Anfrage ist grösser als ${limit}: höchstens ${limit} auf einmal.`, code: 'bodyTooLarge', params: { limit } } satisfies ApiErrorBody); return;
+  }
   if (err instanceof ClosedPeriodError) res.status(403).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);
   else if (err instanceof EmptyRefError) res.status(409).json({ error: err.message, code: 'emptyRef', params: {} } satisfies ApiErrorBody);
   else if (err instanceof StaleBooksError) res.status(409).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);
   else if (err instanceof RequestError) res.status(err.status).json({ error: err.message, ...err.refusal } satisfies ApiErrorBody);
   else if (err instanceof InvoiceRuleError) {
-    res.status(INVOICE_STATUS[err.code]).json({ error: err.message, invoiceRefusal: err.code, ...(err.missing ? { missing: err.missing } : {}) } satisfies InvoiceErrorBody);
-  } else if (err instanceof PaymentError) res.status(409).json({ error: err.message });
+    res.status(INVOICE_STATUS[err.code]).json({ error: err.message, invoiceRefusal: err.code, ...(err.missing ? { missing: err.missing } : {}), ...(err.params ? { params: err.params } : {}) } satisfies InvoiceErrorBody);
+  } else if (err instanceof PaymentError) res.status(err.code === 'notFound' ? 404 : 409).json({ error: err.message, paymentRefusal: err.code } satisfies ApiErrorBody);
   else if (err instanceof MailError) res.status(MAIL_STATUS[err.code]).json({ error: err.message, mailRefusal: err.code, ...(err.detail ? { detail: err.detail } : {}) } satisfies ApiErrorBody);
   else if (err instanceof NoClaudeError) res.status(503).json({ error: err.message, code: 'noClaude', params: err.step ? { step: err.step } : {} } satisfies ApiErrorBody);
   else if (err instanceof AiRefused) res.status(503).json({ error: err.message, code: 'aiRefused', params: err.refusal } satisfies ApiErrorBody);

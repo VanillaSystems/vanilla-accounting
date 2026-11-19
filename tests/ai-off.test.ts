@@ -176,7 +176,7 @@ test('a statement PDF dropped with the switch on, of an account without a bank e
     assert.deepEqual([row.state, row.statement?.file, row.asked], ['taken', 'Raiffeisen/Kontoauszug 01.10.2026 - 31.10.2026.pdf', undefined]);
     await rest();
     const books = (await (await demo.fetch('/books.json')).json()) as Index;
-    assert.deepEqual(books.transactions.filter((t) => t.date >= '2026-10-01'), [], 'kept as the month\'s statement: no movement imported');
+    assert.deepEqual(books.transactions.filter((t) => t.date >= '2026-10-01' && t.bank === 'Raiffeisen'), [], 'kept as the month\'s statement: no movement imported');
     assert.equal(books.statementAsks, undefined, 'its question is answered');
     assert.deepEqual(reached(), [], 'no call reached a provider');
   } finally {
@@ -221,6 +221,7 @@ const NO_MODEL: Record<string, string> = {
   'src/desktop/dictation.ts': "macOS's dictation",
   'src/desktop/main.ts': "the app's own server",
   'src/parsers/pdf-pages.ts': 'osascript renders PDF pages',
+  'src/payroll/tariffs.ts': "the tax authority's tariff files",
   'src/platform/ai-cli.ts': 'the CLI\'s --version and auth status, no model',
   'src/platform/browser/chrome.ts': 'Chrome for a source',
   'src/platform/git-program.ts': 'xcode-select',

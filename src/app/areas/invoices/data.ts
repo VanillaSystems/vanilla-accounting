@@ -4,7 +4,7 @@
  * put back here at once, so the list follows while the API saves it.
  */
 import { useSyncExternalStore } from 'react';
-import type { Customer, Invoice } from '../../../invoices/model.js';
+import type { Contact, Invoice } from '../../../invoices/model.js';
 import { api, type InvoiceList } from '../../lib/api.js';
 import { localEdits } from '../../lib/local-edits.js';
 
@@ -21,7 +21,8 @@ const emit = () => listeners.forEach((l) => l());
 export function reloadInvoices(): Promise<void> {
   const merge = edits.read();
   pending = api.invoices().then(
-    (data) => { load = { state: 'ready', data: load.state === 'ready' ? { ...data, invoices: merge(data.invoices, load.data.invoices) } : data }; emit(); },
+    // A file of the audit export written before Artikel has none.
+    (raw) => { const data = { ...raw, articles: raw.articles ?? [] }; load = { state: 'ready', data: load.state === 'ready' ? { ...data, invoices: merge(data.invoices, load.data.invoices) } : data }; emit(); },
     () => { if (load.state !== 'ready') { load = { state: 'failed' }; emit(); } },
   );
   return pending;
@@ -57,10 +58,10 @@ export const newestIssued = (): string | undefined =>
 export const invoicesNow = (): InvoiceList | undefined => (load.state === 'ready' ? load.data : undefined);
 
 /** A record changed by this page: shown at once, before the next read. */
-export function put(change: { invoice?: Invoice; customer?: Customer }): void {
+export function put(change: { invoice?: Invoice; contact?: Contact }): void {
   if (load.state !== 'ready') return;
   const d = load.data;
   const upsert = <T extends { id: string }>(xs: T[], x: T | undefined) => (!x ? xs : xs.some((y) => y.id === x.id) ? xs.map((y) => (y.id === x.id ? x : y)) : [...xs, x]);
-  load = { state: 'ready', data: { ...d, invoices: upsert(d.invoices, change.invoice), customers: upsert(d.customers, change.customer) } };
+  load = { state: 'ready', data: { ...d, invoices: upsert(d.invoices, change.invoice), contacts: upsert(d.contacts, change.contact) } };
   emit();
 }

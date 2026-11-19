@@ -150,14 +150,14 @@ test('by hand: a person\'s table of a kept PDF gives the books its reference, wh
     const before = await full(api);
     const pay = before.transactions.find((t) => t.bank === 'Raiffeisen' && t.date.startsWith('2026-09') && !t.reference && !t.counterparty?.includes('Raiffeisen'))!;
     const unread = await json<PdfFactsView>(api, `${URL_OF}/facts`);
-    assert.deepEqual([unread.body.state, unread.body.closing?.amount], ['unread', 88252.44], 'not read yet; the balance the books hold from this file is named');
+    assert.deepEqual([unread.body.state, unread.body.closing?.amount], ['unread', 94514.43], 'not read yet; the balance the books hold from this file is named');
     const saved = await json<PdfFactsView>(api, `${URL_OF}/facts`, 'PUT', { statement: septemberTable(pay, 'RE-2026-0777', 70000, { payment: true }) });
     assert.equal(saved.status, 200);
-    assert.deepEqual([saved.body.state, saved.body.closing, saved.body.bank, saved.body.taken], ['hand', undefined, { date: '2026-09-30', amount: 88252.44 }, { references: 1, originals: 0 }], 'the bank\'s export states 30.09.: her typed balance does not stand over it');
+    assert.deepEqual([saved.body.state, saved.body.closing, saved.body.bank, saved.body.taken], ['hand', undefined, { date: '2026-09-30', amount: 94514.43 }, { references: 1, originals: 0 }], 'the bank\'s export states 30.09.: her typed balance does not stand over it');
     const after = await full(api);
     assert.equal(after.transactions.find((t) => t.ref === pay.ref)?.reference, 'RE-2026-0777');
     const lastDay = (b: Full) => b.statementBalances?.filter((x) => x.account === '1021' && x.date === '2026-09-30').map((x) => [x.source, x.amount]);
-    assert.deepEqual(lastDay(after), [['camt', 88252.44]], 'one balance of 30.09., the camt\'s');
+    assert.deepEqual(lastDay(after), [['camt', 94514.43]], 'one balance of 30.09., the camt\'s');
     assert.equal(readBeside(join(api.root, 'transactional-data/2026/bank-statements', FILE))?.by, 'hand', 'kept beside the PDF as hers');
     // A rebuild of the bank side from the folder (an import does one) takes it again.
     const other = 'Kontoauszug 01.08.2026 - 31.08.2026 - CH6580808000000000001 - 2026-08-31.pdf';
@@ -171,7 +171,7 @@ test('by hand: a person\'s table of a kept PDF gives the books its reference, wh
     assert.equal(forgot.body.state, 'unread');
     const again = await full(api);
     assert.equal(again.transactions.find((t) => t.ref === pay.ref)?.reference, undefined, 'the reference came from the table and goes with it');
-    assert.deepEqual(lastDay(again), [['camt', 88252.44]]);
+    assert.deepEqual(lastDay(again), [['camt', 94514.43]]);
 
     const march = 'Kontoauszug 01.03.2026 - 31.03.2026 - CH6580808000000000001 - 2026-03-31.pdf';
     const filed = await json<{ code?: string }>(api, `/api/statements/Raiffeisen/${encodeURIComponent(march)}/facts`, 'PUT', { statement: septemberTable(pay, 'x', 1) });
@@ -223,7 +223,7 @@ test('the reading the person starts: N of M, the model\'s table kept beside the 
     assert.deepEqual([now.job?.finished, now.job?.read, now.job?.failed], [true, 1, []]);
     assert.equal(now.unread.includes(FILE), false);
     const facts = (await json<PdfFactsView>(api, `${URL_OF}/facts`)).body;
-    assert.deepEqual([facts.state, facts.adds, facts.closing?.amount, facts.bank?.amount, facts.taken?.references], ['read', true, undefined, 88252.44, 1], 'the read adds up, yet the camt\'s balance of 30.09. stands');
+    assert.deepEqual([facts.state, facts.adds, facts.closing?.amount, facts.bank?.amount, facts.taken?.references], ['read', true, undefined, 94514.43, 1], 'the read adds up, yet the camt\'s balance of 30.09. stands');
     assert.equal((await full(api)).transactions.find((t) => t.ref === pay.ref)?.reference, 'RE-2026-0999');
   } finally {
     await api.stop();

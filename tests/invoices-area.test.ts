@@ -3,7 +3,7 @@
  * status and sent state, the status tabs with count and total, the facts line, sorting and pages,
  * «Nicht gesendet» (P1.11), Offene Posten equal to the year end's receivables (P1.10), the link ids, a
  * draft following its customer, and the customer form's rules per country. On the demo's invoices,
- * on 11.10.2026, and on fixtures where the demo has too few states.
+ * on 20.10.2026, and on fixtures where the demo has too few states.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -24,52 +24,60 @@ import { issued, sentDoc } from './support/invoice-fixtures.js';
 import { saveInvoices } from '../src/invoices/store.js';
 import { tempWorkspace, writeIndex } from './support/workspace.js';
 import './support/jurisdiction.js';
+import { invoiceBookOf } from '../src/invoices/store.js';
 
-const TODAY = '2026-10-11';
-const book = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as InvoiceBook;
-const d = { today: TODAY, invoices: book.invoices, customers: book.customers, sent: book.sent };
+const TODAY = '2026-10-20';
+const book = invoiceBookOf(JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as Record<string, unknown>, 'invoices.json');
+const d = { today: TODAY, invoices: book.invoices, contacts: book.contacts, articles: [], sent: book.sent };
 const year = parsePeriod('2026', TODAY)!;
 const no = (r: { id: string }) => r.id.startsWith('draft-') ? 'draft' : r.id;
 
 test('Rechnungen: each status from facts, Überfällig with its days beside Offen, the tabs with count and total, the facts line per currency', () => {
   const rows = docRows(d, 'invoice', year, undefined, TODAY);
   assert.deepEqual(rows.map((r) => `${no(r)} ${r.status}${r.overdue ? ` +${r.overdue}` : ''}`), [
-    '2026-001 paid', '2026-002 paid', '2026-003 open +25', '2026-005 open', '2026-006 open', '2026-007 cancelled', 'draft draft', 'draft draft',
-  ], 'the credit note 2026-004 is in Gutschriften, not here');
+    '2026-001 paid', '2026-002 paid', '2026-003 paid', '2026-004 paid', '2026-005 paid', '2026-006 open +34', '2026-007 partly-paid +37', '2026-008 paid',
+    '2026-010 paid', '2026-011 paid', '2026-013 open', '2026-014 open', '2026-015 cancelled', '2026-016 paid', 'draft draft', 'draft draft', '2026-017 open', '2026-018 open',
+  ], 'the credit notes 2026-009 and 2026-012 are in Gutschriften, not here');
   const tabs = Object.fromEntries(tabCounts(rows, 'invoice').map((c) => [c.tab, c.n]));
-  assert.deepEqual(tabs, { all: 8, draft: 2, open: 3, overdue: 1, 'partly-paid': 0, paid: 2, cancelled: 1, unsent: 0 }, 'Überfällig overlaps Offen; every issued demo invoice went out');
+  assert.deepEqual(tabs, { all: 18, draft: 2, open: 5, overdue: 2, 'partly-paid': 1, paid: 9, cancelled: 1, unsent: 2 }, 'Überfällig overlaps Offen and Teilbezahlt; two issued demo invoices did not go out yet');
   const open = tabCounts(rows, 'invoice').find((c) => c.tab === 'open')!;
-  assert.deepEqual(open.sums, [{ currency: 'CHF', gross: 1827.03, open: 1827.03 }, { currency: 'EUR', gross: 865, open: 865 }], 'the total of a tab per currency, the EUR invoice in its own');
+  assert.deepEqual(open.sums, [{ currency: 'CHF', gross: 3227.03, open: 3227.03 }, { currency: 'EUR', gross: 865, open: 865 }], 'the total of a tab per currency, the EUR invoice in its own: 861.84 + 965.19 + 810 + 590');
+  assert.deepEqual(tabCounts(rows, 'invoice').find((c) => c.tab === 'overdue')!.sums, [{ currency: 'CHF', gross: 1674.43, open: 1274.43 }], '2026-006 whole, 2026-007 less its CHF 400 paid');
+  assert.deepEqual(tabCounts(rows, 'invoice').find((c) => c.tab === 'unsent')!.sums, [{ currency: 'CHF', gross: 1400, open: 1400 }], '2026-017 and 2026-018');
   assert.deepEqual(tabCounts(rows, 'invoice').find((c) => c.tab === 'cancelled')!.sums, [{ currency: 'CHF', gross: 406.3, open: 0 }], 'Storniert sums what it holds');
-  assert.equal(tabCounts(rows, 'invoice').find((c) => c.tab === 'all')!.sums[0].gross, 4770.44, 'a cancelled invoice is left out of Alle\'s total');
-  assert.deepEqual(factsOf(rows), [{ currency: 'CHF', open: 1827.03, overdue: 861.84 }, { currency: 'EUR', open: 865, overdue: 0 }]);
-  const r3 = rows.find((r) => r.id === '2026-003')!;
+  assert.equal(tabCounts(rows, 'invoice').find((c) => c.tab === 'all')!.sums[0].gross, 13303.31, 'a cancelled invoice is left out of Alle\'s total');
+  assert.deepEqual(factsOf(rows), [{ currency: 'CHF', open: 3639.62, overdue: 1274.43 }, { currency: 'EUR', open: 865, overdue: 0 }]);
+  const r3 = rows.find((r) => r.id === '2026-006')!;
   assert.deepEqual([r3.level, r3.sent.reminder?.level, r3.sent.last?.kind], [1, 1, 'invoice'], 'its Mahnstufe and the last Mahnung sent');
   assert.equal(tabOf('invoice', 'settled'), 'all', 'a Gutschriften tab in Rechnungen shows Alle');
 });
 
 test('Gutschriften: their own table, the Rechnung each credits, Offen while money is still to go back', () => {
   const rows = docRows(d, 'credit-note', year, undefined, TODAY);
-  assert.deepEqual(rows.map((r) => [r.id, r.status, r.target?.number, r.open]), [['2026-004', 'open', '2026-002', 33.86]], '2026-002 was paid: the credit goes back');
+  assert.deepEqual(rows.map((r) => [r.id, r.status, r.target?.number, r.open]), [['2026-009', 'open', '2026-002', 33.86], ['2026-012', 'settled', '2026-011', 0]],
+    '2026-002 was paid: the credit goes back; 2026-012 is applied to its open Rechnung (Verrechnung)');
   assert.deepEqual(factsOf(rows), [{ currency: 'CHF', open: 33.86, overdue: 0 }]);
-  assert.ok(rows.every((r) => inTab(r, 'open') && !inTab(r, 'settled')));
+  assert.ok(inTab(rows[0], 'open') && !inTab(rows[0], 'settled'));
+  assert.ok(inTab(rows[1], 'settled') && !inTab(rows[1], 'open'));
 });
 
 test('a period shows the documents dated in it, every draft and the earlier ones still open; the search finds number, contact and subject', () => {
   const q2 = docRows(d, 'invoice', parsePeriod('2026-Q2', TODAY)!, undefined, TODAY);
   assert.deepEqual(q2.map((r) => r.status), ['draft', 'draft']);
-  assert.deepEqual(docRows(d, 'invoice', year, '2026-003', TODAY).map((r) => r.id), ['2026-003']);
+  assert.deepEqual(docRows(d, 'invoice', year, '2026-006', TODAY).map((r) => r.id), ['2026-006']);
   assert.ok(docRows(d, 'invoice', year, 'bistro', TODAY).every((r) => r.customer.includes('Bistro')));
-  assert.deepEqual(docRows(d, 'credit-note', year, '2026-002', TODAY).map((r) => r.id), ['2026-004'], 'a Gutschrift is found by its Rechnung\'s number');
+  assert.deepEqual(docRows(d, 'credit-note', year, '2026-002', TODAY).map((r) => r.id), ['2026-009'], 'a Gutschrift is found by its Rechnung\'s number');
 });
 
 test('every column sorts, both ways, the same order every time', () => {
   const rows = docRows(d, 'invoice', year, undefined, TODAY).filter((r) => r.inv.status === 'issued');
   assert.deepEqual(sortRows(rows, { key: 'gross', dir: 1 }).map((r) => r.gross), [...rows.map((r) => r.gross)].sort((a, b) => a - b));
-  assert.deepEqual(sortRows(rows, { key: 'number', dir: -1 }).map((r) => r.id), ['2026-007', '2026-006', '2026-005', '2026-003', '2026-002', '2026-001']);
-  assert.equal(sortRows(rows, { key: 'open', dir: -1 })[0].id, '2026-006');
-  assert.equal(sortRows(rows, { key: 'level', dir: -1 })[0].id, '2026-003');
-  assert.equal(sortRows(rows, { key: 'sent', dir: -1 })[0].id, '2026-007', 'the newest send first');
+  assert.deepEqual(sortRows(rows, { key: 'number', dir: -1 }).map((r) => r.id), [
+    '2026-018', '2026-017', '2026-016', '2026-015', '2026-014', '2026-013', '2026-011', '2026-010', '2026-008', '2026-007', '2026-006', '2026-005', '2026-004', '2026-003', '2026-002', '2026-001',
+  ]);
+  assert.equal(sortRows(rows, { key: 'open', dir: -1 })[0].id, '2026-014');
+  assert.equal(sortRows(rows, { key: 'level', dir: -1 })[0].id, '2026-006');
+  assert.equal(sortRows(rows, { key: 'sent', dir: -1 })[0].id, '2026-016', 'the newest send first');
   assert.equal(PAGE_SIZE, 50);
 });
 
@@ -79,7 +87,7 @@ test('P1.11: eight issued Rechnungen, five sent by mail, one downloaded, two not
     ...invs.slice(0, 5).map((inv, i) => sentDoc(`m${i}`, inv, { sentAt: `2026-10-1${i}T09:0${i}:00Z`, to: `k${i}@kunde.example` })),
     sentDoc('dl', invs[5], { sentAt: '2026-10-16T14:00:00Z', to: 'download', channel: 'download', messageId: undefined }),
   ];
-  const fx = { today: '2026-10-20', invoices: invs, customers: [], sent };
+  const fx = { today: '2026-10-20', invoices: invs, contacts: [], articles: [], sent };
   const rows = docRows(fx, 'invoice', parsePeriod('2026-Q4', '2026-10-20')!, undefined, '2026-10-20');
   const unsent = tabCounts(rows, 'invoice').find((c) => c.tab === 'unsent')!;
   assert.deepEqual([unsent.n, unsent.sums], [2, [{ currency: 'CHF', gross: 1500, open: 1500 }]], '700 + 800');
@@ -107,10 +115,11 @@ test('Versendet: the log newest first, filtered by contact, kind and channel', (
   const all = sentRows(d, undefined);
   assert.equal(all.length, book.sent.length);
   assert.ok(all.every((x, i) => i === 0 || all[i - 1].sentAt >= x.sentAt));
-  assert.deepEqual(sentRows(d, undefined, { kind: 'reminder' }).map((x) => x.title), ['1. Mahnung · Rechnung 2026-003']);
-  const bistro = book.customers.find((c) => c.name.includes('Bistro'))!;
+  assert.deepEqual(sentRows(d, undefined, { kind: 'reminder' }).map((x) => x.title), ['1. Mahnung · Rechnung 2026-006']);
+  const bistro = book.contacts.find((c) => c.name.includes('Bistro'))!;
   assert.ok(sentRows(d, undefined, { customer: bistro.id }).every((x) => book.invoices.find((i) => i.id === x.invoiceId)?.customerId === bistro.id));
-  assert.equal(sentRows(d, undefined, { channel: 'email' }).length, 0, 'the demo recorded every send as a download');
+  assert.deepEqual([sentRows(d, undefined, { channel: 'email' }).length, sentRows(d, undefined, { channel: 'download' }).length], [14, 4],
+    'the demo sent its documents by e-mail; 2026-014 and 2026-016 were downloaded, and so were the Mahnung and the Storno notice');
 });
 
 test('P1.10: Offene Posten on 31.12. equals the year end\'s receivables proposal to the Rappen, invoice by invoice and in total', () => {
@@ -135,7 +144,7 @@ test('P1.10 on harder cases: a part paid before and the rest after 31.12., a Gut
   const cn = issued('n', '2026-003', { kind: 'credit-note', creditFor: 'b', date: '2026-12-15', lines: [{ text: 'Gutschrift', quantity: 1, price: -200, vatRate: 0 }] });
   const late = issued('c', '2026-004', { date: '2026-12-20', cancelled: { date: '2027-01-03', reason: 'x' } });
   const next = issued('e', '2027-001', { date: '2027-01-02' });
-  saveInvoices(ws, { schema: 2, customers: [], invoices: [a, b, cn, late, next], sent: [] });
+  saveInvoices(ws, { schema: 2, contacts: [], invoices: [a, b, cn, late, next], articles: [], sent: [] });
   const proposal = receivablesOf(ws, '2026', ratesOf(), loadBooks(ws));
   const items = openItems([a, b, cn, late, next], '2026-12-31');
   assert.deepEqual(items.map((x) => [x.inv.number, x.open]), [['2026-001', 834.55], ['2026-002', 800], ['2026-004', 1000]]);
@@ -153,13 +162,17 @@ test('links: an issued invoice by its number, a draft by draft-<id>; another id 
 
 test('a draft follows its customer: abroad 0 % for a service abroad (EUR for the neighbours), back home the normal rate', () => {
   const lines = [{ text: 'Beratung', quantity: 2, price: 100, vatRate: 8.1 as const }];
-  const de = { id: 'c1', language: 'de' as const, address: { country: 'DE' } };
-  const us = { id: 'c2', language: 'en' as const, address: { country: 'US' } };
-  const ch = { id: 'c3', language: 'fr' as const, address: { country: 'CH' } };
-  assert.deepEqual(customerChange({ lines, currency: 'CHF' }, de), { customerId: 'c1', language: 'de', lines: [{ ...lines[0], vatRate: 0 }], exemption: 'abroad', currency: 'EUR' });
+  const at = (country: string) => [{ id: 'a-1', postcode: '1', town: 'X', country }];
+  const de = { id: 'c1', language: 'de' as const, addresses: at('DE') };
+  const us = { id: 'c2', language: 'en' as const, addresses: at('US') };
+  const ch = { id: 'c3', language: 'fr' as const, addresses: at('CH') };
+  // Another contact: none of the person and address of the one before.
+  const fresh = { personId: null, addressId: null };
+  assert.deepEqual(customerChange({ lines, currency: 'CHF' }, de), { customerId: 'c1', language: 'de', ...fresh, lines: [{ ...lines[0], vatRate: 0 }], exemption: 'abroad', currency: 'EUR' });
   assert.equal(customerChange({ lines, currency: 'CHF' }, us).currency, undefined, 'a US customer keeps the currency');
-  assert.deepEqual(customerChange({ lines: [{ ...lines[0], vatRate: 0 }], currency: 'EUR' }, ch), { customerId: 'c3', language: 'fr', lines, exemption: null, currency: 'CHF' });
-  assert.deepEqual(customerChange({ lines, currency: 'CHF' }, ch), { customerId: 'c3', language: 'fr' }, 'a Swiss draft keeps its rates');
+  assert.deepEqual(customerChange({ lines: [{ ...lines[0], vatRate: 0 }], currency: 'EUR' }, ch), { customerId: 'c3', language: 'fr', ...fresh, lines, exemption: null, currency: 'CHF' });
+  assert.deepEqual(customerChange({ lines, currency: 'CHF' }, ch), { customerId: 'c3', language: 'fr', ...fresh }, 'a Swiss draft keeps its rates');
+  assert.equal(customerChange({ lines, currency: 'CHF' }, { ...ch, currency: 'EUR' }).currency, 'EUR', 'a contact of its own currency gives it to the draft');
 });
 
 test('the customer form per country: the postcode\'s name and shape, a state, the number first, the VAT number, the language', () => {

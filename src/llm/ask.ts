@@ -9,6 +9,7 @@
  * the provider, so `npm run llm-usage` reports measured cost, not estimates.
  */
 
+import { maskForModel } from './mask.js';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { openWorkspace } from '../workspace/workspace.js';
@@ -110,7 +111,7 @@ async function askOne(prompt: string, opts: AskOptions, provider: Provider, mode
   const row = (ok: boolean, usage: Usage) => record({ at: new Date().toISOString(), step, provider: provider.id, model, ok, ms: Date.now() - started, ...usage }, opts.ledger);
   try {
     const answer = await provider.ask({
-      prompt, model, system: opts.system ?? DEFAULT_SYSTEM, attachments: opts.attachments ?? [], timeoutMs: opts.timeoutMs ?? 360_000,
+      prompt: maskForModel(prompt), model, system: maskForModel(opts.system ?? DEFAULT_SYSTEM), attachments: opts.attachments ?? [], timeoutMs: opts.timeoutMs ?? 360_000,
     });
     const { text, usage } = answer;
     model = answer.model ?? model;

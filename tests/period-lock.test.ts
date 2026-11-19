@@ -18,6 +18,9 @@ import { closedPart } from '../src/books/seal.js';
 import type { RunDetail } from '../src/workflows/model.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { readPackage, writePackage } from '../src/handover/package.js';
+import { savePayroll, appendPayslipEvents } from '../src/payroll/store.js';
+import { computePayslip } from '../src/payroll/compute.js';
+import { closeOf, ctxOf, firm } from './support/payroll.js';
 
 const REPO = process.cwd();
 let api: ApiServer;
@@ -30,15 +33,25 @@ function withInvoice(root: string): void {
     customerId: 'cu_p', date: '2026-06-01', currency: 'CHF' as const, language: 'de' as const, comments: [], lines: [{ text: 'Leistung', quantity: 1, price: 100, vatRate: 8.1 as const }] };
   const sender = { name: 'Muster', uid: 'CHE-123.456.789', address: { street: 'Weg', postcode: '8000', town: 'Zürich', country: 'CH' }, payTo: { account: '1021', iban: 'CH6580808000000000001' } };
   const issued = issue(draft, { customer: { id: 'cu_p', createdAt: '', origin: 'manual', deleted: false, ...customer }, sender, layout: DEFAULT_LAYOUT, invoices: [], now: '2026-06-01T09:00:00Z' });
-  const book: InvoiceBook = { schema: 1, customers: [], invoices: [{ ...issued, pdf: { file: 'transactional-data/2026/invoices/2026-001.pdf', sha256: createHash('sha256').update(pdf).digest('hex') } }], sent: [] };
+  // A second invoice, of the open quarter, with a write-off of the filed one (spec 4.4.6): its «Rückgängig» stays refused.
+  const second = issue({ ...draft, id: 'in_w', date: '2026-07-01', lines: [{ text: 'Leistung', quantity: 1, price: 200, vatRate: 8.1 as const }] }, { customer: { id: 'cu_p', createdAt: '', origin: 'manual', deleted: false, ...customer }, sender, layout: DEFAULT_LAYOUT, invoices: [{ ...issued, pdf: { file: '', sha256: '' } }], now: '2026-07-01T09:00:00Z' });
+  // A third, of the open quarter, never sent: it goes back to draft (spec 4.4.2; a filed event refuses it: tests/invoice-revise-api.test.ts).
+  const third = issue({ ...draft, id: 'in_d', date: '2026-07-05' }, { customer: { id: 'cu_p', createdAt: '', origin: 'manual', deleted: false, ...customer }, sender, layout: DEFAULT_LAYOUT, invoices: [{ ...issued, pdf: { file: '', sha256: '' } }, { ...second, pdf: { file: '', sha256: '' } }], now: '2026-07-05T09:00:00Z' });
+  const stored = { file: 'transactional-data/2026/invoices/2026-001.pdf', sha256: createHash('sha256').update(pdf).digest('hex') };
+  const book: InvoiceBook = { schema: 1, contacts: [], invoices: [{ ...issued, pdf: stored }, { ...second, pdf: stored, writeOffs: [{ id: 'wo-1', date: '2026-06-30', amount: 1, reason: 'fee', by: 'person' }] }, { ...third, pdf: { file: 'transactional-data/2026/invoices/2026-003.pdf', sha256: stored.sha256 } }], articles: [], sent: [] };
   mkdirSync(join(root, 'transactional-data/2026/invoices'), { recursive: true });
   writeFileSync(join(root, 'transactional-data/2026/invoices/2026-001.pdf'), pdf);
+  writeFileSync(join(root, 'transactional-data/2026/invoices/2026-003.pdf'), pdf);
   writeFileSync(join(root, 'invoices.json'), JSON.stringify(book));
 }
 
 before(async () => {
   api = await startApi('tests/fixtures/period-lock-index.json');
   withInvoice(api.root);
+  // Payroll: the owner's June payslip closed in the filed quarter.
+  const store = firm();
+  savePayroll(api.ws, store);
+  appendPayslipEvents(api.ws, '2026', [closeOf(computePayslip(ctxOf(store), 'e1', '2026-06')!)]);
   // A receipt deleted while its payment C1 was open, put back after the quarter was filed.
   mkdirSync(join(api.root, 'data/trash/rx/d1'), { recursive: true });
   // Two files that are no receipt (#228): one of the filed quarter, one of the open one, neither linked.
@@ -94,6 +107,12 @@ async function send({ method, path, body }: Call): Promise<{ status: number; err
 }
 
 const refused: Array<Call & { status: number }> = [
+  // Payroll (docs/specs/payroll.md §6.5 step 4): a payslip of a closed period is never closed, reopened or given a line.
+  { method: 'POST', path: '/api/payroll/payslips/2026-05-e1/close', body: { confirm: true }, status: 403 },
+  { method: 'POST', path: '/api/payroll/payslips/2026-06-e1/reopen', status: 403 },
+  { method: 'POST', path: '/api/payroll/month-lines', body: { employee: 'e1', month: '2026-05', wageType: 'bonus', amount: 100 }, status: 403 },
+  { method: 'POST', path: '/api/payroll/insurances/ak/settle', body: { year: '2026', total: 100, date: '2026-06-15' }, status: 403 },
+  { method: 'POST', path: '/api/payroll/insurer-way', body: { ref: 'C1', way: 'after' }, status: 403 },
   { method: 'PATCH', path: '/api/transactions/C1', body: { description: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/transactions/C1', body: { remarks: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/transactions/C1', body: { noReceiptNeeded: true }, status: 403 },
@@ -163,6 +182,16 @@ const refused: Array<Call & { status: number }> = [
   { method: 'DELETE', path: MAY_FACTS, status: 403 },
   { method: 'DELETE', path: '/api/transactions/C1/filed-twin', status: 403 },
   { method: 'DELETE', path: '/api/invoices/in_p/payments/CI', status: 403 },
+  // Zahlungseingang by hand, Ausbuchung and Ausziffern (spec 4.4.6): never on a closed day; a filed write-off and a filed payment stay.
+  { method: 'POST', path: '/api/invoices/in_p/hand-payments', body: { date: '2026-06-20', account: '1021', amount: 10 }, status: 403 },
+  { method: 'DELETE', path: '/api/invoices/in_p/hand-payments/CI', status: 403 },
+  { method: 'POST', path: '/api/invoices/in_p/write-offs', body: { reason: 'loss', date: '2026-06-20' }, status: 403 },
+  { method: 'DELETE', path: '/api/invoices/in_w/write-offs/wo-1', status: 403 },
+  { method: 'POST', path: '/api/invoices/allocation', body: { transactionRef: 'CI', parts: [{ invoiceId: 'in_p', amount: 108.1 }] }, status: 403 },
+  // A reclassification of «Konten ändern» is never dated in the filed quarter (spec 4.4.2).
+  // «Zurück zum Entwurf» refused in a filed period (403) needs a VAT event booked there: this fixture is on the cash basis
+  // and its filed part must stay as written (the checks below compare it), so that row is in tests/invoice-revise-api.test.ts.
+  { method: 'POST', path: '/api/invoices/in_p/accounts', body: { lines: [{ line: 0, account: '3400' }], date: '2026-06-20' }, status: 403 },
   // Several objects at once (#216): a batch of filed objects only is refused as their single changes are; its undo too.
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'noReceiptNeeded' }, ids: ['C1'] }, status: 403 },
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'vatCode', to: 'I0' }, ids: ['jc'] }, status: 403 },
@@ -309,6 +338,19 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
   // A Sammelbuchung (#567): its lines under one new ref of the person's.
   { method: 'POST', path: '/api/journal-entries/lines', body: { date: '2026-08-31', lines: [{ accountDebit: '6800', accountCredit: '1020', amount: 6, description: 'Sammel offen' }, { accountDebit: '6570', accountCredit: '1020', amount: 4, description: 'Sammel offen' }] },
     check: (i) => { const js = i.journalEntries!.filter((j) => j.description === 'Sammel offen'); return js.length === 2 && js[0].transactionRef === js[1].transactionRef && js.every((j) => j.origin === 'manual'); } },
+  // A Zahlungseingang by hand on the open quarter's invoice, a write-off of its rest and that write-off's «Rückgängig» (spec 4.4.6).
+  { method: 'POST', path: '/api/invoices/in_w/hand-payments', body: { date: '2026-08-05', account: '1021', amount: 100 },
+    check: (i) => i.transactions.some((t) => t.source === 'manual' && t.date === '2026-08-05' && t.amount === 100 && i.journalEntries!.some((j) => j.transactionRef === t.ref && j.origin === 'invoice' && j.vatCode === 'V81')) },
+  { method: 'POST', path: '/api/invoices/in_w/write-offs', body: { reason: 'fee', date: '2026-08-06' },
+    check: () => JSON.stringify((JSON.parse(readFileSync(join(api.root, 'invoices.json'), 'utf8')) as InvoiceBook).invoices.find((x) => x.id === 'in_w')).includes('{"id":"wo-2","date":"2026-08-06","amount":115.2,"reason":"fee","by":"person"}') },
+  { method: 'DELETE', path: '/api/invoices/in_w/write-offs/wo-2',
+    check: () => !readFileSync(join(api.root, 'invoices.json'), 'utf8').includes('"wo-2"') },
+  // «Zurück zum Entwurf» of the open quarter's unsent invoice: a draft that keeps its number (P2.7).
+  { method: 'POST', path: '/api/invoices/in_d/draft',
+    check: () => { const d = (JSON.parse(readFileSync(join(api.root, 'invoices.json'), 'utf8')) as InvoiceBook).invoices.find((x) => x.id === 'in_d'); return d?.status === 'draft' && d.number === '2026-003' && d.replaced?.[0]?.file === 'transactional-data/2026/invoices/2026-003.replaced-1.pdf'; } },
+  // «Konten ändern» on the open quarter's invoice: its hand payment's revenue moves to 3400, code and amount as they were (spec 4.4.2).
+  { method: 'POST', path: '/api/invoices/in_w/accounts', body: { lines: [{ line: 0, account: '3400' }] },
+    check: (i) => { const hand = i.transactions.find((t) => t.source === 'manual' && t.date === '2026-08-05'); return !!hand && i.journalEntries!.some((j) => j.transactionRef === hand.ref && j.accountCredit === '3400' && j.vatCode === 'V81' && j.amount === 100) && !i.journalEntries!.some((j) => j.transactionRef === hand.ref && j.accountCredit === '3300'); } },
   // The manifest and the chart hold no dated record: no period is closed to them.
   { method: 'PATCH', path: '/api/workspace', body: { company: { business: 'Kaffeerösterei' } },
     check: () => readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8').includes('business: Kaffeerösterei') },

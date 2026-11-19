@@ -3,7 +3,8 @@
  * blocks are measured here at their printed width once the invoice fonts are in, placed on pages
  * with `paginate` and written with `assembleSheets`; each page is then zoomed to the column.
  * A draft is edited on the sheet itself: a field reports what was typed (`final` when it is
- * left), a button its action.
+ * left), a button its action. A position moves by its handle: dragged onto another row, or with
+ * ↑/↓ on the handle and Alt+↑/↓ in any of its fields (`move`, with the row it goes to).
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import '@fontsource/inter/400.css';
@@ -46,8 +47,8 @@ export interface SheetProps {
   className?: string;
   /** False: the edit is refused and the field shows what it had again. */
   onEdit?(key: string, value: string, final: boolean): boolean | void;
-  /** May name the field to put the caret in once the sheet is laid out again. */
-  onAction?(action: string, k: number): string | void;
+  /** May name the field to put the caret in once the sheet is laid out again (`mv:<k>`: the handle of row k). `to`: where `move` takes row k. */
+  onAction?(action: string, k: number, to?: number): string | void;
   /** A field to put the caret in once laid out; `onFocused` says it is done. */
   focus?: string;
   onFocused?(): void;
@@ -58,6 +59,7 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
   const [html, setHtml] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const refocus = useRef<string>();
+  const selectAll = useRef(false);
   // A select the person has open (its list, or its keys) is never replaced under them: a re-layout
   // waits until it is left, unless its own change set it off (r5h-22, corner-44: the unit, then the
   // VAT rate 0.6 s later, and the open VAT list was swapped for a new one, so its choice was lost).
@@ -90,12 +92,16 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
     ro.observe(box);
     // After a re-layout the caret goes to the field the person moved to.
     const key = refocus.current ?? focus;
+    // A position just added: its text is selected, so what she types replaces «Neue Position».
+    const fresh = selectAll.current && key === refocus.current;
     refocus.current = undefined;
+    selectAll.current = false;
     if (focus && html) onFocused?.();
-    const next = key ? box.querySelector<HTMLElement>(`[data-ed="${CSS.escape(key)}"]`) : null;
+    const handle = key ? /^mv:(\d+)$/.exec(key) : null;
+    const next = !key ? null : handle ? box.querySelector<HTMLElement>(`[data-ia="move"][data-k="${handle[1]}"]`) : box.querySelector<HTMLElement>(`[data-ed="${CSS.escape(key)}"]`);
     if (next) {
       next.focus();
-      if (next.isContentEditable) { const sel = getSelection(); sel?.selectAllChildren(next); if (!focus && !numeric(next)) sel?.collapseToEnd(); }
+      if (next.isContentEditable) { const sel = getSelection(); sel?.selectAllChildren(next); if (!focus && !fresh && !numeric(next)) sel?.collapseToEnd(); }
     }
     return () => ro.disconnect();
   }, [html, focus]);
@@ -119,6 +125,17 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
   }, []);
 
   const field = (e: { target: EventTarget }) => (e.target as HTMLElement).closest?.<HTMLElement>('[data-ed]') ?? null;
+  const act = useRef(onAction);
+  act.current = onAction;
+  /** Row `from` a step to `to` (Alt+↑/↓, `move`) or dropped on row `to` (`drop`), the field being typed in saved first; the caret follows the row. */
+  const move = (from: number, to: number, how: 'move' | 'drop' = 'move') => {
+    const active = document.activeElement as HTMLElement | null;
+    if (active?.isContentEditable && active.dataset.ed) onEdit?.(active.dataset.ed, text(active), true);
+    const focus = act.current?.(how, from, to);
+    if (focus) refocus.current = focus;
+  };
+  const dragging = useRef<number | null>(null);
+  const rowOf = (el: EventTarget | null) => (el as HTMLElement | null)?.closest?.<HTMLElement>('tr[data-row]') ?? null;
   const text = (el: HTMLElement) => (el instanceof HTMLSelectElement ? el.value : el.innerText.replace(/\n+$/, ''));
 
   return (
@@ -150,20 +167,59 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
         }
       }}
       onKeyDown={(e) => {
+        const handle = (e.target as HTMLElement).closest?.<HTMLElement>('[data-ia="move"]');
+        const at = handle ? Number(handle.dataset.k) : Number(/^l:(\d+):/.exec(field(e)?.dataset.ed ?? '')?.[1] ?? NaN);
+        if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && Number.isInteger(at) && (handle || e.altKey)) {
+          e.preventDefault();
+          e.stopPropagation();
+          move(at, at + (e.key === 'ArrowUp' ? -1 : 1));
+          return;
+        }
         const el = field(e);
         if (!el?.isContentEditable) return;
         e.stopPropagation();
         if (fresh.current === el) { fresh.current = null; if (e.key.length === 1 && !e.metaKey && !e.ctrlKey) getSelection()?.selectAllChildren(el); }
         if (e.key === 'Escape' || (e.key === 'Enter' && !e.shiftKey && el.dataset.ed !== 'intro' && el.dataset.ed !== 'closing')) { e.preventDefault(); el.blur(); }
       }}
-      onMouseDown={(e) => { if ((e.target as HTMLElement).closest('button')) e.preventDefault(); }}
+      onMouseDown={(e) => { const b = (e.target as HTMLElement).closest('button'); if (b && b.dataset.ia !== 'move') e.preventDefault(); }}
+      onDragStart={(e) => {
+        const handle = (e.target as HTMLElement).closest?.<HTMLElement>('[data-ia="move"]');
+        if (!handle) return;
+        dragging.current = Number(handle.dataset.k);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', handle.dataset.k ?? '');
+        const tr = rowOf(handle);
+        if (tr) e.dataTransfer.setDragImage(tr, 12, 12);
+      }}
+      onDragOver={(e) => {
+        const tr = rowOf(e.target);
+        if (dragging.current === null || !tr) return;
+        e.preventDefault();
+        for (const x of ref.current?.querySelectorAll('tr.dropat') ?? []) if (x !== tr) x.classList.remove('dropat');
+        tr.classList.add('dropat');
+      }}
+      onDragEnd={() => { dragging.current = null; for (const x of ref.current?.querySelectorAll('tr.dropat') ?? []) x.classList.remove('dropat'); }}
+      onDrop={(e) => {
+        const tr = rowOf(e.target);
+        const from = dragging.current;
+        dragging.current = null;
+        for (const x of ref.current?.querySelectorAll('tr.dropat') ?? []) x.classList.remove('dropat');
+        if (from === null || !tr) return;
+        e.preventDefault();
+        move(from, Number(tr.dataset.row), 'drop');
+      }}
       onClick={(e) => {
         const b = (e.target as HTMLElement).closest<HTMLElement>('[data-ia]');
-        if (!b) return;
+        if (!b || b.dataset.ia === 'move') return;
         const active = document.activeElement as HTMLElement | null;
         if (active?.isContentEditable && active.dataset.ed) onEdit?.(active.dataset.ed, text(active), true);
-        const focus = onAction?.(b.dataset.ia!, Number(b.dataset.k ?? -1));
-        if (focus) refocus.current = focus;
+        // An add button names no position: the one the person is in (the field that keeps the focus) is where it goes;
+        // the caret in the first position's text, unchanged since it got there (a new draft puts it there), names none,
+        // so an untouched first item gives way (insertLine).
+        const untouched = active?.dataset.ed === 'l:0:text' && text(active) === (active.dataset.was ?? '');
+        const inLine = untouched ? undefined : /^l:(\d+):/.exec(active?.dataset.ed ?? '')?.[1];
+        const focus = onAction?.(b.dataset.ia!, Number(b.dataset.k ?? inLine ?? -1));
+        if (focus) { refocus.current = focus; selectAll.current = b.dataset.ia!.startsWith('add'); }
       }}
     />
   );

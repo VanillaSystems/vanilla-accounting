@@ -47,6 +47,8 @@ export const STEPS = {
   'mail-triage': { ledger: 'receipt-collection.guide.yaml#triage', tier: 'fast', needs: ['typed'], confident: 0.8 },
   // The setup before the books exist (#145): the person's words read into the draft's answers, against the draft and the values code accepts.
   'setup-conversation': { ledger: 'setup.conversation', tier: 'standard', needs: ['json'] },
+  // A fund's or insurer's document read into the Sozialversicherungen' card (docs/specs/payroll.md §6.1): its lines without a salary, the fields code could not read.
+  'payroll-setup': { ledger: 'payroll.setup', tier: 'fast', needs: ['json'] },
 } as const satisfies Record<string, Step>;
 
 export type StepId = keyof typeof STEPS;

@@ -4,7 +4,6 @@
  * house number before or after the street) and which VAT number fits. The QR-bill takes the
  * structured parts, the sheet prints them as the destination's post wants (src/invoices/sheet.ts).
  */
-import type { InvoiceLanguage } from '../../../invoices/model.js';
 import { NUMBER_FIRST } from '../../../invoices/sheet.js';
 
 export type PostcodeName = 'plz' | 'codePostal' | 'cap' | 'codigoPostal' | 'postcode' | 'kodPocztowy' | 'postnummer' | 'postinumero' | 'eircode' | 'zip' | 'postalCode' | 'generic';
@@ -53,18 +52,11 @@ const EU = ['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'G
 
 /** Which VAT number a customer of `country` has, its example and its shape (none: anything goes). */
 export function vatRule(country: string): { kind: 'uid' | 'euVat' | 'gbVat' | 'taxNo'; example: string; pattern?: RegExp } {
-  if (country === 'CH' || country === 'LI') return { kind: 'uid', example: 'CHE-123.456.789 MWST', pattern: /^CHE-\d{3}\.\d{3}\.\d{3}( MWST| TVA| IVA)?$/ };
-  if (EU.includes(country)) { const p = country === 'GR' ? 'EL' : country; return { kind: 'euVat', example: `${p}123456789`, pattern: new RegExp(`^${p}[0-9A-Z+*]{2,13}$`, 'i') }; }
-  if (country === 'GB') return { kind: 'gbVat', example: 'GB123456789', pattern: /^GB(\d{9}|\d{12}|GD\d{3}|HA\d{3})$/i };
+  if (country === 'CH' || country === 'LI') return { kind: 'uid', example: 'CHE-xxx.xxx.xxx MWST', pattern: /^CHE-\d{3}\.\d{3}\.\d{3}( MWST| TVA| IVA)?$/ };
+  if (EU.includes(country)) { const p = country === 'GR' ? 'EL' : country; return { kind: 'euVat', example: `${p}000000000`, pattern: new RegExp(`^${p}[0-9A-Z+*]{2,13}$`, 'i') }; }
+  if (country === 'GB') return { kind: 'gbVat', example: 'GB000000000', pattern: /^GB(\d{9}|\d{12}|GD\d{3}|HA\d{3})$/i };
   return { kind: 'taxNo', example: '' };
 }
 
-/** The language a customer's invoices are likely in: Swiss postcodes by region, else by country. */
-export function languageFor(country: string, postcode: string): InvoiceLanguage {
-  if (country === 'CH') return !postcode ? 'de' : /^(1|2[0-8])/.test(postcode) ? 'fr' : /^6[5-9]/.test(postcode) ? 'it' : 'de';
-  if (['DE', 'AT', 'LI'].includes(country)) return 'de';
-  if (['FR', 'LU', 'MC', 'BE'].includes(country)) return 'fr';
-  return country === 'IT' || country === 'SM' ? 'it' : 'en';
-}
-
+export { languageFor } from '../../../invoices/contacts.js';
 export { COUNTRIES, countryName, countryOf } from '../../../core/countries.js';

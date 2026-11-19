@@ -1,5 +1,5 @@
 {
- "note": "books.json of Muster Consulting GmbH frozen on 2026-10-09, the golden master's input.",
+ "note": "The books of Muster Consulting GmbH frozen on 2026-11-19, the golden master's input.",
  "journalEntries": [
   {
    "id": "3c5d5f06b3dd3400",
@@ -868,26 +868,6 @@
    "description": "Muster Sammelstiftung, BVG Arbeitgeber Q3 2026"
   },
   {
-   "id": "cb81d1072a39749c",
-   "transactionRef": "90000000054",
-   "date": "2026-07-20",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 6486,
-   "vatCode": "V81",
-   "description": "Beispiel Treuhand, Beratungsmandat Juli 2026"
-  },
-  {
-   "id": "738c01da7cc7001c",
-   "transactionRef": "90000000055",
-   "date": "2026-07-20",
-   "accountDebit": "6510",
-   "accountCredit": "1020",
-   "amount": 90.95,
-   "vatCode": "I81",
-   "description": "Muster Telecom, Mobile-Abo Juli 2026"
-  },
-  {
    "id": "bd99dc7f1fd46934",
    "transactionRef": "90000000056",
    "date": "2026-07-27",
@@ -913,18 +893,6 @@
    "accountCredit": "1020",
    "amount": 46.95,
    "description": "Spesenrückerstattung Juli 2026, Lukas Beispiel"
-  },
-  {
-   "id": "08e30341b84e4a29",
-   "transactionRef": "TRANSFER-8000003",
-   "date": "2026-07-28",
-   "accountDebit": "1021",
-   "accountCredit": "3400",
-   "amount": 3800,
-   "vatCode": "V0-E",
-   "description": "Muster Maschinenbau, Sicherheitsaudit (Leistung im Ausland)",
-   "exchangeCurrency": "EUR",
-   "exchangeRate": 0.93835
   },
   {
    "id": "3f83d2653b0cdfc4",
@@ -1007,16 +975,6 @@
    "amount": 24,
    "vatCode": "I0",
    "description": "Parkhaus Beispiel, Kundenbesuch (Beleg fehlt)"
-  },
-  {
-   "id": "de9bbad101f334c4",
-   "transactionRef": "90000000063",
-   "date": "2026-08-20",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 6486,
-   "vatCode": "V81",
-   "description": "Beispiel Treuhand, Beratungsmandat August 2026"
   },
   {
    "id": "73e73f5d28c34372",
@@ -1108,16 +1066,6 @@
    "description": "Muster Telecom, Mobile-Abo September 2026"
   },
   {
-   "id": "5220d6f058f4049b",
-   "transactionRef": "90000000070",
-   "date": "2026-09-21",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 6486,
-   "vatCode": "V81",
-   "description": "Beispiel Treuhand, Beratungsmandat September 2026"
-  },
-  {
    "id": "41f24a41ee040c67",
    "transactionRef": "90000000071",
    "date": "2026-09-25",
@@ -1170,6 +1118,62 @@
    "accountCredit": "1020",
    "amount": 12,
    "description": "Raiffeisen, Kontoführung Q3"
+  },
+  {
+   "id": "08af7b744bf82588",
+   "transactionRef": "90000000055",
+   "date": "2026-07-20",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "V81",
+   "description": "Rechnung 2026-001 Beispiel Treuhand AG",
+   "origin": "invoice"
+  },
+  {
+   "id": "4c0d5cbf6cdd51dc",
+   "transactionRef": "90000000063",
+   "date": "2026-08-20",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "V81",
+   "description": "Rechnung 2026-003 Beispiel Treuhand AG",
+   "origin": "invoice"
+  },
+  {
+   "id": "b55b1baccef7ef4f",
+   "transactionRef": "90000000070",
+   "date": "2026-09-21",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 6486,
+   "vatCode": "V81",
+   "description": "Rechnung 2026-004 Beispiel Treuhand AG",
+   "origin": "invoice"
+  },
+  {
+   "id": "cb81d1072a39749c",
+   "transactionRef": "90000000054",
+   "date": "2026-07-20",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 90.95,
+   "vatCode": "I81",
+   "description": "Muster Telecom, Mobile-Abo Juli 2026"
+  },
+  {
+   "id": "d20794f6ba52c05c",
+   "transactionRef": "TRANSFER-8000003",
+   "date": "2026-07-28",
+   "accountDebit": "1021",
+   "accountCredit": "3400",
+   "amount": 3800,
+   "vatCode": "V0-E",
+   "description": "Rechnung 2026-002 Muster Maschinenbau GmbH",
+   "exchangeCurrency": "EUR",
+   "exchangeRate": 0.93835,
+   "origin": "invoice"
   }
  ],
  "config": {

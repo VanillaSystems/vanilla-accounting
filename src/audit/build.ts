@@ -18,7 +18,8 @@ import { bundledDemo } from '../workspace/demo-copy.js';
 import { workspaceModules } from '../core/modules/load.js';
 import { loadInvoices, sha256 as pdfHash } from '../invoices/store.js';
 import type { Issued } from '../invoices/model.js';
-import { liveCustomers, liveInvoices } from '../invoices/rules.js';
+import { liveInvoices } from '../invoices/rules.js';
+import { liveContacts } from '../invoices/contacts.js';
 import { viewOf } from '../invoices/service.js';
 import { appVersion, hashFiles, MANIFEST, MANIFEST_FORMAT, type ExportedSeal, type ExportManifest } from './manifest.js';
 import { currentVersion } from '../handover/versions.js';
@@ -103,7 +104,7 @@ function writeInvoices(ws: Workspace, out: string, day: string): string[] {
   const issued = liveInvoices(book).filter((i): i is Issued => i.status === 'issued');
   const ids = new Set(issued.map((i) => i.id));
   const sent = book.sent.filter((d) => !d.deleted && ids.has(d.invoiceId));
-  writeOut(out, EXPORT_FILES.invoices(), JSON.stringify({ today: day, invoices: issued.map((i) => viewOf(book, i, day)), customers: liveCustomers(book), sent }));
+  writeOut(out, EXPORT_FILES.invoices(), JSON.stringify({ today: day, invoices: issued.map((i) => viewOf(book, i, day)), contacts: liveContacts(book), sent }));
   const missing: string[] = [];
   const copyPdf = (path: string, doc: { file: string; sha256: string }, what: string) => {
     let bytes: Buffer;

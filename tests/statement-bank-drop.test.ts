@@ -16,8 +16,10 @@ import { inventedStatement } from './support/statement-pdf.js';
 import { APP_FOLDER, APP_ROOT } from '../src/workspace/workspace.js';
 import type { BankStatement, StatementAsk } from '../src/types/index.js';
 import type { DropRow } from '../src/types/drop.js';
+import { salonWithoutIban } from './support/workspace.js';
 
-const COIFFEUR = join(APP_ROOT, 'demo-coiffeur', APP_FOLDER);
+/** The hair salon's manifest without IBANs and invoicing (tests/support/workspace.ts). */
+const COIFFEUR = salonWithoutIban();
 const IBAN = testIban('80808000000000031');
 /** An account at a second bank, clearing 70000. */
 const OTHER = testIban('70000000000000042');

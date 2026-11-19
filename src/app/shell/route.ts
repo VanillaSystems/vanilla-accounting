@@ -21,18 +21,25 @@ export type AutomationTab = typeof AUTOMATION_TABS[number];
 export const AUTOMATION_PAGES = ['runs', 'workflows', 'map', 'queue', 'tasks'] as const;
 
 /**
- * Verkauf's views (docs/specs/invoicing.md 4.8): `list` is Rechnungen (no segment), then Gutschriften,
- * Offene Posten, Kunden and Versendet. A document opens under the view it is listed in; /invoices/<number>
- * stays its link whatever its kind.
+ * Verkauf's views (docs/specs/invoicing.md 4.8): `list` is Rechnungen (no segment), then Angebote,
+ * Aufträge, Lieferscheine, Gutschriften, Offene Posten, Kontakte and Versendet. A document opens under the
+ * view it is listed in; /invoices/<number> stays its link whatever its kind.
  */
-export const INVOICE_VIEWS = ['list', 'credit-notes', 'open-items', 'customers', 'sent'] as const;
+export const INVOICE_VIEWS = ['list', 'quotes', 'orders', 'deliveries', 'credit-notes', 'open-items', 'contacts', 'articles', 'sent'] as const;
 export type InvoiceView = typeof INVOICE_VIEWS[number];
 
 /**
  * The status tabs of Rechnungen and Gutschriften (`?status=`), from facts: Rechnungen draft, open, overdue,
  * partly-paid, paid, cancelled; Gutschriften draft, open, partly, settled; both unsent («Nicht gesendet»).
  */
-export const INVOICE_STATUSES = ['draft', 'open', 'overdue', 'partly-paid', 'paid', 'cancelled', 'partly', 'settled', 'unsent'] as const;
+export const INVOICE_STATUSES = ['draft', 'open', 'overdue', 'partly-paid', 'paid', 'cancelled', 'partly', 'settled', 'unsent', 'accepted', 'declined', 'expired', 'done'] as const;
+
+/** Löhne › Einstellungen: its sections, by their English slugs (docs/urls.md). */
+export const PAYROLL_SECTIONS = ['company', 'insurances', 'wage-types', 'accounts'] as const;
+export type PayrollSection = typeof PAYROLL_SECTIONS[number];
+/** Löhne › Dokumente: the firm's documents of a year beside each person's Lohnausweis (a person's id never is one of these). */
+export const PAYROLL_DOCUMENTS = ['lohnkonto', 'declarations', 'family', 'pension', 'journal', 'tax-at-source'] as const;
+export type PayrollDocument = typeof PAYROLL_DOCUMENTS[number];
 export type InvoiceStatus = typeof INVOICE_STATUSES[number];
 
 export type Route =
@@ -67,7 +74,16 @@ export type Route =
   | { area: 'partners'; id?: string }
   /** Wissen: Lücken, Von der App, or (absent) the area's first page; a topic of Arbeitsweise by its slug. */
   | { area: 'knowledge'; page?: KnowledgePage }
-  | { area: 'knowledge'; topic: string };
+  | { area: 'knowledge'; topic: string }
+  /** Löhne (docs/specs/payroll.md §12.1): the year (its month by `?period=`), a month's payslips and one of them, the people and one person (`new`: the form of a new one), the settings and one section. */
+  | { area: 'payroll'; view: 'overview' }
+  | { area: 'payroll'; view: 'payslips'; month?: string; employee?: string }
+  /** Lohnzahlungen: a month's payouts, one of them by the person (`employee`), or one insurer's balance of the month's year (`insurance`). */
+  | { area: 'payroll'; view: 'payments'; month?: string; employee?: string; insurance?: string }
+  | { area: 'payroll'; view: 'employees'; id?: string }
+  /** Dokumente: a year's documents, one of them (`doc`: a person's Lohnausweis by her id, or one of PAYROLL_DOCUMENTS). */
+  | { area: 'payroll'; view: 'documents'; year?: string; doc?: string }
+  | { area: 'payroll'; view: 'settings'; section?: PayrollSection | (string & {}) };
 
 export type AreaId = Route['area'];
 export type RouteOf<A extends AreaId> = Extract<Route, { area: A }>;
@@ -87,6 +103,7 @@ export const AREA_HOME: { [A in AreaId]: RouteOf<A> } = {
   changes: { area: 'changes' },
   partners: { area: 'partners' },
   knowledge: { area: 'knowledge' },
+  payroll: { area: 'payroll', view: 'overview' },
 };
 
 export interface Query {
@@ -99,7 +116,7 @@ export interface Query {
   /** Offene Posten: the reference date (`?date=2026-12-31`); absent: today. */
   date?: IsoDate;
   vat?: string;
-  /** /invoices/new?customer=<id>: the customer of the draft to write. */
+  /** /invoices/new?customer=<id>: the contact of the draft to write. */
   customer?: string;
   /** /company/rules?payment=<ref>: the form of a new rule, started from that payment. */
   payment?: string;
@@ -155,10 +172,22 @@ function segmentsOf(r: Route): Array<string | undefined> {
     case 'changes': return ['changes', r.commit, r.commit ? r.file : undefined];
     case 'partners': return ['partners', r.id];
     case 'knowledge': return ['knowledge', 'topic' in r ? r.topic : r.page];
+    case 'payroll': return payrollSegments(r);
   }
 }
 
-function routeOf([a, b, c, d]: string[]): Route {
+function payrollSegments(r: RouteOf<'payroll'>): Array<string | undefined> {
+  switch (r.view) {
+    case 'overview': return ['payroll'];
+    case 'payslips': return ['payroll', r.month ?? 'payslips', r.month ? r.employee : undefined];
+    case 'payments': return ['payroll', 'payments', r.month, ...(r.month ? (r.insurance ? ['insurances', r.insurance] : [r.employee]) : [])];
+    case 'employees': return ['payroll', 'employees', r.id];
+    case 'documents': return ['payroll', 'documents', r.year, r.year ? r.doc : undefined];
+    case 'settings': return ['payroll', 'settings', r.section];
+  }
+}
+
+function routeOf([a, b, c, d, e]: string[]): Route {
   switch (a) {
     case 'receipts': return b === 'bills' ? defined({ area: 'receipts', view: 'bills', id: c }) : defined({ area: 'receipts', id: b });
     case 'bank': return b === 'files' && c && d ? { area: 'bank', file: `${c}/${d}` } : defined({ area: 'bank', statement: b, payment: b && c });
@@ -168,13 +197,31 @@ function routeOf([a, b, c, d]: string[]): Route {
     case 'reports': return b === 'custom' ? defined({ area: 'reports', report: 'custom', saved: c }) : isOneOf(REPORTS, b) ? defined({ area: 'reports', report: b, account: c }) : { area: 'reports', report: 'income' };
     case 'close': return defined({ area: 'close', step: b });
     case 'company': return { area: 'company', section: b ?? 'profile' };
-    case 'invoices': return b !== 'list' && isOneOf(INVOICE_VIEWS, b) ? defined({ area: 'invoices', view: b, id: c }) : defined({ area: 'invoices', view: 'list', id: b });
+    // Kunden became Kontakte (phase 2): an old /invoices/customers[/<id>] link opens the same contact.
+    case 'invoices': return b === 'customers' ? defined({ area: 'invoices', view: 'contacts', id: c }) : b !== 'list' && isOneOf(INVOICE_VIEWS, b) ? defined({ area: 'invoices', view: b, id: c }) : defined({ area: 'invoices', view: 'list', id: b });
     case 'automation': return automationRoute(b, c, d);
     case 'changes': return defined({ area: 'changes', commit: b, file: b ? c : undefined });
     case 'partners': return defined({ area: 'partners', id: b });
     case 'knowledge': return !b ? { area: 'knowledge' } : isOneOf(KNOWLEDGE_PAGES, b) ? { area: 'knowledge', page: b } : { area: 'knowledge', topic: b };
+    case 'payroll': return payrollRoute(b, c, d, e);
     default: return { area: 'receipts' };
   }
+}
+
+const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+function payrollRoute(b?: string, c?: string, d?: string, e?: string): Route {
+  if (b && MONTH.test(b)) return defined({ area: 'payroll', view: 'payslips', month: b, employee: c });
+  // «/payroll/payslips/<month>/<person>» names the month too: it opens that month, never this one.
+  if (b === 'payslips') return c && MONTH.test(c) ? defined({ area: 'payroll', view: 'payslips', month: c, employee: d }) : { area: 'payroll', view: 'payslips' };
+  if (b === 'payments') {
+    if (!c || !MONTH.test(c)) return { area: 'payroll', view: 'payments' };
+    return d === 'insurances' ? defined({ area: 'payroll', view: 'payments', month: c, insurance: e }) : defined({ area: 'payroll', view: 'payments', month: c, employee: d });
+  }
+  if (b === 'documents') return c && /^\d{4}$/.test(c) ? defined({ area: 'payroll', view: 'documents', year: c, doc: d }) : { area: 'payroll', view: 'documents' };
+  if (b === 'employees') return defined({ area: 'payroll', view: 'employees', id: c });
+  if (b === 'settings') return defined({ area: 'payroll', view: 'settings', section: c });
+  return { area: 'payroll', view: 'overview' };
 }
 
 function automationSegments(r: RouteOf<'automation'>): Array<string | undefined> {

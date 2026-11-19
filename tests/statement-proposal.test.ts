@@ -19,8 +19,10 @@ import { bankCodeOf, proposedAccount } from '../src/accounting/statement-bank.js
 import { needsYou, tabOf } from '../src/app/shell/drop-tabs.js';
 import type { AccountChoice } from '../src/types/api-error.js';
 import type { DropRow, DropSession } from '../src/types/drop.js';
+import { salonWithoutIban } from './support/workspace.js';
 
-const COIFFEUR = join(APP_ROOT, 'demo-coiffeur', APP_FOLDER);
+/** The hair salon's manifest without IBANs and invoicing (tests/support/workspace.ts). */
+const COIFFEUR = salonWithoutIban();
 /** Invented IBANs with valid check digits: clearing 80808 and 70000. */
 const AT_80808 = testIban('80808000000000031');
 const AT_70000 = testIban('70000000000000042');

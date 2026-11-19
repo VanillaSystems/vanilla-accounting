@@ -41,7 +41,9 @@ test('every area folder is a registered area and a line of the map, every Firma 
 test('the places the sidebar denied in the wishes test are in its prompt, with what it can do there (w07, w13, w15, w16, w18)', () => {
   const prompt = assistantSystem('de', '2451 Kontokorrent', appMap('de'));
   assert.ok(prompt.includes(appMap('de')));
-  assert.match(prompt, /- Verkauf: .*Rechnungen, Gutschriften, Offene Posten, Kunden and Versendet.*«Nicht gesendet».*\(Senden\).*N writes a new draft.* You: invoiceDraft\./);
+  assert.match(prompt, /- Verkauf: .*Angebote, Aufträge, Lieferscheine, Rechnungen, Gutschriften, Offene Posten, Kontakte, Artikel and Versendet.*«Auftrag erstellen».*Belegkette.*«Nicht gesendet».*\(Senden\).*N writes a new draft \(contact, then its contact person.* You: invoiceDraft\./);
+  assert.match(prompt, /Kontakte is a table .*customer number \(K-00001.*archived, never deleted.*«Importieren» reads contacts from a CSV with a column mapping/);
+  assert.match(prompt, /«＋ Artikel» \(a search by code or name.*«＋ Gruppe».*Artikel is a table of the products and services.*archived, one no document names is deleted.*«Importieren» reads Artikel from a CSV/);
   assert.match(prompt, /Firma › Rechnungslayout: .*payment term in days.*text above and below the table.* You: invoicing\./);
   assert.match(prompt, /Exportieren \(⇧E.*«Treuhänder-Paket» \(preset "treuhand".* You: export\./);
   assert.match(prompt, /Firma › Quellen: .*mailboxes/);
@@ -82,4 +84,11 @@ test('a drafted rule is kept with «Behalten» on its card, and the prompt never
     assert.doesNotMatch(appMap(lang), /\(\/[a-z]/, `${lang}: the map names no web address`);
     assert.match(appMap(lang), new RegExp(`«${t('period.filedShort')}»`), `${lang}: a filed quarter in the app's word`);
   }
+});
+
+test('Verkauf names «Zurück zum Entwurf» with when it is offered, and «Konten ändern» with its reclassification (spec 4.4.2)', () => {
+  const sales = AREA_PLACES.invoices.does;
+  assert.match(sales, /«Zurück zum Entwurf», offered only while the document was never sent or downloaded/);
+  assert.match(sales, /a sent one stays issued and is corrected by a credit note or a Storno/);
+  assert.match(sales, /«Konten ändern».*never an amount, rate or code.*RE-<number>-kk-<k> without a VAT code in the open period/);
 });

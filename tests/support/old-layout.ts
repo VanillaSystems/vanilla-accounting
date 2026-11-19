@@ -17,6 +17,8 @@ export function writeOldLayout(app: string, repo: string, golden?: string): void
   writeFileSync(join(repo, MANIFEST_FILE), readFileSync(ws.paths.manifest, 'utf8').replace('logo: logos/', 'logo: invoices/'));
   cpSync(ws.paths.accounts, join(repo, 'accounts.json'));
   cpSync(join(app, 'knowledge'), join(repo, 'knowledge'), { recursive: true });
+  // Not a file of 0.3, but a demo that ships one carries it through the move like invoices.json.
+  if (existsSync(ws.paths.payroll)) cpSync(ws.paths.payroll, join(repo, 'payroll.json'));
   if (existsSync(ws.paths.invoices)) {
     const text = readFileSync(ws.paths.invoices, 'utf8').replace(/transactional-data\/\d{4}\/invoices\//g, 'invoices/').replace(/"logos\//g, '"invoices/');
     writeFileSync(join(repo, 'invoices.json'), text);

@@ -52,11 +52,14 @@ key \`id\`; the files themselves are in \`receipts/\`) and which receipt belongs
   person keeps it in the app (Änderungen, or «Behalten» on a rule's card).
 
 Never edit, move, rename or delete any other file: not the books (\`ledger.json\`,
-\`transactional-data/\`, \`invoices.json\`, \`master-data/\`), not \`belege.workspace.yaml\`, not
+\`transactional-data/\`, \`invoices.json\`, \`payroll.json\`, \`master-data/\`), not \`belege.workspace.yaml\`, not
 a receipt or a statement, not \`data/\` outside the two folders above, and never a seal
 (\`filings/seal-*.json\`). Never run git commands that change anything (commit, reset, checkout,
 stash, rebase): the person saves in the app. The app checks the books when it loads them; a
-change made beside it is found, and books whose filed part changed open read-only.
+change made beside it is found, and books whose filed part changed open read-only. Never read
+\`payroll.json\`, \`transactional-data/<year>/payroll/\` or a payslip's PDF
+(\`*-lohnabrechnung-*.pdf\`): they hold wages and social security numbers, which stay out of every
+model; payroll is done in the app's Löhne area.
 
 ## Changing the books: a proposal
 

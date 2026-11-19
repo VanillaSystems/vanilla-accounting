@@ -2,11 +2,13 @@
  * The words printed on an invoice, in the invoice's language. These are document texts, not UI
  * texts: an invoice to a customer in Geneva is French whatever language the app speaks.
  */
-import type { Exemption, InvoiceLanguage, OWN_TEXTS, Unit } from './model.js';
+import { NET_TERMS, type DocumentKind, type Exemption, type InvoiceLanguage, type OWN_TEXTS } from './model.js';
 
 export interface InvoiceTexts {
   invoice: string; credit: string; draft: string; reminder: (level: number) => string;
   date: string; due: string; forInvoice: string; yourVat: string; vatSuffix: string; supplied: string;
+  /** Before the contact person a document goes to («z. Hd. Anna Muster»). */
+  attn: string;
   desc: string; qty: string; price: string; vat: string; amount: string;
   /** After a line's rate: its price has the VAT in it. */
   included: string;
@@ -20,13 +22,25 @@ export interface InvoiceTexts {
   stamp: string; cancelledOn: (date: string, reason: string) => string; cancelNotice: (no: string, date: string) => string;
   exemption: Record<Exemption, string>;
   page: (k: number, n: number) => string; cut: string; bank: string; vatNo: string; uidNo: string; payment: string; iban: string; reference: string;
-  units: Record<Unit, string>;
+  /** A position's own discount, beside its price («Rabatt 10 %»); the default labels of a new Zwischentotal and Rabatt. */
+  lineDiscount: (pct: string) => string; subtotal: string; discount: string;
+  /** The payment terms of a firm that names none: `paymentTermsDays` days net. */
+  netTerms: (days: number) => string;
+  /** The Skonto the printed terms offer: its percent, the last day, its amount, and what is paid then. */
+  skontoLine: (pct: string, until: string, amount: string, pays: string) => string;
+  /** The titles of the kinds that book nothing (spec 4.4.1), an Auftrag's two print variants among them. */
+  quote: string; confirmation: string; proforma: string; deliveryNote: string;
+  /** An optional position's mark; what the total leaves out of them; an Angebot's last day; the customer's order reference. */
+  option: string; optionsLeftOut: (n: number, amount: string) => string; validUntil: string; yourOrder: string;
+  /** The texts above and below the table of an Angebot, an Auftrag and a Lieferschein. */
+  kindIntro: { quote: string; 'sales-order': string; 'delivery-note': string; proforma: string };
+  kindClosing: { quote: string; 'sales-order': string; 'delivery-note': string; proforma: string };
 }
 
 export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
   de: {
     invoice: 'Rechnung', credit: 'Gutschrift', draft: 'Entwurf', reminder: (n) => `${n}. Mahnung`,
-    date: 'Datum', due: 'zahlbar bis', forInvoice: 'zu Rechnung', yourVat: 'Ihre MWST-Nr.', vatSuffix: 'MWST', supplied: 'Leistung',
+    date: 'Datum', due: 'zahlbar bis', forInvoice: 'zu Rechnung', yourVat: 'Ihre MWST-Nr.', attn: 'z. Hd.', vatSuffix: 'MWST', supplied: 'Leistung',
     desc: 'Beschreibung', qty: 'Menge', price: 'Preis', vat: 'MWST', amount: 'Betrag', included: 'inkl.',
     net: 'Total netto', vatOn: (r, n) => `MWST ${r} % auf ${n}`, total: 'Total',
     intro: 'Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:',
@@ -46,11 +60,16 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
       export: 'Ausfuhr, von der Steuer befreit (Art. 23 Abs. 2 Ziff. 1 MWSTG).',
     },
     page: (k, n) => `Seite ${k} von ${n}`, cut: 'Vor der Einzahlung abzutrennen', bank: 'Bank', vatNo: 'MWST-Nr.', uidNo: 'UID', payment: 'Zahlung', iban: 'IBAN', reference: 'Referenz',
-    units: { h: 'h', day: 'Tag', pcs: 'Stk.', flat: 'pauschal', km: 'km' },
+    lineDiscount: (p) => `Rabatt ${p}`, subtotal: 'Zwischentotal', discount: 'Rabatt', netTerms: NET_TERMS.de,
+    skontoLine: (p, d, a, x) => `Bei Zahlung bis ${d} ${p} % Skonto (${a}): Sie überweisen ${x}.`,
+    quote: 'Angebot', confirmation: 'Auftragsbestätigung', proforma: 'Proformarechnung', deliveryNote: 'Lieferschein',
+    option: 'Option', optionsLeftOut: (n, a) => `Nicht im Total: ${n === 1 ? 'eine Option' : `${n} Optionen`} über ${a}.`, validUntil: 'gültig bis', yourOrder: 'Ihre Bestellung',
+    kindIntro: { quote: 'Gerne unterbreiten wir Ihnen folgendes Angebot:', 'sales-order': 'Vielen Dank für Ihren Auftrag. Wir bestätigen Ihnen:', 'delivery-note': 'Wir liefern Ihnen:', proforma: 'Für die folgenden Leistungen stellen wir Ihnen diese Proformarechnung aus:' },
+    kindClosing: { quote: 'Wir freuen uns auf Ihren Auftrag.\nFreundliche Grüsse', 'sales-order': 'Freundliche Grüsse', 'delivery-note': 'Ware erhalten:\n\n\nDatum, Unterschrift', proforma: 'Freundliche Grüsse' },
   },
   fr: {
     invoice: 'Facture', credit: 'Note de crédit', draft: 'Projet', reminder: (n) => (n === 1 ? '1er rappel' : `${n}e rappel`),
-    date: 'Date', due: 'payable jusqu’au', forInvoice: 'concernant la facture', yourVat: 'Votre n° TVA', vatSuffix: 'TVA', supplied: 'Prestation',
+    date: 'Date', due: 'payable jusqu’au', forInvoice: 'concernant la facture', yourVat: 'Votre n° TVA', attn: 'à l’att. de', vatSuffix: 'TVA', supplied: 'Prestation',
     desc: 'Description', qty: 'Quantité', price: 'Prix', vat: 'TVA', amount: 'Montant', included: 'TTC',
     net: 'Total net', vatOn: (r, n) => `TVA ${r} % sur ${n}`, total: 'Total',
     intro: 'Nous vous remercions de votre mandat et vous facturons les prestations suivantes :',
@@ -70,11 +89,16 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
       export: 'Exportation, exonérée de la TVA (art. 23, al. 2, ch. 1 LTVA).',
     },
     page: (k, n) => `Page ${k} sur ${n}`, cut: 'A détacher avant le versement', bank: 'Banque', vatNo: 'N° TVA', uidNo: 'IDE', payment: 'Paiement', iban: 'IBAN', reference: 'Référence',
-    units: { h: 'h', day: 'jour', pcs: 'pce', flat: 'forfait', km: 'km' },
+    lineDiscount: (p) => `Rabais ${p}`, subtotal: 'Sous-total', discount: 'Rabais', netTerms: NET_TERMS.fr,
+    skontoLine: (p, d, a, x) => `En cas de paiement jusqu’au ${d}, escompte de ${p} % (${a}) : à payer ${x}.`,
+    quote: 'Offre', confirmation: 'Confirmation de commande', proforma: 'Facture proforma', deliveryNote: 'Bulletin de livraison',
+    option: 'Option', optionsLeftOut: (n, a) => `Hors total : ${n === 1 ? 'une option' : `${n} options`} pour ${a}.`, validUntil: 'valable jusqu’au', yourOrder: 'Votre commande',
+    kindIntro: { quote: 'Nous avons le plaisir de vous soumettre l’offre suivante :', 'sales-order': 'Nous vous remercions de votre commande et vous confirmons :', 'delivery-note': 'Nous vous livrons :', proforma: 'Pour les prestations suivantes, nous vous adressons cette facture proforma :' },
+    kindClosing: { quote: 'Dans l’attente de votre commande.\nMeilleures salutations', 'sales-order': 'Meilleures salutations', 'delivery-note': 'Marchandise reçue :\n\n\nDate, signature', proforma: 'Meilleures salutations' },
   },
   it: {
     invoice: 'Fattura', credit: 'Nota di credito', draft: 'Bozza', reminder: (n) => `${n}° sollecito`,
-    date: 'Data', due: 'pagabile entro il', forInvoice: 'relativa alla fattura', yourVat: 'Vostro n. IVA', vatSuffix: 'IVA', supplied: 'Prestazione',
+    date: 'Data', due: 'pagabile entro il', forInvoice: 'relativa alla fattura', yourVat: 'Vostro n. IVA', attn: 'alla c. a. di', vatSuffix: 'IVA', supplied: 'Prestazione',
     desc: 'Descrizione', qty: 'Quantità', price: 'Prezzo', vat: 'IVA', amount: 'Importo', included: 'incl.',
     net: 'Totale netto', vatOn: (r, n) => `IVA ${r} % su ${n}`, total: 'Totale',
     intro: 'Vi ringraziamo per l’incarico e vi fatturiamo le seguenti prestazioni:',
@@ -94,12 +118,17 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
       export: 'Esportazione, esente dall’imposta (art. 23 cpv. 2 n. 1 LIVA).',
     },
     page: (k, n) => `Pagina ${k} di ${n}`, cut: 'Da staccare prima del versamento', bank: 'Banca', vatNo: 'N. IVA', uidNo: 'IDI', payment: 'Pagamento', iban: 'IBAN', reference: 'Riferimento',
-    units: { h: 'h', day: 'giorno', pcs: 'pz.', flat: 'forfait', km: 'km' },
+    lineDiscount: (p) => `Sconto ${p}`, subtotal: 'Subtotale', discount: 'Sconto', netTerms: NET_TERMS.it,
+    skontoLine: (p, d, a, x) => `Con pagamento entro il ${d} sconto del ${p} % (${a}): da pagare ${x}.`,
+    quote: 'Offerta', confirmation: 'Conferma d’ordine', proforma: 'Fattura proforma', deliveryNote: 'Bollettino di consegna',
+    option: 'Opzione', optionsLeftOut: (n, a) => `Escluso dal totale: ${n === 1 ? 'un’opzione' : `${n} opzioni`} per ${a}.`, validUntil: 'valida fino al', yourOrder: 'Vostro ordine',
+    kindIntro: { quote: 'Siamo lieti di sottoporvi la seguente offerta:', 'sales-order': 'Vi ringraziamo per l’ordine e vi confermiamo:', 'delivery-note': 'Vi consegniamo:', proforma: 'Per le seguenti prestazioni vi inviamo questa fattura proforma:' },
+    kindClosing: { quote: 'In attesa del vostro ordine.\nCordiali saluti', 'sales-order': 'Cordiali saluti', 'delivery-note': 'Merce ricevuta:\n\n\nData, firma', proforma: 'Cordiali saluti' },
   },
   en: {
     invoice: 'Invoice', credit: 'Credit note', draft: 'Draft',
     reminder: (n) => (n === 1 ? 'Payment reminder' : n === 2 ? 'Second reminder' : 'Final reminder'),
-    date: 'Date', due: 'payable by', forInvoice: 'for invoice', yourVat: 'Your VAT no.', vatSuffix: 'VAT', supplied: 'Supplied',
+    date: 'Date', due: 'payable by', forInvoice: 'for invoice', yourVat: 'Your VAT no.', attn: 'Attn.', vatSuffix: 'VAT', supplied: 'Supplied',
     desc: 'Description', qty: 'Qty', price: 'Price', vat: 'VAT', amount: 'Amount', included: 'incl.',
     net: 'Net total', vatOn: (r, n) => `VAT ${r} % on ${n}`, total: 'Total',
     intro: 'Thank you for your order. We invoice the following services:',
@@ -119,9 +148,25 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
       export: 'Export of goods, exempt from Swiss VAT (Art. 23 para. 2 no. 1 VAT Act).',
     },
     page: (k, n) => `Page ${k} of ${n}`, cut: 'Separate before paying in', bank: 'Bank', vatNo: 'VAT no.', uidNo: 'UID', payment: 'Payment', iban: 'IBAN', reference: 'Reference',
-    units: { h: 'h', day: 'day', pcs: 'pcs', flat: 'flat rate', km: 'km' },
+    lineDiscount: (p) => `Discount ${p}`, subtotal: 'Subtotal', discount: 'Discount', netTerms: NET_TERMS.en,
+    skontoLine: (p, d, a, x) => `If paid by ${d}, ${p} % cash discount (${a}): pay ${x}.`,
+    quote: 'Quote', confirmation: 'Order confirmation', proforma: 'Pro forma invoice', deliveryNote: 'Delivery note',
+    option: 'Option', optionsLeftOut: (n, a) => `Not in the total: ${n === 1 ? 'one option' : `${n} options`} of ${a}.`, validUntil: 'valid until', yourOrder: 'Your order',
+    kindIntro: { quote: 'We are pleased to offer you the following:', 'sales-order': 'Thank you for your order. We confirm:', 'delivery-note': 'We deliver:', proforma: 'For the following supplies we issue this pro forma invoice:' },
+    kindClosing: { quote: 'We look forward to your order.\nKind regards', 'sales-order': 'Kind regards', 'delivery-note': 'Goods received:\n\n\nDate, signature', proforma: 'Kind regards' },
   },
 };
+
+/** The title a document prints under: its kind's, an Auftrag's print variant, a Rechnung's or Gutschrift's. */
+export function kindTitle(L: InvoiceTexts, kind: DocumentKind, printAs?: 'confirmation' | 'proforma'): string {
+  switch (kind) {
+    case 'quote': return L.quote;
+    case 'sales-order': return printAs === 'proforma' ? L.proforma : L.confirmation;
+    case 'delivery-note': return L.deliveryNote;
+    case 'credit-note': return L.credit;
+    case 'invoice': return L.invoice;
+  }
+}
 
 /** The app's own texts of Firma › Rechnungslayout in a language, the payment term left as {days}; no greeting line. */
 export const builtInTexts = (lang: InvoiceLanguage): Record<(typeof OWN_TEXTS)[number], string> => ({

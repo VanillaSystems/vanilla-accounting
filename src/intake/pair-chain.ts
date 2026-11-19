@@ -34,11 +34,13 @@ import { appBooked, noReceiptOfItsOwn, receiptKnowledge } from '../booking/recei
 import { loadClassifyContext } from '../booking/classify.js';
 import { loadKnowledge } from '../knowledge/layers.js';
 import { noPaymentOf, orderPagesOf, type OrderPage } from '../booking/order-pages.js';
+import { cancelledReceiptIds } from '../invoices/rules.js';
+import { loadInvoices } from '../invoices/store.js';
 import { providersOf } from './sales-report-import.js';
 import { isProvider, providerOfMoneyIn } from '../booking/providers.js';
 import { vatCorrectionsOf, type VatCorrection } from '../booking/vat-corrections.js';
 import { identify, signalsOfTransaction, type Counterparty } from '../knowledge/counterparties.js';
-import { withheldPayeesOf, withheldSharesOf } from '../booking/withheld.js';
+import { collectorsOf, withheldPayeesOf, withheldSharesOf } from '../booking/withheld.js';
 import { APP_ROOT, type Workspace } from '../workspace/workspace.js';
 
 export type { Found, Maker } from './pairing.js';
@@ -104,8 +106,10 @@ export function noReceiptFor(ws: Workspace): (books: Books) => (t: BankTransacti
 
 /**
  * The receipts of `books` without a payment of their own, for the workspace `ws`: an order page of a
- * provider whose order export books its order (src/booking/order-pages.ts, #253), and a bill that
- * proves a VAT-only correction (src/booking/vat-corrections.ts, #190).
+ * provider whose order export books its order (src/booking/order-pages.ts, #253), a bill that
+ * proves a VAT-only correction (src/booking/vat-corrections.ts, #190), and the PDF of a cancelled
+ * invoice (cancelledReceiptIds): «Trotzdem stornieren» leaves its payment unmatched, and no pairing
+ * path ties them again.
  */
 export function noPaymentFor(ws: Pick<Workspace, 'paths'>): (books: Books) => (r: Receipt) => boolean {
   const providers = providersOf(ws);
@@ -113,7 +117,8 @@ export function noPaymentFor(ws: Pick<Workspace, 'paths'>): (books: Books) => (r
   return (books) => {
     const page = noPaymentOf(books, providers);
     const corrections = vatCorrectionsOf(books, counterparties);
-    return (r) => page(r) || corrections.has(r.id);
+    const cancelled = cancelledReceiptIds(loadInvoices(ws));
+    return (r) => page(r) || corrections.has(r.id) || cancelled.has(r.id);
   };
 }
 
@@ -147,10 +152,11 @@ export function providerIssuesIn(ws: Pick<Workspace, 'paths'>, books: Parameters
   const byId = new Map(books.receipts.map((r) => [r.id, r]));
   const linkedTo = (t: BankTransaction) => books.mappings.flatMap((m) => (m.transactionRef === t.ref && byId.has(m.receiptId) ? [byId.get(m.receiptId)!] : []));
   const businessOf = (t: BankTransaction) => { const r = identify(signalsOfTransaction(t, linkedTo(t)), counterparties); return r.kind === 'known' ? r.counterparty : undefined; };
-  const withheldPayees = withheldPayeesOf(books.transactions, businessOf);
+  const collectors = collectorsOf(counterparties);
+  const withheldPayees = withheldPayeesOf(books.transactions, businessOf, collectors);
   if (withheldPayees.length) out.withheldPayees = withheldPayees;
   // What of 2270 each such payment clears, where the payslips tell (#476): the task and «Arbeitnehmeranteil abziehen» ask for that, never for all of it.
-  const shares = withheldSharesOf(books as Parameters<typeof withheldSharesOf>[0], businessOf);
+  const shares = withheldSharesOf(books as Parameters<typeof withheldSharesOf>[0], businessOf, collectors);
   if (Object.keys(shares).length) out.withheldShares = shares;
   if (!providers.length) return out;
   for (const tx of books.transactions) {

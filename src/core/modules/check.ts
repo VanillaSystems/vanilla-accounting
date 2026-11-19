@@ -5,6 +5,7 @@
  */
 import { INCOME_SECTIONS, STAGE_RESULTS, STATEMENTS_VAT, type BoxId, type Formula, type Jurisdiction, type ReturnData } from './schema.js';
 import { FILING_LENGTHS } from '../../accounting/periods.js';
+import { checkPayroll } from './check-payroll.js';
 
 export interface ModuleProblem {
   file: string;
@@ -79,9 +80,18 @@ export function checkJurisdiction(j: Jurisdiction): ModuleProblem[] {
   for (const rate of j.invoicing.rates) {
     if (rate !== 0 && !named.some(([, m]) => m.revenue && m.rate === rate)) add('invoicing.yaml', 'rates', `no code in tax-codes.yaml books a sale at ${rate} %`);
   }
+  for (const kind of ['normal', 'reduced', 'accommodation'] as const) {
+    const list = j.invoicing.rateKinds?.[kind];
+    if (!Array.isArray(list) || !list.length) { add('invoicing.yaml', `rateKinds.${kind}`, 'a list of { rate, from }'); continue; }
+    for (const r of list) if (!j.invoicing.rates.includes(r.rate) || !/^\d{4}-\d{2}-\d{2}$/.test(String(r.from))) add('invoicing.yaml', `rateKinds.${kind}`, `${r.rate} from ${r.from}: a rate of rates with a day JJJJ-MM-TT`);
+    // Newest first: a supply day takes the first entry it is on or after.
+    if (list.some((r, i) => i > 0 && String(r.from) >= String(list[i - 1].from))) add('invoicing.yaml', `rateKinds.${kind}`, 'newest first, each from before the one above it');
+  }
   for (const [why, box] of Object.entries(j.invoicing.exemptions)) {
     if (!named.some(([, m]) => m.deduction === box)) add('invoicing.yaml', `exemptions.${why}`, `no code in tax-codes.yaml deducts its turnover in Ziffer ${box}`);
   }
+  const wo = j.invoicing.writeOff;
+  if (wo !== undefined) for (const k of ['skonto', 'loss'] as const) if (!/^\d{3,6}$/.test(String(wo[k]))) add('invoicing.yaml', `writeOff.${k}`, 'an account number');
   if (!Array.isArray(j.invoicing.territory) || !j.invoicing.territory.length || !j.invoicing.territory.every((c) => /^[A-Z]{2}$/.test(String(c)))) add('invoicing.yaml', 'territory', 'a list of two-letter country codes');
   if (!Array.isArray(j.invoicing.placeAbroad) || !j.invoicing.placeAbroad.every((w) => typeof w === 'string' && w.trim())) add('invoicing.yaml', 'placeAbroad', 'a list of words');
   for (const s of INCOME_SECTIONS) if (!j.statements.income[s]) add('statements.yaml', `income.${s}`, 'missing');
@@ -89,6 +99,7 @@ export function checkJurisdiction(j: Jurisdiction): ModuleProblem[] {
   if (!STATEMENTS_VAT.includes(j.statements.vat)) add('statements.yaml', 'vat', `"${j.statements.vat}" is not one of ${STATEMENTS_VAT.join(', ')}`);
   if (!FILING_LENGTHS.includes(j.periods.vat.length)) add('periods.yaml', 'vat.length', `"${j.periods.vat.length}" is not one of ${FILING_LENGTHS.join(', ')}`);
   if (!(j.periods.vat.dueDays >= 0)) add('periods.yaml', 'vat.dueDays', 'must be a number of days');
+  problems.push(...checkPayroll(j));
   return problems;
 }
 

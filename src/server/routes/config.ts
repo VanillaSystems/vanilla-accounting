@@ -6,15 +6,20 @@ import { join } from 'node:path';
 import { accountsOf, filedReturnsOf } from '../../workspace/reads.js';
 import { WS, RequestError, patchBody, readBooks, reopenWorkspace, stringField } from '../books.js';
 import { readEstvRateTable } from '../../accounting/fx-rates.js';
-import { MANUAL_BANK, MONEY_ROLES, type MoneyRole } from '../../workspace/banks.js';
+import { MANUAL_BANK, MONEY_ROLES, parseIban, type MoneyRole } from '../../workspace/banks.js';
+import { isQrIban, qrIbanTakes } from '../../providers/qr-bill/reference.js';
 import { companyInfo, type CompanyInfo } from '../../books/company.js';
 import { isDemo } from '../../workspace/demo-copy.js';
 import { payoutSales, salesDefaults } from '../../workspace/sells.js';
 import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { SALES_KINDS, salesKinds, type SalesKind } from '../../workspace/setup.js';
-import { writeAtomic } from '../../invoices/store.js';
-import { INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/model.js';
+import { DOCUMENT_KINDS, INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS, PRICES, isBooked, isItem, type DocumentKind, type Issued, type InvoiceLanguage, type PaymentTerms, type UnitDef } from '../../invoices/model.js';
+import { DEFAULT_NUMBERING, nextNumberFor, type Numbering } from '../../invoices/numbering.js';
+import { numberingFits, sameReference } from '../../providers/qr-bill/reference.js';
+import { docRef } from '../../books/refs.js';
+import { loadInvoices, writeAtomic } from '../../invoices/store.js';
+import { liveDocuments } from '../../invoices/rules.js';
 import { accountName, removeAccount, setAccountName } from '../../workspace/accounts-write.js';
 import { standardAccounts } from '../../workspace/chart.js';
 import { readBankStatements } from '../../workspace/bank-statements.js';
@@ -207,19 +212,85 @@ function chartWithBanks(patch: ManifestPatch, before: readonly LedgerBankAccount
   if (!used && accountName(WS, gone.account) === gone.label) removeAccount(WS, gone.account);
 }
 
+/**
+ * The QR-IBAN of a currency's account (#506): a QR-IBAN or nothing (null, an empty text). Under any
+ * currency but CHF it is refused with the warning `qrIbanNotChf` (SIX IG v2.4: QR-IBAN and QR
+ * reference for CHF only; v2.3 valid until November 2027) unless the request carries the person's
+ * «Trotzdem speichern», `confirm: 'qrIbanNotChf'`; then it is stored like any other value.
+ */
+function qrIbanOf(to: Record<string, unknown>, currency: string, confirm: unknown): string | null | undefined {
+  if (to.qrIban === undefined) return undefined;
+  const raw = to.qrIban === null ? '' : stringField(to, 'qrIban');
+  if (!raw.trim()) return null;
+  const qrIban = parseIban(raw);
+  if (!qrIban || !isQrIban(qrIban)) throw new RequestError(400, `${raw.trim()} ist keine QR-IBAN (CH oder LI, Institut 30000 bis 31999, gültige Prüfziffern).`, { code: 'notQrIban', params: { iban: raw.trim() } });
+  if (!qrIbanTakes(currency) && confirm !== 'qrIbanNotChf') {
+    throw new RequestError(400, `Eine QR-IBAN gilt seit den SIX-Richtlinien v2.4 nur für CHF, nicht für ${currency} (v2.3 gilt bis November 2027, danach weisen Banken sie zurück).`, { code: 'qrIbanNotChf', params: { currency } });
+  }
+  return qrIban;
+}
+
+/**
+ * Firma › Rechnungslayout › Nummern: a format per kind, checked with the firm's other formats as they
+ * would stand (src/invoices/numbering.ts checkNumbering); a format no number or payment reference can
+ * hold is refused with `numberFormat`. It applies from the next number: issued numbers never change.
+ */
+function numberingPatch(raw: unknown): NonNullable<InvoicingPatch['numbering']> {
+  const p = patchBody(raw, DOCUMENT_KINDS);
+  const out: NonNullable<InvoicingPatch['numbering']> = {};
+  for (const [kind, v] of Object.entries(p)) {
+    const f = patchBody(v, ['format', 'restartYearly']);
+    if (typeof f.format !== 'string' || (f.restartYearly !== undefined && typeof f.restartYearly !== 'boolean')) throw new RequestError(400, `numbering.${kind}: { format, restartYearly }.`);
+    out[kind as DocumentKind] = { format: f.format.trim(), restartYearly: f.restartYearly !== false };
+  }
+  const merged = { ...(WS.invoicing?.numbering ?? DEFAULT_NUMBERING), ...out };
+  const bad = numberingFits(merged) ?? referenceClash(merged, Object.keys(out) as DocumentKind[]);
+  if (bad) throw new RequestError(400, `Nummernformat «${merged[bad.kind].format}» (${bad.kind}) geht nicht: ${bad.refusal}.`, { code: 'numberFormat', params: { kind: bad.kind, refusal: bad.refusal, format: merged[bad.kind].format } });
+  return out;
+}
+
+/**
+ * A changed format whose next number would make the payment reference or the booking ref of a
+ * document issued already (2026-001 then 2026001 make one QR reference): refused as `referenceTaken`.
+ */
+function referenceClash(n: Numbering, changed: readonly DocumentKind[]): { kind: DocumentKind; refusal: 'referenceTaken' } | undefined {
+  const docs = liveDocuments(loadInvoices(WS));
+  const issued = docs.filter((d): d is Issued => d.status === 'issued' && isBooked(d));
+  const today = new Date().toISOString().slice(0, 10);
+  for (const kind of changed.filter((k) => k === 'invoice' || k === 'credit-note')) {
+    const next = nextNumberFor(docs, kind, today, n);
+    if (issued.some((d) => sameReference(next, d.number) || docRef(d) === docRef({ number: next, kind }))) return { kind, refusal: 'referenceTaken' };
+  }
+  return undefined;
+}
+
 /** The layout's values are checked by the manifest's reader; here only their kinds. */
 function invoicingPatch(raw: unknown): InvoicingPatch {
-  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo']);
   const out: InvoicingPatch = {};
+  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo', 'confirm', 'units', 'prices', 'paymentTerms', 'defaultTerms', 'numbering']);
+  if (b.numbering !== undefined) out.numbering = numberingPatch(b.numbering);
+  if (b.paymentTerms !== undefined) out.paymentTerms = b.paymentTerms === null ? null : termsPatch(b.paymentTerms);
+  if (b.defaultTerms !== undefined) {
+    if (b.defaultTerms !== null && typeof b.defaultTerms !== 'string') throw new RequestError(400, 'defaultTerms: die Id einer Zahlungskondition.');
+    out.defaultTerms = b.defaultTerms as string | null;
+  }
+  if (b.units !== undefined) out.units = b.units === null ? null : unitsPatch(b.units);
+  if (b.prices !== undefined) {
+    const p = patchBody(b.prices, DOCUMENT_KINDS);
+    for (const [kind, v] of Object.entries(p)) if (v !== null && !PRICES.includes(v as never)) throw new RequestError(400, `prices.${kind}: net oder gross.`);
+    out.prices = p as NonNullable<InvoicingPatch['prices']>;
+  }
   if (b.payTo !== undefined) {
     const payTo = patchBody(b.payTo, INVOICE_CURRENCIES);
     out.payTo = Object.fromEntries(Object.entries(payTo).map(([currency, v]) => {
       if (v === null) return [currency, null];
-      const account = stringField(patchBody(v, ['account']), 'account');
+      const to = patchBody(v, ['account', 'qrIban']);
+      const account = stringField(to, 'account');
       // The IBAN may come in the same change (banks); the manifest's reader refuses a payTo without one.
       const bank = WS.bankAccounts.find((a) => a.account === account && a.role === 'bank' && a.currency === currency);
       if (!bank) throw new RequestError(400, `Das Konto, auf das Kunden in ${currency} zahlen, muss ein Bankkonto in ${currency} sein.`, { code: 'payToAccount', params: { currency } });
-      return [currency, { account }];
+      const qrIban = qrIbanOf(to, currency, b.confirm);
+      return [currency, { account, ...(qrIban !== undefined ? { qrIban } : {}) }];
     }));
   }
   if (b.paymentTermsDays !== undefined) {
@@ -256,6 +327,55 @@ function invoicingPatch(raw: unknown): InvoicingPatch {
     }));
   }
   return out;
+}
+
+/**
+ * The firm's payment terms as Firma › Rechnungslayout sends them: the whole list, each term's id
+ * made from its name when it has none; the manifest's reader checks the values (days, Skonto).
+ * An issued invoice keeps the terms it printed, so a term may go any time.
+ */
+function termsPatch(raw: unknown): PaymentTerms[] {
+  if (!Array.isArray(raw) || raw.length === 0) throw new RequestError(400, 'paymentTerms: eine Liste mit mindestens einer Zahlungskondition.');
+  const taken = new Set<string>();
+  return raw.map((x, i) => {
+    const f = patchBody(x, ['id', 'name', 'days', 'skonto', 'text']);
+    const name = stringField(f, 'name').trim();
+    if (!name) throw new RequestError(400, `paymentTerms[${i}].name fehlt.`);
+    if (typeof f.days !== 'number') throw new RequestError(400, `paymentTerms[${i}].days: eine Zahl von Tagen.`);
+    const base = (typeof f.id === 'string' && f.id.trim()) || name.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'terms';
+    let id = base;
+    for (let k = 2; taken.has(id); k++) id = `${base}-${k}`;
+    taken.add(id);
+    const sk = f.skonto === undefined || f.skonto === null ? undefined : patchBody(f.skonto, ['percent', 'days']);
+    const text = typeof f.text === 'string' && f.text.trim() ? f.text.trim() : undefined;
+    return { id, name, days: f.days, ...(sk ? { skonto: { percent: sk.percent as number, days: sk.days as number } } : {}), ...(text ? { text } : {}) };
+  });
+}
+
+/**
+ * The firm's units as Firma › Rechnungslayout sends them: the whole list. A unit a draft still uses
+ * stays (an issued document keeps the words it was issued with): its removal is refused with the
+ * drafts that name it.
+ */
+function unitsPatch(raw: unknown): UnitDef[] {
+  if (!Array.isArray(raw) || raw.length === 0) throw new RequestError(400, 'units: eine Liste mit mindestens einer Einheit.');
+  const units = raw.map((u, i) => {
+    const f = patchBody(u, ['id', ...INVOICE_LANGUAGES]);
+    const id = stringField(f, 'id').trim();
+    if (!/^[a-z0-9][a-z0-9_-]{0,15}$/i.test(id)) throw new RequestError(400, `units[${i}].id: ein kurzes Kürzel (Buchstaben, Ziffern, - oder _).`, { code: 'unitId', params: { id } });
+    const words = Object.fromEntries(INVOICE_LANGUAGES.map((l) => {
+      const w = typeof f[l] === 'string' ? (f[l] as string).trim() : '';
+      if (!w) throw new RequestError(400, `units[${i}].${l}: das Wort der Einheit fehlt.`, { code: 'unitWord', params: { id, language: l } });
+      return [l, w];
+    })) as Record<InvoiceLanguage, string>;
+    return { id, ...words };
+  });
+  const twice = units.find((u, i) => units.findIndex((x) => x.id === u.id) !== i);
+  if (twice) throw new RequestError(400, `units: ${twice.id} steht zweimal.`, { code: 'unitTwice', params: { id: twice.id } });
+  const kept = new Set(units.map((u) => u.id));
+  const used = liveDocuments(loadInvoices(WS)).filter((i) => i.status === 'draft').flatMap((i) => i.lines.flatMap((l) => (isItem(l) && l.unit && !kept.has(l.unit) ? [l.unit] : [])));
+  if (used.length) throw new RequestError(409, `Die Einheit ${used[0]} steht in einem Entwurf: dort zuerst ändern.`, { code: 'unitInUse', params: { id: used[0] } });
+  return units;
 }
 
 /**
@@ -356,7 +476,7 @@ router.patch('/api/workspace', (req, res) => {
   const banksBefore = WS.bankAccounts;
   checked(() => patchManifest(WS.paths.manifest, patch));
   const days = patch.invoicing?.paymentTermsDays;
-  if (days !== undefined && terms !== undefined) setCustomerTerms(WS, (c) => (c.paymentTermsDays === terms ? days : undefined));
+  if (days !== undefined && terms !== undefined) setCustomerTerms(WS, (had) => (had === terms ? days : undefined));
   reopenWorkspace();
   chartWithBanks(patch, banksBefore);
   reopenWorkspace();

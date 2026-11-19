@@ -2,11 +2,11 @@
   "sections": [
     [
       "Erlöse",
-      14344.67,
+      26856.02,
       [
         [
           "3400",
-          14344.67
+          26856.02
         ]
       ]
     ],
@@ -70,7 +70,7 @@
       []
     ]
   ],
-  "grossProfit": 8296.62,
-  "operatingResult": -19784.13,
-  "netResult": -19784.13
+  "grossProfit": 20807.97,
+  "operatingResult": -7272.78,
+  "netResult": -7272.78
 }

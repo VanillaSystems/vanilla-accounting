@@ -92,6 +92,8 @@ export function removeReceipt(books: Relinkable & { receipts: Receipt[] }, id: s
 function isClassifyOpenEntry(e: JournalEntry, closedThrough: string | undefined): boolean {
   if (closedThrough && e.date <= closedThrough) return false;
   if (e.corrects) return false;
+  // A wage or an insurer's payment payroll's code booked (src/payroll/payments.ts, insurers.ts) is matched again by code, not by the classifier.
+  if (e.by?.kind === 'code' && e.by.check === 'payroll') return false;
   // Entries booked before `origin` existed carry none; on a real transaction they are
   // classify's or the API classify route's, as far as the books can tell.
   return e.origin === undefined || e.origin === 'classify';

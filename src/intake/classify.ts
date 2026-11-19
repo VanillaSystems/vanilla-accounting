@@ -11,7 +11,7 @@
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { claimsInputTax, inputTaxWithoutItsReceipt } from '../accounting/evidence-check.js';
-import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, bookWithheldShares, classifyTransactions, loadClassifyContext, type ClassifyContext, type ClassifyOutcome } from '../booking/classify.js';
+import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, bookPayslipWages, bookWithheldShares, classifyTransactions, loadClassifyContext, mappedReceipts, ruleOfPayment, type ClassifyContext, type ClassifyOutcome } from '../booking/classify.js';
 import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
 import { judgedRepayments, markJudged } from '../booking/owner-judged.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -20,10 +20,19 @@ import type { FxResolver } from '../accounting/fx-rates.js';
 import { periodLock, type Books } from '../books/store.js';
 import { heldByReconciliation } from '../books/reconcile.js';
 import { legBooked } from '../accounting/payment-entries.js';
-import type { JournalEntry } from '../types/index.js';
+import type { BankTransaction, JournalEntry } from '../types/index.js';
 import { askSalesWithoutVat, closeSaleQuestionsHeld } from './sale-questions.js';
 import { bookPayoutReports, ordersPaidElsewhere } from './sales-report-import.js';
 import type { Workspace } from '../workspace/workspace.js';
+import { randomBytes } from 'node:crypto';
+import { bookWagePayments } from '../payroll/payments.js';
+import { bookInsurerPayments } from '../payroll/insurers.js';
+import { payrollWays } from '../payroll/insurers-context.js';
+import { loadPayroll } from '../payroll/store.js';
+import { businessOfPayment } from './batch-payers.js';
+import { closedPayslips } from '../payroll/service.js';
+import { baseCurrency, payroll as jurisdictionPayroll, payrollClearing } from '../engines/index.js';
+import { bankAccountFor } from '../workspace/money-accounts.js';
 import type { BooksPort, IntakeNote, StepResult, StepRun } from './pipeline.js';
 
 /** The note for the sales without VAT asked about now; a payment asked about before is not asked again. */
@@ -138,6 +147,27 @@ export function classifyStep({ force = false } = {}): StepRun {
       if (taken) log(`${taken} payment(s) claimed input tax on a receipt no longer linked: booking taken back, each waits for its receipt.\n`);
     }
 
+    // A wage the app's payroll closed is paid by a bank line code matches (docs/specs/payroll.md §6.3): D 1091 / C bank,
+    // the payslip's PDF linked, before a rule or the model sees the line.
+    const wages = payrollClearing() ? closedPayslips(ws) : [];
+    const payroll = payrollClearing() ? loadPayroll(ws) : undefined;
+    const data = jurisdictionPayroll();
+    // A line whose bank or currency the manifest names no account for is left to the other paths, never stops the step.
+    const bankOf = (tx: BankTransaction) => { try { return bankAccountFor(tx, context.bankAccounts); } catch { return undefined; } };
+    // A line a company rule decides stays the rule's, as the bank's fee row does.
+    const ruled = (index: Books) => (tx: BankTransaction) => !!ruleOfPayment(index, tx, context, fx);
+    const own = new Set(context.bankAccounts.flatMap((a) => (a.iban ? [a.iban.replace(/\s/g, '').toUpperCase()] : [])));
+    if (wages.length) {
+      const paid = books.update((index) => bookWagePayments(index, wages, periodLock(index), bankOf, payrollClearing()!, () => randomBytes(8).toString('hex'), { currency: baseCurrency(), ruled: ruled(index), own }));
+      if (paid.length) log(`Wages     : ${paid.length} payment(s) of closed payslips booked from the payroll's clearing account: ${paid.join(', ')}.`);
+    }
+    // A payment to a fund or insurer whose contributions the payslips accrued clears its liability account only (§6.4): never expensed twice.
+    if (payroll?.insurances.length && data) {
+      const insurers = books.update((index) => bookInsurerPayments(index, data, payroll, periodLock(index),
+        (tx) => businessOfPayment(tx, mappedReceipts(index, tx), context.counterparties ?? []), bankOf, () => randomBytes(8).toString('hex'), { currency: baseCurrency(), ruled: ruled(index), wayOf: payrollWays(context.counterparties ?? []) }));
+      if (insurers.length) log(`Insurers  : ${insurers.length} payment(s) to a fund or insurer booked against its liability account: ${insurers.join(', ')}.`);
+    }
+
     const scratch = books.read();
     const lock = periodLock(scratch);
     const lockedCount = scratch.transactions.filter((tx) => lock.isClosed(tx.date) && !scratch.journalEntries.some((je) => je.transactionRef === tx.ref)).length;
@@ -174,6 +204,9 @@ export function classifyStep({ force = false } = {}): StepRun {
       if (corrected.booked.length) log(`Fee bills : ${corrected.booked.length} provider bill(s): the input tax they show booked as ${corrected.booked.map((b) => b.ref).join(', ')}.`);
       if (corrected.linked.length) log(`Fee bills : ${corrected.linked.length} provider bill(s) linked to the correction that books their input tax: ${corrected.linked.map((b) => b.ref).join(', ')}.`);
       if (corrected.waiting.length) log(`Fee bills : ${corrected.waiting.length} provider bill(s) left to the person (${corrected.waiting.map((w) => `${w.receipt}: ${w.why}`).join(', ')}).`);
+      // A wage the app booked before its payslips came is booked again from them, gross (docs/specs/payroll.md §10.2 A3).
+      const wagesAgain = bookPayslipWages(structuredClone(books.read()), context, fx).length ? books.update((index) => bookPayslipWages(index, context, fx, run)) : [];
+      if (wagesAgain.length) log(`Payslips  : ${wagesAgain.length} wage(s) booked again, gross, from the payslips linked since: ${wagesAgain.join(', ')}.`);
       // A contribution payment the app booked before the payslips came (another run of the same drop) takes the share they withheld now (#489).
       const shares = bookWithheldShares(structuredClone(books.read()), context).length ? books.update((index) => bookWithheldShares(index, context, run)) : [];
       if (shares.length) log(`Withheld  : ${shares.length} contribution payment(s) booked again with the employees' share the payslips withheld: ${shares.join(', ')}.`);

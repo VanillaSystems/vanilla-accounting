@@ -28,6 +28,125 @@ Two markers flag an entry you must read before you update:
   the Betriebsergebnis as before. The stages are the jurisdiction's (statements.yaml
   `incomeStages`); the payment fees (6840) count as Finanzerfolg, as the chart says. The export
   carries the same rows. Presentation only: the Betriebsergebnis and the result do not change (#568).
+- Verkauf › Artikel: the products and services the firm sells, as a table (code, name, Ware or
+  Dienstleistung, unit, price, VAT kind), each opened beside it with its form. An Artikel names a
+  VAT kind (normal, reduced, accommodation, none), and the rate comes from the law for the
+  document's supply day. Its price is excl. or incl. VAT and is converted for a document priced the
+  other way. An Artikel a document names is archived, one no document names is deleted. «Importieren»
+  reads Artikel from a CSV with a column mapping, and a row whose code is already there is proposed
+  as the same Artikel.
+- On a draft, «＋ Artikel» searches the Artikel by code or name and fills code, text, unit, price,
+  rate and revenue account into the position, each still editable there. The revenue account comes
+  from the Artikel, else from the contact, else from the settings. Each position shows its account
+  and VAT code on screen. A document prints the Artikel code where Firma › Rechnungslayout shows it
+  (new element «Artikelcode»).
+- «＋ Gruppe» on a draft: a title over sub-positions, printed with their sum. The totals, a Rabatt
+  below it and the bookings count each sub-position once. A conversion takes a group with the
+  sub-positions ticked of it.
+- The AI's invoice draft can name an Artikel by its code or name.
+
+- Verkauf › Weitere › «Zurück zum Entwurf»: a Rechnung or Gutschrift issued by mistake and never
+  sent goes back to draft and keeps its number; its PDF stays in the Verlauf, marked as replaced. On
+  the agreed basis its booking is taken back and booked again when it is issued again. Once sent,
+  the action is not offered: a Gutschrift or a Storno corrects it.
+- Verkauf › Weitere › «Konten ändern»: the revenue account of a Rechnung's positions changes, never
+  an amount, a rate or a code. Its bookings of an open period change account; for a booking of a
+  filed quarter a reclassification without a VAT code is booked in the open period
+  (`RE-<number>-kk-<k>`, `GS-<number>-kk-<k>`, a new ref pattern, no books format change). The
+  invoice's credit notes follow it. The dialog shows what will be booked before it is.
+- The demos show every state of a sales invoice. The coffee roaster (`demo/`) has invoices paid
+  with Skonto, partly paid, short by the customer's bank fee and written off as fees, paid in cash
+  at the door, entered by hand and confirmed by the bank statement, one payment for two invoices, a
+  credit note applied to its invoice, an overdue one with its first reminder, a cancelled one, two
+  not sent yet and a draft with titles, subtotals and a discount; named payment terms, one with
+  Skonto, and a cash box. The consultant invoices from July by the hour, one client in EUR abroad;
+  the joinery invoices with prices including VAT, a discount and a position of its second net rate;
+  the hair salon writes one invoice without VAT for a wedding. **⚠ figures** (the demos only): the
+  coffee roaster's Q3 and Q4, the joinery's H2 and the hair salon's Q2 gain these sales; no filed
+  period changes.
+- Verkauf › Angebote, Aufträge and Lieferscheine. They are written on the same sheet as an invoice,
+  get their own numbers (AN-, AU-, LS-) and book nothing. An Angebot holds until its «gültig bis»
+  day; you mark it «Angenommen» or «Abgelehnt», and after that day it reads «Abgelaufen». An
+  Auftrag prints as Auftragsbestätigung or Proformarechnung. A Lieferschein prints no prices.
+- «Auftrag erstellen», «Lieferschein erstellen» and «Rechnung erstellen». They show the positions
+  with what is still open, each ticked and editable, and the total of what is ticked. An Auftrag
+  reads «Teilweise» once something of it is delivered or invoiced, and «Erledigt» once all of it is
+  invoiced (and delivered, where it has a Lieferschein). A Gutschrift takes its quantities back. An
+  expired or declined Angebot, and more than is still open, warn first.
+- Options on an Angebot or Auftrag: printed with «Option», never in the total. The total names
+  what it leaves out. A conversion lists them unticked.
+- The Belegkette in the margin links every document of the chain: Angebot, Auftrag,
+  Lieferscheine, Rechnung, Gutschrift.
+- An Angebot or Auftrag goes back to draft with its number. Once it was sent, this asks first;
+  the version sent stays in Versendet.
+- Firma › Rechnungslayout › Nummern: a number format for each kind, with the next number shown.
+  A change applies from the next number. A new firm starts with AN-, AU-, LS-, RE- and GS- and
+  the year, five digits, new each year. An existing workspace keeps its numbers: invoices and
+  credit notes continue their one series (2026-001) until you change it.
+- Verkauf › Kontakte replaces Kunden. A contact is a firm or a person, with contact persons (name,
+  role, e-mail, phone), several addresses (one Rechnungsadresse, any number of Lieferadressen), a
+  customer number (K-00001 onwards, given at its first issued document or typed by hand), language,
+  e-mails, phone, UID, its own payment terms, currency, revenue account, a standing discount every new
+  position takes, «keine Mahnungen», notes and tags. Kontakte is a table (number, name, town, what is
+  open, documents, tags; tabs Firmen, Personen, Archiviert); a row opens the contact beside it with its
+  documents and open items. Old links to `/invoices/customers` open the same contact.
+- A draft picks the contact, then the contact person («z. Hd.» on the paper, the e-mail goes to them)
+  and the address (the Rechnungsadresse unless a branch is picked).
+- A contact any document names is archived, never deleted, and picked by no new document until it is
+  restored; a contact without documents is deleted.
+- Kontakte › Importieren reads contacts from a CSV (the export of another program): the columns are
+  mapped by their names and can be changed, each row shows what comes in and what is wrong with it,
+  and a row with the name or UID of a contact already there is proposed as the same contact.
+- A contact can be linked to its Geschäftspartner file; the app proposes the file by UID, the IBAN
+  that paid or the name, and Geschäftspartner then shows the two as one partner.
+- Löhne, payslips of another program (docs/specs/payroll.md §10.2 A-2): a payslip your payroll program
+  or fiduciary issued is recognised when you drop it, read by code (gross, deductions, allowances,
+  expenses, net to the cent) and paired with its wage's bank line. The wage is booked gross from it,
+  without an AI: the net against the bank, the social deductions on 2270, the withholding tax on 2279.
+  A wage booked before its payslip came is booked again from it. No payslip that reads goes to the AI.
+  A wage without a payslip is still not booked by code: the wage rule stays a one-click proposal.
+- Löhne: a business file may say which wage deductions it collects (`collects: [pension]`, `[tax]`).
+  A payment to it then clears exactly what the payslips withheld; without an AI the app books it
+  itself, the employer's part on the contribution account, and the withholding tax's payment with its
+  collection commission.
+- Löhne › Einstellungen › Sozialversicherungen: a compensation fund's decision, an accident or sick-pay
+  policy or a pension certificate in Belege proposes its insurance on a card. Code reads what the
+  document states plainly, the AI on your click the rest (without salaries, the AHV number masked);
+  you check and keep it, and every rate kept names its document.
+
+- Löhne for staff (phase B1, docs/specs/payroll.md §22 decisions 79–90): an hourly wage gets its holiday
+  surcharge (4/48, 5/47, 6/46 by the holiday weeks) on its own line and a public-holiday surcharge where the
+  contract names one; the holiday balance in days on every payslip; Mitarbeitende › Kinder (the allowance the
+  family compensation fund decided, paid with the wage and booked against its account) and › Abwesenheiten
+  (illness, accident, maternity, military, unpaid leave, holidays: the days' wage taken off, the insurer's daily
+  allowance, the rest of the continued pay; no diagnosis); «Nachzahlung» for a person who left; a wage under
+  2,500 a year without AHV, ALV and FAK unless the person asks. Dokumente: Familienzulagen against the fund,
+  the pension fund's expected wages, and the persons exempt on the annual declarations. Lohnzahlungen:
+  «Zahlungsdatei», the month's payouts not paid yet as a pain.001 file for e-banking. demo-schreinerei runs its
+  payroll in the app from October.
+- Löhne computes the **Quellensteuer** (phase B2, monthly model) from the canton's tariff file, which
+  «Tarif laden» (Einstellungen › Sozialversicherungen, or beside a payslip's line «unvollständig») or
+  `npm run fetch-qst -- ZH 2026` fetches from the Federal Tax Administration into the workspace's
+  `data/qst/<year>/` with its checksum and date (never git); a downloaded file can be loaded by hand. The
+  person's tariff code, church tax and other employments come from her declaration (Mitarbeitende ›
+  Quellensteuer). The rate-determining income extrapolates an entry or exit month to 30 days and other
+  employments to their whole; aperiodic payments are added as they are. The line names the tariff, its
+  date, the code and the rate-determining income; it books D 1091 / C 2279. The canton's commission
+  (Bezugsprovision) is an employer line D 2279 / C 5890 (new account «Bezugsprovision Quellensteuer»).
+  Dokumente › Quellensteuer lists the settlement per canton and month (persons, wage, tariff, tax,
+  commission, amount to pay) with its CSV. A new or corrected tariff file never changes a closed
+  payslip: the card offers the Rückwirkende Korrektur first. Cantons on the annual model (FR, GE, TI, VD,
+  VS) get the line «unvollständig» for now.
+- Abschluss › Prüfen: a section «Löhne» with the payroll's year-end checks as facts (never a block):
+  1091 at 31.12. against the payouts not paid by then, each named; each insurer's account with what
+  the payslips accrued, what was paid and what is open, and «Schlussabrechnung erfassen» while no
+  final statement is booked; 5000 per person and month against the payslips' gross lines, and what
+  it holds without one of the app's payslips; each person's Lohnausweis (field 8 against the gross,
+  issued or not, and whether it still agrees); for wages from other programs' payslips, 2270
+  explained by what the wages withheld and what the funds were paid. The year-end step
+  «Sozialversicherungen» counts as booked by the final statements entered in Löhne. Wages booked before
+  payroll ran here count as the opening's (no difference on 5000), and each insurer shows what was paid
+  for those months.
 - Buchungen › Neue Buchung von Hand: «+ Zeile» makes it a Sammelbuchung, one account against
   several lines (for example Haben 1020 against Soll 6500 and 6570). The last line holds the rest of
   the total until you type there, and ↵ books only once the lines add up. The lines are booked
@@ -81,9 +200,186 @@ Two markers flag an entry you must read before you update:
   and exported as CSV. On 31.12. it matches the receivables to the cent: on the cash basis the
   year end's proposal, on the agreed basis what the invoices hold on the receivable account.
 - Verkauf › Versendet: every document sent, filtered by customer, kind and channel.
+- Rechnungen: positions of their own kind on the sheet: a text (as a title or plain), a
+  Zwischentotal (the sum of the positions since the last one), a Rabatt or Zuschlag on the total
+  (a percent or an amount, split over the VAT rates and revenue accounts above it to the Rappen,
+  so the VAT per rate and the booking stay exact; several may follow each other) and a
+  Seitenumbruch for the PDF. A position may carry its own discount in percent, printed beside it.
+  Positions move by their handle: dragged, or with ↑/↓ (Alt+↑/↓ in a field).
+- Rechnungen: prices incl. or excl. VAT per document, a switch in the draft's margin; Firma ›
+  Rechnungslayout sets the default for new invoices.
+- Firma › Rechnungslayout › Einheiten: the units a quantity is counted in, each with its word in
+  German, French, Italian and English. m², m, m³, l, kg and Mt. join Std., Tag, Stk., pauschal and
+  km; a firm adds its own and removes one no draft uses. An issued invoice keeps the words it was
+  issued with.
+- Rechnungen: a position without text or amount, and a Rabatt with nothing above it, no longer
+  stop the issue: the app says what would be printed and why it matters, and «Trotzdem
+  ausstellen» issues the invoice as it is.
+- Rechnungen: an invoice whose total is zero or less (a Rabatt above the total) is not issued: a
+  QR-bill carries no amount below zero; what is owed back goes on a Gutschrift.
+- Rechnungen: «Zahlungseingang erfassen» for money the bank statement does not show yet (cash at
+  the door, another account): date, a bank or the cash box, the amount. It is booked like a
+  statement's payment; when the statement comes, its line confirms the payment instead of booking it
+  again, and the invoice names the confirmation. «Rückgängig» takes it back.
+- Rechnungen: «Ausziffern» of one incoming payment over several invoices of a customer, the amounts
+  proposed (the invoices the payment names first, then the oldest), and for each invoice what
+  becomes of its rest: it stays open, or is written off as Skonto, Rabatt, Verlust, Spesen or Rundung.
+- Rechnungen: «Rest ausbuchen» closes what is left open as Skonto, Rabatt, Verlust, Spesen or
+  Rundung, today by default, with «Rückgängig». On the cash basis nothing is booked; on the agreed
+  basis the write-off is booked on the Erlösminderungen (Verlust: Verluste aus Forderungen) against
+  the receivable with the minus VAT codes, so the VAT comes off in the quarter of the write-off. Its
+  ref is `RE-<number>-wo-<k>`. A write-off of more than is open asks first.
+- Payment terms with a Skonto («10 Tage 2 %, 30 Tage netto») are printed on the invoice with the
+  Skonto's last day and amount; a payment within those days that pays the open amount less the
+  Skonto (to 5 Rappen) marks the invoice paid and writes the Skonto off by itself. An invoice keeps
+  the terms it printed.
+- Rechnungen: a rest of at most a few francs after a payment (Firma › Rechnungslayout, 5 by
+  default) is offered to be written off as Spesen, never by itself.
+- Rechnungen: the four figures above every issued invoice: Betrag, erhalten, gutgeschrieben, offen,
+  each naming the payments, Gutschriften and write-offs behind it. The status Teilbezahlt also
+  counts Gutschriften and write-offs; a Gutschrift reads Offen, Teilweise or Abgerechnet.
+
+### Changed
+
+- The format of `invoices.json` (schema 3) and `belege.workspace.yaml` (schema 5): an older app
+  refuses them. Existing invoices keep every figure: a credit note «by amount» now reads as a
+  document priced incl. VAT, and a line that was priced otherwise than its document keeps its own
+  pricing.
+- Payroll, first slice (docs/specs/payroll.md, phase B0): the Swiss Lohnart catalogue, the kinds of
+  social insurance and the federal figures of 2026 with their sources ship as module data
+  (`modules/ch/payroll.yaml`, `modules/ch/payroll/2026.yaml`); `payroll.json` and the year's
+  `payroll/payslips.jsonl` join the workspace's layout. Nothing is computed or booked yet. A new
+  workspace of a firm that pays wages gets the accounts 1091 Lohndurchlaufkonto and 2271–2275 (one
+  liability account per insurer). Books schema 11: an entry may be booked by payroll; `npm run update`
+  writes it, no record changes.
+- Payroll, closing (phase B0): a payslip is closed per person or for the whole month («Alle
+  abschliessen»). Before, the app says what is off (a line «unvollständig», an earlier month still open, an
+  account the chart lacks) and closes after «Trotzdem abschliessen»: it books exactly the preview through
+  1091 and the insurers' accounts (ref `LR-<yyyy>-<mm>-<person>`), files the payslip PDF in Belege and adds
+  a missing account from the standard chart. The latest closed month can be reopened; an earlier one, or one
+  in a closed period, is corrected by a Rückwirkende Korrektur that the next open month carries. A social
+  security number is masked in everything sent to an AI model.
+- Payroll, Lohnzahlungen and the insurers (phase B0): the bank's line of a wage is matched by code (the
+  payout and the person's IBAN or name) and booked D 1091 / C bank with the payslip linked, so 1091 is 0 once
+  wages are paid. A payment to a fund or insurer clears its liability account (2271–2275) and is never
+  expensed a second time; each insurance shows what the payslips accrued, what was paid and what is open;
+  a final statement's difference is booked from its total.
+- Payroll, Dokumente (phase B0): the Lohnausweis per person from the closed payslips, each Lohnart in
+  its field, as a PDF of Form 11 and as a table; a later one replaces or corrects it and both stay. The
+  Lohnkonto per person and for the firm, the declarations' figures (AHV and ALV wages, the insured wages)
+  and the month's Lohnbuchungen as CSV.
+- Payroll, payslips by mail (phase B0): a closed payslip goes to the person's own address as a PDF locked
+  with her password (never the AHV number; the date of birth only after a warning; or one the app makes and
+  shows once), with a blind copy to the firm's sender; every mail is logged.
+- Payroll, the Löhne area (phase B0, dock G L): Übersicht (the year's months, closed or open, and what
+  is missing), Lohnabrechnungen (the month's people, «Alle abschliessen», one payslip with its lines by
+  Lohnart group, «+ Arbeitgeber», what a line «unvollständig» lacks, «Lohnart hinzufügen», the entries
+  closing books, «Abschliessen» with its warnings in the page, «Korrektur erfassen», «Wieder öffnen» on the
+  latest month, the PDF and the history), Mitarbeitende («Person hinzufügen» with every section at once;
+  each value with «ab», planned values, «Verlauf» and «Ändern» with «gilt ab»; the AHV number masked,
+  in full only after «anzeigen») and Einstellungen (Stammdaten, Sozialversicherungen with their dated
+  rates, Lohnarten, Konten with «Konto anlegen»). A change dated before a closed month first shows which
+  payslips it would change and by how much; «Rückwirkende Korrektur» carries each difference into the next
+  open month, «So lassen» keeps the closed payslip, which then says what differs. A rate outside its usual
+  range is said, never refused. An AHV number is checked by its check digit. Works without the AI.
+- Payroll, the Löhne area's Lohnzahlungen and Dokumente tabs (phase B0): Lohnzahlungen lists a month's
+  payouts (person, IBAN, amount, purpose «Lohn MM/YYYY», value date), each «bezahlt» with its bank line and
+  entries once the statement brought it, and per insurer of the year what the payslips accrued, what was
+  paid, what is open, with the final statement (Schlussabrechnung) whose total the person enters and whose
+  difference the app books. Dokumente shows per year each person's Lohnausweis by the form's fields, the
+  months still open (a warning, then «Trotzdem erstellen»), «Lohnausweis erstellen», later «ersetzen» or
+  «korrigieren», every issue with its PDF, the canton's wish for a copy to the tax office as a fact; the
+  Lohnkonto, the annual declarations' figures and the Lohnbuchungen, each with its CSV. A closed payslip
+  has «Per Mail senden» (the recipient and the copy shown first, a refusal said in the page, every mail
+  sent listed), a month «Alle per Mail senden»; a person's page sets or generates her payslip password,
+  shown once, and warns before one that holds her date of birth. «Alle per Mail senden» leaves out what was
+  sent already (unless asked) and names what cannot go and why. No page shows a password once set, and
+  Änderungen shows payroll.json with the password hidden and the AHV number masked; on a Durchsicht copy
+  sending and passwords stay the firm's. Works without the AI.
+- Demo Muster Consulting: the owner's payroll runs in the Löhne area from October (January to
+  September are its opening), so October to December can be closed, paid and documented.
+
+- Rechnungen: on the cash basis, a payment of an invoice with a Gutschrift books the invoice's
+  revenue and, with the minus VAT code, the Gutschrift's, each per rate: the VAT per rate is right
+  also when the Gutschrift concerns one rate of several.
+- Stornieren of a paid invoice warns and names the payment: «Gutschrift statt Storno», or «Trotzdem
+  stornieren», after which the payment waits unallocated again. A Gutschrift above what is open of
+  its invoice warns before it is issued.
 
 ### Fixed
 
+- Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
+  davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund
+  (`payroll: { payments: liability }`), names the open payments it books first, and code then books
+  such payments against the liability; the insurer's page in Lohnzahlungen shows it with
+  «Rückgängig». «Davor» stays a choice per payment. The bank page no longer shows «kein Beleg» and «Beleg suchen» for a
+  payment to a payroll insurer: the payslips prove it.
+- Löhne › Lohnzahlungen: the final statement shows the year's contributions in the books and, as the
+  total is typed, the difference; the button names its amount and direction («Differenz … buchen:
+  Nachzahlung an …»). Booking it while a December payslip of that year is still a draft is said first
+  in the page, then «Trotzdem buchen».
+- Löhne: a payslip line's federal source names the articles in the person's or the UI's language
+  («LAVS art. 5, 13 …» in French, no «AHVG … Abs.»); the year file's figures carry `cite` per
+  language. The month states are lower case in French, Italian and English throughout («ouverture»
+  beside «ouvert»).
+- Löhne: the company car's rate is typed in percent («Satz % pro Monat», 0.9 prefilled) in both the
+  month's and the recurring form, which now share their fields and words (Kaufpreis / Satz %); the
+  payslip still computes price × 0.009. A missing price reads «Kaufpreis des Fahrzeugs (ohne MWST)
+  fehlt», and a refusal names the field as the form shows it, not «(Menge)».
+- Löhne: a Rückwirkende Korrektur carried into a month is booked as its own entry, «Korrektur 08/2026:
+  BVG Arbeitnehmer …», no longer merged into that month's BVG line; the preview shows it the same way.
+  A payslip's booking texts are the books' German words for every person (the preview no longer
+  translates them).
+- Löhne: the months of a person's opening (paid and booked by hand before payroll ran here, January to
+  the opening's last month) are «Eröffnung» in the year strip and on her timeline. They get no draft, no
+  «noch offen» on a later month, and closing one is refused with its reason (the wage is booked
+  already). The Lohnausweis, the declarations and the Lohnkonto count each month once (the opening's
+  figures and the closes after it) and show the opening beside the months. The opening names its last
+  month (`through` in payroll.json, schema 1 unchanged: an opening without it reads its `months` from
+  January). The demo-consulting walk now starts with October as the first draft.
+- Löhne: a final statement (Schlussabrechnung) compares its total with the year's contributions in the
+  books: what the payslips accrued, and the payments out to that insurer booked for the opening's months
+  (from 1 February to payroll's start; a fund that takes several insurances is not split and says so). A difference over 5 % of the year is shown with these figures first and booked only on
+  «Trotzdem buchen». Before, a full-year total was booked against October and November alone.
+- Löhne: a payment to a fund or pension fund while payroll runs here is decided once for every path. Code
+  books it against the insurer's liability account when what the payslips accrued through its month covers
+  it (an Akonto on the 28th, a BVG payment on the 15th, before the month-end posting); otherwise it waits for
+  the person, never the model, and the hand form offers «für Monate ab dem Lohnstart» (the liability, without
+  a VAT code) or «für Monate davor» (the contributions as booked so far). Such a payment needs no receipt.
+- Löhne: a person's opening (months already paid this year, their bases and Lohnausweis fields) is
+  entered in «Person hinzufügen» and on the person's page; the settings API checks it and refuses one
+  over a month closed here.
+- Löhne: a daily sickness allowance (KTG) or supplementary accident insurance the firm adds holds only
+  for the persons put in it, no longer for everyone at once; the person form offers «nicht versichert».
+  An insurance whose accounts the chart lacks offers «Konten anlegen» on its card.
+- Löhne: a Lohnausweis for a person without an AHV number is said first, then «Trotzdem erstellen».
+- Löhne: each payslip line names its rate's source (federal figure with its articles, insurer and
+  solution, pension certificate), on the page and in the PDF.
+- Löhne: a missing input is named by its own word («Kaufpreis ohne MWST fehlt» for the company car,
+  «Stunden»), and the form uses those words.
+- Löhne: the note under payslips and the Lohnausweis is neutral («Berechnet aus den erfassten Sätzen und
+  den Bundeswerten 2026.»), no longer «vom Treuhänder zu prüfen».
+- Löhne: «Name des Versicherers» / «Nom de l’assureur» and other French fixes («Compte de passif»);
+  Lohnart labels and the booking preview follow the UI language.
+- Löhne: Lohnzahlungen shows «bezahlt» right after a bank statement drop, without a reload.
+- Löhne: without an outgoing mailbox the mail panel says «keine Kopie» and sends nothing; refusals (the
+  AHV number as a password, a line without an amount) stay visible in the page.
+- Löhne: `/payroll/payslips/2026-10` opens October; the AI sidebar on Löhne no longer shows the VAT
+  period's status.
+- Löhne: a payslip paid, reopened and closed again with another payout now says what stays open on the
+  Lohndurchlaufkonto (on the payslip and in Lohnzahlungen) instead of leaving the difference unnamed.
+- Verkauf: a Rechnung closed with a loss written off reads «Ausgebucht» (in the tab «Bezahlt»), not
+  «Bezahlt»; its write-offs show as their own figure «ausgebucht» beside «gutgeschrieben».
+- Verkauf › Offene Posten: the age bands count the days past due (nicht fällig, 1–30, 31–60, 61–90,
+  > 90 days), as the column «Tage überfällig» beside them does.
+- A draft's «＋ Text», «＋ Position» and the other add buttons put the new position after the one you
+  are in; a new draft starts with a title instead of its empty first item.
+- A cancelled invoice's PDF is no longer paired to its payment again after «Trotzdem stornieren».
+- A receipt's total of 1’000 or more printed by the app (a paid invoice filed as its payment's receipt)
+  was read without its thousands. The Skonto line of an invoice now reads «Sie überweisen CHF …», so
+  it is no longer taken for the invoice's total.
+- Verkauf: a payment entered by hand into the cash box no longer reads «noch von keinem Kontoauszug
+  bestätigt» on its invoice (no statement ever shows the cash box); it says the money is in the cash box.
 - Buchungen: an entry that books only the tax (a code such as `M81-2` or `-I81-2`, one side
   empty) said «keine Gegenbuchung» on its empty side, which read as an error. The detail now
   shows the VAT account the Bilanz and the reports fill in there, marked «aus dem MWST-Code», and
@@ -104,6 +400,20 @@ Two markers flag an entry you must read before you update:
 - The top bar (company, search, period, zoom, export, theme, language) stays open: it no longer
   folds away by itself after three uses, which left most people not knowing it is there. Its pin
   still lets it fold, and that choice is kept. Everyone starts with it open once after this update.
+- Rechnungen in EUR follow the new QR-bill guidelines (v2.4, in force since 13 November 2026): a
+  QR-IBAN with a QR reference is for CHF only. Firma › Rechnungslayout › Zahlungskonten now takes the
+  QR-IBAN of each account; one entered for EUR warns with the rule and what follows (banks refuse it
+  after November 2027) and is kept only with «Trotzdem speichern». A QR-IBAN for EUR saved before
+  shows the same warning beside the field. Without one, a EUR invoice prints the IBAN with a
+  creditor reference (SCOR). An invoice already issued keeps the reference it printed.
+
+### Added
+
+- A firm approved for two net tax rates chooses, on each position of a draft, the activity it
+  belongs to («Schreinerei 4.5 %» or «Handel 6.2 %»), on screen only: the invoice still shows the
+  statutory rate. The second activity is booked at the second rate (F2) on the cash basis and on
+  the agreed basis, and the half year's return shows it in the second rate's row. Before, every
+  position was booked at the first rate.
 
 ## [0.6.2] - 2026-11-16
 

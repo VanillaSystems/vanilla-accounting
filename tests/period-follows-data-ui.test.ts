@@ -13,7 +13,7 @@ import { filingKeyOf, localToday } from '../src/accounting/periods.js';
 import { mkdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { textPdf } from './support/text-pdf.js';
-import { writeIndex } from './support/workspace.js';
+import { writeIndex, demoInvoices } from './support/workspace.js';
 
 /** A camt.053 of the demo's Raiffeisen account with one October payment. */
 const OCTOBER = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt>
@@ -22,8 +22,9 @@ const OCTOBER = `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tec
 <Ntry><Amt Ccy="CHF">48.00</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>2026-10-14</Dt></BookgDt><AcctSvcrRef>REF-OCT-1</AcctSvcrRef><AddtlNtryInf>Kontofuehrung</AddtlNtryInf></Ntry>
 </Stmt></BkToCstmrStmt></Document>`;
 
-/** The demo's draft for Muster Hotel GmbH; the next number is 2026-008. */
-const DRAFT = 'in_8rkN6yKIRdjB';
+/** The demo's draft for Muster Hotel GmbH, and the number it is issued as. */
+const DRAFT = demoInvoices().draftOf('Muster Hotel GmbH');
+const NEXT = demoInvoices().next();
 
 test('pages open on the newest data, the picker applies a quarter in one click, an issued invoice stays in view', { skip: noBrowser, timeout: 180_000 }, async () => {
   const app = await openApp();
@@ -31,11 +32,11 @@ test('pages open on the newest data, the picker applies a quarter in one click, 
   const periodButton = () => page.$eval('[data-testid=period-picker]', (b) => (b as HTMLElement).innerText.trim());
   try {
     await app.open('/journal');
-    assert.match(await periodButton(), /Q3 2026/, 'the newest payment is of Q3, Q2 is the oldest unfiled');
+    assert.match(await periodButton(), /Q4 2026/, 'the newest payment is the cash one of 05.10.2026, Q2 is the oldest unfiled');
 
     await app.open('/invoices');
     await page.waitForFunction(() => /Q4 2026/.test(document.querySelector<HTMLElement>('[data-testid=period-picker]')?.innerText ?? ''));
-    assert.ok(await page.$('.ivt tr.trow[data-id="2026-007"]'), 'Rechnungen opens where its newest invoice is, 01.10.2026');
+    assert.ok(await page.$('.ivt tr.trow[data-id="2026-018"]'), 'Rechnungen opens where its newest invoice is, 14.10.2026');
 
     await app.open('/journal');
     await click(page, '[data-testid=period-picker]');
@@ -63,8 +64,8 @@ test('pages open on the newest data, the picker applies a quarter in one click, 
 
     await app.open(`/invoices/draft-${DRAFT}?period=2026-Q2`);
     await click(page, '[data-act=issue]');
-    await page.waitForFunction(() => location.pathname === '/invoices/2026-008');
-    await page.waitForFunction(() => !!document.querySelector('.ivt tr.trow[data-id="2026-008"]'));
+    await page.waitForFunction((n) => location.pathname === `/invoices/${n}`, {}, NEXT);
+    await page.waitForFunction((n) => !!document.querySelector(`.ivt tr.trow[data-id="${n}"]`), {}, NEXT);
     assert.match(await periodButton(), new RegExp(filingKeyOf(localToday(), 'quarter').replace(/(\d+)-(Q\d)/, '$2 $1')), 'the list shows the invoice in its own period');
 
     await app.open('/journal?period=2026-Q2');
@@ -92,7 +93,7 @@ test('a receipt opened while it is still read follows into its period once its d
     const waiting = (await api.send('GET', '/api/inbox')).json as unknown as Array<{ id: string; filename: string }>;
     const id = waiting.find((f) => f.filename === 'spaet.pdf')!.id;
     await app.open(`/receipts/${id}`);
-    assert.match(await page.$eval('[data-testid=period-picker]', (b) => (b as HTMLElement).innerText), /Q3 2026/);
+    assert.match(await page.$eval('[data-testid=period-picker]', (b) => (b as HTMLElement).innerText), /Q4 2026/);
 
     // What reading it does: the receipt in the books with its date, the file out of the inbox.
     const archived = join(api.root, 'transactional-data/2026/receipts/spaet.pdf');

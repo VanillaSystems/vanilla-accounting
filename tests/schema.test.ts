@@ -180,7 +180,7 @@ test('books schema 9 (#450): books of schema 8 load with their seals whole and n
 });
 
 test('books schema 10 (#571): books of schema 9 load with their seals whole and no receipt given a due date, the step adds nothing and a second run changes nothing, a save writes 10 with no record changed; a due date a person set survives a save; an app of schema 9 refuses books of 10', () => {
-  assert.equal(BOOKS_SCHEMA, 10);
+  assert.ok(BOOKS_SCHEMA >= 10);
   const dir = mkdtempSync(join(tmpdir(), 'schema-10-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const ws = workspaceAt(dir);
@@ -189,7 +189,7 @@ test('books schema 10 (#571): books of schema 9 load with their seals whole and 
   const before = booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]);
 
   const loaded = loadBooks(ws);
-  assert.equal(loaded.schema, 10);
+  assert.equal(loaded.schema, BOOKS_SCHEMA);
   assert.ok(sealsOf(loaded).checks.every((c) => c.status !== 'broken'), 'every seal still verifies');
   assert.ok(loaded.receipts.every((r) => !('dueDate' in r)), 'the step adds no due date: the text\'s is read on every load');
 
@@ -199,7 +199,7 @@ test('books schema 10 (#571): books of schema 9 load with their seals whole and 
   assert.deepEqual(once, raw, 'old in, the same records out');
   assert.deepEqual(climb<Record<string, unknown>>(once, 9, 10, BOOKS_MIGRATIONS, 'ledger.json', clone), once, 'a second run changes nothing');
   saveBooks(ws, loaded);
-  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, 10);
+  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, BOOKS_SCHEMA);
   assert.deepEqual(booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]), before, 'no record of the books changed');
 
   const again = loadBooks(ws);
@@ -211,21 +211,22 @@ test('books schema 10 (#571): books of schema 9 load with their seals whole and 
   assert.throws(() => climb<Record<string, unknown>>({}, 10, 9, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
 });
 
-test('manifest schema 4 (#452): a manifest of schema 3 loads with its UID, npm run update writes 4 and changes nothing else; one of 4 without a UID loads; an app of schema 3 refuses a manifest of 4', async () => {
-  assert.equal(WORKSPACE_SCHEMA, 4);
+test('manifest schema 4 (#452): a manifest of schema 3 loads with its UID, npm run update writes the current schema and changes nothing else; one without a UID loads; an app of schema 3 refuses a manifest of 4', async () => {
+  assert.ok(WORKSPACE_SCHEMA >= 4);
   const dir = mkdtempSync(join(tmpdir(), 'manifest-4-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const path = workspaceAt(dir).paths.manifest;
   const current = readFileSync(path, 'utf8');
-  assert.match(current, /^schema: 4\n/m);
-  const old = current.replace(/^schema: 4\n/m, 'schema: 3\n');
+  const stamp = new RegExp(`^schema: ${WORKSPACE_SCHEMA}\n`, 'm');
+  assert.match(current, stamp);
+  const old = current.replace(stamp, 'schema: 3\n');
   writeFileSync(path, old);
 
   assert.equal(readManifest(path).company.uid, 'CHE-123.456.789');
   const ws = workspaceAt(dir);
   const { done } = await upgradeWorkspace(ws);
   const step = done.find((d) => d.file === path);
-  assert.deepEqual(step && { from: step.from, to: step.to }, { from: 3, to: 4 });
+  assert.deepEqual(step && { from: step.from, to: step.to }, { from: 3, to: WORKSPACE_SCHEMA });
   assert.equal(readFileSync(step!.backup, 'utf8'), old);
   assert.equal(readFileSync(path, 'utf8'), current, 'only the number changed');
 
@@ -238,6 +239,127 @@ test('manifest schema 4 (#452): a manifest of schema 3 loads with its UID, npm r
   assert.throws(() => climb(parseDocument(current), 4, 3, MANIFEST_MIGRATIONS, path, (d) => d.clone()), (e: Error) => e instanceof SchemaTooNewError);
 });
 
+test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defaults, npm run update writes only the number; the settings parse typed; an app of schema 4 refuses one of 5', async () => {
+  assert.ok(WORKSPACE_SCHEMA >= 5);
+  const dir = mkdtempSync(join(tmpdir(), 'manifest-5-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const path = workspaceAt(dir).paths.manifest;
+  const current = readFileSync(path, 'utf8');
+  // A manifest of 4 knows none of the fields 5 brought: the demo's named payment terms come off.
+  const old = current.replace(new RegExp(`^schema: ${WORKSPACE_SCHEMA}\n`, 'm'), 'schema: 4\n').replace(/^ {2}paymentTerms:\n(?: {4}- .*\n)*/m, '').replace(/^ {2}defaultTerms: .*\n/m, '');
+  writeFileSync(path, old);
+  const inv = readManifest(path).invoicing!;
+  assert.deepEqual(inv.units.map((u) => u.id), ['h', 'day', 'pcs', 'flat', 'km', 'm2', 'm', 'm3', 'l', 'kg', 'month'], 'the default units, the old ids first');
+  assert.deepEqual(inv.units.find((u) => u.id === 'm2'), { id: 'm2', de: 'm²', fr: 'm²', it: 'm²', en: 'm²' });
+  assert.deepEqual(inv.prices, { quote: 'net', 'sales-order': 'net', 'delivery-note': 'net', invoice: 'net', 'credit-note': 'net' });
+  assert.deepEqual(inv.paymentTerms, [{ id: `net${inv.paymentTermsDays}`, name: `${inv.paymentTermsDays} Tage netto`, days: inv.paymentTermsDays }]);
+  assert.equal(inv.shortfallLimit, 5);
+  assert.equal(inv.writeOffAccount, undefined, 'absent: the jurisdiction\'s accounts');
+  const { done } = await upgradeWorkspace(workspaceAt(dir));
+  assert.deepEqual(done.filter((d) => d.file === path).map((d) => [d.from, d.to]), [[4, WORKSPACE_SCHEMA]]);
+  assert.equal(readFileSync(path, 'utf8'), old.replace(/^schema: 4\n/m, `schema: ${WORKSPACE_SCHEMA}\n`), 'only the number changed');
+
+  const own = old.replace(/^schema: 4\n/m, 'schema: 5\n').replace(/^invoicing:\n/m, [
+    'invoicing:',
+    '  units: [{ id: m2, de: m², fr: m², it: m², en: m² }, { id: pal, de: Palette, fr: palette, it: paletta, en: pallet }]',
+    '  prices: { invoice: gross }',
+    '  paymentTerms: [{ id: skonto, name: "10 Tage 2 %, 30 Tage netto", days: 30, skonto: { percent: 2, days: 10 } }]',
+    '  defaultTerms: skonto',
+    '  writeOffAccount: { skonto: "3800", loss: "3805" }',
+    '  shortfallLimit: 10',
+    '',
+  ].join('\n'));
+  writeFileSync(path, own);
+  const set = readManifest(path).invoicing!;
+  assert.deepEqual(set.units.map((u) => u.en), ['m²', 'pallet']);
+  assert.deepEqual(set.prices, { quote: 'net', 'sales-order': 'net', 'delivery-note': 'net', invoice: 'gross', 'credit-note': 'net' });
+  assert.deepEqual(set.paymentTerms, [{ id: 'skonto', name: '10 Tage 2 %, 30 Tage netto', days: 30, skonto: { percent: 2, days: 10 } }]);
+  assert.deepEqual([set.defaultTerms, set.writeOffAccount, set.shortfallLimit], ['skonto', { skonto: '3800', loss: '3805' }, 10]);
+  for (const [bad, msg] of [
+    ['  units: [{ id: m2, de: m² }]', /invoicing\.units\[0\]\.fr/],
+    ['  prices: { invoice: brutto }', /invoicing\.prices\.invoice/],
+    ['  paymentTerms: [{ id: x, name: X, days: 10, skonto: { percent: 2, days: 20 } }]', /paymentTerms\[0\]\.skonto/],
+    ['  defaultTerms: none', /defaultTerms "none"/],
+  ] as const) {
+    writeFileSync(path, old.replace(/^schema: 4\n/m, 'schema: 5\n').replace(/^invoicing:\n/m, `invoicing:\n${bad}\n`));
+    assert.throws(() => readManifest(path), (e: Error) => msg.test(e.message), msg.source);
+  }
+  assert.throws(() => climb(parseDocument(current), 5, 4, MANIFEST_MIGRATIONS, path, (d) => d.clone()), (e: Error) => e instanceof SchemaTooNewError);
+});
+
+test('manifest schema 6 (invoicing phase 2, number series): a manifest of 5 with invoicing keeps today\'s one series of invoices and credit notes, npm run update writes it; one without invoicing gains nothing; a new firm numbers AN-, AU-, LS-, RE-, GS-; a format no reference holds is refused; an app of 5 refuses 6', async () => {
+  assert.equal(WORKSPACE_SCHEMA, 6);
+  const dir = mkdtempSync(join(tmpdir(), 'manifest-6-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const path = workspaceAt(dir).paths.manifest;
+  const current = readFileSync(path, 'utf8');
+  // The demo as a manifest of 5 had it: no numbering.
+  const old = current.replace(/^schema: 6\n/m, 'schema: 5\n').replace(/^ {2}numbering:\n( {4}.*\n)+/m, '');
+  assert.doesNotMatch(old, /numbering/);
+  writeFileSync(path, old);
+  const legacy = readManifest(path).invoicing!.numbering;
+  assert.deepEqual([legacy.invoice, legacy['credit-note']], [{ format: '{JJJJ}-{NNN}', restartYearly: true }, { format: '{JJJJ}-{NNN}', restartYearly: true }], 'the old series, shared');
+  assert.equal(legacy.quote.format, 'AN-{JJJJ}-{NNNNN}', 'a kind it never had takes the new default');
+  const { done } = await upgradeWorkspace(workspaceAt(dir));
+  assert.deepEqual(done.filter((d) => d.file === path).map((d) => [d.from, d.to]), [[5, 6]]);
+  const written = readFileSync(path, 'utf8');
+  assert.match(written, /^schema: 6\n/m);
+  assert.match(written, /^ {2}numbering:\n {4}invoice: \{ format: "\{JJJJ\}-\{NNN\}", restartYearly: true \}\n {4}credit-note: \{ format: "\{JJJJ\}-\{NNN\}", restartYearly: true \}\n/m);
+  assert.deepEqual(readManifest(path).invoicing!.numbering, legacy, 'the written file reads as the migrated one');
+
+  // No invoicing: nothing to keep, the step adds nothing.
+  const bare = old.replace(/^invoicing:\n( {2}.*\n)+/m, '');
+  writeFileSync(path, bare);
+  await upgradeWorkspace(workspaceAt(dir));
+  assert.doesNotMatch(readFileSync(path, 'utf8'), /numbering/);
+
+  // A new firm (schema 6, no numbering): the prefixes per kind.
+  writeFileSync(path, current.replace(/^ {2}numbering:\n( {4}.*\n)+/m, ''));
+  const fresh = readManifest(path).invoicing!.numbering;
+  assert.deepEqual(Object.values(fresh).map((n) => n.format), ['AN-{JJJJ}-{NNNNN}', 'AU-{JJJJ}-{NNNNN}', 'LS-{JJJJ}-{NNNNN}', 'RE-{JJJJ}-{NNNNN}', 'GS-{JJJJ}-{NNNNN}']);
+  for (const [bad, msg] of [
+    ['  numbering: { invoice: { format: "RE-{JJJJ}-{NNNNNNNNN}-ABCDEFGHIJ", restartYearly: true } }', /tooLong/],
+    ['  numbering: { invoice: { format: "RE-{NNNNN}", restartYearly: true } }', /restartWithoutYear/],
+    ['  numbering: { invoice: { format: "RE/{JJJJ}/{NNN}" } }', /syntax/],
+    ['  numbering: { offer: { format: "{NNN}" } }', /invoicing\.numbering\.offer/],
+  ] as const) {
+    writeFileSync(path, current.replace(/^ {2}numbering:\n( {4}.*\n)+/m, '').replace(/^invoicing:\n/m, `invoicing:\n${bad}\n`));
+    assert.throws(() => readManifest(path), (e: Error) => msg.test(e.message), msg.source);
+  }
+  assert.throws(() => climb(parseDocument(current), 6, 5, MANIFEST_MIGRATIONS, path, (d) => d.clone()), (e: Error) => e instanceof SchemaTooNewError);
+});
+
 function booksFiles(dir: string): string[] {
   return readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((f) => /books\/.*\.jsonl$/.test(f)).map((f) => join(dir, f)).sort();
 }
+
+test('books schema 11 (payroll): books of schema 10 load with their seals whole, the step adds nothing and a second run changes nothing, a save writes 11 with no record changed; a payroll check survives a save; an app of schema 10 refuses books of 11', () => {
+  assert.equal(BOOKS_SCHEMA, 11);
+  const dir = mkdtempSync(join(tmpdir(), 'schema-11-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const ws = workspaceAt(dir);
+  const ledger = JSON.parse(readFileSync(ws.paths.ledger, 'utf8'));
+  writeFileSync(ws.paths.ledger, JSON.stringify({ ...ledger, schema: 10 }, null, 2) + '\n');
+  const before = booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]);
+
+  const loaded = loadBooks(ws);
+  assert.equal(loaded.schema, 11);
+  assert.ok(sealsOf(loaded).checks.every((c) => c.status !== 'broken'), 'every seal still verifies');
+
+  const clone = (d: Record<string, unknown>) => structuredClone(d);
+  const raw = { schema: 10, journalEntries: [{ id: 'j', by: { kind: 'code', check: 'withheldShare' } }] };
+  const once = climb<Record<string, unknown>>(raw, 10, 11, BOOKS_MIGRATIONS, 'ledger.json', clone);
+  assert.deepEqual(once, raw, 'old in, the same records out');
+  assert.deepEqual(climb<Record<string, unknown>>(once, 10, 11, BOOKS_MIGRATIONS, 'ledger.json', clone), once, 'a second run changes nothing');
+  saveBooks(ws, loaded);
+  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, 11);
+  assert.deepEqual(booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]), before, 'no record of the books changed');
+
+  const again = loadBooks(ws);
+  const open = again.journalEntries.find((e) => e.date > (again.config.closedThrough ?? ''))!;
+  open.by = { kind: 'code', check: 'payroll' };
+  saveBooks(ws, again);
+  assert.deepEqual(loadBooks(ws).journalEntries.find((e) => e.id === open.id)?.by, { kind: 'code', check: 'payroll' });
+
+  assert.throws(() => climb<Record<string, unknown>>({}, 11, 10, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
+});

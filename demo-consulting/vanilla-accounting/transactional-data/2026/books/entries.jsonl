@@ -1,6 +1,6 @@
 {"id":"013f219e8737b650","transactionRef":"M2026-018","date":"2026-04-27","accountDebit":"5000","accountCredit":"2270","amount":787.9,"description":"Lohn April 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"}
 {"id":"0697c066928fbcb1","transactionRef":"90000000068","date":"2026-09-07","accountDebit":"6570","accountCredit":"1020","amount":24.6,"vatCode":"B81-1","description":"Sample Labs, Code-Hosting September 2026 (Bezugsteuer)"}
-{"id":"08e30341b84e4a29","transactionRef":"TRANSFER-8000003","date":"2026-07-28","accountDebit":"1021","accountCredit":"3400","amount":3800,"vatCode":"V0-E","description":"Muster Maschinenbau, Sicherheitsaudit (Leistung im Ausland)","exchangeCurrency":"EUR","exchangeRate":0.93835}
+{"id":"08af7b744bf82588","transactionRef":"90000000055","date":"2026-07-20","accountDebit":"1020","accountCredit":"3400","amount":6486,"vatCode":"V81","description":"Rechnung 2026-001 Beispiel Treuhand AG","origin":"invoice"}
 {"id":"0b35a5e2f155aba4","transactionRef":"90000000039","date":"2026-05-27","accountDebit":"2201","accountCredit":"1020","amount":1062.82,"description":"ESTV, MWST-Abrechnung Q1 2026"}
 {"id":"0cf15ff866cb4b68","transactionRef":"90000000031","date":"2026-04-28","accountDebit":"2451","accountCredit":"1020","amount":62.7,"description":"Spesenrückerstattung April 2026, Lukas Beispiel"}
 {"id":"0ded262aaa3c8940","transactionRef":"90000000053","date":"2026-07-15","accountDebit":"2270","accountCredit":"1020","amount":712.5,"description":"Muster Sammelstiftung, BVG Arbeitnehmer Q3 2026"}
@@ -30,10 +30,10 @@
 {"id":"4aaa0c9fc59f06a7","transactionRef":"M2026-021","date":"2026-07-27","accountDebit":"5000","accountCredit":"2270","amount":787.9,"description":"Lohn Juli 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"}
 {"id":"4b24193e8b3f5c31","transactionRef":"90000000003","date":"2026-01-15","accountDebit":"5720","accountCredit":"1020","amount":712.5,"description":"Muster Sammelstiftung, BVG Arbeitgeber Q1 2026"}
 {"id":"4be8575d9926d3db","transactionRef":"90000000057","date":"2026-07-28","accountDebit":"2451","accountCredit":"1020","amount":46.95,"description":"Spesenrückerstattung Juli 2026, Lukas Beispiel"}
+{"id":"4c0d5cbf6cdd51dc","transactionRef":"90000000063","date":"2026-08-20","accountDebit":"1020","accountCredit":"3400","amount":6486,"vatCode":"V81","description":"Rechnung 2026-003 Beispiel Treuhand AG","origin":"invoice"}
 {"id":"4cefe3d6364871ca","transactionRef":"90000000023","date":"2026-03-30","accountDebit":"2451","accountCredit":"1020","amount":162.55,"description":"Spesenrückerstattung März 2026, Lukas Beispiel"}
 {"id":"5104621e655f3498","transactionRef":"90000000040","date":"2026-05-28","accountDebit":"2451","accountCredit":"1020","amount":195.6,"description":"Spesenrückerstattung Mai 2026, Lukas Beispiel"}
 {"id":"51f3678405755ab5","transactionRef":"M2026-005","date":"2026-03-12","accountDebit":"6640","accountCredit":"2451","amount":73.55,"vatCode":"I81","description":"SBB, Billett Bern–Zürich retour (Kundenbesuch März 2026)"}
-{"id":"5220d6f058f4049b","transactionRef":"90000000070","date":"2026-09-21","accountDebit":"1020","accountCredit":"3400","amount":6486,"vatCode":"V81","description":"Beispiel Treuhand, Beratungsmandat September 2026"}
 {"id":"586b769dea045d84","transactionRef":"M2026-026","date":"2026-06-30","accountDebit":"2451","accountCredit":"6510","amount":60.79,"vatCode":"K81-B","description":"Eigenverbrauch: Privatanteil Mobiltelefon Q2 2026, 20% von CHF 303.95 (Lukas Beispiel)"}
 {"id":"5ad4012b119ab21e","transactionRef":"M2026-023","date":"2026-09-25","accountDebit":"5000","accountCredit":"2270","amount":787.9,"description":"Lohn September 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"}
 {"id":"5b6ad748e1718215","transactionRef":"CARD-7000002","date":"2026-02-10","accountDebit":"6570","accountCredit":"1021","amount":32.43,"vatCode":"I81","description":"Beispiel Software, Projektplanung Februar 2026","exchangeCurrency":"EUR","exchangeRate":0.92663}
@@ -46,7 +46,6 @@
 {"id":"6d385a56041c9217","transactionRef":"90000000014","date":"2026-02-25","accountDebit":"5000","accountCredit":"1020","amount":7812.1,"description":"Lohn Februar 2026 netto, Lukas Beispiel"}
 {"id":"6ffe633423ac4e16","transactionRef":"M2026-022","date":"2026-08-25","accountDebit":"5000","accountCredit":"2270","amount":787.9,"description":"Lohn August 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"}
 {"id":"735bda20ff7593b7","transactionRef":"90000000005","date":"2026-01-20","accountDebit":"1020","accountCredit":"3400","amount":6486,"vatCode":"V81","description":"Beispiel Treuhand, Beratungsmandat Januar 2026"}
-{"id":"738c01da7cc7001c","transactionRef":"90000000055","date":"2026-07-20","accountDebit":"6510","accountCredit":"1020","amount":90.95,"vatCode":"I81","description":"Muster Telecom, Mobile-Abo Juli 2026"}
 {"id":"73e73f5d28c34372","transactionRef":"90000000064","date":"2026-08-25","accountDebit":"5000","accountCredit":"1020","amount":7812.1,"description":"Lohn August 2026 netto, Lukas Beispiel"}
 {"id":"7592ad33ec4c2b9d","transactionRef":"90000000006","date":"2026-01-20","accountDebit":"5730","accountCredit":"1020","amount":486,"description":"Muster Versicherungen, UVG-Prämie 2026"}
 {"id":"7d7f179e367ed078","transactionRef":"90000000074","date":"2026-09-30","accountDebit":"6940","accountCredit":"1020","amount":12,"description":"Raiffeisen, Kontoführung Q3"}
@@ -73,6 +72,7 @@
 {"id":"aee3a9aa151a75a6","transactionRef":"90000000065","date":"2026-08-28","accountDebit":"2451","accountCredit":"1020","amount":166.3,"description":"Spesenrückerstattung August 2026, Lukas Beispiel"}
 {"id":"aef1a9e8719e3c1c","transactionRef":"90000000032","date":"2026-05-01","accountDebit":"6000","accountCredit":"1020","amount":450,"vatCode":"I81","description":"Muster Coworking, Fixdesk Mai 2026"}
 {"id":"b14e365af14be8eb","transactionRef":"M2026-003","date":"2026-02-16","accountDebit":"6641","accountCredit":"2451","amount":165.7,"vatCode":"I81","description":"Restaurant Beispielhof, Geschäftsessen mit Kunde (Februar 2026)"}
+{"id":"b55b1baccef7ef4f","transactionRef":"90000000070","date":"2026-09-21","accountDebit":"1020","accountCredit":"3400","amount":6486,"vatCode":"V81","description":"Rechnung 2026-004 Beispiel Treuhand AG","origin":"invoice"}
 {"id":"b6e3026341aa0b3a","transactionRef":"90000000048","date":"2026-06-26","accountDebit":"5700","accountCredit":"1020","amount":1961.4,"description":"Ausgleichskasse, Beiträge Arbeitgeber Q2 2026"}
 {"id":"b7079c34e41daf84","transactionRef":"90000000072","date":"2026-09-28","accountDebit":"5700","accountCredit":"1020","amount":1961.4,"description":"Ausgleichskasse, Beiträge Arbeitgeber Q3 2026"}
 {"id":"b7993a933f2b6101","transactionRef":"90000000021","date":"2026-03-25","accountDebit":"5000","accountCredit":"1020","amount":7812.1,"description":"Lohn März 2026 netto, Lukas Beispiel"}
@@ -87,9 +87,10 @@
 {"id":"c2c2906d5a08c35e","transactionRef":"90000000019","date":"2026-03-18","accountDebit":"6510","accountCredit":"1020","amount":91.85,"vatCode":"I81","description":"Muster Telecom, Mobile-Abo März 2026"}
 {"id":"c600692da0ad15d3","transactionRef":"90000000042","date":"2026-06-01","accountDebit":"1020","accountCredit":"3400","amount":3108.45,"vatCode":"V0-E","description":"Example Analytics, Code-Review (Leistung im Ausland)"}
 {"id":"c9c976536f024ca5","transactionRef":"90000000007","date":"2026-01-26","accountDebit":"5000","accountCredit":"1020","amount":7812.1,"description":"Lohn Januar 2026 netto, Lukas Beispiel"}
-{"id":"cb81d1072a39749c","transactionRef":"90000000054","date":"2026-07-20","accountDebit":"1020","accountCredit":"3400","amount":6486,"vatCode":"V81","description":"Beispiel Treuhand, Beratungsmandat Juli 2026"}
+{"id":"cb81d1072a39749c","transactionRef":"90000000054","date":"2026-07-20","accountDebit":"6510","accountCredit":"1020","amount":90.95,"vatCode":"I81","description":"Muster Telecom, Mobile-Abo Juli 2026"}
 {"id":"d05230c47dd4c418","transactionRef":"90000000020","date":"2026-03-20","accountDebit":"1020","accountCredit":"3400","amount":6486,"vatCode":"V0-E","description":"Beispiel Treuhand, Beratungsmandat März 2026"}
 {"id":"d134b5cb2aefe43c","transactionRef":"90000000045","date":"2026-06-18","accountDebit":"6510","accountCredit":"1020","amount":87.9,"vatCode":"I81","description":"Muster Telecom, Mobile-Abo Juni 2026"}
+{"id":"d20794f6ba52c05c","transactionRef":"TRANSFER-8000003","date":"2026-07-28","accountDebit":"1021","accountCredit":"3400","amount":3800,"vatCode":"V0-E","description":"Rechnung 2026-002 Muster Maschinenbau GmbH","exchangeCurrency":"EUR","exchangeRate":0.93835,"origin":"invoice"}
 {"id":"d7d2c4a90f8e495c","transactionRef":"M2026-013","date":"2026-08-17","accountDebit":"6641","accountCredit":"2451","amount":124.4,"vatCode":"I81","description":"Restaurant Beispielhof, Geschäftsessen mit Kunde (August 2026)"}
 {"id":"d98d8a2196f5b83a","transactionRef":"TRANSFER-8000001","date":"2026-02-02","accountDebit":"1021","accountCredit":"3400","amount":3800,"vatCode":"V0-E","description":"Muster Maschinenbau, Sicherheitsaudit (Leistung im Ausland)","exchangeCurrency":"EUR","exchangeRate":0.92532}
 {"id":"d9c2e3f88f681295","transactionRef":"90000000002","date":"2026-01-07","accountDebit":"6570","accountCredit":"1020","amount":24.6,"vatCode":"B81-1","description":"Sample Labs, Code-Hosting Januar 2026 (Bezugsteuer)"}
@@ -98,7 +99,6 @@
 {"id":"db29fd20d9cf2827","transactionRef":"90000000029","date":"2026-04-20","accountDebit":"6510","accountCredit":"1020","amount":104.2,"vatCode":"I81","description":"Muster Telecom, Mobile-Abo April 2026"}
 {"id":"dbedf1b643cd6e91","transactionRef":"90000000037","date":"2026-05-20","accountDebit":"5810","accountCredit":"1020","amount":1200,"vatCode":"I0","description":"Muster Akademie, Kurs Cloud Security (von der MWST ausgenommen)"}
 {"id":"dd65c91e02798c86","transactionRef":"90000000027","date":"2026-04-15","accountDebit":"2270","accountCredit":"1020","amount":712.5,"description":"Muster Sammelstiftung, BVG Arbeitnehmer Q2 2026"}
-{"id":"de9bbad101f334c4","transactionRef":"90000000063","date":"2026-08-20","accountDebit":"1020","accountCredit":"3400","amount":6486,"vatCode":"V81","description":"Beispiel Treuhand, Beratungsmandat August 2026"}
 {"id":"e12b32a16cd8b10b","transactionRef":"90000000016","date":"2026-03-02","accountDebit":"2451","accountCredit":"1020","amount":260.6,"description":"Spesenrückerstattung Februar 2026, Lukas Beispiel"}
 {"id":"e1d235c3897c2758","transactionRef":"M2026-017","date":"2026-03-25","accountDebit":"5000","accountCredit":"2270","amount":787.9,"description":"Lohn März 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV, BVG), Lukas Beispiel"}
 {"id":"e5804ddea05eeabb","transactionRef":"M2026-008","date":"2026-05-18","accountDebit":"6641","accountCredit":"2451","amount":131.2,"vatCode":"I81","description":"Restaurant Beispielhof, Geschäftsessen mit Kunde (Mai 2026)"}
