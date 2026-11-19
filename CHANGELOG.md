@@ -16,6 +16,23 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- Mahnwesen: the Mahnstufen are a list in Firma › Rechnungslayout › Mahnwesen (name, days to pay,
+  a fee, texts and e-mail per language, an automatic reminder «N Tage nach Fälligkeit»), with default
+  interest off unless switched on. A new firm starts with «Zahlungserinnerung», «1. Mahnung» and
+  «2. Mahnung»; an existing firm keeps its three Mahnungen, 10 days each, the fee typed per Mahnung
+  (`npm run update` writes them, belege.workspace.yaml schema 7, invoices.json schema 5).
+- «Mahnen» on an overdue Rechnung writes the next level as a draft on the sheet: texts, date, due
+  date, fee and interest are edited before it goes; a sent Mahnung is kept as sent, an unsent one is
+  deleted and the level goes back. The column Mahnstufe names the last Mahnung by its name.
+- The Mahnlauf: a dialog above Rechnungen (or «Mahnen» on ticked rows) lists every Rechnung overdue
+  on a date with its next level, fee and interest, names what it leaves out and why (contacts with
+  «keine Mahnungen», a comment of the last 7 days, what an automatic reminder sends, the last level),
+  and after one confirmation sends each by e-mail or downloads its PDF. At most 40 per run, the rest named.
+- Automatic reminders per level, off by default, sent by e-mail without a click, only on the computer
+  that holds the books; one that cannot go becomes a task with the reason.
+- A paid Mahngebühr and Verzugszins are booked with the payment, without VAT: the fee on the fee
+  account, the interest on the financial income account (6950).
+
 - Bilanz & ER: the Bilanz and the Erfolgsrechnung show the prior year beside each figure, as the
   Swiss Code of Obligations asks of the annual accounts (OR 958d Abs. 2): the Bilanz of 31.12. of
   the year before, the Erfolgsrechnung of the same days a year earlier. The figures come from the

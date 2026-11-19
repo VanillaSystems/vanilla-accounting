@@ -7970,6 +7970,7 @@ export const messages = {
   "dunning.set.level": "Stufe",
   "dunning.set.name": "Name",
   "dunning.set.days": "Tage zu zahlen",
+  "dunning.set.daysShort": "Tage",
   "dunning.set.fee": "Gebühr",
   "dunning.set.auto": "Automatisch",
   "dunning.set.afterDays": "Tage nach Fälligkeit",

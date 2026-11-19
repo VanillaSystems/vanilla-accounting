@@ -48,7 +48,7 @@ test('Rechnungen: each status from facts, Überfällig with its days beside Offe
   assert.equal(tabCounts(rows, 'invoice').find((c) => c.tab === 'all')!.sums[0].gross, 17036.06, 'a cancelled invoice is left out of Alle\'s total');
   assert.deepEqual(factsOf(rows), [{ currency: 'CHF', open: 7372.37, overdue: 1274.43 }, { currency: 'EUR', open: 865, overdue: 0 }]);
   const r3 = rows.find((r) => r.id === '2026-006')!;
-  assert.deepEqual([r3.level, r3.sent.reminder?.level, r3.sent.last?.kind], [1, 1, 'invoice'], 'its Mahnstufe and the last Mahnung sent');
+  assert.deepEqual([r3.level, r3.levelTitle, r3.sent.reminder?.title, r3.sent.last?.kind], [3, '2. Mahnung', '2. Mahnung', 'invoice'], 'its Mahnstufe and the last Mahnung sent, by name');
   assert.equal(tabOf('invoice', 'settled'), 'all', 'a Gutschriften tab in Rechnungen shows Alle');
 });
 
@@ -115,11 +115,11 @@ test('Versendet: the log newest first, filtered by contact, kind and channel', (
   const all = sentRows(d, undefined);
   assert.equal(all.length, book.sent.length);
   assert.ok(all.every((x, i) => i === 0 || all[i - 1].sentAt >= x.sentAt));
-  assert.deepEqual(sentRows(d, undefined, { kind: 'reminder' }).map((x) => x.title), ['1. Mahnung · Rechnung 2026-006']);
+  assert.deepEqual(sentRows(d, undefined, { kind: 'reminder' }).map((x) => x.title), ['2. Mahnung · Rechnung 2026-006', '1. Mahnung · Rechnung 2026-006', 'Zahlungserinnerung · Rechnung 2026-006']);
   const bistro = book.contacts.find((c) => c.name.includes('Bistro'))!;
   assert.ok(sentRows(d, undefined, { customer: bistro.id }).every((x) => book.invoices.find((i) => i.id === x.invoiceId)?.customerId === bistro.id));
   assert.deepEqual([sentRows(d, undefined, { channel: 'email' }).length, sentRows(d, undefined, { channel: 'download' }).length], [20, 6],
-    'the demo sent its documents by e-mail; 2026-014 and 2026-016 were downloaded, and so were the Mahnung, the Storno notice and the two Lieferscheine');
+    'the demo sent its documents by e-mail; 2026-014 and 2026-016 were downloaded, and so were the three Mahnungen, the Storno notice and the two Lieferscheine');
 });
 
 test('P1.10: Offene Posten on 31.12. equals the year end\'s receivables proposal to the Rappen, invoice by invoice and in total', () => {

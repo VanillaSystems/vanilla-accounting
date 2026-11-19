@@ -59,11 +59,11 @@ const sentReminder = (level: number, date: string, title: string, fee?: number):
 const shift = (iso: string, days: number) => new Date(Date.parse(`${iso}T12:00:00Z`) + days * 864e5).toISOString().slice(0, 10);
 
 /** The workspace with `book` as its invoices.json and `dunning` as its Mahnwesen; the firm's mail set up unless `mail` is false. */
-function workspace(book: Omit<InvoiceBook, 'schema'>, dunning: DunningSettings = DEFAULT_DUNNING, mail = true): Workspace {
+function workspace(book: Omit<InvoiceBook, 'schema' | 'articles'>, dunning: DunningSettings = DEFAULT_DUNNING, mail = true): Workspace {
   const ws = tempWorkspace('dunning-');
   patchManifest(ws.paths.manifest, { invoicing: { dunning } });
   const opened = workspaceAt(ws.paths.root);
-  saveInvoices(opened, { schema: INVOICES_SCHEMA, ...book });
+  saveInvoices(opened, { schema: INVOICES_SCHEMA, articles: [], ...book });
   return mail ? { ...opened, outgoingMail: { host: 'smtp.example', port: 587, security: 'starttls', fromAddress: 'rechnung@firma.example' } } : opened;
 }
 
@@ -141,7 +141,7 @@ test('P3.4: 14 overdue Rechnungen of 9 contacts, one Mahnlauf, one confirmation:
 
 test('the Mahnlauf names its limit: 40 Mahnungen, the rest counted; the ticked rows only, a ticked one not overdue named', () => {
   const invoices = Array.from({ length: MAX_RUN + 12 }, (_, k) => fixture(`in_${k}`, `RE-${k}`, { dueDate: '2026-10-01', customerId: 'k1' }));
-  const book: InvoiceBook = { schema: INVOICES_SCHEMA, contacts: [contact('k1')], invoices, sent: [] };
+  const book: InvoiceBook = { schema: INVOICES_SCHEMA, contacts: [contact('k1')], articles: [], invoices, sent: [] };
   const plan = dunningRun(book, invoices, DEFAULT_DUNNING, '2026-11-19', { canMail: true });
   assert.deepEqual([plan.items.length, plan.more, plan.limit], [40, 12, 40]);
   const paid = withPayment(fixture('in_p', 'RE-P', { dueDate: '2026-10-01' }), { transactionRef: 'T', date: '2026-10-20', amount: 1000, by: 'reference' });

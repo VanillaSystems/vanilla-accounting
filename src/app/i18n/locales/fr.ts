@@ -7972,6 +7972,7 @@ export default {
     "dunning.set.level": "Niveau",
     "dunning.set.name": "Nom",
     "dunning.set.days": "Jours pour payer",
+    "dunning.set.daysShort": "jours",
     "dunning.set.fee": "Frais",
     "dunning.set.auto": "Automatique",
     "dunning.set.afterDays": "Jours après l’échéance",

@@ -125,7 +125,6 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
         <Units ws={ws} nav={nav} canEdit={canEdit} drafts={load.state === 'ready' ? load.data.invoices.filter((i) => i.status === 'draft') : []} />
         <PaymentTermsSection ws={ws} nav={nav} canEdit={canEdit} />
         <NumberingSection ws={ws} nav={nav} canEdit={canEdit} docs={load.state === 'ready' ? load.data.invoices : []} fits={formatFits} />
-        <DunningSection ws={ws} nav={nav} canEdit={canEdit} />
         <div className="lkf" key={`greet-${lang}`}>
           <label className="lkr"><span>{t('invoiceLayout.salutation')}</span><input name="salutation" defaultValue={texts.salutation} placeholder={t('invoiceLayout.salutationHint')} disabled={!canEdit} onBlur={(e) => saveText('salutation', e.target.value.trim())} /></label>
         </div>
@@ -134,6 +133,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
           <label className="lkr"><span>{t('invoiceLayout.mailSubject')}</span><input name="mailSubject" defaultValue={texts.mailSubject} disabled={!canEdit} onBlur={(e) => saveText('mailSubject', e.target.value)} /></label>
           <label className="lkr top"><span>{t('invoiceLayout.mailBody')}</span><textarea name="mailBody" rows={6} defaultValue={texts.mailBody} disabled={!canEdit} onBlur={(e) => saveText('mailBody', e.target.value)} /></label>
         </div>
+        <DunningSection ws={ws} nav={nav} canEdit={canEdit} />
         <p className="m src-note">{t('invoiceLayout.note')}</p>
       </div>
       <div className="lkprevw">

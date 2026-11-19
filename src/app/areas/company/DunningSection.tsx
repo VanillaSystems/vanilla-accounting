@@ -52,36 +52,36 @@ export function DunningSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav
   };
   const L = TEXTS[lang];
   return (
-    <div className="lkf lkunits" data-testid="dunning-settings">
-      <div className="lkr"><span>{t('dunning.set.title')}</span><span className="m">{t('dunning.set.hint')}</span></div>
-      <table className="lkut">
-        <thead><tr><th>{t('dunning.set.level')}</th><th>{t('dunning.set.name')}</th><th>{t('dunning.set.days')}</th><th>{t('dunning.set.fee')}</th><th>{t('dunning.set.auto')}</th><th /></tr></thead>
-        <tbody>
-          {dunning.levels.map((l, k) => (
-            <tr key={`${k}-${l.name}`} data-level={k + 1}>
-              <td className="mono">{k + 1}</td>
-              <td><input name="name" defaultValue={l.name} disabled={!canEdit} aria-label={t('dunning.set.name')} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== l.name) void setLevel(k, { name: v }); }} /></td>
-              <td><input name="days" className="mono" inputMode="numeric" defaultValue={String(l.days)} disabled={!canEdit} aria-label={t('dunning.set.days')} onBlur={(e) => { const v = num(e.target.value); if (v !== undefined && Number.isInteger(v) && v >= 0 && v !== l.days) void setLevel(k, { days: v }); }} /></td>
-              <td><input name="fee" className="mono" inputMode="decimal" defaultValue={l.fee ? String(l.fee) : ''} placeholder="0.00" disabled={!canEdit} aria-label={t('dunning.set.fee')} onBlur={(e) => { const v = num(e.target.value); if ((v ?? 0) !== (l.fee ?? 0) && (v === undefined || v >= 0)) void setLevel(k, (x) => (v ? { ...x, fee: v } : without(x, 'fee'))); }} /></td>
-              <td>
-                <label className="lkauto"><input type="checkbox" name="auto" checked={!!l.auto} disabled={!canEdit} onChange={(e) => void setLevel(k, (x) => (e.target.checked ? { ...x, auto: { afterDays: 5 } } : without(x, 'auto')))} />
-                  {l.auto ? <><input name="afterDays" className="mono" inputMode="numeric" defaultValue={String(l.auto.afterDays)} disabled={!canEdit} aria-label={t('dunning.set.afterDays')} onBlur={(e) => { const v = num(e.target.value); if (v !== undefined && Number.isInteger(v) && v >= 0 && v !== l.auto?.afterDays) void setLevel(k, { auto: { afterDays: v } }); }} /> {t('dunning.set.afterDue')}</> : t('dunning.set.byHand')}
-                </label>
-              </td>
-              <td className="lkacts">
+    <div className="lkf lkdunning" data-testid="dunning-settings">
+      <div className="lkr top"><span>{t('dunning.set.title')}</span><span className="m">{t('dunning.set.hint')}</span></div>
+      {/* One block per level, two lines each: the column beside the sample sheet is narrow. */}
+      <ol className="lkdun">
+        {dunning.levels.map((l, k) => (
+          <li key={`${k}-${l.name}`} data-level={k + 1}>
+            <div className="lkdrow">
+              <span className="mono lkdk">{k + 1}</span>
+              <input name="name" defaultValue={l.name} disabled={!canEdit} aria-label={t('dunning.set.name')} onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== l.name) void setLevel(k, { name: v }); }} />
+              <label><input name="days" className="mono" inputMode="numeric" defaultValue={String(l.days)} disabled={!canEdit} aria-label={t('dunning.set.days')} onBlur={(e) => { const v = num(e.target.value); if (v !== undefined && Number.isInteger(v) && v >= 0 && v !== l.days) void setLevel(k, { days: v }); }} /> {t('dunning.set.daysShort')}</label>
+              <label>{t('dunning.set.fee')} <input name="fee" className="mono" inputMode="decimal" defaultValue={l.fee ? String(l.fee) : ''} placeholder="0.00" disabled={!canEdit} aria-label={t('dunning.set.fee')} onBlur={(e) => { const v = num(e.target.value); if ((v ?? 0) !== (l.fee ?? 0) && (v === undefined || v >= 0)) void setLevel(k, (x) => (v ? { ...x, fee: v } : without(x, 'fee'))); }} /></label>
+            </div>
+            <div className="lkdrow sub">
+              <label className="lkauto"><input type="checkbox" name="auto" checked={!!l.auto} disabled={!canEdit} onChange={(e) => void setLevel(k, (x) => (e.target.checked ? { ...x, auto: { afterDays: 5 } } : without(x, 'auto')))} />
+                {l.auto ? <>{t('dunning.set.auto')} <input name="afterDays" className="mono" inputMode="numeric" defaultValue={String(l.auto.afterDays)} disabled={!canEdit} aria-label={t('dunning.set.afterDays')} onBlur={(e) => { const v = num(e.target.value); if (v !== undefined && Number.isInteger(v) && v >= 0 && v !== l.auto?.afterDays) void setLevel(k, { auto: { afterDays: v } }); }} /> {t('dunning.set.afterDue')}</> : t('dunning.set.byHand')}
+              </label>
+              <span className="lkacts">
                 <button type="button" className="quiet2" aria-expanded={open === k} onClick={() => setOpen(open === k ? null : k)}>{t('dunning.set.texts')}</button>
                 {canEdit && k > 0 && <AsyncButton type="button" className="quiet2" aria-label={t('dunning.set.up', { name: l.name })} onClick={() => move(k, -1)}>↑</AsyncButton>}
                 {canEdit && dunning.levels.length > 1 && <AsyncButton type="button" className="quiet2" aria-label={t('dunning.set.remove', { name: l.name })} onClick={() => save({ ...dunning, levels: dunning.levels.filter((_, i) => i !== k) }, t('dunning.set.removed', { name: l.name }))}>×</AsyncButton>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+              </span>
+            </div>
+          </li>
+        ))}
+      </ol>
       {open !== null && dunning.levels[open] && (
         <div className="lkf lkmail" key={`${open}-${lang}`} data-testid="dunning-texts">
           <div className="lkr"><span>{t('dunning.set.textsOf', { name: dunning.levels[open]!.name })}</span>
-            <span className="seg" role="group" aria-label={t('invoiceLayout.language')}>
-              {LANGS.map((x) => <button key={x} type="button" aria-pressed={x === lang} onClick={() => setLang(x)}>{x.toUpperCase()}</button>)}
+            <span className="seg2" role="radiogroup" aria-label={t('invoiceLayout.language')}>
+              {LANGS.map((x) => <button key={x} type="button" role="radio" aria-checked={x === lang} className={x === lang ? 'on' : ''} onClick={() => setLang(x)}>{x.toUpperCase()}</button>)}
             </span>
           </div>
           {TEXT_KEYS.map((key) => {
@@ -99,14 +99,14 @@ export function DunningSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav
           <AsyncButton type="button" className="btn ghost" data-act="dunning-add" onClick={() => save({ ...dunning, levels: [...dunning.levels, { name: t('dunning.set.newName', { n: dunning.levels.length + 1 }), days: 10 }] }, t('dunning.set.added'))}>{t('dunning.set.add')}</AsyncButton>
         </div>
       )}
-      <div className="lkr">
+      <div className="lkr top">
         <span>{t('dunning.set.interest')}</span>
         <span className="lkinterest">
           <label><input type="checkbox" name="interest" checked={!!dunning.interest} disabled={!canEdit} onChange={(e) => {
             const { interest: _, ...rest } = dunning;
             void save(e.target.checked ? { ...rest, interest: { rate: offered?.rate ?? 5 } } : rest, t(e.target.checked ? 'dunning.set.interestOn' : 'dunning.set.interestOff'));
-          }} /> {dunning.interest ? t('dunning.set.interestRate') : t('dunning.set.interestNone')}</label>
-          {dunning.interest && <input name="rate" className="mono" inputMode="decimal" defaultValue={String(dunning.interest.rate)} disabled={!canEdit} aria-label={t('dunning.set.interestRate')} onBlur={(e) => { const v = num(e.target.value); if (v && v > 0 && v !== dunning.interest?.rate) void save({ ...dunning, interest: { ...dunning.interest!, rate: v } }, t('dunning.set.interestOn')); }} />}
+          }} />{dunning.interest ? null : ` ${t('dunning.set.interestNone')}`}</label>
+          {dunning.interest && <><input name="rate" className="mono" inputMode="decimal" defaultValue={String(dunning.interest.rate)} disabled={!canEdit} aria-label={t('dunning.set.interestRate')} onBlur={(e) => { const v = num(e.target.value); if (v && v > 0 && v !== dunning.interest?.rate) void save({ ...dunning, interest: { ...dunning.interest!, rate: v } }, t('dunning.set.interestOn')); }} /> {t('dunning.set.interestRate')}</>}
           {dunning.interest && <span className="m">{t('dunning.set.interestHint', { account: dunning.interest.account ?? offered?.account ?? '' })}</span>}
         </span>
       </div>

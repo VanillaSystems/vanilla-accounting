@@ -7972,6 +7972,7 @@ export default {
     "dunning.set.level": "Level",
     "dunning.set.name": "Name",
     "dunning.set.days": "Days to pay",
+    "dunning.set.daysShort": "days",
     "dunning.set.fee": "Fee",
     "dunning.set.auto": "Automatic",
     "dunning.set.afterDays": "Days after due",
