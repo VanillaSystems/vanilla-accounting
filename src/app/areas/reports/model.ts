@@ -22,6 +22,7 @@ import type { Key } from '../../i18n/types.js';
 import { chart, statements } from '../../../engines/index.js';
 import type { IncomeSection, StageResult } from '../../../core/modules/schema.js';
 import { roundCHF } from '../../../accounting/rappen.js';
+import { inGroup } from '../../../engines/chart.js';
 import { matchesTags, type Dimension, type TagFilter } from '../../../books/tags.js';
 
 /** The account of entries booked on one side only (a code that books the VAT itself, M81-2): no number. */
@@ -43,8 +44,9 @@ export interface AccountRow {
 export type Block =
   | { kind: 'head'; title: string }
   /** `title` is the app's German section name (accountingName translates it) or a class digit. */
-  | { kind: 'group'; title: string; rows: AccountRow[]; total?: number; priorTotal?: number; plain?: { name: string; value: number; prior?: number } }
-  | { kind: 'sum'; title: SumTitle; value: number; prior?: number; strong?: boolean };
+  /** `stage`: a stage of the Erfolgsrechnung (statements.yaml `incomeStages`) or the result after it, hidden while none of its accounts has an amount. */
+  | { kind: 'group'; title: string; rows: AccountRow[]; total?: number; priorTotal?: number; plain?: { name: string; value: number; prior?: number }; stage?: true }
+  | { kind: 'sum'; title: SumTitle; value: number; prior?: number; strong?: boolean; stage?: true };
 
 /**
  * The prior year beside the Bilanz and the Erfolgsrechnung (OR 958d Abs. 2 in Switzerland): the
@@ -107,7 +109,8 @@ export function reportView(report: Report, books: Index, period: Period, names: 
     const prior = withPrior ? priorOf(report, books, period) : undefined;
     const view = report === 'income' ? incomeView(postings, period.from, period.to, names) : balanceView(books, postings, period.to, names);
     const before = prior && 'source' in prior ? priorView(report, books, postings, prior, names, chartAccounts) : undefined;
-    const blocks = (before ? besidePrior(view.blocks, before.blocks) : view.blocks)
+    const merged = before ? besidePrior(view.blocks, before.blocks) : view.blocks;
+    const blocks = (all ? merged : withoutEmptyStages(merged))
       .map((b) => (b.kind === 'group' ? { ...b, rows: b.rows.filter(keep) } : b));
     const priorGap = before && !before.balanced ? { value: round(before.result - before.liabilities), assets: before.result, liabilities: before.liabilities } : undefined;
     if (report === 'income') {
@@ -157,6 +160,19 @@ function incomeView(postings: Postings, from: string, to: string, names: Record<
   return { blocks, result: s.netResult, liabilities: 0, balanced: true };
 }
 
+/** Without the stages none of whose accounts has an amount this year or the year before, and the result after each: it repeats the one above. */
+function withoutEmptyStages(blocks: Block[]): Block[] {
+  const out: Block[] = [];
+  let dropped = false;
+  for (const b of blocks) {
+    if (b.kind === 'group' && b.stage && b.rows.every((r) => !r.value && !r.prior)) { dropped = true; continue; }
+    if (b.kind === 'sum' && b.stage && dropped) { dropped = false; continue; }
+    dropped = false;
+    out.push(b);
+  }
+  return out;
+}
+
 /** The sections that add to the result; every other one takes from it. */
 const ADDS: readonly IncomeSection[] = ['revenue', 'otherIncome'];
 
@@ -170,21 +186,25 @@ function staged(key: IncomeSection, sec: IncomeStatementSection, before: number)
   const stages = statements().incomeStages?.[key];
   const rows = sec.rows.map((r) => ({ account: r.account, value: r.amount }));
   if (!stages?.length) return [{ kind: 'group', title: sec.title, rows, total: sec.total }];
-  const stageOf = (a: string) => {
-    const listed = stages.findIndex((st) => st.accounts?.includes(a));
-    return listed >= 0 ? listed : stages.findIndex((st) => st.from !== undefined && st.to !== undefined && a >= st.from && a < st.to);
-  };
+  // One pass: each account to the stage that lists it, else the one whose range holds it, else none (-1).
+  const ranges = stages.map((st) => (st.from !== undefined && st.to !== undefined ? inGroup({ title: st.title, from: st.from, to: st.to }) : () => false));
+  const byStage = new Map<number, AccountRow[]>();
+  for (const r of rows) {
+    const listed = stages.findIndex((st) => st.accounts?.includes(r.account));
+    const i = listed >= 0 ? listed : ranges.findIndex((holds) => holds(r.account));
+    byStage.set(i, [...(byStage.get(i) ?? []), r]);
+  }
   const sign = ADDS.includes(key) ? 1 : -1;
   const out: Block[] = [];
   let result = before;
   stages.forEach((st, i) => {
-    const own = rows.filter((r) => stageOf(r.account) === i);
+    const own = byStage.get(i) ?? [];
     const total = roundCHF(own.reduce((n, r) => n + r.value, 0));
-    out.push({ kind: 'group', title: st.title, rows: own, total });
+    out.push({ kind: 'group', title: st.title, rows: own, total, stage: true });
     result = roundCHF(result + sign * total);
-    if (st.then) out.push({ kind: 'sum', title: st.then, value: result });
+    if (st.then) out.push({ kind: 'sum', title: st.then, value: result, stage: true });
   });
-  const rest = rows.filter((r) => stageOf(r.account) < 0);
+  const rest = byStage.get(-1) ?? [];
   if (rest.length) out.push({ kind: 'group', title: sec.title, rows: rest, total: roundCHF(rest.reduce((n, r) => n + r.value, 0)) });
   return out;
 }

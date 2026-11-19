@@ -14,6 +14,9 @@ import { parsePeriod } from '../src/accounting/periods.js';
 import { reportView, type Block, type ReportView } from '../src/app/areas/reports/model.js';
 import { loadChart } from '../src/workspace/chart.js';
 import { statements } from '../src/engines/index.js';
+import { loadJurisdiction } from '../src/core/modules/load.js';
+import { checkJurisdiction } from '../src/core/modules/check.js';
+import { APP_ROOT } from '../src/workspace/workspace.js';
 
 const p = (token: string) => parsePeriod(token, '2026-11-19')!;
 const je = (id: string, date: string, dr: string, cr: string, amount: number): JournalEntry =>
@@ -33,7 +36,7 @@ const sums = (v: ReportView) => Object.fromEntries(v.blocks.flatMap((b) => (b.ki
 const groups = (v: ReportView) => v.blocks.filter((b): b is Extract<Block, { kind: 'group' }> => b.kind === 'group');
 
 test('Bruttoergebnis, after the staff costs, EBITDA, EBIT and the Betriebsergebnis, in this order', () => {
-  const v = reportView('income', books, p('2026-Q3'), names, false);
+  const v = reportView('income', books, p('2026-Q3'), names, { all: false });
   assert.deepEqual(v.blocks.flatMap((b) => (b.kind === 'sum' ? [b.title] : [])), ['grossProfit', 'afterStaff', 'ebitda', 'ebit', 'operatingResult', 'netResult']);
   assert.deepEqual(sums(v), { grossProfit: 800, afterStaff: 500, ebitda: 400, ebit: 350, operatingResult: 338, netResult: 338 });
   const finance = groups(v).find((g) => g.title === 'Finanzaufwand und Finanzertrag');
@@ -50,7 +53,7 @@ test('on every demo\'s books each account is in one block and the stages add up 
     const entries = frozen.journalEntries ?? [];
     const chart = [...new Set(entries.flatMap((e) => [e.accountDebit, e.accountCredit]))].filter(Boolean).sort();
     const all = Object.fromEntries(chart.map((a) => [a, a]));
-    const v = reportView('income', { ...frozen, transactions: frozen.transactions ?? [] }, p('2026'), all, true, false);
+    const v = reportView('income', { ...frozen, transactions: frozen.transactions ?? [] }, p('2026'), all, { all: true, prior: false });
     const s = computeIncomeStatement(statementPostings(entries, chart), '2026-01-01', '2026-12-31', all);
     const listed = groups(v).flatMap((g) => g.rows.map((r) => r.account));
     assert.equal(listed.length, new Set(listed).size, `${demo}: an account in two blocks`);
@@ -71,7 +74,7 @@ test('every account of the chart lands in the stage of its line (accounts.yaml)'
   const accounts = loadChart().accounts.filter((a) => a.line in stageOfLine);
   assert.ok(accounts.length > 30);
   const chartNames = Object.fromEntries(accounts.map((a) => [a.number, a.name]));
-  const v = reportView('income', books, p('2026-Q3'), chartNames, true, false);
+  const v = reportView('income', books, p('2026-Q3'), chartNames, { all: true, prior: false });
   for (const a of accounts) {
     const g = groups(v).find((x) => x.rows.some((r) => r.account === a.number));
     assert.equal(g?.title, stageOfLine[a.line], `${a.number} ${a.name}`);
@@ -80,8 +83,36 @@ test('every account of the chart lands in the stage of its line (accounts.yaml)'
 
 test('the prior year sits beside each stage and each result', () => {
   const twoYears: Index = { ...books, journalEntries: [...books.journalEntries!, je('wage25', '2025-08-25', '5000', '1020', 120), je('sale25', '2025-08-03', '1020', '3200', 400)] };
-  const v = reportView('income', twoYears, p('2026-Q3'), names, false);
+  const v = reportView('income', twoYears, p('2026-Q3'), names, { all: false });
   assert.equal(groups(v).find((g) => g.title === 'Personalaufwand')?.priorTotal, 120);
   const afterStaff = v.blocks.find((b): b is Extract<Block, { kind: 'sum' }> => b.kind === 'sum' && b.title === 'afterStaff');
   assert.equal(afterStaff?.prior, 280);
+});
+
+test('a stage none of whose accounts has an amount is not shown, nor the result after it, unless all accounts are', () => {
+  const noStaff: Index = { ...books, journalEntries: books.journalEntries!.filter((e) => e.id !== 'wage') };
+  const v = reportView('income', noStaff, p('2026-Q3'), names, { all: false });
+  assert.ok(!groups(v).some((g) => g.title === 'Personalaufwand'));
+  assert.ok(!('afterStaff' in sums(v)));
+  assert.equal(sums(v).ebitda, 700, 'the next result counts on from the Bruttoergebnis');
+  const every = reportView('income', noStaff, p('2026-Q3'), names, { all: true });
+  assert.equal(groups(every).find((g) => g.title === 'Personalaufwand')?.total, 0);
+  assert.equal(sums(every).afterStaff, 800);
+});
+
+test('the module check names a stage list of the wrong shape, a result twice, and an account outside its section, without throwing', () => {
+  const { jurisdiction } = loadJurisdiction(APP_ROOT, 'ch');
+  const withStages = (incomeStages: unknown) => checkJurisdiction({ ...jurisdiction, statements: { ...jurisdiction.statements, incomeStages } } as typeof jurisdiction)
+    .filter((x) => x.path.startsWith('incomeStages')).map((x) => `${x.path}: ${x.message}`);
+  assert.deepEqual(withStages(undefined), []);
+  assert.deepEqual(checkJurisdiction(jurisdiction), [], 'the shipped stages pass');
+  assert.deepEqual(withStages({ operatingExpenses: 'Personal' }), ['incomeStages.operatingExpenses: a list of stages']);
+  assert.deepEqual(withStages(['x']), ['incomeStages: a map of income sections to their stages']);
+  assert.deepEqual(withStages({ operatingExpenses: [
+    { title: 'A', from: '5000', to: '6000', then: 'ebit' },
+    { title: 'B', from: '6000', to: '7000', accounts: ['3000'], then: 'ebit' },
+  ] }), [
+    'incomeStages.operatingExpenses[1].accounts: 3000 is not in the section operatingExpenses',
+    'incomeStages.operatingExpenses[1].then: "ebit" follows an earlier stage already',
+  ]);
 });
