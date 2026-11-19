@@ -3,7 +3,8 @@
  * status filters, what is open, and the link of each record. Computed with src/invoices/rules.ts,
  * the rules the API and the PDF use.
  */
-import { isItem, type Customer, type Draft, type Invoice, type InvoiceBook, type Issued, type SentDocument } from '../../../invoices/model.js';
+import { isItem, type Contact, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type Issued, type SentDocument } from '../../../invoices/model.js';
+import { billingAddress, documentsOf, recipientOf } from '../../../invoices/contacts.js';
 import type { DraftChange } from '../../lib/api.js';
 import { isOverdue, namesNumber, openAmount } from '../../../invoices/rules.js';
 import { channelOf } from '../../../invoices/lists.js';
@@ -47,13 +48,20 @@ export function byRouteId(invoices: readonly Invoice[], id: string | undefined):
   return id.startsWith('draft-') ? invoices.find((i) => i.status === 'draft' && i.id === id.slice(6)) : invoices.find((i) => i.number === id && !i.deleted);
 }
 
-export const bookOf = (d: InvoiceList): InvoiceBook => ({ schema: 1, customers: d.customers, invoices: d.invoices, sent: d.sent });
+export const bookOf = (d: InvoiceList): InvoiceBook => ({ schema: 1, contacts: d.contacts, invoices: d.invoices, sent: d.sent });
 
-export function customerOf(d: InvoiceList, inv: Invoice): Pick<Customer, 'name' | 'address' | 'email' | 'language' | 'paymentTermsDays' | 'vatId' | 'attn'> | undefined {
-  return inv.status === 'issued' ? inv.customer : d.customers.find((c) => c.id === inv.customerId);
+/** The contact a document names (archived ones too). */
+export const contactOf = (d: InvoiceList, inv: Pick<Invoice, 'customerId'>): Contact | undefined => d.contacts.find((c) => c.id === inv.customerId);
+
+/**
+ * Who a document goes to as it prints: an issued one as it froze it, a draft as its contact, person
+ * and address read now. `terms`: the firm's settings for the contact's days.
+ */
+export function customerOf(d: InvoiceList, inv: Invoice, terms?: Parameters<typeof recipientOf>[2]): CustomerFields | undefined {
+  return inv.status === 'issued' ? inv.customer : recipientOf(contactOf(d, inv), inv, terms);
 }
 
-/** A customer's open invoices in CHF, for the customer list. */
+/** A contact's open invoices in the books' currency, for the contact list. */
 export function customerOpen(d: InvoiceList, id: string): number {
   return Math.round(d.invoices.filter((i) => i.status === 'issued' && i.customerId === id && i.currency === baseCurrency()).reduce((s, i) => s + openAmount(i, d.invoices), 0) * 100) / 100;
 }
@@ -70,22 +78,43 @@ export function sentRows(d: InvoiceList, q: string | undefined, filter: { custom
     .filter((doc) => !needle || [doc.title, name(doc), doc.to].join(' ').toLowerCase().includes(needle));
 }
 
-/** The customers by name, searched by name and town. */
-export function customerRows(d: InvoiceList, q: string | undefined): Customer[] {
+/** A row of Kontakte: the contact, its town, what it owes, how many documents name it. */
+export interface ContactRow { contact: Contact; town: string; open: number; documents: number }
+
+/** The tabs of Kontakte: the active contacts, firms, persons, the archived ones. */
+export const CONTACT_TABS = ['all', 'firm', 'person', 'archived'] as const;
+export type ContactTab = (typeof CONTACT_TABS)[number];
+
+/** The contacts of a tab by name, searched by name, number, town, e-mail, UID and tag. */
+export function contactRows(d: InvoiceList, q: string | undefined, tab: ContactTab = 'all'): ContactRow[] {
   const needle = q?.trim().toLowerCase();
-  return [...d.customers].sort((a, b) => a.name.localeCompare(b.name)).filter((c) => !needle || `${c.name} ${c.address.town}`.toLowerCase().includes(needle));
+  return [...d.contacts]
+    .filter((c) => (tab === 'archived' ? !!c.archived : !c.archived && (tab === 'all' || c.type === tab)))
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .map((c) => ({ contact: c, town: townOf(c), open: customerOpen(d, c.id), documents: documentsOf(d, c.id).length }))
+    .filter((r) => !needle || [r.contact.name, r.contact.number, r.town, ...r.contact.emails, r.contact.vatId, ...(r.contact.tags ?? []), ...r.contact.persons.map((p) => p.name)]
+      .filter(Boolean).join(' ').toLowerCase().includes(needle));
+}
+
+/** The town of a contact's billing address, with its country when abroad. */
+export function townOf(c: Pick<Contact, 'addresses'>): string {
+  const a = billingAddress(c);
+  return a ? `${a.town}${a.country !== 'CH' ? `, ${a.country}` : ''}` : '';
 }
 
 /**
  * Another customer: the draft takes their language; a customer abroad gets 0 % with the reason
  * "service abroad" (and EUR for the neighbours), a Swiss one back the normal rate.
  */
-export function customerChange(inv: Pick<Draft, 'lines' | 'currency'>, c: { id: string; language: Draft['language']; address: { country: string } }): DraftChange {
-  const abroad = c.address.country !== 'CH' && c.address.country !== 'LI';
-  if (abroad) return { customerId: c.id, language: c.language, lines: inv.lines.map((l) => (isItem(l) ? { ...l, vatRate: 0 } : l)), exemption: 'abroad', ...(['DE', 'FR', 'IT', 'AT'].includes(c.address.country) ? { currency: 'EUR' } : {}) };
+export function customerChange(inv: Pick<Draft, 'lines' | 'currency'>, c: Pick<Contact, 'id' | 'language' | 'addresses' | 'currency'>): DraftChange {
+  const country = billingAddress(c)?.country ?? 'CH';
+  // Another contact: its person and address are its own, none picked yet.
+  const base = { customerId: c.id, language: c.language, personId: null, addressId: null } as const;
+  const abroad = country !== 'CH' && country !== 'LI';
+  if (abroad) return { ...base, lines: inv.lines.map((l) => (isItem(l) ? { ...l, vatRate: 0 } : l)), exemption: 'abroad', ...(c.currency ? { currency: c.currency } : ['DE', 'FR', 'IT', 'AT'].includes(country) ? { currency: 'EUR' } : {}) };
   const items = inv.lines.filter(isItem);
   const allZero = items.length > 0 && items.every((l) => l.vatRate === 0);
-  return { customerId: c.id, language: c.language, ...(allZero && chargesVat() ? { lines: inv.lines.map((l) => (isItem(l) ? { ...l, vatRate: invoiceRates()[0] } : l)), exemption: null, currency: 'CHF' } : {}) };
+  return { ...base, ...(c.currency ? { currency: c.currency } : {}), ...(allZero && chargesVat() ? { lines: inv.lines.map((l) => (isItem(l) ? { ...l, vatRate: invoiceRates()[0] } : l)), exemption: null, currency: c.currency ?? 'CHF' } : {}) };
 }
 
 /** A payment is linked to a document once an allocation names its ref. */

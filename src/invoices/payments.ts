@@ -295,6 +295,14 @@ export interface PaymentProposal {
 
 const words = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length > 2);
 
+/**
+ * A salutation a person's printed name starts with (src/invoices/contacts.ts printedName), in the four
+ * document languages: no bank row names it, and a refund that says «Frau» must not match every woman.
+ */
+const SALUTATIONS = new Set(['herr', 'herrn', 'frau', 'familie', 'fam', 'monsieur', 'madame', 'mme', 'mlle', 'mademoiselle', 'famille', 'signor', 'signore', 'signora', 'sig', 'famiglia', 'mrs', 'miss', 'family']);
+/** The words of a customer's name that identify it in a payment's text: without its salutation. */
+const nameWords = (name: string) => words(name).filter((w) => !SALUTATIONS.has(w));
+
 export function paymentProposals(books: Books, book: InvoiceBook): PaymentProposal[] {
   const lock = periodLock(books);
   const invoices = liveInvoices(book);
@@ -314,7 +322,7 @@ export function paymentProposals(books: Books, book: InvoiceBook): PaymentPropos
       const numberMatches = namesNumber(text, inv.number);
       // Before the document's date, or booked already: only a payment that names the document is offered.
       if (!numberMatches && (tx.date < inv.date || booked.has(tx.ref))) continue;
-      const name = words(inv.customer.name);
+      const name = nameWords(inv.customer.name);
       const nameMatches = name.length > 0 && name.some((w) => words(text).includes(w));
       const due = dueOf(inv, book);
       // On the agreed basis a part paid by the customer (every word of its name in the payment) is offered too: its revenue is booked with the invoice.
@@ -535,7 +543,7 @@ export function allocationProposal(books: Books, book: InvoiceBook, transactionR
   const open = invoices.filter((i): i is Issued => i.status === 'issued' && i.kind === 'invoice' && !i.cancelled && i.currency === tx.currency && openAmount(i, invoices) > 0);
   const who = customerId
     ?? open.find((i) => namesNumber(text, i.number))?.customerId
-    ?? open.find((i) => { const n = words(i.customer.name); return n.length > 0 && n.every((w) => words(text).includes(w)); })?.customerId;
+    ?? open.find((i) => { const n = nameWords(i.customer.name); return n.length > 0 && n.every((w) => words(text).includes(w)); })?.customerId;
   const mine = (who ? open.filter((i) => i.customerId === who) : open)
     .sort((a, b) => Number(namesNumber(text, b.number)) - Number(namesNumber(text, a.number)) || a.dueDate.localeCompare(b.dueDate) || a.number.localeCompare(b.number));
   let left = Math.round(tx.amount * 100);

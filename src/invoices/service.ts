@@ -5,20 +5,19 @@
  * given twice and nothing saves over another change.
  */
 import { existsSync, readFileSync, renameSync, rmSync } from 'node:fs';
-import { parseUid } from '../workspace/uid.js';
 import { basename, dirname, extname, join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import { receiptFile, type Books } from '../books/store.js';
 import { defaultTexts, draftDays, issuedIntro, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
 import {
   INVOICE_CURRENCIES, INVOICE_LANGUAGES, DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, LINE_KINDS, PRICES, isItem, type UnitDef,
-  type Comment, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
+  type Comment, type Contact, type ContactFields, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
   type AccountChange, type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type SentDocument, type SentKind,
 } from './model.js';
 import { renderHtml, renderPdf, type Rendered } from './pdf.js';
 import {
-  InvoiceRuleError, KIND_WORD, asDraft, assertCreditWithinOpen, backToDraftRefusal, cancel, creditNoteDraft, deleteDraft, figures, isOverdue, issue, liveCustomers, liveDocuments, liveInvoices, missingForIssue,
-  openAmount, reminderDraft, shortfallOf, skontoOffer, status, totals, writeOffAccounts,
+  InvoiceRuleError, KIND_WORD, asDraft, assertCreditWithinOpen, backToDraftRefusal, cancel, creditNoteDraft, deleteDraft, figures, isOverdue, issue, liveDocuments, liveInvoices, missingForIssue,
+  openAmount, reminderDraft, shortfallOf, skontoOffer, status, totals, warningsForIssue, writeOffAccounts,
   type CreditRequest, type Figures, type InvoiceRefusal, type InvoiceStatus, type Missing, type Totals,
 } from './rules.js';
 import type { SheetData } from './sheet.js';
@@ -33,6 +32,9 @@ import type { PaymentContext, PaymentOutcome } from './payments.js';
 import { notesWithAccounts, withAccounts, type AccountChangePlan, type AccountContext } from './revise.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { creditNoteStatus, type CreditListStatus } from './lists.js';
+import {
+  applyContact, assertNumberFree, checkVatId, contactOfCustomer, documentsOf, draftTermsOf, goneRefs, lineDefaults, liveContacts, numberContact, parseContact, pickableContacts, recipientOf,
+} from './contacts.js';
 import { TEXTS } from './texts.js';
 import { baseCurrency, invoiceActivities, invoiceRates, invoicing } from '../engines/index.js';
 import { openItemAccounts } from '../accounting/tax-point.js';
@@ -73,6 +75,7 @@ function serial<T>(fn: () => Promise<T> | T): Promise<T> {
 }
 
 const notFound = (what: string): never => { throw new InvoiceRuleError('notFound', `${what} nicht gefunden.`); };
+const contactGone = (): never => { throw new InvoiceRuleError('contactGone', 'Diesen Kontakt gibt es nicht (mehr).'); };
 
 export function invoicingContext(ws: Workspace): InvoicingContext {
   return { company: ws.company, settings: ws.invoicing };
@@ -89,7 +92,7 @@ export function logoSrc(ws: Workspace, path: string | undefined): string | undef
 
 export function viewOf(book: InvoiceBook, inv: Invoice, today: string, shortfallLimit = DEFAULT_SHORTFALL_LIMIT): InvoiceView {
   const invoices = liveInvoices(book);
-  const customerName = inv.status === 'issued' ? inv.customer.name : book.customers.find((c) => c.id === inv.customerId)?.name ?? '';
+  const customerName = inv.status === 'issued' ? inv.customer.name : book.contacts.find((c) => c.id === inv.customerId)?.name ?? '';
   const issued = inv.status === 'issued' ? inv : undefined;
   const short = issued && shortfallOf(issued, invoices, shortfallLimit, baseCurrency());
   const skonto = issued && !issued.cancelled && openAmount(issued, invoices) > 0 && !issued.payments.length ? skontoOffer(issued) : undefined;
@@ -171,7 +174,7 @@ function parseLines(v: unknown, units: readonly string[]): InvoiceLine[] {
   });
 }
 
-const DRAFT_FIELDS = ['kind', 'customerId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'prices', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs'] as const;
+const DRAFT_FIELDS = ['kind', 'customerId', 'personId', 'addressId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'prices', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs'] as const;
 export type DraftPatch = Partial<Pick<InvoiceContent, (typeof DRAFT_FIELDS)[number]>>;
 
 /**
@@ -185,14 +188,26 @@ export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonl
   if (unknown.length) bad(`Unbekannte Felder: ${unknown.join(', ')}`);
   const out: DraftPatch & { clear: string[] } = { clear: [] };
   for (const [k, v] of Object.entries(b)) {
-    if (v === null && ['supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs'].includes(k)) { out.clear.push(k); continue; }
+    if (v === null && ['personId', 'addressId', 'supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs'].includes(k)) { out.clear.push(k); continue; }
     // A draft is of one kind from its start (a conversion makes one of another); a credit note only from its invoice.
     // A Lieferschein comes only from an Auftrag (decision 21), by «Lieferschein erstellen».
     if (k === 'kind' && v === 'delivery-note') throw new InvoiceRuleError('deliveryFromOrder', 'Ein Lieferschein entsteht aus einem Auftrag: dort «Lieferschein erstellen».');
     if (k === 'kind') { if (id !== undefined || !['quote', 'sales-order', 'invoice'].includes(v as string)) bad('kind ist quote, sales-order oder invoice, beim Anlegen.'); out.kind = v as InvoiceContent['kind']; continue; }
     if (k === 'validUntil') { if (!isDate(v)) bad('validUntil ist ein Datum JJJJ-MM-TT.'); out.validUntil = v as string; continue; }
     if (k === 'printAs') { if (v !== 'confirmation' && v !== 'proforma') bad('printAs ist confirmation oder proforma.'); out.printAs = v as 'confirmation' | 'proforma'; continue; }
-    if (k === 'customerId') { if (!liveCustomers(book).some((c) => c.id === v)) bad('Kunde nicht gefunden.', [{ field: 'customer' }]); out.customerId = v as string; }
+    if (k === 'customerId') {
+      const c = liveContacts(book).find((x) => x.id === v);
+      if (!c) bad('Kontakt nicht gefunden.', [{ field: 'customer' }]);
+      // An archived contact stays on the documents that name it; a document picks it again only once it is restored.
+      if (c!.archived && findInvoice(book, id ?? '')?.customerId !== v) throw new InvoiceRuleError('archived', `${c!.name} ist archiviert: zuerst wiederherstellen.`);
+      out.customerId = v as string;
+    }
+    else if (k === 'personId' || k === 'addressId') {
+      const c = book.contacts.find((x) => x.id === (b.customerId ?? findInvoice(book, id ?? '')?.customerId));
+      const list = k === 'personId' ? c?.persons : c?.addresses;
+      if (!list?.some((x) => x.id === v)) bad(`${k}: ${k === 'personId' ? 'diese Kontaktperson' : 'diese Adresse'} hat der Kontakt nicht.`);
+      out[k] = v as string;
+    }
     else if (k === 'date' || k === 'dueDate') { if (!isDate(v)) bad(`${k} ist ein Datum JJJJ-MM-TT.`); out[k] = v as string; }
     else if (k === 'supplied') {
       const p = (v ?? {}) as Record<string, unknown>;
@@ -225,11 +240,7 @@ export function parseCustomer(body: unknown, partial: boolean): Partial<Customer
   const out: Partial<CustomerFields> = {};
   if (b.name !== undefined || !partial) { if (!isText(b.name) || !b.name.trim()) bad('name fehlt.', [{ field: 'customer.name' }]); out.name = (b.name as string).trim(); }
   for (const k of ['attn', 'vatId', 'email'] as const) if (b[k] !== undefined) { if (!isText(b[k])) bad(`${k} ist ein Text.`); out[k] = (b[k] as string).trim(); }
-  // A Swiss UID carries a check digit (r8c-18): a typo is caught here; a foreign VAT number is any text.
-  if (out.vatId && /^CHE/i.test(out.vatId)) {
-    const parsed = parseUid(out.vatId.replace(/\s*(MWST|TVA|IVA|VAT)$/i, ''));
-    if ('error' in parsed) throw new InvoiceRuleError('uid', parsed.error);
-  }
+  checkVatId(out.vatId);
   if (b.language !== undefined || !partial) { if (!INVOICE_LANGUAGES.includes(b.language as never)) bad(`language ist eine von ${INVOICE_LANGUAGES.join(', ')}.`); out.language = b.language as CustomerFields['language']; }
   if (b.paymentTermsDays !== undefined) { if (!Number.isInteger(b.paymentTermsDays) || (b.paymentTermsDays as number) < 0) bad('paymentTermsDays ist eine ganze Zahl von Tagen.'); out.paymentTermsDays = b.paymentTermsDays as number; }
   if (b.address !== undefined || !partial) {
@@ -242,22 +253,62 @@ export function parseCustomer(body: unknown, partial: boolean): Partial<Customer
   return out;
 }
 
-// ─── customers ─────────────────────────────────────────────────────────────────
+// ─── contacts ──────────────────────────────────────────────────────────────────
 
-export function createCustomer(ws: Workspace, fields: Partial<CustomerFields>, now = new Date().toISOString()): Customer {
+/** The ids of the firm's terms a contact may name. */
+const termIds = (ws: Workspace) => (ws.invoicing?.paymentTerms ?? []).map((x) => x.id);
+
+export function createContact(ws: Workspace, body: unknown, now = new Date().toISOString()): Contact {
+  const { clear: _, ...fields } = parseContact(body, undefined, termIds(ws));
   return updateInvoices(ws, (book) => {
-    const c: Customer = { ...newEnvelope('cu', now), ...(fields as CustomerFields), paymentTermsDays: fields.paymentTermsDays ?? ws.invoicing?.paymentTermsDays ?? 30 };
-    book.customers.push(c);
+    assertNumberFree(book, fields.number);
+    const c: Contact = { ...newEnvelope('cu', now), ...(fields as ContactFields) };
+    book.contacts.push(c);
     return c;
   });
 }
 
-export function updateCustomer(ws: Workspace, id: string, patch: Partial<CustomerFields>): Customer {
+/** A customer as phase 1 named one (the AI's «newCustomer», the demo's customers): a firm contact with its address as the billing address. */
+export function createCustomer(ws: Workspace, fields: Partial<CustomerFields>, now = new Date().toISOString()): Contact {
   return updateInvoices(ws, (book) => {
-    const i = book.customers.findIndex((c) => c.id === id && !c.deleted);
-    if (i < 0) notFound('Kunde');
-    book.customers[i] = { ...book.customers[i], ...patch };
-    return book.customers[i];
+    const c: Contact = { ...newEnvelope('cu', now), ...contactOfCustomer({ language: 'de', ...fields, name: fields.name ?? '' }) };
+    book.contacts.push(c);
+    return c;
+  });
+}
+
+export function updateContact(ws: Workspace, id: string, body: unknown): Contact {
+  return updateInvoices(ws, (book) => {
+    const i = book.contacts.findIndex((c) => c.id === id && !c.deleted);
+    if (i < 0) contactGone();
+    const patch = parseContact(body, book.contacts[i], termIds(ws));
+    assertNumberFree(book, patch.number, id);
+    book.contacts[i] = applyContact(book.contacts[i], patch);
+    return book.contacts[i];
+  });
+}
+
+/**
+ * Takes a contact away: archived while any document names it (spec 4.4.5: its documents keep it),
+ * deleted when none does. An archived contact comes back with `archived: false`.
+ */
+export function removeContact(ws: Workspace, id: string): { contact: Contact; outcome: 'archived' | 'deleted' } {
+  return updateInvoices(ws, (book) => {
+    const i = book.contacts.findIndex((c) => c.id === id && !c.deleted);
+    if (i < 0) contactGone();
+    const outcome = documentsOf(book, id).length ? 'archived' : 'deleted';
+    book.contacts[i] = { ...book.contacts[i], ...(outcome === 'archived' ? { archived: true } : { deleted: true }) };
+    return { contact: book.contacts[i], outcome };
+  });
+}
+
+/** Adds contacts made elsewhere (the CSV import), each with its own envelope, in one save. */
+export function addContacts(ws: Workspace, list: readonly ContactFields[], now = new Date().toISOString()): Contact[] {
+  return updateInvoices(ws, (book) => {
+    for (const f of list) assertNumberFree(book, f.number);
+    const made = list.map((f): Contact => ({ ...newEnvelope('cu', now, 'import'), ...f }));
+    book.contacts.push(...made);
+    return made;
   });
 }
 
@@ -274,43 +325,41 @@ function commit<T>(ws: Workspace, id: string, expected: Invoice, fn: (book: Invo
 
 // ─── drafts ────────────────────────────────────────────────────────────────────
 
+/**
+ * A new draft for a contact: its language, currency and terms; its positions (the AI's) take the
+ * contact's revenue account and standing discount where they name none.
+ */
 export function createDraft(ws: Workspace, input: { customerId: string } & DraftPatch, now = new Date().toISOString()): Draft {
   return updateInvoices(ws, (book) => {
-    const customer = liveCustomers(book).find((c) => c.id === input.customerId) ?? notFound('Kunde');
+    const contact = liveContacts(book).find((c) => c.id === input.customerId) ?? contactGone();
+    // One refusal for an archived contact, wherever a document would pick it.
+    if (contact.archived) throw new InvoiceRuleError('archived', `${contact.name} ist archiviert: zuerst wiederherstellen.`);
     const kind = input.kind ?? 'invoice';
     // A Lieferschein comes only from an Auftrag, a Gutschrift only from its Rechnung (convertDocument, createCreditNote).
     if (kind === 'delivery-note') throw new InvoiceRuleError('deliveryFromOrder', 'Ein Lieferschein entsteht aus einem Auftrag: dort «Lieferschein erstellen».');
     if (kind === 'credit-note') throw new InvoiceRuleError('incomplete', 'Eine Gutschrift entsteht aus ihrer Rechnung.');
-    const terms = kind === 'invoice' ? draftTerms(ws.invoicing, customer.paymentTermsDays) : undefined;
+    const terms = kind === 'invoice' ? draftTermsOf(ws.invoicing, contact) : undefined;
+    const defaults = lineDefaults(contact);
     const date = input.date ?? now.slice(0, 10);
     const draft: Draft = {
       ...newEnvelope('in', now),
       status: 'draft',
       kind,
       date,
-      currency: 'CHF',
-      language: customer.language,
+      currency: contact.currency ?? 'CHF',
+      language: contact.language,
       lines: [],
       prices: ws.invoicing?.prices[kind] ?? 'net',
       ...(terms ? { termsId: terms } : {}),
       // An Angebot holds for 30 days unless the person sets another day.
       ...(kind === 'quote' ? { validUntil: defaultValidUntil(date) } : {}),
       ...input,
+      ...(input.lines ? { lines: input.lines.map((l) => (isItem(l) ? { ...defaults, ...l } : l)) } : {}),
       comments: [],
     };
     book.invoices.push(draft);
     return draft;
   });
-}
-
-/**
- * The terms a new invoice picks: the firm's default, unless the customer pays in days of its own
- * (a `paymentTermsDays` other than the default's days): then none, and it prints the customer's days net.
- */
-function draftTerms(s: Workspace['invoicing'], customerDays: number): string | undefined {
-  const all = s?.paymentTerms ?? [];
-  const def = all.find((x) => x.id === s?.defaultTerms) ?? all[0];
-  return def && def.days === customerDays ? def.id : undefined;
 }
 
 export function updateDraft(ws: Workspace, id: string, patch: DraftPatch & { clear?: string[] }): Draft {
@@ -319,6 +368,11 @@ export function updateDraft(ws: Workspace, id: string, patch: DraftPatch & { cle
     if (inv.status !== 'draft') throw new InvoiceRuleError('notDraft', `Rechnung ${inv.number} ist ausgestellt und bleibt, wie sie ist: eine Gutschrift oder ein Storno korrigiert sie.`);
     const { clear = [], ...fields } = patch;
     const next = { ...inv, ...fields } as Draft;
+    // Another contact: the person and the address of the one before are not its own.
+    if (fields.customerId && fields.customerId !== inv.customerId) {
+      if (!('personId' in fields)) delete next.personId;
+      if (!('addressId' in fields)) delete next.addressId;
+    }
     for (const k of clear) delete (next as unknown as Record<string, unknown>)[k];
     book.invoices[book.invoices.indexOf(inv)] = next;
     return next;
@@ -336,7 +390,7 @@ export function missingOf(ws: Workspace, id: string): Missing[] {
   const book = loadInvoices(ws);
   const inv = findInvoice(book, id) ?? notFound('Rechnung');
   if (inv.status !== 'draft') return [];
-  return missingForIssue(inv, { customer: book.customers.find((c) => c.id === inv.customerId), sender: senderFor(invoicingContext(ws), inv.currency), invoices: liveDocuments(book) });
+  return missingForIssue(inv, { customer: recipientOf(book.contacts.find((c) => c.id === inv.customerId), inv, ws.invoicing), sender: senderFor(invoicingContext(ws), inv.currency), invoices: liveDocuments(book) });
 }
 
 // ─── issuing and sending ───────────────────────────────────────────────────────
@@ -359,9 +413,15 @@ export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; pr
       throw new InvoiceRuleError('sourceCancelled', `${KIND_WORD[source.kind]} ${source.number} ist storniert: dieser Entwurf stammt daraus. Nur mit «Trotzdem ausstellen».`, undefined, { number: source.number });
     }
     const ctx = invoicingContext(ws);
-    const customer = liveCustomers(book).find((c) => c.id === draft.customerId);
+    const contact = liveContacts(book).find((c) => c.id === draft.customerId);
+    // A person or address the contact no longer has: a warning; on «Trotzdem ausstellen» the document goes without them.
+    const gone = goneRefs(contact, draft);
+    if (gone.length && !opts.confirmed) throw new InvoiceRuleError('unconfirmed', 'Die gewählte Kontaktperson oder Adresse gibt es beim Kontakt nicht mehr; nur mit «Trotzdem ausstellen».', [...gone, ...warningsForIssue(draft)]);
+    const customer = recipientOf(contact, draft, ws.invoicing);
     const texts = defaultTexts(ctx, draft.kind, draft.language, draftDays(ctx, draft, customer), draft.printAs);
-    const frozen: Draft = { ...draft, intro: issuedIntro(texts.salutation, draft.intro ?? texts.intro), closing: draft.closing ?? texts.closing };
+    const kept = { ...draft } as Draft;
+    for (const m of gone) delete kept[m.field === 'customer.person' ? 'personId' : 'addressId'];
+    const frozen: Draft = { ...kept, intro: issuedIntro(texts.salutation, draft.intro ?? texts.intro), closing: draft.closing ?? texts.closing };
     // A credit note above what its invoice has open: a warning (spec 4.11), the rest is paid back.
     assertCreditWithinOpen(draft, liveInvoices(book), opts.confirmed);
     const issued = issue(frozen, { customer, sender: senderFor(ctx, draft.currency), layout: ctx.settings?.layout ?? DEFAULT_LAYOUT, units: ctx.settings?.units, invoices: liveDocuments(book), now, confirmed: opts.confirmed, paymentTerms: ctx.settings?.paymentTerms, numbering: ctx.settings?.numbering ?? DEFAULT_NUMBERING });
@@ -370,6 +430,8 @@ export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; pr
       if (nextNumberTaken(fresh, issued.number, draft.id)) throw new InvoiceRuleError('changed', `Die Nummer ${issued.number} wurde inzwischen vergeben; bitte erneut ausstellen.`);
       const done: Issued = { ...issued, pdf: storePdf(ws, now.slice(0, 4), pdfName(ws, now.slice(0, 4), issued.number, printed.pdf), printed.pdf) };
       fresh.invoices[at] = done;
+      // The contact's first issued document gives it its customer number.
+      numberContact(fresh, done.customerId);
       return done;
     });
   });
@@ -485,7 +547,7 @@ export function backToDraft(ws: Workspace, id: string, opts: { now?: string; boo
     const removed = opts.books?.(inv) ?? [];
     renameSync(join(ws.paths.root, inv.pdf.file), join(ws.paths.root, file));
     const ctx = invoicingContext(ws);
-    const customer = liveCustomers(book).find((c) => c.id === inv.customerId);
+    const customer = recipientOf(liveContacts(book).find((c) => c.id === inv.customerId), inv, ws.invoicing);
     const { salutation } = defaultTexts(ctx, inv.kind, inv.language, draftDays(ctx, inv, customer));
     let draft: Draft;
     try {
@@ -609,8 +671,8 @@ export function convertDocument(ws: Workspace, id: string, req: { to: InvoiceCon
     const source = findInvoice(book, id) ?? notFound('Dokument');
     const docs = liveDocuments(book);
     const draft = convertDraft(source, req.to, req.lines, docs, newEnvelope('in', now), now.slice(0, 10), now.slice(0, 10), req.confirm ?? []);
-    const customer = liveCustomers(book).find((c) => c.id === draft.customerId);
-    const terms = req.to === 'invoice' && !draft.termsId && customer ? draftTerms(ws.invoicing, customer.paymentTermsDays) : undefined;
+    const contact = liveContacts(book).find((c) => c.id === draft.customerId);
+    const terms = req.to === 'invoice' && !draft.termsId && contact ? draftTermsOf(ws.invoicing, contact) : undefined;
     const done: Draft = { ...draft, ...(terms ? { termsId: terms } : {}) };
     book.invoices.push(done);
     return done;

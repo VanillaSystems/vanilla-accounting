@@ -5,7 +5,9 @@
  */
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_LAYOUT, DEFAULT_UNITS, type Customer, type Draft, type ItemLine } from '../src/invoices/model.js';
+import { DEFAULT_LAYOUT, DEFAULT_UNITS, type Contact, type Draft, type ItemLine } from '../src/invoices/model.js';
+import { contactBody } from './support/invoice-fixtures.js';
+import { recipientOf } from '../src/invoices/contacts.js';
 import { browserPath } from './support/browser.js';
 import { POSITION_WORDS } from './support/sheet-words.js';
 import { assembleSheets, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
@@ -21,8 +23,8 @@ const address = { street: 'Rosenweg', number: '5', postcode: '9500', town: 'Wil'
 const words = { newCustomer: 'Neuer Kunde', chooseCustomer: 'Kunde wählen', addLine: 'Position', removeLine: 'Entfernen', intro: 'Intro', closing: 'Gruss', desc: 'Beschreibung', noExemption: 'Grund', supplied: 'wie Datum', ...POSITION_WORDS };
 
 /** The sheet's HTML as the screen shows a draft, with its select fields. */
-function sheetOf(d: Draft, customers: Customer[]): string {
-  const c = customers.find((x) => x.id === d.customerId)!;
+function sheetOf(d: Draft, customers: Contact[]): string {
+  const c = recipientOf(customers.find((x) => x.id === d.customerId), d, undefined)!;
   const data: SheetData = {
     kind: d.kind, language: d.language, date: d.date, currency: d.currency, customer: c, lines: d.lines, intro: '', closing: '', layout: DEFAULT_LAYOUT,
     sender: { name: 'Malerei AG', address, uid: 'CHE-123.456.789' }, ...(d.exemption ? { exemption: d.exemption } : {}),
@@ -39,9 +41,9 @@ function options(html: string, key: string): string[] {
   return [...m[1].matchAll(/value="([^"]*)"/g)].map((x) => x[1]);
 }
 
-async function pick(d: Draft, customers: Customer[], key: string, value: string): Promise<Draft> {
+async function pick(d: Draft, customers: Contact[], key: string, value: string): Promise<Draft> {
   assert.ok(options(sheetOf(d, customers), key).includes(value), `${value} is offered in ${key}`);
-  const r = sheetEdit(d, key, value, { customers, defaultTexts: { intro: '', closing: '' } });
+  const r = sheetEdit(d, key, value, { contacts: customers, defaultTexts: { intro: '', closing: '' } });
   assert.ok(r && 'change' in r, `${key} → ${value} is a change`);
   const res = await api.send('PATCH', `/api/invoices/${d.id}`, r.change);
   assert.equal(res.status, 200, String(res.json.error));
@@ -49,8 +51,8 @@ async function pick(d: Draft, customers: Customer[], key: string, value: string)
 }
 
 test('unit, VAT rate, customer and exemption picked on the sheet are stored on the draft', async () => {
-  const keller = (await api.send('POST', '/api/customers', { name: 'Familie Keller', address, language: 'de' })).json as unknown as Customer;
-  const meier = (await api.send('POST', '/api/customers', { name: 'Hans Meier', address: { ...address, street: 'Garagenweg', number: '3' }, language: 'de' })).json as unknown as Customer;
+  const keller = (await api.send('POST', '/api/contacts', contactBody({ name: 'Familie Keller', address, language: 'de' }))).json as unknown as Contact;
+  const meier = (await api.send('POST', '/api/contacts', contactBody({ name: 'Hans Meier', address: { ...address, street: 'Garagenweg', number: '3' }, language: 'de' }))).json as unknown as Contact;
   const customers = [keller, meier];
   let d = (await api.send('POST', '/api/invoices', { customerId: meier.id, lines: [{ text: 'Material', quantity: 1, unit: 'h', price: 312.5, vatRate: 8.1 }] })).json as unknown as Draft;
 
@@ -66,12 +68,12 @@ test('unit, VAT rate, customer and exemption picked on the sheet are stored on t
   d = await pick(d, customers, 'exemption', 'export');
   assert.deepEqual([(d.lines[0] as ItemLine).vatRate, d.exemption], [0, 'export']);
 
-  assert.deepEqual(sheetEdit(d, 'l:0:vatRate', '7.7', { customers, defaultTexts: { intro: '', closing: '' } }), { refused: 'value' }, 'a rate the jurisdiction does not have is refused');
-  assert.equal(sheetEdit(d, 'customer', keller.id, { customers, defaultTexts: { intro: '', closing: '' } }), undefined, 'the same customer changes nothing');
+  assert.deepEqual(sheetEdit(d, 'l:0:vatRate', '7.7', { contacts: customers, defaultTexts: { intro: '', closing: '' } }), { refused: 'value' }, 'a rate the jurisdiction does not have is refused');
+  assert.equal(sheetEdit(d, 'customer', keller.id, { contacts: customers, defaultTexts: { intro: '', closing: '' } }), undefined, 'the same customer changes nothing');
 });
 
 test('«Trotzdem ausstellen»: a position without amount is refused with its warning, then issued on the person\'s word with no mark of it', { skip: browserPath ? false : 'no Chromium-based browser installed' }, async () => {
-  const c = (await api.send('POST', '/api/customers', { name: 'Familie Huber', address, language: 'de' })).json as unknown as Customer;
+  const c = (await api.send('POST', '/api/contacts', contactBody({ name: 'Familie Huber', address, language: 'de' }))).json as unknown as Contact;
   const d = (await api.send('POST', '/api/invoices', { customerId: c.id, lines: [{ text: 'Wand', quantity: 10, unit: 'm2', price: 18.5, vatRate: 8.1 }, { text: 'Kulanz', quantity: 1, price: 0, vatRate: 8.1 }] })).json as unknown as Draft;
   const refused = await api.send('POST', `/api/invoices/${d.id}/issue`);
   assert.equal(refused.status, 409);
@@ -83,7 +85,7 @@ test('«Trotzdem ausstellen»: a position without amount is refused with its war
 });
 
 test('Firma › Rechnungslayout › Einheiten: a unit is added with its four words; one a draft uses is not removed', async () => {
-  const c = (await api.send('POST', '/api/customers', { name: 'Familie Frei', address, language: 'de' })).json as unknown as Customer;
+  const c = (await api.send('POST', '/api/contacts', contactBody({ name: 'Familie Frei', address, language: 'de' }))).json as unknown as Contact;
   const units = [...DEFAULT_UNITS, { id: 'pal', de: 'Palette', fr: 'palette', it: 'paletta', en: 'pallet' }];
   assert.equal((await api.send('PATCH', '/api/workspace', { invoicing: { units } })).status, 200);
   const d = (await api.send('POST', '/api/invoices', { customerId: c.id, lines: [{ text: 'Holz', quantity: 2, unit: 'pal', price: 80, vatRate: 8.1 }] })).json as unknown as Draft;

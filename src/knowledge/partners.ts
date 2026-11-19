@@ -2,8 +2,8 @@
  * Geschäftspartner (docs/0.4.0/knowledge.md): the businesses the company works with, one page each.
  * A partner is a business file of the workspace (knowledge/<role>/<id>.yaml, with the app layer's
  * facts merged in), a public business of the app layer that the open year's payments route to, a
- * business with notes, or a customer of Rechnungen (one partner, two views: the customer list of
- * Rechnungen and this page read the same record). What the books hold for a partner is found by
+ * business with notes, or a contact of Verkauf (one partner, two views: Verkauf › Kontakte and this
+ * page read the same record; a contact that names its business file is that file's partner). What the books hold for a partner is found by
  * code: a payment by the same routing the booking uses (src/knowledge/counterparties.ts identify),
  * a customer's payments by the invoices they paid.
  */
@@ -37,6 +37,8 @@ export interface PartnerRow {
   invoices: string[];
   /** Questions still open on its payments, receipts or entries. */
   open: number;
+  /** The contact of Verkauf it is (`layers.customer`): its id, the link of Verkauf › Kontakte. */
+  contact?: string;
 }
 
 export interface PartnersView { year: string; partners: PartnerRow[] }
@@ -72,7 +74,7 @@ export interface PartnerInput {
   /** Partner notes files by id, with the role of their folder. */
   noted: ReadonlyMap<string, Role>;
   books: Pick<Index, 'transactions' | 'receipts' | 'mappings' | 'journalEntries'>;
-  invoices: Pick<InvoiceBook, 'customers' | 'invoices'>;
+  invoices: Pick<InvoiceBook, 'contacts' | 'invoices'>;
   questions: readonly Question[];
   rules: readonly RuleRow[];
 }
@@ -128,13 +130,16 @@ export function partnersOf(input: PartnerInput): PartnersView {
     if (id) push(receiptsOf, id, r.id);
   }
 
-  const customers = invoices.customers.filter((c) => !c.deleted);
+  const customers = invoices.contacts.filter((c) => !c.deleted);
+  // A contact that names its business file is that partner; else a partner of its own, by its id.
+  const partnerOf = new Map(customers.map((c) => [c.id, c.business && counterparties.some((cp) => cp.id === c.business) ? c.business : c.id]));
   const invoicesOf = new Map<string, Set<string>>();
   for (const inv of invoices.invoices) {
     if (inv.deleted || !inYear(year, inv.date)) continue;
-    push(invoicesOf, inv.customerId, inv.id);
+    const id = partnerOf.get(inv.customerId) ?? inv.customerId;
+    push(invoicesOf, id, inv.id);
     if (inv.status !== 'issued') continue;
-    for (const p of inv.payments) claim(inv.customerId, p.transactionRef, entriesByRef.get(p.transactionRef) ?? []);
+    for (const p of inv.payments) claim(id, p.transactionRef, entriesByRef.get(p.transactionRef) ?? []);
   }
 
   const partnerOfReceipt = new Map<string, string>();
@@ -160,12 +165,13 @@ export function partnersOf(input: PartnerInput): PartnersView {
   });
   const rows: PartnerRow[] = [];
   for (const c of counterparties) {
-    const customer = customers.some((x) => x.id === c.id);
-    const r = row(c.id, c.name, c.role, c.roles, { app: !!c.origin.vendor, workspace: !!c.origin.binding, customer });
+    const contact = customers.find((x) => partnerOf.get(x.id) === c.id);
+    const customer = !!contact;
+    const r = { ...row(c.id, c.name, c.role, c.roles, { app: !!c.origin.vendor, workspace: !!c.origin.binding, customer }), ...(contact ? { contact: contact.id } : {}) };
     if (c.origin.binding || r.notes || r.rules || r.payments.length || r.receipts.length || customer) rows.push(r);
   }
   for (const c of customers) {
-    if (!rows.some((r) => r.id === c.id)) rows.push(row(c.id, c.name, 'customer', [], { app: false, workspace: false, customer: true }));
+    if (!rows.some((r) => r.id === partnerOf.get(c.id))) rows.push({ ...row(c.id, c.name, 'customer', [], { app: false, workspace: false, customer: true }), contact: c.id });
   }
   const weight = (r: PartnerRow) => r.payments.length + r.receipts.length + r.invoices.length;
   rows.sort((a, b) => weight(b) - weight(a) || a.name.localeCompare(b.name, 'de'));

@@ -2,10 +2,11 @@
  * What the buttons of Rechnungen do: each call goes to the invoicing API, its refusal is shown
  * in the user's language (Art. 26 MWSTG gaps named one by one), and the records are read again.
  */
-import { isItem, issuedPdfUrl, sentPdfUrl, type DocumentKind, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceLine, type Issued, type WriteOff, type WriteOffReason } from '../../../invoices/model.js';
+import { isItem, issuedPdfUrl, sentPdfUrl, type Contact, type DocumentKind, type Draft, type Invoice, type InvoiceLine, type Issued, type WriteOff, type WriteOffReason } from '../../../invoices/model.js';
 import type { AllocationPart } from '../../../invoices/payments.js';
 import type { MailMessage } from '../../../invoices/mail.js';
-import { api, errorText, type AccountsInput, type CreditInput, type DraftChange } from '../../lib/api.js';
+import { api, errorText, type AccountsInput, type ContactInput, type CreditInput, type DraftChange } from '../../lib/api.js';
+import { lineDefaults } from '../../../invoices/contacts.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
 import { localToday, parsePeriod, periodContaining, type Period } from '../../../accounting/periods.js';
@@ -25,8 +26,12 @@ export const invoicePath = (inv: Invoice) => ({ area: 'invoices' as const, view:
 export const invoiceAt = (inv: Invoice, current?: Period): Location =>
   ({ route: invoicePath(inv), query: inv.status === 'draft' && current ? { period: current } : { period: parsePeriod(periodContaining(inv.date, current, filing().length), localToday()) ?? undefined } });
 
-/** The line a new draft starts with, its text ready to be typed over; no unit until one is picked (a discount has none). */
-export const firstLine = (zero: boolean): InvoiceLine => ({ text: t('invoices.newLine'), quantity: 1, price: 0, vatRate: zero ? 0 : invoiceRates()[0] });
+/**
+ * The line a new draft starts with, its text ready to be typed over; no unit until one is picked.
+ * `contact`: its revenue account and standing discount fill the new position (the person may remove them).
+ */
+export const firstLine = (zero: boolean, contact?: Pick<Contact, 'revenueAccount' | 'discount'>): InvoiceLine =>
+  ({ text: t('invoices.newLine'), quantity: 1, price: 0, vatRate: zero ? 0 : invoiceRates()[0], ...lineDefaults(contact) });
 
 async function run<T>(nav: Nav, call: Promise<T>): Promise<T | undefined> {
   try {
@@ -37,7 +42,7 @@ async function run<T>(nav: Nav, call: Promise<T>): Promise<T | undefined> {
   }
 }
 
-export async function newDraft(nav: Nav, customer: Pick<Customer, 'id' | 'name'>, input: DraftChange = {}): Promise<Draft | undefined> {
+export async function newDraft(nav: Nav, customer: Pick<Contact, 'id' | 'name'>, input: DraftChange = {}): Promise<Draft | undefined> {
   const draft = await run(nav, api.createDraft({ ...input, customerId: customer.id }));
   if (!draft) return undefined;
   put({ invoice: draft });
@@ -47,8 +52,8 @@ export async function newDraft(nav: Nav, customer: Pick<Customer, 'id' | 'name'>
   return draft;
 }
 
-/** A new draft of `kind` for `c`: one line to type over, the customer's language, 0 % for a customer abroad. */
-export const newDraftFor = (nav: Nav, c: Pick<Customer, 'id' | 'name' | 'language' | 'address'>, kind: DocumentKind = 'invoice') =>
+/** A new draft of `kind` for `c`: one line to type over, the contact's language, 0 % for a contact abroad. */
+export const newDraftFor = (nav: Nav, c: Pick<Contact, 'id' | 'name' | 'language' | 'addresses' | 'currency'>, kind: DocumentKind = 'invoice') =>
   newDraft(nav, c, { ...(kind !== 'invoice' ? { kind } : {}), lines: [firstLine(false)], ...customerChange({ lines: [firstLine(false)], currency: 'CHF' }, c) });
 
 const draftSaves = inOrder();
@@ -278,12 +283,29 @@ export async function releasePayment(nav: Nav, inv: Pick<Issued, 'id' | 'number'
   return true;
 }
 
-export async function saveCustomer(nav: Nav, id: string | undefined, fields: CustomerFields): Promise<Customer | undefined> {
-  const c = await run(nav, id ? api.patchCustomer(id, fields) : api.createCustomer(fields));
+export async function saveContact(nav: Nav, id: string | undefined, fields: ContactInput): Promise<Contact | undefined> {
+  const c = await run(nav, id ? api.patchContact(id, fields) : api.createContact(fields));
   if (!c) return undefined;
-  put({ customer: c });
+  put({ contact: c });
   await reloadInvoices();
   return c;
+}
+
+/** «Archivieren» or «Löschen»: a contact a document names is archived, one without documents deleted; the toast says which, its undo restores an archived one. */
+export async function removeContact(nav: Nav, c: Contact): Promise<boolean> {
+  const out = await run(nav, api.removeContact(c.id));
+  if (!out) return false;
+  await reloadInvoices();
+  if (out.outcome === 'archived') nav.toast(t('contacts.archived', { name: c.name }), () => { void restoreContact(nav, c); });
+  else nav.toast(t('contacts.deleted', { name: c.name }));
+  return true;
+}
+
+export async function restoreContact(nav: Nav, c: Contact): Promise<boolean> {
+  if (!(await run(nav, api.patchContact(c.id, { archived: false })))) return false;
+  await reloadInvoices();
+  nav.toast(t('contacts.restored', { name: c.name }));
+  return true;
 }
 
 /** After a change that booked: the records and the books are read again. */

@@ -1,5 +1,5 @@
 /**
- * Invoicing (ADR 0010): customers, invoices and credit notes, reminders, sent documents and
+ * Invoicing (ADR 0010): contacts, invoices and credit notes, reminders, sent documents and
  * comments, stored in the workspace's invoices.json (src/invoices/store.ts). Every record carries
  * the envelope of ADR 0004. An invoice is a draft until it is issued; issuing gives it its number,
  * its payment reference and its PDF, and freezes what it says.
@@ -77,9 +77,14 @@ export interface Address {
   country: string;
 }
 
+/**
+ * The recipient as a document prints it: what an issued document freezes (`Issued.customer`), made
+ * from its contact, the picked contact person and the picked address at issue (src/invoices/contacts.ts
+ * recipientOf). A document issued before contacts froze its customer so; nothing printed changes.
+ */
 export interface CustomerFields {
   name: string;
-  /** z.H., Abteilung: the second line of the address. */
+  /** z. Hd., Abteilung: the line under the name. */
   attn?: string;
   address: Address;
   language: InvoiceLanguage;
@@ -88,7 +93,75 @@ export interface CustomerFields {
   email?: string;
   paymentTermsDays: number;
 }
-export interface Customer extends Envelope, CustomerFields {}
+
+/** Kontaktperson of a firm (spec 4.4.5): a document's «z. Hd.» and the mail's recipient. */
+export interface ContactPerson {
+  /** `p-<k>`, unique within its contact. */
+  id: string;
+  name: string;
+  role?: string;
+  email?: string;
+  phone?: string;
+}
+
+/**
+ * An address of a contact. The first is the main one; `billing` marks the Rechnungsadresse (at most
+ * one; none: the first), `delivery` a Lieferadresse (a firm with branches has several).
+ */
+export interface ContactAddress extends Address {
+  /** `a-<k>`, unique within its contact. */
+  id: string;
+  /** An internal name («Filiale Bern»), never printed. */
+  label?: string;
+  /** A line printed under the name: a department, «Küche». */
+  attn?: string;
+  billing?: boolean;
+  delivery?: boolean;
+}
+
+export const CONTACT_TYPES = ['firm', 'person'] as const;
+export type ContactType = (typeof CONTACT_TYPES)[number];
+
+/**
+ * Kontakt (spec 4.4.5): a firm or a person the firm sells to. `name` is what lists and documents
+ * show: a firm's name, a person's salutation, first and last name (derived on every save).
+ */
+export interface ContactFields {
+  type: ContactType;
+  name: string;
+  /** A person's: Frau, Herr, … (free text). */
+  salutation?: string;
+  firstName?: string;
+  lastName?: string;
+  /** The customer number, K-00001 from its own series (src/invoices/contacts.ts nextContactNumber), given at the first issued document or by hand. */
+  number?: string;
+  persons: ContactPerson[];
+  addresses: ContactAddress[];
+  language: InvoiceLanguage;
+  /** The first is where documents go when no contact person is picked. */
+  emails: string[];
+  phone?: string;
+  /** CHE-…-MWST, or an EU VAT number. */
+  vatId?: string;
+  /** The id of the firm's terms it pays in (invoicing.paymentTerms). Absent, and no `paymentDays`: the firm's default. */
+  paymentTerms?: string;
+  /** Days net of its own (what a customer's `paymentTermsDays` became); a contact names these or `paymentTerms`, never both. */
+  paymentDays?: number;
+  currency?: InvoiceCurrency;
+  /** The revenue account a new position takes; absent: the settings'. */
+  revenueAccount?: string;
+  /** A standing discount in percent: every new position takes it; the person may remove it. */
+  discount?: number;
+  /** Left out of reminders (phase 3 reads it). */
+  noReminders?: boolean;
+  notes?: string;
+  tags?: string[];
+  /** Named by a document, so kept: out of the pickers, restored by hand. */
+  archived?: boolean;
+  /** The id of its business file (knowledge/customers/<id>.yaml): booking rules stay there. */
+  business?: string;
+}
+export interface Contact extends Envelope, ContactFields {}
 
 /**
  * A position of a document (spec docs/specs/invoicing.md 4.4.3). Absent `kind` is an item: every
@@ -175,7 +248,12 @@ export interface Answer { date: string; by: string }
 /** What a draft holds and an issued invoice keeps, frozen. */
 export interface InvoiceContent {
   kind: DocumentKind;
+  /** The contact (`contacts[].id`); the name stays from before contacts, so every record keeps it. */
   customerId: string;
+  /** The contact person the document goes to: its «z. Hd.» and the mail's recipient. */
+  personId?: string;
+  /** The contact's address it is sent to; absent: the billing address. */
+  addressId?: string;
   /** The invoice date. */
   date: string;
   /**
@@ -379,7 +457,7 @@ export const replacedPdfUrl = (id: string, k: number) => `/api/invoices/${encode
 /** invoices.json. */
 export interface InvoiceBook {
   schema: number;
-  customers: Customer[];
+  contacts: Contact[];
   invoices: Invoice[];
   sent: SentDocument[];
 }

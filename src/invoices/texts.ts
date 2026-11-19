@@ -7,6 +7,8 @@ import { NET_TERMS, type DocumentKind, type Exemption, type InvoiceLanguage, typ
 export interface InvoiceTexts {
   invoice: string; credit: string; draft: string; reminder: (level: number) => string;
   date: string; due: string; forInvoice: string; yourVat: string; vatSuffix: string; supplied: string;
+  /** Before the contact person a document goes to («z. Hd. Anna Muster»). */
+  attn: string;
   desc: string; qty: string; price: string; vat: string; amount: string;
   /** After a line's rate: its price has the VAT in it. */
   included: string;
@@ -38,7 +40,7 @@ export interface InvoiceTexts {
 export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
   de: {
     invoice: 'Rechnung', credit: 'Gutschrift', draft: 'Entwurf', reminder: (n) => `${n}. Mahnung`,
-    date: 'Datum', due: 'zahlbar bis', forInvoice: 'zu Rechnung', yourVat: 'Ihre MWST-Nr.', vatSuffix: 'MWST', supplied: 'Leistung',
+    date: 'Datum', due: 'zahlbar bis', forInvoice: 'zu Rechnung', yourVat: 'Ihre MWST-Nr.', attn: 'z. Hd.', vatSuffix: 'MWST', supplied: 'Leistung',
     desc: 'Beschreibung', qty: 'Menge', price: 'Preis', vat: 'MWST', amount: 'Betrag', included: 'inkl.',
     net: 'Total netto', vatOn: (r, n) => `MWST ${r} % auf ${n}`, total: 'Total',
     intro: 'Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:',
@@ -67,7 +69,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
   },
   fr: {
     invoice: 'Facture', credit: 'Note de crédit', draft: 'Projet', reminder: (n) => (n === 1 ? '1er rappel' : `${n}e rappel`),
-    date: 'Date', due: 'payable jusqu’au', forInvoice: 'concernant la facture', yourVat: 'Votre n° TVA', vatSuffix: 'TVA', supplied: 'Prestation',
+    date: 'Date', due: 'payable jusqu’au', forInvoice: 'concernant la facture', yourVat: 'Votre n° TVA', attn: 'à l’att. de', vatSuffix: 'TVA', supplied: 'Prestation',
     desc: 'Description', qty: 'Quantité', price: 'Prix', vat: 'TVA', amount: 'Montant', included: 'TTC',
     net: 'Total net', vatOn: (r, n) => `TVA ${r} % sur ${n}`, total: 'Total',
     intro: 'Nous vous remercions de votre mandat et vous facturons les prestations suivantes :',
@@ -96,7 +98,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
   },
   it: {
     invoice: 'Fattura', credit: 'Nota di credito', draft: 'Bozza', reminder: (n) => `${n}° sollecito`,
-    date: 'Data', due: 'pagabile entro il', forInvoice: 'relativa alla fattura', yourVat: 'Vostro n. IVA', vatSuffix: 'IVA', supplied: 'Prestazione',
+    date: 'Data', due: 'pagabile entro il', forInvoice: 'relativa alla fattura', yourVat: 'Vostro n. IVA', attn: 'alla c. a. di', vatSuffix: 'IVA', supplied: 'Prestazione',
     desc: 'Descrizione', qty: 'Quantità', price: 'Prezzo', vat: 'IVA', amount: 'Importo', included: 'incl.',
     net: 'Totale netto', vatOn: (r, n) => `IVA ${r} % su ${n}`, total: 'Totale',
     intro: 'Vi ringraziamo per l’incarico e vi fatturiamo le seguenti prestazioni:',
@@ -126,7 +128,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
   en: {
     invoice: 'Invoice', credit: 'Credit note', draft: 'Draft',
     reminder: (n) => (n === 1 ? 'Payment reminder' : n === 2 ? 'Second reminder' : 'Final reminder'),
-    date: 'Date', due: 'payable by', forInvoice: 'for invoice', yourVat: 'Your VAT no.', vatSuffix: 'VAT', supplied: 'Supplied',
+    date: 'Date', due: 'payable by', forInvoice: 'for invoice', yourVat: 'Your VAT no.', attn: 'Attn.', vatSuffix: 'VAT', supplied: 'Supplied',
     desc: 'Description', qty: 'Qty', price: 'Price', vat: 'VAT', amount: 'Amount', included: 'incl.',
     net: 'Net total', vatOn: (r, n) => `VAT ${r} % on ${n}`, total: 'Total',
     intro: 'Thank you for your order. We invoice the following services:',

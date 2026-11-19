@@ -41,7 +41,8 @@ test('every area folder is a registered area and a line of the map, every Firma 
 test('the places the sidebar denied in the wishes test are in its prompt, with what it can do there (w07, w13, w15, w16, w18)', () => {
   const prompt = assistantSystem('de', '2451 Kontokorrent', appMap('de'));
   assert.ok(prompt.includes(appMap('de')));
-  assert.match(prompt, /- Verkauf: .*Angebote, Aufträge, Lieferscheine, Rechnungen, Gutschriften, Offene Posten, Kunden and Versendet.*«Auftrag erstellen».*Belegkette.*«Nicht gesendet».*\(Senden\).*N writes a new draft.* You: invoiceDraft\./);
+  assert.match(prompt, /- Verkauf: .*Angebote, Aufträge, Lieferscheine, Rechnungen, Gutschriften, Offene Posten, Kontakte and Versendet.*«Auftrag erstellen».*Belegkette.*«Nicht gesendet».*\(Senden\).*N writes a new draft \(contact, then its contact person.* You: invoiceDraft\./);
+  assert.match(prompt, /Kontakte is a table .*customer number \(K-00001.*archived, never deleted.*«Importieren» reads contacts from a CSV with a column mapping/);
   assert.match(prompt, /Firma › Rechnungslayout: .*payment term in days.*text above and below the table.* You: invoicing\./);
   assert.match(prompt, /Exportieren \(⇧E.*«Treuhänder-Paket» \(preset "treuhand".* You: export\./);
   assert.match(prompt, /Firma › Quellen: .*mailboxes/);

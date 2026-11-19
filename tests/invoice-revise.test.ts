@@ -18,7 +18,8 @@ import { matchPayments, releasePayment, type PaymentContext } from '../src/invoi
 import { asDraft, backToDraftRefusal, cancel, creditNoteDraft, deleteDraft, issue, nextNumber, totals, warningsForIssue, InvoiceRuleError } from '../src/invoices/rules.js';
 import { chfAmount } from '../src/accounting/ledger.js';
 import { applyAccountChange, planAccountChange, takeBackEvent, withAccounts, type AccountContext } from '../src/invoices/revise.js';
-import { DEFAULT_LAYOUT, type Customer, type Draft, type InvoiceBook, type Issued, type SentDocument } from '../src/invoices/model.js';
+import { DEFAULT_LAYOUT, type Draft, type InvoiceBook, type Issued, type SentDocument } from '../src/invoices/model.js';
+import { asContact, type Customer } from './support/invoice-fixtures.js';
 import { PERSON, update, type Books } from '../src/books/store.js';
 import { closedPart } from '../src/books/seal.js';
 import type { BankTransaction, JournalEntry } from '../src/types/index.js';
@@ -46,7 +47,7 @@ const ctx: PaymentContext = {
 };
 const acc = (): AccountContext => ({ revenueAccount: '3200', isRevenue: (a) => chart().typeOf(a) === 'revenue', base: 'CHF' });
 
-const newBook = (): InvoiceBook => ({ schema: 3, customers: [customer], invoices: [], sent: [] });
+const newBook = (): InvoiceBook => ({ schema: 3, contacts: [asContact(customer)], invoices: [], sent: [] });
 const books = (transactions: BankTransaction[] = [], closedThrough = '2026-06-30'): Books => ({ receipts: [], transactions, mappings: [], bankStatements: [], journalEntries: [], config: { closedThrough } });
 const draft = (id: string, date: string, lines: Draft['lines'], over: Partial<Draft> = {}): Draft => ({
   id, createdAt: `${date}T08:00:00Z`, origin: 'manual', deleted: false, status: 'draft', kind: 'invoice', customerId: 'cu_1', date, currency: 'CHF', language: 'de', comments: [], lines, ...over,

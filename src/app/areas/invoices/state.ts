@@ -21,8 +21,10 @@ export type Dialog =
    * button's words) runs `run` again with the person's confirmation.
    */
   | { kind: 'warn'; title: string; text: string; anyway: string; run: () => Promise<unknown> }
-  /** The customer form; `then` names what follows a new customer: a draft for it, or the draft being written gets it. */
-  | { kind: 'customer'; id?: string; then?: 'invoice' | { draft: string } | { kind: DocumentKind }; name?: string }
+  /** The contact form; `then` names what follows a new contact: a draft (of a kind) for it, or the draft being written gets it. */
+  | { kind: 'contact'; id?: string; then?: 'invoice' | { draft: string } | { kind: DocumentKind }; name?: string }
+  /** Kontakte importieren: a CSV with its column mapping. */
+  | { kind: 'contactImport' }
   | { kind: 'cancel' }
   /** «Zahlungseingang erfassen» on the open invoice. */
   | { kind: 'handPayment' }

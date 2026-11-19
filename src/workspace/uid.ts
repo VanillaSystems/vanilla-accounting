@@ -19,3 +19,13 @@ export function parseUid(input: string): { uid: Uid } | { error: string } {
   }
   return { uid: `CHE-${m[1]}.${m[2]}.${m[3]}` as Uid };
 }
+
+/** A VAT number without the suffix its language prints after it (MWST, TVA, IVA, VAT). */
+export const bareVatId = (vatId: string): string => vatId.replace(/\s*(MWST|TVA|IVA|VAT)$/i, '');
+
+/** Why a customer's VAT number is refused: a Swiss UID with a wrong check digit (r8c-18); a foreign VAT number is any text. */
+export function vatIdError(vatId: string | undefined): string | undefined {
+  if (!vatId || !/^CHE/i.test(vatId)) return undefined;
+  const parsed = parseUid(bareVatId(vatId));
+  return 'error' in parsed ? parsed.error : undefined;
+}

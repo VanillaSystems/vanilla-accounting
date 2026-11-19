@@ -2,7 +2,7 @@
  * The one owner of invoices.json and the invoice PDFs: load (with the schema ladder of
  * src/workspace/schema.ts), save atomically, write a PDF once. The layout of the workspace:
  *
- *   invoices.json               customers, invoices (drafts and issued), sent documents
+ *   invoices.json               contacts, invoices (drafts and issued), sent documents
  *   invoices/<number>.pdf       an issued invoice or credit note, as issued
  *   invoices/sent/<id>.pdf      a reminder or cancellation notice, as sent
  */
@@ -13,12 +13,16 @@ import { yearPaths, type Workspace } from '../workspace/workspace.js';
 import { INVOICES_MIGRATIONS, INVOICES_SCHEMA, climb, schemaOf } from '../workspace/schema.js';
 import type { Envelope, InvoiceBook } from './model.js';
 
-export const emptyInvoiceBook = (): InvoiceBook => ({ schema: INVOICES_SCHEMA, customers: [], invoices: [], sent: [] });
+export const emptyInvoiceBook = (): InvoiceBook => ({ schema: INVOICES_SCHEMA, contacts: [], invoices: [], sent: [] });
 
 export function loadInvoices(ws: Pick<Workspace, 'paths'>): InvoiceBook {
   const path = ws.paths.invoices;
   if (!existsSync(path)) return emptyInvoiceBook();
-  const raw = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+  return invoiceBookOf(JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>, path);
+}
+
+/** invoices.json as read from `path` (a file, or its text as git holds it), brought to the current schema. */
+export function invoiceBookOf(raw: Record<string, unknown>, path: string): InvoiceBook {
   const current = climb<Record<string, unknown>>(raw, schemaOf(raw.schema, path), INVOICES_SCHEMA, INVOICES_MIGRATIONS, path, (d) => structuredClone(d));
   return { ...emptyInvoiceBook(), ...current, schema: INVOICES_SCHEMA } as InvoiceBook;
 }

@@ -12,6 +12,7 @@ import { creditNoteDraft, issue, missingForIssue, revenueSplit, revenueVatCode }
 import { assembleSheets, paginate, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
 import { DEFAULT_LAYOUT } from '../src/invoices/model.js';
 import type { Draft, InvoiceBook, InvoiceLine, Issued, ItemLine, Sender } from '../src/invoices/model.js';
+import { asContact } from './support/invoice-fixtures.js';
 import { matchPayments, type PaymentContext } from '../src/invoices/payments.js';
 import { bookInvoiceEvents } from '../src/invoices/events.js';
 import { parseDraftPatch } from '../src/invoices/service.js';
@@ -126,7 +127,7 @@ test('two net rates: a position of the second activity books F2, one of the firs
 
 test('two net rates on the cash basis: the payment books F1 and F2, and the half year\'s form shows each in its own rate\'s row (323, 333)', () => {
   setJurisdiction(ch, TWO_RATES);
-  const book: InvoiceBook = { schema: 2, customers: [customer], invoices: [], sent: [] } as InvoiceBook;
+  const book: InvoiceBook = { schema: 2, contacts: [asContact(customer)], invoices: [], sent: [] } as InvoiceBook;
   const inv = issuedTwo(book, draft([work(1000, 1), work(500, 2)]));
   const b = emptyBooks();
   b.transactions.push({ ref: 'p1', bank: 'Raiffeisen', date: '2026-11-20', amount: 1621.5, currency: 'CHF', direction: 'CRDT', description: 'Zahlung', reference: inv.reference });
@@ -139,7 +140,7 @@ test('two net rates on the cash basis: the payment books F1 and F2, and the half
 
 test('two net rates on the agreed basis: the invoice\'s event books F1 and F2 on its date, a credit note of the second activity takes F2 back', () => {
   setJurisdiction(ch, TWO_AGREED);
-  const book: InvoiceBook = { schema: 2, customers: [customer], invoices: [], sent: [] } as InvoiceBook;
+  const book: InvoiceBook = { schema: 2, contacts: [asContact(customer)], invoices: [], sent: [] } as InvoiceBook;
   const inv = issuedTwo(book, draft([work(1000, 1), work(500, 2)]));
   const b = emptyBooks();
   bookInvoiceEvents(b, book, payCtx);
@@ -153,7 +154,7 @@ test('two net rates on the agreed basis: the invoice\'s event books F1 and F2 on
 });
 
 test('the activity is checked where a draft comes in: 1 or 2; a 2 on a firm with one net rate (a draft from before it went back) is dropped, so the line stays editable and books the first', () => {
-  const book: InvoiceBook = { schema: 2, customers: [customer], invoices: [], sent: [] } as InvoiceBook;
+  const book: InvoiceBook = { schema: 2, contacts: [asContact(customer)], invoices: [], sent: [] } as InvoiceBook;
   const refusal = (body: unknown) => { try { parseDraftPatch(body, book); } catch (e) { return [(e as InvoiceRuleError).code, (e as InvoiceRuleError).missing?.[0]?.field]; } return undefined; };
   setJurisdiction(ch, TWO_RATES);
   assert.deepEqual((parseDraftPatch({ lines: [work(10, 2), work(10, 1)] }, book).lines! as ItemLine[]).map((l) => l.activity), [2, undefined], 'the first is the default and not kept');
@@ -170,7 +171,7 @@ test('the activity is checked where a draft comes in: 1 or 2; a 2 on a firm with
 
 test('a payment read in after the firm went back to one net rate, for an invoice issued with a second activity: booked at the first, never a stop of the import', () => {
   setJurisdiction(ch, TWO_RATES);
-  const book: InvoiceBook = { schema: 2, customers: [customer], invoices: [], sent: [] } as InvoiceBook;
+  const book: InvoiceBook = { schema: 2, contacts: [asContact(customer)], invoices: [], sent: [] } as InvoiceBook;
   const inv = issuedTwo(book, draft([work(1000, 1), work(500, 2)]));
   setJurisdiction(ch, NET_RATE);
   assert.equal(revenueVatCode(8.1, undefined, 2), 'F1');
@@ -183,7 +184,7 @@ test('a payment read in after the firm went back to one net rate, for an invoice
 
 test('a credit note for part of the total: on a firm with one rate one line per rate, whatever the lines\' activity; with two, one per activity, named by its first position', () => {
   setJurisdiction(ch, TWO_RATES);
-  const book: InvoiceBook = { schema: 2, customers: [customer], invoices: [], sent: [] } as InvoiceBook;
+  const book: InvoiceBook = { schema: 2, contacts: [asContact(customer)], invoices: [], sent: [] } as InvoiceBook;
   const inv = issuedTwo(book, draft([work(1000, 1), { ...work(500, 2), text: 'Beschläge' }, { ...work(100), vatRate: 0 }], { exemption: 'abroad' }));
   const env = { id: 'c1', createdAt: '2026-10-10T08:00:00Z', origin: 'manual' as const, deleted: false };
   const two = creditNoteDraft(inv, { amount: 172.15, reason: 'Kulanz' }, env, '2026-10-10').lines as ItemLine[];
@@ -203,7 +204,7 @@ test('the activity picker: on screen beside the rate, labelled with the firm\'s 
   assert.match(paper, /8\.1 %/);
   // The edit the picker reports: 2 kept on the line, 1 removes it.
   const d = draft([work(1000), work(500, 2)]);
-  const ctx = { customers: [customer], defaultTexts: { intro: '', closing: '' } };
+  const ctx = { contacts: [asContact(customer)], defaultTexts: { intro: '', closing: '' } };
   assert.deepEqual(sheetEdit(d, 'l:0:activity', '2', ctx), { change: { lines: [work(1000, 2), work(500, 2)] } });
   assert.deepEqual(sheetEdit(d, 'l:1:activity', '1', ctx), { change: { lines: [work(1000), work(500)] } });
   assert.deepEqual(sheetEdit(d, 'l:0:activity', '3', ctx), { refused: 'value' });

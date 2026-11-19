@@ -15,7 +15,8 @@ import { describeBooks, type RecordChange } from '../src/saving/model.js';
 import { updateInvoices } from '../src/invoices/store.js';
 import { setAccountName } from '../src/workspace/accounts-write.js';
 import { bookEntry, markTemplate } from '../src/books/year-close.js';
-import type { Customer, Draft, Issued } from '../src/invoices/model.js';
+import type { Draft, Issued } from '../src/invoices/model.js';
+import { asContact, type Customer } from './support/invoice-fixtures.js';
 import { commitExactly } from '../src/workspace/git.js';
 import { recordsPaths } from '../src/saving/changes.js';
 import { relative } from 'node:path';
@@ -97,8 +98,10 @@ test('Änderungen lists invoices, customers, statement imports, year-close marks
   const customer: Customer = { id: 'cu_new', createdAt: '2026-10-16T08:00:00Z', origin: 'manual', deleted: false, name: 'Beispiel Treuhand AG', address: { postcode: '3000', town: 'Bern', country: 'CH' }, language: 'de', paymentTermsDays: 30 };
   let cancelled = '';
   updateInvoices(ws, (book) => {
-    book.customers.push(customer);
-    book.customers[0].paymentTermsDays = 10;
+    book.contacts.push(asContact(customer));
+    book.contacts[0].paymentDays = 10;
+    // A customer number given since the save (an issue gives one): the app's, no change of a person's to list or undo.
+    book.contacts[1].number = 'K-00099';
     book.invoices.push({ id: 'in_new', createdAt: '2026-10-16T08:00:00Z', origin: 'manual', deleted: false, status: 'draft', kind: 'invoice', customerId: 'cu_new', date: '2026-10-16', currency: 'CHF', language: 'de', comments: [], lines: [] } as Draft);
     const issued = book.invoices.find((i): i is Issued => i.status === 'issued' && !i.cancelled && i.kind === 'invoice')!;
     issued.cancelled = { date: '2026-10-16', reason: 'doppelt' };
@@ -128,7 +131,8 @@ test('Änderungen lists invoices, customers, statement imports, year-close marks
   const rename = view.books.records.find((r) => r.kind === 'account' && r.state === 'renamed')!;
   assert.deepEqual('undo' in rename && rename.undo, { kind: 'accountRename', number: '6100', name: 'Unterhalt und Ersatz Einrichtungen' });
   const term = view.books.records.find((r) => r.kind === 'customer' && r.state === 'changed')!;
-  assert.deepEqual('undo' in term && term.undo.kind === 'customerBack' && term.undo.fields.paymentTermsDays, 30, 'the term as saved');
+  assert.deepEqual('undo' in term && term.undo.kind === 'customerBack' && term.undo.fields.paymentDays, 30, 'the term as saved');
+  assert.ok('undo' in term && term.undo.kind === 'customerBack' && !('number' in term.undo.fields), 'its undo never takes a customer number, which the first issued document gives');
   assert.ok(view.books.records.some((r) => r.kind === 'invoice' && r.text.includes(cancelled)));
   assert.deepEqual(view.books.hand.map((h) => [h.id, h.saved === undefined]), [[booked.id, true]], 'the year-close booking is a hand booking with its Rückgängig');
   assert.equal(describeBooks(view.books), 'Bücher: 1 Buchung von Hand · 1 Rechnungsentwurf · 1 Rechnung storniert · 1 Kunde neu · 1 Kunde geändert · 1 Kontoauszug eingelesen · Abschluss: 2 Schritte');

@@ -20,6 +20,7 @@ import { usePersistedFlag } from '../../shell/prefs.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
 import { useInvoices } from '../invoices/data.js';
+import { recipientOf } from '../../../invoices/contacts.js';
 import { bookOf } from '../invoices/model.js';
 import { contextOf, screenOf } from '../invoices/sheets.js';
 import { Sheet } from '../invoices/Sheet.js';
@@ -306,7 +307,7 @@ function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
   const data = useMemo(() => {
     if (!d) return undefined;
     const latest = [...d.invoices].filter((i) => i.kind === 'invoice' && i.lines.length).sort((a, b) => Number(b.status === 'issued') - Number(a.status === 'issued') || b.date.localeCompare(a.date))[0];
-    const customer = latest ? d.customers.find((c) => c.id === latest.customerId) : undefined;
+    const customer = latest ? d.contacts.find((c) => c.id === latest.customerId) : undefined;
     const sample: Draft = {
       id: 'sample', createdAt: '', origin: 'manual', deleted: false, status: 'draft', comments: [], kind: 'invoice',
       customerId: customer?.id ?? '', date: localToday(), currency: 'CHF', language: lang, ...(latest?.prices ? { prices: latest.prices } : {}),
@@ -314,7 +315,7 @@ function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
       intro: texts.intro, closing: texts.closing,
     };
     const ctx = contextOf(ws);
-    const sheet = draftSheet({ ...ctx, settings: { ...ctx.settings!, layout } }, bookOf(d), sample, customer, layout.logo ? api.logoUrl(layout.logo) : undefined);
+    const sheet = draftSheet({ ...ctx, settings: { ...ctx.settings!, layout } }, bookOf(d), sample, recipientOf(customer, sample, ctx.settings), layout.logo ? api.logoUrl(layout.logo) : undefined);
     const fallback = customer ? {} : { customer: { ...sheet.customer, name: t('invoiceLayout.sampleCustomer'), address: { street: t('invoiceLayout.sampleStreet'), number: '1', postcode: '8000', town: t('invoiceLayout.sampleTown'), country: 'CH' } } };
     const windowGuide = guide ? t(layout.window === 'left' ? 'invoiceLayout.windowFrameLeft' : 'invoiceLayout.windowFrameRight') : undefined;
     return { ...sheet, ...fallback, screen: screenOf(d, canEdit ? 'texts' : undefined, undefined, windowGuide) };

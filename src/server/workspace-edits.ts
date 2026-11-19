@@ -12,8 +12,9 @@ import { patchManifest } from '../workspace/manifest-write.js';
 import { APP_ROOT, WorkspaceError, type Workspace } from '../workspace/workspace.js';
 import { createCustomer, createDraft, parseCustomer, parseDraftPatch, removeDraft } from '../invoices/service.js';
 import { loadInvoices, updateInvoices } from '../invoices/store.js';
-import { InvoiceRuleError, liveCustomers, liveDocuments } from '../invoices/rules.js';
-import type { Customer, CustomerFields } from '../invoices/model.js';
+import { InvoiceRuleError, liveDocuments } from '../invoices/rules.js';
+import type { CustomerFields } from '../invoices/model.js';
+import { liveContacts, pickableContacts } from '../invoices/contacts.js';
 import type { Change, ChangeNote, InvoicingSet, WorkspaceChange } from '../types/assistant.js';
 import { RequestError } from './books.js';
 import { askQuestion, closeQuestion, openQuestionOn } from './questions.js';
@@ -70,24 +71,28 @@ function invoicing(ws: Workspace, set: InvoicingSet, customers: Record<string, n
       Object.fromEntries(Object.keys(texts ?? {}).map((k) => [k, (settings.texts[lang as keyof typeof settings.texts] as Record<string, string> | undefined)?.[k] ?? null]))]));
   }
   checked(() => patchManifest(ws.paths.manifest, { invoicing: { ...(set.paymentTermsDays !== undefined ? { paymentTermsDays: set.paymentTermsDays } : {}), ...(set.texts ? { texts: set.texts } : {}) } }));
-  const moved = customers ? setCustomerTerms(ws, (c) => customers[c.id])
-    : set.paymentTermsDays !== undefined ? setCustomerTerms(ws, (c) => (c.paymentTermsDays === settings.paymentTermsDays ? set.paymentTermsDays : undefined)) : {};
+  const moved = customers ? setCustomerTerms(ws, (_days, id) => customers[id])
+    : set.paymentTermsDays !== undefined ? setCustomerTerms(ws, (days) => (days === settings.paymentTermsDays ? set.paymentTermsDays : undefined)) : {};
   const n = Object.keys(moved).length;
   return { undo: { kind: 'invoicing', set: before, ...(n ? { customers: moved } : {}) }, ...(n ? { note: { customers: n } } : {}) };
 }
 
+
 /**
- * Each customer's payment term that `to` names; returns the terms they had. A new default term
- * goes to every customer who had the old one (Firma › Rechnungslayout by hand does the same).
+ * Each contact's own days net that `to` names; returns the days they had. A new default term goes
+ * to every contact who had the old one as days of its own (Firma › Rechnungslayout by hand does the
+ * same); one that follows the firm follows it anyway. `to` gets the days and the contact id.
  */
-export function setCustomerTerms(ws: Pick<Workspace, 'paths'>, to: (c: Customer) => number | undefined): Record<string, number> {
+export function setCustomerTerms(ws: Pick<Workspace, 'paths'>, to: (days: number, id: string) => number | undefined): Record<string, number> {
   const moved: Record<string, number> = {};
   updateInvoices(ws, (book) => {
-    for (const c of liveCustomers(book)) {
-      const days = to(c);
-      if (days === undefined || days === c.paymentTermsDays) continue;
-      moved[c.id] = c.paymentTermsDays;
-      book.customers[book.customers.indexOf(c)] = { ...c, paymentTermsDays: days };
+    for (const c of liveContacts(book)) {
+      const had = c.paymentDays;
+      if (had === undefined) continue;
+      const days = to(had, c.id);
+      if (days === undefined || days === had) continue;
+      moved[c.id] = had;
+      book.contacts[book.contacts.indexOf(c)] = { ...c, paymentDays: days };
     }
   });
   return moved;
@@ -98,8 +103,8 @@ function invoiceDraft(ws: Workspace, c: Extract<WorkspaceChange, { kind: 'invoic
   return checked(() => {
     const { clear: _, ...draft } = parseDraftPatch(c.draft, loadInvoices(ws), ws.invoicing?.units);
     const fields = c.newCustomer ? parseCustomer({ language: 'de', ...c.newCustomer }, false) : undefined;
-    const customer = fields ? createCustomer(ws, fields as CustomerFields) : liveCustomers(loadInvoices(ws)).find((x) => x.id === c.customer);
-    if (!customer) throw new RequestError(400, 'Diesen Kunden gibt es nicht: einen neuen mit newCustomer anlegen.', { code: 'unknownCustomer' });
+    const customer = fields ? createCustomer(ws, fields as CustomerFields) : pickableContacts(loadInvoices(ws)).find((x) => x.id === c.customer);
+    if (!customer) throw new RequestError(400, 'Diesen Kontakt gibt es nicht (oder er ist archiviert): einen neuen mit newCustomer anlegen.', { code: 'unknownCustomer' });
     const made = createDraft(ws, { ...draft, customerId: customer.id });
     return { undo: { kind: 'dropInvoiceDraft', id: made.id, ...(fields ? { customer: customer.id } : {}) }, note: { draft: { id: made.id, customer: customer.name } } };
   });
@@ -110,8 +115,8 @@ function dropInvoiceDraft(ws: Workspace, id: string, customer: string | undefine
   checked(() => removeDraft(ws, id));
   if (customer) {
     updateInvoices(ws, (book) => {
-      const i = book.customers.findIndex((c) => c.id === customer);
-      if (i >= 0 && !liveDocuments(book).some((inv) => inv.customerId === customer)) book.customers[i] = { ...book.customers[i], deleted: true };
+      const i = book.contacts.findIndex((c) => c.id === customer);
+      if (i >= 0 && !liveDocuments(book).some((inv) => inv.customerId === customer)) book.contacts[i] = { ...book.contacts[i], deleted: true };
     });
   }
   return {};

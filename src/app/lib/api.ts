@@ -32,7 +32,8 @@ import { bookingWaitsText } from './booking-waits.js';
 import { agreedBasis, baseCurrency, vatSetup } from '../../engines/index.js';
 import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
-import type { Comment, Customer, CustomerFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, WriteOff, WriteOffReason } from '../../invoices/model.js';
+import type { ImportChoice, ImportMapping, ImportPreview } from '../../invoices/contact-import.js';
+import type { Comment, Contact, ContactFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, WriteOff, WriteOffReason } from '../../invoices/model.js';
 import type { AllocationItem, AllocationPart, PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
@@ -202,6 +203,8 @@ export function errorText(e: unknown): string {
     case 'foreignOrigin': return t('error.foreignOrigin');
     case 'shareNotPackage': return t('error.shareNotPackage');
     case 'shareTooLarge': return t('error.shareTooLarge', { limit: b.params.limit });
+    case 'importTooLarge': return t('error.importTooLarge', { limit: b.params.limit, rows: b.params.rows });
+    case 'bodyTooLarge': return t('error.bodyTooLarge', { limit: b.params.limit });
     case 'shareUnknownBase': return t('error.shareUnknownBase', { name: b.params.name });
     case 'shareUpdateFailed': return t('error.shareUpdateFailed', { why: b.params.why });
     case 'shareOwnBooks': return t('error.shareOwnBooks', { version: b.params.version, name: b.params.name });
@@ -474,7 +477,16 @@ export type { JournalEntryInput };
 export type ManualTransactionInput = { date: string; description: string; amount: number; currency?: string; direction?: 'DBIT' | 'CRDT'; account?: string; role?: MoneyRole; label?: string };
 export type YearEndEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string; template?: string };
 export type YearCloseView = YearClose & { opening?: Opening };
-export interface InvoiceList { today: string; invoices: Invoice[]; customers: Customer[]; sent: SentDocument[] }
+export interface InvoiceList { today: string; invoices: Invoice[]; contacts: Contact[]; sent: SentDocument[] }
+/** A contact with its business file (named, or proposed by code) and the customers' business files a person may pick. */
+export interface ContactDetail {
+  contact: Contact;
+  business?: { id: string; name: string; known: boolean };
+  proposal?: { id: string; name: string; by: string };
+  businesses: Array<{ id: string; name: string }>;
+}
+/** A contact as a request writes it: its fields, null clearing an optional one. */
+export type ContactInput = { [K in keyof ContactFields]?: ContactFields[K] | null };
 export type DraftChange = { [K in keyof DraftPatch]?: DraftPatch[K] | null };
 export interface CreditInput { reason: string; amount?: number; settlement?: 'refund' | 'offset' }
 export interface ReminderInput { date?: string; fee?: number; intro?: string; closing?: string; to?: string; email?: MailMessage }
@@ -792,8 +804,12 @@ export const api = {
 
   invoices: () => request<InvoiceList>('GET', sources.invoices()),
   paymentProposals: () => request<{ proposals: PaymentProposal[] }>('GET', '/api/invoices/payments').then((r) => r.proposals),
-  createCustomer: (fields: CustomerFields) => request<Customer>('POST', '/api/customers', fields),
-  patchCustomer: (id: string, fields: Partial<CustomerFields>) => request<Customer>('PATCH', `/api/customers/${id}`, fields),
+  createContact: (fields: ContactInput) => request<Contact>('POST', '/api/contacts', fields),
+  patchContact: (id: string, fields: ContactInput | Record<string, unknown>) => request<Contact>('PATCH', `/api/contacts/${encodeURIComponent(id)}`, fields),
+  removeContact: (id: string) => request<{ contact: Contact; outcome: 'archived' | 'deleted' }>('DELETE', `/api/contacts/${encodeURIComponent(id)}`),
+  contact: (id: string) => request<ContactDetail>('GET', `/api/contacts/${encodeURIComponent(id)}`),
+  previewContactImport: (csv: string, mapping?: ImportMapping) => request<ImportPreview>('POST', '/api/contacts/import/preview', { csv, ...(mapping ? { mapping } : {}) }),
+  importContacts: (csv: string, mapping: ImportMapping, choices: Record<string, ImportChoice>) => request<{ created: number; skipped: number; ids: string[] }>('POST', '/api/contacts/import', { csv, mapping, choices }),
   createDraft: (input: DraftChange & { customerId: string }) => request<Draft>('POST', '/api/invoices', input),
   patchDraft: (id: string, patch: DraftChange) => request<Draft>('PATCH', `/api/invoices/${id}`, patch),
   deleteDraft: (id: string) => request<{ ok: true }>('DELETE', `/api/invoices/${id}`),

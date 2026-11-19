@@ -11,10 +11,10 @@ and the providers.
 | core | 86 | 23 |
 | engine | 4 | 1 |
 | provider | 15 | 11 |
-| split | 160 | 26 |
+| split | 162 | 26 |
 | infrastructure | 85 | 4 |
 | workflow | 31 | 0 |
-| view | 427 | 54 |
+| view | 428 | 54 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -90,7 +90,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/workspace/scaffold.ts` | MWST 1, ESTV 1 |
 | `src/workspace/setup.ts` | CHF 1, MWST 6, ESTV 4, camt.053 1 |
 | `src/workspace/terminal-agents.ts` | form 0535 1 |
-| `src/workspace/uid.ts` | MWST 2 |
+| `src/workspace/uid.ts` | MWST 4 |
 | `src/workspace/workspace.ts` | ESTV 1 |
 
 ## engine
@@ -135,11 +135,11 @@ Layers are assigned by path prefix, most specific first:
 | `src/intake/read.ts` | camt.053 4 |
 | `src/intake/vat.ts` | MWST 3 |
 | `src/invoices/fonts.ts` | QR-bill 1 |
-| `src/invoices/model.ts` | CHF 1, MWST 2, Ziffer 1, QR-bill 9, Rappen 2 |
+| `src/invoices/model.ts` | CHF 1, MWST 3, Ziffer 1, QR-bill 9, Rappen 2 |
 | `src/invoices/payments.ts` | MWST 1, ESTV 1, camt.053 1, QR-bill 1 |
 | `src/invoices/pdf.ts` | QR-bill 1 |
 | `src/invoices/rules.ts` | MWST 1, Ziffer 1, QR-bill 6, Rappen 14 |
-| `src/invoices/service.ts` | CHF 2, MWST 1, Ziffer 1 |
+| `src/invoices/service.ts` | CHF 2, Ziffer 1 |
 | `src/invoices/sheet.ts` | QR-bill 21 |
 | `src/invoices/texts.ts` | MWST 5 |
 | `src/knowledge/cases.ts` | MWST 5, ESTV 4, Ziffer 4, camt.053 1 |
@@ -170,7 +170,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/invoices/Sheet.tsx` | QR-bill 2 |
 | `src/app/areas/invoices/actions.ts` | CHF 1 |
 | `src/app/areas/invoices/address.ts` | MWST 1, UID 1, QR-bill 1 |
-| `src/app/areas/invoices/model.ts` | CHF 2 |
+| `src/app/areas/invoices/model.ts` | CHF 1 |
 | `src/app/areas/journal/Detail.tsx` | CHF 1 |
 | `src/app/areas/journal/NewEntry.tsx` | CHF 1, form 0535 1, Rappen 1 |
 | `src/app/areas/journal/journal.tsx` | MWST 1 |
@@ -190,7 +190,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 53, MWST 448, ESTV 52, Ziffer 72, form 0535 1, camt.053 24, QR-bill 9, Rappen 3 |
+| `src/app/i18n/locales/de.ts` | CHF 53, MWST 449, ESTV 52, Ziffer 73, form 0535 1, camt.053 24, QR-bill 9, Rappen 3 |
 | `src/app/i18n/locales/en.ts` | CHF 53, MWST 5, ESTV 31, form 0535 1, camt.053 24, QR-bill 15 |
 | `src/app/i18n/locales/fr.ts` | CHF 53, MWST 1, form 0535 1, camt.053 24, QR-bill 9 |
 | `src/app/i18n/locales/it.ts` | CHF 53, MWST 1, form 0535 1, camt.053 24, QR-bill 9 |

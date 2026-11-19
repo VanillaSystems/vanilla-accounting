@@ -137,6 +137,9 @@ export function convertDraft(source: Invoice, to: DocumentKind, picks: readonly 
     status: 'draft',
     kind: to,
     customerId: source.customerId,
+    // The contact person and the address the source went to come along (a Lieferschein to the branch the Auftrag named).
+    ...(source.personId ? { personId: source.personId } : {}),
+    ...(source.addressId ? { addressId: source.addressId } : {}),
     date,
     currency: source.currency,
     language: source.language,
