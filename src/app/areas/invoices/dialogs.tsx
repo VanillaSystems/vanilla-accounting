@@ -26,6 +26,7 @@ import { COUNTRIES, addressRule, countryName, countryOf, languageFor, numberFirs
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 import { BulkDialogs } from './bulk.js';
 import { Frame, close } from './frame.js';
+import { AllocateDialog, HandPaymentDialog, WriteOffDialog } from './money-dialogs.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
 
@@ -45,6 +46,9 @@ export function Dialogs(props: Props) {
     case 'cancel': return inv?.status === 'issued' ? <CancelDialog {...props} inv={inv} /> : null;
     case 'credit': return inv?.status === 'issued' ? <CreditDialog {...props} inv={inv} invoices={d.invoices} /> : null;
     case 'send': return inv?.status === 'issued' ? <SendDialog {...props} inv={inv} reminder={s.dialog.reminder} issued={s.dialog.issued} /> : null;
+    case 'handPayment': return inv?.status === 'issued' ? <HandPaymentDialog {...props} inv={inv} invoices={d.invoices} /> : null;
+    case 'writeOff': return inv?.status === 'issued' ? <WriteOffDialog {...props} inv={inv} invoices={d.invoices} reason={s.dialog.reason} amount={s.dialog.amount} /> : null;
+    case 'allocate': return <AllocateDialog {...props} transactionRef={s.dialog.transactionRef} customerId={s.dialog.customerId} />;
     default: return null;
   }
 }
@@ -294,18 +298,22 @@ function CancelDialog({ inv, nav }: Props & { inv: Issued }) {
   const gross = totals(inv).gross;
   const title = `${inv.customer.name} · ${inv.currency} ${fmt(gross)}`;
   const label = t('invoices.cancelTitle', { number: inv.number });
-  if (inv.payments.length) {
-    return (
-      <Frame label={label} title={title} foot={<><button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button><button type="button" className="btn primary" autoFocus onClick={() => setUi({ dialog: { kind: 'credit' } })}>{t('invoices.creditInstead')}</button></>}>
-        <div className="ibody"><p>{t('invoices.paidNoCancel', { date: formatDate(inv.payments.at(-1)!.date) })}</p></div>
-      </Frame>
-    );
-  }
-  const run = async () => { if (await cancel(nav, inv, { date, reason, notify }, notify && mail.ready ? m ?? mail.defaults : undefined)) close(); };
+  // A paid invoice: a warning naming its payments (spec 4.11); «Gutschrift statt Storno», or «Trotzdem stornieren», which releases them.
+  const paid = inv.payments.length > 0;
+  const run = async () => { if (await cancel(nav, inv, { date, reason, notify, ...(paid ? { confirm: 'paid' as const } : {}) }, notify && mail.ready ? m ?? mail.defaults : undefined)) close(); };
   return (
-    <Frame label={label} title={title} foot={<><button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button><AsyncButton type="button" className="btn primary danger" data-act="cancel-ok" onClick={() => run()}>{t('invoices.cancelOk')}</AsyncButton></>}>
+    <Frame label={label} title={title} foot={<>
+      <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button>
+      {paid && <button type="button" className="btn primary" autoFocus data-act="credit-instead" onClick={() => setUi({ dialog: { kind: 'credit' } })}>{t('invoices.creditInstead')}</button>}
+      <AsyncButton type="button" className={`btn ${paid ? 'ghost' : 'primary'} danger`} data-act="cancel-ok" onClick={() => run()}>{t(paid ? 'invoices.cancelAnyway' : 'invoices.cancelOk')}</AsyncButton>
+    </>}>
       <div className="ibody lkf">
-        <label className="lkr"><span>{t('invoices.reason')}</span><input autoFocus value={reason} placeholder={t('invoices.cancelReasonPh')} onChange={(e) => setReason(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void run(); }} /></label>
+        {paid && (
+          <div className="notice warn" role="note" data-testid="cancel-paid">
+            <span>{t('invoices.paidCancelWarn', { number: inv.number, payments: inv.payments.map((p) => `${formatDate(p.date)} ${inv.currency} ${fmt(p.amount)}`).join(', ') })}</span>
+          </div>
+        )}
+        <label className="lkr"><span>{t('invoices.reason')}</span><input autoFocus={!paid} value={reason} placeholder={t('invoices.cancelReasonPh')} onChange={(e) => setReason(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void run(); }} /></label>
         <label className="lkr"><span>{t('invoices.date')}</span><span className="iin"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></span></label>
         <label className="lkr"><span /><span className="iin"><input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} /> {t('invoices.cancelNotify')}</span></label>
         {notify && <MailFields mail={mail} value={m ?? mail.defaults} onChange={setM} nav={nav} />}

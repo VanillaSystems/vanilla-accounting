@@ -6,7 +6,7 @@
  */
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import type { Invoice, Issued, SentDocument, SentKind } from './model.js';
-import { openOn, paidAmount, refundDue, status } from './rules.js';
+import { creditBeyond, openOn, paidAmount, refundDue, status, totals } from './rules.js';
 import { baseCurrency } from '../engines/index.js';
 
 // ─── the sent log ────────────────────────────────────────────────────────────
@@ -77,12 +77,19 @@ export function creditRest(cn: Invoice, invoices: readonly Invoice[]): number {
   return refundDue(cn.settlement === 'offset' ? { ...cn, settlement: 'refund' } : cn, invoices);
 }
 
-/** The one place a Gutschrift's status is decided (slice C widens it with allocations). */
+/**
+ * The one place a Gutschrift's status is decided (spec 4.4.2): Abgerechnet once nothing of it waits
+ * (applied to its invoice at once, the rest paid back); Teilweise while a rest waits and something
+ * of it is applied to its invoice (Verrechnung, after that invoice's payments and write-offs) or
+ * paid back; Offen while all of it waits. A rest set off against a next invoice waits for phase 4.
+ */
 export function creditNoteStatus(cn: Invoice, invoices: readonly Invoice[]): CreditListStatus {
   if (cn.status === 'draft') return 'draft';
   if (cn.cancelled) return 'cancelled';
-  if (creditRest(cn, invoices) === 0) return 'settled';
-  return paidAmount(cn) > 0 ? 'partly' : 'open';
+  const rest = creditRest(cn, invoices);
+  if (rest === 0) return 'settled';
+  const applied = -toRappen(totals(cn).gross) - toRappen(creditBeyond(cn, invoices)) > 0;
+  return applied || paidAmount(cn) > 0 ? 'partly' : 'open';
 }
 
 // ─── the status tabs ─────────────────────────────────────────────────────────

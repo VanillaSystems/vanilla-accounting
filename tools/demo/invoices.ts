@@ -82,7 +82,7 @@ export async function playInvoicing(inv: DemoInvoicing, manifest: string, owner:
       } else if (s.do === 'credit') {
         const credit = createCreditNote(ws, ids.get(s.of)!, { reason: s.reason, ...(s.amount !== undefined ? { amount: s.amount } : {}), ...(s.vatRate !== undefined ? { vatRate: s.vatRate } : {}), ...(s.settlement ? { settlement: s.settlement } : {}) }, s.at);
         ids.set(s.key, credit.id);
-        await issueAndSend(ws, s.key, credit.id, s.at, expected);
+        await issueAndSend(ws, s.key, credit.id, s.at, expected, true);
       } else if (s.do === 'remind') {
         await sendReminder(ws, ids.get(s.of)!, { date: s.at.slice(0, 10), ...(s.fee ? { fee: s.fee } : {}) }, { now: s.at });
       } else if (s.do === 'cancel') {
@@ -106,8 +106,9 @@ export async function withSeededIds<T>(seed: number, fn: () => Promise<T>): Prom
   try { return await fn(); } finally { idSource.bytes = random; }
 }
 
-async function issueAndSend(ws: Workspace, key: string, id: string, at: string, expected: Map<string, string>): Promise<void> {
-  const issued = await issueInvoice(ws, id, { now: at });
+/** `confirmed`: the demo's «Trotzdem ausstellen», for a credit note of a paid invoice (paid back). */
+async function issueAndSend(ws: Workspace, key: string, id: string, at: string, expected: Map<string, string>, confirmed = false): Promise<void> {
+  const issued = await issueInvoice(ws, id, { now: at, confirmed });
   if (issued.number !== expected.get(key)) throw new Error(`demo invoice ${key} was issued as ${issued.number}, expected ${expected.get(key)}`);
   await recordSend(ws, id, { now: at });
 }

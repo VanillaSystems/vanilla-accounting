@@ -86,6 +86,27 @@ Two markers flag an entry you must read before you update:
   ausstellen» issues the invoice as it is.
 - Rechnungen: an invoice whose total is zero or less (a Rabatt above the total) is not issued: a
   QR-bill carries no amount below zero; what is owed back goes on a Gutschrift.
+- Rechnungen: «Zahlungseingang erfassen» for money the bank statement does not show yet (cash at
+  the door, another account): date, a bank or the cash box, the amount. It is booked like a
+  statement's payment; when the statement comes, its line confirms the payment instead of booking it
+  again, and the invoice names the confirmation. «Rückgängig» takes it back.
+- Rechnungen: «Ausziffern» of one incoming payment over several invoices of a customer, the amounts
+  proposed (the invoices the payment names first, then the oldest), and for each invoice what
+  becomes of its rest: it stays open, or is written off as Skonto, Rabatt, Verlust, Spesen or Rundung.
+- Rechnungen: «Rest ausbuchen» closes what is left open as Skonto, Rabatt, Verlust, Spesen or
+  Rundung, today by default, with «Rückgängig». On the cash basis nothing is booked; on the agreed
+  basis the write-off is booked on the Erlösminderungen (Verlust: Verluste aus Forderungen) against
+  the receivable with the minus VAT codes, so the VAT comes off in the quarter of the write-off. Its
+  ref is `RE-<number>-wo-<k>`. A write-off of more than is open asks first.
+- Payment terms with a Skonto («10 Tage 2 %, 30 Tage netto») are printed on the invoice with the
+  Skonto's last day and amount; a payment within those days that pays the open amount less the
+  Skonto (to 5 Rappen) marks the invoice paid and writes the Skonto off by itself. An invoice keeps
+  the terms it printed.
+- Rechnungen: a rest of at most a few francs after a payment (Firma › Rechnungslayout, 5 by
+  default) is offered to be written off as Spesen, never by itself.
+- Rechnungen: the four figures above every issued invoice: Betrag, erhalten, gutgeschrieben, offen,
+  each naming the payments, Gutschriften and write-offs behind it. The status Teilbezahlt also
+  counts Gutschriften and write-offs; a Gutschrift reads Offen, Teilweise or Abgerechnet.
 
 ### Changed
 
@@ -147,6 +168,12 @@ Two markers flag an entry you must read before you update:
 - Demo Muster Consulting: the owner's payroll runs in the Löhne area from October (January to
   September are its opening), so October to December can be closed, paid and documented.
 
+- Rechnungen: on the cash basis, a payment of an invoice with a Gutschrift books the invoice's
+  revenue and, with the minus VAT code, the Gutschrift's, each per rate: the VAT per rate is right
+  also when the Gutschrift concerns one rate of several.
+- Stornieren of a paid invoice warns and names the payment: «Gutschrift statt Storno», or «Trotzdem
+  stornieren», after which the payment waits unallocated again. A Gutschrift above what is open of
+  its invoice warns before it is issued.
 
 ### Fixed
 

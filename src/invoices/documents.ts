@@ -5,7 +5,7 @@
  */
 import type { Company } from '../workspace/workspace.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type Invoice, type InvoiceBook, type InvoiceContent, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type Issued, type Reminder, type Sender } from './model.js';
-import { addDays, openAmount, openFees, paidAmount, totals } from './rules.js';
+import { addDays, openAmount, openFees, paidAmount, skontoOffer, termsFor, totals } from './rules.js';
 import type { SheetData } from './sheet.js';
 import { TEXTS, formatDate } from './texts.js';
 
@@ -62,9 +62,23 @@ export function mailText(settings: InvoicingSettings | undefined, inv: Issued, d
   return { subject: fill(own?.mailSubject ?? L.mailSubject), body: fill(own?.mailBody ?? L.mailBody) };
 }
 
+/** The days a draft gives to pay: those of the terms it picks, else the customer's, else the firm's. */
+export function draftDays(ctx: InvoicingContext, draft: Pick<Draft, 'kind' | 'termsId' | 'language'>, customer: Pick<Customer, 'paymentTermsDays'> | undefined): number {
+  const days = customer?.paymentTermsDays ?? ctx.settings?.paymentTermsDays ?? 30;
+  return ctx.settings?.paymentTerms.find((x) => x.id === draft.termsId)?.days ?? days;
+}
+
+/** What the paper says of the terms: their text, and the Skonto with its last day and amount. */
+function termsOnPaper(inv: Pick<Issued, 'date' | 'terms' | 'lines' | 'prices' | 'kind'>): SheetData['terms'] {
+  if (!inv.terms) return undefined;
+  const sk = skontoOffer(inv);
+  return { text: inv.terms.text, ...(sk && inv.terms.skonto ? { skonto: { percent: inv.terms.skonto.percent, until: sk.until, amount: sk.amount, pays: sk.pays } } : {}) };
+}
+
 export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draft, customer: Customer | undefined, logoSrc?: string): SheetData {
-  const terms = customer?.paymentTermsDays ?? ctx.settings?.paymentTermsDays ?? 30;
+  const terms = draftDays(ctx, draft, customer);
   const texts = defaultTexts(ctx, draft.kind, draft.language, terms);
+  const picked = ctx.settings?.paymentTerms.some((x) => x.id === draft.termsId) ? termsFor(draft, ctx.settings?.paymentTerms, terms) : undefined;
   return {
     kind: draft.kind,
     language: draft.language,
@@ -84,6 +98,7 @@ export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draf
     layout: ctx.settings?.layout ?? DEFAULT_LAYOUT,
     ...(logoSrc ? { logoSrc } : {}),
     ...(draft.kind === 'credit-note' ? { credit: creditInfo(book, draft) } : {}),
+    ...(picked ? { terms: termsOnPaper({ ...draft, terms: picked }) } : {}),
   };
 }
 
@@ -110,6 +125,7 @@ export function issuedSheet(book: InvoiceBook, inv: Issued, logoSrc?: string): S
     reference: inv.reference,
     ...(inv.kind === 'credit-note' ? { credit: creditInfo(book, inv) } : {}),
     ...(inv.cancelled ? { cancelled: inv.cancelled } : {}),
+    ...(inv.terms?.skonto ? { terms: termsOnPaper(inv) } : {}),
   };
 }
 

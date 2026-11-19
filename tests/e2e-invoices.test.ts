@@ -49,6 +49,7 @@ test('a draft is issued with its stored PDF and sent; a part is credited; a prop
     await click(page, '.isend [data-act=later]');
     await page.waitForFunction(() => !document.querySelector('.isend'));
 
+    await click(page, '[data-act=more]');
     await click(page, '[data-act=credit]');
     await clickText(page, 'Teilbetrag', '.icredit button[role=radio]');
     await page.type('.icredit input.mono', '50');

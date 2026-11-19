@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode } from 'react';
 
-export interface MenuItem { label: ReactNode; side?: ReactNode; current?: boolean; run(): void }
+export interface MenuItem { label: ReactNode; side?: ReactNode; current?: boolean; run(): void; /** A handle for tests and the verify recipes (`data-act`). */ act?: string }
 
 /** A short list under its anchor (the language menu): ↑/↓ move, Enter picks, Esc or a click outside closes. */
 export function Menu({ anchor, items, onClose }: { anchor: DOMRect; items: MenuItem[]; onClose(): void }) {
@@ -28,7 +28,7 @@ export function Menu({ anchor, items, onClose }: { anchor: DOMRect; items: MenuI
       <div className="scrim" onClick={onClose} />
       <div className="menu" role="menu" ref={ref} onKeyDown={onKeyDown}>
         {items.map((it, i) => (
-          <button key={i} type="button" role="menuitem" className={it.current ? 'cur' : ''} onClick={() => { onClose(); it.run(); }}>
+          <button key={i} type="button" role="menuitem" className={it.current ? 'cur' : ''} data-act={it.act} onClick={() => { onClose(); it.run(); }}>
             {it.label}<span className="s">{it.side}</span>
           </button>
         ))}

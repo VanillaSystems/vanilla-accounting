@@ -2,7 +2,8 @@
  * What the buttons of Rechnungen do: each call goes to the invoicing API, its refusal is shown
  * in the user's language (Art. 26 MWSTG gaps named one by one), and the records are read again.
  */
-import { isItem, issuedPdfUrl, sentPdfUrl, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
+import { isItem, issuedPdfUrl, sentPdfUrl, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceLine, type Issued, type WriteOff, type WriteOffReason } from '../../../invoices/model.js';
+import type { AllocationPart } from '../../../invoices/payments.js';
 import type { MailMessage } from '../../../invoices/mail.js';
 import { api, errorText, type CreditInput, type DraftChange } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
@@ -130,7 +131,7 @@ export async function copyAsDraft(nav: Nav, inv: Issued): Promise<void> {
   if (draft) nav.toast(t('invoices.copied', { number: inv.number }));
 }
 
-export async function cancel(nav: Nav, inv: Issued, input: { date: string; reason: string; notify: boolean }, email?: MailMessage): Promise<boolean> {
+export async function cancel(nav: Nav, inv: Issued, input: { date: string; reason: string; notify: boolean; confirm?: 'paid' }, email?: MailMessage): Promise<boolean> {
   const done = await run(nav, api.cancelInvoice(inv.id, { ...input, ...(input.notify ? (email ? { email } : { to: 'download' }) : {}) }));
   if (!done) return false;
   if (done.sent && !email) download(sentPdfUrl(done.sent.id), `${done.sent.title}.pdf`);
@@ -189,4 +190,56 @@ export async function saveCustomer(nav: Nav, id: string | undefined, fields: Cus
   put({ customer: c });
   await reloadInvoices();
   return c;
+}
+
+/** After a change that booked: the records and the books are read again. */
+async function booked(nav: Nav): Promise<void> {
+  await reloadInvoices();
+  nav.refresh();
+}
+
+/** «Zahlungseingang erfassen»: a hand movement on a bank or the cash box; the toast's undo takes it back. */
+export async function handPayment(nav: Nav, inv: Pick<Issued, 'id' | 'number'>, input: { date: string; account: string; amount: number }): Promise<boolean> {
+  const out = await run(nav, api.handPayment(inv.id, input));
+  if (!out) return false;
+  await booked(nav);
+  nav.toast(t('invoices.handPaid', { number: inv.number }), () => { void removeHandPayment(nav, inv, out.transaction.ref); });
+  return true;
+}
+
+export async function removeHandPayment(nav: Nav, inv: Pick<Issued, 'id' | 'number'>, ref: string): Promise<boolean> {
+  if (!(await run(nav, api.removeHandPayment(inv.id, ref)))) return false;
+  await booked(nav);
+  nav.toast(t('invoices.handRemoved', { number: inv.number }));
+  return true;
+}
+
+/** «Rest ausbuchen»; `anyway`: «Trotzdem ausbuchen» over more than is open. Refused for more than open: the caller offers «Trotzdem». */
+export async function writeOff(nav: Nav, inv: Pick<Issued, 'id' | 'number'>, input: { reason: WriteOffReason; date?: string; amount?: number; note?: string }, anyway = false): Promise<WriteOff | 'aboveOpen' | undefined> {
+  try {
+    const out = await api.writeOff(inv.id, { ...input, ...(anyway ? { confirm: 'aboveOpen' as const } : {}) });
+    await booked(nav);
+    nav.toast(t('invoices.writtenOff', { number: inv.number, reason: t(`invoices.reason.${input.reason}`) }), () => { void removeWriteOff(nav, inv, out.writeOff.id); });
+    return out.writeOff;
+  } catch (e) {
+    if ((e as { body?: { invoiceRefusal?: string } }).body?.invoiceRefusal === 'aboveOpen') return 'aboveOpen';
+    nav.toast(errorText(e));
+    return undefined;
+  }
+}
+
+export async function removeWriteOff(nav: Nav, inv: Pick<Issued, 'id' | 'number'>, id: string): Promise<boolean> {
+  if (!(await run(nav, api.removeWriteOff(inv.id, id)))) return false;
+  await booked(nav);
+  nav.toast(t('invoices.writeOffRemoved', { number: inv.number }));
+  return true;
+}
+
+/** «Buchen» of the Ausziffern dialog. */
+export async function allocate(nav: Nav, ref: string, parts: AllocationPart[]): Promise<boolean> {
+  const out = await run(nav, api.allocate(ref, parts));
+  if (!out) return false;
+  await booked(nav);
+  nav.toast(t('invoices.allocated', { n: out.paid.length }));
+  return true;
 }

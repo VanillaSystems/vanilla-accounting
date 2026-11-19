@@ -102,6 +102,7 @@
         }
       ],
       "prices": "net",
+      "termsId": "net30",
       "customerId": "cu_5GQVervgd2rF",
       "subject": "Hausmischung und Barista-Schulung",
       "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
@@ -110,6 +111,12 @@
       "number": "2026-001",
       "issuedAt": "2026-07-06T09:12:00.000Z",
       "dueDate": "2026-08-05",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
       "reference": "000000000000000000020260010",
       "customer": {
         "name": "Beispiel Bistro AG",
@@ -227,6 +234,12 @@
       "number": "2026-002",
       "issuedAt": "2026-07-20T14:30:00.000Z",
       "dueDate": "2026-08-09",
+      "terms": {
+        "id": "net20",
+        "name": "20 Tage netto",
+        "days": 20,
+        "text": "20 Tage netto"
+      },
       "reference": "000000000000000000020260021",
       "customer": {
         "name": "Muster Hotel GmbH",
@@ -328,6 +341,7 @@
         }
       ],
       "prices": "net",
+      "termsId": "net30",
       "customerId": "cu_5GQVervgd2rF",
       "subject": "Hausmischung August",
       "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
@@ -336,6 +350,12 @@
       "number": "2026-003",
       "issuedAt": "2026-08-17T08:05:00.000Z",
       "dueDate": "2026-09-16",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
       "reference": "000000000000000000020260036",
       "customer": {
         "name": "Beispiel Bistro AG",
@@ -535,6 +555,7 @@
         }
       ],
       "prices": "net",
+      "termsId": "net30",
       "customerId": "cu_xeA65pqbdX_h",
       "subject": "Espresso-Mischung, Export",
       "exemption": "export",
@@ -544,6 +565,12 @@
       "number": "2026-005",
       "issuedAt": "2026-09-21T13:00:00.000Z",
       "dueDate": "2026-10-21",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
       "reference": "RF492026005",
       "customer": {
         "name": "Kaffeehaus Beispiel GmbH",
@@ -645,6 +672,7 @@
         }
       ],
       "prices": "net",
+      "termsId": "net30",
       "customerId": "cu_MVknjIERgg_T",
       "subject": "Mélange maison et formation",
       "intro": "Nous vous remercions de votre mandat et vous facturons les prestations suivantes :",
@@ -653,6 +681,12 @@
       "number": "2026-006",
       "issuedAt": "2026-09-29T15:20:00.000Z",
       "dueDate": "2026-10-29",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
       "reference": "000000000000000000020260068",
       "customer": {
         "name": "Café Exemple Sàrl",
@@ -755,6 +789,12 @@
       "number": "2026-007",
       "issuedAt": "2026-10-01T07:45:00.000Z",
       "dueDate": "2026-10-21",
+      "terms": {
+        "id": "net20",
+        "name": "20 Tage netto",
+        "days": 20,
+        "text": "20 Tage netto"
+      },
       "reference": "000000000000000000020260073",
       "customer": {
         "name": "Muster Hotel GmbH",
@@ -880,6 +920,7 @@
         }
       ],
       "prices": "net",
+      "termsId": "net30",
       "customerId": "cu_MVknjIERgg_T",
       "subject": "Mélange maison octobre",
       "comments": []

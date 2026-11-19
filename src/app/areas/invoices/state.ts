@@ -7,14 +7,21 @@
 import { useSyncExternalStore } from 'react';
 import { store, stored } from '../../shell/storage.js';
 import { DEFAULT_SORT, type Sort } from './table.js';
+import type { WriteOffReason } from '../../../invoices/model.js';
 
-export type Section = 'draft' | 'look' | 'customer' | 'sent' | 'comments' | 'log';
+export type Section = 'draft' | 'look' | 'customer' | 'money' | 'sent' | 'comments' | 'log';
 
 export type Dialog =
   | { kind: 'new' }
   /** The customer form; `then` names what follows a new customer: a draft for it, or the draft being written gets it. */
   | { kind: 'customer'; id?: string; then?: 'invoice' | { draft: string }; name?: string }
   | { kind: 'cancel' }
+  /** «Zahlungseingang erfassen» on the open invoice. */
+  | { kind: 'handPayment' }
+  /** «Rest ausbuchen»: the reason (and amount) proposed, e.g. a shortfall as Spesen. */
+  | { kind: 'writeOff'; reason?: WriteOffReason; amount?: number }
+  /** Ausziffern of an incoming payment over a customer's open invoices. */
+  | { kind: 'allocate'; transactionRef: string; customerId?: string }
   | { kind: 'credit' }
   | { kind: 'delete' }
   /**
@@ -56,7 +63,7 @@ let state: State = {
   dialog: null,
   preview: false,
   reminder: null,
-  open: { draft: true, look: false, customer: false, sent: true, comments: true, log: false, ...read<Partial<Record<Section, boolean>>>('invoices.open', {}) },
+  open: { draft: true, look: false, customer: false, money: true, sent: true, comments: true, log: false, ...read<Partial<Record<Section, boolean>>>('invoices.open', {}) },
   sort: { list: DEFAULT_SORT, 'credit-notes': DEFAULT_SORT, ...read<Partial<Record<Sorted, Sort>>>('invoices.sort', {}) },
   ticked: new Set(),
   sentFilter: {},

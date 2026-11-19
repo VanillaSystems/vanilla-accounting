@@ -1,7 +1,7 @@
 import type { AuditSnapshot } from '../audit/sources.js';
 import type { Iban } from '../workspace/banks.js';
 import type { MailRefusal } from '../invoices/mail.js';
-import type { InvoiceRefusal, Missing } from '../invoices/rules.js';
+import type { InvoiceRefusal, Missing, PaymentRefusal } from '../invoices/rules.js';
 import type { SetupRefusal } from '../workspace/create.js';
 import type { SaleGone } from '../questions/model.js';
 import type { RuleRefusal } from './rule-refusal.js';
@@ -432,7 +432,10 @@ export type InvoiceErrorBody = { error: string; code?: undefined; invoiceRefusal
 /** An e-mail the company's mailbox did not send (src/invoices/mail.ts); nothing was recorded. */
 export type MailErrorBody = { error: string; code?: undefined; mailRefusal: MailRefusal; detail?: string };
 
-export type ApiErrorBody = ({ error: string } & (ApiRefusal | { code?: undefined })) | InvoiceErrorBody | MailErrorBody;
+/** A payment, an allocation or a write-off of a document refused (src/invoices/payments.ts PaymentError). */
+export type PaymentErrorBody = { error: string; code?: undefined; paymentRefusal: PaymentRefusal };
+
+export type ApiErrorBody = ({ error: string } & (ApiRefusal | { code?: undefined })) | InvoiceErrorBody | MailErrorBody | PaymentErrorBody;
 
 /**
  * GET /api/status: the API runs, and whether it refuses every write (READONLY=1, `npm run start:audit`).

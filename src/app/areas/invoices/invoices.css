@@ -252,3 +252,50 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .ivtake { display: grid; gap: 2px; margin: 0 0 8px; font-size: 13px; }
 .ivleft .l { display: block; }
 .ivsheet.editing .a4 .dval .ed { min-width: 2mm; }
+
+/* The four figures above an issued invoice's sheet (spec 4.8): Betrag · erhalten · gutgeschrieben · offen. */
+.ivfigs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; margin-top: 10px; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: var(--line); }
+.ivfigs .fig { display: grid; gap: 2px; padding: 7px 10px; background: var(--bg); cursor: help; }
+.ivfigs .fig .lbl { font-size: 11px; color: var(--muted); }
+.ivfigs .fig .n { font-size: 13.5px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ivfigs .fig.open .n { color: var(--warn); }
+.ivfigs .fig.done .n { color: var(--muted); }
+@media (max-width: 560px) { .ivfigs { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* The margin's payments, write-offs and the bookings their events made. */
+.ivmoney, .ivbooked { display: grid; gap: 4px; font-size: 12.5px; }
+.ivbooked { margin-top: 10px; }
+.ivmoney .mrow { display: grid; grid-template-columns: 78px minmax(0, 1fr); column-gap: 8px; align-items: baseline; }
+.ivbooked .mrow { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; }
+.ivmoney .mrow small { display: block; color: var(--muted); font-size: 11.5px; }
+.ivmoney .mrow .acts { grid-column: 2; display: flex; gap: 10px; align-items: baseline; }
+.ivmoney .mrow .acts:empty { display: none; }
+.ivbooked .mrow { color: var(--ink); text-decoration: none; border-radius: 5px; padding: 1px 2px; }
+.ivbooked .mrow:hover { background: var(--hover); }
+.status .ivpay .acts { display: flex; gap: 6px; }
+/* A payment, a proposal or a shortfall each take a row of their own under the status line. */
+.status:has(.ivpay) { flex-wrap: wrap; row-gap: 0; }
+.status .ivpay { flex-basis: 100%; }
+
+/* The Ausziffern dialog: an amount and the rest's fate per open invoice. */
+.idlg.wide { width: min(760px, calc(100vw - 32px)); }
+.idlg table.alloc { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.idlg table.alloc th { text-align: left; font-weight: 500; color: var(--muted); padding: 4px 6px; }
+.idlg table.alloc td { padding: 4px 6px; border-top: 1px solid var(--line); vertical-align: top; }
+.idlg table.alloc .r { text-align: right; }
+.idlg table.alloc input { width: 96px; box-sizing: border-box; text-align: right; font: 12.5px var(--font-mono); padding: 3px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.idlg table.alloc select { max-width: 170px; font: 12px var(--font-sans); }
+.idlg .allocleft { margin-right: auto; }
+.idlg .allocleft.warn { color: var(--warn); }
+.lkunits .lkuadd.lkterms { grid-template-columns: 2fr repeat(3, minmax(0, 1fr)); }
+.lkunits .lkuadd.lkterms input:nth-child(5) { grid-column: 1 / -1; }
+.ivtop { display: flex; gap: 4px 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+.ivtop .ivfigs { flex: 1 1 100%; margin-top: 0; }
+.ivtop .ivfact { margin: 0; }
+.status .ivshort { justify-content: flex-start; gap: 10px; font-size: 12.5px; color: var(--muted); }
+.ivother { display: grid; gap: 4px; margin-top: 10px; font-size: 12.5px; }
+.ivother label { display: grid; gap: 4px; }
+.ivother select { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; font: 12px var(--font-sans); }
+.ivother label { min-width: 0; }
+.ivother { min-width: 0; overflow: hidden; }
+.ivother .acts { display: flex; gap: 10px; }

@@ -51,6 +51,8 @@ export interface SheetData {
   /** A credit note: the invoice it credits and what happens with the money. */
   credit?: { number: string; date: string; gross: number; paid: number; paidDate?: string; settlement?: 'refund' | 'offset' };
   cancelled?: { date: string; reason: string };
+  /** The payment terms printed below the totals, with their Skonto: only when they offer one (net terms: the closing says the days). */
+  terms?: { text: string; skonto?: { percent: number; until: string; amount: number; pays: number } };
   /** On screen only, never in a PDF: what the UI adds to the sheet. */
   screen?: ScreenSheet;
 }
@@ -239,6 +241,10 @@ export function sheetBlocks(d: SheetData): Block[] {
     const back = Math.max(0, Math.round((credit - open) * 100) / 100), A = (x: number) => `${d.currency} ${n(x)}`;
     const settled = back > 0 ? (c.settlement === 'offset' ? L.offset(A(back)) : L.refund(A(back))) : L.stillOpen(c.number, A(Math.round((open - credit) * 100) / 100));
     B.push({ html: `<div class="settle"><div><span>${esc(L.ofInvoice(c.number, formatDate(c.date, d.language)))}</span><span>${n(c.gross)}</span></div>${c.paid ? `<div><span>${L.paidOn(formatDate(c.paidDate ?? c.date, d.language))}</span><span>${n(-c.paid)}</span></div>` : ''}<div><span>${L.creditLine}</span><span>${n(-credit)}</span></div></div><p class="settled">${esc(settled)}</p>` });
+  }
+  if (d.terms?.skonto && !d.due) {
+    const sk = d.terms.skonto;
+    B.push({ html: `<p class="terms">${esc(d.terms.text)}<br>${esc(L.skontoLine(String(sk.percent), formatDate(sk.until, d.language), `${d.currency} ${n(sk.amount)}`, `${d.currency} ${n(sk.pays)}`))}</p>` });
   }
   // The reason for 0 % is a registered firm's: one that charges no VAT has none to give.
   if (draft && withVat && items.some((l) => l.vatRate === 0)) {
@@ -433,7 +439,7 @@ html, body { margin: 0 }
 .a4 .sum .tot { border-top: .4mm solid var(--iva); margin-top: 1mm; padding-top: 1.6mm; font-weight: 700; font-size: 10.5pt }
 .a4 .settle { font-size: 8pt; color: #5b6270; margin-top: 5mm }
 .a4 .settled { font-weight: 600; margin: 4mm 0 0 }
-.a4 .abroad, .a4 .payinfo { color: #5b6270; font-size: 8pt; margin: 5mm 0 0 }
+.a4 .abroad, .a4 .payinfo, .a4 .terms { color: #5b6270; font-size: 8pt; margin: 5mm 0 0 }
 .a4 .cxnote { color: #9f1239; font-weight: 600; margin: 0 0 4mm }
 .a4 .cxstamp { position: absolute; top: 120mm; left: 50%; transform: translateX(-50%) rotate(-18deg); font-size: 44pt; font-weight: 700; letter-spacing: .08em; color: rgba(159, 18, 57, .18); border: 1.2mm solid rgba(159, 18, 57, .18); padding: 2mm 8mm; pointer-events: none }
 .a4 .phead { position: absolute; top: 15mm; left: 20mm; right: 20mm; display: flex; justify-content: space-between; font-size: 7.5pt; color: #5b6270; border-bottom: .2mm solid #e3e6ec; padding-bottom: 1.5mm }
