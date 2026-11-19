@@ -232,6 +232,10 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Löhne: a Rückwirkende Korrektur carried into a month is booked as its own entry, «Korrektur 08/2026:
+  BVG Arbeitnehmer …», no longer merged into that month's BVG line; the preview shows it the same way.
+  A payslip's booking texts are the books' German words for every person (the preview no longer
+  translates them).
 - Löhne: the months of a person's opening (paid and booked by hand before payroll ran here, January to
   the opening's last month) are «Eröffnung» in the year strip and on her timeline. They get no draft, no
   «noch offen» on a later month, and closing one is refused with its reason (the wage is booked

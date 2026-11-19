@@ -1,8 +1,10 @@
 /**
  * What a payslip books (docs/specs/payroll.md §7.2): every line its Lohnart's debit and credit on the
  * posting date, one entry per Lohnart and account pair, under the payslip's ref; a negative amount books
- * the other way. The preview and the close call the same function, so what the preview shows is what
- * closing books. No line carries a VAT code. Pure, browser-safe.
+ * the other way. A correction carried from a closed payslip keeps an entry of its own, per payslip it
+ * corrects, «Korrektur 08/2026: BVG …», never merged into the month's line of the same Lohnart. The texts
+ * are the books' (German) words, whatever the person's language. The preview and the close call the same
+ * function, so what the preview shows is what closing books. No line carries a VAT code. Pure, browser-safe.
  */
 import type { PayrollData } from '../core/modules/schema.js';
 import { firmWageTypes, resolveAccount } from './catalogue.js';
@@ -18,6 +20,8 @@ export interface PayrollPosting {
   credit: string;
   amount: number;
   text: string;
+  /** The payslip a correction posting corrects (the line's `corrects`): never JournalEntry.corrects, which names a filed VAT period. */
+  corrects?: string;
 }
 
 export interface PayslipBooking {
@@ -45,8 +49,11 @@ export function bookingOf(slip: Slip, data: PayrollData, store: Pick<PayrollStor
     const debit = resolveAccount(w.debit, data, insurance);
     const credit = resolveAccount(w.credit, data, insurance);
     if (!debit || !credit) { withoutAccount.add(w.key); continue; }
-    const key = `${w.key}|${debit}|${credit}`;
-    const p = merged.get(key) ?? { wageType: w.key, debit, credit, amount: 0, text: `${l.label} ${m}/${y} ${slip.person.name}` };
+    // A correction is its own entry, per payslip it corrects: the month's line of the same Lohnart stays as computed.
+    const key = `${w.key}|${debit}|${credit}${l.corrects ? `|${l.corrects}` : ''}`;
+    const words = w.label.de;
+    const text = l.corrects ? `Korrektur ${l.corrects.slice(5, 7)}/${l.corrects.slice(0, 4)}: ${words} ${slip.person.name}` : `${words} ${m}/${y} ${slip.person.name}`;
+    const p = merged.get(key) ?? { wageType: w.key, debit, credit, amount: 0, text, ...(l.corrects ? { corrects: l.corrects } : {}) };
     p.amount = round2(p.amount + l.amount);
     merged.set(key, p);
   }

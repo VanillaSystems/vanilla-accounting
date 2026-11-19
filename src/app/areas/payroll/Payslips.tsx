@@ -278,7 +278,7 @@ function SlipView({ v, types, insurances, nav, canEdit }: Props & { v: Payslip; 
       <Lines s={s} types={types} employer={employer} insurances={insurances} />
       <Disclaimer year={v.month.slice(0, 4)} />
       {!closed && canEdit ? <><MonthLines v={v} types={types} nav={nav} /><AddLine v={v} types={types} nav={nav} /></> : null}
-      <Booking v={v} types={types} />
+      <Booking v={v} />
       {canEdit ? (closed ? <ClosedActions v={v} types={types} nav={nav} /> : <CloseAction v={v} nav={nav} />) : null}
       {closed ? <Mail v={v} nav={nav} canEdit={canEdit} /> : null}
       <Corrections v={v} nav={nav} types={types} />
@@ -443,12 +443,11 @@ function AddLine({ v, types, nav }: { v: Payslip; types: Map<string, WageType>; 
 }
 
 /** «Bucht beim Abschliessen» (a draft) or «Gebucht» (a closed one): debit, credit, text, amount, the date and ref. */
-function Booking({ v, types }: { v: Payslip; types: Map<string, WageType> }) {
+function Booking({ v }: { v: Payslip }) {
   const names = getAccountMap();
   const b = v.booking;
-  // The preview names each Lohnart in the UI's language; what closing books (and a closed payslip shows) is the server's text.
-  const [y, mo] = v.month.split('-');
-  const textOf = (p: Payslip['booking']['postings'][number]) => (v.status === 'closed' ? p.text : `${wageTypeLabel(p.wageType, p.text, types)} ${mo}/${y} ${v.slip.person.name}`);
+  // The books' own words, as closing writes them (a correction its own line, «Korrektur 08/2026: …»): the journal's texts are German data (§22).
+  const textOf = (p: Payslip['booking']['postings'][number]) => p.text;
   return (
     <div className="psec">
       <h3>{t(v.status === 'closed' ? 'payroll.booking.booked' : 'payroll.booking.preview')}</h3>

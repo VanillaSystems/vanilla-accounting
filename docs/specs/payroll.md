@@ -1771,6 +1771,20 @@ Taken after the scored persona walk of B0 (2026-11-19, AI on 73, AI off 83, bar 
 52. **A Lohnausweis for a person without a social security number is said first** (field C stays empty),
     then «Trotzdem erstellen» (§18), as an open month is.
 
+Taken after the second persona walk of B0 (2026-11-19, AI on 90, AI off 100); numbered from 120, renumbered at
+merge:
+
+120. **A carried correction is booked as an entry of its own**, one per Lohnart, account pair and payslip it
+     corrects, never merged into the month's regular line of the same Lohnart (src/payroll/booking.ts
+     `bookingOf`): «Korrektur 08/2026: BVG Arbeitnehmer <Name>». The payslip it corrects stays on the payslip's
+     line (`corrects`) and on the posting; the journal entry carries no `corrects`, which names a filed VAT
+     period (AGENTS.md golden rule 1). The preview and the close show the same postings and texts.
+121. **The journal's texts are the books' words, German data, whatever the person's or the UI's language**: a
+     payslip's postings read the Lohnart's German label («AHV/IV/EO 10/2026 Lukas Beispiel»), as every other
+     description code writes («Zahlung …», «Schlussabrechnung …»). The payslip, its PDF and the forms speak
+     the person's or the UI's language; the preview of a draft shows the texts closing will book, not a
+     translation of them.
+
 ---
 
 ## Sources

@@ -90,7 +90,7 @@ test('a missing input of a quantity Lohnart is named for what it lacks: the quan
   assert.ok(checkPayroll(broken).some((p) => p.path.endsWith('.inputs.quantity')), 'an input label lacking a language is a problem of the module');
 });
 
-test('the UI names an input by its Lohnart\'s word and a Lohnart in the UI\'s language, the preview too', () => {
+test('the UI names an input by its Lohnart\'s word and a Lohnart in the UI\'s language; the preview shows what closing books', () => {
   // The UI's words module reads the dictionaries through the bundler (import.meta.glob): what it does is read here off its code.
   for (const lang of ['de', 'fr', 'it', 'en'] as const) {
     for (const w of data.wageTypes.filter((x) => x.input === 'quantity')) assert.ok(w.inputs?.quantity?.[lang] && w.inputs.rate?.[lang], `${w.key} names its inputs in ${lang}`);
@@ -100,7 +100,7 @@ test('the UI names an input by its Lohnart\'s word and a Lohnart in the UI\'s la
   const payslips = readFileSync('src/app/areas/payroll/Payslips.tsx', 'utf8');
   assert.match(payslips, /inputLabel\(f\.wageType, 'quantity', w\?\.inputs\) \?\? t\('payroll\.field\.quantity'\)/, 'the form calls the car\'s quantity «Kaufpreis»');
   assert.match(payslips, /\{w \? labelOf\(w\.label, l\.label\) : l\.label\}/, 'a line in the UI\'s language, not the person\'s');
-  assert.match(payslips, /v\.status === 'closed' \? p\.text : `\$\{wageTypeLabel\(p\.wageType, p\.text, types\)\}/, 'the preview in the UI\'s language; what was booked as booked');
+  assert.match(payslips, /const textOf = \(p: [^)]*\) => p\.text;/, 'the preview shows the books\' words as closing writes them (German data, a correction its own line)');
   for (const lang of ['de', 'fr', 'it', 'en'] as const) assert.equal(typeof data.wageTypes.find((w) => w.key === 'ahv-an')!.label[lang], 'string');
 });
 
