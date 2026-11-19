@@ -7694,6 +7694,7 @@ export const messages = {
   "payroll.docs.exempt.pensioner": "Rentnerfreibetrag {amount}; beitragspflichtig {liable}",
   "payroll.docs.exempt.smallWage": "geringer Lohn: {amount} ohne AHV-Beitrag",
   "payroll.fact.afterExit": "Nachzahlung nach dem Austritt am {date}: nur die erfassten Lohnarten, keine berufliche Vorsorge.",
+  "payroll.fact.figuresOfYear": "Bezahlt nach dem Austritt, verdient {earned}: die Sätze und Grenzen des Bundes von {year}, die App hat jene von {earned} noch nicht.",
   "payroll.fact.smallWage": "Geringer Lohn: bis {amount} im Jahr ohne AHV/IV/EO, ALV und FAK, ausser die Person verlangt es.",
   "payroll.fact.smallWageCaught": "Der Jahreslohn übersteigt {amount}: die Beiträge der Monate davor ({caught}) rechnen diesen Monat mit.",
   "payroll.fact.allowanceBelowMinimum": "{name}: die Zulage liegt unter dem Bundesminimum von {amount}.",

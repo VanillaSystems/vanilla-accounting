@@ -421,3 +421,12 @@ test('a tax office entered on another kind\'s account: no tax check for that acc
   assert.deepEqual(p.taxAtSource, []);
   assert.ok(p.insurers.find((i) => i.account === '2271')!.insurances.some((i) => i.kind === 'qst'));
 });
+
+test('money back from the canton booked onto an expense, not a money account: no payment, the difference is named', async () => {
+  const { input, journalEntries } = await taxedMonths([['q1', 'ZH']]);
+  const owed = payrollYearEnd(input).taxAtSource[0].payable;
+  journalEntries.push({ id: id(), transactionRef: 'M2026-012', date: '2026-03-10', accountDebit: '2279', accountCredit: '1020', amount: owed, by: { kind: 'person', at: '2026-03-10T00:00:00Z' } });
+  journalEntries.push({ id: id(), transactionRef: 'M2026-013', date: '2026-03-20', accountDebit: '6570', accountCredit: '2279', amount: 36.25, by: { kind: 'person', at: '2026-03-20T00:00:00Z' } });
+  const x = payrollYearEnd(input).taxAtSource[0];
+  assert.deepEqual([x.paid, x.expected, x.difference], [owed, 0, 36.25]);
+});

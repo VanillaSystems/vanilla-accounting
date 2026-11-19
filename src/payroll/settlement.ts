@@ -83,9 +83,12 @@ export function settlementsOf(closes: readonly PayslipClose[], year: string, dat
     for (const [region, byMonth] of rows) {
       const list = [...byMonth.values()].sort((a, b) => (a.corrects ?? '').localeCompare(b.corrects ?? ''));
       shareCommission(list, commission.get(region));
+      // A row that nets to nothing (a correction taken back in the same month) is not declared; nor a list left empty.
+      const kept = list.filter((r) => r.tax !== 0 || r.commission !== 0);
+      if (!kept.length) continue;
       const k = `${c.month}|${region}`;
       const s = lists.get(k) ?? { region, month: c.month, rows: [], totals: { wage: 0, tax: 0, commission: 0, payable: 0 }, files: [] };
-      s.rows.push(...list);
+      s.rows.push(...kept);
       const own = c.lines.find((l) => keys.tax.has(l.wageType) && l.tariff?.region === region && !l.corrects)?.tariff?.created;
       if (own && !s.files.includes(own)) s.files.push(own);
       lists.set(k, s);

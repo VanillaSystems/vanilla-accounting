@@ -2172,7 +2172,16 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     31.12. of the employment's last year (`referenceYear`), as its ceiling and small-wage judgement already counted
     that year's wages; while employed in the later year, the payment month's figures and that year's wages. The
     insurers' own rates stay those of the payment day (their contract year). The lapse of the insurance duty without
-    an exit is not told apart.
+    an exit is not told apart. «After the exit» is decided per payment month (`exitBefore`): not employed in it, and
+    the latest Anstellung begun by its end ended before it; so a re-hire entered later for a later month leaves a
+    closed Nachzahlung as it was, and a re-hire already entered for a later month does not make a payment before it
+    the payment year's. The afterExit fact, the ceiling, the small-wage judgement and the liability by age read the
+    same test and year, and every earlier payment after the exit counts in that year (a second Nachzahlung in a
+    further year finds the first against the ceiling). The figures of 2025 are shipped (modules/ch/payroll/2025.yaml,
+    each with its source); a year still not shipped takes the nearest shipped year's figures, said as a fact on the
+    payslip (`figuresOfYear`), never no line. A closed Nachzahlung computed with a fallback year shows as
+    «berechnet mit den Werten von damals» once its year's figures ship (it is not changed). The line's source cites
+    the year whose figure it read.
 125. **The EO allowance is no UVG premium wage; the employer's top-up beyond it is** (UVV Art. 115 Abs. 1 lit. d,
     https://www.fedlex.admin.ch/eli/cc/1983/38_38_38/de, replacing the insurers' wage declarations cited before):
     the Lohnart `taggeld-eo` has no `uvg`/`uvgz` base, `lohnfortzahlung` keeps them, so a month of service with

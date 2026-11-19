@@ -7696,6 +7696,7 @@ export default {
     "payroll.docs.exempt.pensioner": "pensioner’s allowance {amount}; liable {liable}",
     "payroll.docs.exempt.smallWage": "small wage: {amount} without AHV contribution",
     "payroll.fact.afterExit": "Payment after the exit on {date}: only the wage types entered, no occupational pension.",
+    "payroll.fact.figuresOfYear": "Paid after the exit, earned in {earned}: the federal rates and ceilings of {year}; the app does not have those of {earned} yet.",
     "payroll.fact.smallWage": "Small wage: up to {amount} a year without AHV/IV/EO, ALV and FAK, unless the person asks.",
     "payroll.fact.smallWageCaught": "The year’s wage passes {amount}: the months before ({caught}) are charged this month.",
     "payroll.fact.allowanceBelowMinimum": "{name}: the allowance is below the federal minimum of {amount}.",

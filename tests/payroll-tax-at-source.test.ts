@@ -551,3 +551,19 @@ test('the Lohnausweis\'s field 12 is the tax withheld, before the commission the
   const la = lohnausweisOf(store.employees[0], closes, firmWageTypes(ctxOf(store).data, store), ctxOf(store).data, '2026');
   assert.equal(la.fields['12'], 1420, '3 × 473.20 = 1,419.60, in whole francs; not less the 28.35 of commission');
 });
+
+test('a hand correction of a month closed without its tax line books in the person\'s canton of that month, on its office\'s account', () => {
+  const store = withQst(firm([subject(6500, { subject: true, canton: 'BE', code: 'A0' })]), { ZH: 2, BE: 1 });
+  store.insurances.find((i) => i.id === 'qBE')!.account = '2278';
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs: noFile }, 'q1', '2026-10')!); ev.push(oct);
+  assert.equal(line(oct as never, 'quellensteuer').length, 0, 'closed without the file');
+  ev.push(correction(oct.id, 800, '2026-11-01T00:00:00.000Z'));
+  const nov = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-11')!);
+  assert.equal(line(nov as never, 'quellensteuer').find((l) => l.corrects)?.tariff?.region, 'BE');
+  const owed = owedOn([nov], store);
+  assert.equal(owed['2279'], undefined, 'nothing on the ZH office\'s account');
+  const lists = settlementsOf([oct, nov], '2026', ctxOf(store).data, firmWageTypes(ctxOf(store).data, store), store);
+  assert.deepEqual(lists.map((s) => [s.region, s.rows.map((r) => [r.corrects ?? 'own', r.tax])]), [['BE', [['own', 812.5], ['2026-10', 800]]]]);
+  assert.equal(owed['2278'], lists[0].totals.payable);
+});

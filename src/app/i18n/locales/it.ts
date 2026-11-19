@@ -7696,6 +7696,7 @@ export default {
     "payroll.docs.exempt.pensioner": "franchigia per i beneficiari di rendita {amount}; soggetto {liable}",
     "payroll.docs.exempt.smallWage": "salario esiguo: {amount} senza contributo AVS",
     "payroll.fact.afterExit": "Pagamento dopo l’uscita il {date}: solo i generi di salario registrati, nessuna previdenza professionale.",
+    "payroll.fact.figuresOfYear": "Pagato dopo l’uscita, guadagnato nel {earned}: le aliquote e i limiti federali del {year}, l’app non ha ancora quelli del {earned}.",
     "payroll.fact.smallWage": "Salario esiguo: fino a {amount} all’anno senza AVS/AI/IPG, AD e CAF, salvo richiesta della persona.",
     "payroll.fact.smallWageCaught": "Il salario annuo supera {amount}: i contributi dei mesi precedenti ({caught}) sono calcolati questo mese.",
     "payroll.fact.allowanceBelowMinimum": "{name}: l’assegno è sotto il minimo federale di {amount}.",

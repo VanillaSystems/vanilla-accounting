@@ -415,18 +415,19 @@ export function taxAtSourceChecks(input: Pick<PayrollYearEndInput, 'year' | 'boo
     const i = lineInsuranceOf(data, input.store, kinds[0], l.region, firstDay(l.month), lastDay(l.month));
     return i ? accountOfInsurance(data, i) : data.insurances[kinds[0]]?.account;
   };
+  const end = yearEnd(year);
+  // The insurances that hold at some time in the year.
+  const ofYear = input.store.insurances.filter((i) => i.validFrom <= end && (!i.validUntil || i.validUntil >= `${year}-01-01`));
   const accounts = new Set<string>();
   for (const k of kinds) if (data.insurances[k].account) accounts.add(data.insurances[k].account!);
-  for (const i of input.store.insurances) if (kinds.includes(i.kind)) { const a = accountOfInsurance(data, i); if (a) accounts.add(a); }
+  for (const i of ofYear) if (kinds.includes(i.kind)) { const a = accountOfInsurance(data, i); if (a) accounts.add(a); }
   for (const l of lists) { const a = accountOfList(l); if (a) accounts.add(a); }
   // An account another kind books on too (a tax office entered on the AHV's account): its balance is not the tax's alone,
   // so it stays the insurer's fact (decision 102) and no list is checked against it.
   const others = new Set<string>();
   for (const [k, def] of Object.entries(data.insurances)) if (!def.tariff && def.account) others.add(def.account);
-  for (const i of input.store.insurances) if (!kinds.includes(i.kind)) { const a = accountOfInsurance(data, i); if (a) others.add(a); }
+  for (const i of ofYear) if (!kinds.includes(i.kind)) { const a = accountOfInsurance(data, i); if (a) others.add(a); }
   const refs = new Set(input.closes.map((c) => payslipRef(c.month, c.employee)));
-  const bank = new Set(books.transactions.map((t) => t.ref));
-  const end = yearEnd(year);
   return [...accounts].filter((a) => !others.has(a)).flatMap((account): TaxAtSourceCheck[] => {
     const mine = lists.filter((l) => accountOfList(l) === account).map((l) => ({ month: l.month, region: l.region, payable: l.totals.payable }));
     const on = books.journalEntries.filter((e) => e.date >= `${year}-01-01` && e.date <= end && (e.accountDebit === account || e.accountCredit === account));
@@ -434,11 +435,11 @@ export function taxAtSourceChecks(input: Pick<PayrollYearEndInput, 'year' | 'boo
     const carried = opening !== undefined ? round2(input.isDebitNormal(account) ? -opening : opening)
       : creditOn({ ...books, journalEntries: books.journalEntries.filter((e) => e.date < `${year}-01-01`) }, account, year, end, input.isDebitNormal);
     if (!mine.length && !on.length && !carried) return [];
-    // Paid: what a bank line or a money account moved on the account, net (a payment to the canton, less a refund from
-    // it), and each other entry under no payslip's ref that takes off the account (paid by hand). One that adds to it
-    // otherwise (a tax booked by hand) is no list's: it shows as the difference.
+    // Paid: what moved between the account and a money account, net (a payment to the canton, less a refund from it),
+    // and each other entry under no payslip's ref that takes off the account (paid by hand). One that adds to it
+    // otherwise (a tax booked by hand, a refund onto an expense) is no list's: it shows as the difference.
     const debit = (e: JournalEntry) => (e.accountDebit === account ? chfAmount(e) : 0) - (e.accountCredit === account ? chfAmount(e) : 0);
-    const money = (e: JournalEntry) => bank.has(e.transactionRef) || !!input.moneyAccounts?.has(e.accountDebit === account ? e.accountCredit : e.accountDebit);
+    const money = (e: JournalEntry) => !!input.moneyAccounts?.has(e.accountDebit === account ? e.accountCredit : e.accountDebit);
     const paid = round2(on.filter((e) => !refs.has(e.transactionRef)).reduce((s, e) => s + (money(e) ? debit(e) : Math.max(0, debit(e))), 0));
     const payable = round2(mine.reduce((s, l) => s + l.payable, 0));
     const balance = creditOn(books, account, year, end, input.isDebitNormal);

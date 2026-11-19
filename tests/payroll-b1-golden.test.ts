@@ -255,13 +255,15 @@ test('the fact of an entry is said on the entry month once, never again', () => 
 
 import { historyOf } from '../src/payroll/history.js';
 import type { PayslipEvent } from '../src/payroll/model.js';
-import type { FederalFigure } from '../src/core/modules/schema.js';
+import type { FederalFigure, PayrollYearData } from '../src/core/modules/schema.js';
 
 /** Invented figures of 2027 that differ from 2026's, so the case shows whose year a line takes: AHV 5.5 %, ALV ceiling 150,000. */
-function yearsWith2027() {
+function yearsWith2027(extra: string[] = ['2027']) {
   const y26 = ch.payrollYears!['2026'];
-  const row = (key: string, value: number): FederalFigure => { const f = y26.figures[key]; return { ...(Array.isArray(f) ? f[0] : f), value, validFrom: '2027-01-01' }; };
-  return { ...ch.payrollYears, 2027: { ...y26, year: 2027, figures: { ...y26.figures, ahvEmployee: row('ahvEmployee', 5.5), ahvEmployer: row('ahvEmployer', 5.5), alvCeiling: row('alvCeiling', 150000) } } };
+  const row = (y: string, key: string, value: number): FederalFigure => { const f = y26.figures[key]; return { ...(Array.isArray(f) ? f[0] : f), value, validFrom: `${y}-01-01` }; };
+  const out: Record<string, PayrollYearData> = { ...ch.payrollYears };
+  for (const y of extra) out[y] = { ...y26, year: Number(y), figures: { ...y26.figures, ahvEmployee: row(y, 'ahvEmployee', 5.5), ahvEmployer: row(y, 'ahvEmployer', 5.5), alvCeiling: row(y, 'alvCeiling', 150000) } };
+  return out;
 }
 
 /** 2026 closed month by month at `wage`, the Anstellung ending `until` (or running on); a bonus of 2,000 paid in February 2027. */
@@ -287,7 +289,8 @@ test('B1 golden case: back pay while still employed in the later year takes the 
   assert.deepEqual(lines(d).filter(([w]) => w === 'ahv-an' || w === 'alv-an'), [['ahv-an', 14400, 5.5, 792], ['alv-an', 12500, 1.1, 137.5]]);
 });
 
-import { addAbsence } from '../src/payroll/settings.js';
+import { addAbsence, affectedBy, driftOf } from '../src/payroll/settings.js';
+import { lineSource } from '../src/payroll/sources.js';
 
 test('B1 golden case: military service, EO allowance and the employer\'s top-up: the top-up is UVG premium wage, the allowance is not (UVV Art. 115 Abs. 1 lit. d)', () => {
   const store = firm([staff('p1', { employment: [dated('2026-01-01', monthly(6000))] })]);
@@ -301,4 +304,78 @@ test('B1 golden case: military service, EO allowance and the employer\'s top-up:
   assert.equal(line(d, 'nbu-an')[0].base, d.bases.uvg?.month);
   assert.equal(d.bases.uvg?.month, Math.round((6000 - eo) * 100) / 100, 'the full wage less the EO allowance: the top-up counts, the allowance does not');
   assert.equal(d.bases.ahv?.month, 6000, 'the allowance is AHV wage (AHVG Art. 19a)');
+});
+
+// ─── the second review: per month, re-hires, a further year, a year not shipped ──
+
+const ahvAlv = (d: NonNullable<ReturnType<typeof computePayslip>>) => lines(d).filter(([w]) => w === 'ahv-an' || w === 'alv-an');
+/** Closes `months` of the store's person in order with `years`. */
+function closeMonths(store: ReturnType<typeof firm>, months: string[], years: Record<string, PayrollYearData>, events: PayslipEvent[] = []) {
+  for (const m of months) { const d = computePayslip({ data: ch.payroll!, years, store, history: historyOf(events) }, 'p1', m); if (d) events.push(closeOf(d)); }
+  return events;
+}
+const months26 = Array.from({ length: 12 }, (_, i) => `2026-${String(i + 1).padStart(2, '0')}`);
+
+test('a re-hire entered after a closed Nachzahlung changes nothing closed: the earlier month is still after the exit', () => {
+  const years = yearsWith2027();
+  const store = firm([staff('p1', { employment: [dated('2026-01-01', monthly(12400), undefined, '2026-06-30')] })]);
+  const events = closeMonths(store, months26.slice(0, 6), years);
+  store.monthLines = [{ id: 'm1', employee: 'p1', month: '2027-02', wageType: 'bonus', amount: 2000, enteredAt: '2027-02-10T08:00:00Z' }];
+  closeMonths(store, ['2027-02'], years, events);
+  const feb = events.at(-1) as PayslipClose;
+  assert.deepEqual(ahvAlv(feb as never), [['ahv-an', 2000, 5.3, 106]]);
+  const next = structuredClone(store);
+  next.employees[0].employment = [...next.employees[0].employment, dated('2027-09-01', monthly(12400), '2027-08-20T00:00:00Z')];
+  const ctx = { data: ch.payroll!, years, store, history: historyOf(events) };
+  assert.deepEqual(affectedBy(ctx, next), [], 'no closed month computes otherwise');
+  assert.deepEqual(driftOf({ ...ctx, store: next }, feb), []);
+});
+
+test('a re-hire known before the payment month: a bonus in January 2027 between two employments counts in 2026, by 2026\'s ALV ceiling', () => {
+  const years = yearsWith2027();
+  const store = firm([staff('p1', { employment: [dated('2026-01-01', monthly(12400), undefined, '2026-06-30'), dated('2027-03-01', monthly(5000))] })]);
+  const events = closeMonths(store, months26.slice(0, 6), years);
+  store.monthLines = [{ id: 'm1', employee: 'p1', month: '2027-01', wageType: 'bonus', amount: 2000, enteredAt: '2027-01-10T08:00:00Z' }];
+  const d = computePayslip({ data: ch.payroll!, years, store, history: historyOf(events) }, 'p1', '2027-01')!;
+  // 6 × 12,400 = 74,400 already above 2026's ceiling for six months (74,100): no ALV; AHV at 2026's 5.3 %.
+  assert.deepEqual(ahvAlv(d), [['ahv-an', 2000, 5.3, 106]]);
+  assert.ok(facts(d).includes('afterExit') && facts(d).includes('ceiling'));
+});
+
+test('a second Nachzahlung in a further year counts the first against the earned year\'s ceiling', () => {
+  const years = yearsWith2027(['2027', '2028']);
+  // 12 × 12,300 = 147,600: 600 left under 2026's 148,200.
+  const store = firm([staff('p1', { employment: [dated('2026-01-01', monthly(12300), undefined, '2026-12-31')] })]);
+  const events = closeMonths(store, months26, years);
+  store.monthLines = [
+    { id: 'm1', employee: 'p1', month: '2027-02', wageType: 'bonus', amount: 500, enteredAt: '2027-02-10T08:00:00Z' },
+    { id: 'm2', employee: 'p1', month: '2028-02', wageType: 'bonus', amount: 500, enteredAt: '2028-02-10T08:00:00Z' },
+  ];
+  closeMonths(store, ['2027-02'], years, events);
+  assert.deepEqual(ahvAlv(events.at(-1) as never), [['ahv-an', 500, 5.3, 26.5], ['alv-an', 500, 1.1, 5.5]]);
+  const d = computePayslip({ data: ch.payroll!, years, store, history: historyOf(events) }, 'p1', '2028-02')!;
+  assert.deepEqual(ahvAlv(d), [['ahv-an', 500, 5.3, 26.5], ['alv-an', 100, 1.1, 1.1]], 'only 100 left under 2026\'s ceiling');
+});
+
+test('earned in 2025: the shipped 2025 figures, the line citing them; earned in a year not shipped: the nearest year, said', () => {
+  for (const [exit, figureYear, fact] of [['2025-12-31', '2025', false], ['2023-12-31', '2025', true]] as const) {
+    const store = firm([staff('p1', { employment: [dated(`${exit.slice(0, 4)}-01-01`, monthly(6000), undefined, exit)] })]);
+    store.monthLines = [{ id: 'm1', employee: 'p1', month: '2026-03', wageType: 'bonus', amount: 2000, enteredAt: '2026-03-10T08:00:00Z' }];
+    const d = computePayslip({ data: ch.payroll!, years: ch.payrollYears, store, history: historyOf([]) }, 'p1', '2026-03')!;
+    assert.deepEqual(lines(d).find(([w]) => w === 'ahv-an'), ['ahv-an', 2000, 5.3, 106], exit);
+    assert.equal(d.used.find((u) => u.path === 'federal/ahvEmployee')?.validFrom, `${figureYear}-01-01`);
+    assert.equal(d.facts.some((f) => f.key === 'figuresOfYear' && f.vars?.earned === exit.slice(0, 4) && f.vars?.year === figureYear), fact, exit);
+    const src = lineSource(d.lines.find((l) => l.wageType === 'ahv-an')!, d, ch.payroll!, ch.payrollYears, store.insurances);
+    assert.equal(src?.kind === 'federal' ? src.year : undefined, figureYear);
+  }
+});
+
+test('liable by age in the year earned: born 2009, paid in 2027 for 2026, owes no AHV', () => {
+  const years = yearsWith2027();
+  const store = firm([staff('p1', { birthDate: '2009-05-01', employment: [dated('2026-01-01', monthly(3000), undefined, '2026-12-31')] })]);
+  const events = closeMonths(store, months26, years);
+  store.monthLines = [{ id: 'm1', employee: 'p1', month: '2027-02', wageType: 'bonus', amount: 2000, enteredAt: '2027-02-10T08:00:00Z' }];
+  const d = computePayslip({ data: ch.payroll!, years, store, history: historyOf(events) }, 'p1', '2027-02')!;
+  assert.deepEqual(ahvAlv(d), []);
+  assert.ok(facts(d).includes('notLiable'));
 });

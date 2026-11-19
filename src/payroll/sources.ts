@@ -52,11 +52,11 @@ export function lineSource(
     return { kind: 'tariff', region: t.region, year: key.split(':')[1] ?? slip.month.slice(0, 4), created: t.created!, code: t.code, income: t.income, ...(tax ? {} : { fileOnly: true }), ...(note ? { note } : {}) };
   }
   if (kind === 'federal') {
-    const year = slip.month.slice(0, 4);
+    // The row the payslip read (a figure may change inside the year; a payment after the exit reads its earned year's), else the latest.
+    const used = slip.used.find((u) => u.path === `federal/${key}`)?.validFrom;
+    const year = used?.slice(0, 4) ?? slip.month.slice(0, 4);
     const rows = years?.[year]?.figures[key];
     const list = rows ? (Array.isArray(rows) ? rows : [rows]) : [];
-    // The row the payslip read (a figure may change inside the year), else the latest.
-    const used = slip.used.find((u) => u.path === `federal/${key}`)?.validFrom;
     const row = list.find((r) => r.validFrom === used) ?? list.at(-1);
     return row ? { kind: 'federal', year, cite: citesOf(row) } : undefined;
   }

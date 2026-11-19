@@ -358,7 +358,13 @@ Two markers flag an entry you must read before you update:
   ordinary tariff applies without it, in the payslip's language.
 - Löhne: a Nachzahlung after the exit, in a later year, takes the AHV/ALV rates and ceilings of the
   year it was earned in (WBB Rz 2038); it took the payment year's rates. **⚠ figures** for such a
-  payslip closed from now on.
+  payslip closed from now on. «After the exit» is judged per month, so a re-hire entered later changes
+  no closed Nachzahlung; a second Nachzahlung finds the first against the ceiling. The federal
+  figures of 2025 ship; for an earlier year the nearest year's figures are taken and the payslip
+  says so. A Nachzahlung closed before its year's figures shipped shows the difference as a fact
+  («berechnet mit den Werten von damals») and stays as it was closed.
+- Löhne: a hand correction of a month closed without its tax at source books in that month's
+  canton, on its tax office's account.
 - Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
   davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund
   (`payroll: { payments: liability }`), names the open payments it books first, and code then books
