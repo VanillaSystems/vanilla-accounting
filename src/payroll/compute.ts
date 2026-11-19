@@ -442,7 +442,8 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       const catchUp = round2(Math.max(0, sum(earlier.map(raw)) - sum(earlier.map(charged))));
       if (catchUp) fact('smallWageCaught', { amount: limit.value, caught: catchUp });
       base = round2(base + catchUp);
-      capped[key] = base;
+      // Kept as the raw base it covers (before a pensioner's allowance), so the next month compares like with like.
+      capped[key] = round2((bases[c.base] ?? 0) + catchUp);
     }
     if (c.ceiling) {
       const ceiling = fig(c.ceiling);
