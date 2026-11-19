@@ -30,7 +30,7 @@ export function Search({ props }: { props: Props }) {
   return (
     <label className="search">
       {ICONS.search}
-      <span className="sr">{t('invoices.searchLabel')}</span>
+      <span className="sr">{t('invoices.searchIn', { view: t(`invoices.view.${props.route.view}`) })}</span>
       <input type="search" placeholder={t('shell.search')} value={query.q ?? ''} className={query.q ? 'has' : ''} autoComplete="off"
         onChange={(e) => nav.setQuery({ q: e.target.value || undefined })}
         onKeyDown={(e) => { if (e.key === 'Escape') nav.setQuery({ q: undefined }); }} />

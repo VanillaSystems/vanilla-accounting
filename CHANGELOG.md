@@ -336,6 +336,12 @@ Two markers flag an entry you must read before you update:
   Lieferschein «Ausgeführt», not «Bezahlt») and a Lieferschein no amount.
 - Firma › Rechnungslayout › Nummern: the format field is as wide as the column, so a format such as
   «AN-{JJJJ}-{NNNNN}» reads whole.
+- Verkauf: a draft for a person shows her with the salutation, as the document prints it
+  («Herr Peter Keller»).
+- Verkauf: the search names the view it searches («Angebote suchen», «Kontakte suchen») for a
+  screen reader.
+- Verkauf: in the conversion dialog a position with nothing open shows 0 to take, and beside what
+  is open what was taken already («0 · 10 geliefert»).
 
 - Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
   davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund

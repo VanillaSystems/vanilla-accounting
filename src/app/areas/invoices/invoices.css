@@ -318,6 +318,7 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .ivconv { margin: 4px 0 10px; }
 .ivconv tr.gone td { color: var(--faint); }
 .ivconv td.c-contact { white-space: normal; }
+.ivconv .ivdone { color: var(--muted); font-size: 11.5px; white-space: nowrap; }
 .ivconv input.ivqty { width: 72px; text-align: right; font: 13px var(--font-mono); padding: 3px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); color: var(--ink); }
 .ivconv input.ivqty.over { border-color: var(--warn); background: var(--warn-soft); }
 .ivconv input.ivqty:disabled { opacity: .5; }

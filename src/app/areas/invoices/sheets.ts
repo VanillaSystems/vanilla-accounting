@@ -10,7 +10,7 @@ import type { ScreenSheet, SheetData } from '../../../invoices/sheet.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import { api, type InvoiceList } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
-import { bookOf, customerOf } from './model.js';
+import { bookOf, customerOf, pickerContacts } from './model.js';
 import type { ReminderEdit } from './state.js';
 
 export const contextOf = (ws: CompanyInfo): InvoicingContext => ({ company: ws.company, settings: ws.invoicing });
@@ -30,8 +30,7 @@ export function screenOf(d: InvoiceList, scope: 'draft' | 'texts' | undefined, c
   return {
     qrPlaceholder: t('invoices.qrPlaceholder'),
     ...(windowGuide ? { windowGuide } : {}),
-    // An archived contact is picked no more; the draft that names one keeps it.
-    ...(scope ? { edit: { scope, customers: d.contacts.filter((c) => !c.archived || c.id === customerId).sort((a, b) => a.name.localeCompare(b.name)).map((c) => ({ id: c.id, name: c.name })), ...(customerId ? { customerId } : {}), ...(revenueAccount ? { revenueAccount } : {}), words: editWords() } } : {}),
+    ...(scope ? { edit: { scope, customers: pickerContacts(d, customerId), ...(customerId ? { customerId } : {}), ...(revenueAccount ? { revenueAccount } : {}), words: editWords() } } : {}),
   };
 }
 

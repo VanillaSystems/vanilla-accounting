@@ -16,7 +16,7 @@ import { creditNoteDraft, issue, missingForIssue, revenueSplit, totals, warnings
 import { parseDraftPatch } from '../src/invoices/service.js';
 import { assembleSheets, oneLine, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
 import { fixFor, sheetEdit } from '../src/app/areas/invoices/edit.js';
-import { issuedLater, wasSent } from '../src/app/areas/invoices/model.js';
+import { issuedLater, pickerContacts, wasSent } from '../src/app/areas/invoices/model.js';
 import { docRows } from '../src/app/areas/invoices/table.js';
 import { saveFile, sameOrigin } from '../src/desktop/save-file.js';
 import deLocale from '../src/app/i18n/locales/de.js';
@@ -143,4 +143,15 @@ test('a company without its address yet: no dangling commas on the sheet', () =>
   const blocks = sheetBlocks(data);
   const html = assembleSheets(data, blocks, { pages: [blocks.map((_, i) => i)], qrOwnPage: false });
   assert.doesNotMatch(html, /Malerei AG · ,|<span>,|, <\/span>|Malerei AG ,/);
+});
+
+test('the draft sheet names a person contact as the document prints it, with the salutation', () => {
+  const env0 = { createdAt: '2026-07-01T08:00:00Z', origin: 'manual' as const, deleted: false, persons: [], addresses: [], language: 'de' as const, emails: [] };
+  const contacts = [
+    { ...env0, id: 'c1', type: 'person' as const, name: 'Peter Keller', salutation: 'Herr' },
+    { ...env0, id: 'c2', type: 'firm' as const, name: 'Beispiel AG' },
+    { ...env0, id: 'c3', type: 'firm' as const, name: 'Alt AG', archived: true },
+  ];
+  assert.deepEqual(pickerContacts({ contacts }), [{ id: 'c2', name: 'Beispiel AG' }, { id: 'c1', name: 'Herr Peter Keller' }]);
+  assert.deepEqual(pickerContacts({ contacts }, 'c3').map((c) => c.id), ['c3', 'c2', 'c1'], 'the draft that names an archived contact keeps it');
 });

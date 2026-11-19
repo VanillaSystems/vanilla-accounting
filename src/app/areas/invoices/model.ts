@@ -6,7 +6,7 @@
 import { heldByReconciliation } from '../../../books/reconcile.js';
 import { bookedInFiled } from '../../../books/twins.js';
 import { isItem, type Contact, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type Issued, type SentDocument } from '../../../invoices/model.js';
-import { billingAddress, documentsOf, recipientOf } from '../../../invoices/contacts.js';
+import { billingAddress, documentsOf, printedName, recipientOf } from '../../../invoices/contacts.js';
 import type { DraftChange } from '../../lib/api.js';
 import { isOverdue, namesNumber, openAmount } from '../../../invoices/rules.js';
 import { channelOf } from '../../../invoices/lists.js';
@@ -41,6 +41,14 @@ export function issuedLater(invoices: readonly Invoice[], draft: Pick<Draft, 'da
   return invoices
     .filter((i): i is Issued => i.status === 'issued' && !i.deleted && series(i.kind) && i.date.slice(0, 4) === draft.date.slice(0, 4) && i.date > draft.date)
     .sort((a, b) => b.date.localeCompare(a.date))[0];
+}
+
+/**
+ * The contacts the draft sheet's picker offers, by the name the document prints (a person with her
+ * salutation, «Herr Peter Keller»): an archived contact is picked no more, the draft that names one keeps it.
+ */
+export function pickerContacts(d: Pick<InvoiceList, 'contacts'>, customerId?: string): Array<{ id: string; name: string }> {
+  return d.contacts.filter((c) => !c.archived || c.id === customerId).sort((a, b) => a.name.localeCompare(b.name)).map((c) => ({ id: c.id, name: printedName(c) }));
 }
 
 /** The id an invoice has in a link: its number once issued, `draft-<id>` before (docs/urls.md). */
