@@ -23,6 +23,12 @@
 #                payout months), contribution (a row of contributions below); absent: entered by a person
 schema: 1
 
+# The social security number (AHVN13, AHVG Art. 153b-153i): how code finds it in a text, so no prompt to
+# a model ever carries one (#508; src/llm/mask.ts). Separators may be dots, spaces or none.
+socialSecurityNumber:
+  pattern: "\\b756[.\\s-]?\\d{4}[.\\s-]?\\d{4}[.\\s-]?\\d{2}\\b"
+  masked: "756.****.****.**"
+
 # The groups, in the order a payslip prints them. `stage`: where a group's lines act on the payslip:
 # `gross` (they make the Bruttolohn), `deduction` (taken off it: the Nettolohn), `after` (added or taken
 # off after the net: the Auszahlung), `employer` (the employer's contributions, on no payout).

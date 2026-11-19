@@ -18,6 +18,9 @@ import { closedPart } from '../src/books/seal.js';
 import type { RunDetail } from '../src/workflows/model.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { readPackage, writePackage } from '../src/handover/package.js';
+import { savePayroll, appendPayslipEvents } from '../src/payroll/store.js';
+import { computePayslip } from '../src/payroll/compute.js';
+import { closeOf, ctxOf, firm } from './support/payroll.js';
 
 const REPO = process.cwd();
 let api: ApiServer;
@@ -39,6 +42,10 @@ function withInvoice(root: string): void {
 before(async () => {
   api = await startApi('tests/fixtures/period-lock-index.json');
   withInvoice(api.root);
+  // Payroll: the owner's June payslip closed in the filed quarter.
+  const store = firm();
+  savePayroll(api.ws, store);
+  appendPayslipEvents(api.ws, '2026', [closeOf(computePayslip(ctxOf(store), 'e1', '2026-06')!)]);
   // A receipt deleted while its payment C1 was open, put back after the quarter was filed.
   mkdirSync(join(api.root, 'data/trash/rx/d1'), { recursive: true });
   // Two files that are no receipt (#228): one of the filed quarter, one of the open one, neither linked.
@@ -94,6 +101,10 @@ async function send({ method, path, body }: Call): Promise<{ status: number; err
 }
 
 const refused: Array<Call & { status: number }> = [
+  // Payroll (docs/specs/payroll.md §6.5 step 4): a payslip of a closed period is never closed, reopened or given a line.
+  { method: 'POST', path: '/api/payroll/payslips/2026-05-e1/close', body: { confirm: true }, status: 403 },
+  { method: 'POST', path: '/api/payroll/payslips/2026-06-e1/reopen', status: 403 },
+  { method: 'POST', path: '/api/payroll/month-lines', body: { employee: 'e1', month: '2026-05', wageType: 'bonus', amount: 100 }, status: 403 },
   { method: 'PATCH', path: '/api/transactions/C1', body: { description: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/transactions/C1', body: { remarks: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/transactions/C1', body: { noReceiptNeeded: true }, status: 403 },

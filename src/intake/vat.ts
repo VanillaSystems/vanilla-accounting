@@ -93,7 +93,7 @@ export const provisionalNoVat = (r: Receipt): boolean =>
  * not even with `force`; a bank statement has no VAT facts. `withModel`: a model reads, so code's provisional facts are taken up too.
  */
 export const vatCandidates = (books: Books, force = false, withModel = false): Receipt[] =>
-  books.receipts.filter((r) => r.vatBy !== 'human' && r.kind !== 'statement' && (force || ((!hasFacts(r) || unprovenNoVat(r) || (withModel && provisionalNoVat(r))) && !r.needsVisionReview && !vatGivenUp(r) && !filedReceipt(books, r))));
+  books.receipts.filter((r) => r.vatBy !== 'human' && r.kind !== 'statement' && r.kind !== 'payslip' && (force || ((!hasFacts(r) || unprovenNoVat(r) || (withModel && provisionalNoVat(r))) && !r.needsVisionReview && !vatGivenUp(r) && !filedReceipt(books, r))));
 
 /**
  * `only`: the ids of the receipts to read, as for one payment's «Buchen» (src/server/routes/classify.ts); absent, every candidate.

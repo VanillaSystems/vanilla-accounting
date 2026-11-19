@@ -1577,6 +1577,23 @@ non-obvious decision is recorded here when it is taken.
 12. **A Rückwirkende Korrektur entered on a month that is reopened afterwards is void** once that month
     closes again: the new close is computed with today's values, so carrying the old difference would
     count it twice. The reopening card names such corrections.
+13. **A month closes after a warning even while an earlier month of the person is open** (§18 over §6.2
+    step 7, warn, then the person decides): its cumulated ceilings and the 13th are computed from the
+    months closed by then and stay as closed; the warning says so.
+14. **The payslip PDF is drawn with pdf-lib and a standard font**, not printed by a browser like the
+    invoice: it needs no Chrome, and the same close gives the same bytes. The words come from
+    `payroll.yaml documents` in the person's language.
+15. **Reopening takes the payslip's PDF out of Belege** (receipt, link and file); closing again files the
+    new one. An entry of the ref a person changed by hand stays hers and is named.
+16. **The social security number's pattern is jurisdiction data** (`payroll.yaml socialSecurityNumber`);
+    src/llm/mask.ts masks it in every prompt, system text, judged state and sidebar message.
+17. **A payslip's receipt is keyed by its PDF's content** (as the read step keys every file of receipts/),
+    typed `payslip` and excluded from every reread and VAT read by kind: the intake never turns it into an
+    ordinary receipt, and its text holds no salary.
+18. **Closing again after a reopening replaces a person's entry of the payslip's ref** once the warning
+    named it and she confirmed: the ref is booked once, from the payslip.
+19. **Reopening keeps the PDF while a payment is linked to it** (it is that payment's proof); the next
+    close hands the payment's link to the new PDF and removes the old one.
 
 ---
 

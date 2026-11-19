@@ -5,6 +5,7 @@
  * again of the default provider, as is a question a key could not answer; the default is never
  * asked to hand over to a key.
  */
+import { maskState } from './mask.js';
 import { CallFailed, NO_USAGE, type JudgeCall, type Provider, type Question, type Usage, type Verdict } from './provider.js';
 import { usableProviders } from './providers/index.js';
 import { record } from './ask.js';
@@ -45,7 +46,8 @@ export function parseJudgement(raw: string, q: Question): Verdict | undefined {
   return typeof j.choice === 'string' && j.choice in q.options && confidence !== undefined ? { type: 'choice', choice: j.choice, confidence } : undefined;
 }
 
-async function judgeOne(step: StepId, provider: Provider, model: string, call: Omit<JudgeCall, 'model'>): Promise<Verdict> {
+async function judgeOne(step: StepId, provider: Provider, model: string, raw: Omit<JudgeCall, 'model'>): Promise<Verdict> {
+  const call = { ...raw, state: maskState(raw.state) };
   const started = Date.now();
   const row = (ok: boolean, usage: Usage) => record({ at: new Date().toISOString(), step: STEPS[step].ledger, provider: provider.id, model, ok, ms: Date.now() - started, ...usage });
   try {
