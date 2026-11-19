@@ -266,7 +266,7 @@ export type PayslipEvent =
     tariff?: CorrectedTariff;
   }
   /** «So lassen» (§19.3): a change dated back over this closed payslip was kept without a correction; history only. */
-  | { event: 'keep'; id: string; at: string; by: 'person'; path: string; validFrom?: string };
+  | { event: 'keep'; id: string; at: string; by: 'person'; path: string; validFrom?: string; /** A tariff file's checksum: «So lassen» holds for that file. */ version?: string };
 
 export type PayslipClose = Extract<PayslipEvent, { event: 'close' }>;
 export type PayslipCorrection = Extract<PayslipEvent, { event: 'correction' }>;

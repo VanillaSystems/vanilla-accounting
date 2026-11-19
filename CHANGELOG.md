@@ -375,6 +375,8 @@ Two markers flag an entry you must read before you update:
   year lifted over the limit is caught up, and the reference age is judged at the exit. The tariff
   card and the drift never undo a person's own correction of the tax at source, show it beside the
   card, and «So lassen» holds for the file it was said for.
+- Löhne: after a small-wage year's catch-up, the following months owe ALV on their own wage again
+  (a negative ALV base was charged). **⚠ figures** for such a payslip closed from now on.
 - Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
   davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund
   (`payroll: { payments: liability }`), names the open payments it books first, and code then books

@@ -671,12 +671,16 @@ export function affectedByTariff(ctx: PayrollContext, next: PayrollContext, isCl
     const year = c.month.slice(0, 4);
     const regions = new Set(after.lines.filter((l) => l.tariff).map((l) => l.tariff!.region));
     const kept = (ctx.history.events.get(c.id) ?? []).some((ev) => ev.event === 'keep' && ev.at >= c.closedAt
-      && [...regions].some((r) => ev.path === `tariffs/${r}/${year}` && ev.validFrom === next.tariffs?.(r, year)?.file.created));
+      && [...regions].some((r) => {
+        const file = next.tariffs?.(r, year);
+        // By the file's checksum; an older keep named only the file's date.
+        return ev.path === `tariffs/${r}/${year}` && !!file && (ev.version ? ev.version === file.sha256 : ev.validFrom === file.file.created);
+      }));
     if (kept) continue;
     // What the month withheld: its own lines and the corrections a computation made (a file, a value dated back). A
     // person's own corrections stay hers and are not undone, unless the month was closed without its tax: then they
     // stand for it, and nothing is carried twice (decision 96). A hand correction is shown beside the card.
-    const { counted, hand } = withheldBy(c, corrected, taxed, types);
+    const { counted, hand } = withheldBy(c, corrected, taxed);
     // A correction counts in its canton: its own, else the closed month's, else the only one the month computes now.
     const regionOf = (x: PayslipCorrection) => x.tariff?.region ?? closeRegion(c, x.wageType) ?? onlyRegion(after, x.wageType);
     const withheld: Pick<PayslipDraft, 'lines'> = {
@@ -711,8 +715,9 @@ function tariffWageTypes(ctx: Pick<PayrollContext, 'data' | 'store'>) {
  * the corrected month's figures), and a person's own (hand) ones only where the month was closed without its tax, for
  * then they stand for it. A hand correction of a month closed with its tax is hers: never compared, never undone.
  */
-function withheldBy(c: Pick<PayslipClose, 'lines'>, corrected: readonly PayslipCorrection[], taxed: ReadonlySet<string>, types: ReadonlyMap<string, WageType>) {
-  const ownTax = c.lines.some((l) => taxed.has(l.wageType) && types.get(l.wageType)?.computes !== 'commission' && !l.corrects && l.tariff);
+function withheldBy(c: Pick<PayslipClose, 'left'>, corrected: readonly PayslipCorrection[], taxed: ReadonlySet<string>) {
+  // The month could compute its tax when it closed (a line, or a rate of 0 %): nothing of the tax was left «unvollständig».
+  const ownTax = !c.left.some((m) => taxed.has(m.wageType));
   const isHand = (x: PayslipCorrection) => taxed.has(x.wageType) && x.tariff?.wage === undefined;
   return { counted: corrected.filter((x) => !(ownTax && isHand(x))), hand: ownTax ? corrected.filter(isHand) : [] };
 }
@@ -740,8 +745,8 @@ export function backdatedCorrections(ctx: PayrollContext, affected: readonly Aff
 }
 
 /** «So lassen» on each affected payslip, for its history; it changes nothing closed. */
-export const keepEvents = (affected: readonly Affected[], what: { path: string; validFrom?: string }, now: string): PayslipEvent[] =>
-  affected.map((a) => ({ event: 'keep', id: a.payslip, at: now, by: 'person', path: what.path, ...(what.validFrom ? { validFrom: what.validFrom } : {}) }));
+export const keepEvents = (affected: readonly Affected[], what: { path: string; validFrom?: string; version?: string }, now: string): PayslipEvent[] =>
+  affected.map((a) => ({ event: 'keep', id: a.payslip, at: now, by: 'person', path: what.path, ...(what.validFrom ? { validFrom: what.validFrom } : {}), ...(what.version ? { version: what.version } : {}) }));
 
 /**
  * What a closed payslip would compute today, less the corrections entered on it since: shown on it as a
@@ -750,12 +755,16 @@ export const keepEvents = (affected: readonly Affected[], what: { path: string; 
 export function driftOf(ctx: PayrollContext, close: PayslipClose): Difference[] {
   const now = computePayslip({ ...ctx, history: withoutClose(ctx.history, close.id) }, close.employee, close.month);
   // As the tariff card counts them: a person's own correction of the tax of a month closed with its tax is hers.
-  const { types, taxed } = tariffWageTypes(ctx);
-  const corrected = withheldBy(close, ctx.history.corrections.filter((c) => c.of === close.id && c.at >= close.closedAt), taxed, types).counted;
+  const { taxed } = tariffWageTypes(ctx);
+  const { counted: corrected, hand } = withheldBy(close, ctx.history.corrections.filter((c) => c.of === close.id && c.at >= close.closedAt), taxed);
   const left = differencesOf(ctx, close, now).filter((d) => d.carry).map((d) => {
     const inRegion = (c: PayslipCorrection) => !d.region || (c.tariff?.region ?? closeRegion(close, c.wageType) ?? d.region) === d.region;
     const done = round2(corrected.filter((c) => c.wageType === d.wageType && c.side === d.side && inRegion(c)).reduce((s, c) => s + c.amount, 0));
-    return { ...d, diff: round2(d.diff - done) };
+    // Her own correction is never undone, but where it is exactly what is left (she corrected the difference by
+    // hand, after «So lassen»), nothing is left to say.
+    const byHand = round2(hand.filter((c) => c.wageType === d.wageType && c.side === d.side && inRegion(c)).reduce((s, c) => s + c.amount, 0));
+    const diff = round2(d.diff - done);
+    return { ...d, diff: byHand !== 0 && byHand === diff ? 0 : diff };
   });
   return left.filter((d) => d.diff !== 0);
 }

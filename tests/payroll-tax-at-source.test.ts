@@ -610,3 +610,45 @@ test('a hand correction anticipating the file is shown on the card, so a double 
   const [a] = affectedByTariff(ctx, { ...ctx, tariffs: v2 });
   assert.deepEqual([a.differences.find((d) => d.carry)?.diff, a.hand?.map((h) => h.amount)], [14.3, [14.3]]);
 });
+
+// ─── the fourth review ──────────────────────────────────────────────────────────
+
+import { historyOf } from '../src/payroll/history.js';
+
+test('«So lassen» holds for the file by its checksum: another file of the same date is offered again', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const fixed = corrected();
+  const other = { ...corrected(), sha256: 'sha-zh-other-same-date' };
+  other.file = parseTariffFile(text('zh').replace(/^00ZH {15}20251208/m, `00ZH${' '.repeat(15)}20260304`).replace(/^(0601ZHA0N {7}20260101000645100000005000 00000000000)00728/m, '$100760'));
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!);
+  ev.push(oct, { event: 'keep', id: oct.id, at: '2026-11-05T00:00:00.000Z', by: 'person', path: 'tariffs/ZH/2026', validFrom: '2026-03-04', version: fixed.sha256 });
+  const at = (f: LoadedTariff) => (r: string, y: string) => (r === 'ZH' && y === '2026' ? f : tariffs(r, y));
+  const ctx = { ...ctxOf(store, ev), tariffs: at(fixed) };
+  assert.deepEqual(affectedByTariff(ctx, ctx), [], 'the file it was said for');
+  assert.deepEqual(affectedByTariff(ctx, { ...ctx, tariffs: at(other) }).flatMap((a) => a.differences.filter((d) => d.carry).map((d) => d.diff)), [20.8], '6,500 × 7.60 % − 473.20');
+});
+
+test('after «So lassen», her hand correction of exactly the difference clears the drift', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const fixed = corrected();
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!);
+  ev.push(oct, { event: 'keep', id: oct.id, at: '2026-11-05T00:00:00.000Z', by: 'person', path: 'tariffs/ZH/2026', validFrom: '2026-03-04', version: fixed.sha256 });
+  const ctxKept = { ...ctxOf(store, ev), tariffs: (r: string, y: string) => (r === 'ZH' && y === '2026' ? fixed : tariffs(r, y)) };
+  assert.deepEqual(driftOf(ctxKept, oct).map((d) => d.diff), [14.3], 'kept: the month computes otherwise now');
+  const ctxHand = { ...ctxKept, history: historyOf([...ev, correction(oct.id, 14.3, '2026-11-06T00:00:00.000Z')]) };
+  assert.deepEqual(driftOf(ctxHand, oct), []);
+});
+
+test('a month closed with its file at a rate of 0 % could compute its tax: a hand correction of it is hers, shown, not undone', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const zero: LoadedTariff = { region: 'ZH', year: '2026', file: parseTariffFile(text('zh').replace(/^(0601ZHA0N {7}20260101000645100000005000 00000000000)00728/m, '$100000')), sha256: 'sha-zh-zero', fetchedAt: '2026-11-19T10:00:00.000Z' };
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs: (r, y) => (r === 'ZH' && y === '2026' ? zero : undefined) }, 'q1', '2026-10')!);
+  assert.equal(line(oct as never, 'quellensteuer').length, 0);
+  ev.push(oct, correction(oct.id, 50, '2026-11-02T00:00:00.000Z'));
+  const ctx = { ...ctxOf(store, ev), tariffs: (r: string, y: string) => (r === 'ZH' && y === '2026' ? zero : undefined) };
+  const [a] = affectedByTariff(ctx, { ...ctx, tariffs });
+  assert.deepEqual([a.differences.find((d) => d.carry)?.diff, a.hand?.map((h) => h.amount)], [473.2, [50]]);
+});

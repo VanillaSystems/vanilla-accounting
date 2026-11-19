@@ -47,7 +47,7 @@ export async function loadTariff(ws: Workspace, region: string, year: string, op
   // A closed period offers only the correction (§19.3, golden rule 1).
   if (opts.backdated === 'keep' && affected.some((a) => a.closedPeriod)) throw new PayrollRefusal('closedPeriod', 'Eine Lohnabrechnung einer geschlossenen Periode wird nur korrigiert: «So lassen» gibt es für sie nicht.');
   const corrections = opts.backdated === 'correct' ? backdatedCorrections(ctx, affected, () => `co_${idSource.bytes(6).toString('hex')}`, now) : [];
-  const events: PayslipEvent[] = opts.backdated === 'keep' ? keepEvents(affected, { path: `tariffs/${region}/${year}`, validFrom: version.created }, now) : corrections;
+  const events: PayslipEvent[] = opts.backdated === 'keep' ? keepEvents(affected, { path: `tariffs/${region}/${year}`, validFrom: version.created, version: version.sha256 }, now) : corrections;
   const yearOf = (e: PayslipEvent) => (e.event === 'correction' ? e.of : e.id).slice(0, 4);
   // The corrections first: a failure between the two leaves the old file current with its corrections entered, and a
   // retry, comparing with them (affectedByTariff), carries nothing twice; never a new file without its corrections.
