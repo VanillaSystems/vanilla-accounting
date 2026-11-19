@@ -57,6 +57,8 @@ export interface LohnausweisData {
   remarks: Array<{ label: string; amount: number }>;
   /** Payslips of the year that are not closed yet: the statement is not final while one is open. */
   openMonths: string[];
+  /** Lohnarten of the gross that name no field: field 8 is short of the gross by their lines. */
+  unmapped?: string[];
 }
 
 /**
@@ -87,20 +89,28 @@ export function lohnausweisOf(e: PayrollEmployee, closes: readonly PayslipClose[
     }
   }
   for (const [k, v] of Object.entries(e.opening?.[year]?.fields ?? {})) fields[k] = round2((fields[k] ?? 0) + v);
+  // The form takes whole francs, and its sums must add up on paper: each field rounded first, the sums from the rounded ones.
+  for (const k of Object.keys(fields)) fields[k] = Math.round(fields[k]);
+  for (const r of remarks.values()) r.amount = Math.round(r.amount);
   for (const f of form?.fields ?? []) {
     if (!f.sum) continue;
     const plus = f.sum.plus.reduce((s, k) => s + (fields[k] ?? 0), 0);
     const minus = (f.sum.minus ?? []).reduce((s, k) => s + (fields[k] ?? 0), 0);
     fields[f.key] = round2(plus - minus);
   }
+  // A gross line whose Lohnart names no field (a firm's own) would leave field 8 short of the gross: named, never hidden.
+  const unmapped = [...new Set(mine.flatMap((c) => c.lines.filter((l) => { const w = types.get(l.wageType); return !!w && w.stage === 'gross' && !w.lohnausweis; }).map((l) => l.wageType)))];
   const spans = entriesWithin(e.employment, `${year}-01-01`, `${year}-12-31`).filter((s) => s.entry);
-  const employedMonths = new Set(spans.flatMap((s) => months(year).filter((m) => m >= s.from.slice(0, 7) && m <= s.to.slice(0, 7))));
+  // The months an opening covers were paid elsewhere: open are only the months from payroll's first here on.
+  const first = e.opening?.[year] ? mine[0]?.month : undefined;
+  const employedMonths = new Set(spans.flatMap((s) => months(year).filter((m) => m >= s.from.slice(0, 7) && m <= s.to.slice(0, 7) && (!e.opening?.[year] || (!!first && m >= first)))));
   const closedMonths = new Set(mine.map((c) => c.month));
   return {
     employee: e.id, year,
     ...(spans.length ? { from: spans[0].from, to: spans.at(-1)!.to } : {}),
     fields, remarks: [...remarks.values()].filter((r) => r.amount !== 0),
     openMonths: [...employedMonths].filter((m) => !closedMonths.has(m)).sort(),
+    ...(unmapped.length ? { unmapped } : {}),
   };
 }
 
@@ -117,7 +127,10 @@ export function declarationRows(employees: readonly PayrollEmployee[], closes: r
     const mine = closes.filter((c) => c.employee === e.id && c.month.startsWith(year));
     if (!mine.length) return [];
     const bases: Record<string, number> = {};
+    for (const [k, v] of Object.entries(e.opening?.[year]?.bases ?? {})) bases[k] = round2((bases[k] ?? 0) + v);
     for (const c of mine) for (const [k, v] of Object.entries(c.bases)) bases[k] = round2((bases[k] ?? 0) + v.month);
+    // A capped base (`alv|alvCeiling`) counts the opening of its base too, as the engine capped it (src/payroll/compute.ts cumulative).
+    for (const k of Object.keys(bases)) if (k.includes('|')) bases[k] = round2(bases[k] + (e.opening?.[year]?.bases?.[k.split('|')[0]] ?? 0));
     const spans = entriesWithin(e.employment, `${year}-01-01`, `${year}-12-31`).filter((s) => s.entry);
     return [{ employee: e.id, name: mine.at(-1)!.person.name, bases, ...(spans.length ? { from: spans[0].from, to: spans.at(-1)!.to } : {}) }];
   });
@@ -130,7 +143,8 @@ export const journalOf = (entries: readonly JournalEntry[], month: string): Jour
 /** A CSV with semicolons (what spreadsheets in the region open), every cell quoted where it needs it. */
 export function csv(rows: ReadonlyArray<ReadonlyArray<string | number | undefined>>): string {
   const cell = (v: string | number | undefined) => {
-    const s = v === undefined ? '' : typeof v === 'number' ? v.toFixed(2) : v;
+    // A text that starts like a formula is kept a text: a spreadsheet would run it.
+    const s = v === undefined ? '' : typeof v === 'number' ? v.toFixed(2) : /^[=+\-@]/.test(v) ? `'${v}` : v;
     return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   return rows.map((r) => r.map(cell).join(';')).join('\n') + '\n';

@@ -26,6 +26,18 @@ export interface LohnausweisSheet {
 
 const INK = rgb(0.08, 0.08, 0.08);
 const MUTED = rgb(0.4, 0.4, 0.4);
+/** `s` cut into lines no wider than `width` at `size`, at spaces. */
+function wrap(font: PDFFont, s: string, size: number, width: number): string[] {
+  const out: string[] = [];
+  let line = '';
+  for (const word of s.split(/\s+/).filter(Boolean)) {
+    const next = line ? `${line} ${word}` : word;
+    if (line && font.widthOfTextAtSize(safe(font, next), size) > width) { out.push(line); line = word; } else line = next;
+  }
+  if (line) out.push(line);
+  return out;
+}
+
 const safe = (font: PDFFont, s: string) => [...s.replace(/ | /g, ' ')].map((ch) => { try { font.encodeText(ch); return ch; } catch { return '?'; } }).join('');
 
 export async function lohnausweisPdf(sheet: LohnausweisSheet, payroll: PayrollData): Promise<Buffer> {
@@ -49,28 +61,31 @@ export async function lohnausweisPdf(sheet: LohnausweisSheet, payroll: PayrollDa
     page.drawRectangle({ x, y, width: 8, height: 8, borderColor: INK, borderWidth: 0.6 });
     if (on) text('X', x + 1.5, y + 1.2, 7, bold);
   };
-  // A: the kind of statement, C: the number, D: the year, E: the days, F and G: the boxes.
+  // A or B: the kind of statement; C: the number and the date of birth; D: the year; E: the days; F and G: the boxes.
+  // All on the left; the right is the envelope's window, which shows the address alone (Rz 11).
   let y = 800;
-  if (sheet.note) { text(sheet.note, left, y + 14, 8, bold, MUTED); }
+  if (sheet.note) text(sheet.note, left, y + 14, 8, bold, MUTED);
   box(left, y, true); text(`A  ${L(form.title)}`, left + 14, y, 11, bold);
-  y -= 26;
-  text(`C  ${L(form.letters.C)}`, left, y, 8, regular, MUTED); text(sheet.person.socialSecurityNumber ?? '', left + 70, y, 9);
-  if (sheet.person.birthDate) text(day(sheet.person.birthDate), left + 170, y, 9);
+  if (form.letters.B) { y -= 14; box(left, y, false); text(`B  ${L(form.letters.B)}`, left + 14, y, 9, regular, MUTED); }
+  y -= 22;
+  text(`C  ${L(form.letters.C)}`, left, y, 8, regular, MUTED); text(sheet.person.socialSecurityNumber ?? '', left + 80, y, 9);
+  if (sheet.person.birthDate) { y -= 13; text(L(form.letters.born ?? form.letters.C), left + 14, y, 8, regular, MUTED); text(day(sheet.person.birthDate), left + 80, y, 9); }
   y -= 16;
-  text(`D  ${L(form.letters.D)}`, left, y, 8, regular, MUTED); text(sheet.data.year, left + 70, y, 9);
-  text(`E  ${L(form.letters.E)}`, left + 120, y, 8, regular, MUTED);
-  if (sheet.data.from && sheet.data.to) text(`${day(sheet.data.from)} – ${day(sheet.data.to)}`, left + 190, y, 9);
+  text(`D  ${L(form.letters.D)}`, left, y, 8, regular, MUTED); text(sheet.data.year, left + 80, y, 9);
+  y -= 13;
+  text(`E  ${L(form.letters.E)}`, left, y, 8, regular, MUTED);
+  if (sheet.data.from && sheet.data.to) text(`${day(sheet.data.from)} – ${day(sheet.data.to)}`, left + 80, y, 9);
   y -= 16;
   box(left, y, !!sheet.boxes.F); text(`F  ${L(form.letters.F)}`, left + 14, y, 8);
   y -= 13;
   box(left, y, !!sheet.boxes.G); text(`G  ${L(form.letters.G)}`, left + 14, y, 8);
-  // H: the person's address in the window on the right, nothing else beside it.
-  let hy = 760;
-  text(sheet.person.name, 330, hy, 10.5);
+  // H: the person's address where a right-hand window envelope shows it (about 45 to 70 mm from the top).
+  let hy = 700;
+  text(sheet.person.name, 340, hy, 10.5);
   const a = sheet.person.address;
-  for (const line of a ? [[a.street, a.number].filter(Boolean).join(' '), [a.postcode, a.town].filter(Boolean).join(' ')] : []) { hy -= 13; if (line.trim()) text(line, 330, hy, 10.5); }
+  for (const line of a ? [[a.street, a.number].filter(Boolean).join(' '), [a.postcode, a.town].filter(Boolean).join(' ')] : []) { hy -= 13; if (line.trim()) text(line, 340, hy, 10.5); }
 
-  y = 650;
+  y = 600;
   page.drawLine({ start: { x: left, y: y + 12 }, end: { x: right, y: y + 12 }, thickness: 0.6, color: INK });
   for (const f of form.fields) {
     const strong = !!f.sum;
@@ -78,7 +93,8 @@ export async function lohnausweisPdf(sheet: LohnausweisSheet, payroll: PayrollDa
     text(L(f.label), left + 34, y, 8.5, strong ? bold : regular);
     if (f.remark) {
       const said = [sheet.remarks, ...sheet.data.remarks.map((r) => `${r.label} ${money(r.amount)}`)].filter(Boolean).join('; ');
-      if (said) { y -= 12; text(said.slice(0, 120), left + 34, y, 8); }
+      // Wrapped onto as many lines as it takes: a remark is never cut.
+      for (const line of wrap(regular, said, 8, right - left - 34)) { y -= 11; text(line, left + 34, y, 8); }
     } else {
       const v = sheet.data.fields[f.key];
       if (v !== undefined && v !== 0) rightText(`${f.deduction && f.key !== '12' ? '– ' : ''}${money(v)}`, right, y, 9, strong ? bold : regular);

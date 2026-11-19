@@ -246,8 +246,11 @@ lohnausweis:
   title: { de: Lohnausweis, fr: Certificat de salaire, it: Certificato di salario, en: Wage statement }
   replaces: { de: "Ersetzt den Lohnausweis vom {date}", fr: "Remplace le certificat de salaire du {date}", it: "Sostituisce il certificato di salario del {date}", en: "Replaces the wage statement of {date}" }
   corrects: { de: "Korrigiert den Lohnausweis vom {date}", fr: "Corrige le certificat de salaire du {date}", it: "Corregge il certificato di salario del {date}", en: "Corrects the wage statement of {date}" }
+  expenseRules: { de: "Spesenreglement durch Kanton {canton} am {date} genehmigt", fr: "Règlement des frais approuvé par le canton {canton} le {date}", it: "Regolamento spese approvato dal Cantone {canton} il {date}", en: "Expense regulations approved by canton {canton} on {date}" }
   letters:
+    B: { de: Rentenbescheinigung, fr: Attestation de rentes, it: Attestazione di rendite, en: Pension statement }
     C: { de: AHV-Nr., fr: No AVS, it: N. AVS, en: AHV no. }
+    born: { de: Geburtsdatum, fr: Date de naissance, it: Data di nascita, en: Date of birth }
     D: { de: Jahr, fr: Année, it: Anno, en: Year }
     E: { de: von – bis, fr: du – au, it: dal – al, en: from – to }
     F: { de: Unentgeltliche Beförderung zwischen Wohn- und Arbeitsort, fr: Transport gratuit entre le domicile et le lieu de travail, it: Trasporto gratuito tra domicilio e luogo di lavoro, en: Free transport between home and work }
@@ -263,11 +266,11 @@ lohnausweis:
     - { key: "5", label: { de: "Beteiligungsrechte gemäss Beiblatt", fr: "Droits de participation selon annexe", it: "Diritti di partecipazione secondo allegato", en: "Participation rights (annex)" } }
     - { key: "6", label: { de: "Verwaltungsratsentschädigungen", fr: "Indemnités des membres de l'administration", it: "Indennità dei membri dell'amministrazione", en: "Board fees" } }
     - { key: "7", label: { de: "Andere Leistungen", fr: "Autres prestations", it: "Altre prestazioni", en: "Other benefits" } }
-    - { key: "8", sum: { plus: ["1", "2.1", "2.2", "2.3", "3", "4", "5", "6", "7"] }, label: { de: "Bruttolohn total", fr: "Salaire brut total", it: "Salario lordo totale", en: "Gross wage, total" } }
+    - { key: "8", sum: { plus: ["1", "2.1", "2.2", "2.3", "3", "4", "5", "6", "7"] }, label: { de: "Bruttolohn total / Rente", fr: "Salaire brut total / Rente", it: "Salario lordo totale / Rendita", en: "Gross wage, total / pension" } }
     - { key: "9", deduction: true, label: { de: "Beiträge AHV/IV/EO/ALV/NBUV", fr: "Cotisations AVS/AI/APG/AC/AANP", it: "Contributi AVS/AI/IPG/AD/AINP", en: "AHV/IV/EO/ALV/NBUV contributions" } }
     - { key: "10.1", deduction: true, label: { de: "Berufliche Vorsorge: ordentliche Beiträge", fr: "Prévoyance professionnelle : cotisations ordinaires", it: "Previdenza professionale: contributi ordinari", en: "Occupational pension: ordinary contributions" } }
     - { key: "10.2", deduction: true, label: { de: "Berufliche Vorsorge: Beiträge für den Einkauf", fr: "Prévoyance professionnelle : cotisations pour le rachat", it: "Previdenza professionale: contributi per il riscatto", en: "Occupational pension: buy-in contributions" } }
-    - { key: "11", sum: { plus: ["8"], minus: ["9", "10.1", "10.2"] }, label: { de: "Nettolohn", fr: "Salaire net", it: "Salario netto", en: "Net wage" } }
+    - { key: "11", sum: { plus: ["8"], minus: ["9", "10.1", "10.2"] }, label: { de: "Nettolohn / Rente", fr: "Salaire net / Rente", it: "Salario netto / Rendita", en: "Net wage / pension" } }
     - { key: "12", deduction: true, label: { de: "Quellensteuerabzug", fr: "Retenue de l'impôt à la source", it: "Ritenuta d'imposta alla fonte", en: "Tax withheld at source" } }
     - { key: "13.1.1", label: { de: "Effektive Spesen: Reise, Verpflegung, Übernachtung", fr: "Frais effectifs : voyage, repas, nuitées", it: "Spese effettive: viaggio, vitto, alloggio", en: "Actual expenses: travel, meals, lodging" } }
     - { key: "13.1.2", label: { de: "Effektive Spesen: übrige", fr: "Frais effectifs : autres", it: "Spese effettive: altre", en: "Actual expenses: other" } }
@@ -275,6 +278,7 @@ lohnausweis:
     - { key: "13.2.2", label: { de: "Pauschalspesen: Auto", fr: "Frais forfaitaires : voiture", it: "Spese forfettarie: automobile", en: "Flat expenses: car" } }
     - { key: "13.2.3", label: { de: "Pauschalspesen: übrige", fr: "Frais forfaitaires : autres", it: "Spese forfettarie: altre", en: "Flat expenses: other" } }
     - { key: "13.3", label: { de: "Beiträge an die Weiterbildung", fr: "Contributions au perfectionnement", it: "Contributi per il perfezionamento", en: "Training contributions" } }
+    - { key: "14", label: { de: "Weitere Gehaltsnebenleistungen", fr: "Autres prestations salariales accessoires", it: "Altre prestazioni accessorie al salario", en: "Further fringe benefits" } }
     - { key: "15", deduction: true, remark: true, label: { de: "Bemerkungen", fr: "Observations", it: "Osservazioni", en: "Remarks" } }
   # Rz 74: the cantons whose tax office wants a copy from the employer (LU voluntary).
   copyToTaxOffice: [BS, BE, FR, JU, NE, SO, VD, VS]

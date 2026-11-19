@@ -438,6 +438,8 @@ export interface PayrollData {
     /** «Ersetzt / Korrigiert den Lohnausweis vom {date}»: printed on a later statement. */
     replaces: Labels;
     corrects: Labels;
+    /** The remark an approved expense regulation asks for: «… durch Kanton {canton} am {date} genehmigt». */
+    expenseRules?: Labels;
     letters: Record<string, Labels>;
     fields: Array<{ key: string; label: Labels; sum?: { plus: string[]; minus?: string[] }; deduction?: boolean; remark?: boolean }>;
     copyToTaxOffice?: string[];
