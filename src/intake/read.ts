@@ -37,6 +37,8 @@ import { documentKind } from './document-kind.js';
 import { askKind, asksModel, kindOfModel, MODEL_RULE, MODEL_TEXT, NOT_A_RECEIPT, visionVerdict, type ModelKind } from './unclear.js';
 import { statementFacts } from '../books/statement-facts.js';
 import { documents } from '../engines/index.js';
+import { monthEnd, PAYSLIP_RULE, PAYSLIP_UNREAD_RULE, payslipTitled, readPayslip } from '../booking/payslip.js';
+import { closedPayslips } from '../payroll/service.js';
 import { periodLock, release, type Books } from '../books/store.js';
 import { entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { claimsInputTax, deductsTaxAmount, evidenceCheck, lineBillsOf } from '../accounting/evidence-check.js';
@@ -197,9 +199,17 @@ interface Extracted { text: string; method: Receipt['extractionMethod']; fileSiz
  * where the person can say «doch ein Beleg». What the words leave unclear, the model's «no receipt»
  * sets aside when there is one (src/intake/unclear.ts). A bank statement (#151) is dated on its period's last day.
  */
-function kindOfText(fresh: Extracted, filename: string, originalFilename: string, model?: ModelKind): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy' | 'date' | 'amount' | 'currency'> {
+function kindOfText(fresh: Extracted, filename: string, originalFilename: string, firm: Workspace['company'] | undefined, closedHere: (month: string | undefined, name: string | undefined) => boolean, model?: ModelKind): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy' | 'date' | 'amount' | 'currency'> {
   const statement = statementFacts({ extractedText: fresh.text, filename, originalFilename }, documents());
   if (statement) return { kind: 'statement', kindBy: 'rule', kindRule: 'document:statement', ...(statement.to ? { date: statement.to } : {}) };
+  // A payslip the firm's payroll program or fiduciary issued (docs/specs/payroll.md §10.2 A1): dated by its month's end, its amount the net it pays.
+  // One code cannot read, or one of a month the app's own payroll closed (its PDF dropped again), is a payslip all the same: no model reads it,
+  // and the person pairs and books it (§22 decision 54).
+  if (payslipTitled(fresh.text, firm)) {
+    const slip = readPayslip(fresh.text);
+    if (!slip || closedHere(slip.period, slip.employee)) return { kind: 'payslip', kindBy: 'rule', kindRule: PAYSLIP_UNREAD_RULE };
+    return { kind: 'payslip', kindBy: 'rule', kindRule: PAYSLIP_RULE, amount: slip.net, currency: slip.currency, ...(slip.period ? { date: monthEnd(slip.period) } : {}) };
+  }
   const v = documentKind(fresh.text, documents());
   // A customs assessment keeps its tax and day: a payment to the customs office is paired with it by them (#197).
   if (v.is === 'supporting') return { kind: 'supporting', kindBy: 'rule', kindRule: `document:${v.why}`, ...(v.why === 'customs-assessment' ? assessmentFacts(fresh.text, documents().customs) : {}) };
@@ -286,12 +296,19 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     log(`  [${extracted.size}/${toExtract.length}] ${f.filename} → ${out.method}, ${out.text.length} chars${detectVatProofIssue(out.text) ? '  ⚠ VAT proof missing' : ''}`);
   })));
 
+  // The months the app's own payroll closed, by person: a payslip of one of them dropped again is no payslip of another program.
+  let closes: Array<{ month: string; person: { name: string } }> = [];
+  try { closes = closedPayslips(ws); } catch { closes = []; }
+  const fold = (n: string | undefined) => (n ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const closedHere = (month: string | undefined, name: string | undefined) => !!month && closes.some((c) => c.month === month && (!name || fold(c.person.name) === fold(name)));
   // A new receipt whose words decide nothing and that shows almost nothing of an invoice is asked of the model once (#186).
   const modelKinds = new Map<string, ModelKind>();
   // A receipt read again keeps the kind it has; a reading that proves nothing (a photo the model could not read) says nothing of its kind and waits as «nicht lesbar» (#284).
   const unclear = ask ? toExtract.filter((f) => {
     const read = extracted.get(f.id);
-    return !again.has(f.id) && !known.get(f.id)?.kind && !known.get(f.id)?.kindBy && !!read && !read.verdict && textProves({ extractedText: read.text, extractionMethod: read.method }) && asksModel(read.text, documents());
+    return !again.has(f.id) && !known.get(f.id)?.kind && !known.get(f.id)?.kindBy && !!read && !read.verdict && textProves({ extractedText: read.text, extractionMethod: read.method }) && asksModel(read.text, documents())
+      // A payslip code reads is never shown to the model: it carries a salary and a person (§10.2 A8).
+      && !payslipTitled(read.text, ws.company);
   }) : [];
   await Promise.all(unclear.map((f) => pool(async () => {
     try {
@@ -345,7 +362,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
       // A kind given before the text was read (a person's, above all) stays as it is.
       const { date: periodEnd, ...kind }: Pick<Receipt, 'kind' | 'kindBy' | 'kindRule' | 'kindWhy' | 'date'> = existing?.kind || existing?.kindBy
         ? { kind: existing.kind, kindBy: existing.kindBy, kindRule: existing.kindRule, kindWhy: existing.kindWhy }
-        : kindOfText(fresh, filename, originalFilename, modelKinds.get(id));
+        : kindOfText(fresh, filename, originalFilename, ws.company, closedHere, modelKinds.get(id));
       // A receipt read once more (a photo nothing could read yet) keeps what a person gave it: her VAT facts,
       // her links' marks, her «verschieden» (#438). Facts read off a text it had are read again off this one.
       const kept = existing ? { ...existing } : undefined;

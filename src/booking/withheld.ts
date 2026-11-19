@@ -15,6 +15,7 @@ import type { BankTransaction, JournalEntry, Mapping, Receipt } from '../types/i
 import { computeAccountBalance } from '../accounting/ledger.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { baseCurrency, chart, setup } from '../engines/index.js';
+import { readPayslip } from './payslip.js';
 
 type Books = { journalEntries: readonly JournalEntry[]; config?: { openingBalances?: Record<string, Record<string, number>> } };
 
@@ -43,17 +44,50 @@ export function wageAccounts(): { deductions: string; contributions: ReadonlySet
 const fold = (s: string | undefined) => (s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 
 /**
+ * The businesses that collect deductions the payslips withheld, each with its kinds (docs/specs/payroll.md §10.2 A5):
+ * the jurisdiction's payees (setup.yaml `wages.payees`, each collecting the kind of its id), and every business file
+ * that says `collects: [...]` (a pension fund's, the canton's for the withholding tax), whose word wins.
+ */
+export type Collectors = ReadonlyMap<string, readonly string[]>;
+export function collectorsOf(counterparties: ReadonlyArray<{ id: string; collects?: readonly string[] }>): Collectors {
+  const w = setup().wages;
+  const out = new Map<string, readonly string[]>();
+  for (const id of w?.payees ?? []) if (w?.withholds?.[id]) out.set(id, [id]);
+  for (const c of counterparties) if (c.collects?.length) out.set(c.id, c.collects);
+  return out;
+}
+
+/** The kinds a business collects: its own word (`collectors`), else the kind its id names (setup.yaml `wages.withholds`), else none. */
+export function kindsOf(business: string | undefined, collectors?: Collectors): readonly string[] {
+  if (!business) return [];
+  return collectors?.get(business) ?? (setup().wages?.withholds?.[business] ? [business] : []);
+}
+
+/** The account a kind's deductions are owed on: setup.yaml `wages.withholdsTo`, else `deductions`; a combined kind only when its parts share one. */
+export function accountOfKind(kind: string): string | undefined {
+  const w = setup().wages;
+  const accounts = new Set(kind.split('+').map((k) => w?.withholdsTo?.[k] ?? w?.deductions));
+  return accounts.size === 1 ? [...accounts][0] : undefined;
+}
+
+/** The one account of several kinds, or undefined when they are owed on two. */
+export function accountOfKinds(kinds: readonly string[]): string | undefined {
+  const accounts = new Set(kinds.map(accountOfKind));
+  return accounts.size === 1 ? [...accounts][0] : undefined;
+}
+
+/**
  * Whether a payment out pays social insurance contributions, by what the books know of its payee:
  * the business it routes to is one the jurisdiction names as collecting them (setup.yaml
  * `wages.payees`, the business files' ids), or an earlier payment to the same business (or the same
  * counterparty name) is booked on the deductions account or an employer's contribution account. A
  * wage itself is none.
  */
-export function paysContributions(books: Pick<Books, 'journalEntries'> & { transactions: readonly BankTransaction[] }, tx: BankTransaction, businessOf: (t: BankTransaction) => string | undefined): boolean {
+export function paysContributions(books: Pick<Books, 'journalEntries'> & { transactions: readonly BankTransaction[] }, tx: BankTransaction, businessOf: (t: BankTransaction) => string | undefined, collectors?: Collectors): boolean {
   const w = wageAccounts();
   if (!w || tx.direction !== 'DBIT') return false;
   const business = businessOf(tx);
-  if (business && w.payees.includes(business)) return true;
+  if (business && (w.payees.includes(business) || !!collectors?.has(business))) return true;
   const payee = fold(tx.counterparty);
   const same = (t: BankTransaction) => t.ref !== tx.ref && t.date <= tx.date && ((!!business && businessOf(t) === business) || (!!payee && fold(t.counterparty) === payee));
   const refs = new Set(books.transactions.filter(same).map((t) => t.ref));
@@ -201,11 +235,37 @@ const amountOf = (line: string): number | undefined => {
 };
 const escape = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** A line that is a sentence, not a payslip's row: it ends as a sentence does, or runs on. */
-const prose = (label: string) => /[.!?:]$/.test(label) || label.split(/\s+/).length > 8;
+export const prose = (label: string) => /[.!?:]$/.test(label) || label.split(/\s+/).length > 8;
 /** A correction of an earlier month's deduction, printed positive on its own row. */
-const CORRECTION = /korrektur|rückerstattung|r[ée]troactif|correction|rettifica|conguaglio/i;
+export const CORRECTION = /korrektur|rückerstattung|r[ée]troactif|correction|rettifica|conguaglio/i;
+
+/** Whether a payslip row's label names one of `words` as a word of its own, not in a compound («AHV-Nr.»): a short capital word (an abbreviation) only in capitals. */
+export function namesWord(words: readonly string[]): (label: string) => boolean {
+  const res = words.map((w) => new RegExp(`(?<![\\p{L}\\d])${escape(w)}(?![\\p{L}\\d])(?!-\\p{L})`, /^[A-Z]{1,4}$/.test(w) ? 'u' : 'iu'));
+  return (label) => res.some((r) => r.test(label));
+}
+
+/** A payslip's text as rows: each line's label and the amount at its end; `alone`, a line that is an amount only (pdftotext's column of figures). */
+export interface PayslipRow { label: string; amount?: number; alone: boolean }
+export function payslipRows(text: string): PayslipRow[] {
+  return text.split('\n').map((l) => l.trim()).filter(Boolean).map((line) => {
+    const amount = amountOf(line);
+    const label = amount === undefined ? line : line.replace(amountRe(), '').trim();
+    return { label, amount, alone: amount !== undefined && !/\p{L}/u.test(label) };
+  });
+}
 /** A rate on a row's label: «5.3%», «1,10 %». */
 const rateOf = (label: string) => { const m = /(\d+(?:[.,]\d+)?)\s*%/.exec(label); return m ? Number(m[1].replace(',', '.')) : undefined; };
+
+/** The deduction kind a row's label names (several funds' kinds as their combined kind, «accident+sickness»), none for a sentence. */
+export function deductionKind(kinds: Readonly<Record<string, readonly string[]>>): (label: string) => string | undefined {
+  const res = Object.entries(kinds).map(([kind, words]) => [kind, namesWord(words)] as const);
+  return (label) => {
+    if (prose(label)) return undefined;
+    const hit = res.filter(([, names]) => names(label)).map(([k]) => k);
+    return hit.length ? hit.sort().join('+') : undefined;
+  };
+}
 
 /**
  * The deductions a payslip's text names, summed per kind of setup.yaml `wages.withholds` (#476), when that is sure.
@@ -220,17 +280,8 @@ const rateOf = (label: string) => { const m = /(\d+(?:[.,]\d+)?)\s*%/.exec(label
  * With `total` (what the wage booked on the deductions account), the deductions must add up to it. Undefined otherwise.
  */
 export function payslipDeductions(text: string, total: number | undefined, kinds: Readonly<Record<string, readonly string[]>>): Map<string, number> | undefined {
-  const res = Object.entries(kinds).map(([kind, words]) => [kind, words.map((w) => new RegExp(`(?<![\\p{L}\\d])${escape(w)}(?![\\p{L}\\d])(?!-\\p{L})`, /^[A-Z]{1,4}$/.test(w) ? 'u' : 'iu'))] as const);
-  const kindOf = (label: string): string | undefined => {
-    if (prose(label)) return undefined;
-    const hit = res.filter(([, rs]) => rs.some((r) => r.test(label))).map(([k]) => k);
-    return hit.length ? hit.sort().join('+') : undefined;
-  };
-  const rows = text.split('\n').map((l) => l.trim()).filter(Boolean).map((line) => {
-    const amount = amountOf(line);
-    const label = amount === undefined ? line : line.replace(amountRe(), '').trim();
-    return { label, amount, alone: amount !== undefined && !/\p{L}/u.test(label), kind: kindOf(label) };
-  });
+  const kindOf = deductionKind(kinds);
+  const rows = payslipRows(text).map((r) => ({ ...r, kind: kindOf(r.label) }));
   const pairs: Array<{ kind: string; amount: number }> = [];
   const inline = rows.filter((r) => r.kind && !r.alone && r.amount !== undefined);
   if (inline.some((r) => r.amount! < 0)) {
@@ -274,46 +325,75 @@ type ShareBooks = Books & { transactions: readonly BankTransaction[]; receipts: 
  * several), whose deductions read per kind and add up to what it put there, and no row names this business's kind
  * together with another's. Undefined otherwise: the model is told the account's credit and the bill decides.
  */
-export function fundShare(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined): number | undefined {
+export function fundShare(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined, collected: readonly string[] = kindsOf(business)): number | undefined {
+  const open = withheldMonths(books, tx, business, businessOf, collected);
+  if (!open) return undefined;
+  const held = toRappen(withheldFor(books, tx, open.account) ?? 0);
+  return fromRappen(Math.max(0, Math.min(open.months.reduce((s, m) => s + m.rappen, 0), held)));
+}
+
+/** A payslip's deductions per kind: as payslipDeductions reads them, else as readPayslip does (a program that prints them without a minus). */
+const deductionsOf = (text: string, kinds: Readonly<Record<string, readonly string[]>>): Map<string, number> | undefined =>
+  payslipDeductions(text, undefined, kinds) ?? readPayslip(text)?.deductions;
+
+/**
+ * What the payslips withheld for a business's kinds and earlier payments to it have not paid yet, month by month, the
+ * oldest first (by the day the wage put it on the account); earlier payments pay the oldest months first. The same
+ * gates as fundShare: the kinds on one account, no opening of the year on it, every wage that put something there with
+ * its payslips read and adding up, no row mixing this business's kind with another's. Undefined otherwise.
+ */
+export function withheldMonths(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined, collected: readonly string[] = kindsOf(business)): { account: string; months: Array<{ month: string; rappen: number }> } | undefined {
   const w = setup().wages;
-  const account = w?.deductions;
   const kinds = w?.withholds;
-  if (!account || !kinds || !business || !kinds[business]?.length || tx.direction !== 'DBIT') return undefined;
+  const account = accountOfKinds(collected);
+  if (!account || !kinds || !business || !collected.length || tx.direction !== 'DBIT') return undefined;
+  const mine = new Set(collected);
+  // What of a payslip's deductions goes onto this account: its kinds whose account it is.
+  const onAccount = (m: Map<string, number>) => [...m].reduce((s, [k, v]) => s + (accountOfKind(k) === account ? toRappen(v) : 0), 0);
   const year = tx.date.slice(0, 4);
   if (books.config?.openingBalances?.[year]?.[account]) return undefined;
   const lines = books.journalEntries.filter((e) => e.transactionRef !== tx.ref && e.date.startsWith(year) && e.date <= tx.date);
-  const put = new Map<string, number>();
-  for (const e of lines) if (e.accountCredit === account) put.set(e.transactionRef, (put.get(e.transactionRef) ?? 0) + toRappen(e.amount));
-  let withheld = 0;
-  for (const [ref, rappen] of put) {
+  const put = new Map<string, { rappen: number; date: string }>();
+  for (const e of lines) if (e.accountCredit === account) { const had = put.get(e.transactionRef); put.set(e.transactionRef, { rappen: (had?.rappen ?? 0) + toRappen(e.amount), date: had && had.date < e.date ? had.date : e.date }); }
+  const byMonth = new Map<string, number>();
+  for (const [ref, { rappen, date }] of put) {
     const ids = new Set([...books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId), ...lines.filter((e) => e.transactionRef === ref).flatMap((e) => e.receipts ?? [])]);
-    const reads = books.receipts.filter((r) => ids.has(r.id)).flatMap((r) => payslipDeductions(r.extractedText ?? '', undefined, kinds) ?? []);
-    const sum = reads.reduce((s, m) => s + [...m.values()].reduce((a, v) => a + toRappen(v), 0), 0);
+    const reads = books.receipts.filter((r) => ids.has(r.id)).flatMap((r) => deductionsOf(r.extractedText ?? '', kinds) ?? []);
+    const sum = reads.reduce((s, m) => s + onAccount(m), 0);
     if (!reads.length || sum !== rappen) return undefined;
     for (const m of reads) for (const [kind, v] of m) {
       const parts = kind.split('+');
-      if (parts.includes(business) && parts.length > 1) return undefined;
-      if (kind === business) withheld += toRappen(v);
+      const ours = parts.filter((k) => mine.has(k)).length;
+      // A row that names this business's kind together with another's: whose part is whose, nothing says.
+      if (ours && ours < parts.length) return undefined;
+      if (ours) byMonth.set(date.slice(0, 7), (byMonth.get(date.slice(0, 7)) ?? 0) + toRappen(v));
     }
   }
   const theirs = new Set(books.transactions.filter((t) => t.ref !== tx.ref && t.date <= tx.date && businessOf(t) === business).map((t) => t.ref));
-  const paid = lines.filter((e) => theirs.has(e.transactionRef)).reduce((s, e) => s + (e.accountDebit === account ? toRappen(e.amount) : 0) - (e.accountCredit === account ? toRappen(e.amount) : 0), 0);
-  const held = toRappen(withheldFor(books, tx, account) ?? 0);
-  return fromRappen(Math.max(0, Math.min(withheld - paid, held)));
+  let paid = lines.filter((e) => theirs.has(e.transactionRef)).reduce((s, e) => s + (e.accountDebit === account ? toRappen(e.amount) : 0) - (e.accountCredit === account ? toRappen(e.amount) : 0), 0);
+  const months: Array<{ month: string; rappen: number }> = [];
+  for (const [month, rappen] of [...byMonth].sort(([a], [b]) => a.localeCompare(b))) {
+    const taken = Math.min(Math.max(paid, 0), rappen);
+    paid -= taken;
+    if (rappen - taken > 0) months.push({ month, rappen: rappen - taken });
+  }
+  return { account, months };
 }
 
 /**
  * The share of each payment out to a business whose deduction kinds setup.yaml names (fundShare), by ref, where code
  * can tell it (#476): the task and «Arbeitnehmeranteil abziehen» then ask for that part, never for all the account holds.
  */
-export function withheldSharesOf(books: ShareBooks, businessOf: (t: BankTransaction) => string | undefined): Record<string, number> {
-  const kinds = setup().wages?.withholds;
-  if (!kinds) return {};
+export function withheldSharesOf(books: ShareBooks, businessOf: (t: BankTransaction) => string | undefined, collectors?: Collectors): Record<string, number> {
+  const w = setup().wages;
+  if (!w?.withholds || !w.deductions) return {};
   const out: Record<string, number> = {};
   for (const t of books.transactions) {
     const b = t.direction === 'DBIT' ? businessOf(t) : undefined;
-    if (!b || !kinds[b]) continue;
-    const share = fundShare(books, t, b, businessOf);
+    const kinds = kindsOf(b, collectors);
+    // The task and its click are the deductions account's: a kind owed elsewhere (the withholding tax) has none.
+    if (!b || !kinds.length || accountOfKinds(kinds) !== w.deductions) continue;
+    const share = fundShare(books, t, b, businessOf, kinds);
     if (share !== undefined) out[t.ref] = share;
   }
   return out;
@@ -382,8 +462,60 @@ export function unclearedContributions(books: Books & { transactions: readonly B
 }
 
 /** The payments out to a business that collects contributions with the employees' share (setup.yaml `wages.payees`), by ref: what the app's task needs of the business files. */
-export function withheldPayeesOf(transactions: readonly BankTransaction[], businessOf: (t: BankTransaction) => string | undefined): string[] {
+export function withheldPayeesOf(transactions: readonly BankTransaction[], businessOf: (t: BankTransaction) => string | undefined, collectors?: Collectors): string[] {
   const w = wageAccounts();
-  if (!w?.payees.length) return [];
-  return transactions.filter((t) => t.direction === 'DBIT' && w.payees.includes(businessOf(t) ?? '')).map((t) => t.ref);
+  if (!w) return [];
+  const collects = (b: string | undefined) => !!b && (w.payees.includes(b) || (!!collectors?.has(b) && accountOfKinds(collectors.get(b)!) === w.deductions));
+  return transactions.filter((t) => t.direction === 'DBIT' && collects(businessOf(t))).map((t) => t.ref);
+}
+
+/** What code books of a payment to a collector without a model (contributionLines): its lines (`credit` empty is the bank), and why. */
+export interface ContributionBooking {
+  lines: Array<{ debit: string; credit: string; amount: number }>;
+  account: string; share: number;
+  /** Where the employer's part went: the payee's earlier contributions' account, else the kind's (setup.yaml `wages.employer`). */
+  employer?: string;
+  /** The collection commission the collector left the employer (setup.yaml `wages.commission`), and its account. */
+  commission?: { amount: number; account: string };
+}
+
+/**
+ * A payment to a business that collects deductions (§10.2 A4, A5), booked by code only where the payslips account for it
+ * (review of A-2: never on what a later month withheld). The months the payslips withheld for its kinds that no payment
+ * has cleared, oldest first (withheldMonths), are what it may clear, a whole number of them from the oldest:
+ * - the withholding tax (a kind with a commission, setup.yaml `wages.commission`): the payment is those months' tax,
+ *   or that less the collection commission (between `from` and `upTo` percent of it), which goes on the commission's
+ *   account; a payment that fits no such run of months clears only what it pays;
+ * - a fund's contributions: the payment is the employees' share of those months and the employer's beside it, so at
+ *   least twice that share (the employer pays at least half by law) and at most three times it (with the family
+ *   allowances and the administration cost); the rest goes on the payee's earlier contribution account, else the
+ *   kind's (setup.yaml `wages.employer`). A payment that fits no run of months is the person's (or the model's).
+ * Never at the year's start while the year before has books and no opening says what the account carried over.
+ * Undefined when code cannot tell.
+ */
+export function contributionLines(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined, collectors?: Collectors): ContributionBooking | undefined {
+  const w = setup().wages;
+  const kinds = kindsOf(business, collectors);
+  const account = accountOfKinds(kinds);
+  if (!w || !business || !account || tx.direction !== 'DBIT') return undefined;
+  const year = tx.date.slice(0, 4);
+  const prev = String(Number(year) - 1);
+  if (!books.config?.openingBalances?.[year] && books.journalEntries.some((e) => e.date.startsWith(prev))) return undefined;
+  const open = withheldMonths(books, tx, business, businessOf, kinds);
+  if (!open?.months.length) return undefined;
+  const held = toRappen(withheldFor(books, tx, account) ?? 0);
+  const paid = toRappen(Math.abs(tx.amount));
+  const runs = open.months.map((_, k) => open.months.slice(0, k + 1).reduce((s, m) => s + m.rappen, 0)).filter((p) => p <= held);
+  const commission = kinds.map((k) => w.commission?.[k]).find(Boolean);
+  if (commission) {
+    const fit = runs.find((p) => paid === p || (paid < p && (p - paid) * 100 >= p * (commission.from ?? 0) && (p - paid) * 100 <= p * commission.upTo));
+    if (fit !== undefined && fit > paid) return { account, share: fromRappen(fit), commission: { amount: fromRappen(fit - paid), account: commission.account }, lines: [{ debit: account, credit: '', amount: fromRappen(paid) }, { debit: account, credit: commission.account, amount: fromRappen(fit - paid) }] };
+    if (fit !== undefined || paid <= runs.at(-1)!) return { account, share: fromRappen(Math.min(paid, fit ?? paid)), lines: [{ debit: account, credit: '', amount: fromRappen(paid) }] };
+    return undefined;
+  }
+  const fit = runs.find((p) => paid >= 2 * p - 1 && paid <= 3 * p);
+  if (fit === undefined) return undefined;
+  const employer = payeeContributionAccount(books, tx, businessOf) ?? kinds.map((k) => w.employer?.[k]).find(Boolean);
+  if (!employer) return undefined;
+  return { account, share: fromRappen(fit), employer, lines: [{ debit: account, credit: '', amount: fromRappen(fit) }, { debit: employer, credit: '', amount: fromRappen(paid - fit) }] };
 }

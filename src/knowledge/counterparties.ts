@@ -15,6 +15,10 @@ import { RECEIPT_KINDS, type BankTransaction, type Receipt, type ReceiptKind } f
 import { HEAD, wordsRe } from '../core/modules/words.js';
 import { parseProvider, type ProviderFacts } from './provider.js';
 import { PROVES, type Proves } from '../booking/vat-corrections.js';
+import { setup } from '../engines/index.js';
+
+/** The deduction kinds the jurisdiction names (setup.yaml `wages.withholds`), or undefined without them: what a file's `collects` may say. */
+const KINDS = (): string[] | undefined => { try { const w = setup().wages?.withholds; return w ? Object.keys(w) : undefined; } catch { return undefined; } };
 
 /** Strongest first. The order is the routing precedence. */
 export const TIERS = ['uid', 'iban', 'domain', 'payee', 'tx', 'file'] as const;
@@ -100,6 +104,13 @@ export interface Counterparty {
   provider?: ProviderFacts;
   /** The company's way with a payment to this fund or insurer that the payslips' accruals do not cover (src/knowledge/payroll-way.ts). */
   payroll?: PayrollSection;
+  /**
+   * The kinds of wage deductions it collects (setup.yaml `wages.withholds`: `ausgleichskasse`, `pension`,
+   * `accident`, `sickness`, `tax`): a contract the company's file states, never a name in the app. A payment
+   * to it clears what the payslips withheld for those kinds (src/booking/withheld.ts fundShare, docs/specs/
+   * payroll.md §10.2 A4, A5).
+   */
+  collects?: string[];
 }
 
 export type Routing =
@@ -253,6 +264,7 @@ export type RawCounterparty = {
   facts?: Partial<Fact>[];
   provider?: unknown;
   payroll?: unknown;
+  collects?: unknown;
 };
 
 /** Validate one counterparty after its layers are merged. Throws naming the file and the fix. */
@@ -297,9 +309,14 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
   const way = raw.payroll === undefined ? undefined : parsePayrollSection(raw.payroll);
   if (way && 'problem' in way) fail(way.problem);
   const payroll = way && 'section' in way ? way.section : undefined;
+  const collects = raw.collects ?? [];
+  if (!Array.isArray(collects) || collects.some((k) => typeof k !== 'string' || !k.trim())) fail('collects must be a list of deduction kinds, e.g. collects: [pension]');
+  const known = KINDS();
+  const unknown = known ? (collects as string[]).find((k) => !known.includes(k)) : undefined;
+  if (unknown) fail(`collects: "${unknown}" is no deduction kind — use ${known!.join(', ')}`);
   return {
     id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, ...(sharedUid.length ? { sharedUid } : {}), ...(raw.grouped !== undefined ? { groupedSaid: true as const } : {}), ...(learnedTx.length ? { learnedTx } : {}), documents, facts,
-    accounts: raw.accounts, steps: raw.steps ?? {}, origin, ...(provider ? { provider } : {}), ...(payroll ? { payroll } : {}),
+    accounts: raw.accounts, steps: raw.steps ?? {}, origin, ...(provider ? { provider } : {}), ...(payroll ? { payroll } : {}), ...((collects as string[]).length ? { collects: [...new Set(collects as string[])] } : {}),
   };
 }
 

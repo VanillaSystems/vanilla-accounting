@@ -70,6 +70,20 @@ Two markers flag an entry you must read before you update:
   and a row with the name or UID of a contact already there is proposed as the same contact.
 - A contact can be linked to its Geschäftspartner file; the app proposes the file by UID, the IBAN
   that paid or the name, and Geschäftspartner then shows the two as one partner.
+- Löhne, payslips of another program (docs/specs/payroll.md §10.2 A-2): a payslip your payroll program
+  or fiduciary issued is recognised when you drop it, read by code (gross, deductions, allowances,
+  expenses, net to the cent) and paired with its wage's bank line. The wage is booked gross from it,
+  without an AI: the net against the bank, the social deductions on 2270, the withholding tax on 2279.
+  A wage booked before its payslip came is booked again from it. No payslip that reads goes to the AI.
+  A wage without a payslip is still not booked by code: the wage rule stays a one-click proposal.
+- Löhne: a business file may say which wage deductions it collects (`collects: [pension]`, `[tax]`).
+  A payment to it then clears exactly what the payslips withheld; without an AI the app books it
+  itself, the employer's part on the contribution account, and the withholding tax's payment with its
+  collection commission.
+- Löhne › Einstellungen › Sozialversicherungen: a compensation fund's decision, an accident or sick-pay
+  policy or a pension certificate in Belege proposes its insurance on a card. Code reads what the
+  document states plainly, the AI on your click the rest (without salaries, the AHV number masked);
+  you check and keep it, and every rate kept names its document.
 
 - Buchungen › Neue Buchung von Hand: «+ Zeile» makes it a Sammelbuchung, one account against
   several lines (for example Haben 1020 against Soll 6500 and 6570). The last line holds the rest of

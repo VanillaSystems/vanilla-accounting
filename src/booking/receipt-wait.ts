@@ -311,6 +311,9 @@ export function receiptWordings(k: Pick<Knowledge, 'guides'>, firm?: 'employer')
 export function receiptFree(k: Pick<Knowledge, 'counterpartyFiles'>, only?: 'pairs'): Set<string> {
   const free = new Set<string>();
   for (const f of k.counterpartyFiles) {
+    // A business that collects wage deductions (`collects`, a fund, the canton's withholding tax) is paid as the compensation
+    // fund is: no receipt changes the booking, its bill still pairs (docs/specs/payroll.md §10.2 A5).
+    if (f.body.id && Array.isArray(f.body.collects) && f.body.collects.length) { free.add(f.body.id); continue; }
     const rules = (f.body.steps?.[RECEIPT_STEP] as Rules)?.rules ?? [];
     if (f.body.id && rules.some((r) => { const p = r.apply !== undefined && r.status !== 'open' ? parseReceiptApply(r.apply) : undefined; return !!p?.ok && (!only || !!p.pairs); })) free.add(f.body.id);
   }

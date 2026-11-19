@@ -14,6 +14,11 @@ import type { PaymentRow } from '../../../payroll/payments.js';
 import type { InsurerRow as InsurerFigures, SettlementCompare } from '../../../payroll/insurers.js';
 import type { DeclarationRow, Lohnkonto, LohnausweisData } from '../../../payroll/documents.js';
 import type { LohnausweisSnapshot, PayslipMail, PayslipSent } from '../../../payroll/service.js';
+import type { SetupCard } from '../../../payroll/setup-documents.js';
+import type { KeptItem } from '../../../payroll/settings.js';
+
+/** The cards of the funds' documents (src/payroll/setup-documents.ts) and whether a model can read what code left out. */
+export interface SetupCards { cards: SetupCard[]; ai: boolean }
 
 export interface Overview {
   shown: boolean; year: string; today: string;
@@ -69,6 +74,7 @@ export const urls = {
   insurers: (year: string) => `/api/payroll/insurances?year=${year}`,
   documents: (year: string) => `/api/payroll/documents/${year}`,
   mail: (id: string) => `/api/payroll/payslips/${id}/mail`,
+  setupCards: '/api/payroll/setup-cards',
 };
 
 /** The files the server hands out as they are: an issued Lohnausweis, the year's tables as CSV. */
@@ -125,9 +131,12 @@ export const payrollApi = {
   issueLohnausweis: (year: string, body: { employee: string; kind?: 'replacement' | 'correction'; confirm?: boolean }) => request<Issued | { issued: false; openMonths: string[]; noSocialSecurityNumber?: true }>('POST', `/api/payroll/documents/${year}/lohnausweis`, body),
   mailOf: (id: string) => request<PayslipMail>('GET', `/api/payroll/payslips/${id}/mail`),
   send: (id: string) => request<PayslipSent>('POST', `/api/payroll/payslips/${id}/send`),
+  readSetupCard: (receipt: string) => request<{ cards: SetupCard[] }>('POST', `/api/payroll/setup-cards/${encodeURIComponent(receipt)}/read`),
+  dismissSetupCard: (receipt: string) => request<{ cards: SetupCard[] }>('POST', `/api/payroll/setup-cards/${encodeURIComponent(receipt)}/dismiss`),
+  keepSetupCard: (receipt: string, items: KeptItem[], backdated?: Backdated) => request<Saved<{ insurances: string[]; persons: string[] }>>('POST', `/api/payroll/setup-cards/${encodeURIComponent(receipt)}/keep`, { items, ...(backdated ? { backdated } : {}) }),
   mailPassword: (employee: string, body: { password?: string; confirm?: boolean }) => request<{ password?: string; warn?: 'birthDate' }>('POST', `/api/payroll/employees/${encodeURIComponent(employee)}/mail-password`, body),
 };
 
-export type { PaymentRow, PayslipMail, PayslipSent, LohnausweisData };
+export type { PaymentRow, PayslipMail, PayslipSent, LohnausweisData, SetupCard, KeptItem };
 
 export type { EmployeeDetail, SettingsView, MonthView, YearMonth, EmployeeRow, Affected, Difference };

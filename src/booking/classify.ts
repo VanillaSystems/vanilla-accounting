@@ -48,6 +48,7 @@ import { businessGuidance, companyGuidance } from '../knowledge/guidance.js';
 import { partPayment, partReceipts, partsOf, partText } from '../accounting/batch-parts.js';
 import { cardLinesOf, cardPart, cardParts, lineReceiptsOf } from '../books/card-lines.js';
 import { wordsIn } from '../export/texts.js';
+import { paidBySlips, wageLines, type WageLine } from './payslip.js';
 import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 import { businessVat, capAtBills, capAtReceipts, settlesVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
@@ -57,7 +58,7 @@ import { bankCodedFee } from '../books/bank-import.js';
 import { sidesOf, withDerivedCodes } from './line-vat.js';
 import { withReceiptTax } from './receipt-tax.js';
 import { clearingAccounts, payoutWaitOf, providerOfPayment, type PayoutWait, type Provider } from './providers.js';
-import { atWithheld, fundShare, mergedLines, overWithheld, takenOff, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor, withinWithheld } from './withheld.js';
+import { atWithheld, collectorsOf, contributionLines, kindsOf, accountOfKinds, type ContributionBooking, fundShare, mergedLines, overWithheld, takenOff, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor, withinWithheld } from './withheld.js';
 import { splitByReceipts } from './receipt-lines.js';
 import { CUSTOMS_BY, customsSplit, importVatDeductions, ratesImportVat, type Assessment, type CustomsHold, type CustomsTexts, type Importer } from './customs-invoice.js';
 import { nextManualRef } from '../books/next-ref.js';
@@ -617,6 +618,7 @@ export function bookWithheldShares(books: Books, context: Pick<ClassifyContext, 
   if (!deductions || !wages || !setup().wages?.withholds) return [];
   const lock = periodLock(books);
   const chartAccounts = new Set(chartNames(context.chartOfAccounts).keys());
+  const collectors = collectorsOf(context.counterparties ?? []);
   const businessOf = (t: BankTransaction): string | undefined => {
     const routing = identify(signalsOfTransaction(t, mappedReceipts(books, t)), context.counterparties ?? []);
     return routing.kind === 'known' ? routing.counterparty : undefined;
@@ -630,7 +632,10 @@ export function bookWithheldShares(books: Books, context: Pick<ClassifyContext, 
     const lines = byRef.get(tx.ref);
     if (tx.direction !== 'DBIT' || lock.isClosed(tx.date) || !lines?.length || !lines.every(app)) continue;
     if (!lines.some((e) => wages.contributions.has(e.accountDebit) || e.accountDebit === deductions)) continue;
-    const share = fundShare(books, tx, businessOf(tx), businessOf);
+    const kinds = kindsOf(businessOf(tx), collectors);
+    // Only what is owed on the deductions account: the withholding tax's payment is booked to its share when it is booked.
+    if (accountOfKinds(kinds) !== deductions) continue;
+    const share = fundShare(books, tx, businessOf(tx), businessOf, kinds);
     if (share === undefined || Math.abs(takenOff(lines, deductions) - share) < 0.005) continue;
     const toEmployer = { named: wages.contributions, shared: wages.shared, fallback: payeeContributionAccount(books, tx, businessOf) ?? [...wages.contributions].find((a) => !chartAccounts.size || chartAccounts.has(a)) };
     const exact = atWithheld(lines, deductions, share, toEmployer, newEntryId);
@@ -669,6 +674,99 @@ export function providerPayout(books: Books, tx: BankTransaction, provider: Prov
     by: { kind: 'code', check: 'payoutReport' }, reason: wordsIn('de').t('salesReport.payoutReason', { provider: provider.name, account: clearing }),
   });
   return paymentRefusal(tx, entries, bankAccount, new Set(chartNames(context.chartOfAccounts).keys())) ?? entries;
+}
+
+/** A company rule that books the payment whole on the wage account (the rule for the wages, #383): the payslip completes its net booking. */
+export const wageRule = (placed: PlacedRule | undefined): boolean => {
+  const then = placed?.rule.then;
+  return then?.kind === 'book' && then.booking.account === setup().wages?.account && !then.booking.private && !then.booking.foreignTax;
+};
+
+/** A wage line's text: what it books and for whom, «Lohn 07/2026 Matthias Kälin». */
+function wageText(l: WageLine): string {
+  const [y, m] = l.period?.split('-') ?? [];
+  const who = [y && m ? `${m}/${y}` : '', l.employee ?? ''].filter(Boolean).join(' ');
+  return wordsIn('de').t(`payslip.text.${l.what}` as 'payslip.text.net', { who }).trim();
+}
+
+/**
+ * A wage paid as the payslips of another program linked to it say (docs/specs/payroll.md §10.2 A3), booked by code:
+ * their nets add up to what the bank paid (paidBySlips), and each payslip books its wage gross (wageLines): the wage
+ * less its deductions against the bank, the deductions onto the accounts they are owed on, the allowances paid with
+ * it, the expenses. No VAT code, no model. Refused, and so left for the person, when an account is not in the chart.
+ */
+export function payslipWageEntries(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver): JournalEntry[] | { reason: string; refusal: ClassifyRefusal } | undefined {
+  const slips = paidBySlips(books, tx);
+  const lines = slips && wageLines(slips);
+  if (!slips || !lines?.length) return undefined;
+  const names = chartNames(context.chartOfAccounts);
+  const bankAccount = bankAccountFor(tx, context.bankAccounts);
+  const gross = slips.reduce((s, x) => s + Math.round(x.read.gross * 100), 0) / 100;
+  const deductions = [...new Set(lines.filter((l) => l.what === 'deductions').map((l) => l.credit))].join(', ');
+  const reason = wordsIn('de').t(deductions ? 'payslip.reason' : 'payslip.reasonNone', { n: slips.length, currency: baseCurrency(), gross: gross.toFixed(2), wage: setup().wages!.account, net: Math.abs(tx.amount).toFixed(2), deductions });
+  const entries = entriesFor(tx, lines.map((l) => ({ accountDebit: l.debit, accountCredit: l.credit, amount: l.amount, vatCode: '', description: wageText(l) })), {
+    fx, receipts: slips.map((x) => x.receipt), bankAccount, lock: periodLock(books), money: context.moneyAccounts, by: { kind: 'code', check: 'payslip' }, reason,
+  });
+  return paymentRefusal(tx, entries, bankAccount, new Set(names.keys())) ?? entries;
+}
+
+/** Two bookings of a payment alike: the same accounts, amounts and receipts, whatever their ids and order. */
+const sameLines = (a: readonly JournalEntry[], b: readonly JournalEntry[]) => {
+  const key = (e: JournalEntry) => JSON.stringify([e.accountDebit, e.accountCredit, Math.round(e.amount * 100), e.vatCode ?? '', [...(e.receipts ?? [])].sort()]);
+  return JSON.stringify(a.map(key).sort()) === JSON.stringify(b.map(key).sort());
+};
+
+/**
+ * The wages the app booked before their payslips came (§10.2 A3): booked again from the payslips by code, as
+ * bookWithheldShares books a contribution payment again. Only a payment of the open period whose every line the app
+ * booked (the model's, a rule's on the wage account, or this check's), never a person's booking, nor one whose
+ * payslips do not pay what the bank paid. Returns the refs booked anew.
+ */
+export function bookPayslipWages(books: Books, context: ClassifyContext, fx: FxResolver, run?: string): string[] {
+  const lock = periodLock(books);
+  const wage = setup().wages?.account;
+  const byRef = new Map<string, JournalEntry[]>();
+  for (const e of books.journalEntries) (byRef.get(e.transactionRef) ?? byRef.set(e.transactionRef, []).get(e.transactionRef)!).push(e);
+  const app = (e: JournalEntry) => e.origin === 'classify' && !e.corrects && (e.by?.kind === 'model' || (e.by?.kind === 'code' && e.by.check === 'payslip') || (e.by?.kind === 'rule' && e.accountDebit === wage && !e.vatCode));
+  const done: string[] = [];
+  for (const tx of books.transactions) {
+    const lines = byRef.get(tx.ref);
+    if (tx.direction !== 'DBIT' || lock.isClosed(tx.date) || !lines?.length || !lines.every(app)) continue;
+    const booked = payslipWageEntries(books, tx, context, fx);
+    if (!booked || 'refusal' in booked || sameLines(lines, booked)) continue;
+    const at = books.journalEntries.findIndex((e) => e.transactionRef === tx.ref);
+    const rest = books.journalEntries.filter((e) => e.transactionRef !== tx.ref);
+    books.journalEntries = [...rest.slice(0, at), ...booked.map((e) => ({ ...e, ...(run && { run }) })), ...rest.slice(at)];
+    done.push(tx.ref);
+  }
+  return done;
+}
+
+/**
+ * A payment to a business that collects deductions (a fund, the canton's withholding tax), booked by code where it can
+ * tell (contributionLines, §10.2 A4, A5): the share the payslips withheld on its account, the employer's rest on its
+ * account, a collection commission. Stamped as bookWithheldShares stamps it, so a later payslip books its share again.
+ */
+export function contributionEntries(books: Books, tx: BankTransaction, context: ClassifyContext, fx: FxResolver, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined): { entries: JournalEntry[]; booking: ContributionBooking } | { reason: string; refusal: ClassifyRefusal } | undefined {
+  if (tx.currency !== baseCurrency()) return undefined;
+  const booking = contributionLines(books, tx, business, businessOf, collectorsOf(context.counterparties ?? []));
+  if (!booking) return undefined;
+  const names = chartNames(context.chartOfAccounts);
+  const bankAccount = bankAccountFor(tx, context.bankAccounts);
+  const de = wordsIn('de');
+  const cur = baseCurrency();
+  const reason = [
+    booking.account !== context.wageDeductions ? de.t('withheld.code.tax', { currency: cur, share: booking.share.toFixed(2), paid: Math.abs(tx.amount).toFixed(2), account: booking.account })
+      : booking.share ? de.t('rules.say.withheldShare', { currency: cur, share: booking.share.toFixed(2) }) : de.t('withheld.code.none', { account: booking.account }),
+    booking.employer ? de.t('withheld.code.employer', { account: booking.employer }) : '',
+    booking.commission ? de.t('withheld.code.commission', { currency: cur, amount: booking.commission.amount.toFixed(2), account: booking.commission.account }) : '',
+  ].filter(Boolean).join(' ');
+  const text = merchantOf(tx.description) || tx.description;
+  const entries = entriesFor(tx, booking.lines.map((l) => ({ accountDebit: l.debit, accountCredit: l.credit, amount: l.amount, vatCode: '', description: text })), {
+    fx, receipts: mappedReceipts(books, tx).map((r) => r.id), bankAccount, lock: periodLock(books), money: context.moneyAccounts, by: { kind: 'code', check: 'withheldShare' }, reason,
+  });
+  const refused = paymentRefusal(tx, entries, bankAccount, new Set(names.keys()));
+  return refused ?? { entries, booking };
 }
 
 /**
@@ -997,6 +1095,13 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
    * It is booked once every part has its lines, in one go, or in no part: never short of what the bank paid.
    */
   const byPart = new Map<string, { entries: JournalEntry[]; open: number }>();
+  // The businesses that collect what the payslips withheld (setup.yaml `wages.payees`, a file's `collects`, §10.2 A5).
+  const collectors = collectorsOf(context.counterparties ?? []);
+  const payeeOf = (t: BankTransaction): string | undefined => {
+    const routing = identify(signalsOfTransaction(t, mappedReceipts(books, t)), context.counterparties ?? []);
+    return routing.kind === 'known' ? routing.counterparty : undefined;
+  };
+  const collected: Array<{ tx: BankTransaction; collector: string }> = [];
   for (const tx of txs) {
     // A payment provider's payout settles its clearing account, in code, whatever a rule or the model would say (#203).
     // Until the company's file names the clearing account and the cut-over day (the first sales report asks for both), the payout waits
@@ -1054,6 +1159,23 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     }
     const placed = ruleOfPayment(books, tx, context, fx);
     const then = placed?.rule.then;
+    // A wage its payslips of another program pay (§10.2 A3): booked gross by code, the model never asked. A company rule
+    // that books elsewhere stays the rule's; the rule for the wages books the same net, which the payslip completes.
+    const slipped = !placed || wageRule(placed) ? payslipWageEntries(books, tx, context, fx) : undefined;
+    // A payment with a payslip linked that code does not book (one it cannot read, nets that do not pay the line): the
+    // person's, never the model's, which would read the payslip's salary and person (§10.2 A8).
+    if (!slipped && !placed && mappedReceipts(books, tx).some((r) => r.kind === 'payslip')) {
+      log(`  ${tx.ref}  a payslip is linked that code does not book: waits for the person`);
+      outcome.failed.push({ ref: tx.ref, reason: wordsIn('de').t('payslip.byHand') });
+      continue;
+    }
+    if (slipped) {
+      if ('refusal' in slipped) { log(`  ${tx.ref}  wage from its payslip: refused: ${slipped.reason}`); outcome.failed.push({ ref: tx.ref, ...slipped }); continue; }
+      books.journalEntries.push(...slipped);
+      log(`  ${tx.ref}  → wage from its payslip${slipped.some((e) => e.receipts && e.receipts.length > 1) ? 's' : ''}, gross`);
+      outcome.classified.push(tx.ref);
+      continue;
+    }
     // The bank's own fee row is booked in code when no company rule decides it, before the model is asked (#359).
     const fee = !placed && isOwnBankFee(tx, context.bankCoded) ? bankFeeEntries(books, tx, context, fx) : undefined;
     if (fee) {
@@ -1091,6 +1213,13 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
       }
       if (customs) customsNotes.set(tx, customs.note);
     }
+    // A payment to a business that collects deductions, where code can tell its share (§10.2 A4, A5): one owed on an account
+    // of its own (the withholding tax's) always, a fund's on the deductions account only without a model, which reads the
+    // bill's split of the employer's part (the family allowances apart). A payroll insurer's payment is payroll's (§22 decision 45).
+    const collector = !placed && !insurer ? payeeOf(tx) : undefined;
+    const kinds = kindsOf(collector, collectors);
+    // They go after the other payments of the run: what the wages booked now withheld is on the books before.
+    if (collector && kinds.length && (!ask || accountOfKinds(kinds) !== context.wageDeductions)) { collected.push({ tx, collector }); continue; }
     if (!placed || !then) { toModel.push(tx); continue; }
     if (then.kind === 'book') {
       books.journalEntries.push(...atPoint(tx, ruleEntries(books, tx, placed, then.booking, context, fx)));
@@ -1102,6 +1231,14 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     log(`  ${tx.ref}  waits for the person (rule ${placed.rule.id})`);
     outcome.asked.push(asked);
     if (!then.booking && proposeAsked) { proposing.set(tx.ref, asked); toModel.push(tx); }
+  }
+  for (const { tx, collector } of collected.sort((a, b) => a.tx.date.localeCompare(b.tx.date))) {
+    const paidTo = contributionEntries(books, tx, context, fx, collector, payeeOf);
+    if (paidTo && 'refusal' in paidTo) { log(`  ${tx.ref}  payment to ${collector}: refused: ${paidTo.reason}`); outcome.failed.push({ ref: tx.ref, ...paidTo }); continue; }
+    if (!paidTo) { toModel.push(tx); continue; }
+    books.journalEntries.push(...paidTo.entries);
+    log(`  ${tx.ref}  → payment to ${collector}: ${paidTo.booking.share} of what the payslips withheld off ${paidTo.booking.account}${paidTo.booking.employer ? `, the rest on ${paidTo.booking.employer}` : ''}${paidTo.booking.commission ? `, ${paidTo.booking.commission.amount} commission on ${paidTo.booking.commission.account}` : ''}`);
+    outcome.classified.push(tx.ref);
   }
   afterWave?.();
   if (!ask) {
@@ -1125,7 +1262,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     return routing.kind === 'known' ? routing.counterparty : undefined;
   };
   const isWage = (t: BankTransaction) => !!context.wageWordings?.some((w) => w.test(t.description) || (!!t.counterparty && w.test(t.counterparty)));
-  const contributions = new Set(context.wageDeductions ? toModel.filter((t) => !repayments.has(t.ref) && !isWage(t) && !mappedReceipts(booksOf(t), t).some((r) => r.hasSwissVat) && paysContributions(books, t, businessOf)).map((t) => t.ref) : []);
+  const contributions = new Set(context.wageDeductions ? toModel.filter((t) => !repayments.has(t.ref) && !isWage(t) && !mappedReceipts(booksOf(t), t).some((r) => r.hasSwissVat) && paysContributions(books, t, businessOf, collectors)).map((t) => t.ref) : []);
   // Where code books what an answer takes off the deductions account over what it holds (#470): the employer's contribution accounts.
   const wages = wageAccounts();
   const employer = { named: wages?.contributions ?? new Set<string>(), shared: wages?.shared ?? new Set<string>(), fallback: [...(wages?.contributions ?? [])].find((a) => !chartAccounts.size || chartAccounts.has(a)) };
@@ -1133,11 +1270,14 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     if (!context.wageDeductions || !contributions.has(tx.ref)) return undefined;
     // Nothing held is said too (#470), where the books carry wages: the whole contribution is the employer's, not the bill's split.
     // Without a wage in the year it is no employer's contribution (an owner's own AHV, a fund's fee): no line, as before.
-    const open = withheldFor(own, tx, context.wageDeductions);
+    // The account the payee's kinds are owed on: the withholding tax's collector is told what 2279 holds, never 2270 (review of A-2).
+    const kinds = kindsOf(businessOf(tx), collectors);
+    const account = (kinds.length && accountOfKinds(kinds)) || context.wageDeductions;
+    const open = withheldFor(own, tx, account);
     if (open === undefined && !wagesBooked(own, tx)) return undefined;
     // What of it the payslips withheld for this payee, where code can tell (#476): booked so, whatever the bill or the model says.
-    const share = open ? fundShare(own, tx, businessOf(tx), businessOf) : undefined;
-    return { account: context.wageDeductions, open: open ?? 0, ...(share !== undefined && { share }) };
+    const share = open && kinds.length ? fundShare(own, tx, businessOf(tx), businessOf, kinds) : undefined;
+    return { account, open: open ?? 0, ...(share !== undefined && { share }) };
   };
   // The contribution payments go last, in waves of their own: what the wages of this run withhold is booked before they are asked.
   const batches: BankTransaction[][] = [];
@@ -1220,7 +1360,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
         const deductions = context.wageDeductions;
         const heldOn = deductions && contributions.has(tx.ref) ? withheldFor(books, tx, deductions) : undefined;
         // What the payslips withheld for this payee, where code can tell (#476): exactly that on the account, the rest the employer's.
-        const share = heldOn ? fundShare(books, tx, businessOf(tx), businessOf) : undefined;
+        const share = heldOn && accountOfKinds(kindsOf(businessOf(tx), collectors)) === deductions ? fundShare(books, tx, businessOf(tx), businessOf, kindsOf(businessOf(tx), collectors)) : undefined;
         // Named by no line of the answer: where the payee's earlier contributions went (a pension fund's 5720), then the setup's first.
         const toEmployer = { ...employer, fallback: payeeContributionAccount(books, tx, businessOf) ?? employer.fallback };
         const exact = share !== undefined ? atWithheld(answered, deductions!, share, toEmployer, newEntryId) : undefined;

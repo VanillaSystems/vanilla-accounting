@@ -25,6 +25,10 @@ import { accountsOf } from '../../workspace/reads.js';
 import { setAccountName } from '../../workspace/accounts-write.js';
 import { standardAccounts } from '../../workspace/chart.js';
 import type { ApiErrorBody } from '../../types/api-error.js';
+import { keepSetupCard, type KeptItem } from '../../payroll/settings.js';
+import { parseSetupAnswer, readSetupDocument, setupCards, setupKindOf, setupPrompt } from '../../payroll/setup-documents.js';
+import { loadSetupState, updateSetupState } from '../../payroll/setup-store.js';
+import { ask, modelReady } from '../../llm/ask.js';
 
 export const router = Router();
 
@@ -195,4 +199,59 @@ router.post('/api/payroll/accounts', run((req, res) => {
   if (chartNumbers(WS).has(number)) throw new PayrollRefusal('exists', `Konto ${number} gibt es schon.`);
   const kindName = Object.values(ctx.data.insurances).find((k) => k.account === number)?.label.de;
   res.json(setAccountName(WS, number, needed.name ?? kindName ?? `Konto ${number}`));
+}));
+
+// ─── the funds' documents (§6.1 step 2, src/payroll/setup-documents.ts) ─────────
+
+const cardsNow = () => { const ctx = payrollContext(WS); return setupCards(readBooks().receipts, ctx.store, ctx.data, loadSetupState(WS)); };
+const receiptOf = (id: string) => readBooks().receipts.find((r) => r.id === id) ?? (() => { throw new PayrollRefusal('notFound', `Keinen Beleg ${id}.`); })();
+
+/** The cards: each document of a fund or insurer in Belege not kept or set aside, with what code and the AI read; `ai`: whether a model can read the rest. */
+router.get('/api/payroll/setup-cards', async (_req, res, next) => {
+  try { res.json({ cards: cardsNow(), ai: await modelReady() }); } catch (e) { next(e); }
+});
+
+/**
+ * «Von der KI lesen lassen»: the AI reads what code left out, from the document's lines without a salary or a birth date (the
+ * social security number masked on the way, src/llm/ask.ts); kept beside the books, never used before the person keeps the card.
+ */
+router.post('/api/payroll/setup-cards/:receipt/read', async (req, res, next) => {
+  try {
+    const r = receiptOf(String(req.params.receipt));
+    const data = payrollContext(WS).data;
+    const text = r.extractedText ?? '';
+    const kinds = [...new Set([setupKindOf(text, data), ...readSetupDocument(text, data).map((p) => p.kind)].filter((k): k is string => !!k))];
+    if (!kinds.length) throw new PayrollRefusal('badInput', 'Dieser Beleg ist kein Dokument einer Versicherung.');
+    const raw = await ask(setupPrompt(text, kinds, data), { step: 'payroll-setup', timeoutMs: 120_000 });
+    updateSetupState(WS, (st) => { st[r.id] = { ...st[r.id], ai: parseSetupAnswer(raw, kinds, data) }; });
+    res.json({ cards: cardsNow() });
+  } catch (e) {
+    if (e instanceof PayrollRefusal) return void res.status(STATUS[e.code]).json({ error: e.message, code: 'payroll', params: { why: e.code } } satisfies ApiErrorBody);
+    next(e);
+  }
+});
+
+/** «Nicht verwenden»: the card goes; the document stays in Belege. */
+router.post('/api/payroll/setup-cards/:receipt/dismiss', run((req, res) => {
+  const r = receiptOf(String(req.params.receipt));
+  updateSetupState(WS, (st) => { st[r.id] = { ...st[r.id], dismissed: new Date().toISOString() }; });
+  res.json({ cards: cardsNow() });
+}));
+
+/** «Übernehmen»: the card's insurances, rates and a person's contributions as the person edited them, each naming the document. */
+router.post('/api/payroll/setup-cards/:receipt/keep', run((req, res) => {
+  const r = receiptOf(String(req.params.receipt));
+  const items = Array.isArray(body(req).items) ? body(req).items as KeptItem[] : [];
+  const now = new Date().toISOString();
+  const data = payrollContext(WS).data;
+  const ids: string[] = [];
+  const newId = () => { const id = freshId('in', 3, (x) => ids.includes(x) || payrollContext(WS).store.insurances.some((i) => i.id === x)); ids.push(id); return id; };
+  let n = 0;
+  // `save` may run the change twice (compared, then saved): the ids are made once, in order.
+  const idOf = () => ids[n++] ?? newId();
+  save(req, res, { path: 'insurances' }, (s) => { n = 0; return keepSetupCard(s, data, r.id, items, idOf, now); }, (kept) => {
+    // A card whose person's part could not be taken stays: the person adds her under Mitarbeitende and keeps it again.
+    if (!kept.persons.length) updateSetupState(WS, (st) => { st[r.id] = { ...st[r.id], kept: now }; });
+    return { insurances: kept.insurances, persons: kept.persons };
+  }, (kept) => kept.warnings);
 }));

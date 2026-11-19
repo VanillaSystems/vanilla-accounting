@@ -1006,9 +1006,9 @@ doctor` names them.
 - *Corinne (webshop):* «I drop the two payslips and the bank statement. The wages are booked gross
   without me answering anything. The Akonto clears exactly what was withheld.»
 - *Matthias (consulting):* «Without an AI subscription my salary is still booked gross.»
-- *Sandra (painter):* she has only net bank lines. The app books them net (the accepted variant b
-  of kit.mjs) and says once, as a fact: «Löhne netto gebucht: ohne Lohnabrechnungen stimmen
-  Lohnaufwand und Lohnausweis nicht überein.»
+- *Sandra (painter):* she has only net bank lines. Code books no wage without its payslip (the
+  owner's decision on #359, §22 decision 53): the wage rule is offered in one click on Aufgaben,
+  and once she keeps it the wages are booked net on 5000. No question is asked.
 
 ### 10.2 Changes
 
@@ -1016,13 +1016,13 @@ doctor` names them.
 |---|---|---|---|
 | A1 | **Document kind `payslip`.** Recognised by code: the firm is the issuer (`issuedByFirm` ≠ false), the head names a payslip word (a new `documents.yaml` list `payslip: [Lohnabrechnung, Lohnblatt, Salärabrechnung, Gehaltsabrechnung, Décompte de salaire, Bulletin de salaire, Conteggio salario, Busta paga, Payslip]`) and `payslipDeductions` reads. A payslip is never an «own invoice» waiting for its customer (`waitsForCustomer`) and never a bill. | code | modules/ch/documents.yaml, src/intake/document-kind.ts, src/intake/own-invoice.ts, period-issues.ts |
 | A2 | **`readPayslip(text)` → `{ employee, period, gross, net, deductions: Map<kind, amount>, allowances, expenses }`**, built on `payslipDeductions`. It needs gross − Σ deductions + allowances + expenses = net to the Rappen, else undefined. The words for gross, net, allowance and expenses come from `setup.yaml wages.payslip` (data, de/fr/it/en), never from code. | code | src/booking/withheld.ts (or a new src/booking/payslip.ts), modules/ch/setup.yaml |
-| A3 | **Code books `cls-salary`.** A wage payment linked to a payslip that reads, with net = the bank amount: D 5000 / C bank (net); D 5000 / C 2270 for the social deductions; D 5000 / C 2279 for kind `tax`; an allowance D 2270 / C bank (the fund refunds it on its bill; §16, decision 10; level B books it on the FAK’s own account, §7.2); expenses D 5820/5830 / C bank. `by: { kind: 'code', check: 'payslip' }`. A payment of several wages (one bank line, several payslips) books each payslip as its own lines. The model is not asked. Without a payslip, the payment is booked net as today (ev-exempt-wages), and when a payslip comes later, code books it again (as `bookWithheldShares` does, never a person's booking). | code | src/booking/classify.ts, processes/booking.guide.yaml cls-salary (→ status: accepted), **books schema step** for the new check (§9.1) |
+| A3 | **Code books `cls-salary`.** A wage payment linked to a payslip that reads, with net = the bank amount: D 5000 / C bank (net); D 5000 / C 2270 for the social deductions; D 5000 / C 2279 for kind `tax`; an allowance D 2270 / C bank (the fund refunds it on its bill; §16, decision 10; level B books it on the FAK’s own account, §7.2); expenses D 5820/5830 / C bank. `by: { kind: 'code', check: 'payslip' }`. A payment of several wages (one bank line, several payslips) books each payslip as its own lines. The model is not asked. Without a payslip code books nothing (§22 decision 53): the wage is booked by the wage rule the person keeps in one click (#383), or by the model, and when a payslip comes later, code books it again (as `bookWithheldShares` does, never a person's booking). | code | src/booking/classify.ts, processes/booking.guide.yaml cls-salary (→ status: accepted), **books schema step** for the new check (§9.1) |
 | A4 | **Quellensteuer as a kind with a payee.** `setup.yaml wages.withholdsTo: { tax: "2279" }` (per-kind deductions account; 2270 stays the default). A business file whose `collects: [tax]` names the cantonal tax office routes its payment to clear 2279. The Bezugsprovision (payment < 2279's share) books C 3xxx/6xxx «Bezugsprovision Quellensteuer» (account in setup.yaml). | code; the person names the tax office's file once | modules/ch/setup.yaml, processes/authorities/steuerverwaltung.yaml (fact `withholding`, DBG Art. 88), src/booking/withheld.ts `fundShare` per account |
 | A5 | **Generic payees for pension, accident, sickness.** A business file may say `collects: [pension]` (a contract, not a name). The app's `wages.payees` becomes «ausgleichskasse **plus** every file that declares `collects`». The workspace grows the fund's file. The AI drafts it from the first bill, and the person keeps it on its card. `fundShare` then works for the pension fund too. | code + AI drafts + person keeps | src/knowledge/ (file schema), src/booking/withheld.ts, processes/README.md |
 | A6 | **Payroll journal import.** A payroll program's CSV export, recognised by the columns a business file names (`payroll: { reports: { journal: { columns: … } } }`, exactly like `provider.reports.sales` in src/booking/sales-report.ts). It is booked as entries per employee and month by ref `LJ-<business>-<period>-<employee>`, once. The person names the program's file. The app ships the contract and one reference file in tests, no vendor (ADR 0015 row 4). | code (contract), AI writes the column map with the person | src/intake/ (new payroll-journal-import.ts), src/booking/ |
 | A7 | **Year-close checks (facts, not reminders):** (a) 5000 of the year = Σ gross of the year's payslips, per employee; difference named. (b) 2270 at 31.12. = Σ what the funds still bill, per kind (from `fundShare`'s arithmetic). (c) The final statement of the fund (Schlussabrechnung) is booked: its difference to the Akontos on 5700 against 2270, proposed by code from the statement's total and the Akontos booked (the `socialInsurance` template becomes a proposal). (d) Per-employee year totals in Lohnausweis fields 1, 8, 9, 10.1, 11, 12, 13 from the payslips read, shown on a «Lohnausweis-Daten» page and exported as CSV for the person or the Treuhänder. | code | src/accounting/year-close.ts, src/app/areas/close/steps.ts, modules/ch/year-end.yaml, processes/year-close.flow.yaml (new step `payroll-check`) |
 | A8 | **Salary data marked as such.** A receipt of kind `payslip` is sent to the model only when code cannot read it, and then without its AHV number (a 756.xxxx.xxxx.xx pattern masked before the call, and never in a model prompt). The AI's facts name totals, not persons' wages, unless the person asks about one. | code | src/llm/prompts.ts, src/intake/ (a mask step), docs/0.4.0/ privacy note |
-| A9 | Close #383 and #359 on the way: the wage rule books when kept, and code books wages without an AI. | code | src/saving/wage-rule.ts |
+| A9 | #383 and #359 on the way: the wage rule books when kept (tests/rule-keep-books.test.ts) and a payslip completes its net booking (§22 decision 56); without an AI code books the bank's fee row and a wage from its payslip, never a wage without one (the owner's decision on #359, §22 decision 53). | code | src/saving/wage-rule.ts, src/booking/classify.ts |
 
 ### 10.3 Data
 
@@ -1045,8 +1045,8 @@ Scored on the first-run walks (first-run.md checkpoints), with the AI **off** fo
    payment clears the BVG share once its file has `collects: [pension]`. 2270 is 0.00 at 30.09.
    whenever the funds billed the quarter.
 2. Consulting: the same with one person. With the AI off, the three wages are still gross.
-3. Huber: net bank lines only. Wages net, no payment on 2270, the one fact shown. No question
-   asked.
+3. Huber: net bank lines only. Code books no wage; the wage rule is offered in one click and, kept,
+   books them net. No payment on 2270, no question asked (§22 decision 53).
 4. Treuhänder: a synthetic Lohnjournal CSV of 3 people × 3 months is booked once. A second drop
    books nothing. «Rückgängig» takes only its entries.
 5. Year close on demo-consulting: the A7 checks show 0 differences. Breaking one payslip by
@@ -1254,7 +1254,7 @@ checkpoint 1 counts with the forms).
 | 1 | Six payslips of Q3 and the camt.053 dropped: every wage booked gross by code (`by.check: payslip`) | K.O. | 30 |
 | 2 | The Akonto clears exactly the AHV/IV/EO/ALV share (withheld-fund-476); the pension fund's payment clears the BVG share once its file has `collects: [pension]` | | 25 |
 | 3 | A payslip with Quellensteuer books 2279 | | 15 |
-| 4 | Huber: net bank lines only, booked net, one fact shown, no question asked | | 15 |
+| 4 | Huber: net bank lines only, not booked by code; the wage rule offered in one click, no question asked (§22 decision 53) | | 15 |
 | 5 | withheld-*.test.ts stay green; no `756.` in any prompt | K.O. | 15 |
 
 Bar: all K.O. and at least 80.
@@ -1830,6 +1830,91 @@ merge:
      and undo reads the books again. Such a payment needs no receipt (decision 45), so the bank page shows neither
      «kein Beleg» nor «Beleg suchen» for it (`GET /api/payroll/insurer-payments`, loaded with the books from the
      knowledge and payroll.json alone); its bill still pairs.
+
+Taken while building A-2 (2026-11-19):
+
+53. **A wage without its payslip is not booked by code** (the owner's decision on #359 of 2026-11-12, kept by
+    the coordinator for A-2): a net wage booked by code would contradict `cls-salary`. It stays a one-click
+    proposal (the wage rule of #383 on Aufgaben, or the model with an AI); its payslip, when it comes, books it
+    gross by code. §10.1 (Sandra), §10.2 A3, §10.4 3 and §15.2 4 say so; there is no «Löhne netto gebucht» fact,
+    since nothing is booked net without the person's click.
+54. **A payslip of another program is its kind only when it reads** (`kindRule: document:payslip`, src/booking/
+    payslip.ts): the firm issued it (its name in the letterhead, or its UID as the only one shown: a payslip
+    prints no VAT number, so `issuedByFirm`'s UID test alone would refuse every payslip of a firm with a UID), a
+    payslip title from documents.yaml is in its first lines, and gross − deductions + allowances + expenses is
+    its net to the cent. One that does not read stays a receipt like any other, which the model may read, masked
+    (§11). Only payslips read at the drop are typed; one read before this build keeps its kind.
+55. **A payslip is dated by its month's end and its amount is the net it pays**; it is paired by code alone with
+    the payment out of its net to the cent that names its person (the bank's counterparty in its text, or its
+    person in the payment's), from 20 days before its month ends to a month after, the nearest first; one line
+    equal to all of a month's payslips pays each. The link is `rule: payslip`. Neither the model's match nor the
+    titles call sees a payslip that reads, and the chain's general search never takes one (pairableReceipt).
+56. **The wage rule (#383) books what a payslip completes**: a company rule that books the payment whole on the wage
+    account is replaced by the payslip's booking, at once or when the payslip comes later; a rule that books
+    elsewhere stays the rule's. The rebooking takes only the app's lines (the model's, this check's, that rule's).
+57. **The allowances paid with a wage go onto the deductions account (2270), the expenses by their kind** (setup.yaml
+    `wages.payslip.expenses`: flat 5830 first, effective 5820), as §16 decision 10 says for level A.
+58. **A business file's `collects:` makes it a collector** (A5) beside setup.yaml `wages.payees`; a kind it does not
+    name of the jurisdiction refuses the file. A collector's payment needs no receipt, as the compensation fund's.
+    `fundShare` works per account: the kinds a business collects must all be owed on one account (2270, or 2279 for
+    the withholding tax, `wages.withholdsTo`).
+59. **Without a model, code books a collector's payment where it knows the share**: the share on its account, the
+    rest the employer's on the payee's earlier contribution account, else the kind's (`wages.employer`: 5700, 5720).
+    The family allowances billed with the compensation fund's contributions land on 5700 then; with a model the bill
+    splits them. (Which months a payment clears, and when code books nothing: decision 65.) A pension fund
+    without `collects` stays the person's without a model. Payments to collectors are booked after the run's other
+    payments, so the wages booked now are on the books first.
+60. **The withholding tax's payment is booked by code with or without a model** (it is fully decided by the
+    payslips): 2279 cleared by what was withheld; a shortfall up to 5 % of it (`wages.commission`, DBG Art. 88 Abs.
+    4 names 1 to 2 %, a canton its own rate) is the collection commission (Bezugsprovision), credited to 6500 as a
+    lower administration cost; short by more, the payment clears only what it pays; more than owed is the person's.
+    Name the canton's file by what tells its withholding-tax payments apart: the same office collects the firm's
+    direct taxes.
+61. **A payroll insurer's payment stays payroll's** (decision 45): level A's collector booking skips a payment
+    `insurerPaymentOf` names, covered or not.
+62. **The setup cards are derived from Belege on every read** (src/payroll/setup-documents.ts): a document whose
+    first lines name a kind's document (payroll.yaml `setupDocuments.kinds`) is a card until payroll.json names it
+    (`source.receiptId` on a rate entry, a person's insurances entry, or the new insurance's `source`), it is kept or
+    set aside (data/payroll-setup.json, beside the books, with the AI's reading once asked). Code reads the
+    letterhead's name, a number after its label and a rate in % on the line of its words; a compensation fund's
+    decision proposes the family allowances' insurance beside it when it names that rate.
+63. **The AI reads only on the person's click** («Fehlendes von der KI lesen lassen», step `payroll-setup`), never
+    by itself, from the document's lines without a salary, an insured wage or a birth date (`notToModel`), the
+    social security number masked; code checks the answer (known kinds and rate keys, rates within their ranges)
+    and the AI only fills what code left empty. Each field on the card says who read it.
+64. **«Übernehmen» writes what the forms write**, through the same comparison with closed payslips (§19.3): a new
+    insurance as «Versicherung erfassen» does, or, for a kind the firm has, its rates as a dated entry of its
+    solution (with the rates the document does not name carried over) and the numbers it lacks; a pension
+    certificate's person her contributions as a dated entry of her insurances, matched by her name; a name payroll.json
+    lacks is said and not written. Nothing of a card counts before.
+
+After the independent review of A-2 (2026-11-19):
+
+65. **A collector's payment clears whole months, the oldest first** (src/booking/withheld.ts `withheldMonths`,
+    `contributionLines`), never what a later month withheld: the withholding tax's payment is a run of the oldest open
+    months' tax, or that less the collection commission between `from` and `upTo` percent (setup.yaml, 0.5 to 5), else
+    it clears only what it pays; a fund's payment is a run of the oldest open months' employees' share and the employer's
+    beside it, so between twice and three times that share, else it is the person's (or the model's). Decision 59's
+    «whole payment the employer's» without a model is gone: on thin evidence code books nothing.
+66. **Never at the year's start without the year before's balance**: while the year before has books and no opening of
+    the year says what the account carried over, code books no collector's payment (a January payment of Q4's).
+67. **A payslip's nearest payment is its only one**: chosen among every payment that fits, filed or linked ones too; when
+    that one is filed, linked or nearer to another payslip, the payslip gets no link (it never reaches a month off). Its
+    person is read below its title, never from the firm's letterhead.
+68. **Nothing of a payslip reaches a model**: a text the firm issued and titles a payslip is of kind `payslip` whether it
+    reads or not (`document:payslip-unread`, filed for the person), and so is one of a month the app's own payroll closed
+    (its PDF dropped again); neither goes to the kind, title or match calls, and a payment with a payslip linked that code
+    does not book is the person's, never the model's. A program that prints its deductions without a minus reads when the
+    net proves them.
+69. **A setup document's lines for a model are an allow-list** (`linesForModel`): the letterhead's first two lines, a line
+    with a %, a line with a word of the rates, numbers, kinds or `toModel`; never an amount alone, a line with a day, or one
+    that holds a word of `notToModel` anywhere (substrings, any case). The card is keyed by whether the AI was asked, so
+    its reading shows.
+70. **A kept card writes only what it says**: a blank contribution stays as the person's entry valid on that day says, or
+    her part is not taken (and the card stays); the rates and her insurances carried over are the entry valid on the
+    card's day, not the last entered.
+71. **A payslip's currency is the one its amounts name** (else the books'); a wage less its deductions at or below
+    nothing books nothing; the withholding tax's collector is told what 2279 holds, with a reason of its own.
 
 ---
 
