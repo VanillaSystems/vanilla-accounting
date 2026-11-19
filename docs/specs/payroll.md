@@ -1587,6 +1587,13 @@ non-obvious decision is recorded here when it is taken.
     new one. An entry of the ref a person changed by hand stays hers and is named.
 16. **The social security number's pattern is jurisdiction data** (`payroll.yaml socialSecurityNumber`);
     src/llm/mask.ts masks it in every prompt, system text, judged state and sidebar message.
+17. **A payslip's receipt is keyed by its PDF's content** (as the read step keys every file of receipts/),
+    typed `payslip` and excluded from every reread and VAT read by kind: the intake never turns it into an
+    ordinary receipt, and its text holds no salary.
+18. **Closing again after a reopening replaces a person's entry of the payslip's ref** once the warning
+    named it and she confirmed: the ref is booked once, from the payslip.
+19. **Reopening keeps the PDF while a payment is linked to it** (it is that payment's proof); the next
+    close hands the payment's link to the new PDF and removes the old one.
 
 ---
 

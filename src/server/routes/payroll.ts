@@ -37,6 +37,12 @@ const monthParam = (req: Request): string => {
   return m;
 };
 
+/** A month whose first day lies in a closed period takes no line and no text: its payslips stay as they are. */
+function assertMonthOpen(month: string): void {
+  const lock = periodLock(readBooks());
+  if (lock.isClosed(`${month}-01`)) throw new ClosedPeriodError(`${lock.closedText(`${month}-01`)} Eine Lohnabrechnung einer geschlossenen Periode bleibt, wie sie ist: korrigiert wird im nächsten offenen Monat (Rückwirkende Korrektur).`, lock.closedThrough, 'payroll');
+}
+
 /** An async route's error goes to the API's error handler. */
 const run = (fn: (req: Request, res: Response) => Promise<void> | void) => (req: Request, res: Response, next: NextFunction) => {
   Promise.resolve().then(() => fn(req, res)).catch((e) => {
@@ -75,9 +81,10 @@ router.get('/api/payroll/payslips/:id', run((req, res) => {
 }));
 
 /** The PDF of a closed payslip, exactly as it lies in Belege. */
-router.get('/payroll/payslips/:file', run((req, res) => {
+router.get('/payroll/payslips/:file', (req, res, next) => run((rq, rs) => servePdf(rq, rs, next))(req, res, next));
+function servePdf(req: Request, res: Response, next: NextFunction): void {
   const m = /^(.+)\.pdf$/.exec(String(req.params.file));
-  if (!m) throw new RequestError(404, 'Nicht gefunden.');
+  if (!m) return void next();
   const ctx = payrollContext(WS);
   const close = ctx.history.closed.get(m[1]);
   const books = readBooks();
@@ -85,7 +92,7 @@ router.get('/payroll/payslips/:file', run((req, res) => {
   const path = receipt && receiptFile(WS, books, receipt);
   if (!path || !existsSync(path)) throw new PayrollRefusal('notFound', `Kein PDF für ${m[1]}.`);
   res.type('application/pdf').send(readFileSync(path));
-}));
+}
 
 // ─── closing, reopening, correcting ─────────────────────────────────────────────
 
@@ -107,8 +114,13 @@ router.post('/api/payroll/months/:month/close', run(async (req, res) => {
   }
   const closed: string[] = [];
   for (const r of drafts) {
-    const out = await closePayslip(WS, write, r.employee, month, { confirm: true });
-    if (out.closed) closed.push(out.id);
+    try {
+      const out = await closePayslip(WS, write, r.employee, month, { confirm: true });
+      if (out.closed) closed.push(out.id);
+    } catch (e) {
+      // The ones closed so far stand: say which, and why the next one did not close.
+      return void res.status(e instanceof ClosedPeriodError ? 403 : 409).json({ closed, warned: [], stopped: { id: r.id, error: (e as Error).message } });
+    }
   }
   res.json({ closed, warned: [] });
 }));
@@ -138,8 +150,7 @@ router.post('/api/payroll/month-lines', run((req, res) => {
   const ctx = payrollContext(WS);
   if (!ctx.store.employees.some((e) => e.id === employee)) throw new PayrollRefusal('notFound', `Keine Person ${employee}.`);
   if (ctx.history.closed.has(`${month}-${employee}`)) throw new PayrollRefusal('alreadyClosed', 'Der Monat ist abgeschlossen: eine Änderung als Rückwirkende Korrektur erfassen.');
-  const lock = periodLock(readBooks());
-  if (lock.isClosed(`${month}-01`)) throw new ClosedPeriodError(`${lock.closedText(`${month}-01`)} Eine Lohnabrechnung einer geschlossenen Periode bleibt, wie sie ist: korrigiert wird im nächsten offenen Monat (Rückwirkende Korrektur).`, lock.closedThrough, 'payroll');
+  assertMonthOpen(month);
   const wageType = String(b.wageType ?? '');
   if (!ctx.data.wageTypes.some((w) => w.key === wageType) && !ctx.store.wageTypes.some((w) => w.key === wageType)) throw new PayrollRefusal('unknownWageType', `Lohnart ${wageType} gibt es nicht.`);
   const n = (k: string) => (typeof b[k] === 'number' && Number.isFinite(b[k]) ? b[k] as number : undefined);
@@ -159,6 +170,7 @@ router.delete('/api/payroll/month-lines/:id', run((req, res) => {
   const line = store.monthLines.find((l) => l.id === req.params.id && !l.removed);
   if (!line) throw new PayrollRefusal('notFound', 'Diese Zeile gibt es nicht.');
   if (payrollContext(WS).history.closed.has(`${line.month}-${line.employee}`)) throw new PayrollRefusal('alreadyClosed', 'Der Monat ist abgeschlossen.');
+  assertMonthOpen(line.month);
   updatePayroll(WS, (s) => { const l = s.monthLines.find((x) => x.id === line.id); if (l) l.removed = true; });
   res.json({ removed: line.id });
 }));
@@ -166,6 +178,7 @@ router.delete('/api/payroll/month-lines/:id', run((req, res) => {
 /** A text for every payslip of a month («Frohe Festtage»); empty removes it. */
 router.put('/api/payroll/months/:month/text', run((req, res) => {
   const month = monthParam(req);
+  assertMonthOpen(month);
   const text = typeof body(req).text === 'string' ? (body(req).text as string).trim() : '';
   updatePayroll(WS, (s) => {
     const texts = { ...(s.monthTexts ?? {}) };

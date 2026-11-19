@@ -6,7 +6,7 @@
 const API_PREFIXES = ['/api', '/scan', '/books.json', '/modules.json'];
 const FILE = /\.[A-Za-z0-9]+$/;
 /** A file of the books: a receipt, a statement, an invoice PDF. */
-const BOOKS_FILE = '^/(receipts|bank-statements|invoices)/[^?]*\\.[A-Za-z0-9]+(\\?|$)';
+const BOOKS_FILE = '^/(receipts|bank-statements|invoices|payroll/payslips)/[^?]*\\.[A-Za-z0-9]+(\\?|$)';
 
 export function isAppPath(path: string): boolean {
   return !API_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`)) && !FILE.test(path);
