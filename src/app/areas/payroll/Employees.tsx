@@ -135,17 +135,38 @@ const employmentSpec = (): ValueSpec<Employment> => ({
   ].filter(Boolean).join(' · '),
 });
 
+/** The other employments as the form asks them: none, unknown, their Pensum, or their income (KS 45 Ziff. 6.4). */
+const otherOf = (v: TaxAtSource | undefined): string => (v?.otherEmployment === undefined ? 'none' : v.otherEmployment === 'unknown' ? 'unknown' : v.otherEmployment.income !== undefined ? 'income' : 'pensum');
+const otherText = (v: TaxAtSource): string => {
+  const o = v.otherEmployment;
+  if (o === undefined) return '';
+  if (o === 'unknown') return t('payroll.tax.other.unknownShort');
+  return o.income !== undefined ? t('payroll.tax.other.incomeShort', { amount: fmt(o.income) }) : t('payroll.tax.other.pensumShort', { pensum: o.pensum ?? 0 });
+};
+
 const taxSpec = (): ValueSpec<TaxAtSource> => ({
-  fields: [{ k: 'subject', label: t('payroll.field.taxSubject'), type: 'check' }, { k: 'canton', label: t('payroll.field.canton') }, { k: 'code', label: t('payroll.field.taxCode') }],
-  from: (v) => ({ subject: String(!!v?.subject), canton: s(v?.canton), code: s(v?.code) }),
-  to: (f) => ({ subject: f.subject === 'true', canton: f.canton, code: f.code }),
-  show: (v) => (v.subject ? [t('payroll.employee.taxSubject'), v.canton, v.code].filter(Boolean).join(' · ') : t('payroll.employee.taxNot')),
+  fields: [
+    { k: 'subject', label: t('payroll.field.taxSubject'), type: 'check' }, { k: 'canton', label: t('payroll.field.canton'), mono: true },
+    { k: 'municipality', label: t('payroll.field.municipality') }, { k: 'code', label: t('payroll.field.taxCode'), mono: true, hint: t('payroll.tax.codeHint') },
+    { k: 'church', label: t('payroll.field.church'), type: 'check' },
+    { k: 'other', label: t('payroll.field.otherEmployment'), type: 'select', options: [['none', t('payroll.tax.other.none')], ['unknown', t('payroll.tax.other.unknown')], ['pensum', t('payroll.tax.other.pensum')], ['income', t('payroll.tax.other.income')]] },
+    { k: 'otherValue', label: t('payroll.field.otherValue'), type: 'number', hint: t('payroll.tax.other.valueHint') },
+  ],
+  from: (v) => ({
+    subject: String(!!v?.subject), canton: s(v?.canton), municipality: s(v?.municipality), code: s(v?.code), church: String(!!v?.church), other: otherOf(v),
+    otherValue: typeof v?.otherEmployment === 'object' ? String(v.otherEmployment.income ?? v.otherEmployment.pensum ?? '') : '',
+  }),
+  to: (f) => ({
+    subject: f.subject === 'true', canton: f.canton, municipality: f.municipality, code: f.code, church: f.church === 'true',
+    ...(f.other === 'unknown' ? { otherEmployment: 'unknown' } : f.other === 'pensum' ? { otherEmployment: { pensum: numberOf(f.otherValue) } } : f.other === 'income' ? { otherEmployment: { income: numberOf(f.otherValue) } } : {}),
+  }),
+  show: (v) => (v.subject ? [t('payroll.employee.taxSubject'), v.canton, v.municipality, v.code ? `${v.code}${v.code.length === 2 ? (v.church ? 'Y' : 'N') : ''}` : '', otherText(v)].filter(Boolean).join(' · ') : t('payroll.employee.taxNot')),
 });
 
 /** The person's insurances: per kind the firm has, the insurance and its solution (a pension certificate: the two monthly figures). */
 export function insuranceFields(insurances: readonly PayrollInsurance[]): FieldDef[] {
   const d = data();
-  const kinds = [...new Set(insurances.map((i) => i.kind))].filter((k) => d?.insurances[k] && d.insurances[k].computed !== false);
+  const kinds = [...new Set(insurances.map((i) => i.kind))].filter((k) => d?.insurances[k] && d.insurances[k].computed !== false && !d.insurances[k].tariff);
   return [
     ...kinds.flatMap((kind): FieldDef[] => {
       const of = insurances.filter((i) => i.kind === kind);

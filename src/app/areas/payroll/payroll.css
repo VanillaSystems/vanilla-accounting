@@ -70,7 +70,7 @@
 [data-area="payroll"] .pgroup + .pgroup { margin-top: 4px; }
 [data-area="payroll"] .pg { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); padding: 12px 0 3px; }
 [data-area="payroll"] .pl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto) 110px; gap: 14px; align-items: baseline; padding: 4px 0; border-bottom: 1px solid var(--line); }
-[data-area="payroll"] .pl .pt { min-width: 0; overflow-wrap: anywhere; }
+[data-area="payroll"] .pl .pt { min-width: 0; overflow-wrap: break-word; }
 [data-area="payroll"] .pl .pt small { display: block; color: var(--muted); font-size: 12px; }
 [data-area="payroll"] .pl .pb { color: var(--muted); font-size: 12.5px; text-align: right; white-space: nowrap; }
 [data-area="payroll"] .pl .pa { text-align: right; white-space: nowrap; }
@@ -152,7 +152,7 @@
 [data-area="payroll"] .row.pdoc.firm { grid-template-columns: minmax(0, 1fr) auto; }
 [data-area="payroll"] .pkv { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 6px 16px; margin: 0 0 12px; font-size: 13.5px; max-width: 760px; }
 [data-area="payroll"] .pkv dt { color: var(--muted); }
-[data-area="payroll"] .pkv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+[data-area="payroll"] .pkv dd { margin: 0; min-width: 0; overflow-wrap: break-word; }
 [data-area="payroll"] .pkv dd small { font-size: 12px; }
 [data-area="payroll"] .plinks { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; margin: 14px 0 0; }
 [data-area="payroll"] .pwshown { font-size: 18px; letter-spacing: .06em; margin: 0; user-select: all; color: var(--ink); }
@@ -197,3 +197,18 @@
 [data-area="payroll"] .pform > .m.wide { color: var(--muted); font-size: 12.5px; margin: 0; }
 [data-area="payroll"] .ppayfile a.btn { text-decoration: none; display: inline-block; }
 [data-area="payroll"] .pfamily .pscroll, [data-area="payroll"] .ppension .pscroll { margin-bottom: 14px; }
+/* The tax at source (TaxAtSource.tsx): the tariff files and the settlement lists. */
+[data-area="payroll"] .pcard.ptax .inshead { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 14px; }
+[data-area="payroll"] .pcard.ptax .notice .acts { margin-top: 6px; }
+[data-area="payroll"] .ftab.ptariffs .fh, [data-area="payroll"] .ftab.ptariffs .fr { grid-template-columns: 56px 56px minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr) auto; align-items: center; }
+[data-area="payroll"] .ftab.psettle .fh, [data-area="payroll"] .ftab.psettle .fr { grid-template-columns: minmax(0, 1.6fr) 52px repeat(5, minmax(0, 1fr)); }
+[data-area="payroll"] .ftab.psettle .fh > span { min-width: 0; overflow-wrap: break-word; }
+[data-area="payroll"] .ftab.psettle .fr.tot { font-weight: 600; border-top: 1px solid var(--line); }
+[data-area="payroll"] .psec .ppay { margin: 8px 0 0; }
+@container (max-width: 560px) {
+  [data-area="payroll"] .ftab.ptariffs .fh, [data-area="payroll"] .ftab.ptariffs .fr { grid-template-columns: 48px 48px minmax(0, 1fr) auto; }
+  [data-area="payroll"] .ftab.ptariffs .fh > :nth-child(4), [data-area="payroll"] .ftab.ptariffs .fr > :nth-child(4),
+  [data-area="payroll"] .ftab.ptariffs .fh > :nth-child(5), [data-area="payroll"] .ftab.ptariffs .fr > :nth-child(5) { display: none; }
+  [data-area="payroll"] .ftab.psettle .fh, [data-area="payroll"] .ftab.psettle .fr { grid-template-columns: minmax(0, 1fr) 44px 80px 80px; }
+  [data-area="payroll"] .ftab.psettle .fh > :nth-child(n+4):not(:nth-child(6)), [data-area="payroll"] .ftab.psettle .fr > :nth-child(n+4):not(:nth-child(6)) { display: none; }
+}
