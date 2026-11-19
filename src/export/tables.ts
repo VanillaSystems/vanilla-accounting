@@ -48,7 +48,7 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const fmt2 = (n: number) => r2(n).toFixed(2);
 
 const REPORT_SUM: Record<string, Key> = {
-  grossProfit: 'income.grossProfit', operatingResult: 'income.operatingResult', netResult: 'reports.result',
+  grossProfit: 'income.grossProfit', afterStaff: 'income.afterStaff', ebitda: 'income.ebitda', ebit: 'income.ebit', operatingResult: 'income.operatingResult', netResult: 'reports.result',
   totalAssets: 'balance.totalAssets', totalLiabilities: 'balance.totalLiabilities',
 };
 

@@ -174,6 +174,17 @@ export interface ChartData {
 export type AccountGroup = { title: string } & ({ from: string; to: string } | { accounts: string[] });
 
 export const INCOME_SECTIONS = ['revenue', 'costOfGoods', 'operatingExpenses', 'otherIncome', 'otherExpenses', 'extraordinaryItems'] as const;
+export type IncomeSection = (typeof INCOME_SECTIONS)[number];
+
+/** The results an expense stage of the income statement may be followed by: after the staff costs, before depreciation (EBITDA), before the financial result (EBIT). */
+export const STAGE_RESULTS = ['afterStaff', 'ebitda', 'ebit'] as const;
+export type StageResult = (typeof STAGE_RESULTS)[number];
+
+/**
+ * One stage of a section of the income statement: its accounts by range, and `accounts` that belong
+ * to it wherever their number falls (they win over every range); `then` the result shown after it.
+ */
+export interface IncomeStage { title: string; from?: string; to?: string; accounts?: string[]; then?: StageResult }
 
 /** statements.yaml: the groups of the balance sheet and the sections of the income statement. */
 export interface StatementsData {
@@ -182,7 +193,9 @@ export interface StatementsData {
     /** The group with `openResult` also shows the year's result while the year is open, under that name. */
     liabilities: (AccountGroup & { openResult?: string })[];
   };
-  income: Record<(typeof INCOME_SECTIONS)[number], AccountGroup>;
+  income: Record<IncomeSection, AccountGroup>;
+  /** The income statement in stages: an expense section split into the stages it is shown in, in order. Absent: the sections as they are. */
+  incomeStages?: Partial<Record<IncomeSection, IncomeStage[]>>;
   /**
    * How the statements show the VAT during the year. `net`: the tax the codes split off sits on
    * the VAT account from the day it is booked, as the year close posts it (src/accounting/statement-postings.ts);

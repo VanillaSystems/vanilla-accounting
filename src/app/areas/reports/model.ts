@@ -19,6 +19,8 @@ import { vatInFigures, type VatInFigures } from '../../../accounting/vat-in-figu
 export { vatParts } from '../../../accounting/vat-in-figures.js';
 import type { Report } from '../../shell/route.js';
 import { chart, statements } from '../../../engines/index.js';
+import type { IncomeSection, StageResult } from '../../../core/modules/schema.js';
+import { roundCHF } from '../../../accounting/rappen.js';
 import { matchesTags, type Dimension, type TagFilter } from '../../../books/tags.js';
 
 /** The account of entries booked on one side only (a code that books the VAT itself, M81-2): no number. */
@@ -55,7 +57,7 @@ export type Prior =
   | { from: string; to: string; source: 'books' | 'opening'; since?: string }
   | { from: string; to: string; missing: 'noBooks' | 'overlap'; first?: string };
 
-export type SumTitle = 'grossProfit' | 'operatingResult' | 'netResult' | 'totalAssets' | 'totalLiabilities';
+export type SumTitle = 'grossProfit' | StageResult | 'operatingResult' | 'netResult' | 'totalAssets' | 'totalLiabilities';
 
 /**
  * What Bilanz & ER say about the VAT. `net`: the figures are net, the tax sits on `account` (the
@@ -135,16 +137,48 @@ export function reportView(report: Report, books: Index, period: Period, names: 
 /** The opening balances the books hold for `year`. */
 const openingOfYear = (books: Index, year: string): Record<string, number> => books.config?.openingBalances?.[year] ?? {};
 
-/** The Erfolgsrechnung of `from`..`to` as blocks with every account; `result` the net result. */
+/** The Erfolgsrechnung of `from`..`to` as blocks with every account, in the jurisdiction's stages; `result` the net result. */
 function incomeView(postings: Postings, from: string, to: string, names: Record<string, string>) {
   const s = computeIncomeStatement(postings, from, to, names);
-  const group = (sec: IncomeStatementSection): Block => ({ kind: 'group', title: sec.title, rows: sec.rows.map((r) => ({ account: r.account, value: r.amount })), total: sec.total });
   const blocks: Block[] = [
-    group(s.revenue), group(s.costOfGoods), { kind: 'sum', title: 'grossProfit', value: s.grossProfit },
-    group(s.operatingExpenses), { kind: 'sum', title: 'operatingResult', value: s.operatingResult },
-    group(s.otherIncome), group(s.otherExpenses), { kind: 'sum', title: 'netResult', value: s.netResult, strong: true },
+    ...staged('revenue', s.revenue, 0), ...staged('costOfGoods', s.costOfGoods, s.revenue.total), { kind: 'sum', title: 'grossProfit', value: s.grossProfit },
+    ...staged('operatingExpenses', s.operatingExpenses, s.grossProfit), { kind: 'sum', title: 'operatingResult', value: s.operatingResult },
+    ...staged('otherIncome', s.otherIncome, s.operatingResult), ...staged('otherExpenses', s.otherExpenses, s.operatingResult + s.otherIncome.total),
+    { kind: 'sum', title: 'netResult', value: s.netResult, strong: true },
   ];
   return { blocks, result: s.netResult, liabilities: 0, balanced: true };
+}
+
+/** The sections that add to the result; every other one takes from it. */
+const ADDS: readonly IncomeSection[] = ['revenue', 'otherIncome'];
+
+/**
+ * A section of the Erfolgsrechnung as its stages (statements.yaml `incomeStages`, OR 959b in
+ * Switzerland), each followed by the result it leaves when it names one, counted on from `before`;
+ * what no stage takes stays under the section's own title, last. Without stages the section as it
+ * is. Each account is in exactly one block, so the stages add up to the section's total.
+ */
+function staged(key: IncomeSection, sec: IncomeStatementSection, before: number): Block[] {
+  const stages = statements().incomeStages?.[key];
+  const rows = sec.rows.map((r) => ({ account: r.account, value: r.amount }));
+  if (!stages?.length) return [{ kind: 'group', title: sec.title, rows, total: sec.total }];
+  const stageOf = (a: string) => {
+    const listed = stages.findIndex((st) => st.accounts?.includes(a));
+    return listed >= 0 ? listed : stages.findIndex((st) => st.from !== undefined && st.to !== undefined && a >= st.from && a < st.to);
+  };
+  const sign = ADDS.includes(key) ? 1 : -1;
+  const out: Block[] = [];
+  let result = before;
+  stages.forEach((st, i) => {
+    const own = rows.filter((r) => stageOf(r.account) === i);
+    const total = roundCHF(own.reduce((n, r) => n + r.value, 0));
+    out.push({ kind: 'group', title: st.title, rows: own, total });
+    result = roundCHF(result + sign * total);
+    if (st.then) out.push({ kind: 'sum', title: st.then, value: result });
+  });
+  const rest = rows.filter((r) => stageOf(r.account) < 0);
+  if (rest.length) out.push({ kind: 'group', title: sec.title, rows: rest, total: roundCHF(rest.reduce((n, r) => n + r.value, 0)) });
+  return out;
 }
 
 /** The Bilanz at `asOf` as blocks with every account, from the books' opening of its year or `opening`; `result` the total assets. */

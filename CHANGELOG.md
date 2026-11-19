@@ -22,6 +22,12 @@ Two markers flag an entry you must read before you update:
   books when they reach back that far, else the Bilanz from the year's opening balances; without
   either the column stays empty and a line says why (never zeros), with «Eröffnung erfassen». The
   export (CSV, Excel, PDF) carries the same column. Presentation only: no figure changes (#568).
+- Bilanz & ER: the Erfolgsrechnung in stages (OR 959b): after the Bruttoergebnis the operating
+  expenses as Personalaufwand, übriger betrieblicher Aufwand, Abschreibungen and Finanzerfolg,
+  each followed by the result it leaves: Bruttoergebnis nach Personalaufwand, EBITDA, EBIT, then
+  the Betriebsergebnis as before. The stages are the jurisdiction's (statements.yaml
+  `incomeStages`); the payment fees (6840) count as Finanzerfolg, as the chart says. The export
+  carries the same rows. Presentation only: the Betriebsergebnis and the result do not change (#568).
 
 ### Fixed
 

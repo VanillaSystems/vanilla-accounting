@@ -19,6 +19,19 @@ income:
   otherExpenses: { title: Nebenbetrieblicher Aufwand, accounts: ["7010", "8000", "8500", "8900"] }
   extraordinaryItems: { title: Ausserordentliches, accounts: [] }
 
+# The Erfolgsrechnung in stages (OR 959b Abs. 2, by nature of expense, the levels of the KMU chart):
+# the operating expenses split into the Code's lines, each followed by the result it leaves:
+# Bruttoergebnis nach Personalaufwand, EBITDA, EBIT; the Betriebsergebnis after the financial result.
+# An account under `accounts` belongs to that stage wherever its number falls (6840
+# Zahlungsverkehrsgebühren is Finanzerfolg in the chart, accounts.yaml); what no stage takes stays
+# under the section's own title. Presentation only: the sections and their totals do not change.
+incomeStages:
+  operatingExpenses:
+    - { title: Personalaufwand, from: "5000", to: "6000", then: afterStaff }
+    - { title: Übriger betrieblicher Aufwand, from: "6000", to: "6800", then: ebitda }
+    - { title: Abschreibungen und Wertberichtigungen, from: "6800", to: "6900", then: ebit }
+    - { title: Finanzaufwand und Finanzertrag, from: "6900", to: "7000", accounts: ["6840"] }
+
 # The VAT during the year: net, as Banana shows it. The tax each code splits off sits on the VAT
 # account (year-end.yaml vatSettlement) from the day it is booked, the way the year close posts it,
 # so revenue and expense are net and the Bilanz balances within the year (decision 16.10.2026).
