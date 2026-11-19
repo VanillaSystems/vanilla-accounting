@@ -143,7 +143,7 @@ export function ContactPanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
       {c.archived && <p className="cnote" data-testid="contact-archived">{t('contacts.archivedNote')}</p>}
       {canEdit && (
         <div className="ivacts">
-          {!c.archived && <button type="button" className="btn primary" data-act="new-invoice" onClick={() => { void newDraftFor(nav, c); }}>{t('invoices.new')}</button>}
+          {!c.archived && <AsyncButton type="button" className="btn primary" data-act="new-invoice" onClick={() => newDraftFor(nav, c)}>{t('invoices.new')}</AsyncButton>}
           <button type="button" className="btn ghost" data-act="edit-contact" onClick={() => setUi({ dialog: { kind: 'contact', id: c.id } })}>{t('contacts.edit')}</button>
           {c.archived
             ? <AsyncButton type="button" className="btn ghost" data-act="restore-contact" onClick={() => restoreContact(nav, c)}>{t('contacts.restore')}</AsyncButton>

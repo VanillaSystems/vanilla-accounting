@@ -44,8 +44,8 @@ export function salonWithoutIban(): string {
  * ids: the ids follow the generator's seed and move whenever the demo gains a document.
  */
 export function demoInvoices(): { draftOf(customer: string): string; next(n?: number): string } {
-  const book = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as { customers: Array<{ id: string; name: string }>; invoices: Array<{ id: string; status: string; customerId: string; number?: string }> };
-  const name = (id: string) => book.customers.find((c) => c.id === id)?.name;
+  const book = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as { contacts: Array<{ id: string; name: string }>; invoices: Array<{ id: string; status: string; customerId: string; number?: string }> };
+  const name = (id: string) => book.contacts.find((c) => c.id === id)?.name;
   const last = Math.max(...book.invoices.filter((i) => i.status === 'issued').map((i) => Number(i.number!.slice(5))));
   return {
     draftOf: (customer) => book.invoices.find((i) => i.status === 'draft' && name(i.customerId) === customer)!.id,
