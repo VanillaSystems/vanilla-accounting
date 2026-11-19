@@ -1574,6 +1574,7 @@ export default {
     'reports.priorNoneEmpty': 'Pas de chiffres de l’exercice précédent pour {prior} : la comptabilité ne contient encore rien.',
     'reports.priorCol': 'Exercice précédent',
     'reports.priorNoneCol': 'Exercice précédent : pas de chiffres',
+    'reports.priorGap': 'Exercice précédent : actifs {assets} et passifs {liabilities} diffèrent de {gap} ; le bilan d’ouverture n’est pas équilibré.',
     'reports.show': 'Afficher',
     'reports.opening': 'Début',
     'reports.debit': 'Débit',

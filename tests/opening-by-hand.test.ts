@@ -32,7 +32,7 @@ test('an asset and a liability typed for the first year: retained earnings carri
     assert.equal(r.status, 200, String(r.json.error));
   }
   assert.deepEqual(books().config?.openingBalances, { 2026: { 1021: 18420.15, 1500: 12000, 2800: 20000, 2970: 10420.15 } }, 'assets 30\'420.15 = 2800 20\'000 + 2970 10\'420.15');
-  const balance = reportView('balance', books(), parsePeriod('2026', '2026-10-16')!, names, false);
+  const balance = reportView('balance', books(), parsePeriod('2026', '2026-10-16')!, names, { all: false });
   assert.equal(balance.gap, undefined, 'Aktiven = Passiven');
   assert.equal(balance.headline.value, 30420.15);
 

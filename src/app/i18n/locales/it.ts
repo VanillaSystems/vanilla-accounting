@@ -1574,6 +1574,7 @@ export default {
     'reports.priorNoneEmpty': 'Nessuna cifra dell’anno precedente per {prior}: la contabilità non contiene ancora nulla.',
     'reports.priorCol': 'Anno precedente',
     'reports.priorNoneCol': 'Anno precedente: nessuna cifra',
+    'reports.priorGap': 'Anno precedente: attivi {assets} e passivi {liabilities} differiscono di {gap}; il bilancio d’apertura non quadra.',
     'reports.show': 'Mostrare',
     'reports.opening': 'Inizio',
     'reports.debit': 'Dare',
