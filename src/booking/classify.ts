@@ -323,7 +323,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     companyUid: ws.company.uid,
     ...bankFeeContext(ws, chartOfAccounts),
     wageWordings: employs(ws.profile) ? receiptWordings(knowledge, 'employer') : [],
-    ...payrollInsurerContext(ws),
+    ...payrollInsurerContext(ws, counterparties),
   };
 }
 
@@ -1012,9 +1012,19 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     // A payroll insurer's payment the liability does not cover (§22 decision 45): it may pay months before payroll ran here,
     // which level A books otherwise. The person decides on its hand form; never the model, which would expense it again.
     const insurer = payrollInsurerOfPayment(books, tx, context);
-    if (insurer && !insurer.covered) {
+    if (insurer && !insurer.books) {
       log(`  ${tx.ref}  payment to ${insurer.name}: waits for the person (the liability ${insurer.account} does not cover it)`);
       outcome.failed.push({ ref: tx.ref, reason: `Zahlung an ${insurer.name}: ${insurer.account} deckt sie nicht. Für Monate ab dem Lohnstart gegen ${insurer.account}, für Monate davor als Beiträge buchen (von Hand).` });
+      continue;
+    }
+    // One the liability covers, or whose fund's file keeps the liability way («Immer so», §22 decision 126): bank / liability by code,
+    // as the intake's payroll step books it, never the model, which would expense the contributions a second time. A company rule still decides its own.
+    const insurerBank = insurer?.books && !ruleOfPayment(books, tx, context, fx) ? (() => { try { return bankAccountFor(tx, context.bankAccounts); } catch { return undefined; } })() : undefined;
+    if (insurer && insurerBank) {
+      const bank = insurerBank;
+      books.journalEntries.push({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, date: tx.date, accountDebit: insurer.account, accountCredit: bank, amount: Math.round(Math.abs(tx.amount) * 100) / 100, description: `Zahlung ${insurer.name}`, by: { kind: 'code', check: 'payroll' } });
+      log(`  ${tx.ref}  → payment to ${insurer.name}, against its liability ${insurer.account}`);
+      outcome.classified.push(tx.ref);
       continue;
     }
     const provider = providerOfPayment(tx, mappedReceipts(books, tx), context.counterparties ?? []);

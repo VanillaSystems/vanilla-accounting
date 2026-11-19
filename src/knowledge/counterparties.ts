@@ -10,6 +10,7 @@
  * stronger one. See docs/adr/0002-counterparty-knowledge-and-lean-calls.md.
  */
 
+import { parsePayrollSection, type PayrollSection } from './payroll-way.js';
 import { RECEIPT_KINDS, type BankTransaction, type Receipt, type ReceiptKind } from '../types/index.js';
 import { HEAD, wordsRe } from '../core/modules/words.js';
 import { parseProvider, type ProviderFacts } from './provider.js';
@@ -97,6 +98,8 @@ export interface Counterparty {
    * account, and its sales report books the sales onto it (src/booking/providers.ts, #203).
    */
   provider?: ProviderFacts;
+  /** The company's way with a payment to this fund or insurer that the payslips' accruals do not cover (src/knowledge/payroll-way.ts). */
+  payroll?: PayrollSection;
 }
 
 export type Routing =
@@ -249,6 +252,7 @@ export type RawCounterparty = {
   documents?: { id?: string; kind?: string; text?: string[]; proves?: string; name?: string; where?: string }[];
   facts?: Partial<Fact>[];
   provider?: unknown;
+  payroll?: unknown;
 };
 
 /** Validate one counterparty after its layers are merged. Throws naming the file and the fix. */
@@ -290,9 +294,12 @@ export function compileCounterparty(raw: RawCounterparty, origin: Counterparty['
   const parsed = raw.provider === undefined ? undefined : parseProvider(raw.provider);
   if (parsed && 'problem' in parsed) throw new Error(`${origin.binding ?? origin.vendor}: ${parsed.problem}`);
   const provider = parsed?.provider;
+  const way = raw.payroll === undefined ? undefined : parsePayrollSection(raw.payroll);
+  if (way && 'problem' in way) fail(way.problem);
+  const payroll = way && 'section' in way ? way.section : undefined;
   return {
     id: stem, name: raw.name!, role, roles: roles as Role[], match, grouped: raw.grouped === true, ...(sharedUid.length ? { sharedUid } : {}), ...(raw.grouped !== undefined ? { groupedSaid: true as const } : {}), ...(learnedTx.length ? { learnedTx } : {}), documents, facts,
-    accounts: raw.accounts, steps: raw.steps ?? {}, origin, ...(provider ? { provider } : {}),
+    accounts: raw.accounts, steps: raw.steps ?? {}, origin, ...(provider ? { provider } : {}), ...(payroll ? { payroll } : {}),
   };
 }
 

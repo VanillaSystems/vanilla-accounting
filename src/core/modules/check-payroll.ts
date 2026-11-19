@@ -38,6 +38,7 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
     labels(F, `insurances.${k}.fund`, ins.fund);
     labels(F, `insurances.${k}.nameOf`, ins.nameOf);
     if (!/^\d{4}$/.test(ins.account)) add(F, `insurances.${k}.account`, 'an account number of four digits');
+    if (ins.role !== undefined && ins.role !== 'authority' && ins.role !== 'supplier') add(F, `insurances.${k}.role`, 'authority or supplier');
     for (const [r, def] of Object.entries(ins.rates ?? {})) {
       labels(F, `insurances.${k}.rates.${r}`, def.label);
       if (!Array.isArray(def.range) || def.range.length !== 2 || !(def.range[0] <= def.range[1])) add(F, `insurances.${k}.rates.${r}.range`, 'a range [low, high]');

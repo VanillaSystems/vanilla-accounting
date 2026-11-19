@@ -161,3 +161,16 @@ test('a refused password says why, and one with a space at either end is refused
   const lock = await api.fetch('/payroll/documents/2026/lohnausweis.csv');
   assert.equal(lock.headers.get('cache-control'), 'no-store', 'the table with the number in full is never cached');
 });
+
+test('the insurers\' payments: listed for the bank page; «Immer so» refuses a payment that pays no insurer and a way it does not know', async () => {
+  const list = await api.send('GET', '/api/payroll/insurer-payments');
+  assert.equal(list.status, 200);
+  assert.ok(Array.isArray(list.json.refs));
+  const none = await api.send('POST', '/api/payroll/insurer-way', { ref: 'O1', way: 'after' });
+  assert.equal(none.status, 404);
+  assert.equal(none.json.code, 'payroll');
+  const bad = await api.send('POST', '/api/payroll/insurer-way', { ref: 'O1', way: 'sometimes' });
+  assert.equal(bad.status, 400);
+  const gone = await api.send('DELETE', '/api/payroll/insurer-way', { business: 'nobody' });
+  assert.equal(gone.json.code, 'payroll');
+});

@@ -105,11 +105,46 @@ export function PaymentBooking(props: Props) {
           {(['after', 'before'] as const).map((w) => (
             <label key={w}><input type="radio" name="insurer-way" checked={way === w} onChange={() => setWay(w)} /> {t(`journal.byHand.insurerWay.${w}`)}</label>
           ))}
+          {props.canRule !== false && !start.nature.shared ? <KeepWay nav={props.nav} payment={props.payment} way={way} name={start.nature.name} /> : null}
         </div>
       ) : null}
       <BookingForm key={way} {...props} onForm={(el) => { formEl.current = el; props.onForm?.(el); }} accounts={ws.bankAccounts} draft={draft} dimensions={ws.dimensions ?? []} defaults={defaults} pending={known!.books !== props.books} onNotOwn={setNotOwn} />
       {props.canRule !== false && start ? <RuleWay nav={props.nav} payment={props.payment} start={start} form={() => formEl.current} lines={draft.lines} other={draft.bank && (draft.bank.side === 'accountDebit' ? 'accountCredit' : 'accountDebit')} /> : null}
     </>
+  );
+}
+
+/**
+ * «Immer so» for a payroll insurer's payments (§22 decision 126): the chosen way kept in the company's file of the fund,
+ * so the next Akonto is not asked again. «ab dem Lohnstart» books this fund's open payments at once; «Rückgängig»
+ * takes the way out of the file again (what it booked stays).
+ */
+function KeepWay({ nav, payment, way, name }: { nav: Nav; payment: string; way: 'after' | 'before'; name: string }) {
+  const [kept, setKept] = useState<{ business: string; path: string; booked: number } | null>(null);
+  const keep = async () => {
+    try {
+      const r = await api.keepInsurerWay(payment, way);
+      setKept({ business: r.business, path: r.path, booked: r.booked.length });
+      nav.toast(t(r.booked.length ? 'journal.byHand.insurerWay.keptBooked' : 'journal.byHand.insurerWay.kept', { name, path: r.path, n: r.booked.length }));
+      if (r.booked.length) nav.refresh();
+    } catch (e) { nav.toast(errorText(e)); }
+  };
+  const undo = async () => {
+    if (!kept) return;
+    try { await api.forgetInsurerWay(kept.business); setKept(null); nav.toast(t('journal.byHand.insurerWay.forgotten', { name })); } catch (e) { nav.toast(errorText(e)); }
+  };
+  if (kept) {
+    return (
+      <span className="m" data-testid="insurer-way-kept">
+        {t('journal.byHand.insurerWay.keptNote', { name, path: kept.path })}{' '}
+        <AsyncButton type="button" className="golink" data-testid="insurer-way-undo" onClick={undo}>{t('journal.byHand.insurerWay.undo')}</AsyncButton>
+      </span>
+    );
+  }
+  return (
+    <span>
+      <AsyncButton type="button" className="golink" data-testid="insurer-way-keep" onClick={keep}>{t(`journal.byHand.insurerWay.keep.${way}`, { name })}</AsyncButton>
+    </span>
   );
 }
 

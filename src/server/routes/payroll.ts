@@ -15,8 +15,12 @@ import { PayrollRefusal, assertNotOpening, planClose } from '../../payroll/close
 import { addCorrection, chartNumbers, closePayslip, payrollContext, reopenPayslip, type BooksWriter } from '../../payroll/service.js';
 import { decemberOpen, monthView, payslipView, employeeRows, yearStrip } from '../../payroll/views.js';
 import { paymentRows } from '../../payroll/payments.js';
-import { insurerRows, settlementOf } from '../../payroll/insurers.js';
-import { loadClassifyContext, mappedReceipts } from '../../booking/classify.js';
+import { bookInsurerPayments, insurancesOfPayment, insurerRows, settlementOf } from '../../payroll/insurers.js';
+import { payrollWays } from '../../payroll/insurers-context.js';
+import { forgetPayrollWay, keepPayrollWay, wayTarget } from '../../payroll/insurer-way.js';
+import type { PayrollWay } from '../../knowledge/payroll-way.js';
+import { bankAccountFor } from '../../workspace/money-accounts.js';
+import { loadClassifyContext, mappedReceipts, payrollInsurerOfPayment } from '../../booking/classify.js';
 import { businessOfPayment } from '../../intake/batch-payers.js';
 import { closedPayslips, issueLohnausweis, lohnausweisSnapshots, payslipMail, payslipsSent, sendPayslip, setMailPassword } from '../../payroll/service.js';
 import { sendMail } from '../../invoices/mail.js';
@@ -277,6 +281,59 @@ router.post('/api/payroll/insurances/:id/settle', run((req, res) => {
     return entry ? { booked: entry.id, amount: entry.amount, debit: entry.accountDebit, credit: entry.accountCredit, compare } : { booked: null, compare };
   });
   res.json(out);
+}));
+
+// ─── the insurers' payments: which need no receipt, «Immer so» (§22 decisions 45, 126) ──────
+
+/** The open payments that pay one of the firm's payroll insurers while payroll runs here: their proof is the payslips, never «kein Beleg». */
+router.get('/api/payroll/insurer-payments', run((_req, res) => {
+  const context = loadClassifyContext(WS);
+  if (!context.payrollInsurer) return void res.json({ refs: [] });
+  const books = readBooks();
+  const lock = periodLock(books);
+  res.json({ refs: books.transactions.filter((tx) => !lock.isClosed(tx.date) && tx.direction === 'DBIT' && !!payrollInsurerOfPayment(books, tx, context)).map((tx) => tx.ref) });
+}));
+
+/**
+ * «Immer so» on the hand form of a payment to a payroll insurer: `way` after (months from payroll's start: the liability)
+ * or before (as contributions, level A), kept in the company's file of the fund. With «after» code books at once
+ * every open payment to that insurance the liability does not cover yet; «before» changes only what comes next.
+ */
+router.post('/api/payroll/insurer-way', run((req, res) => {
+  const b = body(req);
+  const ref = String(b.ref ?? '');
+  const way: PayrollWay | undefined = b.way === 'after' ? 'liability' : b.way === 'before' ? 'contributions' : undefined;
+  if (!way) throw new PayrollRefusal('badInput', 'Ab dem Lohnstart oder davor.');
+  const context = loadClassifyContext(WS);
+  const books = readBooks();
+  const tx = books.transactions.find((t) => t.ref === ref);
+  const lock = periodLock(books);
+  if (tx && lock.isClosed(tx.date)) throw new ClosedPeriodError(`${lock.closedText(tx.date)} Eine Zahlung einer geschlossenen Periode bleibt, wie sie gebucht ist.`, lock.closedThrough, 'newEntry');
+  const pay = tx && payrollInsurerOfPayment(books, tx, context);
+  if (!tx || !pay) throw new PayrollRefusal('notFound', `Keine Zahlung an eine Sozialversicherung: ${ref}.`);
+  const ctx = payrollContext(WS);
+  const ins = ctx.store.insurances.find((i) => i.id === pay.id)!;
+  const routed = businessOfPayment(tx, mappedReceipts(books, tx), context.counterparties ?? []);
+  const target = wayTarget(ins, routed, context.counterparties ?? [], ctx.data.insurances[ins.kind]?.role ?? 'supplier');
+  const path = keepPayrollWay(WS, target, way, tx, today());
+  let booked: string[] = [];
+  if (way === 'liability') {
+    const fresh = loadClassifyContext(WS).counterparties ?? [];
+    booked = updateBooksWithEffects((index) => bookInsurerPayments(index, ctx.data, ctx.store, periodLock(index),
+      (t) => businessOfPayment(t, mappedReceipts(index, t), fresh), (t) => { try { return bankAccountFor(t, WS.bankAccounts); } catch { return undefined; } },
+      () => idSource.bytes(8).toString('hex'),
+      { currency: baseCurrency(), wayOf: payrollWays(fresh), only: (t) => insurancesOfPayment(t, ctx.store, (x) => businessOfPayment(x, mappedReceipts(index, x), fresh)).some((i) => i.id === ins.id) }));
+  }
+  res.json({ business: target.id, name: ins.name, path, created: target.created, way, booked });
+}));
+
+/** «Rückgängig»: the kept way leaves the company's file of `business`; what it booked stays booked. */
+router.delete('/api/payroll/insurer-way', run((req, res) => {
+  const id = String(body(req).business ?? '');
+  const cp = (loadClassifyContext(WS).counterparties ?? []).find((c) => c.id === id);
+  const path = cp && forgetPayrollWay(WS, cp);
+  if (!path) throw new PayrollRefusal('gone', `${id} hält keinen Weg für Zahlungen.`);
+  res.json({ business: id, path });
 }));
 
 // ─── Dokumente ─────────────────────────────────────────────────────────────────

@@ -90,6 +90,7 @@ totals:
 insurances:
   ahv:
     label: { de: AHV/IV/EO/ALV, fr: AVS/AI/APG/AC, it: AVS/AI/IPG/AD, en: AHV/IV/EO/ALV }
+    role: authority
     fund: { de: Ausgleichskasse, fr: Caisse de compensation, it: Cassa di compensazione, en: Compensation fund }
     nameOf: { de: Name der Ausgleichskasse, fr: Nom de la caisse de compensation, it: Nome della cassa di compensazione, en: Name of the compensation fund }
     account: "2271"
@@ -99,6 +100,7 @@ insurances:
       adminCost: { label: { de: Verwaltungskosten, fr: Frais d'administration, it: Spese amministrative, en: Administration cost }, range: [0, 5], note: "AHVG Art. 69, AHVV Art. 157: at most 5 % of the contributions" }
   fak:
     label: { de: Familienausgleichskasse, fr: Caisse d'allocations familiales, it: Cassa di compensazione per assegni familiari, en: Family compensation fund }
+    role: authority
     fund: { de: Familienausgleichskasse, fr: Caisse d'allocations familiales, it: Cassa assegni familiari, en: Family compensation fund }
     nameOf: { de: Name der Familienausgleichskasse, fr: Nom de la caisse d’allocations familiales, it: Nome della cassa assegni familiari, en: Name of the family compensation fund }
     account: "2272"
