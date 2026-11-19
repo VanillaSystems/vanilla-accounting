@@ -1561,6 +1561,22 @@ non-obvious decision is recorded here when it is taken.
    leave 1091 off by the share.
 5. **Large figures of modules/ch/payroll/<year>.yaml are written in exponent form** (`148.2e3`), as
    registration.yaml does: the leak guard reads YAML as prose and flags a six-digit number.
+6. **The 13th: «1/12» is exactly a twelfth, «8,33 %» is that percentage** of the base since the last payout,
+   as the market's two choices; December always pays what the year owes, and so does the last month of a
+   person who leaves.
+7. **The reference age needs the person's sex**: without it no pensioner rule applies and the payslip
+   says «Geschlecht fehlt» as a fact; the app never assumes one.
+8. **Recurring Lohnarten are prorated to the days employed**, like the monthly wage (an entry on the 16th
+   gets half the flat expenses).
+9. **The BVG entry threshold is read against the yearly wage the Anstellung promises** (monthly × 12,
+   with the 13th), not against one month annualised, so a bonus month does not cross it.
+10. **A hand-over and a share carry `payroll.json` and `payroll/`**: the fiduciary needs them, and the
+    books' payroll entries would otherwise arrive without their payslips.
+11. **The AI sidebar never reads payroll files** (`payroll.json`, `payroll/`, the payslip PDFs): a deny
+    rule of its tools, tested; the terminal agents' instructions say the same.
+12. **A Rückwirkende Korrektur entered on a month that is reopened afterwards is void** once that month
+    closes again: the new close is computed with today's values, so carrying the old difference would
+    count it twice. The reopening card names such corrections.
 
 ---
 

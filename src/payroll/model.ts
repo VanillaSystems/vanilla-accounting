@@ -22,7 +22,7 @@ export interface PayrollCompany {
   rounding: Dated<number>;
   /** How a part month is prorated: by calendar days, or 30 days to a month. */
   proration: Dated<'calendar-days' | 'thirty-days'>;
-  /** The 13th salary: a twelfth of the year's wage, or 8 1/3 %. */
+  /** The 13th salary: a twelfth of the year's wage, or 8.33 % of it (a little less than a twelfth). */
   thirteenth: Dated<'twelfth' | 'percent'>;
   lohnausweis?: Dated<{ meals?: 'free' | 'reduced'; transportF?: boolean; canteenG?: boolean; expenseRules?: { canton: string; approvedOn: string }; remarks?: string }>;
   /** Who gets a copy of each payslip mail. */

@@ -15,11 +15,11 @@ export type Carriage = 'whole' | 'new';
 
 /** The top-level names that hold content, and how each travels. */
 const TOP: Record<string, Carriage> = {
-  'ledger.json': 'whole', 'belege.workspace.yaml': 'whole', 'invoices.json': 'whole',
+  'ledger.json': 'whole', 'belege.workspace.yaml': 'whole', 'invoices.json': 'whole', 'payroll.json': 'whole',
   'master-data': 'whole', knowledge: 'whole', modules: 'whole', logos: 'whole',
 };
 /** The folders of a year that hold content, and how each travels. */
-const YEAR: Record<string, Carriage> = { books: 'whole', filings: 'whole', receipts: 'new', 'bank-statements': 'new', invoices: 'new' };
+const YEAR: Record<string, Carriage> = { books: 'whole', filings: 'whole', payroll: 'whole', receipts: 'new', 'bank-statements': 'new', invoices: 'new' };
 
 export interface ContentFile {
   /** Relative to the app's folder, with forward slashes. */

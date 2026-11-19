@@ -174,9 +174,15 @@ export function assistantSystem(language: string, owner: string, map: string, te
 /** What the block changes at once with an undo is never drafted: the chart (an account of it is a change of the books' answer). */
 export const NEVER_DRAFTED = ['data/draft/master-data/accounts.json'];
 
+/**
+ * What the sidebar never reads (docs/specs/payroll.md §11, #508): the payroll's people, their wages and
+ * social security numbers, and the payslips' PDFs. A Read rule holds for Grep and Glob too.
+ */
+export const NEVER_READ = ['**/payroll.json', '**/transactional-data/*/payroll/**', '**/transactional-data/*/receipts/*-lohnabrechnung-*'];
+
 export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: string | undefined, repository: string, owner: string, map = '', term?: number): string[] {
   const writes = draftPatterns().flatMap((p) => [`Edit(${p})`, `Write(${p})`]);
-  const never = NEVER_DRAFTED.flatMap((p) => [`Edit(${p})`, `Write(${p})`]);
+  const never = [...NEVER_DRAFTED.flatMap((p) => [`Edit(${p})`, `Write(${p})`]), ...NEVER_READ.map((p) => `Read(${p})`)];
   return [
     '-p',
     '--model', sidebarModel(),
