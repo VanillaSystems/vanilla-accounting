@@ -369,6 +369,12 @@ Two markers flag an entry you must read before you update:
   tax at source; a corrected file carries only its own effect. A Nachzahlung for a year whose wages
   are not in the app reckons the ALV/UVG ceiling by the months employed and says so (it had none).
 - Löhne: the federal figures of 2026 date the family-allowance minimums from 1.1.2025, as in force.
+- Löhne: a Nachzahlung is computed from one model of the year it was earned in: when only part of
+  that year is in the app, its ceiling counts only those months (and the payslip says so), a month
+  never charges more than its own base, a second exit no longer gives a negative base, a small-wage
+  year lifted over the limit is caught up, and the reference age is judged at the exit. The tariff
+  card and the drift never undo a person's own correction of the tax at source, show it beside the
+  card, and «So lassen» holds for the file it was said for.
 - Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
   davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund
   (`payroll: { payments: liability }`), names the open payments it books first, and code then books

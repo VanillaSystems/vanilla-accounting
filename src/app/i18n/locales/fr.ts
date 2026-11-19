@@ -7292,6 +7292,7 @@ export default {
     "error.payroll.gone": "Cela n’existe plus : recharger la page.",
     "error.payroll.closedPeriod": "Un décompte d’une période clôturée se corrige seulement : «Laisser ainsi» n’existe pas pour lui.",
     "payroll.backdated.follows": "En découlent, décomptés avec le salaire au prochain mois ouvert : {list}",
+    "payroll.backdated.hand": "Corrigé à la main depuis la clôture, reste ainsi : {list}. Si cela couvre la même différence, ne pas corriger à nouveau.",
     "payroll.backdated.closedPeriod": "période clôturée",
     "payroll.backdated.waysClosed": "Un décompte d’une période clôturée reste tel quel et se corrige seulement : la différence passe par genre de salaire dans le prochain décompte ouvert.",
     "payroll.history.keep": "Laissé ainsi le {at}, {time} : une valeur dès le {from} calcule autrement, sans correction",

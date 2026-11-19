@@ -7290,6 +7290,7 @@ export const messages = {
   "error.payroll.gone": "Das gibt es nicht mehr: die Seite neu laden.",
   "error.payroll.closedPeriod": "Eine Lohnabrechnung einer geschlossenen Periode wird nur korrigiert: «So lassen» gibt es für sie nicht.",
   "payroll.backdated.follows": "Daraus folgen, mit dem Lohn im nächsten offenen Monat abgerechnet: {list}",
+  "payroll.backdated.hand": "Von Hand korrigiert seit dem Abschluss, bleibt so: {list}. Deckt sie dieselbe Differenz, nicht nochmals korrigieren.",
   "payroll.backdated.closedPeriod": "geschlossene Periode",
   "payroll.backdated.waysClosed": "Eine Lohnabrechnung einer geschlossenen Periode bleibt, wie sie ist, und wird nur korrigiert: die Differenz kommt je Lohnart in die nächste offene Lohnabrechnung.",
   "payroll.history.keep": "Am {at}, {time} so gelassen: ein Wert ab {from} rechnet anders, ohne Korrektur",

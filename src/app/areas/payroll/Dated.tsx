@@ -131,6 +131,9 @@ function BackdatedCard({ res, onChoose, onCancel }: { res: Extract<Saved, { save
             {a.differences.some((d) => !d.carry && !commission(d.wageType)) ? (
               <li className="m">{t('payroll.backdated.follows', { list: a.differences.filter((d) => !d.carry && !commission(d.wageType)).map((d) => `${wageTypeLabel(d.wageType, d.label)} ${signed(d.diff)}`).join(', ') })}</li>
             ) : null}
+            {a.hand?.length ? (
+              <li className="m" data-testid="backdated-hand">{t('payroll.backdated.hand', { list: a.hand.map((h) => `${wageTypeLabel(h.wageType, h.label)} ${signed(h.amount)}`).join(', ') })}</li>
+            ) : null}
             {a.differences.some((d) => commission(d.wageType)) ? (
               <li className="m">{t('payroll.backdated.followsTax', { list: a.differences.filter((d) => commission(d.wageType)).map((d) => `${wageTypeLabel(d.wageType, d.label)} ${signed(d.diff)}`).join(', ') })}</li>
             ) : null}

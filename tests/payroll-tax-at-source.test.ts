@@ -410,7 +410,7 @@ test('a Nachzahlung after the exit: taxed at the rate of the exit month\'s incom
 
 // ─── the third walk's fixes (2026-11-19) ────────────────────────────────────────
 
-import { affectedBetween, backdatedCorrections } from '../src/payroll/settings.js';
+import { affectedBetween, backdatedCorrections, driftOf } from '../src/payroll/settings.js';
 
 test('a code changed back over October: November\'s list has its own row and October\'s correction as a row of its own (§22 decision 120)', () => {
   const p = { ...subject(6500, { subject: true, canton: 'ZH', code: 'L0' }), name: [dated('2026-01-01', { first: 'Jonas', last: 'Grenzgänger' })] };
@@ -577,4 +577,36 @@ test('a person\'s own correction stays hers: the same file again offers nothing,
   const fixed = corrected();
   const aff = affectedByTariff(ctx, { ...ctx, tariffs: (r, y) => (r === 'ZH' && y === '2026' ? fixed : tariffs(r, y)) });
   assert.deepEqual(aff.flatMap((a) => a.differences.filter((d) => d.carry).map((d) => [d.wageType, d.diff])), [['quellensteuer', 14.3]], '6,500 × (7.50 − 7.28) %, the 100 left as entered');
+});
+
+// ─── the third review: a person's correction is hers ────────────────────────────
+
+const v2 = (r: string, y: string) => (r === 'ZH' && y === '2026' ? corrected() : tariffs(r, y));
+
+test('after the corrected file was carried, the same file again offers nothing and the drift agrees; «So lassen» on a file holds for that file', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!); ev.push(oct, correction(oct.id, 100, '2026-11-02T00:00:00.000Z'));
+  const ctx1 = { ...ctxOf(store, ev), tariffs };
+  const aff = affectedByTariff(ctx1, { ...ctx1, tariffs: v2 });
+  assert.deepEqual(aff.flatMap((a) => a.differences.filter((d) => d.carry).map((d) => d.diff)), [14.3]);
+  assert.deepEqual(aff[0].hand?.map((h) => h.amount), [100], 'the hand correction shown beside');
+  let n = 0;
+  const carried = [...ev, ...backdatedCorrections(ctx1, aff, () => `c${++n}`, '2026-11-05T00:00:00.000Z')];
+  const ctx2 = { ...ctxOf(store, carried), tariffs: v2 };
+  assert.deepEqual(affectedByTariff(ctx2, ctx2), []);
+  assert.deepEqual(driftOf(ctx2, oct), [], 'the drift counts as the card does');
+  // «So lassen» on the corrected file instead: loading it again offers nothing either.
+  const kept = [...ev, { event: 'keep' as const, id: oct.id, at: '2026-11-05T00:00:00.000Z', by: 'person' as const, path: 'tariffs/ZH/2026', validFrom: '2026-03-04' }];
+  const ctx3 = { ...ctxOf(store, kept), tariffs: v2 };
+  assert.deepEqual(affectedByTariff(ctx3, ctx3), []);
+});
+
+test('a hand correction anticipating the file is shown on the card, so a double is seen', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!); ev.push(oct, correction(oct.id, 14.3, '2026-11-02T00:00:00.000Z'));
+  const ctx = { ...ctxOf(store, ev), tariffs };
+  const [a] = affectedByTariff(ctx, { ...ctx, tariffs: v2 });
+  assert.deepEqual([a.differences.find((d) => d.carry)?.diff, a.hand?.map((h) => h.amount)], [14.3, [14.3]]);
 });

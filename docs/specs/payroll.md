@@ -2136,7 +2136,12 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     correction is not undone by a new file (second review): where the month was closed with the file before (it
     computes now with that file what it withheld), only the new file's effect (new − old computation) is carried, so
     the same file again offers nothing; decision 96's comparison of what was withheld and corrected with the new tax
-    holds where the month could not compute the tax then (no file) or withheld otherwise («So lassen»).
+    holds where the month could not compute the tax then (no file) or withheld otherwise («So lassen»). Third review:
+    the card and the drift count a month's corrections alike (`withheldBy`): those a computation made (they carry the
+    corrected month's figures) always; a person's own (hand) correction only where the month was closed without its
+    tax, for then it stands for the tax; else it is hers, never compared, never undone, and shown on the card
+    («von Hand korrigiert …») so a double is seen. «So lassen» on a file (its keep event names the file's date) holds
+    for that file: loading it again offers that month nothing.
 121. **The Bezugsprovision is rounded to 5 Rappen, as the tax is** (`taxAtSource.rounding`, the same step), not to the
     Rappen: it is money of the same settlement, and no source was found that a canton computes it to the cent. What
     was read: the cantons publish only its rate (ESTV, «Auskunftsstellen Quellensteuer, Bezugsprovisionen und
@@ -2185,9 +2190,17 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     each with its source); a year still not shipped takes the nearest shipped year's figures, said as a fact on the
     payslip (`figuresOfYear`), never no line. A closed Nachzahlung computed with a fallback year shows as
     «berechnet mit den Werten von damals» once its year's figures ship (it is not changed). The line's source cites
-    the year whose figure it read. Its ceiling is the earned year's for the months employed in it (from the
-    Anstellungen, ceiling × months / 12), less the wages the app holds of that year; where it holds none (no closed
-    month, no opening), the payslip says so (`wagesNotInApp`) and the room is the whole of those months, never zero.
+    the year whose figure it read. One model holds it (`earnedYearOf`, third review): the year the wage counts in,
+    the exit it comes after, every closed month before it that counts in that year whatever month it was paid in
+    (`referenceYear` of that month equal), the opening, the months of that year the app holds (the opening's and the
+    closed months' employed shares) and the months employed in it. The ceilings, the small-wage judgement and its
+    catch-up, the liability by age and the reference age (judged at the exit's month, by the earned year's table) and
+    their facts all read it. A payment after the exit has as its ceiling the months held, or the months employed
+    when the app holds none of them; whenever it holds fewer than were employed, the payslip says so
+    (`wagesNotInApp`). A month never charges more than its own base under a ceiling, nor less than nothing. A
+    Nachzahlung that lifts a small-wage year over the limit catches that year's months up; a payment counting in
+    another year is never caught up. A later month computed while an earlier one with lines after the exit is open
+    says so (`earlierOpen`).
 125. **The EO allowance is no UVG premium wage; the employer's top-up beyond it is** (UVV Art. 115 Abs. 1 lit. d,
     https://www.fedlex.admin.ch/eli/cc/1983/38_38_38/de, replacing the insurers' wage declarations cited before):
     the Lohnart `taggeld-eo` has no `uvg`/`uvgz` base, `lohnfortzahlung` keeps them, so a month of service with

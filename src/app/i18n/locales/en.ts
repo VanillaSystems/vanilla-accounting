@@ -7292,6 +7292,7 @@ export default {
     "error.payroll.gone": "That no longer exists: reload the page.",
     "error.payroll.closedPeriod": "A payslip of a closed period is only corrected: there is no «Leave it» for it.",
     "payroll.backdated.follows": "Following from it, settled with the wage in the next open month: {list}",
+    "payroll.backdated.hand": "Corrected by hand since the close, kept as it is: {list}. If it covers the same difference, do not correct it again.",
     "payroll.backdated.closedPeriod": "closed period",
     "payroll.backdated.waysClosed": "A payslip of a closed period stays as it is and is only corrected: the difference per wage type goes into the next open payslip.",
     "payroll.history.keep": "Left as it is on {at}, {time}: a value from {from} computes otherwise, without a correction",

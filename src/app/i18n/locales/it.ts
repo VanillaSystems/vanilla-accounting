@@ -7292,6 +7292,7 @@ export default {
     "error.payroll.gone": "Non esiste più: ricaricare la pagina.",
     "error.payroll.closedPeriod": "Un conteggio di un periodo chiuso si corregge soltanto: «Lasciare così» non esiste per esso.",
     "payroll.backdated.follows": "Ne derivano, conteggiati con il salario nel prossimo mese aperto: {list}",
+    "payroll.backdated.hand": "Corretto a mano dalla chiusura, resta così: {list}. Se copre la stessa differenza, non correggere di nuovo.",
     "payroll.backdated.closedPeriod": "periodo chiuso",
     "payroll.backdated.waysClosed": "Un conteggio di un periodo chiuso resta com’è e si corregge soltanto: la differenza passa per genere di salario nel prossimo conteggio aperto.",
     "payroll.history.keep": "Lasciato così il {at}, {time}: un valore dal {from} calcola diversamente, senza correzione",
