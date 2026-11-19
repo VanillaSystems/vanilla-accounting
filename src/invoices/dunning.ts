@@ -12,9 +12,9 @@
 import { roundCHF } from '../accounting/rappen.js';
 import { baseCurrency, invoicing } from '../engines/index.js';
 import type { Contact, DunningLevel, DunningSettings, Invoice, InvoiceBook, InvoiceLanguage, InvoicingSettings, Issued, Reminder, ReminderInterest } from './model.js';
-import { InvoiceRuleError, addDays, openAmount, openCharges } from './rules.js';
+import { InvoiceRuleError, addDays, creditNotesOf, openAmount, openCharges, openOn } from './rules.js';
 import { TEXTS, formatDate, reminderTitle } from './texts.js';
-import { daysBetween } from './lists.js';
+import { daysBetween, wasSent } from './lists.js';
 import { DEFAULT_DUNNING, LEGACY_DUNNING, readDunning } from '../workspace/dunning.js';
 
 export { DEFAULT_DUNNING, LEGACY_DUNNING, readDunning, reminderTitle };
@@ -27,8 +27,14 @@ export const COMMENT_DAYS = 7;
 
 /** The Mahnungen sent (kept as sent), oldest first. */
 export const sentReminders = (inv: Issued): Reminder[] => inv.reminders.filter((r) => r.documentId);
-/** The Mahnung written and not sent yet, if any: at most one, always the last. */
-export const reminderDraftOf = (inv: Issued): Reminder | undefined => inv.reminders.find((r) => !r.documentId);
+/** The Mahnung written and not sent yet, as stored: at most one, always the last. */
+export const storedDraftOf = (inv: Issued): Reminder | undefined => inv.reminders.find((r) => !r.documentId);
+/**
+ * The Mahnung written and not sent yet that still stands: a Rechnung paid, credited or cancelled
+ * meanwhile drops it (it is no longer due), whatever the file still holds.
+ */
+export const reminderDraftOf = (inv: Issued, invoices: readonly Invoice[]): Reminder | undefined =>
+  (!inv.cancelled && openAmount(inv, invoices) > 0 ? storedDraftOf(inv) : undefined);
 
 
 /** A level's title in a language: its own text, else its name. */
@@ -45,18 +51,24 @@ export function nextLevel(inv: Issued, settings: DunningSettings): { level: numb
 export const dueBase = (inv: Issued): string => sentReminders(inv).at(-1)?.dueDate ?? inv.dueDate;
 
 /** To the books' smallest coin in their own currency, to the cent in another. */
-const round = (inv: Pick<Issued, 'currency'>, n: number) => (inv.currency === baseCurrency() ? roundCHF(n) : Math.round(n * 100) / 100);
+export const round = (inv: Pick<Issued, 'currency'>, n: number) => (inv.currency === baseCurrency() ? roundCHF(n) : Math.round(n * 100) / 100);
 
 /**
- * Default interest on what is open, from the printed due date to `date`, at the firm's rate a year
- * (365 days); undefined while the firm charges none or nothing is late.
+ * Default interest from the printed due date to `date`, at the firm's rate a year (365 days), period
+ * by period on what was open in each: a part payment, a credit note or a write-off lowers it from its
+ * own day, never before. So a later Mahnung's interest holds every day an earlier one charged.
+ * Undefined while the firm charges none or nothing is late.
  */
 export function interestOf(inv: Issued, invoices: readonly Invoice[], date: string, settings: DunningSettings): ReminderInterest | undefined {
   const rate = settings.interest?.rate;
   if (!rate) return undefined;
   const days = daysBetween(inv.dueDate, date);
   if (days <= 0) return undefined;
-  const amount = round(inv, openAmount(inv, invoices) * rate / 100 * days / 365);
+  const events = [...inv.payments.map((p) => p.date), ...(inv.writeOffs ?? []).map((w) => w.date), ...creditNotesOf(inv, invoices).map((c) => c.date)]
+    .filter((d) => d > inv.dueDate && d < date);
+  const points = [...new Set([inv.dueDate, ...events])].sort();
+  const owedDays = points.reduce((sum, from, k) => sum + openOn(inv, invoices, from) * daysBetween(from, points[k + 1] ?? date), 0);
+  const amount = round(inv, owedDays * rate / 100 / 365);
   return amount > 0 ? { rate, from: inv.dueDate, to: date, days, amount } : undefined;
 }
 
@@ -122,6 +134,8 @@ export interface RunItem {
   to?: string;
   /** The Mahnung is written already (a draft): the run sends it as it stands. */
   draft?: true;
+  /** The Rechnung itself never went out (no send, no download): the dialog flags it and leaves it unticked. */
+  unsent?: true;
 }
 
 export const LEFT_OUT = ['noReminders', 'comment', 'auto', 'lastLevel', 'notOverdue'] as const;
@@ -141,9 +155,9 @@ const commentWithin = (inv: Issued, date: string): string | undefined => {
 };
 
 /** The day the next level's automatic reminder sends, when it has one and can (an address, mail set up); undefined otherwise. */
-export function autoDay(inv: Issued, book: Pick<InvoiceBook, 'contacts'>, settings: DunningSettings, canMail: boolean): string | undefined {
+export function autoDay(inv: Issued, book: Pick<InvoiceBook, 'contacts' | 'sent'>, invoices: readonly Invoice[], settings: DunningSettings, canMail: boolean): string | undefined {
   const { def, repeat } = nextLevel(inv, settings);
-  if (!def.auto || repeat || reminderDraftOf(inv)) return undefined;
+  if (!def.auto || repeat || reminderDraftOf(inv, invoices) || !wasSent(book.sent, inv)) return undefined;
   return canMail && reminderAddress(book, inv) ? addDays(dueBase(inv), def.auto.afterDays) : undefined;
 }
 
@@ -172,9 +186,9 @@ export function dunningRun(book: InvoiceBook, invoices: readonly Invoice[], sett
     if (contactOf(book, inv)?.noReminders) { out('noReminders'); continue; }
     const commented = commentWithin(inv, date);
     if (commented) { out('comment', commented); continue; }
-    const auto = autoDay(inv, book, settings, opts.canMail);
+    const auto = autoDay(inv, book, invoices, settings, opts.canMail);
     if (auto) { out('auto', auto); continue; }
-    const draft = reminderDraftOf(inv);
+    const draft = reminderDraftOf(inv, invoices);
     const { level, repeat } = nextLevel(inv, settings);
     if (repeat && !draft) { out('lastLevel'); continue; }
     const r = draft ?? draftReminder(inv, invoices, date, settings);
@@ -183,26 +197,33 @@ export function dunningRun(book: InvoiceBook, invoices: readonly Invoice[], sett
     items.push({
       invoiceId: inv.id, number: inv.number, customerId: inv.customerId, customerName: inv.customer.name, currency: inv.currency,
       level: draft?.level ?? level, title: reminderTitle(r, inv.language), open: openAmount(inv, invoices),
-      fee: Math.round(((r.fee ?? 0) + charges.fee) * 100) / 100, interest: r.interest?.amount ?? charges.interest,
+      // Fees add up; the interest of this Mahnung replaces what an earlier one charged.
+      fee: Math.round(((r.fee ?? 0) + charges.fee) * 100) / 100, interest: r.interest?.amount ?? 0,
       dueSince: dueBase(inv), days: daysBetween(dueBase(inv), date),
-      ...(to ? { to } : {}), ...(draft ? { draft: true as const } : {}),
+      ...(to ? { to } : {}), ...(draft ? { draft: true as const } : {}), ...(wasSent(book.sent, inv) ? {} : { unsent: true as const }),
     });
   }
   items.sort((a, b) => a.dueSince.localeCompare(b.dueSince) || a.number.localeCompare(b.number));
   return { date, items: items.slice(0, MAX_RUN), leftOut, limit: MAX_RUN, more: Math.max(0, items.length - MAX_RUN) };
 }
 
+/** The key of a level of an invoice: what the automatic reminders remember (a failure, a mail whose record failed). */
+export const levelKey = (invoiceId: string, level: number): string => `${invoiceId}#${level}`;
+
 /**
  * What the automatic reminders send on `today`: each overdue invoice whose next level is automatic
- * and whose day («N Tage nach Fälligkeit» of what came last) has come, unless its contact takes no
- * Mahnungen, a person commented on it in the last COMMENT_DAYS days, or a Mahnung of it is being
- * written. Each level is sent once: the next is the level after the last sent.
+ * and whose day («N Tage nach Fälligkeit» of what came last) has come, unless the invoice itself
+ * never went out (a reminder of a bill the customer never got), its contact takes no Mahnungen, a
+ * person commented on it in the last COMMENT_DAYS days, a Mahnung of it is being written, or this
+ * level was mailed once already without being recorded (`mailed`: never mailed twice by itself).
+ * Each level is sent once: the next is the level after the last sent.
  */
-export function autoDue(book: InvoiceBook, invoices: readonly Invoice[], settings: DunningSettings, today: string): Issued[] {
+export function autoDue(book: InvoiceBook, invoices: readonly Invoice[], settings: DunningSettings, today: string, mailed: ReadonlySet<string> = new Set()): Issued[] {
   return invoices.filter((inv): inv is Issued => {
     if (inv.status !== 'issued' || !overdueOn(inv, invoices, today)) return false;
-    const { def, repeat } = nextLevel(inv, settings);
-    if (!def.auto || repeat || reminderDraftOf(inv) || contactOf(book, inv)?.noReminders || commentWithin(inv, today)) return false;
+    const { level, def, repeat } = nextLevel(inv, settings);
+    if (!def.auto || repeat || reminderDraftOf(inv, invoices) || !wasSent(book.sent, inv) || contactOf(book, inv)?.noReminders || commentWithin(inv, today)) return false;
+    if (mailed.has(levelKey(inv.id, level))) return false;
     return addDays(dueBase(inv), def.auto.afterDays) <= today;
   });
 }

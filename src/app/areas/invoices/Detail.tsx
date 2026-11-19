@@ -87,8 +87,10 @@ function InvoiceDetail(props: DetailProps) {
   const state = rowState(inv, d.invoices, today);
   const customer = customerOf(d, inv);
   const t0 = totals(inv);
-  // A Mahnung written and not sent yet is what the sheet shows, to edit before it goes out (spec 4.4.7).
-  const reminder = inv.status === 'issued' ? reminderDraftOf(inv) ?? null : null;
+  // A Mahnung written and not sent yet has a tab of its own beside the Rechnung, to edit before it goes out (spec 4.4.7);
+  // a Rechnung paid, credited or cancelled meanwhile drops it.
+  const draftR = inv.status === 'issued' ? reminderDraftOf(inv, d.invoices) ?? null : null;
+  const reminder = draftR && s.sheet !== 'invoice' ? draftR : null;
   const editing = canEdit && !s.preview && (inv.status === 'draft' || !!reminder);
 
   const data = reminder && inv.status === 'issued' ? reminderData(d, inv, reminder, editing)
@@ -142,7 +144,7 @@ function InvoiceDetail(props: DetailProps) {
       </div>
       {/* The money first (spec 4.8); slice D's sent fact sits beside the figures in this row. */}
       {/* The facts of an issued document first (spec 4.8): its money, and whether and how it went out. */}
-      {inv.status === 'issued' && !reminder && (
+      {inv.status === 'issued' && (
         <div className="ivtop">
           {inv.kind === 'invoice' && !inv.cancelled && <FourFigures inv={inv} invoices={d.invoices} />}
           <SentLine sent={d.sent} inv={inv} onSend={canEdit ? () => setUi({ dialog: { kind: 'send' } }) : undefined} />
@@ -150,6 +152,12 @@ function InvoiceDetail(props: DetailProps) {
       )}
       {inv.status === 'issued' && !isBooked(inv) ? <ChainStatus {...props} inv={inv} /> : <Status {...props} state={state} reminder={!!reminder} />}
       {inv.status === 'issued' && !isBooked(inv) ? <ChainActions {...props} inv={inv} /> : <Actions {...props} state={state} />}
+      {draftR && inv.status === 'issued' && (
+        <div className="ivsheettabs seg2" role="tablist" aria-label={t('invoices.sheetTabs')} data-testid="sheet-tabs">
+          <button type="button" role="tab" aria-selected={!reminder} className={reminder ? '' : 'on'} onClick={() => setUi({ sheet: 'invoice', preview: false })}>{t('invoices.tabInvoice', { number: inv.number })}</button>
+          <button type="button" role="tab" aria-selected={!!reminder} className={reminder ? 'on' : ''} data-act="reminder-tab" onClick={() => setUi({ sheet: 'reminder', preview: false })}>{t('invoices.tabReminder', { title: reminderTitle(draftR, inv.language) })}</button>
+        </div>
+      )}
       <div className="body">
         <div className="desk">
           <Sheet data={data} editing={editing} onEdit={edit} onAction={action} focus={editing ? s.focus : undefined} onFocused={() => setUi({ focus: undefined })} />
@@ -222,20 +230,19 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
       </div>
     );
   }
-  const r = inv.status === 'issued' ? reminderDraftOf(inv) : undefined;
-  if (reminder && r) {
-    return (
-      <div className="status">
-        <span className="notice" data-testid="reminder-status">{t('invoices.reminderStatus', { title: reminderTitle(r, inv.language), date: formatDate(r.dueDate) })}</span>
-        {!wasSent(d.sent, inv) && (
-          <div className="notice warn" role="note">
-            {I.dot}<span>{t('invoices.remindUnsent')}</span>
-            {canEdit && <button type="button" className="btn ghost" onClick={() => setUi({ preview: false, dialog: { kind: 'send' } })}>{t('invoices.sendFirst')}</button>}
-          </div>
-        )}
-      </div>
-    );
-  }
+  // A Mahnung written and not sent: a line of its own under the Rechnung's status, which stays.
+  const r = inv.status === 'issued' ? reminderDraftOf(inv, d.invoices) : undefined;
+  const drafted = r ? (
+    <>
+      <span className="notice" data-testid="reminder-status">{t('invoices.reminderStatus', { title: reminderTitle(r, inv.language), date: formatDate(r.dueDate) })}</span>
+      {reminder && !wasSent(d.sent, inv) && (
+        <div className="notice warn" role="note">
+          {I.dot}<span>{t('invoices.remindUnsent')}</span>
+          {canEdit && <button type="button" className="btn ghost" onClick={() => setUi({ preview: false, dialog: { kind: 'send' } })}>{t('invoices.sendFirst')}</button>}
+        </div>
+      )}
+    </>
+  ) : null;
   let line: ReactNode = null;
   if (state === 'cancelled' && inv.cancelled) line = <span className="notice">{t('invoices.cancelledStatus', { date: formatDate(inv.cancelled.date) })}{inv.cancelled.reason ? ` · ${inv.cancelled.reason}` : ''}</span>;
   else if (state === 'credit') {
@@ -275,6 +282,7 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
   return (
     <div className="status">
       {line}
+      {drafted}
       {short !== undefined && (
         <div className="notice ivpay ivshort" data-testid="shortfall">
           <span>{t('invoices.shortfall', { amount: `${inv.currency} ${fmt(short)}`, limit: `${inv.currency} ${fmt(ws.invoicing?.shortfallLimit ?? DEFAULT_SHORTFALL_LIMIT)}` })}</span>
@@ -385,20 +393,7 @@ function Actions(props: DetailProps & { state: RowState }) {
       </div>
     );
   }
-  const draftR = reminderDraftOf(inv);
-  if (draftR) {
-    const title = reminderTitle(draftR, inv.language);
-    return (
-      <div className="ivacts">
-        {preview}
-        <button type="button" className="btn primary" data-act="remsend" onClick={() => setUi({ dialog: { kind: 'send', reminder: { level: draftR.level, title } } })}>
-          {t('invoices.sendReminder', { title })}
-        </button>
-        {/* An unsent Mahnung may go: its level goes back (a sent one is kept as sent). */}
-        <AsyncButton type="button" className="btn ghost danger" data-act="remdelete" onClick={() => deleteReminder(nav, inv)}>{t('invoices.reminderDelete')}</AsyncButton>
-      </div>
-    );
-  }
+  const draftR = reminderDraftOf(inv, d.invoices);
   const sentOnce = d.sent.some((x) => x.invoiceId === inv.id && (x.kind === 'invoice' || x.kind === 'credit-note'));
   const open = state === 'open' || state === 'overdue';
   const unpaid = inv.kind === 'invoice' && open;
@@ -407,7 +402,13 @@ function Actions(props: DetailProps & { state: RowState }) {
   // One row of the main actions of the state; the rest in «Weitere» (owner's review of slice C).
   const main: ReactNode[] = [];
   if (unpaid) main.push(<button key="hand" type="button" className={`btn ${state === 'overdue' ? 'ghost' : 'primary'}`} data-act="hand-payment" onClick={() => setUi({ dialog: { kind: 'handPayment' } })}>{t('invoices.handPayment')}</button>);
-  if (state === 'overdue') main.push(<AsyncButton key="remind" type="button" className="btn primary" data-act="remind" onClick={() => remind(nav, inv)}>{t('invoices.remind', { title: next })}</AsyncButton>);
+  // A Mahnung written: it is sent or deleted (its level goes back; a sent one is kept as sent); else «Mahnen» writes the next.
+  if (draftR) {
+    const title = reminderTitle(draftR, inv.language);
+    if (s.sheet !== 'invoice') main.push(<span key="preview">{preview}</span>);
+    main.push(<button key="remsend" type="button" className="btn primary" data-act="remsend" onClick={() => setUi({ dialog: { kind: 'send', reminder: { level: draftR.level, title } } })}>{t('invoices.sendReminder', { title })}</button>);
+    main.push(<AsyncButton key="remdelete" type="button" className="btn ghost danger" data-act="remdelete" onClick={() => deleteReminder(nav, inv)}>{t('invoices.reminderDelete')}</AsyncButton>);
+  } else if (state === 'overdue') main.push(<AsyncButton key="remind" type="button" className="btn primary" data-act="remind" onClick={() => remind(nav, inv)}>{t('invoices.remind', { title: next })}</AsyncButton>);
   if (open || state === 'credit') main.push(<button key="send" type="button" className={`btn ${sentOnce || unpaid ? 'ghost' : 'primary'}`} data-act="send" data-tip={t('invoices.sendTip')} onClick={() => setUi({ dialog: { kind: 'send' } })}>{sentOnce ? t('invoices.resend') : t('invoices.send')}</button>);
   const more: MenuItem[] = [
     ...(unpaid ? [{ act: 'write-off', label: t('invoices.writeOff'), run: () => setUi({ dialog: { kind: 'writeOff' } }) }] : []),
@@ -573,8 +574,8 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
 }
 
 /** The margin of a Mahnung being written: its title, date, due date, fee and default interest, each saved on leaving the field. */
-function ReminderSec({ inv, nav, canEdit }: DetailProps & { inv: Issued }) {
-  const r = reminderDraftOf(inv);
+function ReminderSec({ d, inv, nav, canEdit }: DetailProps & { inv: Issued }) {
+  const r = reminderDraftOf(inv, d.invoices);
   if (!r) return null;
   const amount = (key: 'fee' | 'interest') => (e: { target: HTMLInputElement }) => {
     const n = parseNumber(e.target.value);

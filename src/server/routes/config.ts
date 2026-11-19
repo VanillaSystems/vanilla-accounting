@@ -16,7 +16,8 @@ import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, typ
 import { SALES_KINDS, salesKinds, type SalesKind } from '../../workspace/setup.js';
 import { DOCUMENT_KINDS, INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS, PRICES, isBooked, isItem, type DocumentKind, type Issued, type InvoiceLanguage, type PaymentTerms, type UnitDef } from '../../invoices/model.js';
 import { DEFAULT_NUMBERING, nextNumberFor, type Numbering } from '../../invoices/numbering.js';
-import { readDunning } from '../../workspace/dunning.js';
+import { MAX_LEVELS, readDunning, type DunningSettings } from '../../workspace/dunning.js';
+import { thisDevice } from '../../workspace/device.js';
 import { numberingFits, sameReference } from '../../providers/qr-bill/reference.js';
 import { docRef } from '../../books/refs.js';
 import { loadInvoices, writeAtomic } from '../../invoices/store.js';
@@ -265,13 +266,32 @@ function referenceClash(n: Numbering, changed: readonly DocumentKind[]): { kind:
   return undefined;
 }
 
+/**
+ * Firma › Rechnungslayout › Mahnwesen: the whole list, checked as the manifest reads it, a refusal
+ * with its rule and field (`dunningSetting`). The automatic reminders run on one computer only
+ * (decision 7.4): switching a level to automatic where none was names this computer (`device`); the
+ * computer stays when the list changes otherwise, `device: "here"` moves it here, and with no
+ * automatic level left it goes.
+ */
+function dunningPatch(raw: unknown): DunningSettings {
+  const body = (raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>;
+  const { device: asked, ...rest } = body;
+  const next = readDunning(rest, (msg, r) => { throw new RequestError(400, msg, { code: 'dunningSetting', params: { rule: r.rule, where: r.where.replace(/^dunning\./, ''), max: MAX_LEVELS } }); }, 'dunning');
+  const before = WS.invoicing?.dunning;
+  const { device: _d, ...plain } = next;
+  if (!next.levels.some((l) => l.auto)) return plain;
+  const wasAuto = !!before?.levels.some((l) => l.auto);
+  const device = asked === 'here' || !wasAuto || !before?.device ? thisDevice(WS) : before.device;
+  return { ...plain, device };
+}
+
 /** The layout's values are checked by the manifest's reader; here only their kinds. */
 function invoicingPatch(raw: unknown): InvoicingPatch {
   const out: InvoicingPatch = {};
   const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo', 'confirm', 'units', 'prices', 'paymentTerms', 'defaultTerms', 'numbering', 'dunning']);
   if (b.numbering !== undefined) out.numbering = numberingPatch(b.numbering);
-  // Firma › Verkauf › Mahnwesen: the whole list, checked as the manifest reads it.
-  if (b.dunning !== undefined) out.dunning = b.dunning === null ? null : readDunning(b.dunning, (msg) => { throw new RequestError(400, msg); }, 'dunning');
+  // Firma › Rechnungslayout › Mahnwesen: the whole list, checked as the manifest reads it.
+  if (b.dunning !== undefined) out.dunning = b.dunning === null ? null : dunningPatch(b.dunning);
   if (b.paymentTerms !== undefined) out.paymentTerms = b.paymentTerms === null ? null : termsPatch(b.paymentTerms);
   if (b.defaultTerms !== undefined) {
     if (b.defaultTerms !== null && typeof b.defaultTerms !== 'string') throw new RequestError(400, 'defaultTerms: die Id einer Zahlungskondition.');

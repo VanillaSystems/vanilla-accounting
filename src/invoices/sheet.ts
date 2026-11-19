@@ -285,7 +285,8 @@ export function sheetBlocks(d: SheetData): Block[] {
     d.due.paidSoFar ? `<div><span>${L.paidSoFar}</span><span>${n(-d.due.paidSoFar)}</span></div>` : '',
     d.due.fee ? `<div><span>${L.fee}</span><span>${n(d.due.fee)}</span></div>` : '',
     // Default interest, a position without VAT: what is owed for paying late, not for a supply.
-    d.due.interest ? `<div><span>${esc(L.interest(String(d.due.interest.rate), formatDate(d.due.interest.from, d.language), d.due.interest.days))}</span><span>${n(d.due.interest.amount)}</span></div>` : '',
+    // An amount typed by hand without a rate names no percent.
+    d.due.interest ? `<div><span>${esc(d.due.interest.rate ? L.interest(String(d.due.interest.rate), formatDate(d.due.interest.from, d.language), d.due.interest.days) : L.interestWord)}</span><span>${n(d.due.interest.amount)}</span></div>` : '',
     `<div class="tot"><span>${L.openNow} ${d.currency}</span><span>${n(d.due.open)}</span></div>`,
   ].join('') : '';
   const net = withVat ? `<div><span>${L.net}</span><span>${n(t.net)}</span></div>` : '';

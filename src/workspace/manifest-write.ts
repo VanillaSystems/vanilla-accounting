@@ -218,6 +218,7 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
       const levels = node.get('levels') as YAMLSeq;
       for (const l of levels.items) { const texts = (l as YAMLMap).get('texts'); if (isMap(texts)) for (const p of texts.items) (p.value as YAMLMap).flow = true; const auto = (l as YAMLMap).get('auto'); if (isMap(auto)) auto.flow = true; }
       const interest = node.get('interest'); if (isMap(interest)) interest.flow = true;
+      const device = node.get('device'); if (isMap(device)) device.flow = true;
       doc.setIn(['invoicing', 'dunning'], node);
     }
   }

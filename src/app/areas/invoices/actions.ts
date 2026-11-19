@@ -272,7 +272,7 @@ export async function remind(nav: Nav, inv: Issued): Promise<boolean> {
   const r = await run(nav, api.draftReminder(inv.id, { date: localToday() }));
   if (!r) return false;
   await reloadInvoices();
-  setUi({ preview: false });
+  setUi({ preview: false, sheet: 'reminder' });
   return true;
 }
 

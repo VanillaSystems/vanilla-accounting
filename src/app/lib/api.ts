@@ -385,6 +385,7 @@ export function errorText(e: unknown): string {
     case 'qrIbanNotChf': return t('error.qrIbanNotChf', b.params);
     case 'unitId': case 'unitTwice': case 'unitInUse': return t(`error.${b.code}`, { id: b.params.id });
     case 'numberFormat': return numberFormatText(b.params.refusal, b.params.kind, b.params.format);
+    case 'dunningSetting': return (t as (key: string, vars: Record<string, string | number>) => string)(`error.dunningSetting.${b.params.rule}`, { where: b.params.where, max: b.params.max });
     case 'unitWord': return t('error.unitWord', { id: b.params.id, language: b.params.language.toUpperCase() });
     case 'ibanOnInvoices': return t('error.ibanOnInvoices', b.params);
     case 'unknownCustomer': return t('error.unknownCustomer');
@@ -892,10 +893,12 @@ export const api = {
   deleteReminder: (id: string) => request<Issued>('DELETE', `/api/invoices/${id}/reminders/draft`),
   /** The Mahnlauf's list on a date (the ticked rows only, with `ids`), and its «Senden». */
   dunningPlan: (date: string, ids?: readonly string[]) => request<RunPlan>('GET', `/api/invoices/dunning/run?date=${date}${ids?.length ? `&ids=${ids.map(encodeURIComponent).join(',')}` : ''}`),
+  /** This computer, as the automatic reminders name the one they run on. */
+  dunningDevice: () => request<{ here: { id: string; name: string } }>('GET', '/api/invoices/dunning/device'),
   runDunning: (date: string, ids: readonly string[]) => request<RunOutcome>('POST', '/api/invoices/dunning/run', { date, ids }),
   addComment: (id: string, text: string) => request<Comment>('POST', `/api/invoices/${id}/comments`, { text }),
   /** Links a payment to an invoice; `booked` false when a person's booking of the payment stays as the revenue (r9c-3). */
-  confirmPayment: (id: string, transactionRef: string) => request<{ paid: Array<{ transactionRef: string; number: string; amount: number; fee: number; booked: boolean }> }>('POST', `/api/invoices/${id}/payments`, { transactionRef }),
+  confirmPayment: (id: string, transactionRef: string) => request<{ paid: Array<{ transactionRef: string; number: string; amount: number; fee: number; interest: number; booked: boolean }> }>('POST', `/api/invoices/${id}/payments`, { transactionRef }),
   /** «Lösen» (r10c-3): the payment leaves the invoice, the link's bookings go, what the link replaced is back. */
   releasePayment: (id: string, transactionRef: string) => request<PaymentReleased>('DELETE', `/api/invoices/${id}/payments/${encodeURIComponent(transactionRef)}`),
   /** The PDF as issued, or a sent reminder or notice as sent: the file's path under the workspace is its URL. */

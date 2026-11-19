@@ -42,6 +42,7 @@ import type { Books } from '../../books/store.js';
 import { recordReplaced, takeReplaced } from '../link-history.js';
 import { bookAgain } from './automation.js';
 import { checkMessage, sendMail } from '../../invoices/mail.js';
+import { thisDevice } from '../../workspace/device.js';
 import type { Deliver } from '../../invoices/service.js';
 
 export const router = Router();
@@ -104,6 +105,11 @@ router.get('/api/invoices/:id/preview', async (req, res) => {
 router.get('/api/invoices/:id/reminder', (req, res) => {
   const fee = req.query.fee === undefined ? undefined : Number(req.query.fee);
   res.json(previewReminder(WS, req.params.id, String(req.query.date ?? today()), fee));
+});
+
+/** This computer, as Firma › Mahnwesen names the one the automatic reminders run on. */
+router.get('/api/invoices/dunning/device', (_req, res) => {
+  res.json({ here: thisDevice(WS) });
 });
 
 /** The Mahnlauf's list (spec 4.4.7): `?date=` the reference date, `&ids=a,b` the rows ticked in the table. */

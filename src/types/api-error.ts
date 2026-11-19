@@ -322,6 +322,8 @@ export type ApiRefusal =
   /** Firma › Rechnungslayout › Nummern: a kind's number format no number or payment reference can hold (src/invoices/numbering.ts FormatRefusal). */
   | { code: 'numberFormat'; params: { kind: string; refusal: string; format: string } }
   | { code: 'unitInUse'; params: { id: string } }
+  /** Firma › Rechnungslayout › Mahnwesen: a value the levels or the interest cannot take (src/workspace/dunning.ts DunningRule), with the field it names. */
+  | { code: 'dunningSetting'; params: { rule: string; where: string; max: number } }
   /** Firma › Bankkonten: a text that is no IBAN (length or check digits). */
   /** Firma › Bankkonten: the IBAN cleared is printed on invoices (invoicing.payTo); pick another account under Rechnungslayout first. */
   | { code: 'ibanOnInvoices'; params: { currency: string; account: string } }

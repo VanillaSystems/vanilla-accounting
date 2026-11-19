@@ -182,6 +182,8 @@ const writtenOff = (inv: Issued, asOf?: string): number => (inv.writeOffs ?? [])
  */
 export interface Figures {
   amount: number; received: number; credited: number; writtenOff: number; open: number;
+  /** What the payments paid beyond the invoice: Mahngebühren and default interest, each its own (never part of `received`). */
+  charges: { fee: number; interest: number };
   payments: PaymentAllocation[];
   creditNotes: Array<{ id: string; number: string; date: string; amount: number }>;
   writeOffs: WriteOff[];
@@ -194,6 +196,7 @@ export function figures(inv: Issued, invoices: readonly Invoice[]): Figures {
   const off = writtenOff(inv);
   return {
     amount: fromRappen(amount), received: fromRappen(received), credited: fromRappen(credited), writtenOff: fromRappen(off), open: fromRappen(amount - received - credited - off),
+    charges: { fee: fromRappen(inv.payments.reduce((s, p) => s + toRappen(p.fee ?? 0), 0)), interest: fromRappen(inv.payments.reduce((s, p) => s + toRappen(p.interest ?? 0), 0)) },
     payments: inv.payments, creditNotes: notes, writeOffs: inv.writeOffs ?? [],
   };
 }
@@ -269,11 +272,12 @@ export const namesNumber = (text: string, number: string): boolean => new RegExp
 
 /**
  * What the sent Mahnungen charge beyond the invoice: their fees added up, and the default interest of
- * the last that charged any (it counts from the due date, so it replaces the earlier). A draft charges nothing.
+ * the last one sent (it counts from the due date, so it replaces the earlier; none on it waives it). A draft charges nothing.
  */
 export function chargesOf(inv: Issued): { fee: number; interest: number } {
   const sent = inv.reminders.filter((r) => r.documentId);
-  return { fee: fromRappen(sent.reduce((s, r) => s + toRappen(r.fee ?? 0), 0)), interest: sent.filter((r) => r.interest).at(-1)?.interest?.amount ?? 0 };
+  // The last Mahnung sent decides the interest: it counts from the due date again, and one that names none waives it.
+  return { fee: fromRappen(sent.reduce((s, r) => s + toRappen(r.fee ?? 0), 0)), interest: sent.at(-1)?.interest?.amount ?? 0 };
 }
 
 /** What of the Mahnungen's fees and interest is not paid yet. */
@@ -449,7 +453,7 @@ export type InvoiceRefusal = 'numberTaken' | 'archived' | 'contactGone' | 'incom
   | 'sent' | 'settled' | 'applied' | 'closed' | 'numbered' | 'account' | 'credited'
   | 'refTaken' | 'numberFormat' | 'convert' | 'nothingTicked' | 'expired' | 'declined' | 'overOpen' | 'sentVersion' | 'orderDelivered' | 'orderInvoiced' | 'notReopenable' | 'notQuote'
   | 'referenceTaken' | 'deliveryFromOrder' | 'orderDrafts' | 'sourceCancelled'
-  | 'codeTaken' | 'articleGone' | 'noReminderDraft';
+  | 'codeTaken' | 'articleGone' | 'noReminderDraft' | 'levelChanged' | 'recordFailed';
 
 /** A kind's name in the German messages of a refusal (the UI words its own, src/app/i18n). */
 export const KIND_WORD: Record<DocumentKind, string> = { quote: 'Angebot', 'sales-order': 'Auftrag', 'delivery-note': 'Lieferschein', invoice: 'Rechnung', 'credit-note': 'Gutschrift' };

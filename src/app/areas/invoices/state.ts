@@ -63,6 +63,8 @@ export interface SentFilter { customer?: string; kind?: string; channel?: string
 interface State {
   dialog: Dialog | null;
   preview: boolean;
+  /** With a Mahnung written and not sent: which sheet the detail shows, the Mahnung (its tab, the default) or the Rechnung. */
+  sheet: 'reminder' | 'invoice';
   open: Record<Section, boolean>;
   sort: Record<Sorted, Sort>;
   /** The documents ticked in the table shown (their ids); another view or tab starts with none. */
@@ -79,6 +81,7 @@ function read<T>(key: string, fallback: T): T {
 let state: State = {
   dialog: null,
   preview: false,
+  sheet: 'reminder',
   open: { draft: true, look: false, chain: true, customer: false, money: true, sent: true, comments: true, log: false, ...read<Partial<Record<Section, boolean>>>('invoices.open', {}) },
   sort: { ...(Object.fromEntries(DOC_VIEWS.map((v) => [v, DEFAULT_SORT])) as Record<Sorted, Sort>), ...read<Partial<Record<Sorted, Sort>>>('invoices.sort', {}) },
   ticked: new Set(),

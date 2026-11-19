@@ -64,7 +64,7 @@ test('a payment with the QR reference: invoice paid, revenue booked from its lin
   const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [inv], articles: [], sent: [] };
   const b = books(fromCamt([credit('B1', '2026-08-04', 963.72, inv.reference)]));
   const out = matchPayments(b, book, ctx);
-  assert.deepEqual(out.paid, [{ transactionRef: 'B1', number: '2026-001', amount: 963.72, fee: 0, booked: true }]);
+  assert.deepEqual(out.paid, [{ transactionRef: 'B1', number: '2026-001', amount: 963.72, fee: 0, interest: 0, booked: true }]);
   assert.equal(status(book.invoices[0], book.invoices), 'paid');
   assert.deepEqual(b.journalEntries.map((e) => [e.accountDebit, e.accountCredit, e.vatCode, e.amount, e.origin]), [
     ['1021', '3300', 'V26', 574.56, 'invoice'],
@@ -177,7 +177,7 @@ test('a payment without reference whose text names an open invoice and pays it: 
   const b = books(fromCamt([credit('B1', '2026-08-04', 963.72, 'Garage Rechnung 2026-001', 'Hans Meier')]));
   b.journalEntries.push({ id: 'cl', transactionRef: 'B1', date: '2026-08-04', accountDebit: '1021', accountCredit: '3300', amount: 963.72, vatCode: 'V0', origin: 'classify' });
   const out = matchPayments(b, book, ctx);
-  assert.deepEqual(out.paid, [{ transactionRef: 'B1', number: '2026-001', amount: 963.72, fee: 0, booked: true }]);
+  assert.deepEqual(out.paid, [{ transactionRef: 'B1', number: '2026-001', amount: 963.72, fee: 0, interest: 0, booked: true }]);
   assert.equal((book.invoices[0] as Issued).payments[0].by, 'number');
   assert.deepEqual(b.journalEntries.map((e) => [e.accountCredit, e.vatCode, e.amount, e.origin]), [['3300', 'V26', 574.56, 'invoice'], ['3600', 'V81', 389.16, 'invoice']]);
   assert.equal(status(book.invoices[0], book.invoices), 'paid');
@@ -218,7 +218,7 @@ test('a credit note\'s refund naming its number: matched, booked with the minus 
   assert.equal(refundDue(cn, book.invoices), 200);
   const b = books(fromCamt([debit('R1', '2026-08-20', 200, 'Gutschrift 2026-002 Kulanz Parkett', 'Peter Keller')]));
   const out = matchPayments(b, book, ctx);
-  assert.deepEqual(out.paid, [{ transactionRef: 'R1', number: '2026-002', amount: 200, fee: 0, booked: true }]);
+  assert.deepEqual(out.paid, [{ transactionRef: 'R1', number: '2026-002', amount: 200, fee: 0, interest: 0, booked: true }]);
   assert.deepEqual(b.journalEntries.map((e) => [e.accountDebit, e.accountCredit, e.vatCode, e.amount, e.description]), [['3300', '1021', '-V81', 200, 'Gutschrift 2026-002 Beispiel Bistro AG']]);
   assert.equal(refundDue(book.invoices[1], book.invoices), 0, 'paid back');
   assert.equal(b.receipts[0].filename, '20260810-gutschrift-2026-002.pdf');
@@ -254,7 +254,7 @@ test('a payment before the invoice date, or booked by hand, whose text names the
   b.journalEntries.push({ id: 'm', transactionRef: 'W1', date: '2026-10-12', accountDebit: '1023', accountCredit: '3400', amount: 3000, vatCode: 'V0-E', exchangeCurrency: 'EUR', exchangeRate: 0.95661, origin: 'manual' });
   assert.deepEqual(paymentProposals(b, book).map((p) => [p.transactionRef, p.booked]), [['W1', true]]);
   const out = confirmPayment(b, book, inv.id, 'W1', { ...ctx, fx: { daily: () => 0.95661 } });
-  assert.deepEqual(out.paid, [{ transactionRef: 'W1', number: '2026-001', amount: 3000, fee: 0, booked: false }], 'allocated, not booked again');
+  assert.deepEqual(out.paid, [{ transactionRef: 'W1', number: '2026-001', amount: 3000, fee: 0, interest: 0, booked: false }], 'allocated, not booked again');
   assert.deepEqual(b.journalEntries.map((e) => e.id), ['m'], 'the hand booking is the revenue; it stays');
   const linked = book.invoices[0] as Issued;
   assert.deepEqual(linked.payments, [{ transactionRef: 'W1', date: '2026-10-12', amount: 3000, by: 'confirmed' }]);

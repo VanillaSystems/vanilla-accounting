@@ -60,10 +60,10 @@ export interface DocRow {
 }
 
 /** The Mahnstufe a row shows: the last Mahnung sent, and one written but not sent. */
-function levelOf(inv: Invoice): Pick<DocRow, 'level' | 'levelTitle' | 'reminderDraft'> {
+function levelOf(inv: Invoice, invoices: readonly Invoice[]): Pick<DocRow, 'level' | 'levelTitle' | 'reminderDraft'> {
   if (inv.status !== 'issued') return { level: 0 };
   const last = sentReminders(inv).at(-1);
-  const draft = reminderDraftOf(inv);
+  const draft = reminderDraftOf(inv, invoices);
   return { level: last?.level ?? 0, ...(last ? { levelTitle: reminderTitle(last, inv.language) } : {}), ...(draft ? { reminderDraft: reminderTitle(draft, inv.language) } : {}) };
 }
 
@@ -99,7 +99,7 @@ export function docRows(d: InvoiceList, kind: DocKind, period: Period, q: string
       return {
         inv, id: routeId(inv), customer: customerOf(d, inv)?.name ?? '', status, overdue: due, unsent: unsent(inv, d.sent),
         sent: sentFacts(d.sent, inv), gross: totals(inv).gross, open,
-        ...levelOf(inv),
+        ...levelOf(inv, d.invoices),
         ...(target ? { target } : {}),
         ...(kind === 'sales-order' && inv.status === 'issued' ? { delivered: doneShare(inv, d.invoices, 'delivered'), invoiced: doneShare(inv, d.invoices, 'invoiced') } : {}),
       };

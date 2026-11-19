@@ -136,10 +136,12 @@ export function openEngine(workspace: () => Workspace, deps: EngineDeps): Engine
 
   /**
    * A scheduled check that found nothing to do (the hourly collection with no source due): it
-   * changed nothing and started nothing, so it is no run for a person, and it is not kept.
+   * changed nothing, sent nothing and started nothing, so it is no run for a person, and it is not kept.
    */
   const idle = (run: Run) => run.startedBy.kind === 'schedule' && run.mode === 'live' && run.state.status === 'done'
     && run.steps.every((s) => s.effects.every((e) => !e.applied))
+    // A step that hands on `sent` with entries did something outside the books (an automatic Mahnung went out): kept.
+    && !run.steps.some((s) => Array.isArray(s.output?.sent) && (s.output.sent as unknown[]).length > 0)
     && ![...runs.values()].some((r) => r.startedBy.kind === 'parent' && r.startedBy.run === run.id);
 
   // Idle checks kept before they were forgotten go now.
@@ -628,6 +630,9 @@ export function openEngine(workspace: () => Workspace, deps: EngineDeps): Engine
     declared = loadWorkflows(deps.appRoot, workspace().paths.root);
     for (const w of declared.workflows) {
       if (!w.runnable.ok || !isApproved(w)) continue;
+      // One scheduled run of a workflow at a time: while the last is still queued or running, this minute starts none.
+      const busy = [...runs.values()].some((r) => r.workflow === w.id && r.mode === 'live' && r.startedBy.kind === 'schedule' && (r.state.status === 'queued' || r.state.status === 'running'));
+      if (busy) continue;
       for (const t of w.triggers) if (t.kind === 'schedule' && !t.off && cronMatches(t.cron, at)) await create(w, { kind: 'company', id: 'company' }, { kind: 'schedule', cron: t.cron }, 'live');
     }
   }

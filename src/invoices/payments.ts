@@ -66,7 +66,7 @@ export interface PaymentQuestion {
 /** What the import does with the payments: invoices' new allocations, the books' new entries, receipts and links, and the PDFs to file as receipts. */
 export interface PaymentOutcome {
   /** Payments allocated or booked by this run. */
-  paid: Array<{ transactionRef: string; number: string; amount: number; fee: number; booked: boolean }>;
+  paid: Array<{ transactionRef: string; number: string; amount: number; fee: number; interest: number; booked: boolean }>;
   questions: PaymentQuestion[];
   /** receipts/<filename> to write with these bytes (the invoice PDF), when not there yet. */
   files: Array<{ filename: string; pdf: Buffer }>;
@@ -164,7 +164,7 @@ export function matchPayments(books: Books, book: InvoiceBook, ctx: PaymentConte
       for (const { inv, a } of allocations) bookPayment(books, tx, inv, a, ctx, out, liveInvoices(book));
     }
     for (const { inv, a, known } of allocations) {
-      if (!known || toBook) out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: a.fee ?? 0, booked: toBook });
+      if (!known || toBook) out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: a.fee ?? 0, interest: a.interest ?? 0, booked: toBook });
     }
   }
   rebookEvents(books, book, ctx, out);
@@ -384,7 +384,7 @@ export function confirmPayment(books: Books, book: InvoiceBook, invoiceId: strin
     bookPayment(books, tx, inv, a, ctx, out, liveInvoices(book));
   }
   rebookEvents(books, book, ctx, out);
-  out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: a.fee ?? 0, booked: !keep });
+  out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: a.fee ?? 0, interest: a.interest ?? 0, booked: !keep });
   return out;
 }
 
@@ -682,7 +682,7 @@ export function allocatePayment(books: Books, book: InvoiceBook, transactionRef:
     const inv = current(book, id);
     if (keep) { dropEvent(books, prepaidEvent(books, tx, inv)); attachInvoice(books, tx, inv, ctx, out); }
     else bookPayment(books, tx, inv, a, ctx, out, liveInvoices(book));
-    out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: 0, booked: !keep });
+    out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: 0, interest: 0, booked: !keep });
   }
   rebookEvents(books, book, ctx, out);
   return out;

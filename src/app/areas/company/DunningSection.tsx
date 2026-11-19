@@ -4,9 +4,10 @@
  * language) and default interest, off unless switched on. Saved as one block in belege.workspace.yaml
  * (invoicing.dunning); a Mahnung sent keeps what it printed, so a level may change or go any time.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { DunningLevel, DunningSettings, DunningTexts, InvoiceLanguage } from '../../../invoices/model.js';
-import { DEFAULT_DUNNING } from '../../../workspace/dunning.js';
+import { DEFAULT_DUNNING, MAX_LEVELS } from '../../../workspace/dunning.js';
+import type { Device } from '../../../workspace/device.js';
 import { TEXTS } from '../../../invoices/texts.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import { api, errorText } from '../../lib/api.js';
@@ -25,9 +26,13 @@ export function DunningSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav
   const [lang, setLang] = useState<InvoiceLanguage>('de');
   const [open, setOpen] = useState<number | null>(null);
   const offered = invoicing().interest;
-  async function save(next: DunningSettings, done: string): Promise<boolean> {
+  // This computer: the automatic reminders run only on the one they were switched on (decision 7.4).
+  const [here, setHere] = useState<Device>();
+  useEffect(() => { api.dunningDevice().then((x) => setHere(x.here), () => setHere(undefined)); }, []);
+  const auto = dunning.levels.some((l) => l.auto);
+  async function save(next: DunningSettings | (Omit<DunningSettings, 'device'> & { device: 'here' }), done: string): Promise<boolean> {
     try {
-      await api.patchWorkspace({ invoicing: { dunning: next } });
+      await api.patchWorkspace({ invoicing: { dunning: next as DunningSettings } });
       reloadWorkspace();
       nav.toast(done);
       return true;
@@ -94,10 +99,18 @@ export function DunningSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav
           <p className="m ivhint">{t('dunning.set.placeholders', { number: '{number}', date: '{date}', due: '{due}', days: '{days}', previous: '{previous}', document: '{document}', company: '{company}' })}</p>
         </div>
       )}
-      {canEdit && dunning.levels.length < 9 && (
+      {canEdit && (
         <div className="lkuadd">
-          <AsyncButton type="button" className="btn ghost" data-act="dunning-add" onClick={() => save({ ...dunning, levels: [...dunning.levels, { name: t('dunning.set.newName', { n: dunning.levels.length + 1 }), days: 10 }] }, t('dunning.set.added'))}>{t('dunning.set.add')}</AsyncButton>
+          {dunning.levels.length < MAX_LEVELS
+            ? <AsyncButton type="button" className="btn ghost" data-act="dunning-add" onClick={() => save({ ...dunning, levels: [...dunning.levels, { name: t('dunning.set.newName', { n: dunning.levels.length + 1 }), days: 10 }] }, t('dunning.set.added'))}>{t('dunning.set.add')}</AsyncButton>
+            : <span className="m" data-testid="dunning-max">{t('dunning.set.max', { max: MAX_LEVELS })}</span>}
         </div>
+      )}
+      {auto && (
+        <p className="m ivhint" data-testid="dunning-device">
+          {!dunning.device ? t('dunning.set.deviceNone') : here && dunning.device.id === here.id ? t('dunning.set.deviceHere', { name: dunning.device.name }) : t('dunning.set.deviceOther', { name: dunning.device.name })}
+          {canEdit && here && dunning.device?.id !== here.id && <> <AsyncButton type="button" className="quiet2" data-act="dunning-device-here" onClick={() => save({ ...dunning, device: 'here' }, t('dunning.set.deviceMoved', { name: here.name }))}>{t('dunning.set.deviceMove')}</AsyncButton></>}
+        </p>
       )}
       <div className="lkr top">
         <span>{t('dunning.set.interest')}</span>

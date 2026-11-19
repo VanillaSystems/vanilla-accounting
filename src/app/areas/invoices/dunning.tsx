@@ -37,7 +37,8 @@ export function DunningDialog({ d, nav, ids }: { d: InvoiceList; nav: Nav; ids?:
   const [done, setDone] = useState<RunOutcome>();
   useEffect(() => {
     let live = true;
-    api.dunningPlan(date, ids).then((p) => { if (live) { setPlan(p); setOff(new Set()); } }, (e) => nav.toast(errorText(e)));
+    // A Rechnung that never went out is flagged and left unticked: a reminder of a bill the customer never got.
+    api.dunningPlan(date, ids).then((p) => { if (live) { setPlan(p); setOff(new Set(p.items.filter((i) => i.unsent).map((i) => i.invoiceId))); } }, (e) => nav.toast(errorText(e)));
     return () => { live = false; };
   }, [date, ids?.join(',')]);
 
@@ -90,7 +91,7 @@ export function DunningDialog({ d, nav, ids }: { d: InvoiceList; nav: Nav; ids?:
                       <tr key={i.invoiceId} data-id={i.invoiceId}>
                         <td><input type="checkbox" aria-label={t('sales.bulk.tick', { what: i.number })} checked={!off.has(i.invoiceId)} onChange={() => setOff((s) => { const n = new Set(s); if (n.has(i.invoiceId)) n.delete(i.invoiceId); else n.add(i.invoiceId); return n; })} /></td>
                         <td className="mono">{link(i)}</td>
-                        <td>{i.customerName}</td>
+                        <td>{i.customerName}{i.unsent ? <small className="warn" data-testid="dunning-unsent"> · {t('dunning.unsent')}</small> : null}</td>
                         <td>{i.title}{i.draft ? <small className="m"> · {t('dunning.written')}</small> : null}</td>
                         <td>{t('dunning.since', { date: formatDate(i.dueSince), n: i.days })}</td>
                         <td className="num mono">{i.currency} {fmt(i.open)}</td>

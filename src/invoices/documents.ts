@@ -65,7 +65,7 @@ export function mailText(settings: InvoicingSettings | undefined, inv: Issued, d
     : doc.kind === 'cancellation' ? L.cancelNotice(inv.number, formatDate(inv.date, inv.language))
     : what;
   const fill = (s: string) => s.replaceAll('{document}', document).replaceAll('{company}', company);
-  // A Mahnstufe's own mail texts come first (Firma › Verkauf › Mahnwesen).
+  // A Mahnstufe's own mail texts come first (Firma › Rechnungslayout › Mahnwesen).
   const level = doc.kind === 'reminder' ? settings?.dunning?.levels[doc.level - 1]?.texts?.[inv.language] : undefined;
   return { subject: fill(level?.mailSubject || (own?.mailSubject ?? L.mailSubject)), body: fill(level?.mailBody || (own?.mailBody ?? L.mailBody)) };
 }
