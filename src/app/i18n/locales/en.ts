@@ -379,6 +379,7 @@ export default {
     'journal.split.adds': "Adds up to the total: {currency} {amount}",
     'journal.split.errRest': "The lines do not add up to the total: {currency} {amount} still open.",
     'journal.split.errOver': "The lines add up to more than the total: {currency} {amount} too much.",
+    'journal.split.errEmptyLine': "Line {n} has no amount: the others already add up to the total. Remove the line (×) or change the amounts.",
     'journal.correctionText': 'Correction of {ref}: {text}',
     'journal.reverseText': 'Reversal of {ref}: {text}',
     'journal.accrualText': 'Release {year}: {text}',

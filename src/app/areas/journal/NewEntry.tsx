@@ -113,6 +113,7 @@ export function NewEntry(props: Props) {
 
   /** What the lines leave of the total; null without a total (the lines' sum is the entry then). */
   function restOfLines(): number | null {
+    if (!form.current) return null;
     const now = typed();
     if (!now.split || !now.draft.amount) return null;
     return fromRappen(toRappen(now.draft.amount) - toRappen(sum(now.split.lines.map((l) => l.amount ?? 0))));
@@ -154,7 +155,7 @@ export function NewEntry(props: Props) {
     const last = lines.at(-1);
     if (last?.auto && draft.amount) {
       const left = fromRappen(toRappen(draft.amount) - toRappen(sum(lines.slice(0, -1).map((l) => l.amount ?? 0))));
-      if (left > 0) last.amount = left;
+      if (left) last.amount = left;
     }
     return { draft, split: { side: split.side, lines } };
   }
@@ -171,7 +172,7 @@ export function NewEntry(props: Props) {
 
   /** ⇄: Soll and Haben change places; in a Sammelbuchung the shared account goes to the other side. */
   const swap = () => again(({ draft, split }) => ({
-    draft: split ? draft : { ...draft, accountDebit: draft.accountCredit, accountCredit: draft.accountDebit },
+    draft: { ...draft, accountDebit: draft.accountCredit, accountCredit: draft.accountDebit },
     ...(split && { split: { ...split, side: otherSide(split.side) } }),
   }));
 
@@ -202,9 +203,11 @@ export function NewEntry(props: Props) {
   const removeLine = (i: number) => again(({ draft, split }) => {
     if (!split) return { draft };
     const lines = split.lines.filter((_, j) => j !== i);
-    if (lines.length > 1) return { draft, split: { ...split, lines } };
+    // The new last line holds the rest when nothing is typed in it.
+    const last = lines.at(-1);
+    if (lines.length > 1) return { draft, split: { ...split, lines: last && last.amount === undefined ? [...lines.slice(0, -1), { ...last, auto: true }] : lines } };
     const [only] = lines;
-    return { draft: { ...draft, [otherSide(split.side)]: only?.account ?? '', vatCode: only?.vatCode ?? '', amount: draft.amount ?? only?.amount } };
+    return { draft: { ...draft, [otherSide(split.side)]: only?.account ?? '', vatCode: only?.vatCode ?? '', amount: only?.amount ?? draft.amount, description: only?.description?.trim() || draft.description } };
   });
 
   /** A pick from the payments: the entry books it, on its date, its amount and bank side filled where empty. */
@@ -237,7 +240,7 @@ export function NewEntry(props: Props) {
       if (split && (!p.accountDebit || !p.accountCredit)) return t('journal.byHand.errLegs', { n: i + 1 });
       if (p.vat && !lookupVatCode(p.vat)) return t('journal.errVat', { code: p.vat });
       if (p.vat && !formTakes(p.vat)) return t(`journal.errVatNotTaken.${noInputTax ?? 'none'}`, { code: p.vat });
-      if (!p.amount) return t('journal.errAmount');
+      if (!p.amount) return split && total && toRappen(sum(pairs.map((x) => x.amount ?? 0))) === toRappen(total) ? t('journal.split.errEmptyLine', { n: i + 1 }) : t('journal.errAmount');
       if (!p.text) return t('journal.errText');
     }
     if (split && total) {
@@ -308,7 +311,8 @@ export function NewEntry(props: Props) {
 
   function onInput(e: React.FormEvent) {
     const name = (e.target as HTMLInputElement).name;
-    if (split && name === `line-amount-${split.lines.length - 1}`) ownRest.current = true;
+    // Typed in, the last line's amount is hers; emptied again, it holds the rest again.
+    if (split && name === `line-amount-${split.lines.length - 1}`) ownRest.current = !!(e.target as HTMLInputElement).value.trim();
     followPrivate();
     redraw((n) => n + 1);
     setSure(false);
@@ -389,9 +393,9 @@ export function NewEntry(props: Props) {
               {firmCodes().length ? (
                 <div className="two">
                   <VatCodeField name="vatCode" label={t('journal.field.vatCode')} defaultValue={d.vatCode ?? ''} placeholder={t('journal.vatPlaceholder')} />
-                  {filed ? <span /> : <span className="jaddl"><button type="button" className="addlink" data-act="add-line" data-tip={t('journal.split.startTip')} onClick={addLine}>+ {t('journal.byHand.addLine')}</button></span>}
+                  {filed || fx ? <span /> : <span className="jaddl"><button type="button" className="addlink" data-act="add-line" data-tip={t('journal.split.startTip')} onClick={addLine}>+ {t('journal.byHand.addLine')}</button></span>}
                 </div>
-              ) : filed ? null : <button type="button" className="addlink" data-act="add-line" data-tip={t('journal.split.startTip')} onClick={addLine}>+ {t('journal.byHand.addLine')}</button>}
+              ) : filed || fx ? null : <button type="button" className="addlink" data-act="add-line" data-tip={t('journal.split.startTip')} onClick={addLine}>+ {t('journal.byHand.addLine')}</button>}
             </>
           )}
           {split ? null : <label>{t('journal.field.description')}<input name="description" defaultValue={d.description ?? ''} /></label>}

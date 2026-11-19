@@ -376,6 +376,7 @@ export const messages = {
   'journal.split.adds': "Ergibt das Total: {currency} {amount}",
   'journal.split.errRest': "Die Zeilen ergeben das Total nicht: noch {currency} {amount} offen.",
   'journal.split.errOver': "Die Zeilen ergeben mehr als das Total: {currency} {amount} zu viel.",
+  'journal.split.errEmptyLine': "Zeile {n} hat keinen Betrag: die anderen ergeben das Total schon. Die Zeile entfernen (×) oder die Beträge ändern.",
   'journal.correctionText': 'Korrektur zu {ref}: {text}',
   'journal.reverseText': 'Gegenbuchung zu {ref}: {text}',
   'journal.accrualText': 'Auflösung {year}: {text}',

@@ -379,6 +379,7 @@ export default {
     'journal.split.adds': "Donne le total : {currency} {amount}",
     'journal.split.errRest': "Les lignes ne donnent pas le total : encore {currency} {amount} ouvert.",
     'journal.split.errOver': "Les lignes dépassent le total : {currency} {amount} de trop.",
+    'journal.split.errEmptyLine': "La ligne {n} n'a pas de montant : les autres donnent déjà le total. Supprimer la ligne (×) ou changer les montants.",
     'journal.correctionText': 'Correction de {ref}: {text}',
     'journal.reverseText': 'Contre-passation de {ref} : {text}',
     'journal.accrualText': 'Dissolution {year} : {text}',
