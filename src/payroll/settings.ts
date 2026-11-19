@@ -14,7 +14,7 @@ import { computePayslip, employedFraction, type PayrollContext, type PayslipDraf
 import { closedOf, latestClosed, type PayslipHistory } from './history.js';
 import { correctionOf, PayrollRefusal } from './close.js';
 import type {
-  Employment, PayrollEmployee, PayrollInsurance, PayrollLanguage, PayrollStore, PayslipClose, PayslipCorrection, PayslipEvent, PersonInsurances, TaxAtSource, WageTypeLayer,
+  Absence, Child, Employment, PayrollEmployee, PayrollInsurance, PayrollLanguage, PayrollStore, PayslipClose, PayslipCorrection, PayslipEvent, PersonInsurances, TaxAtSource, WageTypeLayer,
 } from './model.js';
 import { payslipId } from './model.js';
 import { firstDay, monthsBetween, nextMonth, round2 } from './money.js';
@@ -28,6 +28,8 @@ const FIELD_OF: Record<string, string> = {
   'Beitrag Arbeitnehmer': 'certEmployee', 'Anteil Arbeitgeber': 'certEmployer', 'Beitrag Arbeitgeber': 'certEmployer', Menge: 'quantity', Ansatz: 'unitRate',
   Betrag: 'amount', 'Gilt ab': 'validFrom', 'Gilt bis': 'validUntil', Geburtsdatum: 'birthDate', Eintritt: 'entry', Code: 'code', Kanton: 'canton',
   Zahltag: 'payday', Bewilligung: 'permit', 'E-Mail': 'email', Lohnart: 'wageType', Bezeichnung: 'label',
+  Feiertagszuschlag: 'publicHolidaySurcharge', Von: 'from', Bis: 'to', Arbeitsunfähigkeit: 'incapacity', Lohnfortzahlung: 'continuedPay',
+  Taggeld: 'dailyAllowance', 'Taggeld ab': 'allowanceFrom', Art: 'kind',
 };
 const bad = (what: string, field?: string): never => { throw new PayrollRefusal('badInput', what, field); };
 /** Something the request names that is not there (a person, an insurance, a solution, an entry). */
@@ -78,7 +80,7 @@ interface Target {
   ends?: boolean;
 }
 
-const COMPANY_FIELDS = ['canton', 'payday', 'postingDate', 'rounding', 'proration', 'thirteenth'] as const;
+const COMPANY_FIELDS = ['canton', 'payday', 'postingDate', 'rounding', 'proration', 'thirteenth', 'holidayBasis'] as const;
 const EMPLOYEE_FIELDS = ['name', 'address', 'bank', 'employment', 'insurances', 'permit', 'email', 'taxAtSource'] as const;
 
 /** The dated value a path names in `store` (the same paths a close's `used` names). */
@@ -94,6 +96,15 @@ function targetOf(store: PayrollStore, data: PayrollData, path: string): Target 
   }
   if (parts[0] === 'employees' && parts.length >= 3) {
     const e = employeeOf(store, parts[1]);
+    if (parts[2] === 'children' && parts.length === 5 && parts[4] === 'allowance') {
+      const child = (e.children ?? []).find((c) => c.id === parts[3]) ?? gone(`Kind ${parts[3]} gibt es nicht.`);
+      return {
+        history: () => child.allowance,
+        write: (h) => { child.allowance = h as typeof child.allowance; },
+        value: (v) => ({ value: allowanceValue(v, data, store), warnings: [] }),
+        ends: true,
+      };
+    }
     if (parts[2] === 'recurring' && parts.length === 4) {
       const key = parts[3];
       const w = firmWageTypes(data, store).get(key);
@@ -142,6 +153,7 @@ function companyValue(f: typeof COMPANY_FIELDS[number], v: unknown, data: Payrol
     case 'rounding': return typeof v === 'number' && data.rounding.includes(v) ? v : bad(`Rundung: ${data.rounding.join(' oder ')}.`);
     case 'proration': return v === 'calendar-days' || v === 'thirty-days' ? v : bad('Anteil: Kalendertage oder 30 Tage.');
     case 'thirteenth': return v === 'twelfth' || v === 'percent' ? v : bad('13. Monatslohn: 1/12 oder 8,33 %.');
+    case 'holidayBasis': return v === 'wage' || v === 'wage-with-surcharge' ? v : bad('Ferienzuschlag auf: dem Stundenlohn, oder mit dem Feiertagszuschlag.');
   }
 }
 
@@ -180,7 +192,23 @@ function employmentValue(v: unknown): Employment {
     kind, amount: num(v.amount, 'Lohn', 0), pensum: optNum(v.pensum, 'Pensum', 1, 100), hoursPerWeek: optNum(v.hoursPerWeek, 'Stunden pro Woche', 0, 80),
     holidayDays: optNum(v.holidayDays, 'Ferientage', 0, 60), ...(months ? { thirteenth: { months: [...new Set(months)].sort((a, b) => a - b) } } : {}),
     fixedTerm: v.fixedTerm === true ? true : undefined, exitReason: optStr(v.exitReason),
+    ...(kind === 'hourly' ? {
+      holidayPay: v.holidayPay === 'leave' ? 'leave' as const : undefined,
+      publicHolidaySurcharge: optNum(v.publicHolidaySurcharge, 'Feiertagszuschlag', 0, 20) || undefined,
+    } : {}),
   });
+}
+
+/** A child's allowance as the fund decided it: one of the family allowance Lohnarten, a monthly amount. */
+function allowanceValue(v: unknown, data: PayrollData, store: PayrollStore): { wageType: string; amount: number } {
+  if (!isObj(v)) return bad('Eine Zulage.');
+  const key = str(v.wageType, 'Lohnart');
+  const w = firmWageTypes(data, store).get(key);
+  const group = data.groups.find((g) => g.key === w?.group);
+  // The Lohnarten of the kind a fund pays per child: their own allowance data, or the group the catalogue's are in.
+  const allowanceGroups = new Set(data.wageTypes.filter((x) => x.allowance || x.once).map((x) => x.group));
+  if (!w || !group || !allowanceGroups.has(w.group)) return bad(`${key} ist keine Familienzulage.`, 'wageType');
+  return { wageType: key, amount: num(v.amount, 'Betrag', 0) };
 }
 
 function insurancesValue(v: unknown, store: PayrollStore, data: PayrollData): PersonInsurances {
@@ -189,6 +217,7 @@ function insurancesValue(v: unknown, store: PayrollStore, data: PayrollData): Pe
   for (const [kind, x] of Object.entries(v)) {
     if (x === undefined || x === null) continue;
     if (kind === 'pensioner') { out.pensioner = x === 'allowance' || x === 'waiver' ? x : bad('Rentner: Freibetrag oder Verzicht.'); continue; }
+    if (kind === 'smallWage') { if (x === 'liable') out.smallWage = 'liable'; else if (x !== '' && x !== false) bad('Geringer Lohn: beitragspflichtig auf Verlangen, oder leer.'); continue; }
     const def = own(data.insurances, kind);
     if (!def) return bad(`Versicherung ${kind} gibt es nicht.`);
     if (!isObj(x)) return bad(`${kind}: die Versicherung und die Lösung.`);
@@ -351,6 +380,57 @@ export function patchEmployee(store: PayrollStore, data: PayrollData, id: string
   if ('nationality' in patch) { const n = optStr(patch.nationality); if (n) e.nationality = n.toUpperCase(); else delete e.nationality; }
   if ('language' in patch) e.language = (LANGUAGES as readonly unknown[]).includes(patch.language) ? patch.language as PayrollLanguage : bad('Sprache: de, fr, it oder en.');
   if ('isOwner' in patch) { if (patch.isOwner === true) e.isOwner = true; else delete e.isOwner; }
+}
+
+// ─── children and absences (§5.4, B1) ──────────────────────────────────────────
+
+/** A child with the allowance the fund decided, from a day (and until one, where the decision ends it). */
+export function addChild(store: PayrollStore, data: PayrollData, employee: string, input: Record<string, unknown>, id: string, now: string): Child {
+  const e = employeeOf(store, employee);
+  const validFrom = day(input.validFrom, 'Gilt ab');
+  const validUntil = optStr(input.validUntil) ? day(input.validUntil, 'Gilt bis') : undefined;
+  if (validUntil && validUntil < validFrom) bad('Das Ende liegt vor dem Beginn.', 'validUntil');
+  const child: Child = {
+    id, name: str(input.name, 'Name'), birthDate: day(input.birthDate, 'Geburtsdatum'),
+    allowance: [{ validFrom, ...(validUntil ? { validUntil } : {}), value: allowanceValue({ wageType: input.wageType, amount: input.amount }, data, store), enteredAt: now }],
+  };
+  e.children = [...(e.children ?? []), child];
+  return child;
+}
+
+/** A child no closed payslip paid an allowance for; one that was paid for stays (its allowance ends with an entry). */
+export function removeChild(store: PayrollStore, history: PayslipHistory, employee: string, child: string): void {
+  const e = employeeOf(store, employee);
+  if (!(e.children ?? []).some((c) => c.id === child)) gone(`Kind ${child} gibt es nicht.`);
+  const path = `employees/${employee}/children/${child}/allowance`;
+  if ([...history.closed.values()].some((c) => c.used.some((u) => u.path === path))) throw new PayrollRefusal('used', 'Eine abgeschlossene Lohnabrechnung hat für dieses Kind eine Zulage bezahlt: es bleibt, die Zulage endet mit einem Eintrag «gilt bis».');
+  e.children = (e.children ?? []).filter((c) => c.id !== child);
+}
+
+/** An absence: its days, its kind, the incapacity and the continued pay in %, the insurer's daily allowance. No diagnosis (§11). */
+export function addAbsence(store: PayrollStore, data: PayrollData, employee: string, input: Record<string, unknown>, id: string, now: string): Absence {
+  const e = employeeOf(store, employee);
+  const kind = typeof input.kind === 'string' && own(data.absences, input.kind) ? input.kind : bad('Die Art der Abwesenheit.', 'kind');
+  const from = day(input.from, 'Von');
+  const to = day(input.to, 'Bis');
+  if (to < from) bad('Das Ende liegt vor dem Beginn.', 'to');
+  const allowanceFrom = optStr(input.allowanceFrom) ? day(input.allowanceFrom, 'Taggeld ab') : undefined;
+  if (allowanceFrom && (allowanceFrom < from || allowanceFrom > to)) bad('Taggeld ab: ein Tag der Abwesenheit.', 'allowanceFrom');
+  const def = own(data.absences, kind)!;
+  const absence: Absence = clean({
+    id, from, to, kind, incapacity: optNum(input.incapacity, 'Arbeitsunfähigkeit', 1, 100),
+    continuedPay: def.unpaid || def.holiday ? undefined : optNum(input.continuedPay, 'Lohnfortzahlung', 0, 100),
+    dailyAllowance: def.allowance ? optNum(input.dailyAllowance, 'Taggeld', 0) : undefined,
+    allowanceFrom: def.allowance ? allowanceFrom : undefined, enteredAt: now,
+  });
+  e.absences = [...(e.absences ?? []), absence].sort((a, b) => a.from.localeCompare(b.from));
+  return absence;
+}
+
+export function removeAbsence(store: PayrollStore, employee: string, absence: string): void {
+  const e = employeeOf(store, employee);
+  if (!(e.absences ?? []).some((a) => a.id === absence)) gone(`Abwesenheit ${absence} gibt es nicht.`);
+  e.absences = (e.absences ?? []).filter((a) => a.id !== absence);
 }
 
 // ─── the firm's insurances ─────────────────────────────────────────────────────

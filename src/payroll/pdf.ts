@@ -25,6 +25,8 @@ export interface PayslipSheet {
   text?: string;
   /** Per line (same order as `lines`), where its rate comes from in the person's language (src/payroll/sources.ts); undefined: nothing printed. */
   sources?: ReadonlyArray<string | undefined>;
+  /** The holiday balance in days at the month's end (B1), where the holidays are taken. */
+  holidays?: { earned: number; taken: number; balance: number };
   /** The time the PDF names as made: the close's, so the same payslip prints the same bytes. */
   at: string;
 }
@@ -137,6 +139,11 @@ export async function payslipPdf(sheet: PayslipSheet, data: PayrollData, types: 
   total(data.totals.payout[lang], sheet.payout, true);
   if (sheet.person.iban) { text(`${words('payTo')} ${sheet.person.iban}`, left, 9, regular, MUTED); next(18); }
   if (sheet.text) { text(sheet.text, left, 9.5); next(18); }
+  if (sheet.holidays) {
+    const h = sheet.holidays;
+    text(words('holidays').replace('{balance}', num(lang, h.balance)).replace('{earned}', num(lang, h.earned)).replace('{taken}', num(lang, h.taken)), left, 9, regular, MUTED);
+    next(18);
+  }
 
   const employer = ofStage('employer');
   if (employer.length) {

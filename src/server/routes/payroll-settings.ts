@@ -15,8 +15,8 @@ import { CatalogueError } from '../../payroll/catalogue.js';
 import { chartNumbers, payrollContext } from '../../payroll/service.js';
 import { appendPayslipEvents, updatePayroll } from '../../payroll/store.js';
 import {
-  addDatedEntry, addSolution, affectedBy, backdatedCorrections, keepEvents, copyWageType, createEmployee, createInsurance, employeeDetail, patchEmployee,
-  patchInsurance, payrollAccounts, removeWageType, reopenOffer, setOpening, setWageType, settingsView, withdrawDatedEntry, type RateWarning,
+  addAbsence, addChild, addDatedEntry, addSolution, affectedBy, backdatedCorrections, keepEvents, copyWageType, createEmployee, createInsurance, employeeDetail, patchEmployee,
+  patchInsurance, payrollAccounts, removeAbsence, removeChild, removeWageType, reopenOffer, setOpening, setWageType, settingsView, withdrawDatedEntry, type RateWarning,
 } from '../../payroll/settings.js';
 import type { PayrollStore, PayslipEvent } from '../../payroll/model.js';
 import { maskedNumber } from '../../payroll/views.js';
@@ -132,6 +132,35 @@ router.put('/api/payroll/employees/:id/opening/:year', run((req, res) => {
   const { backdated: _, ...rest } = body(req);
   const value = 'value' in rest ? rest.value : rest;
   save(req, res, { path: `employees/${req.params.id}/opening` }, (s) => setOpening(s, ctx.data, ctx.history, String(req.params.id), String(req.params.year), value), () => ({ id: req.params.id }));
+}));
+
+/** A child and the allowance the family compensation fund decided (Mitarbeitende › Kinder). */
+router.post('/api/payroll/employees/:id/children', run((req, res) => {
+  const ctx = payrollContext(WS);
+  const e = ctx.store.employees.find((x) => x.id === req.params.id);
+  const child = freshId('k', 3, (x) => !!e?.children?.some((c) => c.id === x));
+  const now = new Date().toISOString();
+  save(req, res, { path: `employees/${req.params.id}/children/${child}`, ...(typeof body(req).validFrom === 'string' ? { validFrom: body(req).validFrom as string } : {}) },
+    (s) => addChild(s, ctx.data, String(req.params.id), body(req), child, now).id, (id) => ({ id }));
+}));
+
+router.delete('/api/payroll/employees/:id/children/:child', run((req, res) => {
+  const ctx = payrollContext(WS);
+  save(req, res, { path: `employees/${req.params.id}/children/${req.params.child}` }, (s) => removeChild(s, ctx.history, String(req.params.id), String(req.params.child)), () => ({ removed: req.params.child }));
+}));
+
+/** An absence (Mitarbeitende › Abwesenheiten): days, kind, incapacity, continued pay, the insurer's daily allowance; no diagnosis. */
+router.post('/api/payroll/employees/:id/absences', run((req, res) => {
+  const ctx = payrollContext(WS);
+  const e = ctx.store.employees.find((x) => x.id === req.params.id);
+  const absence = freshId('ab', 3, (x) => !!e?.absences?.some((a) => a.id === x));
+  const now = new Date().toISOString();
+  save(req, res, { path: `employees/${req.params.id}/absences/${absence}`, ...(typeof body(req).from === 'string' ? { validFrom: body(req).from as string } : {}) },
+    (s) => addAbsence(s, ctx.data, String(req.params.id), body(req), absence, now).id, (id) => ({ id }));
+}));
+
+router.delete('/api/payroll/employees/:id/absences/:absence', run((req, res) => {
+  save(req, res, { path: `employees/${req.params.id}/absences/${req.params.absence}` }, (s) => removeAbsence(s, String(req.params.id), String(req.params.absence)), () => ({ removed: req.params.absence }));
 }));
 
 /** A dated value from a day («gilt ab»): of a person, of the Stammdaten, of a solution's rates (the path a close's `used` names). */

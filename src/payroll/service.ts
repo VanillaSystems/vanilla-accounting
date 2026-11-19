@@ -84,7 +84,7 @@ export async function closePayslip(ws: Workspace, write: BooksWriter, employee: 
     gross: plan.draft.gross, deductions: plan.draft.deductions, net: plan.draft.net, payout: plan.draft.payout, employer: plan.draft.employer,
     person: plan.draft.person, firm: { name: ws.company.name, ...(ws.company.address ? { address: ws.company.address } : {}) },
     ...(employeeRecord?.socialSecurityNumber ? { socialSecurityNumber: employeeRecord.socialSecurityNumber } : {}),
-    ...(plan.draft.text ? { text: plan.draft.text } : {}), at: now,
+    ...(plan.draft.text ? { text: plan.draft.text } : {}), ...(plan.draft.holidays ? { holidays: plan.draft.holidays } : {}), at: now,
     sources: plan.draft.lines.map((l) => { const s = lineSource(l, plan.draft, ctx.data, ctx.years, ctx.store.insurances); return s && sourceText(s, ctx.data.documents, plan.draft.language); }),
   }, ctx.data, firmWageTypes(ctx.data, ctx.store));
   const id = () => idSource.bytes(8).toString('hex');

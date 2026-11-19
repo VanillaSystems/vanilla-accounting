@@ -362,8 +362,12 @@ export type Labels = Record<'de' | 'fr' | 'it' | 'en', string>;
 /** An account a Lohnart books on: a number, or the liability account of the insurance of that kind. */
 export type PayrollAccountRef = string | { insurance: string };
 
-/** How code fills a Lohnart: the Anstellung's monthly amount, the 13th in its payout months, a row of `contributions`. */
-export type WageTypeComputes = 'monthly' | 'thirteenth' | 'contribution';
+/**
+ * How code fills a Lohnart: the Anstellung's monthly amount, the 13th in its payout months, a row of
+ * `contributions`; for an hourly Anstellung the holiday surcharge on its hours (`holiday`) and the public-holiday
+ * surcharge its contract names (`publicHoliday`); the wage an absence takes off (`absence`, `payroll.yaml absences`).
+ */
+export type WageTypeComputes = 'monthly' | 'thirteenth' | 'contribution' | 'holiday' | 'publicHoliday' | 'absence';
 
 /** One Lohnart of payroll.yaml (docs/specs/payroll.md §5.3): code reads only these flags, never the key. */
 export interface WageTypeDef {
@@ -393,6 +397,25 @@ export interface WageTypeDef {
   /** The sentence a line «unvollständig» says when that input is missing («Kaufpreis des Fahrzeugs (ohne MWST) fehlt»); absent: «<its word> fehlt». */
   missing?: Partial<Record<'quantity' | 'rate' | 'amount', Labels>>;
   computes?: WageTypeComputes;
+  /** Paid once, in the month its entry begins (a birth allowance), not for every month it holds. */
+  once?: boolean;
+  /** An allowance a fund pays per month for a child: the federal minimum it is checked against, and the age after whose month it ends. */
+  allowance?: { minimum?: string; untilAge?: number };
+}
+
+/** A kind of absence (Abwesenheit) and the Lohnarten its wage takes: what the absence takes off, the employer's continued wage, the insurer's daily allowance. */
+export interface AbsenceKindDef {
+  label: Labels;
+  /** The Lohnart that takes the absent days' wage off (a negative wage line). */
+  loss?: string;
+  /** The Lohnart of the wage the employer continues to pay beyond the daily allowance. */
+  wage?: string;
+  /** The Lohnart of the insurer's daily allowance. */
+  allowance?: string;
+  /** Unpaid: the wage is taken off, nothing continues. */
+  unpaid?: boolean;
+  /** Holidays taken: no line, counted against the holiday balance. */
+  holiday?: boolean;
 }
 
 /** A rate a firm's document states for an insurance's solution, with the range code warns outside of. */
@@ -440,6 +463,11 @@ export interface ContributionDef {
   share?: { employer: string };
   /** Owed only from these weekly hours (a federal key). */
   minHours?: string;
+  /**
+   * Not owed while the person's base of the year stays at or below this yearly amount (a federal key), unless she
+   * asked to pay (`PersonInsurances.smallWage`); once the year passes it, owed on the whole year's base.
+   */
+  smallWage?: string;
 }
 
 /** payroll.yaml: the Lohnart catalogue, its groups and bases, the kinds of insurance and the contributions. */
@@ -456,6 +484,15 @@ export interface PayrollData {
   wageTypes: WageTypeDef[];
   /** The clearing account every payslip's payout passes (Lohndurchlaufkonto): credited by the close, cleared by the bank payment. */
   clearing: string;
+  /**
+   * Holidays: the working days of a week (holiday days to weeks), the weeks of a year (the surcharge of an
+   * hourly wage is weeks / (weeksPerYear − weeks)), and the legal minimum by age where the Anstellung names none.
+   */
+  holidays?: { daysPerWeek: number; weeksPerYear: number; minimum: Array<{ untilAge?: number; weeks: number }>; source?: string };
+  /** The kinds of absence, by key, in the order the form offers them. */
+  absences?: Record<string, AbsenceKindDef>;
+  /** The annual declarations: the contribution whose base is the liable wage of the first-pillar declaration (persons exempt by age, small wage or allowance). */
+  declarations?: { liable: { contribution: string; base: string } };
   /** The Lohnausweis (the jurisdiction's annual wage statement): its fields in print order and its words. */
   lohnausweis?: {
     title: Labels;
@@ -477,7 +514,7 @@ export interface PayrollData {
    */
   setupDocuments?: { kinds: Record<string, string[]>; numbers: Partial<Record<'memberNumber' | 'contractNumber', string[]>>; rates: Record<string, Record<string, string[]>>; toModel?: string[]; notToModel: string[] };
   /** The words of the payroll's documents, in each language. */
-  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate', Labels>;
+  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate' | 'holidays', Labels>;
 }
 
 /** One figure of the law: its value from a day, with its source. */

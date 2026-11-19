@@ -119,7 +119,7 @@ export function closeEventOf(plan: ClosePlan, now: string, receiptId: string, en
   return {
     event: 'close', id: d.id, employee: d.employee, month: d.month, postingDate: d.postingDate, payday: d.payday, closedAt: now, closedBy: 'person',
     lines: d.lines, bases: d.bases, gross: d.gross, net: d.net, payout: d.payout, employer: d.employer, ...(d.text ? { text: d.text } : {}),
-    left: d.missing, receiptId, entries: entries.map((e) => e.id), used: d.used, person: d.person,
+    left: d.missing, receiptId, entries: entries.map((e) => e.id), used: d.used, person: d.person, ...(d.holidays ? { holidays: d.holidays } : {}),
   };
 }
 

@@ -24,6 +24,8 @@ export interface PayrollCompany {
   proration: Dated<'calendar-days' | 'thirty-days'>;
   /** The 13th salary: a twelfth of the year's wage, or 8.33 % of it (a little less than a twelfth). */
   thirteenth: Dated<'twelfth' | 'percent'>;
+  /** The base of an hourly wage's holiday surcharge: the hours' wage, or with the public-holiday surcharge (§5.1); absent: the wage. */
+  holidayBasis?: Dated<'wage' | 'wage-with-surcharge'>;
   lohnausweis?: Dated<{ meals?: 'free' | 'reduced'; transportF?: boolean; canteenG?: boolean; expenseRules?: { canton: string; approvedOn: string }; remarks?: string }>;
   /** Who gets a copy of each payslip mail. */
   sender?: { copyTo?: string };
@@ -77,6 +79,10 @@ export interface Employment {
   thirteenth?: { months: number[] };
   fixedTerm?: boolean;
   exitReason?: string;
+  /** An hourly wage: the holidays paid as a surcharge on every payslip (the default), or taken as paid leave. */
+  holidayPay?: 'surcharge' | 'leave';
+  /** An hourly wage: the public-holiday surcharge in % the contract or GAV names; absent: none. */
+  publicHolidaySurcharge?: number;
 }
 
 /** A Lohnart every payslip of the person gets, with its values (dated). */
@@ -93,6 +99,8 @@ export interface PersonInsurances {
   ktg?: { insurance: string; code: string };
   /** Past the reference age: the monthly allowance, or the person waived it for the year. */
   pensioner?: 'allowance' | 'waiver';
+  /** A small wage (at most the yearly limit) is liable all the same: the person asked for it, or her work is always liable. */
+  smallWage?: 'liable';
   /** Any further kind the jurisdiction has, by its key: the solution the person is in. */
   [kind: string]: unknown;
 }
@@ -128,8 +136,10 @@ export interface PayrollEmployee {
   employment: Dated<Employment>;
   recurring: RecurringWageType[];
   insurances: Dated<PersonInsurances>;
-  children?: Array<{ name: string; birthDate: string; allowance: Dated<{ wageType: string; amount: number }> }>;
-  absences?: Array<{ from: string; to: string; kind: string; incapacity?: number; continuedPay?: number }>;
+  /** The children the FAK decided allowances for (§5.4): each allowance dated, its Lohnart and monthly amount as decided. */
+  children?: Child[];
+  /** Absences the wage needs (§5.4, §11): days, kind, figures; never a diagnosis. */
+  absences?: Absence[];
   taxAtSource?: Dated<TaxAtSource>;
   /**
    * Totals of the year before payroll started here (a firm starting mid-year): per base and Lohnausweis field, no
@@ -138,6 +148,31 @@ export interface PayrollEmployee {
    * neither, its figures count and it holds no month.
    */
   opening?: Record<string, { through?: string; bases?: Record<string, number>; fields?: Record<string, number>; months?: number }>;
+}
+
+/** A child and the allowance the family compensation fund decided for it, dated (from, until). */
+export interface Child {
+  id: string;
+  name: string;
+  birthDate: string;
+  allowance: Dated<{ wageType: string; amount: number }>;
+}
+
+/**
+ * An absence (Abwesenheit): its days, its kind (a key of the jurisdiction's `absences`), the incapacity in %
+ * (default 100), the share of the wage the employer continues to pay in % (default 100; an unpaid kind 0), and
+ * the insurer's daily allowance per calendar day from its decision, from `allowanceFrom` (after the waiting days).
+ */
+export interface Absence {
+  id: string;
+  from: string;
+  to: string;
+  kind: string;
+  incapacity?: number;
+  continuedPay?: number;
+  dailyAllowance?: number;
+  allowanceFrom?: string;
+  enteredAt: string;
 }
 
 /** A line added to one month's payslip by a person (hours, a bonus, an expense, a text). */
@@ -188,6 +223,9 @@ export interface PayslipLine {
 /** A line whose input is missing: shown «unvollständig», left out of every figure (§6.2). */
 export interface MissingLine { wageType: string; label: string; missing: string; days?: { from: string; to: string } }
 
+/** Holidays in days: earned in the year up to the month's end, taken by then, and the balance. */
+export interface HolidayBalance { earned: number; taken: number; balance: number }
+
 /** Every dated entry a payslip read, by path: a later entry never changes it (§19.2). */
 export interface UsedEntry { path: string; validFrom: string; enteredAt: string }
 
@@ -201,6 +239,8 @@ export type PayslipEvent =
     left: MissingLine[];
     receiptId?: string; entries: string[];
     used: UsedEntry[];
+    /** The holiday balance in days at the month's end, as the payslip printed it (B1). */
+    holidays?: HolidayBalance;
     /** What the payslip printed of the person and the firm, as on its payday. */
     person: { name: string; address?: Address; iban?: string; language: PayrollLanguage };
   }
