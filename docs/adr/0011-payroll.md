@@ -1,8 +1,8 @@
 # ADR 0011: Payroll: book what others calculate, and a narrow helper for the owner's salary
 
-Status: accepted (2026-10-10). Step 1 exists; steps 2 and 3 are not built. **Amendment proposed
-2026-11-19** (see «Amendment» below; the owner to accept): payroll for small firms follows the Swiss
-market leader's approach and is planned in phases instead of «later, or never».
+Status: accepted (2026-10-10). Step 1 exists; steps 2 and 3 are not built. **Amended 2026-11-19,
+accepted by the owner the same day** (see «Amendment» below): payroll for small firms follows the
+Swiss market leader's approach and is planned in phases instead of «later, or never».
 
 ## Problem
 
@@ -85,7 +85,7 @@ a payroll provider does today (step 1).
 - **Hard-coded rates:** pension, accident and sick-pay rates differ by company; a wrong assumed
   rate is worse than asking.
 
-## Amendment (proposed 2026-11-19, the owner to accept)
+## Amendment (2026-11-19, accepted by the owner 2026-11-19)
 
 The owner decided on 2026-11-19 that the payroll concept follows the approach of the Swiss market
 leader's payroll module closely, because many in Switzerland are used to it
@@ -109,7 +109,7 @@ above stays as it was decided.
   again without a migration.
 - **Liability** («a calculation from the entered rates, to be checked by the Treuhänder») stays on
   every payslip. Quellensteuer (B2) keeps the liability argument of this ADR: it is built only with a
-  golden set per canton tariff file and after the owner accepts this amendment for it explicitly.
+  golden set per canton tariff file, and only after B1 has shipped and passed (owner, 2026-11-19).
 - **Hard-coded rates** stay rejected: federal figures come with the app with their source; every
   fund's, insurer's and GAV's figure comes from the firm's document.
 

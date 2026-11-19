@@ -1,16 +1,16 @@
 # Spec: payroll (Lohnbuchhaltung)
 
-Status: rewritten 2026-11-19 after the owner's decision to follow the approach of the Swiss
+Status: rewritten and decided by the owner 2026-11-19 (§21), after the owner's decision to follow the approach of the Swiss
 market leader's payroll module closely: «many in Switzerland are used to that concept». The
 concept, flows, terms, data model and phase plan below follow that approach; §20 lists every
-decision of the concept of 2026-11-15 that this replaces, and §21 what the owner must still decide.
+decision of the concept of 2026-11-15 that this replaces, and §21 the owner's decisions on it (2026-11-19).
 Earlier states: decided by the owner 2026-11-14 (§16), market-review patterns and «warn, then the
 person decides» 2026-11-15 (§17, §18), values that change over time the same day (§19). No code
 yet. A clickable prototype of the 2026-11-15 concept is in
 [mockups/payroll/](mockups/payroll/index.html); §12.3 lists what in it must change.
 
-Builds on [ADR 0011](../adr/0011-payroll.md), which this rewrite **amends** (proposed, the owner to
-accept: see the amendment at the end of the ADR and §21), and is judged by
+Builds on [ADR 0011](../adr/0011-payroll.md), which this rewrite **amends** (accepted by the owner
+2026-11-19: see the amendment at the end of the ADR and §21), and is judged by
 [MISSION.md](../../MISSION.md) and
 [ADR 0015](../adr/0015-base-cases-in-the-app-long-tail-in-the-workspace.md).
 
@@ -393,9 +393,10 @@ said.
   net, 12 Quellensteuer withheld, 13 expenses (13.1 effective, 13.2 flat), 15 remarks; boxes F
   (free transport to work) and G (canteen meals). Several cantons (BS, BE, …) want the employer
   to send copies to the tax office. **K**.
-- Free federal tool: «eLohnausweis SSK». Software may print the form if it matches the Wegleitung.
-  Whether the SSK tool reads an import file was not verified: it is checked before B0's year-end
-  step (§16, decision 8; now §21 question 5).
+- Free federal tool: «eLohnausweis SSK». Payroll software may print Form 11 itself: the Wegleitung
+  2026 says the Lohnausweis is as a rule printed straight from payroll software on white paper
+  (Rz 75), and the Wegleitung is binding for filling it in (Rz 1). Checked 2026-11-19, §21
+  decision 6. Whether the SSK tool reads an import file was not verified; the CSV is the fallback.
 
 ### 3h Contract law: 13th salary, holidays, hourly pay, payslip
 
@@ -722,7 +723,7 @@ person pays in e-banking. The bank statement brings the line; code matches it by
 person's name or IBAN valid on the payday and books D 1091 / C bank; the list shows «bezahlt» with
 the bank line. A payment of several wages in one line is split by the payslips it covers. In B1 the
 list writes a pain.001 file through the payments channel the invoicing work builds; until that
-channel exists, no file (§21 question 4).
+channel exists, no file (§21 decision 5).
 
 ### 6.4 Sozialversicherungen through the year
 
@@ -804,7 +805,7 @@ once Löhne is switched on:
 | 2279 | Quellensteuer | the tax withheld until the canton is paid (exists) |
 | 2270 | Sozialversicherungen und Vorsorgeeinrichtungen | level A's collective account (exists, unchanged) |
 
-Numbering is the app's proposal (§21 question 3). Each insurance names its account (§5.2), so a
+Numbering decided by the owner (§21 decision 4). Each insurance names its account (§5.2), so a
 firm with its own chart maps them.
 
 ### 7.2 What a closed Lohnabrechnung books
@@ -1200,7 +1201,7 @@ B0 build instead:
   Revisit only if B1 has many firms asking for ELM.
 
 The market leader's payroll is certified, and its annual and monthly reports go out by ELM. This
-concept keeps the recommendation above (§21 question 2) and keeps the data Swissdec-shaped (member
+concept keeps the recommendation above (§21 decision 2) and keeps the data Swissdec-shaped (member
 and contract numbers per insurer, UVG solution codes, the BUR number, Lohnart flags and Lohnausweis
 fields), so that a later certification needs no migration of the books or of `payroll.json`. The
 list of data a declaration still lacks («Mitgliednummer der Ausgleichskasse fehlt») is shown as a
@@ -1221,7 +1222,7 @@ reach the bar. The next phase starts only after its predecessor passed and shipp
 | **A-2** | Payslips a Treuhänder or a program issues: A2 `readPayslip`, A3 booking by code, A4 Quellensteuer on 2279, A5 `collects:`, A9 (#383, #359) | 3–4 weeks |
 | **B1** | Staff: up to ~10 persons, one canton of work; hourly wage with holiday and public-holiday surcharge, holiday balance; 13th with payout months and pro rata; entry and exit mid-month, Nachzahlung; Kinder and Familienzulagen; Abwesenheiten with daily allowances; thresholds and age rules for everyone; FAK statement, BVG expected wages, AHV-exempt persons; pain.001 from Lohnzahlungen once the payments channel exists; the simplified procedure (VAV) for an Einzelfirma | 6–10 weeks |
 | **A-3** | A7 year-close checks for external payslips and their Lohnausweis CSV; A6 payroll journal import | 2–3 weeks |
-| **B2** | Quellensteuer computed: tariff files per canton and year, the monthly or annual model by canton, rate-determining income (other employments, entry and exit extrapolated to 30 days), Bezugsprovision, the canton's settlement list, corrections. Planned after B1, built only once the owner accepts the ADR 0011 amendment's liability line (§21 question 1) | 4–8 weeks for the first canton, then data |
+| **B2** | Quellensteuer computed: tariff files per canton and year, the monthly or annual model by canton, rate-determining income (other employments, entry and exit extrapolated to 30 days), Bezugsprovision, the canton's settlement list, corrections. Planned after B1 and built only after B1 (§21 decision 1); its liability line stays in the ADR 0011 amendment | 4–8 weeks for the first canton, then data |
 | B3 | Treuhänder: several firms from one desk; an export for ELM-capable software | open, not planned |
 
 ### 15.1 B0 acceptance (consulting walk: the owner-employee; demo-consulting)
@@ -1467,9 +1468,9 @@ that replaced, decision by decision:
 
 | Was (2026-11-14/15; numbers of that spec: its §13 is now §16, §14 is §17, §15 is §18, §16 is §19) | Now (2026-11-19) | Why |
 |---|---|---|
-| §13.3: ADR 0011 amended only after B0 ships; B2 and ELM out «until a firm asks» | The amendment is written now (proposed, at the end of ADR 0011): full payroll for small firms in phases, B2 planned after B1. ELM still out | The market's approach is a full payroll module; the concept has to describe it whole. The owner accepts the amendment (§21 question 1) |
+| §13.3: ADR 0011 amended only after B0 ships; B2 and ELM out «until a firm asks» | The amendment is written now (accepted 2026-11-19, at the end of ADR 0011): full payroll for small firms in phases, B2 planned after B1. ELM still out | The market's approach is a full payroll module; the concept has to describe it whole. The owner accepted the amendment (§21 decision 1) |
 | §13.6: `payroll.json` with `plan` (funds, pension, accident, sickness, vav) and per-employee `contract`, `pension`, `allowances`; runs in `runs.jsonl` | `payroll.json` with `company` (Stammdaten), `insurances` (Sozialversicherungen with Lösungen), `wageTypes`, `employees` (sections of §5.4); `payslips.jsonl` per person and month | The market's objects and Swissdec's shape (member numbers, solution codes) |
-| §13.8: Lohnausweis as field data and CSV in B0, the Form 11 PDF in B1 | The Form 11 PDF in B0 with the CSV, each field from the Lohnarten's field; replacement and correction as new snapshots | The market prints it from the payslips; the owner needs it in January anyway. The Wegleitung's rules for software-printed forms are still checked before (§21 question 5) |
+| §13.8: Lohnausweis as field data and CSV in B0, the Form 11 PDF in B1 | The Form 11 PDF in B0 with the CSV, each field from the Lohnarten's field; replacement and correction as new snapshots | The market prints it from the payslips; the owner needs it in January anyway. The Wegleitung allows software-printed forms (§21 decision 6) |
 | §13.10: family allowances paid through the wage: D 2270 | D 2272 (the FAK's own liability account) / C 1091 | One liability account per insurer |
 | §13.11: no payment file in payroll | The Lohnzahlungen list in B0 (IBAN, payout, purpose, value date, status from the bank); pain.001 in B1 through the payments channel | The market pays wages from the payroll module; we keep the status from the bank statement |
 | §13.12: new account 2290 Lohnverbindlichkeiten for the net | 1091 Lohndurchlaufkonto: every Lohnart books against it; the payment clears it | The Swiss payroll convention: one clearing account, 0 after the payment |
@@ -1494,25 +1495,48 @@ warn, then decide (§15, now §18); dated values (§16, now §19); level A (§10
 
 ---
 
-## 21. Open questions for the owner
+## 21. The owner's decisions (2026-11-19)
 
-1. **ADR 0011.** Accept the amendment: payroll for small firms is no longer «later or never» but
-   planned in phases (B0, B1, B2). ELM/Swissdec certification stays rejected. Quellensteuer computed
-   (B2) carries the liability ADR 0011 named; the amendment keeps it behind its own golden set and
-   your acceptance before B2 starts.
-2. **ELM.** «Very similar to the market leader» in full would mean Swissdec certification (its
-   module is certified). This spec keeps it out and keeps the data Swissdec-shaped. Confirm, or ask
-   for a separate estimate (§14).
-3. **Account numbers.** 1091 Lohndurchlaufkonto and 2271–2275 per insurer, with 2270 left as level
-   A's collective account. Other charts put BVG on 2270 itself. Keep the proposal, or renumber?
-4. **pain.001.** The Lohnzahlungen list is in B0; the file needs the payments channel. Build it in
-   payroll if invoicing has not built it by B1, or wait?
-5. **Lohnausweis PDF in B0.** The Wegleitung allows forms printed by software within its rules;
-   this is to be checked against the current edition before the year-end step is built (as decision
-   8 already said for B1). If it does not hold, B0 falls back to the CSV for eLohnausweis SSK.
-6. **Golden rule 1 and payroll.** Payroll carries no VAT, but the books are sealed per quarter, so a
-   payslip of a closed quarter is never reopened. This is the hard lock as it stands; confirm that it
-   holds for payroll too.
+The owner decided the six open questions of this rewrite on 2026-11-19, each as recommended:
+
+1. **ADR 0011: the amendment is accepted.** Payroll for small firms is built in phases B0 → B1 → B2.
+   B2 (Quellensteuer computed) starts only after B1 has shipped and passed; it keeps the liability
+   line of the amendment (its own golden set per canton tariff file).
+2. **ELM/Swissdec stays out.** The data stay Swissdec-shaped (member and contract numbers, UVG
+   solution codes, BUR number, Lohnart flags and fields), so the question can be asked again
+   without a migration (§14).
+3. **The hard lock holds for payroll.** A closed Lohnabrechnung whose posting date lies in a closed
+   (filed) period is never rewritten or reopened; it is corrected in the person's next open month
+   (Rückwirkende Korrektur, §6.5). Payroll carries no VAT, but the books are sealed per quarter
+   (AGENTS.md golden rule 1, `closedThrough`, seals).
+4. **Accounts as proposed:** 1091 Lohndurchlaufkonto; 2271 AHV/IV/EO/ALV, 2272 FAK, 2273 UVG/UVGZ,
+   2274 KTG, 2275 BVG; 2279 Quellensteuer; 2270 stays level A's collective account (§7.1).
+5. **pain.001 in B1**, built in payroll unless the invoicing work has built a payment channel by
+   then, in which case payroll hands its Lohnzahlungen to that channel (§6.3).
+6. **Lohnausweis PDF in B0, the CSV as fallback.** Checked against the primary source before
+   deciding: the *Wegleitung zum Ausfüllen des Lohnausweises bzw. der Rentenbescheinigung
+   (Formular 11)*, SSK/ESTV, valid from 1 January 2026
+   ([estv.admin.ch](https://www.estv.admin.ch/dam/de/sd-web/afP1GDFr8gE3/dbst-form-lohna-wegleitung-2026-de.pdf)):
+   - Rz 75: «In der Regel wird der Lohnausweis direkt aus einer Lohnsoftwareapplikation auf
+     weisses Papier gedruckt.» The printed form is ordered only where that is not possible. So a
+     software-printed Form 11 is the normal case, not an exception.
+   - Rz 1: the form to use is Formular 11, and «für das Ausfüllen des Formulars ist diese Wegleitung
+     verbindlich». The app prints Form 11's layout and fields (letters A–I, Ziffern 1–15), filled as
+     the Wegleitung says; no form of its own.
+   - Rz 12 (Buchstabe I): place and date, the employer's exact address, the person responsible and
+     a phone number; signed, but «bei vollautomatisiert erstellten Lohnausweisen kann auf die
+     Unterschrift verzichtet werden».
+   - Rz 11 (Buchstabe H): the employee's full current address; the address field fits window
+     envelopes left or right, and no confidential data may show in the window.
+   - Rz 74: BS, BE, FR, JU, NE, SO, VD and VS want a copy sent by the employer to the cantonal tax
+     office (LU voluntary): the Dokumente page names this as a fact for the firm's canton.
+   - Rz 6: the 13-digit AHV number goes in its field (Buchstabe C): the one place besides the
+     payslip and the declarations where the app prints it (§11).
+
+   Not found in the Wegleitung: any certification, barcode or approval requirement for software
+   that prints the form. The SSK FAQ (linked from the Wegleitung's «Allgemeines») is to be read
+   when the PDF layout is built, for layout details. If the PDF falls short, B0 delivers the CSV for
+   eLohnausweis SSK.
 
 ---
 
