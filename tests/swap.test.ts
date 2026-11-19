@@ -71,7 +71,7 @@ test('xx\'s chart: revenue in class 4 is credit-normal, the statements follow it
 
 test('xx shows its statements gross within the year: the Erfolgsrechnung keeps the tax and says how much it holds (r8c-2)', () => {
   const books: Index = { receipts: [], transactions: [], mappings: [], bankStatements: [], journalEntries: entries };
-  const view = reportView('income', books, parsePeriod('2026', '2026-12-31')!, names, false);
+  const view = reportView('income', books, parsePeriod('2026', '2026-12-31')!, names, { all: false });
   assert.equal(view.headline.value, 1565, 'sales and rent as booked, the tax inside');
   assert.deepEqual(view.vat, { shown: 'gross', figures: { owed: 205, input: 40, acquisition: 0, net: 165 } });
 });

@@ -1564,6 +1564,7 @@ export const messages = {
   'reports.priorNoneEmpty': 'Keine Vorjahreszahlen für {prior}: die Bücher halten noch nichts.',
   'reports.priorCol': 'Vorjahr',
   'reports.priorNoneCol': 'Vorjahr: keine Zahlen',
+  'reports.priorGap': 'Vorjahr: Aktiven {assets} und Passiven {liabilities} weichen um {gap} ab; die Eröffnungsbilanz geht nicht auf.',
   'reports.show': 'Zeigen',
   'reports.opening': 'Anfang',
   'reports.debit': 'Soll',

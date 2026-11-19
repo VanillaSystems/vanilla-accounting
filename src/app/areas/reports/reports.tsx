@@ -20,7 +20,7 @@ import type { Area, AreaProps, LegendItem } from '../index.js';
 import { entryAt } from '../vat/links.js';
 import {
   NO_ACCOUNT, NO_ACCOUNT_SLUG, accountsOf, filterBlocks, incomeColumns, ledgerOf, reportOfAccount, reportView, searchReport,
-  type AccountRow, type Block, type Prior, type ReportView,
+  priorReason, type AccountRow, type Block, type Prior, type ReportView, type Translate,
 } from './model.js';
 import { SliceBar } from './SliceBar.js';
 import { setSlice, useSliced } from './slice.js';
@@ -63,7 +63,7 @@ function useView({ route, query, books, period }: Pick<Props, 'route' | 'query' 
   const names = getAccountMap();
   const q = query.q ?? '';
   return useMemo(() => {
-    const view = reportView(route.report, books, period, names, all || !!q.trim());
+    const view = reportView(route.report, books, period, names, { all: all || !!q.trim() });
     return filterBlocks(view, q, names, t('reports.vatOnly'));
   }, [route.report, books, period, names, all, q]);
 }
@@ -156,7 +156,13 @@ function List(props: Props) {
           {t(route.report === 'income' ? 'reports.vatNoteIncome' : 'reports.vatNoteBalance', { net: fmt(view.vat.figures.net), parts: vatParts(view.vat.figures).map((x) => t(x.key, { amount: fmt(x.amount) })).join(', ') })}
         </p>
       )}
-      {prior && <PriorNote prior={prior} report={route.report} canEdit={canEdit} onOpening={() => nav.go({ route: { area: 'company', section: 'opening' }, query: {} })} />}
+      {prior && route.report !== 'trial' && <PriorNote prior={prior} report={route.report} canEdit={canEdit} onOpening={() => nav.go({ route: { area: 'company', section: 'opening' }, query: {} })} />}
+      {view.priorGap && (
+        <div className="notice warn rgap" data-testid="prior-gap">
+          <span className="dot" aria-hidden="true" />
+          <span>{t('reports.priorGap', { assets: fmt(view.priorGap.assets), liabilities: fmt(view.priorGap.liabilities), gap: fmt(view.priorGap.value) })}</span>
+        </div>
+      )}
       {view.gap && (
         <div className="notice warn rgap">
           <span className="dot" aria-hidden="true" />
@@ -244,23 +250,16 @@ function priorLabel(prior: Prior, report: Report): string {
   return p ? periodName(p) : `${formatDate(prior.from)} – ${formatDate(prior.to)}`;
 }
 
-/** Where the prior-year figures come from when not from the books, or why there are none. */
-function PriorNote({ prior, report, canEdit, onOpening }: { prior: Prior; report: Report; canEdit: boolean; onOpening(): void }) {
-  const year = prior.to.slice(0, 4);
-  const next = String(Number(year) + 1);
-  const label = priorLabel(prior, report);
-  if ('source' in prior) {
-    if (prior.source === 'opening') return <p className="m rvat" data-testid="prior-note" data-prior="opening">{t('reports.priorOpening', { year: next, prior: year })}</p>;
-    return prior.since ? <p className="m rvat" data-testid="prior-note" data-prior="since">{t('reports.priorSince', { date: formatDate(prior.since) })}</p> : null;
-  }
-  if (prior.missing === 'overlap') return <p className="m rvat" data-testid="prior-note" data-prior="overlap">{t('reports.priorOverlap')}</p>;
-  const text = !prior.first ? t('reports.priorNoneEmpty', { prior: label })
-    : report === 'balance' ? t('reports.priorNoneBalance', { prior: label, date: formatDate(prior.first), year: next })
-      : t('reports.priorNone', { prior: label, date: formatDate(prior.first) });
+/** Where the prior-year figures come from when not from the books, or why there are none (priorReason). */
+function PriorNote({ prior, report, canEdit, onOpening }: { prior: Prior; report: 'income' | 'balance'; canEdit: boolean; onOpening(): void }) {
+  // The typed `t` checks each key's holes; priorReason fills them as the export's words do.
+  const text = priorReason(prior, report, t as unknown as Translate, priorLabel(prior, report));
+  if (!text) return null;
+  const kind = 'source' in prior ? (prior.source === 'opening' ? 'opening' : 'since') : prior.missing === 'overlap' ? 'overlap' : 'none';
   return (
-    <p className="m rvat" data-testid="prior-note" data-prior="none">
+    <p className="m rvat" data-testid="prior-note" data-prior={kind}>
       {text}{' '}
-      {report === 'balance' && canEdit && <button type="button" onClick={onOpening}>{t('reports.openingSet')}</button>}
+      {kind === 'none' && report === 'balance' && canEdit && <button type="button" onClick={onOpening}>{t('reports.openingSet')}</button>}
     </p>
   );
 }

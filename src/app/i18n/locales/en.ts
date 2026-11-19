@@ -1567,6 +1567,7 @@ export default {
     'reports.priorNoneEmpty': 'No prior-year figures for {prior}: the books hold nothing yet.',
     'reports.priorCol': 'Prior year',
     'reports.priorNoneCol': 'Prior year: no figures',
+    'reports.priorGap': 'Prior year: assets {assets} and liabilities {liabilities} differ by {gap}; the opening balance sheet does not balance.',
     'reports.show': 'Show',
     'reports.opening': 'Opening',
     'reports.debit': 'Debit',

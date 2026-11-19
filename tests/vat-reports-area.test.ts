@@ -85,31 +85,31 @@ test('a rate row compares with the filed form as its turnover: with tax for supp
 });
 
 test('the Erfolgsrechnung shows the app\'s figures, accounts with an amount only unless all', () => {
-  const view = reportView('income', books, p('2026-Q3'), names, false);
+  const view = reportView('income', books, p('2026-Q3'), names, { all: false });
   const app = computeIncomeStatement(statementPostings(books.journalEntries!, Object.keys(names)), '2026-07-01', '2026-09-30', names);
   assert.equal(view.headline.value, app.netResult);
   assert.deepEqual(accountsOf(view), ['3200', '4000', '6500']);
-  assert.ok(accountsOf(reportView('income', books, p('2026-Q4'), names, true)).includes('3200'), 'all accounts in an empty quarter');
-  assert.deepEqual(accountsOf(reportView('income', books, p('2026-Q4'), names, false)), []);
+  assert.ok(accountsOf(reportView('income', books, p('2026-Q4'), names, { all: true })).includes('3200'), 'all accounts in an empty quarter');
+  assert.deepEqual(accountsOf(reportView('income', books, p('2026-Q4'), names, { all: false })), []);
 });
 
 test('the Bilanz names why assets and liabilities differ: an account missing from the chart; a tax correction booked on one side is balanced by its tax posting', () => {
-  const view = reportView('balance', books, p('2026-Q3'), names, false);
+  const view = reportView('balance', books, p('2026-Q3'), names, { all: false });
   assert.equal(view.asOf, '2026-09-30');
   assert.deepEqual(view.gap?.causes, [{ code: 'notInChart', account: '2800', amount: 1000 }]);
   const oneSided: Index = { ...books, journalEntries: [je('half', '2026-09-30', '', '4000', 8.1)] };
-  assert.deepEqual(reportView('balance', oneSided, p('2026-Q3'), names, false).gap?.causes[0], { code: 'oneLeg', entryIds: ['half'], amount: -8.1 }, 'without a code nothing balances it');
+  assert.deepEqual(reportView('balance', oneSided, p('2026-Q3'), names, { all: false }).gap?.causes[0], { code: 'oneLeg', entryIds: ['half'], amount: -8.1 }, 'without a code nothing balances it');
 });
 
 test('an opening booked against 9100 (treuhaender-30): the Bilanz names the account, not entries without a counter account', () => {
   const fresh: Index = { ...books, config: {}, journalEntries: [je('open', '2026-07-01', '1020', '9100', 18420.15)] };
-  const view = reportView('balance', fresh, p('2026'), { ...names, 9100: 'Eröffnungsbilanz' }, false);
+  const view = reportView('balance', fresh, p('2026'), { ...names, 9100: 'Eröffnungsbilanz' }, { all: false });
   assert.equal(view.gap?.value, 18420.15);
   assert.deepEqual(view.gap?.causes, [{ code: 'outsideStatements', account: '9100', amount: -18420.15 }]);
 });
 
 test('the Saldobilanz starts from the balance when the period begins and lists one-sided entries apart', () => {
-  const view = reportView('trial', books, p('2026-Q3'), names, false);
+  const view = reportView('trial', books, p('2026-Q3'), names, { all: false });
   const groups = view.blocks.flatMap((b) => (b.kind === 'group' ? [b] : []));
   const bank = groups.flatMap((g) => g.rows).find((r) => r.account === '1020')!;
   assert.equal(bank.open, 1000 - 54.05);
@@ -121,7 +121,7 @@ test('a search finds an account in the report that holds it and narrows the list
   assert.equal(searchReport('income', 'bank', names, 'nur MWST'), 'balance');
   assert.equal(searchReport('income', 'büro', names, 'nur MWST'), 'income');
   assert.equal(searchReport('trial', 'bank', names, 'nur MWST'), 'trial');
-  const found = filterBlocks(reportView('income', books, p('2026-Q3'), names, true), '6500', names, 'nur MWST');
+  const found = filterBlocks(reportView('income', books, p('2026-Q3'), names, { all: true }), '6500', names, 'nur MWST');
   assert.deepEqual(accountsOf(found), ['6500']);
 });
 
@@ -140,15 +140,15 @@ test('Bilanz & ER are net of VAT: revenue and expense without the tax, the tax o
   // August: a sale of 1081 gross (81 owed), paper for 108.10 gross (8.10 input tax).
   assert.deepEqual(vatInFigures(books.journalEntries!, '2026-08-01', '2026-08-31'), { owed: 81, input: 8.1, acquisition: 0, net: 72.9 });
   assert.equal(vatInFigures(books.journalEntries!, '2026-01-01', '2026-01-31'), undefined, 'no coded entry');
-  const income = reportView('income', books, p('2026-08'), names, false);
+  const income = reportView('income', books, p('2026-08'), names, { all: false });
   assert.deepEqual(income.vat, { shown: 'net', account: '2200' });
   assert.equal(income.headline.value, 1000 - 100, 'sale and paper net of their tax');
-  assert.equal(reportView('income', books, p('2026-01'), names, false).vat, undefined, 'no coded entry: no line');
-  const balance = reportView('balance', books, p('2026-08'), names, false);
+  assert.equal(reportView('income', books, p('2026-01'), names, { all: false }).vat, undefined, 'no coded entry: no line');
+  const balance = reportView('balance', books, p('2026-08'), names, { all: false });
   assert.deepEqual(balance.vat, { shown: 'net', account: '2200' });
   const owed = balance.blocks.flatMap((b) => (b.kind === 'group' ? b.rows : [])).find((r) => r.account === '2200');
   assert.equal(owed?.value, 68.85, 'the year\'s tax up to its day sits on 2200: 81 owed, 8.10 and 4.05 deducted');
-  assert.equal(reportView('trial', books, p('2026-08'), names, false).vat, undefined);
+  assert.equal(reportView('trial', books, p('2026-08'), names, { all: false }).vat, undefined);
   const words = { t: (key: string, vars?: Record<string, string | number>) => `${key}${vars ? ' ' + JSON.stringify(vars) : ''}`, accountingName: (g: string) => g };
   const tb = tableOf('income', { books, period: p('2026-08'), names, words: words as never, filed: {}, filingLength: 'quarter' });
   assert.ok(!tb.rows.some((r) => String(r[0]).startsWith('reports.vatRow')), 'no «VAT held in these figures» row');
