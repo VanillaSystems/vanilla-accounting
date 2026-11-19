@@ -1,4 +1,8 @@
 import type { Found } from '../../intake/pairing.js';
+import type { DatedCard, DatedWay } from '../../invoices/backdated.js';
+import type { DatedSaved } from '../../invoices/dated-change.js';
+/** What «Ändern» with «gilt ab» answers. */
+export type DatedSavedView = DatedSaved;
 import type { TerminalApp, TerminalCli, TerminalView } from '../../platform/terminal.js';
 import type { AiSetupView, KeySaved, Probation, SetupKey } from '../../platform/ai-setup.js';
 import type { StatementProblem } from '../../types/api-error.js';
@@ -495,7 +499,8 @@ export interface ContactDetail {
 /** A contact as a request writes it: its fields, null clearing an optional one. */
 export type ContactInput = { [K in keyof ContactFields]?: ContactFields[K] | null };
 /** An Artikel as a request writes it: its fields, null clearing an optional one. */
-export type ArticleInput = { [K in keyof ArticleFields]?: ArticleFields[K] | null };
+/** An Artikel's fields as a form sends them; `price` one number, which joins the price's history from today (spec 4.12). */
+export type ArticleInput = { [K in Exclude<keyof ArticleFields, 'price'>]?: ArticleFields[K] | null } & { price?: number };
 export type DraftChange = { [K in keyof DraftPatch]?: DraftPatch[K] | null };
 export interface CreditInput { reason: string; amount?: number; settlement?: 'refund' | 'offset' }
 export type ReminderInput = ReminderPatch & { to?: string; email?: MailMessage };
@@ -819,6 +824,13 @@ export const api = {
   paymentProposals: () => request<{ proposals: PaymentProposal[] }>('GET', '/api/invoices/payments').then((r) => r.proposals),
   createContact: (fields: ContactInput) => request<Contact>('POST', '/api/contacts', fields),
   patchContact: (id: string, fields: ContactInput | Record<string, unknown>) => request<Contact>('PATCH', `/api/contacts/${encodeURIComponent(id)}`, fields),
+  /** A contact changed from a «gilt ab» (spec 4.12): the contact, or the card while issued documents printed another address or terms. */
+  patchContactFrom: (id: string, fields: ContactInput | Record<string, unknown>, validFrom: string, way?: 'keep') =>
+    request<Contact | ({ saved: false } & DatedCard)>('PATCH', `/api/contacts/${encodeURIComponent(id)}`, { ...fields, validFrom, ...(way ? { way } : {}) }),
+  /** «Ändern» with «gilt ab» on a dated value (spec 4.12): saved, or the card of the issued documents it covers. */
+  datedChange: (change: { path: string; value: unknown; validFrom: string; way?: DatedWay }) => request<DatedSavedView>('POST', '/api/invoicing/dated', change),
+  /** «Zahlungsaufforderung mit neuer IBAN» of an open invoice: mailed with `email`, else downloaded. */
+  sendNotice: (id: string, body: { date?: string; to?: string; email?: { to: string; subject: string; body: string } } = {}) => request<SentDocument>('POST', `/api/invoices/${encodeURIComponent(id)}/notices`, body),
   removeContact: (id: string) => request<{ contact: Contact; outcome: 'archived' | 'deleted' }>('DELETE', `/api/contacts/${encodeURIComponent(id)}`),
   contact: (id: string) => request<ContactDetail>('GET', `/api/contacts/${encodeURIComponent(id)}`),
   previewContactImport: (csv: string, mapping?: ImportMapping) => request<ImportPreview>('POST', '/api/contacts/import/preview', { csv, ...(mapping ? { mapping } : {}) }),

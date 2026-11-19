@@ -19,6 +19,8 @@ import { WorkspaceError, WorkspaceRefusal } from './workspace.js';
 import { parseUid } from './uid.js';
 import { goodsOf, profileOf, type SalesKind } from './setup.js';
 import { dimensionYaml, type Dimension } from '../books/tags.js';
+import { valueOn } from '../core/dated.js';
+import { historyOf, withEntry } from '../core/dated.js';
 
 /** A text field set, or removed with null; absent: unchanged. */
 type Edit<T> = T | null | undefined;
@@ -74,6 +76,15 @@ export interface InvoicingPatch {
   numbering?: Partial<Record<DocumentKind, NumberFormat>>;
   /** The Mahnwesen (spec 4.4.7): its levels and default interest, written as one block; null removes it (a new firm's levels again). */
   dunning?: DunningSettings | null;
+  /**
+   * Values that change over time (spec 4.12), each a new entry of its history from `validFrom`: `key` the
+   * path under `invoicing` (`['payTo', 'EUR']`, `['paymentTerms']`, `['letterhead']`, …). `payTo` and
+   * `paymentTerms` above join their histories the same way, from `validFrom` (absent: today).
+   */
+  dated?: Array<{ key: string[]; value: unknown; validFrom: string; enteredAt: string }>;
+  validFrom?: string;
+  /** Entries taken out again by `{ validFrom, enteredAt }` (the undo of a change nothing used yet). */
+  withdraw?: Array<{ key: string[]; validFrom: string; enteredAt: string }>;
 }
 
 /** Firma › E-Mail: the outgoing mailbox, field by field; null removes a field, `outgoingMail: null` the block. */
@@ -179,20 +190,25 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     }
     if (!isMap(doc.get('invoicing'))) throw new WorkspaceError(`${path} has no invoicing block: add one (payTo, revenueAccount) before the layout`);
     if (inv.paymentTermsDays !== undefined) doc.setIn(['invoicing', 'paymentTermsDays'], inv.paymentTermsDays);
+    const now = new Date().toISOString();
+    const from = inv.validFrom ?? now.slice(0, 10);
     for (const [currency, to] of Object.entries(inv.payTo ?? {})) {
       if (to === null) doc.deleteIn(['invoicing', 'payTo', currency]);
       else if (to) {
-        // What else the currency's entry holds stays while its account does; a field set to null leaves.
-        const before = doc.getIn(['invoicing', 'payTo', currency]);
-        const kept = isMap(before) && String(before.get('account')) === to.account ? (before.toJSON() as Record<string, unknown>) : {};
+        // What else the currency's entry holds on that day stays while its account does; a field set to null leaves.
+        const before = valueOn(historyOf<Record<string, unknown>>(jsonAt(doc, ['invoicing', 'payTo', currency])), from);
+        const kept = before && String(before.account) === to.account ? before : {};
         const { account, ...fields } = to;
         const value = Object.fromEntries(Object.entries({ ...kept, ...fields }).filter(([k, v]) => k !== 'account' && v !== null && v !== undefined));
-        const node = doc.createNode({ account, ...value }) as YAMLMap;
-        // Like its neighbours: one-line `{ account: "1021" }` when the other currencies are.
-        const sibling = (doc.getIn(['invoicing', 'payTo']) as YAMLMap | undefined)?.items.map((i) => i.value).find(isMap);
-        node.flow = !sibling || !!sibling.flow;
-        doc.setIn(['invoicing', 'payTo', currency], node);
+        addDated(doc, ['invoicing', 'payTo', currency], { account, ...value }, from, now);
       }
+    }
+    if (inv.paymentTerms) addDated(doc, ['invoicing', 'paymentTerms'], inv.paymentTerms, from, now);
+    for (const d of inv.dated ?? []) addDated(doc, ['invoicing', ...d.key], d.value, d.validFrom, d.enteredAt);
+    for (const w of inv.withdraw ?? []) {
+      const path = ['invoicing', ...w.key];
+      const left = historyOf(jsonAt(doc, path)).filter((e) => !(e.validFrom === w.validFrom && e.enteredAt === w.enteredAt));
+      doc.setIn(path, doc.createNode(left));
     }
     const { show, ...layout } = inv.layout ?? {};
     for (const [key, value] of Object.entries(layout)) set(doc, ['invoicing', 'layout', key], value);
@@ -205,22 +221,15 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     else if (inv.units) doc.setIn(['invoicing', 'units'], doc.createNode(inv.units.map((u) => { const n = doc.createNode(u) as YAMLMap; n.flow = true; return n; })));
     // One line per term, `{ id: sk2, name: …, days: 30, skonto: { percent: 2, days: 10 } }`.
     if (inv.paymentTerms === null) doc.deleteIn(['invoicing', 'paymentTerms']);
-    else if (inv.paymentTerms) doc.setIn(['invoicing', 'paymentTerms'], doc.createNode(inv.paymentTerms.map((x) => { const n = doc.createNode(x) as YAMLMap; n.flow = true; return n; })));
     if (inv.defaultTerms !== undefined) set(doc, ['invoicing', 'defaultTerms'], inv.defaultTerms);
     for (const [kind, value] of Object.entries(inv.prices ?? {})) set(doc, ['invoicing', 'prices', kind], value);
     // One line per kind, `invoice: { format: "RE-{JJJJ}-{NNNNN}", restartYearly: true }`.
     for (const [kind, value] of Object.entries(inv.numbering ?? {})) { const n = doc.createNode(value) as YAMLMap; n.flow = true; doc.setIn(['invoicing', 'numbering', kind], n); }
     if (isMap(doc.getIn(['invoicing', 'prices'])) && (doc.getIn(['invoicing', 'prices']) as YAMLMap).items.length === 0) doc.deleteIn(['invoicing', 'prices']);
     // One block per level, each level's texts one line per language.
+    // The Mahnwesen is a dated history (spec 4.12): a change holds from `validFrom`, a Mahnung reads its own date.
     if (inv.dunning === null) doc.deleteIn(['invoicing', 'dunning']);
-    else if (inv.dunning) {
-      const node = doc.createNode(inv.dunning) as YAMLMap;
-      const levels = node.get('levels') as YAMLSeq;
-      for (const l of levels.items) { const texts = (l as YAMLMap).get('texts'); if (isMap(texts)) for (const p of texts.items) (p.value as YAMLMap).flow = true; const auto = (l as YAMLMap).get('auto'); if (isMap(auto)) auto.flow = true; }
-      const interest = node.get('interest'); if (isMap(interest)) interest.flow = true;
-      const device = node.get('device'); if (isMap(device)) device.flow = true;
-      doc.setIn(['invoicing', 'dunning'], node);
-    }
+    else if (inv.dunning) addDated(doc, ['invoicing', 'dunning'], inv.dunning, from, now);
   }
   if (patch.sells) {
     if (!isMap(doc.get('profile'))) throw new WorkspaceError(`${path} has no profile: what the firm sells is kept in it (npm run init writes one)`);
@@ -249,6 +258,29 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
 }
 
 /** Applies `patch` to the manifest file; nothing is written when the result would not open. */
+/** The plain value of the node at `path`, or undefined. */
+function jsonAt(doc: Document, path: string[]): unknown {
+  const node = doc.getIn(path, true) as { toJSON?: () => unknown } | undefined;
+  return node && typeof node === 'object' && node.toJSON ? node.toJSON() : node;
+}
+
+/**
+ * The history at `path` with `value` from `validFrom` (spec 4.12): a plain value there is first one
+ * entry from the start; nothing is added when that day holds the value already. Each entry is written
+ * as `- { validFrom, enteredAt, value }` with a one-line value where it is a mapping.
+ */
+function addDated(doc: Document, path: string[], value: unknown, validFrom: string, enteredAt: string): void {
+  const next = withEntry(historyOf(jsonAt(doc, path)), value, validFrom, enteredAt);
+  const seq = doc.createNode(next.map((e) => {
+    const n = doc.createNode(e) as YAMLMap;
+    const v = n.get('value', true);
+    if (isMap(v)) v.flow = true;
+    if (isSeq(v)) for (const item of v.items) if (isMap(item)) item.flow = true;
+    return n;
+  }));
+  doc.setIn(path, seq);
+}
+
 export function patchManifest(path: string, patch: ManifestPatch): Manifest {
   const { text, manifest } = patchManifestText(readFileSync(path, 'utf8'), patch, path);
   writeAtomic(path, text);

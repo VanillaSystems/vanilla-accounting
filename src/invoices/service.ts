@@ -8,7 +8,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs
 import { basename, dirname, extname, join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import { receiptFile, type Books } from '../books/store.js';
-import { defaultTexts, draftDays, instalmentSheet, issuedIntro, issuedSheet, mailText, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
+import { defaultTexts, draftDays, instalmentSheet, issuedIntro, issuedSheet, mailText, payToNoticeSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
 import {
   INVOICE_CURRENCIES, INVOICE_LANGUAGES, DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, LINE_KINDS, PRICES, isItem, withGroups, type UnitDef,
   type Article, type ArticleFields, type Comment, type Contact, type ContactFields, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
@@ -37,10 +37,11 @@ import { thisDevice } from '../workspace/device.js';
 import { MailError, checkMessage, sendMail } from './mail.js';
 import { isDurchsicht } from '../handover/durchsicht.js';
 import {
-  applyContact, assertNumberFree, checkVatId, contactOfCustomer, documentsOf, draftTermsOf, goneRefs, lineDefaults, liveContacts, numberContact, parseContact, pickableContacts, recipientOf,
+  assertNumberFree, applyContactFrom, checkVatId, contactOfCustomer, documentsOf, draftTermsOf, goneRefs, lineDefaults, liveContacts, numberContact, parseContact, pickableContacts, recipientOf,
 } from './contacts.js';
-import { applyArticle, assertCodeFree, documentsNaming, liveArticles, parseArticle } from './articles.js';
+import { applyArticle, articleRecord, assertCodeFree, documentsNaming, liveArticles, parseArticle, type ArticleInput } from './articles.js';
 import { TEXTS } from './texts.js';
+import { contactOn, contactOnDay, contactRecord, invoicingOn, invoicingOnDay, letterheadOn } from './dated-values.js';
 import { baseCurrency, invoiceActivities, invoiceRates, invoicing } from '../engines/index.js';
 import { openItemAccounts } from '../accounting/tax-point.js';
 import { heldByReconciliation } from '../books/reconcile.js';
@@ -84,9 +85,12 @@ function serial<T>(fn: () => Promise<T> | T): Promise<T> {
 const notFound = (what: string): never => { throw new InvoiceRuleError('notFound', `${what} nicht gefunden.`); };
 const contactGone = (): never => { throw new InvoiceRuleError('contactGone', 'Diesen Kontakt gibt es nicht (mehr).'); };
 
-export function invoicingContext(ws: Workspace): InvoicingContext {
-  return { company: ws.company, settings: ws.invoicing };
+/** What a document of `day` reads of the firm (spec 4.12): the settings and the letterhead valid on its date. */
+export function invoicingContext(ws: Workspace, day: string): InvoicingContext {
+  return { company: ws.company, settings: invoicingOnDay(ws.invoicing, day), letterhead: letterheadOn(ws.company, ws.invoicing, day) };
 }
+/** A contact of the book, read on `day`. */
+const contactAt = (book: InvoiceBook, id: string, day: string, live = true) => contactOnDay((live ? liveContacts(book) : book.contacts).find((c) => c.id === id), day);
 
 /** The logo as a data: URI, so the PDF needs no file access. */
 export function logoSrc(ws: Workspace, path: string | undefined): string | undefined {
@@ -239,7 +243,8 @@ export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonl
       out.customerId = v as string;
     }
     else if (k === 'personId' || k === 'addressId') {
-      const c = book.contacts.find((x) => x.id === (b.customerId ?? findInvoice(book, id ?? '')?.customerId));
+      const doc = findInvoice(book, id ?? '');
+      const c = contactAt(book, (b.customerId ?? doc?.customerId) as string, (b.date as string | undefined) ?? doc?.date ?? new Date().toISOString().slice(0, 10), false);
       const list = k === 'personId' ? c?.persons : c?.addresses;
       if (!list?.some((x) => x.id === v)) bad(`${k}: ${k === 'personId' ? 'diese Kontaktperson' : 'diese Adresse'} hat der Kontakt nicht.`);
       out[k] = v as string;
@@ -292,13 +297,13 @@ export function parseCustomer(body: unknown, partial: boolean): Partial<Customer
 // ─── contacts ──────────────────────────────────────────────────────────────────
 
 /** The ids of the firm's terms a contact may name. */
-const termIds = (ws: Workspace) => (ws.invoicing?.paymentTerms ?? []).map((x) => x.id);
+const termIds = (ws: Workspace) => [...new Set((ws.invoicing?.paymentTerms ?? []).flatMap((e) => e.value.map((x) => x.id)))];
 
 export function createContact(ws: Workspace, body: unknown, now = new Date().toISOString()): Contact {
   const { clear: _, ...fields } = parseContact(body, undefined, termIds(ws));
   return updateInvoices(ws, (book) => {
     assertNumberFree(book, fields.number);
-    const c: Contact = { ...newEnvelope('cu', now), ...(fields as ContactFields) };
+    const c: Contact = { ...newEnvelope('cu', now), ...contactRecord(fields as ContactFields, undefined, now.slice(0, 10), now) };
     book.contacts.push(c);
     return c;
   });
@@ -307,19 +312,24 @@ export function createContact(ws: Workspace, body: unknown, now = new Date().toI
 /** A customer as phase 1 named one (the AI's «newCustomer», the demo's customers): a firm contact with its address as the billing address. */
 export function createCustomer(ws: Workspace, fields: Partial<CustomerFields>, now = new Date().toISOString()): Contact {
   return updateInvoices(ws, (book) => {
-    const c: Contact = { ...newEnvelope('cu', now), ...contactOfCustomer({ language: 'de', ...fields, name: fields.name ?? '' }) };
+    const c: Contact = { ...newEnvelope('cu', now), ...contactRecord(contactOfCustomer({ language: 'de', ...fields, name: fields.name ?? '' }), undefined, now.slice(0, 10), now) };
     book.contacts.push(c);
     return c;
   });
 }
 
-export function updateContact(ws: Workspace, id: string, body: unknown): Contact {
+/**
+ * A change of a contact: its plain fields at once, each dated value (addresses, terms, discount,
+ * revenue account) as a new entry from `validFrom` («gilt ab», spec 4.12; absent: today).
+ */
+export function updateContact(ws: Workspace, id: string, body: unknown, validFrom?: string, now = new Date().toISOString()): Contact {
   return updateInvoices(ws, (book) => {
     const i = book.contacts.findIndex((c) => c.id === id && !c.deleted);
     if (i < 0) contactGone();
-    const patch = parseContact(body, book.contacts[i], termIds(ws));
+    const from = validFrom ?? now.slice(0, 10);
+    const patch = parseContact(body, contactOn(book.contacts[i], from), termIds(ws));
     assertNumberFree(book, patch.number, id);
-    book.contacts[i] = applyContact(book.contacts[i], patch);
+    book.contacts[i] = applyContactFrom(book.contacts[i], patch, from, now);
     return book.contacts[i];
   });
 }
@@ -342,7 +352,7 @@ export function removeContact(ws: Workspace, id: string): { contact: Contact; ou
 export function addContacts(ws: Workspace, list: readonly ContactFields[], now = new Date().toISOString()): Contact[] {
   return updateInvoices(ws, (book) => {
     for (const f of list) assertNumberFree(book, f.number);
-    const made = list.map((f): Contact => ({ ...newEnvelope('cu', now, 'import'), ...f }));
+    const made = list.map((f): Contact => ({ ...newEnvelope('cu', now, 'import'), ...contactRecord(f, undefined, now.slice(0, 10), now) }));
     book.contacts.push(...made);
     return made;
   });
@@ -358,19 +368,20 @@ export function createArticle(ws: Workspace, body: unknown, now = new Date().toI
   const { clear: _, ...fields } = parseArticle(body, unitIds(ws));
   return updateInvoices(ws, (book) => {
     assertCodeFree(book, fields.code);
-    const a: Article = { ...newEnvelope('ar', now), ...(fields as ArticleFields) };
+    const a: Article = { ...newEnvelope('ar', now), ...articleRecord(fields as ArticleInput) };
     book.articles.push(a);
     return a;
   });
 }
 
-export function updateArticle(ws: Workspace, id: string, body: unknown): Article {
+/** A change of an Artikel; a new price holds from `validFrom` («gilt ab», spec 4.12; absent: today). */
+export function updateArticle(ws: Workspace, id: string, body: unknown, validFrom?: string, now = new Date().toISOString()): Article {
   return updateInvoices(ws, (book) => {
     const i = book.articles.findIndex((a) => a.id === id && !a.deleted);
     if (i < 0) articleGone();
     const patch = parseArticle(body, unitIds(ws), book.articles[i]);
     assertCodeFree(book, patch.code, id);
-    book.articles[i] = applyArticle(book.articles[i], patch);
+    book.articles[i] = applyArticle(book.articles[i], patch, validFrom ?? now.slice(0, 10), now);
     return book.articles[i];
   });
 }
@@ -390,10 +401,10 @@ export function removeArticle(ws: Workspace, id: string): { article: Article; ou
 }
 
 /** Adds Artikel made elsewhere (the CSV import), each with its own envelope, in one save. */
-export function addArticles(ws: Workspace, list: readonly ArticleFields[], now = new Date().toISOString()): Article[] {
+export function addArticles(ws: Workspace, list: readonly ArticleInput[], now = new Date().toISOString()): Article[] {
   return updateInvoices(ws, (book) => {
     for (const f of list) assertCodeFree(book, f.code);
-    const made = list.map((f): Article => ({ ...newEnvelope('ar', now, 'import'), ...f }));
+    const made = list.map((f): Article => ({ ...newEnvelope('ar', now, 'import'), ...articleRecord(f) }));
     book.articles.push(...made);
     return made;
   });
@@ -420,16 +431,17 @@ function commit<T>(ws: Workspace, id: string, expected: Invoice, fn: (book: Invo
  */
 export function createDraft(ws: Workspace, input: { customerId: string } & DraftPatch, now = new Date().toISOString()): Draft {
   return updateInvoices(ws, (book) => {
-    const contact = liveContacts(book).find((c) => c.id === input.customerId) ?? contactGone();
+    const date = input.date ?? now.slice(0, 10);
+    // The contact as it stands on the draft's date (spec 4.12): its terms, revenue account and discount of that day.
+    const contact = contactAt(book, input.customerId, date) ?? contactGone();
     // One refusal for an archived contact, wherever a document would pick it.
     if (contact.archived) throw new InvoiceRuleError('archived', `${contact.name} ist archiviert: zuerst wiederherstellen.`);
     const kind = input.kind ?? 'invoice';
     // A Lieferschein comes only from an Auftrag, a Gutschrift only from its Rechnung (convertDocument, createCreditNote).
     if (kind === 'delivery-note') throw new InvoiceRuleError('deliveryFromOrder', 'Ein Lieferschein entsteht aus einem Auftrag: dort «Lieferschein erstellen».');
     if (kind === 'credit-note') throw new InvoiceRuleError('incomplete', 'Eine Gutschrift entsteht aus ihrer Rechnung.');
-    const terms = kind === 'invoice' ? draftTermsOf(ws.invoicing, contact) : undefined;
+    const terms = kind === 'invoice' ? draftTermsOf(invoicingOnDay(ws.invoicing, date), contact) : undefined;
     const defaults = lineDefaults(contact);
-    const date = input.date ?? now.slice(0, 10);
     const draft: Draft = {
       ...newEnvelope('in', now),
       status: 'draft',
@@ -490,7 +502,7 @@ export function missingOf(ws: Workspace, id: string): Missing[] {
   const book = loadInvoices(ws);
   const inv = findInvoice(book, id) ?? notFound('Rechnung');
   if (inv.status !== 'draft') return [];
-  return missingForIssue(inv, { customer: recipientOf(book.contacts.find((c) => c.id === inv.customerId), inv, ws.invoicing), sender: senderFor(invoicingContext(ws), inv.currency), invoices: liveDocuments(book) });
+  return missingForIssue(inv, { customer: recipientOf(contactAt(book, inv.customerId, inv.date, false), inv, invoicingOnDay(ws.invoicing, inv.date)), sender: senderFor(invoicingContext(ws, inv.date), inv.currency), invoices: liveDocuments(book) });
 }
 
 // ─── issuing and sending ───────────────────────────────────────────────────────
@@ -512,12 +524,13 @@ export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; pr
     if (source?.status === 'issued' && source.cancelled && !opts.confirm?.includes('sourceCancelled')) {
       throw new InvoiceRuleError('sourceCancelled', `${KIND_WORD[source.kind]} ${source.number} ist storniert: dieser Entwurf stammt daraus. Nur mit «Trotzdem ausstellen».`, undefined, { number: source.number });
     }
-    const ctx = invoicingContext(ws);
-    const contact = liveContacts(book).find((c) => c.id === draft.customerId);
+    // Everything a document prints of the firm and the contact is read on its own date (spec 4.12).
+    const ctx = invoicingContext(ws, draft.date);
+    const contact = contactAt(book, draft.customerId, draft.date);
     // A person or address the contact no longer has: a warning; on «Trotzdem ausstellen» the document goes without them.
     const gone = goneRefs(contact, draft);
     if (gone.length && !opts.confirmed) throw new InvoiceRuleError('unconfirmed', 'Die gewählte Kontaktperson oder Adresse gibt es beim Kontakt nicht mehr; nur mit «Trotzdem ausstellen».', [...gone, ...warningsForIssue(draft)]);
-    const customer = recipientOf(contact, draft, ws.invoicing);
+    const customer = recipientOf(contact, draft, ctx.settings);
     const texts = defaultTexts(ctx, draft.kind, draft.language, draftDays(ctx, draft, customer), draft.printAs);
     const kept = { ...draft } as Draft;
     for (const m of gone) delete kept[m.field === 'customer.person' ? 'personId' : 'addressId'];
@@ -541,6 +554,7 @@ function sentTitle(inv: Issued, kind: SentKind, reminder?: Pick<Reminder, 'level
   const L = TEXTS[inv.language];
   if (kind === 'reminder') return `${reminderTitle(reminder ?? { level: 1 }, inv.language)} · ${L.invoice} ${inv.number}`;
   if (kind === 'cancellation') return `${L.stamp}: ${L.invoice} ${inv.number}`;
+  if (kind === 'notice') return `${L.payToNotice} · ${L.invoice} ${inv.number}`;
   if (kind === 'instalment') return `${L.instalment} · ${kindTitle(L, inv.kind, inv.printAs, inv.role)} ${inv.number}`;
   return `${kindTitle(L, inv.kind, inv.printAs, inv.role)} ${inv.number}`;
 }
@@ -647,8 +661,8 @@ export function backToDraft(ws: Workspace, id: string, opts: { now?: string; boo
     if (existsSync(join(ws.paths.root, file))) throw new InvoiceRuleError('changed', `${file} gibt es schon; bitte neu laden.`);
     const removed = opts.books?.(inv) ?? [];
     renameSync(join(ws.paths.root, inv.pdf.file), join(ws.paths.root, file));
-    const ctx = invoicingContext(ws);
-    const customer = recipientOf(liveContacts(book).find((c) => c.id === inv.customerId), inv, ws.invoicing);
+    const ctx = invoicingContext(ws, inv.date);
+    const customer = recipientOf(contactAt(book, inv.customerId, inv.date), inv, ctx.settings);
     const { salutation } = defaultTexts(ctx, inv.kind, inv.language, draftDays(ctx, inv, customer));
     let draft: Draft;
     try {
@@ -753,7 +767,7 @@ export function createCreditNote(ws: Workspace, id: string, req: CreditRequest, 
   return updateInvoices(ws, (book) => {
     const inv = findInvoice(book, id) ?? notFound('Rechnung');
     const draft = creditNoteDraft(inv, req, newEnvelope('in', now), now.slice(0, 10));
-    const texts = defaultTexts(invoicingContext(ws), 'credit-note', draft.language, 0);
+    const texts = defaultTexts(invoicingContext(ws, draft.date), 'credit-note', draft.language, 0);
     const credit = { ...draft, closing: texts.closing };
     book.invoices.push(credit);
     return credit;
@@ -772,8 +786,8 @@ export function convertDocument(ws: Workspace, id: string, req: { to: InvoiceCon
     const source = findInvoice(book, id) ?? notFound('Dokument');
     const docs = liveDocuments(book);
     const draft = convertDraft(source, req.to, req.lines, docs, newEnvelope('in', now), now.slice(0, 10), now.slice(0, 10), req.confirm ?? []);
-    const contact = liveContacts(book).find((c) => c.id === draft.customerId);
-    const terms = req.to === 'invoice' && !draft.termsId && contact ? draftTermsOf(ws.invoicing, contact) : undefined;
+    const contact = contactAt(book, draft.customerId, draft.date);
+    const terms = req.to === 'invoice' && !draft.termsId && contact ? draftTermsOf(invoicingOnDay(ws.invoicing, draft.date), contact) : undefined;
     const done: Draft = { ...draft, ...(terms ? { termsId: terms } : {}) };
     book.invoices.push(done);
     return done;
@@ -826,7 +840,8 @@ export function reopenDocument(ws: Workspace, id: string, confirmed: boolean): D
 
 // ─── Mahnungen (spec 4.4.7) ────────────────────────────────────────────────────
 
-const dunningOf = (ws: Workspace): DunningSettings => ws.invoicing?.dunning ?? DEFAULT_DUNNING;
+/** The Mahnwesen valid on `day` (spec 4.12): a Mahnung reads its own date. */
+const dunningOf = (ws: Workspace, day: string): DunningSettings => invoicingOnDay(ws.invoicing, day)?.dunning ?? DEFAULT_DUNNING;
 const draftIn = (book: InvoiceBook, inv: Issued) => reminderDraftOf(inv, liveInvoices(book));
 const noDraft = (): never => { throw new InvoiceRuleError('noReminderDraft', 'Keine Mahnung im Entwurf: eine gesendete bleibt, wie sie gesendet wurde.'); };
 
@@ -835,7 +850,7 @@ export function previewReminder(ws: Workspace, id: string, date: string, fee?: n
   const book = loadInvoices(ws);
   const inv = findInvoice(book, id) ?? notFound('Rechnung');
   if (inv.status === 'issued') { const d = draftIn(book, inv); if (d) return d; }
-  return draftReminder(inv, liveInvoices(book), date, dunningOf(ws), fee !== undefined ? { fee } : {});
+  return draftReminder(inv, liveInvoices(book), date, dunningOf(ws, date), fee !== undefined ? { fee } : {});
 }
 
 const remindable = (book: InvoiceBook, id: string): Issued => {
@@ -858,7 +873,7 @@ export function createReminderDraft(ws: Workspace, id: string, req: { date?: str
     const inv = remindable(book, id);
     const there = draftIn(book, inv);
     if (there) return there;
-    const r = draftReminder(inv, liveInvoices(book), date, dunningOf(ws), req.fee !== undefined ? { fee: req.fee } : {});
+    const r = draftReminder(inv, liveInvoices(book), date, dunningOf(ws, date), req.fee !== undefined ? { fee: req.fee } : {});
     if (r.date < inv.date) bad(`Eine Mahnung ist frühestens am Tag der Rechnung (${inv.date}) datiert.`);
     replaceDoc(book, { ...inv, reminders: [...inv.reminders.filter((x) => x.documentId), r] });
     return r;
@@ -874,15 +889,15 @@ function patched(ws: Workspace, inv: Issued, invoices: readonly Invoice[], r: Re
   if (p.fee !== undefined && p.fee !== null && (typeof p.fee !== 'number' || !Number.isFinite(p.fee) || p.fee < 0)) bad('fee ist ein Betrag ab 0.');
   if (p.interest !== undefined && p.interest !== null && (typeof p.interest !== 'number' || !Number.isFinite(p.interest) || p.interest < 0)) bad('interest ist ein Betrag ab 0.');
   for (const k of ['title', 'intro', 'closing'] as const) if (p[k] !== undefined && typeof p[k] !== 'string') bad(`${k} ist ein Text.`);
-  const level = dunningOf(ws).levels[r.level - 1];
+  const level = dunningOf(ws, p.date ?? r.date).levels[r.level - 1];
   // A new date moves the due date by the level's days and the interest to it, unless the person names them.
   const date = p.date ?? r.date;
   const dueDate = p.dueDate ?? (p.date !== undefined ? addDays(date, level?.days ?? daysBetween(r.date, r.dueDate)) : r.dueDate);
   if (date < inv.date) bad(`Eine Mahnung ist frühestens am Tag der Rechnung (${inv.date}) datiert.`);
   if (dueDate < date) bad(`Zahlbar bis ${dueDate} liegt vor dem Datum der Mahnung ${date}.`);
-  const computed = p.date !== undefined ? interestOf(inv, invoices, date, dunningOf(ws)) : r.interest;
+  const computed = p.date !== undefined ? interestOf(inv, invoices, date, dunningOf(ws, date)) : r.interest;
   // An amount typed by hand: over the same span; without a rate (the firm charges none) the paper names no percent.
-  const span = computed ?? { rate: dunningOf(ws).interest?.rate ?? 0, from: inv.dueDate, to: date, days: Math.max(0, daysBetween(inv.dueDate, date)), amount: 0 };
+  const span = computed ?? { rate: dunningOf(ws, date).interest?.rate ?? 0, from: inv.dueDate, to: date, days: Math.max(0, daysBetween(inv.dueDate, date)), amount: 0 };
   const interest = p.interest === null ? undefined : p.interest !== undefined ? { ...span, amount: round(inv, p.interest) } : computed;
   const fee = p.fee === null ? undefined : p.fee !== undefined ? round(inv, p.fee) : r.fee;
   const { fee: _f, interest: _i, ...rest } = r;
@@ -939,7 +954,7 @@ export function sendReminder(ws: Workspace, id: string, req: ReminderPatch & { t
     const invoices = liveInvoices(book);
     const draft = draftIn(book, inv);
     const { to, by, expect, ...patch } = req;
-    const base = draft ?? draftReminder(inv, invoices, req.date ?? now.slice(0, 10), dunningOf(ws), typeof req.fee === 'number' ? { fee: req.fee } : {});
+    const base = draft ?? draftReminder(inv, invoices, req.date ?? now.slice(0, 10), dunningOf(ws, req.date ?? now.slice(0, 10)), typeof req.fee === 'number' ? { fee: req.fee } : {});
     if (expect && (base.level !== expect.level || !!draft !== expect.draft)) {
       throw new InvoiceRuleError('levelChanged', `Rechnung ${inv.number}: inzwischen ist ${draft ? 'eine Mahnung im Entwurf' : `die Stufe ${base.level}`} dran, nicht die geplante Stufe ${expect.level}; nichts gesendet.`, undefined, { number: inv.number });
     }
@@ -982,13 +997,13 @@ export const canMail = (ws: Workspace): boolean => !!ws.outgoingMail;
 /** Sends a Mahnung's PDF to `to`: the level's mail texts, else the firm's, else the app's, through the company's mailbox. */
 export type MailReminder = (to: string, inv: Issued, r: Pick<Reminder, 'level' | 'title'>) => Deliver;
 export const mailReminder = (ws: Workspace): MailReminder => (to, inv, r) => ({ filename, pdf }) =>
-  sendMail(ws, checkMessage({ to, ...mailText(ws.invoicing, inv, { kind: 'reminder', level: r.level, title: reminderTitle(r, inv.language) }, ws.company.name) }), { filename, content: pdf });
+  sendMail(ws, checkMessage({ to, ...mailText(invoicingOnDay(ws.invoicing, new Date().toISOString().slice(0, 10)), inv, { kind: 'reminder', level: r.level, title: reminderTitle(r, inv.language) }, ws.company.name) }), { filename, content: pdf });
 
 /** The Mahnlauf's list on `date` (spec 4.4.7): see src/invoices/dunning.ts dunningRun. */
 export function planDunningRun(ws: Workspace, date: string, only?: readonly string[]): RunPlan {
   if (!isDate(date)) bad('date ist ein Datum JJJJ-MM-TT.');
   const book = loadInvoices(ws);
-  return dunningRun(book, liveInvoices(book), dunningOf(ws), date, { ...(only ? { only } : {}), canMail: canMail(ws) });
+  return dunningRun(book, liveInvoices(book), dunningOf(ws, date), date, { ...(only ? { only } : {}), canMail: canMail(ws) });
 }
 
 /** Why a Mahnung did not go: the rule's or the mailbox's code, and its words. */
@@ -1052,12 +1067,13 @@ export interface AutoOutcome {
 export async function autoReminders(ws: Workspace, opts: { today?: string; now?: string; printer?: Printer; mail?: MailReminder } = {}): Promise<AutoOutcome> {
   const none = (skipped?: AutoOutcome['skipped']): AutoOutcome => ({ sent: [], failed: [], examined: [], deferred: [], ...(skipped ? { skipped } : {}) });
   if (!holdsTheBooks(ws)) return none('copy');
-  const dunning = dunningOf(ws);
+  const now = opts.now ?? new Date().toISOString();
+  const today = opts.today ?? now.slice(0, 10);
+  // The Mahnstufen valid today (spec 4.12).
+  const dunning = dunningOf(ws, today);
   if (!dunning.levels.some((l) => l.auto)) return none();
   if (!dunning.device) return none('noDevice');
   if (dunning.device.id !== thisDevice(ws).id) return none('otherDevice');
-  const now = opts.now ?? new Date().toISOString();
-  const today = opts.today ?? now.slice(0, 10);
   const book = loadInvoices(ws);
   const due = autoDue(book, liveInvoices(book), dunning, today, new Set(readMailed(ws).map((m) => levelKey(m.invoiceId, m.level))));
   const take = due.slice(0, MAX_RUN);
@@ -1136,8 +1152,8 @@ export function createStageInvoice(ws: Workspace, id: string, stage: number | 'f
     const draft = stage === 'final' || stage === last
       ? finalDraft(order, docs, envelope, now.slice(0, 10), confirm)
       : stageDraft(order, stage, docs, envelope, now.slice(0, 10));
-    const contact = liveContacts(book).find((c) => c.id === draft.customerId);
-    const terms = !draft.termsId && contact ? draftTermsOf(ws.invoicing, contact) : undefined;
+    const contact = contactAt(book, draft.customerId, draft.date);
+    const terms = !draft.termsId && contact ? draftTermsOf(invoicingOnDay(ws.invoicing, draft.date), contact) : undefined;
     const done: Draft = { ...draft, ...(terms ? { termsId: terms } : {}) };
     book.invoices.push(done);
     return done;
@@ -1183,6 +1199,26 @@ export function sendInstalment(ws: Workspace, id: string, req: { date?: string; 
   });
 }
 
+/**
+ * «Zahlungsaufforderung mit neuer IBAN» (spec 4.12) for an open invoice: printed with the account
+ * valid on `date` and what is still open, kept in the sent log like a reminder (mailed, or downloaded).
+ */
+export function sendPayToNotice(ws: Workspace, id: string, req: { date?: string; to?: string }, opts: { now?: string; printer?: Printer; deliver?: Deliver } = {}): Promise<SentDocument> {
+  return serial(async () => {
+    const now = opts.now ?? new Date().toISOString();
+    const book = loadInvoices(ws);
+    const inv = findInvoice(book, id) ?? notFound('Rechnung');
+    if (inv.status !== 'issued' || inv.kind !== 'invoice' || inv.cancelled) throw new InvoiceRuleError('notIssued', 'Eine Zahlungsaufforderung gibt es zu einer offenen Rechnung.');
+    if (openAmount(inv, liveInvoices(book)) <= 0) throw new InvoiceRuleError('nothingOpen', `Rechnung ${inv.number} ist nicht mehr offen.`);
+    const date = req.date ?? now.slice(0, 10);
+    if (!isDate(date)) bad('date ist ein Datum JJJJ-MM-TT.');
+    const payTo = invoicingOnDay(ws.invoicing, date)?.payTo[inv.currency];
+    if (!payTo) throw new InvoiceRuleError('incomplete', `Kein Konto für ${inv.currency} am ${date}.`);
+    const sent = await printOwnDocument(ws, inv, 'notice', payToNoticeSheet(book, inv, payTo, date, logoSrc(ws, inv.layout.logo)), req.to, now, opts.printer ?? chromium, opts.deliver);
+    return commit(ws, inv.id, inv, (fresh) => { fresh.sent.push(sent); return sent; });
+  });
+}
+
 export function addComment(ws: Workspace, id: string, text: string, author: string, now = new Date().toISOString()): Comment {
   if (!text.trim()) bad('Der Kommentar ist leer.');
   return updateInvoices(ws, (book) => {
@@ -1201,8 +1237,8 @@ export async function previewHtml(ws: Workspace, id: string, opts: { reminder?: 
   const inv = findInvoice(book, id) ?? notFound('Rechnung');
   const logo = logoSrc(ws, inv.status === 'issued' ? inv.layout.logo : ws.invoicing?.layout.logo);
   const sheet = opts.reminder && inv.status === 'issued'
-    ? reminderSheet(book, inv, draftIn(book, inv) ?? draftReminder(inv, liveInvoices(book), opts.reminder.date, dunningOf(ws), opts.reminder.fee !== undefined ? { fee: opts.reminder.fee } : {}), logo)
-    : sheetOf(invoicingContext(ws), book, inv, logo);
+    ? reminderSheet(book, inv, draftIn(book, inv) ?? draftReminder(inv, liveInvoices(book), opts.reminder.date, dunningOf(ws, opts.reminder.date), opts.reminder.fee !== undefined ? { fee: opts.reminder.fee } : {}), logo)
+    : sheetOf(invoicingContext(ws, inv.date), book, inv, logo);
   return (opts.printer ?? chromium).html(sheet);
 }
 
@@ -1228,9 +1264,13 @@ export function paymentContext(ws: Workspace): PaymentContext | undefined {
   return {
     bankAccounts: ws.bankAccounts,
     revenueAccount: s.revenueAccount,
-    ...(s.feeAccount ? { feeAccount: s.feeAccount } : {}),
-    interestAccount: interestAccount(s),
-    ...(writeOffAccounts(s) ? { writeOffAccount: writeOffAccounts(s) } : {}),
+    interestAccount: interestAccount(invoicingOn(s, new Date().toISOString().slice(0, 10))),
+    // A payment's fee reads the fee account of its date, a write-off the accounts of its own (spec 4.12).
+    accountsOn: (day) => {
+      const on = invoicingOn(s, day);
+      const wo = writeOffAccounts(on);
+      return { ...(on.feeAccount ? { feeAccount: on.feeAccount } : {}), ...(wo ? { writeOffAccount: wo } : {}) };
+    },
     ensureAccount: (number) => {
       if (accountName(ws, number) !== undefined) return;
       const name = standardAccounts().find((a) => a.number === number)?.name;

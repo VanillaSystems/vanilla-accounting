@@ -8,13 +8,16 @@
 import { Router, type Request } from 'express';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { WS, assertOpen, readBooks, receiptPath, refDates, updateBooksWithEffects, RequestError } from '../books.js';
+import { WS, assertOpen, readBooks, receiptPath, refDates, reopenWorkspace, updateBooksWithEffects, RequestError } from '../books.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
+import { allTerms } from '../../invoices/dated-values.js';
+import { changeDated, contactChangeCard } from '../../invoices/dated-change.js';
+import type { DatedWay } from '../../invoices/backdated.js';
 import { InvoiceRuleError, liveDocuments, liveInvoices, type CreditRequest } from '../../invoices/rules.js';
 import {
   addArticles, createArticle, liveArticles, removeArticle, updateArticle,
   addComment, answerQuote, backToDraft, cancelInvoice, changeAccounts, convertDocument, createContact, addContacts, createCreditNote, createDraft, createReminderDraft, deleteReminderDraft, planDunningRun, previewReminder, runDunning, updateReminderDraft, fileReceipts, findInvoice, issueInvoice, issuedPdf,
-  missingOf, parseDraftPatch, paymentContext, previewHtml, recordSend, removeContact, removeDraft, reopenDocument, replacedPdf, sendReminder, sentPdf, updateContact, updateDraft, viewOf,
+  missingOf, parseDraftPatch, paymentContext, previewHtml, recordSend, removeContact, removeDraft, reopenDocument, replacedPdf, sendPayToNotice, sendReminder, sentPdf, updateContact, updateDraft, viewOf,
   addDeductions, createStageInvoice, parseStages, sendInstalment, setStages,
 } from '../../invoices/service.js';
 import { liveContacts, payerIbans, proposeBusiness } from '../../invoices/contacts.js';
@@ -176,8 +179,25 @@ router.post('/api/contacts', (req, res) => {
   res.json(createContact(WS, req.body));
 });
 
+/**
+ * A change of a contact; `validFrom` («gilt ab», absent: today) dates its addresses, terms, discount and
+ * revenue account (spec 4.12). A day before issued documents that printed another address or other terms
+ * answers with the card and saves nothing until `way: 'keep'` («So lassen»).
+ */
 router.patch('/api/contacts/:id', (req, res) => {
-  res.json(updateContact(WS, req.params.id, req.body));
+  const { validFrom, way, ...patch } = body(req) as Record<string, unknown> & { validFrom?: string; way?: string };
+  const from = typeof validFrom === 'string' ? validFrom : today();
+  const card = way === 'keep' ? undefined : contactChangeCard(WS, req.params.id, patch, from);
+  if (card) return void res.json({ saved: false, ...card });
+  res.json(updateContact(WS, req.params.id, patch, from));
+});
+
+/** «Ändern» with «gilt ab» on a dated value (spec 4.12): saved, or the card of the issued documents it covers until a way is named. */
+router.post('/api/invoicing/dated', (req, res) => {
+  const b = body(req);
+  const out = changeDated(WS, { path: String(b.path ?? ''), value: b.value, validFrom: String(b.validFrom ?? ''), ...(typeof b.way === 'string' ? { way: b.way as DatedWay } : {}) });
+  if (out.saved && String(b.path).startsWith('invoicing/')) reopenWorkspace();
+  res.json(out);
 });
 
 /** Archived while a document names it, else deleted (spec 4.4.5); the answer says which. */
@@ -232,7 +252,7 @@ router.post('/api/articles/import', (req, res) => {
 });
 
 router.post('/api/invoices', (req, res) => {
-  const { clear: _, ...patch } = parseDraftPatch(req.body, loadInvoices(WS), WS.invoicing?.units, undefined, WS.invoicing?.paymentTerms);
+  const { clear: _, ...patch } = parseDraftPatch(req.body, loadInvoices(WS), WS.invoicing?.units, undefined, WS.invoicing ? allTerms(WS.invoicing) : undefined);
   if (!patch.customerId) throw new RequestError(400, 'customerId fehlt.');
   res.json(createDraft(WS, { ...patch, customerId: patch.customerId }));
 });
@@ -240,7 +260,7 @@ router.post('/api/invoices', (req, res) => {
 /** `confirm: 'stagesInvoiced'`: «Trotzdem ändern» over a changed total of an Auftrag whose Teilrechnungen are issued (spec 4.11). */
 router.patch('/api/invoices/:id', (req, res) => {
   const { confirm, ...patch } = body(req);
-  res.json(updateDraft(WS, req.params.id, parseDraftPatch(patch, loadInvoices(WS), WS.invoicing?.units, req.params.id, WS.invoicing?.paymentTerms), confirms({ confirm })));
+  res.json(updateDraft(WS, req.params.id, parseDraftPatch(patch, loadInvoices(WS), WS.invoicing?.units, req.params.id, WS.invoicing ? allTerms(WS.invoicing) : undefined), confirms({ confirm })));
 });
 
 router.delete('/api/invoices/:id', (req, res) => {
@@ -356,6 +376,12 @@ router.post('/api/invoices/:id/credit-note', (req, res) => {
   if (settlement !== undefined && settlement !== 'refund' && settlement !== 'offset') throw new RequestError(400, 'settlement ist refund oder offset.');
   const credit: CreditRequest = { reason: optText(b, 'reason') ?? '', ...(b.amount !== undefined ? { amount: optNumber(b, 'amount') } : {}), ...(settlement ? { settlement } : {}) };
   res.json(createCreditNote(WS, req.params.id, credit));
+});
+
+/** «Zahlungsaufforderung mit neuer IBAN» (spec 4.12): mailed with `email`, else downloaded; kept in the sent log. */
+router.post('/api/invoices/:id/notices', async (req, res) => {
+  const b = body(req);
+  res.json(await sendPayToNotice(WS, req.params.id, { date: optText(b, 'date'), to: optText(b, 'to') }, { deliver: delivery(b) }));
 });
 
 /** A Mahnung's changes in a body: null takes the fee or the interest off. */

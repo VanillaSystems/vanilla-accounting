@@ -9,7 +9,8 @@
  * src/invoices/service.ts addArticles saves what it returns.
  */
 import { kindOfRate } from '../engines/index.js';
-import { DEFAULT_UNITS, type Article, type ArticleFields, type UnitDef, type VatKind } from './model.js';
+import { DEFAULT_UNITS, type Article, type UnitDef, type VatKind } from './model.js';
+import type { ArticleInput } from './articles.js';
 import { ambiguousNumber, normWord, proposeColumns, readTable, tableNumber, type ImportChoice, type Mapping } from './table-import.js';
 
 export const ARTICLE_FIELDS = ['code', 'name', 'type', 'text', 'unit', 'price', 'vat', 'account', 'group'] as const;
@@ -27,7 +28,7 @@ const BLOCKING: readonly ArticleProblem[] = ['name', 'price', 'priceUnclear'];
 
 export interface ArticleImportRow {
   line: number;
-  article?: ArticleFields;
+  article?: ArticleInput;
   problems: ArticleProblem[];
   /** The Artikel already there, or the earlier row, with the same code. */
   same?: { articleId: string; name: string } | { line: number; name: string };
@@ -81,7 +82,7 @@ function unitOf(cell: string, units: readonly UnitDef[]): string | undefined {
   return u?.id;
 }
 
-function rowArticle(cell: (f: ArticleField) => string, units: readonly UnitDef[], today: string): { article?: ArticleFields; problems: ArticleProblem[] } {
+function rowArticle(cell: (f: ArticleField) => string, units: readonly UnitDef[], today: string): { article?: ArticleInput; problems: ArticleProblem[] } {
   const name = cell('name');
   if (!name) return { problems: ['name'] };
   const problems: ArticleProblem[] = [];
@@ -141,10 +142,10 @@ export function previewArticleImport(csv: string, mapping: ArticleMapping | unde
  * (else the proposed one). A row taken as new whose code another Artikel (or an earlier row) holds
  * comes without its code: a code names one Artikel.
  */
-export function importArticles(csv: string, mapping: ArticleMapping | undefined, choices: Record<string, ImportChoice>, existing: readonly Article[], units?: readonly UnitDef[], today?: string): { articles: ArticleFields[]; skipped: number } {
+export function importArticles(csv: string, mapping: ArticleMapping | undefined, choices: Record<string, ImportChoice>, existing: readonly Article[], units?: readonly UnitDef[], today?: string): { articles: ArticleInput[]; skipped: number } {
   const preview = previewArticleImport(csv, mapping, existing, units, today);
   const taken = new Set(existing.flatMap((a) => (a.code && !a.deleted ? [codeKey(a.code)] : [])));
-  const articles: ArticleFields[] = [];
+  const articles: ArticleInput[] = [];
   for (const row of preview.rows) {
     const choice = choices[String(row.line)] ?? row.choice;
     if (choice !== 'new' || !row.article || row.problems.some((p) => BLOCKING.includes(p))) continue;

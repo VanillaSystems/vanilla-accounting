@@ -4,6 +4,10 @@
  * sheet. Saved in belege.workspace.yaml's invoicing block; an issued invoice keeps the layout it
  * was issued with.
  */
+import { DatedValue, Input } from '../invoices/DatedValue.js';
+import { oneLine } from '../../../invoices/sheet.js';
+import type { Letterhead } from '../../../invoices/model.js';
+import { contactOnDay, invoicingOnDay } from '../../../invoices/dated-values.js';
 import { banksOf } from '../../../workspace/money-accounts.js';
 import { Fragment, useMemo, useState } from 'react';
 import { DEFAULT_UNITS, INVOICE_CURRENCIES, INVOICE_FONTS, LAYOUT_ELEMENTS, PRICES, isItem, type Invoice, type Prices, type UnitDef, type Draft, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type LayoutElement, type OWN_TEXTS } from '../../../invoices/model.js';
@@ -122,6 +126,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
           </div>
         </div>
         <PayTo ws={ws} nav={nav} canEdit={canEdit} />
+        <LetterheadSection ws={ws} nav={nav} canEdit={canEdit} />
         <Units ws={ws} nav={nav} canEdit={canEdit} drafts={load.state === 'ready' ? load.data.invoices.filter((i) => i.status === 'draft') : []} />
         <PaymentTermsSection ws={ws} nav={nav} canEdit={canEdit} />
         <NumberingSection ws={ws} nav={nav} canEdit={canEdit} docs={load.state === 'ready' ? load.data.invoices : []} fits={formatFits} />
@@ -149,6 +154,37 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
  * after the first setup too (r8c-1: an EUR invoice needs payTo.EUR). An account without an IBAN
  * takes it here, in the same change, as the setup does.
  */
+type PayToValue = { account: string; iban: string; qrIban?: string };
+
+/**
+ * The letterhead (spec 4.12): the firm's name, address and UID as its documents print them, a dated
+ * history; while it has none, documents print the company's of Firma › Stammdaten.
+ */
+function LetterheadSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boolean }) {
+  const own = { name: ws.company.name, ...(ws.company.address ? { address: ws.company.address } : {}), ...(ws.company.uid ? { uid: ws.company.uid } : {}) };
+  const show = (v: Letterhead) => [v.name, v.address ? oneLine(v.address) : '', v.uid ?? ''].filter(Boolean).join(' · ');
+  return (
+    <div className="lkf" data-testid="letterhead">
+      <DatedValue<Letterhead> label={t('invoiceLayout.letterhead')} path="invoicing/letterhead" history={ws.invoicing?.letterhead} today={localToday()} nav={nav} show={show}
+        none={<>{show(own)} <span className="m">· {t('invoiceLayout.letterheadCompany')}</span></>}
+        form={canEdit ? {
+          from: (v) => { const x = v ?? own; return { name: x.name, street: x.address?.street ?? '', number: x.address?.number ?? '', postcode: x.address?.postcode ?? '', town: x.address?.town ?? '', uid: x.uid ?? '' }; },
+          to: (f) => ({ name: f.name.trim(), address: { ...(f.street.trim() ? { street: f.street.trim() } : {}), ...(f.number.trim() ? { number: f.number.trim() } : {}), postcode: f.postcode.trim(), town: f.town.trim(), country: ws.company.address?.country ?? 'CH' }, ...(f.uid.trim() ? { uid: f.uid.trim() } : {}) }),
+          fields: (f, setF) => (
+            <>
+              <Input k="name" label={t('invoiceLayout.letterheadName')} f={f} set={setF} />
+              <Input k="street" label={t('company.field.street')} f={f} set={setF} />
+              <Input k="number" label={t('company.field.number')} f={f} set={setF} />
+              <Input k="postcode" label={t('company.field.postcode')} f={f} set={setF} mono />
+              <Input k="town" label={t('company.field.town')} f={f} set={setF} />
+              <Input k="uid" label={t('invoiceLayout.letterheadUid')} f={f} set={setF} mono />
+            </>
+          ),
+        } : undefined} />
+    </div>
+  );
+}
+
 function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boolean }) {
   const banks = banksOf(ws.bankAccounts);
   const [pending, setPending] = useState<Partial<Record<InvoiceCurrency, string>>>({});
@@ -167,7 +203,7 @@ function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boole
       <div className="lkr lkstack"><span>{t('invoiceLayout.payToTitle')}</span><span className="m">{t('invoiceLayout.payToHint')}</span></div>
       {INVOICE_CURRENCIES.map((c) => {
         const own = banks.filter((a) => a.currency === c);
-        const current = ws.invoicing?.payTo[c]?.account ?? '';
+        const current = invoicingOnDay(ws.invoicing, localToday())?.payTo[c]?.account ?? '';
         const picked = pending[c] ?? current;
         const bank = own.find((a) => a.account === picked);
         const needsIban = !!bank && !bank.iban;
@@ -194,6 +230,24 @@ function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boole
             )}
           </label>
           {current && <QrIban key={current} ws={ws} nav={nav} canEdit={canEdit} currency={c} account={current} />}
+          {own.length > 0 && (
+            <DatedValue<PayToValue> label={t('invoiceLayout.payToFrom', { currency: c })} path={`invoicing/payTo/${c}`} history={ws.invoicing?.payTo[c]} today={localToday()} nav={nav}
+              show={(v) => <span className="mono">{v.account} · {v.qrIban ?? v.iban}</span>}
+              form={canEdit ? {
+                from: (v) => ({ account: v?.account ?? own[0].account, qrIban: v?.qrIban ?? '' }),
+                to: (f) => ({ account: f.account, ...(f.qrIban.trim() ? { qrIban: f.qrIban.trim() } : {}) }),
+                fields: (f, setF) => (
+                  <>
+                    <label>{t('invoiceLayout.payToIn', { currency: c })}
+                      <select name="account" value={f.account} onChange={(e) => setF({ ...f, account: e.target.value })}>
+                        {own.filter((a) => a.iban).map((a) => <option key={a.account} value={a.account}>{a.account} {a.label} · {a.iban}</option>)}
+                      </select>
+                    </label>
+                    <Input k="qrIban" label={t('invoiceLayout.qrIban')} f={f} set={setF} mono />
+                  </>
+                ),
+              } : undefined} />
+          )}
           </Fragment>
         );
       })}
@@ -208,7 +262,7 @@ function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boole
  * existed, shows the same warning as a fact beside the field.
  */
 function QrIban({ ws, nav, canEdit, currency, account }: { ws: CompanyInfo; nav: Nav; canEdit: boolean; currency: InvoiceCurrency; account: string }) {
-  const stored = ws.invoicing?.payTo[currency]?.qrIban ?? '';
+  const stored = invoicingOnDay(ws.invoicing, localToday())?.payTo[currency]?.qrIban ?? '';
   const [value, setValue] = useState(stored);
   const [warned, setWarned] = useState(false);
   const changed = value.replace(/\s+/g, '').toUpperCase() !== stored;
@@ -316,8 +370,8 @@ function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
       lines: latest?.lines.length ? latest.lines : [{ text: t('invoiceLayout.sampleLine'), quantity: 4, unit: 'h', price: 120, vatRate: invoiceRates()[0] }],
       intro: texts.intro, closing: texts.closing,
     };
-    const ctx = contextOf(ws);
-    const sheet = draftSheet({ ...ctx, settings: { ...ctx.settings!, layout } }, bookOf(d), sample, recipientOf(customer, sample, ctx.settings), layout.logo ? api.logoUrl(layout.logo) : undefined);
+    const ctx = contextOf(ws, sample.date);
+    const sheet = draftSheet({ ...ctx, settings: { ...ctx.settings!, layout } }, bookOf(d), sample, recipientOf(contactOnDay(customer, sample.date), sample, ctx.settings), layout.logo ? api.logoUrl(layout.logo) : undefined);
     const fallback = customer ? {} : { customer: { ...sheet.customer, name: t('invoiceLayout.sampleCustomer'), address: { street: t('invoiceLayout.sampleStreet'), number: '1', postcode: '8000', town: t('invoiceLayout.sampleTown'), country: 'CH' } } };
     const windowGuide = guide ? t(layout.window === 'left' ? 'invoiceLayout.windowFrameLeft' : 'invoiceLayout.windowFrameRight') : undefined;
     return { ...sheet, ...fallback, screen: screenOf(d, canEdit ? 'texts' : undefined, undefined, windowGuide) };

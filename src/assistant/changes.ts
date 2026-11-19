@@ -174,6 +174,12 @@ function change(v: unknown): Change {
     }
     case 'invoicing': return { kind: 'invoicing', set: invoicingSet(c.set) };
     case 'invoiceDraft': return invoiceDraft(c);
+    case 'datedValue': {
+      const validFrom = str(c.validFrom, 'validFrom');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(validFrom)) throw new ChangesError('validFrom: ein Datum JJJJ-MM-TT');
+      if (c.value === undefined) throw new ChangesError('value fehlt');
+      return { kind: 'datedValue', path: str(c.path, 'path'), value: c.value, validFrom };
+    }
     case 'export': {
       const preset = str(c.preset, 'preset');
       if (!PRESETS.some((p) => p.id === preset)) throw new ChangesError(`preset: eines von ${PRESETS.map((p) => p.id).join(', ')}`);

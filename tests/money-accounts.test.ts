@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join, relative } from 'node:path';
 import { parseDocument } from 'yaml';
 import type { BankTransaction, Index } from '../src/types/index.js';
-import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, MANIFEST_MIGRATIONS, SchemaTooNewError, WORKSPACE_SCHEMA, climb } from '../src/workspace/schema.js';
+import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, MANIFEST_MIGRATIONS, SchemaTooNewError, WORKSPACE_SCHEMA, climb, datedInvoicing, manifestText } from '../src/workspace/schema.js';
 import { parseManifest } from '../src/workspace/manifest.js';
 import { patchManifestText } from '../src/workspace/manifest-write.js';
 import { accountOf, bankAccountFor, byStatement, madeByHand, roleOf, UnknownMoneyAccountError } from '../src/workspace/money-accounts.js';
@@ -166,7 +166,9 @@ for (const root of DEMO_ROOTS) {
     const after = filesOf(ws);
     const changed = [...after.keys()].filter((f) => after.get(f) !== before.get(f)).sort();
     assert.deepEqual(changed, ['belege.workspace.yaml', 'ledger.json'], 'no book record, seal, filing or receipt changed');
-    assert.equal(readFileSync(manifest, 'utf8'), noCash(readFileSync(join(root, 'belege.workspace.yaml'), 'utf8')), 'the migrated manifest is the one the app ships');
+    // The shipped manifest writes its invoicing settings plain; the step 6 → 7 makes each one entry from the start.
+    const shipped = manifestText(datedInvoicing(parseDocument(noCash(readFileSync(join(root, 'belege.workspace.yaml'), 'utf8')))));
+    assert.equal(readFileSync(manifest, 'utf8'), shipped, 'the migrated manifest is the one the app ships');
     const books = loadBooks(workspaceAt(ws));
     const seals = sealsOf(books).checks;
     assert.ok(seals.every((c) => c.status === 'intact'), seals.map((c) => `${c.quarter} ${c.status}`).join(', '));

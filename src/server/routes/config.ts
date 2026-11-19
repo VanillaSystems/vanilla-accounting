@@ -1,4 +1,5 @@
 import { STATEMENT_KINDS, type StatementKind } from '../../workspace/banks.js';
+import { invoicingOnDay } from '../../invoices/dated-values.js';
 import express, { Router } from 'express';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -125,7 +126,7 @@ function bankPatch(raw: unknown): BankPatch {
   const iban = optText(b, 'iban');
   if (iban === null) {
     const bank = WS.bankAccounts.find((a) => a.bank === stringField(b, 'bank') && a.currency === stringField(b, 'currency'));
-    const printed = bank && Object.entries(WS.invoicing?.payTo ?? {}).find(([, to]) => to?.account === bank.account);
+    const printed = bank && Object.entries(WS.invoicing?.payTo ?? {}).find(([, to]) => to?.some((e) => e.value.account === bank.account));
     if (printed) throw new RequestError(400, `Die IBAN von ${bank.account} steht auf den Rechnungen in ${printed[0]}. Zuerst unter Rechnungslayout › Zahlungskonten ein anderes Konto wählen.`, { code: 'ibanOnInvoices', params: { currency: printed[0], account: bank.account } });
   }
   return { bank: stringField(b, 'bank'), currency: stringField(b, 'currency'), label: optText(b, 'label') ?? undefined, iban };
@@ -189,7 +190,7 @@ function removedBank(raw: unknown): NonNullable<ManifestPatch['removeBank']> {
   const shared = WS.bankAccounts.some((a) => a !== bank && a.account === bank.account);
   const own = (e: JournalEntry) => (e.transactionRef !== undefined && refs.has(e.transactionRef)) || (!shared && (e.accountDebit === bank.account || e.accountCredit === bank.account));
   const entries = books.journalEntries.filter(own).length + payments.length;
-  const invoices = Object.entries(WS.invoicing?.payTo ?? {}).filter(([cur, to]) => cur === bank.currency && to?.account === bank.account).length;
+  const invoices = Object.entries(WS.invoicing?.payTo ?? {}).filter(([cur, to]) => cur === bank.currency && to?.some((e) => e.value.account === bank.account)).length;
   if (statements || entries || invoices) {
     throw new RequestError(400, `Das Bankkonto ${bank.label} (${bank.account}) wird gebraucht: ${statements} Auszüge, ${entries} Buchungen oder Zahlungen, ${invoices} Rechnungskonten. Erst diese entfernen.`,
       { code: 'bankInUse', params: { account: bank.account, label: bank.label, statements, entries, invoices } });
@@ -277,7 +278,7 @@ function dunningPatch(raw: unknown): DunningSettings {
   const body = (raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>;
   const { device: asked, ...rest } = body;
   const next = readDunning(rest, (msg, r) => { throw new RequestError(400, msg, { code: 'dunningSetting', params: { rule: r.rule, where: r.where.replace(/^dunning\./, ''), max: MAX_LEVELS } }); }, 'dunning');
-  const before = WS.invoicing?.dunning;
+  const before = invoicingOnDay(WS.invoicing, new Date().toISOString().slice(0, 10))?.dunning;
   const { device: _d, ...plain } = next;
   if (!next.levels.some((l) => l.auto)) return plain;
   const wasAuto = !!before?.levels.some((l) => l.auto);
@@ -288,7 +289,9 @@ function dunningPatch(raw: unknown): DunningSettings {
 /** The layout's values are checked by the manifest's reader; here only their kinds. */
 function invoicingPatch(raw: unknown): InvoicingPatch {
   const out: InvoicingPatch = {};
-  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo', 'confirm', 'units', 'prices', 'paymentTerms', 'defaultTerms', 'numbering', 'dunning']);
+  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo', 'confirm', 'units', 'prices', 'paymentTerms', 'defaultTerms', 'numbering', 'dunning', 'validFrom']);
+  // «Gilt ab» of payTo, the Konditionen and the Mahnwesen (spec 4.12); absent: today.
+  if (b.validFrom !== undefined) { if (typeof b.validFrom !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(b.validFrom)) throw new RequestError(400, 'validFrom ist ein Datum JJJJ-MM-TT.'); out.validFrom = b.validFrom; }
   if (b.numbering !== undefined) out.numbering = numberingPatch(b.numbering);
   // Firma › Rechnungslayout › Mahnwesen: the whole list, checked as the manifest reads it.
   if (b.dunning !== undefined) out.dunning = b.dunning === null ? null : dunningPatch(b.dunning);

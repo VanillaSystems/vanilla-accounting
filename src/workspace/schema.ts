@@ -17,6 +17,7 @@ import { isMap, isSeq, type Document, type YAMLMap, type YAMLSeq } from 'yaml';
 import { LEGACY_DUNNING } from './dunning.js';
 import { roleBefore } from './banks.js';
 import { LEGACY_FORMAT } from './numbering.js';
+import { fromStart, historyOf, isHistory, START_ENTERED, SINCE_START } from '../core/dated.js';
 
 /**
  * 2: the books split by fiscal year (ADR 0013); the move itself is the layout migration (src/workspace/layout.ts).
@@ -99,6 +100,12 @@ export const BOOKS_SCHEMA = 11;
  * automatic, no interest (src/invoices/dunning.ts LEGACY_DUNNING). No Mahnung sent changes. An app of schema 6
  * would mahn by its three fixed levels and drop the list on its next save, so it must refuse. Further phase-3
  * settings ride on this step until it is released.
+ *    Also in 7 (slice L, values over time, spec 4.12): `invoicing.payTo.<currency>`, `invoicing.paymentTerms`,
+ *    `invoicing.writeOffAccount`, `invoicing.feeAccount` and `invoicing.dunning` (levels, fees, interest) are dated histories (`[{ validFrom, enteredAt,
+ *    value }]`), and `invoicing.letterhead` (the firm's name, address and UID as documents print them; absent:
+ *    the company's) is one. The step writes each plain value as one entry valid from the start (validFrom
+ *    1900-01-01), so every document prints what it printed before. An app of schema 6 would read a list of
+ *    entries as an account or as payment terms and refuse the manifest or print nonsense, so it must refuse.
  */
 export const WORKSPACE_SCHEMA = 7;
 /**
@@ -137,6 +144,12 @@ export const WORKSPACE_SCHEMA = 7;
  *    (`retention`); sent-log kinds `instalment` and `statement`. A file of schema 4 holds none: the
  *    step adds nothing. An app of schema 4 would read a deduction as a position with its own VAT and
  *    ask the whole of a Rechnung with a retention, so it must refuse.
+ *    Also in 5 (slice L, values over time, spec 4.12): an Artikel's `price` and a contact's `addresses`,
+ *    `terms` (which replaces `paymentTerms` / `paymentDays`), `discount` and `revenueAccount` are dated
+ *    histories (`[{ validFrom, enteredAt, value }]`, src/core/dated.ts). The step writes each plain value
+ *    as one entry valid from the start (validFrom 1900-01-01, src/invoices/dated-values.ts SINCE_START),
+ *    so every document reads what it read before. An app of schema 4 would read a list of entries as a
+ *    price or an address and print nonsense, so it must refuse.
  */
 export const INVOICES_SCHEMA = 5;
 /** 1: payroll.json starts with dated histories (docs/specs/domain-model.md §5.7), so it needs no step yet. */
@@ -206,9 +219,28 @@ export const MANIFEST_MIGRATIONS: Ladder<Document> = {
     const levels = doc.createNode(LEGACY_DUNNING.levels.map((l) => ({ name: l.name, days: l.days, ...(l.texts ? { texts: l.texts } : {}) }))) as YAMLSeq;
     for (const item of levels.items) for (const texts of [(item as YAMLMap).get('texts')]) if (isMap(texts)) for (const p of texts.items) (p.value as YAMLMap).flow = true;
     inv.set('dunning', doc.createNode({ levels }));
-    return doc;
+    // Each plain payTo, payment terms, write-off and fee account and the Mahnwesen become one entry from the start (slice L).
+    return datedInvoicing(doc);
   },
 };
+
+/** The dated fields of `invoicing:` (spec 4.12), each a list of entries; a plain value becomes one entry from the start. */
+export function datedInvoicing(doc: Document): Document {
+  const inv = doc.get('invoicing');
+  if (!isMap(inv)) return doc;
+  const entry = (value: unknown) => {
+    const node = doc.createNode({ validFrom: SINCE_START, enteredAt: START_ENTERED, value }) as YAMLMap;
+    return doc.createNode([node]);
+  };
+  const plain = (node: unknown): boolean => node !== undefined && node !== null && !isHistory((node as { toJSON?: () => unknown }).toJSON?.() ?? node);
+  const payTo = inv.get('payTo');
+  if (isMap(payTo)) for (const p of payTo.items) if (plain(p.value)) p.value = entry((p.value as YAMLMap).toJSON());
+  for (const key of ['paymentTerms', 'writeOffAccount', 'feeAccount', 'dunning']) {
+    const node = inv.get(key, true);
+    if (plain(node)) inv.set(key, entry((node as { toJSON(): unknown }).toJSON()));
+  }
+  return doc;
+}
 
 /** The manifest document named at the current schema: its `schema:` set where it stands (its comments with it), else added as the first key. */
 export function stampManifest(doc: Document): Document {
@@ -229,9 +261,45 @@ export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {
   // No document is of a phase-2 kind before: nothing to add for them. Each customer becomes a firm contact; the documents stay byte for byte.
   3: (doc) => contactsOfCustomers(doc),
   // No Mahnung is a draft and none names a title, interest or how it went before; no document has a role, a deduction, a plan
-  // or a retention: nothing to add. The number makes an older app refuse the file.
-  4: (doc) => doc,
+  // or a retention. Each plain price, address list, terms, discount and revenue account becomes one entry from the start (slice L).
+  4: (doc) => withHistories(doc),
 };
+
+/**
+ * A contact of invoices.json with every plain value of before the histories as one entry from the
+ * start: `addresses`, `paymentTerms` / `paymentDays` (→ `terms`), `discount`, `revenueAccount`. A
+ * contact that holds histories stays as it is. The invoices.json step 4 → 5 and every read use it.
+ */
+export function contactWithHistories(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw;
+  const { paymentTerms, paymentDays, addresses, discount, revenueAccount, terms, ...rest } = raw as Record<string, unknown>;
+  const plainTerms = paymentTerms !== undefined || paymentDays !== undefined
+    ? { ...(paymentTerms !== undefined ? { paymentTerms } : {}), ...(paymentDays !== undefined ? { paymentDays } : {}) } : undefined;
+  return {
+    ...rest,
+    // A plain list of addresses is one entry; a list of entries stays; none (or an empty list) is none.
+    addresses: isHistory(addresses) ? addresses : Array.isArray(addresses) && addresses.length ? fromStart(addresses) : [],
+    terms: terms !== undefined ? historyOf(terms) : plainTerms ? fromStart(plainTerms) : [],
+    discount: historyOf(discount),
+    revenueAccount: historyOf(revenueAccount),
+  };
+}
+
+/** An Artikel of invoices.json with a plain price as one entry from the start. */
+export function articleWithHistory(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw;
+  const a = raw as Record<string, unknown>;
+  return { ...a, price: historyOf(a.price) };
+}
+
+/** invoices.json with every contact's and Artikel's plain value as a history (step 4 → 5, and every read). */
+export function withHistories(doc: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...doc,
+    ...(Array.isArray(doc.contacts) ? { contacts: doc.contacts.map(contactWithHistories) } : {}),
+    ...(Array.isArray(doc.articles) ? { articles: doc.articles.map(articleWithHistory) } : {}),
+  };
+}
 
 /**
  * Step 3 → 4: `customers` → `contacts`. A customer of schema 3 is a firm contact under the same id,

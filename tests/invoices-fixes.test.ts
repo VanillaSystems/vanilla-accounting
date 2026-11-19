@@ -146,7 +146,7 @@ test('a company without its address yet: no dangling commas on the sheet', () =>
 });
 
 test('the draft sheet names a person contact as the document prints it, with the salutation', () => {
-  const env0 = { createdAt: '2026-07-01T08:00:00Z', origin: 'manual' as const, deleted: false, persons: [], addresses: [], language: 'de' as const, emails: [] };
+  const env0 = { createdAt: '2026-07-01T08:00:00Z', origin: 'manual' as const, deleted: false, persons: [], addresses: [], terms: [], discount: [], revenueAccount: [], language: 'de' as const, emails: [] };
   const contacts = [
     { ...env0, id: 'c1', type: 'person' as const, name: 'Peter Keller', salutation: 'Herr' },
     { ...env0, id: 'c2', type: 'firm' as const, name: 'Beispiel AG' },

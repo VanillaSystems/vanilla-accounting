@@ -15,6 +15,7 @@ import { MANIFEST_FILE, workspacePaths, WorkspaceError } from '../src/workspace/
 import { DEMO_ROOTS } from './support/workspace.js';
 import { startApi } from './support/api-server.js';
 import type { CompanyInfo } from '../src/books/company.js';
+import { invoicingOn } from '../src/invoices/dated-values.js';
 
 const MANIFEST = `# Muster GmbH: hand-kept, keep this comment
 schema: 1
@@ -189,18 +190,27 @@ test('API: a logo upload is stored by its checksum and becomes the layout\'s log
 test('Rechnungslayout › Zahlungskonten: the account customers pay to in a second currency is set after setup; null removes it; an account without IBAN or of another currency is refused (r8c-1)', () => {
   const withWise = INVOICING.replace('  - { bank: manual,', '  - { bank: Wise, currency: EUR, account: "1023", label: Wise, statements: camt053, iban: BE29967000000164 }\n  - { bank: Wise, currency: USD, account: "1024", label: Wise USD, statements: camt053 }\n  - { bank: manual,');
   const { text, manifest } = patchManifestText(withWise, { invoicing: { payTo: { EUR: { account: '1023' } } } }, 'm.yaml');
-  assert.deepEqual(manifest.invoicing!.payTo.EUR, { account: '1023', iban: 'BE29967000000164', bank: 'Wise' });
-  assert.deepEqual(manifest.invoicing!.payTo.CHF?.account, '1021', 'the CHF account stays');
-  assert.deepEqual((parse(text) as { invoicing: { payTo: unknown } }).invoicing.payTo, { CHF: { account: '1021' }, EUR: { account: '1023' } });
+  const today = new Date().toISOString().slice(0, 10);
+  assert.deepEqual(invoicingOn(manifest.invoicing!, today).payTo.EUR, { account: '1023', iban: 'BE29967000000164', bank: 'Wise' });
+  assert.deepEqual(invoicingOn(manifest.invoicing!, today).payTo.CHF?.account, '1021', 'the CHF account stays');
+  const written = (parse(text) as { invoicing: { payTo: Record<string, unknown> } }).invoicing.payTo;
+  assert.deepEqual(written.CHF, [{ validFrom: '1900-01-01', enteredAt: '1900-01-01T00:00:00.000Z', value: { account: '1021' } }], 'the CHF account stays, one entry from the start');
+  // The EUR account is a history: one entry from today.
+  assert.ok(Array.isArray(written.EUR), 'payTo.EUR is written as a dated history');
+  const [eur, ...more] = written.EUR as Array<{ validFrom: string; enteredAt: string; value: unknown }>;
+  assert.deepEqual(more, []);
+  assert.deepEqual([eur.validFrom, eur.value], [today, { account: '1023' }]);
+  assert.match(eur.enteredAt, /^\d{4}-\d{2}-\d{2}T/);
   const removed = patchManifestText(text, { invoicing: { payTo: { EUR: null } } }, 'm.yaml');
-  assert.equal(removed.manifest.invoicing!.payTo.EUR, undefined);
+  assert.equal(invoicingOn(removed.manifest.invoicing!, today).payTo.EUR, undefined);
+  assert.equal(removed.manifest.invoicing!.payTo.EUR, undefined, 'null takes the account of the currency away');
   assert.throws(() => patchManifestText(withWise, { invoicing: { payTo: { EUR: { account: '1021' } } } }, 'm.yaml'), /must be a EUR account/);
   assert.throws(() => patchManifestText(withWise, { invoicing: { payTo: { USD: { account: '1024' } } } as never }, 'm.yaml'), /CHF or EUR/);
   // The IBAN may come in the same change, as at setup.
   const noIban = withWise.replace(', iban: BE29967000000164', '');
   assert.throws(() => patchManifestText(noIban, { invoicing: { payTo: { EUR: { account: '1023' } } } }, 'm.yaml'), /needs its iban/);
   const both = patchManifestText(noIban, { banks: [{ bank: 'Wise', currency: 'EUR', iban: 'BE29 9670 0000 0164' }], invoicing: { payTo: { EUR: { account: '1023' } } } }, 'm.yaml');
-  assert.equal(both.manifest.invoicing!.payTo.EUR?.iban, 'BE29967000000164');
+  assert.equal(invoicingOn(both.manifest.invoicing!, today).payTo.EUR?.iban, 'BE29967000000164');
 });
 
 test('Rechnungen einrichten: setup writes an invoicing block the reader takes, with the layout in the same change; a second setup is refused', () => {

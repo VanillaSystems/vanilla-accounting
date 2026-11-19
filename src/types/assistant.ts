@@ -100,6 +100,13 @@ export type WorkspaceChange =
   | { kind: 'invoicing'; set: InvoicingSet; customers?: Record<string, number> }
   | { kind: 'invoiceDraft'; customer?: string; newCustomer?: { name: string } & Record<string, unknown>; draft: { lines: DraftLine[] } & Record<string, unknown> }
   | { kind: 'dropInvoiceDraft'; id: string; customer?: string }
+  /**
+   * A wish of a value that changes over time (spec 4.12: «Hausmischung ab Januar 29 Franken», «Müller zahlt
+   * ab jetzt in 20 Tagen»): `{ path, value, validFrom }`, written by code as «Ändern» with «gilt ab» writes
+   * it; issued documents keep what they printed. Its undo withdraws the entry.
+   */
+  | { kind: 'datedValue'; path: string; value: unknown; validFrom: string }
+  | { kind: 'withdrawDated'; path: string; validFrom: string; enteredAt: string }
   /** A question to the owner the AI cannot decide (src/server/questions.ts); its undo withdraws it. */
   | { kind: 'question'; on: QuestionTarget; text: string; choices?: Choice[]; to?: string }
   | { kind: 'withdrawQuestion'; id: string }
@@ -153,6 +160,8 @@ export interface ChangeNote {
   vatFollowed?: { from: string; to: string };
   file?: { name: string; path: string };
   draft?: { id: string; customer: string };
+  /** A dated value: what held on its «gilt ab» before, and the issued documents it covers, which keep what they printed. */
+  dated?: { before: unknown; covers: string[] };
   customers?: number;
   /** The question asked, and its answer when a precedent gave one at once; `open`: the payment's question that was open already, asked by `by`, which stands instead. */
   question?: { id: string; to?: string; answered?: string; open?: Pick<Question, 'on' | 'text' | 'by' | 'topic'> };

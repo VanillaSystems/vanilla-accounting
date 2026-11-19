@@ -143,6 +143,14 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
       return { text, ...(note?.draft ? { go: { area: 'invoices', view: 'list', id: `draft-${note.draft.id}` } as Route } : {}) };
     }
     case 'dropInvoiceDraft': return { text: t('assistant.c.dropInvoiceDraft') };
+    case 'datedValue': {
+      const shown = (v: unknown) => (typeof v === 'number' ? fmt(v) : typeof v === 'string' ? v : v == null ? '–' : JSON.stringify(v));
+      const covers = note?.dated?.covers.length ? ` · ${t('assistant.c.datedCovers', { list: note.dated.covers.join(', ') })}` : '';
+      const [area, id] = c.path.split('/');
+      const go: Route | undefined = area === 'articles' ? { area: 'invoices', view: 'articles', id } : area === 'contacts' ? { area: 'invoices', view: 'contacts', id } : { area: 'company', section: 'invoice-layout' };
+      return { text: t('assistant.c.datedValue', { before: shown(note?.dated?.before), value: shown(c.value), date: formatDate(c.validFrom) }) + covers, go };
+    }
+    case 'withdrawDated': return { text: t('assistant.c.withdrawDated', { date: formatDate(c.validFrom) }) };
     case 'question': {
       const open = note?.question?.open;
       if (open) return { text: t('assistant.c.questionOpen', { text: questionText(open, books), to: note.question?.to ?? '' }), go: { area: 'automation', view: 'tasks' } };

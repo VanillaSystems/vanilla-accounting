@@ -1,11 +1,12 @@
 /** Issued documents and sent-log entries for tests of Verkauf's lists, where the demo has too few states. */
+import { contactRecord } from '../../src/invoices/dated-values.js';
 import type { Contact, CustomerFields, Envelope, Invoice, Issued, SentDocument } from '../../src/invoices/model.js';
 import { contactOfCustomer } from '../../src/invoices/contacts.js';
 
 /** A customer as phase 1 wrote one, with its envelope: what `issue` freezes, and as a contact through `asContact`. */
 export type Customer = CustomerFields & Envelope;
 /** The firm contact the invoices.json step 3 → 4 makes of a customer, under the same id. */
-export const asContact = (c: Customer): Contact => ({ id: c.id, createdAt: c.createdAt, origin: c.origin, deleted: c.deleted, ...contactOfCustomer(c) });
+export const asContact = (c: Customer): Contact => ({ id: c.id, createdAt: c.createdAt, origin: c.origin, deleted: c.deleted, ...contactRecord(contactOfCustomer(c), undefined, '', '') });
 
 export const issued = (id: string, number: string, over: Partial<Issued> = {}): Issued => ({
   id, createdAt: '2026-10-01T08:00:00Z', origin: 'manual', deleted: false, status: 'issued', kind: 'invoice', number, issuedAt: '2026-10-01T08:00:00Z',

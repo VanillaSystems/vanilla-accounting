@@ -4,6 +4,9 @@
  * language) and default interest, off unless switched on. Saved as one block in belege.workspace.yaml
  * (invoicing.dunning); a Mahnung sent keeps what it printed, so a level may change or go any time.
  */
+import { invoicingOnDay } from '../../../invoices/dated-values.js';
+import { localToday } from '../../../accounting/periods.js';
+import { DatedTrail } from '../invoices/DatedValue.js';
 import { useEffect, useState } from 'react';
 import type { DunningLevel, DunningSettings, DunningTexts, InvoiceLanguage } from '../../../invoices/model.js';
 import { DEFAULT_DUNNING, MAX_LEVELS } from '../../../workspace/dunning.js';
@@ -22,7 +25,10 @@ const TEXT_KEYS = ['title', 'intro', 'closing', 'mailSubject', 'mailBody'] as co
 const num = (s: string): number | undefined => (s.trim() === '' ? undefined : Number(s.replace(',', '.')));
 
 export function DunningSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boolean }) {
-  const dunning = ws.invoicing?.dunning ?? DEFAULT_DUNNING;
+  // The Mahnwesen valid on the day a change holds from («gilt ab», spec 4.12); a Mahnung reads its own date.
+  const today = localToday();
+  const [from, setFrom] = useState(today);
+  const dunning = invoicingOnDay(ws.invoicing, from)?.dunning ?? DEFAULT_DUNNING;
   const [lang, setLang] = useState<InvoiceLanguage>('de');
   const [open, setOpen] = useState<number | null>(null);
   const offered = invoicing().interest;
@@ -32,7 +38,7 @@ export function DunningSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav
   const auto = dunning.levels.some((l) => l.auto);
   async function save(next: DunningSettings | (Omit<DunningSettings, 'device'> & { device: 'here' }), done: string): Promise<boolean> {
     try {
-      await api.patchWorkspace({ invoicing: { dunning: next as DunningSettings } });
+      await api.patchWorkspace({ invoicing: { dunning: next as DunningSettings, validFrom: from } });
       reloadWorkspace();
       nav.toast(done);
       return true;
@@ -59,6 +65,10 @@ export function DunningSection({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav
   return (
     <div className="lkf lkdunning" data-testid="dunning-settings">
       <div className="lkr top"><span>{t('dunning.set.title')}</span><span className="m">{t('dunning.set.hint')}</span></div>
+      <label className="lkr"><span>{t('dated.validFrom')}</span>
+        <input type="date" data-testid="dunning-valid-from" value={from} disabled={!canEdit} onChange={(e) => setFrom(e.target.value || today)} />
+      </label>
+      <DatedTrail history={ws.invoicing?.dunning} today={today} show={(v) => v.levels.map((l) => (l.fee ? `${l.name} ${l.fee}` : l.name)).join(', ')} />
       {/* One block per level, two lines each: the column beside the sample sheet is narrow. */}
       <ol className="lkdun">
         {dunning.levels.map((l, k) => (

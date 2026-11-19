@@ -170,7 +170,8 @@ export function bookInvoiceEvents(books: Books, book: InvoiceBook, ctx: PaymentC
 const REASON_WORDS: Record<WriteOffReason, string> = { skonto: 'Skonto', discount: 'Rabatt', loss: 'Verlust', fee: 'Spesen', rounding: 'Rundung' };
 
 export function bookWriteOff(books: Books, inv: Issued, w: WriteOff, ctx: PaymentContext, out: Pick<PaymentOutcome, 'files'>): JournalEntry[] {
-  const accounts = ctx.writeOffAccount ?? writeOffAccounts(undefined);
+  // The accounts valid on the write-off's own date (spec 4.12).
+  const accounts = (ctx.accountsOn ? ctx.accountsOn(w.date).writeOffAccount : ctx.writeOffAccount) ?? writeOffAccounts(undefined);
   if (!accounts) throw new Error('the jurisdiction names no write-off accounts (modules/<j>/invoicing.yaml writeOff)');
   const account = w.reason === 'loss' ? accounts.loss : accounts.skonto;
   ctx.ensureAccount?.(account);

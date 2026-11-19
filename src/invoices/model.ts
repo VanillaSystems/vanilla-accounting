@@ -5,6 +5,7 @@
  * its payment reference and its PDF, and freezes what it says.
  */
 
+import type { Dated } from '../core/dated.js';
 import type { Numbering } from '../workspace/numbering.js';
 
 export const INVOICE_LANGUAGES = ['de', 'fr', 'it', 'en'] as const;
@@ -161,7 +162,26 @@ export interface ContactFields {
   /** The id of its business file (knowledge/customers/<id>.yaml): booking rules stay there. */
   business?: string;
 }
-export interface Contact extends Envelope, ContactFields {}
+/** A contact's terms: the firm's named terms it pays in, or days net of its own (never both); neither: the firm's default. */
+export interface ContactTerms { paymentTerms?: string; paymentDays?: number }
+
+/**
+ * The values of a contact that change over time (spec 4.12, docs/specs/domain-model.md §5): each a
+ * dated history, read on a document's date (src/invoices/dated-values.ts contactOn). `null` ends a
+ * value from its day on: no discount, the settings' revenue account.
+ */
+export interface ContactHistories {
+  addresses: Dated<ContactAddress[]>;
+  terms: Dated<ContactTerms>;
+  discount: Dated<number | null>;
+  revenueAccount: Dated<string | null>;
+}
+export const CONTACT_DATED = ['addresses', 'terms', 'discount', 'revenueAccount'] as const;
+/** What invoices.json holds of a contact: its plain fields and the histories of what changes over time. */
+export type ContactRecordFields = Omit<ContactFields, 'addresses' | 'paymentTerms' | 'paymentDays' | 'discount' | 'revenueAccount'> & ContactHistories;
+export interface Contact extends Envelope, ContactRecordFields {}
+/** A contact as it stands on one day (contactOn): every dated value read on that day. */
+export interface ContactOnDay extends Envelope, ContactFields {}
 
 /**
  * A position of a document (spec docs/specs/invoicing.md 4.4.3). Absent `kind` is an item: every
@@ -311,8 +331,11 @@ export interface ArticleFields {
   /** The text a position prints; absent: the name. */
   text?: string;
   unit?: Unit;
-  /** The unit price in the books' currency, net or gross as `prices` says. */
-  price: number;
+  /**
+   * The unit price in the books' currency, net or gross as `prices` says: a dated history (spec 4.12),
+   * a position takes the price valid on its document's date (src/invoices/dated-values.ts articlePriceOn).
+   */
+  price: Dated<number>;
   /** Absent: net. A position on a document of the other pricing converts it at its rate, to the cent. */
   prices?: Prices;
   vatKind: VatKind;
@@ -568,9 +591,9 @@ export type Invoice = Draft | Issued;
 /**
  * `quote`, `sales-order`, `delivery-note`: the document itself going out, as `invoice` and
  * `credit-note` are; `instalment` a Zahlungsaufforderung of a retention due (spec 4.4.9), `statement`
- * a contact's Kontoauszug (4.4.5).
+ * a contact's Kontoauszug (4.4.5); `notice` «Zahlungsaufforderung mit neuer IBAN» of an open invoice (4.12).
  */
-export const SENT_KINDS = ['invoice', 'resend', 'reminder', 'credit-note', 'cancellation', 'quote', 'sales-order', 'delivery-note', 'instalment', 'statement'] as const;
+export const SENT_KINDS = ['invoice', 'resend', 'reminder', 'credit-note', 'cancellation', 'quote', 'sales-order', 'delivery-note', 'instalment', 'statement', 'notice'] as const;
 export type SentKind = (typeof SENT_KINDS)[number];
 
 /** A document as it went out: its PDF, byte-exact, with checksum, time and recipient. */
@@ -650,7 +673,7 @@ export interface PayToPatch { account: string; qrIban?: string | null }
 /** The company's invoicing settings, read from belege.workspace.yaml (src/workspace/manifest.ts). */
 export interface InvoicingSettings {
   /** Per currency, the ledger account the customer pays to, with its IBAN, and a QR-IBAN if the bank gave one. */
-  payTo: Partial<Record<InvoiceCurrency, { account: string; iban: string; qrIban?: string; bank?: string }>>;
+  payTo: Partial<Record<InvoiceCurrency, PayTo>>;
   revenueAccount: string;
   /** Where paid reminder fees are booked; absent: revenueAccount. */
   feeAccount?: string;
@@ -678,6 +701,28 @@ export interface InvoicingSettings {
 
 export type { DunningLevel, DunningSettings, DunningTexts } from '../workspace/dunning.js';
 import type { DunningSettings } from '../workspace/dunning.js';
+/** Where customers pay in one currency: the ledger account with its IBAN, and the QR-IBAN its bank gave. */
+export interface PayTo { account: string; iban: string; qrIban?: string; bank?: string }
+
+/** The firm as its documents print it (the letterhead): name, address, UID. */
+export interface Letterhead { name: string; address?: Address; uid?: string }
+
+/**
+ * The invoicing settings as belege.workspace.yaml holds them: the values that change over time are
+ * dated histories (spec 4.12), read on a document's date by `invoicingOn` (src/invoices/dated-values.ts),
+ * which gives the plain InvoicingSettings of that day. `letterhead` absent or empty: the company's
+ * name, address and UID of the manifest.
+ */
+export type InvoicingConfig = Omit<InvoicingSettings, 'payTo' | 'paymentTerms' | 'writeOffAccount' | 'feeAccount' | 'dunning'> & {
+  /** The Mahnstufen with their fees and the default interest: a Mahnung reads the entry of its own date. */
+  dunning: Dated<DunningSettings>;
+  payTo: Partial<Record<InvoiceCurrency, Dated<PayTo>>>;
+  paymentTerms: Dated<PaymentTerms[]>;
+  writeOffAccount: Dated<{ skonto: string; loss: string }>;
+  feeAccount: Dated<string>;
+  letterhead: Dated<Letterhead>;
+};
+export const INVOICING_DATED = ['payTo', 'paymentTerms', 'writeOffAccount', 'feeAccount', 'letterhead', 'dunning'] as const;
 
 /** Zahlungskondition: days to pay, an optional Skonto within fewer days, and a text for the paper. */
 export interface PaymentTerms {

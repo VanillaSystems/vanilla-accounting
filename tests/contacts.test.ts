@@ -12,7 +12,8 @@ import { DEMO_ROOT, tempWorkspace } from './support/workspace.js';
 import './support/jurisdiction.js';
 import { INVOICES_MIGRATIONS, INVOICES_SCHEMA, climb, contactsOfCustomers } from '../src/workspace/schema.js';
 import { loadInvoices } from '../src/invoices/store.js';
-import type { Contact, CustomerFields, Draft, InvoiceBook, Issued } from '../src/invoices/model.js';
+import type { Contact, ContactOnDay, CustomerFields, Draft, InvoiceBook, Issued } from '../src/invoices/model.js';
+import { contactOn, contactOnDay, invoicingOnDay } from '../src/invoices/dated-values.js';
 import { assembleSheets, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
 import { draftSheet, issuedSheet } from '../src/invoices/documents.js';
 import { contactDays, draftTermsOf, goneRefs, nextContactNumber, proposeBusiness, recipientOf } from '../src/invoices/contacts.js';
@@ -34,6 +35,8 @@ const IBAN = `${'CH93'}00762011623852957`;
 const html = (d: SheetData) => { const b = sheetBlocks(d); return assembleSheets(d, b, { pages: [b.map((_, i) => i)], qrOwnPage: false }); };
 const raw = (file: string) => JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
 const at = (doc: Record<string, unknown>, from: number, to: number) => climb(doc, from, to, INVOICES_MIGRATIONS, 'invoices.json', (d) => structuredClone(d));
+/** Today as the server writes it (UTC): the day a contact's values are read on when a test names none. */
+const TODAY = new Date().toISOString().slice(0, 10);
 const strip = ({ id: _i, createdAt: _c, origin: _o, deleted: _d, ...rest }: CustomerFields & { id?: string; createdAt?: string; origin?: string; deleted?: boolean }) => rest;
 
 /** A file of schema 3 with every kind of customer: an attn line, an e-mail, a UID, days of its own, a minimal one, a deleted one. */
@@ -65,7 +68,6 @@ test('P2.6: the step 3 → 4 keeps every document byte for byte, and each draft 
   ];
   for (const [name, doc, from, dir] of fixtures) {
     const ws = workspaceAt(join(APP_ROOT, dir, 'vanilla-accounting'));
-    const ctx = invoicingContext(ws);
     const before = at(doc as Record<string, unknown>, from, 3) as unknown as InvoiceBook & { customers: Array<CustomerFields & { id: string; deleted: boolean }> };
     const after = at(doc as Record<string, unknown>, from, INVOICES_SCHEMA) as unknown as InvoiceBook;
     assert.equal(JSON.stringify(after.invoices), JSON.stringify(before.invoices), `${name}: the documents are untouched`);
@@ -77,14 +79,16 @@ test('P2.6: the step 3 → 4 keeps every document byte for byte, and each draft 
       assert.equal(contact.type, 'firm');
       for (const inv of after.invoices.filter((i) => i.customerId === c.id)) {
         // What a draft prints of its customer comes from the contact now: the same name, line, address, VAT number, e-mail and days.
-        assert.deepEqual(recipientOf(contact, inv, ws.invoicing), strip(c), `${name}: ${c.name} as ${inv.id} names it`);
-        if (inv.status === 'draft') assert.equal(html(draftSheet(ctx, after, inv, recipientOf(contact, inv, ws.invoicing))), html(draftSheet(ctx, before, inv as Draft, c)), `${name}: draft ${inv.id} prints the same`);
+        const ctx = invoicingContext(ws, inv.date);
+        const onDay = contactOn(contact, inv.date);
+        assert.deepEqual(recipientOf(onDay, inv, ctx.settings), strip(c), `${name}: ${c.name} as ${inv.id} names it`);
+        if (inv.status === 'draft') assert.equal(html(draftSheet(ctx, after, inv, recipientOf(onDay, inv, ctx.settings))), html(draftSheet(ctx, before, inv as Draft, c)), `${name}: draft ${inv.id} prints the same`);
         else assert.equal(html(issuedSheet(after, inv)), html(issuedSheet(before, inv)), `${name}: ${inv.number} prints as issued`);
       }
     }
   }
   // What the documents book reads only the documents (src/invoices/events.ts, inv.customer): unchanged above, so nothing books anew.
-  const m = contactsOfCustomers(mixed()).contacts as Contact[];
+  const m = contactsOfCustomers(mixed()).contacts as ContactOnDay[]; // the step 3 → 4 alone: plain values, the histories come with 4 → 5
   assert.deepEqual(m[0].addresses, [{ id: 'a-1', street: 'Dorfstrasse', number: '3', postcode: '3800', town: 'Interlaken', country: 'CH', attn: 'Buchhaltung', billing: true }], 'the attn line stays a line of the billing address');
   assert.deepEqual([m[0].emails, m[0].paymentDays, m[0].paymentTerms, m[0].persons], [['rechnung@alpenblick.example'], 10, undefined, []]);
   assert.deepEqual([m[1].emails, m[1].paymentDays], [[], 30]);
@@ -120,20 +124,20 @@ test('P2.5: a café chain with a head office and two branches: the Rechnung goes
     ],
     persons: [{ name: 'Anna Muster', role: 'Einkauf', email: 'anna@kafi.example' }, { name: 'Beat Beispiel', role: 'Filialleiter Bern' }],
   });
-  const [hq, bern] = chain.addresses.map((a) => a.id);
+  const [hq, bern] = contactOn(chain, TODAY).addresses.map((a) => a.id);
   const [anna, beat] = chain.persons.map((p) => p.id);
-  assert.ok([...chain.addresses, ...chain.persons].every((x) => /^[ap]-[0-9a-z]{6}$/.test(x.id)), 'each its own id');
+  assert.ok([...contactOn(chain, TODAY).addresses, ...chain.persons].every((x) => /^[ap]-[0-9a-z]{6}$/.test(x.id)), 'each its own id');
   assert.equal(chain.number, undefined, 'no number before its first document');
 
   const draft = createDraft(ws, { customerId: chain.id, personId: anna, lines: [{ text: 'Kaffeebohnen 10 kg', quantity: 3, unit: 'pcs', price: 180, vatRate: 2.6 }] });
-  const r = recipientOf(loadInvoices(ws).contacts[0], draft, ws.invoicing)!;
+  const r = recipientOf(contactOn(loadInvoices(ws).contacts[0], draft.date), draft, invoicingOnDay(ws.invoicing, draft.date))!;
   assert.deepEqual([r.name, r.attn, r.address.street, r.address.town, r.email], ['Kafi Kette AG', 'z. Hd. Anna Muster', 'Bahnhofstrasse', 'Zürich', 'anna@kafi.example'], 'the head office, for Anna');
 
   const other = createContact(ws, { type: 'person', firstName: 'Lea', lastName: 'Frei', salutation: 'Frau', language: 'de', addresses: [{ postcode: '9500', town: 'Wil', country: 'CH' }] });
   assert.equal(other.name, 'Lea Frei');
   assert.throws(() => parseDraftPatch({ personId: beat }, { ...loadInvoices(ws), invoices: loadInvoices(ws).invoices.map((i) => ({ ...i, customerId: other.id })) }, undefined, draft.id), /Kontaktperson/, 'a person of another contact is refused');
   const toBern = updateDraft(ws, draft.id, parseDraftPatch({ addressId: bern }, loadInvoices(ws), undefined, draft.id));
-  assert.equal(recipientOf(loadInvoices(ws).contacts[0], toBern, ws.invoicing)!.address.town, 'Bern', 'a branch picked on the draft');
+  assert.equal(recipientOf(contactOn(loadInvoices(ws).contacts[0], toBern.date), toBern, invoicingOnDay(ws.invoicing, toBern.date))!.address.town, 'Bern', 'a branch picked on the draft');
   updateDraft(ws, draft.id, parseDraftPatch({ addressId: null }, loadInvoices(ws), undefined, draft.id));
 
   const issued = await issueInvoice(ws, draft.id, { now: '2026-10-11T09:00:00Z', printer });
@@ -145,7 +149,7 @@ test('P2.5: a café chain with a head office and two branches: the Rechnung goes
   assert.equal((loadInvoices(ws).invoices.find((i) => i.id === draft.id) as Issued).customer.address.street, 'Bahnhofstrasse');
 
   // A person's name is its parts, salutation printed before it.
-  assert.equal(recipientOf(loadInvoices(ws).contacts.find((c) => c.id === other.id), { language: 'de' }, ws.invoicing)!.name, 'Frau Lea Frei');
+  assert.equal(recipientOf(contactOnDay(loadInvoices(ws).contacts.find((c) => c.id === other.id), TODAY), { language: 'de' }, invoicingOnDay(ws.invoicing, TODAY))!.name, 'Frau Lea Frei');
 });
 
 test('defaults: a draft takes the contact\'s language, currency and terms; its positions its revenue account and standing discount', () => {
@@ -158,7 +162,7 @@ test('defaults: a draft takes the contact\'s language, currency and terms; its p
     { kind: 'text', text: 'Hinweis' },
     { account: '3400', discount: 0, text: 'Ohne', quantity: 1, price: 5, vatRate: 2.6 },
   ], 'every new position takes them; one that names its own keeps it');
-  assert.equal(recipientOf(loadInvoices(ws).contacts[0], d, ws.invoicing)!.paymentTermsDays, 10);
+  assert.equal(recipientOf(contactOn(loadInvoices(ws).contacts[0], d.date), d, invoicingOnDay(ws.invoicing, d.date))!.paymentTermsDays, 10);
 });
 
 test('the customer number: K-00001 onwards from the highest given; one another contact holds is refused', () => {
@@ -204,7 +208,7 @@ test('the CSV import: the mapping proposed from the header, each row\'s problem 
     number: 'Kontakt Nr.', type: 'Typ', name: 'Firma', firstName: 'Vorname', lastName: 'Nachname', street: 'Strasse', houseNumber: 'Haus-Nr.', postcode: 'PLZ', town: 'Ort',
     country: 'Land', email: 'E-Mail', vatId: 'MWST-Nummer', language: 'Sprache', person: 'Kontaktperson', paymentDays: 'Zahlungsfrist', tags: 'Kategorie',
   });
-  const existing = [{ id: 'cu_h', createdAt: '', origin: 'manual', deleted: false, type: 'firm', name: 'Muster Hotel GmbH', persons: [], addresses: [], language: 'de', emails: [] }] as Contact[];
+  const existing = [{ id: 'cu_h', createdAt: '', origin: 'manual', deleted: false, type: 'firm', name: 'Muster Hotel GmbH', persons: [], addresses: [], terms: [], discount: [], revenueAccount: [], language: 'de', emails: [] }] as Contact[];
   const p = previewContactImport(CSV, undefined, existing);
   const row = (line: number) => p.rows.find((r) => r.line === line)!;
   assert.deepEqual(row(2).contact, {
@@ -243,7 +247,7 @@ test('its business file: code proposes the one its UID, a paying IBAN or its nam
     compileCounterparty({ id: 'hotel', name: 'Muster Hotel GmbH', match: { tx: ['muster hotel'] } }, { binding: 'knowledge/customers/hotel.yaml' }, 'customer'),
     compileCounterparty({ id: 'bank', name: 'Kafi Kette', match: { iban: [IBAN] } }, { binding: 'knowledge/customers/kafi.yaml' }, 'customer'),
   ];
-  const c = (over: Partial<Contact>) => ({ id: 'cu_x', createdAt: '', origin: 'manual', deleted: false, type: 'firm', name: 'X', persons: [], addresses: [], language: 'de', emails: [], ...over }) as Contact;
+  const c = (over: Partial<Contact>) => ({ id: 'cu_x', createdAt: '', origin: 'manual', deleted: false, type: 'firm', name: 'X', persons: [], addresses: [], terms: [], discount: [], revenueAccount: [], language: 'de', emails: [], ...over }) as Contact;
   assert.deepEqual(proposeBusiness(c({ name: 'Brot AG', vatId: `${UID} MWST` }), cps), { id: 'brot', name: 'Bäckerei Brot AG', by: 'uid' });
   assert.equal(proposeBusiness(c({ name: 'Muster Hotel GmbH' }), cps)?.id, 'hotel');
   assert.equal(proposeBusiness(c({ name: 'Kafi Kette AG' }), cps, [IBAN])?.by, 'iban');
@@ -270,16 +274,17 @@ test('a person or address once given never comes back under its id: a draft that
   assert.notEqual(bruno.id, anna, 'an id the contact no longer has is not taken from the request');
   const book = loadInvoices(ws);
   const inv = book.invoices.find((i) => i.id === d.id)!;
-  const r = recipientOf(book.contacts[0], inv, ws.invoicing)!;
+  const r = recipientOf(contactOn(book.contacts[0], inv.date), inv, invoicingOnDay(ws.invoicing, inv.date))!;
   assert.deepEqual([r.attn, r.email], [undefined, 'firm@x.example'], 'not «z. Hd. Bruno Neu»');
-  assert.deepEqual(goneRefs(book.contacts[0], inv), [{ field: 'customer.person' }]);
+  assert.deepEqual(goneRefs(contactOn(book.contacts[0], inv.date), inv), [{ field: 'customer.person' }]);
 });
 
 test('a draft whose person or address is gone: issuing warns, «Trotzdem ausstellen» issues it without them', async () => {
   const ws = tempWorkspace();
   const c = createContact(ws, { type: 'firm', name: 'X AG', language: 'de', addresses: [{ street: 'A', postcode: '8000', town: 'Zürich', country: 'CH', billing: true }, { street: 'B', postcode: '3000', town: 'Bern', country: 'CH' }], persons: [{ name: 'Anna Muster' }] });
-  const d = createDraft(ws, { customerId: c.id, personId: c.persons[0].id, addressId: c.addresses[1].id, lines: [{ text: 'Beratung', quantity: 1, price: 100, vatRate: 8.1 }] });
-  updateContact(ws, c.id, { persons: [], addresses: [c.addresses[0]] });
+  const addresses = contactOn(c, TODAY).addresses;
+  const d = createDraft(ws, { customerId: c.id, personId: c.persons[0].id, addressId: addresses[1].id, lines: [{ text: 'Beratung', quantity: 1, price: 100, vatRate: 8.1 }] });
+  updateContact(ws, c.id, { persons: [], addresses: [addresses[0]] });
   await assert.rejects(issueInvoice(ws, d.id, { now: '2026-10-11T09:00:00Z', printer }), (e: unknown) => e instanceof InvoiceRuleError && e.code === 'unconfirmed'
     && JSON.stringify(e.missing) === JSON.stringify([{ field: 'customer.person' }, { field: 'customer.addressGone' }]));
   const issued = await issueInvoice(ws, d.id, { now: '2026-10-11T09:00:00Z', printer, confirmed: true });
@@ -288,7 +293,7 @@ test('a draft whose person or address is gone: issuing warns, «Trotzdem ausstel
 
 test('own days never meet a firm terms id: a migrated customer of 10 days is not a firm\'s «net10» with Skonto', () => {
   const s = { paymentTermsDays: 30, defaultTerms: 'std', paymentTerms: [{ id: 'std', name: '30 Tage', days: 30 }, { id: 'net10', name: '10 Tage 2 % Skonto', days: 10, skonto: { percent: 2, days: 5 } }] };
-  const migrated = (contactsOfCustomers({ customers: [{ id: 'cu', name: 'A', language: 'de', address: { postcode: '1', town: 'X', country: 'CH' }, paymentTermsDays: 10 }] }).contacts as Contact[])[0];
+  const migrated = (contactsOfCustomers({ customers: [{ id: 'cu', name: 'A', language: 'de', address: { postcode: '1', town: 'X', country: 'CH' }, paymentTermsDays: 10 }] }).contacts as ContactOnDay[])[0];
   assert.deepEqual([draftTermsOf(s, migrated), contactDays(migrated, s)], [undefined, 10], 'plain 10 days net, as before');
   assert.deepEqual([draftTermsOf(s, { paymentTerms: 'net10' }), contactDays({ paymentTerms: 'net10' }, s)], ['net10', 10], 'the firm\'s terms only when named');
 });

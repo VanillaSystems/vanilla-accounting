@@ -5,7 +5,8 @@
  * tools/demo/generate.ts, so they cannot disagree.
  */
 import type { CorrectionCase, QuarterKey, ReceiptKind, VatRateGroup } from '../../src/types/index.js';
-import type { Address, ArticleFields, ContactFields, CustomerFields, DocumentKind, Exemption, InvoiceCurrency, InvoiceLine, Prices, Schedule, Stage, VatRate, WriteOffReason } from '../../src/invoices/model.js';
+import type { ArticleInput } from '../../src/invoices/articles.js';
+import type { Address, ContactFields, CustomerFields, DocumentKind, Exemption, InvoiceCurrency, InvoiceLine, Prices, Schedule, Stage, VatRate, WriteOffReason } from '../../src/invoices/model.js';
 import type { VatSetup } from '../../src/workspace/vat-setup.js';
 import { LEGACY_DUNNING } from '../../src/workspace/dunning.js';
 
@@ -113,7 +114,7 @@ export interface DemoInvoicing {
   logo?: { file: string; svg: string };
   customers: Record<string, CustomerFields>;
   /** Artikel the firm sells (invoices.json articles), made after the documents of `steps`, which name none of them; a Rechnung of `sales` may. */
-  articles?: ArticleFields[];
+  articles?: ArticleInput[];
   steps: InvoiceStep[];
   /**
    * Phase 2 of invoicing (spec 5 «Phase 2»): contacts of the new shape and the chain Angebot →

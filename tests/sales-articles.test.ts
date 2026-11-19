@@ -25,6 +25,7 @@ import { groupsLeftBehind, offered } from '../src/invoices/chain.js';
 import { issuedSheet } from '../src/invoices/documents.js';
 import { sheetBlocks } from '../src/invoices/sheet.js';
 import { withGroups, type Draft, type InvoiceLine, type Issued } from '../src/invoices/model.js';
+import { contactOn } from '../src/invoices/dated-values.js';
 import { insertLine, moveLine, sheetEdit } from '../src/app/areas/invoices/edit.js';
 import { kindOfRate, rateOfKind } from '../src/engines/index.js';
 
@@ -89,9 +90,9 @@ test('P2.4: a wholesale Rechnung from the Artikel list: code, text, unit, price,
 test('the account chain of a position: the Artikel\'s, else the contact\'s revenue account, else the settings\'', () => {
   const { ws, beans, mill } = shop();
   const c = createCustomer(ws, CUSTOMER);
-  updateContact(ws, c.id, { revenueAccount: '3210', discount: 5 });
+  updateContact(ws, c.id, { revenueAccount: '3210', discount: 5 }, '2026-11-19');
   const book = loadInvoices(ws);
-  const contact = book.contacts.find((x) => x.id === c.id)!;
+  const contact = contactOn(book.contacts.find((x) => x.id === c.id)!, '2026-11-19');
   const a = (id: string) => book.articles.find((x) => x.id === id)!;
   assert.equal(articleLine(a(beans), { date: '2026-11-19' }, contact).account, '3200', 'the Artikel names one');
   assert.equal(articleLine(a(mill), { date: '2026-11-19' }, contact).account, '3210', 'else the contact\'s');

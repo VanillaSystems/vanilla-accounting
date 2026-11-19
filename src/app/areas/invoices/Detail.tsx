@@ -3,9 +3,12 @@
  * written on the sheet before it goes out) with its state, actions and margin; a contact
  * (contacts.tsx); a sent document as the PDF that went out.
  */
+import { articlePriceNotes } from '../../../invoices/articles.js';
+import { sinceText } from './DatedValue.js';
+import { contactOnDay, invoicingOnDay } from '../../../invoices/dated-values.js';
 import { useEffect, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
-import { PRICES, isBooked, isItem, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
+import { PRICES, isBooked, isItem, sentPdfUrl, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
 import { eventRef } from '../../../books/refs.js';
 import { lockedThrough } from '../../../books/lock-line.js';
 import { TEXTS } from '../../../invoices/texts.js';
@@ -21,7 +24,7 @@ import { at } from '../receipts/view.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { RouteOf } from '../../shell/route.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
-import { api, missingText, sources, type DraftChange, type InvoiceList } from '../../lib/api.js';
+import { api, errorText, missingText, sources, type DraftChange, type InvoiceList } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { language, t } from '../../i18n/index.js';
 import { baseCurrency, chargesVat } from '../../../engines/index.js';
@@ -30,7 +33,7 @@ import { FourFigures, MoneyRows } from './Figures.js';
 import { I } from '../receipts/icons.js';
 import { Paper } from '../receipts/Paper.js';
 import type { AreaProps } from '../index.js';
-import { useInvoices } from './data.js';
+import { reloadInvoices, useInvoices } from './data.js';
 import { byRouteId, contactOf, customerOf, issuedLater, linkablePayments, routeId, rowState, wasSent, type RowState } from './model.js';
 import { CONVERSIONS, chainOf, doneShare } from '../../../invoices/chain.js';
 import { groupOf, statusOfKind } from './table.js';
@@ -120,7 +123,7 @@ function InvoiceDetail(props: DetailProps) {
     }
     // «＋ Artikel»: the picker puts the Artikel position after the position the person is in.
     if (a === 'addarticle') { setUi({ dialog: { kind: 'articlePick', draft: inv.id, after: k } }); return; }
-    const added = newPosition(a, inv, contactOf(d, inv));
+    const added = newPosition(a, inv, contactOnDay(contactOf(d, inv), inv.date));
     if (added) {
       // After the position the person is in (k), else at the end; an untouched first item gives way.
       const { lines, at } = insertLine(inv.lines, added, k, t('invoices.newLine'));
@@ -174,6 +177,7 @@ function InvoiceDetail(props: DetailProps) {
               <PlanRows inv={inv} invoices={d.invoices} nav={nav} period={props.period} canEdit={canEdit} today={localToday()} />
             </Sec>
           )}
+          {inv.status === 'issued' && <PayToNotice {...props} inv={inv} />}
           <CustomerSec {...props} />
           {inv.status === 'issued' && isBooked(inv) && (
             <Sec k="money" label={t('invoices.sec.money')} val={String(inv.payments.length + (inv.writeOffs?.length ?? 0) || '–')}>
@@ -206,8 +210,8 @@ function newPosition(a: string, inv: Draft, contact?: Parameters<typeof firstLin
 
 /** An edit on the draft's sheet, saved; false: refused, the field goes back. */
 function draftChange({ d, ws, nav }: DetailProps, inv: Draft, key: string, value: string): DraftChange | false | undefined {
-  const terms = draftDays(contextOf(ws), inv, customerOf(d, inv, ws.invoicing));
-  const r = sheetEdit(inv, key, value, { contacts: d.contacts, defaultTexts: defaultTexts(contextOf(ws), inv.kind, inv.language, terms, inv.printAs), units: ws.invoicing?.units });
+  const terms = draftDays(contextOf(ws, inv.date), inv, customerOf(d, inv, contextOf(ws, inv.date).settings));
+  const r = sheetEdit(inv, key, value, { contacts: d.contacts, defaultTexts: defaultTexts(contextOf(ws, inv.date), inv.kind, inv.language, terms, inv.printAs), units: ws.invoicing?.units });
   if (!r) return undefined;
   if ('change' in r) return r.change;
   if ('newCustomer' in r) { setUi({ dialog: { kind: 'contact', then: { draft: inv.id } } }); return false; }
@@ -385,8 +389,8 @@ function Actions(props: DetailProps & { state: RowState }) {
     : dl;
   const preview = <button type="button" className="btn ghost" data-act="preview" aria-pressed={s.preview} onClick={() => setUi({ preview: !s.preview })}>{s.preview ? t('invoices.edit') : t('invoices.preview')}</button>;
   if (inv.status === 'draft') {
-    const missing = missingForIssue(inv, { customer: customerOf(d, inv, ws.invoicing), sender: senderFor(contextOf(ws), inv.currency), invoices: d.invoices });
-    const warnings = missing.length ? [] : [...goneRefs(contactOf(d, inv), inv), ...warningsForIssue(inv)];
+    const missing = missingForIssue(inv, { customer: customerOf(d, inv, contextOf(ws, inv.date).settings), sender: senderFor(contextOf(ws, inv.date), inv.currency), invoices: d.invoices });
+    const warnings = missing.length ? [] : [...goneRefs(contactOnDay(contactOf(d, inv), inv.date), inv), ...warningsForIssue(inv)];
     const tryIssue = () => {
       if (missing.length || warnings.length) {
         // Issuing would be refused or warned of: the person is taken to the first thing to fix.
@@ -411,7 +415,7 @@ function Actions(props: DetailProps & { state: RowState }) {
   const sentOnce = d.sent.some((x) => x.invoiceId === inv.id && (x.kind === 'invoice' || x.kind === 'credit-note'));
   const open = state === 'open' || state === 'overdue';
   const unpaid = inv.kind === 'invoice' && open;
-  const dunning = ws.invoicing?.dunning ?? DEFAULT_DUNNING;
+  const dunning = invoicingOnDay(ws.invoicing, localToday())?.dunning ?? DEFAULT_DUNNING;
   const next = open && inv.kind === 'invoice' ? levelTitle(nextLevel(inv, dunning).def, inv.language) : '';
   // The retention's day has come: «Zahlungsaufforderung» with its own payment slip (spec 4.4.9), before the Mahnung.
   const heldDue = !!instalmentDue(inv, d.invoices, localToday());
@@ -536,13 +540,49 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
   );
 }
 
+/**
+ * An open Rechnung that printed another IBAN than the one valid today (spec 4.12, P3.8): it keeps its
+ * QR-bill and its payments are still matched by reference; «Zahlungsaufforderung mit neuer IBAN» prints
+ * the open amount with today's account, kept in the sent log.
+ */
+function PayToNotice({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Issued }) {
+  const today = localToday();
+  const now = invoicingOnDay(ws.invoicing, today)?.payTo[inv.currency];
+  const printed = inv.sender.payTo;
+  if (inv.kind !== 'invoice' || inv.cancelled || !now || openAmount(inv, d.invoices) <= 0) return null;
+  if (now.iban === printed.iban && (now.qrIban ?? '') === (printed.qrIban ?? '')) return null;
+  async function send() {
+    try {
+      const sent = await api.sendNotice(inv.id, { date: today });
+      window.open(sentPdfUrl(sent.id), '_blank');
+      await reloadInvoices();
+      nav.toast(t('dated.noticeSent', { number: inv.number }));
+    } catch (e) { nav.toast(errorText(e)); }
+  }
+  return (
+    <p className="m ivhint warn" data-testid="pay-to-notice">
+      {t('dated.card.printed', { printed: printed.qrIban ?? printed.iban, now: now.qrIban ?? now.iban })}
+      {canEdit ? <> <AsyncButton type="button" className="quiet2" data-act="pay-to-notice" data-tip={t('dated.noticeTip')} onClick={send}>{t('dated.notice')}</AsyncButton></> : null}
+    </p>
+  );
+}
+
 function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
-  const customer = customerOf(d, inv, ws.invoicing);
-  const terms = contactDays(contactOf(d, inv), ws.invoicing);
-  const def = defaultTexts(contextOf(ws), inv.kind, inv.language, draftDays(contextOf(ws), inv, customer), inv.printAs);
+  const customer = customerOf(d, inv, contextOf(ws, inv.date).settings);
+  const terms = contactDays(contactOnDay(contactOf(d, inv), inv.date), contextOf(ws, inv.date).settings);
+  const def = defaultTexts(contextOf(ws, inv.date), inv.kind, inv.language, draftDays(contextOf(ws, inv.date), inv, customer), inv.printAs);
   const own = (inv.intro !== undefined && inv.intro !== def.intro) || (inv.closing !== undefined && inv.closing !== def.closing);
+  // A position whose Artikel costs otherwise on the draft's date (spec 4.12): named, the person keeps or takes it.
+  const notes = articlePriceNotes(inv, d.articles);
+  const take = (k: number, price: number) => saveDraft(nav, inv, { lines: inv.lines.map((l, j) => (j === k && isItem(l) ? { ...l, price } : l)) });
   return (
     <Sec k="draft" label={inv.kind === 'credit-note' ? t('invoices.sec.credit') : inv.kind === 'invoice' ? t('invoices.sec.draft') : t(`invoices.docKind.${inv.kind}`)} val={`${t(`invoices.lang.${inv.language}`)} · ${inv.currency}`}>
+      {notes.map((n) => (
+        <p key={n.line} className="m ivhint warn" data-testid="article-price-note">
+          {t('dated.articlePrice', { n: inv.lines.slice(0, n.line + 1).filter(isItem).length, since: sinceText(n.since), price: fmt(n.article), line: fmt(n.price) })}
+          {canEdit ? <> <AsyncButton type="button" className="quiet2" data-act="take-article-price" onClick={() => take(n.line, n.article)}>{t('dated.takePrice', { price: fmt(n.article) })}</AsyncButton></> : null}
+        </p>
+      ))}
       <div className="lkf">
         <div className="lkr"><span>{t('invoices.language')}</span>
           <span className="seg2" role="radiogroup" aria-label={t('invoices.language')}>
@@ -554,11 +594,11 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
             {(['CHF', 'EUR'] as const).map((c) => <AsyncButton key={c} type="button" role="radio" aria-checked={inv.currency === c} className={inv.currency === c ? 'on' : ''} disabled={!canEdit || !ws.invoicing?.payTo[c]} data-tip={ws.invoicing?.payTo[c] ? undefined : t('invoices.currencyNeedsPayTo', { currency: c })} onClick={() => saveDraft(nav, inv, { currency: c })}>{c}</AsyncButton>)}
           </span>
         </div>
-        {inv.kind === 'invoice' && (ws.invoicing?.paymentTerms.length ?? 0) > 0 && (
+        {inv.kind === 'invoice' && (contextOf(ws, inv.date).settings?.paymentTerms.length ?? 0) > 0 && (
           <label className="lkr"><span>{t('invoices.terms')}</span>
             <select data-testid="draft-terms" value={inv.termsId ?? ''} disabled={!canEdit} onChange={(e) => saveDraft(nav, inv, { termsId: e.target.value || null, dueDate: null })}>
               <option value="">{t('invoices.termsCustomer', { n: terms })}</option>
-              {ws.invoicing!.paymentTerms.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              {contextOf(ws, inv.date).settings!.paymentTerms.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             </select>
           </label>
         )}
@@ -628,10 +668,10 @@ function ReminderSec({ d, inv, nav, canEdit }: DetailProps & { inv: Issued }) {
  * another is picked); an issued document shows what it froze.
  */
 function CustomerSec({ d, ws, inv, nav, canEdit }: DetailProps) {
-  const c = customerOf(d, inv, ws.invoicing);
+  const c = customerOf(d, inv, contextOf(ws, inv.date).settings);
   if (!c) return null;
   const a = c.address;
-  const contact = inv.status === 'draft' ? contactOf(d, inv) : undefined;
+  const contact = inv.status === 'draft' ? contactOnDay(contactOf(d, inv), inv.date) : undefined;
   const addr = contact ? addressOf(contact, inv.addressId) : undefined;
   const gone = inv.status === 'draft' ? goneRefs(contact, inv) : [];
   return (

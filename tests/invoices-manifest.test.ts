@@ -8,11 +8,12 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { workspaceAt } from '../src/workspace/workspace.js';
 import { tempWorkspace } from './support/workspace.js';
+import { invoicingOn } from '../src/invoices/dated-values.js';
 
 test('the demo invoices: QR-IBAN for CHF, the Wise IBAN for EUR, its layout and texts', () => {
   const ws = tempWorkspace('invoicing-');
   assert.deepEqual(ws.company.address, { street: 'Musterstrasse', number: '1', postcode: '8000', town: 'Zürich', country: 'CH' });
-  assert.deepEqual(ws.invoicing?.payTo, {
+  assert.deepEqual(invoicingOn(ws.invoicing!, '2026-10-01').payTo, {
     CHF: { account: '1021', iban: 'CH6580808000000000001', qrIban: 'CH4431999123000889012', bank: 'Raiffeisen' },
     EUR: { account: '1023', iban: 'BE29967000000164', bank: 'Wise' },
   });

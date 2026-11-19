@@ -7,11 +7,13 @@
  */
 import { invoiceActivities, rateOfKind } from '../engines/index.js';
 import {
-  ARTICLE_TYPES, DOCUMENT_KINDS, PRICES, VAT_KINDS,
-  type Article, type DocumentKind, type InvoicingSettings, type ArticleFields, type Contact, type Invoice, type InvoiceBook, type InvoiceContent, type ItemLine, type Prices, type UnitDef,
+  ARTICLE_TYPES, DOCUMENT_KINDS, PRICES, VAT_KINDS, isItem,
+  type Article, type DocumentKind, type InvoicingSettings, type ArticleFields, type ContactFields, type Invoice, type InvoiceBook, type InvoiceContent, type ItemLine, type Prices, type UnitDef,
 } from './model.js';
 import { lineDefaults } from './contacts.js';
 import { InvoiceRuleError } from './rules.js';
+import { articlePriceOn, fromStart, withEntry } from './dated-values.js';
+import { entryOn } from '../core/dated.js';
 
 /** Artikel not deleted, archived ones included (a document may name one). */
 export const liveArticles = (book: Pick<InvoiceBook, 'articles'>): Article[] => book.articles.filter((a) => !a.deleted);
@@ -32,12 +34,17 @@ const FIELDS = ['code', 'type', 'name', 'text', 'unit', 'price', 'prices', 'vatK
  * changes (`null` clears an optional one). `units`: the unit ids the firm's list names (and the one
  * the Artikel holds already, removed from the list since).
  */
-export function parseArticle(body: unknown, units: readonly string[], was?: Article): Partial<ArticleFields> & { clear: string[] } {
+/** A request's Artikel fields: the price as one number, which joins the price's history from its «gilt ab» (applyArticle). */
+export type ArticlePatch = Partial<Omit<ArticleFields, 'price'>> & { price?: number; clear: string[] };
+/** An Artikel's fields with its price as one number: a form's, an import's. */
+export type ArticleInput = Omit<ArticleFields, 'price'> & { price: number };
+
+export function parseArticle(body: unknown, units: readonly string[], was?: Article): ArticlePatch {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return bad('JSON-Objekt erwartet.');
   const b = body as Record<string, unknown>;
   const unknown = Object.keys(b).filter((k) => !FIELDS.includes(k as never));
   if (unknown.length) bad(`Unbekannte Felder: ${unknown.join(', ')}`);
-  const out: Partial<ArticleFields> & { clear: string[] } = { clear: [] };
+  const out: ArticlePatch = { clear: [] };
   const optional = ['code', 'text', 'unit', 'prices', 'account', 'activity', 'group', 'archived'];
   for (const [k, v] of Object.entries(b)) if (v === null && optional.includes(k)) out.clear.push(k);
   const given = (k: string) => b[k] !== undefined && b[k] !== null;
@@ -61,13 +68,19 @@ export function parseArticle(body: unknown, units: readonly string[], was?: Arti
   return out;
 }
 
-/** The Artikel with a request's fields applied: those it names set, those it clears gone. */
-export function applyArticle<T extends ArticleFields>(a: T, patch: Partial<ArticleFields> & { clear?: string[] }): T {
-  const { clear = [], ...fields } = patch;
-  const next = { ...a, ...fields } as T;
+/**
+ * The Artikel with a request's fields applied: those it names set, those it clears gone; a price
+ * joins its history from `validFrom` («gilt ab», spec 4.12), never overwriting an earlier one.
+ */
+export function applyArticle<T extends ArticleFields>(a: T, patch: Omit<ArticlePatch, 'clear'> & { clear?: string[] }, validFrom: string, enteredAt: string): T {
+  const { clear = [], price, ...fields } = patch;
+  const next = { ...a, ...fields, ...(price === undefined ? {} : { price: withEntry(a.price, price, validFrom, enteredAt) }) } as T;
   for (const k of clear) delete (next as Record<string, unknown>)[k];
   return next;
 }
+
+/** A new Artikel's record: its first price holds from the start (4.12), so a draft of any date reads it. */
+export const articleRecord = ({ price, ...f }: ArticleInput): ArticleFields => ({ ...f, price: fromStart(price) });
 
 const codeKey = (s: string) => s.trim().toUpperCase();
 
@@ -108,11 +121,35 @@ export function searchArticles(articles: readonly Article[], query: string, limi
  * converted at the position's rate, to the cent (net × (100 + rate) / 100, or back). A position
  * keeps what it got: the person may change it.
  */
-export function priceOn(a: Pick<ArticleFields, 'price' | 'prices'>, prices: Prices, rate: number): number {
+export function priceOn(a: { price: number; prices?: Prices }, prices: Prices, rate: number): number {
   const own = a.prices ?? 'net';
   if (own === prices || rate === 0) return a.price;
   const cents = Math.round(a.price * 100);
   return Math.round(own === 'net' ? cents * (100 + rate) / 100 : cents * 100 / (100 + rate)) / 100;
+}
+
+/** What a position of the Artikel costs on a document: the price of the document's date, in its pricing at `rate`. */
+export function articlePositionPrice(a: Pick<Article, 'price' | 'prices'>, doc: Pick<InvoiceContent, 'date' | 'prices'>, rate: number): number {
+  return priceOn({ price: articlePriceOn(a, doc.date) ?? 0, ...(a.prices ? { prices: a.prices } : {}) }, doc.prices ?? 'net', rate);
+}
+
+/** A position whose price is not the Artikel's of its document's date: what the preview names on it. */
+export interface ArticlePriceNote { line: number; price: number; article: number; since: string }
+
+/**
+ * A draft's Artikel positions whose price differs from the Artikel's price valid on the draft's date
+ * (spec 4.12): its date moved, or a new price begins before it. The preview names each («Artikelpreis
+ * ab 01.12.2026: 29; Position: 28»); the person keeps or changes it. A day no price holds names nothing.
+ */
+export function articlePriceNotes(doc: Pick<InvoiceContent, 'date' | 'prices' | 'lines'>, articles: readonly Pick<Article, 'id' | 'price' | 'prices'>[]): ArticlePriceNote[] {
+  return doc.lines.flatMap((l, k) => {
+    if (!isItem(l) || l.kind !== 'article') return [];
+    const a = articles.find((x) => x.id === l.articleId);
+    const since = a && entryOn(a.price, doc.date)?.validFrom;
+    if (!a || !since) return [];
+    const price = articlePositionPrice(a, doc, l.vatRate);
+    return price === l.price ? [] : [{ line: k, price: l.price, article: price, since }];
+  });
 }
 
 /** The day a position's rate is read for: the document's supply day, else its date (Art. 115 MWSTG: the rate of the supply). */
@@ -124,7 +161,7 @@ export const supplyDay = (doc: Pick<InvoiceContent, 'date' | 'supplied'>): strin
  * Artikel's, else the contact's revenue account, else none (the settings'); the contact's standing
  * discount; the activity on a firm with two net rates. Quantity 1.
  */
-export function articleLine(a: Article, doc: Pick<InvoiceContent, 'date' | 'supplied' | 'prices'>, contact?: Pick<Contact, 'revenueAccount' | 'discount'>, units?: readonly UnitDef[]): ItemLine {
+export function articleLine(a: Article, doc: Pick<InvoiceContent, 'date' | 'supplied' | 'prices'>, contact?: Pick<ContactFields, 'revenueAccount' | 'discount'>, units?: readonly UnitDef[]): ItemLine {
   const rate = rateOfKind(a.vatKind, supplyDay(doc));
   const defaults = lineDefaults(contact);
   const unit = a.unit && (!units || units.some((u) => u.id === a.unit)) ? a.unit : undefined;
@@ -135,7 +172,8 @@ export function articleLine(a: Article, doc: Pick<InvoiceContent, 'date' | 'supp
     text: a.text ?? a.name,
     quantity: 1,
     ...(unit ? { unit } : {}),
-    price: priceOn(a, doc.prices ?? 'net', rate),
+    // The price valid on the document's date (spec 4.12); none holds yet: 0, which issuing names.
+    price: articlePositionPrice(a, doc, rate),
     vatRate: rate,
     ...(defaults.discount ? { discount: defaults.discount } : {}),
     ...(a.account ?? defaults.account ? { account: a.account ?? defaults.account } : {}),

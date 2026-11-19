@@ -9,9 +9,11 @@ import type { ScreenSheet, SheetData } from '../../../invoices/sheet.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import { api, type InvoiceList } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
-import { bookOf, customerOf, pickerContacts } from './model.js';
+import { bookOf, contactOf, customerOf, pickerContacts } from './model.js';
+import { contactOnDay, invoicingOnDay, letterheadOn } from '../../../invoices/dated-values.js';
 
-export const contextOf = (ws: CompanyInfo): InvoicingContext => ({ company: ws.company, settings: ws.invoicing });
+/** What a document of `day` reads of the firm (spec 4.12): the settings and the letterhead of that day. */
+export const contextOf = (ws: CompanyInfo, day: string): InvoicingContext => ({ company: ws.company, settings: invoicingOnDay(ws.invoicing, day), letterhead: letterheadOn(ws.company, ws.invoicing, day) });
 
 const logo = (path: string | undefined) => (path ? api.logoUrl(path) : undefined);
 
@@ -33,9 +35,10 @@ export function screenOf(d: InvoiceList, scope: 'draft' | 'texts' | undefined, c
 }
 
 export function draftData(d: InvoiceList, ws: CompanyInfo, draft: Draft, editing: boolean): SheetData {
-  const sheet = draftSheet(contextOf(ws), bookOf(d), draft, customerOf(d, draft, ws.invoicing), logo(ws.invoicing?.layout.logo));
-  // A position without an account of its own books on the contact's revenue account, else the settings'.
-  const revenue = d.contacts.find((c) => c.id === draft.customerId)?.revenueAccount ?? ws.invoicing?.revenueAccount;
+  const ctx = contextOf(ws, draft.date);
+  const sheet = draftSheet(ctx, bookOf(d), draft, customerOf(d, draft, ctx.settings), logo(ws.invoicing?.layout.logo));
+  // A position without an account of its own books on the contact's revenue account of the draft's date, else the settings'.
+  const revenue = contactOnDay(contactOf(d, draft), draft.date)?.revenueAccount ?? ws.invoicing?.revenueAccount;
   return { ...sheet, screen: screenOf(d, editing ? 'draft' : undefined, draft.customerId, undefined, revenue) };
 }
 

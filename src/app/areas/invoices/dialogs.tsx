@@ -3,6 +3,7 @@
  * sending an invoice or a reminder (by e-mail or as a download), and cancelling or crediting an
  * issued invoice. A dialog is an action, not a place (docs/urls.md).
  */
+import { invoicingOnDay } from '../../../invoices/dated-values.js';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
 import { isBooked, issuedPdfUrl, type Contact, type DocumentKind, type Invoice, type Issued } from '../../../invoices/model.js';
@@ -122,7 +123,7 @@ function useMail(inv: Issued, doc: MailDocument): { ready: boolean; status?: Mai
   const ws = useWorkspace();
   const [status, setStatus] = useState<MailStatus>();
   useEffect(() => { api.mailStatus().then(setStatus, () => setStatus(undefined)); }, []);
-  const text = mailText(ws?.invoicing, inv, doc, ws?.company.name ?? '');
+  const text = mailText(invoicingOnDay(ws?.invoicing, inv.date), inv, doc, ws?.company.name ?? '');
   return { ready: !!status?.configured && status.password !== 'missing', status, defaults: { to: inv.customer.email ?? '', ...text } };
 }
 

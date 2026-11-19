@@ -51,6 +51,8 @@ export interface PaymentContext {
   held(books: Books): ReadonlySet<string>;
   /** Where a rest is written off on the agreed basis (invoicing.writeOffAccount); absent: the jurisdiction's. */
   writeOffAccount?: { skonto: string; loss: string };
+  /** The fee and write-off accounts valid on a day (spec 4.12): a payment's fee reads its date, a write-off its own; absent: the fields above. */
+  accountsOn?(day: string): { feeAccount?: string; writeOffAccount?: { skonto: string; loss: string } };
   /** Puts an account a booking needs into the chart when it lacks it, under the jurisdiction chart's name (a write-off account). */
   ensureAccount?(number: string): void;
 }
@@ -206,9 +208,11 @@ export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: P
   const fx = rate !== undefined ? { exchangeCurrency: tx.currency, exchangeRate: rate } : {};
   const stamp = (l: Omit<JournalEntry, 'id' | 'transactionRef' | 'date' | 'origin'>): JournalEntry => ({ id: idSource.bytes(8).toString('hex'), transactionRef: tx.ref, date: tx.date, ...l, origin: 'invoice' });
   // A Mahnung's fee and default interest, paid with it: revenue without a code, on either basis (no consideration for a supply).
+  // The fee account valid on the payment's date (spec 4.12).
+  const feeAccount = ctx.accountsOn ? ctx.accountsOn(tx.date).feeAccount : ctx.feeAccount;
   const fee = [
-    ...(a.fee ? [stamp({ accountDebit: bank, accountCredit: ctx.feeAccount ?? ctx.revenueAccount, amount: a.fee, description: `${text}, ${TEXTS.de.fee}`, ...fx })] : []),
-    ...(a.interest ? [stamp({ accountDebit: bank, accountCredit: ctx.interestAccount ?? ctx.feeAccount ?? ctx.revenueAccount, amount: a.interest, description: `${text}, ${TEXTS.de.interestWord}`, ...fx })] : []),
+    ...(a.fee ? [stamp({ accountDebit: bank, accountCredit: feeAccount ?? ctx.revenueAccount, amount: a.fee, description: `${text}, ${TEXTS.de.fee}`, ...fx })] : []),
+    ...(a.interest ? [stamp({ accountDebit: bank, accountCredit: ctx.interestAccount ?? feeAccount ?? ctx.revenueAccount, amount: a.interest, description: `${text}, ${TEXTS.de.interestWord}`, ...fx })] : []),
   ];
   const entries: JournalEntry[] = hasEvent(books, inv)
     ? [...settlementLines({

@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Index } from '../src/types/index.js';
 import { issue } from '../src/invoices/rules.js';
-import { DEFAULT_LAYOUT, type InvoiceBook } from '../src/invoices/model.js';
+import { DEFAULT_LAYOUT, type Contact, type InvoiceBook } from '../src/invoices/model.js';
 import { loadBooks, PERSON, saveBooks, update, type Books } from '../src/books/store.js';
 import { findFile, workspaceAt } from '../src/workspace/workspace.js';
 import { booksOnDisk } from './support/workspace.js';
@@ -376,7 +376,7 @@ test('phase 3 (spec 4.4.9): a Schlussrechnung deducting a Teilrechnung of the fi
   const original = readFileSync(file, 'utf8');
   const doc = JSON.parse(original) as InvoiceBook;
   doc.invoices = doc.invoices.map((i) => (i.id === 'in_p' ? { ...i, role: 'partial' as const } : i));
-  doc.contacts = [...(doc.contacts ?? []), { id: 'cu_p', createdAt: '2026-06-01T08:00:00Z', origin: 'manual', deleted: false, type: 'firm', name: 'Beispiel Bistro AG', persons: [], addresses: [{ id: 'a-1', postcode: '3000', town: 'Bern', country: 'CH', billing: true }], language: 'de', emails: [] }];
+  doc.contacts = [...(doc.contacts ?? []), { id: 'cu_p', createdAt: '2026-06-01T08:00:00Z', origin: 'manual', deleted: false, type: 'firm', name: 'Beispiel Bistro AG', persons: [], addresses: [{ id: 'a-1', postcode: '3000', town: 'Bern', country: 'CH', billing: true }], language: 'de', emails: [] } as unknown as Contact];
   writeFileSync(file, JSON.stringify(doc));
   const before = JSON.stringify(booksOnDisk(api.ws));
   try {

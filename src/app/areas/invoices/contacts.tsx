@@ -4,9 +4,12 @@
  * documents and open items, its business file), the form for a new and a known contact, and the
  * import of contacts from a CSV with a column mapping.
  */
+import { allTerms, contactOn, invoicingOnDay } from '../../../invoices/dated-values.js';
+import type { DatedCard } from '../../../invoices/backdated.js';
+import { DatedCardView, DatedTrail } from './DatedValue.js';
 import { useEffect, useRef, useState } from 'react';
 import { localToday } from '../../../accounting/periods.js';
-import { INVOICE_CURRENCIES, type Contact, type ContactAddress, type ContactPerson, type InvoiceCurrency, type InvoiceLanguage } from '../../../invoices/model.js';
+import { INVOICE_CURRENCIES, type Contact, type ContactAddress, type ContactOnDay, type ContactPerson, type InvoiceCurrency, type InvoiceLanguage } from '../../../invoices/model.js';
 import { billingAddress, contactDays, documentsOf } from '../../../invoices/contacts.js';
 import { IMPORT_FIELDS, type ImportField, type ImportMapping, type ImportRow } from '../../../invoices/contact-import.js';
 import { TableImport, type ImportKind } from './import-dialog.js';
@@ -23,7 +26,7 @@ import type { AreaProps } from '../index.js';
 import { CONTACT_TABS, contactRows, customerChange, rowState, type ContactTab } from './model.js';
 import { groupOf, statusOfKind } from './table.js';
 import { listed, setUi, useUi } from './state.js';
-import { invoiceAt, newDraftFor, removeContact, restoreContact, saveContact, saveDraft } from './actions.js';
+import { invoiceAt, newDraftFor, removeContact, restoreContact, saveContact, saveContactFrom, saveDraft } from './actions.js';
 import { invoicesNow, reloadInvoices } from './data.js';
 import { COUNTRIES, addressRule, countryName, countryOf, languageFor, numberFirst, vatRule } from './address.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
@@ -105,16 +108,20 @@ export function ContactTable(props: Props & { d: InvoiceList }) {
 const addressText = (a: ContactAddress) =>
   [[a.street, a.number].filter(Boolean).join(' '), a.line2, `${a.country !== 'CH' ? `${a.country}-` : ''}${a.postcode} ${a.town}${a.state ? ` ${a.state}` : ''}`].filter(Boolean).join(', ');
 
-function termsText(c: Contact, ws: ReturnType<typeof useWorkspace>): string {
-  const named = ws?.invoicing?.paymentTerms.find((x) => x.id === c.paymentTerms);
+function termsText(c: ContactOnDay, ws: ReturnType<typeof useWorkspace>, day: string): string {
+  const s = invoicingOnDay(ws?.invoicing, day);
+  const named = s?.paymentTerms.find((x) => x.id === c.paymentTerms);
   if (named) return named.name;
-  const days = contactDays(c, ws?.invoicing);
+  const days = contactDays(c, s);
   return c.paymentDays !== undefined ? t('invoices.nDays', { n: days }) : t('contacts.termsFirm', { n: days });
 }
 
 export function ContactPanel({ d, route, nav, canEdit }: Props & { d: InvoiceList }) {
   const ws = useWorkspace();
-  const c = d.contacts.find((x) => x.id === route.id);
+  const stored = d.contacts.find((x) => x.id === route.id);
+  const today = localToday();
+  // The contact as it stands today; its dated values show from when, what is planned and «Verlauf» (spec 4.12).
+  const c = stored && contactOn(stored, today);
   const [detail, setDetail] = useState<Detail>();
   useEffect(() => {
     if (!c) return;
@@ -122,9 +129,8 @@ export function ContactPanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
     api.contact(c.id).then((x) => { if (live) setDetail(x); }, () => { if (live) setDetail(undefined); });
     return () => { live = false; };
   }, [c?.id, c?.business]);
-  if (!c) return <div className="detail-empty"><div>{route.id ? t('contacts.gone') : t('invoices.noneSelected')}</div></div>;
+  if (!c || !stored) return <div className="detail-empty"><div>{route.id ? t('contacts.gone') : t('invoices.noneSelected')}</div></div>;
   const docs = documentsOf(d, c.id).sort((x, y) => y.date.localeCompare(x.date));
-  const today = localToday();
   const open = docs.filter((i) => i.status === 'issued' && i.kind === 'invoice' && !i.cancelled && openAmount(i, d.invoices) > 0);
   const a = billingAddress(c);
   const partner = detail?.business?.known ? detail.business.id : undefined;
@@ -139,17 +145,17 @@ export function ContactPanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
         {c.phone && <span>{c.phone}</span>}
         <span>{c.vatId || t('invoices.noVatId')}</span>
         <span>{t(`invoices.lang.${c.language}`)}</span>
-        <span>{termsText(c, ws)}</span>
+        <span>{termsText(c, ws, today)}</span>
       </div>
       {c.archived && <p className="cnote" data-testid="contact-archived">{t('contacts.archivedNote')}</p>}
       {canEdit && (
         <div className="ivacts">
-          {!c.archived && <AsyncButton type="button" className="btn primary" data-act="new-invoice" onClick={() => newDraftFor(nav, c)}>{t('invoices.new')}</AsyncButton>}
+          {!c.archived && <AsyncButton type="button" className="btn primary" data-act="new-invoice" onClick={() => newDraftFor(nav, stored)}>{t('invoices.new')}</AsyncButton>}
           {open.length > 0 && <button type="button" className="btn ghost" data-act="allocate-contact" data-tip={t('contacts.allocateTip')} onClick={() => setUi({ dialog: { kind: 'allocate', transactionRef: '', customerId: c.id } })}>{t('contacts.allocate')}</button>}
           <button type="button" className="btn ghost" data-act="edit-contact" onClick={() => setUi({ dialog: { kind: 'contact', id: c.id } })}>{t('contacts.edit')}</button>
           {c.archived
-            ? <AsyncButton type="button" className="btn ghost" data-act="restore-contact" onClick={() => restoreContact(nav, c)}>{t('contacts.restore')}</AsyncButton>
-            : <AsyncButton type="button" className="btn ghost danger" data-act="remove-contact" data-tip={t(docs.length ? 'contacts.archiveTip' : 'contacts.deleteTip')} onClick={() => removeContact(nav, c)}>{t(docs.length ? 'contacts.archive' : 'common.delete')}</AsyncButton>}
+            ? <AsyncButton type="button" className="btn ghost" data-act="restore-contact" onClick={() => restoreContact(nav, stored)}>{t('contacts.restore')}</AsyncButton>
+            : <AsyncButton type="button" className="btn ghost danger" data-act="remove-contact" data-tip={t(docs.length ? 'contacts.archiveTip' : 'contacts.deleteTip')} onClick={() => removeContact(nav, stored)}>{t(docs.length ? 'contacts.archive' : 'common.delete')}</AsyncButton>}
         </div>
       )}
       <div className="csecs">
@@ -161,6 +167,7 @@ export function ContactPanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
               <span className="m">{[x.id === a?.id && t('contacts.billing'), x.delivery && t('contacts.delivery')].filter(Boolean).join(' · ')}</span>
             </div>
           )) : <p className="m">{t('contacts.noAddress')}</p>}
+          <DatedTrail history={stored.addresses} today={today} show={(list) => list.map(addressText).join(' / ') || t('contacts.noAddress')} />
         </section>
         {c.type === 'firm' && (
           <section className="csec">
@@ -176,10 +183,10 @@ export function ContactPanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
         <section className="csec">
           <h3>{t('contacts.sec.defaults')}</h3>
           <dl className="kv">
-            <dt>{t('invoices.f.terms')}</dt><dd>{termsText(c, ws)}</dd>
+            <dt>{t('invoices.f.terms')}</dt><dd>{termsText(c, ws, today)}<DatedTrail history={stored.terms} today={today} show={(v) => termsText({ ...c, paymentTerms: v.paymentTerms, paymentDays: v.paymentDays }, ws, today)} /></dd>
             <dt>{t('invoices.currency')}</dt><dd>{c.currency ?? t('contacts.firmDefault')}</dd>
-            <dt>{t('contacts.revenueAccount')}</dt><dd className={c.revenueAccount ? 'mono' : undefined}>{c.revenueAccount ?? t('contacts.firmDefault')}</dd>
-            <dt>{t('contacts.discount')}</dt><dd>{c.discount ? `${c.discount} %` : '–'}</dd>
+            <dt>{t('contacts.revenueAccount')}</dt><dd className={c.revenueAccount ? 'mono' : undefined}>{c.revenueAccount ?? t('contacts.firmDefault')}<DatedTrail history={stored.revenueAccount} today={today} show={(v) => v ?? t('contacts.firmDefault')} /></dd>
+            <dt>{t('contacts.discount')}</dt><dd>{c.discount ? `${c.discount} %` : '–'}<DatedTrail history={stored.discount} today={today} show={(v) => (v ? `${v} %` : '–')} /></dd>
             <dt>{t('contacts.reminders')}</dt><dd>{t(c.noReminders ? 'contacts.noReminders' : 'contacts.withReminders')}</dd>
           </dl>
           {(c.tags?.length || c.notes) && <p className="m">{(c.tags ?? []).map((x) => <span key={x} className="ctag">{x}</span>)} {c.notes}</p>}
@@ -256,7 +263,8 @@ const addrForm = (a: ContactAddress, billing: boolean): AddrForm => ({
 });
 const personForm = (p: ContactPerson): PersonForm => ({ id: p.id, name: p.name, role: p.role ?? '', email: p.email ?? '', phone: p.phone ?? '' });
 
-function formOf(c: Contact | undefined, typedName: string | undefined, firmTerms: readonly string[]): Form {
+function formOf(stored: Contact | undefined, typedName: string | undefined, firmTerms: readonly string[], day: string): Form {
+  const c = stored && contactOn(stored, day);
   const own = c?.paymentDays !== undefined ? String(c.paymentDays) : undefined;
   const billing = c ? billingAddress(c)?.id : undefined;
   return {
@@ -330,9 +338,13 @@ export function ContactDialog({ contact, nav }: Props & { contact?: Contact }) {
   const ws = useWorkspace();
   const dlg = s.dialog?.kind === 'contact' ? s.dialog : undefined;
   const then = dlg?.then;
-  const firmTerms = (ws?.invoicing?.paymentTerms ?? []).map((x) => x.id);
+  const firmTerms = allTerms(ws?.invoicing).map((x) => x.id);
+  const today = localToday();
+  // «Gilt ab» of a known contact's addresses, terms, discount and revenue account (spec 4.12): today unless she names a day.
+  const [from, setFrom] = useState(today);
+  const [card, setCard] = useState<DatedCard | null>(null);
   // N › a name nobody has yet › ↵: the name typed is the new contact's (r8c-17).
-  const [f, setF] = useState<Form>(() => formOf(contact, dlg?.name, firmTerms));
+  const [f, setF] = useState<Form>(() => formOf(contact, dlg?.name, firmTerms, today));
   const [tried, setTried] = useState(false);
   const langChosen = useRef(!!contact);
   const errors = tried ? errorsOf(f) : {};
@@ -354,21 +366,26 @@ export function ContactDialog({ contact, nav }: Props & { contact?: Contact }) {
   const field = (k: 'name' | 'salutation' | 'firstName' | 'lastName' | 'number' | 'emails' | 'phone' | 'vatId' | 'ownDays' | 'revenueAccount' | 'discount' | 'tags' | 'notes', label: string, ph: string, cls: string, mono = false, autoFocus = false) =>
     input(k, f[k], (v) => set(k, v), label, ph, cls, mono, autoFocus);
 
-  async function save(next: 'close' | 'invoice') {
+  async function save(next: 'close' | 'invoice', way?: 'keep') {
     setTried(true);
     if (Object.keys(errorsOf(f)).length) return;
-    const saved = await saveContact(nav, contact?.id, inputOf(f));
-    if (!saved) return;
-    close();
     if (contact) {
+      // A day before issued documents that printed another address or terms: the card first, «So lassen» saves (4.11).
+      const out = await saveContactFrom(nav, contact.id, inputOf(f), from, way);
+      if (!out) return;
+      if ('saved' in out) { setCard(out); return; }
+      close();
       const before = contact;
-      nav.toast(t('contacts.saved', { name: saved.name }), () => { void saveContact(nav, before.id, inputOf(formOf(before, undefined, firmTerms))); });
+      nav.toast(t('contacts.saved', { name: out.name }), () => { void saveContactFrom(nav, before.id, inputOf(formOf(before, undefined, firmTerms, from)), from, 'keep'); });
       return;
     }
+    const saved = await saveContact(nav, undefined, inputOf(f));
+    if (!saved) return;
+    close();
     if (then && typeof then === 'object' && 'kind' in then) { void newDraftFor(nav, saved, then.kind); return; }
     if (then && typeof then === 'object') {
       const draft = invoicesNow()?.invoices.find((i) => i.id === then.draft);
-      if (draft?.status === 'draft') void saveDraft(nav, draft, customerChange(draft, saved));
+      if (draft?.status === 'draft') void saveDraft(nav, draft, customerChange(draft, contactOn(saved, draft.date)));
       return;
     }
     if (then === 'invoice' || next === 'invoice') { void newDraftFor(nav, saved); return; }
@@ -466,8 +483,8 @@ export function ContactDialog({ contact, nav }: Props & { contact?: Contact }) {
         <h4 className="cfh">{t('contacts.sec.defaults')}</h4>
         <label className="cf s2"><span>{t('customer.terms')}</span>
           <select value={f.terms} data-field="terms" onChange={(e) => set('terms', e.target.value)}>
-            <option value="">{t('contacts.termsFirm', { n: contactDays(undefined, ws?.invoicing) })}</option>
-            {(ws?.invoicing?.paymentTerms ?? []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            <option value="">{t('contacts.termsFirm', { n: contactDays(undefined, invoicingOnDay(ws?.invoicing, from)) })}</option>
+            {(invoicingOnDay(ws?.invoicing, from)?.paymentTerms ?? []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
             <option value="own">{t('contacts.termsOwn')}</option>
           </select>
         </label>
@@ -482,6 +499,13 @@ export function ContactDialog({ contact, nav }: Props & { contact?: Contact }) {
         <label className="cf s1 cflags"><span /><label><input type="checkbox" checked={f.noReminders} onChange={(e) => set('noReminders', e.target.checked)} /> {t('contacts.noReminders')}</label></label>
         {field('tags', t('contacts.tags'), t('contacts.tagsPh'), 'w2')}
         {field('notes', t('contacts.notes'), '', 'w2')}
+        {contact && (
+          <label className="cf s2" data-testid="contact-valid-from"><span>{t('dated.validFrom')}</span>
+            <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); setCard(null); }} />
+            <span className="fhint">{t('contacts.validFromHint')}</span>
+          </label>
+        )}
+        {card && <div className="w2"><DatedCardView card={card} onChoose={() => save('close', 'keep')} onCancel={() => setCard(null)} /></div>}
         <AsyncButton type="submit" hidden />
       </AsyncForm>
     </Frame>

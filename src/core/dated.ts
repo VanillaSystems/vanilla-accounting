@@ -116,3 +116,52 @@ export function withdrawEntry<T>(h: Dated<T>, key: EntryKey, usedBy: (key: Entry
   if (usedBy(key)) throw new DatedEntryError(`the entry from ${key.validFrom} was used and stays; a new entry corrects it`);
   return h.filter((_, j) => j !== i);
 }
+
+// ─── a value of before the histories, and the one writer of a form's change ─────────
+
+/**
+ * The day a value written before histories holds from: «from the start», before any document a
+ * workspace can hold (an opening Rechnung of an earlier year included). The UI says «seit Beginn».
+ */
+export const SINCE_START = '1900-01-01';
+/** When such a value was «entered»: before any entry a person adds, so hers wins on the same day. */
+export const START_ENTERED = '1900-01-01T00:00:00.000Z';
+
+export const fromStart = <T>(value: T): DatedEntry<T>[] => [{ validFrom: SINCE_START, enteredAt: START_ENTERED, value }];
+
+/** A list of dated entries, as a file writes one (every item with `validFrom` and `value`). */
+export function isHistory(v: unknown): v is DatedEntry<unknown>[] {
+  return Array.isArray(v) && v.every((e) => !!e && typeof e === 'object' && 'validFrom' in e && 'value' in e);
+}
+
+/**
+ * A field as a file holds it, as a history: a history stays; a plain value (a file of before the
+ * histories, or one written by hand) is one entry valid from the start; absent is none. `read` checks
+ * or shapes each value.
+ */
+export function historyOf<T>(v: unknown, read: (x: unknown) => T = (x) => x as T): DatedEntry<T>[] {
+  if (v === undefined || v === null) return [];
+  if (isHistory(v)) return v.map((e) => ({ ...e, value: read(e.value) }));
+  return fromStart(read(v));
+}
+
+/**
+ * `h` with `value` from `validFrom`: the one writer of invoicing's histories (core/dated addEntry).
+ * Nothing is added when the value on that day is already the same: a form saved unchanged leaves no entry.
+ */
+export function withEntry<T>(h: Dated<T> | undefined, value: T, validFrom: string, enteredAt: string, source?: DatedEntry<T>['source']): DatedEntry<T>[] {
+  // None and null are alike: a value ended (null) on a day none held adds nothing.
+  if (same(valueOn(h, validFrom) ?? null, value ?? null)) return [...(h ?? [])];
+  return addEntry(h, { validFrom, enteredAt, value, ...(source ? { source } : {}) });
+}
+
+/** Two values alike as JSON writes them (keys in any order). */
+export function same(a: unknown, b: unknown): boolean {
+  return canonical(a) === canonical(b);
+}
+function canonical(v: unknown): string {
+  if (v === undefined) return 'undefined';
+  if (v === null || typeof v !== 'object') return JSON.stringify(v);
+  if (Array.isArray(v)) return `[${v.map(canonical).join(',')}]`;
+  return `{${Object.keys(v).filter((k) => (v as Record<string, unknown>)[k] !== undefined).sort().map((k) => `${JSON.stringify(k)}:${canonical((v as Record<string, unknown>)[k])}`).join(',')}}`;
+}

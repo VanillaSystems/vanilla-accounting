@@ -9,7 +9,8 @@ import { cpSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadBooks, saveBooks, sealsOf } from '../src/books/store.js';
-import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, MANIFEST_MIGRATIONS, SchemaTooNewError, WORKSPACE_SCHEMA, climb, type Ladder } from '../src/workspace/schema.js';
+import { BOOKS_MIGRATIONS, BOOKS_SCHEMA, MANIFEST_MIGRATIONS, SchemaTooNewError, WORKSPACE_SCHEMA, climb, datedInvoicing, manifestText, type Ladder } from '../src/workspace/schema.js';
+import { invoicingOn } from '../src/invoices/dated-values.js';
 import { upgradeWorkspace } from '../src/workspace/upgrade.js';
 import { readManifest } from '../src/workspace/manifest.js';
 import { parseDocument } from 'yaml';
@@ -229,7 +230,7 @@ test('manifest schema 4 (#452): a manifest of schema 3 loads with its UID, npm r
   const step = done.find((d) => d.file === path);
   assert.deepEqual(step && { from: step.from, to: step.to }, { from: 3, to: WORKSPACE_SCHEMA });
   assert.equal(readFileSync(step!.backup, 'utf8'), old);
-  assert.equal(readFileSync(path, 'utf8'), current, 'only the number changed');
+  assert.equal(readFileSync(path, 'utf8'), withHistories(current), 'only the number changed (and the step 6 → 7 dated the invoicing settings)');
 
   writeFileSync(path, current.replace(/^ {2}uid: .*\n/m, ''));
   assert.doesNotMatch(readFileSync(path, 'utf8'), /uid:/);
@@ -253,12 +254,13 @@ test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defa
   assert.deepEqual(inv.units.map((u) => u.id), ['h', 'day', 'pcs', 'flat', 'km', 'm2', 'm', 'm3', 'l', 'kg', 'month'], 'the default units, the old ids first');
   assert.deepEqual(inv.units.find((u) => u.id === 'm2'), { id: 'm2', de: 'm²', fr: 'm²', it: 'm²', en: 'm²' });
   assert.deepEqual(inv.prices, { quote: 'net', 'sales-order': 'net', 'delivery-note': 'net', invoice: 'net', 'credit-note': 'net' });
-  assert.deepEqual(inv.paymentTerms, [{ id: `net${inv.paymentTermsDays}`, name: `${inv.paymentTermsDays} Tage netto`, days: inv.paymentTermsDays }]);
+  const today = new Date().toISOString().slice(0, 10);
+  assert.deepEqual(invoicingOn(inv, today).paymentTerms, [{ id: `net${inv.paymentTermsDays}`, name: `${inv.paymentTermsDays} Tage netto`, days: inv.paymentTermsDays }]);
   assert.equal(inv.shortfallLimit, 5);
-  assert.equal(inv.writeOffAccount, undefined, 'absent: the jurisdiction\'s accounts');
+  assert.equal(invoicingOn(inv, today).writeOffAccount, undefined, 'absent: the jurisdiction\'s accounts');
   const { done } = await upgradeWorkspace(workspaceAt(dir));
   assert.deepEqual(done.filter((d) => d.file === path).map((d) => [d.from, d.to]), [[4, WORKSPACE_SCHEMA]]);
-  assert.equal(readFileSync(path, 'utf8'), old.replace(/^schema: 4\n/m, `schema: ${WORKSPACE_SCHEMA}\n`), 'only the number changed');
+  assert.equal(readFileSync(path, 'utf8'), withHistories(old.replace(/^schema: 4\n/m, `schema: ${WORKSPACE_SCHEMA}\n`)), 'only the number changed (and the step 6 → 7 dated the invoicing settings)');
 
   const own = old.replace(/^schema: 4\n/m, 'schema: 5\n').replace(/^invoicing:\n/m, [
     'invoicing:',
@@ -274,8 +276,9 @@ test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defa
   const set = readManifest(path).invoicing!;
   assert.deepEqual(set.units.map((u) => u.en), ['m²', 'pallet']);
   assert.deepEqual(set.prices, { quote: 'net', 'sales-order': 'net', 'delivery-note': 'net', invoice: 'gross', 'credit-note': 'net' });
-  assert.deepEqual(set.paymentTerms, [{ id: 'skonto', name: '10 Tage 2 %, 30 Tage netto', days: 30, skonto: { percent: 2, days: 10 } }]);
-  assert.deepEqual([set.defaultTerms, set.writeOffAccount, set.shortfallLimit], ['skonto', { skonto: '3800', loss: '3805' }, 10]);
+  const onDay = invoicingOn(set, today);
+  assert.deepEqual(onDay.paymentTerms, [{ id: 'skonto', name: '10 Tage 2 %, 30 Tage netto', days: 30, skonto: { percent: 2, days: 10 } }]);
+  assert.deepEqual([onDay.defaultTerms, onDay.writeOffAccount, onDay.shortfallLimit], ['skonto', { skonto: '3800', loss: '3805' }, 10]);
   for (const [bad, msg] of [
     ['  units: [{ id: m2, de: m² }]', /invoicing\.units\[0\]\.fr/],
     ['  prices: { invoice: brutto }', /invoicing\.prices\.invoice/],
@@ -330,6 +333,43 @@ test('manifest schema 6 (invoicing phase 2, number series): a manifest of 5 with
   assert.throws(() => climb(parseDocument(current), 6, 5, MANIFEST_MIGRATIONS, path, (d) => d.clone()), (e: Error) => e instanceof SchemaTooNewError);
 });
 
+test('manifest schema 7 (dated invoicing settings): a manifest of 6 reads as before on any day; npm run update writes each plain payTo, terms and account as one entry from the start and nothing else; a second run changes nothing; an app of 6 refuses 7', async () => {
+  assert.equal(WORKSPACE_SCHEMA, 7);
+  const dir = mkdtempSync(join(tmpdir(), 'manifest-7-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const path = workspaceAt(dir).paths.manifest;
+  const current = readFileSync(path, 'utf8');
+  // The demo as a manifest of 6 wrote it: plain values, and a write-off account of its own.
+  const old = current.replace(/^schema: \d+\n/m, 'schema: 6\n').replace(/^invoicing:\n/m, 'invoicing:\n  writeOffAccount: { skonto: "3800", loss: "3805" }\n');
+  writeFileSync(path, old);
+  const days = ['2020-01-01', '2026-06-30', new Date().toISOString().slice(0, 10)];
+  const before = readManifest(path).invoicing!;
+  assert.equal(invoicingOn(before, days[1]).payTo.CHF?.account, '1021', 'a plain value reads as one from the start');
+
+  const { done } = await upgradeWorkspace(workspaceAt(dir));
+  assert.deepEqual(done.filter((d) => d.file === path).map((d) => [d.from, d.to]), [[6, 7]]);
+  const written = readFileSync(path, 'utf8');
+  const start = { validFrom: '1900-01-01', enteredAt: '1900-01-01T00:00:00.000Z' };
+  const inv = (parseDocument(written).toJSON() as { invoicing: Record<string, unknown> }).invoicing;
+  const was = (parseDocument(old).toJSON() as { invoicing: Record<string, unknown> }).invoicing;
+  for (const cur of Object.keys(was.payTo as object)) {
+    assert.deepEqual((inv.payTo as Record<string, unknown>)[cur], [{ ...start, value: (was.payTo as Record<string, unknown>)[cur] }], `payTo.${cur}`);
+  }
+  assert.deepEqual(inv.paymentTerms, [{ ...start, value: was.paymentTerms }]);
+  assert.deepEqual(inv.writeOffAccount, [{ ...start, value: { skonto: '3800', loss: '3805' } }]);
+  const { payTo: _p, paymentTerms: _t, writeOffAccount: _w, ...rest } = inv;
+  const { payTo: _p0, paymentTerms: _t0, writeOffAccount: _w0, ...restWas } = was;
+  assert.deepEqual(rest, restWas, 'nothing else of invoicing changes');
+  const after = readManifest(path).invoicing!;
+  for (const day of days) assert.deepEqual(invoicingOn(after, day), invoicingOn(before, day), `every document of ${day} reads the same settings`);
+
+  assert.equal(withHistories(written), written, 'a second run changes nothing');
+  assert.throws(() => climb(parseDocument(written), 7, 6, MANIFEST_MIGRATIONS, path, (d) => d.clone()), (e: Error) => e instanceof SchemaTooNewError);
+});
+
+/** `text` with what the step 6 → 7 makes of it: each plain payTo, terms and account of `invoicing:` one entry from the start. */
+const withHistories = (text: string): string => manifestText(datedInvoicing(parseDocument(text)));
+
 function booksFiles(dir: string): string[] {
   return readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((f) => /books\/.*\.jsonl$/.test(f)).map((f) => join(dir, f)).sort();
 }
@@ -371,7 +411,7 @@ test('manifest schema 7 (invoicing phase 3, Mahnwesen): a manifest of 6 with inv
   assert.deepEqual(fresh.levels.map((l) => [l.name, l.fee, l.texts?.fr?.title]), [['Zahlungserinnerung', undefined, 'Rappel de paiement'], ['1. Mahnung', undefined, '1er rappel'], ['2. Mahnung', undefined, '2e rappel']]);
   // The demo's own: its 2. Mahnung charges 20.
   writeFileSync(path, current);
-  assert.equal(readManifest(path).invoicing!.dunning.levels[2]!.fee, 20);
+  assert.equal(invoicingOn(readManifest(path).invoicing!, '2026-11-19').dunning.levels[2]!.fee, 20);
   for (const [bad, msg] of [
     ['  dunning: { levels: [] }', /dunning\.levels must list at least one level/],
     ['  dunning: { levels: [{ name: X, days: -1 }] }', /dunning\.levels\[0\]\.days/],

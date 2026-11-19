@@ -38,6 +38,8 @@ export interface SheetData {
   role?: InvoiceRole;
   /** A Rechnung's retention: printed below the total with what is paid now, which its QR-bill asks for. */
   retention?: { percent: number; until: string; amount: number };
+  /** «Zahlungsaufforderung mit neuer IBAN» (spec 4.12): the title says so. */
+  payToNotice?: true;
   date: string;
   /** The day or period of the supply when it is not the invoice date. */
   supplied?: { from: string; to?: string };
@@ -160,7 +162,7 @@ const prettyIban = (iban: string) => iban.replace(/\s+/g, '').replace(/(.{4})(?!
 
 export function sheetTitle(d: SheetData, L: InvoiceTexts = TEXTS[d.language]): string {
   const base = kindTitle(L, d.kind, d.printAs, d.role);
-  return d.reminderTitle ? `${d.reminderTitle} · ${base}` : d.instalment ? `${L.instalment} · ${base}` : base;
+  return d.reminderTitle ? `${d.reminderTitle} · ${base}` : d.instalment ? `${L.instalment} · ${base}` : d.payToNotice ? `${L.payToNotice} · ${base}` : base;
 }
 
 /** The code a position's revenue books with, shown on a draft's screen; none where the jurisdiction has none for it (a firm not registered). */

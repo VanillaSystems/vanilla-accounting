@@ -12,6 +12,7 @@ import { dirname, join, relative } from 'node:path';
 import { yearPaths, type Workspace } from '../workspace/workspace.js';
 import { INVOICES_MIGRATIONS, INVOICES_SCHEMA, climb, schemaOf } from '../workspace/schema.js';
 import type { Envelope, InvoiceBook } from './model.js';
+import { withHistories } from '../workspace/schema.js';
 
 export const emptyInvoiceBook = (): InvoiceBook => ({ schema: INVOICES_SCHEMA, contacts: [], articles: [], invoices: [], sent: [] });
 
@@ -24,7 +25,8 @@ export function loadInvoices(ws: Pick<Workspace, 'paths'>): InvoiceBook {
 /** invoices.json as read from `path` (a file, or its text as git holds it), brought to the current schema. */
 export function invoiceBookOf(raw: Record<string, unknown>, path: string): InvoiceBook {
   const current = climb<Record<string, unknown>>(raw, schemaOf(raw.schema, path), INVOICES_SCHEMA, INVOICES_MIGRATIONS, path, (d) => structuredClone(d));
-  return { ...emptyInvoiceBook(), ...current, schema: INVOICES_SCHEMA } as InvoiceBook;
+  // A plain value written by hand or by a fixture reads as one entry from the start, as the step writes it (spec 4.12).
+  return { ...emptyInvoiceBook(), ...withHistories(current), schema: INVOICES_SCHEMA } as InvoiceBook;
 }
 
 /** Write to a temp file beside the target, then rename: a crash never leaves half a file. */

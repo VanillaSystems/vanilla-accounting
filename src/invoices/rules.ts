@@ -15,6 +15,8 @@ import { docRef } from '../books/refs.js';
 import { checkDeductions } from './stages.js';
 import { chargesVat, invoiceActivities, invoiceRates, invoicing, vat, vatSetup } from '../engines/index.js';
 import { parseReference, referenceFor } from '../providers/qr-bill/reference.js';
+/** Where a customer pays, on paper: the payment part's rules for another account (spec 4.12). */
+export { accountOnPaper, paymentToNewAccount, samePaidTo } from '../providers/qr-bill/reference.js';
 import type { BankTransaction } from '../types/index.js';
 
 // ─── totals ──────────────────────────────────────────────────────────────────

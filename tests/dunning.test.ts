@@ -54,7 +54,7 @@ function mailbox(refuse?: string) {
 }
 
 const contact = (id: string, over: Partial<Contact> = {}): Contact => ({
-  id, createdAt: '2026-01-01T08:00:00Z', origin: 'manual', deleted: false, type: 'firm', name: `Kunde ${id}`, persons: [], addresses: [], language: 'de', emails: [`ap@${id}.example`], ...over,
+  id, createdAt: '2026-01-01T08:00:00Z', origin: 'manual', deleted: false, type: 'firm', name: `Kunde ${id}`, persons: [], addresses: [], terms: [], discount: [], revenueAccount: [], language: 'de', emails: [`ap@${id}.example`], ...over,
 });
 
 /** A sent Mahnung of `level` on `date`, as the sent log keeps it. */

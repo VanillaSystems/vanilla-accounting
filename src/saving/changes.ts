@@ -4,6 +4,7 @@
  * changed outside the app against git's HEAD, and Verlauf. Only this module and saving.ts read or
  * write git (and the year close, which commits itself as a locked save).
  */
+import { contactOn } from '../invoices/dated-values.js';
 import { madeByHand } from '../workspace/money-accounts.js';
 import fs, { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -103,8 +104,11 @@ const parseJson = <T>(text: string, fallback: T): T => { try { return text ? (JS
 // Not `number`: one given at the first issued document is the app's, never a person's change to undo.
 const CONTACT_EDITS = ['type', 'name', 'salutation', 'firstName', 'lastName', 'persons', 'addresses', 'language', 'emails', 'phone', 'vatId',
   'paymentTerms', 'paymentDays', 'currency', 'revenueAccount', 'discount', 'noReminders', 'notes', 'tags', 'archived', 'business'] as const;
-const customerFields = (c: Contact): Record<string, unknown> =>
-  Object.fromEntries(CONTACT_EDITS.map((k) => [k, c[k] ?? (k === 'archived' ? false : null)]));
+/** As the contact stands today: its undo is a change of today, an entry of each dated value from today (spec 4.12). */
+const customerFields = (stored: Contact): Record<string, unknown> => {
+  const c = contactOn(stored, new Date().toISOString().slice(0, 10));
+  return Object.fromEntries(CONTACT_EDITS.map((k) => [k, c[k] ?? (k === 'archived' ? false : null)]));
+};
 
 /**
  * The records changed since the last save that are neither bookings nor receipts (r9c-6), each

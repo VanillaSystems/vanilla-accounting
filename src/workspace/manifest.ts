@@ -11,17 +11,18 @@ import { BUSINESS_PROFILES, LEGAL_FORMS, PRESET_NAMES, QUESTIONS, VAT_QUESTIONS,
 import { parseVatSetup } from './vat-setup.js';
 import {
   DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, DOCUMENT_KINDS, INVOICE_CURRENCIES, INVOICE_FONTS, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, MAIL_SECURITY, NET_TERMS, OWN_TEXTS, PRICES,
-  type Address, type DocumentKind, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type MailSecurity, type OutgoingMail, type PaymentTerms, type Prices, type UnitDef,
+  type Address, type DocumentKind, type InvoiceCurrency, type InvoiceLanguage, type InvoicingConfig, type InvoicingSettings, type Letterhead, type MailSecurity, type OutgoingMail, type PaymentTerms, type Prices, type UnitDef,
 } from '../invoices/model.js';
 import { isQrIban, referenceTooLong } from '../providers/qr-bill/reference.js';
 import { DEFAULT_NUMBERING, checkNumbering, type Numbering } from './numbering.js';
 import { readDimensions, type Dimension } from '../books/tags.js';
 import { readDunning } from './dunning.js';
+import { historyOf, isDay, SINCE_START, type DatedEntry } from '../core/dated.js';
 
 const PROFILE_KEYS = Object.keys(QUESTIONS).filter((k) => k !== 'legalForm' && !(VAT_QUESTIONS as readonly string[]).includes(k)) as ProfileKey[];
 
 export type Manifest = {
-  company: Company; bankAccounts: LedgerBankAccount[]; profile?: WorkspaceProfile; invoicing?: InvoicingSettings; outgoingMail?: OutgoingMail;
+  company: Company; bankAccounts: LedgerBankAccount[]; profile?: WorkspaceProfile; invoicing?: InvoicingConfig; outgoingMail?: OutgoingMail;
   /** The reporting dimensions bookings may carry a tag of (#127, src/books/tags.ts); absent: none. */
   dimensions?: Dimension[];
 };
@@ -147,22 +148,40 @@ function readAddress(raw: unknown, where: string, fail: (msg: string) => never):
   return out;
 }
 
+/**
+ * A dated field of `invoicing:` (spec 4.12): a list of `{ validFrom, enteredAt, value, validUntil?, source? }`,
+ * each value checked by `read`; a plain value (a manifest of before the histories, or one written by hand)
+ * is one entry from the start.
+ */
+function readHistory<T>(raw: unknown, where: string, read: (v: unknown, where: string) => T, fail: (msg: string) => never): DatedEntry<T>[] {
+  return historyOf(raw).map((e, i) => {
+    // A plain value, or the one entry the step made of it, is named as the person wrote it.
+    const listed = Array.isArray(raw) && raw.length && isMap(raw[0]) && 'validFrom' in raw[0] && !(raw.length === 1 && e.validFrom === SINCE_START);
+    const at = listed ? `${where}[${i}]` : where;
+    if (!isDay(e.validFrom)) fail(`${at}.validFrom must be a day YYYY-MM-DD`);
+    if (e.validUntil !== undefined && (!isDay(e.validUntil) || e.validUntil < e.validFrom)) fail(`${at}.validUntil must be a day from validFrom on`);
+    if (typeof e.enteredAt !== 'string' || Number.isNaN(Date.parse(e.enteredAt))) fail(`${at}.enteredAt must be a time`);
+    return { ...e, validFrom: String(e.validFrom), enteredAt: String(e.enteredAt), value: read(e.value, at === where ? where : `${at}.value`) };
+  }).sort((a, b) => a.validFrom.localeCompare(b.validFrom) || a.enteredAt.localeCompare(b.enteredAt));
+}
+
 /** The invoicing block: where customers pay to (a bank account of the manifest with its IBAN), accounts, terms, layout, texts. */
-function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: string) => never): InvoicingSettings {
+function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: string) => never): InvoicingConfig {
   if (!isMap(raw)) return fail('invoicing must be a mapping');
-  const payTo: InvoicingSettings['payTo'] = {};
+  const payTo: InvoicingConfig['payTo'] = {};
   if (!isMap(raw.payTo)) fail('invoicing.payTo must map a currency (CHF, EUR) to { account, qrIban? }');
-  for (const [cur, v] of Object.entries(raw.payTo as Record<string, unknown>)) {
-    const where = `invoicing.payTo.${cur}`;
-    if (!INVOICE_CURRENCIES.includes(cur as InvoiceCurrency)) fail(`${where}: a QR-bill is in CHF or EUR`);
-    if (!isMap(v)) fail(`${where} must be { account, qrIban? }`);
-    const p = v as Record<string, unknown>;
-    const bank = accounts.find((a) => a.account === String(p.account) && a.currency === cur);
-    if (!bank) fail(`${where}.account "${String(p.account)}" must be a ${cur} account of bankAccounts`);
-    if (!bank!.iban) throw new WorkspaceRefusal(`${where}: bankAccounts ${bank!.bank} ${cur} needs its iban to be printed on invoices`, { code: 'payToNeedsIban', params: { bank: bank!.bank, currency: cur } });
-    const qrIban = p.qrIban === undefined ? undefined : parseIban(String(p.qrIban));
-    if (p.qrIban !== undefined && (!qrIban || !isQrIban(qrIban))) fail(`${where}.qrIban "${String(p.qrIban)}" is not a QR-IBAN (CH or LI, institution id 30000 to 31999, valid check digits)`);
-    payTo[cur as InvoiceCurrency] = { account: bank!.account, iban: bank!.iban!, ...(qrIban ? { qrIban } : {}), bank: bank!.bank };
+  for (const [cur, h] of Object.entries(raw.payTo as Record<string, unknown>)) {
+    if (!INVOICE_CURRENCIES.includes(cur as InvoiceCurrency)) fail(`invoicing.payTo.${cur}: a QR-bill is in CHF or EUR`);
+    payTo[cur as InvoiceCurrency] = readHistory(h, `invoicing.payTo.${cur}`, (v, where) => {
+      if (!isMap(v)) fail(`${where} must be { account, qrIban? }`);
+      const p = v as Record<string, unknown>;
+      const bank = accounts.find((a) => a.account === String(p.account) && a.currency === cur);
+      if (!bank) fail(`${where}.account "${String(p.account)}" must be a ${cur} account of bankAccounts`);
+      if (!bank!.iban) throw new WorkspaceRefusal(`${where}: bankAccounts ${bank!.bank} ${cur} needs its iban to be printed on invoices`, { code: 'payToNeedsIban', params: { bank: bank!.bank, currency: cur } });
+      const qrIban = p.qrIban === undefined ? undefined : parseIban(String(p.qrIban));
+      if (p.qrIban !== undefined && (!qrIban || !isQrIban(qrIban))) fail(`${where}.qrIban "${String(p.qrIban)}" is not a QR-IBAN (CH or LI, institution id 30000 to 31999, valid check digits)`);
+      return { account: bank!.account, iban: bank!.iban!, ...(qrIban ? { qrIban } : {}), bank: bank!.bank };
+    }, fail);
   }
   const account = (v: unknown, where: string) => (/^\d{4}$/.test(String(v)) ? String(v) : fail(`${where} "${String(v)}" must be a 4-digit ledger account`));
   const days = raw.paymentTermsDays ?? 30;
@@ -190,16 +209,28 @@ function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: 
       texts[lang as InvoiceLanguage] = Object.fromEntries(OWN_TEXTS.filter((k) => t[k] !== undefined).map((k) => [k, String(t[k])]));
     }
   }
-  const terms = readTerms(raw.paymentTerms, days as number, fail);
-  if (raw.defaultTerms !== undefined && !terms.some((x) => x.id === raw.defaultTerms)) fail(`invoicing.defaultTerms "${String(raw.defaultTerms)}" must be the id of one of invoicing.paymentTerms`);
+  const terms = raw.paymentTerms === undefined ? [] : readHistory(raw.paymentTerms, 'invoicing.paymentTerms', (v, where) => readTerms(v, days as number, fail, where), fail);
+  const allTerms = terms.length ? terms.flatMap((e) => e.value) : readTerms(undefined, days as number, fail);
+  if (raw.defaultTerms !== undefined && !allTerms.some((x) => x.id === raw.defaultTerms)) fail(`invoicing.defaultTerms "${String(raw.defaultTerms)}" must be the id of one of invoicing.paymentTerms`);
   const limit = raw.shortfallLimit ?? DEFAULT_SHORTFALL_LIMIT;
   if (typeof limit !== 'number' || !Number.isFinite(limit) || limit < 0) fail('invoicing.shortfallLimit must be an amount from 0');
-  const wo = raw.writeOffAccount;
-  if (wo !== undefined && !isMap(wo)) fail('invoicing.writeOffAccount must be { skonto, loss }');
+  const writeOffAccount = readHistory(raw.writeOffAccount, 'invoicing.writeOffAccount', (wo, where) => {
+    if (!isMap(wo)) fail(`${where} must be { skonto, loss }`);
+    return { skonto: account((wo as Record<string, unknown>).skonto, `${where}.skonto`), loss: account((wo as Record<string, unknown>).loss, `${where}.loss`) };
+  }, fail);
+  const letterhead = readHistory(raw.letterhead, 'invoicing.letterhead', (v, where): Letterhead => {
+    if (!isMap(v)) fail(`${where} must be { name, address?, uid? }`);
+    const l = v as Record<string, unknown>;
+    const name = optText(l.name, `${where}.name`, fail)?.trim();
+    if (!name) fail(`${where}.name is missing`);
+    const uid = l.uid === undefined ? undefined : String(l.uid);
+    if (uid !== undefined && !/^CHE-\d{3}\.\d{3}\.\d{3}$/.test(uid)) fail(`${where}.uid "${uid}" must look like CHE-###.###.###`);
+    return { name: name!, ...(l.address === undefined ? {} : { address: readAddress(l.address, `${where}.address`, fail) }), ...(uid ? { uid } : {}) };
+  }, fail);
   return {
     payTo,
     revenueAccount: account(raw.revenueAccount, 'invoicing.revenueAccount'),
-    ...(raw.feeAccount === undefined ? {} : { feeAccount: account(raw.feeAccount, 'invoicing.feeAccount') }),
+    feeAccount: readHistory(raw.feeAccount, 'invoicing.feeAccount', account, fail),
     paymentTermsDays: days as number,
     layout: {
       font: pick(l.font, INVOICE_FONTS, DEFAULT_LAYOUT.font, 'font'),
@@ -216,9 +247,10 @@ function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: 
     numbering: readNumbering(raw.numbering, fail),
     paymentTerms: terms,
     ...(raw.defaultTerms === undefined ? {} : { defaultTerms: String(raw.defaultTerms) }),
-    ...(isMap(wo) ? { writeOffAccount: { skonto: account(wo.skonto, 'invoicing.writeOffAccount.skonto'), loss: account(wo.loss, 'invoicing.writeOffAccount.loss') } } : {}),
+    writeOffAccount,
+    letterhead,
     shortfallLimit: limit as number,
-    dunning: readDunning(raw.dunning, fail),
+    dunning: readHistory(raw.dunning, 'invoicing.dunning', (v, where) => readDunning(v, fail, where), fail),
   };
 }
 
@@ -277,12 +309,12 @@ function readNumbering(raw: unknown, fail: (msg: string) => never): Numbering {
 }
 
 /** Zahlungskonditionen by name; absent: one of `days` days net, id `net<days>`, named «30 Tage netto» (its words in each document language: NET_TERMS). */
-function readTerms(raw: unknown, days: number, fail: (msg: string) => never): PaymentTerms[] {
+function readTerms(raw: unknown, days: number, fail: (msg: string) => never, list = 'invoicing.paymentTerms'): PaymentTerms[] {
   if (raw === undefined) return [{ id: `net${days}`, name: NET_TERMS.de(days), days }];
-  if (!Array.isArray(raw) || raw.length === 0) return fail('invoicing.paymentTerms must list terms { id, name, days, skonto?, text? }');
+  if (!Array.isArray(raw) || raw.length === 0) return fail(`${list} must list terms { id, name, days, skonto?, text? }`);
   const seen = new Set<string>();
   return raw.map((t, i): PaymentTerms => {
-    const where = `invoicing.paymentTerms[${i}]`;
+    const where = `${list}[${i}]`;
     if (!isMap(t)) fail(`${where} must be { id, name, days, skonto?, text? }`);
     const id = optText(t.id, `${where}.id`, fail)?.trim();
     if (!id) fail(`${where}.id is missing`);

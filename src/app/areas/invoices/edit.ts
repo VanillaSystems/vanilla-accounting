@@ -3,6 +3,7 @@
  * `l:<line>:<field>`, src/invoices/sheet.ts) and the value it shows become the draft change the API
  * saves. Pure: the sheet reports, Detail.tsx saves or says why not.
  */
+import { contactOn } from '../../../invoices/dated-values.js';
 import { parseSwissDate } from '../../../accounting/periods.js';
 import { DEFAULT_UNITS, isItem, type Contact, type Draft, type InvoiceLine, type UnitDef } from '../../../invoices/model.js';
 import type { Missing } from '../../../invoices/rules.js';
@@ -46,7 +47,7 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { contact
     if (value === '+') return { newCustomer: true };
     if (value === inv.customerId) return undefined;
     const next = ctx.contacts.find((x) => x.id === value);
-    return next ? changed(customerChange(inv, next)) : { refused: 'value' };
+    return next ? changed(customerChange(inv, contactOn(next, inv.date))) : { refused: 'value' };
   }
   const m = /^l:(\d+):(\w+)$/.exec(key);
   if (!m) return undefined;

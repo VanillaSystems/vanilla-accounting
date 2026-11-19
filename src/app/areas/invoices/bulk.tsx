@@ -3,6 +3,7 @@
  * e-mail through the send route, one after the other; «PDF» saves the ticked documents' PDFs. Each
  * names what it leaves out and why, and the limit per run when it is hit.
  */
+import { invoicingOnDay } from '../../../invoices/dated-values.js';
 import { useEffect, useState } from 'react';
 import type { Invoice, Issued } from '../../../invoices/model.js';
 import { mailText } from '../../../invoices/documents.js';
@@ -56,7 +57,7 @@ function BulkSend({ d, nav, docs }: { d: InvoiceList; nav: Nav; docs: Invoice[] 
     const failed: Array<{ number: string; why: string }> = [];
     for (const [i, inv] of take.entries()) {
       setBusy(i + 1);
-      const text = mailText(ws?.invoicing, inv, { kind: 'invoice' }, ws?.company.name ?? '');
+      const text = mailText(invoicingOnDay(ws?.invoicing, inv.date), inv, { kind: 'invoice' }, ws?.company.name ?? '');
       try {
         await api.recordSend(inv.id, { email: { to: inv.customer.email!, ...text } });
         sent.push(inv.number);

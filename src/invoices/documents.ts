@@ -4,22 +4,24 @@
  * a reminder and a cancellation notice from the issued invoice.
  */
 import type { Company } from '../workspace/workspace.js';
-import { DEFAULT_LAYOUT, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type Issued, type Reminder, type Sender } from './model.js';
-import { addDays, instalmentDue, openAmount, openCharges, paidAmount, retentionOf, skontoOffer, termsFor, totals } from './rules.js';
+import { DEFAULT_LAYOUT, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type Issued, type Letterhead, type Reminder, type Sender } from './model.js';
+import { accountOnPaper, addDays, paymentToNewAccount, instalmentDue, openAmount, openCharges, paidAmount, retentionOf, skontoOffer, termsFor, totals } from './rules.js';
 import type { SheetData } from './sheet.js';
 import { TEXTS, formatAmount, formatDate, kindTitle, reminderTitle } from './texts.js';
 import { recipientOf } from './contacts.js';
+import { contactOnDay } from './dated-values.js';
 
-export interface InvoicingContext { company: Company; settings: InvoicingSettings | undefined }
+/** What a document reads of the firm on its date (spec 4.12): the settings and the letterhead of that day; `letterhead` absent: the company's. */
+export interface InvoicingContext { company: Company; settings: InvoicingSettings | undefined; letterhead?: Letterhead }
 
 /** The company as an invoice in `currency` names it now; payTo absent when the workspace sets no account for that currency. */
 export function senderFor(ctx: InvoicingContext, currency: InvoiceCurrency): Omit<Sender, 'payTo'> & { payTo?: Sender['payTo'] } {
-  const { company } = ctx;
+  const head = ctx.letterhead ?? { name: ctx.company.name, address: ctx.company.address, uid: ctx.company.uid };
   const payTo = ctx.settings?.payTo[currency];
   return {
-    name: company.name,
-    address: company.address ?? { postcode: '', town: '', country: 'CH' },
-    uid: company.uid ?? '',
+    name: head.name,
+    address: head.address ?? { postcode: '', town: '', country: 'CH' },
+    uid: head.uid ?? '',
     ...(payTo ? { payTo } : {}),
   };
 }
@@ -209,8 +211,32 @@ export function instalmentSheet(book: InvoiceBook, inv: Issued, at: { date: stri
   };
 }
 
+/**
+ * «Zahlungsaufforderung mit neuer IBAN» (spec 4.12): the invoice with what is still open, dated
+ * `date`, paid to `payTo` (the account valid on that day). Its reference stays where the new account
+ * takes it (the payment part's rule: paymentToNewAccount of its provider); where it
+ * cannot, the notice names the account and the number, and its payment is matched by number and amount.
+ */
+export function payToNoticeSheet(book: InvoiceBook, inv: Issued, payTo: Sender['payTo'], date: string, logoSrc?: string): SheetData {
+  const L = TEXTS[inv.language];
+  const { to, reference } = paymentToNewAccount(inv.reference, payTo);
+  const open = openAmount(inv, book.invoices);
+  // What a Mahnung charged and is still open goes with it, as it would on the next Mahnung.
+  const charges = openCharges(inv);
+  const gross = totals(inv).gross;
+  return {
+    ...issuedSheet(book, inv, logoSrc),
+    payToNotice: true,
+    date,
+    sender: { ...inv.sender, payTo: to },
+    reference,
+    intro: L.payToNoticeIntro(inv.number, formatDate(inv.date, inv.language), accountOnPaper(to).replace(/(.{4})(?!$)/g, '$1 ')),
+    due: { paidSoFar: Math.round((gross - open) * 100) / 100, fee: charges.fee, open: Math.round((open + charges.fee + charges.interest) * 100) / 100 },
+  };
+}
+
 /** The sheet of any invoice record: a draft with today's settings, an issued one as issued. */
 export function sheetOf(ctx: InvoicingContext, book: InvoiceBook, inv: Invoice, logoSrc?: string): SheetData {
   if (inv.status === 'issued') return issuedSheet(book, inv, logoSrc);
-  return draftSheet(ctx, book, inv, recipientOf(book.contacts.find((c) => c.id === inv.customerId), inv, ctx.settings), logoSrc);
+  return draftSheet(ctx, book, inv, recipientOf(contactOnDay(book.contacts.find((c) => c.id === inv.customerId), inv.date), inv, ctx.settings), logoSrc);
 }

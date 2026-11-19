@@ -3,9 +3,11 @@
  * (layout A), an Artikel opened as the panel over it with its form, a new one in a dialog, the
  * picker «＋ Artikel» of a draft's sheet (a search by code or name), and the import from a CSV.
  */
+import { articlePriceOn, contactOnDay } from '../../../invoices/dated-values.js';
+import { DatedValue, Input, numberOf as datedNumber } from './DatedValue.js';
 import { useState } from 'react';
 import { ARTICLE_FIELDS, type ArticleField, type ArticleImportRow } from '../../../invoices/article-import.js';
-import { articleLine, documentsNaming, searchArticles } from '../../../invoices/articles.js';
+import { articleLine, articlePositionPrice, documentsNaming, searchArticles, supplyDay } from '../../../invoices/articles.js';
 import { ARTICLE_TYPES, DEFAULT_UNITS, VAT_KINDS, unitWord, type Article, type ArticleType, type Draft, type Prices, type VatKind } from '../../../invoices/model.js';
 import { totals } from '../../../invoices/rules.js';
 import { baseCurrency, chargesVat, invoiceActivities, rateOfKind } from '../../../engines/index.js';
@@ -100,7 +102,7 @@ export function ArticleTable(props: Props & { d: InvoiceList }) {
                     <td className="tt">{a.name}{a.group && <small>{a.group}</small>}</td>
                     <td>{t(`articles.type.${a.type}`)}</td>
                     <td>{unit(a.unit)}</td>
-                    <td className="num mono">{fmt(a.price)}{a.prices === 'gross' && chargesVat() ? <small> {t('invoices.prices.gross')}</small> : null}</td>
+                    <td className="num mono">{fmt(articlePriceOn(a, localToday()) ?? 0)}{a.prices === 'gross' && chargesVat() ? <small> {t('invoices.prices.gross')}</small> : null}</td>
                     <td>{kindText(a.vatKind)}</td>
                   </tr>
                 );
@@ -118,7 +120,7 @@ export function ArticleTable(props: Props & { d: InvoiceList }) {
 type Form = { code: string; type: ArticleType; name: string; text: string; unit: string; price: string; prices: Prices; vatKind: VatKind; account: string; activity: '1' | '2'; group: string };
 
 const formOf = (a: Article | undefined): Form => ({
-  code: a?.code ?? '', type: a?.type ?? 'service', name: a?.name ?? '', text: a?.text ?? '', unit: a?.unit ?? '', price: a ? String(a.price) : '',
+  code: a?.code ?? '', type: a?.type ?? 'service', name: a?.name ?? '', text: a?.text ?? '', unit: a?.unit ?? '', price: a ? String(articlePriceOn(a, localToday()) ?? '') : '',
   prices: a?.prices ?? 'net', vatKind: a?.vatKind ?? (chargesVat() ? 'normal' : 'none'), account: a?.account ?? '', activity: a?.activity === 2 ? '2' : '1', group: a?.group ?? '',
 });
 
@@ -137,8 +139,9 @@ function errorsOf(f: Form): Record<string, string> {
 }
 
 /** The request of the form: every field, an empty optional one as null (it clears what the Artikel had). */
-const inputOf = (f: Form): ArticleInput => ({
-  code: f.code.trim() || null, type: f.type, name: f.name.trim(), text: f.text.trim() || null, unit: f.unit || null, price: numberOf(f.price) ?? 0,
+/** The price goes with a new Artikel only: a known one changes it with «gilt ab» (DatedValue). */
+const inputOf = (f: Form, withPrice: boolean): ArticleInput => ({
+  code: f.code.trim() || null, type: f.type, name: f.name.trim(), text: f.text.trim() || null, unit: f.unit || null, ...(withPrice ? { price: numberOf(f.price) ?? 0 } : {}),
   prices: f.prices === 'gross' ? 'gross' : null, vatKind: f.vatKind, account: f.account.trim() || null, activity: f.activity === '2' ? 2 : null, group: f.group.trim() || null,
 });
 
@@ -160,7 +163,7 @@ function ArticleForm({ article, nav, canEdit, onSaved }: { article?: Article; na
     setTried(true);
     if (Object.keys(errorsOf(f)).length) return;
     try {
-      const saved = article ? await api.patchArticle(article.id, inputOf(f)) : await api.createArticle(inputOf(f));
+      const saved = article ? await api.patchArticle(article.id, inputOf(f, false)) : await api.createArticle(inputOf(f, true));
       await reloadInvoices();
       onSaved(saved);
     } catch (e) { nav.toast(errorText(e)); }
@@ -183,7 +186,7 @@ function ArticleForm({ article, nav, canEdit, onSaved }: { article?: Article; na
           {f.unit && !units.some((u) => u.id === f.unit) && <option value={f.unit}>{f.unit}</option>}
         </select>
       </label>
-      {input('price', t('articles.price'), '0.00', 's1', true)}
+      {article ? <span className="cf s1" /> : input('price', t('articles.price'), '0.00', 's1', true)}
       {chargesVat() ? (
         <div className="cf s2"><span>{t('articles.prices')}</span>
           <span className="seg2" role="radiogroup" aria-label={t('articles.prices')}>
@@ -217,6 +220,7 @@ export function ArticlePanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
   const a = d.articles.find((x) => x.id === route.id);
   if (!a) return <div className="detail-empty"><div>{route.id ? t('articles.gone') : t('invoices.noneSelected')}</div></div>;
   const docs = documentsNaming(d, a.id).sort((x, y) => y.date.localeCompare(x.date));
+  const today = localToday();
   async function remove() {
     try {
       const out = await api.removeArticle(a!.id);
@@ -232,7 +236,7 @@ export function ArticlePanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
     <div className="detail-in cpanel" data-for={a.id}>
       <div className="head">
         <h2 className="who">{a.name}<small>{[a.code, t(`articles.type.${a.type}`), a.group].filter(Boolean).join(' · ')}</small></h2>
-        <div className="amount"><small>{baseCurrency()}</small>{fmt(a.price)}</div>
+        <div className="amount"><small>{baseCurrency()}</small>{fmt(articlePriceOn(a, today) ?? 0)}</div>
       </div>
       <div className="facts"><span>{kindText(a.vatKind)}</span>{chargesVat() && <span>{t(`invoices.prices.${a.prices ?? 'net'}`)}</span>}</div>
       {a.archived && <p className="cnote" data-testid="article-archived">{t('articles.archivedNote')}</p>}
@@ -244,6 +248,11 @@ export function ArticlePanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
         </div>
       )}
       <div className="csecs">
+        <section className="csec" data-testid="article-price">
+          <DatedValue label={t('articles.price')} path={`articles/${a.id}/price`} history={a.price} today={today} nav={nav}
+            show={(v: number) => <span className="mono">{baseCurrency()} {fmt(v)}</span>}
+            form={canEdit && !a.archived ? { from: (v) => ({ price: v === undefined ? '' : String(v) }), to: (f) => datedNumber(f.price) ?? 0, fields: (f, set) => <Input k="price" label={t('articles.price')} f={f} set={set} type="number" /> } : undefined} />
+        </section>
         <section className="csec aedit">
           <ArticleForm key={a.id} article={a} nav={nav} canEdit={canEdit && !a.archived} onSaved={(x) => nav.toast(t('articles.saved', { name: x.name }))} />
         </section>
@@ -286,7 +295,7 @@ export function ArticlePicker({ d, nav, draft, after }: Props & { d: InvoiceList
   const all = searchArticles(d.articles, q, Number.MAX_SAFE_INTEGER);
   const hits = all.slice(0, PICK_LIMIT);
   async function pick(a: Article) {
-    const line = articleLine(a, draft, contactOf(d, draft), ws?.invoicing?.units);
+    const line = articleLine(a, draft, contactOnDay(contactOf(d, draft), draft.date), ws?.invoicing?.units);
     const { lines } = insertLine(draft.lines, line, after, t('invoices.newLine'));
     close();
     await saveDraft(nav, draft, { lines });
@@ -305,7 +314,7 @@ export function ArticlePicker({ d, nav, draft, after }: Props & { d: InvoiceList
                 <span className="mono">{a.code ?? ''}</span>
                 <span>{a.name}</span>
                 <span className="m">{[unit(a.unit), kindText(a.vatKind)].filter(Boolean).join(' · ')}</span>
-                <span className="r mono">{fmt(a.price)}</span>
+                <span className="r mono">{fmt(articlePositionPrice(a, draft, rateOfKind(a.vatKind, supplyDay(draft))))}</span>
               </AsyncButton>
             ))}
           </div>

@@ -5,6 +5,7 @@
  * The paid invoices' payments are part of the year's bank statements (invoicePayments); the
  * generator lets the app's payment matcher book them (src/invoices/payments.ts).
  */
+import { contactOnDay } from '../../src/invoices/dated-values.js';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
@@ -211,7 +212,7 @@ async function playSales(ws: Workspace, inv: DemoInvoicing, customerIds: Map<str
     if (!('article' in l)) return l;
     const a = articles.find((x) => x.code === l.article);
     if (!a) throw new Error(`demo sales: no Artikel ${l.article}`);
-    return { ...articleLine(a, doc, contactOf(contactId), ws.invoicing?.units), quantity: l.quantity };
+    return { ...articleLine(a, doc, contactOnDay(contactOf(contactId), doc.date), ws.invoicing?.units), quantity: l.quantity };
   };
   const pick = (s: { person?: string; address?: string }) => ({ ...(s.person ? { personId: s.person } : {}), ...(s.address ? { addressId: s.address } : {}) });
   const finish = async (s: Extract<SalesStep, { do: 'issue' | 'convert' }>, id: string) => {

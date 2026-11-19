@@ -6,6 +6,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { DEFAULT_LAYOUT, DEFAULT_UNITS, type Contact, type Draft, type ItemLine } from '../src/invoices/model.js';
+import { contactOnDay } from '../src/invoices/dated-values.js';
 import { contactBody } from './support/invoice-fixtures.js';
 import { recipientOf } from '../src/invoices/contacts.js';
 import { browserPath } from './support/browser.js';
@@ -24,7 +25,7 @@ const words = { newCustomer: 'Neuer Kunde', chooseCustomer: 'Kunde wählen', add
 
 /** The sheet's HTML as the screen shows a draft, with its select fields. */
 function sheetOf(d: Draft, customers: Contact[]): string {
-  const c = recipientOf(customers.find((x) => x.id === d.customerId), d, undefined)!;
+  const c = recipientOf(contactOnDay(customers.find((x) => x.id === d.customerId), d.date), d, undefined)!;
   const data: SheetData = {
     kind: d.kind, language: d.language, date: d.date, currency: d.currency, customer: c, lines: d.lines, intro: '', closing: '', layout: DEFAULT_LAYOUT,
     sender: { name: 'Malerei AG', address, uid: 'CHE-123.456.789' }, ...(d.exemption ? { exemption: d.exemption } : {}),

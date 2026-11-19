@@ -20,6 +20,7 @@ import type { Index } from '../src/types/index.js';
 import type { Draft, InvoiceBook } from '../src/invoices/model.js';
 import { defaultTexts, draftSheet, issuedIntro } from '../src/invoices/documents.js';
 import { invoicingContext } from '../src/invoices/service.js';
+import { contactOn } from '../src/invoices/dated-values.js';
 import { sheetBlocks } from '../src/invoices/sheet.js';
 import { TEXTS } from '../src/invoices/texts.js';
 import { loadInvoices } from '../src/invoices/store.js';
@@ -212,7 +213,7 @@ test('an earlier answer\'s change is not taken back by a later one: its own «R�
 
 test('the payment term and the invoice texts change at once: for every customer who had the old term; the undo puts all back', async (t) => {
   const s = await sidebar(t);
-  const terms = () => Object.fromEntries(s.invoices().contacts.map((c) => [c.name, c.paymentDays]));
+  const terms = () => Object.fromEntries(s.invoices().contacts.map((c) => [c.name, contactOn(c, new Date().toISOString().slice(0, 10)).paymentDays]));
   const was = terms();
   const made = await s.answer([{ kind: 'invoicing', set: { paymentTermsDays: 10, texts: { de: { intro: 'Grüezi mitenand' }, fr: { closing: null } } } }]);
   assert.equal(made.refused, undefined, made.refused?.message);
@@ -244,7 +245,7 @@ test('a greeting is a line of its own above the intro: «Grüezi» leaves the in
   assert.deepEqual([info.invoicing?.texts.de.salutation, info.invoicing?.texts.de.intro], ['Grüezi', undefined], 'the intro is not touched');
 
   const ws = workspaceAt(s.api.root);
-  const ctx = invoicingContext(ws);
+  const ctx = invoicingContext(ws, new Date().toISOString().slice(0, 10));
   const draft = { ...s.invoices().invoices.find((i) => i.kind === 'invoice')!, status: 'draft', intro: undefined, closing: undefined, language: 'de' } as Draft;
   const sheet = draftSheet(ctx, s.invoices(), draft, undefined);
   const html = sheetBlocks(sheet).map((b) => b.html).join('');
@@ -272,7 +273,7 @@ test('an invoice draft for a customer, or for a new one; the undo drops it (and 
 
   const fresh = await s.answer([{ kind: 'invoiceDraft', newCustomer: { name: 'Familie Keller', address: { street: 'Hauptstrasse', number: '1', postcode: '9500', town: 'Wil', country: 'CH' } }, draft: { lines } }]);
   assert.equal(fresh.refused, undefined, fresh.refused?.message);
-  const keller = s.invoices().contacts.find((c) => c.name === 'Familie Keller')!;
+  const keller = contactOn(s.invoices().contacts.find((c) => c.name === 'Familie Keller')!, new Date().toISOString().slice(0, 10));
   // A new contact names no terms of its own: it pays in the firm's (30 days in the demo).
   assert.deepEqual([keller.type, keller.language, keller.paymentDays, keller.addresses[0]?.billing, keller.deleted], ['firm', 'de', undefined, true, false]);
   assert.equal(drafts().length, n + 2);

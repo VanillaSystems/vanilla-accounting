@@ -2,7 +2,9 @@
  * What the buttons of Rechnungen do: each call goes to the invoicing API, its refusal is shown
  * in the user's language (Art. 26 MWSTG gaps named one by one), and the records are read again.
  */
-import { isItem, issuedPdfUrl, sentPdfUrl, type Contact, type DocumentKind, type Draft, type Invoice, type InvoiceLine, type Issued, type Stage, type WriteOff, type WriteOffReason } from '../../../invoices/model.js';
+import type { DatedCard } from '../../../invoices/backdated.js';
+import { contactOn } from '../../../invoices/dated-values.js';
+import { isItem, issuedPdfUrl, sentPdfUrl, type Contact, type ContactFields, type DocumentKind, type Draft, type Invoice, type InvoiceLine, type Issued, type Stage, type WriteOff, type WriteOffReason } from '../../../invoices/model.js';
 import type { AllocationPart } from '../../../invoices/payments.js';
 import type { MailMessage } from '../../../invoices/mail.js';
 import type { ReminderPatch } from '../../../invoices/service.js';
@@ -32,7 +34,7 @@ export const invoiceAt = (inv: Invoice, current?: Period): Location =>
  * The line a new draft starts with, its text ready to be typed over; no unit until one is picked.
  * `contact`: its revenue account and standing discount fill the new position (the person may remove them).
  */
-export const firstLine = (zero: boolean, contact?: Pick<Contact, 'revenueAccount' | 'discount'>): InvoiceLine =>
+export const firstLine = (zero: boolean, contact?: Pick<ContactFields, 'revenueAccount' | 'discount'>): InvoiceLine =>
   ({ text: t('invoices.newLine'), quantity: 1, price: 0, vatRate: zero ? 0 : invoiceRates()[0], ...lineDefaults(contact) });
 
 async function run<T>(nav: Nav, call: Promise<T>): Promise<T | undefined> {
@@ -55,8 +57,8 @@ export async function newDraft(nav: Nav, customer: Pick<Contact, 'id' | 'name'>,
 }
 
 /** A new draft of `kind` for `c`: one line to type over, the contact's language, 0 % for a contact abroad. */
-export const newDraftFor = (nav: Nav, c: Pick<Contact, 'id' | 'name' | 'language' | 'addresses' | 'currency'>, kind: DocumentKind = 'invoice') =>
-  newDraft(nav, c, { ...(kind !== 'invoice' ? { kind } : {}), lines: [firstLine(false)], ...customerChange({ lines: [firstLine(false)], currency: 'CHF' }, c) });
+export const newDraftFor = (nav: Nav, c: Contact, kind: DocumentKind = 'invoice') =>
+  newDraft(nav, c, { ...(kind !== 'invoice' ? { kind } : {}), lines: [firstLine(false)], ...customerChange({ lines: [firstLine(false)], currency: 'CHF' }, contactOn(c, localToday())) });
 
 const draftSaves = inOrder();
 
@@ -376,6 +378,15 @@ export async function releasePayment(nav: Nav, inv: Pick<Issued, 'id' | 'number'
 export async function saveContact(nav: Nav, id: string | undefined, fields: ContactInput): Promise<Contact | undefined> {
   const c = await run(nav, id ? api.patchContact(id, fields) : api.createContact(fields));
   if (!c) return undefined;
+  put({ contact: c });
+  await reloadInvoices();
+  return c;
+}
+
+/** A known contact changed from `validFrom` (spec 4.12): the contact, the card when issued documents printed otherwise, undefined when refused. */
+export async function saveContactFrom(nav: Nav, id: string, fields: ContactInput, validFrom: string, way?: 'keep'): Promise<Contact | ({ saved: false } & DatedCard) | undefined> {
+  const c = await run(nav, api.patchContactFrom(id, fields, validFrom, way));
+  if (!c || 'saved' in c) return c;
   put({ contact: c });
   await reloadInvoices();
   return c;

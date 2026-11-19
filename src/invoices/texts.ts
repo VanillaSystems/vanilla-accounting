@@ -23,6 +23,8 @@ export interface InvoiceTexts {
   ofInvoice: (no: string, date: string) => string; paidOn: (date: string) => string; creditLine: string;
   refund: (amount: string) => string; offset: (amount: string) => string; stillOpen: (no: string, amount: string) => string;
   stamp: string; cancelledOn: (date: string, reason: string) => string; cancelNotice: (no: string, date: string) => string;
+  /** «Zahlungsaufforderung mit neuer IBAN» (spec 4.12): its title, and its text naming the new account. */
+  payToNotice: string; payToNoticeIntro: (no: string, date: string, iban: string) => string;
   exemption: Record<Exemption, string>;
   page: (k: number, n: number) => string; cut: string; bank: string; vatNo: string; uidNo: string; payment: string; iban: string; reference: string;
   /** A position's own discount, beside its price («Rabatt 10 %»); the default labels of a new Zwischentotal and Rabatt. */
@@ -66,6 +68,8 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     stillOpen: (no, a) => `Von Rechnung ${no} bleiben ${a} offen.`,
     stamp: 'STORNIERT', cancelledOn: (d, r) => `Storniert am ${d}${r ? `: ${r}` : ''}. Diese Rechnung ist nicht mehr zu bezahlen.`,
     cancelNotice: (no, d) => `Storno-Mitteilung zu Rechnung ${no} vom ${d}`,
+    payToNotice: 'Zahlungsaufforderung',
+    payToNoticeIntro: (no, d, iban) => `Unsere Bankverbindung hat geändert. Bitte überweisen Sie den offenen Betrag der Rechnung ${no} vom ${d} auf unser neues Konto ${iban}.`,
     exemption: {
       abroad: 'Leistung im Ausland, nicht der Schweizer MWST unterstellt (Art. 8 Abs. 1 MWSTG).',
       export: 'Ausfuhr, von der Steuer befreit (Art. 23 Abs. 2 Ziff. 1 MWSTG).',
@@ -99,6 +103,8 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     stillOpen: (no, a) => `Il reste ${a} à payer sur la facture ${no}.`,
     stamp: 'ANNULÉE', cancelledOn: (d, r) => `Annulée le ${d}${r ? ` : ${r}` : ''}. Cette facture n’est plus à payer.`,
     cancelNotice: (no, d) => `Avis d’annulation de la facture ${no} du ${d}`,
+    payToNotice: 'Demande de paiement',
+    payToNoticeIntro: (no, d, iban) => `Nos coordonnées bancaires ont changé. Veuillez verser le montant ouvert de la facture ${no} du ${d} sur notre nouveau compte ${iban}.`,
     exemption: {
       abroad: 'Prestation à l’étranger, non soumise à la TVA suisse (art. 8, al. 1 LTVA).',
       export: 'Exportation, exonérée de la TVA (art. 23, al. 2, ch. 1 LTVA).',
@@ -132,6 +138,8 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     stillOpen: (no, a) => `Della fattura ${no} restano da pagare ${a}.`,
     stamp: 'ANNULLATA', cancelledOn: (d, r) => `Annullata il ${d}${r ? `: ${r}` : ''}. Questa fattura non è più da pagare.`,
     cancelNotice: (no, d) => `Avviso di annullamento della fattura ${no} del ${d}`,
+    payToNotice: 'Richiesta di pagamento',
+    payToNoticeIntro: (no, d, iban) => `Le nostre coordinate bancarie sono cambiate. Vi preghiamo di versare l’importo aperto della fattura ${no} del ${d} sul nostro nuovo conto ${iban}.`,
     exemption: {
       abroad: 'Prestazione all’estero, non soggetta all’IVA svizzera (art. 8 cpv. 1 LIVA).',
       export: 'Esportazione, esente dall’imposta (art. 23 cpv. 2 n. 1 LIVA).',
@@ -166,6 +174,8 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     stillOpen: (no, a) => `${a} of invoice ${no} remains open.`,
     stamp: 'CANCELLED', cancelledOn: (d, r) => `Cancelled on ${d}${r ? `: ${r}` : ''}. This invoice is no longer payable.`,
     cancelNotice: (no, d) => `Cancellation of invoice ${no} of ${d}`,
+    payToNotice: 'Payment request',
+    payToNoticeIntro: (no, d, iban) => `Our bank details have changed. Please pay the open amount of invoice ${no} of ${d} to our new account ${iban}.`,
     exemption: {
       abroad: 'Service supplied abroad, not subject to Swiss VAT (Art. 8 para. 1 VAT Act).',
       export: 'Export of goods, exempt from Swiss VAT (Art. 23 para. 2 no. 1 VAT Act).',

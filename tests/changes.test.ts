@@ -17,6 +17,7 @@ import { setAccountName } from '../src/workspace/accounts-write.js';
 import { bookEntry, markTemplate } from '../src/books/year-close.js';
 import type { Draft, Issued } from '../src/invoices/model.js';
 import { asContact, type Customer } from './support/invoice-fixtures.js';
+import { withEntry } from '../src/invoices/dated-values.js';
 import { commitExactly } from '../src/workspace/git.js';
 import { recordsPaths } from '../src/saving/changes.js';
 import { relative } from 'node:path';
@@ -99,7 +100,7 @@ test('Änderungen lists invoices, customers, statement imports, year-close marks
   let cancelled = '';
   updateInvoices(ws, (book) => {
     book.contacts.push(asContact(customer));
-    book.contacts[0].paymentDays = 10;
+    book.contacts[0].terms = withEntry(book.contacts[0].terms, { paymentDays: 10 }, '2026-10-16', '2026-10-16T08:00:00Z');
     // A customer number given since the save (an issue gives one): the app's, no change of a person's to list or undo.
     book.contacts[1].number = 'K-00099';
     book.invoices.push({ id: 'in_new', createdAt: '2026-10-16T08:00:00Z', origin: 'manual', deleted: false, status: 'draft', kind: 'invoice', customerId: 'cu_new', date: '2026-10-16', currency: 'CHF', language: 'de', comments: [], lines: [] } as Draft);

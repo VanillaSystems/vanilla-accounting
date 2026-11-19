@@ -8,11 +8,12 @@ import { bareVatId, vatIdError } from '../workspace/uid.js';
 import { identify, type Counterparty } from '../knowledge/counterparties.js';
 import {
   CONTACT_TYPES, INVOICE_CURRENCIES, INVOICE_LANGUAGES,
-  type Address, type Contact, type ContactAddress, type ContactFields, type ContactPerson, type CustomerFields, type Invoice,
+  type Address, type Contact, type ContactAddress, type ContactFields, type ContactOnDay, type ContactPerson, type CustomerFields, type Invoice,
   type InvoiceBook, type InvoiceContent, type InvoiceLanguage, type InvoicingSettings,
 } from './model.js';
 import { InvoiceRuleError, type Missing } from './rules.js';
 import { TEXTS } from './texts.js';
+import { contactOn, contactRecord } from './dated-values.js';
 
 /** Contacts not deleted, archived ones included (a document may name one). */
 export const liveContacts = (book: Pick<InvoiceBook, 'contacts'>): Contact[] => book.contacts.filter((c) => !c.deleted);
@@ -59,7 +60,7 @@ export const printedName = (c: Pick<ContactFields, 'type' | 'name' | 'salutation
  * address (else the billing address) with that address's line, «z. Hd.» the picked contact person,
  * whose e-mail the document goes to (else the contact's first). Undefined: no contact.
  */
-export function recipientOf(c: Contact | undefined, doc: Pick<InvoiceContent, 'personId' | 'addressId' | 'language'>, s: Pick<InvoicingSettings, 'paymentTerms' | 'defaultTerms' | 'paymentTermsDays'> | undefined): CustomerFields | undefined {
+export function recipientOf(c: ContactOnDay | undefined, doc: Pick<InvoiceContent, 'personId' | 'addressId' | 'language'>, s: Pick<InvoicingSettings, 'paymentTerms' | 'defaultTerms' | 'paymentTermsDays'> | undefined): CustomerFields | undefined {
   if (!c) return undefined;
   const a = addressOf(c, doc.addressId);
   const person = doc.personId ? c.persons.find((p) => p.id === doc.personId) : undefined;
@@ -192,7 +193,7 @@ const FIELDS = ['type', 'name', 'salutation', 'firstName', 'lastName', 'number',
  * changes (`null` clears an optional one). A person's `name` is derived from its first and last
  * name; a firm needs a name. `terms`: the firm's terms ids a contact may name.
  */
-export function parseContact(body: unknown, was?: Contact, terms: readonly string[] = []): Partial<ContactFields> & { clear: string[] } {
+export function parseContact(body: unknown, was?: ContactOnDay, terms: readonly string[] = []): Partial<ContactFields> & { clear: string[] } {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return bad('JSON-Objekt erwartet.');
   const b = body as Record<string, unknown>;
   const unknown = Object.keys(b).filter((k) => !FIELDS.includes(k as never));
@@ -282,6 +283,16 @@ export function applyContact<T extends ContactFields>(c: T, patch: Partial<Conta
   // A firm keeps no person's name parts; a person's name is its parts.
   if (next.type === 'firm') { delete next.salutation; delete next.firstName; delete next.lastName; }
   return next;
+}
+
+/**
+ * The stored contact with a request's fields applied on `validFrom` («gilt ab», spec 4.12): the plain
+ * fields set or cleared, each dated value changed a new entry from that day.
+ */
+export function applyContactFrom(c: Contact, patch: Partial<ContactFields> & { clear?: string[] }, validFrom: string, enteredAt: string): Contact {
+  const day = applyContact(contactOn(c, validFrom), patch);
+  // Plain fields the patch cleared leave the record too (contactRecord keeps what the day view holds).
+  return { ...contactRecord(day, c, validFrom, enteredAt) } as Contact;
 }
 
 /** A customer number another live contact holds already: refused, the number names one contact. */

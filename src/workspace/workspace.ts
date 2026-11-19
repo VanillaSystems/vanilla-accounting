@@ -17,7 +17,7 @@ import type { FilingLength } from '../accounting/periods.js';
 import type { LegalForm, Preset, QuestionKey, SupportedAnswers, VatQuestionKey } from './setup.js';
 import type { VatSetup } from './vat-setup.js';
 import type { Iban, MoneyRole, StatementKind } from './banks.js';
-import type { Address, InvoicingSettings, OutgoingMail } from '../invoices/model.js';
+import type { Address, InvoicingConfig, OutgoingMail } from '../invoices/model.js';
 import type { Dimension } from '../books/tags.js';
 
 declare const brand: unique symbol;
@@ -176,7 +176,8 @@ export interface Workspace {
   /** Absent in a workspace set up before `npm run init` existed. */
   readonly profile?: WorkspaceProfile;
   /** Absent until the company writes invoices (the manifest's invoicing block). */
-  readonly invoicing?: InvoicingSettings;
+  /** Its dated values read on a document's date: src/invoices/dated-values.ts invoicingOn. */
+  readonly invoicing?: InvoicingConfig;
   /** Absent until the company sends documents by e-mail (the manifest's outgoingMail block). */
   readonly outgoingMail?: OutgoingMail;
   /** The reporting dimensions bookings may carry a tag of (#127, src/books/tags.ts); absent: none. */

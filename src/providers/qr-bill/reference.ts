@@ -113,3 +113,23 @@ export function prettyReference(ref: string): string {
   if (/^\d{27}$/.test(ref)) return `${ref.slice(0, 2)} ${ref.slice(2).replace(/(.{5})(?!$)/g, '$1 ')}`;
   return ref.replace(/(.{4})(?!$)/g, '$1 ');
 }
+
+/** Where a customer pays to, as an invoice printed it: the account, its IBAN and the QR-IBAN its bank gave. */
+interface PaidTo { iban: string; qrIban?: string }
+
+/** The account a document's payment part names: the QR-IBAN where there is one, else the IBAN. */
+export const accountOnPaper = (p: PaidTo | undefined): string => (p ? p.qrIban ?? p.iban : '');
+
+/** Two accounts to pay to alike on paper: the same IBAN and the same QR-IBAN (or none). */
+export const samePaidTo = (a: PaidTo, b: PaidTo): boolean => a.iban === b.iban && (a.qrIban ?? '') === (b.qrIban ?? '');
+
+/**
+ * A request to pay an issued invoice to another account (spec 4.12): its QR reference stays with a
+ * QR-IBAN, its creditor reference with an IBAN. A QR reference cannot go with a plain IBAN: the request
+ * then carries no reference (the payment is matched by number and amount) and no QR-IBAN.
+ */
+export function paymentToNewAccount<T extends PaidTo>(reference: string, to: T): { to: T; reference: string } {
+  const qrr = parseReference(reference)?.kind === 'QRR';
+  if (qrr) return to.qrIban ? { to, reference } : { to: { ...to, qrIban: undefined }, reference: '' };
+  return { to: { ...to, qrIban: undefined }, reference };
+}

@@ -5,6 +5,9 @@
  * what they refuse, and returns the change that undoes it. No record of the books changes, so no
  * period is closed to them.
  */
+import { changeDated, datedValueNow, withdrawDated } from '../invoices/dated-change.js';
+import { valueOn } from '../core/dated.js';
+import { withEntry } from '../invoices/dated-values.js';
 import type { Books } from '../books/store.js';
 import { accountName, removeAccount, setAccountName } from '../workspace/accounts-write.js';
 import { assertPlaced } from './edits.js';
@@ -88,13 +91,15 @@ function invoicing(ws: Workspace, set: InvoicingSet, customers: Record<string, n
 export function setCustomerTerms(ws: Pick<Workspace, 'paths'>, to: (days: number, id: string) => number | undefined): Record<string, number> {
   const moved: Record<string, number> = {};
   updateInvoices(ws, (book) => {
+    const now = new Date().toISOString();
     for (const c of liveContacts(book)) {
-      const had = c.paymentDays;
+      // The contact's own days of today; the change holds from today on (spec 4.12), earlier documents keep theirs.
+      const had = valueOn(c.terms, now.slice(0, 10))?.paymentDays;
       if (had === undefined) continue;
       const days = to(had, c.id);
       if (days === undefined || days === had) continue;
       moved[c.id] = had;
-      book.contacts[book.contacts.indexOf(c)] = { ...c, paymentDays: days };
+      book.contacts[book.contacts.indexOf(c)] = { ...c, terms: withEntry(c.terms, { paymentDays: days }, now.slice(0, 10), now) };
     }
   });
   return moved;
@@ -110,6 +115,22 @@ function invoiceDraft(ws: Workspace, c: Extract<WorkspaceChange, { kind: 'invoic
     if (!customer) throw new RequestError(400, 'Diesen Kontakt gibt es nicht (oder er ist archiviert): einen neuen mit newCustomer anlegen.', { code: 'unknownCustomer' });
     const made = createDraft(ws, { ...draft, customerId: customer.id });
     return { undo: { kind: 'dropInvoiceDraft', id: made.id, ...(fields ? { customer: customer.id } : {}) }, note: { draft: { id: made.id, customer: customer.name } } };
+  });
+}
+
+/**
+ * A dated value the AI's wish names (spec 4.12): written as «Ändern» with «gilt ab» writes it. Issued
+ * documents keep what they printed («So lassen»); the card names those it covers, and its undo withdraws
+ * the entry while nothing used it.
+ */
+function datedValue(ws: Workspace, c: Extract<WorkspaceChange, { kind: 'datedValue' }>): Applied {
+  return checked(() => {
+    const before = datedValueNow(ws, c.path, c.validFrom);
+    const now = new Date().toISOString();
+    const first = changeDated(ws, c, now);
+    const out = first.saved ? first : changeDated(ws, { ...c, way: 'keep' }, now);
+    if (!out.saved) throw new RequestError(400, 'Nicht gespeichert.');
+    return { undo: { kind: 'withdrawDated', path: c.path, validFrom: c.validFrom, enteredAt: now }, note: { dated: { before, covers: first.saved ? [] : first.affected.map((a) => a.number) } } };
   });
 }
 
@@ -218,6 +239,8 @@ export function applyWorkspaceChange(ws: Workspace, books: Books, c: WorkspaceCh
     case 'invoicing': return invoicing(ws, c.set, c.customers);
     case 'invoiceDraft': return invoiceDraft(ws, c);
     case 'dropInvoiceDraft': return dropInvoiceDraft(ws, c.id, c.customer);
+    case 'datedValue': return datedValue(ws, c);
+    case 'withdrawDated': return checked(() => { withdrawDated(ws, c.path, c.validFrom, c.enteredAt); return {}; });
     case 'question': return question(ws, c);
     case 'withdrawQuestion': closeQuestion(c.id, AI, 'withdrawn'); return {};
     case 'mailbox': return mailbox(ws, c);

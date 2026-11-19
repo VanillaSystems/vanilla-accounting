@@ -3,9 +3,12 @@
  * status filters, what is open, and the link of each record. Computed with src/invoices/rules.ts,
  * the rules the API and the PDF use.
  */
+import { valueOn } from '../../../core/dated.js';
+import { localToday } from '../../../accounting/periods.js';
+import { contactOnDay } from '../../../invoices/dated-values.js';
 import { heldByReconciliation } from '../../../books/reconcile.js';
 import { bookedInFiled } from '../../../books/twins.js';
-import { isItem, type Contact, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type Issued, type SentDocument } from '../../../invoices/model.js';
+import { isItem, type Contact, type ContactOnDay, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type Issued, type SentDocument } from '../../../invoices/model.js';
 import { billingAddress, documentsOf, printedName, recipientOf } from '../../../invoices/contacts.js';
 import type { DraftChange } from '../../lib/api.js';
 import { isOverdue, namesNumber, openAmount } from '../../../invoices/rules.js';
@@ -70,7 +73,7 @@ export const contactOf = (d: InvoiceList, inv: Pick<Invoice, 'customerId'>): Con
  * and address read now. `terms`: the firm's settings for the contact's days.
  */
 export function customerOf(d: InvoiceList, inv: Invoice, terms?: Parameters<typeof recipientOf>[2]): CustomerFields | undefined {
-  return inv.status === 'issued' ? inv.customer : recipientOf(contactOf(d, inv), inv, terms);
+  return inv.status === 'issued' ? inv.customer : recipientOf(contactOnDay(contactOf(d, inv), inv.date), inv, terms);
 }
 
 /** A contact's open invoices in the books' currency, for the contact list. */
@@ -110,7 +113,7 @@ export function contactRows(d: InvoiceList, q: string | undefined, tab: ContactT
 
 /** The town of a contact's billing address, with its country when abroad. */
 export function townOf(c: Pick<Contact, 'addresses'>): string {
-  const a = billingAddress(c);
+  const a = billingAddress({ addresses: valueOn(c.addresses, localToday()) ?? [] });
   return a ? `${a.town}${a.country !== 'CH' ? `, ${a.country}` : ''}` : '';
 }
 
@@ -118,7 +121,7 @@ export function townOf(c: Pick<Contact, 'addresses'>): string {
  * Another customer: the draft takes their language; a customer abroad gets 0 % with the reason
  * "service abroad" (and EUR for the neighbours), a Swiss one back the normal rate.
  */
-export function customerChange(inv: Pick<Draft, 'lines' | 'currency'>, c: Pick<Contact, 'id' | 'language' | 'addresses' | 'currency'>): DraftChange {
+export function customerChange(inv: Pick<Draft, 'lines' | 'currency'>, c: Pick<ContactOnDay, 'id' | 'language' | 'addresses' | 'currency'>): DraftChange {
   const country = billingAddress(c)?.country ?? 'CH';
   // Another contact: its person and address are its own, none picked yet.
   const base = { customerId: c.id, language: c.language, personId: null, addressId: null } as const;

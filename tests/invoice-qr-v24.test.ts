@@ -22,6 +22,10 @@ import { MANIFEST_FILE } from '../src/workspace/workspace.js';
 import { startApi } from './support/api-server.js';
 import type { CompanyInfo } from '../src/books/company.js';
 import './support/jurisdiction.js';
+import { invoicingOn } from '../src/invoices/dated-values.js';
+
+/** Today as the server writes it (UTC): a change without «gilt ab» holds from it. */
+const TODAY = new Date().toISOString().slice(0, 10);
 
 const QR_IBAN = 'CH4431999123000889012';
 // The demo's account: the leak guard knows it as public. A EUR account at the same Swiss bank.
@@ -85,12 +89,14 @@ test('a EUR QR-IBAN kept with «Trotzdem speichern» (or from before v2.4): the 
 test('a manifest written before v2.4 with a QR-IBAN under EUR still reads (the page shows the warning as a fact); the writer keeps it while the account stays and drops it with null', () => {
   const text = readFileSync(join('demo/vanilla-accounting', MANIFEST_FILE), 'utf8')
     .replace('EUR: { account: "1023" }', `EUR: { account: "1023", qrIban: ${QR_IBAN} }`);
-  assert.equal(parseManifest(text, 'm.yaml').invoicing!.payTo.EUR?.qrIban, QR_IBAN);
+  assert.equal(invoicingOn(parseManifest(text, 'm.yaml').invoicing!, TODAY).payTo.EUR?.qrIban, QR_IBAN);
   const same = patchManifestText(text, { invoicing: { payTo: { EUR: { account: '1023' } } } }, 'm.yaml');
-  assert.equal(same.manifest.invoicing!.payTo.EUR?.qrIban, QR_IBAN, 'the same account keeps its QR-IBAN');
+  assert.equal(invoicingOn(same.manifest.invoicing!, TODAY).payTo.EUR?.qrIban, QR_IBAN, 'the same account keeps its QR-IBAN');
   const dropped = patchManifestText(text, { invoicing: { payTo: { EUR: { account: '1023', qrIban: null } } } }, 'm.yaml');
-  assert.equal(dropped.manifest.invoicing!.payTo.EUR?.qrIban, undefined);
-  assert.deepEqual((parse(dropped.text) as { invoicing: { payTo: { EUR: unknown } } }).invoicing.payTo.EUR, { account: '1023' });
+  assert.equal(invoicingOn(dropped.manifest.invoicing!, TODAY).payTo.EUR?.qrIban, undefined);
+  // Written as a history: the value from the start keeps its QR-IBAN (a document dated before reads it), today's has none.
+  const eur = (parse(dropped.text) as { invoicing: { payTo: { EUR: Array<{ validFrom: string; value: unknown }> } } }).invoicing.payTo.EUR;
+  assert.deepEqual(eur.map((e) => [e.validFrom, e.value]), [['1900-01-01', { account: '1023', qrIban: QR_IBAN }], [TODAY, { account: '1023' }]]);
 });
 
 test('API: a QR-IBAN under EUR warns with the rule and is stored only with confirm; under CHF it is stored at once; a text that is none is refused', async () => {
@@ -106,7 +112,7 @@ test('API: a QR-IBAN under EUR warns with the rule and is stored only with confi
 
     const anyway = await api.send('PATCH', '/api/workspace', { invoicing: { payTo: { EUR: { account: '1023', qrIban: 'CH44 3199 9123 0008 8901 2' } }, confirm: 'qrIbanNotChf' } });
     assert.equal(anyway.status, 200);
-    assert.equal((anyway.json as unknown as CompanyInfo).invoicing!.payTo.EUR?.qrIban, QR_IBAN, 'stored like any other value');
+    assert.equal(invoicingOn((anyway.json as unknown as CompanyInfo).invoicing!, TODAY).payTo.EUR?.qrIban, QR_IBAN, 'stored like any other value');
     assert.doesNotMatch(manifest(), /confirm/, 'no override is stored');
 
     const none = await api.send('PATCH', '/api/workspace', { invoicing: { payTo: { CHF: { account: '1021', qrIban: 'CH6580808000000000001' } } } });
@@ -115,10 +121,10 @@ test('API: a QR-IBAN under EUR warns with the rule and is stored only with confi
 
     const cleared = await api.send('PATCH', '/api/workspace', { invoicing: { payTo: { CHF: { account: '1021', qrIban: null } } } });
     assert.equal(cleared.status, 200);
-    assert.equal((cleared.json as unknown as CompanyInfo).invoicing!.payTo.CHF?.qrIban, undefined);
+    assert.equal(invoicingOn((cleared.json as unknown as CompanyInfo).invoicing!, TODAY).payTo.CHF?.qrIban, undefined);
     const chf = await api.send('PATCH', '/api/workspace', { invoicing: { payTo: { CHF: { account: '1021', qrIban: QR_IBAN } } } });
     assert.equal(chf.status, 200, 'CHF needs no confirmation');
-    assert.equal((chf.json as unknown as CompanyInfo).invoicing!.payTo.CHF?.qrIban, QR_IBAN);
+    assert.equal(invoicingOn((chf.json as unknown as CompanyInfo).invoicing!, TODAY).payTo.CHF?.qrIban, QR_IBAN);
   } finally {
     await api.stop();
   }

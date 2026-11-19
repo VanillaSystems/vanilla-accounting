@@ -4,6 +4,7 @@
  * 50 rows a page with the rest named, ticked rows with their bulk bar and «⋯» on each row. A row opens
  * its document as the panel over the table's right part.
  */
+import { invoicingOnDay } from '../../../invoices/dated-values.js';
 import { useEffect, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
 import type { Issued } from '../../../invoices/model.js';
@@ -273,7 +274,7 @@ function FactLine({ rows, kind, onExport, onDunning }: { rows: DocRow[]; kind: D
 /** «⋯» on a row: Öffnen, PDF, Senden, Mahnen, Als Entwurf kopieren, as far as the document allows. */
 function RowMenu({ r, at, view, nav, canEdit, onClose }: Props & { d: InvoiceList; r: DocRow; at: DOMRect; view: DocView; onClose(): void }) {
   const inv = r.inv;
-  const dunning = useWorkspace()?.invoicing?.dunning ?? DEFAULT_DUNNING;
+  const dunning = invoicingOnDay(useWorkspace()?.invoicing, localToday())?.dunning ?? DEFAULT_DUNNING;
   const go = () => nav.select({ area: 'invoices', view, id: r.id });
   const items: MenuItem[] = [{ label: t('sales.menu.open'), run: go }];
   if (inv.status === 'issued') {

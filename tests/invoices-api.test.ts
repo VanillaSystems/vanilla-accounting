@@ -8,7 +8,8 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { issuedPdfUrl, sentPdfUrl } from '../src/invoices/model.js';
+import { issuedPdfUrl, sentPdfUrl, type Contact } from '../src/invoices/model.js';
+import { contactOn } from '../src/invoices/dated-values.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import { browserPath } from './support/browser.js';
@@ -29,7 +30,8 @@ const lines = [{ text: 'Mélange maison 1 kg', quantity: 15, unit: 'pcs', price:
 test('contacts: created paying in the firm\'s terms; an address without town is refused; a Swiss UID is checked', async () => {
   const { status, json } = await api.send('POST', '/api/contacts', contactBody(customer));
   assert.equal(status, 200, String(json.error));
-  assert.deepEqual([json.type, json.paymentTerms, (json.addresses as Array<{ billing?: boolean }>)[0].billing, json.emails], ['firm', undefined, true, ['compta@cafe.example']], 'no terms of its own: the firm\'s');
+  const made = contactOn(json as unknown as Contact, new Date().toISOString().slice(0, 10));
+  assert.deepEqual([made.type, made.paymentTerms, made.paymentDays, made.addresses[0].billing, made.emails], ['firm', undefined, undefined, true, ['compta@cafe.example']], 'no terms of its own: the firm\'s');
   assert.match(String(json.id), /^cu_/);
   const bad = await api.send('POST', '/api/contacts', contactBody({ ...customer, address: { postcode: '1204', country: 'CH' } as never }));
   assert.equal(bad.status, 400);
