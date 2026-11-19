@@ -1,6 +1,8 @@
 # ADR 0011: Payroll: book what others calculate, and a narrow helper for the owner's salary
 
-Status: accepted (2026-10-10). Step 1 exists; steps 2 and 3 are not built.
+Status: accepted (2026-10-10). Step 1 exists; steps 2 and 3 are not built. **Amendment proposed
+2026-11-19** (see «Amendment» below; the owner to accept): payroll for small firms follows the Swiss
+market leader's approach and is planned in phases instead of «later, or never».
 
 ## Problem
 
@@ -82,3 +84,36 @@ a payroll provider does today (step 1).
   single owner's statement is made with the free federal tool.
 - **Hard-coded rates:** pension, accident and sick-pay rates differ by company; a wrong assumed
   rate is worse than asking.
+
+## Amendment (proposed 2026-11-19, the owner to accept)
+
+The owner decided on 2026-11-19 that the payroll concept follows the approach of the Swiss market
+leader's payroll module closely, because many in Switzerland are used to it
+([docs/specs/payroll.md](../specs/payroll.md), §0 and §20). That approach is a full payroll module:
+Mitarbeitende, a Lohnart catalogue, Sozialversicherungen, a Lohnabrechnung per person and month,
+Lohnzahlungen, the Lohnausweis and the annual declarations. It changes this ADR as follows; the text
+above stays as it was decided.
+
+- **Step 3 is no longer «later, or never».** Payroll for small firms (up to about ten people, one
+  canton of work, monthly or hourly pay) is built in this app, in phases: B0 = step 2 (the owner as
+  the only employee), B1 = staff, B2 = Quellensteuer computed. Each phase starts only after the one
+  before has shipped and a scored persona walk has passed (payroll.md §15).
+- **Step 2 widens slightly within B0:** a 13th salary, a bonus, the company car's private share and
+  expenses are Lohnarten of the owner's payslip; the payslip PDF is joined by the Lohnausweis PDF
+  (the «eLohnausweis SSK» CSV stays), the Lohnkonto and the declarations' figures.
+- **«Refuse what is out of scope»** becomes «warn, then the person decides» (owner, 2026-11-15) for
+  what is inside the phases: a line without its input is shown «unvollständig», and the person may
+  close the payslip anyway. Security boundaries and closed periods stay hard.
+- **Still rejected:** Swissdec certification and ELM transmission (a product commitment of its own;
+  not mandatory for the employer). The data model is Swissdec-shaped so the question can be asked
+  again without a migration.
+- **Liability** («a calculation from the entered rates, to be checked by the Treuhänder») stays on
+  every payslip. Quellensteuer (B2) keeps the liability argument of this ADR: it is built only with a
+  golden set per canton tariff file and after the owner accepts this amendment for it explicitly.
+- **Hard-coded rates** stay rejected: federal figures come with the app with their source; every
+  fund's, insurer's and GAV's figure comes from the firm's document.
+
+Consequences: `payroll.json` (Stammdaten, Sozialversicherungen, Lohnarten overrides, Mitarbeitende,
+all dated) replaces the «payroll settings record per year»; closed payslips are append-only in
+`transactional-data/<year>/payroll/payslips.jsonl`; booking per Lohnart through a Lohndurchlaufkonto
+and one liability account per insurer.
