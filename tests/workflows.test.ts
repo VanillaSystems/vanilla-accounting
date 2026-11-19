@@ -18,7 +18,7 @@ const byId = (id: string, ws = app.workflows) => ws.find((w) => w.id === id)!;
 
 test('every app workflow loads with no problem', () => {
   assert.deepEqual(app.problems, []);
-  assert.deepEqual(app.workflows.map((w) => w.id).sort(), ['ask', 'bank-import', 'booking', 'collect', 'collection', 'correction', 'evidence', 'new-case', 'receipt-intake', 'vat-filing', 'year-close']);
+  assert.deepEqual(app.workflows.map((w) => w.id).sort(), ['ask', 'bank-import', 'booking', 'collect', 'collection', 'correction', 'dunning', 'evidence', 'new-case', 'receipt-intake', 'vat-filing', 'year-close']);
 });
 
 test('every built action names every key it may hand on, so the step that uses it can emit each (#482)', () => {
@@ -27,7 +27,7 @@ test('every built action names every key it may hand on, so the step that uses i
 });
 
 test('asking, booking, the inbox, the VAT filing, the year close and the collection run; every other workflow names the actions it still lacks', () => {
-  const RUNS = ['ask', 'booking', 'receipt-intake', 'vat-filing', 'year-close', 'collection', 'collect'];
+  const RUNS = ['ask', 'booking', 'receipt-intake', 'vat-filing', 'year-close', 'collection', 'collect', 'dunning'];
   for (const id of RUNS) assert.deepEqual(byId(id).runnable, { ok: true }, id);
   for (const w of app.workflows.filter((x) => !RUNS.includes(x.id))) {
     assert.equal(w.runnable.ok, false, `${w.id} should not be runnable yet`);

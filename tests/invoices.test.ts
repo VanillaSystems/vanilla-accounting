@@ -3,11 +3,12 @@
  * totals, numbering, what an invoice needs before issue, issued = frozen, delete vs cancel,
  * credit notes, reminders, how a payment is split, and how blocks fall onto A4 sheets.
  */
+import { LEGACY_DUNNING, draftReminder as draftReminderOf } from '../src/invoices/dunning.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isQRReferenceValid, isSCORReferenceValid, calculateQRReferenceChecksum } from 'swissqrbill/utils';
 import {
-  allocate, cancel, creditNoteDraft, deleteDraft, issue, missingForIssue, nextNumber, openAmount, openOn, reminderDraft,
+  allocate, cancel, creditNoteDraft, deleteDraft, issue, missingForIssue, nextNumber, openAmount, openOn,
   revenueSplit, status, totals, warningsForIssue, withPayment, InvoiceRuleError, creditable } from '../src/invoices/rules.js';
 import { isQrIban, parseReference, prettyReference, qrReference, referenceFor, scorReference } from '../src/providers/qr-bill/reference.js';
 import { PAGE, addressLines, assembleSheets, paginate, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
@@ -166,6 +167,7 @@ test('credit notes: a part over the invoice rates, or at one rate; they reduce w
 });
 
 test('reminders: the next level in the invoice language, due in 10 days; not for paid, cancelled or credit notes', () => {
+  const reminderDraft = (i: Issued, all: Issued[], date: string, fee?: number) => draftReminderOf(i, all, date, LEGACY_DUNNING, fee !== undefined ? { fee } : {});
   const inv = issued(draft([line(1, 100, 8.1)], { language: 'fr' }));
   const r1 = reminderDraft(inv, [inv], '2026-11-20', 20);
   assert.deepEqual([r1.level, r1.dueDate, r1.fee], [1, '2026-11-30', 20]);
@@ -186,9 +188,12 @@ test('reminders: the next level in the invoice language, due in 10 days; not for
 
 test('allocate: what is open first, then unpaid reminder fees; more is a surplus, never booked', () => {
   const inv = { ...issued(draft([line(1, 100, 8.1)])), reminders: [{ level: 1, date: '2026-11-20', dueDate: '2026-11-30', fee: 20, intro: '', closing: '', documentId: 'sd' }] };
-  assert.deepEqual(allocate(inv, [inv], 50), { amount: 50, fee: 0, surplus: 0 });
-  assert.deepEqual(allocate(inv, [inv], 128.1), { amount: 108.1, fee: 20, surplus: 0 });
-  assert.deepEqual(allocate(inv, [inv], 130), { amount: 108.1, fee: 20, surplus: 1.9 });
+  assert.deepEqual(allocate(inv, [inv], 50), { amount: 50, fee: 0, interest: 0, surplus: 0 });
+  assert.deepEqual(allocate(inv, [inv], 128.1), { amount: 108.1, fee: 20, interest: 0, surplus: 0 });
+  assert.deepEqual(allocate(inv, [inv], 130), { amount: 108.1, fee: 20, interest: 0, surplus: 1.9 });
+  // Default interest a Mahnung charged comes after its fee; a draft Mahnung charges nothing.
+  const withInterest = { ...inv, reminders: [...inv.reminders, { level: 2, date: '2026-12-10', dueDate: '2026-12-20', fee: 10, interest: { rate: 5, from: '2026-11-04', to: '2026-12-10', days: 36, amount: 0.55 }, intro: '', closing: '', documentId: 'sd2' }, { level: 3, date: '2026-12-30', dueDate: '2027-01-09', fee: 99, intro: '', closing: '' }] };
+  assert.deepEqual(allocate(withInterest, [withInterest], 138.65), { amount: 108.1, fee: 30, interest: 0.55, surplus: 0 });
   const part = withPayment(inv, { transactionRef: 'T1', date: '2026-11-01', amount: 50, by: 'reference' });
   assert.equal(status(part, [part]), 'partly-paid');
   assert.equal(openAmount(part, [part]), 58.1);

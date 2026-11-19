@@ -66,13 +66,16 @@ export function MoneyRows({ inv, books, nav, period, canEdit }: { inv: Issued; b
   for (const p of inv.payments) {
     const tx = books.transactions.find((x) => x.ref === p.transactionRef);
     // One payment over several invoices (Ausziffern): this invoice's part of it.
-    const parts = !!tx && Math.round(tx.amount * 100) !== Math.round((p.amount + (p.fee ?? 0)) * 100);
+    const parts = !!tx && Math.round(tx.amount * 100) !== Math.round((p.amount + (p.fee ?? 0) + (p.interest ?? 0)) * 100);
     rows.push(
       <div key={`p${p.transactionRef}`} className="mrow" data-testid="linked-payment">
         <span className="mono">{formatDate(p.date)}</span>
         <span>
           {t(p.source === 'hand' || tx?.source === 'manual' ? 'invoices.money.hand' : 'invoices.money.statement', { amount: money(p.amount) })}
           {parts && tx ? <small>{t('invoices.money.part', { amount: `${tx.currency} ${fmt(tx.amount)}` })}</small> : null}
+          {/* What the payment paid of a Mahnung beyond the invoice, each by its name: a fee, default interest. */}
+          {p.fee ? <small data-testid="paid-fee">{t('invoices.money.fee', { amount: money(p.fee) })}</small> : null}
+          {p.interest ? <small data-testid="paid-interest">{t('invoices.money.interest', { amount: money(p.interest) })}</small> : null}
           {tx?.source === 'manual' && tx.statement ? <small data-testid="hand-confirmed">{t('invoices.money.confirmed', { ref: tx.statement })}</small> : null}
           {tx?.source === 'manual' && !tx.statement ? <small>{t(cashBox(tx.bank) ? 'invoices.money.cash' : 'invoices.money.unconfirmed')}</small> : null}
         </span>

@@ -10,7 +10,8 @@ import { eventRef } from '../../../books/refs.js';
 import { lockedThrough } from '../../../books/lock-line.js';
 import { TEXTS } from '../../../invoices/texts.js';
 import { defaultTexts, draftDays, senderFor } from '../../../invoices/documents.js';
-import { backToDraftRefusal, missingForIssue, openAmount, openFees, paidAmount, refundDue, reminderDraft, shortfallOf, skontoOffer, totals, warningsForIssue, type Missing } from '../../../invoices/rules.js';
+import { backToDraftRefusal, missingForIssue, openAmount, openFees, paidAmount, refundDue, shortfallOf, skontoOffer, totals, warningsForIssue, type Missing } from '../../../invoices/rules.js';
+import { DEFAULT_DUNNING, levelTitle, nextLevel, reminderDraftOf, reminderTitle, sentReminders } from '../../../invoices/dunning.js';
 import { prettyReference } from '../../../providers/qr-bill/reference.js';
 import { closedByLoss } from '../../../invoices/lists.js';
 import type { PaymentProposal } from '../../../invoices/payments.js';
@@ -33,7 +34,7 @@ import { CONVERSIONS, chainOf, doneShare } from '../../../invoices/chain.js';
 import { groupOf, statusOfKind } from './table.js';
 import { fixFor, insertLine, moveLine, parseNumber, repriced, sheetEdit, type Fix } from './edit.js';
 import { setUi, ui, useUi, type Section } from './state.js';
-import { answer, comment, confirmPayment, copyAsDraft, deleteDraft, firstLine, invoiceAt, issue, reopen, saveDraft, send, sendReminder, writeOff } from './actions.js';
+import { answer, comment, confirmPayment, copyAsDraft, deleteDraft, deleteReminder, editReminder, firstLine, invoiceAt, issue, remind, reopen, saveDraft, send, writeOff } from './actions.js';
 import { ContactPanel } from './contacts.js';
 import { ArticlePanel } from './articles.js';
 import { addressOf, contactDays, goneRefs } from '../../../invoices/contacts.js';
@@ -86,16 +87,19 @@ function InvoiceDetail(props: DetailProps) {
   const state = rowState(inv, d.invoices, today);
   const customer = customerOf(d, inv);
   const t0 = totals(inv);
-  const reminder = inv.status === 'issued' && s.reminder?.invoiceId === inv.id ? s.reminder : null;
+  // A Mahnung written and not sent yet has a tab of its own beside the Rechnung, to edit before it goes out (spec 4.4.7);
+  // a Rechnung paid, credited or cancelled meanwhile drops it.
+  const draftR = inv.status === 'issued' ? reminderDraftOf(inv, d.invoices) ?? null : null;
+  const reminder = draftR && s.sheet !== 'invoice' ? draftR : null;
   const editing = canEdit && !s.preview && (inv.status === 'draft' || !!reminder);
 
-  const data = reminder && inv.status === 'issued' ? reminderData(d, inv, reminder, today, editing)
+  const data = reminder && inv.status === 'issued' ? reminderData(d, inv, reminder, editing)
     : inv.status === 'draft' ? draftData(d, ws, inv, editing) : issuedData(d, inv);
 
   function edit(key: string, value: string, final: boolean): boolean | void {
     if (!final) return;
     if (reminder && inv.status === 'issued') {
-      if (key === 'intro' || key === 'closing') setUi({ reminder: { ...reminder, [key]: value } });
+      if ((key === 'intro' || key === 'closing') && value !== reminder[key]) void editReminder(nav, inv, { [key]: value });
       return;
     }
     if (inv.status !== 'draft') return;
@@ -140,14 +144,20 @@ function InvoiceDetail(props: DetailProps) {
       </div>
       {/* The money first (spec 4.8); slice D's sent fact sits beside the figures in this row. */}
       {/* The facts of an issued document first (spec 4.8): its money, and whether and how it went out. */}
-      {inv.status === 'issued' && !reminder && (
+      {inv.status === 'issued' && (
         <div className="ivtop">
           {inv.kind === 'invoice' && !inv.cancelled && <FourFigures inv={inv} invoices={d.invoices} />}
           <SentLine sent={d.sent} inv={inv} onSend={canEdit ? () => setUi({ dialog: { kind: 'send' } }) : undefined} />
         </div>
       )}
       {inv.status === 'issued' && !isBooked(inv) ? <ChainStatus {...props} inv={inv} /> : <Status {...props} state={state} reminder={!!reminder} />}
-      {inv.status === 'issued' && !isBooked(inv) ? <ChainActions {...props} inv={inv} /> : <Actions {...props} state={state} reminderLevel={reminder ? reminderDraft(inv, d.invoices, today).level : undefined} />}
+      {inv.status === 'issued' && !isBooked(inv) ? <ChainActions {...props} inv={inv} /> : <Actions {...props} state={state} />}
+      {draftR && inv.status === 'issued' && (
+        <div className="ivsheettabs seg2" role="tablist" aria-label={t('invoices.sheetTabs')} data-testid="sheet-tabs">
+          <button type="button" role="tab" aria-selected={!reminder} className={reminder ? '' : 'on'} onClick={() => setUi({ sheet: 'invoice', preview: false })}>{t('invoices.tabInvoice', { number: inv.number })}</button>
+          <button type="button" role="tab" aria-selected={!!reminder} className={reminder ? 'on' : ''} data-act="reminder-tab" onClick={() => setUi({ sheet: 'reminder', preview: false })}>{t('invoices.tabReminder', { title: reminderTitle(draftR, inv.language) })}</button>
+        </div>
+      )}
       <div className="body">
         <div className="desk">
           <Sheet data={data} editing={editing} onEdit={edit} onAction={action} focus={editing ? s.focus : undefined} onFocused={() => setUi({ focus: undefined })} />
@@ -220,20 +230,19 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
       </div>
     );
   }
-  if (reminder) {
-    const r = reminderDraft(inv, d.invoices, today);
-    return (
-      <div className="status">
-        <span className="notice">{t('invoices.reminderStatus', { level: r.level, date: formatDate(r.dueDate) })}</span>
-        {!wasSent(d.sent, inv) && (
-          <div className="notice warn" role="note">
-            {I.dot}<span>{t('invoices.remindUnsent')}</span>
-            {canEdit && <button type="button" className="btn ghost" onClick={() => setUi({ reminder: null, preview: false, dialog: { kind: 'send' } })}>{t('invoices.sendFirst')}</button>}
-          </div>
-        )}
-      </div>
-    );
-  }
+  // A Mahnung written and not sent: a line of its own under the Rechnung's status, which stays.
+  const r = inv.status === 'issued' ? reminderDraftOf(inv, d.invoices) : undefined;
+  const drafted = r ? (
+    <>
+      <span className="notice" data-testid="reminder-status">{t('invoices.reminderStatus', { title: reminderTitle(r, inv.language), date: formatDate(r.dueDate) })}</span>
+      {reminder && !wasSent(d.sent, inv) && (
+        <div className="notice warn" role="note">
+          {I.dot}<span>{t('invoices.remindUnsent')}</span>
+          {canEdit && <button type="button" className="btn ghost" onClick={() => setUi({ preview: false, dialog: { kind: 'send' } })}>{t('invoices.sendFirst')}</button>}
+        </div>
+      )}
+    </>
+  ) : null;
   let line: ReactNode = null;
   if (state === 'cancelled' && inv.cancelled) line = <span className="notice">{t('invoices.cancelledStatus', { date: formatDate(inv.cancelled.date) })}{inv.cancelled.reason ? ` · ${inv.cancelled.reason}` : ''}</span>;
   else if (state === 'credit') {
@@ -256,13 +265,13 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
       : t('invoices.settledByCredit')}{fee > 0 ? ` · ${t('invoices.feeOpen', { amount: `${inv.currency} ${fmt(fee)}` })}` : ''}</span>;
   } else {
     const due = inv.dueDate;
-    const r = inv.reminders.at(-1);
+    const last = inv.status === 'issued' ? sentReminders(inv).at(-1) : undefined;
     const paid = paidAmount(inv);
     const sk = !inv.payments.length ? skontoOffer(inv) : undefined;
     const parts = [
       state === 'overdue' ? t('invoices.overdueSince', { n: days(due, today) }) : t('invoices.openDue', { when: due === today ? t('invoices.today') : t('invoices.inDays', { n: days(today, due) }) }),
       ...(sk && sk.until >= today ? [t('invoices.skontoUntil', { date: formatDate(sk.until), amount: `${inv.currency} ${fmt(sk.pays)}` })] : []),
-      ...(r ? [t('invoices.lastReminder', { level: r.level, date: formatDate(r.date) })] : []),
+      ...(last ? [t('invoices.lastReminder', { title: reminderTitle(last, inv.language), date: formatDate(last.date) })] : []),
       ...(paid ? [t('invoices.partlyPaid', { paid: fmt(paid), open: fmt(openAmount(inv, d.invoices)) })] : []),
       ...(openFees(inv) > 0 ? [t('invoices.feeOpen', { amount: `${inv.currency} ${fmt(openFees(inv))}` })] : []),
     ];
@@ -273,6 +282,7 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
   return (
     <div className="status">
       {line}
+      {drafted}
       {short !== undefined && (
         <div className="notice ivpay ivshort" data-testid="shortfall">
           <span>{t('invoices.shortfall', { amount: `${inv.currency} ${fmt(short)}`, limit: `${inv.currency} ${fmt(ws.invoicing?.shortfallLimit ?? DEFAULT_SHORTFALL_LIMIT)}` })}</span>
@@ -347,8 +357,8 @@ function MissingList({ d, inv, nav, missing, warn }: DetailProps & { inv: Draft;
   );
 }
 
-function Actions(props: DetailProps & { state: RowState; reminderLevel?: number }) {
-  const { d, ws, inv, state, reminderLevel, nav, canEdit } = props;
+function Actions(props: DetailProps & { state: RowState }) {
+  const { d, ws, inv, state, nav, canEdit } = props;
   const s = useUi();
   const dl = inv.status === 'issued'
     ? <a className="dl inline" href={sources.invoicePdf(inv.number)} download={`${inv.number}.pdf`} data-tip={t('invoices.downloadTip')}>{I.dl}<span>{t('invoices.downloadInstead')}</span></a>
@@ -383,26 +393,22 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
       </div>
     );
   }
-  if (reminderLevel !== undefined && s.reminder) {
-    const r = s.reminder;
-    return (
-      <div className="ivacts">
-        {preview}
-        <button type="button" className="btn primary" data-act="remsend" onClick={() => setUi({ dialog: { kind: 'send', reminder: { level: reminderLevel, ...(r.fee ? { fee: r.fee } : {}), ...(r.intro !== undefined ? { intro: r.intro } : {}), ...(r.closing !== undefined ? { closing: r.closing } : {}) } } })}>
-          {t('invoices.sendReminder', { level: reminderLevel })}
-        </button>
-        <button type="button" className="btn ghost" onClick={() => setUi({ reminder: null, preview: false })}>{t('common.cancel')}</button>
-      </div>
-    );
-  }
+  const draftR = reminderDraftOf(inv, d.invoices);
   const sentOnce = d.sent.some((x) => x.invoiceId === inv.id && (x.kind === 'invoice' || x.kind === 'credit-note'));
   const open = state === 'open' || state === 'overdue';
   const unpaid = inv.kind === 'invoice' && open;
-  const next = open ? reminderDraft(inv, d.invoices, localToday()).level : 0;
+  const dunning = ws.invoicing?.dunning ?? DEFAULT_DUNNING;
+  const next = open && inv.kind === 'invoice' ? levelTitle(nextLevel(inv, dunning).def, inv.language) : '';
   // One row of the main actions of the state; the rest in «Weitere» (owner's review of slice C).
   const main: ReactNode[] = [];
   if (unpaid) main.push(<button key="hand" type="button" className={`btn ${state === 'overdue' ? 'ghost' : 'primary'}`} data-act="hand-payment" onClick={() => setUi({ dialog: { kind: 'handPayment' } })}>{t('invoices.handPayment')}</button>);
-  if (state === 'overdue') main.push(<button key="remind" type="button" className="btn primary" data-act="remind" onClick={() => setUi({ reminder: { invoiceId: inv.id }, preview: false })}>{t('invoices.remind', { level: next })}</button>);
+  // A Mahnung written: it is sent or deleted (its level goes back; a sent one is kept as sent); else «Mahnen» writes the next.
+  if (draftR) {
+    const title = reminderTitle(draftR, inv.language);
+    if (s.sheet !== 'invoice') main.push(<span key="preview">{preview}</span>);
+    main.push(<button key="remsend" type="button" className="btn primary" data-act="remsend" onClick={() => setUi({ dialog: { kind: 'send', reminder: { level: draftR.level, title } } })}>{t('invoices.sendReminder', { title })}</button>);
+    main.push(<AsyncButton key="remdelete" type="button" className="btn ghost danger" data-act="remdelete" onClick={() => deleteReminder(nav, inv)}>{t('invoices.reminderDelete')}</AsyncButton>);
+  } else if (state === 'overdue') main.push(<AsyncButton key="remind" type="button" className="btn primary" data-act="remind" onClick={() => remind(nav, inv)}>{t('invoices.remind', { title: next })}</AsyncButton>);
   if (open || state === 'credit') main.push(<button key="send" type="button" className={`btn ${sentOnce || unpaid ? 'ghost' : 'primary'}`} data-act="send" data-tip={t('invoices.sendTip')} onClick={() => setUi({ dialog: { kind: 'send' } })}>{sentOnce ? t('invoices.resend') : t('invoices.send')}</button>);
   const more: MenuItem[] = [
     ...(unpaid ? [{ act: 'write-off', label: t('invoices.writeOff'), run: () => setUi({ dialog: { kind: 'writeOff' } }) }] : []),
@@ -567,19 +573,33 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
   );
 }
 
-function ReminderSec({ d, inv }: DetailProps & { inv: Issued }) {
-  const s = useUi();
-  const r = s.reminder!;
-  const drafted = reminderDraft(inv, d.invoices, localToday(), r.fee);
+/** The margin of a Mahnung being written: its title, date, due date, fee and default interest, each saved on leaving the field. */
+function ReminderSec({ d, inv, nav, canEdit }: DetailProps & { inv: Issued }) {
+  const r = reminderDraftOf(inv, d.invoices);
+  if (!r) return null;
+  const amount = (key: 'fee' | 'interest') => (e: { target: HTMLInputElement }) => {
+    const n = parseNumber(e.target.value);
+    const before = key === 'fee' ? r.fee : r.interest?.amount;
+    const next = n && n > 0 ? n : null;
+    if ((next ?? undefined) !== before) void editReminder(nav, inv, { [key]: next });
+  };
+  const date = (key: 'date' | 'dueDate') => (e: { target: HTMLInputElement }) => { if (e.target.value && e.target.value !== r[key]) void editReminder(nav, inv, { [key]: e.target.value }); };
   return (
-    <Sec k="draft" label={t('invoices.sec.reminder', { level: drafted.level })} val={t('invoices.dueShort', { date: formatDate(drafted.dueDate) })}>
-      <div className="lkf">
+    <Sec k="draft" label={reminderTitle(r, inv.language)} val={t('invoices.dueShort', { date: formatDate(r.dueDate) })}>
+      <div className="lkf" key={`${r.date}${r.dueDate}${r.fee ?? ''}${r.interest?.amount ?? ''}`}>
+        <label className="lkr"><span>{t('invoices.reminderTitle')}</span>
+          <input name="title" defaultValue={reminderTitle(r, inv.language)} disabled={!canEdit} onBlur={(e) => { if (e.target.value.trim() && e.target.value !== reminderTitle(r, inv.language)) void editReminder(nav, inv, { title: e.target.value }); }} />
+        </label>
+        <label className="lkr"><span>{t('invoices.reminderDate')}</span><input name="date" type="date" defaultValue={r.date} disabled={!canEdit} onBlur={date('date')} /></label>
+        <label className="lkr"><span>{t('invoices.reminderDue')}</span><input name="dueDate" type="date" defaultValue={r.dueDate} disabled={!canEdit} onBlur={date('dueDate')} /></label>
         <label className="lkr"><span>{t('invoices.fee')}</span>
-          <input className="mono" inputMode="decimal" defaultValue={r.fee ? fmt(r.fee) : ''} placeholder="0.00" aria-label={t('invoices.fee')}
-            onBlur={(e) => { const n = parseNumber(e.target.value); setUi({ reminder: { ...r, ...(n && n > 0 ? { fee: n } : { fee: undefined }) } }); }} />
+          <input name="fee" className="mono" inputMode="decimal" defaultValue={r.fee ? fmt(r.fee) : ''} placeholder="0.00" disabled={!canEdit} onBlur={amount('fee')} />
+        </label>
+        <label className="lkr"><span>{t('invoices.interest')}</span>
+          <input name="interest" className="mono" inputMode="decimal" defaultValue={r.interest ? fmt(r.interest.amount) : ''} placeholder="0.00" disabled={!canEdit} onBlur={amount('interest')} />
         </label>
       </div>
-      <p className="m ivhint">{t('invoices.feeHint')}</p>
+      <p className="m ivhint">{r.interest ? t('invoices.interestHint', { rate: r.interest.rate, days: r.interest.days, date: formatDate(r.interest.from) }) : t('invoices.feeHint')}</p>
     </Sec>
   );
 }

@@ -4,20 +4,20 @@
  * print a PDF are asynchronous; they run one at a time in this process, so a number is never
  * given twice and nothing saves over another change.
  */
-import { existsSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { basename, dirname, extname, join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import { receiptFile, type Books } from '../books/store.js';
-import { defaultTexts, draftDays, issuedIntro, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
+import { defaultTexts, draftDays, issuedIntro, issuedSheet, mailText, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
 import {
   INVOICE_CURRENCIES, INVOICE_LANGUAGES, DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, LINE_KINDS, PRICES, isItem, withGroups, type UnitDef,
   type Article, type ArticleFields, type Comment, type Contact, type ContactFields, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
-  type AccountChange, type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type SentDocument, type SentKind,
+  type AccountChange, type DunningSettings, type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type SentDocument, type SentKind,
 } from './model.js';
 import { renderHtml, renderPdf, type Rendered } from './pdf.js';
 import {
   InvoiceRuleError, KIND_WORD, asDraft, assertCreditWithinOpen, backToDraftRefusal, cancel, creditNoteDraft, deleteDraft, figures, isOverdue, issue, liveDocuments, liveInvoices, missingForIssue,
-  openAmount, reminderDraft, shortfallOf, skontoOffer, status, totals, warningsForIssue, writeOffAccounts,
+  addDays, openAmount, shortfallOf, skontoOffer, status, totals, warningsForIssue, writeOffAccounts,
   type CreditRequest, type Figures, type InvoiceRefusal, type InvoiceStatus, type Missing, type Totals,
 } from './rules.js';
 import type { SheetData } from './sheet.js';
@@ -31,7 +31,11 @@ import { kindTitle } from './texts.js';
 import type { PaymentContext, PaymentOutcome } from './payments.js';
 import { notesWithAccounts, withAccounts, type AccountChangePlan, type AccountContext } from './revise.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
-import { creditNoteStatus, type CreditListStatus } from './lists.js';
+import { creditNoteStatus, daysBetween, type CreditListStatus } from './lists.js';
+import { DEFAULT_DUNNING, MAX_RUN, assertRemindable, autoDue, draftReminder, dunningRun, interestAccount, interestOf, levelKey, levelTitle, nextLevel, reminderAddress, reminderDraftOf, reminderTitle, round, storedDraftOf, type LeftOut, type RunPlan } from './dunning.js';
+import { thisDevice } from '../workspace/device.js';
+import { MailError, checkMessage, sendMail } from './mail.js';
+import { isDurchsicht } from '../handover/durchsicht.js';
 import {
   applyContact, assertNumberFree, checkVatId, contactOfCustomer, documentsOf, draftTermsOf, goneRefs, lineDefaults, liveContacts, numberContact, parseContact, pickableContacts, recipientOf,
 } from './contacts.js';
@@ -501,9 +505,9 @@ export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; pr
   });
 }
 
-function sentTitle(inv: Issued, kind: SentKind, level?: number): string {
+function sentTitle(inv: Issued, kind: SentKind, reminder?: Pick<Reminder, 'level' | 'title'>): string {
   const L = TEXTS[inv.language];
-  if (kind === 'reminder') return `${L.reminder(level ?? 1)} · ${L.invoice} ${inv.number}`;
+  if (kind === 'reminder') return `${reminderTitle(reminder ?? { level: 1 }, inv.language)} · ${L.invoice} ${inv.number}`;
   if (kind === 'cancellation') return `${L.stamp}: ${L.invoice} ${inv.number}`;
   return `${kindTitle(L, inv.kind, inv.printAs)} ${inv.number}`;
 }
@@ -565,10 +569,10 @@ const nextNumberTaken = (book: InvoiceBook, number: string, id?: string) => book
  * Prints a document of its own (reminder, cancellation notice), stores its PDF and hands it to
  * `deliver`; the caller records it as sent. A failed e-mail removes the PDF again and throws.
  */
-async function printOwnDocument(ws: Workspace, inv: Issued, kind: SentKind, sheet: SheetData, to: string | undefined, now: string, printer: Printer, deliver?: Deliver, level?: number): Promise<SentDocument> {
+async function printOwnDocument(ws: Workspace, inv: Issued, kind: SentKind, sheet: SheetData, to: string | undefined, now: string, printer: Printer, deliver?: Deliver, reminder?: Pick<Reminder, 'level' | 'title'>): Promise<SentDocument> {
   const env = newEnvelope('sd', now);
   const printed = await printer.pdf(sheet, now);
-  const title = sentTitle(inv, kind, level);
+  const title = sentTitle(inv, kind, reminder);
   const pdf = storePdf(ws, now.slice(0, 4), `sent/${env.id}.pdf`, printed.pdf);
   let delivered: Awaited<ReturnType<Deliver>> | undefined;
   try {
@@ -786,32 +790,265 @@ export function reopenDocument(ws: Workspace, id: string, confirmed: boolean): D
   });
 }
 
-export function draftReminder(ws: Workspace, id: string, date: string, fee?: number): Omit<Reminder, 'documentId'> {
+// ─── Mahnungen (spec 4.4.7) ────────────────────────────────────────────────────
+
+const dunningOf = (ws: Workspace): DunningSettings => ws.invoicing?.dunning ?? DEFAULT_DUNNING;
+const draftIn = (book: InvoiceBook, inv: Issued) => reminderDraftOf(inv, liveInvoices(book));
+const noDraft = (): never => { throw new InvoiceRuleError('noReminderDraft', 'Keine Mahnung im Entwurf: eine gesendete bleibt, wie sie gesendet wurde.'); };
+
+/** The next Mahnung of an invoice as it would be written on `date` (not stored): the preview of «Mahnen». */
+export function previewReminder(ws: Workspace, id: string, date: string, fee?: number): Reminder {
   const book = loadInvoices(ws);
   const inv = findInvoice(book, id) ?? notFound('Rechnung');
-  return reminderDraft(inv, liveInvoices(book), date, fee);
+  if (inv.status === 'issued') { const d = draftIn(book, inv); if (d) return d; }
+  return draftReminder(inv, liveInvoices(book), date, dunningOf(ws), fee !== undefined ? { fee } : {});
 }
 
-export function sendReminder(ws: Workspace, id: string, req: { date?: string; fee?: number; intro?: string; closing?: string; to?: string }, opts: { now?: string; printer?: Printer; deliver?: Deliver } = {}): Promise<{ reminder: Reminder; sent: SentDocument }> {
+const remindable = (book: InvoiceBook, id: string): Issued => {
+  const inv = findInvoice(book, id) ?? notFound('Rechnung');
+  assertRemindable(inv, liveInvoices(book));
+  return inv;
+};
+const replaceDoc = (book: InvoiceBook, inv: Issued) => { book.invoices[book.invoices.findIndex((i) => i.id === inv.id)] = inv; };
+
+/**
+ * «Mahnen»: the next Mahnung written and kept as a draft (Reminder without documentId) with the
+ * level's texts in the invoice's language, editable until it is sent. One draft per invoice: a second
+ * «Mahnen» returns the one there.
+ */
+export function createReminderDraft(ws: Workspace, id: string, req: { date?: string; fee?: number } = {}, now = new Date().toISOString()): Reminder {
+  const date = req.date ?? now.slice(0, 10);
+  if (!isDate(date)) bad('date ist ein Datum JJJJ-MM-TT.');
+  if (req.fee !== undefined && (typeof req.fee !== 'number' || req.fee < 0)) bad('fee ist ein Betrag ab 0.');
+  return updateInvoices(ws, (book) => {
+    const inv = remindable(book, id);
+    const there = draftIn(book, inv);
+    if (there) return there;
+    const r = draftReminder(inv, liveInvoices(book), date, dunningOf(ws), req.fee !== undefined ? { fee: req.fee } : {});
+    if (r.date < inv.date) bad(`Eine Mahnung ist frühestens am Tag der Rechnung (${inv.date}) datiert.`);
+    replaceDoc(book, { ...inv, reminders: [...inv.reminders.filter((x) => x.documentId), r] });
+    return r;
+  });
+}
+
+/** What a person changes on a Mahnung before it is sent; null takes a fee or the interest off. */
+export interface ReminderPatch { date?: string; dueDate?: string; title?: string; fee?: number | null; interest?: number | null; intro?: string; closing?: string }
+
+function patched(ws: Workspace, inv: Issued, invoices: readonly Invoice[], r: Reminder, p: ReminderPatch): Reminder {
+  if (p.date !== undefined && !isDate(p.date)) bad('date ist ein Datum JJJJ-MM-TT.');
+  if (p.dueDate !== undefined && !isDate(p.dueDate)) bad('dueDate ist ein Datum JJJJ-MM-TT.');
+  if (p.fee !== undefined && p.fee !== null && (typeof p.fee !== 'number' || !Number.isFinite(p.fee) || p.fee < 0)) bad('fee ist ein Betrag ab 0.');
+  if (p.interest !== undefined && p.interest !== null && (typeof p.interest !== 'number' || !Number.isFinite(p.interest) || p.interest < 0)) bad('interest ist ein Betrag ab 0.');
+  for (const k of ['title', 'intro', 'closing'] as const) if (p[k] !== undefined && typeof p[k] !== 'string') bad(`${k} ist ein Text.`);
+  const level = dunningOf(ws).levels[r.level - 1];
+  // A new date moves the due date by the level's days and the interest to it, unless the person names them.
+  const date = p.date ?? r.date;
+  const dueDate = p.dueDate ?? (p.date !== undefined ? addDays(date, level?.days ?? daysBetween(r.date, r.dueDate)) : r.dueDate);
+  if (date < inv.date) bad(`Eine Mahnung ist frühestens am Tag der Rechnung (${inv.date}) datiert.`);
+  if (dueDate < date) bad(`Zahlbar bis ${dueDate} liegt vor dem Datum der Mahnung ${date}.`);
+  const computed = p.date !== undefined ? interestOf(inv, invoices, date, dunningOf(ws)) : r.interest;
+  // An amount typed by hand: over the same span; without a rate (the firm charges none) the paper names no percent.
+  const span = computed ?? { rate: dunningOf(ws).interest?.rate ?? 0, from: inv.dueDate, to: date, days: Math.max(0, daysBetween(inv.dueDate, date)), amount: 0 };
+  const interest = p.interest === null ? undefined : p.interest !== undefined ? { ...span, amount: round(inv, p.interest) } : computed;
+  const fee = p.fee === null ? undefined : p.fee !== undefined ? round(inv, p.fee) : r.fee;
+  const { fee: _f, interest: _i, ...rest } = r;
+  return {
+    ...rest, date, dueDate,
+    ...(p.title !== undefined && p.title.trim() ? { title: p.title.trim() } : {}),
+    ...(p.intro !== undefined ? { intro: p.intro } : {}), ...(p.closing !== undefined ? { closing: p.closing } : {}),
+    ...(fee ? { fee } : {}), ...(interest && interest.amount > 0 ? { interest } : {}),
+  };
+}
+
+/** Changes the Mahnung written and not sent yet; refused (`noReminderDraft`) when there is none: a sent one is kept as sent. */
+export function updateReminderDraft(ws: Workspace, id: string, p: ReminderPatch): Reminder {
+  return updateInvoices(ws, (book) => {
+    const inv = findInvoice(book, id) ?? notFound('Rechnung');
+    const r = inv.status === 'issued' ? draftIn(book, inv) : undefined;
+    if (!r || inv.status !== 'issued') return noDraft();
+    const next = patched(ws, inv, liveInvoices(book), r, p);
+    replaceDoc(book, { ...inv, reminders: inv.reminders.map((x) => (x === r ? next : x)) });
+    return next;
+  });
+}
+
+/** Deletes the Mahnung written and not sent yet (also one a payment made moot), which takes its level back; a sent one is kept as sent (`noReminderDraft`). */
+export function deleteReminderDraft(ws: Workspace, id: string): Issued {
+  return updateInvoices(ws, (book) => {
+    const inv = findInvoice(book, id) ?? notFound('Rechnung');
+    const r = inv.status === 'issued' ? storedDraftOf(inv) : undefined;
+    if (!r || inv.status !== 'issued') return noDraft();
+    const next: Issued = { ...inv, reminders: inv.reminders.filter((x) => x !== r) };
+    replaceDoc(book, next);
+    return next;
+  });
+}
+
+/** What a Mahnlauf or an automatic round planned to send: refused (`levelChanged`) when, by the time it is its turn, another level is due or the draft came or went. */
+export interface PlannedReminder { level: number; draft: boolean }
+
+/**
+ * Sends the next Mahnung of an invoice (by e-mail with `deliver`, else downloaded) and keeps it as
+ * sent, with its PDF in the sent log: the draft as written, with what `req` still changes, or, without
+ * a draft, the next level written now (the Mahnlauf, the automatic reminder). `expect`: what the
+ * caller planned; two overlapping runs so never escalate one invoice twice. Print, mail and record run
+ * in one step of this process's queue; the record merges into the book as it is by then (a payment
+ * matched meanwhile stays). A failed e-mail records nothing. A mail that went out whose record then
+ * fails is noted on this computer (data/dunning-mailed.json), so it is never mailed again by itself,
+ * and refused with `recordFailed`.
+ */
+export function sendReminder(ws: Workspace, id: string, req: ReminderPatch & { to?: string; by?: Reminder['by']; expect?: PlannedReminder }, opts: { now?: string; printer?: Printer; deliver?: Deliver } = {}): Promise<{ reminder: Reminder; sent: SentDocument }> {
   return serial(async () => {
     const now = opts.now ?? new Date().toISOString();
     const book = loadInvoices(ws);
-    const inv = findInvoice(book, id) ?? notFound('Rechnung');
-    const date = req.date ?? now.slice(0, 10);
-    if (!isDate(date)) bad('date ist ein Datum JJJJ-MM-TT.');
-    if (req.fee !== undefined && (typeof req.fee !== 'number' || req.fee < 0)) bad('fee ist ein Betrag ab 0.');
-    const drafted = reminderDraft(inv, liveInvoices(book), date, req.fee);
-    const reminder = { ...drafted, ...(req.intro !== undefined ? { intro: req.intro } : {}), ...(req.closing !== undefined ? { closing: req.closing } : {}) };
-    const issued = inv as Issued;
-    const sent = await printOwnDocument(ws, issued, 'reminder', reminderSheet(book, issued, reminder, logoSrc(ws, issued.layout.logo)), req.to, now, opts.printer ?? chromium, opts.deliver, reminder.level);
+    const inv = remindable(book, id);
+    const invoices = liveInvoices(book);
+    const draft = draftIn(book, inv);
+    const { to, by, expect, ...patch } = req;
+    const base = draft ?? draftReminder(inv, invoices, req.date ?? now.slice(0, 10), dunningOf(ws), typeof req.fee === 'number' ? { fee: req.fee } : {});
+    if (expect && (base.level !== expect.level || !!draft !== expect.draft)) {
+      throw new InvoiceRuleError('levelChanged', `Rechnung ${inv.number}: inzwischen ist ${draft ? 'eine Mahnung im Entwurf' : `die Stufe ${base.level}`} dran, nicht die geplante Stufe ${expect.level}; nichts gesendet.`, undefined, { number: inv.number });
+    }
+    const reminder: Reminder = { ...patched(ws, inv, invoices, base, draft ? patch : { ...patch, date: undefined }), ...(by ? { by } : {}) };
+    const sent = await printOwnDocument(ws, inv, 'reminder', reminderSheet(book, inv, reminder, logoSrc(ws, inv.layout.logo)), to, now, opts.printer ?? chromium, opts.deliver, reminder);
     const done: Reminder = { ...reminder, documentId: sent.id };
-    return commit(ws, inv.id, inv, (fresh, at) => {
-      fresh.invoices[at] = { ...issued, reminders: [...issued.reminders, done] };
-      fresh.sent.push(sent);
-      return { reminder: done, sent };
-    });
+    try {
+      return updateInvoices(ws, (fresh) => {
+        const at = fresh.invoices.findIndex((i) => i.id === inv.id);
+        const cur = fresh.invoices[at];
+        if (!cur || cur.status !== 'issued') throw new Error(`${inv.number} ist nicht mehr ausgestellt`);
+        // Merged into the book as it is now: what changed meanwhile stays; the draft gives way to what was sent.
+        fresh.invoices[at] = { ...cur, reminders: [...cur.reminders.filter((r) => r.documentId), done] };
+        fresh.sent.push(sent);
+        return { reminder: done, sent };
+      });
+    } catch (e) {
+      if (sent.channel === 'email') noteMailed(ws, { invoiceId: inv.id, number: inv.number, level: reminder.level, to: sent.to, at: now });
+      throw new InvoiceRuleError('recordFailed', `${reminderTitle(reminder, inv.language)} zu ${inv.number} ging an ${sent.to}, ist aber nicht festgehalten: ${(e as Error).message}. Bitte im Versand prüfen; sie wird nicht noch einmal von selbst gesendet.`, undefined, { number: inv.number, to: sent.to });
+    }
   });
 }
+
+/** A Mahnung mailed whose record failed, by invoice and level: never mailed again by itself. */
+interface Mailed { invoiceId: string; number: string; level: number; to: string; at: string }
+const mailedFile = (ws: Pick<Workspace, 'paths'>) => join(ws.paths.root, 'data', 'dunning-mailed.json');
+function readMailed(ws: Pick<Workspace, 'paths'>): Mailed[] {
+  try { return existsSync(mailedFile(ws)) ? (JSON.parse(readFileSync(mailedFile(ws), 'utf8')) as { mailed: Mailed[] }).mailed : []; } catch { return []; }
+}
+function noteMailed(ws: Pick<Workspace, 'paths'>, m: Mailed): void {
+  try {
+    mkdirSync(dirname(mailedFile(ws)), { recursive: true });
+    writeAtomic(mailedFile(ws), `${JSON.stringify({ mailed: [...readMailed(ws), m] }, null, 2)}\n`);
+  } catch { /* the refusal still says it went */ }
+}
+
+/** Whether the firm's mail is set up: a Mahnung with an address then goes by e-mail. */
+export const canMail = (ws: Workspace): boolean => !!ws.outgoingMail;
+
+/** Sends a Mahnung's PDF to `to`: the level's mail texts, else the firm's, else the app's, through the company's mailbox. */
+export type MailReminder = (to: string, inv: Issued, r: Pick<Reminder, 'level' | 'title'>) => Deliver;
+export const mailReminder = (ws: Workspace): MailReminder => (to, inv, r) => ({ filename, pdf }) =>
+  sendMail(ws, checkMessage({ to, ...mailText(ws.invoicing, inv, { kind: 'reminder', level: r.level, title: reminderTitle(r, inv.language) }, ws.company.name) }), { filename, content: pdf });
+
+/** The Mahnlauf's list on `date` (spec 4.4.7): see src/invoices/dunning.ts dunningRun. */
+export function planDunningRun(ws: Workspace, date: string, only?: readonly string[]): RunPlan {
+  if (!isDate(date)) bad('date ist ein Datum JJJJ-MM-TT.');
+  const book = loadInvoices(ws);
+  return dunningRun(book, liveInvoices(book), dunningOf(ws), date, { ...(only ? { only } : {}), canMail: canMail(ws) });
+}
+
+/** Why a Mahnung did not go: the rule's or the mailbox's code, and its words. */
+export interface RunFailed { invoiceId: string; number: string; error: string; code: string }
+const failure = (e: unknown): Pick<RunFailed, 'error' | 'code'> => ({
+  error: (e as Error).message,
+  code: e instanceof InvoiceRuleError ? e.code : e instanceof MailError ? `mail.${e.code}` : 'failed',
+});
+
+export interface RunSent { invoiceId: string; number: string; title: string; channel: 'email' | 'download'; to: string; sentId: string }
+export interface RunOutcome { sent: RunSent[]; failed: RunFailed[]; leftOut: LeftOut[]; more: number }
+
+/**
+ * «Senden» of the Mahnlauf, after the one confirmation: each ticked invoice that the list on `date`
+ * still proposes gets its Mahnung, by e-mail where it has an address and the firm's mail is set up,
+ * else downloaded (its PDF in the sent log, channel «Download»). A written draft goes as it stands,
+ * with its own date. Each goes only at the level the list planned. One that fails is named with its
+ * code and the rest go on.
+ */
+export async function runDunning(ws: Workspace, req: { date: string; ids: readonly string[] }, opts: { now?: string; printer?: Printer; mail?: MailReminder } = {}): Promise<RunOutcome> {
+  const plan = planDunningRun(ws, req.date, req.ids);
+  const out: RunOutcome = { sent: [], failed: [], leftOut: plan.leftOut, more: plan.more };
+  const mail = opts.mail ?? mailReminder(ws);
+  const book = loadInvoices(ws);
+  for (const item of plan.items) {
+    try {
+      const inv = findInvoice(book, item.invoiceId) as Issued;
+      const deliver = item.to ? mail(item.to, inv, { level: item.level, title: item.title }) : undefined;
+      const r = await sendReminder(ws, item.invoiceId, { ...(item.draft ? {} : { date: req.date }), by: 'run', expect: { level: item.level, draft: !!item.draft }, ...(item.to ? {} : { to: 'download' }) }, { ...(opts.now ? { now: opts.now } : {}), ...(opts.printer ? { printer: opts.printer } : {}), ...(deliver ? { deliver } : {}) });
+      out.sent.push({ invoiceId: item.invoiceId, number: item.number, title: item.title, channel: r.sent.channel ?? 'download', to: r.sent.to, sentId: r.sent.id });
+    } catch (e) {
+      out.failed.push({ invoiceId: item.invoiceId, number: item.number, ...failure(e) });
+    }
+  }
+  return out;
+}
+
+/** Why an automatic Mahnung did not go: no address, mail not set up, the server refused, it went but was not recorded, or the invoice moved on meanwhile. */
+export type AutoFailure = 'noAddress' | 'noMail' | 'refused' | 'unrecorded' | 'changed';
+/**
+ * What one round of automatic reminders did: sent, failed with why, `examined` the invoices it took
+ * up and `deferred` those beyond its MAX_RUN (the next round's). `skipped`: nothing ran here, a
+ * Durchsicht copy or a read-only start (`copy`), automatic reminders switched on on another computer
+ * (`otherDevice`), or on none (`noDevice`).
+ */
+export interface AutoOutcome {
+  sent: RunSent[];
+  failed: Array<{ invoiceId: string; number: string; level: number; reason: AutoFailure; detail?: string; code?: string }>;
+  examined: string[]; deferred: string[];
+  skipped?: 'copy' | 'otherDevice' | 'noDevice';
+}
+
+/**
+ * The automatic reminders of `today` (spec 4.4.7): each level «N Tage nach Fälligkeit» sends by mail
+ * without a click, only on the computer that holds the books (decision 7.4): the one the levels were
+ * switched to automatic on (`dunning.device`), never in a Durchsicht copy or a read-only start. Each
+ * level once: the next round finds the level after it. At most MAX_RUN a round, the rest the next.
+ * A Mahnung that cannot go (no address, no mail set up, refused) is a failure the caller makes a task
+ * of; nothing is recorded for it, so the next round tries again.
+ */
+export async function autoReminders(ws: Workspace, opts: { today?: string; now?: string; printer?: Printer; mail?: MailReminder } = {}): Promise<AutoOutcome> {
+  const none = (skipped?: AutoOutcome['skipped']): AutoOutcome => ({ sent: [], failed: [], examined: [], deferred: [], ...(skipped ? { skipped } : {}) });
+  if (!holdsTheBooks(ws)) return none('copy');
+  const dunning = dunningOf(ws);
+  if (!dunning.levels.some((l) => l.auto)) return none();
+  if (!dunning.device) return none('noDevice');
+  if (dunning.device.id !== thisDevice(ws).id) return none('otherDevice');
+  const now = opts.now ?? new Date().toISOString();
+  const today = opts.today ?? now.slice(0, 10);
+  const book = loadInvoices(ws);
+  const due = autoDue(book, liveInvoices(book), dunning, today, new Set(readMailed(ws).map((m) => levelKey(m.invoiceId, m.level))));
+  const take = due.slice(0, MAX_RUN);
+  const out: AutoOutcome = { sent: [], failed: [], examined: take.map((i) => i.id), deferred: due.slice(MAX_RUN).map((i) => i.id) };
+  const mail = opts.mail ?? mailReminder(ws);
+  for (const inv of take) {
+    const { level, def } = nextLevel(inv, dunning);
+    const to = reminderAddress(book, inv);
+    if (!to) { out.failed.push({ invoiceId: inv.id, number: inv.number, level, reason: 'noAddress' }); continue; }
+    if (!canMail(ws)) { out.failed.push({ invoiceId: inv.id, number: inv.number, level, reason: 'noMail' }); continue; }
+    try {
+      const r = await sendReminder(ws, inv.id, { date: today, by: 'auto', expect: { level, draft: false } }, { now, ...(opts.printer ? { printer: opts.printer } : {}), deliver: mail(to, inv, { level, title: levelTitle(def, inv.language) }) });
+      out.sent.push({ invoiceId: inv.id, number: inv.number, title: reminderTitle(r.reminder, inv.language), channel: 'email', to: r.sent.to, sentId: r.sent.id });
+    } catch (e) {
+      const code = failure(e).code;
+      // Another round sent this level meanwhile, or the invoice was paid: nothing to do, and no task.
+      if (code === 'levelChanged' || code === 'nothingOpen' || code === 'cancelled') continue;
+      out.failed.push({ invoiceId: inv.id, number: inv.number, level, reason: code === 'recordFailed' ? 'unrecorded' : 'refused', detail: (e as Error).message, code });
+    }
+  }
+  return out;
+}
+
+/** The device that holds the books: not a Durchsicht copy of someone else's, not a read-only start (decision 7.4). */
+export const holdsTheBooks = (ws: Pick<Workspace, 'paths'>): boolean => !isDurchsicht(ws.paths.root) && process.env.READONLY !== '1';
 
 export function addComment(ws: Workspace, id: string, text: string, author: string, now = new Date().toISOString()): Comment {
   if (!text.trim()) bad('Der Kommentar ist leer.');
@@ -831,7 +1068,7 @@ export async function previewHtml(ws: Workspace, id: string, opts: { reminder?: 
   const inv = findInvoice(book, id) ?? notFound('Rechnung');
   const logo = logoSrc(ws, inv.status === 'issued' ? inv.layout.logo : ws.invoicing?.layout.logo);
   const sheet = opts.reminder && inv.status === 'issued'
-    ? reminderSheet(book, inv, reminderDraft(inv, liveInvoices(book), opts.reminder.date, opts.reminder.fee), logo)
+    ? reminderSheet(book, inv, draftIn(book, inv) ?? draftReminder(inv, liveInvoices(book), opts.reminder.date, dunningOf(ws), opts.reminder.fee !== undefined ? { fee: opts.reminder.fee } : {}), logo)
     : sheetOf(invoicingContext(ws), book, inv, logo);
   return (opts.printer ?? chromium).html(sheet);
 }
@@ -859,6 +1096,7 @@ export function paymentContext(ws: Workspace): PaymentContext | undefined {
     bankAccounts: ws.bankAccounts,
     revenueAccount: s.revenueAccount,
     ...(s.feeAccount ? { feeAccount: s.feeAccount } : {}),
+    interestAccount: interestAccount(s),
     ...(writeOffAccounts(s) ? { writeOffAccount: writeOffAccounts(s) } : {}),
     ensureAccount: (number) => {
       if (accountName(ws, number) !== undefined) return;

@@ -16,6 +16,7 @@ import {
 import { isQrIban, referenceTooLong } from '../providers/qr-bill/reference.js';
 import { DEFAULT_NUMBERING, checkNumbering, type Numbering } from './numbering.js';
 import { readDimensions, type Dimension } from '../books/tags.js';
+import { readDunning } from './dunning.js';
 
 const PROFILE_KEYS = Object.keys(QUESTIONS).filter((k) => k !== 'legalForm' && !(VAT_QUESTIONS as readonly string[]).includes(k)) as ProfileKey[];
 
@@ -217,6 +218,7 @@ function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: 
     ...(raw.defaultTerms === undefined ? {} : { defaultTerms: String(raw.defaultTerms) }),
     ...(isMap(wo) ? { writeOffAccount: { skonto: account(wo.skonto, 'invoicing.writeOffAccount.skonto'), loss: account(wo.loss, 'invoicing.writeOffAccount.loss') } } : {}),
     shortfallLimit: limit as number,
+    dunning: readDunning(raw.dunning, fail),
   };
 }
 

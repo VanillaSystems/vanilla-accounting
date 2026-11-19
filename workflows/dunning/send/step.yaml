@@ -1,0 +1,5 @@
+label: {"de": "Fällige automatische Mahnungen senden", "en": "Send the automatic reminders due", "fr": "Envoyer les rappels automatiques dus", "it": "Inviare i solleciti automatici dovuti"}
+uses: invoices.remind
+effects: ["runs.close"]
+emits: ["sent", "more", "limit", "invoices", "noaddress", "refused", "check"]
+outcomes: {"sent": "done", "none": "done", "failed": "fix"}

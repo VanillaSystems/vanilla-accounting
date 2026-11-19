@@ -15,7 +15,8 @@ import { I } from '../receipts/icons.js';
 import type { AreaProps } from '../index.js';
 import { invoicesNow, useInvoices } from './data.js';
 import { byRouteId, townOf } from './model.js';
-import { setUi, useUi, type ReminderEdit } from './state.js';
+import { setUi, useUi } from './state.js';
+import { DunningDialog } from './dunning.js';
 import { api } from '../../lib/api.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { mailText, type MailDocument } from '../../../invoices/documents.js';
@@ -42,6 +43,7 @@ export function Dialogs(props: Props) {
   if (s.dialog.kind === 'bulk-pdf') return <BulkDialogs d={d} nav={props.nav} ids={s.dialog.ids} kind="bulk-pdf" />;
   if (!props.canEdit) return null;
   if (s.dialog.kind === 'bulk-send') return <BulkDialogs d={d} nav={props.nav} ids={s.dialog.ids} kind="bulk-send" />;
+  if (s.dialog.kind === 'dunning') return <DunningDialog d={d} nav={props.nav} {...(s.dialog.ids ? { ids: s.dialog.ids } : {})} />;
   const inv = byRouteId(d.invoices, props.route.view === 'contacts' || props.route.view === 'sent' ? undefined : props.route.id);
   switch (s.dialog.kind) {
     case 'new': return <NewInvoice {...props} contacts={d.contacts.filter((c) => !c.archived)} doc={s.dialog.doc ?? 'invoice'} />;
@@ -146,24 +148,23 @@ function MailFields({ mail, value, onChange, nav }: { mail: ReturnType<typeof us
  * Senden: the issued invoice with its stored PDF in view, or a reminder, by e-mail with the PDF attached, or saved as
  * a download. Right after «Ausstellen» (`issued`) it says so and «Später» closes it.
  */
-function SendDialog({ inv, nav, reminder, issued }: Props & { inv: Issued; reminder?: Omit<ReminderEdit, 'invoiceId'> & { level: number }; issued?: true }) {
-  const mail = useMail(inv, reminder ? { kind: 'reminder', level: reminder.level } : { kind: 'invoice' });
+function SendDialog({ inv, nav, reminder, issued }: Props & { inv: Issued; reminder?: { level: number; title: string }; issued?: true }) {
+  const mail = useMail(inv, reminder ? { kind: 'reminder', level: reminder.level, title: reminder.title } : { kind: 'invoice' });
   const [m, setM] = useState<MailMessage>();
   const [busy, setBusy] = useState(false);
   const value = m ?? mail.defaults;
   const go = async (email?: MailMessage) => {
     setBusy(true);
-    const { level: _, ...input } = reminder ?? { level: 0 };
-    const ok = reminder ? await sendReminder(nav, inv, input, email) : await send(nav, inv, email);
+    const ok = reminder ? await sendReminder(nav, inv, email) : await send(nav, inv, email);
     setBusy(false);
     if (!ok) return;
     close();
-    if (reminder) setUi({ reminder: null, preview: false });
+    if (reminder) setUi({ preview: false });
   };
   const credit = inv.kind === 'credit-note';
   // An Angebot, Auftrag or Lieferschein names its own kind.
   const other = inv.kind !== 'invoice' && !credit ? t(`invoices.docKind.${inv.kind}`) : undefined;
-  const label = reminder ? t('invoices.sendReminder', { level: reminder.level })
+  const label = reminder ? t('invoices.sendReminder', { title: reminder.title })
     : other ? t(issued ? 'invoices.docIssued' : 'invoices.sendTitleDoc', { kind: other, number: inv.number })
     : issued ? t(credit ? 'invoices.creditIssued' : 'invoices.issued', { number: inv.number })
     : t(credit ? 'invoices.sendTitleCredit' : 'invoices.sendTitle', { number: inv.number });
@@ -180,7 +181,7 @@ function SendDialog({ inv, nav, reminder, issued }: Props & { inv: Issued; remin
         {!reminder && <div className="isendpdf paper real"><Paper src={issuedPdfUrl(inv.number)} maxWidth={560} whole /></div>}
         {issued && <p className="m ivhint">{t('invoices.issuedNext')}</p>}
         <MailFields mail={mail} value={value} onChange={setM} nav={nav} />
-        <p className="m ivhint">{t('invoices.mailAttached', { file: reminder ? t('invoices.reminderFile', { level: reminder.level }) : `${inv.number}.pdf` })}</p>
+        <p className="m ivhint">{t('invoices.mailAttached', { file: reminder ? t('invoices.reminderFile', { title: reminder.title }) : `${inv.number}.pdf` })}</p>
       </div>
     </Frame>
   );

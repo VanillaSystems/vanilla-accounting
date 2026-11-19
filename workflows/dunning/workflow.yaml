@@ -1,0 +1,10 @@
+label: {"de": "Automatisch mahnen", "en": "Send automatic reminders", "fr": "Envoyer les rappels automatiques", "it": "Inviare i solleciti automatici"}
+desc: {"de": "Sendet jede Mahnstufe, die unter Firma › Rechnungslayout › Mahnwesen «automatisch» ist, am Tag «N Tage nach Fälligkeit» per E-Mail, nur auf dem Computer, auf dem sie eingeschaltet wurden. Was nicht gesendet werden kann, wird eine Aufgabe.", "en": "Sends each Mahnstufe set to «automatic» under Firma › Rechnungslayout › Mahnwesen by e-mail on its day «N days after due», only on the device that holds the books. What cannot be sent becomes a task.", "fr": "Envoie par e-mail chaque niveau de rappel réglé sur « automatique » sous Firma › Rechnungslayout › Mahnwesen, le jour « N jours après l’échéance », seulement sur l’appareil qui tient les livres. Ce qui ne peut pas partir devient une tâche.", "it": "Invia per e-mail ogni livello di sollecito impostato su «automatico» in Firma › Rechnungslayout › Mahnwesen, il giorno «N giorni dopo la scadenza», solo sul dispositivo che tiene i libri. Ciò che non può partire diventa un compito."}
+phase: book
+cadence: {"de": "stündlich", "en": "hourly", "fr": "toutes les heures", "it": "ogni ora"}
+for: company
+triggers:
+  - schedule: {"cron": "5 * * * *"}
+emits: []
+start: send
+steps: ["send", "fix"]

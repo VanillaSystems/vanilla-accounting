@@ -13,7 +13,8 @@
  * A books step never changes a record dated on or before closedThrough: the seals of the filed
  * quarters (src/books/seal.ts) are checked after it and refuse books it changed.
  */
-import { isMap, isSeq, type Document, type YAMLMap } from 'yaml';
+import { isMap, isSeq, type Document, type YAMLMap, type YAMLSeq } from 'yaml';
+import { LEGACY_DUNNING } from './dunning.js';
 import { roleBefore } from './banks.js';
 import { LEGACY_FORMAT } from './numbering.js';
 
@@ -90,8 +91,16 @@ export const BOOKS_SCHEMA = 11;
  * of schema 5 would number by its fixed series and drop the formats on its next save, so it must refuse.
  * `invoicing.prices` may name the new kinds too, and `invoicing.layout.show.articleCode` (slice G2) the
  * Artikel code on paper. Further phase-2 settings ride on this step until it is released.
+ * 7: the Mahnwesen of invoicing phase 3 (docs/specs/invoicing.md 4.4.7): `invoicing.dunning`, `{ levels: [{ name,
+ * days, fee?, texts?, auto?: { afterDays } }], interest?: { rate, account? } }`. A manifest without it takes a new
+ * firm's three levels (Zahlungserinnerung, 1. Mahnung, 2. Mahnung), so the step writes what every firm had before
+ * into each manifest with an `invoicing:` section: «1. Mahnung» to «3. Mahnung», with the words each printed in
+ * fr, it and en, 10 days to pay, no fee of its own (the person names one per Mahnung, as before), nothing
+ * automatic, no interest (src/invoices/dunning.ts LEGACY_DUNNING). No Mahnung sent changes. An app of schema 6
+ * would mahn by its three fixed levels and drop the list on its next save, so it must refuse. Further phase-3
+ * settings ride on this step until it is released.
  */
-export const WORKSPACE_SCHEMA = 6;
+export const WORKSPACE_SCHEMA = 7;
 /**
  * 2: a line may be priced with the VAT in it (`InvoiceLine.vatIncluded`, a credit note of «500 VAT
  * included»). An app of schema 1 would read that price as net and add the VAT to it, so it must refuse.
@@ -114,8 +123,15 @@ export const WORKSPACE_SCHEMA = 6;
  *    Also in 4 (slice G2): `articles` (Artikel), the position kinds `article` (`articleId`, `code`) and
  *    `group`, a position's `inGroup`. A file of schema 3 holds none: the step adds nothing for them,
  *    and a book read without `articles` has an empty list (store.ts emptyInvoiceBook).
+ * 5: invoicing phase 3 (docs/specs/invoicing.md 4.3). A file of schema 4 holds none of its fields: the
+ *    step adds nothing.
+ *    Also in 5 (slice I, Mahnwesen): a Mahnung without `documentId` is a draft (written, not sent, its
+ *    fee and interest not charged yet); `Reminder.title` (its level's title as printed), `interest`
+ *    (default interest `{ rate, from, to, days, amount }`) and `by` (`auto`, `run`); `payments[].interest`
+ *    (the part of a payment that paid default interest). An app of schema 4 would count a draft's fee
+ *    as charged and print every Mahnung as «n. Mahnung», so it must refuse.
  */
-export const INVOICES_SCHEMA = 4;
+export const INVOICES_SCHEMA = 5;
 /** 1: payroll.json starts with dated histories (docs/specs/domain-model.md §5.7), so it needs no step yet. */
 export const PAYROLL_SCHEMA = 1;
 export const PAYROLL_MIGRATIONS: Ladder<Record<string, unknown>> = {};
@@ -176,6 +192,15 @@ export const MANIFEST_MIGRATIONS: Ladder<Document> = {
     inv.set('numbering', numbering);
     return doc;
   },
+  // An invoicing section keeps the three Mahnungen of before (absent would mean a new firm's levels).
+  6: (doc) => {
+    const inv = doc.get('invoicing');
+    if (!isMap(inv) || inv.has('dunning')) return doc;
+    const levels = doc.createNode(LEGACY_DUNNING.levels.map((l) => ({ name: l.name, days: l.days, ...(l.texts ? { texts: l.texts } : {}) }))) as YAMLSeq;
+    for (const item of levels.items) for (const texts of [(item as YAMLMap).get('texts')]) if (isMap(texts)) for (const p of texts.items) (p.value as YAMLMap).flow = true;
+    inv.set('dunning', doc.createNode({ levels }));
+    return doc;
+  },
 };
 
 /** The manifest document named at the current schema: its `schema:` set where it stands (its comments with it), else added as the first key. */
@@ -196,6 +221,8 @@ export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {
   2: (doc) => ({ ...doc, invoices: Array.isArray(doc.invoices) ? doc.invoices.map((d) => unitsOfIssued(pricesOfDocument(d))) : doc.invoices }),
   // No document is of a phase-2 kind before: nothing to add for them. Each customer becomes a firm contact; the documents stay byte for byte.
   3: (doc) => contactsOfCustomers(doc),
+  // No Mahnung is a draft and none names a title, interest or how it went before; the number makes an older app refuse the file.
+  4: (doc) => doc,
 };
 
 /**

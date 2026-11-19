@@ -23,6 +23,12 @@ exemptions:
 # Erlösminderungen, a loss on the Verluste aus Forderungen of the KMU chart (accounts.yaml).
 writeOff: { skonto: "3800", loss: "3805" }
 
+# Default interest (Verzugszins) a Mahnung may charge once the firm switches it on (Firma ›
+# Rechnungslayout › Mahnwesen): 5 % a year unless more was agreed (OR Art. 104 Abs. 1), from the due date;
+# booked when paid, without VAT (no consideration for a supply, MWSTG Art. 18 Abs. 2 lit. i), on the
+# Finanzertrag of the KMU chart.
+interest: { rate: 5, account: "6950" }
+
 # The countries of the VAT territory (Art. 3 MWSTG: Switzerland and Liechtenstein), by the first
 # two letters of an IBAN: a customer payment in CHF from such an IBAN is proposed as a domestic
 # sale at the normal rate, any other as an export (src/accounting/sales-without-vat.ts).

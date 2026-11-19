@@ -37,7 +37,8 @@ import type { ImportChoice, ImportMapping, ImportPreview } from '../../invoices/
 import type { ArticleImportPreview, ArticleMapping } from '../../invoices/article-import.js';
 import type { Article, ArticleFields, Comment, Contact, ContactFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, WriteOff, WriteOffReason } from '../../invoices/model.js';
 import type { AllocationPart, AllocationView, PaymentProposal } from '../../invoices/payments.js';
-import type { DraftPatch } from '../../invoices/service.js';
+import type { DraftPatch, ReminderPatch, RunOutcome } from '../../invoices/service.js';
+import type { RunPlan } from '../../invoices/dunning.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
 import type { AccountChangePlan } from '../../invoices/revise.js';
 
@@ -384,6 +385,7 @@ export function errorText(e: unknown): string {
     case 'qrIbanNotChf': return t('error.qrIbanNotChf', b.params);
     case 'unitId': case 'unitTwice': case 'unitInUse': return t(`error.${b.code}`, { id: b.params.id });
     case 'numberFormat': return numberFormatText(b.params.refusal, b.params.kind, b.params.format);
+    case 'dunningSetting': return (t as (key: string, vars: Record<string, string | number>) => string)(`error.dunningSetting.${b.params.rule}`, { where: b.params.where, max: b.params.max });
     case 'unitWord': return t('error.unitWord', { id: b.params.id, language: b.params.language.toUpperCase() });
     case 'ibanOnInvoices': return t('error.ibanOnInvoices', b.params);
     case 'unknownCustomer': return t('error.unknownCustomer');
@@ -496,7 +498,7 @@ export type ContactInput = { [K in keyof ContactFields]?: ContactFields[K] | nul
 export type ArticleInput = { [K in keyof ArticleFields]?: ArticleFields[K] | null };
 export type DraftChange = { [K in keyof DraftPatch]?: DraftPatch[K] | null };
 export interface CreditInput { reason: string; amount?: number; settlement?: 'refund' | 'offset' }
-export interface ReminderInput { date?: string; fee?: number; intro?: string; closing?: string; to?: string; email?: MailMessage }
+export type ReminderInput = ReminderPatch & { to?: string; email?: MailMessage };
 
 /** Raw bytes to a route that takes a file. */
 async function upload<T>(path: string, body: Blob, type: string): Promise<T> {
@@ -885,9 +887,18 @@ export const api = {
   accountsPlan: (id: string, input: AccountsInput) => request<AccountChangePlan>('POST', `/api/invoices/${id}/accounts/plan`, input),
   changeAccounts: (id: string, input: AccountsInput) => request<AccountChangePlan>('POST', `/api/invoices/${id}/accounts`, input),
   sendReminder: (id: string, input: ReminderInput) => request<{ reminder: Reminder; sent: SentDocument }>('POST', `/api/invoices/${id}/reminders`, input),
+  /** «Mahnen» (spec 4.4.7): the next Mahnung written and kept as a draft; changed, or deleted (its level back). */
+  draftReminder: (id: string, input: { date?: string } = {}) => request<Reminder>('POST', `/api/invoices/${id}/reminders/draft`, input),
+  editReminder: (id: string, input: ReminderPatch) => request<Reminder>('PATCH', `/api/invoices/${id}/reminders/draft`, input),
+  deleteReminder: (id: string) => request<Issued>('DELETE', `/api/invoices/${id}/reminders/draft`),
+  /** The Mahnlauf's list on a date (the ticked rows only, with `ids`), and its «Senden». */
+  dunningPlan: (date: string, ids?: readonly string[]) => request<RunPlan>('GET', `/api/invoices/dunning/run?date=${date}${ids?.length ? `&ids=${ids.map(encodeURIComponent).join(',')}` : ''}`),
+  /** This computer, as the automatic reminders name the one they run on. */
+  dunningDevice: () => request<{ here: { id: string; name: string } }>('GET', '/api/invoices/dunning/device'),
+  runDunning: (date: string, ids: readonly string[]) => request<RunOutcome>('POST', '/api/invoices/dunning/run', { date, ids }),
   addComment: (id: string, text: string) => request<Comment>('POST', `/api/invoices/${id}/comments`, { text }),
   /** Links a payment to an invoice; `booked` false when a person's booking of the payment stays as the revenue (r9c-3). */
-  confirmPayment: (id: string, transactionRef: string) => request<{ paid: Array<{ transactionRef: string; number: string; amount: number; fee: number; booked: boolean }> }>('POST', `/api/invoices/${id}/payments`, { transactionRef }),
+  confirmPayment: (id: string, transactionRef: string) => request<{ paid: Array<{ transactionRef: string; number: string; amount: number; fee: number; interest: number; booked: boolean }> }>('POST', `/api/invoices/${id}/payments`, { transactionRef }),
   /** «Lösen» (r10c-3): the payment leaves the invoice, the link's bookings go, what the link replaced is back. */
   releasePayment: (id: string, transactionRef: string) => request<PaymentReleased>('DELETE', `/api/invoices/${id}/payments/${encodeURIComponent(transactionRef)}`),
   /** The PDF as issued, or a sent reminder or notice as sent: the file's path under the workspace is its URL. */

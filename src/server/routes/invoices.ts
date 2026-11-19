@@ -13,7 +13,7 @@ import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { InvoiceRuleError, liveDocuments, liveInvoices, type CreditRequest } from '../../invoices/rules.js';
 import {
   addArticles, createArticle, liveArticles, removeArticle, updateArticle,
-  addComment, answerQuote, backToDraft, cancelInvoice, changeAccounts, convertDocument, createContact, addContacts, createCreditNote, createDraft, draftReminder, fileReceipts, findInvoice, issueInvoice, issuedPdf,
+  addComment, answerQuote, backToDraft, cancelInvoice, changeAccounts, convertDocument, createContact, addContacts, createCreditNote, createDraft, createReminderDraft, deleteReminderDraft, planDunningRun, previewReminder, runDunning, updateReminderDraft, fileReceipts, findInvoice, issueInvoice, issuedPdf,
   missingOf, parseDraftPatch, paymentContext, previewHtml, recordSend, removeContact, removeDraft, reopenDocument, replacedPdf, sendReminder, sentPdf, updateContact, updateDraft, viewOf,
 } from '../../invoices/service.js';
 import { liveContacts, payerIbans, proposeBusiness } from '../../invoices/contacts.js';
@@ -42,6 +42,7 @@ import type { Books } from '../../books/store.js';
 import { recordReplaced, takeReplaced } from '../link-history.js';
 import { bookAgain } from './automation.js';
 import { checkMessage, sendMail } from '../../invoices/mail.js';
+import { thisDevice } from '../../workspace/device.js';
 import type { Deliver } from '../../invoices/service.js';
 
 export const router = Router();
@@ -103,7 +104,18 @@ router.get('/api/invoices/:id/preview', async (req, res) => {
 
 router.get('/api/invoices/:id/reminder', (req, res) => {
   const fee = req.query.fee === undefined ? undefined : Number(req.query.fee);
-  res.json(draftReminder(WS, req.params.id, String(req.query.date ?? today()), fee));
+  res.json(previewReminder(WS, req.params.id, String(req.query.date ?? today()), fee));
+});
+
+/** This computer, as Firma › Mahnwesen names the one the automatic reminders run on. */
+router.get('/api/invoices/dunning/device', (_req, res) => {
+  res.json({ here: thisDevice(WS) });
+});
+
+/** The Mahnlauf's list (spec 4.4.7): `?date=` the reference date, `&ids=a,b` the rows ticked in the table. */
+router.get('/api/invoices/dunning/run', (req, res) => {
+  const ids = typeof req.query.ids === 'string' && req.query.ids ? req.query.ids.split(',') : undefined;
+  res.json(planDunningRun(WS, String(req.query.date ?? today()), ids));
 });
 
 router.get('/api/contacts', (_req, res) => {
@@ -343,11 +355,37 @@ router.post('/api/invoices/:id/credit-note', (req, res) => {
   res.json(createCreditNote(WS, req.params.id, credit));
 });
 
+/** A Mahnung's changes in a body: null takes the fee or the interest off. */
+const reminderPatch = (b: Record<string, unknown>) => ({
+  date: optText(b, 'date'), dueDate: optText(b, 'dueDate'), title: optText(b, 'title'), intro: optText(b, 'intro'), closing: optText(b, 'closing'),
+  ...(b.fee === null ? { fee: null } : { fee: optNumber(b, 'fee') }), ...(b.interest === null ? { interest: null } : { interest: optNumber(b, 'interest') }),
+});
+
+/** Sends the Mahnung: the draft as written (with what the body still changes), else the next level written now. */
 router.post('/api/invoices/:id/reminders', async (req, res) => {
   const b = body(req);
-  res.json(await sendReminder(WS, req.params.id, {
-    date: optText(b, 'date'), fee: optNumber(b, 'fee'), intro: optText(b, 'intro'), closing: optText(b, 'closing'), to: optText(b, 'to'),
-  }, { deliver: delivery(b) }));
+  res.json(await sendReminder(WS, req.params.id, { ...reminderPatch(b), to: optText(b, 'to') }, { deliver: delivery(b) }));
+});
+
+/** «Mahnen»: the next Mahnung written and kept as a draft until it is sent or deleted. */
+router.post('/api/invoices/:id/reminders/draft', (req, res) => {
+  const b = body(req);
+  res.json(createReminderDraft(WS, req.params.id, { date: optText(b, 'date'), fee: optNumber(b, 'fee') }));
+});
+router.patch('/api/invoices/:id/reminders/draft', (req, res) => {
+  res.json(updateReminderDraft(WS, req.params.id, reminderPatch(body(req))));
+});
+/** Deletes the unsent Mahnung, which takes its level back; a sent one is kept as sent. */
+router.delete('/api/invoices/:id/reminders/draft', (req, res) => {
+  res.json(deleteReminderDraft(WS, req.params.id));
+});
+
+/** «Senden» of the Mahnlauf, after its one confirmation: `{ date, ids }`. */
+router.post('/api/invoices/dunning/run', async (req, res) => {
+  const b = body(req);
+  const date = optText(b, 'date') ?? today();
+  if (!Array.isArray(b.ids) || !b.ids.every((x) => typeof x === 'string')) throw new RequestError(400, 'ids: die Rechnungen, die gemahnt werden.');
+  res.json(await runDunning(WS, { date, ids: b.ids as string[] }));
 });
 
 router.post('/api/invoices/:id/comments', (req, res) => {

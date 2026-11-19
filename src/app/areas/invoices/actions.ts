@@ -5,6 +5,8 @@
 import { isItem, issuedPdfUrl, sentPdfUrl, type Contact, type DocumentKind, type Draft, type Invoice, type InvoiceLine, type Issued, type WriteOff, type WriteOffReason } from '../../../invoices/model.js';
 import type { AllocationPart } from '../../../invoices/payments.js';
 import type { MailMessage } from '../../../invoices/mail.js';
+import type { ReminderPatch } from '../../../invoices/service.js';
+import { reminderTitle } from '../../../invoices/texts.js';
 import { api, errorText, type AccountsInput, type ContactInput, type CreditInput, type DraftChange } from '../../lib/api.js';
 import { lineDefaults } from '../../../invoices/contacts.js';
 import { t } from '../../i18n/index.js';
@@ -254,12 +256,38 @@ export async function creditNote(nav: Nav, inv: Issued, input: CreditInput): Pro
   return true;
 }
 
-export async function sendReminder(nav: Nav, inv: Issued, input: { fee?: number; intro?: string; closing?: string }, email?: MailMessage): Promise<boolean> {
-  const done = await run(nav, api.sendReminder(inv.id, { ...input, ...(email ? { email } : { to: 'download' }) }));
+/** Sends the Mahnung written as a draft, by e-mail or as a download (its PDF saved); kept as sent. */
+export async function sendReminder(nav: Nav, inv: Issued, email?: MailMessage): Promise<boolean> {
+  const done = await run(nav, api.sendReminder(inv.id, email ? { email } : { to: 'download' }));
   if (!done) return false;
   if (!email) download(sentPdfUrl(done.sent.id), `${done.sent.title}.pdf`);
   await reloadInvoices();
-  nav.toast(email ? t('invoices.reminderMailed', { level: done.reminder.level, number: inv.number, to: done.sent.to }) : t('invoices.reminderSent', { level: done.reminder.level, number: inv.number }));
+  const title = reminderTitle(done.reminder, inv.language);
+  nav.toast(email ? t('invoices.reminderMailed', { title, number: inv.number, to: done.sent.to }) : t('invoices.reminderSent', { title, number: inv.number }));
+  return true;
+}
+
+/** «Mahnen»: the next Mahnung written as a draft, shown on the sheet to edit before it is sent. */
+export async function remind(nav: Nav, inv: Issued): Promise<boolean> {
+  const r = await run(nav, api.draftReminder(inv.id, { date: localToday() }));
+  if (!r) return false;
+  await reloadInvoices();
+  setUi({ preview: false, sheet: 'reminder' });
+  return true;
+}
+
+/** A change to the Mahnung's draft (its texts on the sheet, its fee, interest, dates in the margin). */
+export async function editReminder(nav: Nav, inv: Issued, patch: ReminderPatch): Promise<boolean> {
+  if (!(await run(nav, api.editReminder(inv.id, patch)))) return false;
+  await reloadInvoices();
+  return true;
+}
+
+/** Deletes the unsent Mahnung: its level goes back. */
+export async function deleteReminder(nav: Nav, inv: Issued): Promise<boolean> {
+  if (!(await run(nav, api.deleteReminder(inv.id)))) return false;
+  await reloadInvoices();
+  nav.toast(t('invoices.reminderDeleted', { number: inv.number }));
   return true;
 }
 

@@ -5,9 +5,9 @@
  */
 import type { Company } from '../workspace/workspace.js';
 import { DEFAULT_LAYOUT, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type Issued, type Reminder, type Sender } from './model.js';
-import { addDays, openAmount, openFees, paidAmount, skontoOffer, termsFor, totals } from './rules.js';
+import { addDays, openAmount, openCharges, paidAmount, skontoOffer, termsFor, totals } from './rules.js';
 import type { SheetData } from './sheet.js';
-import { TEXTS, formatDate, kindTitle } from './texts.js';
+import { TEXTS, formatDate, kindTitle, reminderTitle } from './texts.js';
 import { recipientOf } from './contacts.js';
 
 export interface InvoicingContext { company: Company; settings: InvoicingSettings | undefined }
@@ -51,7 +51,7 @@ function creditInfo(book: InvoiceBook, c: InvoiceContent): SheetData['credit'] {
   return { number: target.number, date: target.date, gross: totals(target).gross, paid: paidAmount(target), ...(last ? { paidDate: last.date } : {}), ...(c.settlement ? { settlement: c.settlement } : {}) };
 }
 
-export type MailDocument = { kind: 'invoice' } | { kind: 'reminder'; level: number } | { kind: 'cancellation' };
+export type MailDocument = { kind: 'invoice' } | { kind: 'reminder'; level: number; title?: string } | { kind: 'cancellation' };
 
 /**
  * The subject and text of the e-mail that sends a document: the language's own texts
@@ -61,11 +61,13 @@ export function mailText(settings: InvoicingSettings | undefined, inv: Issued, d
   const L = TEXTS[inv.language];
   const own = settings?.texts[inv.language];
   const what = `${kindTitle(L, inv.kind, inv.printAs)} ${inv.number}`;
-  const document = doc.kind === 'reminder' ? `${L.reminder(doc.level)} · ${what}`
+  const document = doc.kind === 'reminder' ? `${doc.title ?? L.reminder(doc.level)} · ${what}`
     : doc.kind === 'cancellation' ? L.cancelNotice(inv.number, formatDate(inv.date, inv.language))
     : what;
   const fill = (s: string) => s.replaceAll('{document}', document).replaceAll('{company}', company);
-  return { subject: fill(own?.mailSubject ?? L.mailSubject), body: fill(own?.mailBody ?? L.mailBody) };
+  // A Mahnstufe's own mail texts come first (Firma › Rechnungslayout › Mahnwesen).
+  const level = doc.kind === 'reminder' ? settings?.dunning?.levels[doc.level - 1]?.texts?.[inv.language] : undefined;
+  return { subject: fill(level?.mailSubject || (own?.mailSubject ?? L.mailSubject)), body: fill(level?.mailBody || (own?.mailBody ?? L.mailBody)) };
 }
 
 /** The days a draft gives to pay: those of the terms it picks, else the customer's, else the firm's. */
@@ -145,20 +147,28 @@ export function issuedSheet(book: InvoiceBook, inv: Issued, logoSrc?: string): S
   };
 }
 
-/** A reminder: the invoice's lines and reference, what is still open with the fees, its own date, due date and texts. */
-export function reminderSheet(book: InvoiceBook, inv: Issued, reminder: Omit<Reminder, 'documentId'>, logoSrc?: string): SheetData {
-  const withThis = inv.reminders.some((r) => r.level === reminder.level && r.date === reminder.date) ? inv : { ...inv, reminders: [...inv.reminders, { ...reminder, documentId: '' }] };
+/**
+ * A reminder: the invoice's lines and reference, what is still open with the fees and default
+ * interest (this one's with those sent before), its own title, date, due date and texts.
+ */
+export function reminderSheet(book: InvoiceBook, inv: Issued, reminder: Reminder, logoSrc?: string): SheetData {
+  // As sent, or as it would be sent: a draft, or one not stored yet, counts with the Mahnungen sent before it.
+  const sent = inv.reminders.filter((r) => r.documentId);
+  const k = reminder.documentId ? sent.findIndex((r) => r.documentId === reminder.documentId) : -1;
+  const upTo = k >= 0 ? sent.slice(0, k + 1) : [...sent, { ...reminder, documentId: 'this' }];
+  const withThis: Issued = { ...inv, reminders: upTo };
   const open = openAmount(withThis, book.invoices);
-  const fee = openFees(withThis);
+  const charges = openCharges(withThis);
   const gross = totals(inv).gross;
+  const interest = charges.interest && reminder.interest ? { amount: charges.interest, rate: reminder.interest.rate, from: reminder.interest.from, days: reminder.interest.days } : undefined;
   return {
     ...issuedSheet(book, inv, logoSrc),
-    reminderLevel: reminder.level,
+    reminderTitle: reminderTitle(reminder, inv.language),
     date: reminder.date,
     dueDate: reminder.dueDate,
     intro: reminder.intro,
     closing: reminder.closing,
-    due: { paidSoFar: Math.round((gross - open) * 100) / 100, fee, open: Math.round((open + fee) * 100) / 100 },
+    due: { paidSoFar: Math.round((gross - open) * 100) / 100, fee: charges.fee, ...(interest ? { interest } : {}), open: Math.round((open + charges.fee + charges.interest) * 100) / 100 },
   };
 }
 

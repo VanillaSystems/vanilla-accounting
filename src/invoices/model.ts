@@ -438,6 +438,8 @@ export interface PaymentAllocation {
   amount: number;
   /** The part of the payment that paid reminder fees. */
   fee?: number;
+  /** The part of the payment that paid default interest (Verzugszins) a reminder charged. */
+  interest?: number;
   by: 'reference' | 'number' | 'confirmed';
   /**
    * `hand`: a Zahlungseingang a person entered on the invoice (cash at the door, another account):
@@ -473,16 +475,30 @@ export interface WriteOff {
 /** The payment terms an issued document printed (spec 4.12): its due date and its Skonto are read from them. */
 export interface IssuedTerms { id: string; name: string; days: number; skonto?: { percent: number; days: number }; text: string }
 
+/** Default interest a reminder charges: `rate` percent a year on what was open, from the printed due date `from` to the reminder's date `to`. */
+export interface ReminderInterest { rate: number; from: string; to: string; days: number; amount: number }
+
+/**
+ * A Mahnung of an invoice at a Mahnstufe (src/invoices/dunning.ts). Without `documentId` it is a
+ * draft (Entwurf): written, editable, not sent, and deleting it takes the level back; once sent it
+ * names the sent document that holds its PDF and is kept as sent.
+ */
 export interface Reminder {
   level: number;
+  /** The level's title as the paper prints it, in the invoice's language; absent on a reminder of before the levels: the app's word for the level. */
+  title?: string;
   date: string;
   dueDate: string;
   /** A reminder fee: damages for late payment, not a supply, so it carries no VAT. */
   fee?: number;
+  /** Default interest up to its date, printed as a position without VAT; it replaces what an earlier reminder charged. */
+  interest?: ReminderInterest;
   intro: string;
   closing: string;
-  /** The sent document that holds the reminder's PDF. */
-  documentId: string;
+  /** The sent document that holds the reminder's PDF; absent: a draft. */
+  documentId?: string;
+  /** Sent without a click by its level's automatic reminder (`auto`), or by a Mahnlauf (`run`); absent: from the invoice. */
+  by?: 'auto' | 'run';
 }
 
 export interface Issued extends Envelope, InvoiceContent {
@@ -618,7 +634,12 @@ export interface InvoicingSettings {
   writeOffAccount?: { skonto: string; loss: string };
   /** A payment short by at most this much (the books' currency) may be closed as fees; absent in the file: 5. */
   shortfallLimit: number;
+  /** Mahnstufen and default interest (src/invoices/dunning.ts); absent in the file: a new firm's three levels, no interest. */
+  dunning: DunningSettings;
 }
+
+export type { DunningLevel, DunningSettings, DunningTexts } from '../workspace/dunning.js';
+import type { DunningSettings } from '../workspace/dunning.js';
 
 /** Zahlungskondition: days to pay, an optional Skonto within fewer days, and a text for the paper. */
 export interface PaymentTerms {

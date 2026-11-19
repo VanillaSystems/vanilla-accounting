@@ -29,6 +29,7 @@ import { chargesVat, invoiceRates } from '../../../engines/index.js';
 import { AsyncButton } from '../../shell/AsyncButton.js';
 import { PaymentTermsSection } from './PaymentTerms.js';
 import { NumberingSection } from './Numbering.js';
+import { DunningSection } from './DunningSection.js';
 
 const LANGS: InvoiceLanguage[] = ['de', 'fr', 'it', 'en'];
 const ACCENTS: Array<[string, 'black' | 'blue' | 'green' | 'bordeaux' | 'ochre']> = [['#141a26', 'black'], ['#1d4ed8', 'blue'], ['#0f766e', 'green'], ['#9f1239', 'bordeaux'], ['#b45309', 'ochre']];
@@ -132,6 +133,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
           <label className="lkr"><span>{t('invoiceLayout.mailSubject')}</span><input name="mailSubject" defaultValue={texts.mailSubject} disabled={!canEdit} onBlur={(e) => saveText('mailSubject', e.target.value)} /></label>
           <label className="lkr top"><span>{t('invoiceLayout.mailBody')}</span><textarea name="mailBody" rows={6} defaultValue={texts.mailBody} disabled={!canEdit} onBlur={(e) => saveText('mailBody', e.target.value)} /></label>
         </div>
+        <DunningSection ws={ws} nav={nav} canEdit={canEdit} />
         <p className="m src-note">{t('invoiceLayout.note')}</p>
       </div>
       <div className="lkprevw">

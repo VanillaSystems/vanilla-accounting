@@ -2,6 +2,7 @@
  * The schema of the books (ledger.json) and of the manifest (src/workspace/schema.ts): old files read,
  * newer ones are refused, and the ladder runs forward, pure and once.
  */
+import { DEFAULT_DUNNING, LEGACY_DUNNING } from '../src/workspace/dunning.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { cpSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -288,22 +289,22 @@ test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defa
 });
 
 test('manifest schema 6 (invoicing phase 2, number series): a manifest of 5 with invoicing keeps today\'s one series of invoices and credit notes, npm run update writes it; one without invoicing gains nothing; a new firm numbers AN-, AU-, LS-, RE-, GS-; a format no reference holds is refused; an app of 5 refuses 6', async () => {
-  assert.equal(WORKSPACE_SCHEMA, 6);
+  assert.ok(WORKSPACE_SCHEMA >= 6);
   const dir = mkdtempSync(join(tmpdir(), 'manifest-6-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const path = workspaceAt(dir).paths.manifest;
   const current = readFileSync(path, 'utf8');
   // The demo as a manifest of 5 had it: no numbering.
-  const old = current.replace(/^schema: 6\n/m, 'schema: 5\n').replace(/^ {2}numbering:\n( {4}.*\n)+/m, '');
+  const old = current.replace(new RegExp(`^schema: ${WORKSPACE_SCHEMA}\n`, 'm'), 'schema: 5\n').replace(/^ {2}numbering:\n( {4}.*\n)+/m, '');
   assert.doesNotMatch(old, /numbering/);
   writeFileSync(path, old);
   const legacy = readManifest(path).invoicing!.numbering;
   assert.deepEqual([legacy.invoice, legacy['credit-note']], [{ format: '{JJJJ}-{NNN}', restartYearly: true }, { format: '{JJJJ}-{NNN}', restartYearly: true }], 'the old series, shared');
   assert.equal(legacy.quote.format, 'AN-{JJJJ}-{NNNNN}', 'a kind it never had takes the new default');
   const { done } = await upgradeWorkspace(workspaceAt(dir));
-  assert.deepEqual(done.filter((d) => d.file === path).map((d) => [d.from, d.to]), [[5, 6]]);
+  assert.deepEqual(done.filter((d) => d.file === path).map((d) => [d.from, d.to]), [[5, WORKSPACE_SCHEMA]]);
   const written = readFileSync(path, 'utf8');
-  assert.match(written, /^schema: 6\n/m);
+  assert.match(written, new RegExp(`^schema: ${WORKSPACE_SCHEMA}\n`, 'm'));
   assert.match(written, /^ {2}numbering:\n {4}invoice: \{ format: "\{JJJJ\}-\{NNN\}", restartYearly: true \}\n {4}credit-note: \{ format: "\{JJJJ\}-\{NNN\}", restartYearly: true \}\n/m);
   assert.deepEqual(readManifest(path).invoicing!.numbering, legacy, 'the written file reads as the migrated one');
 
@@ -332,6 +333,57 @@ test('manifest schema 6 (invoicing phase 2, number series): a manifest of 5 with
 function booksFiles(dir: string): string[] {
   return readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((f) => /books\/.*\.jsonl$/.test(f)).map((f) => join(dir, f)).sort();
 }
+
+test('manifest schema 7 (invoicing phase 3, Mahnwesen): a manifest of 6 with invoicing keeps the three Mahnungen of before, npm run update writes them; one without invoicing gains nothing; a new firm starts with Zahlungserinnerung, 1. and 2. Mahnung; a level list it cannot take is refused; an app of 6 refuses 7', async () => {
+  assert.ok(WORKSPACE_SCHEMA >= 7);
+  const dir = mkdtempSync(join(tmpdir(), 'manifest-7-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const path = workspaceAt(dir).paths.manifest;
+  const current = readFileSync(path, 'utf8');
+  const noDunning = (text: string) => text.replace(/^ {2}dunning:\n( {4}.*\n)+/m, '');
+  // The demo as a manifest of 6 had it: no dunning.
+  const old = noDunning(current.replace(new RegExp(`^schema: ${WORKSPACE_SCHEMA}\n`, 'm'), 'schema: 6\n'));
+  assert.doesNotMatch(old, /dunning/);
+  writeFileSync(path, old);
+  const legacy = readManifest(path).invoicing!.dunning;
+  assert.deepEqual(legacy, LEGACY_DUNNING);
+  assert.deepEqual(legacy.levels.map((l) => [l.name, l.days, l.fee, l.auto, l.texts?.fr?.title, l.texts?.en?.title]), [
+    ['1. Mahnung', 10, undefined, undefined, '1er rappel', 'Payment reminder'],
+    ['2. Mahnung', 10, undefined, undefined, '2e rappel', 'Second reminder'],
+    ['3. Mahnung', 10, undefined, undefined, '3e rappel', 'Final reminder'],
+  ], 'what every firm printed before, no fee of its own, nothing automatic');
+  assert.equal(legacy.interest, undefined, 'no default interest');
+  const { done } = await upgradeWorkspace(workspaceAt(dir));
+  assert.deepEqual(done.filter((d) => d.file === path).map((d) => [d.from, d.to]), [[6, WORKSPACE_SCHEMA]]);
+  const written = readFileSync(path, 'utf8');
+  assert.match(written, /^ {2}dunning:\n {4}levels:\n {6}- name: 1\. Mahnung\n {8}days: 10\n {8}texts:\n {10}fr: \{ title: 1er rappel \}\n/m);
+  assert.deepEqual(readManifest(path).invoicing!.dunning, legacy, 'the written file reads as the migrated one');
+
+  // No invoicing: nothing to keep, the step adds nothing.
+  writeFileSync(path, old.replace(/^invoicing:\n( {2}.*\n)+/m, ''));
+  await upgradeWorkspace(workspaceAt(dir));
+  assert.doesNotMatch(readFileSync(path, 'utf8'), /dunning/);
+
+  // A new firm (schema 7, no dunning): the three levels of spec 4.4.7, no fee, no interest.
+  writeFileSync(path, noDunning(current));
+  const fresh = readManifest(path).invoicing!.dunning;
+  assert.deepEqual(fresh, DEFAULT_DUNNING);
+  assert.deepEqual(fresh.levels.map((l) => [l.name, l.fee, l.texts?.fr?.title]), [['Zahlungserinnerung', undefined, 'Rappel de paiement'], ['1. Mahnung', undefined, '1er rappel'], ['2. Mahnung', undefined, '2e rappel']]);
+  // The demo's own: its 2. Mahnung charges 20.
+  writeFileSync(path, current);
+  assert.equal(readManifest(path).invoicing!.dunning.levels[2]!.fee, 20);
+  for (const [bad, msg] of [
+    ['  dunning: { levels: [] }', /dunning\.levels must list at least one level/],
+    ['  dunning: { levels: [{ name: X, days: -1 }] }', /dunning\.levels\[0\]\.days/],
+    ['  dunning: { levels: [{ name: X, days: 10, auto: { afterDays: x } }] }', /dunning\.levels\[0\]\.auto/],
+    ['  dunning: { levels: [{ name: X, days: 10, texts: { es: { title: Y } } }] }', /dunning\.levels\[0\]\.texts\.es/],
+    ['  dunning: { levels: [{ name: X, days: 10 }], interest: { rate: 50 } }', /dunning\.interest/],
+  ] as const) {
+    writeFileSync(path, noDunning(current).replace(/^invoicing:\n/m, `invoicing:\n${bad}\n`));
+    assert.throws(() => readManifest(path), (e: Error) => msg.test(e.message), msg.source);
+  }
+  assert.throws(() => climb(parseDocument(current), 7, 6, MANIFEST_MIGRATIONS, path, (d) => d.clone()), (e: Error) => e instanceof SchemaTooNewError);
+});
 
 test('books schema 11 (payroll): books of schema 10 load with their seals whole, the step adds nothing and a second run changes nothing, a save writes 11 with no record changed; a payroll check survives a save; an app of schema 10 refuses books of 11', () => {
   assert.equal(BOOKS_SCHEMA, 11);

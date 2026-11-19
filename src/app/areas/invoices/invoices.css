@@ -388,3 +388,33 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .ivacts button.dl { background: none; border: 0; padding: 0; cursor: pointer; }
 /* The Ausziffern table scrolls sideways in a narrow dialog (a phone) instead of spilling over its edge. */
 .allocwrap { overflow-x: auto; }
+
+/* the Mahnlauf: a wide dialog, its list scrolls inside it */
+.idlg.idunning { --w: min(1040px, 100vw - 32px); width: var(--w); top: 6vh; }
+.idunning .ivdunwrap { max-height: 52vh; overflow: auto; margin: 8px 0 10px; border-top: 1px solid var(--line); }
+.idunning .ivdun { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.idunning .ivdun th { position: sticky; top: 0; background: var(--bg); text-align: left; font-weight: 500; color: var(--muted); padding: 6px 6px; white-space: nowrap; }
+.idunning .ivdun td { padding: 6px 6px; border-top: 1px solid var(--line); vertical-align: top; }
+.idunning .ivdun .num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.idunning .ivdun td.mono, .idunning .ivdun td:nth-child(4), .idunning .ivdun td:nth-child(5) { white-space: nowrap; }
+.idunning .ivdun tfoot td { font-weight: 600; }
+.idunning .ivleft .l { display: block; }
+@media (max-width: 720px) {
+  .idunning .ivdun th:nth-child(9), .idunning .ivdun td:nth-child(9), .idunning .ivdun th:nth-child(8), .idunning .ivdun td:nth-child(8) { display: none; }
+}
+/* Firma › Mahnwesen: each level a block of two lines, the interest row */
+.lkdun { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.lkdun li { border-top: 1px solid var(--line); padding-top: 6px; display: grid; gap: 4px; }
+.lkdrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.lkdrow.sub { padding-left: 22px; color: var(--muted); }
+.lkdrow .lkdk { width: 12px; color: var(--muted); }
+.lkdrow input[name=name] { flex: 1 1 140px; min-width: 0; }
+.lkdrow input[name=days], .lkdrow input[name=fee], .lkdrow input[name=afterDays] { width: 52px; }
+.lkdrow input:not([type=checkbox]) { font: 12.5px var(--font-sans); padding: 3px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.lkdrow .lkauto { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lkdrow .lkacts { margin-left: auto; white-space: nowrap; display: inline-flex; gap: 10px; }
+.lkinterest { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.lkinterest input[name=rate] { width: 56px; font: 12.5px var(--font-sans); padding: 3px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.lkdunning { border-top: 1px solid var(--line); padding-top: 12px; }
+.idlg.idunning .ibody .lkr input[name=date] { width: auto; justify-self: start; }
+.idunning .ibody a { color: var(--accent); }

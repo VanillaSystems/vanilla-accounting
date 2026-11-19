@@ -2,7 +2,7 @@
  * The words printed on an invoice, in the invoice's language. These are document texts, not UI
  * texts: an invoice to a customer in Geneva is French whatever language the app speaks.
  */
-import { NET_TERMS, type DocumentKind, type Exemption, type InvoiceLanguage, type OWN_TEXTS } from './model.js';
+import { NET_TERMS, type DocumentKind, type Exemption, type InvoiceLanguage, type OWN_TEXTS, type Reminder } from './model.js';
 
 export interface InvoiceTexts {
   invoice: string; credit: string; draft: string; reminder: (level: number) => string;
@@ -16,7 +16,10 @@ export interface InvoiceTexts {
   intro: string; closing: (days: number) => string; creditClosing: string;
   /** The e-mail that sends a document; {document} and {company} are filled in. */
   mailSubject: string; mailBody: string;
-  reminderIntro: (level: number, no: string, date: string, due: string, previous?: string) => string; reminderClosing: string; fee: string; paidSoFar: string; openNow: string;
+  /** A Mahnung's intro by its place: the first level, or a later one that names the previous Mahnung; `days`: the level's days to pay. */
+  reminderIntro: (level: number, no: string, date: string, due: string, previous?: string, days?: number) => string; reminderClosing: string; fee: string; paidSoFar: string; openNow: string;
+  /** Default interest on a Mahnung: its rate, from the due date, for so many days. */
+  interest: (rate: string, from: string, days: number) => string; interestWord: string;
   ofInvoice: (no: string, date: string) => string; paidOn: (date: string) => string; creditLine: string;
   refund: (amount: string) => string; offset: (amount: string) => string; stillOpen: (no: string, amount: string) => string;
   stamp: string; cancelledOn: (date: string, reason: string) => string; cancelNotice: (no: string, date: string) => string;
@@ -46,10 +49,10 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     intro: 'Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:',
     mailSubject: '{document} · {company}', mailBody: 'Guten Tag\n\nIm Anhang finden Sie {document}.\n\nFreundliche Grüsse\n{company}',
     closing: (d) => `Zahlbar innert ${d} Tagen.\nFreundliche Grüsse`, creditClosing: 'Freundliche Grüsse',
-    reminderIntro: (lv, no, d, due, prev) => lv === 1
-      ? `Unsere Rechnung ${no} vom ${d} war am ${due} fällig. Bis heute haben wir keine Zahlung erhalten. Bitte überweisen Sie den offenen Betrag innert 10 Tagen.`
-      : `Trotz unserer Mahnung${prev ? ` vom ${prev}` : ''} ist die Rechnung ${no} vom ${d} noch offen. Bitte überweisen Sie den Betrag innert 10 Tagen.`,
-    reminderClosing: 'Falls Sie inzwischen bezahlt haben, betrachten Sie dieses Schreiben als gegenstandslos.\nFreundliche Grüsse', fee: 'Mahngebühr', paidSoFar: 'bereits bezahlt oder gutgeschrieben', openNow: 'Offener Betrag',
+    reminderIntro: (lv, no, d, due, prev, n = 10) => lv === 1
+      ? `Unsere Rechnung ${no} vom ${d} war am ${due} fällig. Bis heute haben wir keine Zahlung erhalten. Bitte überweisen Sie den offenen Betrag innert ${n} Tagen.`
+      : `Trotz unserer Mahnung${prev ? ` vom ${prev}` : ''} ist die Rechnung ${no} vom ${d} noch offen. Bitte überweisen Sie den Betrag innert ${n} Tagen.`,
+    reminderClosing: 'Falls Sie inzwischen bezahlt haben, betrachten Sie dieses Schreiben als gegenstandslos.\nFreundliche Grüsse', interest: (r, f, n) => `Verzugszins ${r} % ab ${f} (${n} Tage)`, interestWord: 'Verzugszins', fee: 'Mahngebühr', paidSoFar: 'bereits bezahlt oder gutgeschrieben', openNow: 'Offener Betrag',
     ofInvoice: (no, d) => `Rechnung ${no} vom ${d}`, paidOn: (d) => `bezahlt am ${d}`, creditLine: 'Gutschrift',
     refund: (a) => `Wir überweisen Ihnen ${a} auf Ihr Konto.`, offset: (a) => `Wir verrechnen ${a} mit Ihrer nächsten Rechnung.`,
     stillOpen: (no, a) => `Von Rechnung ${no} bleiben ${a} offen.`,
@@ -75,10 +78,10 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     intro: 'Nous vous remercions de votre mandat et vous facturons les prestations suivantes :',
     mailSubject: '{document} · {company}', mailBody: 'Bonjour\n\nVous trouverez en annexe {document}.\n\nMeilleures salutations\n{company}',
     closing: (d) => `Payable dans les ${d} jours.\nMeilleures salutations`, creditClosing: 'Meilleures salutations',
-    reminderIntro: (lv, no, d, due, prev) => lv === 1
-      ? `Notre facture ${no} du ${d} était payable le ${due}. À ce jour, nous n’avons reçu aucun paiement. Nous vous prions de régler le montant dans les 10 jours.`
-      : `Malgré notre rappel${prev ? ` du ${prev}` : ''}, la facture ${no} du ${d} reste impayée. Nous vous prions de régler le montant dans les 10 jours.`,
-    reminderClosing: 'Si vous avez entre-temps effectué le paiement, veuillez ne pas tenir compte de ce courrier.\nMeilleures salutations', fee: 'Frais de rappel', paidSoFar: 'déjà payé ou crédité', openNow: 'Montant ouvert',
+    reminderIntro: (lv, no, d, due, prev, n = 10) => lv === 1
+      ? `Notre facture ${no} du ${d} était payable le ${due}. À ce jour, nous n’avons reçu aucun paiement. Nous vous prions de régler le montant dans les ${n} jours.`
+      : `Malgré notre rappel${prev ? ` du ${prev}` : ''}, la facture ${no} du ${d} reste impayée. Nous vous prions de régler le montant dans les ${n} jours.`,
+    reminderClosing: 'Si vous avez entre-temps effectué le paiement, veuillez ne pas tenir compte de ce courrier.\nMeilleures salutations', interest: (r, f, n) => `Intérêts moratoires ${r} % dès le ${f} (${n} jours)`, interestWord: 'Intérêts moratoires', fee: 'Frais de rappel', paidSoFar: 'déjà payé ou crédité', openNow: 'Montant ouvert',
     ofInvoice: (no, d) => `Facture ${no} du ${d}`, paidOn: (d) => `payée le ${d}`, creditLine: 'Note de crédit',
     refund: (a) => `Nous vous versons ${a} sur votre compte.`, offset: (a) => `Nous déduirons ${a} de votre prochaine facture.`,
     stillOpen: (no, a) => `Il reste ${a} à payer sur la facture ${no}.`,
@@ -104,10 +107,10 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     intro: 'Vi ringraziamo per l’incarico e vi fatturiamo le seguenti prestazioni:',
     mailSubject: '{document} · {company}', mailBody: 'Buongiorno\n\nIn allegato trova {document}.\n\nCordiali saluti\n{company}',
     closing: (d) => `Pagabile entro ${d} giorni.\nCordiali saluti`, creditClosing: 'Cordiali saluti',
-    reminderIntro: (lv, no, d, due, prev) => lv === 1
-      ? `La nostra fattura ${no} del ${d} era pagabile il ${due}. Finora non abbiamo ricevuto alcun pagamento. Vi preghiamo di versare l’importo entro 10 giorni.`
-      : `Nonostante il nostro sollecito${prev ? ` del ${prev}` : ''}, la fattura ${no} del ${d} è ancora aperta. Vi preghiamo di versare l’importo entro 10 giorni.`,
-    reminderClosing: 'Se nel frattempo avete già pagato, vogliate considerare nulla la presente.\nCordiali saluti', fee: 'Spese di sollecito', paidSoFar: 'già pagato o accreditato', openNow: 'Importo aperto',
+    reminderIntro: (lv, no, d, due, prev, n = 10) => lv === 1
+      ? `La nostra fattura ${no} del ${d} era pagabile il ${due}. Finora non abbiamo ricevuto alcun pagamento. Vi preghiamo di versare l’importo entro ${n} giorni.`
+      : `Nonostante il nostro sollecito${prev ? ` del ${prev}` : ''}, la fattura ${no} del ${d} è ancora aperta. Vi preghiamo di versare l’importo entro ${n} giorni.`,
+    reminderClosing: 'Se nel frattempo avete già pagato, vogliate considerare nulla la presente.\nCordiali saluti', interest: (r, f, n) => `Interessi di mora ${r} % dal ${f} (${n} giorni)`, interestWord: 'Interessi di mora', fee: 'Spese di sollecito', paidSoFar: 'già pagato o accreditato', openNow: 'Importo aperto',
     ofInvoice: (no, d) => `Fattura ${no} del ${d}`, paidOn: (d) => `pagata il ${d}`, creditLine: 'Nota di credito',
     refund: (a) => `Vi rimborsiamo ${a} sul vostro conto.`, offset: (a) => `Dedurremo ${a} dalla vostra prossima fattura.`,
     stillOpen: (no, a) => `Della fattura ${no} restano da pagare ${a}.`,
@@ -134,10 +137,10 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     intro: 'Thank you for your order. We invoice the following services:',
     mailSubject: '{document} · {company}', mailBody: 'Hello\n\nPlease find attached {document}.\n\nKind regards\n{company}',
     closing: (d) => `Payable within ${d} days.\nKind regards`, creditClosing: 'Kind regards',
-    reminderIntro: (lv, no, d, due, prev) => lv === 1
-      ? `Our invoice ${no} of ${d} was due on ${due}. We have not received payment yet. Please transfer the amount within 10 days.`
-      : `Despite our reminder${prev ? ` of ${prev}` : ''}, invoice ${no} of ${d} is still unpaid. Please transfer the amount within 10 days.`,
-    reminderClosing: 'If you have paid in the meantime, please disregard this letter.\nKind regards', fee: 'Reminder fee', paidSoFar: 'already paid or credited', openNow: 'Amount due',
+    reminderIntro: (lv, no, d, due, prev, n = 10) => lv === 1
+      ? `Our invoice ${no} of ${d} was due on ${due}. We have not received payment yet. Please transfer the amount within ${n} days.`
+      : `Despite our reminder${prev ? ` of ${prev}` : ''}, invoice ${no} of ${d} is still unpaid. Please transfer the amount within ${n} days.`,
+    reminderClosing: 'If you have paid in the meantime, please disregard this letter.\nKind regards', interest: (r, f, n) => `Default interest ${r} % from ${f} (${n} days)`, interestWord: 'Default interest', fee: 'Reminder fee', paidSoFar: 'already paid or credited', openNow: 'Amount due',
     ofInvoice: (no, d) => `Invoice ${no} of ${d}`, paidOn: (d) => `paid on ${d}`, creditLine: 'Credit note',
     refund: (a) => `We will transfer ${a} to your account.`, offset: (a) => `We will deduct ${a} from your next invoice.`,
     stillOpen: (no, a) => `${a} of invoice ${no} remains open.`,
@@ -167,6 +170,9 @@ export function kindTitle(L: InvoiceTexts, kind: DocumentKind, printAs?: 'confir
     case 'invoice': return L.invoice;
   }
 }
+
+/** The title a reminder prints under: its own, else the app's word for its level (a reminder of before the levels). */
+export const reminderTitle = (r: Pick<Reminder, 'level' | 'title'>, lang: InvoiceLanguage): string => r.title ?? TEXTS[lang].reminder(r.level);
 
 /** The app's own texts of Firma › Rechnungslayout in a language, the payment term left as {days}; no greeting line. */
 export const builtInTexts = (lang: InvoiceLanguage): Record<(typeof OWN_TEXTS)[number], string> => ({

@@ -99,7 +99,7 @@ test('P2.6: a workspace of schema 3 opens with its contacts, saves schema 4, and
   assert.deepEqual(book.contacts.map((c) => c.name), ['Alpenblick AG', 'Studio Lumière', 'Weg AG']);
   updateContact(ws, 'cu_b', { phone: '+33 1 00 00 00 00' });
   const saved = raw(ws.paths.invoices);
-  assert.equal(saved.schema, 4);
+  assert.equal(saved.schema, INVOICES_SCHEMA);
   assert.equal('customers' in saved, false);
   assert.equal(JSON.stringify(saved.invoices), JSON.stringify(mixed().invoices), 'saving the contacts leaves every document as it was');
 });

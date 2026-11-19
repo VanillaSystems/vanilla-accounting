@@ -7,9 +7,9 @@
  */
 import type { StatementKind } from './banks.js';
 import { readFileSync } from 'node:fs';
-import { isMap, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
+import { isMap, isSeq, parseDocument, type Document, type YAMLMap, type YAMLSeq } from 'yaml';
 import { writeAtomic } from '../invoices/store.js';
-import type { Address, DocumentKind, InvoiceContent, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail, PayToPatch, PaymentTerms, Prices, UnitDef } from '../invoices/model.js';
+import type { Address, DocumentKind, DunningSettings, InvoiceContent, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail, PayToPatch, PaymentTerms, Prices, UnitDef } from '../invoices/model.js';
 import type { NumberFormat } from './numbering.js';
 import { parseIban, roleBefore, type MoneyRole } from './banks.js';
 import { parseManifest, type Manifest } from './manifest.js';
@@ -72,6 +72,8 @@ export interface InvoicingPatch {
   defaultTerms?: string | null;
   /** The number series of a kind (spec 4.4.4), each written as one line; applies from the next number. */
   numbering?: Partial<Record<DocumentKind, NumberFormat>>;
+  /** The Mahnwesen (spec 4.4.7): its levels and default interest, written as one block; null removes it (a new firm's levels again). */
+  dunning?: DunningSettings | null;
 }
 
 /** Firma › E-Mail: the outgoing mailbox, field by field; null removes a field, `outgoingMail: null` the block. */
@@ -209,6 +211,16 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     // One line per kind, `invoice: { format: "RE-{JJJJ}-{NNNNN}", restartYearly: true }`.
     for (const [kind, value] of Object.entries(inv.numbering ?? {})) { const n = doc.createNode(value) as YAMLMap; n.flow = true; doc.setIn(['invoicing', 'numbering', kind], n); }
     if (isMap(doc.getIn(['invoicing', 'prices'])) && (doc.getIn(['invoicing', 'prices']) as YAMLMap).items.length === 0) doc.deleteIn(['invoicing', 'prices']);
+    // One block per level, each level's texts one line per language.
+    if (inv.dunning === null) doc.deleteIn(['invoicing', 'dunning']);
+    else if (inv.dunning) {
+      const node = doc.createNode(inv.dunning) as YAMLMap;
+      const levels = node.get('levels') as YAMLSeq;
+      for (const l of levels.items) { const texts = (l as YAMLMap).get('texts'); if (isMap(texts)) for (const p of texts.items) (p.value as YAMLMap).flow = true; const auto = (l as YAMLMap).get('auto'); if (isMap(auto)) auto.flow = true; }
+      const interest = node.get('interest'); if (isMap(interest)) interest.flow = true;
+      const device = node.get('device'); if (isMap(device)) device.flow = true;
+      doc.setIn(['invoicing', 'dunning'], node);
+    }
   }
   if (patch.sells) {
     if (!isMap(doc.get('profile'))) throw new WorkspaceError(`${path} has no profile: what the firm sells is kept in it (npm run init writes one)`);

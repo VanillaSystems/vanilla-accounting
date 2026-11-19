@@ -245,6 +245,8 @@ export interface InvoicingData {
   exemptions: Record<'abroad' | 'export', BoxId>;
   /** The accounts the rest of an invoice is written off on while the firm names none: Skonto and the like, and a loss. */
   writeOff?: { skonto: string; loss: string };
+  /** Default interest a reminder may charge: the rate offered when the firm switches it on, and the financial income account it is booked on. */
+  interest?: { rate: number; account: string };
   /** The country codes of the VAT territory, as an IBAN starts: a payer there is domestic. */
   territory: string[];
   /** Words with which an invoice without the jurisdiction's VAT says its service is supplied abroad. */

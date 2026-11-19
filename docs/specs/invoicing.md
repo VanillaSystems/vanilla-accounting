@@ -1552,7 +1552,74 @@ listed here and updated with phase 2's build:
     their own, so every earlier record and booking keeps its id; their Rechnungen continue the legacy
     series (2026-019, 2026-020) and stay open, so on the cash basis no figure changes. A Schreinerei
     Angebot and Auftrag go to a customer of their own, apart from the Teilrechnungsplan's.
-
+101. **A Mahnung written and not sent is a draft kept in invoices.json** (slice I): a `Reminder`
+    without `documentId`, at most one per Rechnung and always the last. «Mahnen» writes it with the
+    next level's title, due date, fee, interest and texts in the Rechnung's language. It shows as a tab
+    of its own beside the Rechnung («Rechnung …» · «… (Entwurf)»); every action of the Rechnung stays.
+    The sheet edits its texts, the margin its title, date, due date, fee and interest, each saved on
+    leaving the field; its date lies on or after the Rechnung's, its due date on or after its date.
+    «Senden» sends it as written and it is kept as sent; «Mahnung löschen» deletes it and the level is
+    back. A draft charges nothing: its fee and interest count once it is sent (`chargesOf`). A Rechnung
+    paid, credited or cancelled meanwhile drops its draft: it is no longer shown, counted or sent
+    (`reminderDraftOf` reads it so; the next write takes it out). It is a new state of an existing
+    record, not a new status of the Rechnung, so it rides on invoices.json step 4 → 5 with `title`,
+    `interest`, `by` and `payments[].interest`.
+102. **The next level is the one after the last sent; at the last, the last again.** «Mahnen» by hand
+    repeats the last level; the Mahnlauf leaves a Rechnung at its last level out («letzte Mahnstufe
+    schon gesendet»), as the market leader stops escalating there. A Mahnung keeps the title it printed,
+    so renaming or removing a level never changes a sent one. At most 9 levels; Firma › Mahnwesen says
+    so when the list is full, and a refusal of the settings carries its rule and field
+    (`dunningSetting`).
+103. **What a firm of before keeps** (manifest step 6 → 7): «1. Mahnung», «2. Mahnung», «3. Mahnung» with
+    the titles each printed in fr, it, en, 10 days each, no fee of its own (the fee is still typed per
+    Mahnung, as before), nothing automatic, no interest. A manifest without `dunning` takes a new firm's
+    three levels («Zahlungserinnerung» without a fee, «1. Mahnung», «2. Mahnung», 10 days each). The
+    settings live in src/workspace/dunning.ts (beside numbering.ts), so the manifest reads them without
+    the invoicing rules.
+104. **Default interest** is `rate` % a year from the printed due date to the Mahnung's date, over 365
+    days, period by period on what was open in each (a part payment, a credit note or a write-off lowers
+    it from its own day), to the Rappen. So a later Mahnung's interest holds every day an earlier one
+    charged; it replaces the earlier one's, and a Mahnung that names no interest waives it: what is
+    open of the charges is always what the last paper shows, and its QR amount is its total. Fees add
+    up. An amount typed by hand without a rate prints without a percent. A payment pays the Rechnung
+    first, then the fees, then the interest; fee and interest are booked with the payment without a VAT
+    code, the fee on `feeAccount`, the interest on the financial income account
+    (`dunning.interest.account`, else the jurisdiction's, modules/ch/invoicing.yaml `interest`: 6950), on
+    both bases. Figures name what was paid of each (`charges`), never as part of `received`.
+105. **The Mahnlauf** recomputes its list on «Senden» and sends what the list still holds of the ticked
+    rows, one after the other, each only at the level the list planned (`levelChanged` otherwise: two
+    runs at once never escalate one Rechnung twice); one that fails is named with its code and the rest
+    go on. A Mahnung goes by e-mail when the firm's mail is set up and the contact has an address (the
+    contact person's, else the contact's first, else the one the Rechnung froze), else its PDF is
+    downloaded, which is its entry in the sent log. A written draft is sent as it stands, with its own
+    date. A Rechnung that never went out (no send, no download) is flagged «Rechnung nicht gesendet»
+    and left unticked. Limit: 40 per run, the rest named.
+106. **Left out of the Mahnlauf**: «keine Mahnungen» on the contact; a comment dated in the 7 days up to
+    the reference date; a Rechnung whose next level is automatic and can go (an address and mail set up,
+    the Rechnung sent), named with the day it goes; one at its last level. A Rechnung whose automatic
+    level cannot go stays in the run, so the person can send or download it. The automatic reminder
+    skips a Rechnung that never went out, one with a fresh comment, and one whose Mahnung is being written.
+107. **Automatic reminders** «N Tage nach Fälligkeit» count from what came last: the Rechnung's due date
+    for the first level, the previous Mahnung's for a later one. They run as the app workflow `dunning`
+    (hourly, at minute 5, through the automation poller; one scheduled run of a workflow at a time), at
+    most 40 a round, the rest the next round (named in the run). A round that sent something is kept in
+    the runs. A Mahnung that cannot go (no address, mail not set up, the server refuses) becomes the task
+    «Automatische Mahnung nicht gesendet: …» once per Rechnung, level and reason (data/dunning-auto.json
+    on that computer, merged, never written by a round that ran nowhere); the task closes when its
+    failures are sent or no longer due, and a new one names what still fails. Nothing is recorded for a
+    failure, so the next round sends it once the address is there.
+108. **Who holds the books, for the automatic reminders** (decision 4): the computer they were switched
+    on. Each computer has an id in its workspace's data/ (data/device.json, never in git); switching a
+    level to automatic where none was records that computer in the manifest (`dunning.device`, id and
+    name). Every other computer, a Durchsicht copy and a read-only start send nothing by themselves;
+    Firma › Mahnwesen names the computer («Automatische Mahnungen laufen auf dem Computer …, nicht
+    hier») with «Hierher holen». No level automatic: the device goes. A manifest with an automatic
+    level and no device sends nowhere until a person switches it here.
+109. **Print, mail and record are one step.** In this process's queue the Mahnung is printed, mailed and
+    then merged into the book as it is by then (a payment matched meanwhile stays). Should the record
+    still fail after the mail went, that level of that Rechnung is noted as mailed on the computer
+    (data/dunning-mailed.json) and never mailed again by itself; the refusal (`recordFailed`) and the
+    task say to check the sent log.
 ---
 
 ## 8. Changes from the concept of 2026-11-15 (owner, 2026-11-19)
