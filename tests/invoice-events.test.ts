@@ -319,7 +319,7 @@ test('a shared IBAN proposes no one, even when only one of its payers has someth
   assert.deepEqual([q.customerId, q.by], ['cu_1', 'name'], 'a shared IBAN leaves the name to decide');
 
   // The garage's own IBAN on a payment that names the bistro: they point apart, nobody is proposed and both are named.
-  const own = 'CH6580808000000000098';
+  const own = `${shared.slice(0, -2)}98`;
   b.transactions.push(
     paying('P7', '2026-08-06', totals(now(book, 'g2')).gross, { counterparty: 'GARAGE', counterpartyIban: own, description: 'Zahlung' }),
     paying('P8', '2026-08-07', 100, { counterparty: 'BEISPIEL BISTRO AG', counterpartyIban: own, description: 'Zahlung' }),
