@@ -891,7 +891,7 @@ No branch for one fund, insurer, canton, GAV or payroll vendor in src/.
 ### 9.1 Books (ledger, `BOOKS_SCHEMA` 9, src/workspace/schema.ts)
 
 - `JournalEntry.by.check` gains `'payroll'` (B), `'payslip'` (A3) and `'payrollJournal'` (A6):
-  **books schema 10**, one empty migration step for all three, with the first phase that books one
+  **books schema 11** (10 went to the payables' due date, #571), one empty migration step for all three, with the first phase that books one
   (B0; decision 5).
 - Refs `LR-<yyyy>-<mm>-<employeeId>` (a closed payslip; a correction books under the payslip that
   carries it) and `LJ-…` (a payroll journal import). Check `transactionRef` consumers that assume a
@@ -1028,7 +1028,7 @@ doctor` names them.
   src/types/index.ts). Its read figures are derived on every read (as `order-pages.ts` is,
   #253), not stored, so a better reader re-reads old payslips.
 - JournalEntry `by.check` gains `'payslip'` and `'payrollJournal'`. That is a **books schema step
-  (9 → 10)** with an empty migration, like schema 9 for `withheldShare`. Decided: one step for all
+  (10 → 11)** with an empty migration, like schema 9 for `withheldShare`. Decided: one step for all
   three checks (§16, decision 5).
 - Business files gain `collects: [<kind>]` and `payroll.reports.journal`. That is a knowledge-file
   schema change (src/knowledge/), not a books or manifest step.
@@ -1218,7 +1218,7 @@ reach the bar. The next phase starts only after its predecessor passed and shipp
 
 | Phase | Content | Rough effort |
 |---|---|---|
-| **B0** | The owner as the only employee of a GmbH or AG: Stammdaten, Sozialversicherungen from the funds' documents (AHV/IV/EO/ALV, FAK, BVG fixed from the certificate, UVG, optional KTG), the Lohnart catalogue (the whole catalogue loaded; B0 uses the monthly wage, 13th, bonus, the company car, flat and effective expenses, the deductions and employer shares), one Mitarbeitende record with Zeitachse, the monthly Lohnabrechnung, closing with preview and booking via 1091 and 2271–2275, the Rückwirkende Korrektur, reopening the latest month, Lohnzahlungen with the bank match, the insurers' accounts with Akonto and Schlussabrechnung, the payslip PDF and its encrypted mail, Lohnkonto, the AHV and UVG/KTG declaration figures, the Lohnausweis PDF and CSV. Quellensteuer: the section exists, a QST-subject person's line is «unvollständig». From level A: the document kind `payslip` (A1) and AHV-number masking (A8). Books schema 10. `payroll.json`, `payslips.jsonl`, `modules/ch/payroll{,/2026}.yaml` | 5–7 weeks |
+| **B0** | The owner as the only employee of a GmbH or AG: Stammdaten, Sozialversicherungen from the funds' documents (AHV/IV/EO/ALV, FAK, BVG fixed from the certificate, UVG, optional KTG), the Lohnart catalogue (the whole catalogue loaded; B0 uses the monthly wage, 13th, bonus, the company car, flat and effective expenses, the deductions and employer shares), one Mitarbeitende record with Zeitachse, the monthly Lohnabrechnung, closing with preview and booking via 1091 and 2271–2275, the Rückwirkende Korrektur, reopening the latest month, Lohnzahlungen with the bank match, the insurers' accounts with Akonto and Schlussabrechnung, the payslip PDF and its encrypted mail, Lohnkonto, the AHV and UVG/KTG declaration figures, the Lohnausweis PDF and CSV. Quellensteuer: the section exists, a QST-subject person's line is «unvollständig». From level A: the document kind `payslip` (A1) and AHV-number masking (A8). Books schema 11. `payroll.json`, `payslips.jsonl`, `modules/ch/payroll{,/2026}.yaml` | 5–7 weeks |
 | **A-2** | Payslips a Treuhänder or a program issues: A2 `readPayslip`, A3 booking by code, A4 Quellensteuer on 2279, A5 `collects:`, A9 (#383, #359) | 3–4 weeks |
 | **B1** | Staff: up to ~10 persons, one canton of work; hourly wage with holiday and public-holiday surcharge, holiday balance; 13th with payout months and pro rata; entry and exit mid-month, Nachzahlung; Kinder and Familienzulagen; Abwesenheiten with daily allowances; thresholds and age rules for everyone; FAK statement, BVG expected wages, AHV-exempt persons; pain.001 from Lohnzahlungen once the payments channel exists; the simplified procedure (VAV) for an Einzelfirma | 6–10 weeks |
 | **A-3** | A7 year-close checks for external payslips and their Lohnausweis CSV; A6 payroll journal import | 2–3 weeks |
@@ -1537,6 +1537,30 @@ The owner decided the six open questions of this rewrite on 2026-11-19, each as 
    that prints the form. The SSK FAQ (linked from the Wegleitung's «Allgemeines») is to be read
    when the PDF layout is built, for layout details. If the PDF falls short, B0 delivers the CSV for
    eLohnausweis SSK.
+
+---
+
+## 22. Decisions taken while building (delegated by the owner, 2026-11-19)
+
+The owner delegated the build's open questions to the main session on 2026-11-19: decide along this
+spec, MISSION.md and ADR 0015, and where the spec is silent, follow the market's approach (§0). Each
+non-obvious decision is recorded here when it is taken.
+
+1. **The social security number is `socialSecurityNumber` in `payroll.json`**, not `ahvNumber`: src/
+   names no Swiss specific (the layers lint); the UI and the documents call it «AHV-Nummer».
+2. **The payroll accounts of §7.1 carry `payroll: true` in modules/ch/accounts.yaml**: a new chart has
+   them only when the setup's answer `employees` is `owner` or `staff`; any other firm adds them from
+   Löhne › Einstellungen › Konten. A firm without wages keeps the chart it had.
+3. **The Lohnarten a person adds to a month not yet closed live in `payroll.json` `monthLines`**; the
+   closed payslip keeps its own copy of every line (§9.3), so `monthLines` of a closed month is history
+   only.
+4. **Benefits in kind (`cash: false`) book wage against the cost they relieve** (company car: D 5000 /
+   C 6200) and do not move 1091: they count in the gross, the bases and the Lohnausweis, but no money is
+   paid, so 1091 still ends at the payout. The market books the same pair in two Lohnarten through 1091;
+   one line is simpler and gives the same balances. §7.2's «D 1091 / C the car's cost account» alone would
+   leave 1091 off by the share.
+5. **Large figures of modules/ch/payroll/<year>.yaml are written in exponent form** (`148.2e3`), as
+   registration.yaml does: the leak guard reads YAML as prose and flags a six-digit number.
 
 ---
 

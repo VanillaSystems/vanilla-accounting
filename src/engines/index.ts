@@ -118,3 +118,9 @@ export const setup = (): Jurisdiction['setup'] => loaded().source.setup;
 
 /** The words that say what a document is: a receipt, a document beside one, or none. */
 export const documents = (): Jurisdiction['documents'] => loaded().source.documents;
+
+/** The jurisdiction's payroll: its Lohnart catalogue, insurance kinds and contributions; undefined where it has none. */
+export const payroll = (): Jurisdiction['payroll'] => loaded().source.payroll;
+
+/** The law's payroll figures by year (payroll/<year>.yaml). */
+export const payrollYears = (): Jurisdiction['payrollYears'] => loaded().source.payrollYears;

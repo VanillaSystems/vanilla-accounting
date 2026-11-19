@@ -8,10 +8,10 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 83 | 23 |
+| core | 85 | 23 |
 | engine | 4 | 1 |
 | provider | 15 | 11 |
-| split | 136 | 26 |
+| split | 143 | 26 |
 | infrastructure | 84 | 4 |
 | workflow | 31 | 0 |
 | view | 407 | 54 |
@@ -44,6 +44,7 @@ Layers are assigned by path prefix, most specific first:
 - `src/booking/` → split
 - `src/intake/` → split
 - `src/invoices/` → split
+- `src/payroll/` → split
 - `src/knowledge/` → split
 - `src/collect/` → split
 - `src/workflows/` → workflow

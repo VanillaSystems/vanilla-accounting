@@ -105,3 +105,13 @@ test('scan, structural half: allowlist, binaries, IBANs, UIDs, prose amounts and
 test("this repo's public view passes the structural half", () => {
   assert.deepEqual(checkTree(APP_ROOT, []), []);
 });
+
+test('secretsOf: the payroll\'s people are the company\'s: a name, a social security number and an IBAN of payroll.json', () => {
+  const ssn = j('756.', '9217.0769.85');
+  const iban = j('CH56', '04835012345678009');
+  const found = secretsOf({ ...sources, payroll: { names: ['Lara Beispielhof'], numbers: [ssn], ibans: [iban] } });
+  const scanOf = (text: string) => scan([{ path: 'src/x.ts', text }], found, allowlist, { requireAllowlisted: true }).map((f) => f.kind);
+  assert.ok(scanOf('// for Lara Beispielhof').includes('employee'));
+  assert.ok(scanOf(`const n = '${ssn}';`).includes('social-security-number'));
+  assert.ok(scanOf(`// ${iban}`).includes('iban'));
+});

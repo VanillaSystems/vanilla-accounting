@@ -180,7 +180,7 @@ test('books schema 9 (#450): books of schema 8 load with their seals whole and n
 });
 
 test('books schema 10 (#571): books of schema 9 load with their seals whole and no receipt given a due date, the step adds nothing and a second run changes nothing, a save writes 10 with no record changed; a due date a person set survives a save; an app of schema 9 refuses books of 10', () => {
-  assert.equal(BOOKS_SCHEMA, 10);
+  assert.ok(BOOKS_SCHEMA >= 10);
   const dir = mkdtempSync(join(tmpdir(), 'schema-10-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const ws = workspaceAt(dir);
@@ -189,7 +189,7 @@ test('books schema 10 (#571): books of schema 9 load with their seals whole and 
   const before = booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]);
 
   const loaded = loadBooks(ws);
-  assert.equal(loaded.schema, 10);
+  assert.equal(loaded.schema, BOOKS_SCHEMA);
   assert.ok(sealsOf(loaded).checks.every((c) => c.status !== 'broken'), 'every seal still verifies');
   assert.ok(loaded.receipts.every((r) => !('dueDate' in r)), 'the step adds no due date: the text\'s is read on every load');
 
@@ -199,7 +199,7 @@ test('books schema 10 (#571): books of schema 9 load with their seals whole and 
   assert.deepEqual(once, raw, 'old in, the same records out');
   assert.deepEqual(climb<Record<string, unknown>>(once, 9, 10, BOOKS_MIGRATIONS, 'ledger.json', clone), once, 'a second run changes nothing');
   saveBooks(ws, loaded);
-  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, 10);
+  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, BOOKS_SCHEMA);
   assert.deepEqual(booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]), before, 'no record of the books changed');
 
   const again = loadBooks(ws);
@@ -289,3 +289,34 @@ test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defa
 function booksFiles(dir: string): string[] {
   return readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((f) => /books\/.*\.jsonl$/.test(f)).map((f) => join(dir, f)).sort();
 }
+
+test('books schema 11 (payroll): books of schema 10 load with their seals whole, the step adds nothing and a second run changes nothing, a save writes 11 with no record changed; a payroll check survives a save; an app of schema 10 refuses books of 11', () => {
+  assert.equal(BOOKS_SCHEMA, 11);
+  const dir = mkdtempSync(join(tmpdir(), 'schema-11-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const ws = workspaceAt(dir);
+  const ledger = JSON.parse(readFileSync(ws.paths.ledger, 'utf8'));
+  writeFileSync(ws.paths.ledger, JSON.stringify({ ...ledger, schema: 10 }, null, 2) + '\n');
+  const before = booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]);
+
+  const loaded = loadBooks(ws);
+  assert.equal(loaded.schema, 11);
+  assert.ok(sealsOf(loaded).checks.every((c) => c.status !== 'broken'), 'every seal still verifies');
+
+  const clone = (d: Record<string, unknown>) => structuredClone(d);
+  const raw = { schema: 10, journalEntries: [{ id: 'j', by: { kind: 'code', check: 'withheldShare' } }] };
+  const once = climb<Record<string, unknown>>(raw, 10, 11, BOOKS_MIGRATIONS, 'ledger.json', clone);
+  assert.deepEqual(once, raw, 'old in, the same records out');
+  assert.deepEqual(climb<Record<string, unknown>>(once, 10, 11, BOOKS_MIGRATIONS, 'ledger.json', clone), once, 'a second run changes nothing');
+  saveBooks(ws, loaded);
+  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, 11);
+  assert.deepEqual(booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]), before, 'no record of the books changed');
+
+  const again = loadBooks(ws);
+  const open = again.journalEntries.find((e) => e.date > (again.config.closedThrough ?? ''))!;
+  open.by = { kind: 'code', check: 'payroll' };
+  saveBooks(ws, again);
+  assert.deepEqual(loadBooks(ws).journalEntries.find((e) => e.id === open.id)?.by, { kind: 'code', check: 'payroll' });
+
+  assert.throws(() => climb<Record<string, unknown>>({}, 11, 10, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
+});
