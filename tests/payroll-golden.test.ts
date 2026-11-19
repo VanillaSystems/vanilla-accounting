@@ -119,6 +119,13 @@ test('B0 golden case: a Rückwirkende Korrektur on August (BVG 19 each side) lan
   const carried = oct.lines.filter((l) => l.corrects);
   assert.deepEqual(carried.map((l) => [l.wageType, l.amount, l.corrects, l.correction]), [['bvg-an', 19, aug, 'c1'], ['bvg-ag', 19, aug, 'c2']]);
   assert.equal(oct.net, 8910 - 19, 'the employee\'s share comes off October\'s net');
+  // Booked as entries of their own, apart from October's regular BVG lines, each named after the payslip it corrects.
+  const posts = bookingOf(oct, ch.payroll!, store).postings.filter((p) => p.wageType === 'bvg-an' || p.wageType === 'bvg-ag');
+  const regular = posts.filter((p) => !p.corrects);
+  assert.equal(regular.length, 2, 'October\'s own BVG lines stay as computed');
+  assert.ok(regular.every((p) => p.amount !== 19 && !p.text.startsWith('Korrektur')));
+  assert.deepEqual(posts.filter((p) => p.corrects).map((p) => [p.wageType, p.amount, p.corrects, p.text.split(' ').slice(0, 2).join(' ')]),
+    [['bvg-an', 19, aug, 'Korrektur 08/2026:'], ['bvg-ag', 19, aug, 'Korrektur 08/2026:']]);
   assert.equal(computePayslip(ctxOf(store, all), 'e1', '2026-11')!.lines.filter((l) => l.corrects).length, 0, 'not in November too');
   const septemberAgain = computePayslip(ctxOf(store, events), 'e1', '2026-09');
   assert.ok(septemberAgain, 'closed months are not touched by the correction');

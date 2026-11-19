@@ -376,6 +376,12 @@ export interface WageTypeDef {
   input?: 'amount' | 'quantity';
   /** What its inputs are called in the form and in the line «unvollständig» («Kaufpreis» for a quantity); absent: the app's words. */
   inputs?: Partial<Record<'quantity' | 'rate' | 'amount', Labels>>;
+  /** The unit an input is entered and shown in: `percent` (a car's 0.9 % a month); the line computes with the fraction (0.009). */
+  units?: { rate?: 'percent' };
+  /** What the forms prefill, in the unit they show (0.9 for 0.9 %). */
+  defaults?: { quantity?: number; rate?: number };
+  /** The sentence a line «unvollständig» says when that input is missing («Kaufpreis des Fahrzeugs (ohne MWST) fehlt»); absent: «<its word> fehlt». */
+  missing?: Partial<Record<'quantity' | 'rate' | 'amount', Labels>>;
   computes?: WageTypeComputes;
 }
 
@@ -392,6 +398,8 @@ export interface InsuranceKindDef {
   account: string;
   /** The jurisdiction's business file of the fund, where the app ships one. */
   business?: string;
+  /** The folder a company's own file of such a fund goes in when the app writes one («Immer so», §22 decision 126); absent: supplier. */
+  role?: 'authority' | 'supplier';
   rates?: Record<string, InsuranceRateDef>;
   /** The contribution is the person's (a pension certificate's figures), not a rate of the firm. */
   perPerson?: boolean;
@@ -457,7 +465,13 @@ export interface PayrollData {
 }
 
 /** One figure of the law: its value from a day, with its source. */
-export interface FederalFigure { value: number; validFrom: string; source: string }
+export interface FederalFigure {
+  value: number; validFrom: string;
+  /** Where it comes from, with its explanation: the maintainers' note, one string. */
+  source: string;
+  /** The articles a payslip line names, per language («LAVS art. 5, 13» in French); absent: the head of `source` in every language. */
+  cite?: Partial<Labels>;
+}
 
 /** The reference age for those born from a year on. */
 export interface ReferenceAgeRow { bornFrom: number; years: number; months: number }

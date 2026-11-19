@@ -9,7 +9,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { localToday } from '../../../accounting/periods.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { t } from '../../i18n/index.js';
-import { errorText } from '../../lib/api.js';
+import { api, errorText } from '../../lib/api.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
@@ -18,7 +18,8 @@ import type { JournalEntry } from '../../../types/index.js';
 import type { SettlementCompare } from '../../../payroll/insurers.js';
 import type { AreaProps, Nav } from '../index.js';
 import { payrollApi, reloadPayroll, urls, usePayroll, type InsurerRow, type Insurers, type PaymentRow, type Payments } from './data.js';
-import { at, Go, inPeriodOf, MonthSwitch, payslipAt, Tabs, type PayrollRoute } from './common.js';
+import { at, Go, inPeriodOf, MonthSwitch, payslipAt, Tabs, useRefusal, type PayrollRoute } from './common.js';
+import { round2 } from '../../../payroll/money.js';
 import { Fields, numberOf, type Form } from './Dated.js';
 import { kindLabel, monthText } from './words.js';
 
@@ -196,6 +197,7 @@ function Insurer({ row, year, books, nav, canEdit }: Props & { row: InsurerRow; 
           <dt>{t('payroll.insurers.open')}</dt><dd className={`mono${row.open < 0 ? ' neg' : ''}`}>{fmt(row.open)}{row.open < 0 ? <small className="m"> · {t('payroll.insurers.ahead')}</small> : null}</dd>
         </dl>
         <p className="m">{t('payroll.insurers.how', { account: row.account })}</p>
+        {row.kept ? <KeptWay row={row} kept={row.kept} nav={nav} canEdit={canEdit} /> : null}
         {settled.length ? (
           <div className="psec" data-testid="settled">
             <h3>{t('payroll.insurers.settled')}</h3>
@@ -209,48 +211,98 @@ function Insurer({ row, year, books, nav, canEdit }: Props & { row: InsurerRow; 
 }
 
 /**
+ * The way the company keeps for this insurer's payments the accruals do not cover yet («Immer so», §22 decision 126):
+ * where it is kept, and «Rückgängig», which takes it out of the file; payments booked so far stay booked.
+ */
+function KeptWay({ row, kept, nav, canEdit }: { row: InsurerRow; kept: NonNullable<InsurerRow['kept']>; nav: Nav; canEdit: boolean }) {
+  const refusal = useRefusal();
+  const undo = async () => {
+    try { await api.forgetInsurerWay(kept.business); refusal.clear(); nav.toast(t('journal.byHand.insurerWay.forgotten', { name: row.name })); await reloadPayroll(); } catch (e) { refusal.refuse(e); }
+    nav.refresh();
+  };
+  return (
+    <div className="psec" data-testid="insurer-kept-way">
+      <h3>{t('payroll.insurers.keptTitle')}</h3>
+      <p>{t('payroll.insurers.kept', { path: kept.path })}</p>
+      {canEdit ? <p><AsyncButton type="button" className="btn ghost" data-testid="insurer-kept-undo" onClick={undo}>{t('journal.byHand.insurerWay.undo')}</AsyncButton> <span className="m">{t('payroll.insurers.keptUndo')}</span></p> : null}
+      {refusal.node}
+    </div>
+  );
+}
+
+/**
  * The final statement: its total and its day; code books the difference to the year's contributions in the books
- * (the payslips' and, for the months before payroll ran here, the payments booked otherwise), once. A large
- * difference is shown with its figures in the page first, then «Trotzdem buchen» (§18).
+ * (the payslips' and, for the months before payroll ran here, the payments booked otherwise), once. The books' sum
+ * is read first, so the page says the difference and its direction as the total is typed, and the button names
+ * them. A large difference, or a December still a draft, is shown in the page first, then «Trotzdem buchen» (§18).
  */
 function Settle({ row, year, nav, again }: { row: InsurerRow; year: string; nav: Nav; again: boolean }) {
   const today = localToday();
   const [f, setF] = useState<Form>({ total: '', date: today });
   const [result, setResult] = useState<string | null>(null);
-  const [warned, setWarned] = useState<SettlementCompare | null>(null);
+  const [warned, setWarned] = useState<{ compare: SettlementCompare; decemberOpen?: string[] } | null>(null);
+  const [known, setKnown] = useState<{ compare: SettlementCompare | null; decemberOpen: string[] } | null>(null);
+  const [read, setRead] = useState(0);
+  const refusal = useRefusal();
+  useEffect(() => {
+    let live = true;
+    payrollApi.settleCompare(row.id, year).then((r) => { if (live) setKnown(r); }, () => { if (live) setKnown(null); });
+    return () => { live = false; };
+  }, [row.id, year, read]);
   const total = numberOf(f.total);
+  const typed = total !== undefined && !Number.isNaN(total);
+  // What booking would do, as she types: the total less the year's contributions in the books.
+  const diff = known?.compare && typed ? round2(total - known.compare.books) : undefined;
+  const label = diff === undefined ? t('payroll.settle.save') : diff > 0 ? t('payroll.settle.saveMore', { amount: fmt(diff), name: row.name })
+    : diff < 0 ? t('payroll.settle.saveBack', { amount: fmt(-diff), name: row.name }) : t('payroll.settle.saveNone');
   const run = async (confirm: boolean) => {
-    if (total === undefined) return;
+    if (!typed) return;
     try {
       const r = await payrollApi.settle(row.id, { year, total, date: f.date, ...(confirm ? { confirm } : {}) });
-      if (!r.booked && 'warning' in r && r.warning) { setWarned(r.compare); setResult(null); return; }
+      refusal.clear();
+      if (!r.booked && 'warning' in r && r.warning) { setWarned({ compare: r.compare, ...(r.decemberOpen ? { decemberOpen: r.decemberOpen } : {}) }); setResult(null); return; }
       setWarned(null);
       setResult(r.booked ? `${t('payroll.settle.booked', { amount: fmt(r.amount), debit: r.debit, credit: r.credit })} ${compareText(r.compare)}` : t('payroll.settle.agrees'));
       setF({ ...f, total: '' });
+      setRead((x) => x + 1);
       await reloadPayroll();
       nav.refresh();
-    } catch (x) { setResult(null); nav.toast(errorText(x)); }
+    } catch (x) { setResult(null); refusal.refuse(x); }
   };
   const save = async (e: FormEvent) => { e.preventDefault(); await run(false); };
+  const c = warned?.compare;
   return (
     <div className="psec">
       <h3>{t('payroll.settle.title', { year })}</h3>
       {again ? <p className="m">{t('payroll.settle.again')}</p> : <p className="m">{t('payroll.settle.lead')}</p>}
       <AsyncForm className="form inline pform" onSubmit={save}>
         <Fields fields={[{ k: 'total', label: t('payroll.settle.total', { year }), type: 'number' }, { k: 'date', label: t('payroll.settle.date'), type: 'date' }]} f={f} set={(x) => { setWarned(null); setF(x); }} />
-        <div className="acts"><AsyncButton type="submit" className="btn primary" disabled={total === undefined || !f.date}>{t('payroll.settle.save')}</AsyncButton></div>
+        {known?.compare ? (
+          <p className="m wide" data-testid="settle-live">
+            {t('payroll.settle.live', { books: fmt(known.compare.books) })}
+            {diff !== undefined ? <> · <b className="mono">{t('payroll.settle.liveDiff', { diff: `${diff > 0 ? '+' : ''}${fmt(diff)}` })}</b></> : null}
+          </p>
+        ) : null}
+        <div className="acts"><AsyncButton type="submit" className="btn primary" data-testid="settle-save" disabled={!typed || !f.date}>{label}</AsyncButton></div>
       </AsyncForm>
-      {warned ? (
+      {refusal.node}
+      {warned && c ? (
         <div className="pcard warnpanel" role="alert" data-testid="settle-warning">
-          <h4>{t('payroll.settle.warnTitle', { diff: fmt(warned.difference), pct: Math.round(Math.abs(warned.difference) / Math.max(warned.total, warned.books, 1) * 100) })}</h4>
+          {warned.decemberOpen?.length ? (
+            <div data-testid="settle-december">
+              <h4>{t('payroll.settle.decemberTitle', { year })}</h4>
+              <p>{t('payroll.settle.decemberText', { names: warned.decemberOpen.join(', ') })}</p>
+            </div>
+          ) : null}
+          {c.large ? <h4>{t('payroll.settle.warnTitle', { diff: fmt(c.difference), pct: Math.round(Math.abs(c.difference) / Math.max(c.total, c.books, 1) * 100) })}</h4> : null}
           <dl className="kv2">
-            <dt>{t('payroll.settle.accrued')}</dt><dd className="mono">{fmt(warned.accrued)}</dd>
-            <dt>{warned.openingThrough && warned.beforeUntil ? t('payroll.settle.beforeOpening', { through: monthText(warned.openingThrough), until: formatDate(warned.beforeUntil) }) : t('payroll.settle.before')}</dt><dd className="mono">{fmt(warned.before)}</dd>
-            <dt>{t('payroll.settle.inBooks')}</dt><dd className="mono">{fmt(warned.books)}</dd>
-            <dt>{t('payroll.settle.statement')}</dt><dd className="mono">{fmt(warned.total)}</dd>
+            <dt>{t('payroll.settle.accrued')}</dt><dd className="mono">{fmt(c.accrued)}</dd>
+            <dt>{c.openingThrough && c.beforeUntil ? t('payroll.settle.beforeOpening', { through: monthText(c.openingThrough), until: formatDate(c.beforeUntil) }) : t('payroll.settle.before')}</dt><dd className="mono">{fmt(c.before)}</dd>
+            <dt>{t('payroll.settle.inBooks')}</dt><dd className="mono">{fmt(c.books)}</dd>
+            <dt>{t('payroll.settle.statement')}</dt><dd className="mono">{fmt(c.total)}</dd>
           </dl>
-          {warned.sharedPayees?.length ? <p data-testid="settle-shared">{t('payroll.settle.shared', { list: warned.sharedPayees.join(', ') })}</p> : null}
-          {warned.openingThrough && warned.before === 0 && !warned.sharedPayees?.length ? <p>{t('payroll.settle.noBefore', { through: monthText(warned.openingThrough) })}</p> : null}
+          {c.sharedPayees?.length ? <p data-testid="settle-shared">{t('payroll.settle.shared', { list: c.sharedPayees.join(', ') })}</p> : null}
+          {c.openingThrough && c.before === 0 && !c.sharedPayees?.length ? <p>{t('payroll.settle.noBefore', { through: monthText(c.openingThrough) })}</p> : null}
           <p className="m">{t('payroll.settle.warnRule')}</p>
           <div className="acts">
             <AsyncButton type="button" className="btn primary" onClick={() => run(true)}>{t('payroll.settle.anyway')}</AsyncButton>

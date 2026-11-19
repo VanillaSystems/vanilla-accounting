@@ -1,27 +1,28 @@
 # Federal payroll figures of 2026 (docs/specs/payroll.md §3, §3l), maintained with each release like
 # rates.yaml. Each figure: `value`, `validFrom` (a row with a later validFrom replaces it from that day),
-# `source`. Rates in %, amounts in the books' currency per year unless the key says otherwise. Read by
+# `source` (the maintainers' note, one string) and `cite` (the articles a payslip line names, per language; absent:
+# the head of `source`). Rates in %, amounts in the books' currency per year unless the key says otherwise. Read by
 # the payroll engine through the same valueOn as the firm's values (src/core/dated.ts). A year with
 # payslips but no file here gives every payslip that needs a figure the line «unvollständig».
 # Large amounts are written like registration.yaml (148.2e3 for 148,200).
 year: 2026
 figures:
-  ahvEmployee: { value: 5.3, validFrom: 2026-01-01, source: "AHVG Art. 5, 13; IVG Art. 3; EOV Art. 36: AHV 8.7 + IV 1.4 + EO 0.5 = 10.6 %, half each (BSV, Entwicklung Beitragssätze 2026)" }
-  ahvEmployer: { value: 5.3, validFrom: 2026-01-01, source: "AHVG Art. 13; IVG Art. 3; EOV Art. 36 (BSV, Entwicklung Beitragssätze 2026)" }
-  alvEmployee: { value: 1.1, validFrom: 2026-01-01, source: "AVIG Art. 3 Abs. 1-2: 2.2 %, half each; no solidarity percentage since 1.1.2023" }
-  alvEmployer: { value: 1.1, validFrom: 2026-01-01, source: "AVIG Art. 3 Abs. 1-2" }
-  alvCeiling: { value: 148.2e3, validFrom: 2026-01-01, source: "AVIG Art. 3 Abs. 2, UVV Art. 22 Abs. 1: maximum insured earnings per year" }
-  uvgCeiling: { value: 148.2e3, validFrom: 2026-01-01, source: "UVV Art. 22 Abs. 1: maximum insured earnings per year" }
-  nbuMinHours: { value: 8, validFrom: 2026-01-01, source: "UVG Art. 8 Abs. 2, UVV Art. 13: non-occupational accidents insured from 8 hours a week" }
-  liableFromAge: { value: 17, validFrom: 2026-01-01, source: "AHVG Art. 3 Abs. 2 lit. a: contributions from 1 January after the 17th birthday" }
-  pensionerAllowance: { value: 1400, validFrom: 2026-01-01, source: "AHVV Art. 6quater: CHF 1,400 per month and employer past the reference age" }
-  smallWageLimit: { value: 2500, validFrom: 2026-01-01, source: "AHVV Art. 34d Abs. 1: wages up to CHF 2,500 a year per employer only on the employee's request" }
-  bvgEntryThreshold: { value: 22680, validFrom: 2026-01-01, source: "BVG Art. 2, 7; BVV 2 Art. 5 (BSV, Masszahlen 2025/2026)" }
-  bvgCoordination: { value: 26460, validFrom: 2026-01-01, source: "BVG Art. 8 Abs. 1; BVV 2 Art. 5" }
-  bvgMinCoordinated: { value: 3780, validFrom: 2026-01-01, source: "BVG Art. 8 Abs. 2; BVV 2 Art. 5" }
-  bvgMaxCoordinated: { value: 64260, validFrom: 2026-01-01, source: "BVG Art. 8 Abs. 1; BVV 2 Art. 5 (upper limit 90,720 less the coordination)" }
-  childAllowanceMin: { value: 215, validFrom: 2026-01-01, source: "FamZG Art. 5 Abs. 1, FamZV: at least CHF 215 per month from 1.1.2026" }
-  educationAllowanceMin: { value: 268, validFrom: 2026-01-01, source: "FamZG Art. 5 Abs. 2, FamZV: at least CHF 268 per month from 1.1.2026" }
+  ahvEmployee: { value: 5.3, validFrom: 2026-01-01, source: "AHVG Art. 5, 13; IVG Art. 3; EOV Art. 36: AHV 8.7 + IV 1.4 + EO 0.5 = 10.6 %, half each (BSV, Entwicklung Beitragssätze 2026)", cite: { de: "AHVG Art. 5, 13; IVG Art. 3; EOV Art. 36", fr: "LAVS art. 5, 13; LAI art. 3; RAPG art. 36", it: "LAVS art. 5, 13; LAI art. 3; OIPG art. 36", en: "AHVG Art. 5, 13; IVG Art. 3; EOV Art. 36" } }
+  ahvEmployer: { value: 5.3, validFrom: 2026-01-01, source: "AHVG Art. 13; IVG Art. 3; EOV Art. 36 (BSV, Entwicklung Beitragssätze 2026)", cite: { de: "AHVG Art. 13; IVG Art. 3; EOV Art. 36", fr: "LAVS art. 13; LAI art. 3; RAPG art. 36", it: "LAVS art. 13; LAI art. 3; OIPG art. 36", en: "AHVG Art. 13; IVG Art. 3; EOV Art. 36" } }
+  alvEmployee: { value: 1.1, validFrom: 2026-01-01, source: "AVIG Art. 3 Abs. 1-2: 2.2 %, half each; no solidarity percentage since 1.1.2023", cite: { de: "AVIG Art. 3 Abs. 1-2", fr: "LACI art. 3 al. 1-2", it: "LADI art. 3 cpv. 1-2", en: "AVIG Art. 3 para. 1-2" } }
+  alvEmployer: { value: 1.1, validFrom: 2026-01-01, source: "AVIG Art. 3 Abs. 1-2", cite: { de: "AVIG Art. 3 Abs. 1-2", fr: "LACI art. 3 al. 1-2", it: "LADI art. 3 cpv. 1-2", en: "AVIG Art. 3 para. 1-2" } }
+  alvCeiling: { value: 148.2e3, validFrom: 2026-01-01, source: "AVIG Art. 3 Abs. 2, UVV Art. 22 Abs. 1: maximum insured earnings per year", cite: { de: "AVIG Art. 3 Abs. 2, UVV Art. 22 Abs. 1", fr: "LACI art. 3 al. 2, OLAA art. 22 al. 1", it: "LADI art. 3 cpv. 2, OAINF art. 22 cpv. 1", en: "AVIG Art. 3 para. 2, UVV Art. 22 para. 1" } }
+  uvgCeiling: { value: 148.2e3, validFrom: 2026-01-01, source: "UVV Art. 22 Abs. 1: maximum insured earnings per year", cite: { de: "UVV Art. 22 Abs. 1", fr: "OLAA art. 22 al. 1", it: "OAINF art. 22 cpv. 1", en: "UVV Art. 22 para. 1" } }
+  nbuMinHours: { value: 8, validFrom: 2026-01-01, source: "UVG Art. 8 Abs. 2, UVV Art. 13: non-occupational accidents insured from 8 hours a week", cite: { de: "UVG Art. 8 Abs. 2, UVV Art. 13", fr: "LAA art. 8 al. 2, OLAA art. 13", it: "LAINF art. 8 cpv. 2, OAINF art. 13", en: "UVG Art. 8 para. 2, UVV Art. 13" } }
+  liableFromAge: { value: 17, validFrom: 2026-01-01, source: "AHVG Art. 3 Abs. 2 lit. a: contributions from 1 January after the 17th birthday", cite: { de: "AHVG Art. 3 Abs. 2 lit. a", fr: "LAVS art. 3 al. 2 let. a", it: "LAVS art. 3 cpv. 2 lett. a", en: "AHVG Art. 3 para. 2 let. a" } }
+  pensionerAllowance: { value: 1400, validFrom: 2026-01-01, source: "AHVV Art. 6quater: CHF 1,400 per month and employer past the reference age", cite: { de: "AHVV Art. 6quater", fr: "RAVS art. 6quater", it: "OAVS art. 6quater", en: "AHVV Art. 6quater" } }
+  smallWageLimit: { value: 2500, validFrom: 2026-01-01, source: "AHVV Art. 34d Abs. 1: wages up to CHF 2,500 a year per employer only on the employee's request", cite: { de: "AHVV Art. 34d Abs. 1", fr: "RAVS art. 34d al. 1", it: "OAVS art. 34d cpv. 1", en: "AHVV Art. 34d para. 1" } }
+  bvgEntryThreshold: { value: 22680, validFrom: 2026-01-01, source: "BVG Art. 2, 7; BVV 2 Art. 5 (BSV, Masszahlen 2025/2026)", cite: { de: "BVG Art. 2, 7; BVV 2 Art. 5", fr: "LPP art. 2, 7; OPP 2 art. 5", it: "LPP art. 2, 7; OPP 2 art. 5", en: "BVG Art. 2, 7; BVV 2 Art. 5" } }
+  bvgCoordination: { value: 26460, validFrom: 2026-01-01, source: "BVG Art. 8 Abs. 1; BVV 2 Art. 5", cite: { de: "BVG Art. 8 Abs. 1; BVV 2 Art. 5", fr: "LPP art. 8 al. 1; OPP 2 art. 5", it: "LPP art. 8 cpv. 1; OPP 2 art. 5", en: "BVG Art. 8 para. 1; BVV 2 Art. 5" } }
+  bvgMinCoordinated: { value: 3780, validFrom: 2026-01-01, source: "BVG Art. 8 Abs. 2; BVV 2 Art. 5", cite: { de: "BVG Art. 8 Abs. 2; BVV 2 Art. 5", fr: "LPP art. 8 al. 2; OPP 2 art. 5", it: "LPP art. 8 cpv. 2; OPP 2 art. 5", en: "BVG Art. 8 para. 2; BVV 2 Art. 5" } }
+  bvgMaxCoordinated: { value: 64260, validFrom: 2026-01-01, source: "BVG Art. 8 Abs. 1; BVV 2 Art. 5 (upper limit 90,720 less the coordination)", cite: { de: "BVG Art. 8 Abs. 1; BVV 2 Art. 5", fr: "LPP art. 8 al. 1; OPP 2 art. 5", it: "LPP art. 8 cpv. 1; OPP 2 art. 5", en: "BVG Art. 8 para. 1; BVV 2 Art. 5" } }
+  childAllowanceMin: { value: 215, validFrom: 2026-01-01, source: "FamZG Art. 5 Abs. 1, FamZV: at least CHF 215 per month from 1.1.2026", cite: { de: "FamZG Art. 5 Abs. 1, FamZV", fr: "LAFam art. 5 al. 1, OAFam", it: "LAFam art. 5 cpv. 1, OAFami", en: "FamZG Art. 5 para. 1, FamZV" } }
+  educationAllowanceMin: { value: 268, validFrom: 2026-01-01, source: "FamZG Art. 5 Abs. 2, FamZV: at least CHF 268 per month from 1.1.2026", cite: { de: "FamZG Art. 5 Abs. 2, FamZV", fr: "LAFam art. 5 al. 2, OAFam", it: "LAFam art. 5 cpv. 2, OAFami", en: "FamZG Art. 5 para. 2, FamZV" } }
 # The reference age (AHVG Art. 21, AHV 21): 65 for men; for women born up to 1960 64, then rising by three
 # months per cohort to 65 for those born from 1964. `bornFrom` the first birth year a row holds for.
 referenceAge:

@@ -1,0 +1,8 @@
+{ "receipts": [], "mappings": [], "journalEntries": [],
+  "transactions": [
+    { "ref": "PK-OCT", "bank": "Raiffeisen", "date": "2026-10-15", "amount": 600, "currency": "CHF", "direction": "DBIT", "counterparty": "Pensionskasse Beispiel", "description": "Akonto 2026-10" },
+    { "ref": "PK-NOV", "bank": "Raiffeisen", "date": "2026-11-15", "amount": 600, "currency": "CHF", "direction": "DBIT", "counterparty": "Pensionskasse Beispiel", "description": "Akonto 2026-11 Sonderfall" },
+    { "ref": "PK-DEC", "bank": "Raiffeisen", "date": "2026-11-18", "amount": 600, "currency": "CHF", "direction": "DBIT", "counterparty": "Pensionskasse Beispiel", "description": "Akonto 2026-12" },
+    { "ref": "KTG-1", "bank": "Raiffeisen", "date": "2026-10-20", "amount": 200, "currency": "CHF", "direction": "DBIT", "counterparty": "Krankentaggeld Beispiel", "description": "Praemie" }
+  ],
+  "config": { "closedThrough": "2026-06-30" } }

@@ -6,7 +6,7 @@
 import { language, monthLocale, t, tWith } from '../../i18n/index.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { payroll } from '../../../engines/index.js';
-import type { Labels, PayrollData } from '../../../core/modules/schema.js';
+import type { Labels, PayrollData, WageTypeDef } from '../../../core/modules/schema.js';
 import type { PayslipFact } from '../../../payroll/compute.js';
 import type { CloseWarning } from '../../../payroll/close.js';
 import type { RateWarning } from '../../../payroll/settings.js';
@@ -49,10 +49,16 @@ export const inputLabel = (wageType: string, input: 'quantity' | 'rate' | 'amoun
   return l ? labelOf(l) : undefined;
 };
 
-/** What a line «unvollständig» lacks: a rate of the insurance names that rate, an input its Lohnart's word for it (a car's price). */
-export function missingText(code: string, wageType: string, inputs?: Partial<Record<'quantity' | 'rate' | 'amount', Labels>>): string {
+/**
+ * What a line «unvollständig» lacks: a rate of the insurance names that rate, an input its Lohnart's sentence for it where
+ * the data has one (a car's missing price), else its word («Stunden fehlt»).
+ */
+export function missingText(code: string, wageType: string, w?: Pick<WageTypeDef, 'inputs' | 'missing'>): string {
   const input = code === 'quantity' ? 'quantity' : code === 'unitRate' ? 'rate' : code === 'amount' ? 'amount' : undefined;
-  const said = input && inputLabel(wageType, input, inputs);
+  const def = w ?? data()?.wageTypes.find((x) => x.key === wageType);
+  const sentence = input && def?.missing?.[input];
+  if (sentence) return labelOf(sentence);
+  const said = input && inputLabel(wageType, input, def?.inputs);
   if (said) return t('payroll.missing.input', { what: said });
   if (code.startsWith('rate:')) {
     const kind = kindOfWageType(wageType);

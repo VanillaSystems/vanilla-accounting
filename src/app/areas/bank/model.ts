@@ -251,7 +251,8 @@ export interface Bank {
   strays(from: IsoDate, to: IsoDate): JournalEntry[];
 }
 
-export function bankOf(books: Index, accounts: readonly Account[], today: IsoDate): Bank {
+/** `proofElsewhere`: payments whose proof is not a receipt of their own (a payroll insurer's, proven by the payslips): never «kein Beleg». */
+export function bankOf(books: Index, accounts: readonly Account[], today: IsoDate, proofElsewhere: ReadonlySet<string> = new Set()): Bank {
   const banked = accounts.filter((a) => a.statements || a.role === 'bank');
   const accountOf = (bank: string, currency: string) => banked.find((a) => a.bank === bank && a.currency === currency);
   const txByRef = new Map(books.transactions.map((t) => [t.ref, t]));
@@ -479,8 +480,8 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     },
     entriesOf: (ref) => entries.get(ref) ?? [],
     txByRef,
-    // A payment the payroll's code booked (a wage, a fund's or insurer's contribution) has its proof in the payslips: no «kein Beleg».
-    needsReceipt: (t) => !isBankFee(t) && t.amount !== 0 && !t.noReceiptNeeded && !(receipts.get(t.ref) ?? []).length
+    // A payment the payroll's code booked (a wage, a fund's or insurer's contribution), or one to a payroll insurer while payroll runs here, has its proof in the payslips: no «kein Beleg».
+    needsReceipt: (t) => !isBankFee(t) && t.amount !== 0 && !t.noReceiptNeeded && !(receipts.get(t.ref) ?? []).length && !proofElsewhere.has(t.ref)
       && !(entries.get(t.ref) ?? []).some((e) => e.by?.kind === 'code' && e.by.check === 'payroll'),
     unbooked,
     strays: (from, to) => (books.journalEntries ?? []).filter((e) => e.date >= from && e.date <= to && e.origin !== 'year-close'

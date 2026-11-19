@@ -1771,6 +1771,66 @@ Taken after the scored persona walk of B0 (2026-11-19, AI on 73, AI off 83, bar 
 52. **A Lohnausweis for a person without a social security number is said first** (field C stays empty),
     then «Trotzdem erstellen» (§18), as an open month is.
 
+Taken after the second persona walk of B0 (2026-11-19, AI on 90, AI off 100); numbered from 120, renumbered at
+merge:
+
+120. **A carried correction is booked as an entry of its own**, one per Lohnart, account pair and payslip it
+     corrects, never merged into the month's regular line of the same Lohnart (src/payroll/booking.ts
+     `bookingOf`): «Korrektur 08/2026: BVG Arbeitnehmer <Name>». The payslip it corrects stays on the payslip's
+     line (`corrects`) and on the posting; the journal entry carries no `corrects`, which names a filed VAT
+     period (AGENTS.md golden rule 1). The preview and the close show the same postings and texts.
+121. **The journal's texts are the books' words, German data, whatever the person's or the UI's language**: a
+     payslip's postings read the Lohnart's German label («AHV/IV/EO 10/2026 Lukas Beispiel»), as every other
+     description code writes («Zahlung …», «Schlussabrechnung …»). The payslip, its PDF and the forms speak
+     the person's or the UI's language; the preview of a draft shows the texts closing will book, not a
+     translation of them.
+122. **A Lohnart's rate may be entered in percent, with a default, and its missing input says a sentence of its own**,
+     all data (`units: { rate: percent }`, `defaults: { rate: 0.9 }`, `missing` in payroll.yaml, checked by
+     check-payroll): the company car is typed «0.9» under «Satz % pro Monat», prefilled, and kept as the fraction
+     the payslip computes with (0.009: price × 0.9 %), so a stored value and every computed figure stay as they
+     were. The payslip, its PDF and the forms show it as «0.90 %». A car without its price reads «Kaufpreis des
+     Fahrzeugs (ohne MWST) fehlt». The month's «Lohnart hinzufügen» and a person's «Wiederkehrende Lohnart»
+     share one set of fields (src/app/areas/payroll/inputs.ts), and a refusal names the field by the word the
+     form shows («Kaufpreis ohne MWST», not «Menge»).
+123. **A federal figure names its articles per language** (`cite: { de, fr, it, en }` beside `source` in
+     payroll/<year>.yaml): the payslip line, its page and its PDF read them in the person's or the UI's
+     language («Valeur fédérale 2026 · LAVS art. 5, 13; LAI art. 3; RAPG art. 36»). `source` stays the
+     maintainers' one string; a figure without `cite` names the head of its `source` in every language, as
+     before, so an older year file reads as it did. check-payroll wants all four languages once `cite` is there.
+124. **The month states are written alike in every language**: lower case in French, Italian and English
+     («clôturé», «ouvert», «à venir», «ouverture», «brouillon»), as the German adjectives are; German keeps
+     its nouns capitalised («Eröffnung», «Entwurf») by its grammar. A heading uses its own key
+     (`payroll.month.openingTitle`).
+125. **The final statement says its difference before it is booked, and a December still open first**: the page
+     reads the year's contributions in the books when it opens (`GET /api/payroll/insurances/<id>/compare`,
+     decision 44's sum, with no total), shows «In den Büchern …» and, as the total is typed, «Differenz +…»;
+     the button names the amount and the direction («Differenz <Betrag> buchen: Nachzahlung an …», «…: Guthaben
+     bei …», or «Stimmt mit den Büchern überein»). Booking while any person's December payslip of that year is
+     still a draft is said first in the page («Dezember 2026 ist noch nicht abgeschlossen», the people named),
+     whatever the difference's size, and booked only on «Trotzdem buchen» (§18): the books do not hold the year
+     whole yet, so the difference would hold December too. One «Trotzdem buchen» covers both warnings. A refusal
+     shows as a panel beside the form (decision 50).
+126. **«Immer so» keeps «für Monate ab dem Lohnstart» for a fund, in the company's file of the fund** (`payroll: {
+     payments: liability, source }`, src/knowledge/payroll-way.ts, validated with the business files; the app layer
+     may not say it). Only that way is kept: «für Monate davor» pays months before payroll ran here, which end, so kept
+     for good it would expense later advance payments a second time; it stays a choice per payment, and the file
+     refuses `contributions` with its reason (review, 2026-11-19). The file is the insurance's business, else the
+     business the payment routes to, else a new file of the company's own named after the insurer, matched by the
+     payee the bank writes and its IBAN, in the folder the kind's `role` names (payroll.yaml: the compensation and
+     family funds with the authorities, the others with the suppliers). Only the `payroll:` block is written or taken
+     out; the rest of a file stays byte for byte, a file that is no YAML map is refused (`badInput`), and the write goes
+     through a file beside it and a rename, after the books took the bookings. insurerPaymentOf honours it: an
+     uncovered payment is booked bank / liability by code (the intake's payroll step and the classifier alike, never
+     the model; a payment no bank account of the firm takes waits for the person). A covered payment is booked
+     against the liability whatever is kept, a payee of several insurances is never booked by code, and a company
+     rule's payment stays the rule's. Before the click the form names the open payments to that insurance it books
+     at once (their days and amounts, the button their number), as a rule's card does; the click books exactly
+     those. The insurer's page in Löhne › Lohnzahlungen shows the kept way and «Rückgängig»; undoing it there or on
+     the form asks again from the next payment, and what was booked stays booked, the person's to change. Every keep
+     and undo reads the books again. Such a payment needs no receipt (decision 45), so the bank page shows neither
+     «kein Beleg» nor «Beleg suchen» for it (`GET /api/payroll/insurer-payments`, loaded with the books from the
+     knowledge and payroll.json alone); its bill still pairs.
+
 ---
 
 ## Sources

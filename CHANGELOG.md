@@ -232,6 +232,28 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
+  davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund
+  (`payroll: { payments: liability }`), names the open payments it books first, and code then books
+  such payments against the liability; the insurer's page in Lohnzahlungen shows it with
+  «Rückgängig». «Davor» stays a choice per payment. The bank page no longer shows «kein Beleg» and «Beleg suchen» for a
+  payment to a payroll insurer: the payslips prove it.
+- Löhne › Lohnzahlungen: the final statement shows the year's contributions in the books and, as the
+  total is typed, the difference; the button names its amount and direction («Differenz … buchen:
+  Nachzahlung an …»). Booking it while a December payslip of that year is still a draft is said first
+  in the page, then «Trotzdem buchen».
+- Löhne: a payslip line's federal source names the articles in the person's or the UI's language
+  («LAVS art. 5, 13 …» in French, no «AHVG … Abs.»); the year file's figures carry `cite` per
+  language. The month states are lower case in French, Italian and English throughout («ouverture»
+  beside «ouvert»).
+- Löhne: the company car's rate is typed in percent («Satz % pro Monat», 0.9 prefilled) in both the
+  month's and the recurring form, which now share their fields and words (Kaufpreis / Satz %); the
+  payslip still computes price × 0.009. A missing price reads «Kaufpreis des Fahrzeugs (ohne MWST)
+  fehlt», and a refusal names the field as the form shows it, not «(Menge)».
+- Löhne: a Rückwirkende Korrektur carried into a month is booked as its own entry, «Korrektur 08/2026:
+  BVG Arbeitnehmer …», no longer merged into that month's BVG line; the preview shows it the same way.
+  A payslip's booking texts are the books' German words for every person (the preview no longer
+  translates them).
 - Löhne: the months of a person's opening (paid and booked by hand before payroll ran here, January to
   the opening's last month) are «Eröffnung» in the year strip and on her timeline. They get no draft, no
   «noch offen» on a later month, and closing one is refused with its reason (the wage is booked

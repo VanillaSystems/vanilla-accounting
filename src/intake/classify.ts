@@ -27,6 +27,7 @@ import type { Workspace } from '../workspace/workspace.js';
 import { randomBytes } from 'node:crypto';
 import { bookWagePayments } from '../payroll/payments.js';
 import { bookInsurerPayments } from '../payroll/insurers.js';
+import { payrollWays } from '../payroll/insurers-context.js';
 import { loadPayroll } from '../payroll/store.js';
 import { businessOfPayment } from './batch-payers.js';
 import { closedPayslips } from '../payroll/service.js';
@@ -163,7 +164,7 @@ export function classifyStep({ force = false } = {}): StepRun {
     // A payment to a fund or insurer whose contributions the payslips accrued clears its liability account only (§6.4): never expensed twice.
     if (payroll?.insurances.length && data) {
       const insurers = books.update((index) => bookInsurerPayments(index, data, payroll, periodLock(index),
-        (tx) => businessOfPayment(tx, mappedReceipts(index, tx), context.counterparties ?? []), bankOf, () => randomBytes(8).toString('hex'), { currency: baseCurrency(), ruled: ruled(index) }));
+        (tx) => businessOfPayment(tx, mappedReceipts(index, tx), context.counterparties ?? []), bankOf, () => randomBytes(8).toString('hex'), { currency: baseCurrency(), ruled: ruled(index), wayOf: payrollWays(context.counterparties ?? []) }));
       if (insurers.length) log(`Insurers  : ${insurers.length} payment(s) to a fund or insurer booked against its liability account: ${insurers.join(', ')}.`);
     }
 

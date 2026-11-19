@@ -378,6 +378,27 @@ provider:
   The clearing account must be a balance-sheet account (an asset or a
   liability) that no other provider's file names.
 
+## A payroll insurer's payments
+
+While payroll runs in the app, a payment to one of the firm's funds or insurers (its business by
+payroll.json's `business`, else the one the payment routes to) is booked against the insurance's
+liability account when the payslips' accruals cover it. One they do not cover yet (an Akonto paid
+ahead) is asked on its hand form: «für Monate ab dem Lohnstart» or «für Monate davor». «Immer so»
+keeps the first answer in the company's file of the fund, never the app layer's:
+
+```yaml
+# knowledge/<role>/<id>.yaml
+payroll:
+  payments: liability        # booked against the liability by code at once
+  source: hand 2026-11-19
+```
+
+«Für Monate davor» is never kept: those months end, and kept for good it would expense later
+advance payments twice; `payments: contributions` is refused. A covered payment is booked against
+the liability whatever the file says. Remove the section (or «Rückgängig» on the insurer's page in
+Löhne › Lohnzahlungen) to be asked again; what was booked stays booked (src/knowledge/payroll-way.ts,
+docs/specs/payroll.md §22 decision 126).
+
 ## The contract
 
 `npm run check-processes` enforces rules 1–3 and the graph's wiring, and prints

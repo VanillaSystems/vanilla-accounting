@@ -11,7 +11,7 @@ import type { Affected, Difference, EmployeeDetail, RateWarning, SettingsView } 
 import type { CloseWarning } from '../../../payroll/close.js';
 import type { MonthLine, PayslipCorrection } from '../../../payroll/model.js';
 import type { PaymentRow } from '../../../payroll/payments.js';
-import type { InsurerRow, SettlementCompare } from '../../../payroll/insurers.js';
+import type { InsurerRow as InsurerFigures, SettlementCompare } from '../../../payroll/insurers.js';
 import type { DeclarationRow, Lohnkonto, LohnausweisData } from '../../../payroll/documents.js';
 import type { LohnausweisSnapshot, PayslipMail, PayslipSent } from '../../../payroll/service.js';
 
@@ -81,6 +81,8 @@ export const files = {
 };
 
 export interface Payments { month: string; rows: PaymentRow[] }
+/** An insurer's figures, and the way its uncovered payments are booked when the company keeps one («Immer so», §22 decision 126). */
+export type InsurerRow = InsurerFigures & { kept?: { business: string; path: string; source?: string } };
 export interface Insurers { year: string; rows: InsurerRow[] }
 /** An issued Lohnausweis as the list names it: its figures stay on the server, in its PDF. */
 export type Issued = Omit<LohnausweisSnapshot, 'data'>;
@@ -117,7 +119,8 @@ export const payrollApi = {
   copyWageType: (body: Record<string, unknown>, backdated?: Backdated) => request<Saved<{ key: string }>>('POST', '/api/payroll/wage-types', { ...body, ...(backdated ? { backdated } : {}) }),
   removeWageType: (key: string, backdated?: Backdated) => request<Saved>('DELETE', `/api/payroll/wage-types/${encodeURIComponent(key)}`, backdated ? { backdated } : undefined),
   addAccount: (number: string) => request<{ number: string; name: string }>('POST', '/api/payroll/accounts', { number }),
-  settle: (id: string, body: { year: string; total: number; date: string; confirm?: boolean }) => request<{ booked: string; amount: number; debit: string; credit: string; compare: SettlementCompare } | { booked: null; warning?: true; compare: SettlementCompare }>('POST', `/api/payroll/insurances/${encodeURIComponent(id)}/settle`, body),
+  settle: (id: string, body: { year: string; total: number; date: string; confirm?: boolean }) => request<{ booked: string; amount: number; debit: string; credit: string; compare: SettlementCompare } | { booked: null; warning?: true; compare: SettlementCompare; decemberOpen?: string[] }>('POST', `/api/payroll/insurances/${encodeURIComponent(id)}/settle`, body),
+  settleCompare: (id: string, year: string) => request<{ year: string; compare: SettlementCompare | null; why?: string; decemberOpen: string[] }>('GET', `/api/payroll/insurances/${encodeURIComponent(id)}/compare?year=${year}`),
   setOpening: (id: string, year: string, value: Record<string, unknown> | null, backdated?: Backdated) => request<Saved>('PUT', `/api/payroll/employees/${encodeURIComponent(id)}/opening/${year}`, { value, ...(backdated ? { backdated } : {}) }),
   issueLohnausweis: (year: string, body: { employee: string; kind?: 'replacement' | 'correction'; confirm?: boolean }) => request<Issued | { issued: false; openMonths: string[]; noSocialSecurityNumber?: true }>('POST', `/api/payroll/documents/${year}/lohnausweis`, body),
   mailOf: (id: string) => request<PayslipMail>('GET', `/api/payroll/payslips/${id}/mail`),
@@ -125,6 +128,6 @@ export const payrollApi = {
   mailPassword: (employee: string, body: { password?: string; confirm?: boolean }) => request<{ password?: string; warn?: 'birthDate' }>('POST', `/api/payroll/employees/${encodeURIComponent(employee)}/mail-password`, body),
 };
 
-export type { PaymentRow, InsurerRow, PayslipMail, PayslipSent, LohnausweisData };
+export type { PaymentRow, PayslipMail, PayslipSent, LohnausweisData };
 
 export type { EmployeeDetail, SettingsView, MonthView, YearMonth, EmployeeRow, Affected, Difference };
