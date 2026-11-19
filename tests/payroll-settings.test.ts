@@ -255,6 +255,29 @@ test('routes: a payslip of a closed period is only corrected: «So lassen» refu
   assert.equal(loadPayroll(api.ws).insurances[0].solutions[0].rates.length, 1, 'nothing saved');
 });
 
+test('routes (B1): a child or an absence over a payslip of a closed period answers with the card, «So lassen» refused; a later one saves and the draft reads it', async () => {
+  const child = { name: 'Lea', birthDate: '2020-01-01', wageType: 'kinderzulage', amount: 215, validFrom: '2026-05-01' };
+  const card = await api.send('POST', '/api/payroll/employees/e1/children', child);
+  assert.equal(card.json.saved, false);
+  assert.ok((card.json.affected as Array<{ closedPeriod: boolean }>).some((a) => a.closedPeriod));
+  const keep = await api.send('POST', '/api/payroll/employees/e1/children', { ...child, backdated: 'keep' });
+  assert.equal(keep.status, 403);
+  assert.equal((keep.json.params as { why: string }).why, 'closedPeriod');
+  const absence = await api.send('POST', '/api/payroll/employees/e1/absences', { kind: 'unpaid', from: '2026-06-10', to: '2026-06-11', backdated: 'keep' });
+  assert.equal(absence.status, 403);
+  assert.equal(loadPayroll(api.ws).employees[0].children, undefined, 'nothing saved');
+  assert.equal(loadPayroll(api.ws).employees[0].absences, undefined);
+  const later = await api.send('POST', '/api/payroll/employees/e1/children', { ...child, validFrom: '2026-12-01' });
+  assert.equal(later.json.saved, true);
+  const dec = await api.send('GET', '/api/payroll/payslips/2026-12-e1');
+  assert.ok((dec.json.slip as { lines: Array<{ wageType: string; amount: number }> }).lines.some((l) => l.wageType === 'kinderzulage' && l.amount === 215));
+  const bad = await api.send('POST', '/api/payroll/employees/e1/absences', { kind: 'diagnosis', from: '2026-12-01', to: '2026-12-02' });
+  assert.equal(bad.status, 400);
+  const id = later.json.id as string;
+  const gone = await api.send('DELETE', `/api/payroll/employees/e1/children/${id}`);
+  assert.equal(gone.json.saved, true, 'a child no closed payslip paid for can go');
+});
+
 test('routes: a refusal names its field and never the number; something gone has its own reason', async () => {
   const bad = await api.send('POST', '/api/payroll/entries', { path: 'employees/e1/employment', validFrom: '2026-13-01', value: { kind: 'monthly', amount: 1 } });
   assert.deepEqual(bad.json.params, { why: 'badInput', field: 'validFrom' });
