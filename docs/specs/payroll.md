@@ -1603,6 +1603,9 @@ non-obvious decision is recorded here when it is taken.
     payroll ran here stays level A's booking, 2270/57xx), only a payment out (what an insurer pays in is
     mostly a benefit), only in the books' currency, and never one a company rule decides. The same holds for
     the wage match; `classify --force` leaves payroll's code bookings in place.
+22. **The final statement's (Schlussabrechnung) total is entered by the person** off the statement; code
+    books its difference to what the payslips accrued (D 57xx / C 227x, or back), ref `LS-<year>-<insurance>`,
+    once. Reading the total off the statement's PDF is for the AI on her drop, later.
 23. **The Lohnausweis PDF prints Form 11's letters and fields in the module's order and words**
     (`payroll.yaml lohnausweis`), drawn with pdf-lib on white paper; each issue is a snapshot in
     `transactional-data/<year>/payroll/lohnausweise.jsonl` with its PDF beside it, and a replacement or a
@@ -1615,9 +1618,11 @@ non-obvious decision is recorded here when it is taken.
     The Lohnausweis's fields are whole francs, each rounded before the sums, so 8 and 11 add up on paper;
     it is issued once every payslip of the person's year is closed, before only after the warning; a gross
     Lohnart without a field is named. Daily allowances stay in field 1, as the market maps them.
-22. **The final statement's (Schlussabrechnung) total is entered by the person** off the statement; code
-    books its difference to what the payslips accrued (D 57xx / C 227x, or back), ref `LS-<year>-<insurance>`,
-    once. Reading the total off the statement's PDF is for the AI on her drop, later.
+25. **A payslip by mail is a PDF locked with AES-128** (the PDF standard security handler, V 4 R 4, which
+    every common reader opens), written by the app itself (src/payroll/pdf-encrypt.ts). The person's
+    password lives in `payroll.json` beside her other data (owner decision 4: plain, in the workspace; the AI
+    sidebar never reads the file); a generated one is shown once. The copy to the sender goes as a blind copy
+    of the same mail; every mail is a line in `payroll/sent.jsonl`.
 
 ---
 

@@ -236,6 +236,7 @@ documents:
   correction: { de: Korrektur, fr: Correction, it: Correzione, en: Correction }
   missing: { de: unvollständig, fr: incomplet, it: incompleto, en: incomplete }
   employer: { de: Arbeitgeberbeiträge (zur Information), fr: Cotisations de l'employeur (pour information), it: Contributi del datore di lavoro (per informazione), en: Employer contributions (for information) }
+  mailBody: { de: "Guten Tag\n\nIm Anhang die Lohnabrechnung {month}. Das PDF ist mit Ihrem Passwort geschützt.\n\nFreundliche Grüsse\n{firm}", fr: "Bonjour\n\nVous trouverez ci-joint le décompte de salaire {month}. Le PDF est protégé par votre mot de passe.\n\nMeilleures salutations\n{firm}", it: "Buongiorno\n\nIn allegato il conteggio dello stipendio {month}. Il PDF è protetto dalla sua password.\n\nCordiali saluti\n{firm}", en: "Hello\n\nAttached is your payslip for {month}. The PDF is protected with your password.\n\nKind regards\n{firm}" }
   disclaimer: { de: "Berechnung aus den erfassten Sätzen, vom Treuhänder zu prüfen.", fr: "Calcul selon les taux saisis, à vérifier par la fiduciaire.", it: "Calcolo secondo le aliquote registrate, da verificare dalla fiduciaria.", en: "Computed from the rates entered; to be checked by the fiduciary." }
 
 # The Lohnausweis (Form 11, ESTV/SSK Wegleitung 2026): its numbered fields in print order, each with its
