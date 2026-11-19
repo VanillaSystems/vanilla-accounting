@@ -2,7 +2,7 @@
  * Löhne (docs/specs/payroll.md §12.1): Übersicht, Lohnabrechnungen, Mitarbeitende, Einstellungen, each a
  * list and a detail beside it. Lohnzahlungen and Dokumente are later slices. The area works without the
  * AI; the sidebar reads nothing of it (§22 decision 11). It is always in the dock: a firm without wages
- * finds there what to do first (§22 decision 17).
+ * finds there what to do first (§22 decision 26).
  */
 import './payroll.css';
 import { t } from '../../i18n/index.js';
