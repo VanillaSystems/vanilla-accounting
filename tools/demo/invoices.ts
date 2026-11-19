@@ -9,10 +9,11 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, wr
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { partDirs, workspaceAt, type Workspace } from '../../src/workspace/workspace.js';
-import { addArticles, addComment, cancelInvoice, createCreditNote, createCustomer, createDraft, issueInvoice, recordSend, sendReminder } from '../../src/invoices/service.js';
+import { addArticles, addComment, addContacts, answerQuote, cancelInvoice, convertDocument, createCreditNote, createCustomer, createDraft, issueInvoice, recordSend, sendReminder, updateDraft } from '../../src/invoices/service.js';
+import { articleLine } from '../../src/invoices/articles.js';
 import { closeBrowser } from '../../src/invoices/pdf.js';
-import { idSource, updateInvoices } from '../../src/invoices/store.js';
-import type { CustomerFields, InvoiceBook, Issued } from '../../src/invoices/model.js';
+import { idSource, loadInvoices, updateInvoices } from '../../src/invoices/store.js';
+import type { Article, CustomerFields, InvoiceBook, InvoiceLine, Issued, Prices } from '../../src/invoices/model.js';
 import { qrReference, scorReference } from '../../src/providers/qr-bill/reference.js';
 import { liveInvoices, openAmount, skontoOf, totals, withPayment, withWriteOff } from '../../src/invoices/rules.js';
 import { TEXTS } from '../../src/invoices/texts.js';
@@ -20,7 +21,7 @@ import { allocatePayment, recordHandPayment, writeOffRest, type PaymentContext, 
 import { matchStatementRows } from '../../src/books/bank-import.js';
 import { periodLock, type Books } from '../../src/books/store.js';
 import type { BankTransaction } from '../../src/types/index.js';
-import { mulberry32, r2, YEAR, type DemoInvoicing, type DemoSend, type Part, type Payment } from './kit.js';
+import { mulberry32, r2, YEAR, type DemoInvoicing, type DemoSend, type Part, type Payment, type SalesLine, type SalesStep } from './kit.js';
 
 /** The number each issued document gets: issued in step order, numbered per year from 001. */
 export function numbersOf(inv: DemoInvoicing): Map<string, string> {
@@ -132,16 +133,66 @@ export async function playInvoicing(inv: DemoInvoicing, manifest: string, owner:
     }
     arrived('9999-12-31');
     // From a seed of their own, so the seeded ids of every other record (and of the entries booked after) stay as they were.
-    if (inv.articles?.length) {
-      const rnd = mulberry32(0xa271c1e5);
+    const ownSeed = async (seed: number, fn: () => Promise<void> | void) => {
+      const rnd = mulberry32(seed);
       const before = idSource.bytes;
       idSource.bytes = (n) => Buffer.from(Array.from({ length: n }, () => Math.floor(rnd() * 256)));
-      try { addArticles(ws, inv.articles, `${YEAR}-07-01T08:00:00.000Z`); } finally { idSource.bytes = before; }
-    }
+      try { await fn(); } finally { idSource.bytes = before; }
+    };
+    let articles: Article[] = [];
+    if (inv.articles?.length) await ownSeed(0xa271c1e5, () => { articles = addArticles(ws, inv.articles!, `${YEAR}-07-01T08:00:00.000Z`); });
+    if (inv.sales) await ownSeed(0x5a1e5f2, () => playSales(ws, inv, customerIds, articles, ids, owner));
   } finally {
     await closeBrowser();
   }
   return { ws, ids };
+}
+
+/**
+ * Phase 2 (DemoInvoicing.sales): its contacts, then its documents through the app's own service,
+ * each at its own time: issued, converted with the ticked positions, answered, sent. A contact
+ * person or an address is picked on the draft before it is issued.
+ */
+async function playSales(ws: Workspace, inv: DemoInvoicing, customerIds: Map<string, string>, articles: readonly Article[], ids: Map<string, string>, owner: string): Promise<void> {
+  const sales = inv.sales!;
+  const contactIds = new Map(customerIds);
+  for (const [key, fields] of Object.entries(sales.contacts ?? {})) contactIds.set(key, addContacts(ws, [fields], `${YEAR}-07-01T08:00:00.000Z`)[0].id);
+  const contactOf = (id: string) => loadInvoices(ws).contacts.find((c) => c.id === id);
+  const lineOf = (l: SalesLine, doc: { date: string; prices: Prices }, contactId: string): InvoiceLine => {
+    if (!('article' in l)) return l;
+    const a = articles.find((x) => x.code === l.article);
+    if (!a) throw new Error(`demo sales: no Artikel ${l.article}`);
+    return { ...articleLine(a, doc, contactOf(contactId), ws.invoicing?.units), quantity: l.quantity };
+  };
+  const pick = (s: { person?: string; address?: string }) => ({ ...(s.person ? { personId: s.person } : {}), ...(s.address ? { addressId: s.address } : {}) });
+  const finish = async (s: Extract<SalesStep, { do: 'issue' | 'convert' }>, id: string) => {
+    ids.set(s.key, id);
+    if (s.draft) return;
+    const issued = await issueInvoice(ws, id, { now: s.at });
+    const send = s.send ?? 'email';
+    if (send === 'none') return;
+    if (send === 'email' && !issued.customer.email) throw new Error(`demo document ${s.key} goes by e-mail: its contact needs an address`);
+    const deliver = send === 'email' ? async () => ({ to: issued.customer.email!, messageId: `<${issued.number}.${s.at.slice(0, 10)}@mail.demo.example>` }) : undefined;
+    await recordSend(ws, id, { now: s.at, ...(deliver ? { deliver } : {}) });
+  };
+  for (const s of sales.steps) {
+    if (s.do === 'issue') {
+      const customerId = contactIds.get(s.customer);
+      if (!customerId) throw new Error(`demo sales: no contact ${s.customer}`);
+      const prices = s.prices ?? ws.invoicing?.prices[s.kind] ?? 'net';
+      const draft = createDraft(ws, {
+        customerId, kind: s.kind, date: s.date, subject: s.subject, prices, lines: s.lines.map((l) => lineOf(l, { date: s.date, prices }, customerId)),
+        ...(s.validUntil ? { validUntil: s.validUntil } : {}), ...(s.ordered ? { ordered: s.ordered } : {}), ...pick(s),
+      }, s.at);
+      await finish(s, draft.id);
+    } else if (s.do === 'convert') {
+      const made = convertDocument(ws, ids.get(s.of)!, { to: s.to, lines: s.lines, ...(s.confirm ? { confirm: s.confirm } : {}) }, s.at);
+      if (s.person || s.address) updateDraft(ws, made.id, pick(s));
+      await finish(s, made.id);
+    } else {
+      answerQuote(ws, ids.get(s.of)!, s.answer, owner, s.at.slice(0, 10));
+    }
+  }
 }
 
 /** Runs `fn` with record and entry ids drawn from `seed`, so the same seed gives the same files. */

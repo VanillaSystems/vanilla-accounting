@@ -54,4 +54,24 @@ export const SCHREINEREI_INVOICING: DemoInvoicing = {
         { text: 'Montage', quantity: 24, unit: 'h', price: 98, vatRate: 8.1 },
       ] },
   ],
+  // Phase 2 (spec 5 «Phase 2»): a kitchen quoted to another family, accepted, and its Auftrag (printed as Auftragsbestätigung).
+  sales: {
+    contacts: {
+      rossi: {
+        type: 'firm', name: 'Familie Beispiel-Rossi', language: 'de', emails: ['beispiel-rossi@mail.example'], paymentDays: 30, persons: [],
+        addresses: [{ id: 'a-1', street: 'Bühlstrasse', number: '4', postcode: '9010', town: 'St. Gallen', country: 'CH', billing: true }],
+      },
+    },
+    steps: [
+      { do: 'issue', key: 'an-kueche', kind: 'quote', customer: 'rossi', at: '2026-10-05T15:30:00.000Z', date: '2026-10-05', validUntil: '2026-11-04', subject: 'Küche in Eiche', prices: 'gross',
+        lines: [
+          { kind: 'text', text: 'Küche', style: 'title' },
+          { text: 'Küchenfronten Eiche massiv, Herstellung', quantity: 12, unit: 'pcs', price: 390, vatRate: 8.1 },
+          { text: 'Korpusse und Arbeitsplatte, Montage', quantity: 28, unit: 'h', price: 98, vatRate: 8.1 },
+          { text: 'Einbaugeräte (Backofen, Kochfeld, Geschirrspüler), Lieferung', quantity: 1, unit: 'flat', price: 3950, vatRate: 8.1, activity: 2 },
+        ] },
+      { do: 'answer', of: 'an-kueche', at: '2026-10-12T17:00:00.000Z', answer: 'accepted' },
+      { do: 'convert', key: 'au-kueche', of: 'an-kueche', to: 'sales-order', at: '2026-10-13T08:00:00.000Z', lines: [{ line: 1, quantity: 12 }, { line: 2, quantity: 28 }, { line: 3, quantity: 1 }] },
+    ],
+  },
 };

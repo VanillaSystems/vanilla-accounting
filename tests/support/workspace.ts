@@ -44,9 +44,10 @@ export function salonWithoutIban(): string {
  * ids: the ids follow the generator's seed and move whenever the demo gains a document.
  */
 export function demoInvoices(): { draftOf(customer: string): string; next(n?: number): string } {
-  const book = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as { contacts: Array<{ id: string; name: string }>; invoices: Array<{ id: string; status: string; customerId: string; number?: string }> };
+  const book = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as { contacts: Array<{ id: string; name: string }>; invoices: Array<{ id: string; status: string; kind: string; customerId: string; number?: string }> };
   const name = (id: string) => book.contacts.find((c) => c.id === id)?.name;
-  const last = Math.max(...book.invoices.filter((i) => i.status === 'issued').map((i) => Number(i.number!.slice(5))));
+  // The Rechnungen and Gutschriften share the demo's old series (2026-001); Angebote, Aufträge and Lieferscheine have their own.
+  const last = Math.max(...book.invoices.filter((i) => i.status === 'issued' && (i.kind === 'invoice' || i.kind === 'credit-note')).map((i) => Number(i.number!.slice(5))));
   return {
     draftOf: (customer) => book.invoices.find((i) => i.status === 'draft' && name(i.customerId) === customer)!.id,
     next: (n = 1) => `2026-${String(last + n).padStart(3, '0')}`,

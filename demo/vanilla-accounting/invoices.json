@@ -210,6 +210,68 @@
       "emails": [],
       "paymentDays": 30,
       "number": "K-00008"
+    },
+    {
+      "id": "cu_sZxm_ABGqQ09",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "import",
+      "deleted": false,
+      "type": "firm",
+      "name": "Beispiel Cafés AG",
+      "language": "de",
+      "emails": [
+        "info@beispiel-cafes.example"
+      ],
+      "paymentDays": 30,
+      "persons": [
+        {
+          "id": "p-1",
+          "name": "Laura Beispiel",
+          "role": "Einkauf",
+          "email": "einkauf@beispiel-cafes.example"
+        },
+        {
+          "id": "p-2",
+          "name": "Marco Muster",
+          "role": "Buchhaltung",
+          "email": "buchhaltung@beispiel-cafes.example"
+        }
+      ],
+      "addresses": [
+        {
+          "id": "a-1",
+          "label": "Hauptsitz",
+          "street": "Löwenstrasse",
+          "number": "20",
+          "postcode": "8001",
+          "town": "Zürich",
+          "country": "CH",
+          "billing": true
+        },
+        {
+          "id": "a-2",
+          "label": "Filiale Bern",
+          "attn": "Filiale Bern",
+          "street": "Marktgasse",
+          "number": "5",
+          "postcode": "3011",
+          "town": "Bern",
+          "country": "CH",
+          "delivery": true
+        },
+        {
+          "id": "a-3",
+          "label": "Filiale Basel",
+          "attn": "Filiale Basel",
+          "street": "Freie Strasse",
+          "number": "30",
+          "postcode": "4051",
+          "town": "Basel",
+          "country": "CH",
+          "delivery": true
+        }
+      ],
+      "number": "K-00009"
     }
   ],
   "articles": [
@@ -2406,6 +2468,886 @@
         "file": "transactional-data/2026/invoices/2026-018.pdf",
         "sha256": "5a5178d93de74899c447c026e558bab741de3bacd55b12b511d8df7293c0095e"
       }
+    },
+    {
+      "id": "in_7YM_ZR6poOqj",
+      "createdAt": "2026-10-15T09:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "quote",
+      "date": "2026-10-15",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Hausmischung Espresso, Karton à 6 × 1 kg",
+          "quantity": 10,
+          "unit": "pcs",
+          "price": 162,
+          "vatRate": 2.6
+        }
+      ],
+      "prices": "net",
+      "validUntil": "2026-11-14",
+      "customerId": "cu_sZxm_ABGqQ09",
+      "subject": "Hausmischung für zwei Filialen",
+      "personId": "p-1",
+      "intro": "Gerne unterbreiten wir Ihnen folgendes Angebot:",
+      "closing": "Wir freuen uns auf Ihren Auftrag.\nFreundliche Grüsse",
+      "status": "issued",
+      "number": "AN-2026-00001",
+      "issuedAt": "2026-10-15T09:00:00.000Z",
+      "dueDate": "2026-11-14",
+      "reference": "",
+      "customer": {
+        "name": "Beispiel Cafés AG",
+        "attn": "z. Hd. Laura Beispiel",
+        "address": {
+          "street": "Löwenstrasse",
+          "number": "20",
+          "postcode": "8001",
+          "town": "Zürich",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "einkauf@beispiel-cafes.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "logos/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        }
+      ],
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/AN-2026-00001.pdf",
+        "sha256": "56782d6d33341790c521133d0b6d70de9621691fbc89b3286db5824de3b7ec85"
+      },
+      "accepted": {
+        "date": "2026-10-19",
+        "by": "Anna Muster"
+      }
+    },
+    {
+      "id": "in_3PwBNv9AAcSJ",
+      "createdAt": "2026-10-19T08:45:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "sales-order",
+      "customerId": "cu_sZxm_ABGqQ09",
+      "personId": "p-1",
+      "date": "2026-10-19",
+      "currency": "CHF",
+      "language": "de",
+      "subject": "Hausmischung für zwei Filialen",
+      "lines": [
+        {
+          "text": "Hausmischung Espresso, Karton à 6 × 1 kg",
+          "quantity": 10,
+          "unit": "pcs",
+          "price": 162,
+          "vatRate": 2.6,
+          "ofLine": 0
+        }
+      ],
+      "prices": "net",
+      "from": {
+        "id": "in_7YM_ZR6poOqj",
+        "kind": "quote"
+      },
+      "intro": "Vielen Dank für Ihren Auftrag. Wir bestätigen Ihnen:",
+      "closing": "Freundliche Grüsse",
+      "status": "issued",
+      "number": "AU-2026-00001",
+      "issuedAt": "2026-10-19T08:45:00.000Z",
+      "dueDate": "2026-11-18",
+      "reference": "",
+      "customer": {
+        "name": "Beispiel Cafés AG",
+        "attn": "z. Hd. Laura Beispiel",
+        "address": {
+          "street": "Löwenstrasse",
+          "number": "20",
+          "postcode": "8001",
+          "town": "Zürich",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "einkauf@beispiel-cafes.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "logos/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        }
+      ],
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/AU-2026-00001.pdf",
+        "sha256": "8af1938bac880137a1d95948e204614827c75d67dbb5129c28d32a1ffd9074c9"
+      }
+    },
+    {
+      "id": "in_ToRcOZgdm9tN",
+      "createdAt": "2026-10-22T07:15:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "delivery-note",
+      "customerId": "cu_sZxm_ABGqQ09",
+      "personId": "p-1",
+      "date": "2026-10-22",
+      "currency": "CHF",
+      "language": "de",
+      "subject": "Hausmischung für zwei Filialen",
+      "lines": [
+        {
+          "text": "Hausmischung Espresso, Karton à 6 × 1 kg",
+          "quantity": 6,
+          "unit": "pcs",
+          "price": 162,
+          "vatRate": 2.6,
+          "ofLine": 0
+        }
+      ],
+      "prices": "net",
+      "from": {
+        "id": "in_3PwBNv9AAcSJ",
+        "kind": "sales-order"
+      },
+      "addressId": "a-2",
+      "intro": "Wir liefern Ihnen:",
+      "closing": "Ware erhalten:\n\n\nDatum, Unterschrift",
+      "status": "issued",
+      "number": "LS-2026-00001",
+      "issuedAt": "2026-10-22T07:15:00.000Z",
+      "dueDate": "2026-11-21",
+      "reference": "",
+      "customer": {
+        "name": "Beispiel Cafés AG",
+        "attn": "Filiale Bern, z. Hd. Laura Beispiel",
+        "address": {
+          "street": "Marktgasse",
+          "number": "5",
+          "postcode": "3011",
+          "town": "Bern",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "einkauf@beispiel-cafes.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "logos/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        }
+      ],
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/LS-2026-00001.pdf",
+        "sha256": "cda79d5076350187dc2cabe771ec9fc2c103d974ecd9ab70de8b73b2625afb77"
+      }
+    },
+    {
+      "id": "in_cZrP2NGCBLRo",
+      "createdAt": "2026-10-29T07:20:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "delivery-note",
+      "customerId": "cu_sZxm_ABGqQ09",
+      "personId": "p-1",
+      "date": "2026-10-29",
+      "currency": "CHF",
+      "language": "de",
+      "subject": "Hausmischung für zwei Filialen",
+      "lines": [
+        {
+          "text": "Hausmischung Espresso, Karton à 6 × 1 kg",
+          "quantity": 4,
+          "unit": "pcs",
+          "price": 162,
+          "vatRate": 2.6,
+          "ofLine": 0
+        }
+      ],
+      "prices": "net",
+      "from": {
+        "id": "in_3PwBNv9AAcSJ",
+        "kind": "sales-order"
+      },
+      "addressId": "a-3",
+      "intro": "Wir liefern Ihnen:",
+      "closing": "Ware erhalten:\n\n\nDatum, Unterschrift",
+      "status": "issued",
+      "number": "LS-2026-00002",
+      "issuedAt": "2026-10-29T07:20:00.000Z",
+      "dueDate": "2026-11-28",
+      "reference": "",
+      "customer": {
+        "name": "Beispiel Cafés AG",
+        "attn": "Filiale Basel, z. Hd. Laura Beispiel",
+        "address": {
+          "street": "Freie Strasse",
+          "number": "30",
+          "postcode": "4051",
+          "town": "Basel",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "einkauf@beispiel-cafes.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "logos/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        }
+      ],
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/LS-2026-00002.pdf",
+        "sha256": "df138f35972429ae68fca4ce9bdea5f3688423c61c5908cb709327105e2fbc7c"
+      }
+    },
+    {
+      "id": "in_Na5d1ss6GPiH",
+      "createdAt": "2026-10-30T10:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "customerId": "cu_sZxm_ABGqQ09",
+      "personId": "p-2",
+      "date": "2026-10-30",
+      "currency": "CHF",
+      "language": "de",
+      "subject": "Hausmischung für zwei Filialen",
+      "lines": [
+        {
+          "text": "Hausmischung Espresso, Karton à 6 × 1 kg",
+          "quantity": 10,
+          "unit": "pcs",
+          "price": 162,
+          "vatRate": 2.6,
+          "ofLine": 0
+        }
+      ],
+      "prices": "net",
+      "from": {
+        "id": "in_3PwBNv9AAcSJ",
+        "kind": "sales-order"
+      },
+      "termsId": "net30",
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Anna Muster",
+      "status": "issued",
+      "number": "2026-019",
+      "issuedAt": "2026-10-30T10:00:00.000Z",
+      "dueDate": "2026-11-29",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
+      "reference": "000000000000000000020260194",
+      "customer": {
+        "name": "Beispiel Cafés AG",
+        "attn": "z. Hd. Marco Muster",
+        "address": {
+          "street": "Löwenstrasse",
+          "number": "20",
+          "postcode": "8001",
+          "town": "Zürich",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "buchhaltung@beispiel-cafes.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "logos/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        }
+      ],
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/2026-019.pdf",
+        "sha256": "7c99455b2698962f3a6ad98b3952b5b1c00b696ae2c4905be69014d6e6ae4507"
+      }
+    },
+    {
+      "id": "in_cWjQ1FKixiFl",
+      "createdAt": "2026-09-01T10:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "quote",
+      "date": "2026-09-01",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Espresso-Mischung Crema, Bohnen 1 kg",
+          "quantity": 25,
+          "unit": "pcs",
+          "price": 32,
+          "vatRate": 2.6
+        }
+      ],
+      "prices": "net",
+      "validUntil": "2026-09-30",
+      "customerId": "cu_5GQVervgd2rF",
+      "subject": "Espresso-Mischung Crema, Herbst",
+      "intro": "Gerne unterbreiten wir Ihnen folgendes Angebot:",
+      "closing": "Wir freuen uns auf Ihren Auftrag.\nFreundliche Grüsse",
+      "status": "issued",
+      "number": "AN-2026-00002",
+      "issuedAt": "2026-09-01T10:30:00.000Z",
+      "dueDate": "2026-10-01",
+      "reference": "",
+      "customer": {
+        "name": "Beispiel Bistro AG",
+        "address": {
+          "street": "Seeweg",
+          "number": "12",
+          "postcode": "3000",
+          "town": "Bern",
+          "country": "CH"
+        },
+        "language": "de",
+        "vatId": "CHE-987.654.320 MWST",
+        "email": "buchhaltung@bistro.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "logos/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        }
+      ],
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/AN-2026-00002.pdf",
+        "sha256": "ea1da358be7974dd039df68dd9d47390573607c7d3e28be5f3cd5c1bc962a8a6"
+      }
+    },
+    {
+      "id": "in_rWTbysbHIFrD",
+      "createdAt": "2026-11-02T14:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "quote",
+      "date": "2026-11-02",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Filterkaffee Guji, Bohnen 500 g",
+          "quantity": 48,
+          "unit": "pcs",
+          "price": 16.5,
+          "vatRate": 2.6
+        },
+        {
+          "text": "Barista-Schulung Latte Art, halber Tag",
+          "quantity": 1,
+          "unit": "flat",
+          "price": 380,
+          "vatRate": 8.1,
+          "account": "3600",
+          "optional": true
+        },
+        {
+          "text": "Milchkännchen 600 ml, Inox",
+          "quantity": 6,
+          "unit": "pcs",
+          "price": 24,
+          "vatRate": 8.1,
+          "account": "3600",
+          "optional": true
+        }
+      ],
+      "prices": "net",
+      "validUntil": "2026-12-31",
+      "customerId": "cu_2KIQYfUMHYIT",
+      "subject": "Filterkaffee Winter mit Schulung",
+      "intro": "Gerne unterbreiten wir Ihnen folgendes Angebot:",
+      "closing": "Wir freuen uns auf Ihren Auftrag.\nFreundliche Grüsse",
+      "status": "issued",
+      "number": "AN-2026-00003",
+      "issuedAt": "2026-11-02T14:00:00.000Z",
+      "dueDate": "2026-11-22",
+      "reference": "",
+      "customer": {
+        "name": "Muster Hotel GmbH",
+        "attn": "Küche, z. H. Herr Beispiel",
+        "address": {
+          "street": "Pilatusstrasse",
+          "number": "9",
+          "postcode": "6003",
+          "town": "Luzern",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "kueche@musterhotel.example",
+        "paymentTermsDays": 20
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "logos/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        },
+        {
+          "id": "flat",
+          "de": "pauschal",
+          "fr": "forfait",
+          "it": "forfait",
+          "en": "flat rate"
+        }
+      ],
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/AN-2026-00003.pdf",
+        "sha256": "5b2a44894e5e22025445e230088f4805e3809676f8e01a7a20ccbf950941d0d9"
+      }
+    },
+    {
+      "id": "in_B-FjJVIpKOQS",
+      "createdAt": "2026-11-05T09:40:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-11-05",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "kind": "article",
+          "articleId": "ar_NuJ4rr5701Xz",
+          "code": "HM-1",
+          "text": "Hausmischung 1 kg",
+          "quantity": 30,
+          "unit": "kg",
+          "price": 28,
+          "vatRate": 2.6
+        },
+        {
+          "kind": "article",
+          "articleId": "ar_cYtU_kNE1Kr_",
+          "code": "ES-1",
+          "text": "Espresso Bohnen 1 kg",
+          "quantity": 20,
+          "unit": "kg",
+          "price": 32,
+          "vatRate": 2.6
+        },
+        {
+          "kind": "article",
+          "articleId": "ar_-9b0YbPYk3Xt",
+          "code": "DC-1",
+          "text": "Entkoffeiniert 500 g",
+          "quantity": 12,
+          "unit": "pcs",
+          "price": 16.5,
+          "vatRate": 2.6
+        },
+        {
+          "kind": "article",
+          "articleId": "ar_WVGMGw-CDpbp",
+          "code": "MU-7",
+          "text": "Kaffeemühle Modell 7",
+          "quantity": 1,
+          "unit": "pcs",
+          "price": 322.85,
+          "vatRate": 8.1
+        }
+      ],
+      "prices": "net",
+      "termsId": "net30",
+      "customerId": "cu_S9Jcs6yeSIZJ",
+      "subject": "Grosshandel November",
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Anna Muster",
+      "status": "issued",
+      "number": "2026-020",
+      "issuedAt": "2026-11-05T09:40:00.000Z",
+      "dueDate": "2026-12-05",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
+      "reference": "000000000000000000020260203",
+      "customer": {
+        "name": "Beispiel Kantine AG",
+        "address": {
+          "street": "Werkstrasse",
+          "number": "8",
+          "postcode": "5000",
+          "town": "Aarau",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "einkauf@beispiel-kantine.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Kaffee GmbH",
+        "address": {
+          "postcode": "8000",
+          "town": "Zürich",
+          "country": "CH",
+          "street": "Musterstrasse",
+          "number": "1"
+        },
+        "uid": "CHE-123.456.789",
+        "payTo": {
+          "account": "1021",
+          "iban": "CH6580808000000000001",
+          "qrIban": "CH4431999123000889012",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#5a3a22",
+        "window": "right",
+        "logo": "logos/logo.svg",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        },
+        {
+          "id": "kg",
+          "de": "kg",
+          "fr": "kg",
+          "it": "kg",
+          "en": "kg"
+        }
+      ],
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/2026-020.pdf",
+        "sha256": "8e59a78c9e08e56f72d21df3fdb041e989528d3e38db348b5e723419ddfb2e64"
+      }
     }
   ],
   "sent": [
@@ -2674,6 +3616,124 @@
       "sentAt": "2026-10-05T07:30:00.000Z",
       "to": "download",
       "channel": "download"
+    },
+    {
+      "id": "sd_cN6mCCvPpPcD",
+      "createdAt": "2026-10-15T09:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_7YM_ZR6poOqj",
+      "kind": "quote",
+      "title": "Angebot AN-2026-00001",
+      "file": "transactional-data/2026/invoices/AN-2026-00001.pdf",
+      "sha256": "56782d6d33341790c521133d0b6d70de9621691fbc89b3286db5824de3b7ec85",
+      "sentAt": "2026-10-15T09:00:00.000Z",
+      "to": "einkauf@beispiel-cafes.example",
+      "channel": "email",
+      "messageId": "<AN-2026-00001.2026-10-15@mail.demo.example>"
+    },
+    {
+      "id": "sd_ewq65bbjmV_t",
+      "createdAt": "2026-10-19T08:45:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_3PwBNv9AAcSJ",
+      "kind": "sales-order",
+      "title": "Auftragsbestätigung AU-2026-00001",
+      "file": "transactional-data/2026/invoices/AU-2026-00001.pdf",
+      "sha256": "8af1938bac880137a1d95948e204614827c75d67dbb5129c28d32a1ffd9074c9",
+      "sentAt": "2026-10-19T08:45:00.000Z",
+      "to": "einkauf@beispiel-cafes.example",
+      "channel": "email",
+      "messageId": "<AU-2026-00001.2026-10-19@mail.demo.example>"
+    },
+    {
+      "id": "sd_2QQlGulD1RUi",
+      "createdAt": "2026-10-22T07:15:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_ToRcOZgdm9tN",
+      "kind": "delivery-note",
+      "title": "Lieferschein LS-2026-00001",
+      "file": "transactional-data/2026/invoices/LS-2026-00001.pdf",
+      "sha256": "cda79d5076350187dc2cabe771ec9fc2c103d974ecd9ab70de8b73b2625afb77",
+      "sentAt": "2026-10-22T07:15:00.000Z",
+      "to": "einkauf@beispiel-cafes.example",
+      "channel": "download"
+    },
+    {
+      "id": "sd_3vt1pZiwz1jy",
+      "createdAt": "2026-10-29T07:20:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_cZrP2NGCBLRo",
+      "kind": "delivery-note",
+      "title": "Lieferschein LS-2026-00002",
+      "file": "transactional-data/2026/invoices/LS-2026-00002.pdf",
+      "sha256": "df138f35972429ae68fca4ce9bdea5f3688423c61c5908cb709327105e2fbc7c",
+      "sentAt": "2026-10-29T07:20:00.000Z",
+      "to": "einkauf@beispiel-cafes.example",
+      "channel": "download"
+    },
+    {
+      "id": "sd_JheKvg3j008o",
+      "createdAt": "2026-10-30T10:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_Na5d1ss6GPiH",
+      "kind": "invoice",
+      "title": "Rechnung 2026-019",
+      "file": "transactional-data/2026/invoices/2026-019.pdf",
+      "sha256": "7c99455b2698962f3a6ad98b3952b5b1c00b696ae2c4905be69014d6e6ae4507",
+      "sentAt": "2026-10-30T10:00:00.000Z",
+      "to": "buchhaltung@beispiel-cafes.example",
+      "channel": "email",
+      "messageId": "<2026-019.2026-10-30@mail.demo.example>"
+    },
+    {
+      "id": "sd_kSX_kMcaGwgK",
+      "createdAt": "2026-09-01T10:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_cWjQ1FKixiFl",
+      "kind": "quote",
+      "title": "Angebot AN-2026-00002",
+      "file": "transactional-data/2026/invoices/AN-2026-00002.pdf",
+      "sha256": "ea1da358be7974dd039df68dd9d47390573607c7d3e28be5f3cd5c1bc962a8a6",
+      "sentAt": "2026-09-01T10:30:00.000Z",
+      "to": "buchhaltung@bistro.example",
+      "channel": "email",
+      "messageId": "<AN-2026-00002.2026-09-01@mail.demo.example>"
+    },
+    {
+      "id": "sd_1RuWcmTF5rPE",
+      "createdAt": "2026-11-02T14:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_rWTbysbHIFrD",
+      "kind": "quote",
+      "title": "Angebot AN-2026-00003",
+      "file": "transactional-data/2026/invoices/AN-2026-00003.pdf",
+      "sha256": "5b2a44894e5e22025445e230088f4805e3809676f8e01a7a20ccbf950941d0d9",
+      "sentAt": "2026-11-02T14:00:00.000Z",
+      "to": "kueche@musterhotel.example",
+      "channel": "email",
+      "messageId": "<AN-2026-00003.2026-11-02@mail.demo.example>"
+    },
+    {
+      "id": "sd_WTi2yWlks4FB",
+      "createdAt": "2026-11-05T09:40:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_B-FjJVIpKOQS",
+      "kind": "invoice",
+      "title": "Rechnung 2026-020",
+      "file": "transactional-data/2026/invoices/2026-020.pdf",
+      "sha256": "8e59a78c9e08e56f72d21df3fdb041e989528d3e38db348b5e723419ddfb2e64",
+      "sentAt": "2026-11-05T09:40:00.000Z",
+      "to": "einkauf@beispiel-kantine.example",
+      "channel": "email",
+      "messageId": "<2026-020.2026-11-05@mail.demo.example>"
     }
   ]
 }
