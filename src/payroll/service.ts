@@ -22,6 +22,7 @@ import type { PayrollData } from '../core/modules/schema.js';
 import { firmWageTypes } from './catalogue.js';
 import type { PayrollContext } from './compute.js';
 import { historyOf } from './history.js';
+import { tariffSource } from './tariffs.js';
 import { PayrollRefusal, applyClose, applyReopen, assertReopenable, closeEventOf, correctionOf, entriesOf, payslipReceipt, planClose, reopenEventOf, type ClosePlan, type CloseWarning } from './close.js';
 import { payslipPdf } from './pdf.js';
 import { lineSource, sourceText } from './sources.js';
@@ -44,7 +45,7 @@ export function payrollData(): PayrollData {
 }
 
 export function payrollContext(ws: Pick<Workspace, 'paths'>): PayrollContext {
-  return { data: payrollData(), years: payrollYears(), store: loadPayroll(ws), history: historyOf(allPayslipEvents(ws)) };
+  return { data: payrollData(), years: payrollYears(), store: loadPayroll(ws), history: historyOf(allPayslipEvents(ws)), tariffs: tariffSource(ws) };
 }
 
 /** Every payslip closed as it stands, in every year. */
