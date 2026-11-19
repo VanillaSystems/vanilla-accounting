@@ -55,6 +55,8 @@ export interface PayrollInsurance {
   solutions: InsuranceSolution[];
   validFrom: string;
   validUntil?: string;
+  /** The document it was set up from (a fund's decision, a policy: Belege), when the person kept it off its card (src/payroll/setup-documents.ts). */
+  source?: { receiptId: string };
 }
 
 /** The firm's layer over the catalogue (§5.3): an override, a copy, or a Lohnart of its own after the warning. */

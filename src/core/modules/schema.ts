@@ -470,6 +470,12 @@ export interface PayrollData {
   };
   /** How a social security number looks (a regular expression), what stands for it in a text sent to a model, and how its last digit checks the others. */
   socialSecurityNumber: { pattern: string; masked: string; checkDigit?: 'ean13' };
+  /**
+   * The funds' and insurers' documents the Sozialversicherungen are set up from (src/payroll/setup-documents.ts): the words
+   * that name each kind's document in its first lines, the labels of its numbers, each kind's rates by the words on their
+   * line, and the words of a line never sent to a model (a salary).
+   */
+  setupDocuments?: { kinds: Record<string, string[]>; numbers: Partial<Record<'memberNumber' | 'contractNumber', string[]>>; rates: Record<string, Record<string, string[]>>; notToModel: string[] };
   /** The words of the payroll's documents, in each language. */
   documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate', Labels>;
 }

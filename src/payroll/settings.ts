@@ -361,11 +361,14 @@ export function createInsurance(store: PayrollStore, data: PayrollData, input: R
   const validFrom = day(input.validFrom, 'Gilt ab');
   const code = optStr(input.code) ?? 'A';
   const { value, warnings } = ratesValue(kind, input.rates ?? {}, data);
+  // Kept off a document's card (src/payroll/setup-documents.ts): the insurance and its rates name the document.
+  const receiptId = optStr(input.receiptId);
+  const source = receiptId ? { source: { receiptId } } : {};
   const insurance: PayrollInsurance = clean({
     id, kind, name: str(input.name, 'Name'), business: optStr(input.business), memberNumber: optStr(input.memberNumber), contractNumber: optStr(input.contractNumber),
     customerNumber: optStr(input.customerNumber), account: accountValue(input.account),
-    solutions: [clean({ code, label: optStr(input.solutionLabel), rates: Object.keys(value).length ? [{ validFrom, value, enteredAt: now }] : [] })],
-    validFrom,
+    solutions: [clean({ code, label: optStr(input.solutionLabel), rates: Object.keys(value).length ? [{ validFrom, value, enteredAt: now, ...source }] : [] })],
+    validFrom, ...source,
   });
   store.insurances.push(insurance);
   return { insurance, warnings };
@@ -643,3 +646,49 @@ export function settingsView(ctx: PayrollContext, accounts: PayrollAccount[]) {
   };
 }
 export type SettingsView = ReturnType<typeof settingsView>;
+
+// ─── a document's card (src/payroll/setup-documents.ts) ────────────────────────
+
+/** One insurance of a card as the person kept it: the card's fields after her edits, and from when they hold. */
+export interface KeptItem { kind: string; name?: string; memberNumber?: string; contractNumber?: string; code?: string; rates?: Record<string, number>; validFrom: string; person?: { name: string; employee?: number; employer?: number } }
+
+const foldName = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^\p{L}]+/gu, ' ').trim();
+
+/**
+ * Keeps a document's card (§6.1 step 2): each insurance it proposes is created as the form creates it, or, where the firm
+ * has one of the kind, its rates are a dated entry from `validFrom` of its solution (a new solution for a new code) and
+ * the numbers it lacks are set; a pension certificate's person gets her contributions as a dated entry of her
+ * insurances. Every entry names the document (`source.receiptId`). `persons`: the people the certificate names that
+ * payroll.json does not have, left for the person to add.
+ */
+export function keepSetupCard(store: PayrollStore, data: PayrollData, receiptId: string, items: readonly KeptItem[], newId: () => string, now: string): { insurances: string[]; persons: string[]; warnings: RateWarning[] } {
+  if (!items.length) bad('Die Karte schlägt nichts vor.');
+  const out = { insurances: [] as string[], persons: [] as string[], warnings: [] as RateWarning[] };
+  for (const item of items) {
+    if (!own(data.insurances, item.kind)) bad(`Versicherung ${item.kind} gibt es nicht.`, 'kind');
+    const rates = Object.fromEntries(Object.entries(item.rates ?? {}).filter(([, v]) => typeof v === 'number' && Number.isFinite(v)));
+    let ins = store.insurances.find((i) => i.kind === item.kind && !i.validUntil);
+    if (!ins) {
+      const made = createInsurance(store, data, { kind: item.kind, name: item.name, memberNumber: item.memberNumber, contractNumber: item.contractNumber, code: item.code, validFrom: item.validFrom, rates, receiptId }, newId(), now);
+      ins = made.insurance;
+      out.warnings.push(...made.warnings);
+    } else {
+      for (const k of ['memberNumber', 'contractNumber'] as const) if (!ins[k] && optStr(item[k])) ins[k] = optStr(item[k]);
+      if (Object.keys(rates).length && !data.insurances[item.kind].perPerson) {
+        const code = optStr(item.code) ?? ins.solutions[0]?.code ?? 'A';
+        if (!ins.solutions.some((s) => s.code === code)) out.warnings.push(...addSolution(store, data, ins.id, { code, validFrom: item.validFrom, rates: {} }, now));
+        out.warnings.push(...addDatedEntry(store, data, { path: `insurances/${ins.id}/solutions/${code}/rates`, validFrom: item.validFrom, value: rates, receiptId }, now).warnings);
+      }
+    }
+    out.insurances.push(ins.id);
+    if (item.person && data.insurances[item.kind].perPerson) {
+      const want = foldName(item.person.name);
+      const e = store.employees.find((x) => { const n = x.name.at(-1)?.value; return !!n && foldName(`${n.first} ${n.last}`) === want || (!!n && foldName(`${n.last} ${n.first}`) === want); });
+      if (!e) { out.persons.push(item.person.name); continue; }
+      const current = e.insurances.at(-1)?.value ?? {};
+      const value = { ...current, [item.kind]: { insurance: ins.id, employee: item.person.employee ?? 0, employer: item.person.employer ?? 0 } };
+      addDatedEntry(store, data, { path: `employees/${e.id}/insurances`, validFrom: item.validFrom, value, receiptId }, now);
+    }
+  }
+  return out;
+}

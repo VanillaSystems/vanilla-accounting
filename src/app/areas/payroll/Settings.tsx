@@ -15,7 +15,9 @@ import { PAYROLL_SECTIONS, type PayrollSection } from '../../shell/route.js';
 import type { PayrollAccountRef } from '../../../core/modules/schema.js';
 import type { PayrollInsurance } from '../../../payroll/model.js';
 import type { AreaProps, Nav } from '../index.js';
-import { payrollApi, reloadPayroll, urls, usePayroll, type SettingsView } from './data.js';
+import { payrollApi, reloadPayroll, urls, usePayroll, type KeptItem, type SettingsView, type SetupCard, type SetupCards } from './data.js';
+import { hrefOf } from '../../shell/history.js';
+import { at } from '../receipts/view.js';
 import { Tabs, type PayrollRoute } from './common.js';
 import { DatedField, Fields, numberOf, useBackdated, type FieldDef, type Form, type ValueSpec } from './Dated.js';
 import { data, kindLabel, labelOf, lang, pct, rateLabel } from './words.js';
@@ -143,9 +145,100 @@ function Insurances({ v, nav, canEdit }: Props & { v: SettingsView }) {
     <>
       <p className="lead">{t('payroll.insurances.lead')}</p>
       {missing.length ? <div className="notice warn" role="note">{t('payroll.insurances.missing', { list: missing.map(([k]) => kindLabel(k)).join(', ') })}</div> : null}
+      <DocumentCards nav={nav} canEdit={canEdit} />
       {v.insurances.map((i) => <InsuranceCard key={i.id} i={i} v={v} nav={nav} canEdit={canEdit} />)}
       {canEdit ? (adding ? <NewInsurance v={v} nav={nav} onDone={() => setAdding(false)} /> : <button type="button" className="btn" onClick={() => setAdding(true)}>{t('payroll.insurances.add')}</button>) : null}
     </>
+  );
+}
+
+/**
+ * The funds' and insurers' documents in Belege, each a card of what it proposes (§6.1 step 2, src/payroll/setup-documents.ts):
+ * what code read and what the AI added, each field marked so and editable; «Übernehmen» writes it as the forms do, naming the
+ * document; nothing counts before. Without an AI the card holds what code read, and the forms below do the rest.
+ */
+function DocumentCards({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
+  const load = usePayroll<SetupCards>(urls.setupCards);
+  if (load.state !== 'ready' || !load.data.cards.length) return null;
+  return (
+    <div className="psetup" data-testid="setup-cards">
+      <h4>{t('payroll.setup.title')}</h4>
+      <p className="m">{t('payroll.setup.lead')}</p>
+      {load.data.cards.map((c) => <DocumentCard key={c.receipt} c={c} ai={load.data.ai} nav={nav} canEdit={canEdit} />)}
+    </div>
+  );
+}
+
+const yearStart = (date: string | undefined) => `${(date ?? localToday()).slice(0, 4)}-01-01`;
+
+function DocumentCard({ c, ai, nav, canEdit }: { c: SetupCard; ai: boolean; nav: Nav; canEdit: boolean }) {
+  const d = data();
+  const start: Form = {};
+  c.items.forEach((p, n) => {
+    for (const k of ['name', 'memberNumber', 'contractNumber', 'code'] as const) start[`${n}.${k}`] = p[k] ?? '';
+    for (const k of Object.keys(d?.insurances[p.kind]?.rates ?? {})) start[`${n}.rates.${k}`] = p.rates[k] === undefined ? '' : String(p.rates[k]);
+    if (d?.insurances[p.kind]?.perPerson) { start[`${n}.person`] = p.person?.name ?? ''; start[`${n}.employee`] = p.person?.employee === undefined ? '' : String(p.person.employee); start[`${n}.employer`] = p.person?.employer === undefined ? '' : String(p.person.employer); }
+    start[`${n}.validFrom`] = yearStart(c.date);
+  });
+  const [f, setF] = useState<Form>(start);
+  const card = useBackdated(nav);
+  const by = (p: SetupCard['items'][number], k: string) => (p.by[k] === 'code' ? t('payroll.setup.byCode') : p.by[k] === 'ai' ? t('payroll.setup.byAi') : '');
+  const fieldsOf = (p: SetupCard['items'][number], n: number): FieldDef[] => [
+    { k: `${n}.name`, label: labelOf(d?.insurances[p.kind]?.nameOf, t('payroll.insurances.name')), wide: true, hint: by(p, 'name') },
+    { k: `${n}.memberNumber`, label: t('payroll.insurances.memberNumber'), mono: true, hint: by(p, 'memberNumber') },
+    { k: `${n}.contractNumber`, label: t('payroll.insurances.contractNumber'), mono: true, hint: by(p, 'contractNumber') },
+    ...(d?.insurances[p.kind]?.perPerson ? [
+      { k: `${n}.person`, label: t('payroll.setup.person'), hint: by(p, 'person') },
+      { k: `${n}.employee`, label: t('payroll.setup.employee'), type: 'number' as const },
+      { k: `${n}.employer`, label: t('payroll.setup.employer'), type: 'number' as const },
+    ] : [
+      { k: `${n}.code`, label: t('payroll.insurances.code'), mono: true, hint: by(p, 'code') },
+      ...Object.keys(d?.insurances[p.kind]?.rates ?? {}).map((k) => ({ k: `${n}.rates.${k}`, label: `${rateLabel(p.kind, k)} (%)`, type: 'number' as const, hint: [by(p, `rates.${k}`), rangeHint(p.kind, k)].filter(Boolean).join(' · ') })),
+    ]),
+    { k: `${n}.validFrom`, label: t('payroll.dated.validFrom'), type: 'date' },
+  ];
+  const itemsOf = (): KeptItem[] => c.items.map((p, n) => {
+    const v = (k: string) => f[`${n}.${k}`]?.trim() || undefined;
+    const rates = Object.fromEntries(Object.keys(d?.insurances[p.kind]?.rates ?? {}).flatMap((k) => (numberOf(f[`${n}.rates.${k}`]) === undefined ? [] : [[k, numberOf(f[`${n}.rates.${k}`])!]])));
+    const person = v('person') ? { name: v('person')!, ...(numberOf(f[`${n}.employee`]) !== undefined ? { employee: numberOf(f[`${n}.employee`]) } : {}), ...(numberOf(f[`${n}.employer`]) !== undefined ? { employer: numberOf(f[`${n}.employer`]) } : {}) } : undefined;
+    return { kind: p.kind, name: v('name'), memberNumber: v('memberNumber'), contractNumber: v('contractNumber'), code: v('code'), rates, validFrom: f[`${n}.validFrom`] || yearStart(c.date), ...(person ? { person } : {}) };
+  });
+  const keep = async (e: FormEvent) => {
+    e.preventDefault();
+    await card.send(async (how) => {
+      const r = await payrollApi.keepSetupCard(c.receipt, itemsOf(), how);
+      if (r.saved && r.persons.length) nav.toast(t('payroll.setup.personMissing', { list: r.persons.join(', ') }));
+      return r;
+    });
+  };
+  const act = async (call: () => Promise<unknown>) => { try { await call(); await reloadPayroll(); } catch (err) { nav.toast(errorText(err)); } };
+  const missing = c.items.flatMap((p) => p.missing);
+  const doc = at({ area: 'receipts', id: c.receipt }, c.date);
+  return (
+    <div className="pcard setupcard" data-receipt={c.receipt}>
+      <div className="inshead">
+        <a className="golink" href={hrefOf(doc)} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); nav.go(doc); }}>{c.filename}</a>
+        <span className="m">{c.items.map((p) => kindLabel(p.kind)).join(' · ')}{c.date ? ` · ${formatDate(c.date)}` : ''}</span>
+      </div>
+      {c.items.some((p) => p.exists) ? <p className="m">{t('payroll.setup.exists')}</p> : null}
+      <AsyncForm className="form inline pform" onSubmit={keep}>
+        {c.items.map((p, n) => (
+          <div key={`${p.kind}-${n}`} className="wide setupitem">
+            {c.items.length > 1 ? <b>{kindLabel(p.kind)}</b> : null}
+            <Fields fields={fieldsOf(p, n)} f={f} set={setF} />
+          </div>
+        ))}
+        {missing.length ? <p className="m wide">{ai ? (c.asked ? t('payroll.setup.missingAsked') : t('payroll.setup.missingAi')) : t('payroll.setup.missingNoAi')}</p> : null}
+        {canEdit ? (
+          <div className="acts">
+            <AsyncButton type="submit" className="btn primary">{t('payroll.setup.keep')}</AsyncButton>
+            {ai && missing.length && !c.asked ? <AsyncButton type="button" className="btn" onClick={() => act(() => payrollApi.readSetupCard(c.receipt))}>{t('payroll.setup.askAi')}</AsyncButton> : null}
+            <AsyncButton type="button" className="btn ghost" onClick={() => act(() => payrollApi.dismissSetupCard(c.receipt))}>{t('payroll.setup.dismiss')}</AsyncButton>
+          </div>
+        ) : null}
+      </AsyncForm>
+      {card.node}
+    </div>
   );
 }
 

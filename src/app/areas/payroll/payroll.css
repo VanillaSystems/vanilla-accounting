@@ -174,3 +174,10 @@
 }
 [data-area="payroll"] .pcard p { margin: 0; font-size: 13px; }
 [data-area="payroll"] .row.ppay .a small.pdiff { display: block; font-size: 12px; color: var(--neg); }
+
+/* The funds' documents proposed as insurances (Einstellungen › Sozialversicherungen, src/payroll/setup-documents.ts). */
+[data-area="payroll"] .psetup { margin: 8px 0 16px; max-width: 760px; }
+[data-area="payroll"] .psetup > h4 { margin: 0 0 2px; font: 600 14px var(--font-display); }
+[data-area="payroll"] .setupcard { border-style: dashed; border-color: var(--accent); }
+[data-area="payroll"] .setupcard .setupitem { display: contents; }
+[data-area="payroll"] .setupcard .setupitem > b { grid-column: 1 / -1; font-size: 13px; }
