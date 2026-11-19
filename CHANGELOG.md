@@ -119,6 +119,17 @@ Two markers flag an entry you must read before you update:
 - Payroll, payslips by mail (phase B0): a closed payslip goes to the person's own address as a PDF locked
   with her password (never the AHV number; the date of birth only after a warning; or one the app makes and
   shows once), with a blind copy to the firm's sender; every mail is logged.
+- Payroll, the Löhne area (phase B0, dock G L): Übersicht (the year's months, closed or open, and what
+  is missing), Lohnabrechnungen (the month's people, «Alle abschliessen», one payslip with its lines by
+  Lohnart group, «+ Arbeitgeber», what a line «unvollständig» lacks, «Lohnart hinzufügen», the entries
+  closing books, «Abschliessen» with its warnings in the page, «Korrektur erfassen», «Wieder öffnen» on the
+  latest month, the PDF and the history), Mitarbeitende («Person hinzufügen» with every section at once;
+  each value with «ab», planned values, «Verlauf» and «Ändern» with «gilt ab»; the AHV number masked,
+  in full only after «anzeigen») and Einstellungen (Stammdaten, Sozialversicherungen with their dated
+  rates, Lohnarten, Konten with «Konto anlegen»). A change dated before a closed month first shows which
+  payslips it would change and by how much; «Rückwirkende Korrektur» carries each difference into the next
+  open month, «So lassen» keeps the closed payslip, which then says what differs. A rate outside its usual
+  range is said, never refused. An AHV number is checked by its check digit. Works without the AI.
 
 ### Fixed
 

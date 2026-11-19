@@ -10,13 +10,13 @@
 .mswitch b { font: 600 15px var(--font-display); min-width: 9ch; text-align: center; }
 
 /* The year strip: twelve months in a grid that wraps in a narrow column. */
-.ystrip { display: grid; grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); gap: 6px; }
+.ystrip { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 6px; }
 .ym { display: flex; flex-direction: column; gap: 2px; padding: 8px 9px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); text-decoration: none; min-width: 0; }
 .ym:hover { background: var(--hover); }
 .ym.sel { border-color: var(--accent); background: var(--accent-soft); }
 .ym.now .mn::after { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 5px; vertical-align: 2px; }
 .ym .mn { font-weight: 600; font-size: 13px; text-transform: capitalize; }
-.ym .ms { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ym .ms { font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ym .mg { font-size: 11px; color: var(--ink-2); min-height: 14px; }
 .ym.closed .ms { color: var(--pos); }
 .ym.partial .ms, .ym.open .ms { color: var(--warn); }
@@ -33,7 +33,9 @@
 .pempty .m { color: var(--muted); font-size: 12.5px; }
 
 /* Rows of the lists. */
-.row.slip, .row.emp { grid-template-columns: 96px minmax(0, 1fr) auto; }
+.row.slip { grid-template-columns: 104px minmax(0, 1fr) auto; }
+.row.emp { grid-template-columns: 76px minmax(0, 1fr) auto; }
+.row.emp .t small { display: block; font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .pstate { font-size: 12px; white-space: nowrap; }
 .pstate.closed, .pstate.active { color: var(--pos); }
 .pstate.draft, .pstate.future { color: var(--warn); }
@@ -49,6 +51,8 @@
 .pcard ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; font-size: 13px; }
 .pcard .acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .pcard .m { color: var(--muted); font-size: 12.5px; margin: 0; }
+.pcard > .quiet2 { align-self: flex-start; }
+.pcard .form.inline { border: 0; padding: 0; margin: 0; }
 .warnpanel { border-color: color-mix(in srgb, var(--warn) 45%, transparent); background: var(--warn-soft); }
 .warnpanel h4 { color: var(--warn); }
 .affected b { font-size: 13px; }
@@ -130,9 +134,10 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; fon
 .pcard.ins .inshead { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 14px; }
 .pcard.ins .kv2 { grid-template-columns: 170px minmax(0, 1fr); font-size: 13px; }
 .pcard .dated:last-of-type { border-bottom: 0; }
-.ftab.pwt .fh, .ftab.pwt .fr { grid-template-columns: minmax(0, 1fr) 64px 56px 56px minmax(120px, auto); }
+.ftab.pwt .fh, .ftab.pwt .fr { grid-template-columns: minmax(0, 1fr) 96px 56px 56px minmax(120px, auto); }
 .ftab.pwt .fr.own { background: var(--hover); border-radius: 6px; }
 .ftab.pwt .wtacts { display: inline-flex; gap: 10px; justify-content: flex-end; }
 .ftab.pacc .fh, .ftab.pacc .fr { grid-template-columns: 56px minmax(0, 1fr) minmax(0, 1fr) auto; }
 .ftab.pacc .fr.missing { color: var(--warn); }
 .ftab.pacc .fr .m { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ftab.prun { margin-bottom: 14px; }

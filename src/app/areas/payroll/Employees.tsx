@@ -50,8 +50,8 @@ export function EmployeeList(props: Props) {
                 <div key={r.id} className={`row emp${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={r.id}
                   onClick={() => nav.select({ area: 'payroll', view: 'employees', id: r.id })}>
                   <span className={`d pstate ${r.status}`}>{statusText(r.status)}</span>
-                  <span className="t">{r.name}{r.isOwner ? <small> · {t('payroll.employee.owner')}</small> : null}<small> · {t('payroll.employee.pensum', { pensum: r.pensum ?? 100 })}</small></span>
-                  <span className="a mono">{r.amount !== undefined ? fmt(r.amount) : ''}{r.since ? <small className="m"> {t('payroll.dated.from', { date: formatDate(r.since) })}</small> : null}</span>
+                  <span className="t">{r.name}<small>{[r.isOwner ? t('payroll.employee.owner') : '', t('payroll.employee.pensum', { pensum: r.pensum ?? 100 }), r.since ? t('payroll.dated.from', { date: formatDate(r.since) }) : ''].filter(Boolean).join(' · ')}</small></span>
+                  <span className="a mono">{r.amount !== undefined ? fmt(r.amount) : ''}</span>
                 </div>
               );
             })}

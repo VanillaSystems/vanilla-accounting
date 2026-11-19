@@ -1623,6 +1623,28 @@ non-obvious decision is recorded here when it is taken.
     password lives in `payroll.json` beside her other data (owner decision 4: plain, in the workspace; the AI
     sidebar never reads the file); a generated one is shown once. The copy to the sender goes as a blind copy
     of the same mail; every mail is a line in `payroll/sent.jsonl`.
+26. **Löhne is always in the dock**, not only when the setup's `employees` answer says so (§12.1): a
+    firm whose setup predates the question (the demos) has no other way in, and the shell's dock has no
+    entry that shows by data. The Übersicht's empty state says what to do first («Sozialversicherungen
+    erfassen», «Person hinzufügen»). The question may come back once Firma › Löhne exists.
+27. **A change is compared with each closed payslip computed twice** (§19.3): as if open, once with the
+    values before the change and once with them after. Comparing with the close itself would also show
+    what changed for another reason (an earlier «So lassen», a close after a warning); this way the card
+    names only the change's own difference, Lohnart by Lohnart and side. Each payslip is computed against
+    the months closed before it, as they stand.
+28. **«Rückwirkende Korrektur» records one correction per differing Lohnart** (and so per side, since a
+    Lohnart has one), with no text; the payslip carrying it prints «Korrektur <Monat>». «Wieder öffnen» on
+    the card saves the entry («So lassen») and then reopens the month, the existing route.
+29. **«So lassen» leaves no mark**: a closed payslip's view computes on every read what it would be today,
+    less the corrections entered on it since its close, and says it as a fact (`drift`). Nothing is stored
+    for it, so a later correction makes the fact go away by itself.
+30. **One write path for every dated value**: `POST /api/payroll/entries { path, validFrom, value }` with
+    the same paths a close's `used` names (`employees/<id>/employment`, `…/recurring/<Lohnart>`,
+    `company/rounding`, `insurances/<id>/solutions/<code>/rates`), so «zurücknehmen» checks `used`
+    directly. A recurring Lohnart ends with an entry of amount 0 from a day; an exit is the Anstellung's
+    entry again with `validUntil`.
+31. **An IBAN that fails its check digits is refused**, unlike a rate outside its range (a warning, §18):
+    it is a typing error, not a rule the person may set aside, and a payout to it cannot work.
 
 ---
 

@@ -104,7 +104,7 @@ function Facts({ d, settings, nav }: { d: Data; settings?: SettingsView; nav: Na
     <ul className="pfactlist">
       {missingKinds.length ? <li><Go nav={nav} loc={settingsAt('insurances')}>{t('payroll.overview.missingInsurances', { list: missingKinds.map(kindLabel).join(', ') })}</Go></li> : null}
       {missingAccounts.length ? <li><Go nav={nav} loc={settingsAt('accounts')}>{t('payroll.overview.missingAccounts', { list: missingAccounts.map((a) => a.number).join(', ') })}</Go></li> : null}
-      {open.map((m) => <li key={m.month}><Go nav={nav} loc={at({ area: 'payroll', view: 'payslips', month: m.month })}>{t('payroll.overview.monthOpen', { month: monthText(m.month), closed: m.closed, of: m.of })}</Go></li>)}
+      {open.length ? <li><Go nav={nav} loc={at({ area: 'payroll', view: 'payslips', month: open[0].month })}>{t('payroll.overview.monthsOpen', { n: open.length, months: open.map((m) => monthShort(m.month)).join(', ') })}</Go></li> : null}
       {!d.federal.includes(d.year) ? <li className="warn">{t('payroll.overview.noFederal', { year: d.year })}</li> : null}
     </ul>
   );

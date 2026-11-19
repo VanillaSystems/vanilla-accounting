@@ -236,3 +236,15 @@ test('routes: an entry a closed payslip used cannot be withdrawn', async () => {
   assert.equal((r.json.params as { why: string }).why, 'used');
 });
 
+
+test('the Löhne paths of docs/urls.md parse and format both ways', async () => {
+  const { formatLocation, parseLocation } = await import('../src/app/shell/route.js');
+  const paths = ['/payroll', '/payroll/2026-09', '/payroll/2026-09/p1', '/payroll/payslips', '/payroll/employees', '/payroll/employees/new', '/payroll/settings/insurances'];
+  for (const p of paths) {
+    const loc = parseLocation(p, '', '2026-11-19');
+    assert.ok(!('redirect' in loc), p);
+    assert.equal(loc.route.area, 'payroll', p);
+    assert.equal(formatLocation(loc as never), p);
+  }
+  assert.deepEqual((parseLocation('/payroll/2026-09/p1', '', '2026-11-19') as { route: unknown }).route, { area: 'payroll', view: 'payslips', month: '2026-09', employee: 'p1' });
+});

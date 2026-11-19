@@ -112,7 +112,7 @@ function BackdatedCard({ res, onChoose, onCancel }: { res: Extract<Saved, { save
           <ul>
             {a.differences.map((d) => (
               <li key={`${d.wageType}|${d.side}`}>
-                {t(d.side === 'employer' ? 'payroll.backdated.lineEmployer' : 'payroll.backdated.line', { label: d.label, before: fmt(d.before), after: fmt(d.after), diff: `${d.diff > 0 ? '+' : ''}${fmt(d.diff)}` })}
+                {t('payroll.backdated.line', { label: d.label, before: fmt(d.before), after: fmt(d.after), diff: `${d.diff > 0 ? '+' : ''}${fmt(d.diff)}` })}
               </li>
             ))}
           </ul>
@@ -173,7 +173,7 @@ export function DatedField<T>({ label, path, history, spec, today, defaultFrom, 
       <div className="dbody">
         <div className="dnow">
           {now ? <>{spec.show(now.value)} <span className="from">{t('payroll.dated.from', { date: formatDate(now.validFrom) })}{now.validUntil ? ` ${t('payroll.dated.until', { date: formatDate(now.validUntil) })}` : ''}</span></>
-            : <span className="m">{t('payroll.dated.none')}</span>}
+            : <span className="m">{note ?? t('payroll.dated.none')}</span>}
           {canEdit && !edit ? <button type="button" className="quiet2" onClick={begin}>{t('payroll.dated.change')}</button> : null}
         </div>
         {ahead.map((x) => (
@@ -182,7 +182,7 @@ export function DatedField<T>({ label, path, history, spec, today, defaultFrom, 
             {canEdit && !used.has(key(x)) ? <AsyncButton type="button" className="quiet2" onClick={() => withdraw(x)}>{t('payroll.dated.withdraw')}</AsyncButton> : null}
           </div>
         ))}
-        {note ? <div className="m">{note}</div> : null}
+        {note && now ? <div className="m">{note}</div> : null}
         {earlier.length ? (
           <details className="dhist">
             <summary>{t('payroll.dated.history', { n: earlier.length })}</summary>
