@@ -301,12 +301,12 @@ export function ArticlePicker({ d, nav, draft, after }: Props & { d: InvoiceList
         {hits.length ? (
           <div className="ftab apl">
             {hits.map((a) => (
-              <button key={a.id} type="button" className="fr" data-pick={a.id} onClick={() => { void pick(a); }}>
+              <AsyncButton key={a.id} type="button" className="fr" data-pick={a.id} onClick={() => pick(a)}>
                 <span className="mono">{a.code ?? ''}</span>
                 <span>{a.name}</span>
                 <span className="m">{[unit(a.unit), kindText(a.vatKind)].filter(Boolean).join(' · ')}</span>
                 <span className="r mono">{fmt(a.price)}</span>
-              </button>
+              </AsyncButton>
             ))}
           </div>
         ) : <p className="m">{t(d.articles.some((a) => !a.archived) ? 'articles.pickNone' : 'articles.pickEmpty')}</p>}
