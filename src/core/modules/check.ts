@@ -3,7 +3,7 @@
  * formula that names a missing box or depends on itself, a rate row the form never shows. Each
  * problem names its file and path, so the person (or the AI) editing the overlay can fix it.
  */
-import { INCOME_SECTIONS, STATEMENTS_VAT, type BoxId, type Formula, type Jurisdiction, type ReturnData } from './schema.js';
+import { INCOME_SECTIONS, STAGE_RESULTS, STATEMENTS_VAT, type BoxId, type Formula, type Jurisdiction, type ReturnData } from './schema.js';
 import { FILING_LENGTHS } from '../../accounting/periods.js';
 import { checkPayroll } from './check-payroll.js';
 
@@ -95,11 +95,46 @@ export function checkJurisdiction(j: Jurisdiction): ModuleProblem[] {
   if (!Array.isArray(j.invoicing.territory) || !j.invoicing.territory.length || !j.invoicing.territory.every((c) => /^[A-Z]{2}$/.test(String(c)))) add('invoicing.yaml', 'territory', 'a list of two-letter country codes');
   if (!Array.isArray(j.invoicing.placeAbroad) || !j.invoicing.placeAbroad.every((w) => typeof w === 'string' && w.trim())) add('invoicing.yaml', 'placeAbroad', 'a list of words');
   for (const s of INCOME_SECTIONS) if (!j.statements.income[s]) add('statements.yaml', `income.${s}`, 'missing');
+  checkStages(j.statements.incomeStages, j.statements.income, add);
   if (!STATEMENTS_VAT.includes(j.statements.vat)) add('statements.yaml', 'vat', `"${j.statements.vat}" is not one of ${STATEMENTS_VAT.join(', ')}`);
   if (!FILING_LENGTHS.includes(j.periods.vat.length)) add('periods.yaml', 'vat.length', `"${j.periods.vat.length}" is not one of ${FILING_LENGTHS.join(', ')}`);
   if (!(j.periods.vat.dueDays >= 0)) add('periods.yaml', 'vat.dueDays', 'must be a number of days');
   problems.push(...checkPayroll(j));
   return problems;
+}
+
+/**
+ * statements.yaml `incomeStages`: a map of income sections to lists of stages, each with a title,
+ * a range or accounts of its own section, and at most one stage per result (`then`). A value of
+ * the wrong shape is a problem, never a throw.
+ */
+function checkStages(raw: unknown, income: Jurisdiction['statements']['income'], add: (file: string, path: string, message: string) => void): void {
+  if (raw === undefined) return;
+  const file = 'statements.yaml';
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) { add(file, 'incomeStages', 'a map of income sections to their stages'); return; }
+  const results = new Set<string>();
+  for (const [section, stages] of Object.entries(raw)) {
+    const path = `incomeStages.${section}`;
+    if (!(INCOME_SECTIONS as readonly string[]).includes(section)) { add(file, path, 'not a section of income'); continue; }
+    if (!Array.isArray(stages)) { add(file, path, 'a list of stages'); continue; }
+    const group = income[section as keyof typeof income];
+    const inSection = (a: string) => !group || ('accounts' in group ? group.accounts.includes(a) : a >= group.from && a < group.to);
+    stages.forEach((s: unknown, i) => {
+      const at = `${path}[${i}]`;
+      if (typeof s !== 'object' || s === null) { add(file, at, 'a stage: title, from and to, or accounts'); return; }
+      const st = s as Record<string, unknown>;
+      if (typeof st.title !== 'string' || !st.title) add(file, at, 'title missing');
+      if (st.accounts !== undefined && !(Array.isArray(st.accounts) && st.accounts.every((a) => typeof a === 'string'))) add(file, `${at}.accounts`, 'a list of account numbers');
+      const accounts = Array.isArray(st.accounts) ? st.accounts.map(String) : [];
+      if (!((typeof st.from === 'string' && typeof st.to === 'string') || accounts.length)) add(file, at, 'needs from and to, or accounts');
+      for (const a of accounts) if (!inSection(a)) add(file, `${at}.accounts`, `${a} is not in the section ${section}`);
+      if (typeof st.from === 'string' && !inSection(st.from)) add(file, `${at}.from`, `${st.from} is not in the section ${section}`);
+      if (st.then === undefined) return;
+      if (!(STAGE_RESULTS as readonly unknown[]).includes(st.then)) add(file, `${at}.then`, `"${String(st.then)}" is not one of ${STAGE_RESULTS.join(', ')}`);
+      else if (results.has(st.then as string)) add(file, `${at}.then`, `"${String(st.then)}" follows an earlier stage already`);
+      else results.add(st.then as string);
+    });
+  }
 }
 
 /** One return form: its rate order names rows, its formulas name boxes that exist and do not loop, its result boxes are derived. */

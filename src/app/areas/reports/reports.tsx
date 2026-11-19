@@ -37,7 +37,7 @@ import { useWorkspace } from '../../hooks/use-workspace.js';
 export type BooksRoute = Extract<RouteOf<'reports'>, { report: Report }>;
 type Props = AreaProps<BooksRoute>;
 const SUM_LABEL = {
-  grossProfit: 'income.grossProfit', operatingResult: 'income.operatingResult', netResult: 'reports.result',
+  grossProfit: 'income.grossProfit', afterStaff: 'income.afterStaff', ebitda: 'income.ebitda', ebit: 'income.ebit', operatingResult: 'income.operatingResult', netResult: 'reports.result',
   totalAssets: 'balance.totalAssets', totalLiabilities: 'balance.totalLiabilities',
 } as const;
 const HEADLINE = { result: 'reports.result', balanceTotal: 'reports.balanceTotal', balanced: 'reports.balanced', difference: 'reports.difference' } as const;
