@@ -50,7 +50,7 @@ function assertMonthOpen(month: string): void {
 const run = (fn: (req: Request, res: Response) => Promise<void> | void) => (req: Request, res: Response, next: NextFunction) => {
   Promise.resolve().then(() => fn(req, res)).catch((e) => {
     if (e instanceof PayrollRefusal) {
-      const status = e.code === 'notFound' ? 404 : e.code === 'badAmount' || e.code === 'unknownWageType' ? 400 : 409;
+      const status = e.code === 'notFound' || e.code === 'unknownInsurance' ? 404 : e.code === 'badAmount' || e.code === 'unknownWageType' || e.code === 'badInput' ? 400 : 409;
       res.status(status).json({ error: e.message, code: 'payroll', params: { why: e.code } } satisfies ApiErrorBody);
     } else next(e);
   });
@@ -216,7 +216,7 @@ router.post('/api/payroll/insurances/:id/settle', run((req, res) => {
   const year = String(b.year ?? '');
   const date = String(b.date ?? '');
   const total = typeof b.total === 'number' && Number.isFinite(b.total) ? b.total : NaN;
-  if (!/^\d{4}$/.test(year) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(total)) throw new PayrollRefusal('badAmount', 'Jahr, Datum und Total der Schlussabrechnung.');
+  if (!/^\d{4}$/.test(year) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(total)) throw new PayrollRefusal('badInput', 'Jahr, Datum und Total der Schlussabrechnung.');
   const ctx = payrollContext(WS);
   const out = updateBooksWithEffects((books) => {
     const lock = periodLock(books);
