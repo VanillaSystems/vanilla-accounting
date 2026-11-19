@@ -180,7 +180,7 @@ function MailFields({ mail, value, onChange, nav }: { mail: MailState; value: Se
           </span></div>
         );
       })()}
-      {mail.own && <label className="lkr"><span /><span className="iin"><input type="checkbox" name="copy" checked={!!value.copy} onChange={(e) => onChange({ ...value, copy: e.target.checked })} /> {t('invoices.mailCopy', { address: mail.own })}</span></label>}
+      {mail.own && <label className="lkr"><span /><span className="lkchk"><input type="checkbox" name="copy" checked={!!value.copy} onChange={(e) => onChange({ ...value, copy: e.target.checked })} /> {t('invoices.mailCopy', { address: mail.own })}</span></label>}
       <label className="lkr"><span>{t('invoices.mailSubject')}</span><input name="subject" value={value.subject} onChange={(e) => onChange({ ...value, subject: e.target.value })} /></label>
       <label className="lkr top"><span>{t('invoices.mailBody')}</span><textarea name="body" rows={6} value={value.body} onChange={(e) => onChange({ ...value, body: e.target.value })} /></label>
     </>

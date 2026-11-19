@@ -139,7 +139,7 @@ export function statementHtml(s: Statement, p: StatementPaper, fontCss: string):
 .a4 h3 { color: ${p.accent}; font-size: 14pt; margin: 0 0 1mm } .a4 .period { margin: 0 0 6mm; color: #4a5160 }
 .a4 h4 { font-size: 10pt; margin: 8mm 0 2mm }
 .a4 table.st { width: 100%; border-collapse: collapse } .a4 table.st th { text-align: left; font-weight: 600; border-bottom: 0.4mm solid ${p.accent}; padding: 1.2mm 1mm }
-.a4 table.st td { padding: 1.2mm 1mm; border-bottom: 0.2mm solid #e3e6ea; vertical-align: top } .a4 .r { text-align: right; white-space: nowrap }
+.a4 table.st td { padding: 1.2mm 1mm; border-bottom: 0.2mm solid #e3e6ea; vertical-align: top } .a4 .r, .a4 table.st th.r { text-align: right; white-space: nowrap }
 .a4 tr.sum td { font-weight: 600 } .a4 tr.end td { border-top: 0.4mm solid ${p.accent}; border-bottom: none }`;
   const lines = (xs: string[]) => xs.map((x) => `<span>${esc(x)}</span>`).join('');
   return `<!doctype html><html lang="${p.language}"><head><meta charset="utf-8"><title>${esc(L.title)}</title><style>${fontCss}\n${css}</style></head><body><div class="a4${p.letterhead ? ' lh' : ''}">

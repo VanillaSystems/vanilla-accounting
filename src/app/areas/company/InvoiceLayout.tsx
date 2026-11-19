@@ -144,7 +144,8 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
         <p className="m src-note">{t('invoiceLayout.note')}</p>
       </div>
       <div className="lkprevw">
-        {load.state === 'ready' && <Preview ws={ws} layout={layout} lang={lang} texts={texts} guide={guide} canEdit={canEdit} onText={saveText} />}
+        {load.state === 'ready' && <Preview ws={ws} layout={layout} lang={lang} templateId={tpl.id} texts={{ ...texts, ...pick(tpl.texts?.invoice?.[lang]) }} guide={guide} canEdit={canEdit}
+          onText={(key, value) => { if (tpl.texts?.invoice?.[lang]?.[key]) void patch({ template: tpl.id, templateTexts: { invoice: { [lang]: { [key]: value } } } }); else saveText(key, value); }} />}
         <p className="m ivhint">{t('invoiceLayout.daysHint', { days: DAYS })}{changed > 0 && <> · {t('invoiceLayout.nChanged', { n: changed })}{canEdit && <> · <AsyncButton type="button" className="quiet2" onClick={resetTexts}>{t('invoiceLayout.reset')}</AsyncButton></>}</>}</p>
       </div>
     </div>
@@ -308,8 +309,11 @@ export function unitId(word: string, units: readonly UnitDef[]): string {
 }
 
 /** The newest invoice laid out as a draft with this layout (or a sample when there is none), its texts editable. */
-function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
-  ws: CompanyInfo; layout: InvoiceLayout; lang: InvoiceLanguage; texts: { salutation: string; intro: string; closing: string }; guide: boolean; canEdit: boolean; onText(key: 'intro' | 'closing', value: string): void;
+/** A Vorlage's own intro and closing of a Rechnung, where it has them: they replace the firm's in the preview. */
+const pick = (x: { intro?: string; closing?: string } | undefined) => ({ ...(x?.intro ? { intro: x.intro } : {}), ...(x?.closing ? { closing: x.closing } : {}) });
+
+function Preview({ ws, layout, lang, templateId, texts, guide, canEdit, onText }: {
+  ws: CompanyInfo; layout: InvoiceLayout; lang: InvoiceLanguage; templateId: string; texts: { salutation: string; intro: string; closing: string }; guide: boolean; canEdit: boolean; onText(key: 'intro' | 'closing', value: string): void;
 }) {
   const load = useInvoices();
   const d = load.state === 'ready' ? load.data : undefined;
@@ -319,7 +323,7 @@ function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
     const customer = latest ? d.contacts.find((c) => c.id === latest.customerId) : undefined;
     const sample: Draft = {
       id: 'sample', createdAt: '', origin: 'manual', deleted: false, status: 'draft', comments: [], kind: 'invoice',
-      customerId: customer?.id ?? '', date: localToday(), currency: 'CHF', language: lang, ...(latest?.prices ? { prices: latest.prices } : {}),
+      customerId: customer?.id ?? '', date: localToday(), currency: 'CHF', language: lang, templateId, ...(latest?.prices ? { prices: latest.prices } : {}),
       lines: latest?.lines.length ? latest.lines : [{ text: t('invoiceLayout.sampleLine'), quantity: 4, unit: 'h', price: 120, vatRate: invoiceRates()[0] }],
       intro: texts.intro, closing: texts.closing,
     };
@@ -328,7 +332,7 @@ function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
     const fallback = customer ? {} : { customer: { ...sheet.customer, name: t('invoiceLayout.sampleCustomer'), address: { street: t('invoiceLayout.sampleStreet'), number: '1', postcode: '8000', town: t('invoiceLayout.sampleTown'), country: 'CH' } } };
     const windowGuide = guide ? t(layout.window === 'left' ? 'invoiceLayout.windowFrameLeft' : 'invoiceLayout.windowFrameRight') : undefined;
     return { ...sheet, ...fallback, screen: screenOf(d, canEdit ? 'texts' : undefined, undefined, windowGuide) };
-  }, [d, ws, layout, lang, texts.intro, texts.closing, texts.salutation, guide, canEdit]);
+  }, [d, ws, layout, lang, templateId, texts.intro, texts.closing, texts.salutation, guide, canEdit]);
   if (!data) return null;
   return <Sheet data={data} editing={canEdit} className="lkprev" onEdit={(key, value, final) => { if (final && (key === 'intro' || key === 'closing')) onText(key, value); }} />;
 }

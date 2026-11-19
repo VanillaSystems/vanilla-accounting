@@ -35,6 +35,19 @@ Two markers flag an entry you must read before you update:
 - A paid Mahngebühr and Verzugszins are booked with the payment, without VAT: the fee on the fee
   account, the interest on the financial income account (6950).
 
+- Verkauf: Vorlagen. Firma › Rechnungslayout lists several named Vorlagen («Standard» first, the
+  layout you had), each with its own layout, a letterhead PDF printed under every page, a fixed
+  attachment (your terms as a PDF) for the kinds you pick, and its own title, intro, closing and
+  e-mail per kind and language, with the placeholders {person}, {number}, {dueDate} and {total}. A
+  Vorlage is the default of the kinds you tick; a draft may pick another, change its title and carry
+  further PDFs (a Rapport). An issued document keeps the Vorlage, texts and attachments it was issued
+  with.
+- Verkauf: sending to several recipients and copies (the contact's e-mails and contact persons are
+  offered), with «Kopie an mich» to your own address; every attachment goes with the PDF byte for
+  byte, and Versendet keeps each attachment's checksum.
+- Verkauf › Kontakte: «Kontoauszug» shows a contact's Rechnungen, Gutschriften, payments,
+  write-offs and Stornos of a period with the balance after each and the items open at its end (the
+  same as Offene Posten), as a PDF to look at, send or download; Versendet lists it.
 - Bilanz & ER: the Bilanz and the Erfolgsrechnung show the prior year beside each figure, as the
   Swiss Code of Obligations asks of the annual accounts (OR 958d Abs. 2): the Bilanz of 31.12. of
   the year before, the Erfolgsrechnung of the same days a year earlier. The figures come from the

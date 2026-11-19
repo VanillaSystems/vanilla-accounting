@@ -3,8 +3,9 @@
  * with the workspace's layout and texts of now, an issued invoice as it was issued, a reminder
  * from its invoice. The UI adds what only a screen has (src/invoices/sheet.ts ScreenSheet).
  */
-import { draftSheet, issuedSheet, reminderSheet, type InvoicingContext } from '../../../invoices/documents.js';
+import { draftSheet, issuedSheet, placeholderValues, reminderSheet, type InvoicingContext } from '../../../invoices/documents.js';
 import type { Draft, Invoice, Issued, Reminder } from '../../../invoices/model.js';
+import { fillPlaceholders, templateOf } from '../../../invoices/templates.js';
 import type { ScreenSheet, SheetData } from '../../../invoices/sheet.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import { api, type InvoiceList } from '../../lib/api.js';
@@ -33,10 +34,16 @@ export function screenOf(d: InvoiceList, scope: 'draft' | 'texts' | undefined, c
 }
 
 export function draftData(d: InvoiceList, ws: CompanyInfo, draft: Draft, editing: boolean): SheetData {
-  const sheet = draftSheet(contextOf(ws), bookOf(d), draft, customerOf(d, draft, ws.invoicing), logo(ws.invoicing?.layout.logo));
+  const sheet = draftSheet(contextOf(ws), bookOf(d), draft, customerOf(d, draft, ws.invoicing), logo(templateOf(ws.invoicing, draft).layout.logo));
   // A position without an account of its own books on the contact's revenue account, else the settings'.
   const revenue = d.contacts.find((c) => c.id === draft.customerId)?.revenueAccount ?? ws.invoicing?.revenueAccount;
-  return { ...sheet, screen: screenOf(d, editing ? 'draft' : undefined, draft.customerId, undefined, revenue) };
+  // Edited in place, a Vorlage's placeholders stay as written (issuing fills them); the preview shows them filled where known.
+  const filled = editing ? {} : (() => {
+    const values = placeholderValues({ ...sheet, ...(sheet.number ? { number: sheet.number } : {}) }, ws.company.name);
+    const fill = (x: string) => fillPlaceholders(x, values, sheet.language);
+    return { intro: fill(sheet.intro), closing: fill(sheet.closing), ...(sheet.title ? { title: fill(sheet.title) } : {}) };
+  })();
+  return { ...sheet, ...filled, screen: screenOf(d, editing ? 'draft' : undefined, draft.customerId, undefined, revenue) };
 }
 
 export function issuedData(d: InvoiceList, inv: Issued): SheetData {

@@ -468,3 +468,9 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .stmt .r { text-align: right; white-space: nowrap; }
 .stmt tr.sum td { font-weight: 600; }
 .stmtwrap { max-height: 46vh; overflow: auto; }
+.lkchk { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.lkchk input { width: auto; flex: none; margin: 0; }
+.isend a.btn { text-decoration: none; }
+.lktpl { margin-bottom: 14px; }
+.tplchip { max-width: 260px; }
+.stmt td.mono { white-space: nowrap; }

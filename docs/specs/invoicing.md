@@ -1620,8 +1620,6 @@ listed here and updated with phase 2's build:
     still fail after the mail went, that level of that Rechnung is noted as mailed on the computer
     (data/dunning-mailed.json) and never mailed again by itself; the refusal (`recordFailed`) and the
     task say to check the sent log.
----
-
 110. **Formats of phase 3 (slice J).** `invoices.json` step 4 → 5 (`INVOICES_SCHEMA` 5, shared with slice I's Mahnwesen) holds a Rechnung's
     `role` (`partial`, `final`) and `stage`, a position's `deducts` and `deductedVat`, an Auftrag's `stages`,
     a Rechnung's `schedule.retention`, and the sent-log kinds `instalment` and `statement`. A file of schema 4
@@ -1682,6 +1680,42 @@ listed here and updated with phase 2's build:
     of its own (`instalment` in the sent log) asking the retention, or what is open when less, with the
     Rechnung's reference, naming what else is open; nothing is booked.
     Instalments beyond the retention (`schedule.instalments`) are not built.
+117. **Vorlagen as a read default (slice K).** A manifest without `invoicing.templates` has one
+    Vorlage, «Standard» (id `standard`), of its `invoicing.layout`, so the manifest step changes
+    nothing; Firma › Vorlagen turns the one layout into the list on the first change of the list
+    (adding, renaming, a letterhead, an attachment, texts), and `invoicing.layout` then goes. The
+    default per kind is `invoicing.templateFor`; a kind it names not takes the first Vorlage, and a
+    draft whose Vorlage was removed takes its kind's default again. The market leader keeps one
+    default per kind the same way.
+118. **Texts of a Vorlage (slice K).** Per kind and language a Vorlage holds title, intro, closing and
+    the e-mail's subject and text; an empty one falls back to the firm's texts of the language (a
+    Rechnung's), then the app's. Placeholders `{person}` (the contact person, else the contact),
+    `{number}`, `{dueDate}`, `{total}` (with the currency, as the language writes amounts), and as
+    before `{days}`, `{document}`, `{company}`. They are filled when the document is issued and frozen
+    with it; a draft edited in place shows them as written, its preview fills what is known, and one
+    not known yet (a draft's number) stays as written. The e-mail per Mahnstufe is the level's own
+    (Firma › Mahnwesen, decision 101 ff.), filled with the same placeholders; a Mahnung's mail never
+    takes the Vorlage's.
+119. **The letterhead (slice K).** The first page of the Vorlage's letterhead PDF is laid under every
+    page of the printed PDF (pdf-lib, after Chromium printed the sheet see-through); the QR-bill stays
+    white over it. The screen shows the sheet without it and Firma › Vorlagen says so. An issued
+    document freezes the letterhead's file and checksum, so its Mahnungen print on the same paper.
+120. **Attachments are frozen at issue (slice K).** The Vorlage's fixed attachment for the kind and the
+    draft's own go into the issued document's `attachments` with their checksums; a Vorlage changed
+    later changes nothing sent. Files lie once under `transactional-data/<year>/invoices/files/<sha12>-<name>.pdf`,
+    by their checksum, never replaced. They go only by e-mail; a download records the document alone.
+    At most 10 own attachments per document and 10 MB per file, each limit named when hit.
+121. **Several recipients (slice K).** `to` and `cc` take several addresses; «Kopie an mich» is a blind
+    copy to the mailbox's sending address. The mail counts as sent only when the server took every
+    `to` recipient; the sent log keeps `to` (comma-separated), `cc`, `bcc` and each attachment.
+122. **The Kontoauszug (slice K, P3.7).** Per currency, for a period: the balance at the end of the day
+    before it, each Rechnung, Gutschrift (by its own number), payment, write-off (with its reason) and
+    Storno with the balance after it, the balance at its end and the items open then. Each event takes
+    off at most what was open (a payment beyond it names the rest), and money dated before its
+    Rechnung counts from the Rechnung's date, so the balance is `openOn` on every day and equals
+    Offene Posten for the contact. It books nothing. The PDF is in the contact's language, in the
+    first Vorlage's font, colour, logo and letterhead; the sent log keeps it as kind `statement` with
+    `contactId` and `period`, its `invoiceId` empty.
 
 ## 8. Changes from the concept of 2026-11-15 (owner, 2026-11-19)
 
