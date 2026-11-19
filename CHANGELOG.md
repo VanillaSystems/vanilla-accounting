@@ -29,7 +29,9 @@ Two markers flag an entry you must read before you update:
   «keine Mahnungen», a comment of the last 7 days, what an automatic reminder sends, the last level),
   and after one confirmation sends each by e-mail or downloads its PDF. At most 40 per run, the rest named.
 - Automatic reminders per level, off by default, sent by e-mail without a click, only on the computer
-  that holds the books; one that cannot go becomes a task with the reason.
+  where they were switched on (Firma › Mahnwesen names it, «Hierher holen» moves it), never for a
+  Rechnung that was not sent; one that cannot go becomes a task with the reason, which closes once it
+  goes.
 - A paid Mahngebühr and Verzugszins are booked with the payment, without VAT: the fee on the fee
   account, the interest on the financial income account (6950).
 
