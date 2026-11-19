@@ -60,6 +60,9 @@ wages:
   # no earlier payment to the same collector says where it goes. The family allowances (5710) are billed with
   # the compensation fund's contributions; a model or the person books them apart.
   employer: { ausgleichskasse: "5700", pension: "5720" }
+  # Where «Zieht Lohnabzüge ein» puts a new company file of a kind's collector (src/payroll/collects-way.ts): the
+  # compensation fund and the canton's tax office are authorities; a pension fund or an insurer (absent) a supplier.
+  roles: { ausgleichskasse: authority, tax: authority }
   # What the collector of a kind leaves the employer of what was withheld: the withholding tax's collection
   # commission (Bezugsprovision, DBG Art. 88 Abs. 4: 1 to 2 %, a canton at its own rate). A payment that
   # clears whole months of the tax owed, the oldest first, less `from` to `upTo` percent of them, books the

@@ -3,7 +3,8 @@
  * names a deduction the year's payslips withheld and no business collects yet (a pension fund's «Pensionskasse»), one click
  * writes `collects:` into the company's file of that business (src/payroll/collects-way.ts), so the hand form proposes the
  * employees' share on the deductions account and a payment booked whole is named under «Arbeitnehmeranteil abziehen».
- * «Rückgängig» puts the file back. Nothing is written to the books.
+ * What the file says it collects shows with «Rückgängig», which takes the kinds out of the file again (from the file
+ * alone, after a restart too). Nothing is written to the books.
  */
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../../lib/api.js';
@@ -12,7 +13,7 @@ import { setup } from '../../../engines/index.js';
 import type { Nav } from '../index.js';
 import { AsyncButton } from '../../shell/AsyncButton.js';
 
-type Offer = NonNullable<Awaited<ReturnType<typeof api.collectsOffer>>['offer']>;
+type Offer = Awaited<ReturnType<typeof api.collectsOffer>>;
 
 /** A deduction kind in the person's words: the app's name for it, else the first word the payslips name it by. */
 export function collectsKindLabel(kind: string): string {
@@ -21,34 +22,41 @@ export function collectsKindLabel(kind: string): string {
 }
 
 export function CollectsOffer({ payment, nav }: { payment: string; nav: Pick<Nav, 'toast' | 'refresh'> }) {
-  const [offer, setOffer] = useState<Offer | null>(null);
-  const [kept, setKept] = useState<{ name: string; path: string; kinds: string[]; undo: string } | null>(null);
+  const [state, setState] = useState<Awaited<ReturnType<typeof api.collectsOffer>> | null>(null);
+  // The kinds kept by a click here: «Rückgängig» takes back those; otherwise what the file says it collects.
+  const [mine, setMine] = useState<string[] | null>(null);
+  const load = () => api.collectsOffer(payment).then(setState, () => setState(null));
   useEffect(() => {
     let live = true;
-    api.collectsOffer(payment).then((r) => { if (live) setOffer(r.offer); }, () => { if (live) setOffer(null); });
+    api.collectsOffer(payment).then((r) => { if (live) setState(r); }, () => { if (live) setState(null); });
     return () => { live = false; };
   }, [payment]);
   const keep = async (kinds: string[]) => {
     try {
       const r = await api.keepCollects(payment, kinds);
-      setKept({ name: r.name, path: r.path, kinds: r.kinds, undo: r.undo });
+      setMine(r.kinds);
       nav.toast(t('journal.byHand.collects.kept', { name: r.name, kinds: r.kinds.map(collectsKindLabel).join(', '), path: r.path }));
+      await load();
     } catch (e) { nav.toast(errorText(e)); }
     nav.refresh();
   };
-  const undo = async () => {
+  const undo = async (kept: NonNullable<Offer>['kept']) => {
     if (!kept) return;
-    try { await api.undoCollects(kept.undo); setKept(null); nav.toast(t('journal.byHand.collects.undone', { name: kept.name })); } catch (e) { nav.toast(errorText(e)); }
+    const kinds = mine ?? kept.kinds;
+    try { await api.forgetCollects(kept.business, kinds); setMine(null); nav.toast(t('journal.byHand.collects.undone', { name: kept.name })); await load(); } catch (e) { nav.toast(errorText(e)); }
     nav.refresh();
   };
+  const kept = state?.kept;
   if (kept) {
+    const kinds = mine ?? kept.kinds;
     return (
       <p className="collectsway m" data-testid="collects-kept">
-        {t('journal.byHand.collects.keptNote', { name: kept.name, kinds: kept.kinds.map(collectsKindLabel).join(', '), path: kept.path })}{' '}
-        <AsyncButton type="button" className="golink" data-testid="collects-undo" onClick={undo}>{t('journal.byHand.collects.undo')}</AsyncButton>
+        {t('journal.byHand.collects.keptNote', { name: kept.name, kinds: kinds.map(collectsKindLabel).join(', '), path: kept.path })}{' '}
+        <AsyncButton type="button" className="golink" data-testid="collects-undo" onClick={() => undo(kept)}>{t('journal.byHand.collects.undo')}</AsyncButton>
       </p>
     );
   }
+  const offer = state?.offer;
   if (!offer) return null;
   return (
     <div className="collectsway" data-testid="collects-offer" data-business={offer.business}>

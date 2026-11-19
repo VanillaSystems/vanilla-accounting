@@ -7351,6 +7351,8 @@ export default {
     "payroll.insurers.ahead": "paid more than accrued",
     "payroll.insurers.how": "From the entries on {account}: each closed payslip credits both shares, each payment to the insurer debits the account.",
     "payroll.insurers.keptTitle": "Always so",
+    "payroll.insurers.collectsTitle": "Collects wage deductions",
+    "payroll.insurers.collects": "The firm keeps: this fund collects {kinds} (in {path}). Its payments take the employees’ share off the wage deductions.",
     "payroll.insurers.kept": "Payments the payslips do not cover yet (an advance), the app books against the liability account without asking. Kept in {path}.",
     "payroll.insurers.keptUndo": "After that the next such payment asks again; what was booked stays booked.",
     "payroll.insurers.settled": "Final statement booked",

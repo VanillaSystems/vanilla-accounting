@@ -7351,6 +7351,8 @@ export default {
     "payroll.insurers.ahead": "plus payé qu’accumulé",
     "payroll.insurers.how": "Selon les écritures sur {account} : chaque décompte clôturé crédite les deux parts, chaque paiement à l’assurance débite le compte.",
     "payroll.insurers.keptTitle": "Toujours ainsi",
+    "payroll.insurers.collectsTitle": "Encaisse des retenues salariales",
+    "payroll.insurers.collects": "L’entreprise note : cette caisse encaisse {kinds} (dans {path}). Ses paiements prennent la part des employés sur les retenues salariales.",
     "payroll.insurers.kept": "Les paiements que les décomptes ne couvrent pas encore (un acompte d’avance), l’app les comptabilise sans demander contre le compte de passif. Retenu dans {path}.",
     "payroll.insurers.keptUndo": "Ensuite, le prochain paiement de ce genre demande de nouveau ; ce qui est comptabilisé le reste.",
     "payroll.insurers.settled": "Décompte final comptabilisé",

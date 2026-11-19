@@ -2256,14 +2256,18 @@ After the third persona walk (2026-11-19):
      the kind's (5720). It stays a proposal booked by her click: code does not book a payment ahead of its months
      (decision 72). The same share is what «Arbeitnehmeranteil abziehen» asks of a payment booked whole on 5720 where
      nothing was withheld on its day (`withheldSharesOf`), so 2270 clears.
-110. **«Zieht Lohnabzüge ein» marks a collector without editing YAML** (src/payroll/collects-way.ts, `GET|POST
-     /api/payroll/collects`, `POST /api/payroll/collects/undo`): offered on a payment out, unbooked on its hand form and
+110. **«Zieht Lohnabzüge ein» marks a collector without editing YAML** (src/payroll/collects-way.ts, `GET|POST|DELETE
+     /api/payroll/collects`): offered on a payment out, unbooked on its hand form and
      booked on its page, whose payee, text or documents' first lines name a kind the year's payslips withheld and no
      business collects yet, never for a wage (a payslip is linked) nor a payroll insurer's payment (decision 68). The
      click writes `collects:` into the company's file of the business the payment routes to (a binding of an app file
-     starts with its id; without one, a new file in knowledge/authorities matched by the payee and its IBAN), only that
-     key changing, through a file beside it and a rename. Nothing is booked. «Rückgängig» (for a week, while the server
-     runs) puts the file back as the click found it, or removes the file it made, refused once the file changed since.
+     starts with its id; without one, a new file matched by the payee and its IBAN, in the folder of the kind's collector:
+     setup.yaml `wages.roles`, authorities for the compensation fund and the tax office, suppliers for a pension fund or
+     an insurer, as decision 59 files an insurer), only that key changing, through a file beside it and a rename. Nothing
+     is booked. «Rückgängig» works from the file alone, after a restart too, as decision 59's: on the payment and on the
+     fund's page in Lohnzahlungen (beside the kept way) it takes the kinds out of `collects:` again, and removes a file
+     the click made (its first line says so) once it holds nothing else. A collector's payment is on the list of payments
+     proven elsewhere (`GET /api/payroll/insurer-payments`), so the bank page never says «kein Beleg · Beleg suchen».
 
 ---
 

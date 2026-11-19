@@ -16,7 +16,8 @@ import { loadBooks, PERSON, saveBooks, update } from '../src/books/store.js';
 import { cleanUp, drop, firm, linesOf, pay, run, sum } from './support/payslip-firm.js';
 import { textPdf } from './support/text-pdf.js';
 import { handStart } from '../src/saving/hand-rule.js';
-import { collectsOffer, keptCollectsText, restoreCollects, withCollects, writeCollects } from '../src/payroll/collects-way.js';
+import { collectsOffer, forgetCollects, keptCollects, keptCollectsText, MADE_LINE, withCollects, writeCollects } from '../src/payroll/collects-way.js';
+import { startApi } from './support/api-server.js';
 import { collectorsOf, unclearedContributions } from '../src/booking/withheld.js';
 import { loadClassifyContext, mappedReceipts } from '../src/booking/classify.js';
 import { businessOfPayment } from '../src/intake/batch-payers.js';
@@ -61,6 +62,7 @@ test('decision 110: the text writer sets `collects:` and nothing else, in place 
   assert.equal(withCollects('id: pk\ncollects:\n- tax\nname: X\n', ['pension', 'tax'], 'pk'), 'id: pk\ncollects: [pension, tax]\nname: X\n', 'a list at the margin replaced in place');
   assert.equal(withCollects('id: pk\ncollects: [pension]\nname: X\n', [], 'pk'), 'id: pk\nname: X\n');
   assert.equal(withCollects('', ['pension'], 'ausgleichskasse'), 'id: "ausgleichskasse"\ncollects: [pension]\n', 'a binding of an app file starts with its id');
+  assert.ok(withCollects('', ['pension'], 'pk', { name: 'PK', payee: 'PK' }).startsWith(`${MADE_LINE}\nid: "pk"\n`), 'a file the click makes says so on its first line');
   assert.throws(() => withCollects('id: [', ['pension'], 'pk'), /kein gültiges YAML/);
 });
 
@@ -72,12 +74,13 @@ test('decisions 109–110, walk 3 A-2: «Zieht Lohnabzüge ein: BVG» on the pen
   const { tx, offer } = offerOf(ws, 'PK');
   assert.deepEqual(offer?.kinds, ['pension'], 'the payee names the pension fund, which the payslips withheld and nobody collects');
   assert.equal(offer!.target.created, true);
+  assert.equal(offer!.target.path, 'knowledge/suppliers/pensionskasse-zentral.yaml', 'a pension fund\'s new file goes where an insurer\'s does (setup.yaml wages.roles)');
   assert.equal(offerOf(ws, 'LW-07').offer, undefined, 'a wage is offered nothing');
 
   const { text, before: was } = keptCollectsText(ws, offer!.target, ['pension'], tx);
   assert.equal(was, undefined);
   const path = writeCollects(ws, offer!.target.path, text);
-  assert.match(readFileSync(join(ws.paths.root, path), 'utf8'), /^id: "pensionskasse-zentral"\nname: "Pensionskasse Zentral"\nmatch:\n {2}payee: \["Pensionskasse Zentral"\]\ncollects: \[pension\]\n$/);
+  assert.equal(readFileSync(join(ws.paths.root, path), 'utf8'), `${MADE_LINE}\nid: "pensionskasse-zentral"\nname: "Pensionskasse Zentral"\nmatch:\n  payee: ["Pensionskasse Zentral"]\ncollects: [pension]\n`);
   assert.equal(offerOf(ws, 'PK').offer, undefined, 'kept: offered no more');
 
   const after = handStart(ws, 'PK')!;
@@ -85,8 +88,17 @@ test('decisions 109–110, walk 3 A-2: «Zieht Lohnabzüge ein: BVG» on the pen
   if (after.nature?.kind !== 'contributions') return;
   assert.deepEqual([after.nature.deductions, after.nature.takes, after.nature.account, after.nature.collector?.months], ['2270', 597.6, '5720', ['2026-07', '2026-08', '2026-09']], 'July to September\'s BVG share on 2270, the rest the firm\'s');
 
-  restoreCollects(ws, path, was);
+  // «Rückgängig» from the file alone (after a restart too): the file the click made holds nothing else, so it goes.
+  const cp = loadClassifyContext(ws).counterparties!.find((c) => c.id === 'pensionskasse-zentral')!;
+  assert.deepEqual(keptCollects(ws, cp)?.kinds, ['pension']);
+  assert.equal(forgetCollects(ws, cp, ['pension']), path);
   assert.ok(!existsSync(join(ws.paths.root, path)), 'the file the click made goes');
+  // A file of the company's own keeps everything but the kinds taken out.
+  const own = 'id: pensionskasse-zentral\nname: Pensionskasse Zentral # the fund\nmatch:\n  payee: ["Pensionskasse Zentral"]\ncollects: [pension]\nnotes: kept\n';
+  writeFileSync(join(ws.paths.root, path), own);
+  assert.equal(forgetCollects(ws, cp, ['pension']), path);
+  assert.equal(readFileSync(join(ws.paths.root, path), 'utf8'), own.replace('collects: [pension]\n', ''));
+  assert.equal(forgetCollects(ws, cp, ['pension']), undefined, 'nothing left to take back');
 });
 
 test('decision 109: a payment she booked whole on 5720 is named under «Arbeitnehmeranteil abziehen» for its share once the fund collects; the click clears 2270', async () => {
@@ -110,4 +122,22 @@ test('decision 109: a payment she booked whole on 5720 is named under «Arbeitne
   assert.deepEqual([sum(pk, '2270'), sum(pk, '5720')], [597.6, 597.6]);
   const on2270 = loadBooks(ws).journalEntries.reduce((s, e) => s + (e.accountCredit === '2270' ? e.amount : 0) - (e.accountDebit === '2270' ? e.amount : 0), 0);
   assert.equal(Math.round(on2270 * 100), 120000, 'what stays on 2270 is the compensation fund\'s AHV/IV/EO and ALV share (3 × 400.00), not paid yet');
+});
+
+test('decision 110 on the real API: a collector\'s payment needs no receipt of its own (never «kein Beleg»); the fund\'s page and «Rückgängig» work from the file', async () => {
+  const api = await startApi('tests/fixtures/payroll-insurer-way-index.json');
+  try {
+    assert.deepEqual((await api.send('GET', '/api/payroll/insurer-payments')).json.refs, [], 'no payroll here, no collector yet');
+    const file = join(api.root, 'knowledge/suppliers/pensionskasse-beispiel.yaml');
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, 'id: pensionskasse-beispiel\nname: Pensionskasse Beispiel\nmatch:\n  payee: ["Pensionskasse Beispiel"]\ncollects: [pension]\n');
+    assert.deepEqual(((await api.send('GET', '/api/payroll/insurer-payments')).json.refs as string[]).sort(), ['PK-DEC', 'PK-NOV', 'PK-OCT'], 'the payments to the collector are proven by the payslips');
+    const plan = await api.send('GET', '/api/payroll/collects?ref=PK-OCT');
+    assert.deepEqual(plan.json.kept, { business: 'pensionskasse-beispiel', name: 'Pensionskasse Beispiel', path: 'knowledge/suppliers/pensionskasse-beispiel.yaml', kinds: ['pension'] });
+    const undo = await api.send('DELETE', '/api/payroll/collects?business=pensionskasse-beispiel&kinds=pension');
+    assert.equal(undo.status, 200);
+    assert.doesNotMatch(readFileSync(file, 'utf8'), /collects/);
+    assert.deepEqual((await api.send('GET', '/api/payroll/insurer-payments')).json.refs, []);
+    assert.equal((await api.send('DELETE', '/api/payroll/collects?business=pensionskasse-beispiel')).status, 404, 'nothing kept: refused');
+  } finally { await api.stop(); }
 });

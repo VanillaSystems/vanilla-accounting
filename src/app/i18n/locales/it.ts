@@ -7351,6 +7351,8 @@ export default {
     "payroll.insurers.ahead": "pagato più del maturato",
     "payroll.insurers.how": "Dalle registrazioni su {account}: ogni conteggio chiuso accredita le due quote, ogni pagamento all’assicurazione addebita il conto.",
     "payroll.insurers.keptTitle": "Sempre così",
+    "payroll.insurers.collectsTitle": "Incassa trattenute salariali",
+    "payroll.insurers.collects": "La ditta annota: questa cassa incassa {kinds} (in {path}). I suoi pagamenti prendono la quota dei dipendenti dalle trattenute salariali.",
     "payroll.insurers.kept": "I pagamenti che i conteggi non coprono ancora (un acconto anticipato), l’app li registra senza chiedere contro il conto passivo. Memorizzato in {path}.",
     "payroll.insurers.keptUndo": "Dopo, il prossimo pagamento di questo tipo chiede di nuovo; quanto registrato resta.",
     "payroll.insurers.settled": "Conteggio finale registrato",

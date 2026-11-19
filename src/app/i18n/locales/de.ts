@@ -7349,6 +7349,8 @@ export const messages = {
   "payroll.insurers.ahead": "mehr bezahlt als aufgelaufen",
   "payroll.insurers.how": "Aus den Buchungen auf {account}: jede abgeschlossene Lohnabrechnung schreibt beide Anteile gut, jede Zahlung an die Versicherung belastet das Konto.",
   "payroll.insurers.keptTitle": "Immer so",
+  "payroll.insurers.collectsTitle": "Zieht Lohnabzüge ein",
+  "payroll.insurers.collects": "Die Firma merkt sich: diese Kasse zieht {kinds} ein (in {path}). Ihre Zahlungen nehmen den Arbeitnehmeranteil von den Lohnabzügen.",
   "payroll.insurers.kept": "Zahlungen, die die Lohnabrechnungen noch nicht decken (ein Akonto im Voraus), bucht die App ohne zu fragen gegen das Verbindlichkeitskonto. Gemerkt in {path}.",
   "payroll.insurers.keptUndo": "Danach fragt die nächste solche Zahlung wieder; schon Gebuchtes bleibt gebucht.",
   "payroll.insurers.settled": "Schlussabrechnung gebucht",

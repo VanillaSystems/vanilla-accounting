@@ -282,6 +282,8 @@ export interface SetupData {
     withholdsTo?: Record<string, string>;
     /** The employer's own contribution account of a kind: code books there what a payment to the kind's collector pays beyond the employees' share, without a model (src/booking/withheld.ts contributionLines). */
     employer?: Record<string, string>;
+    /** The folder a new business file of a kind's collector goes into (src/payroll/collects-way.ts): `authority` or `supplier`; absent, `supplier` (an insurer). */
+    roles?: Record<string, 'authority' | 'supplier'>;
     /** What a kind's collector leaves the employer (the withholding tax's collection commission): a payment short of what is owed by at most `upTo` percent books the rest on `account`. */
     commission?: Record<string, { account: string; from?: number; upTo: number }>;
     /** The words a payslip of another program names its figures by (src/booking/payslip.ts readPayslip): the gross, the net, the allowances paid with the wage, the expenses by account. */
