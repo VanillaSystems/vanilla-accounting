@@ -1,0 +1,555 @@
+/**
+ * The settings and people a firm keeps for payroll (docs/specs/payroll.md §5.1–§5.4, §19): every value a
+ * payslip reads is a dated entry added with `addEntry`, never overwritten; an entry a closed payslip used
+ * stays (`used` of its close). A change whose days a closed payslip covers is compared first (§19.3): the
+ * payslip computed as if open, with and without the change, Lohnart by Lohnart; the caller saves only once
+ * the person chose a way on (a Rückwirkende Korrektur per differing Lohnart, or «So lassen»). A rate outside
+ * its kind's range is a warning, never a refusal (§18). Pure: the files are written by the API route.
+ */
+import { addEntry, isDay, withdrawEntry, DatedEntryError, type Dated, type DatedEntry } from '../core/dated.js';
+import type { Labels, PayrollData } from '../core/modules/schema.js';
+import { parseIban } from '../workspace/banks.js';
+import { firmWageTypes, resolveAccount } from './catalogue.js';
+import { computePayslip, employedFraction, type PayrollContext, type PayslipDraft } from './compute.js';
+import { closedOf, latestClosed, type PayslipHistory } from './history.js';
+import { correctionOf, PayrollRefusal } from './close.js';
+import type {
+  Employment, PayrollEmployee, PayrollInsurance, PayrollLanguage, PayrollStore, PayslipClose, PayslipCorrection, PersonInsurances, TaxAtSource, WageTypeLayer,
+} from './model.js';
+import { payslipId } from './model.js';
+import { firstDay, monthsBetween, nextMonth, round2 } from './money.js';
+
+const LANGUAGES: readonly PayrollLanguage[] = ['de', 'fr', 'it', 'en'];
+const bad = (what: string): never => { throw new PayrollRefusal('badInput', what); };
+const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
+const str = (v: unknown, what: string): string => (typeof v === 'string' && v.trim() ? v.trim() : bad(`${what} fehlt.`));
+const optStr = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+const num = (v: unknown, what: string, min = -Infinity, max = Infinity): number =>
+  (typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : bad(`${what}: eine Zahl${min > -Infinity ? ` ab ${min}` : ''}${max < Infinity ? ` bis ${max}` : ''}.`));
+const optNum = (v: unknown, what: string, min?: number, max?: number): number | undefined => (v === undefined || v === null || v === '' ? undefined : num(v, what, min, max));
+const day = (v: unknown, what: string): string => (isDay(v) ? v : bad(`${what}: ein Tag JJJJ-MM-TT.`));
+const clean = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
+
+// ─── the social security number ────────────────────────────────────────────────
+
+/**
+ * The number as the jurisdiction writes it (payroll.yaml `socialSecurityNumber`): its pattern, and its
+ * check digit where the data names the method. Separators may be dots, spaces or none; it is kept with dots.
+ */
+export function socialSecurityNumberOf(raw: string, data: PayrollData): string {
+  const digits = raw.replace(/[.\s]/g, '');
+  const spec = data.socialSecurityNumber;
+  if (!/^\d+$/.test(digits) || !new RegExp(`^(?:${spec.pattern})$`).test(digits)) throw new PayrollRefusal('socialSecurityNumber', `${raw} ist keine gültige Nummer.`);
+  if (spec.checkDigit === 'ean13' && !ean13(digits)) throw new PayrollRefusal('socialSecurityNumber', `${raw}: die Prüfziffer stimmt nicht.`);
+  return digits.length === 13 ? `${digits.slice(0, 3)}.${digits.slice(3, 7)}.${digits.slice(7, 11)}.${digits.slice(11)}` : digits;
+}
+
+/** The EAN-13 check digit: the first twelve digits weighted 1, 3, 1, 3 …; the last makes the sum a multiple of ten. */
+export function ean13(digits: string): boolean {
+  if (!/^\d{13}$/.test(digits)) return false;
+  const sum = [...digits.slice(0, 12)].reduce((s, d, i) => s + Number(d) * (i % 2 ? 3 : 1), 0);
+  return (10 - (sum % 10)) % 10 === Number(digits[12]);
+}
+
+// ─── dated values by path ──────────────────────────────────────────────────────
+
+/** A rate outside the range its kind names: said, never refused. */
+export interface RateWarning { key: string; value: number; range: [number, number] }
+
+interface Target {
+  history(): Dated<unknown> | undefined;
+  write(h: DatedEntry<unknown>[]): void;
+  /** The value checked and cleaned, with the warnings it gives. */
+  value(v: unknown): { value: unknown; warnings: RateWarning[] };
+  /** May the entry end (`validUntil`)? An Anstellung ends with the exit; a rate or a name does not. */
+  ends?: boolean;
+}
+
+const COMPANY_FIELDS = ['canton', 'payday', 'postingDate', 'rounding', 'proration', 'thirteenth'] as const;
+const EMPLOYEE_FIELDS = ['name', 'address', 'bank', 'employment', 'insurances', 'permit', 'email', 'taxAtSource'] as const;
+
+/** The dated value a path names in `store` (the same paths a close's `used` names). */
+function targetOf(store: PayrollStore, data: PayrollData, path: string): Target {
+  const parts = path.split('/');
+  if (parts[0] === 'company' && parts.length === 2 && (COMPANY_FIELDS as readonly string[]).includes(parts[1])) {
+    const f = parts[1] as typeof COMPANY_FIELDS[number];
+    return {
+      history: () => store.company[f] as Dated<unknown>,
+      write: (h) => { (store.company as unknown as Record<string, unknown>)[f] = h; },
+      value: (v) => ({ value: companyValue(f, v, data), warnings: [] }),
+    };
+  }
+  if (parts[0] === 'employees' && parts.length >= 3) {
+    const e = employeeOf(store, parts[1]);
+    if (parts[2] === 'recurring' && parts.length === 4) {
+      const key = parts[3];
+      const w = firmWageTypes(data, store).get(key);
+      if (!w) throw new PayrollRefusal('unknownWageType', `Lohnart ${key} gibt es nicht.`);
+      if (w.computes) bad(`${key} rechnet die App selbst: keine wiederkehrende Lohnart.`);
+      return {
+        history: () => e.recurring.find((r) => r.wageType === key)?.value,
+        write: (h) => {
+          const r = e.recurring.find((x) => x.wageType === key);
+          if (!h.length) e.recurring = e.recurring.filter((x) => x.wageType !== key);
+          else if (r) r.value = h as typeof r.value;
+          else e.recurring.push({ wageType: key, value: h as DatedEntry<{ amount?: number }>[] });
+        },
+        value: (v) => ({ value: recurringValue(v, w.input === 'quantity'), warnings: [] }),
+        ends: true,
+      };
+    }
+    if (parts.length === 3 && (EMPLOYEE_FIELDS as readonly string[]).includes(parts[2])) {
+      const f = parts[2] as typeof EMPLOYEE_FIELDS[number];
+      return {
+        history: () => e[f] as Dated<unknown> | undefined,
+        write: (h) => { (e as unknown as Record<string, unknown>)[f] = h; },
+        value: (v) => ({ value: employeeValue(f, v, store, data), warnings: [] }),
+        ends: f === 'employment',
+      };
+    }
+  }
+  if (parts[0] === 'insurances' && parts.length === 5 && parts[2] === 'solutions' && parts[4] === 'rates') {
+    const ins = insuranceById(store, parts[1]);
+    const s = ins.solutions.find((x) => x.code === parts[3]);
+    if (!s) throw new PayrollRefusal('notFound', `Lösung ${parts[3]} gibt es nicht.`);
+    return {
+      history: () => s.rates,
+      write: (h) => { s.rates = h as typeof s.rates; },
+      value: (v) => ratesValue(ins.kind, v, data),
+    };
+  }
+  return bad(`${path} ist kein Wert mit Datum.`);
+}
+
+function companyValue(f: typeof COMPANY_FIELDS[number], v: unknown, data: PayrollData): unknown {
+  switch (f) {
+    case 'canton': return str(v, 'Kanton').toUpperCase();
+    case 'payday': return v === 'last-working-day' ? v : num(v, 'Zahltag', 1, 31);
+    case 'postingDate': return v === 'month-end' || v === 'payday' ? v : bad('Buchungsdatum: Monatsende oder Zahltag.');
+    case 'rounding': return typeof v === 'number' && data.rounding.includes(v) ? v : bad(`Rundung: ${data.rounding.join(' oder ')}.`);
+    case 'proration': return v === 'calendar-days' || v === 'thirty-days' ? v : bad('Anteil: Kalendertage oder 30 Tage.');
+    case 'thirteenth': return v === 'twelfth' || v === 'percent' ? v : bad('13. Monatslohn: 1/12 oder 8,33 %.');
+  }
+}
+
+function employeeValue(f: typeof EMPLOYEE_FIELDS[number], v: unknown, store: PayrollStore, data: PayrollData): unknown {
+  switch (f) {
+    case 'name': return isObj(v) ? { first: str(v.first, 'Vorname'), last: str(v.last, 'Nachname') } : bad('Ein Name.');
+    case 'address': return addressValue(v);
+    case 'bank': return bankValue(v);
+    case 'employment': return employmentValue(v);
+    case 'insurances': return insurancesValue(v, store, data);
+    case 'permit': case 'email': return str(v, f === 'permit' ? 'Bewilligung' : 'E-Mail');
+    case 'taxAtSource': return taxValue(v);
+  }
+}
+
+function addressValue(v: unknown) {
+  if (!isObj(v)) return bad('Eine Adresse.');
+  return clean({
+    street: optStr(v.street), number: optStr(v.number), postcode: str(v.postcode, 'PLZ'), town: str(v.town, 'Ort'),
+    country: (optStr(v.country) ?? 'CH').toUpperCase(), canton: optStr(v.canton)?.toUpperCase(), municipality: optStr(v.municipality),
+  });
+}
+
+function bankValue(v: unknown) {
+  if (!isObj(v)) return bad('Eine Bankverbindung.');
+  const iban = parseIban(str(v.iban, 'IBAN'));
+  if (!iban) throw new PayrollRefusal('iban', `${String(v.iban)} ist keine gültige IBAN.`);
+  return clean({ iban: iban as string, holder: optStr(v.holder) });
+}
+
+function employmentValue(v: unknown): Employment {
+  if (!isObj(v)) return bad('Eine Anstellung.');
+  const kind = v.kind === 'monthly' || v.kind === 'hourly' ? v.kind : bad('Monatslohn oder Stundenlohn.');
+  const months = isObj(v.thirteenth) && Array.isArray(v.thirteenth.months) ? v.thirteenth.months.map((m) => num(m, '13. Monatslohn: Monat', 1, 12)) : undefined;
+  return clean({
+    kind, amount: num(v.amount, 'Lohn', 0), pensum: optNum(v.pensum, 'Pensum', 1, 100), hoursPerWeek: optNum(v.hoursPerWeek, 'Stunden pro Woche', 0, 80),
+    holidayDays: optNum(v.holidayDays, 'Ferientage', 0, 60), ...(months ? { thirteenth: { months: [...new Set(months)].sort((a, b) => a - b) } } : {}),
+    fixedTerm: v.fixedTerm === true ? true : undefined, exitReason: optStr(v.exitReason),
+  });
+}
+
+function insurancesValue(v: unknown, store: PayrollStore, data: PayrollData): PersonInsurances {
+  if (!isObj(v)) return bad('Die Versicherungen der Person.');
+  const out: PersonInsurances = {};
+  for (const [kind, x] of Object.entries(v)) {
+    if (x === undefined || x === null) continue;
+    if (kind === 'pensioner') { out.pensioner = x === 'allowance' || x === 'waiver' ? x : bad('Rentner: Freibetrag oder Verzicht.'); continue; }
+    const def = data.insurances[kind];
+    if (!def) bad(`Versicherung ${kind} gibt es nicht.`);
+    if (!isObj(x)) return bad(`${kind}: die Versicherung und die Lösung.`);
+    const ins = store.insurances.find((i) => i.id === x.insurance && i.kind === kind) ?? bad(`${kind}: diese Versicherung hat die Firma nicht.`);
+    if (def.perPerson) {
+      const solution = optStr(x.solution);
+      out[kind] = isObj(x.percent)
+        ? clean({ insurance: ins.id, solution, percent: { employee: num(x.percent.employee, 'Anteil Arbeitnehmer', 0, 100), employer: num(x.percent.employer, 'Anteil Arbeitgeber', 0, 100) } })
+        : clean({ insurance: ins.id, solution, employee: num(x.employee, 'Beitrag Arbeitnehmer', 0), employer: num(x.employer, 'Beitrag Arbeitgeber', 0) });
+    } else {
+      const code = str(x.code, `${kind}: der Code`);
+      if (!ins.solutions.some((s) => s.code === code)) bad(`${kind}: die Lösung ${code} hat die Versicherung nicht.`);
+      out[kind] = { insurance: ins.id, code };
+    }
+  }
+  return out;
+}
+
+function taxValue(v: unknown): TaxAtSource {
+  if (!isObj(v) || typeof v.subject !== 'boolean') return bad('Quellensteuer: pflichtig oder nicht.');
+  return clean({ subject: v.subject, canton: optStr(v.canton)?.toUpperCase(), municipality: optStr(v.municipality), code: optStr(v.code), church: typeof v.church === 'boolean' ? v.church : undefined });
+}
+
+function recurringValue(v: unknown, quantity: boolean) {
+  if (!isObj(v)) return bad('Ein Betrag.');
+  const text = optStr(v.text);
+  if (quantity && v.amount === undefined) return clean({ quantity: num(v.quantity, 'Menge', 0), rate: num(v.rate, 'Ansatz'), text });
+  return clean({ amount: num(v.amount, 'Betrag'), text });
+}
+
+/** The rates of a solution, by the kind's rate keys; a value outside its range is a warning. */
+function ratesValue(kind: string, v: unknown, data: PayrollData): { value: Record<string, number>; warnings: RateWarning[] } {
+  if (!isObj(v)) return bad('Die Sätze.');
+  const defs = data.insurances[kind]?.rates ?? {};
+  const value: Record<string, number> = {};
+  const warnings: RateWarning[] = [];
+  for (const [k, x] of Object.entries(v)) {
+    if (x === undefined || x === null || x === '') continue;
+    const def = defs[k] ?? bad(`${k} ist kein Satz dieser Versicherung.`);
+    value[k] = num(x, def.label.de);
+    if (value[k] < def.range[0] || value[k] > def.range[1]) warnings.push({ key: k, value: value[k], range: def.range });
+  }
+  return { value, warnings };
+}
+
+export interface EntryInput { path: string; validFrom: string; validUntil?: string; value: unknown; note?: string; receiptId?: string }
+
+/** Adds a dated entry to the value `path` names; the warnings of its rates come back. */
+export function addDatedEntry(store: PayrollStore, data: PayrollData, input: EntryInput, now: string): { entry: DatedEntry<unknown>; warnings: RateWarning[] } {
+  const target = targetOf(store, data, input.path);
+  const { value, warnings } = target.value(input.value);
+  if (input.validUntil !== undefined && !target.ends) bad('Dieser Wert endet nicht: ein neuer Eintrag ab einem Tag ersetzt ihn.');
+  const source = clean({ receiptId: optStr(input.receiptId), note: optStr(input.note) });
+  const entry: DatedEntry<unknown> = {
+    validFrom: day(input.validFrom, 'Gilt ab'), ...(input.validUntil !== undefined ? { validUntil: day(input.validUntil, 'Gilt bis') } : {}),
+    value, enteredAt: now, ...(Object.keys(source).length ? { source } : {}),
+  };
+  try { target.write(addEntry(target.history(), entry)); } catch (e) { if (e instanceof DatedEntryError) bad(e.message); throw e; }
+  return { entry, warnings };
+}
+
+/** Whether any closed payslip read the entry. */
+export const usedByCloses = (history: PayslipHistory, path: string, key: { validFrom: string; enteredAt: string }): boolean =>
+  [...history.closed.values()].some((c) => c.used.some((u) => u.path === path && u.validFrom === key.validFrom && u.enteredAt === key.enteredAt));
+
+/** Takes an entry back that no closed payslip used: a planned raise, a typo; one that was used stays (a new entry corrects it). */
+export function withdrawDatedEntry(store: PayrollStore, data: PayrollData, history: PayslipHistory, path: string, key: { validFrom: string; enteredAt: string }): void {
+  const target = targetOf(store, data, path);
+  const h = target.history() ?? [];
+  if (!h.some((e) => e.validFrom === key.validFrom && e.enteredAt === key.enteredAt)) throw new PayrollRefusal('notFound', 'Diesen Eintrag gibt es nicht.');
+  if (usedByCloses(history, path, key)) throw new PayrollRefusal('used', 'Eine abgeschlossene Lohnabrechnung hat diesen Eintrag gelesen: er bleibt, ein neuer Eintrag korrigiert ihn.');
+  target.write(withdrawEntry(h, key, () => false));
+}
+
+// ─── the people ────────────────────────────────────────────────────────────────
+
+const employeeOf = (store: PayrollStore, id: string): PayrollEmployee => store.employees.find((e) => e.id === id) ?? (() => { throw new PayrollRefusal('notFound', `Keine Person ${id}.`); })();
+const insuranceById = (store: PayrollStore, id: string): PayrollInsurance => store.insurances.find((i) => i.id === id) ?? (() => { throw new PayrollRefusal('notFound', `Keine Versicherung ${id}.`); })();
+
+/** A new person with her sections at once (Person, Anstellung, Adresse, Bank, Versicherungen), each dated from the entry day. */
+export function createEmployee(store: PayrollStore, data: PayrollData, input: Record<string, unknown>, id: string, now: string): PayrollEmployee {
+  const from = day(input.validFrom, 'Eintritt');
+  const at = <T>(value: T): DatedEntry<T>[] => [{ validFrom: from, value, enteredAt: now }];
+  const lang = (LANGUAGES as readonly unknown[]).includes(input.language) ? input.language as PayrollLanguage : 'de';
+  const e: PayrollEmployee = clean({
+    id, ...(input.isOwner === true ? { isOwner: true } : {}), language: lang,
+    socialSecurityNumber: optStr(input.socialSecurityNumber) ? socialSecurityNumberOf(String(input.socialSecurityNumber), data) : undefined,
+    birthDate: day(input.birthDate, 'Geburtsdatum'), sex: input.sex === 'f' || input.sex === 'm' ? input.sex : undefined, nationality: optStr(input.nationality)?.toUpperCase(),
+    name: at({ first: str(input.first, 'Vorname'), last: str(input.last, 'Nachname') }),
+    email: optStr(input.email) ? at(String(input.email).trim()) : undefined,
+    address: input.address !== undefined && isObj(input.address) && (optStr(input.address.postcode) || optStr(input.address.town)) ? at(addressValue(input.address)) : [],
+    bank: isObj(input.bank) && optStr(input.bank.iban) ? at(bankValue(input.bank)) : [],
+    employment: at(employmentValue(input.employment)),
+    recurring: [],
+    insurances: isObj(input.insurances) && Object.keys(input.insurances).length ? at(insurancesValue(input.insurances, store, data)) : [],
+  });
+  store.employees.push(e);
+  return e;
+}
+
+const PERSON_FIELDS = ['socialSecurityNumber', 'birthDate', 'sex', 'nationality', 'language', 'isOwner'] as const;
+
+/** The undated facts of a person (the number, the birth date, the sex, the payslip's language, «Inhaber/in»). */
+export function patchEmployee(store: PayrollStore, data: PayrollData, id: string, patch: Record<string, unknown>): void {
+  const e = employeeOf(store, id);
+  for (const k of Object.keys(patch)) if (!(PERSON_FIELDS as readonly string[]).includes(k)) bad(`${k} ist kein Feld der Person.`);
+  if ('socialSecurityNumber' in patch) {
+    if (optStr(patch.socialSecurityNumber)) e.socialSecurityNumber = socialSecurityNumberOf(String(patch.socialSecurityNumber), data);
+    else delete e.socialSecurityNumber;
+  }
+  if ('birthDate' in patch) e.birthDate = day(patch.birthDate, 'Geburtsdatum');
+  if ('sex' in patch) { if (patch.sex === 'f' || patch.sex === 'm') e.sex = patch.sex; else delete e.sex; }
+  if ('nationality' in patch) { const n = optStr(patch.nationality); if (n) e.nationality = n.toUpperCase(); else delete e.nationality; }
+  if ('language' in patch) e.language = (LANGUAGES as readonly unknown[]).includes(patch.language) ? patch.language as PayrollLanguage : bad('Sprache: de, fr, it oder en.');
+  if ('isOwner' in patch) { if (patch.isOwner === true) e.isOwner = true; else delete e.isOwner; }
+}
+
+// ─── the firm's insurances ─────────────────────────────────────────────────────
+
+/** A Sozialversicherung of a kind of payroll.yaml, with its first solution and rates (dated from its start). */
+export function createInsurance(store: PayrollStore, data: PayrollData, input: Record<string, unknown>, id: string, now: string): { insurance: PayrollInsurance; warnings: RateWarning[] } {
+  const kind = typeof input.kind === 'string' && data.insurances[input.kind] ? input.kind : bad('Eine Art der Versicherung.');
+  const validFrom = day(input.validFrom, 'Gilt ab');
+  const code = optStr(input.code) ?? 'A';
+  const { value, warnings } = ratesValue(kind, input.rates ?? {}, data);
+  const insurance: PayrollInsurance = clean({
+    id, kind, name: str(input.name, 'Name'), business: optStr(input.business), memberNumber: optStr(input.memberNumber), contractNumber: optStr(input.contractNumber),
+    customerNumber: optStr(input.customerNumber), account: accountValue(input.account),
+    solutions: [clean({ code, label: optStr(input.solutionLabel), rates: Object.keys(value).length ? [{ validFrom, value, enteredAt: now }] : [] })],
+    validFrom,
+  });
+  store.insurances.push(insurance);
+  return { insurance, warnings };
+}
+
+const accountValue = (v: unknown): string | undefined => {
+  const a = optStr(v);
+  return a === undefined ? undefined : /^\d{4}$/.test(a) ? a : bad(`Konto ${a}: vier Stellen.`);
+};
+
+const INSURANCE_FIELDS = ['name', 'business', 'memberNumber', 'contractNumber', 'customerNumber', 'account', 'validUntil'] as const;
+
+/** The insurance's numbers, name, liability account, or its end; a closed payslip's insurance ends but is never deleted. */
+export function patchInsurance(store: PayrollStore, id: string, patch: Record<string, unknown>): void {
+  const ins = insuranceById(store, id);
+  for (const k of Object.keys(patch)) if (!(INSURANCE_FIELDS as readonly string[]).includes(k)) bad(`${k} ist kein Feld der Versicherung.`);
+  const rec = ins as unknown as Record<string, unknown>;
+  for (const k of INSURANCE_FIELDS) {
+    if (!(k in patch)) continue;
+    const v = k === 'account' ? accountValue(patch[k]) : k === 'validUntil' ? (optStr(patch[k]) ? day(patch[k], 'Gilt bis') : undefined) : optStr(patch[k]);
+    if (k === 'name' && !v) bad('Name fehlt.');
+    if (v === undefined) delete rec[k]; else rec[k] = v;
+  }
+}
+
+/** A further solution («B» for the workshop) with its rates from a day. */
+export function addSolution(store: PayrollStore, data: PayrollData, id: string, input: Record<string, unknown>, now: string): RateWarning[] {
+  const ins = insuranceById(store, id);
+  const code = str(input.code, 'Code');
+  if (ins.solutions.some((s) => s.code === code)) throw new PayrollRefusal('exists', `Die Lösung ${code} gibt es schon.`);
+  const { value, warnings } = ratesValue(ins.kind, input.rates ?? {}, data);
+  ins.solutions.push(clean({ code, label: optStr(input.label), rates: Object.keys(value).length ? [{ validFrom: day(input.validFrom, 'Gilt ab'), value, enteredAt: now }] : [] }));
+  return warnings;
+}
+
+// ─── the Lohnarten layer ───────────────────────────────────────────────────────
+
+/** Whether a closed payslip has a line of the Lohnart (then it is never deleted, §5.3). */
+export const wageTypeUsed = (history: PayslipHistory, key: string): boolean => [...history.closed.values()].some((c) => c.lines.some((l) => l.wageType === key));
+
+/** A rename, other accounts, another Lohnausweis field of a Lohnart; empty fields go back to the catalogue's. */
+export function setWageType(store: PayrollStore, data: PayrollData, key: string, input: Record<string, unknown>): void {
+  const types = firmWageTypes(data, store);
+  if (!types.has(key)) throw new PayrollRefusal('unknownWageType', `Lohnart ${key} gibt es nicht.`);
+  const label = isObj(input.label) ? clean(Object.fromEntries(LANGUAGES.map((l) => [l, optStr((input.label as Record<string, unknown>)[l])]))) as Partial<Labels> : undefined;
+  const fields = clean({ debit: accountValue(input.debit), credit: accountValue(input.credit), lohnausweis: optStr(input.lohnausweis) });
+  const i = store.wageTypes.findIndex((l) => l.key === key);
+  const layer = i >= 0 ? store.wageTypes[i] : undefined;
+  if (layer && 'own' in layer) bad('Eine eigene Lohnart ändert ihr Formular.');
+  if (layer && 'copyOf' in layer) {
+    const copy = layer as Extract<WageTypeLayer, { copyOf: string }>;
+    store.wageTypes[i] = clean({ key, copyOf: copy.copyOf, label: { ...copy.label, ...(label ?? {}) } as Labels, ...fields });
+    return;
+  }
+  const next: WageTypeLayer = clean({ key, ...(label && Object.keys(label).length ? { label } : {}), ...fields });
+  if (Object.keys(next).length === 1) { if (i >= 0) store.wageTypes.splice(i, 1); return; }
+  if (i >= 0) store.wageTypes[i] = next; else store.wageTypes.push(next);
+}
+
+/** A copy that keeps every flag of the Lohnart, under a new key and label. */
+export function copyWageType(store: PayrollStore, data: PayrollData, input: Record<string, unknown>, key: string): string {
+  const from = str(input.copyOf, 'Lohnart');
+  const w = firmWageTypes(data, store).get(from) ?? (() => { throw new PayrollRefusal('unknownWageType', `Lohnart ${from} gibt es nicht.`); })();
+  if (w.computes) bad(`${from} rechnet die App selbst: eine Kopie davon rechnet niemand.`);
+  const de = str(isObj(input.label) ? input.label.de : input.label, 'Bezeichnung');
+  const label = Object.fromEntries(LANGUAGES.map((l) => [l, (isObj(input.label) ? optStr(input.label[l]) : undefined) ?? de])) as Labels;
+  store.wageTypes.push(clean({ key, copyOf: from, label, debit: accountValue(input.debit), credit: accountValue(input.credit), lohnausweis: optStr(input.lohnausweis) }));
+  return key;
+}
+
+/** Removes a copy no closed payslip used; a catalogue Lohnart is never removed. */
+export function removeWageType(store: PayrollStore, history: PayslipHistory, key: string): void {
+  const layer = store.wageTypes.find((l) => l.key === key);
+  if (!layer || !('copyOf' in layer)) bad('Nur eine Kopie lässt sich entfernen; eine Lohnart des Katalogs bleibt.');
+  if (wageTypeUsed(history, key)) throw new PayrollRefusal('used', 'Eine abgeschlossene Lohnabrechnung hat diese Lohnart: sie bleibt.');
+  if (store.employees.some((e) => e.recurring.some((r) => r.wageType === key)) || store.monthLines.some((l) => l.wageType === key && !l.removed)) throw new PayrollRefusal('used', 'Eine Person hat diese Lohnart noch: sie bleibt.');
+  store.wageTypes = store.wageTypes.filter((l) => l.key !== key);
+}
+
+// ─── a change dated before a closed month (§19.3) ──────────────────────────────
+
+/** One Lohnart of a closed payslip that a change computes otherwise. */
+export interface Difference { wageType: string; label: string; side: 'employee' | 'employer'; before: number; after: number; diff: number }
+
+export interface Affected {
+  payslip: string; employee: string; name: string; month: string; postingDate: string;
+  differences: Difference[];
+}
+
+/** The history as if the payslip `id` were not closed: its draft computed again from the values. */
+function withoutClose(h: PayslipHistory, id: string): PayslipHistory {
+  const closed = new Map(h.closed);
+  closed.delete(id);
+  return { ...h, closed };
+}
+
+/** The lines summed by Lohnart and side. */
+function byWageType(d: Pick<PayslipDraft, 'lines'> | undefined): Map<string, { label: string; side: 'employee' | 'employer'; amount: number }> {
+  const out = new Map<string, { label: string; side: 'employee' | 'employer'; amount: number }>();
+  // A correction line is carried by whichever month is open first: it is no value of this month.
+  for (const l of (d?.lines ?? []).filter((x) => !x.corrects)) {
+    const k = `${l.wageType}|${l.side}`;
+    const x = out.get(k) ?? { label: l.label, side: l.side, amount: 0 };
+    x.amount = round2(x.amount + l.amount);
+    out.set(k, x);
+  }
+  return out;
+}
+
+function differencesOf(before: Pick<PayslipDraft, 'lines'> | undefined, after: Pick<PayslipDraft, 'lines'> | undefined): Difference[] {
+  const b = byWageType(before); const a = byWageType(after);
+  const out: Difference[] = [];
+  for (const k of new Set([...b.keys(), ...a.keys()])) {
+    const x = b.get(k); const y = a.get(k);
+    const diff = round2((y?.amount ?? 0) - (x?.amount ?? 0));
+    if (diff !== 0) out.push({ wageType: k.split('|')[0], label: (y ?? x)!.label, side: (y ?? x)!.side, before: x?.amount ?? 0, after: y?.amount ?? 0, diff });
+  }
+  return out;
+}
+
+/**
+ * The closed payslips `next` computes otherwise than the store of `ctx`: each computed as if open, once
+ * with the values before the change and once with them after, so only the change's own difference shows.
+ */
+export function affectedBy(ctx: PayrollContext, next: PayrollStore): Affected[] {
+  const out: Affected[] = [];
+  for (const c of ctx.history.closed.values()) {
+    const history = withoutClose(ctx.history, c.id);
+    const before = computePayslip({ ...ctx, history }, c.employee, c.month);
+    const after = computePayslip({ ...ctx, store: next, history }, c.employee, c.month);
+    const differences = differencesOf(before, after);
+    if (differences.length) out.push({ payslip: c.id, employee: c.employee, name: c.person.name, month: c.month, postingDate: c.postingDate, differences });
+  }
+  return out.sort((a, b) => a.month.localeCompare(b.month) || a.name.localeCompare(b.name));
+}
+
+/** «Wieder öffnen» on the card: only when the one payslip affected is the person's latest closed month, in an open period. */
+export function reopenOffer(ctx: PayrollContext, affected: readonly Affected[], isClosed: (day: string) => boolean): string | undefined {
+  if (affected.length !== 1) return undefined;
+  const a = affected[0];
+  return latestClosed(ctx.history, a.employee)?.id === a.payslip && !isClosed(a.postingDate) ? a.payslip : undefined;
+}
+
+/** «Rückwirkende Korrektur»: one correction per differing Lohnart of each affected payslip, carried to the person's next open month. */
+export function backdatedCorrections(ctx: PayrollContext, affected: readonly Affected[], id: () => string, now: string): PayslipCorrection[] {
+  return affected.flatMap((a) => a.differences.map((d) => correctionOf(ctx, ctx.data, a.payslip, { wageType: d.wageType, amount: d.diff }, id(), now)));
+}
+
+/**
+ * What a closed payslip would compute today, less the corrections entered on it since: shown on it as a
+ * fact («berechnet mit den Werten von damals»), never a reminder; empty when nothing differs (§19.3 «So lassen»).
+ */
+export function driftOf(ctx: PayrollContext, close: PayslipClose): Difference[] {
+  const now = computePayslip({ ...ctx, history: withoutClose(ctx.history, close.id) }, close.employee, close.month);
+  const corrected = ctx.history.corrections.filter((c) => c.of === close.id && c.at >= close.closedAt);
+  const own = differencesOf(close, now).map((d) => {
+    const done = round2(corrected.filter((c) => c.wageType === d.wageType && c.side === d.side).reduce((s, c) => s + c.amount, 0));
+    return { ...d, diff: round2(d.diff - done) };
+  });
+  return own.filter((d) => d.diff !== 0);
+}
+
+// ─── what the pages read ───────────────────────────────────────────────────────
+
+/** The first day of the person's first month without a closed payslip: the default «gilt ab» (domain-model.md §5.6). */
+export function defaultFrom(ctx: PayrollContext, e: PayrollEmployee, today: string): string {
+  const entry = [...e.employment].sort((a, b) => a.validFrom.localeCompare(b.validFrom))[0]?.validFrom;
+  if (!entry) return today;
+  const last = closedOf(ctx.history, e.id).at(-1)?.month;
+  if (!last) return entry;
+  return firstDay(nextMonth(last));
+}
+
+export interface EmployeeDetail {
+  employee: Omit<PayrollEmployee, 'socialSecurityNumber'> & { socialSecurityNumber?: string; hasSocialSecurityNumber: boolean };
+  /** The entries closed payslips read, as `path|validFrom|enteredAt`: they stay, a new entry corrects them. */
+  used: string[];
+  /** The person's months of the year, closed or open (the Zeitachse). */
+  months: Array<{ month: string; status: 'closed' | 'draft'; payslip: string }>;
+  defaultFrom: string;
+}
+
+export function employeeDetail(ctx: PayrollContext, id: string, year: string, today: string, mask: (n: string) => string): EmployeeDetail {
+  const e = employeeOf(ctx.store, id);
+  const prefix = `employees/${id}/`;
+  const used = [...new Set(closedOf(ctx.history, id).flatMap((c) => c.used.filter((u) => u.path.startsWith(prefix)).map((u) => `${u.path}|${u.validFrom}|${u.enteredAt}`)))];
+  const months = monthsBetween(`${year}-01`, `${year}-12`).flatMap((m): EmployeeDetail['months'] => {
+    const pid = payslipId(m, id);
+    if (ctx.history.closed.has(pid)) return [{ month: m, status: 'closed', payslip: pid }];
+    return employedFraction(e, m, 'calendar-days') > 0 ? [{ month: m, status: 'draft', payslip: pid }] : [];
+  });
+  const { socialSecurityNumber, ...rest } = e;
+  return {
+    employee: { ...rest, ...(socialSecurityNumber ? { socialSecurityNumber: mask(socialSecurityNumber) } : {}), hasSocialSecurityNumber: !!socialSecurityNumber },
+    used, months, defaultFrom: defaultFrom(ctx, e, today),
+  };
+}
+
+/** One account the payroll books on, and whether the chart has it. */
+export interface PayrollAccount { number: string; exists: boolean; name?: string; wageTypes: string[] }
+
+/**
+ * The accounts the firm's payslips book on (§5.3 «accounts exist»): those of the Lohnarten code computes
+ * for the insurances the firm has or must have, of the Lohnarten its people have, and of its closed lines.
+ */
+export function payrollAccounts(ctx: PayrollContext, chart: ReadonlyMap<string, string>, standard: ReadonlyMap<string, string>): PayrollAccount[] {
+  const { data, store, history } = ctx;
+  const types = firmWageTypes(data, store);
+  const kinds = new Set([...store.insurances.map((i) => i.kind), ...Object.entries(data.insurances).filter(([, k]) => k.required).map(([k]) => k)]);
+  const contributionTypes = new Set(data.contributions.filter((c) => kinds.has(c.insurance)).map((c) => c.wageType));
+  const keys = new Set<string>([
+    ...[...types.values()].filter((w) => w.computes === 'monthly' || w.computes === 'thirteenth').map((w) => w.key),
+    ...contributionTypes,
+    ...store.employees.flatMap((e) => e.recurring.map((r) => r.wageType)),
+    ...store.monthLines.filter((l) => !l.removed).map((l) => l.wageType),
+    ...[...history.closed.values()].flatMap((c) => c.lines.map((l) => l.wageType)),
+  ]);
+  const byNumber = new Map<string, Set<string>>();
+  for (const key of keys) {
+    const w = types.get(key);
+    if (!w) continue;
+    for (const ref of [w.debit, w.credit]) {
+      const kind = ref && typeof ref === 'object' ? ref.insurance : undefined;
+      const insurance = kind ? store.insurances.find((i) => i.kind === kind) : undefined;
+      const n = resolveAccount(ref, data, insurance);
+      if (n) byNumber.set(n, (byNumber.get(n) ?? new Set()).add(key));
+    }
+  }
+  return [...byNumber.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([number, ws]) => {
+    const name = chart.get(number) ?? standard.get(number);
+    return { number, exists: chart.has(number), ...(name ? { name } : {}), wageTypes: [...ws] };
+  });
+}
+
+/** The settings page: the Stammdaten, the insurances, the firm's Lohnarten and which closed payslip used what. */
+export function settingsView(ctx: PayrollContext, accounts: PayrollAccount[]) {
+  const { store, history } = ctx;
+  const types = firmWageTypes(ctx.data, store);
+  return {
+    company: store.company,
+    insurances: store.insurances,
+    wageTypes: [...types.values()].map((w) => ({ ...w, used: wageTypeUsed(history, w.key) })),
+    used: [...new Set([...history.closed.values()].flatMap((c) => c.used.filter((u) => u.path.startsWith('company/') || u.path.startsWith('insurances/')).map((u) => `${u.path}|${u.validFrom}|${u.enteredAt}`)))],
+    accounts,
+  };
+}
+export type SettingsView = ReturnType<typeof settingsView>;

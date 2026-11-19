@@ -28,10 +28,13 @@ schema: 1
 clearing: "1091"
 
 # The social security number (AHVN13, AHVG Art. 153b-153i): how code finds it in a text, so no prompt to
-# a model ever carries one (#508; src/llm/mask.ts). Separators may be dots, spaces or none.
+# a model ever carries one (#508; src/llm/mask.ts). Separators may be dots, spaces or none. `checkDigit`:
+# the 13th digit is the EAN-13 check digit of the first twelve (ZAS, «Aufbau der AHV-Nummer»): a number
+# typed into Löhne › Mitarbeitende is checked by it (src/payroll/settings.ts).
 socialSecurityNumber:
   pattern: "\\b756[.\\s-]?\\d{4}[.\\s-]?\\d{4}[.\\s-]?\\d{2}\\b"
   masked: "756.****.****.**"
+  checkDigit: ean13
 
 # The groups, in the order a payslip prints them. `stage`: where a group's lines act on the payslip:
 # `gross` (they make the Bruttolohn), `deduction` (taken off it: the Nettolohn), `after` (added or taken

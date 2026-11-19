@@ -33,6 +33,10 @@ export type InvoiceView = typeof INVOICE_VIEWS[number];
  * partly-paid, paid, cancelled; Gutschriften draft, open, partly, settled; both unsent («Nicht gesendet»).
  */
 export const INVOICE_STATUSES = ['draft', 'open', 'overdue', 'partly-paid', 'paid', 'cancelled', 'partly', 'settled', 'unsent'] as const;
+
+/** Löhne › Einstellungen: its sections, by their English slugs (docs/urls.md). */
+export const PAYROLL_SECTIONS = ['company', 'insurances', 'wage-types', 'accounts'] as const;
+export type PayrollSection = typeof PAYROLL_SECTIONS[number];
 export type InvoiceStatus = typeof INVOICE_STATUSES[number];
 
 export type Route =
@@ -67,7 +71,12 @@ export type Route =
   | { area: 'partners'; id?: string }
   /** Wissen: Lücken, Von der App, or (absent) the area's first page; a topic of Arbeitsweise by its slug. */
   | { area: 'knowledge'; page?: KnowledgePage }
-  | { area: 'knowledge'; topic: string };
+  | { area: 'knowledge'; topic: string }
+  /** Löhne (docs/specs/payroll.md §12.1): the year (its month by `?period=`), a month's payslips and one of them, the people and one person (`new`: the form of a new one), the settings and one section. */
+  | { area: 'payroll'; view: 'overview' }
+  | { area: 'payroll'; view: 'payslips'; month?: string; employee?: string }
+  | { area: 'payroll'; view: 'employees'; id?: string }
+  | { area: 'payroll'; view: 'settings'; section?: PayrollSection | (string & {}) };
 
 export type AreaId = Route['area'];
 export type RouteOf<A extends AreaId> = Extract<Route, { area: A }>;
@@ -87,6 +96,7 @@ export const AREA_HOME: { [A in AreaId]: RouteOf<A> } = {
   changes: { area: 'changes' },
   partners: { area: 'partners' },
   knowledge: { area: 'knowledge' },
+  payroll: { area: 'payroll', view: 'overview' },
 };
 
 export interface Query {
@@ -155,6 +165,7 @@ function segmentsOf(r: Route): Array<string | undefined> {
     case 'changes': return ['changes', r.commit, r.commit ? r.file : undefined];
     case 'partners': return ['partners', r.id];
     case 'knowledge': return ['knowledge', 'topic' in r ? r.topic : r.page];
+    case 'payroll': return r.view === 'overview' ? ['payroll'] : r.view === 'payslips' ? ['payroll', r.month ?? 'payslips', r.month ? r.employee : undefined] : ['payroll', r.view, r.view === 'employees' ? r.id : r.section];
   }
 }
 
@@ -173,8 +184,19 @@ function routeOf([a, b, c, d]: string[]): Route {
     case 'changes': return defined({ area: 'changes', commit: b, file: b ? c : undefined });
     case 'partners': return defined({ area: 'partners', id: b });
     case 'knowledge': return !b ? { area: 'knowledge' } : isOneOf(KNOWLEDGE_PAGES, b) ? { area: 'knowledge', page: b } : { area: 'knowledge', topic: b };
+    case 'payroll': return payrollRoute(b, c);
     default: return { area: 'receipts' };
   }
+}
+
+const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+function payrollRoute(b?: string, c?: string): Route {
+  if (b && MONTH.test(b)) return defined({ area: 'payroll', view: 'payslips', month: b, employee: c });
+  if (b === 'payslips') return { area: 'payroll', view: 'payslips' };
+  if (b === 'employees') return defined({ area: 'payroll', view: 'employees', id: c });
+  if (b === 'settings') return defined({ area: 'payroll', view: 'settings', section: c });
+  return { area: 'payroll', view: 'overview' };
 }
 
 function automationSegments(r: RouteOf<'automation'>): Array<string | undefined> {

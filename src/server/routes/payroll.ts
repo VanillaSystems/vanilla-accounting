@@ -24,6 +24,7 @@ import type { PayrollEmployee, PayslipClose } from '../../payroll/model.js';
 import { join } from 'node:path';
 import { idSource, sha256 } from '../../invoices/store.js';
 import { loadPayroll, updatePayroll } from '../../payroll/store.js';
+import { driftOf } from '../../payroll/settings.js';
 import { employs } from '../../workspace/setup.js';
 import type { ApiErrorBody } from '../../types/api-error.js';
 
@@ -85,9 +86,14 @@ router.get('/api/payroll/months/:month', run((req, res) => {
 
 router.get('/api/payroll/payslips/:id', run((req, res) => {
   const { month, employee } = idParts(String(req.params.id));
-  const view = payslipView(payrollContext(WS), employee, month, periodLock(readBooks()));
+  const ctx = payrollContext(WS);
+  const view = payslipView(ctx, employee, month, periodLock(readBooks()));
   if (!view) throw new PayrollRefusal('notFound', `Keine Lohnabrechnung ${req.params.id}.`);
-  res.json(view);
+  // A closed payslip the values of today compute otherwise says so, as a fact (§19.3 «So lassen»).
+  const close = ctx.history.closed.get(view.id);
+  // The Lohnarten added to an open month, with their ids: the draft's «entfernen».
+  const monthLines = close ? [] : ctx.store.monthLines.filter((l) => l.employee === employee && l.month === month && !l.removed);
+  res.json({ ...view, drift: close ? driftOf(ctx, close) : [], monthLines });
 }));
 
 /** The PDF of a closed payslip, exactly as it lies in Belege. */

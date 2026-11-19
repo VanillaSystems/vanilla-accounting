@@ -446,8 +446,8 @@ export interface PayrollData {
     fields: Array<{ key: string; label: Labels; sum?: { plus: string[]; minus?: string[] }; deduction?: boolean; remark?: boolean }>;
     copyToTaxOffice?: string[];
   };
-  /** How a social security number looks (a regular expression) and what stands for it in a text sent to a model. */
-  socialSecurityNumber: { pattern: string; masked: string };
+  /** How a social security number looks (a regular expression), what stands for it in a text sent to a model, and how its last digit checks the others. */
+  socialSecurityNumber: { pattern: string; masked: string; checkDigit?: 'ean13' };
   /** The words of the payroll's documents, in each language. */
   documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody', Labels>;
 }
