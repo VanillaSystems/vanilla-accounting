@@ -43,6 +43,7 @@
     "help:preview": "tsx tools/help/preview.ts",
     "inventory": "tsx tools/layers/inventory.ts",
     "fetch-rates": "tsx src/cli/fetch-estv-rates.ts",
+    "fetch-qst": "tsx src/cli/fetch-qst.ts",
     "restamp-fx": "tsx src/cli/restamp-fx-rates.ts",
     "reconcile-balances": "tsx src/cli/reconcile-balances.ts",
     "check-closed": "tsx src/cli/check-closed-period.ts",

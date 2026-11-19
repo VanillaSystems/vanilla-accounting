@@ -111,7 +111,11 @@ export type ApiRefusal =
   /** «Arbeitnehmeranteil abziehen» on a payment that has no employees' share open (#476). */
   | { code: 'withheldNone' }
   /** A payroll action that does not apply (src/payroll/close.ts PayrollRefusal): the payslip is gone, closed already, not closed, not the latest closed month, the Lohnart unknown, the amount missing; a setting malformed, an entry a closed payslip used, a social security number or IBAN that is none, a solution that exists (src/payroll/settings.ts). */
-  | { code: 'payroll'; params: { why: 'notFound' | 'alreadyClosed' | 'notClosed' | 'notLatest' | 'unknownWageType' | 'badAmount' | 'badInput' | 'unknownInsurance' | 'noExpenseAccount' | 'nothingAccrued' | 'noEmail' | 'noPassword' | 'noOutbox' | 'badPassword' | 'used' | 'socialSecurityNumber' | 'iban' | 'exists' | 'gone' | 'closedPeriod' | 'opening'; field?: string } }
+  | { code: 'payroll'; params: { why: 'notFound' | 'alreadyClosed' | 'notClosed' | 'notLatest' | 'unknownWageType' | 'badAmount' | 'badInput' | 'unknownInsurance' | 'noExpenseAccount' | 'nothingAccrued' | 'noEmail' | 'noPassword' | 'noOutbox' | 'badPassword' | 'used' | 'socialSecurityNumber' | 'iban' | 'exists' | 'gone' | 'closedPeriod' | 'opening' | 'tariff'; field?: string;
+    /** With `why: 'tariff'`: a tax at source tariff file that could not be loaded (src/payroll/tariffs.ts TariffError). */
+    tariff?: 'notFound' | 'network' | 'badFile' | 'otherRegion' | 'otherYear' | 'noSource' | 'tooLarge' | 'notAFile';
+    /** With `tariff: 'tooLarge'`: the limit, as words («20 MB»). */
+    limit?: string } }
   | { code: 'decidedByHand' }
   | { code: 'changedSince' }
   | { code: 'undoGone' }

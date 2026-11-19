@@ -16,6 +16,7 @@ import type {
 } from './model.js';
 import { payslipId } from './model.js';
 import { inOpening, openingOf } from './opening.js';
+import { taxAtSourceLines, type TariffSource } from './tax-at-source.js';
 import { addMonths, daysIn, firstDay, lastDay, monthsBetween, nextMonth, round2, roundStep, sum } from './money.js';
 
 /** A fact beside the payslip: said once, never a reminder, never a block (§6.2 step 3). */
@@ -52,6 +53,8 @@ export interface PayrollContext {
   years: Readonly<Record<string, PayrollYearData>> | undefined;
   store: PayrollStore;
   history: PayslipHistory;
+  /** The tax at source's tariff files the workspace has (src/payroll/tariffs.ts); absent: none. */
+  tariffs?: TariffSource;
 }
 
 /** The settings of the firm on a day, each with its default where the firm set none (§5.1). */
@@ -390,6 +393,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
   if (pensioner) facts.push({ key: 'pensioner', vars: { date: reachDay! } });
   if (!e.sex) facts.push({ key: 'sexMissing' });
   const computed = new Map<string, number>();
+  const commissionLines: PayslipLine[] = [];
   const cumulated: Record<string, { base: number; capped: number; ceiling: number }> = {};
   /** The capped base of each base and ceiling this month: kept on the close, so the next month caps against what was used. */
   const capped: Record<string, number> = {};
@@ -398,9 +402,28 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     if (!w) continue;
     const kind = data.insurances[c.insurance];
     const side: 'employee' | 'employer' = w.side === 'employer' ? 'employer' : 'employee';
-    if (kind?.computed === false) {
+    if (kind?.computed === false || kind?.tariff) {
       const tax = read(`employees/${e.id}/taxAtSource`, e.taxAtSource, to);
-      if (tax?.subject) miss(w.key, 'notComputed');
+      // A tax correction carried into a month she is no longer subject in still takes its commission.
+      const carried = lines.some((l) => l.wageType === w.key && l.corrects);
+      if (!tax?.subject && !(kind.tariff && carried)) continue;
+      if (!kind.tariff) { miss(w.key, 'notComputed'); continue; }
+      // The tax at source by the region's tariff file, and the commission on it (src/payroll/tax-at-source.ts).
+      const commission = [...types.values()].find((x) => x.computes === 'commission');
+      const out = taxAtSourceLines({
+        data, types, wageType: w, label: label(w), person: tax ?? { subject: false }, month, lines,
+        // The days employed in the firm's own proration, so the extrapolation takes back exactly what the proration cut (§22 decision 103).
+        days: employedFraction(e, month, settings.proration) * (data.taxAtSource?.partMonth ?? 30), pensum: job?.pensum ?? (job?.kind === 'monthly' ? 100 : undefined),
+        // A payment after the exit (a Nachzahlung) takes the rate with the exit month's income (FAQ KS 45, Frage 16).
+        ...(!employed ? { exitIncome: exitIncomeOf(history, e.id, month, w.key, typeof c.base === 'string' ? c.base : '') } : {}),
+        tariffs: ctx.tariffs, insurances: store.insurances,
+        regionOf: (id) => history.closed.get(id)?.lines.find((l) => l.wageType === w.key && l.tariff)?.tariff?.region,
+        ...(commission ? { commission: { wageType: commission, label: label(commission) } } : {}),
+      });
+      // The commission prints after the employer's contributions, the tax in its place.
+      for (const l of out.lines) (l.side === 'employer' ? commissionLines : lines).push(l);
+      for (const m of out.missing) miss(m.wageType, m.code);
+      for (const u of out.used) used.set(`${u.path}|${u.validFrom}|${u.enteredAt}`, u);
       continue;
     }
     const firm = insuranceOf(store, c.insurance, from, to);
@@ -530,6 +553,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     if (amount !== 0 || base !== 0) add({ wageType: w.key, label: label(w), base, rate, amount, side, source });
   }
 
+  lines.push(...commissionLines);
   // The holiday balance in days, where the holidays are taken (a monthly wage, or an hourly one paid as leave).
   const holidays = employed && data.holidays ? holidayBalanceOf(e, month, settings.proration, data) : undefined;
   if (holidays && leaves) fact('holidayBalance', { days: holidays.balance });
@@ -556,6 +580,16 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     ...(holidays ? { holidays } : {}),
     fraction: round2(fraction * 1e4) / 1e4,
   };
+}
+
+/**
+ * The rate-determining income of the person's last closed month before `month` (her exit month, for a payment after
+ * the exit): what its tax line was looked up with, else its taxable wage; undefined without one.
+ */
+function exitIncomeOf(history: PayslipHistory, employee: string, month: string, taxType: string, base: string): number | undefined {
+  const last = closedOf(history, employee).filter((c) => c.month < month && c.lines.some((l) => !l.corrects)).at(-1);
+  if (!last) return undefined;
+  return last.lines.find((l) => l.wageType === taxType && !l.corrects && l.tariff)?.tariff?.income ?? last.bases[base]?.month;
 }
 
 /** Which input of a line is missing: its quantity (a car's price, the hours), its rate per unit, or its amount. */
@@ -679,7 +713,8 @@ export function totalsOf(lines: readonly PayslipLine[], types: ReadonlyMap<strin
     const w = types.get(l.wageType);
     if (!w) continue;
     const signed = w.sign === '-' ? -l.amount : l.amount;
-    if (w.stage === 'employer') employer += l.amount;
+    // An employer line that deducts (the commission on the tax at source) lowers the employer's total.
+    if (w.stage === 'employer') employer += signed;
     else if (w.stage === 'gross') { gross += signed; if (w.cash === false) noCash += signed; }
     else if (w.stage === 'deduction') deductions -= signed;
     else after += signed;

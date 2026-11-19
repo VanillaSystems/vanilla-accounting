@@ -235,6 +235,8 @@ export function errorText(e: unknown): string {
     case 'notByReceipt': return t('error.notByReceipt');
     case 'withheldNone': return t('error.withheldNone');
     case 'payroll': {
+      // A tariff file that could not be loaded says why (not found, the network, not a tariff file, …).
+      if (b.params.why === 'tariff') return b.params.tariff === 'tooLarge' ? t('error.payroll.tariff.tooLarge', { limit: b.params.limit ?? '' }) : t(`error.payroll.tariff.${b.params.tariff ?? 'notFound'}`);
       // A refusal with a reason of its own (a password too short, …) says that reason.
       if (b.params.field && isKey(`error.payroll.${b.params.why}.${b.params.field}`)) return t(`error.payroll.${b.params.why}.${b.params.field}` as 'error.payroll.badPassword');
       // The field it is about, in the person's words, after the reason.

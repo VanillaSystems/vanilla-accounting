@@ -153,7 +153,8 @@ export async function payslipPdf(sheet: PayslipSheet, data: PayrollData, types: 
       text(l.corrects ? `${words('correction')}: ${l.label}` : l.label, left, 8.5, regular, MUTED);
       if (l.base !== undefined) rightText(money(lang, l.base), colBase, 8.5, regular, MUTED);
       if (l.rate !== undefined) rightText(`${num(lang, l.rate)} %`, colRate, 8.5, regular, MUTED);
-      rightText(money(lang, l.amount), colAmount, 8.5, regular, MUTED);
+      // An employer line that deducts (the commission on the tax at source) prints its minus.
+      rightText(money(lang, types.get(l.wageType)?.sign === '-' ? -l.amount : l.amount), colAmount, 8.5, regular, MUTED);
       next(12);
       sourceRow(l);
     }

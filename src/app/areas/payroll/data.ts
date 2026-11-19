@@ -20,6 +20,8 @@ import type { KeptItem } from '../../../payroll/settings.js';
 
 /** The cards of the funds' documents (src/payroll/setup-documents.ts) and whether a model can read what code left out. */
 export interface SetupCards { cards: SetupCard[]; ai: boolean }
+import type { TariffIndex, TariffVersion } from '../../../payroll/tariffs.js';
+import type { Settlement } from '../../../payroll/settlement.js';
 
 export interface Overview {
   shown: boolean; year: string; today: string;
@@ -76,6 +78,8 @@ export const urls = {
   documents: (year: string) => `/api/payroll/documents/${year}`,
   mail: (id: string) => `/api/payroll/payslips/${id}/mail`,
   setupCards: '/api/payroll/setup-cards',
+  tariffs: '/api/payroll/tariffs',
+  settlements: (year: string) => `/api/payroll/documents/${year}/tax-at-source`,
 };
 
 /** The files the server hands out as they are: an issued Lohnausweis, the year's tables as CSV. */
@@ -88,7 +92,14 @@ export const files = {
   pensionCsv: (year: string) => `/payroll/documents/${year}/pension.csv`,
   paymentFileMade: (month: string, id: string) => `/payroll/payments/${month}/payment-files/${id}.xml`,
   journalCsv: (month: string) => `/payroll/documents/journal/${month}.csv`,
+  settlementCsv: (year: string, month?: string, region?: string) => `/payroll/documents/${year}/tax-at-source.csv${month || region ? `?${[month ? `month=${month}` : '', region ? `region=${region}` : ''].filter(Boolean).join('&')}` : ''}`,
 };
+
+/** The tax at source's tariff files: what the workspace has, the regions its people need, every region and its model. */
+export interface Tariffs { year: string; files: TariffIndex[]; needed: string[]; regions: Array<{ region: string; model: 'monthly' | 'annual' }>; page?: string }
+export interface Settlements { year: string; settlements: Settlement[] }
+/** «Tarif laden»'s answer: kept and current, or the card of §19.3 first. */
+export type TariffLoaded = Saved<{ region: string; year: string; version: TariffVersion; unchanged: boolean }>;
 
 export interface Payments { month: string; rows: PaymentRow[]; file: PaymentFilePlan }
 /** An insurer's figures, and the way its uncovered payments are booked when the company keeps one («Immer so», §22 decision 126). */
@@ -145,6 +156,7 @@ export const payrollApi = {
   removeChild: (employee: string, child: string, backdated?: Backdated) => request<Saved>('DELETE', `/api/payroll/employees/${encodeURIComponent(employee)}/children/${encodeURIComponent(child)}`, backdated ? { backdated } : undefined),
   addAbsence: (employee: string, body: Record<string, unknown>, backdated?: Backdated) => request<Saved<{ id: string }>>('POST', `/api/payroll/employees/${encodeURIComponent(employee)}/absences`, { ...body, ...(backdated ? { backdated } : {}) }),
   removeAbsence: (employee: string, absence: string, backdated?: Backdated) => request<Saved>('DELETE', `/api/payroll/employees/${encodeURIComponent(employee)}/absences/${encodeURIComponent(absence)}`, backdated ? { backdated } : undefined),
+  loadTariff: (region: string, year: string, backdated?: Backdated) => request<TariffLoaded>('POST', '/api/payroll/tariffs', { region, year, ...(backdated ? { backdated } : {}) }),
   mailPassword: (employee: string, body: { password?: string; confirm?: boolean }) => request<{ password?: string; warn?: 'birthDate' }>('POST', `/api/payroll/employees/${encodeURIComponent(employee)}/mail-password`, body),
 };
 

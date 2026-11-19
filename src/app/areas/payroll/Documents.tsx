@@ -18,6 +18,7 @@ import type { AreaProps, Nav } from '../index.js';
 import { files, payrollApi, reloadPayroll, urls, usePayroll, type Documents, type Issued, type LohnausweisData, type SettingsView } from './data.js';
 import { Disclaimer, documentAt, employeeAt, Go, payslipAt, Tabs, YearSwitch, type PayrollRoute } from './common.js';
 import { data, labelOf, localWhen, monthShort, monthText } from './words.js';
+import { SettlementsView } from './TaxAtSource.js';
 
 type Props = AreaProps<PayrollRoute>;
 
@@ -40,7 +41,7 @@ export function DocumentList(props: Props) {
   const load = usePayroll<Documents>(urls.documents(year));
   const selected = route.view === 'documents' ? route.doc : undefined;
   const d = load.state === 'ready' ? load.data : undefined;
-  listedDocuments.ids = d ? [...d.people.map((p) => p.employee), ...PAYROLL_DOCUMENTS] : [];
+  listedDocuments.ids = d ? [...d.people.map((p) => p.employee), ...PAYROLL_DOCUMENTS.filter((x) => x !== 'tax-at-source' || !!data()?.taxAtSource)] : [];
   const first = listedDocuments.ids[0];
   useEffect(() => { if (!selected && first) nav.select({ area: 'payroll', view: 'documents', year, doc: first }); }, [selected, first, year]);
   const pick = (doc: string) => nav.select({ area: 'payroll', view: 'documents', year, doc });
@@ -80,6 +81,7 @@ export function DocumentList(props: Props) {
               {row('family', null, t('payroll.docs.family'), t('payroll.docs.familySub'), fmt(d.family.totals.allowances))}
               {row('pension', null, t('payroll.docs.pension'), t('payroll.docs.pensionSub'), String(d.pension.length))}
               {row('journal', null, t('payroll.docs.journal'), t('payroll.docs.journalSub'), '')}
+              {data()?.taxAtSource ? row('tax-at-source', null, t('payroll.docs.taxAtSource'), t('payroll.docs.taxAtSourceSub'), '') : null}
             </div>
           </>
         )}
@@ -107,6 +109,7 @@ export function DocumentDetail(props: Props) {
   if (doc === 'journal') return <JournalView d={d} />;
   if (doc === 'family') return <FamilyView d={d} nav={props.nav} />;
   if (doc === 'pension') return <PensionView d={d} nav={props.nav} />;
+  if (doc === 'tax-at-source') return <SettlementsView year={year} nav={props.nav} />;
   const person = d.people.find((p) => p.employee === doc);
   if (!person || isDocument(doc)) return <div className="detail-empty"><div>{t('payroll.docs.gone', { year })}</div></div>;
   return <LohnausweisView key={`${year}-${doc}`} {...props} d={d} person={person} labels={labels} />;

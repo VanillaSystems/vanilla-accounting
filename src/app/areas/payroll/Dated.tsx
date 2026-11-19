@@ -11,7 +11,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 import type { Nav } from '../index.js';
 import { payrollApi, reloadPayroll, type Backdated, type Saved } from './data.js';
-import { monthText, rateWarningText, wageTypeLabel } from './words.js';
+import { data, monthText, rateWarningText, wageTypeLabel } from './words.js';
 import { useRefusal } from './common.js';
 
 /** One input of a value's form. */
@@ -109,6 +109,9 @@ export function useBackdated(nav: Nav, kind?: string, fieldWord?: (field: string
   return { send, node, open: !!card };
 }
 
+/** A commission on the tax at source: it follows the tax, never carried itself (§22 decision 101). */
+const commission = (wageType: string): boolean => data()?.wageTypes.find((w) => w.key === wageType)?.computes === 'commission';
+
 const signed = (x: number): string => `${x > 0 ? '+' : ''}${fmt(x)}`;
 
 function BackdatedCard({ res, onChoose, onCancel }: { res: Extract<Saved, { saved: false }>; onChoose(how: Backdated, reopen?: string): Promise<void>; onCancel(): void }) {
@@ -125,8 +128,11 @@ function BackdatedCard({ res, onChoose, onCancel }: { res: Extract<Saved, { save
                 {t('payroll.backdated.line', { label: wageTypeLabel(d.wageType, d.label), before: fmt(d.before), after: fmt(d.after), diff: signed(d.diff) })}
               </li>
             ))}
-            {a.differences.some((d) => !d.carry) ? (
-              <li className="m">{t('payroll.backdated.follows', { list: a.differences.filter((d) => !d.carry).map((d) => `${wageTypeLabel(d.wageType, d.label)} ${signed(d.diff)}`).join(', ') })}</li>
+            {a.differences.some((d) => !d.carry && !commission(d.wageType)) ? (
+              <li className="m">{t('payroll.backdated.follows', { list: a.differences.filter((d) => !d.carry && !commission(d.wageType)).map((d) => `${wageTypeLabel(d.wageType, d.label)} ${signed(d.diff)}`).join(', ') })}</li>
+            ) : null}
+            {a.differences.some((d) => commission(d.wageType)) ? (
+              <li className="m">{t('payroll.backdated.followsTax', { list: a.differences.filter((d) => commission(d.wageType)).map((d) => `${wageTypeLabel(d.wageType, d.label)} ${signed(d.diff)}`).join(', ') })}</li>
             ) : null}
           </ul>
         </div>

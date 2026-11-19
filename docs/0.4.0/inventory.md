@@ -10,11 +10,11 @@ and the providers.
 |---|---:|---:|
 | core | 86 | 23 |
 | engine | 4 | 1 |
-| provider | 16 | 12 |
-| split | 168 | 26 |
+| provider | 17 | 13 |
+| split | 172 | 26 |
 | infrastructure | 85 | 4 |
 | workflow | 31 | 0 |
-| view | 430 | 54 |
+| view | 433 | 54 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -115,6 +115,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/providers/qr-bill/reference.ts` | CHF 2, camt.053 1, QR-bill 23 |
 | `src/providers/statement-files.ts` | camt.053 2 |
 | `src/providers/statement-read/camt-writer.ts` | camt.053 4 |
+| `src/providers/tax-at-source/tariff-file.ts` | ESTV 1, Rappen 1 |
 
 ## split
 

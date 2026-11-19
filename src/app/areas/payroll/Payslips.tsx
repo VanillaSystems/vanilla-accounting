@@ -22,6 +22,7 @@ import type { AreaProps, Nav } from '../index.js';
 import { payrollApi, reloadPayroll, urls, usePayroll, type Payslip, type PayslipMail, type PayslipSent, type SettingsView } from './data.js';
 import type { MonthView } from '../../../payroll/views.js';
 import { at, Disclaimer, employeeAt, Go, inPeriodOf, MonthSwitch, payslipAt, settingsAt, Tabs, useRefusal, type PayrollRoute } from './common.js';
+import { LoadTariff } from './TaxAtSource.js';
 import { data, factText, labelOf, lang, localWhen, missingText, monthText, pct, wageTypeLabel, warningText } from './words.js';
 import { lineSource, sourceText } from '../../../payroll/sources.js';
 import { useHandover } from '../../handover/store.js';
@@ -277,6 +278,7 @@ function SlipView({ v, types, insurances, nav, canEdit }: Props & { v: Payslip; 
         {closed ? <a className="clink" href={`/payroll/payslips/${v.id}.pdf`} target="_blank" rel="noreferrer">{t('payroll.slip.pdf')}</a> : null}
       </div>
       <Lines s={s} types={types} employer={employer} insurances={insurances} />
+      {!closed && canEdit ? <TariffsMissing s={s} nav={nav} /> : null}
       <Disclaimer year={v.month.slice(0, 4)} />
       {!closed && canEdit ? <><MonthLines v={v} types={types} nav={nav} /><AddLine v={v} types={types} nav={nav} /></> : null}
       <Booking v={v} />
@@ -359,8 +361,20 @@ function Lines({ s, types, employer, insurances }: { s: Slip; types: Map<string,
   );
 }
 
+/** The tariff files a draft lacks («unvollständig: Tarif ZH 2026 nicht geladen»), each with «Tarif laden» (warn, then the person acts). */
+function TariffsMissing({ s, nav }: { s: Slip; nav: Nav }) {
+  const wanted = [...new Set(missingOf(s).flatMap((m) => (m.missing.startsWith('tariff:') ? [m.missing.slice(7)] : [])))];
+  if (!wanted.length) return null;
+  return (
+    <div className="notice warn" data-testid="tariff-missing">
+      {wanted.map((k) => { const [region, year] = k.split(':'); return <span key={k}>{t('payroll.tax.slipMissing', { region, year })} <LoadTariff region={region} year={year} nav={nav} primary /></span>; })}
+    </div>
+  );
+}
+
 function LineRow({ l, w, source }: { l: PayslipLine; w?: WageType; source?: string }) {
-  const minus = w?.sign === '-' && w.side !== 'employer';
+  // An employer line that deducts (the commission on the tax at source) shows its minus too.
+  const minus = w?.sign === '-';
   const calc = l.quantity !== undefined && l.rate !== undefined && l.base === undefined ? calcText(w, l.quantity, l.rate)
     : l.base !== undefined && l.rate !== undefined ? `${fmt(l.base)} × ${pct(l.rate)}`
     : '';

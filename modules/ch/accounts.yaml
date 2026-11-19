@@ -151,6 +151,7 @@ accounts:
   - { number: "5820", name: Spesenentschädigung effektiv, type: expense, line: personalaufwand }
   - { number: "5830", name: Spesenentschädigung pauschal, type: expense, line: personalaufwand }
   - { number: "5880", name: Sonstiger Personalaufwand, type: expense, line: personalaufwand, hints: [Arbeitskleider, Arbeitskleidung, Berufskleider] }
+  - { number: "5890", name: Bezugsprovision Quellensteuer, type: expense, line: personalaufwand, payroll: true }
   - { number: "5900", name: Leistungen Dritter (Temporärpersonal), type: expense, line: personalaufwand }
 
   # 6 Übriger betrieblicher Aufwand, Abschreibungen, Finanzerfolg

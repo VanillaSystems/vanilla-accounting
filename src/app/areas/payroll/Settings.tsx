@@ -21,6 +21,7 @@ import { at } from '../receipts/view.js';
 import { Tabs, type PayrollRoute } from './common.js';
 import { DatedField, Fields, numberOf, useBackdated, type FieldDef, type Form, type ValueSpec } from './Dated.js';
 import { data, kindLabel, labelOf, lang, pct, rateLabel } from './words.js';
+import { TariffFiles } from './TaxAtSource.js';
 
 type Props = AreaProps<PayrollRoute>;
 export const listedSections: { ids: string[] } = { ids: [...PAYROLL_SECTIONS] };
@@ -151,6 +152,7 @@ function Insurances({ v, nav, canEdit }: Props & { v: SettingsView }) {
       <DocumentCards nav={nav} canEdit={canEdit} />
       {v.insurances.map((i) => <InsuranceCard key={i.id} i={i} v={v} nav={nav} canEdit={canEdit} />)}
       {canEdit ? (adding ? <NewInsurance v={v} nav={nav} onDone={() => setAdding(false)} /> : <button type="button" className="btn" onClick={() => setAdding(true)}>{t('payroll.insurances.add')}</button>) : null}
+      {d?.taxAtSource ? <TariffFiles nav={nav} canEdit={canEdit} /> : null}
     </>
   );
 }
@@ -337,7 +339,8 @@ function NewInsurance({ v, nav, onDone }: { v: SettingsView; nav: Nav; onDone():
     { k: 'memberNumber', label: t('payroll.insurances.memberNumber'), mono: true }, { k: 'contractNumber', label: t('payroll.insurances.contractNumber'), mono: true },
     { k: 'account', label: t('payroll.insurances.account'), mono: true, hint: t('payroll.insurances.accountHint', { account: d?.insurances[kind]?.account ?? '' }) },
     { k: 'validFrom', label: t('payroll.dated.validFrom'), type: 'date' },
-    ...(d?.insurances[kind]?.perPerson ? [] : [{ k: 'code', label: t('payroll.insurances.code'), mono: true }, ...ratesSpec(kind).fields]),
+    // A tariff kind's solution is a canton (its code: ZH), its rate the commission where the firm's differs from the file's.
+    ...(d?.insurances[kind]?.perPerson ? [] : [{ k: 'code', label: t(d?.insurances[kind]?.tariff ? 'payroll.tax.regionCode' : 'payroll.insurances.code'), mono: true }, ...ratesSpec(kind).fields]),
   ];
   const save = async (e: FormEvent) => {
     e.preventDefault();

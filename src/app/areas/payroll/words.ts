@@ -64,6 +64,12 @@ export function missingText(code: string, wageType: string, w?: Pick<WageTypeDef
     const kind = kindOfWageType(wageType);
     return t('payroll.missing.rate', { rate: kind ? rateLabel(kind, code.slice(5)) : code.slice(5), insurance: kind ? kindLabel(kind) : '' });
   }
+  // The tax at source: a tariff file not loaded, a canton on the annual model, a code the file lacks (src/payroll/tax-at-source.ts).
+  const [head, a, b] = code.split(':');
+  if (head === 'tariff') return t('payroll.missing.tariff', { region: a, year: b });
+  if (head === 'annualModel') return t('payroll.missing.annualModel', { region: a });
+  if (head === 'taxRegionUnknown') return t('payroll.missing.taxRegionUnknown', { region: a });
+  if (head === 'taxCodeUnknown') return t('payroll.missing.taxCodeUnknown', { code: a });
   if (code === 'insurance') { const kind = kindOfWageType(wageType); return t('payroll.missing.insurance', { insurance: kind ? kindLabel(kind) : '' }); }
   return tWith(`payroll.missing.${code}`, {});
 }
