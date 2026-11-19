@@ -25,7 +25,7 @@ import { loadInvoices, newEnvelope, readPdf, sha256, storePdf, updateInvoices, w
 import type { PaymentContext, PaymentOutcome } from './payments.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { TEXTS } from './texts.js';
-import { invoiceRates, invoicing } from '../engines/index.js';
+import { invoiceActivities, invoiceRates, invoicing } from '../engines/index.js';
 import { openItemAccounts } from '../accounting/tax-point.js';
 import { heldByReconciliation } from '../books/reconcile.js';
 import { accountsOf } from '../workspace/reads.js';
@@ -92,10 +92,14 @@ function parseLines(v: unknown): InvoiceLine[] {
     if (l.unit !== undefined && !UNITS.includes(l.unit as never)) bad(`Position ${i + 1}: unit ist eine von ${UNITS.join(', ')}.`);
     if (l.account !== undefined && !/^\d{4}$/.test(String(l.account))) bad(`Position ${i + 1}: account ist ein Konto mit 4 Ziffern.`);
     if (l.vatIncluded !== undefined && typeof l.vatIncluded !== 'boolean') bad(`Position ${i + 1}: vatIncluded ist true oder false.`);
+    // The activity of a firm with two approved net rates (#504): 2 books the second rate.
+    if (l.activity !== undefined && l.activity !== 1 && l.activity !== 2) bad(`Position ${i + 1}: activity ist 1 oder 2.`, [{ field: 'line.activity', line: i }]);
     return {
       text: l.text as string, quantity: l.quantity as number, price: l.price as number, vatRate: l.vatRate as InvoiceLine['vatRate'],
       ...(l.unit !== undefined ? { unit: l.unit as InvoiceLine['unit'] } : {}), ...(l.account !== undefined ? { account: String(l.account) } : {}),
       ...(l.vatIncluded === true && (l.vatRate as number) > 0 ? { vatIncluded: true as const } : {}),
+      // A 2 on a firm with one net rate (a draft from before it went back to one) is dropped, not refused: the line books the first and stays editable.
+      ...(l.activity === 2 && invoiceActivities().length && (l.vatRate as number) > 0 ? { activity: 2 as const } : {}),
     };
   });
 }

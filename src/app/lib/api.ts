@@ -17,7 +17,7 @@ import type { EstvRateTable } from '../../accounting/fx-conversion.js';
 import type { WorkspaceModules } from '../../core/modules/load.js';
 import type { Account } from './accounts.js';
 import type { CompanyInfo } from '../../books/company.js';
-import type { ManifestPatch } from '../../workspace/manifest-write.js';
+import type { InvoicingPatch, ManifestPatch } from '../../workspace/manifest-write.js';
 import type { QuestionId } from '../../onboarding/model.js';
 import type { SetupView } from '../../onboarding/facts.js';
 import type { VatSetup } from '../../workspace/vat-setup.js';
@@ -361,6 +361,8 @@ export function errorText(e: unknown): string {
     case 'invoice': return invoiceRefusalText(b.params.refusal, b.params.missing);
     case 'invoicingNotSetUp': return t('error.invoicingNotSetUp');
     case 'payToAccount': return t('error.payToAccount', b.params);
+    case 'notQrIban': return t('error.notQrIban', b.params);
+    case 'qrIbanNotChf': return t('error.qrIbanNotChf', b.params);
     case 'ibanOnInvoices': return t('error.ibanOnInvoices', b.params);
     case 'unknownCustomer': return t('error.unknownCustomer');
     case 'amountZero': return t('error.amountZero');
@@ -757,7 +759,8 @@ export const api = {
   },
   /** «Handy koppeln», step 1: where the receipt app is downloaded, and its QR code. */
   phoneApp: () => request<{ url: string; qr: string }>('GET', '/api/phone/app'),
-  patchWorkspace: (patch: ManifestPatch) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
+  /** `invoicing.confirm`: the person's «Trotzdem speichern» on a warning of that code (a QR-IBAN outside CHF, #506). */
+  patchWorkspace: (patch: Omit<ManifestPatch, 'invoicing'> & { invoicing?: InvoicingPatch & { confirm?: 'qrIbanNotChf' } }) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
   removeAccount: (number: string) => request<Ok>('DELETE', `/api/accounts/${number}`),
   setAccountName: (number: string, name: string) => request<{ number: string; name: string; added: boolean }>('PUT', `/api/accounts/${number}`, { name }),
   uploadLogo: (file: Blob, type: string) => upload<CompanyInfo>('/api/workspace/logo', file, type),

@@ -85,6 +85,13 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { custome
     if (included) line.vatIncluded = true; else delete line.vatIncluded;
     return changed({ lines });
   }
+  if (field === 'activity') {
+    // The net rate of a firm with two (#504): 1 is the default and not kept.
+    if (value !== '1' && value !== '2') return { refused: 'value' };
+    if (Number(value) === (line.activity ?? 1)) return undefined;
+    if (value === '2') line.activity = 2; else delete line.activity;
+    return changed({ lines });
+  }
   return undefined;
 }
 
@@ -102,6 +109,7 @@ export function fixFor(m: Missing): Fix | undefined {
     case 'line.text': return { field: `l:${m.line ?? 0}:text` };
     case 'line.quantity': return { field: `l:${m.line ?? 0}:quantity` };
     case 'line.vatRate': return { field: `l:${m.line ?? 0}:vatRate` };
+    case 'line.activity': return { field: `l:${m.line ?? 0}:activity` };
     case 'exemption': return { field: 'exemption' };
     default: return undefined;
   }

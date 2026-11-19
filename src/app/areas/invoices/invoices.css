@@ -108,6 +108,10 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .ivsheet.editing:hover select.edsel { outline-color: color-mix(in srgb, var(--iva) 28%, transparent); }
 .a4 .to select.edsel { text-align: left; font-size: 10pt; }
 .a4 .abroad select.edsel { text-align: left; color: #5b6270; max-width: 100%; }
+/* the net rate a line is booked at (two approved rates): under the VAT rate, on screen only, never printed */
+/* flex-end: a label wider than the narrow rate column runs out to the left, over the price's padding, never into the amount */
+.a4 .edact { display: flex; justify-content: flex-end; line-height: 1.1; white-space: nowrap; }
+.a4 .edact select.edsel { font-size: 7pt; color: #5b6270; flex: none; }
 .a4 table.tb { position: relative; }
 .a4 .edx { position: absolute; right: -6mm; top: 1.2mm; width: 4.5mm; height: 4.5mm; line-height: 4mm; font-size: 10pt; color: #9aa1ad; border-radius: 50%; opacity: 0; }
 .a4 table.tb:hover .edx { opacity: 1; }
@@ -126,6 +130,11 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .lkr { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 8px; align-items: center; }
 .lkr.top { align-items: start; }
 .lkpay { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .lkpay select { max-width: 100%; }
+/* the QR-IBAN and its «Speichern» on one line, the label beside the field */
+.lkqr .lkpay { flex-wrap: nowrap; } .lkqr .lkpay input { flex: 1 1 0; min-width: 0; }
+.lkr .qrwarn { margin: 0; flex-wrap: wrap; line-height: 1.4; }
+/* a section's title over its help, where the title is wider than the label column */
+.lkr.lkstack { grid-template-columns: minmax(0, 1fr); gap: 2px; }
 .lkr > span:first-child { color: var(--muted); }
 .lkr select, .lkr textarea, .lkr > input { font: 12.5px var(--font-sans); padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); width: 100%; box-sizing: border-box; }
 .lkr input.mono { font-family: var(--font-mono); }

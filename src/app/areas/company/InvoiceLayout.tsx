@@ -5,13 +5,14 @@
  * was issued with.
  */
 import { banksOf } from '../../../workspace/money-accounts.js';
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { INVOICE_CURRENCIES, INVOICE_FONTS, LAYOUT_ELEMENTS, type Draft, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type LayoutElement, type OWN_TEXTS } from '../../../invoices/model.js';
 import { draftSheet } from '../../../invoices/documents.js';
 import { builtInTexts } from '../../../invoices/texts.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { InvoicingPatch } from '../../../workspace/manifest-write.js';
-import { api, errorText } from '../../lib/api.js';
+import { ApiError, api, errorText } from '../../lib/api.js';
+import { qrIbanTakes } from '../../../providers/qr-bill/reference.js';
 import { reloadWorkspace } from '../../hooks/use-workspace.js';
 import { localToday } from '../../../accounting/periods.js';
 import { getAccountMap } from '../../lib/accounts.js';
@@ -154,7 +155,7 @@ function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boole
   }
   return (
     <div className="lkf" data-testid="pay-to">
-      <div className="lkr"><span>{t('invoiceLayout.payToTitle')}</span><span className="m">{t('invoiceLayout.payToHint')}</span></div>
+      <div className="lkr lkstack"><span>{t('invoiceLayout.payToTitle')}</span><span className="m">{t('invoiceLayout.payToHint')}</span></div>
       {INVOICE_CURRENCIES.map((c) => {
         const own = banks.filter((a) => a.currency === c);
         const current = ws.invoicing?.payTo[c]?.account ?? '';
@@ -162,7 +163,8 @@ function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boole
         const bank = own.find((a) => a.account === picked);
         const needsIban = !!bank && !bank.iban;
         return (
-          <label className="lkr" key={c} data-currency={c}><span>{t('invoiceLayout.payToIn', { currency: c })}</span>
+          <Fragment key={c}>
+          <label className="lkr" data-currency={c}><span>{t('invoiceLayout.payToIn', { currency: c })}</span>
             {own.length === 0 ? <span className="m">{t('invoiceLayout.payToNoBank', { currency: c })}</span> : (
               <span className="lkpay">
                 <select value={picked} disabled={!canEdit} onChange={(e) => {
@@ -182,9 +184,57 @@ function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boole
               </span>
             )}
           </label>
+          {current && <QrIban key={current} ws={ws} nav={nav} canEdit={canEdit} currency={c} account={current} />}
+          </Fragment>
         );
       })}
     </div>
+  );
+}
+
+/**
+ * The QR-IBAN of a currency's account, optional: invoices paid to it carry a QR reference. Since
+ * SIX IG v2.4 only CHF may use one (#506): saving it under another currency warns with the rule and
+ * what follows, and «Trotzdem speichern» keeps it. One kept so, or written before the warning
+ * existed, shows the same warning as a fact beside the field.
+ */
+function QrIban({ ws, nav, canEdit, currency, account }: { ws: CompanyInfo; nav: Nav; canEdit: boolean; currency: InvoiceCurrency; account: string }) {
+  const stored = ws.invoicing?.payTo[currency]?.qrIban ?? '';
+  const [value, setValue] = useState(stored);
+  const [warned, setWarned] = useState(false);
+  const changed = value.replace(/\s+/g, '').toUpperCase() !== stored;
+  async function save(confirm: boolean) {
+    try {
+      await api.patchWorkspace({ invoicing: { payTo: { [currency]: { account, qrIban: value.trim() || null } }, ...(confirm ? { confirm: 'qrIbanNotChf' as const } : {}) } });
+      setWarned(false);
+      reloadWorkspace();
+      nav.toast(value.trim() ? t('invoiceLayout.qrIbanSet', { currency }) : t('invoiceLayout.qrIbanCleared', { currency }));
+    } catch (e) {
+      if (e instanceof ApiError && e.body.code === 'qrIbanNotChf') setWarned(true);
+      else nav.toast(errorText(e));
+    }
+  }
+  const fact = !!stored && !qrIbanTakes(currency) && !changed;
+  return (
+    <>
+      <label className="lkr lkqr" data-qr-iban={currency}>
+        <span>{t('invoiceLayout.qrIban')}</span>
+        <span className="lkpay">
+          <input className="mono wide" value={value} placeholder={t('invoiceLayout.qrIbanPlaceholder')} aria-label={t('invoiceLayout.qrIbanIn', { currency })} disabled={!canEdit}
+            onChange={(e) => { setValue(e.target.value); setWarned(false); }} />
+          {changed && <AsyncButton type="button" className="btn" disabled={!canEdit} onClick={() => save(false)}>{t('common.save')}</AsyncButton>}
+        </span>
+      </label>
+      {(warned || fact) && (
+        <div className="lkr" data-qr-warning={currency}>
+          <span />
+          <span className="warnline qrwarn" role={warned ? 'alert' : undefined}>
+            {t('invoiceLayout.qrIbanNotChf', { currency })}
+            {warned && <AsyncButton type="button" className="btn" disabled={!canEdit} onClick={() => save(true)}>{t('invoiceLayout.saveAnyway')}</AsyncButton>}
+          </span>
+        </div>
+      )}
+    </>
   );
 }
 

@@ -60,7 +60,22 @@ export function isQrIban(iban: string): boolean {
 /** The IBAN can carry a QR-bill: Swiss or Liechtenstein. */
 export const isQrBillIban = (iban: string): boolean => /^(CH|LI)/.test(iban.replace(/\s+/g, '').toUpperCase());
 
-/** The reference an invoice gets at issue: QRR when paid to a QR-IBAN, else SCOR. */
+/**
+ * Whether a QR-IBAN, and with it a QR reference, may be used for an invoice in `currency`: only in
+ * CHF since the SIX Implementation Guidelines for the QR-bill v2.4 (24.02.2026, in force with the
+ * SIC release of 13.11.2026; chapters 2.8, 2.10, 2.12, 4.2.2, 4.3.2): «For invoicing in euros (EUR),
+ * only the combination IBAN/SCOR reference and IBAN/unstructured message is possible». v2.3 stays
+ * valid until November 2027, after which banks refuse it. Saving one under another currency warns
+ * (src/server/routes/config.ts); the person may keep it, and an invoice then carries it (#506).
+ */
+export const qrIbanTakes = (currency: string): boolean => currency === 'CHF';
+
+/**
+ * The reference an invoice gets at issue: QRR when paid to a QR-IBAN, else SCOR. A EUR account
+ * without a QR-IBAN (what v2.4 wants) gets SCOR with its plain IBAN; one a person kept against the
+ * warning gets QRR, her decision. Frozen on the issued invoice: a later change of the account never
+ * changes what was printed.
+ */
 export function referenceFor(invoiceNumber: string, payTo: { qrIban?: string }): string {
   return payTo.qrIban ? qrReference(invoiceNumber) : scorReference(invoiceNumber);
 }

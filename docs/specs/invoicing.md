@@ -1048,6 +1048,32 @@ listed here and updated with phase 2's build:
     Offene Posten and Versendet are tables; Kunden stays list + detail until Kontakte (phase 2). A row
     of Versendet opens the PDF as sent; its document column links the document.
 31. **Sorting is a viewer's preference**, kept in the browser per table, not in the link.
+32. **F1 follows 4.11 literally (lead).** A QR-IBAN under any currency but CHF warns when saved (API code
+    `qrIbanNotChf`: what is off, SIX IG v2.4 with v2.3 valid until November 2027, banks refuse it after);
+    «Trotzdem speichern» sends `invoicing.confirm: 'qrIbanNotChf'` on that one request and the QR-IBAN is
+    stored like any other value, nothing else recorded. One stored so, or written by hand before the
+    fix, shows the same warning beside the field as a fact. An invoice issued with it carries QRR (the
+    person decided); without one a EUR invoice carries the plain IBAN with SCOR, as before. No manifest
+    step: the format is unchanged.
+33. **Where a QR-IBAN is entered.** No app path wrote one before (only the YAML by hand, and the AI's
+    `invoicing` change has no `payTo`), so there was nothing to warn on. Firma › Rechnungslayout ›
+    Zahlungskonten gets a QR-IBAN field under each currency's account; `PATCH /api/workspace` takes
+    `payTo.<cur>.qrIban` (null takes it out; a text that is no QR-IBAN is refused, `notQrIban`). The
+    QR-IBAN stays while its currency keeps the same account and leaves with a change of account.
+34. **Structured addresses (v2.3, 4.2.2).** swissqrbill 4.4.2 writes address type S for creditor and
+    debtor, street and number apart, postcode and town apart; `line2` has no field there. Proven with
+    the library's own encoder (tests/invoice-qr-v24.test.ts); nothing to fix.
+35. **`activity` on a position (F3).** 1 is the default and is not stored; 2 is. The picker sits under
+    the rate on screen, on a firm with two approved rates only, and not on a 0 % line (its code is the
+    exemption's; a 0 % line keeps no activity). A 2 on a firm with one rate (a draft or an invoice from
+    before it went back to one) is never refused: a draft drops it at its next save, so it stays
+    editable, and booking takes the first rate (`netRateCode(activity) ?? netRateCode(1)`), so a
+    statement import never stops on it. A credit note for part of the total splits each rate over its
+    activities on a firm with two rates, each line named by the first position of its activity, so a
+    credit of activity 2 takes back F2; on any other firm one line per rate as before. The default
+    from the Artikel or Tätigkeit (4.4.3) comes with those in phase 2.
+36. **Format.** `activity` rides on the one invoices.json step 2→3 of phase 1 (introduced by the
+    positions slice); this slice adds no step of its own.
 
 ---
 

@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { accountsOf, filedReturnsOf } from '../../workspace/reads.js';
 import { WS, RequestError, patchBody, readBooks, reopenWorkspace, stringField } from '../books.js';
 import { readEstvRateTable } from '../../accounting/fx-rates.js';
-import { MANUAL_BANK, MONEY_ROLES, type MoneyRole } from '../../workspace/banks.js';
+import { MANUAL_BANK, MONEY_ROLES, parseIban, type MoneyRole } from '../../workspace/banks.js';
+import { isQrIban, qrIbanTakes } from '../../providers/qr-bill/reference.js';
 import { companyInfo, type CompanyInfo } from '../../books/company.js';
 import { isDemo } from '../../workspace/demo-copy.js';
 import { payoutSales, salesDefaults } from '../../workspace/sells.js';
@@ -207,19 +208,39 @@ function chartWithBanks(patch: ManifestPatch, before: readonly LedgerBankAccount
   if (!used && accountName(WS, gone.account) === gone.label) removeAccount(WS, gone.account);
 }
 
+/**
+ * The QR-IBAN of a currency's account (#506): a QR-IBAN or nothing (null, an empty text). Under any
+ * currency but CHF it is refused with the warning `qrIbanNotChf` (SIX IG v2.4: QR-IBAN and QR
+ * reference for CHF only; v2.3 valid until November 2027) unless the request carries the person's
+ * «Trotzdem speichern», `confirm: 'qrIbanNotChf'`; then it is stored like any other value.
+ */
+function qrIbanOf(to: Record<string, unknown>, currency: string, confirm: unknown): string | null | undefined {
+  if (to.qrIban === undefined) return undefined;
+  const raw = to.qrIban === null ? '' : stringField(to, 'qrIban');
+  if (!raw.trim()) return null;
+  const qrIban = parseIban(raw);
+  if (!qrIban || !isQrIban(qrIban)) throw new RequestError(400, `${raw.trim()} ist keine QR-IBAN (CH oder LI, Institut 30000 bis 31999, gültige Prüfziffern).`, { code: 'notQrIban', params: { iban: raw.trim() } });
+  if (!qrIbanTakes(currency) && confirm !== 'qrIbanNotChf') {
+    throw new RequestError(400, `Eine QR-IBAN gilt seit den SIX-Richtlinien v2.4 nur für CHF, nicht für ${currency} (v2.3 gilt bis November 2027, danach weisen Banken sie zurück).`, { code: 'qrIbanNotChf', params: { currency } });
+  }
+  return qrIban;
+}
+
 /** The layout's values are checked by the manifest's reader; here only their kinds. */
 function invoicingPatch(raw: unknown): InvoicingPatch {
-  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo']);
+  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo', 'confirm']);
   const out: InvoicingPatch = {};
   if (b.payTo !== undefined) {
     const payTo = patchBody(b.payTo, INVOICE_CURRENCIES);
     out.payTo = Object.fromEntries(Object.entries(payTo).map(([currency, v]) => {
       if (v === null) return [currency, null];
-      const account = stringField(patchBody(v, ['account']), 'account');
+      const to = patchBody(v, ['account', 'qrIban']);
+      const account = stringField(to, 'account');
       // The IBAN may come in the same change (banks); the manifest's reader refuses a payTo without one.
       const bank = WS.bankAccounts.find((a) => a.account === account && a.role === 'bank' && a.currency === currency);
       if (!bank) throw new RequestError(400, `Das Konto, auf das Kunden in ${currency} zahlen, muss ein Bankkonto in ${currency} sein.`, { code: 'payToAccount', params: { currency } });
-      return [currency, { account }];
+      const qrIban = qrIbanOf(to, currency, b.confirm);
+      return [currency, { account, ...(qrIban !== undefined ? { qrIban } : {}) }];
     }));
   }
   if (b.paymentTermsDays !== undefined) {

@@ -779,6 +779,7 @@ classDiagram
     +price: number
     +vatRate: number
     +account: string [0..1]
+    +activity: 1 | 2 [0..1]
   }
   class PaymentAllocation {
     +transactionRef: string
