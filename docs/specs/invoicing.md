@@ -1193,6 +1193,10 @@ listed here and updated with phase 2's build:
     booked with the event. A hand movement names no counterparty, so a statement row of whoever paid
     confirms it. The write-off account joins the chart in the booking itself (`ensureAccount`),
     whoever books it, code's Skonto included. A refusal of the money carries `paymentRefusal`.
+43. **One Gutschrift status.** `creditNoteStatus` lives in `src/invoices/lists.ts` (slice D's, with
+    its statuses draft, open, partly, settled, cancelled); slice C widened it: Teilweise also when part
+    of the note is applied to its invoice while a rest waits to go back. The four figures share
+    `.ivtop` with D's sent line above the status and the actions.
 
 ---
 
