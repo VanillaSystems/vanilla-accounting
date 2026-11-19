@@ -2127,7 +2127,12 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     row names the corrected month's code as declared and leaves wage and rate empty. The payslip's commission of a
     canton is shared over its rows at its rate, the rounding left on the month's own row, so the rows add up to
     the line booked on 2279 and the list still equals 2279's movements. The wage total counts the month's own rows
-    only (the corrected month declared its wage already). The CSV has one row per such row, `corrects` the month.
+    only (the corrected month declared its wage already). The CSV has one row per such row, `corrects` the month,
+    and the municipality of the month it corrects. A tariff kind's difference is taken per canton (review): a canton
+    moved back over a closed month takes the tax back from the old canton (its row names the month's old code,
+    wage and rate, the tax negative) and owes it to the new one, two corrections; a correction entered by hand
+    names the corrected month's canton on its line, so its booking, its commission and its row agree. A tariff file
+    that only changes a closed month's commission (its rounding) shows no card: nothing is carried.
 121. **The Bezugsprovision is rounded to 5 Rappen, as the tax is** (`taxAtSource.rounding`, the same step), not to the
     Rappen: it is money of the same settlement, and no source was found that a canton computes it to the cent. What
     was read: the cantons publish only its rate (ESTV, «Auskunftsstellen Quellensteuer, Bezugsprovisionen und
@@ -2145,7 +2150,11 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     on the kind's), what was paid (each entry under no payslip's ref that takes off the account), and open =
     carried + lists − paid against the balance at 31.12. A difference (a payslip's entry changed, a tax booked by
     hand) is a hint with the account's ledger; open at 31.12. is the next settlement's, a fact. The insurer's fact of
-    decision 102 is not shown for such an account, so it is one fact, with links to the settlement lists.
+    decision 102 is not shown for such an account, so it is one fact, with links to the settlement lists. Each list is
+    checked on the account its tax books on, resolved as the booking resolves it (`lineInsuranceOf`: the canton's
+    office, else the kind's first office, else the kind's account). A bank line or a money account moving the account
+    counts net as paid (a refund from the canton lowers it). A tax office entered on another kind's account gets no
+    such check (the balance is not the tax's alone): the insurer's fact names it.
 123. **A tariff code whose rate depends on a certificate says so, as data** (`taxAtSource.codeNotes`: a pattern on
     the code and its words in the four languages). The codes L to Q (a cross-border commuter resident in Germany)
     take the flat 4.5 % only while the employer holds the German tax office's certificate of residence

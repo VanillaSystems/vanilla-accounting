@@ -119,7 +119,8 @@ router.get('/payroll/documents/:year/tax-at-source.csv', run((req, res) => {
   const head = ['month', 'region', 'employee', 'name', 'ssn', 'birthDate', 'municipality', 'code', 'wage', 'rateIncome', 'rate', 'tax', 'commission', 'corrects'];
   const rows = lists.flatMap((s) => s.rows.map((r) => {
     const e = person(r.employee);
-    const tax = valueOn(e?.taxAtSource, `${s.month}-28`);
+    // A correction row names the municipality of the month it corrects.
+    const tax = valueOn(e?.taxAtSource, `${r.corrects ?? s.month}-28`);
     return [s.month, s.region, r.employee, r.name, e?.socialSecurityNumber, e?.birthDate, tax?.municipality, r.code, r.wage, r.income, r.rate, r.tax, r.commission, r.corrects ?? ''];
   }));
   const totals = lists.map((s) => [s.month, s.region, '', 'Total', '', '', '', '', s.totals.wage, undefined, undefined, s.totals.tax, s.totals.commission, `payable ${s.totals.payable.toFixed(2)}`]);

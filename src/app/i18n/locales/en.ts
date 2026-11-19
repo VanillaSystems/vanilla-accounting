@@ -7516,7 +7516,7 @@ export default {
     "payroll.tax.tax": "Tax",
     "payroll.tax.commission": "Commission",
     "payroll.tax.corrects": "correction {list}",
-    "payroll.tax.correctionRows": "A correction is a row of its own with the month it corrects: that month's code, tax-at-source wage and rate as computed now, the tax is the difference. It is declared with this settlement; the wage in the total counts the month's own only.",
+    "payroll.tax.correctionRows": "A correction is a row of its own with the month it corrects: that month's code, tax-at-source wage and rate as computed when it was made (for a correction entered by hand, the code only), the tax is the difference. It is declared with this settlement; the wage in the total counts the month's own only.",
     "payroll.tax.total": "Total",
     "payroll.tax.payable": "To pay: {currency} {amount} (tax at source less commission, account 2279)",
     "payroll.docs.taxAtSource": "Tax at source",

@@ -11,7 +11,7 @@ import { firmWageTypes, resolveAccount } from './catalogue.js';
 import { insuranceOf } from './compute.js';
 import { regionSolutionOf } from './tax-at-source.js';
 import type { PayslipDraft } from './compute.js';
-import type { PayrollStore } from './model.js';
+import type { PayrollInsurance, PayrollStore } from './model.js';
 import { payslipRef } from './model.js';
 import { firstDay, lastDay, round2 } from './money.js';
 
@@ -35,6 +35,15 @@ export interface PayslipBooking {
 
 type Slip = Pick<PayslipDraft, 'employee' | 'month' | 'postingDate' | 'lines' | 'person'>;
 
+/**
+ * The firm's insurance a line of `kind` books on: for a tariff kind, the insurance of the line's region (one per canton,
+ * each its own customer number), else the kind's first that holds in the month. The year-end's check reads the same.
+ */
+export function lineInsuranceOf(data: PayrollData, store: Pick<PayrollStore, 'insurances'>, kind: string, region: string | undefined, from: string, to: string): PayrollInsurance | undefined {
+  const own = region && data.insurances[kind]?.tariff ? regionSolutionOf(store.insurances, data, region, from, to)?.insurance : undefined;
+  return own ?? insuranceOf(store, kind, from, to);
+}
+
 export function bookingOf(slip: Slip, data: PayrollData, store: Pick<PayrollStore, 'wageTypes' | 'insurances'>): PayslipBooking {
   const types = firmWageTypes(data, store);
   const from = firstDay(slip.month); const to = lastDay(slip.month);
@@ -46,9 +55,7 @@ export function bookingOf(slip: Slip, data: PayrollData, store: Pick<PayrollStor
     if (!w) { withoutAccount.add(l.wageType); continue; }
     const kindOf = (ref: typeof w.debit) => (ref && typeof ref === 'object' ? ref.insurance : undefined);
     const kind = kindOf(w.debit) ?? kindOf(w.credit);
-    // A tariff kind's line books on the firm's insurance of its region (one per canton, each its own customer number), else the kind's first.
-    const own = kind && l.tariff?.region && data.insurances[kind]?.tariff ? regionSolutionOf(store.insurances, data, l.tariff.region, from, to)?.insurance : undefined;
-    const insurance = own ?? (kind ? insuranceOf(store, kind, from, to) : undefined);
+    const insurance = kind ? lineInsuranceOf(data, store, kind, l.tariff?.region, from, to) : undefined;
     const debit = resolveAccount(w.debit, data, insurance);
     const credit = resolveAccount(w.credit, data, insurance);
     if (!debit || !credit) { withoutAccount.add(w.key); continue; }

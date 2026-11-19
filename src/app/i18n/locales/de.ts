@@ -7514,7 +7514,7 @@ export const messages = {
   "payroll.tax.tax": "Steuer",
   "payroll.tax.commission": "Provision",
   "payroll.tax.corrects": "Korrektur {list}",
-  "payroll.tax.correctionRows": "Eine Korrektur steht als eigene Zeile mit dem Monat, den sie korrigiert: Tarif, QST-Lohn und Satz dieses Monats, wie er jetzt gerechnet ist, die Steuer ist die Differenz. Sie wird mit dieser Abrechnung gemeldet; der QST-Lohn im Total zählt nur den eigenen Monat.",
+  "payroll.tax.correctionRows": "Eine Korrektur steht als eigene Zeile mit dem Monat, den sie korrigiert: Tarif, QST-Lohn und Satz dieses Monats, wie er bei der Korrektur gerechnet wurde (bei einer von Hand erfassten Korrektur nur der Tarif), die Steuer ist die Differenz. Sie wird mit dieser Abrechnung gemeldet; der QST-Lohn im Total zählt nur den eigenen Monat.",
   "payroll.tax.total": "Total",
   "payroll.tax.payable": "Zu zahlen: {currency} {amount} (Quellensteuer abzüglich Bezugsprovision, Konto 2279)",
   "payroll.docs.taxAtSource": "Quellensteuer",

@@ -372,3 +372,52 @@ test('2279 without a «Quellensteuer» insurance: still checked against the sett
   const none = payrollYearEnd({ ...input, closes: [] }).taxAtSource;
   assert.deepEqual(none.map((x) => [x.account, x.payable]), [['2279', 0]]);
 });
+
+/** Three months of invented people taxed at source, each closed and booked; nothing paid. */
+async function taxedMonths(people: Array<[id: string, canton: string]>, office?: { region: string; account: string }) {
+  const { readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { parseTariffFile } = await import('../src/providers/tax-at-source/tariff-file.js');
+  const { computePayslip } = await import('../src/payroll/compute.js');
+  const { closeOf, ctxOf } = await import('./support/payroll.js');
+  const { APP_ROOT } = await import('../src/workspace/workspace.js');
+  const file = (k: string) => ({ region: k.toUpperCase(), year: '2026', file: parseTariffFile(readFileSync(join(APP_ROOT, `tests/fixtures/qst/tar26${k}-excerpt.txt`), 'latin1')), sha256: 'sha-0123456789abcdef', fetchedAt: '2026-11-19T10:00:00.000Z' });
+  const files: Record<string, ReturnType<typeof file>> = { ZH: file('zh'), BE: file('be') };
+  const tariffs = (r: string, y: string) => (y === '2026' ? files[r] : undefined);
+  const store = firm(people.map(([pid, canton]) => owner({
+    id: pid, isOwner: false, name: [dated('2026-01-01', { first: pid, last: 'Beispiel' })],
+    employment: [dated('2026-01-01', { kind: 'monthly' as const, amount: 6500, pensum: 100, hoursPerWeek: 42, holidayDays: 25 })],
+    insurances: [dated('2026-01-01', { uvg: { insurance: 'uvg', code: 'A1' } })], taxAtSource: [dated('2026-01-01', { subject: true, canton, code: 'A0' })],
+  })));
+  if (office) store.insurances.push({ id: `q${office.region}`, kind: 'qst', name: `Steuerverwaltung ${office.region}`, account: office.account, solutions: [{ code: office.region, rates: [dated('2026-01-01', { provision: 2 })] }], validFrom: '2026-01-01' });
+  const closes: PayslipClose[] = []; const journalEntries: JournalEntry[] = [];
+  for (let m = 1; m <= 3; m++) for (const e of store.employees) {
+    const c = { ...closeOf(computePayslip({ ...ctxOf(store, closes), tariffs }, e.id, `2026-0${m}`)!), receiptId: `r-${e.id}-${m}` };
+    closes.push(c);
+    journalEntries.push(...entriesOf({ booking: bookingOf(c, ch.payroll!, store) }, id, c.receiptId));
+  }
+  const input: PayrollYearEndInput = { year: '2026', books: { journalEntries, transactions: [], mappings: [] }, closes, employees: store.employees, data: ch.payroll!, store, issued: [], isDebitNormal: (a) => chart().isDebitNormal(a), wageAccount: '5000', moneyAccounts: new Set(['1020']) };
+  return { input, journalEntries };
+}
+
+test('the canton refunds what was paid too much: a payment back, no difference', async () => {
+  const { input, journalEntries } = await taxedMonths([['q1', 'ZH']]);
+  const owed = payrollYearEnd(input).taxAtSource[0].payable;
+  journalEntries.push({ id: id(), transactionRef: 'M2026-010', date: '2026-03-10', accountDebit: '2279', accountCredit: '1020', amount: owed + 50, by: { kind: 'person', at: '2026-03-10T00:00:00Z' } });
+  journalEntries.push({ id: id(), transactionRef: 'M2026-011', date: '2026-03-20', accountDebit: '1020', accountCredit: '2279', amount: 50, by: { kind: 'person', at: '2026-03-20T00:00:00Z' } });
+  const x = payrollYearEnd(input).taxAtSource[0];
+  assert.deepEqual([x.paid, x.expected, x.balance, x.difference], [owed, 0, 0, 0]);
+});
+
+test('lists are checked on the account their tax books on: the ZH office\'s own account, and BE without an office on the kind\'s first office', async () => {
+  const { input } = await taxedMonths([['q1', 'ZH'], ['q2', 'BE']], { region: 'ZH', account: '2278' });
+  const p = payrollYearEnd(input);
+  assert.deepEqual(p.taxAtSource.map((x) => [x.account, x.lists.map((l) => l.region).sort().join(), x.difference]), [['2278', 'BE,BE,BE,ZH,ZH,ZH', 0]]);
+});
+
+test('a tax office entered on another kind\'s account: no tax check for that account, the insurer\'s fact names it', async () => {
+  const { input } = await taxedMonths([['q1', 'ZH']], { region: 'ZH', account: '2271' });
+  const p = payrollYearEnd(input);
+  assert.deepEqual(p.taxAtSource, []);
+  assert.ok(p.insurers.find((i) => i.account === '2271')!.insurances.some((i) => i.kind === 'qst'));
+});

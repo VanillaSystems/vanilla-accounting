@@ -49,6 +49,7 @@ export function settlementsOf(closes: readonly PayslipClose[], year: string, dat
   const keys = keysOf(data, types);
   // Each closed payslip's own tax line: its region, and what a correction of it without its own figures declares.
   const ownOf = new Map<string, PayslipLine>();
+  const monthOf = new Map(closes.map((c) => [c.id, c.month]));
   for (const c of closes) for (const l of c.lines) if (keys.tax.has(l.wageType) && l.tariff && !l.corrects) ownOf.set(c.id, l);
   const lists = new Map<string, Settlement>();
   for (const c of [...closes].filter((x) => x.month.startsWith(year)).sort((a, b) => a.month.localeCompare(b.month) || a.person.name.localeCompare(b.person.name))) {
@@ -64,7 +65,7 @@ export function settlementsOf(closes: readonly PayslipClose[], year: string, dat
         commission.set(region, { amount: round2((had?.amount ?? 0) + l.amount), ...(l.rate !== undefined ? { rate: l.rate } : had?.rate !== undefined ? { rate: had.rate } : {}) });
         continue;
       }
-      const corrected = l.corrects ? closes.find((x) => x.id === l.corrects)?.month ?? l.corrects.slice(0, 7) : '';
+      const corrected = l.corrects ? monthOf.get(l.corrects) ?? l.corrects.slice(0, 7) : '';
       const byMonth = rows.get(region) ?? new Map<string, SettlementRow>();
       const row = byMonth.get(corrected) ?? { payslip: c.id, employee: c.employee, name: c.person.name, ...(corrected ? { corrects: corrected } : {}), tax: 0, commission: 0 };
       row.tax = round2(row.tax + l.amount);

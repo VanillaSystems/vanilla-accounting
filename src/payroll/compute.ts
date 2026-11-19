@@ -366,7 +366,13 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       wageType: w.key, label: label(w), amount: c.amount, side: c.side, source: 'correction', corrects: c.of, correction: c.id,
       ...(c.base !== undefined ? { base: c.base } : {}), ...(c.rateDiff !== undefined ? { rate: c.rateDiff } : {}),
       ...(c.text ? { text: c.text } : {}), ...(of ? { days: { from: firstDay(of.month), to: lastDay(of.month) } } : {}),
-      ...(c.tariff ? { tariff: c.tariff } : {}),
+      // A tax correction names its canton: its own figures, else the corrected month's (a correction entered by hand),
+      // so its booking, its commission and the settlement list agree on the canton.
+      ...(() => {
+        if (c.tariff) return { tariff: c.tariff };
+        const was = of?.lines.find((l) => l.wageType === w.key && !l.corrects && l.tariff)?.tariff;
+        return was ? { tariff: { region: was.region, code: was.code, income: was.income } } : {};
+      })(),
     });
   }
 

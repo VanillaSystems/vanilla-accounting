@@ -470,3 +470,63 @@ test('an L code\'s tax line says the 4.5 % depends on the certificate of residen
   assert.doesNotMatch(textOf('A0', 'quellensteuer', 'de')!, /Gre-1/);
   assert.doesNotMatch(textOf('L0', 'bezugsprovision', 'de')!, /Gre-1/, 'the commission names only its file');
 });
+
+// ─── review of the third walk's fixes ───────────────────────────────────────────
+
+/** What the closes book per liability account of the tax at source: the tax credited less the commission debited. */
+function owedOn(closes: ReturnType<typeof closeOf>[], store: ReturnType<typeof firm>): Record<string, number> {
+  const m: Record<string, number> = {};
+  const add = (a: string, x: number) => { m[a] = Math.round(((m[a] ?? 0) + x) * 100) / 100; };
+  for (const c of closes) for (const p of bookingOf(c, ctxOf(store).data, store).postings) {
+    if (!/quellensteuer|bezugsprovision/.test(p.wageType)) continue;
+    if (/^227/.test(p.credit)) add(p.credit, p.amount);
+    if (/^227/.test(p.debit)) add(p.debit, -p.amount);
+  }
+  return m;
+}
+
+test('a tariff file that only changes a closed month\'s commission by its rounding: no card, nothing to do', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const mar = closeOf(computePayslip({ ...ctxOf(store), tariffs }, 'q1', '2026-03')!);
+  // Closed before the commission was rounded to 5 Rappen: 9.46.
+  mar.lines = mar.lines.map((l) => (l.wageType === 'bezugsprovision' ? { ...l, amount: 9.46 } : l));
+  const ctx = { ...ctxOf(store, [mar]), tariffs };
+  assert.deepEqual(affectedByTariff(ctx, { ...ctx, tariffs }), []);
+});
+
+test('a canton move ZH → BE dated back over a closed October: the tax back from ZH and owed to BE, each list right, totals = 2279', () => {
+  const store = withQst(firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]), { ZH: 2, BE: 1 });
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!); ev.push(oct);
+  const changed = structuredClone(store);
+  changed.employees[0].taxAtSource = [dated('2026-01-01', { subject: true, canton: 'ZH', code: 'A0' }), dated('2026-10-01', { subject: true, canton: 'BE', code: 'A0' })];
+  const ctx = { ...ctxOf(store, ev), tariffs };
+  const aff = affectedBetween(ctx, { ...ctx, store: changed });
+  let n = 0;
+  const cs = backdatedCorrections(ctx, aff, () => `cb${++n}`, '2026-11-05T00:00:00.000Z');
+  assert.deepEqual(cs.map((c) => [c.tariff?.region, c.amount]), [['ZH', -473.2], ['BE', 812.5]]);
+  ev.push(...cs);
+  const nov = closeOf(computePayslip({ ...ctxOf(changed, ev), tariffs }, 'q1', '2026-11')!);
+  const lists = settlementsOf([oct, nov], '2026', ctx.data, firmWageTypes(ctx.data, changed), changed).filter((s) => s.month === '2026-11');
+  assert.deepEqual(lists.map((s) => [s.region, s.rows.map((r) => [r.corrects ?? 'own', r.code, r.rate, r.tax])]), [
+    ['BE', [['own', 'A0N', 12.5, 812.5], ['2026-10', 'A0N', 12.5, 812.5]]],
+    ['ZH', [['2026-10', 'A0N', 7.28, -473.2]]],
+  ]);
+  const all = settlementsOf([oct, nov], '2026', ctx.data, firmWageTypes(ctx.data, changed), changed).reduce((s, x) => s + x.totals.payable, 0);
+  assert.equal(Math.round(all * 100) / 100, owedOn([oct, nov], changed)['2279']);
+});
+
+test('a correction entered by hand books, takes its commission and is listed in the corrected month\'s canton, on that canton\'s account', () => {
+  const p = subject(6500, { subject: true, canton: 'ZH', code: 'A0' });
+  p.taxAtSource = [...p.taxAtSource!, dated('2026-11-01', { subject: true, canton: 'BE', code: 'A0' })];
+  const store = withQst(firm([p]), { BE: 1, ZH: 2 });
+  store.insurances.find((i) => i.id === 'qBE')!.account = '2278';
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!); ev.push(oct, correction(oct.id, 100, '2026-11-02T00:00:00.000Z'));
+  const nov = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-11')!);
+  assert.equal(line(nov as never, 'quellensteuer').find((l) => l.corrects)?.tariff?.region, 'ZH', 'the line names the corrected month\'s canton');
+  const lists = settlementsOf([oct, nov], '2026', ctxOf(store).data, firmWageTypes(ctxOf(store).data, store), store);
+  const payable = (region: string) => Math.round(lists.filter((s) => s.region === region).reduce((s, x) => s + x.totals.payable, 0) * 100) / 100;
+  assert.deepEqual(owedOn([oct, nov], store), { '2279': payable('ZH'), '2278': payable('BE') });
+  assert.equal(payable('BE'), 804.35, 'BE\'s own November only');
+});

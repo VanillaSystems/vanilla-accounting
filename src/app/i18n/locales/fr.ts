@@ -7516,7 +7516,7 @@ export default {
     "payroll.tax.tax": "Impôt",
     "payroll.tax.commission": "Commission",
     "payroll.tax.corrects": "correction {list}",
-    "payroll.tax.correctionRows": "Une correction figure sur sa propre ligne avec le mois qu’elle corrige : barème, salaire IS et taux de ce mois tels qu’ils sont calculés maintenant, l’impôt est la différence. Elle est déclarée avec ce décompte ; le salaire IS du total ne compte que le mois lui-même.",
+    "payroll.tax.correctionRows": "Une correction figure sur sa propre ligne avec le mois qu’elle corrige : barème, salaire IS et taux de ce mois tels que calculés lors de la correction (pour une correction saisie à la main, le barème seul), l’impôt est la différence. Elle est déclarée avec ce décompte ; le salaire IS du total ne compte que le mois lui-même.",
     "payroll.tax.total": "Total",
     "payroll.tax.payable": "À payer : {currency} {amount} (impôt à la source moins commission, compte 2279)",
     "payroll.docs.taxAtSource": "Impôt à la source",

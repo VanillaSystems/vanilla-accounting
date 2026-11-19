@@ -137,7 +137,7 @@ export function SettlementsView({ year, nav }: { year: string; nav: Nav }) {
                 <span>{t('payroll.tax.person')}</span><span>{t('payroll.tax.code')}</span><span className="r">{t('payroll.tax.wage')}</span><span className="r" data-tip={t('payroll.tax.rateIncomeLong')}>{t('payroll.tax.rateIncome')}</span><span className="r">{t('payroll.tax.rate')}</span><span className="r">{t('payroll.tax.tax')}</span><span className="r">{t('payroll.tax.commission')}</span>
               </div>
               {s.rows.map((r) => (
-                <div key={`${r.payslip}-${r.corrects ?? ''}`} className={`fr${r.corrects ? ' corr' : ''}`} role="row" data-corrects={r.corrects}>
+                <div key={`${r.payslip}-${r.corrects ?? ''}`} className="fr" role="row" data-corrects={r.corrects}>
                   <span><Go loc={payslipAt(r.payslip)} nav={nav}>{r.name}</Go>{r.corrects ? <small className="m"> · {t('payroll.tax.corrects', { list: monthText(r.corrects) })}</small> : null}</span>
                   <span className="mono">{r.code ?? ''}</span>
                   <span className="r mono">{r.wage !== undefined && (r.wage || r.corrects) ? fmt(r.wage) : ''}</span>

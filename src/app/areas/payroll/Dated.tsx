@@ -124,8 +124,8 @@ function BackdatedCard({ res, onChoose, onCancel }: { res: Extract<Saved, { save
           <b>{t('payroll.backdated.payslip', { month: monthText(a.month), name: a.name })}</b>{a.closedPeriod ? <span className="m"> · {t('payroll.backdated.closedPeriod')}</span> : null}
           <ul>
             {a.differences.filter((d) => d.carry).map((d) => (
-              <li key={`${d.wageType}|${d.side}`}>
-                {t('payroll.backdated.line', { label: wageTypeLabel(d.wageType, d.label), before: fmt(d.before), after: fmt(d.after), diff: signed(d.diff) })}
+              <li key={`${d.wageType}|${d.side}|${d.region ?? ''}`}>
+                {t('payroll.backdated.line', { label: `${wageTypeLabel(d.wageType, d.label)}${d.region ? ` ${d.region}` : ''}`, before: fmt(d.before), after: fmt(d.after), diff: signed(d.diff) })}
               </li>
             ))}
             {a.differences.some((d) => !d.carry && !commission(d.wageType)) ? (
