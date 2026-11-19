@@ -12,6 +12,7 @@ import {
   YEAR, bankDay, chf, invoicesFor, isoDate, lastDay, MONTHS, mulberry32, pad, PAID_PRIVATELY, qrReference, r2, taxIn,
   type Company, type Demo, type ManualEntry, type Payment, type Scenario, type StatementBank, type Vendor,
 } from './kit.js';
+import type { PayrollStore } from '../../src/payroll/model.js';
 
 const COMPANY: Company = {
   name: 'Muster Consulting GmbH',
@@ -522,7 +523,47 @@ steps:
 `,
 };
 
+/**
+ * The owner's payroll in the app from October (docs/specs/payroll.md B0): January to September were paid
+ * and booked by hand (above), so they enter as the year's opening, which books nothing and feeds the
+ * ceilings and the Lohnausweis. October to December are drafts for a person to close. Invented rates.
+ */
+const AT = '2026-10-01T08:00:00.000Z';
+const from = <T>(validFrom: string, value: T) => [{ validFrom, enteredAt: AT, value }];
+const PAYROLL: PayrollStore = {
+  schema: 1,
+  company: {
+    canton: from('2026-01-01', 'BE'), payday: from('2026-01-01', 25), postingDate: from('2026-01-01', 'month-end' as const),
+    rounding: from('2026-01-01', 0.05), proration: from('2026-01-01', 'calendar-days' as const), thirteenth: from('2026-01-01', 'twelfth' as const),
+    sender: { copyTo: 'buchhaltung@muster-consulting.example' }, contact: { name: COMPANY.owner, phone: '031 000 00 00' },
+  },
+  insurances: [
+    { id: 'ak', kind: 'ahv', business: 'ausgleichskasse', name: VENDORS.ausgleichskasse.bankName, memberNumber: '100.4711', solutions: [{ code: 'A', rates: from('2026-01-01', { adminCost: 1.9 }) }], validFrom: '2026-01-01' },
+    { id: 'fak', kind: 'fak', name: 'Familienausgleichskasse Muster', solutions: [{ code: 'A', rates: from('2026-01-01', { employer: 1.0 }) }], validFrom: '2026-01-01' },
+    { id: 'uvg', kind: 'uvg', name: 'Muster Unfallversicherung AG', contractNumber: 'UV-2026-88', solutions: [{ code: 'A1', rates: from('2026-01-01', { bu: 0.07, nbu: 0.95, nbuEmployerShare: 0 }) }], validFrom: '2026-01-01' },
+    { id: 'pk', kind: 'bvg', name: VENDORS.vorsorge.bankName, contractNumber: 'BVG-55-2026', solutions: [{ code: 'K', rates: [] }], validFrom: '2026-01-01' },
+  ],
+  wageTypes: [],
+  employees: [{
+    id: 'lukas', isOwner: true, language: 'de', birthDate: '1984-03-09', sex: 'm',
+    name: from('2026-01-01', { first: 'Lukas', last: 'Beispiel' }),
+    email: from('2026-01-01', 'lukas@muster-consulting.example'),
+    address: from('2026-01-01', { street: 'Beispielgasse', number: '8', postcode: '3011', town: 'Bern', country: 'CH' }),
+    bank: from('2026-01-01', { iban: 'CH1180808000000000003', holder: COMPANY.owner }),
+    employment: from('2026-01-01', { kind: 'monthly' as const, amount: GROSS_SALARY, pensum: 100, hoursPerWeek: 42, holidayDays: 25 }),
+    recurring: [],
+    insurances: from('2026-01-01', { bvg: { insurance: 'pk', solution: 'K', employee: BVG_EMPLOYEE, employer: BVG_EMPLOYEE }, uvg: { insurance: 'uvg', code: 'A1' } }),
+    opening: { 2026: {
+      months: 9,
+      bases: { ahv: 9 * GROSS_SALARY, alv: 9 * GROSS_SALARY, uvg: 9 * GROSS_SALARY, uvgz: 9 * GROSS_SALARY, ktg: 9 * GROSS_SALARY, bvg: 9 * GROSS_SALARY, qst: 9 * GROSS_SALARY, thirteenth: 9 * GROSS_SALARY },
+      fields: { 1: 9 * GROSS_SALARY, 9: r2(9 * AHV_EMPLOYEE), '10.1': r2(9 * BVG_EMPLOYEE) },
+    } },
+  }],
+  monthLines: [],
+};
+
 export const consulting: Demo = {
+  payroll: PAYROLL,
   dir: 'demo-consulting',
   company: COMPANY,
   closedThrough: '2026-03-31',

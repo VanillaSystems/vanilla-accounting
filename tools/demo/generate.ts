@@ -38,6 +38,7 @@ import { loadInvoices, readPdf } from '../../src/invoices/store.js';
 import { matchPayments } from '../../src/invoices/payments.js';
 import { kaffee } from './kaffee.js';
 import { consulting } from './consulting.js';
+import { PAYROLL_SCHEMA } from '../../src/workspace/schema.js';
 import { coiffeur } from './coiffeur.js';
 import { schreinerei } from './schreinerei.js';
 import { setJurisdiction, vat } from '../../src/engines/index.js';
@@ -375,6 +376,7 @@ async function build(demo: Demo, seed: number): Promise<Tree> {
   tree.set(`${APP_FOLDER}/master-data/accounts.json`, json(demo.accounts.map(([number, name]) => ({ number, name }))));
   tree.set(`${APP_FOLDER}/belege.workspace.yaml`, manifest(demo));
   for (const [file, yaml] of Object.entries(demo.knowledge)) tree.set(`${APP_FOLDER}/knowledge/${file}`, yaml);
+  if (demo.payroll) tree.set(`${APP_FOLDER}/payroll.json`, json({ ...demo.payroll, schema: PAYROLL_SCHEMA }));
   tree.set('.gitignore', 'data/\n.env\nbeleg-import/\n');
   tree.set('.gitattributes', GITATTRIBUTES);
   return tree;
