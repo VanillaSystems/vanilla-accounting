@@ -64,7 +64,7 @@ export function PayrollChecks({ d, nav }: { d: YearCloseView; nav: Nav }) {
           );
         })}
         {(p.taxAtSource ?? []).map((x) => (
-          <Fact key={`tax-${x.account}`} id={`tax-${x.account}`} state={taxState(x)} title={<>{acc(x.account)} · {x.insurances.length ? x.insurances.map((i) => i.name).join(', ') : t('close.payroll.taxTitle')}</>}>
+          <Fact key={`tax-${x.account}`} id={`tax-${x.account}`} state={taxState(x)} title={x.insurances.length ? <>{acc(x.account)} · {x.insurances.map((i) => i.name).join(', ')}</> : <>{acc(x.account)}{names[x.account] ? '' : ` · ${t('close.payroll.taxTitle')}`}</>}>
             <span>{x.carried ? `${t('close.payroll.carried', { amount: fmt(x.carried) })} · ` : ''}{t('close.payroll.taxFigures', { year, payable: fmt(x.payable), paid: fmt(x.paid), expected: fmt(x.expected) })}</span>
             <span>{x.difference
               ? t('close.payroll.taxDiffers', { balance: fmt(x.balance), expected: fmt(x.expected), difference: signed(x.difference) })
