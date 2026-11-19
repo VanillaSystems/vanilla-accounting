@@ -79,3 +79,21 @@ test('Lohnzahlungen and the insurers: the month\'s rows with what is paid, the a
   assert.equal(settle.status, 200);
   assert.equal((settle.json as { amount: number }).amount, 10);
 });
+
+test('Dokumente: the year\'s figures, a Lohnausweis issued and its PDF, the tables as CSV', async () => {
+  const docs = await api.send('GET', '/api/payroll/documents/2026');
+  assert.equal(docs.status, 200);
+  const people = docs.json.people as Array<{ employee: string; lohnausweis: { fields: Record<string, number>; openMonths: string[] } }>;
+  assert.ok(people.find((p) => p.employee === 'e1')!.lohnausweis.fields['8'] > 0);
+  const issued = await api.send('POST', '/api/payroll/documents/2026/lohnausweis', { employee: 'e1', confirm: true });
+  assert.equal(issued.status, 200);
+  const pdf = await api.fetch(`/payroll/documents/2026/lohnausweis/${issued.json.id as string}.pdf`);
+  assert.equal(pdf.headers.get('content-type'), 'application/pdf');
+  for (const path of ['/payroll/documents/2026/lohnausweis.csv', '/payroll/documents/2026/lohnkonto.csv?employee=e1', '/payroll/documents/2026/declarations.csv', '/payroll/documents/journal/2026-09.csv']) {
+    const r = await api.fetch(path);
+    assert.equal(r.status, 200, path);
+    assert.match(r.headers.get('content-type') ?? '', /text\/csv/);
+  }
+  const journal = await (await api.fetch('/payroll/documents/journal/2026-09.csv')).text();
+  assert.ok(journal.includes('LR-2026-09-e1'));
+});

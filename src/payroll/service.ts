@@ -6,19 +6,23 @@
  * person's next open month. The PDF lies in the year's receipts/ like any receipt; the events are
  * appended to payslips.jsonl only once the books are saved.
  */
-import { existsSync, rmSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { ClosedPeriodError, loadBooks, periodLock, receiptFile, type Books } from '../books/store.js';
 import { payroll, payrollYears } from '../engines/index.js';
 import { writeAtomic, idSource, sha256 } from '../invoices/store.js';
 import { accountsOf } from '../workspace/reads.js';
 import { setAccountName } from '../workspace/accounts-write.js';
 import { standardAccounts } from '../workspace/chart.js';
-import type { Workspace } from '../workspace/workspace.js';
+import { yearPaths, type Workspace } from '../workspace/workspace.js';
+import { valueOn } from '../core/dated.js';
+import { lohnausweisOf, type LohnausweisData } from './documents.js';
+import { lohnausweisPdf } from './lohnausweis-pdf.js';
 import type { PayrollData } from '../core/modules/schema.js';
 import { firmWageTypes } from './catalogue.js';
 import type { PayrollContext } from './compute.js';
 import { historyOf } from './history.js';
-import { applyClose, applyReopen, assertReopenable, closeEventOf, correctionOf, entriesOf, payslipReceipt, planClose, reopenEventOf, type ClosePlan, type CloseWarning } from './close.js';
+import { PayrollRefusal, applyClose, applyReopen, assertReopenable, closeEventOf, correctionOf, entriesOf, payslipReceipt, planClose, reopenEventOf, type ClosePlan, type CloseWarning } from './close.js';
 import { payslipPdf } from './pdf.js';
 import { allPayslipEvents, appendPayslipEvents, loadPayroll } from './store.js';
 import type { PayslipCorrection } from './model.js';
@@ -132,4 +136,61 @@ export function addCorrection(ws: Workspace, of: string, input: { wageType: stri
   const c = correctionOf(ctx, ctx.data, of, input, `co_${idSource.bytes(6).toString('hex')}`, now);
   appendPayslipEvents(ws, of.slice(0, 4), [c]);
   return c;
+}
+
+// ─── documents ─────────────────────────────────────────────────────────────────
+
+/** A Lohnausweis as issued: a snapshot of its figures and its PDF; a later one replaces or corrects it, both stay. */
+export interface LohnausweisSnapshot {
+  id: string; employee: string; year: string; kind: 'original' | 'replacement' | 'correction';
+  issuedAt: string; data: LohnausweisData; file: string; sha256: string;
+}
+
+const snapshotsFile = (ws: Pick<Workspace, 'paths'>, year: string) => join(yearPaths(ws.paths, year).payroll, 'lohnausweise.jsonl');
+
+export function lohnausweisSnapshots(ws: Pick<Workspace, 'paths'>, year: string): LohnausweisSnapshot[] {
+  const f = snapshotsFile(ws, year);
+  return existsSync(f) ? readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as LohnausweisSnapshot) : [];
+}
+
+/**
+ * Issues the Lohnausweis of `employee` for `year` from her closed payslips: the PDF in the year's payroll
+ * folder and its snapshot appended. A second one is a replacement (all figures again) or a correction.
+ */
+export async function issueLohnausweis(ws: Workspace, employee: string, year: string, kind: LohnausweisSnapshot['kind'] = 'original', now = new Date().toISOString(), confirm = false): Promise<LohnausweisSnapshot | { issued: false; openMonths: string[] }> {
+  const ctx = payrollContext(ws);
+  const e = ctx.store.employees.find((x) => x.id === employee);
+  if (!e) throw new PayrollRefusal('notFound', `Keine Person ${employee}.`);
+  const types = firmWageTypes(ctx.data, ctx.store);
+  const closes = [...ctx.history.closed.values()];
+  const data = lohnausweisOf(e, closes, types, ctx.data, year, e.language);
+  // Ready once every payslip of the person's year is closed (§6.7); before, only after the warning, and the snapshot names the open months.
+  if (data.openMonths.length && !confirm) return { issued: false, openMonths: data.openMonths };
+  const day = now.slice(0, 10);
+  const settings = valueOn(ctx.store.company.lohnausweis, `${year}-12-31`);
+  const name = valueOn(e.name, `${year}-12-31`) ?? e.name.at(-1)?.value;
+  const address = valueOn(e.address, day) ?? e.address.at(-1)?.value;
+  const earlier = lohnausweisSnapshots(ws, year).filter((s) => s.employee === employee);
+  const last = earlier.at(-1);
+  const words = ctx.data.lohnausweis?.[kind === 'correction' ? 'corrects' : 'replaces'];
+  const dd = (d: string) => new Intl.DateTimeFormat(`${e.language}-CH`, { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${d.slice(0, 10)}T00:00:00Z`));
+  const note = last && words ? (words[e.language] ?? words.de).replace('{date}', dd(last.issuedAt)) : undefined;
+  const rules = settings?.expenseRules && ctx.data.lohnausweis?.expenseRules;
+  const rulesText = rules ? (rules[e.language] ?? rules.de).replace('{canton}', settings!.expenseRules!.canton).replace('{date}', dd(settings!.expenseRules!.approvedOn)) : undefined;
+  const remarks = [rulesText, settings?.remarks].filter(Boolean).join('; ');
+  const pdf = await lohnausweisPdf({
+    data, language: e.language,
+    person: { name: name ? `${name.first} ${name.last}` : e.id, ...(address ? { address } : {}), ...(e.socialSecurityNumber ? { socialSecurityNumber: e.socialSecurityNumber } : {}), birthDate: e.birthDate },
+    firm: { name: ws.company.name, ...(ws.company.address ? { address: ws.company.address } : {}), ...(ctx.store.company.contact ? { contact: ctx.store.company.contact } : {}) },
+    boxes: { F: !!settings?.transportF, G: !!settings?.canteenG }, ...(remarks ? { remarks } : {}),
+    place: ws.company.address?.town ?? '', day, ...(note ? { note } : {}),
+  }, ctx.data);
+  const id = `la_${idSource.bytes(6).toString('hex')}`;
+  const dir = yearPaths(ws.paths, year).payroll;
+  // Named by the snapshot's id: two issues at once never write one file.
+  const file = join(dir, `lohnausweis-${year}-${employee}-${id}.pdf`);
+  writeAtomic(file, pdf);
+  const snap: LohnausweisSnapshot = { id, employee, year, kind: !earlier.length ? 'original' : kind === 'original' ? 'replacement' : kind, issuedAt: now, data, file: relative(ws.paths.root, file), sha256: sha256(pdf) };
+  appendFileSync(snapshotsFile(ws, year), JSON.stringify(snap) + '\n');
+  return snap;
 }
