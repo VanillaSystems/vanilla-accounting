@@ -1270,7 +1270,7 @@ listed here and updated with phase 2's build:
 48. **The Skonto line says «Sie überweisen», not «zu zahlen».** «zu zahlen» is a total word of the
     receipt reader (modules/ch/documents.yaml), so a paid invoice filed as its payment's receipt read
     as the Skonto amount, not its total. The reader also takes ʼ (U+02BC, how the PDF reader gives the
-    printed ’) as a thousands mark: «3ʼ800.00» read as 800.00 before.
+    printed ’) as a thousands mark: before, an amount with it lost its thousands.
 
 ---
 
