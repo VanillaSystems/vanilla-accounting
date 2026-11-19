@@ -274,12 +274,15 @@ function SlipView({ v, types, nav, canEdit }: Props & { v: Payslip; types: Map<s
 
 function SlipFacts({ v, nav }: { v: Payslip; nav: Nav }) {
   const facts = factsOf(v.slip);
-  if (!facts.length && !v.drift.length) return null;
+  if (!facts.length && !v.drift.length && !v.paidDifference) return null;
   return (
     <div className="pfacts">
       {facts.map((f, i) => (
         <div key={i} className="notice">{factText(f)}{f.key === 'earlierOpen' && f.vars?.month ? <> · <Go nav={nav} loc={payslipAt(`${f.vars.month}-${v.employee}`)}>{monthText(String(f.vars.month))}</Go></> : null}</div>
       ))}
+      {v.paidDifference ? (
+        <div className="notice warn" data-testid="paid-difference">{t('payroll.slip.paidDifference', { paid: fmt(v.paidDifference.paid), payout: fmt(v.slip.payout), difference: fmt(v.paidDifference.difference) })}</div>
+      ) : null}
       {v.drift.length ? (
         <div className="notice warn" data-testid="drift">{t('payroll.slip.drift', { lines: v.drift.map((d) => `${d.label} ${fmt(d.before)} → ${fmt(d.after)}`).join(', ') })}</div>
       ) : null}

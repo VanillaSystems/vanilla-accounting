@@ -107,11 +107,27 @@ export function bookWagePayments(
   return matches.map((x) => x.tx.ref);
 }
 
+/**
+ * What the bank line paid for this payslip: its entries off 1091 that name the payslip's PDF (one line may pay
+ * a whole month); a line booked by hand naming no PDF counts whole when it pays only this payslip.
+ */
+export function paidFor(books: BooksLike, tx: BankTransaction, c: Pick<PayslipClose, 'receiptId'>): number {
+  const onRef = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
+  const named = onRef.filter((e) => c.receiptId && e.receipts?.includes(c.receiptId));
+  const lines = named.length ? named : books.mappings.filter((m) => m.transactionRef === tx.ref).length <= 1 ? onRef : [];
+  return round2(lines.reduce((s, e) => s + e.amount, 0));
+}
+
 export interface PaymentRow {
   id: string; employee: string; name: string; iban?: string; payout: number;
   purpose: string; valueDate: string;
-  /** The bank line that paid it, once a booking holds it. */
-  paid?: { ref: string; date: string; amount: number };
+  /** The bank line that paid it, once a booking holds it: the line's amount, and what of it paid this payslip. */
+  paid?: { ref: string; date: string; amount: number; forThis: number };
+  /**
+   * The payout less what the bank paid for it, when they differ (a payslip reopened and closed again with
+   * another payout after its wage was paid): that much stays on 1091 until a payment or a booking settles it.
+   */
+  difference?: number;
 }
 
 /** The month's Lohnzahlungen: one row per closed payslip with something to pay. */
@@ -119,10 +135,13 @@ export function paymentRows(books: BooksLike, closes: readonly PayslipClose[], m
   return closes.filter((c) => c.month === month && c.payout !== 0).map((c) => {
     const tx = paymentOf(books, c);
     const [y, m] = c.month.split('-');
+    const forThis = tx ? paidFor(books, tx, c) : 0;
+    const difference = tx ? round2(c.payout - forThis) : 0;
     return {
       id: c.id, employee: c.employee, name: c.person.name, ...(c.person.iban ? { iban: c.person.iban } : {}), payout: c.payout,
       purpose: `Lohn ${m}/${y}`, valueDate: c.payday,
-      ...(tx ? { paid: { ref: tx.ref, date: tx.date, amount: Math.abs(tx.amount) } } : {}),
+      ...(tx ? { paid: { ref: tx.ref, date: tx.date, amount: Math.abs(tx.amount), forThis } } : {}),
+      ...(difference ? { difference } : {}),
     };
   });
 }

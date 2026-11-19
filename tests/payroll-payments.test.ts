@@ -9,8 +9,9 @@ import assert from 'node:assert/strict';
 import type { BankTransaction, JournalEntry, Mapping } from '../src/types/index.js';
 import { bookWagePayments, paymentRows, wageMatches, type MatchOptions } from '../src/payroll/payments.js';
 import { computePayslip } from '../src/payroll/compute.js';
-import { closePayslip, type BooksWriter } from '../src/payroll/service.js';
-import { savePayroll } from '../src/payroll/store.js';
+import { closePayslip, reopenPayslip, type BooksWriter } from '../src/payroll/service.js';
+import { historyOf } from '../src/payroll/history.js';
+import { allPayslipEvents, savePayroll } from '../src/payroll/store.js';
 import { loadBooks, moduleActor, PERSON, saveBooks, updateSaved, type Books } from '../src/books/store.js';
 import { runIntake, storePort } from '../src/intake/pipeline.js';
 import { classifyStep } from '../src/intake/classify.js';
@@ -82,4 +83,24 @@ test('classify --force keeps a wage payroll\'s code booked, so it is never hande
   const { entriesForceMayRemove } = await import('../src/accounting/classify-force.js');
   const e = { id: 'w', transactionRef: 'T1', date: '2026-09-25', accountDebit: '1091', accountCredit: '1020', amount: 8910, by: { kind: 'code' as const, check: 'payroll' as const } };
   assert.deepEqual(entriesForceMayRemove([e], new Set(['T1']), undefined), []);
+});
+
+test('a payslip paid, reopened and closed again with another payout names the difference left on 1091', async () => {
+  const ws = tempWorkspace('payroll-pay-diff-');
+  writeIndex(ws, { journalEntries: [], config: {} });
+  savePayroll(ws, firm());
+  const write: BooksWriter = <T>(fn: (b: Books) => T) => updateSaved(ws, PERSON, fn);
+  await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
+  const b = loadBooks(ws);
+  b.transactions.push(tx('BANK-2', '2026-09-25', -8910, { counterpartyIban: IBAN, bank: ws.bankAccounts[0]?.bank ?? 'Bank' }));
+  saveBooks(ws, b);
+  await runIntake({ ws, books: storePort(ws, moduleActor('intake')), steps: [['classify', classifyStep()]] });
+  reopenPayslip(ws, write, '2026-09-e1');
+  const store = firm();
+  store.monthLines = [{ id: 'l1', employee: 'e1', month: '2026-09', wageType: 'pauschalspesen', amount: 100, enteredAt: '2026-10-02T00:00:00Z' }];
+  savePayroll(ws, store);
+  await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
+  const closes = [...historyOf(allPayslipEvents(ws)).closed.values()];
+  const [row] = paymentRows(loadBooks(ws), closes, '2026-09');
+  assert.deepEqual([row.payout, row.paid?.forThis, row.difference], [9010, 8910, 100]);
 });

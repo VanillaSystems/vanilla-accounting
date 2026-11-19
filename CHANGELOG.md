@@ -177,6 +177,8 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Löhne: a payslip paid, reopened and closed again with another payout now says what stays open on the
+  Lohndurchlaufkonto 1091 (on the payslip and in Lohnzahlungen) instead of leaving the difference unnamed.
 - Buchungen: an entry that books only the tax (a code such as `M81-2` or `-I81-2`, one side
   empty) said «keine Gegenbuchung» on its empty side, which read as an error. The detail now
   shows the VAT account the Bilanz and the reports fill in there, marked «aus dem MWST-Code», and

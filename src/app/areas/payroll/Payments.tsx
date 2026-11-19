@@ -71,7 +71,7 @@ export function PaymentList(props: Props) {
                       <div key={r.id} className={`row slip ppay${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={r.id} onClick={() => pick(r.employee)}>
                         <span className={`d pstate ${r.paid ? 'closed' : 'draft'}`}>{t(r.paid ? 'payroll.payments.paid' : 'payroll.payments.unpaid')}</span>
                         <span className="t">{r.name}<small className="mono">{iban(r.iban) || t('payroll.payments.noIban')}</small></span>
-                        <span className="a mono">{fmt(r.payout)}</span>
+                        <span className="a mono">{fmt(r.payout)}{r.difference ? <small className="neg" data-tip={t('payroll.payments.differenceTip', { difference: fmt(r.difference) })}>{t('payroll.payments.differenceShort', { difference: fmt(r.difference) })}</small> : null}</span>
                       </div>
                     );
                   })}
@@ -163,7 +163,8 @@ function Payment({ row, books, nav }: Props & { row: PaymentRow }) {
           <div className="psec" data-testid="paid">
             <h3>{t('payroll.payments.bankLine')}</h3>
             <p><Go nav={nav} loc={inPeriodOf({ area: 'bank', payment: row.paid.ref }, row.paid.date)}>{t('payroll.payments.paidOn', { date: formatDate(row.paid.date), amount: fmt(row.paid.amount) })}</Go></p>
-            {row.paid.amount !== row.payout ? <p className="m">{t('payroll.payments.together', { amount: fmt(row.paid.amount) })}</p> : null}
+            {row.paid.amount !== row.paid.forThis ? <p className="m">{t('payroll.payments.together', { amount: fmt(row.paid.amount) })}</p> : null}
+            {row.difference ? <div className="notice warn" data-testid="paid-difference">{t('payroll.slip.paidDifference', { paid: fmt(row.paid.forThis), payout: fmt(row.payout), difference: fmt(row.difference) })}</div> : null}
             {entries.length ? <Entries entries={entries} nav={nav} /> : null}
           </div>
         ) : (

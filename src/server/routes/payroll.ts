@@ -96,7 +96,9 @@ router.get('/api/payroll/payslips/:id', run((req, res) => {
   const close = ctx.history.closed.get(view.id);
   // The Lohnarten added to an open month, with their ids: the draft's «entfernen».
   const monthLines = close ? [] : ctx.store.monthLines.filter((l) => l.employee === employee && l.month === month && !l.removed);
-  res.json({ ...view, drift: close ? driftOf(ctx, close) : [], monthLines });
+  // A payslip paid before it was reopened and closed again with another payout: the difference on 1091, as a fact.
+  const paidRow = close ? paymentRows(readBooks(), [close], close.month)[0] : undefined;
+  res.json({ ...view, drift: close ? driftOf(ctx, close) : [], monthLines, ...(paidRow?.difference ? { paidDifference: { difference: paidRow.difference, paid: paidRow.paid!.forThis, ref: paidRow.paid!.ref, date: paidRow.paid!.date } } : {}) });
 }));
 
 /** The PDF of a closed payslip, exactly as it lies in Belege. */
