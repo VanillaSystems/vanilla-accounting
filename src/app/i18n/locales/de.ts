@@ -7084,6 +7084,7 @@ export const messages = {
   "payroll.reopen.notLatest": "Wieder öffnen lässt sich nur der letzte abgeschlossene Monat der Person; diesen korrigiert die Rückwirkende Korrektur.",
   "payroll.reopen.closedPeriod": "Die Periode dieses Monats ist abgeschlossen: er bleibt, wie er ist, und wird mit der Rückwirkenden Korrektur im nächsten offenen Monat korrigiert.",
   "payroll.fact.entry": "Eintritt am {date}: Anmeldung bei der Ausgleichskasse, der Pensionskasse und dem Unfallversicherer.",
+  "payroll.fact.entryNoPension": "Eintritt am {date}: Anmeldung bei der Ausgleichskasse und dem Unfallversicherer.",
   "payroll.fact.exit": "Austritt am {date}.",
   "payroll.fact.earlierOpen": "{month} ist noch offen: die Zahlen dieses Monats gelten vorläufig.",
   "payroll.fact.pensioner": "Referenzalter erreicht am {date}: Rentnerfreibetrag, keine ALV.",

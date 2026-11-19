@@ -411,6 +411,9 @@ Two markers flag an entry you must read before you update:
   card, and «So lassen» holds for the file it was said for.
 - Löhne: after a small-wage year's catch-up, the following months owe ALV on their own wage again
   (a negative ALV base was charged). **⚠ figures** for such a payslip closed from now on.
+- Löhne: the entry fact of a new person («Eintritt am …: Anmeldung bei …») no longer names the
+  pension fund for a person without occupational pension (below the entry threshold, or a firm
+  without a pension fund).
 - Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
   davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund
   (`payroll: { payments: liability }`), names the open payments it books first, and code then books

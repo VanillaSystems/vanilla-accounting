@@ -2231,6 +2231,13 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     source read here (it is treated as no turnover, no code on the line); a firm that learns otherwise changes the
     Lohnart. The Lohnausweis's field 12 (Quellensteuerabzug) sums the tax lines as withheld, before the commission
     the employer keeps (the commission is an employer line of its own and enters no field; test).
+After the third persona walk (2026-11-19):
+
+107. **The entry fact names the pension fund only for a person it insures** (src/payroll/compute.ts): «Anmeldung bei
+     der Ausgleichskasse und dem Unfallversicherer» (`entryNoPension`) when the month has no line of a kind required
+     above a threshold (the pension's, payroll.yaml `requiredAbove`), neither computed nor «unvollständig»: below the
+     entry threshold, or a firm without a pension fund. A person above it without her certificate yet is still named
+     with the pension fund: she is to be registered.
 
 ---
 

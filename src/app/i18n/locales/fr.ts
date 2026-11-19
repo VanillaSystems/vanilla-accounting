@@ -7086,6 +7086,7 @@ export default {
     "payroll.reopen.notLatest": "Seul le dernier mois clôturé de la personne peut être rouvert ; celui-ci se corrige par la correction rétroactive.",
     "payroll.reopen.closedPeriod": "La période de ce mois est clôturée : il reste tel quel et se corrige par la correction rétroactive au prochain mois ouvert.",
     "payroll.fact.entry": "Entrée le {date} : annonce à la caisse de compensation, à la caisse de pension et à l’assureur-accidents.",
+    "payroll.fact.entryNoPension": "Entrée le {date} : annonce à la caisse de compensation et à l’assureur-accidents.",
     "payroll.fact.exit": "Sortie le {date}.",
     "payroll.fact.earlierOpen": "{month} est encore ouvert : les chiffres de ce mois sont provisoires.",
     "payroll.fact.pensioner": "Âge de référence atteint le {date} : franchise des rentiers, pas d’AC.",

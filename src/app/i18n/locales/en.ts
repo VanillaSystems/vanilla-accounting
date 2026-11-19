@@ -7086,6 +7086,7 @@ export default {
     "payroll.reopen.notLatest": "Only the person’s latest closed month can be reopened; this one is corrected by the retroactive correction.",
     "payroll.reopen.closedPeriod": "This month’s period is closed: it stays as it is and is corrected by the retroactive correction in the next open month.",
     "payroll.fact.entry": "Entry on {date}: register with the compensation fund, the pension fund and the accident insurer.",
+    "payroll.fact.entryNoPension": "Entry on {date}: register with the compensation fund and the accident insurer.",
     "payroll.fact.exit": "Exit on {date}.",
     "payroll.fact.earlierOpen": "{month} is still open: this month’s figures are provisional.",
     "payroll.fact.pensioner": "Reference age reached on {date}: pensioner’s allowance, no ALV.",

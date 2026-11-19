@@ -453,4 +453,15 @@ test('two Nachzahlungen: the later one, computed while the earlier is open, says
   store.monthLines = [bonusIn('2027-02', 500), bonusIn('2027-03', 500)];
   const mar = computePayslip({ data: ch.payroll!, years, store, history: historyOf(events) }, 'p1', '2027-03')!;
   assert.ok(mar.facts.some((f) => f.key === 'earlierOpen' && f.vars?.month === '2027-02'));
+test('walk 3: the entry fact names the pension fund only for a person it insures (§22 decision 107)', () => {
+  const at = (amount: number, more: Partial<PayrollEmployee> = {}) => computePayslip(ctxOf(firm([staff('j1', { employment: [dated('2026-03-10', monthly(amount))], ...more })])), 'j1', '2026-03')!;
+  const below = at(1500);
+  assert.ok(facts(below).includes('belowThreshold'));
+  assert.deepEqual(below.facts.filter((f) => f.key.startsWith('entry')).map((f) => [f.key, f.vars]), [['entryNoPension', { date: '2026-03-10' }]], 'below the entry threshold: no pension fund to register with');
+  assert.deepEqual(facts(at(5000)).filter((k) => k.startsWith('entry')), ['entry'], 'above it, without her certificate yet: the pension fund is named');
+  const insured = at(5000, { insurances: [dated('2026-01-01', { bvg: { insurance: 'pk', employee: 300, employer: 300 }, uvg: { insurance: 'uvg', code: 'A1' } })] });
+  assert.deepEqual(facts(insured).filter((k) => k.startsWith('entry')), ['entry']);
+  const noFund = firm([staff('j1', { employment: [dated('2026-03-10', monthly(5000))] })]);
+  noFund.insurances = noFund.insurances.filter((i) => i.kind !== 'bvg');
+  assert.deepEqual(facts(computePayslip(ctxOf(noFund), 'j1', '2026-03')!).filter((k) => k.startsWith('entry')), ['entryNoPension'], 'a firm without a pension fund names none');
 });
