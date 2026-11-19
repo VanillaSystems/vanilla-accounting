@@ -1,0 +1,70 @@
+/**
+ * Lohnzahlungen (src/payroll/payments.ts, docs/specs/payroll.md §6.3, §15.1 checkpoint 5): the bank's line
+ * of a wage is matched by code (amount = the payout, and the person's IBAN or name), one line for the
+ * whole month pays each payslip, a line of a closed period or far from the payday pays none, and the
+ * intake books it D 1091 / C bank with the payslip's PDF linked, so 1091 is 0 after the payment.
+ */
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import type { BankTransaction, JournalEntry, Mapping } from '../src/types/index.js';
+import { bookWagePayments, paymentRows, wageMatches } from '../src/payroll/payments.js';
+import { computePayslip } from '../src/payroll/compute.js';
+import { closePayslip, type BooksWriter } from '../src/payroll/service.js';
+import { savePayroll } from '../src/payroll/store.js';
+import { loadBooks, moduleActor, PERSON, saveBooks, updateSaved, type Books } from '../src/books/store.js';
+import { runIntake, storePort } from '../src/intake/pipeline.js';
+import { classifyStep } from '../src/intake/classify.js';
+import { closeOf, ctxOf, dated, firm, owner } from './support/payroll.js';
+import { tempWorkspace, writeIndex } from './support/workspace.js';
+import type { PayslipClose } from '../src/payroll/model.js';
+
+const IBAN = ['CH93', '00762011623852957'].join('');
+const tx = (ref: string, date: string, amount: number, extra: Partial<BankTransaction> = {}): BankTransaction =>
+  ({ ref, bank: 'Bank', date, amount, currency: 'CHF', direction: 'DBIT', description: 'Zahlung', ...extra });
+const open = { isClosed: (d: string) => d <= '2026-06-30' };
+const closes = (store = firm()): PayslipClose[] => ['2026-08', '2026-09'].map((m) => ({ ...closeOf(computePayslip(ctxOf(store), 'e1', m)!), receiptId: `r-${m}` }));
+const books = (transactions: BankTransaction[]) => ({ transactions, journalEntries: [], mappings: [] });
+
+test('a payment of the payout to the person\'s IBAN, or naming her, pays the payslip nearest its payday', () => {
+  const [aug, sep] = closes();
+  const byIban = wageMatches(books([tx('T1', '2026-09-25', -8910, { counterpartyIban: IBAN })]), [aug, sep], open);
+  assert.deepEqual(byIban.map((m) => [m.tx.ref, m.payslips.map((p) => p.id)]), [['T1', ['2026-09-e1']]]);
+  const byName = wageMatches(books([tx('T2', '2026-08-26', -8910, { counterparty: 'BEISPIEL MILA' })]), [aug, sep], open);
+  assert.deepEqual(byName.map((m) => m.payslips[0].id), ['2026-08-e1']);
+  assert.deepEqual(wageMatches(books([tx('T3', '2026-09-25', -8910)]), [aug, sep], open), [], 'neither IBAN nor name: no match');
+  assert.deepEqual(wageMatches(books([tx('T4', '2026-09-25', -8900, { counterpartyIban: IBAN })]), [aug, sep], open), [], 'another amount');
+  assert.deepEqual(wageMatches(books([tx('T5', '2026-12-20', -8910, { counterpartyIban: IBAN })]), [aug, sep], open), [], 'far from any payday');
+  assert.deepEqual(wageMatches(books([tx('T6', '2026-06-25', -8910, { counterpartyIban: IBAN })]), [{ ...sep, payday: '2026-06-25' }], open), [], 'a line of a closed period');
+});
+
+test('one line for the whole month pays each payslip of it; a paid payslip is not paid again', () => {
+  const two = firm([owner(), owner({ id: 'e2', name: [dated('2026-01-01', { first: 'Nora', last: 'Muster' })] })]);
+  const sep = ['e1', 'e2'].map((e) => ({ ...closeOf(computePayslip(ctxOf(two), e, '2026-09')!), receiptId: `r-${e}` }));
+  const b: { transactions: BankTransaction[]; journalEntries: JournalEntry[]; mappings: Mapping[] } = { transactions: [tx('T1', '2026-09-25', -17820, { description: 'Sammelauftrag Löhne' }), tx('T2', '2026-09-26', -8910, { counterpartyIban: IBAN })], journalEntries: [], mappings: [] };
+  const refs = bookWagePayments(b, sep, open, () => '1020', '1091', (() => { let i = 0; return () => `j${++i}`; })());
+  assert.deepEqual(refs, ['T1']);
+  assert.deepEqual(b.journalEntries.map((e) => [e.transactionRef, e.accountDebit, e.accountCredit, e.amount]), [['T1', '1091', '1020', 8910], ['T1', '1091', '1020', 8910]]);
+  assert.deepEqual(b.mappings.map((m) => m.receiptId), ['r-e1', 'r-e2']);
+  assert.deepEqual(paymentRows(b, sep, '2026-09').map((r) => [r.name, r.purpose, r.paid?.ref]), [['Mila Beispiel', 'Lohn 09/2026', 'T1'], ['Nora Muster', 'Lohn 09/2026', 'T1']]);
+  assert.deepEqual(bookWagePayments(b, sep, open, () => '1020', '1091', () => 'x'), [], 'T2 pays nothing: both are paid');
+});
+
+test('through the intake: the bank line of a closed payslip is booked D 1091 / C bank, and 1091 is 0', async () => {
+  const ws = tempWorkspace('payroll-pay-');
+  writeIndex(ws, { journalEntries: [], config: {} });
+  savePayroll(ws, firm());
+  const write: BooksWriter = <T>(fn: (b: Books) => T) => updateSaved(ws, PERSON, fn);
+  await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
+  const b = loadBooks(ws);
+  b.transactions.push(tx('BANK-1', '2026-09-25', -8910, { counterpartyIban: IBAN, bank: ws.bankAccounts[0]?.bank ?? 'Bank' }));
+  saveBooks(ws, b);
+  await runIntake({ ws, books: storePort(ws, moduleActor('intake')), steps: [['classify', classifyStep()]] });
+  const after = loadBooks(ws);
+  const paid = after.journalEntries.filter((e) => e.transactionRef === 'BANK-1');
+  assert.equal(paid.length, 1);
+  assert.equal(paid[0].accountDebit, '1091');
+  assert.equal(paid[0].amount, 8910);
+  assert.deepEqual(paid[0].by, { kind: 'code', check: 'payroll' });
+  const on1091 = after.journalEntries.reduce((s, e) => s + (e.accountCredit === '1091' ? e.amount : 0) - (e.accountDebit === '1091' ? e.amount : 0), 0);
+  assert.equal(Math.round(on1091 * 100) / 100, 0);
+});

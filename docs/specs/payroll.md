@@ -1594,6 +1594,16 @@ non-obvious decision is recorded here when it is taken.
     named it and she confirmed: the ref is booked once, from the payslip.
 19. **Reopening keeps the PDF while a payment is linked to it** (it is that payment's proof); the next
     close hands the payment's link to the new PDF and removes the old one.
+20. **A wage payment is matched by code when its amount is the payout and it names the person** (her IBAN
+    valid on the payday, or her first and last name in the bank's text), within two weeks before and a
+    month after the payday; one line equal to all of a month's unpaid payouts pays each of them. Booked
+    D 1091 / C bank in the intake before any rule or model, with the payslip's PDF linked as its proof.
+21. **A payment to a fund or insurer is booked against its liability account only when the closed
+    payslips accrued onto that account in the year**: a firm whose payroll runs elsewhere keeps level A's
+    booking (2270, 57xx).
+22. **The final statement's (Schlussabrechnung) total is entered by the person** off the statement; code
+    books its difference to what the payslips accrued (D 57xx / C 227x, or back), ref `LS-<year>-<insurance>`,
+    once. Reading the total off the statement's PDF is for the AI on her drop, later.
 
 ---
 

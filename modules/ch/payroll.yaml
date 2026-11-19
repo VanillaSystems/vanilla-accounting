@@ -23,6 +23,10 @@
 #                payout months), contribution (a row of contributions below); absent: entered by a person
 schema: 1
 
+# The clearing account (Lohndurchlaufkonto, §7.1): each payslip books its payout onto it, the bank's
+# payment of the wage takes it off again (src/payroll/payments.ts); 0 once every wage is paid.
+clearing: "1091"
+
 # The social security number (AHVN13, AHVG Art. 153b-153i): how code finds it in a text, so no prompt to
 # a model ever carries one (#508; src/llm/mask.ts). Separators may be dots, spaces or none.
 socialSecurityNumber:

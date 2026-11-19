@@ -11,7 +11,7 @@
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { claimsInputTax, inputTaxWithoutItsReceipt } from '../accounting/evidence-check.js';
-import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, bookWithheldShares, classifyTransactions, loadClassifyContext, type ClassifyContext, type ClassifyOutcome } from '../booking/classify.js';
+import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, bookWithheldShares, classifyTransactions, loadClassifyContext, mappedReceipts, type ClassifyContext, type ClassifyOutcome } from '../booking/classify.js';
 import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
 import { judgedRepayments, markJudged } from '../booking/owner-judged.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -24,6 +24,14 @@ import type { JournalEntry } from '../types/index.js';
 import { askSalesWithoutVat, closeSaleQuestionsHeld } from './sale-questions.js';
 import { bookPayoutReports, ordersPaidElsewhere } from './sales-report-import.js';
 import type { Workspace } from '../workspace/workspace.js';
+import { randomBytes } from 'node:crypto';
+import { bookWagePayments } from '../payroll/payments.js';
+import { bookInsurerPayments } from '../payroll/insurers.js';
+import { loadPayroll } from '../payroll/store.js';
+import { businessOfPayment } from './batch-payers.js';
+import { closedPayslips } from '../payroll/service.js';
+import { payroll as jurisdictionPayroll, payrollClearing } from '../engines/index.js';
+import { bankAccountFor } from '../workspace/money-accounts.js';
 import type { BooksPort, IntakeNote, StepResult, StepRun } from './pipeline.js';
 
 /** The note for the sales without VAT asked about now; a payment asked about before is not asked again. */
@@ -136,6 +144,22 @@ export function classifyStep({ force = false } = {}): StepRun {
     if (!force && !ask) {
       const taken = takeBackUnproven(ws, books, context, fx);
       if (taken) log(`${taken} payment(s) claimed input tax on a receipt no longer linked: booking taken back, each waits for its receipt.\n`);
+    }
+
+    // A wage the app's payroll closed is paid by a bank line code matches (docs/specs/payroll.md §6.3): D 1091 / C bank,
+    // the payslip's PDF linked, before a rule or the model sees the line.
+    const wages = payrollClearing() ? closedPayslips(ws) : [];
+    if (wages.length) {
+      const paid = books.update((index) => bookWagePayments(index, wages, periodLock(index), (tx) => bankAccountFor(tx, context.bankAccounts), payrollClearing()!, () => randomBytes(8).toString('hex')));
+      if (paid.length) log(`Wages     : ${paid.length} payment(s) of closed payslips booked from the payroll's clearing account: ${paid.join(', ')}.`);
+    }
+    // A payment to a fund or insurer whose contributions the payslips accrued clears its liability account only (§6.4): never expensed twice.
+    const payroll = payrollClearing() ? loadPayroll(ws) : undefined;
+    const data = jurisdictionPayroll();
+    if (payroll?.insurances.length && data) {
+      const insurers = books.update((index) => bookInsurerPayments(index, data, payroll, periodLock(index),
+        (tx) => businessOfPayment(tx, mappedReceipts(index, tx), context.counterparties ?? []), (tx) => bankAccountFor(tx, context.bankAccounts), () => randomBytes(8).toString('hex')));
+      if (insurers.length) log(`Insurers  : ${insurers.length} payment(s) to a fund or insurer booked against its liability account: ${insurers.join(', ')}.`);
     }
 
     const scratch = books.read();
