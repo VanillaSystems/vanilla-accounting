@@ -5,7 +5,7 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
-import { PRICES, isBooked, isItem, replacedPdfUrl, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
+import { PRICES, isBooked, isItem, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
 import { eventRef } from '../../../books/refs.js';
 import { lockedThrough } from '../../../books/lock-line.js';
 import { TEXTS } from '../../../invoices/texts.js';
@@ -354,6 +354,11 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
     ? <a className="dl inline" href={sources.invoicePdf(inv.number)} download={`${inv.number}.pdf`} data-tip={t('invoices.downloadTip')}>{I.dl}<span>{t('invoices.downloadInstead')}</span></a>
     : null;
   if (!canEdit) return <div className="ivacts">{dl}</div>;
+  // A Rechnung or Gutschrift that never went out: its download may be the sending (spec 4.8), so it asks whether to record it.
+  const asks = inv.status === 'issued' && (inv.kind === 'invoice' || inv.kind === 'credit-note') && !inv.cancelled && !wasSent(d.sent, inv);
+  const download = asks
+    ? <button type="button" className="dl inline" data-act="download-pdf" data-tip={t('invoices.downloadAskTip')} onClick={() => setUi({ dialog: { kind: 'download' } })}>{I.dl}<span>{t('invoices.downloadInstead')}</span></button>
+    : dl;
   const preview = <button type="button" className="btn ghost" data-act="preview" aria-pressed={s.preview} onClick={() => setUi({ preview: !s.preview })}>{s.preview ? t('invoices.edit') : t('invoices.preview')}</button>;
   if (inv.status === 'draft') {
     const missing = missingForIssue(inv, { customer: customerOf(d, inv, ws.invoicing), sender: senderFor(contextOf(ws), inv.currency), invoices: d.invoices });
@@ -406,6 +411,7 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
     ...(open || state === 'paid' ? [{ act: 'cancel', label: t('invoices.cancel'), run: () => setUi({ dialog: { kind: 'cancel' } }) }] : []),
     ...(state !== 'credit' ? [{ act: 'copy', label: t('invoices.copy'), run: () => { void copyAsDraft(nav, inv); } }] : []),
     // Spec 4.4.2: only while never sent, nothing settled, and its booking (the agreed basis) in an open period; once sent, Gutschrift and Storno are the ways on.
+    // Refused only because it went out (a recorded download included), it is still offered: its dialog says why (decision 97).
     ...(mayGoBack(props, inv) ? [{ act: 'back-to-draft', label: t('invoices.backToDraft'), run: () => setUi({ dialog: { kind: 'backToDraft' } }) }] : []),
     ...(inv.kind === 'invoice' && !inv.cancelled ? [{ act: 'accounts', label: t('invoices.accounts'), run: () => setUi({ dialog: { kind: 'accounts' } }) }] : []),
   ];
@@ -413,14 +419,15 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
     <div className="ivacts">
       {main}
       {more.length > 0 && <MoreMenu items={more} />}
-      {dl}
+      {download}
     </div>
   );
 }
 
 /** «Zurück zum Entwurf» is offered: the rules allow it, and its booking of the issue (the agreed basis) lies after the locked line. */
 function mayGoBack({ d, books }: DetailProps, inv: Issued): boolean {
-  if (backToDraftRefusal(inv, d.invoices, d.sent)) return false;
+  const refused = backToDraftRefusal(inv, d.invoices, d.sent);
+  if (refused && (refused !== 'sent' || backToDraftRefusal(inv, d.invoices, []))) return false;
   const line = lockedThrough(books.config);
   const ref = eventRef(inv, 'issue');
   return !line || !books.journalEntries?.some((e) => e.transactionRef === ref && e.date <= line);
@@ -662,7 +669,7 @@ function Log({ d, inv }: DetailProps) {
   // Each PDF it was issued with before it went back to draft stays, marked as replaced (spec 4.4.2).
   (inv.replaced ?? []).forEach((r, k) => {
     rows.push([r.issuedAt.slice(0, 10), t('invoices.log.issued', { number: inv.number ?? '' })]);
-    rows.push([r.replacedAt.slice(0, 10), <>{t('invoices.log.replaced')} · <a className="golink" href={replacedPdfUrl(inv.id, k + 1)} target="_blank" rel="noreferrer" data-act="replaced-pdf">{t('invoices.replacedPdf', { date: formatDate(r.issuedAt.slice(0, 10)) })}</a></>]);
+    rows.push([r.replacedAt.slice(0, 10), <>{t('invoices.log.replaced')} · <a className="golink" href={inv.number ? sources.replacedPdf({ id: inv.id, number: inv.number }, k + 1) : undefined} target="_blank" rel="noreferrer" data-act="replaced-pdf">{t('invoices.replacedPdf', { date: formatDate(r.issuedAt.slice(0, 10)) })}</a></>]);
   });
   if (inv.status === 'issued') {
     rows.push([inv.issuedAt.slice(0, 10), t('invoices.log.issued', { number: inv.number })]);

@@ -3,7 +3,7 @@
  * static audit export (npm run build:audit, docs/audit-export.md). The export writes exactly
  * EXPORT_FILES, so each read of the exported app is a file the export holds.
  */
-import { issuedPdfUrl, sentPdfUrl } from '../invoices/model.js';
+import { issuedPdfUrl, replacedPdfUrl, sentPdfUrl } from '../invoices/model.js';
 import { inertExt } from '../core/files.js';
 
 /** What names a receipt's file: its id, and its file name, whose extension the export keeps (a CSV report, an image). */
@@ -31,6 +31,8 @@ export interface Sources {
   invoices(): string;
   /** An issued invoice's or credit note's PDF, exactly as stored when it was issued. */
   invoicePdf(number: string): string;
+  /** A PDF an issued document was issued with before it went back to draft (`Issued.replaced`, `k` from 1), exactly as stored. */
+  replacedPdf(doc: { id: string; number: string }, k: number): string;
   /** A sent document's PDF (a reminder, a notice, a resend), exactly as sent. */
   sentPdf(id: string): string;
   /** A logo an invoice is laid out with, by its path in the workspace. */
@@ -52,6 +54,7 @@ export const API_SOURCES: Sources = {
   statement: (bank, filename) => `/bank-statements/${bank}/${encodeURIComponent(filename)}`,
   invoices: () => '/api/invoices',
   invoicePdf: issuedPdfUrl,
+  replacedPdf: (doc, k) => replacedPdfUrl(doc.id, k),
   sentPdf: sentPdfUrl,
   invoiceLogo: (path) => `/api/invoice-logo?path=${encodeURIComponent(path)}`,
 };
@@ -76,6 +79,8 @@ export const EXPORT_FILES: Sources = {
   statement: (bank, filename) => `bank-statements/${bank}/${filename}${inertExt(filename) === 'bin' ? '.bin' : ''}`,
   invoices: () => 'data/invoices.json',
   invoicePdf: (number) => `invoices/${number}.pdf`,
+  // Beside the issued PDF, under the name the workspace keeps it by (invoices/<number>.replaced-<k>.pdf).
+  replacedPdf: (doc, k) => `invoices/${doc.number}.replaced-${k}.pdf`,
   sentPdf: (id) => `invoices/sent/${id}.pdf`,
   invoiceLogo: (path) => `invoice-logos/${path}`,
 };
@@ -98,6 +103,7 @@ export const EXPORT_SOURCES: Sources = {
   statement: (bank, filename) => encodePath(EXPORT_FILES.statement(bank, filename)),
   invoices: () => encodePath(EXPORT_FILES.invoices()),
   invoicePdf: (number) => encodePath(EXPORT_FILES.invoicePdf(number)),
+  replacedPdf: (doc, k) => encodePath(EXPORT_FILES.replacedPdf(doc, k)),
   sentPdf: (id) => encodePath(EXPORT_FILES.sentPdf(id)),
   invoiceLogo: (path) => encodePath(EXPORT_FILES.invoiceLogo(path)),
 };

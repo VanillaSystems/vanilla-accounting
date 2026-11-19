@@ -5,6 +5,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { appendFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -33,8 +34,24 @@ let base: string;
 let launched: Promise<Browser> | undefined;
 const chrome = () => launched ??= launchChrome(browserPath!, ['--lang=en-US']);
 
+/** The demo's first issued invoice, given a PDF it was issued with before it went back to draft (slice F2's `replaced`). */
+const REPLACED = Buffer.from('%PDF-1.4 the PDF first issued, replaced\n');
+function withReplacedPdf(root: string): void {
+  const file = join(root, 'invoices.json');
+  const raw = JSON.parse(readFileSync(file, 'utf8')) as { invoices: Array<{ status: string; issuedAt?: string; pdf?: { file: string }; replaced?: unknown[] }> };
+  const inv = raw.invoices.find((i) => i.status === 'issued' && i.pdf)!;
+  const replaced = inv.pdf!.file.replace(/\.pdf$/, '.replaced-1.pdf');
+  writeFileSync(join(root, replaced), REPLACED);
+  inv.replaced = [{ file: replaced, sha256: createHash('sha256').update(REPLACED).digest('hex'), issuedAt: inv.issuedAt, replacedAt: inv.issuedAt }];
+  writeFileSync(file, JSON.stringify(raw, null, 2));
+}
+
 before(async () => {
-  await buildAuditExport(workspaceAt(join(APP_ROOT, 'demo')), dir, { createdAt: '2026-10-09T12:00:00.000Z' });
+  // A copy of the demo, so the export also carries a replaced PDF the generated demo has none of.
+  const demo = join(tmp, 'demo');
+  cpSync(join(APP_ROOT, 'demo'), demo, { recursive: true });
+  withReplacedPdf(join(demo, 'vanilla-accounting'));
+  await buildAuditExport(workspaceAt(demo), dir, { createdAt: '2026-10-09T12:00:00.000Z' });
   server = await serveStatic(join(tmp, 'host'));
   base = `${server.url}/snapshot/`;
 });
@@ -256,6 +273,31 @@ test('the invoices and their PDFs are in the export, each with the checksum it w
   }
   assert.deepEqual(wrong, []);
   assert.ok(manifest.files.some((f) => f.path.startsWith('invoice-logos/')), 'the logo the sheets show is in the export');
+});
+
+/** F2's replaced PDFs: what was once issued under a number goes into the export beside the issued PDF, with its checksum. */
+test('a PDF an invoice was issued with before it went back to draft is in the export beside the issued one, with its checksum', async () => {
+  const d = await json<{ invoices: Array<{ id: string; status: string; number?: string; replaced?: Array<{ sha256: string }> }> }>(EXPORT_SOURCES.invoices());
+  const inv = d.invoices.find((i) => i.replaced?.length)!;
+  assert.ok(inv, 'the record names its replaced PDF');
+  const path = EXPORT_SOURCES.replacedPdf({ id: inv.id, number: inv.number! }, 1);
+  assert.equal(path, `invoices/${inv.number}.replaced-1.pdf`);
+  const res = await get(path);
+  assert.equal(res.status, 200);
+  assert.deepEqual(Buffer.from(await res.arrayBuffer()), REPLACED, 'byte for byte');
+  const manifest = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8')) as { files: Array<{ path: string; sha256: string }> };
+  assert.equal(manifest.files.find((f) => f.path === path)?.sha256, inv.replaced![0].sha256);
+
+  // Swapped for the issued PDF with a manifest made to match: verify-audit names it.
+  const copy = join(tmp, 'replaced-swapped');
+  cpSync(dir, copy, { recursive: true });
+  const issuedPdf = readFileSync(join(copy, EXPORT_SOURCES.invoicePdf(inv.number!)));
+  writeFileSync(join(copy, path), issuedPdf);
+  const m = JSON.parse(readFileSync(join(copy, 'manifest.json'), 'utf8')) as { files: Array<{ path: string; sha256: string }> };
+  const swapped = createHash('sha256').update(issuedPdf).digest('hex');
+  for (const f of m.files) if (f.path === path) f.sha256 = swapped;
+  writeFileSync(join(copy, 'manifest.json'), JSON.stringify(m));
+  assert.deepEqual(verifyExport(copy), [`${path}: not the PDF as issued (sha256 ${swapped}, data/invoices.json ${inv.replaced![0].sha256})`]);
 });
 
 test('verify-audit refuses an invoice PDF swapped for another with a manifest made to match', () => {

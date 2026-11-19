@@ -44,13 +44,29 @@ test('a draft is issued with its stored PDF and sent; a part is credited; a prop
     const stored = readFileSync(join(api.root, issued.pdf!.file));
     assert.equal(stored.subarray(0, 5).toString(), '%PDF-');
     assert.equal(sha(stored), issued.pdf!.sha256, 'the stored PDF is the one its SHA-256 names');
-    const href = await page.$eval('.detail a.dl', (a) => a.getAttribute('href')!);
-    const served = Buffer.from(await (await fetch(app.ui + href)).arrayBuffer());
-    assert.equal(sha(served), issued.pdf!.sha256, 'the download link serves the stored PDF');
+    const served = Buffer.from(await (await fetch(`${app.ui}/invoices/${NEXT}.pdf`)).arrayBuffer());
+    assert.equal(sha(served), issued.pdf!.sha256, 'the download serves the stored PDF');
 
-    await click(page, '.isend [data-act=download]');
+    // «PDF herunterladen» of a Rechnung never sent asks whether the download is its sending (decision 97).
+    await click(page, '.isend [data-act=later]');
+    await page.waitForFunction(() => !document.querySelector('.isend'));
+    await click(page, '.detail [data-act=download-pdf]');
+    await page.waitForSelector('[data-testid=download-ask]');
+    await click(page, '[data-act=view-only]');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=download-ask]'));
+    assert.deepEqual((await invoice(DRAFT)).sent ?? [], [], '«Nur ansehen» records nothing');
+    await click(page, '.detail [data-act=download-pdf]');
+    await click(page, '[data-act=record-download]');
     await waitText(page, `Rechnung ${NEXT} als gesendet erfasst`);
     assert.deepEqual((await invoice(DRAFT)).sent?.map((s) => s.channel), ['download']);
+    // Sent now: the plain link, and «Zurück zum Entwurf» says why it is refused.
+    await page.waitForSelector('.detail a.dl');
+    await click(page, '[data-act=more]');
+    await click(page, '[data-act=back-to-draft]');
+    await page.waitForSelector('[data-testid=back-refused]');
+    assert.match(await page.$eval('[data-testid=back-refused]', (e) => (e as HTMLElement).innerText), new RegExp(`${NEXT} ging hinaus \\(\\d\\d\\.\\d\\d\\.\\d{4} · Download\\)`));
+    await clickText(page, 'Schliessen', '.idlg button');
+    await page.waitForFunction(() => !document.querySelector('[data-testid=back-refused]'));
     await click(page, '[data-act=send]');
     await page.waitForSelector('.isend.withpdf .isendpdf canvas.pg');
     await click(page, '.isend [data-act=later]');

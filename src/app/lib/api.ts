@@ -36,7 +36,7 @@ import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
 import type { ImportChoice, ImportMapping, ImportPreview } from '../../invoices/contact-import.js';
 import type { ArticleImportPreview, ArticleMapping } from '../../invoices/article-import.js';
 import type { Article, ArticleFields, Comment, Contact, ContactFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, WriteOff, WriteOffReason } from '../../invoices/model.js';
-import type { AllocationItem, AllocationPart, PaymentProposal } from '../../invoices/payments.js';
+import type { AllocationPart, AllocationView, PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
 import type { AccountChangePlan } from '../../invoices/revise.js';
@@ -867,7 +867,7 @@ export const api = {
   writeOff: (id: string, input: { reason: WriteOffReason; date?: string; amount?: number; note?: string; confirm?: 'aboveOpen' }) => request<{ writeOff: WriteOff }>('POST', `/api/invoices/${id}/write-offs`, input),
   removeWriteOff: (id: string, wo: string) => request<{ writeOff: WriteOff }>('DELETE', `/api/invoices/${id}/write-offs/${encodeURIComponent(wo)}`),
   /** The Ausziffern dialog of an incoming payment, and its «Buchen». */
-  allocation: (transactionRef: string, customerId?: string) => request<{ transaction: BankTransaction; items: AllocationItem[]; left: number }>('GET', `/api/invoices/allocation?transactionRef=${encodeURIComponent(transactionRef)}${customerId ? `&customerId=${encodeURIComponent(customerId)}` : ''}`),
+  allocation: (transactionRef: string, customerId?: string) => request<AllocationView>('GET', `/api/invoices/allocation?transactionRef=${encodeURIComponent(transactionRef)}${customerId !== undefined ? `&customerId=${encodeURIComponent(customerId)}` : ''}`),
   allocate: (transactionRef: string, parts: AllocationPart[]) => request<{ paid: Array<{ number: string; amount: number }> }>('POST', '/api/invoices/allocation', { transactionRef, parts }),
   /** A conversion (spec 4.4.1): `confirm` names the warnings the person overrode («Trotzdem erstellen», «Trotzdem übernehmen»). */
   convert: (id: string, input: { to: DocumentKind; lines: Array<{ line: number; quantity: number }>; confirm?: string[] }) => request<Draft>('POST', `/api/invoices/${id}/convert`, input),

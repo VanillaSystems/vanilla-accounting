@@ -96,7 +96,7 @@ export function issue(nav: Nav, draft: Draft, current: Period, anyway = false): 
  * The PDF saved where the person says: in the Mac app through the Save dialog, which tells whether
  * it was saved; in a browser by its download, which does not.
  */
-async function savePdf(href: string, name: string): Promise<boolean> {
+async function saveFile(href: string, name: string): Promise<boolean> {
   if (desktop?.saveFile) return desktop.saveFile(href, name);
   download(href, name);
   return true;
@@ -116,13 +116,18 @@ export function download(href: string, name: string): void {
   a.remove();
 }
 
+/** The issued PDF saved here and nothing recorded: «Nur ansehen» (a view, not a sending). */
+export async function savePdf(nav: Nav, inv: Issued): Promise<boolean> {
+  return !!(await run(nav, saveFile(issuedPdfUrl(inv.number), `${inv.number}.pdf`)));
+}
+
 /**
  * The issued PDF goes out by e-mail through the company's mailbox, or is saved here to be sent
  * otherwise; either way it is recorded with its bytes. A failed e-mail records nothing.
  */
 export async function send(nav: Nav, inv: Issued, email?: MailMessage): Promise<boolean> {
   // Cancelled in the Save dialog: nothing went out, nothing is recorded.
-  if (!email && !(await run(nav, savePdf(issuedPdfUrl(inv.number), `${inv.number}.pdf`)))) return false;
+  if (!email && !(await run(nav, saveFile(issuedPdfUrl(inv.number), `${inv.number}.pdf`)))) return false;
   const doc = await run(nav, api.recordSend(inv.id, email ? { email } : { to: 'download' }));
   if (!doc) return false;
   await reloadInvoices();

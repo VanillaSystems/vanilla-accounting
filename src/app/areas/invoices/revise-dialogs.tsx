@@ -5,7 +5,8 @@
  * person picks, what will be booked, read from the server's plan.
  */
 import { useEffect, useState } from 'react';
-import { isItem, type Issued } from '../../../invoices/model.js';
+import { isItem, type Issued, type SentDocument } from '../../../invoices/model.js';
+import { sendsOf } from '../../../invoices/lists.js';
 import { lineAmounts, totals } from '../../../invoices/rules.js';
 import type { AccountChangePlan } from '../../../invoices/revise.js';
 import { eventRef } from '../../../books/refs.js';
@@ -20,11 +21,38 @@ import type { RouteOf } from '../../shell/route.js';
 import type { AreaProps } from '../index.js';
 import { AsyncButton } from '../../shell/AsyncButton.js';
 import { Frame, close } from './frame.js';
+import { invoicesNow } from './data.js';
+import { setUi } from './state.js';
 import { backToDraft, changeAccounts } from './actions.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
 
-export function BackToDraftDialog({ inv, nav, books }: Props & { inv: Issued }) {
+export function BackToDraftDialog(props: Props & { inv: Issued }) {
+  const sends = sendsOf(invoicesNow()?.sent ?? [], props.inv);
+  return sends.length ? <BackRefused inv={props.inv} sends={sends} /> : <BackToDraft {...props} />;
+}
+
+/**
+ * Sent (by e-mail, or a download recorded as its sending): the customer may hold it, so it stays
+ * issued (spec 4.4.2). The dialog names each send and the ways on, Gutschrift and Storno.
+ */
+function BackRefused({ inv, sends }: { inv: Issued; sends: SentDocument[] }) {
+  const list = sends.map((x) => `${formatDate(x.sentAt.slice(0, 10))} · ${x.to === 'download' ? t('sales.channel.download') : x.to}`).join(', ');
+  return (
+    <Frame label={t('invoices.backTitle', { number: inv.number })} title={`${inv.customer.name} · ${inv.currency} ${fmt(totals(inv).gross)}`}
+      foot={<>
+        <button type="button" className="btn ghost" onClick={close}>{t('common.close')}</button>
+        {inv.kind === 'invoice' && <button type="button" className="btn primary" autoFocus data-act="credit-instead" onClick={() => setUi({ dialog: { kind: 'credit' } })}>{t('invoices.credit')}</button>}
+      </>}>
+      <div className="ibody lkf" data-testid="back-refused">
+        <div className="notice warn" role="note"><span>{t('invoices.backRefusedSent', { number: inv.number, list })}</span></div>
+        <p className="m ivhint">{t(inv.kind === 'invoice' ? 'invoices.backRefusedWays' : 'invoices.backRefusedWaysCredit')}</p>
+      </div>
+    </Frame>
+  );
+}
+
+function BackToDraft({ inv, nav, books }: Props & { inv: Issued }) {
   const ref = eventRef(inv, 'issue');
   const event = books.journalEntries?.find((e) => e.transactionRef === ref);
   return (

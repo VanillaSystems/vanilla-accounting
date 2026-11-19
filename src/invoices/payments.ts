@@ -528,22 +528,42 @@ export interface AllocationPart { invoiceId: string; amount: number; rest?: Writ
 /** An invoice the Ausziffern dialog offers, with what code proposes to allocate to it. */
 export interface AllocationItem { invoiceId: string; number: string; customerId: string; customerName: string; date: string; dueDate: string; open: number; named: boolean; proposed: number }
 
+/** How the contact of a payment was found: the person gave it, the text names its invoice's number, the IBAN paid its invoices before, the text names it. */
+export type AllocationBy = 'given' | 'number' | 'iban' | 'name';
+
+/** A contact the Ausziffern dialog can be switched to: one with open Rechnungen in the payment's currency. */
+export interface AllocationContact { id: string; name: string; open: number; n: number }
+
+export interface AllocationView {
+  transaction: BankTransaction;
+  items: AllocationItem[];
+  left: number;
+  /** The contact whose open items are shown (absent: every contact's) and how it was found. */
+  customerId?: string;
+  by?: AllocationBy;
+  /** Every contact with open Rechnungen in the payment's currency, by name: the person can pick another. */
+  customers: AllocationContact[];
+}
+
+const bareIban = (s: string | undefined) => (s ?? '').replace(/\s+/g, '').toUpperCase();
+
 /**
  * What the Ausziffern dialog shows for an incoming payment (spec 4.8): the open invoices of its
- * customer in its currency (the customer given, else the one whose invoices the text names, else
- * the one whose every name word it names; none found: every open invoice in the currency), and
- * code's proposal: the invoices the text names first, then the oldest by due date, each up to what
- * is open, until the payment is used up. `left`: what the proposal leaves of the payment.
+ * contact in its currency, and code's proposal. The contact is the one given (`''`: none, every
+ * contact's), else the one whose invoice number the text names, else the one alone whose earlier
+ * invoices the payment's IBAN paid, else the one whose every name word the text names; none found:
+ * every open invoice in the currency, nothing proposed but what the text names. The proposal: the
+ * invoices the text names first, then the oldest by due date, each up to what is open, until the
+ * payment is used up. `left`: what the proposal leaves of the payment.
  */
-export function allocationProposal(books: Books, book: InvoiceBook, transactionRef: string, customerId?: string): { transaction: BankTransaction; items: AllocationItem[]; left: number } {
+export function allocationProposal(books: Books, book: InvoiceBook, transactionRef: string, customerId?: string): AllocationView {
   const tx = books.transactions.find((t) => t.ref === transactionRef && t.direction === 'CRDT');
   if (!tx) throw new PaymentError('noPayment', 'Keine eingehende Zahlung mit dieser Referenz.');
   const invoices = liveInvoices(book);
   const text = [tx.description, tx.reference, tx.counterparty, ...(tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference])].filter(Boolean).join(' ');
   const open = invoices.filter((i): i is Issued => i.status === 'issued' && i.kind === 'invoice' && !i.cancelled && i.currency === tx.currency && openAmount(i, invoices) > 0);
-  const who = customerId
-    ?? open.find((i) => namesNumber(text, i.number))?.customerId
-    ?? open.find((i) => { const n = nameWords(i.customer.name); return n.length > 0 && n.every((w) => words(text).includes(w)); })?.customerId;
+  const found = customerId !== undefined ? (customerId ? { id: customerId, by: 'given' as const } : undefined) : proposeContact(books, invoices, open, tx, text);
+  const who = found?.id;
   const mine = (who ? open.filter((i) => i.customerId === who) : open)
     .sort((a, b) => Number(namesNumber(text, b.number)) - Number(namesNumber(text, a.number)) || a.dueDate.localeCompare(b.dueDate) || a.number.localeCompare(b.number));
   let left = Math.round(tx.amount * 100);
@@ -554,7 +574,28 @@ export function allocationProposal(books: Books, book: InvoiceBook, transactionR
     left -= proposed;
     return { invoiceId: i.id, number: i.number, customerId: i.customerId, customerName: i.customer.name, date: i.date, dueDate: i.dueDate, open: due / 100, named, proposed: proposed / 100 };
   });
-  return { transaction: tx, items, left: left / 100 };
+  const customers = new Map<string, AllocationContact>();
+  for (const i of open) {
+    const c = customers.get(i.customerId) ?? { id: i.customerId, name: book.contacts.find((x) => x.id === i.customerId)?.name ?? i.customer.name, open: 0, n: 0 };
+    customers.set(i.customerId, { ...c, open: Math.round((c.open + openAmount(i, invoices)) * 100) / 100, n: c.n + 1 });
+  }
+  return { transaction: tx, items, left: left / 100, ...(found ? { customerId: found.id, by: found.by } : {}), customers: [...customers.values()].sort((a, b) => a.name.localeCompare(b.name)) };
+}
+
+/** The contact code proposes for an incoming payment, among those with open Rechnungen: by the number its text names, the IBAN that paid them before, or its name. */
+function proposeContact(books: Books, invoices: readonly Invoice[], open: readonly Issued[], tx: BankTransaction, text: string): { id: string; by: AllocationBy } | undefined {
+  const byNumber = open.find((i) => namesNumber(text, i.number))?.customerId;
+  if (byNumber) return { id: byNumber, by: 'number' };
+  const iban = bareIban(tx.counterpartyIban);
+  if (iban) {
+    const paidFrom = new Map(books.transactions.flatMap((t) => (t.ref !== tx.ref && t.counterpartyIban ? [[t.ref, bareIban(t.counterpartyIban)] as const] : [])));
+    const candidates = new Set(open.map((i) => i.customerId));
+    const payers = new Set(invoices.flatMap((i) => (i.status === 'issued' && candidates.has(i.customerId) && i.payments.some((p) => paidFrom.get(p.transactionRef) === iban) ? [i.customerId] : [])));
+    // Only when one contact alone was paid from it: a shared account (a family, a holding) proposes no one.
+    if (payers.size === 1) return { id: [...payers][0], by: 'iban' };
+  }
+  const byName = open.find((i) => { const n = nameWords(i.customer.name); return n.length > 0 && n.every((w) => words(text).includes(w)); })?.customerId;
+  return byName ? { id: byName, by: 'name' } : undefined;
 }
 
 /**

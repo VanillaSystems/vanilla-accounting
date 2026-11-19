@@ -249,6 +249,53 @@ test('P1.5: one payment of 3 180 for 1 620 and 1 580, 20 short: proposed over bo
   }
 });
 
+test('Ausziffern proposes the contact by the IBAN that paid its invoices before, else by name; the person picks another or all', () => {
+  setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+  const book = newBook();
+  const garage: Customer = { ...customer, id: 'cu_2', name: 'Muster Garage GmbH' };
+  book.contacts.push(asContact(garage));
+  const issuedFor = (d: Draft, c: Customer) => {
+    const inv = { ...issue(d, { customer: c, sender, layout: DEFAULT_LAYOUT, invoices: book.invoices, now: `${d.date}T10:00:00Z` }), pdf: { file: `invoices/${d.id}.pdf`, sha256: d.id } };
+    book.invoices.push(inv);
+    return inv;
+  };
+  issued(book, draft('a', '2026-07-01', [line(1000, 8.1)]));
+  issuedFor(draft('g1', '2026-07-02', [line(100, 8.1)], { customerId: 'cu_2' }), garage);
+  issuedFor(draft('g2', '2026-07-03', [line(200, 8.1)], { customerId: 'cu_2' }), garage);
+  // The statement may show it spaced or not: both are the same payer.
+  const iban = 'CH6580808000000000099'.replace(/(.{4})/g, '$1 ').trim();
+  const b = books([
+    paying('P0', '2026-08-01', totals(now(book, 'g1')).gross, { counterparty: 'M. HUBER', counterpartyIban: iban, description: 'Zahlung' }),
+    paying('P1', '2026-08-04', 300, { counterparty: 'M. HUBER', counterpartyIban: iban.replace(/\s/g, ''), description: 'Zahlung' }),
+    paying('P2', '2026-08-05', 300, { counterparty: 'BEISPIEL BISTRO AG', description: 'Zahlung' }),
+    paying('P3', '2026-08-06', 300, { counterparty: 'JEMAND', description: 'Zahlung' }),
+  ]);
+  allocatePayment(b, book, 'P0', [{ invoiceId: 'g1', amount: totals(now(book, 'g1')).gross }], ctx);
+
+  const byIban = allocationProposal(b, book, 'P1');
+  assert.deepEqual([byIban.customerId, byIban.by], ['cu_2', 'iban'], 'the IBAN paid the garage before: its contact, though the text names no one');
+  assert.deepEqual(byIban.items.map((i) => [i.number, i.proposed]), [['2026-003', 216.2]], 'its open items, the payment up to what is open');
+  assert.deepEqual(byIban.customers.map((c) => [c.id, c.n]), [['cu_1', 1], ['cu_2', 1]], 'every contact with open items, to pick another');
+
+  const byName = allocationProposal(b, book, 'P2');
+  assert.deepEqual([byName.customerId, byName.by, byName.items.map((i) => i.number)], ['cu_1', 'name', ['2026-001']]);
+
+  const none = allocationProposal(b, book, 'P3');
+  assert.deepEqual([none.customerId, none.items.length, none.items.every((i) => i.proposed === 0)], [undefined, 2, true], 'no one found: every open item, nothing proposed');
+
+  const picked = allocationProposal(b, book, 'P1', 'cu_1');
+  assert.deepEqual([picked.customerId, picked.by, picked.items.map((i) => [i.number, i.proposed])], ['cu_1', 'given', [['2026-001', 300]]], 'the person picked another contact');
+  const all = allocationProposal(b, book, 'P1', '');
+  assert.deepEqual([all.customerId, all.items.length], [undefined, 2], 'all contacts: every open item');
+
+  // An IBAN that paid two contacts (a shared account) proposes no one by it.
+  const b2 = books([...b.transactions.map((t) => ({ ...t })), paying('P4', '2026-08-07', totals(now(book, 'a')).gross, { counterparty: 'M. HUBER', counterpartyIban: iban, description: 'x' })]);
+  b2.journalEntries = b.journalEntries;
+  allocatePayment(b2, book, 'P4', [{ invoiceId: 'a', amount: totals(now(book, 'a')).gross }], ctx);
+  issued(book, draft('a2', '2026-07-09', [line(50, 8.1)]));
+  assert.equal(allocationProposal(b2, book, 'P1').by, undefined, 'paid both: no proposal by IBAN');
+});
+
 test('Ausziffern refuses a surplus (it stays unallocated in phase 1), more than a Rechnung has open, and a payment allocated already', () => {
   setJurisdiction(ch, EFFECTIVE_QUARTERLY);
   const book = newBook();
