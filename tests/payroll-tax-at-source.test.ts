@@ -182,7 +182,7 @@ test('the commission is the file\'s electronic rate on the tax, an employer line
   const [c] = line(d, 'bezugsprovision');
   assert.equal(c.base, 473.2);
   assert.equal(c.rate, 2);
-  assert.equal(c.amount, 9.45, '473.20 × 2 % = 9.464, rounded to 5 Rappen as the tax (§22 decision 121)');
+  assert.equal(c.amount, 9.45, '473.20 × 2 % = 9.464, rounded to 5 Rappen as the tax (§22 decision 112)');
   assert.equal(c.side, 'employer');
   const b = bookingOf(d, ctxOf(firm()).data, firm());
   const tax = b.postings.find((p) => p.wageType === 'quellensteuer')!;
@@ -412,7 +412,7 @@ test('a Nachzahlung after the exit: taxed at the rate of the exit month\'s incom
 
 import { affectedBetween, backdatedCorrections, driftOf } from '../src/payroll/settings.js';
 
-test('a code changed back over October: November\'s list has its own row and October\'s correction as a row of its own (§22 decision 120)', () => {
+test('a code changed back over October: November\'s list has its own row and October\'s correction as a row of its own (§22 decision 111)', () => {
   const p = { ...subject(6500, { subject: true, canton: 'ZH', code: 'L0' }), name: [dated('2026-01-01', { first: 'Jonas', last: 'Grenzgänger' })] };
   const store = firm([p]);
   const ev: PayslipEvent[] = [];
@@ -455,7 +455,7 @@ test('a correction entered by hand: its own row with the corrected month\'s code
 
 import { lineSource, sourceText } from '../src/payroll/sources.js';
 
-test('an L code\'s tax line says the 4.5 % depends on the certificate of residence (Gre-1/Gre-2), in the payslip\'s language; A0 and the commission say nothing (§22 decision 123)', () => {
+test('an L code\'s tax line says the 4.5 % depends on the certificate of residence (Gre-1/Gre-2), in the payslip\'s language; A0 and the commission say nothing (§22 decision 114)', () => {
   const data = ctxOf(firm()).data;
   const textOf = (code: string, wageType: string, lang: 'de' | 'fr' | 'it' | 'en') => {
     const d = draft(7000, { subject: true, canton: 'ZH', code });
@@ -531,7 +531,7 @@ test('a correction entered by hand books, takes its commission and is listed in 
   assert.equal(payable('BE'), 804.35, 'BE\'s own November only');
 });
 
-test('an exact half of 5 Rappen is rounded up (FAQ KS 45 no. 5 «kaufmännisch»; its own example rounds 466.725 down, §22 decision 126)', () => {
+test('an exact half of 5 Rappen is rounded up (FAQ KS 45 no. 5 «kaufmännisch»; its own example rounds 466.725 down, §22 decision 117)', () => {
   assert.equal(roundStep(466.725, 0.05), 466.75);
   assert.equal(roundStep(10.075, 0.05), 10.1);
   assert.equal(roundStep(10.025, 0.05), 10.05);

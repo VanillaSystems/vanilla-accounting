@@ -563,7 +563,7 @@ export interface Difference {
   wageType: string; label: string; side: 'employee' | 'employer'; before: number; after: number; diff: number; carry: boolean;
   /** A tariff kind's line: its region (a canton is settled on its own). */
   region?: string;
-  /** The tax at source as the month computes now (its code, wage and rate): what its correction declares (§22 decision 120). */
+  /** The tax at source as the month computes now (its code, wage and rate): what its correction declares (§22 decision 111). */
   tariff?: CorrectedTariff;
 }
 

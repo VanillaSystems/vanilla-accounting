@@ -116,7 +116,7 @@ test('the settlement list per canton and month equals the movements of 2279 in t
   assert.equal(csv.headers.get('cache-control'), 'no-store');
   const text = await csv.text();
   assert.match(text, /2026-10;ZH;q1;Lena Grenzfall/);
-  // September's tax, carried into October when the file came, is a row of its own naming September (§22 decision 120).
+  // September's tax, carried into October when the file came, is a row of its own naming September (§22 decision 111).
   const rows = text.split(/\r?\n/).filter((l) => l.startsWith('2026-10;ZH;q1;'));
   assert.equal(rows.length, 2);
   assert.match(rows.find((l) => l.endsWith(';2026-09'))!, /;A0N;6500\.00;6500\.00;7\.28;473\.20;9\.4\d;2026-09$/);

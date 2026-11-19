@@ -14,7 +14,7 @@
  * - Small wage months now keep a capped ALV base of 0 (bases only: hourly small wage 25/h few hours; monthly small wage
  *   200 with exit; hourly small wage NZ cases; no employment at all; exit 2025 hourly).
  * - Reference age reached after the exit (bonus later the same year; NZ ref age in the exit month; NZ ref age after
- *   exit): the payment is for months before it, no pensioner: ALV owed, no pensioner fact (finding 6, decision 124).
+ *   exit): the payment is for months before it, no pensioner: ALV owed, no pensioner fact (finding 6, decision 115).
  * - NZ partial closes Oct–Dec (15,000; 6,000 + 50,000): the ceiling over the 3 months held, 37,050, less the
  *   45,000 / 18,000 held: no room / 19,050; wagesNotInApp (finding 2).
  * - NZ second exit: the Nachzahlung of 2028 counts only 2027's months (May–Dec at 12,350 = 98,800 = 8/12 of

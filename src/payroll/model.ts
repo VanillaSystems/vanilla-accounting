@@ -226,7 +226,7 @@ export interface PayslipLine {
    * A tax at source line (src/payroll/tax-at-source.ts): the region, the tariff code and the rate-determining
    * income it was looked up with, the file's date and the first characters of its checksum. On a carried
    * correction of the tax: the month it corrects as computed when the correction was made (its taxable wage
-   * and rate too), which the settlement list declares beside the corrected month (§22 decision 120).
+   * and rate too), which the settlement list declares beside the corrected month (§22 decision 111).
    */
   tariff?: { region: string; code: string; income: number; created?: string; version?: string; wage?: number; rate?: number };
 }

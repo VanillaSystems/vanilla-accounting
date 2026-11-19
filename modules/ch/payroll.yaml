@@ -251,7 +251,7 @@ wageTypes:
   # The EO's allowance is AHV wage (AHVG Art. 19a) but no premium wage of the accident insurance: UVV Art. 115 Abs. 1
   # lit. d (https://www.fedlex.admin.ch/eli/cc/1983/38_38_38/de). The employer's top-up beyond it (lohnfortzahlung) is
   # wage and stays premium-liable. UVGZ follows the insurer's terms (AVB): the base list here is the usual one, and a
-  # firm whose AVB says otherwise changes the Lohnart's bases (§22 decision 125).
+  # firm whose AVB says otherwise changes the Lohnart's bases (§22 decision 116).
   - { key: taggeld-eo, group: ersatz, label: { de: EO-Entschädigung, fr: Allocation APG, it: Indennità IPG, en: EO allowance }, sign: "+", gross: true, bases: [ahv, alv, ktg, bvg, qst], lohnausweis: "1", debit: "2271", credit: "1091" }
   - { key: taggeld-uvg, group: ersatz, label: { de: UVG-Taggeld, fr: Indemnité journalière LAA, it: Indennità giornaliera LAINF, en: UVG daily allowance }, sign: "+", gross: true, bases: [qst], lohnausweis: "1", debit: "2273", credit: "1091" }
   - { key: taggeld-ktg, group: ersatz, label: { de: KTG-Taggeld, fr: Indemnité journalière maladie, it: Indennità giornaliera malattia, en: Sick pay allowance }, sign: "+", gross: true, bases: [qst], lohnausweis: "1", debit: "2274", credit: "1091" }
@@ -342,7 +342,7 @@ setupDocuments:
 # a cross-border commuter resident in Germany: the flat 4.5 % (DBA CH-DE Art. 15a Abs. 1) only while the
 # employer holds her certificate of residence of the German tax office (Ansässigkeitsbescheinigung, form Gre-1;
 # its renewal Gre-2); without it the ordinary tariff applies (DBA CH-DE Art. 15a Abs. 3; ESTV, Merkblatt
-# Grenzgänger Deutschland) (§22 decision 123).
+# Grenzgänger Deutschland) (§22 decision 114).
 taxAtSource:
   file:
     url: "https://www.estv2.admin.ch/qst/{year}/loehne/tar{yy}{canton}.zip"

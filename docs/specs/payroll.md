@@ -1942,7 +1942,7 @@ After the independent review of A-2 (2026-11-19):
     a Lohnart counts the same. Lines that would cancel (paid on whole, no allowance) are left out and said as a
     fact. An hourly wage's absence pays what its hours entered say (a fact names the Lohnart). No diagnosis is
     kept (§11).
-    Absences over the same days take a day's wage off once (the later one only what the earlier left; the form says so first, a fact on the payslip); two kinds a fund pays in one month each top up only their own allowance. The EO's allowance is no premium wage of the accident insurance (UVV Art. 115 Abs. 1 lit. d, decision 125; its Lohnart has no UVG bases).
+    Absences over the same days take a day's wage off once (the later one only what the earlier left; the form says so first, a fact on the payslip); two kinds a fund pays in one month each top up only their own allowance. The EO's allowance is no premium wage of the accident insurance (UVV Art. 115 Abs. 1 lit. d, decision 116; its Lohnart has no UVG bases).
 83. **A child's allowance is the fund's decision, dated, prorated to the days employed**; a birth allowance (`once`)
     is paid in the month its entry begins. The federal minimum and the age after which the allowance ends are
     checked as facts (`allowance.minimum`, `untilAge`), never applied: the fund decides. A child the app paid for is
@@ -1999,11 +1999,11 @@ Taken while building B2, the Quellensteuer (2026-11-19):
 92. **The Bezugsprovision is a payslip line of the employer** (Lohnart `bezugsprovision`, `computes:
      commission`): the canton's rate on the month's tax at source, carried corrections included, booked D 2279 /
      C 5890 «Bezugsprovision Quellensteuer» (new payroll account, Personalaufwand): a reduction of the personnel
-     expense, not income (KS 45 Ziff. 9.1; decision 127); a firm re-accounts the Lohnart if its fiduciary wants
+     expense, not income (KS 45 Ziff. 9.1; decision 118); a firm re-accounts the Lohnart if its fiduciary wants
      another account. The rate is the
      firm's solution for the canton (a Quellensteuer insurance whose solution code is the canton, rate
      `provision`: a paper settlement, a canton's own rule), else the file's electronic rate (`PEL`); rounded to
-     5 Rappen as the tax (decision 121; until then to the Rappen). It lowers «Total Arbeitgeber». The line always names its canton (also with the firm's rate, and on a month
+     5 Rappen as the tax (decision 112; until then to the Rappen). It lowers «Total Arbeitgeber». The line always names its canton (also with the firm's rate, and on a month
      that only carries a correction, also after the person left or is no longer subject), so the settlement
      list reads it. A correction never carries it: the month that carries the tax's
      correction takes it again, so it is charged once. The canton grants it only for a timely settlement; the
@@ -2113,7 +2113,7 @@ Taken while building the year-end checks (2026-11-19):
 
 Taken on the third persona walk's fixes, part b (2026-11-19):
 
-120. **A carried correction of the tax at source is a row of its own in the settlement list**, in the list of the
+111. **A carried correction of the tax at source is a row of its own in the settlement list**, in the list of the
     month whose payslip carried it, declared with the month it corrects: person, month corrected, code, the
     corrected month's taxable wage, rate-determining income and rate as computed when the correction was made, the
     tax (the difference) and its commission. The canton expects a correction declared with the next settlement,
@@ -2146,16 +2146,16 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     tax. The drift says nothing where her hand correction is exactly what is left. The reference age of a payment
     after the exit, also in the same year, is judged at the exit's month. tests/payroll-scenarios-golden.test.ts holds
     64 scenarios' payslips (ordinary and after the exit) as a golden file, so a change of an ordinary figure is seen.
-121. **The Bezugsprovision is rounded to 5 Rappen, as the tax is** (`taxAtSource.rounding`, the same step), not to the
+112. **The Bezugsprovision is rounded to 5 Rappen, as the tax is** (`taxAtSource.rounding`, the same step), not to the
     Rappen: it is money of the same settlement, and no source was found that a canton computes it to the cent. What
     was read: the cantons publish only its rate (ESTV, «Auskunftsstellen Quellensteuer, Bezugsprovisionen und
     Kirchensteuer 2026»: Online / Papier per canton); the canton SO's Wegleitung QST-Revision 6.3 and the canton GR's
     «KS 45 Ergänzungen 2026» Ziff. 6 give the percentage; the BSV's circular on the tax at source (Rz 1076) says that
     on the monthly model the tax office states the commission in its invoice and deducts it there. So the canton's
     invoice is what counts: where it computes the commission on the settlement's total and rounds otherwise, a few
-    Rappen stay on 2279, which the year-end's tax-at-source check names (decision 122). The settlement list's row
+    Rappen stay on 2279, which the year-end's tax-at-source check names (decision 113). The settlement list's row
     shares are cents of the payslip's line, which is rounded.
-122. **The tax at source's account is checked at the year end whenever a payslip of the year withheld the tax, or
+113. **The tax at source's account is checked at the year end whenever a payslip of the year withheld the tax, or
     the account carried or moved**, whether or not the firm entered the canton's tax office as an insurance (the
     walk had none, and 2279 was missing from the checks). One fact per account (the tariff kind's, 2279, and the
     account of each canton's own insurance): what it carried into the year, what the year's settlement lists leave
@@ -2168,15 +2168,15 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     office, else the kind's first office, else the kind's account). A bank line or a money account moving the account
     counts net as paid (a refund from the canton lowers it). A tax office entered on another kind's account gets no
     such check (the balance is not the tax's alone): the insurer's fact names it.
-123. **A tariff code whose rate depends on a certificate says so, as data** (`taxAtSource.codeNotes`: a pattern on
+114. **A tariff code whose rate depends on a certificate says so, as data** (`taxAtSource.codeNotes`: a pattern on
     the code and its words in the four languages). The codes L to Q (a cross-border commuter resident in Germany)
     take the flat 4.5 % only while the employer holds the German tax office's certificate of residence
     (Ansässigkeitsbescheinigung, form Gre-1; its renewal Gre-2); without it the ordinary tariff applies (DBA CH-DE
     Art. 15a Abs. 1 and 3). The words follow the tax line's source on the payslip's page and in its PDF (in the
     person's language there), and the person's tax-at-source entry on her form. The app does not ask for the
     certificate nor switch the code: the person changes the code, dated back where it was wrong (a Rückwirkende
-    Korrektur carries the difference, decision 120).
-124. **Back pay in a later year takes the payment year's rates and ceilings, unless the employment has ended**
+    Korrektur carries the difference, decision 111).
+115. **Back pay in a later year takes the payment year's rates and ceilings, unless the employment has ended**
     (BSV, Wegleitung über den massgebenden Lohn (WBB) Rz 2036–2040,
     https://sozialversicherungen.admin.ch/de/d/6923/download pp. 45–48): by default the year the wage is paid in
     decides (Rz 2039); paid after the employment with the same employer ended (or the insurance duty lapsed), the
@@ -2209,20 +2209,20 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     Nachzahlung that lifts a small-wage year over the limit catches that year's months up; a payment counting in
     another year is never caught up. A later month computed while an earlier one with lines after the exit is open
     says so (`earlierOpen`).
-125. **The EO allowance is no UVG premium wage; the employer's top-up beyond it is** (UVV Art. 115 Abs. 1 lit. d,
+116. **The EO allowance is no UVG premium wage; the employer's top-up beyond it is** (UVV Art. 115 Abs. 1 lit. d,
     https://www.fedlex.admin.ch/eli/cc/1983/38_38_38/de, replacing the insurers' wage declarations cited before):
     the Lohnart `taggeld-eo` has no `uvg`/`uvgz` base, `lohnfortzahlung` keeps them, so a month of service with
     continued pay has as UVG wage the full wage less the allowance. The supplementary accident insurance (UVGZ)
     follows the insurer's terms (AVB), not the law: the shipped bases are the usual case and stay data, which a firm
     changes on the Lohnart (Einstellungen › Lohnarten).
-126. **The tax at source is rounded half up to 5 Rappen, though the FAQ's own example rounds a half down.** The
+117. **The tax at source is rounded half up to 5 Rappen, though the FAQ's own example rounds a half down.** The
     cantons' FAQ to KS 45 (ESTV, 2022, no. 5,
     https://www.estv.admin.ch/dam/de/sd-web/a7vG5hlZeAdW/dbst-ks-2022-1-045-d-faq-de.pdf) says «kaufmännisch auf-
     oder abzurunden» in steps of 5 Rappen, which is half up; its example rounds an amount ending in ,725 down to ,70,
     which contradicts that. The app keeps half up (,725 to ,75; tests/payroll-tax-at-source.test.ts): the rule's
     words over its example. A canton that rounds as the
-    example does differs by 5 Rappen on such a month; the year-end check of decision 122 shows it on 2279.
-127. **The Bezugsprovision reduces the personnel expense; it stays on 5890, and field 12 is the tax before it.** KS 45
+    example does differs by 5 Rappen on such a month; the year-end check of decision 113 shows it on 2279.
+118. **The Bezugsprovision reduces the personnel expense; it stays on 5890, and field 12 is the tax before it.** KS 45
     Ziff. 9.1 treats the commission as a reduction of expense, not as income: booked D 2279 / C 5890, a credit on
     an expense account of `personalaufwand`. The chart (modules/ch/accounts.yaml) has no 57xx account that fits:
     5700–5740 are the social insurances by fund (AHV/IV/EO/ALV, FAK, BVG, UVG, KTG), and the tax at source is

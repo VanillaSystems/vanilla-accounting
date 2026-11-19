@@ -140,7 +140,7 @@ export interface WithheldCheck {
 }
 
 /**
- * The tax at source's account at 31.12. (§22 decision 122): what it carried into the year, what the year's settlement lists
+ * The tax at source's account at 31.12. (§22 decision 113): what it carried into the year, what the year's settlement lists
  * leave to pay (the tax less the commission, as the closed payslips booked it), what was paid to the canton (its debits under
  * no payslip's ref), and the balance against carried + lists − paid. Whether or not the firm entered the canton's tax office.
  */

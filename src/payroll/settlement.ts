@@ -4,7 +4,7 @@
  * rate-determining income and rate, the tax and the commission; and what is owed to the region, the tax
  * less the commission. It is read from the closed payslips only, so it is exactly what they booked on
  * the liability account: the tax credited, the commission debited. A correction carried into a month is
- * its own row in that month's list, declared with the month it corrects (§22 decision 120). Pure, browser-safe.
+ * its own row in that month's list, declared with the month it corrects (§22 decision 111). Pure, browser-safe.
  */
 import type { PayrollData } from '../core/modules/schema.js';
 import type { WageType } from './catalogue.js';
@@ -16,7 +16,7 @@ export interface SettlementRow {
   payslip: string; employee: string; name: string;
   /**
    * The month a correction row corrects (YYYY-MM): a correction carried into this month is its own row, declared
-   * with the month it corrects (§22 decision 120). Absent: the month's own tax.
+   * with the month it corrects (§22 decision 111). Absent: the month's own tax.
    */
   corrects?: string;
   /** The taxable wage: of the month, or of the corrected month as computed when the correction was made (absent: not known). */

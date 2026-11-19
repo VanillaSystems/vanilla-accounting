@@ -356,7 +356,7 @@ test('B1 and B2 on the year-end: a child allowance and a person taxed at source 
   for (const i of p.insurers) assert.equal(i.open, 0, i.account);
 });
 
-test('2279 without a «Quellensteuer» insurance: still checked against the settlement lists; a payment and a booking by hand (§22 decision 122)', async () => {
+test('2279 without a «Quellensteuer» insurance: still checked against the settlement lists; a payment and a booking by hand (§22 decision 113)', async () => {
   const { input, journalEntries, payable } = await taxedYear({ office: false });
   const p = payrollYearEnd(input);
   assert.equal(p.taxAtSource.length, 1, 'a payslip of the year withheld the tax: 2279 is checked though no tax office is entered');

@@ -675,7 +675,7 @@ export function referenceYear(e: Pick<PayrollEmployee, 'employment'>, month: str
   return exit && exit.slice(0, 4) < year ? exit.slice(0, 4) : year;
 }
 
-/** The year a payslip's wage counts in and what the app holds of it: one model for the ceilings, the small-wage limit, the age rules and their facts (§22 decision 124). */
+/** The year a payslip's wage counts in and what the app holds of it: one model for the ceilings, the small-wage limit, the age rules and their facts (§22 decision 115). */
 export interface EarnedYear {
   year: string;
   /** The exit of an earlier year a payment after it comes after; absent while the wage counts in its own year. */
