@@ -343,6 +343,40 @@ Two markers flag an entry you must read before you update:
 - Verkauf: in the conversion dialog a position with nothing open shows 0 to take, and beside what
   is open what was taken already («0 · 10 geliefert»).
 
+- Löhne › Dokumente › Quellensteuer: a correction carried into a month is a row of its own in that
+  month's settlement list (and its CSV), naming the month it corrects with that month's code, wage and
+  rate as recomputed, its tax and its commission; it was merged into the person's row of the month
+  (under the month's own code and tax). The list still equals 2279's movements.
+- Löhne: the Bezugsprovision on the tax at source is rounded to 5 Rappen, as the tax is (it was
+  rounded to the Rappen). **⚠ figures** for a payslip with tax at source closed from now on; closed
+  payslips stay as they are.
+- Abschluss › Prüfen › Löhne: the tax at source's account (2279) is checked against what the year's
+  settlement lists leave to pay, also when no «Quellensteuer» insurance is entered (it was missing
+  then): carried, to pay, paid, open, and a difference named with the account's ledger.
+- Löhne: a tax-at-source line with a cross-border code (L to Q) and the person's form say that the
+  4.5 % holds only with the certificate of residence (form Gre-1, renewal Gre-2) and that the
+  ordinary tariff applies without it, in the payslip's language.
+- Löhne: a Nachzahlung after the exit, in a later year, takes the AHV/ALV rates and ceilings of the
+  year it was earned in (WBB Rz 2038); it took the payment year's rates. **⚠ figures** for such a
+  payslip closed from now on. «After the exit» is judged per month, so a re-hire entered later changes
+  no closed Nachzahlung; a second Nachzahlung finds the first against the ceiling. The federal
+  figures of 2025 ship; for an earlier year the nearest year's figures are taken and the payslip
+  says so. A Nachzahlung closed before its year's figures shipped shows the difference as a fact
+  («berechnet mit den Werten von damals») and stays as it was closed.
+- Löhne: a hand correction of a month closed without its tax at source books in that month's
+  canton, on its tax office's account.
+- Löhne: loading a tariff file again no longer proposes to undo a person's own correction of the
+  tax at source; a corrected file carries only its own effect. A Nachzahlung for a year whose wages
+  are not in the app reckons the ALV/UVG ceiling by the months employed and says so (it had none).
+- Löhne: the federal figures of 2026 date the family-allowance minimums from 1.1.2025, as in force.
+- Löhne: a Nachzahlung is computed from one model of the year it was earned in: when only part of
+  that year is in the app, its ceiling counts only those months (and the payslip says so), a month
+  never charges more than its own base, a second exit no longer gives a negative base, a small-wage
+  year lifted over the limit is caught up, and the reference age is judged at the exit. The tariff
+  card and the drift never undo a person's own correction of the tax at source, show it beside the
+  card, and «So lassen» holds for the file it was said for.
+- Löhne: after a small-wage year's catch-up, the following months owe ALV on their own wage again
+  (a negative ALV base was charged). **⚠ figures** for such a payslip closed from now on.
 - Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
   davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund
   (`payroll: { payments: liability }`), names the open payments it books first, and code then books

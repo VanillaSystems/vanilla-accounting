@@ -70,7 +70,7 @@ test('loading the file: the card first, then «Rückwirkende Korrektur» carries
   const oct = await linesOf('2026-10-q1');
   const tax = oct.lines.filter((l) => l.wageType === 'quellensteuer');
   assert.deepEqual(tax.map((l) => [l.amount, l.corrects ?? null]), [[473.2, '2026-09-q1'], [473.2, null]]);
-  assert.deepEqual(oct.lines.filter((l) => l.wageType === 'bezugsprovision').map((l) => [l.base, l.amount]), [[946.4, 18.93]]);
+  assert.deepEqual(oct.lines.filter((l) => l.wageType === 'bezugsprovision').map((l) => [l.base, l.amount]), [[946.4, 18.95]]);
   const closed = await api.send('POST', '/api/payroll/payslips/2026-10-q1/close', { confirm: true });
   assert.equal(closed.json.closed, true);
 });
@@ -114,7 +114,12 @@ test('the settlement list per canton and month equals the movements of 2279 in t
   const csv = await api.fetch('/payroll/documents/2026/tax-at-source.csv?month=2026-10&region=ZH');
   assert.equal(csv.status, 200);
   assert.equal(csv.headers.get('cache-control'), 'no-store');
-  assert.match(await csv.text(), /2026-10;ZH;q1;Lena Grenzfall/);
+  const text = await csv.text();
+  assert.match(text, /2026-10;ZH;q1;Lena Grenzfall/);
+  // September's tax, carried into October when the file came, is a row of its own naming September (§22 decision 111).
+  const rows = text.split(/\r?\n/).filter((l) => l.startsWith('2026-10;ZH;q1;'));
+  assert.equal(rows.length, 2);
+  assert.match(rows.find((l) => l.endsWith(';2026-09'))!, /;A0N;6500\.00;6500\.00;7\.28;473\.20;9\.4\d;2026-09$/);
 });
 
 test('an upload: the canton\'s file by its name in a zip, a broken zip, a file over the limit, a body sent as JSON, each with its reason', async () => {

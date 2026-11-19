@@ -132,6 +132,10 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
     if (!(t.partMonth > 0)) add(F, 'taxAtSource.partMonth', 'a number of days');
     if (!t.provision?.electronic) add(F, 'taxAtSource.provision.electronic', 'missing');
     if (!t.source?.trim()) add(F, 'taxAtSource.source', 'missing');
+    (t.codeNotes ?? []).forEach((n, i) => {
+      try { new RegExp(n.codes); } catch { add(F, `taxAtSource.codeNotes.${i}.codes`, 'no pattern'); }
+      for (const l of ['de', 'fr', 'it', 'en'] as const) if (!n.text?.[l]?.trim()) add(F, `taxAtSource.codeNotes.${i}.text.${l}`, 'missing');
+    });
     for (const [r, x] of Object.entries(t.regions ?? {})) if (x.model !== 'monthly' && x.model !== 'annual') add(F, `taxAtSource.regions.${r}.model`, 'monthly or annual');
     for (const f of t.aperiodic ?? []) if (p.lohnausweis && !p.lohnausweis.fields.some((x) => x.key === f)) add(F, 'taxAtSource.aperiodic', `field "${f}" does not exist`);
   }

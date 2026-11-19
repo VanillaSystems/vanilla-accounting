@@ -350,8 +350,8 @@ export function payrollYearEndOf(ws: Workspace, year: string, books: Books = loa
     issued: lohnausweisSnapshots(ws, year), isDebitNormal: (a) => chart().isDebitNormal(a),
     ...(wages?.account ? { wageAccount: wages.account } : {}), ...(wages?.deductions ? { deductionsAccount: wages.deductions } : {}),
     withheldPayees: new Set(issues?.withheldPayees ?? []), withheldShares: issues?.withheldShares ?? {},
-    ...(businessOf ? { businessOf } : {}), currency: baseCurrency(),
+    ...(businessOf ? { businessOf } : {}), currency: baseCurrency(), moneyAccounts: new Set(ws.bankAccounts.map((a) => a.account)),
   });
-  const something = out.clearing || out.insurers.length || out.wages || out.statements.length || out.withheld;
+  const something = out.clearing || out.insurers.length || out.taxAtSource.length || out.wages || out.statements.length || out.withheld;
   return something ? out : undefined;
 }

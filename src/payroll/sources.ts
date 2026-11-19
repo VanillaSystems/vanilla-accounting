@@ -12,7 +12,11 @@ export type LineSource =
   | { kind: 'federal'; year: string; cite: Labels }
   | { kind: 'solution'; insurer: string; code?: string }
   | { kind: 'certificate'; insurer: string }
-  | { kind: 'tariff'; region: string; year: string; created: string; code: string; income: number; fileOnly?: boolean };
+  | {
+    kind: 'tariff'; region: string; year: string; created: string; code: string; income: number; fileOnly?: boolean;
+    /** What the code's rate depends on (data `taxAtSource.codeNotes`), said beside the tax line. */
+    note?: Labels;
+  };
 
 /** The head of a figure's source: its articles, before the first explanation or the publication in brackets. */
 export const citeOf = (source: string): string => source.split(/[:(]/)[0].trim();
@@ -32,7 +36,7 @@ export function citesOf(row: Pick<FederalFigure, 'source' | 'cite'>): Labels {
  */
 export function lineSource(
   line: Pick<PayslipLine, 'wageType' | 'source' | 'tariff'>, slip: { month: string; used: readonly UsedEntry[] },
-  data: Pick<PayrollData, 'contributions'>, years: Readonly<Record<string, PayrollYearData>> | undefined,
+  data: Pick<PayrollData, 'contributions'> & Partial<Pick<PayrollData, 'taxAtSource'>>, years: Readonly<Record<string, PayrollYearData>> | undefined,
   insurances: ReadonlyArray<Pick<PayrollInsurance, 'id' | 'name'>>,
 ): LineSource | undefined {
   const at = line.source.indexOf(':');
@@ -44,14 +48,15 @@ export function lineSource(
     const t = line.tariff;
     // The commission names only the file its rate comes from; the tax names the code and the income it was looked up with.
     const tax = data.contributions.some((c) => c.wageType === line.wageType);
-    return { kind: 'tariff', region: t.region, year: key.split(':')[1] ?? slip.month.slice(0, 4), created: t.created!, code: t.code, income: t.income, ...(tax ? {} : { fileOnly: true }) };
+    const note = tax ? codeNoteOf(data, t.code) : undefined;
+    return { kind: 'tariff', region: t.region, year: key.split(':')[1] ?? slip.month.slice(0, 4), created: t.created!, code: t.code, income: t.income, ...(tax ? {} : { fileOnly: true }), ...(note ? { note } : {}) };
   }
   if (kind === 'federal') {
-    const year = slip.month.slice(0, 4);
+    // The row the payslip read (a figure may change inside the year; a payment after the exit reads its earned year's), else the latest.
+    const used = slip.used.find((u) => u.path === `federal/${key}`)?.validFrom;
+    const year = used?.slice(0, 4) ?? slip.month.slice(0, 4);
     const rows = years?.[year]?.figures[key];
     const list = rows ? (Array.isArray(rows) ? rows : [rows]) : [];
-    // The row the payslip read (a figure may change inside the year), else the latest.
-    const used = slip.used.find((u) => u.path === `federal/${key}`)?.validFrom;
     const row = list.find((r) => r.validFrom === used) ?? list.at(-1);
     return row ? { kind: 'federal', year, cite: citesOf(row) } : undefined;
   }
@@ -77,8 +82,14 @@ export function sourceText(s: LineSource, documents: Pick<PayrollData['documents
     case 'federal': return `${w(documents.sourceFederal).replace('{year}', s.year)} · ${w(s.cite)}`;
     case 'solution': return s.code ? `${s.insurer}, ${w(documents.sourceSolution).replace('{code}', s.code)}` : s.insurer;
     case 'certificate': return `${w(documents.sourceCertificate)} ${s.insurer}`;
-    case 'tariff': return documents.sourceTariff
+    case 'tariff': return (documents.sourceTariff
       ? (s.fileOnly ? w(documents.sourceTariff).split(' · ')[0] : w(documents.sourceTariff)).replace('{region}', s.region).replace('{year}', s.year).replace('{date}', day(s.created)).replace('{code}', s.code).replace('{income}', amount(s.income))
-      : `${s.region} ${s.year} ${s.code}`;
+      : `${s.region} ${s.year} ${s.code}`) + (s.note ? ` · ${w(s.note)}` : '');
   }
+}
+
+/** What a tariff code's rate depends on, where the data says (`taxAtSource.codeNotes`): the first note whose pattern matches. */
+export function codeNoteOf(data: Partial<Pick<PayrollData, 'taxAtSource'>>, code: string | undefined): Labels | undefined {
+  if (!code) return undefined;
+  return data.taxAtSource?.codeNotes?.find((n) => new RegExp(n.codes).test(code.toUpperCase()))?.text;
 }

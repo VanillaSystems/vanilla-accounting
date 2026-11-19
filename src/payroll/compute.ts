@@ -109,6 +109,12 @@ export function paydayOf(month: string, payday: number | 'last-working-day'): st
   return lastDay(month);
 }
 
+/** The shipped year nearest to `year` (the later of two as near), or undefined when none is shipped. */
+function nearestYear(years: PayrollContext['years'], year: string): string | undefined {
+  const all = Object.keys(years ?? {}).sort();
+  return all.sort((a, b) => Math.abs(Number(a) - Number(year)) - Math.abs(Number(b) - Number(year)) || b.localeCompare(a))[0];
+}
+
 /** A federal figure on a day, from the year's file; undefined when the year's file or the key is missing. */
 function federalOn(years: PayrollContext['years'], key: string, day: string): FederalFigure | undefined {
   const rows = years?.[day.slice(0, 4)]?.figures[key];
@@ -166,8 +172,16 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     missing.push({ wageType, label: w ? label(w) : wageType, missing: code, ...(days ? { days } : {}) });
   };
 
+  // The law's rates and ceilings: of the payment's month, but a payment after the employment ended, in a later year,
+  // takes those of the year it was earned in, its last year (WBB Rz 2038; while employed, the payment year's, Rz 2039).
+  const earned = earnedYearOf(e, month, history, settings.proration);
+  const earnedIn = earned.year;
+  // A year whose figures the app does not ship (yet): the nearest year it ships, said on the payslip, never no line.
+  const figureYear = earnedIn === year || ctx.years?.[earnedIn] ? earnedIn : nearestYear(ctx.years, earnedIn);
+  const figureDay = figureYear === year ? to : figureYear && figureYear > earnedIn ? `${figureYear}-01-01` : `${figureYear ?? earnedIn}-12-31`;
   const fig = (key: string) => {
-    const f = federalOn(ctx.years, key, to);
+    const f = federalOn(ctx.years, key, figureDay);
+    if (f && figureYear && figureYear !== earnedIn) fact('figuresOfYear', { earned: earnedIn, year: figureYear });
     if (f) used.set(`federal/${key}|${f.validFrom}`, { path: `federal/${key}`, validFrom: f.validFrom, enteredAt: f.validFrom });
     return f;
   };
@@ -187,10 +201,13 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
   const lastEntry = [...e.employment].sort((a, b) => a.validFrom.localeCompare(b.validFrom)).at(-1);
   if (firstEntry && firstEntry.validFrom >= from && firstEntry.validFrom <= to) facts.push({ key: 'entry', vars: { date: firstEntry.validFrom } });
   if (lastEntry?.validUntil && lastEntry.validUntil >= from && lastEntry.validUntil <= to) facts.push({ key: 'exit', vars: { date: lastEntry.validUntil } });
-  const openBefore = monthsBetween(`${year}-01`, month).filter((m) => m < month && isEmployed(e, m) && !inOpening(e, m) && !history.closed.has(payslipId(m, e.id)));
+  // An earlier month still open: one employed, or one with lines added after the exit (a Nachzahlung not closed yet).
+  const added = (m: string) => store.monthLines.some((l) => l.employee === e.id && l.month === m && !l.removed);
+  const openBefore = monthsBetween(`${year}-01`, month).filter((m) => m < month && (isEmployed(e, m) || added(m)) && !inOpening(e, m) && !history.closed.has(payslipId(m, e.id)));
   if (openBefore.length) facts.push({ key: 'earlierOpen', vars: { month: openBefore[0] } });
   // A payment after the exit (§6.6 «Nachzahlung»): a payslip of only the Lohnarten added for the month.
-  if (!employed && lastEntry?.validUntil && lastEntry.validUntil < from) fact('afterExit', { date: lastEntry.validUntil });
+  const exit = exitBefore(e, month);
+  if (exit) fact('afterExit', { date: exit });
 
   // 1. The wage of the Anstellung, split where it changes inside the month.
   for (const s of spans) {
@@ -366,6 +383,18 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       wageType: w.key, label: label(w), amount: c.amount, side: c.side, source: 'correction', corrects: c.of, correction: c.id,
       ...(c.base !== undefined ? { base: c.base } : {}), ...(c.rateDiff !== undefined ? { rate: c.rateDiff } : {}),
       ...(c.text ? { text: c.text } : {}), ...(of ? { days: { from: firstDay(of.month), to: lastDay(of.month) } } : {}),
+      // A tax correction names its canton: its own figures, else the corrected month's (a correction entered by hand),
+      // so its booking, its commission and the settlement list agree on the canton.
+      ...(() => {
+        if (c.tariff) return { tariff: c.tariff };
+        const was = of?.lines.find((l) => l.wageType === w.key && !l.corrects && l.tariff)?.tariff;
+        if (was) return { tariff: { region: was.region, code: was.code, income: was.income } };
+        // A month closed without its tax line: the person's canton then, else now.
+        const tariffKind = data.contributions.some((x) => x.wageType === w.key && data.insurances[x.insurance]?.tariff);
+        if (!tariffKind) return {};
+        const region = (of ? entryOn(e.taxAtSource ?? [], lastDay(of.month))?.value.canton : undefined) ?? entryOn(e.taxAtSource ?? [], to)?.value.canton;
+        return region?.trim() ? { tariff: { region: region.trim().toUpperCase(), code: '', income: 0 } } : {};
+      })(),
     });
   }
 
@@ -387,14 +416,18 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
   // 6. The contributions, in the data's order.
   const bases = basesOf(lines, types);
   const insurancesOn = read(`employees/${e.id}/insurances`, e.insurances, to) ?? {};
-  const yearData = ctx.years?.[year];
+  // Past the reference age: judged for the month the wage was earned in, so a payment after the exit by the exit's month
+  // and the earned year's table (or the nearest year's the app ships).
+  const yearData = ctx.years?.[earned.exit ? figureYear ?? earnedIn : year];
   const reachDay = referenceAgeReached(e, yearData);
-  const pensioner = !!reachDay && from > lastDay(reachDay.slice(0, 7));
+  const exitAt = exitBefore(e, month);
+  const workedFrom = exitAt ? firstDay(exitAt.slice(0, 7)) : from;
+  const pensioner = !!reachDay && workedFrom > lastDay(reachDay.slice(0, 7));
   if (pensioner) facts.push({ key: 'pensioner', vars: { date: reachDay! } });
   if (!e.sex) facts.push({ key: 'sexMissing' });
   const computed = new Map<string, number>();
   const commissionLines: PayslipLine[] = [];
-  const cumulated: Record<string, { base: number; capped: number; ceiling: number }> = {};
+  const cumulated: Record<string, ReturnType<typeof cumulative>> = {};
   /** The capped base of each base and ceiling this month: kept on the close, so the next month caps against what was used. */
   const capped: Record<string, number> = {};
   for (const c of data.contributions) {
@@ -417,7 +450,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
         // A payment after the exit (a Nachzahlung) takes the rate with the exit month's income (FAQ KS 45, Frage 16).
         ...(!employed ? { exitIncome: exitIncomeOf(history, e.id, month, w.key, typeof c.base === 'string' ? c.base : '') } : {}),
         tariffs: ctx.tariffs, insurances: store.insurances,
-        regionOf: (id) => history.closed.get(id)?.lines.find((l) => l.wageType === w.key && l.tariff)?.tariff?.region,
+        regionOf: (id) => history.closed.get(id)?.lines.find((l) => l.wageType === w.key && l.tariff && !l.corrects)?.tariff?.region,
         ...(commission ? { commission: { wageType: commission, label: label(commission) } } : {}),
       });
       // The commission prints after the employer's contributions, the tax in its place.
@@ -443,7 +476,8 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       const age = fig(c.liable);
       if (!age) { miss(w.key, 'federal'); continue; }
       const startYear = Number(e.birthDate?.slice(0, 4)) + age.value + 1;
-      if (Number.isFinite(startYear) && Number(year) < startYear) { if (!facts.some((f) => f.key === 'notLiable')) facts.push({ key: 'notLiable', vars: { year: startYear } }); continue; }
+      // A payment after the exit is judged in the year it was earned in, as its figures are.
+      if (Number.isFinite(startYear) && Number(earnedIn) < startYear) { if (!facts.some((f) => f.key === 'notLiable')) facts.push({ key: 'notLiable', vars: { year: startYear } }); continue; }
     }
     if (pensioner && c.pensioner === 'ends') continue;
     if (c.minHours) {
@@ -457,6 +491,8 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     }
     // The base.
     let base = typeof c.base === 'string' ? bases[c.base] ?? 0 : round2(sum(c.base.lines.map((k) => computed.get(k) ?? 0)));
+    // The earlier months' base a small-wage catch-up adds to this month: already in the year's base under the ceiling.
+    let caught = 0;
     if (pensioner && typeof c.pensioner === 'object' && insurancesOn.pensioner !== 'waiver') {
       const allowance = fig(c.pensioner.allowance);
       if (!allowance) { miss(w.key, 'federal'); continue; }
@@ -470,21 +506,25 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       // What the earlier months charged: kept on each close; a close before this rule charged its whole base.
       const charged = (m: PayslipClose) => m.bases[key]?.month ?? raw(m);
       // A payment after the exit in a later year belongs to the year it was earned in (as its ceiling does, cumulative()).
-      const ref = referenceYear(e, year);
-      const refEarlier = ref === year ? earlier : closedOf(history, e.id).filter((x) => x.month.startsWith(ref) && !inOpening(e, x.month));
-      const openingBase = openingOf(e, ref)?.bases[c.base] ?? 0;
-      const yearBase = round2(openingBase + sum(refEarlier.map(raw)) + (ref === year ? 0 : sum(earlier.map(raw))) + base);
+      // The year the wage counts in, and every earlier month that counts in it (earnedYearOf).
+      const ref = earned.year;
+      const counted = earned.counted;
+      const openingBase = earned.opening?.bases[c.base] ?? 0;
+      const yearBase = round2(openingBase + sum(counted.map(raw)) + base);
       // A monthly wage promises its year; an hourly one is judged by its average month so far over the months employed.
-      const promised = promisedYear(e, ref, settings.proration) ?? expectedYear(e, ref, refEarlier, yearBase, ref === year ? fraction : 0, settings.proration);
+      const promised = promisedYear(e, ref, settings.proration) ?? expectedYear(e, ref, counted.filter((x) => x.month.startsWith(ref)), yearBase, earned.exit ? 0 : fraction, settings.proration);
       if (yearBase <= limit.value && promised <= limit.value) {
         fact('smallWage', { amount: limit.value });
         capped[key] = 0;
+        // Nothing charged under the ceiling either: a later month's room counts this month as unused.
+        if (c.ceiling) capped[`${c.base}|${c.ceiling}`] = 0;
         continue;
       }
       // Past the limit the whole year is liable: the months left out are caught up now.
-      const catchUp = round2(Math.max(0, sum(earlier.map(raw)) - sum(earlier.map(charged))));
+      const catchUp = round2(Math.max(0, sum(counted.map(raw)) - sum(counted.map(charged))));
       if (catchUp) fact('smallWageCaught', { amount: limit.value, caught: catchUp });
       base = round2(base + catchUp);
+      caught = catchUp;
       // Kept as the raw base it covers (before a pensioner's allowance), so the next month compares like with like.
       capped[key] = round2((bases[c.base] ?? 0) + catchUp);
     }
@@ -493,8 +533,13 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       if (!ceiling) { miss(w.key, 'federal'); continue; }
       const raw = typeof c.base === 'string' ? c.base : '';
       const key = `${raw}|${c.ceiling}`;
-      const cum = cumulated[key] ??= cumulative(ctx, e, month, raw, key, settings.proration, ceiling.value);
-      const own = round2(Math.min(cum.base + base, cum.ceiling) - cum.capped);
+      const smallKey = c.smallWage && typeof c.base === 'string' ? `${c.base}#${c.smallWage}` : undefined;
+      const cum = cumulated[key] ??= cumulative(earned, e, month, raw, key, settings.proration, ceiling.value, smallKey);
+      if (earned.missing) fact('wagesNotInApp', { year: earned.year });
+      // What this month may still charge under the ceiling, cumulated over the year (a bonus, a negative month, an
+      // unpaid month even out). A payment after the exit charges at most its own base, and never less than nothing.
+      const room = round2(Math.min(cum.base + base - caught, cum.ceiling) - cum.capped);
+      const own = !earned.exit ? room : base >= 0 ? Math.min(base, Math.max(0, room)) : Math.max(base, Math.min(0, room));
       if (own < base && !facts.some((f) => f.key === 'ceiling')) facts.push({ key: 'ceiling', vars: { amount: ceiling.value } });
       capped[key] = own;
       base = own;
@@ -611,11 +656,51 @@ function promisedYear(e: PayrollEmployee, year: string, proration: string): numb
   return round2(total);
 }
 
-/** The year a payment of `year` counts in: `year`, or for a payment after the exit in a later year, the exit's. */
-export function referenceYear(e: Pick<PayrollEmployee, 'employment'>, year: string): string {
-  const inYear = entriesWithin(e.employment, `${year}-01-01`, `${year}-12-31`).some((s) => s.entry);
-  const last = [...e.employment].sort((a, b) => a.validFrom.localeCompare(b.validFrom)).at(-1);
-  return !inYear && last?.validUntil && last.validUntil < `${year}-01-01` ? last.validUntil.slice(0, 4) : year;
+/**
+ * The exit a payment of `month` comes after: the end of the latest Anstellung begun by the month's end, when the person
+ * is not employed in the month and it ended before. Decided per month, so an Anstellung entered later for a later
+ * month (a re-hire) leaves an earlier month's answer as it was.
+ */
+export function exitBefore(e: Pick<PayrollEmployee, 'employment'>, month: string): string | undefined {
+  const from = firstDay(month); const to = lastDay(month);
+  if (entriesWithin(e.employment, from, to).some((x) => x.entry)) return undefined;
+  const last = e.employment.filter((x) => x.validFrom <= to).sort((a, b) => a.validFrom.localeCompare(b.validFrom)).at(-1);
+  return last?.validUntil && last.validUntil < from ? last.validUntil : undefined;
+}
+
+/** The year a payment of `month` counts in: its own, or for a payment after an exit of an earlier year, the exit's (WBB Rz 2038). */
+export function referenceYear(e: Pick<PayrollEmployee, 'employment'>, month: string): string {
+  const year = month.slice(0, 4);
+  const exit = exitBefore(e, month);
+  return exit && exit.slice(0, 4) < year ? exit.slice(0, 4) : year;
+}
+
+/** The year a payslip's wage counts in and what the app holds of it: one model for the ceilings, the small-wage limit, the age rules and their facts (§22 decision 115). */
+export interface EarnedYear {
+  year: string;
+  /** The exit of an earlier year a payment after it comes after; absent while the wage counts in its own year. */
+  exit?: string;
+  /** Every closed month before this one that counts in that year, whatever month it was paid in (outside the opening). */
+  counted: PayslipClose[];
+  opening?: ReturnType<typeof openingOf>;
+  /** The months of that year the app holds (the opening's and the closed months' employed shares), and the months employed in it. */
+  held: number;
+  employed: number;
+  /** A payment after the exit whose year the app does not hold whole: its ceiling is reckoned as said (wagesNotInApp). */
+  missing: boolean;
+}
+
+export function earnedYearOf(e: PayrollEmployee, month: string, history: PayslipHistory, proration: string): EarnedYear {
+  const year = month.slice(0, 4);
+  const ref = referenceYear(e, month);
+  const exit = ref !== year ? exitBefore(e, month) : undefined;
+  const counted = closedOf(history, e.id).filter((c) => c.month < month && referenceYear(e, c.month) === ref && !inOpening(e, c.month));
+  const opening = openingOf(e, ref);
+  const share = (m: string) => employedFraction(e, m, proration);
+  // Unrounded: the ceiling is reckoned with the exact share of each month.
+  const held = (opening?.months ?? 0) + counted.reduce((a, c) => a + share(c.month), 0);
+  const employed = monthsBetween(`${ref}-01`, `${ref}-12`).reduce((a, m) => a + share(m), 0);
+  return { year: ref, ...(exit ? { exit } : {}), counted, ...(opening ? { opening } : {}), held, employed, missing: !!exit && held < employed - 1e-6 };
 }
 
 /** An hourly year's wage: the year's base so far by the months employed so far, over the months the Anstellungen hold this year. */
@@ -740,20 +825,18 @@ function solutionOf(firm: PayrollInsurance, person: PersonInsurances, kind: stri
  * month): the base of the closed months, the capped base their lines used, and the ceiling to date with
  * this month's share.
  */
-function cumulative(ctx: PayrollContext, e: PayrollEmployee, month: string, base: string, key: string, proration: string, yearly: number): { base: number; capped: number; ceiling: number } {
-  const year = month.slice(0, 4);
-  // A payment after the exit in a later year («Nachzahlung») counts against the ceiling of the employment's last year.
-  const ref = referenceYear(e, year);
-  const earlier = closedOf(ctx.history, e.id).filter((c) => ((ref !== year && c.month.startsWith(ref)) || (c.month < month && c.month.startsWith(year))) && !inOpening(e, c.month));
-  const opening = openingOf(e, ref);
+function cumulative(earned: EarnedYear, e: PayrollEmployee, month: string, base: string, key: string, proration: string, yearly: number, smallKey?: string): { base: number; capped: number; ceiling: number } {
   const share = (m: string) => employedFraction(e, m, proration);
-  const months = (opening?.months ?? 0) + earlier.reduce((a, c) => a + share(c.month), 0) + share(month);
-  const openingBase = opening?.bases[base] ?? 0;
+  // A payment after the exit: the ceiling of the months the app holds of that year, or of the months employed in it
+  // when it holds none (earnedYearOf says which). Else the year so far, this month's share included.
+  const months = earned.exit ? (earned.held > 0 ? earned.held : earned.employed) : earned.held + share(month);
+  const openingBase = earned.opening?.bases[base] ?? 0;
   // A month whose close kept no capped base (none of this ceiling's contributions was owed then) used at most its share of the ceiling.
-  const cappedOf = (c: PayslipClose) => c.bases[key]?.month ?? Math.min(c.bases[base]?.month ?? 0, yearly / 12 * share(c.month));
+  // A month the small-wage rule left out charged nothing under the ceiling either.
+  const cappedOf = (c: PayslipClose) => c.bases[key]?.month ?? (smallKey && c.bases[smallKey]?.month === 0 ? 0 : Math.min(c.bases[base]?.month ?? 0, yearly / 12 * share(c.month)));
   return {
-    base: round2(openingBase + sum(earlier.map((c) => c.bases[base]?.month ?? 0))),
-    capped: round2(Math.min(openingBase, yearly / 12 * (opening?.months ?? 0)) + sum(earlier.map(cappedOf))),
+    base: round2(openingBase + sum(earned.counted.map((c) => c.bases[base]?.month ?? 0))),
+    capped: round2(Math.min(openingBase, yearly / 12 * (earned.opening?.months ?? 0)) + sum(earned.counted.map(cappedOf))),
     ceiling: round2(yearly / 12 * months),
   };
 }

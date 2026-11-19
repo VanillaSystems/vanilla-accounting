@@ -22,7 +22,7 @@ import { settlementsOf } from '../src/payroll/settlement.js';
 import { firmWageTypes } from '../src/payroll/catalogue.js';
 import type { TaxAtSource } from '../src/payroll/model.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
-import { amountOf, closeOf, ctxOf, dated, firm, line, owner } from './support/payroll.js';
+import { amountOf, ch, closeOf, ctxOf, dated, firm, line, owner } from './support/payroll.js';
 
 const FIX = join(APP_ROOT, 'tests/fixtures/qst');
 const text = (kt: string) => readFileSync(join(FIX, `tar26${kt}-excerpt.txt`), 'latin1');
@@ -182,13 +182,13 @@ test('the commission is the file\'s electronic rate on the tax, an employer line
   const [c] = line(d, 'bezugsprovision');
   assert.equal(c.base, 473.2);
   assert.equal(c.rate, 2);
-  assert.equal(c.amount, 9.46);
+  assert.equal(c.amount, 9.45, '473.20 × 2 % = 9.464, rounded to 5 Rappen as the tax (§22 decision 112)');
   assert.equal(c.side, 'employer');
   const b = bookingOf(d, ctxOf(firm()).data, firm());
   const tax = b.postings.find((p) => p.wageType === 'quellensteuer')!;
   const com = b.postings.find((p) => p.wageType === 'bezugsprovision')!;
   assert.deepEqual([tax.debit, tax.credit, tax.amount], ['1091', '2279', 473.2]);
-  assert.deepEqual([com.debit, com.credit, com.amount], ['2279', '5890', 9.46]);
+  assert.deepEqual([com.debit, com.credit, com.amount], ['2279', '5890', 9.45]);
   // The payout is net of the tax; the commission is no money of the person's.
   assert.equal(d.net, Math.round((d.gross - d.deductions) * 100) / 100);
   assert.ok(d.lines.every((l) => l.wageType !== 'bezugsprovision' || l.side === 'employer'));
@@ -199,7 +199,7 @@ test('a firm\'s own commission rate for the canton (a paper settlement) replaces
   store.insurances.push({ id: 'qbe', kind: 'qst', name: 'Steuerverwaltung Beispiel', customerNumber: 'QST-1', solutions: [{ code: 'BE', rates: [dated('2026-01-01', { provision: 1 })] }], validFrom: '2026-01-01' });
   const d = computePayslip({ ...ctxOf(store), tariffs }, 'q1', '2026-03')!;
   assert.equal(line(d, 'bezugsprovision')[0].rate, 1);
-  assert.equal(amountOf(d, 'bezugsprovision'), 8.13, '812.50 × 1 %');
+  assert.equal(amountOf(d, 'bezugsprovision'), 8.15, '812.50 × 1 % = 8.125, to 5 Rappen');
 });
 
 test('without the canton\'s file the line is «unvollständig: Tarif ZH 2026 nicht geladen», never a guess', () => {
@@ -230,7 +230,7 @@ test('the settlement list per canton and month equals what the payslips booked o
   assert.deepEqual(lists.map((s) => `${s.month} ${s.region} ${s.rows.length}`), ['2026-03 BE 1', '2026-03 ZH 2']);
   const zh = lists.find((s) => s.region === 'ZH')!;
   assert.equal(zh.totals.tax, 788.2, '473.20 + 315.00');
-  assert.equal(zh.totals.commission, 15.76, '9.46 + 6.30');
+  assert.equal(zh.totals.commission, 15.75, '9.45 + 6.30');
   // 2279's movements of the month: credits the tax, debits the commission.
   let credit = 0; let debit = 0;
   for (const c of closes) for (const p of bookingOf(c, ctx.data, store).postings) {
@@ -274,10 +274,10 @@ test('a canton move ZH → BE with a carried correction and the firm\'s rates: e
   const mar = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-03')!); ev.push(mar, correction(mar.id, 100));
   const apr = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-04')!);
   // April: BE's own tax at BE's 1 %, the ZH correction of 100 at ZH's 2 %, each line naming its canton.
-  assert.deepEqual(line(apr as never, 'bezugsprovision').map((l) => [l.tariff?.region, l.base, l.rate, l.amount]), [['ZH', 100, 2, 2], ['BE', 812.5, 1, 8.13]]);
+  assert.deepEqual(line(apr as never, 'bezugsprovision').map((l) => [l.tariff?.region, l.base, l.rate, l.amount]), [['ZH', 100, 2, 2], ['BE', 812.5, 1, 8.15]]);
   const lists = settlementsOf([mar, apr], '2026', ctxOf(store).data, firmWageTypes(ctxOf(store).data, store), store);
   const april = lists.filter((s) => s.month === '2026-04');
-  assert.deepEqual(april.map((s) => [s.region, s.totals.tax, s.totals.commission, s.insurer?.customerNumber]), [['BE', 812.5, 8.13, 'K-BE'], ['ZH', 100, 2, 'K-ZH']]);
+  assert.deepEqual(april.map((s) => [s.region, s.totals.tax, s.totals.commission, s.insurer?.customerNumber]), [['BE', 812.5, 8.15, 'K-BE'], ['ZH', 100, 2, 'K-ZH']]);
   const all = lists.reduce((s, x) => ({ tax: s.tax + x.totals.tax, commission: s.commission + x.totals.commission }), { tax: 0, commission: 0 });
   const b = byRegionAndBooked([mar, apr], store);
   assert.equal(Math.round(all.tax * 100), Math.round(b.credit * 100), 'the lists\' tax = 2279\'s credits');
@@ -406,4 +406,249 @@ test('a Nachzahlung after the exit: taxed at the rate of the exit month\'s incom
   assert.equal(l.rate, bracketOf(FILES.ZH.file, 'A0N', 7500, '2026-12-31')!.rate);
   assert.equal(l.amount, roundStep(1000 * l.rate! / 100, 0.05));
   assert.equal(line(d, 'bezugsprovision')[0].tariff?.region, 'ZH');
+});
+
+// ─── the third walk's fixes (2026-11-19) ────────────────────────────────────────
+
+import { affectedBetween, backdatedCorrections, driftOf } from '../src/payroll/settings.js';
+
+test('a code changed back over October: November\'s list has its own row and October\'s correction as a row of its own (§22 decision 111)', () => {
+  const p = { ...subject(6500, { subject: true, canton: 'ZH', code: 'L0' }), name: [dated('2026-01-01', { first: 'Jonas', last: 'Grenzgänger' })] };
+  const store = firm([p]);
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!); ev.push(oct);
+  assert.deepEqual(line(oct as never, 'quellensteuer').map((l) => [l.tariff?.code, l.amount]), [['L0N', 292.5]]);
+  // The certificate of residence was missing: A0 from October, dated back over the closed month.
+  const changed = structuredClone(store);
+  changed.employees[0].taxAtSource = [dated('2026-10-01', { subject: true, canton: 'ZH', code: 'A0' })];
+  const ctx = { ...ctxOf(store, ev), tariffs };
+  const aff = affectedBetween(ctx, { ...ctx, store: changed });
+  let n = 0;
+  const corrections = backdatedCorrections(ctx, aff, () => `co${++n}`, '2026-11-05T00:00:00.000Z');
+  assert.deepEqual(corrections.map((c) => [c.wageType, c.amount, c.tariff]), [['quellensteuer', 180.7, { region: 'ZH', code: 'A0N', income: 6500, wage: 6500, rate: 7.28 }]]);
+  ev.push(...corrections);
+  const nov = closeOf(computePayslip({ ...ctxOf(changed, ev), tariffs }, 'q1', '2026-11')!);
+  const lists = settlementsOf([oct, nov], '2026', ctx.data, firmWageTypes(ctx.data, changed), changed);
+  const november = lists.find((s) => s.month === '2026-11')!;
+  assert.deepEqual(november.rows.map((r) => [r.corrects, r.code, r.wage, r.income, r.rate, r.tax]), [
+    [undefined, 'A0N', 6500, 6500, 7.28, 473.2],
+    ['2026-10', 'A0N', 6500, 6500, 7.28, 180.7],
+  ], 'November\'s own tax, and October\'s correction: 473.20 under A0N less the 292.50 withheld under L0N');
+  const booked = byRegionAndBooked([nov], changed);
+  assert.equal(november.totals.wage, 6500, 'the wage total is the month\'s own');
+  assert.equal(november.totals.tax, booked.credit, 'the list\'s tax = 2279\'s credits');
+  assert.equal(Math.round(november.rows.reduce((s, r) => s + r.commission, 0) * 100) / 100, booked.debit, 'the rows\' commissions = 2279\'s debit');
+  assert.equal(november.totals.payable, Math.round((booked.credit - booked.debit) * 100) / 100);
+  assert.ok(november.rows.every((r) => r.commission > 0), 'each row carries its own commission');
+});
+
+test('a correction entered by hand: its own row with the corrected month\'s code, its wage and rate not known', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const ev: PayslipEvent[] = [];
+  const mar = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-03')!); ev.push(mar, correction(mar.id, 50));
+  const apr = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-04')!);
+  const april = settlementsOf([mar, apr], '2026', ctxOf(store).data, firmWageTypes(ctxOf(store).data, store), store).find((s) => s.month === '2026-04')!;
+  const row = april.rows.find((r) => r.corrects === '2026-03')!;
+  assert.deepEqual([row.code, row.wage, row.rate, row.tax], ['A0N', undefined, undefined, 50]);
+  assert.equal(april.rows.length, 2);
+});
+
+import { lineSource, sourceText } from '../src/payroll/sources.js';
+
+test('an L code\'s tax line says the 4.5 % depends on the certificate of residence (Gre-1/Gre-2), in the payslip\'s language; A0 and the commission say nothing (§22 decision 114)', () => {
+  const data = ctxOf(firm()).data;
+  const textOf = (code: string, wageType: string, lang: 'de' | 'fr' | 'it' | 'en') => {
+    const d = draft(7000, { subject: true, canton: 'ZH', code });
+    const [l] = line(d, wageType);
+    const s = lineSource(l, d, data, ch.payrollYears, []);
+    return s && sourceText(s, data.documents, lang);
+  };
+  assert.equal(textOf('L0', 'quellensteuer', 'de'), 'Tarif ZH 2026 vom 08.12.2025 · L0N · satzbestimmend 7\'000.00 · Grenzgängertarif 4.5 % nur mit gültiger Ansässigkeitsbescheinigung (Formular Gre-1, Verlängerung Gre-2); ohne sie gilt der ordentliche Tarif');
+  assert.match(textOf('M2', 'quellensteuer', 'fr')!, /attestation de résidence valable \(formulaire Gre-1, prolongation Gre-2\) ; sans elle, le barème ordinaire s’applique$/);
+  assert.match(textOf('L0', 'quellensteuer', 'it')!, /certificato di residenza.*Gre-1.*tariffa ordinaria$/);
+  assert.match(textOf('L0', 'quellensteuer', 'en')!, /certificate of residence \(form Gre-1, renewal Gre-2\); without it the ordinary tariff applies$/);
+  assert.doesNotMatch(textOf('A0', 'quellensteuer', 'de')!, /Gre-1/);
+  assert.doesNotMatch(textOf('L0', 'bezugsprovision', 'de')!, /Gre-1/, 'the commission names only its file');
+});
+
+// ─── review of the third walk's fixes ───────────────────────────────────────────
+
+/** What the closes book per liability account of the tax at source: the tax credited less the commission debited. */
+function owedOn(closes: ReturnType<typeof closeOf>[], store: ReturnType<typeof firm>): Record<string, number> {
+  const m: Record<string, number> = {};
+  const add = (a: string, x: number) => { m[a] = Math.round(((m[a] ?? 0) + x) * 100) / 100; };
+  for (const c of closes) for (const p of bookingOf(c, ctxOf(store).data, store).postings) {
+    if (!/quellensteuer|bezugsprovision/.test(p.wageType)) continue;
+    if (/^227/.test(p.credit)) add(p.credit, p.amount);
+    if (/^227/.test(p.debit)) add(p.debit, -p.amount);
+  }
+  return m;
+}
+
+test('a tariff file that only changes a closed month\'s commission by its rounding: no card, nothing to do', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const mar = closeOf(computePayslip({ ...ctxOf(store), tariffs }, 'q1', '2026-03')!);
+  // Closed before the commission was rounded to 5 Rappen: 9.46.
+  mar.lines = mar.lines.map((l) => (l.wageType === 'bezugsprovision' ? { ...l, amount: 9.46 } : l));
+  const ctx = { ...ctxOf(store, [mar]), tariffs };
+  assert.deepEqual(affectedByTariff(ctx, { ...ctx, tariffs }), []);
+});
+
+test('a canton move ZH → BE dated back over a closed October: the tax back from ZH and owed to BE, each list right, totals = 2279', () => {
+  const store = withQst(firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]), { ZH: 2, BE: 1 });
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!); ev.push(oct);
+  const changed = structuredClone(store);
+  changed.employees[0].taxAtSource = [dated('2026-01-01', { subject: true, canton: 'ZH', code: 'A0' }), dated('2026-10-01', { subject: true, canton: 'BE', code: 'A0' })];
+  const ctx = { ...ctxOf(store, ev), tariffs };
+  const aff = affectedBetween(ctx, { ...ctx, store: changed });
+  let n = 0;
+  const cs = backdatedCorrections(ctx, aff, () => `cb${++n}`, '2026-11-05T00:00:00.000Z');
+  assert.deepEqual(cs.map((c) => [c.tariff?.region, c.amount]), [['ZH', -473.2], ['BE', 812.5]]);
+  ev.push(...cs);
+  const nov = closeOf(computePayslip({ ...ctxOf(changed, ev), tariffs }, 'q1', '2026-11')!);
+  const lists = settlementsOf([oct, nov], '2026', ctx.data, firmWageTypes(ctx.data, changed), changed).filter((s) => s.month === '2026-11');
+  assert.deepEqual(lists.map((s) => [s.region, s.rows.map((r) => [r.corrects ?? 'own', r.code, r.rate, r.tax])]), [
+    ['BE', [['own', 'A0N', 12.5, 812.5], ['2026-10', 'A0N', 12.5, 812.5]]],
+    ['ZH', [['2026-10', 'A0N', 7.28, -473.2]]],
+  ]);
+  const all = settlementsOf([oct, nov], '2026', ctx.data, firmWageTypes(ctx.data, changed), changed).reduce((s, x) => s + x.totals.payable, 0);
+  assert.equal(Math.round(all * 100) / 100, owedOn([oct, nov], changed)['2279']);
+});
+
+test('a correction entered by hand books, takes its commission and is listed in the corrected month\'s canton, on that canton\'s account', () => {
+  const p = subject(6500, { subject: true, canton: 'ZH', code: 'A0' });
+  p.taxAtSource = [...p.taxAtSource!, dated('2026-11-01', { subject: true, canton: 'BE', code: 'A0' })];
+  const store = withQst(firm([p]), { BE: 1, ZH: 2 });
+  store.insurances.find((i) => i.id === 'qBE')!.account = '2278';
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!); ev.push(oct, correction(oct.id, 100, '2026-11-02T00:00:00.000Z'));
+  const nov = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-11')!);
+  assert.equal(line(nov as never, 'quellensteuer').find((l) => l.corrects)?.tariff?.region, 'ZH', 'the line names the corrected month\'s canton');
+  const lists = settlementsOf([oct, nov], '2026', ctxOf(store).data, firmWageTypes(ctxOf(store).data, store), store);
+  const payable = (region: string) => Math.round(lists.filter((s) => s.region === region).reduce((s, x) => s + x.totals.payable, 0) * 100) / 100;
+  assert.deepEqual(owedOn([oct, nov], store), { '2279': payable('ZH'), '2278': payable('BE') });
+  assert.equal(payable('BE'), 804.35, 'BE\'s own November only');
+});
+
+test('an exact half of 5 Rappen is rounded up (FAQ KS 45 no. 5 «kaufmännisch»; its own example rounds 466.725 down, §22 decision 117)', () => {
+  assert.equal(roundStep(466.725, 0.05), 466.75);
+  assert.equal(roundStep(10.075, 0.05), 10.1);
+  assert.equal(roundStep(10.025, 0.05), 10.05);
+  // 6,505 × 4.5 % = 292.725 on the flat L0 tariff: 292.75.
+  const [l] = line(draft(6505, { subject: true, canton: 'ZH', code: 'L0' }), 'quellensteuer');
+  assert.deepEqual([l.base, l.rate, l.amount], [6505, 4.5, 292.75]);
+});
+
+import { lohnausweisOf } from '../src/payroll/documents.js';
+
+test('the Lohnausweis\'s field 12 is the tax withheld, before the commission the employer keeps (KS 45 Ziff. 9.1)', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const ev: PayslipEvent[] = [];
+  for (const m of ['2026-01', '2026-02', '2026-03']) ev.push(closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', m)!));
+  const closes = ev as ReturnType<typeof closeOf>[];
+  assert.ok(closes.every((c) => line(c as never, 'bezugsprovision')[0]?.amount === 9.45), 'each month keeps a commission of 9.45');
+  const la = lohnausweisOf(store.employees[0], closes, firmWageTypes(ctxOf(store).data, store), ctxOf(store).data, '2026');
+  assert.equal(la.fields['12'], 1420, '3 × 473.20 = 1,419.60, in whole francs; not less the 28.35 of commission');
+});
+
+test('a hand correction of a month closed without its tax line books in the person\'s canton of that month, on its office\'s account', () => {
+  const store = withQst(firm([subject(6500, { subject: true, canton: 'BE', code: 'A0' })]), { ZH: 2, BE: 1 });
+  store.insurances.find((i) => i.id === 'qBE')!.account = '2278';
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs: noFile }, 'q1', '2026-10')!); ev.push(oct);
+  assert.equal(line(oct as never, 'quellensteuer').length, 0, 'closed without the file');
+  ev.push(correction(oct.id, 800, '2026-11-01T00:00:00.000Z'));
+  const nov = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-11')!);
+  assert.equal(line(nov as never, 'quellensteuer').find((l) => l.corrects)?.tariff?.region, 'BE');
+  const owed = owedOn([nov], store);
+  assert.equal(owed['2279'], undefined, 'nothing on the ZH office\'s account');
+  const lists = settlementsOf([oct, nov], '2026', ctxOf(store).data, firmWageTypes(ctxOf(store).data, store), store);
+  assert.deepEqual(lists.map((s) => [s.region, s.rows.map((r) => [r.corrects ?? 'own', r.tax])]), [['BE', [['own', 812.5], ['2026-10', 800]]]]);
+  assert.equal(owed['2278'], lists[0].totals.payable);
+});
+
+test('a person\'s own correction stays hers: the same file again offers nothing, a corrected file carries only its own effect', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!); ev.push(oct, correction(oct.id, 100, '2026-11-02T00:00:00.000Z'));
+  const ctx = { ...ctxOf(store, ev), tariffs };
+  assert.deepEqual(affectedByTariff(ctx, ctx), [], 'the same file: no card');
+  const fixed = corrected();
+  const aff = affectedByTariff(ctx, { ...ctx, tariffs: (r, y) => (r === 'ZH' && y === '2026' ? fixed : tariffs(r, y)) });
+  assert.deepEqual(aff.flatMap((a) => a.differences.filter((d) => d.carry).map((d) => [d.wageType, d.diff])), [['quellensteuer', 14.3]], '6,500 × (7.50 − 7.28) %, the 100 left as entered');
+});
+
+// ─── the third review: a person's correction is hers ────────────────────────────
+
+const v2 = (r: string, y: string) => (r === 'ZH' && y === '2026' ? corrected() : tariffs(r, y));
+
+test('after the corrected file was carried, the same file again offers nothing and the drift agrees; «So lassen» on a file holds for that file', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!); ev.push(oct, correction(oct.id, 100, '2026-11-02T00:00:00.000Z'));
+  const ctx1 = { ...ctxOf(store, ev), tariffs };
+  const aff = affectedByTariff(ctx1, { ...ctx1, tariffs: v2 });
+  assert.deepEqual(aff.flatMap((a) => a.differences.filter((d) => d.carry).map((d) => d.diff)), [14.3]);
+  assert.deepEqual(aff[0].hand?.map((h) => h.amount), [100], 'the hand correction shown beside');
+  let n = 0;
+  const carried = [...ev, ...backdatedCorrections(ctx1, aff, () => `c${++n}`, '2026-11-05T00:00:00.000Z')];
+  const ctx2 = { ...ctxOf(store, carried), tariffs: v2 };
+  assert.deepEqual(affectedByTariff(ctx2, ctx2), []);
+  assert.deepEqual(driftOf(ctx2, oct), [], 'the drift counts as the card does');
+  // «So lassen» on the corrected file instead: loading it again offers nothing either.
+  const kept = [...ev, { event: 'keep' as const, id: oct.id, at: '2026-11-05T00:00:00.000Z', by: 'person' as const, path: 'tariffs/ZH/2026', validFrom: '2026-03-04' }];
+  const ctx3 = { ...ctxOf(store, kept), tariffs: v2 };
+  assert.deepEqual(affectedByTariff(ctx3, ctx3), []);
+});
+
+test('a hand correction anticipating the file is shown on the card, so a double is seen', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!); ev.push(oct, correction(oct.id, 14.3, '2026-11-02T00:00:00.000Z'));
+  const ctx = { ...ctxOf(store, ev), tariffs };
+  const [a] = affectedByTariff(ctx, { ...ctx, tariffs: v2 });
+  assert.deepEqual([a.differences.find((d) => d.carry)?.diff, a.hand?.map((h) => h.amount)], [14.3, [14.3]]);
+});
+
+// ─── the fourth review ──────────────────────────────────────────────────────────
+
+import { historyOf } from '../src/payroll/history.js';
+
+test('«So lassen» holds for the file by its checksum: another file of the same date is offered again', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const fixed = corrected();
+  const other = { ...corrected(), sha256: 'sha-zh-other-same-date' };
+  other.file = parseTariffFile(text('zh').replace(/^00ZH {15}20251208/m, `00ZH${' '.repeat(15)}20260304`).replace(/^(0601ZHA0N {7}20260101000645100000005000 00000000000)00728/m, '$100760'));
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!);
+  ev.push(oct, { event: 'keep', id: oct.id, at: '2026-11-05T00:00:00.000Z', by: 'person', path: 'tariffs/ZH/2026', validFrom: '2026-03-04', version: fixed.sha256 });
+  const at = (f: LoadedTariff) => (r: string, y: string) => (r === 'ZH' && y === '2026' ? f : tariffs(r, y));
+  const ctx = { ...ctxOf(store, ev), tariffs: at(fixed) };
+  assert.deepEqual(affectedByTariff(ctx, ctx), [], 'the file it was said for');
+  assert.deepEqual(affectedByTariff(ctx, { ...ctx, tariffs: at(other) }).flatMap((a) => a.differences.filter((d) => d.carry).map((d) => d.diff)), [20.8], '6,500 × 7.60 % − 473.20');
+});
+
+test('after «So lassen», her hand correction of exactly the difference clears the drift', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const fixed = corrected();
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!);
+  ev.push(oct, { event: 'keep', id: oct.id, at: '2026-11-05T00:00:00.000Z', by: 'person', path: 'tariffs/ZH/2026', validFrom: '2026-03-04', version: fixed.sha256 });
+  const ctxKept = { ...ctxOf(store, ev), tariffs: (r: string, y: string) => (r === 'ZH' && y === '2026' ? fixed : tariffs(r, y)) };
+  assert.deepEqual(driftOf(ctxKept, oct).map((d) => d.diff), [14.3], 'kept: the month computes otherwise now');
+  const ctxHand = { ...ctxKept, history: historyOf([...ev, correction(oct.id, 14.3, '2026-11-06T00:00:00.000Z')]) };
+  assert.deepEqual(driftOf(ctxHand, oct), []);
+});
+
+test('a month closed with its file at a rate of 0 % could compute its tax: a hand correction of it is hers, shown, not undone', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const zero: LoadedTariff = { region: 'ZH', year: '2026', file: parseTariffFile(text('zh').replace(/^(0601ZHA0N {7}20260101000645100000005000 00000000000)00728/m, '$100000')), sha256: 'sha-zh-zero', fetchedAt: '2026-11-19T10:00:00.000Z' };
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs: (r, y) => (r === 'ZH' && y === '2026' ? zero : undefined) }, 'q1', '2026-10')!);
+  assert.equal(line(oct as never, 'quellensteuer').length, 0);
+  ev.push(oct, correction(oct.id, 50, '2026-11-02T00:00:00.000Z'));
+  const ctx = { ...ctxOf(store, ev), tariffs: (r: string, y: string) => (r === 'ZH' && y === '2026' ? zero : undefined) };
+  const [a] = affectedByTariff(ctx, { ...ctx, tariffs });
+  assert.deepEqual([a.differences.find((d) => d.carry)?.diff, a.hand?.map((h) => h.amount)], [473.2, [50]]);
 });

@@ -1942,7 +1942,7 @@ After the independent review of A-2 (2026-11-19):
     a Lohnart counts the same. Lines that would cancel (paid on whole, no allowance) are left out and said as a
     fact. An hourly wage's absence pays what its hours entered say (a fact names the Lohnart). No diagnosis is
     kept (§11).
-    Absences over the same days take a day's wage off once (the later one only what the earlier left; the form says so first, a fact on the payslip); two kinds a fund pays in one month each top up only their own allowance. The EO's allowance is no premium wage of the accident insurance (UVV Art. 115; its Lohnart has no UVG bases).
+    Absences over the same days take a day's wage off once (the later one only what the earlier left; the form says so first, a fact on the payslip); two kinds a fund pays in one month each top up only their own allowance. The EO's allowance is no premium wage of the accident insurance (UVV Art. 115 Abs. 1 lit. d, decision 116; its Lohnart has no UVG bases).
 83. **A child's allowance is the fund's decision, dated, prorated to the days employed**; a birth allowance (`once`)
     is paid in the month its entry begins. The federal minimum and the age after which the allowance ends are
     checked as facts (`allowance.minimum`, `untilAge`), never applied: the fund decides. A child the app paid for is
@@ -1998,12 +1998,12 @@ Taken while building B2, the Quellensteuer (2026-11-19):
      fetched and read whole (24'978 to 98'923 records each).
 92. **The Bezugsprovision is a payslip line of the employer** (Lohnart `bezugsprovision`, `computes:
      commission`): the canton's rate on the month's tax at source, carried corrections included, booked D 2279 /
-     C 5890 «Bezugsprovision Quellensteuer» (new payroll account, Personalaufwand). As income it is a credit; it
-     sits in the personnel expense because OR 959b knows no other operating income line and the commission pays
-     for the payroll work; a firm re-accounts the Lohnart if its fiduciary wants 3xxx or 7xxx. The rate is the
+     C 5890 «Bezugsprovision Quellensteuer» (new payroll account, Personalaufwand): a reduction of the personnel
+     expense, not income (KS 45 Ziff. 9.1; decision 118); a firm re-accounts the Lohnart if its fiduciary wants
+     another account. The rate is the
      firm's solution for the canton (a Quellensteuer insurance whose solution code is the canton, rate
      `provision`: a paper settlement, a canton's own rule), else the file's electronic rate (`PEL`); rounded to
-     the Rappen. It lowers «Total Arbeitgeber». The line always names its canton (also with the firm's rate, and on a month
+     5 Rappen as the tax (decision 112; until then to the Rappen). It lowers «Total Arbeitgeber». The line always names its canton (also with the firm's rate, and on a month
      that only carries a correction, also after the person left or is no longer subject), so the settlement
      list reads it. A correction never carries it: the month that carries the tax's
      correction takes it again, so it is charged once. The canton grants it only for a timely settlement; the
@@ -2110,6 +2110,127 @@ Taken while building the year-end checks (2026-11-19):
     what was booked elsewhere too, an allowance on the fund's account); only what is booked otherwise after it is
     named as «ohne Lohnabrechnung der App». An insurer shows, beside accrued, paid and open, what the final
     statement's comparison counts for those months (`settlementOf`'s `before`).
+
+Taken on the third persona walk's fixes, part b (2026-11-19):
+
+111. **A carried correction of the tax at source is a row of its own in the settlement list**, in the list of the
+    month whose payslip carried it, declared with the month it corrects: person, month corrected, code, the
+    corrected month's taxable wage, rate-determining income and rate as computed when the correction was made, the
+    tax (the difference) and its commission. The canton expects a correction declared with the next settlement,
+    naming the period it corrects (KS 45 Ziff. 9.4: the employer corrects his own settlement himself until 31 March
+    of the following year; BSV, Kreisschreiben über die Quellensteuer, Rz 1040: «Die Korrektur gegenüber der
+    Steuerbehörde hat unter einem entsprechenden Hinweis in der nächsten Abrechnung … zu erfolgen»; Swissdec's
+    ELM-QST reports corrections as records of the corrected period beside the month's own). The KS 45 text itself
+    could not be read (no reachable copy); Ziff. 9.4 is named by the canton SO's Wegleitung QST-Revision 6.4. The
+    correction event keeps the recomputed figures (`tariff`: region, code, income, wage, rate; payslips.jsonl is
+    append-only, the field is optional and an older app ignores it); a correction entered by hand has none, so its
+    row names the corrected month's code as declared and leaves wage and rate empty. The payslip's commission of a
+    canton is shared over its rows at its rate, the rounding left on the month's own row, so the rows add up to
+    the line booked on 2279 and the list still equals 2279's movements. The wage total counts the month's own rows
+    only (the corrected month declared its wage already). The CSV has one row per such row, `corrects` the month,
+    and the municipality of the month it corrects. A tariff kind's difference is taken per canton (review): a canton
+    moved back over a closed month takes the tax back from the old canton (its row names the month's old code,
+    wage and rate, the tax negative) and owes it to the new one, two corrections; a correction entered by hand
+    names the corrected month's canton on its line, so its booking, its commission and its row agree. A tariff file
+    that only changes a closed month's commission (its rounding) shows no card: nothing is carried. A person's own
+    correction is not undone by a new file (second review): where the month was closed with the file before (it
+    computes now with that file what it withheld), only the new file's effect (new − old computation) is carried, so
+    the same file again offers nothing; decision 96's comparison of what was withheld and corrected with the new tax
+    holds where the month could not compute the tax then (no file) or withheld otherwise («So lassen»). Third review:
+    the card and the drift count a month's corrections alike (`withheldBy`): those a computation made (they carry the
+    corrected month's figures) always; a person's own (hand) correction only where the month was closed without its
+    tax, for then it stands for the tax; else it is hers, never compared, never undone, and shown on the card
+    («von Hand korrigiert …») so a double is seen. «So lassen» on a file holds for that file (its keep event names the
+    file's checksum; an older one only its date): loading it again offers that month nothing. A month that could
+    compute its tax when it closed (nothing of it «unvollständig», a rate of 0 % included) counts as closed with its
+    tax. The drift says nothing where her hand correction is exactly what is left. The reference age of a payment
+    after the exit, also in the same year, is judged at the exit's month. tests/payroll-scenarios-golden.test.ts holds
+    64 scenarios' payslips (ordinary and after the exit) as a golden file, so a change of an ordinary figure is seen.
+112. **The Bezugsprovision is rounded to 5 Rappen, as the tax is** (`taxAtSource.rounding`, the same step), not to the
+    Rappen: it is money of the same settlement, and no source was found that a canton computes it to the cent. What
+    was read: the cantons publish only its rate (ESTV, «Auskunftsstellen Quellensteuer, Bezugsprovisionen und
+    Kirchensteuer 2026»: Online / Papier per canton); the canton SO's Wegleitung QST-Revision 6.3 and the canton GR's
+    «KS 45 Ergänzungen 2026» Ziff. 6 give the percentage; the BSV's circular on the tax at source (Rz 1076) says that
+    on the monthly model the tax office states the commission in its invoice and deducts it there. So the canton's
+    invoice is what counts: where it computes the commission on the settlement's total and rounds otherwise, a few
+    Rappen stay on 2279, which the year-end's tax-at-source check names (decision 113). The settlement list's row
+    shares are cents of the payslip's line, which is rounded.
+113. **The tax at source's account is checked at the year end whenever a payslip of the year withheld the tax, or
+    the account carried or moved**, whether or not the firm entered the canton's tax office as an insurance (the
+    walk had none, and 2279 was missing from the checks). One fact per account (the tariff kind's, 2279, and the
+    account of each canton's own insurance): what it carried into the year, what the year's settlement lists leave
+    to pay (`settlementsOf`, the tax less the commission, the lists on the account of the canton's insurance or else
+    on the kind's), what was paid (each entry under no payslip's ref that takes off the account), and open =
+    carried + lists − paid against the balance at 31.12. A difference (a payslip's entry changed, a tax booked by
+    hand) is a hint with the account's ledger; open at 31.12. is the next settlement's, a fact. The insurer's fact of
+    decision 102 is not shown for such an account, so it is one fact, with links to the settlement lists. Each list is
+    checked on the account its tax books on, resolved as the booking resolves it (`lineInsuranceOf`: the canton's
+    office, else the kind's first office, else the kind's account). A bank line or a money account moving the account
+    counts net as paid (a refund from the canton lowers it). A tax office entered on another kind's account gets no
+    such check (the balance is not the tax's alone): the insurer's fact names it.
+114. **A tariff code whose rate depends on a certificate says so, as data** (`taxAtSource.codeNotes`: a pattern on
+    the code and its words in the four languages). The codes L to Q (a cross-border commuter resident in Germany)
+    take the flat 4.5 % only while the employer holds the German tax office's certificate of residence
+    (Ansässigkeitsbescheinigung, form Gre-1; its renewal Gre-2); without it the ordinary tariff applies (DBA CH-DE
+    Art. 15a Abs. 1 and 3). The words follow the tax line's source on the payslip's page and in its PDF (in the
+    person's language there), and the person's tax-at-source entry on her form. The app does not ask for the
+    certificate nor switch the code: the person changes the code, dated back where it was wrong (a Rückwirkende
+    Korrektur carries the difference, decision 111).
+115. **Back pay in a later year takes the payment year's rates and ceilings, unless the employment has ended**
+    (BSV, Wegleitung über den massgebenden Lohn (WBB) Rz 2036–2040,
+    https://sozialversicherungen.admin.ch/de/d/6923/download pp. 45–48): by default the year the wage is paid in
+    decides (Rz 2039); paid after the employment with the same employer ended (or the insurance duty lapsed), the
+    year it was earned in decides (Rz 2038), which also covers the ALV ceiling and UVV Art. 22 Abs. 1. A payslip of
+    a month after the exit, in a later year, now reads the law's figures (rates, ceilings, the small-wage limit) on
+    31.12. of the employment's last year (`referenceYear`), as its ceiling and small-wage judgement already counted
+    that year's wages; while employed in the later year, the payment month's figures and that year's wages. The
+    insurers' own rates stay those of the payment day (their contract year). The lapse of the insurance duty without
+    an exit is not told apart. «After the exit» is decided per payment month (`exitBefore`): not employed in it, and
+    the latest Anstellung begun by its end ended before it; so a re-hire entered later for a later month leaves a
+    closed Nachzahlung as it was, and a re-hire already entered for a later month does not make a payment before it
+    the payment year's. The afterExit fact, the ceiling, the small-wage judgement and the liability by age read the
+    same test and year, and every earlier payment after the exit counts in that year (a second Nachzahlung in a
+    further year finds the first against the ceiling). The figures of 2025 are shipped (modules/ch/payroll/2025.yaml,
+    each with its source); a year still not shipped takes the nearest shipped year's figures, said as a fact on the
+    payslip (`figuresOfYear`), never no line. A closed Nachzahlung computed with a fallback year shows as
+    «berechnet mit den Werten von damals» once its year's figures ship (it is not changed). The line's source cites
+    the year whose figure it read. One model holds it (`earnedYearOf`, third review): the year the wage counts in,
+    the exit it comes after, every closed month before it that counts in that year whatever month it was paid in
+    (`referenceYear` of that month equal), the opening, the months of that year the app holds (the opening's and the
+    closed months' employed shares) and the months employed in it. The ceilings, the small-wage judgement and its
+    catch-up, the liability by age and the reference age (judged at the exit's month, by the earned year's table) and
+    their facts all read it. A payment after the exit has as its ceiling the months held, or the months employed
+    when the app holds none of them; whenever it holds fewer than were employed, the payslip says so
+    (`wagesNotInApp`). A payment after the exit never charges more than its own base under a ceiling, nor less than
+    nothing; while employed the ceiling stays cumulative over the year (a bonus, a negative or unpaid month even out;
+    fourth review: the clamp had broken it). Held and employed months are kept unrounded. A month the small-wage rule
+    leaves out charged nothing under the ceiling either (its capped base is 0, also for an older close), and the month
+    that catches the year up counts the caught-up base once. A
+    Nachzahlung that lifts a small-wage year over the limit catches that year's months up; a payment counting in
+    another year is never caught up. A later month computed while an earlier one with lines after the exit is open
+    says so (`earlierOpen`).
+116. **The EO allowance is no UVG premium wage; the employer's top-up beyond it is** (UVV Art. 115 Abs. 1 lit. d,
+    https://www.fedlex.admin.ch/eli/cc/1983/38_38_38/de, replacing the insurers' wage declarations cited before):
+    the Lohnart `taggeld-eo` has no `uvg`/`uvgz` base, `lohnfortzahlung` keeps them, so a month of service with
+    continued pay has as UVG wage the full wage less the allowance. The supplementary accident insurance (UVGZ)
+    follows the insurer's terms (AVB), not the law: the shipped bases are the usual case and stay data, which a firm
+    changes on the Lohnart (Einstellungen › Lohnarten).
+117. **The tax at source is rounded half up to 5 Rappen, though the FAQ's own example rounds a half down.** The
+    cantons' FAQ to KS 45 (ESTV, 2022, no. 5,
+    https://www.estv.admin.ch/dam/de/sd-web/a7vG5hlZeAdW/dbst-ks-2022-1-045-d-faq-de.pdf) says «kaufmännisch auf-
+    oder abzurunden» in steps of 5 Rappen, which is half up; its example rounds an amount ending in ,725 down to ,70,
+    which contradicts that. The app keeps half up (,725 to ,75; tests/payroll-tax-at-source.test.ts): the rule's
+    words over its example. A canton that rounds as the
+    example does differs by 5 Rappen on such a month; the year-end check of decision 113 shows it on 2279.
+118. **The Bezugsprovision reduces the personnel expense; it stays on 5890, and field 12 is the tax before it.** KS 45
+    Ziff. 9.1 treats the commission as a reduction of expense, not as income: booked D 2279 / C 5890, a credit on
+    an expense account of `personalaufwand`. The chart (modules/ch/accounts.yaml) has no 57xx account that fits:
+    5700–5740 are the social insurances by fund (AHV/IV/EO/ALV, FAK, BVG, UVG, KTG), and the tax at source is
+    none; one secondary source (WEKA) shows it under social-security costs, which is no reason to mix it into
+    5700. So 5890 «Bezugsprovision Quellensteuer» stays. That the commission carries no VAT is not confirmed by a
+    source read here (it is treated as no turnover, no code on the line); a firm that learns otherwise changes the
+    Lohnart. The Lohnausweis's field 12 (Quellensteuerabzug) sums the tax lines as withheld, before the commission
+    the employer keeps (the commission is an employer line of its own and enters no field; test).
 
 ---
 

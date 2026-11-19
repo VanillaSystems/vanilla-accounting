@@ -137,10 +137,10 @@ export function SettlementsView({ year, nav }: { year: string; nav: Nav }) {
                 <span>{t('payroll.tax.person')}</span><span>{t('payroll.tax.code')}</span><span className="r">{t('payroll.tax.wage')}</span><span className="r" data-tip={t('payroll.tax.rateIncomeLong')}>{t('payroll.tax.rateIncome')}</span><span className="r">{t('payroll.tax.rate')}</span><span className="r">{t('payroll.tax.tax')}</span><span className="r">{t('payroll.tax.commission')}</span>
               </div>
               {s.rows.map((r) => (
-                <div key={r.payslip} className="fr" role="row">
-                  <span><Go loc={payslipAt(r.payslip)} nav={nav}>{r.name}</Go>{r.corrects.length ? <small className="m"> · {t('payroll.tax.corrects', { list: r.corrects.map(monthText).join(', ') })}</small> : null}</span>
+                <div key={`${r.payslip}-${r.corrects ?? ''}`} className="fr" role="row" data-corrects={r.corrects}>
+                  <span><Go loc={payslipAt(r.payslip)} nav={nav}>{r.name}</Go>{r.corrects ? <small className="m"> · {t('payroll.tax.corrects', { list: monthText(r.corrects) })}</small> : null}</span>
                   <span className="mono">{r.code ?? ''}</span>
-                  <span className="r mono">{r.wage ? fmt(r.wage) : ''}</span>
+                  <span className="r mono">{r.wage !== undefined && (r.wage || r.corrects) ? fmt(r.wage) : ''}</span>
                   <span className="r mono">{r.income !== undefined ? fmt(r.income) : ''}</span>
                   <span className="r mono">{r.rate !== undefined ? pct(r.rate) : ''}</span>
                   <span className="r mono">{fmt(r.tax)}</span>
@@ -152,6 +152,7 @@ export function SettlementsView({ year, nav }: { year: string; nav: Nav }) {
                 <span className="r mono">{fmt(s.totals.tax)}</span><span className="r mono">{fmt(s.totals.commission)}</span>
               </div>
             </div>
+            {s.rows.some((r) => r.corrects) ? <p className="m">{t('payroll.tax.correctionRows')}</p> : null}
             <p className="ppay"><b>{t('payroll.tax.payable', { currency: baseCurrency(), amount: fmt(s.totals.payable) })}</b> · <a className="clink" href={files.settlementCsv(year, s.month, s.region)} target="_blank" rel="noreferrer">{t('export.fmt.csv')}</a></p>
           </div>
         ))}

@@ -124,12 +124,15 @@ function BackdatedCard({ res, onChoose, onCancel }: { res: Extract<Saved, { save
           <b>{t('payroll.backdated.payslip', { month: monthText(a.month), name: a.name })}</b>{a.closedPeriod ? <span className="m"> · {t('payroll.backdated.closedPeriod')}</span> : null}
           <ul>
             {a.differences.filter((d) => d.carry).map((d) => (
-              <li key={`${d.wageType}|${d.side}`}>
-                {t('payroll.backdated.line', { label: wageTypeLabel(d.wageType, d.label), before: fmt(d.before), after: fmt(d.after), diff: signed(d.diff) })}
+              <li key={`${d.wageType}|${d.side}|${d.region ?? ''}`}>
+                {t('payroll.backdated.line', { label: `${wageTypeLabel(d.wageType, d.label)}${d.region ? ` ${d.region}` : ''}`, before: fmt(d.before), after: fmt(d.after), diff: signed(d.diff) })}
               </li>
             ))}
             {a.differences.some((d) => !d.carry && !commission(d.wageType)) ? (
               <li className="m">{t('payroll.backdated.follows', { list: a.differences.filter((d) => !d.carry && !commission(d.wageType)).map((d) => `${wageTypeLabel(d.wageType, d.label)} ${signed(d.diff)}`).join(', ') })}</li>
+            ) : null}
+            {a.hand?.length ? (
+              <li className="m" data-testid="backdated-hand">{t('payroll.backdated.hand', { list: a.hand.map((h) => `${wageTypeLabel(h.wageType, h.label)} ${signed(h.amount)}`).join(', ') })}</li>
             ) : null}
             {a.differences.some((d) => commission(d.wageType)) ? (
               <li className="m">{t('payroll.backdated.followsTax', { list: a.differences.filter((d) => commission(d.wageType)).map((d) => `${wageTypeLabel(d.wageType, d.label)} ${signed(d.diff)}`).join(', ') })}</li>

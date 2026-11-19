@@ -549,6 +549,8 @@ export interface TaxAtSourceData {
   partMonth: number;
   /** The file's codes of the commission, for an electronic and a paper settlement. */
   provision: { electronic: string; paper?: string };
+  /** What a tax line and the person's form say beside a tariff code matching `codes` (a pattern): what its rate depends on. */
+  codeNotes?: Array<{ codes: string; text: Labels }>;
   source: string;
   /** Each region with the model it applies; the app computes `monthly`. */
   regions: Record<string, { model: 'monthly' | 'annual' }>;
