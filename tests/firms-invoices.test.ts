@@ -210,3 +210,17 @@ test('the activity picker: on screen beside the rate, labelled with the firm\'s 
   setJurisdiction(ch, NET_RATE);
   assert.doesNotMatch(html([work(1000)], true), /:activity/, 'one approved rate: no picker');
 });
+
+test('two net rates and a Rabatt: it lowers each activity by its share, so F1 and F2 keep their proportion', () => {
+  setJurisdiction(ch, TWO_RATES);
+  try {
+    // 1000 + 500 net at 8.1 %, 10 % off: 900 on activity 1 and 450 on 2; gross 972.90 and 486.45.
+    const d = draft([work(1000, 1), work(500, 2), { kind: 'discount', text: 'Rabatt', percent: 10 }]);
+    assert.deepEqual(revenueSplit(d, 1459.35, '3400'), [
+      { account: '3400', vatCode: 'F1', amount: 972.9 },
+      { account: '3400', vatCode: 'F2', amount: 486.45 },
+    ]);
+  } finally {
+    setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+  }
+});
