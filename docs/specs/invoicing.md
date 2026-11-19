@@ -1020,7 +1020,11 @@ listed here and updated with phase 2's build:
     open-items list only as a download at a key date, with no age basis. Counted from the invoice date,
     the four bands (0–30, 31–60, 61–90, > 90 days) hold every open item, the not yet due ones too; the
     days past the due date stand in a column of their own. Offene Posten takes its reference date as
-    `?date=` (default today) and sums `openOn`, the year end's own figure.
+    `?date=` (default today) and sums `openOn`, the year end's own figure. On 31.12. it equals, on the
+    cash basis, the year end's receivables proposal (which leaves out only invoices whose event the
+    books carry); on the agreed basis, where every app invoice has its event, what the app's invoices
+    hold on the receivable account (event less payments and credit notes). A foreign-currency invoice
+    is listed in its own currency; the books hold it in theirs.
 24. **Überfällig overlaps.** An overdue Rechnung is in the tab Überfällig and in Offen or Teilbezahlt;
     its chip reads «Überfällig · N Tage» with the sent mark.
 25. **A Gutschrift's status is one function**, `creditNoteStatus` in `src/invoices/lists.ts`: Offen while
@@ -1030,9 +1034,11 @@ listed here and updated with phase 2's build:
 26. **«Nicht gesendet»** holds the issued documents whose own entry the sent log lacks, cancelled ones
     left out (nothing to send); a paid Rechnung never sent stays in it.
 27. **Totals.** A tab's total and the totals row sum Brutto (and Offen) per currency; a cancelled
-    document counts only in Storniert.
+    document counts only in Storniert, a tab Rechnungen and Gutschriften both have. A cancelled document
+    never reads «nicht gesendet» and offers no «Senden».
 28. **Bulk actions.** «Senden» sends each ticked issued document by e-mail through the send route, at
-    most 25 per run; «PDF» saves at most 20 PDFs per run and records no send. A document that goes out
+    most 25 per run; «PDF» saves at most 20 PDFs per run and records no send; «Export CSV» in the bulk
+    bar takes the ticked rows, the one in the facts line the whole tab, filter and search. A document that goes out
     by hand is recorded by its own «Senden › PDF herunterladen» (the download is its entry); there is
     no «als gesendet markieren».
 29. **Routes.** A Gutschrift opens under `/invoices/credit-notes/<number>`; `/invoices/<number>` of a

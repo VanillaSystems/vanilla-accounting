@@ -2370,6 +2370,7 @@ export default {
     'sales.tab.credit.open': 'Open',
     'sales.tab.credit.partly': 'Partly',
     'sales.tab.credit.settled': 'Settled',
+    'sales.tab.credit.cancelled': 'Cancelled',
     'sales.tab.credit.unsent': 'Not sent',
     'sales.facts.open': 'Open: {amount}',
     'sales.facts.overdue': 'of which overdue: {amount}',

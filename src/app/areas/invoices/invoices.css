@@ -27,7 +27,14 @@ table.ivt { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ivt th.num, .ivt td.num { text-align: right; }
 .ivt td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
 .ivt .mono { font-variant-numeric: tabular-nums; }
-.ivt td.c-contact { white-space: normal; min-width: 150px; }
+.ivt td.c-contact { white-space: normal; min-width: 140px; }
+.ivt .c-date, .ivt .c-number, .ivt .c-due { width: 1%; }
+.ivt td.c-status { white-space: normal; }
+.ivt td.c-sent { white-space: normal; min-width: 120px; }
+/* Narrower, the table drops what another column already says (the currency stands beside each foreign
+   amount; the due date is in Überfällig's days) before it would scroll; Offen and Mahnstufe always show. */
+@container page (max-width: 1240px) { .ivt .c-currency { display: none; } }
+@container page (max-width: 1060px) { .ivt .c-due { display: none; } }
 .ivt .tt small { display: block; color: var(--muted); font-size: 12px; }
 .ivt tr.trow { cursor: pointer; outline-offset: -2px; }
 .ivt tr.trow:hover td { background: var(--hover); }
@@ -37,10 +44,11 @@ table.ivt { width: 100%; border-collapse: collapse; font-size: 13px; }
 .ivt .more { width: 30px; padding: 4px 0; text-align: right; }
 .ivmore { width: 26px; height: 26px; border-radius: 6px; color: var(--muted); font-size: 15px; }
 .ivmore:hover { background: var(--bg); color: var(--ink); }
+.ivt tfoot .ivtotal { display: inline-block; width: 0; white-space: nowrap; overflow: visible; }
 .ivt tfoot td { font-weight: 600; border-bottom: 0; border-top: 1px solid var(--line-2); }
 .ivt .late { color: var(--warn); }
 .ivt .c { color: var(--muted); margin-right: 4px; font-size: 11px; }
-.ivchip { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; background: var(--hover); color: var(--ink-2); border: 1px solid transparent; }
+.ivchip { display: inline-block; padding: 1px 8px; border-radius: 8px; font-size: 12px; background: var(--hover); color: var(--ink-2); border: 1px solid transparent; }
 .ivchip.st-open, .ivchip.st-partly-paid, .ivchip.st-partly { background: var(--accent-soft); color: var(--ink); }
 .ivchip.st-overdue { background: var(--warn-soft); color: var(--warn); }
 .ivchip.st-paid, .ivchip.st-settled { background: var(--pos-soft); color: var(--pos); }
@@ -60,14 +68,15 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
   body:has(.oplist) * { visibility: hidden; }
   body:has(.oplist) .oplist, body:has(.oplist) .oplist * { visibility: visible; }
   body:has(.oplist) :is(main, .list) { height: auto !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; }
-  body:has(.oplist) .oplist { position: absolute; left: 0; top: 0; width: 100%; color: #000; background: #fff; font-size: 9.5pt; }
+  /* Printed, the list is paper in either theme (tokens.css --paper-*): the theme's tokens point at the paper's. */
+  body:has(.oplist) .oplist { --ink: var(--paper-ink); --ink-2: var(--paper-ink-2); --muted: var(--paper-ink-2); --faint: var(--paper-ink-2); --line: var(--paper-line); --line-2: var(--paper-line-2); --bg: var(--paper);
+    position: absolute; left: 0; top: 0; width: 100%; color: var(--ink); background: var(--bg); font-size: 9.5pt; }
   .oplist .noprint, .oplist .lhead, body:has(.oplist) .detail.panel { display: none !important; }
   .oplist .ivprinthead { display: flex; gap: 16px; align-items: baseline; margin: 0 0 4mm; font-size: 10pt; }
   .oplist .ivprinthead b { font-size: 13pt; }
   .oplist .ivscroll { overflow: visible; margin: 0; padding: 0; }
   .oplist .ivt { font-size: 9pt; }
-  .oplist .ivt th { color: #555; border-color: #999; }
-  .oplist .ivt td { border-color: #ccc; padding: 1.4mm 1.5mm; background: none !important; }
+  .oplist .ivt td { padding: 1.4mm 1.5mm; background: none !important; }
   .oplist .ivt tr { break-inside: avoid; }
   .oplist .ivt thead { display: table-header-group; }
 }

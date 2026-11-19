@@ -2367,6 +2367,7 @@ export const messages = {
   'sales.tab.credit.open': 'Offen',
   'sales.tab.credit.partly': 'Teilweise',
   'sales.tab.credit.settled': 'Abgerechnet',
+  'sales.tab.credit.cancelled': 'Storniert',
   'sales.tab.credit.unsent': 'Nicht gesendet',
   'sales.facts.open': 'Offen: {amount}',
   'sales.facts.overdue': 'davon überfällig: {amount}',

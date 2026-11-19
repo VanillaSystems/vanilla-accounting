@@ -152,6 +152,7 @@ test('other spellings redirect to the canonical path', () => {
   assert.equal(to('/journal?q=x&vat=I81'), '/journal?vat=I81&q=x');
   assert.equal(to('/journal?period=2026-Q9'), '/journal');
   assert.equal(to('/invoices/open-items?date=2026-13-45'), '/invoices/open-items', 'a reference date that is no day');
+  assert.equal(to('/invoices/open-items?date=2026-02-30'), '/invoices/open-items', 'nor one Date would roll into March');
   assert.equal(to('/invoices?status=whatever'), '/invoices');
   assert.equal(to('/receipts?filter=linked'), '/receipts?f=state_linked');
   assert.equal(to('/receipts?filter=unlinked'), '/receipts?f=state_open');

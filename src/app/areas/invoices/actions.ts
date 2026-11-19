@@ -62,10 +62,11 @@ export async function saveDraft(nav: Nav, draft: Draft, patch: DraftChange): Pro
   else void reloadInvoices();
 }
 
-export async function deleteDraft(nav: Nav, draft: Draft, next?: Invoice): Promise<void> {
+/** Deletes the draft; its table stays in view with nothing open (layout A selects nothing by itself). */
+export async function deleteDraft(nav: Nav, draft: Draft): Promise<void> {
   if (!(await run(nav, api.deleteDraft(draft.id)))) return;
   await reloadInvoices();
-  nav.select(next ? invoicePath(next) : { area: 'invoices', view: 'list' });
+  nav.select({ area: 'invoices', view: invoicePath(draft).view });
   const { id: _id, createdAt: _c, origin: _o, deleted: _d, status: _s, comments: _cm, kind: _k, creditFor: _cf, ...content } = draft;
   // A credit note is drafted from its invoice only; any other draft comes back as it was.
   nav.toast(t('invoices.draftDeleted'), draft.kind === 'credit-note' ? undefined : () => { void newDraft(nav, { id: draft.customerId, name: '' }, content); });

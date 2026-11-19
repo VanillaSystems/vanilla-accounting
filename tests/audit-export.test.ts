@@ -305,7 +305,7 @@ test('the Invoices area of the export lists the invoices, offers no change and o
     await page.setViewport({ width: 1400, height: 900 });
     await page.goto(`${base}#/invoices/${issued.number}`, { waitUntil: 'networkidle0' });
     await page.waitForSelector(`.detail-in[data-for="${issued.id}"]`);
-    const rows = await page.$$eval('.list .row.inv', (xs) => xs.length);
+    const rows = await page.$$eval('.list .ivt tr.trow', (xs) => xs.length);
     assert.ok(rows > 3, `the list shows the invoices (${rows})`);
     const body = await page.evaluate(() => document.body.innerText);
     assert.ok(!body.includes(en.messages['invoices.unavailable']), 'no «only with its server»');

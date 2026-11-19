@@ -23,10 +23,10 @@ import { byRouteId } from './model.js';
 import { copyAsDraft, invoiceAt, saveText } from './actions.js';
 import { listed, setUi, toggleTick, useUi } from './state.js';
 import {
-  PAGE_SIZE, docRows, factsOf, inTab, kindOfView, sortRows, sumsOf, tabCounts, tabOf, viewOfKind,
+  PAGE_SIZE, docRows, factsOf, inTab, kindOfView, sortRows, sumsOf, tabCounts, tabOf,
   type DocKind, type DocRow, type DocView, type SortKey, type Sum, type Tab,
 } from './table.js';
-import { SentCell, channelText } from './Sent.js';
+import { SentCell, channelText, rowTab } from './Sent.js';
 import { Search, Views } from './views.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
@@ -39,12 +39,14 @@ const money = (r: DocRow, n: number) => (r.inv.currency !== baseCurrency() ? <><
 export function statusText(r: DocRow, kind: DocKind): string {
   const base = r.overdue > 0 ? t('sales.status.overdueDays', { n: r.overdue }) : t(`sales.status.${kind === 'invoice' ? 'invoice' : 'credit'}.${r.status}` as 'sales.status.invoice.open');
   if (r.inv.status !== 'issued') return base;
+  // A cancelled document waits for nothing: it reads «gesendet» when it went out, never «nicht gesendet».
+  if (r.status === 'cancelled' && !r.sent.sent) return base;
   return `${base} · ${t(r.sent.sent ? 'sales.mark.sent' : 'sales.mark.unsent')}`;
 }
 
 function StatusChip({ r, kind }: { r: DocRow; kind: DocKind }) {
   const tone = r.overdue > 0 ? 'overdue' : r.status;
-  return <span className={`ivchip st-${tone}${r.inv.status === 'issued' && !r.sent.sent ? ' unsent' : ''}`} data-testid="status-chip">{statusText(r, kind)}</span>;
+  return <span className={`ivchip st-${tone}${r.unsent ? ' unsent' : ''}`} data-testid="status-chip">{statusText(r, kind)}</span>;
 }
 
 function columns(kind: DocKind, go: (loc: ReturnType<typeof invoiceAt>) => void): Column[] {
@@ -106,16 +108,18 @@ export function DocTable(props: Props & { d: InvoiceList; view: DocView }) {
   useEffect(() => {
     const inv = byRouteId(d.invoices, selected);
     if (!inv) return;
-    if (inv.kind !== kind) { nav.go({ route: { area: 'invoices', view: viewOfKind(inv.kind), id: selected }, query: {} }); return; }
+    // invoiceAt names the view of the document's kind and a period that holds its date.
+    if (inv.kind !== kind) { nav.go(invoiceAt(inv, period)); return; }
     if (inv.status === 'issued' && !query.period && !all.some((r) => r.inv.id === inv.id)) nav.go(invoiceAt(inv));
-  }, [selected]);
+  }, [selected, view]);
 
   const sortBy = (key: SortKey) => {
     const cur = s.sort[view];
     setUi({ sort: { ...s.sort, [view]: { key, dir: cur.key === key ? (cur.dir === 1 ? -1 : 1) : key === 'date' || key === 'gross' || key === 'open' ? -1 : 1 } } });
   };
   const open = (r: DocRow) => nav.select({ area: 'invoices', view, id: r.id });
-  const exportCsv = () => saveText(csvOf(cols.map((c) => c.label), shown.map((r) => cols.map((c) => c.csv(r)))), `${t(`invoices.view.${view}`)}-${period.token.replace('..', '_')}.csv`);
+  /** The rows as CSV: the whole tab, filter and search from the facts line; the ticked ones from the bulk bar. */
+  const exportCsv = (rows: readonly DocRow[] = shown) => saveText(csvOf(cols.map((c) => c.label), rows.map((r) => cols.map((c) => c.csv(r)))), `${t(`invoices.view.${view}`)}-${period.token.replace('..', '_')}.csv`);
   const allTicked = page.length > 0 && page.every((r) => s.ticked.has(r.inv.id));
 
   return (
@@ -127,13 +131,13 @@ export function DocTable(props: Props & { d: InvoiceList; view: DocView }) {
         </div>
       </ListHead>
       <Tabs {...props} kind={kind} tab={tab} rows={all} />
-      <FactLine rows={all} kind={kind} onExport={exportCsv} />
+      <FactLine rows={all} kind={kind} onExport={() => exportCsv()} />
       {ticked.length > 0 && (
         <div className="ivbulk" role="toolbar" aria-label={t('sales.bulk.label')} data-testid="bulk-bar">
           <b>{t('sales.bulk.ticked', { n: ticked.length })}</b>
           {props.canEdit && <button type="button" className="btn primary" data-act="bulk-send" onClick={() => setUi({ dialog: { kind: 'bulk-send', ids: ticked.map((r) => r.inv.id) } })}>{t('invoices.send')}</button>}
           <button type="button" className="btn ghost" data-act="bulk-pdf" onClick={() => setUi({ dialog: { kind: 'bulk-pdf', ids: ticked.map((r) => r.inv.id) } })}>{t('sales.bulk.pdf')}</button>
-          <button type="button" className="btn ghost" data-act="bulk-csv" onClick={exportCsv}>{t('sales.exportCsv')}</button>
+          <button type="button" className="btn ghost" data-act="bulk-csv" onClick={() => exportCsv(ticked)}>{t('sales.exportCsv')}</button>
           <button type="button" className="quiet2" onClick={() => setUi({ ticked: new Set() })}>{t('sales.bulk.clear')}</button>
         </div>
       )}
@@ -151,7 +155,7 @@ export function DocTable(props: Props & { d: InvoiceList; view: DocView }) {
                 {cols.map((c) => {
                   const on = s.sort[view].key === c.key;
                   return (
-                    <th key={c.key} className={c.num ? 'num' : ''} aria-sort={on ? (s.sort[view].dir === 1 ? 'ascending' : 'descending') : 'none'}>
+                    <th key={c.key} className={`c-${c.key}${c.num ? ' num' : ''}`} aria-sort={on ? (s.sort[view].dir === 1 ? 'ascending' : 'descending') : 'none'}>
                       <button type="button" className={on ? 'on' : ''} data-sort={c.key} onClick={() => sortBy(c.key)}>{c.label}{on ? (s.sort[view].dir === 1 ? ' ↑' : ' ↓') : ''}</button>
                     </th>
                   );
@@ -160,13 +164,13 @@ export function DocTable(props: Props & { d: InvoiceList; view: DocView }) {
               </tr>
             </thead>
             <tbody>
-              {page.map((r) => {
+              {page.map((r, i) => {
                 const sel = r.id === selected;
                 return (
-                  <tr key={r.inv.id} className={`trow${sel ? ' sel' : ''}${r.status === 'cancelled' ? ' gone' : ''}`} data-id={r.id} aria-selected={sel} tabIndex={sel ? 0 : -1} onClick={() => open(r)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') open(r); }}>
+                  <tr key={r.inv.id} className={`trow${sel ? ' sel' : ''}${r.status === 'cancelled' ? ' gone' : ''}`} data-id={r.id} aria-selected={sel} tabIndex={rowTab(sel, i, page.some((x) => x.id === selected))} onClick={() => open(r)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) open(r); }}>
                     <td className="tick" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={t('sales.bulk.tick', { what: r.inv.status === 'issued' ? r.inv.number : t('invoices.draft') })} checked={s.ticked.has(r.inv.id)} onChange={() => toggleTick(r.inv.id)} /></td>
-                    {cols.map((c) => <td key={c.key} className={c.num ? 'num mono' : `c-${c.key}`}>{c.cell(r)}</td>)}
+                    {cols.map((c) => <td key={c.key} className={`c-${c.key}${c.num ? ' num mono' : ''}`}>{c.cell(r)}</td>)}
                     <td className="more" onClick={(e) => e.stopPropagation()}>
                       <button type="button" className="ivmore" aria-label={t('sales.rowActions')} data-act="row-menu" onClick={(e) => setMenu({ r, at: e.currentTarget.getBoundingClientRect() })}>⋯</button>
                     </td>
@@ -177,9 +181,12 @@ export function DocTable(props: Props & { d: InvoiceList; view: DocView }) {
             <tfoot>
               <tr data-testid="totals-row">
                 <td />
-                <td colSpan={cols.findIndex((c) => c.key === 'gross')}>{t('sales.totalOf', { n: shown.length })}</td>
-                <td className="num mono">{sumLines(sums, 'gross')}</td>
-                {kind === 'invoice' ? <><td className="num mono">{sumLines(sums, 'open')}</td><td /></> : <td className="num mono">{sumLines(sums, 'open')}</td>}
+                {/* One cell per column (no colSpan), so a column hidden at a narrow width takes its cell along. */}
+                {cols.map((c, i) => (
+                  <td key={c.key} className={`c-${c.key}${c.num ? ' num mono' : ''}`}>
+                    {i === 0 ? <span className="ivtotal">{t('sales.totalOf', { n: shown.length })}</span> : c.key === 'gross' || c.key === 'open' ? sumLines(sums, c.key) : null}
+                  </td>
+                ))}
                 <td />
               </tr>
             </tfoot>
@@ -240,7 +247,8 @@ function RowMenu({ r, at, view, nav, canEdit, d, onClose }: Props & { d: Invoice
     if (canEdit && inv.kind === 'invoice') items.push({ label: t('invoices.copy'), run: () => { void copyAsDraft(nav, inv as Issued); } });
   }
   return (
-    <div onKeyDown={(e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } }}>
+    // The menu keeps its keys: ↑ ↓ move in it, not through the table's rows; Esc closes it, not the panel.
+    <div onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') onClose(); }}>
       <Menu anchor={at} items={items} onClose={onClose} />
     </div>
   );

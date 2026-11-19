@@ -15,7 +15,7 @@ import type { AreaProps } from '../index.js';
 import { customerOf, sentRows } from './model.js';
 import { invoiceAt } from './actions.js';
 import { listed, setUi, useUi } from './state.js';
-import { channelText, recipientOf, timeOf } from './Sent.js';
+import { channelText, recipientOf, rowTab, timeOf } from './Sent.js';
 import { Search, Views } from './views.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
@@ -69,12 +69,12 @@ export function SentLog(props: Props & { d: InvoiceList }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((doc) => {
+              {rows.map((doc, i) => {
                 const sel = doc.id === route.id;
                 const inv = d.invoices.find((i) => i.id === doc.invoiceId);
                 return (
-                  <tr key={doc.id} className={`trow${sel ? ' sel' : ''}`} data-id={doc.id} data-channel={channelOf(doc)} aria-selected={sel} tabIndex={sel ? 0 : -1}
-                    onClick={() => nav.select({ area: 'invoices', view: 'sent', id: doc.id })} onKeyDown={(e) => { if (e.key === 'Enter') nav.select({ area: 'invoices', view: 'sent', id: doc.id }); }}>
+                  <tr key={doc.id} className={`trow${sel ? ' sel' : ''}`} data-id={doc.id} data-channel={channelOf(doc)} aria-selected={sel} tabIndex={rowTab(sel, i, rows.some((x) => x.id === route.id))}
+                    onClick={() => nav.select({ area: 'invoices', view: 'sent', id: doc.id })} onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) nav.select({ area: 'invoices', view: 'sent', id: doc.id }); }}>
                     <td className="mono">{formatDate(doc.sentAt.slice(0, 10))} {timeOf(doc.sentAt)}</td>
                     <td>{inv ? <a className="golink" href={hrefOf(invoiceAt(inv))} data-act="to-document" onClick={(e) => { e.stopPropagation(); if (e.metaKey || e.ctrlKey) return; e.preventDefault(); nav.go(invoiceAt(inv)); }}>{doc.title}</a> : doc.title}</td>
                     <td>{t(`invoices.docKind.${doc.kind}`)}</td>

@@ -17,6 +17,9 @@ import type { Nav } from '../index.js';
 /** A sent document's page: its PDF exactly as it went out. */
 export const sentAt = (doc: Pick<SentDocument, 'id'>): Location => ({ route: { area: 'invoices', view: 'sent', id: doc.id }, query: {} });
 
+/** Roving focus over a table's rows: the selected row takes Tab, or the first one while none is selected. */
+export const rowTab = (sel: boolean, index: number, anySelected: boolean): 0 | -1 => (sel || (!anySelected && index === 0) ? 0 : -1);
+
 export const timeOf = (iso: string): string => new Date(iso).toTimeString().slice(0, 5);
 export const channelText = (doc: SentDocument): string => t(`sales.channel.${channelOf(doc)}`);
 /** Who it went to: the address of an e-mail; a download went to whoever the person handed it to. */
@@ -49,6 +52,8 @@ export function SentLine({ sent, inv, onSend }: { sent: readonly SentDocument[];
   if (inv.status !== 'issued') return null;
   const f = sentFacts(sent, inv);
   const last = f.last;
+  // A cancelled document never sent is no task: nothing to say above its sheet.
+  if (!last && inv.cancelled) return null;
   return (
     <div className={`ivfact${last ? '' : ' unsent'}`} data-testid="sent-line">
       {last ? I.check : I.dot}

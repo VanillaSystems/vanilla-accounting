@@ -2,7 +2,9 @@
  * Offene Posten (docs/specs/invoicing.md 4.4.12): every Rechnung with something open on a reference
  * date (today unless the link names one), by contact and currency with subtotals, with its days
  * overdue and its age band; printable as the Debitorenliste on A4 and exported to CSV. The amounts
- * are `openOn`, the year end's own figure, so on 31.12. the list equals its receivables proposal.
+ * are `openOn`, the year end's own figure: on 31.12. the list equals the year end's receivables
+ * proposal on the cash basis, and on the agreed basis what the app's invoices hold on the receivable
+ * account in the books (their events less their payments and credit notes; tests/open-items-agreed.test.ts).
  */
 import { Fragment } from 'react';
 import { localToday } from '../../../accounting/periods.js';
@@ -17,6 +19,7 @@ import type { AreaProps } from '../index.js';
 import { saveText } from './actions.js';
 import { listed } from './state.js';
 import { Views } from './views.js';
+import { rowTab } from './Sent.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
 
@@ -74,8 +77,8 @@ export function OpenItems(props: Props & { d: InvoiceList }) {
                   {g.items.map((x) => {
                     const sel = x.inv.number === selected;
                     return (
-                      <tr key={x.inv.id} className={`trow${sel ? ' sel' : ''}`} data-id={x.inv.number} aria-selected={sel} tabIndex={sel ? 0 : -1}
-                        onClick={() => nav.select({ area: 'invoices', view: 'open-items', id: x.inv.number })} onKeyDown={(e) => { if (e.key === 'Enter') nav.select({ area: 'invoices', view: 'open-items', id: x.inv.number }); }}>
+                      <tr key={x.inv.id} className={`trow${sel ? ' sel' : ''}`} data-id={x.inv.number} aria-selected={sel} tabIndex={rowTab(sel, listed.ids.indexOf(x.inv.number), listed.ids.includes(selected ?? ''))}
+                        onClick={() => nav.select({ area: 'invoices', view: 'open-items', id: x.inv.number })} onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) nav.select({ area: 'invoices', view: 'open-items', id: x.inv.number }); }}>
                         <td className="mono">{x.inv.number}</td>
                         <td className="mono">{formatDate(x.inv.date)}</td>
                         <td className="mono">{formatDate(x.inv.dueDate)}</td>

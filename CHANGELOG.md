@@ -54,7 +54,7 @@ Two markers flag an entry you must read before you update:
   registered for VAT has nothing to reconcile (#569).
 - Verkauf: Rechnungen and the new Gutschriften are each one table across the page, with status tabs
   that count and sum what is in them (Alle, Entwürfe, Offen, Überfällig, Teilbezahlt, Bezahlt,
-  Storniert; for Gutschriften Offen, Teilweise, Abgerechnet) and a tab «Nicht gesendet». Every
+  Storniert; for Gutschriften Offen, Teilweise, Abgerechnet, Storniert) and a tab «Nicht gesendet». Every
   column sorts; a line above says what is open and overdue per currency; a totals row sums what
   is shown. A row opens the document over the table's right part; Esc or «×» closes it, ↑ ↓ go
   to the next. Ticked rows can be sent by e-mail together, their PDFs saved, and the table exported
@@ -66,7 +66,8 @@ Two markers flag an entry you must read before you update:
   PDF as it went out.
 - Verkauf › Offene Posten: every invoice with something open on a chosen day, by customer, with
   the days overdue and the age (0–30, 31–60, 61–90, over 90 days), printable as the Debitorenliste
-  and exported as CSV. On 31.12. it is the year end's receivables to the cent.
+  and exported as CSV. On 31.12. it matches the receivables to the cent: on the cash basis the
+  year end's proposal, on the agreed basis what the invoices hold on the receivable account.
 - Verkauf › Versendet: every document sent, filtered by customer, kind and channel.
 
 ### Fixed

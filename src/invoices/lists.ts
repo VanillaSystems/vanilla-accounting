@@ -90,8 +90,8 @@ export function creditNoteStatus(cn: Invoice, invoices: readonly Invoice[]): Cre
 /** The tabs of Rechnungen beside «Alle», in their order, and «Nicht gesendet» after them. */
 export const INVOICE_TABS = ['draft', 'open', 'overdue', 'partly-paid', 'paid', 'cancelled', 'unsent'] as const;
 export type InvoiceTab = (typeof INVOICE_TABS)[number];
-/** The tabs of Gutschriften beside «Alle», and «Nicht gesendet». */
-export const CREDIT_TABS = ['draft', 'open', 'partly', 'settled', 'unsent'] as const;
+/** The tabs of Gutschriften beside «Alle» (Storniert counts what a total leaves out), and «Nicht gesendet». */
+export const CREDIT_TABS = ['draft', 'open', 'partly', 'settled', 'cancelled', 'unsent'] as const;
 export type CreditTab = (typeof CREDIT_TABS)[number];
 
 /** Issued, not cancelled, and never sent itself: what «Nicht gesendet» holds. */

@@ -297,10 +297,7 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
       <div className="ivacts">
         {preview}
         <AsyncButton type="button" className="btn primary" data-act="issue" aria-describedby={missing.length ? 'ivmissing' : undefined} onClick={tryIssue}>{t(inv.kind === 'credit-note' ? 'invoices.issueCredit' : 'invoices.issue')}</AsyncButton>
-        <AsyncButton type="button" className="btn ghost danger" data-act="delete" onClick={() => {
-          const i = d.invoices.indexOf(inv);
-          return deleteDraft(nav, inv, d.invoices[i + 1] ?? d.invoices[i - 1]);
-        }}>{t('common.delete')}</AsyncButton>
+        <AsyncButton type="button" className="btn ghost danger" data-act="delete" onClick={() => deleteDraft(nav, inv)}>{t('common.delete')}</AsyncButton>
         {missing.length > 0 && <MissingList {...props} inv={inv} missing={missing} />}
       </div>
     );

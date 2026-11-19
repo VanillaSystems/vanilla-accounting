@@ -213,12 +213,19 @@ function queryOf(params: URLSearchParams, today: IsoDate): Query {
     q: get('q'),
     chips: chips.length ? chips : undefined,
     status: isOneOf(INVOICE_STATUSES, status) ? status : undefined,
-    date: /^\d{4}-\d{2}-\d{2}$/.test(get('date') ?? '') && !Number.isNaN(Date.parse(get('date')!)) ? get('date') : undefined,
+    date: isDay(get('date')) ? get('date') : undefined,
     vat: get('vat'),
     customer: get('customer'),
     payment: get('payment'),
     by: get('payment') && get('by') === 'text' ? 'text' : undefined,
   });
+}
+
+/** A real day YYYY-MM-DD: 2026-02-30 is none (Date would roll it into March). */
+function isDay(s: string | undefined): s is string {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T12:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }
 
 /** urls.md writes a custom range 2026-07-01_2026-09-30; periods.ts and older links use '..'. */
