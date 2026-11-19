@@ -98,6 +98,7 @@ test('a reminder for an invoice never sent; a draft dated before the last issued
   assert.equal(issuedLater([inv], { date: '2026-08-20' })?.id, inv.id);
   assert.equal(issuedLater([inv], { date: '2026-10-15' }), undefined);
   assert.equal(issuedLater([inv], { date: '2025-08-20' }), undefined, 'another year has its own numbers');
+  assert.equal(issuedLater([inv], { date: '2026-08-20', number: '2026-000' }), undefined, 'a draft back from issue keeps its number: it gets no higher one');
 });
 
 test('a credit note for part of an invoice reads «1 × −200.00», priced with the VAT in it, titled for the invoice it credits', () => {

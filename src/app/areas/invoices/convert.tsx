@@ -34,10 +34,12 @@ export function ConvertDialog({ inv, to, invoices, nav }: Props & { inv: Issued;
   const total = tickedTotal(inv, picks);
   const all = rows.length > 0 && rows.every((r) => ticked[r.line]);
   const label = t(`sales.convert.${to}` as 'sales.convert.invoice');
+  // The warnings the dialog shows are confirmed by its own button («Trotzdem erstellen»), not asked a second time.
+  const shown = [...new Set(warnings.map((w) => w.code))];
   return (
     <Frame className="iconvert" label={label} title={`${inv.number} · ${inv.customer.name}`} foot={<>
       <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button>
-      <AsyncButton type="button" className="btn primary" data-act="convert-ok" onClick={() => convert(nav, inv, to, picks)}>{label}</AsyncButton>
+      <AsyncButton type="button" className="btn primary" data-act="convert-ok" onClick={() => convert(nav, inv, to, picks, shown)}>{shown.length ? t(`sales.anyway.${shown[0]}`) : label}</AsyncButton>
     </>}>
       <div className="ibody">
         {warnings.filter((w) => w.code !== 'overOpen').map((w) => (

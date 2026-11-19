@@ -32,7 +32,9 @@ export { wasSent } from '../../../invoices/lists.js';
  * The last document issued in the draft's year with a later date: the draft would take the next
  * number with an earlier date, and the numbers would no longer follow the dates.
  */
-export function issuedLater(invoices: readonly Invoice[], draft: Pick<Draft, 'date'> & { kind?: Draft['kind'] }): Issued | undefined {
+export function issuedLater(invoices: readonly Invoice[], draft: Pick<Draft, 'date'> & { kind?: Draft['kind']; number?: string }): Issued | undefined {
+  // A draft back from issue keeps its number («Zurück zum Entwurf»): it gets no higher one.
+  if (draft.number) return undefined;
   const kind = draft.kind ?? 'invoice';
   // The same series: the same kind, or the other of a Rechnung and Gutschrift sharing today's series.
   const series = (k: Draft['kind']) => k === kind || ((k === 'invoice' || k === 'credit-note') && (kind === 'invoice' || kind === 'credit-note'));

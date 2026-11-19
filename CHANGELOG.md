@@ -39,6 +39,11 @@ Two markers flag an entry you must read before you update:
   it went out) instead of being hidden.
 - The audit export holds the PDFs a document was issued with before it went back to draft, beside
   the issued PDF, each checked against its checksum.
+- The coffee roaster demo holds the documents of the chain: a café chain (head office, two contact
+  persons, two branches) whose Angebot was accepted by phone and became an Auftrag, two
+  Lieferscheine (6 and 4 of 10 boxes) and its Rechnung; an open Angebot with two optional
+  positions; an expired Angebot; a Rechnung made from the Artikel list. The joinery demo quotes a
+  kitchen and holds its Auftrag. Both new Rechnungen are open, so no figure of the books changes.
 - Verkauf › Artikel: the products and services the firm sells, as a table (code, name, Ware or
   Dienstleistung, unit, price, VAT kind), each opened beside it with its form. An Artikel names a
   VAT kind (normal, reduced, accommodation, none), and the rate comes from the law for the
@@ -318,6 +323,19 @@ Two markers flag an entry you must read before you update:
   its invoice warns before it is issued.
 
 ### Fixed
+
+- Verkauf: converting an expired or declined Angebot, or taking more than is open, asks once: the
+  dialog names the warning and its button reads «Trotzdem erstellen» (it asked a second time with
+  the same words).
+- Verkauf: a Rechnung back from «Zurück zum Entwurf» no longer warns that it would get a higher
+  number with an earlier date; it keeps its number.
+- Verkauf: the send dialog of an Angebot, Auftrag or Lieferschein names its kind («Angebot
+  AN-2026-00004 ausgestellt», not «Rechnung …»), and an Angebot, Auftrag or Lieferschein no longer
+  explains itself with the words of a Rechnung (the missing-position warning, «Gestaltung»).
+- Kontakte: the documents of a contact show each one's own status (an Auftrag «Erledigt», a
+  Lieferschein «Ausgeführt», not «Bezahlt») and a Lieferschein no amount.
+- Firma › Rechnungslayout › Nummern: the format field is as wide as the column, so a format such as
+  «AN-{JJJJ}-{NNNNN}» reads whole.
 
 - Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
   davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund

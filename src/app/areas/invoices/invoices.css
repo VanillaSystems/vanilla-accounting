@@ -332,10 +332,11 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
   .ivconv th:nth-child(3), .ivconv td:nth-child(3) { display: none; }
 }
 .lknumbers .lknumrows { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 6px; }
-.lknumbers .lknum { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; font-size: 12.5px; }
+/* The format takes the whole width beside the kind, so «AN-{JJJJ}-{NNNNN}» reads whole; «jährlich neu» and the next number go under it. */
+.lknumbers .lknum { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 2px 8px; align-items: center; font-size: 12.5px; }
 .lknumbers .lknum input.mono { min-width: 0; font-size: 12px; padding: 4px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); color: var(--ink); }
 .lknumbers .lknum input[aria-invalid="true"] { border-color: var(--warn); }
-.lknumbers .lknr { color: var(--muted); white-space: nowrap; font-size: 12px; }
+.lknumbers .lknr { grid-column: 2; color: var(--muted); white-space: nowrap; font-size: 12px; }
 .lknumbers .lknext { grid-column: 2 / -1; color: var(--muted); font-size: 12px; }
 .lknumbers .lknext b { color: var(--ink); font-weight: 500; }
 /* Kontakte (spec 4.4.5): the table, a contact's panel, its form and the import. */

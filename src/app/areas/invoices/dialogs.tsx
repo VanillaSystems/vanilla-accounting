@@ -161,7 +161,10 @@ function SendDialog({ inv, nav, reminder, issued }: Props & { inv: Issued; remin
     if (reminder) setUi({ reminder: null, preview: false });
   };
   const credit = inv.kind === 'credit-note';
+  // An Angebot, Auftrag or Lieferschein names its own kind.
+  const other = inv.kind !== 'invoice' && !credit ? t(`invoices.docKind.${inv.kind}`) : undefined;
   const label = reminder ? t('invoices.sendReminder', { level: reminder.level })
+    : other ? t(issued ? 'invoices.docIssued' : 'invoices.sendTitleDoc', { kind: other, number: inv.number })
     : issued ? t(credit ? 'invoices.creditIssued' : 'invoices.issued', { number: inv.number })
     : t(credit ? 'invoices.sendTitleCredit' : 'invoices.sendTitle', { number: inv.number });
   const foot = (

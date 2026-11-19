@@ -1510,6 +1510,15 @@ listed here and updated with phase 2's build:
     fields over it, priced as createDraft prices the draft (the prices it names, else the firm's default
     for its kind); an Artikel no code or name finds, or one whose name two share, is refused
     (`unknownArticle`).
+96. **A warning the conversion dialog shows is confirmed by its button.** The dialog computes the
+    warnings of `convertWarnings` itself (expired, declined, more than open) and names them above the
+    positions; its button then reads «Trotzdem erstellen» («Trotzdem übernehmen») and sends those codes
+    as `confirm`. A warning only the server finds still opens the warning dialog. Asking twice with
+    the same words was friction without a second fact.
+97. **The demos' phase-2 documents** (tools/demo, `sales`) are played after the Artikel from a seed of
+    their own, so every earlier record and booking keeps its id; their Rechnungen continue the legacy
+    series (2026-019, 2026-020) and stay open, so on the cash basis no figure changes. A Schreinerei
+    Angebot and Auftrag go to a customer of their own, apart from the Teilrechnungsplan's.
 
 96. **Ausziffern where the money is seen (slice H).** The bank's page of an incoming payment no
     document holds offers «Ausziffern» beside «Rechnung zuordnen», decided per payment (its date after
