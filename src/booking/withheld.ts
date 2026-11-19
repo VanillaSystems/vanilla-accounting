@@ -201,11 +201,37 @@ const amountOf = (line: string): number | undefined => {
 };
 const escape = (w: string) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /** A line that is a sentence, not a payslip's row: it ends as a sentence does, or runs on. */
-const prose = (label: string) => /[.!?:]$/.test(label) || label.split(/\s+/).length > 8;
+export const prose = (label: string) => /[.!?:]$/.test(label) || label.split(/\s+/).length > 8;
 /** A correction of an earlier month's deduction, printed positive on its own row. */
-const CORRECTION = /korrektur|rückerstattung|r[ée]troactif|correction|rettifica|conguaglio/i;
+export const CORRECTION = /korrektur|rückerstattung|r[ée]troactif|correction|rettifica|conguaglio/i;
+
+/** Whether a payslip row's label names one of `words` as a word of its own, not in a compound («AHV-Nr.»): a short capital word (an abbreviation) only in capitals. */
+export function namesWord(words: readonly string[]): (label: string) => boolean {
+  const res = words.map((w) => new RegExp(`(?<![\\p{L}\\d])${escape(w)}(?![\\p{L}\\d])(?!-\\p{L})`, /^[A-Z]{1,4}$/.test(w) ? 'u' : 'iu'));
+  return (label) => res.some((r) => r.test(label));
+}
+
+/** A payslip's text as rows: each line's label and the amount at its end; `alone`, a line that is an amount only (pdftotext's column of figures). */
+export interface PayslipRow { label: string; amount?: number; alone: boolean }
+export function payslipRows(text: string): PayslipRow[] {
+  return text.split('\n').map((l) => l.trim()).filter(Boolean).map((line) => {
+    const amount = amountOf(line);
+    const label = amount === undefined ? line : line.replace(amountRe(), '').trim();
+    return { label, amount, alone: amount !== undefined && !/\p{L}/u.test(label) };
+  });
+}
 /** A rate on a row's label: «5.3%», «1,10 %». */
 const rateOf = (label: string) => { const m = /(\d+(?:[.,]\d+)?)\s*%/.exec(label); return m ? Number(m[1].replace(',', '.')) : undefined; };
+
+/** The deduction kind a row's label names (several funds' kinds as their combined kind, «accident+sickness»), none for a sentence. */
+export function deductionKind(kinds: Readonly<Record<string, readonly string[]>>): (label: string) => string | undefined {
+  const res = Object.entries(kinds).map(([kind, words]) => [kind, namesWord(words)] as const);
+  return (label) => {
+    if (prose(label)) return undefined;
+    const hit = res.filter(([, names]) => names(label)).map(([k]) => k);
+    return hit.length ? hit.sort().join('+') : undefined;
+  };
+}
 
 /**
  * The deductions a payslip's text names, summed per kind of setup.yaml `wages.withholds` (#476), when that is sure.
@@ -220,17 +246,8 @@ const rateOf = (label: string) => { const m = /(\d+(?:[.,]\d+)?)\s*%/.exec(label
  * With `total` (what the wage booked on the deductions account), the deductions must add up to it. Undefined otherwise.
  */
 export function payslipDeductions(text: string, total: number | undefined, kinds: Readonly<Record<string, readonly string[]>>): Map<string, number> | undefined {
-  const res = Object.entries(kinds).map(([kind, words]) => [kind, words.map((w) => new RegExp(`(?<![\\p{L}\\d])${escape(w)}(?![\\p{L}\\d])(?!-\\p{L})`, /^[A-Z]{1,4}$/.test(w) ? 'u' : 'iu'))] as const);
-  const kindOf = (label: string): string | undefined => {
-    if (prose(label)) return undefined;
-    const hit = res.filter(([, rs]) => rs.some((r) => r.test(label))).map(([k]) => k);
-    return hit.length ? hit.sort().join('+') : undefined;
-  };
-  const rows = text.split('\n').map((l) => l.trim()).filter(Boolean).map((line) => {
-    const amount = amountOf(line);
-    const label = amount === undefined ? line : line.replace(amountRe(), '').trim();
-    return { label, amount, alone: amount !== undefined && !/\p{L}/u.test(label), kind: kindOf(label) };
-  });
+  const kindOf = deductionKind(kinds);
+  const rows = payslipRows(text).map((r) => ({ ...r, kind: kindOf(r.label) }));
   const pairs: Array<{ kind: string; amount: number }> = [];
   const inline = rows.filter((r) => r.kind && !r.alone && r.amount !== undefined);
   if (inline.some((r) => r.amount! < 0)) {

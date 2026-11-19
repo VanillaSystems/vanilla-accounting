@@ -261,6 +261,14 @@ export interface SetupData {
     shared?: string[];
     /** The words a payslip names each deduction by, per kind (a key of `payees` is what that business collects): code reads the payslips' deductions per fund by them (src/booking/withheld.ts fundShare, #476). */
     withholds?: Record<string, string[]>;
+    /** The account a kind's deductions are owed on where it is not `deductions` (the withholding tax's): a payment to the business that collects the kind clears it (src/booking/withheld.ts fundShare, docs/specs/payroll.md §10.2 A4). */
+    withholdsTo?: Record<string, string>;
+    /** The employer's own contribution account of a kind: code books there what a payment to the kind's collector pays beyond the employees' share, without a model (src/booking/withheld.ts contributionLines). */
+    employer?: Record<string, string>;
+    /** What a kind's collector leaves the employer (the withholding tax's collection commission): a payment short of what is owed by at most `upTo` percent books the rest on `account`. */
+    commission?: Record<string, { account: string; upTo: number }>;
+    /** The words a payslip of another program names its figures by (src/booking/payslip.ts readPayslip): the gross, the net, the allowances paid with the wage, the expenses by account. */
+    payslip?: { gross: string[]; net: string[]; allowances?: string[]; expenses?: Array<{ account: string; words: string[] }> };
   };
   /** The account each kind of private use (the setup's privateUse: car, phone) is booked on: a share named in the setup is offered as a rule on a payment booked there (#402). */
   privateUse?: Partial<Record<'car' | 'phone', string>>;
@@ -330,6 +338,8 @@ export interface DocumentsData {
   days?: string[];
   /** The months, January first, each by its names in the jurisdiction's languages. */
   months?: string[][];
+  /** The title of a payslip another program issued («Lohnabrechnung», «Payslip»): in its first lines, on a text the firm issued that reads as one, the receipt is of kind `payslip` (src/booking/payslip.ts). */
+  payslip?: string[];
   /** Legal forms and words of a firm's name that tell no one apart («GmbH», «Holding»). */
   legalForms?: string[];
   /** The words that label the customer's block of an invoice («Kunde», «Rechnungsadresse», «Ihre UID»): a VAT number beside one is the buyer's, never the sender's (src/intake/own-invoice.ts buyerUids). */
