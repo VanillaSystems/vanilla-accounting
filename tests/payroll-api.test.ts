@@ -171,6 +171,6 @@ test('the insurers\' payments: listed for the bank page; «Immer so» refuses a 
   assert.equal(none.json.code, 'payroll');
   const bad = await api.send('POST', '/api/payroll/insurer-way', { ref: 'O1', way: 'sometimes' });
   assert.equal(bad.status, 400);
-  const gone = await api.send('DELETE', '/api/payroll/insurer-way', { business: 'nobody' });
+  const gone = await api.send('DELETE', '/api/payroll/insurer-way?business=nobody');
   assert.equal(gone.json.code, 'payroll');
 });

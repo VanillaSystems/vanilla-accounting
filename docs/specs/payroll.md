@@ -1810,19 +1810,26 @@ merge:
      whatever the difference's size, and booked only on «Trotzdem buchen» (§18): the books do not hold the year
      whole yet, so the difference would hold December too. One «Trotzdem buchen» covers both warnings. A refusal
      shows as a panel beside the form (decision 50).
-126. **«Immer so» keeps a fund's way with payments the accruals do not cover, in the company's file of the fund**
-     (`payroll: { payments: liability | contributions, source }`, src/knowledge/payroll-way.ts, validated with the
-     business files; the app layer may not say it). The hand form offers it under its two choices; the file is the
-     insurance's business, else the business the payment routes to, else a new file of the company's own named
-     after the insurer, matched by the payee the bank writes, in the folder the kind's `role` names (payroll.yaml:
-     the compensation and family funds with the authorities, the others with the suppliers). insurerPaymentOf
-     honours it: `liability` books an uncovered payment bank / liability by code at once (the intake's payroll step
-     and the classifier alike, never the model), and keeping it books the fund's open payments at once;
-     `contributions` treats an uncovered payment as before payroll ran here (level A). A covered payment is booked
-     against the liability whatever is kept, and a payee of several insurances is never booked by code. «Rückgängig»
-     (and removing the section by hand) asks again from the next payment; what was booked stays booked, the
-     person's to change. Such a payment needs no receipt (decision 45), so the bank page shows neither «kein Beleg»
-     nor «Beleg suchen» for it (`GET /api/payroll/insurer-payments`, loaded with the books); its bill still pairs.
+126. **«Immer so» keeps «für Monate ab dem Lohnstart» for a fund, in the company's file of the fund** (`payroll: {
+     payments: liability, source }`, src/knowledge/payroll-way.ts, validated with the business files; the app layer
+     may not say it). Only that way is kept: «für Monate davor» pays months before payroll ran here, which end, so kept
+     for good it would expense later advance payments a second time; it stays a choice per payment, and the file
+     refuses `contributions` with its reason (review, 2026-11-19). The file is the insurance's business, else the
+     business the payment routes to, else a new file of the company's own named after the insurer, matched by the
+     payee the bank writes and its IBAN, in the folder the kind's `role` names (payroll.yaml: the compensation and
+     family funds with the authorities, the others with the suppliers). Only the `payroll:` block is written or taken
+     out; the rest of a file stays byte for byte, a file that is no YAML map is refused (`badInput`), and the write goes
+     through a file beside it and a rename, after the books took the bookings. insurerPaymentOf honours it: an
+     uncovered payment is booked bank / liability by code (the intake's payroll step and the classifier alike, never
+     the model; a payment no bank account of the firm takes waits for the person). A covered payment is booked
+     against the liability whatever is kept, a payee of several insurances is never booked by code, and a company
+     rule's payment stays the rule's. Before the click the form names the open payments to that insurance it books
+     at once (their days and amounts, the button their number), as a rule's card does; the click books exactly
+     those. The insurer's page in Löhne › Lohnzahlungen shows the kept way and «Rückgängig»; undoing it there or on
+     the form asks again from the next payment, and what was booked stays booked, the person's to change. Every keep
+     and undo reads the books again. Such a payment needs no receipt (decision 45), so the bank page shows neither
+     «kein Beleg» nor «Beleg suchen» for it (`GET /api/payroll/insurer-payments`, loaded with the books from the
+     knowledge and payroll.json alone); its bill still pairs.
 
 ---
 

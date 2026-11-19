@@ -9,6 +9,11 @@ import { readFileSync } from 'node:fs';
 import { computePayslip } from '../src/payroll/compute.js';
 import { firmWageTypes, ratePercent, rateShown, rateStored } from '../src/payroll/catalogue.js';
 import { checkPayroll } from '../src/core/modules/check-payroll.js';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { payslipPdf } from '../src/payroll/pdf.js';
 import type { Jurisdiction } from '../src/core/modules/schema.js';
 import { amountOf, ch, closedThrough, ctxOf, dated, firm, owner } from './support/payroll.js';
 import { decemberOpen } from '../src/payroll/views.js';
@@ -115,4 +120,18 @@ test('the final statement: December still a draft is named before booking; the b
   assert.match(payments, /data-testid="settle-december"/);
   const route = readFileSync('src/server/routes/payroll.ts', 'utf8');
   assert.match(route, /if \(entry && \(compare\.large \|\| december\.length\) && b\.confirm !== true\)/);
+});
+
+test('the payslip PDF prints the car\'s rate as the page does: «0.90 %»', async () => {
+  const store = firm([owner({ recurring: [{ wageType: 'privatanteil-fahrzeug', value: [dated('2026-01-01', { quantity: 60000, rate: 0.009 })] }] })]);
+  const d = computePayslip(ctxOf(store), 'e1', '2026-10')!;
+  const pdf = await payslipPdf({
+    month: d.month, payday: d.payday, language: 'de', lines: d.lines, gross: d.gross, deductions: d.deductions, net: d.net, payout: d.payout, employer: d.employer,
+    person: d.person, firm: { name: 'Beispiel GmbH' }, at: '2026-10-31T12:00:00.000Z',
+  }, data, firmWageTypes(data, store));
+  const file = join(mkdtempSync(join(tmpdir(), 'payroll-car-')), 'p.pdf');
+  writeFileSync(file, pdf);
+  const text = execFileSync('pdftotext', [file, '-'], { encoding: 'utf8' }).replace(/\s+/g, ' ');
+  assert.match(text, /0[.,]90 %/);
+  assert.doesNotMatch(text, /0[.,]009/);
 });

@@ -53,9 +53,9 @@ export interface InsurerPayment {
    * model): it may pay months before payroll ran here, which level A books.
    */
   covered: boolean;
-  /** The company's kept way with this fund's payments (its business file's `payroll.payments`, «Immer so»), when it has one. */
+  /** The company's kept way with this fund's uncovered payments (its business file's `payroll.payments`, «Immer so»): the liability. */
   kept?: PayrollWay;
-  /** Code books it against the liability at once: covered, or not covered and the company keeps the liability way (not for a shared payee). */
+  /** Code books it against the liability at once: covered, or not covered and the company keeps that way (not for a shared payee). */
   books: boolean;
   /** The business file the way is kept in, or would be: the insurance's own, else the one the payment routes to. */
   business?: string;
@@ -93,8 +93,6 @@ export function insurerPaymentOf(
   const routed = businessOf(tx);
   const business = [ins.business, routed].find((b) => !!b && wayOf(b)) ?? ins.business ?? routed;
   const kept = business ? wayOf(business) : undefined;
-  // Months before payroll ran here, as she keeps it: level A's way, as if payroll were not here. Covered stays the liability's.
-  if (!covered && kept === 'contributions') return undefined;
   return { insurance: ins, account, shared, covered, ...(kept ? { kept } : {}), books: covered || (!shared && kept === 'liability'), ...(business ? { business } : {}) };
 }
 
@@ -107,7 +105,7 @@ export function bookInsurerPayments(
   books: { transactions: BankTransaction[]; journalEntries: JournalEntry[] },
   data: PayrollData, store: Pick<PayrollStore, 'insurances' | 'employees'>, lock: Pick<PeriodLock, 'isClosed'>,
   businessOf: (tx: BankTransaction) => string | undefined, bankAccountOf: (tx: BankTransaction) => string | undefined, newId: () => string,
-  opts: { currency: string; ruled?: (tx: BankTransaction) => boolean; wayOf?: PayrollWayOf; only?: (tx: BankTransaction) => boolean },
+  opts: { currency: string; ruled?: (tx: BankTransaction) => boolean; wayOf?: PayrollWayOf; only?: (tx: BankTransaction) => boolean; keep?: boolean },
 ): string[] {
   const booked = new Set(books.journalEntries.map((e) => e.transactionRef));
   const out: string[] = [];
@@ -115,7 +113,8 @@ export function bookInsurerPayments(
     // Only payments out: what an insurer pays in is mostly a benefit (a daily allowance, family allowances), never a contribution's refund by default.
     if (booked.has(tx.ref) || lock.isClosed(tx.date) || opts.ruled?.(tx) || (opts.only && !opts.only(tx))) continue;
     const pay = insurerPaymentOf(tx, books.journalEntries, data, store, businessOf, opts.currency, opts.wayOf);
-    if (!pay?.books) continue;
+    // `keep`: the way being kept right now («Immer so»), whose file is not written yet: the liability for every payment of `only`.
+    if (!pay || !(pay.books || (opts.keep && !pay.shared))) continue;
     const bank = bankAccountOf(tx);
     if (!bank) continue;
     books.journalEntries.push({

@@ -1019,9 +1019,15 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     }
     // One the liability covers, or whose fund's file keeps the liability way («Immer so», §22 decision 126): bank / liability by code,
     // as the intake's payroll step books it, never the model, which would expense the contributions a second time. A company rule still decides its own.
-    const insurerBank = insurer?.books && !ruleOfPayment(books, tx, context, fx) ? (() => { try { return bankAccountFor(tx, context.bankAccounts); } catch { return undefined; } })() : undefined;
-    if (insurer && insurerBank) {
-      const bank = insurerBank;
+    if (insurer?.books && !ruleOfPayment(books, tx, context, fx)) {
+      let bank: string | undefined;
+      try { bank = bankAccountFor(tx, context.bankAccounts); } catch { bank = undefined; }
+      // No bank account for its line: it waits for the person, never the model, which would expense the contributions again.
+      if (!bank) {
+        log(`  ${tx.ref}  payment to ${insurer.name}: no bank account of the manifest takes it; waits for the person`);
+        outcome.failed.push({ ref: tx.ref, reason: `Zahlung an ${insurer.name}: kein Bankkonto der Firma nimmt sie (${tx.bank}, ${tx.currency}); gegen ${insurer.account} von Hand buchen.` });
+        continue;
+      }
       books.journalEntries.push({ id: randomBytes(8).toString('hex'), transactionRef: tx.ref, date: tx.date, accountDebit: insurer.account, accountCredit: bank, amount: Math.round(Math.abs(tx.amount) * 100) / 100, description: `Zahlung ${insurer.name}`, by: { kind: 'code', check: 'payroll' } });
       log(`  ${tx.ref}  → payment to ${insurer.name}, against its liability ${insurer.account}`);
       outcome.classified.push(tx.ref);

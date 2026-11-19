@@ -101,7 +101,7 @@ test('the UI names an input by its Lohnart\'s word and a Lohnart in the UI\'s la
   assert.match(payslips, /\.\.\.inputFields\(w\)/, 'the form calls the car\'s quantity «Kaufpreis»');
   assert.match(readFileSync('src/app/areas/payroll/inputs.ts', 'utf8'), /inputLabel\(w\.key, 'quantity', w\.inputs\) \?\? t\('payroll\.field\.quantity'\)/);
   assert.match(payslips, /\{w \? labelOf\(w\.label, l\.label\) : l\.label\}/, 'a line in the UI\'s language, not the person\'s');
-  assert.match(payslips, /const textOf = \(p: [^)]*\) => p\.text;/, 'the preview shows the books\' words as closing writes them (German data, a correction its own line)');
+  assert.match(payslips, /<span className="pt">\{p\.text\}<\/span>/, 'the preview shows the books\' words as closing writes them (German data, a correction its own line)');
   for (const lang of ['de', 'fr', 'it', 'en'] as const) assert.equal(typeof data.wageTypes.find((w) => w.key === 'ahv-an')!.label[lang], 'string');
 });
 

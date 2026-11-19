@@ -9,7 +9,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { localToday } from '../../../accounting/periods.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { t } from '../../i18n/index.js';
-import { errorText } from '../../lib/api.js';
+import { api, errorText } from '../../lib/api.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
@@ -197,6 +197,7 @@ function Insurer({ row, year, books, nav, canEdit }: Props & { row: InsurerRow; 
           <dt>{t('payroll.insurers.open')}</dt><dd className={`mono${row.open < 0 ? ' neg' : ''}`}>{fmt(row.open)}{row.open < 0 ? <small className="m"> · {t('payroll.insurers.ahead')}</small> : null}</dd>
         </dl>
         <p className="m">{t('payroll.insurers.how', { account: row.account })}</p>
+        {row.kept ? <KeptWay row={row} kept={row.kept} nav={nav} canEdit={canEdit} /> : null}
         {settled.length ? (
           <div className="psec" data-testid="settled">
             <h3>{t('payroll.insurers.settled')}</h3>
@@ -205,6 +206,26 @@ function Insurer({ row, year, books, nav, canEdit }: Props & { row: InsurerRow; 
         ) : null}
         {canEdit ? <Settle row={row} year={year} nav={nav} again={settled.length > 0} /> : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The way the company keeps for this insurer's payments the accruals do not cover yet («Immer so», §22 decision 126):
+ * where it is kept, and «Rückgängig», which takes it out of the file; payments booked so far stay booked.
+ */
+function KeptWay({ row, kept, nav, canEdit }: { row: InsurerRow; kept: NonNullable<InsurerRow['kept']>; nav: Nav; canEdit: boolean }) {
+  const refusal = useRefusal();
+  const undo = async () => {
+    try { await api.forgetInsurerWay(kept.business); refusal.clear(); nav.toast(t('journal.byHand.insurerWay.forgotten', { name: row.name })); await reloadPayroll(); } catch (e) { refusal.refuse(e); }
+    nav.refresh();
+  };
+  return (
+    <div className="psec" data-testid="insurer-kept-way">
+      <h3>{t('payroll.insurers.keptTitle')}</h3>
+      <p>{t('payroll.insurers.kept', { path: kept.path })}</p>
+      {canEdit ? <p><AsyncButton type="button" className="btn ghost" data-testid="insurer-kept-undo" onClick={undo}>{t('journal.byHand.insurerWay.undo')}</AsyncButton> <span className="m">{t('payroll.insurers.keptUndo')}</span></p> : null}
+      {refusal.node}
     </div>
   );
 }

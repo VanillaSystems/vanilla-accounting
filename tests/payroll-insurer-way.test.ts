@@ -41,27 +41,26 @@ function books(): Workspace {
   return ws;
 }
 
-test('the business file\'s payroll section: liability or contributions, company only', () => {
+test('the business file\'s payroll section: only the liability way, company only; «davor» is never kept', () => {
   assert.deepEqual(parsePayrollSection({ payments: 'liability', source: 'hand 2026-11-19' }), { section: { payments: 'liability', source: 'hand 2026-11-19' } });
-  assert.match((parsePayrollSection({ payments: 'later' }) as { problem: string }).problem, /liability or contributions/);
+  assert.match((parsePayrollSection({ payments: 'contributions' }) as { problem: string }).problem, /contributions cannot be kept/);
+  assert.match((parsePayrollSection({ payments: 'later' }) as { problem: string }).problem, /must be liability/);
   assert.match((parsePayrollSection({ payments: 'liability', how: 1 }) as { problem: string }).problem, /payroll\.how/);
   assert.throws(() => mergeCounterparty({ id: 'x', name: 'X', match: { payee: ['X'] }, payroll: { payments: 'liability' } }, undefined, { vendor: 'processes/suppliers/x.yaml' }, 'supplier'), /one company's choice/);
-  const own = mergeCounterparty(undefined, { id: 'x', name: 'X', match: { payee: ['X'] }, payroll: { payments: 'contributions' } }, { binding: 'knowledge/suppliers/x.yaml' }, 'supplier');
-  assert.deepEqual(own.payroll, { payments: 'contributions' });
-  assert.throws(() => mergeCounterparty(undefined, { id: 'x', name: 'X', match: { payee: ['X'] }, payroll: { payments: 'x' } }, { binding: 'knowledge/suppliers/x.yaml' }, 'supplier'), /payroll\.payments/);
+  const own = mergeCounterparty(undefined, { id: 'x', name: 'X', match: { payee: ['X'] }, payroll: { payments: 'liability' } }, { binding: 'knowledge/suppliers/x.yaml' }, 'supplier');
+  assert.deepEqual(own.payroll, { payments: 'liability' });
+  assert.throws(() => mergeCounterparty(undefined, { id: 'x', name: 'X', match: { payee: ['X'] }, payroll: { payments: 'contributions' } }, { binding: 'knowledge/suppliers/x.yaml' }, 'supplier'), /contributions cannot be kept/);
 });
 
 test('insurerPaymentOf honours the kept way only while the accruals do not cover the payment, never for a shared payee', () => {
   const store = firm([owner({ opening: { 2026: { through: '2026-09', bases: { ahv: 90000 } } } })]);
   const tx = pay('BVG-OCT', '2026-10-15', 600, 'Pensionskasse Beispiel');
-  const of = (way?: 'liability' | 'contributions') => insurerPaymentOf(tx, [], ch.payroll!, store, () => 'pk-file', 'CHF', (b) => (b === 'pk-file' ? way : undefined));
+  const of = (way?: 'liability') => insurerPaymentOf(tx, [], ch.payroll!, store, () => 'pk-file', 'CHF', (b) => (b === 'pk-file' ? way : undefined));
   assert.deepEqual([of()?.covered, of()?.books, of()?.kept], [false, false, undefined], 'asked as before');
   assert.deepEqual([of('liability')?.covered, of('liability')?.books, of('liability')?.business], [false, true, 'pk-file'], 'booked at once by code');
-  assert.equal(of('contributions'), undefined, 'level A\'s way: as before payroll ran here');
-  // Covered: always the liability, whatever is kept (never expensed twice).
   const accrued = [{ id: 'a', transactionRef: 'LR-2026-10-e1', date: '2026-10-31', accountDebit: '5720', accountCredit: '2275', amount: 700, by: { kind: 'code' as const, check: 'payroll' as const } }];
-  const covered = insurerPaymentOf(tx, accrued, ch.payroll!, store, () => 'pk-file', 'CHF', () => 'contributions');
-  assert.deepEqual([covered?.covered, covered?.books], [true, true]);
+  const covered = insurerPaymentOf(tx, accrued, ch.payroll!, store, () => 'pk-file', 'CHF');
+  assert.deepEqual([covered?.covered, covered?.books], [true, true], 'covered: the liability without any kept way');
   const both = { ...store, insurances: store.insurances.map((i) => ({ ...i, business: 'fund' })) };
   const shared = insurerPaymentOf(tx, [], ch.payroll!, both, () => 'fund', 'CHF', () => 'liability');
   assert.deepEqual([shared?.shared, shared?.books], [true, false], 'a payee of several insurances is never booked by code');
@@ -96,18 +95,33 @@ test('«Immer so»: kept in a new file of the fund, the classifier then books ba
   const ak = firm().insurances.find((i) => i.kind === 'ahv')!;
   const akTarget = wayTarget({ ...ak, business: 'ausgleichskasse' }, undefined, loadClassifyContext(ws).counterparties ?? [], 'authority');
   assert.deepEqual([akTarget.path, akTarget.created], ['knowledge/authorities/ausgleichskasse.yaml', false]);
-  keepPayrollWay(ws, akTarget, 'contributions', pay('AK', '2026-10-28', 3300, 'Ausgleichskasse Beispiel'), '2026-11-19');
-  assert.deepEqual(loadClassifyContext(ws).counterparties!.find((c) => c.id === 'ausgleichskasse')?.payroll, { payments: 'contributions', source: 'hand 2026-11-19' });
+  keepPayrollWay(ws, akTarget, 'liability', pay('AK', '2026-10-28', 3300, 'Ausgleichskasse Beispiel'), '2026-11-19');
+  assert.deepEqual(loadClassifyContext(ws).counterparties!.find((c) => c.id === 'ausgleichskasse')?.payroll, { payments: 'liability', source: 'hand 2026-11-19' });
 });
 
-test('the way goes into an existing file without touching the rest; taking it out leaves the file as it was', () => {
-  const text = 'id: ausgleichskasse\naccounts: ["2271"]\n';
-  const withIt = withPayrollWay(text, 'liability', 'hand 2026-11-19', 'ausgleichskasse');
-  assert.deepEqual(parse(withIt), { id: 'ausgleichskasse', accounts: ['2271'], payroll: { payments: 'liability', source: 'hand 2026-11-19' } });
-  assert.deepEqual(parse(withoutPayrollWay(withIt)!), { id: 'ausgleichskasse', accounts: ['2271'] });
+test('the way goes into an existing file without touching the rest; taking it out gives back the same text', () => {
+  const text = '# Our fund\nid: ak   # the id\nname: "AK"\nmatch:\n    iban: [ "CH00 1234" ]   # odd indent\n    tx:\n    - Ausgleich\nsteps:\n  booking.guide.yaml#classify:\n    - id: r1\n      then: { account: "5700", vat: none }\n';
+  const withIt = withPayrollWay(text, 'liability', 'hand 2026-11-19', 'ak');
+  assert.ok(withIt.startsWith(text), 'the rest stays byte for byte');
+  assert.deepEqual(parse(withIt).payroll, { payments: 'liability', source: 'hand 2026-11-19' });
+  assert.equal(withoutPayrollWay(withIt), text, 'Rückgängig gives back the file as it was');
   assert.equal(withoutPayrollWay(text), undefined);
-  // A binding of an app file the company had none of yet: its id first, else the knowledge would not load.
-  assert.deepEqual(parse(withPayrollWay('', 'contributions', 'hand 2026-11-19', 'ausgleichskasse')), { id: 'ausgleichskasse', payroll: { payments: 'contributions', source: 'hand 2026-11-19' } });
+  // A second keep replaces the block in place: one payroll section, never two.
+  const again = withPayrollWay(withIt, 'liability', 'hand 2026-11-20', 'ak');
+  assert.equal(again.match(/^payroll:/gm)?.length, 1);
+  assert.match(again, /source: hand 2026-11-20/);
+  // Windows line ends stay as they are.
+  const crlf = withPayrollWay('id: ak\r\nname: AK\r\n', 'liability', 's', 'ak');
+  assert.ok(!/[^\r]\n/.test(crlf), crlf);
+  // A binding of an app file the company had none of yet: its id first, else the knowledge would not load; a comment-only file keeps its comment.
+  assert.deepEqual(parse(withPayrollWay('', 'liability', 'hand 2026-11-19', 'ausgleichskasse')), { id: 'ausgleichskasse', payroll: { payments: 'liability', source: 'hand 2026-11-19' } });
+  const commented = withPayrollWay('# nothing yet\n', 'liability', 's', 'ak');
+  assert.ok(commented.startsWith('# nothing yet\n'));
+  assert.deepEqual(parse(commented), { id: 'ak', payroll: { payments: 'liability', source: 's' } });
+  // A broken file or a list is refused with a code, never overwritten.
+  for (const bad of ['id: ak\n  bad: [', '- a\n- b\n']) {
+    assert.throws(() => withPayrollWay(bad, 'liability', 's', 'ak'), (e: Error & { code?: string }) => e.code === 'badInput', bad);
+  }
   const known = wayTarget({ business: 'ausgleichskasse', name: 'AK' }, undefined, [{ id: 'ausgleichskasse', role: 'authority', name: 'Ausgleichskasse' }], 'authority');
   assert.deepEqual([known.path, known.created], ['knowledge/authorities/ausgleichskasse.yaml', false]);
   const taken = wayTarget({ name: 'Pensionskasse Beispiel' }, undefined, [{ id: 'pensionskasse-beispiel', role: 'supplier', name: 'other' }], 'supplier');
@@ -119,5 +133,21 @@ test('the bank page drops «kein Beleg» and «Beleg suchen» for a payroll insu
   assert.match(model, /&& !proofElsewhere\.has\(t\.ref\)/);
   assert.match(readFileSync('src/app/areas/bank/state.ts', 'utf8'), /bankOf\(books, list, localToday\(\), proof\)/);
   assert.match(readFileSync('src/app/hooks/use-index.ts', 'utf8'), /setInsurerPayments\(insurerPayments\)/);
-  assert.match(readFileSync('src/app/areas/journal/PaymentBooking.tsx', 'utf8'), /<KeepWay /);
+  const form = readFileSync('src/app/areas/journal/PaymentBooking.tsx', 'utf8');
+  assert.match(form, /way === 'after' \? <KeepWay /, '«Immer so» only for «ab dem Lohnstart»');
+  assert.match(form, /data-testid="insurer-way-books"/, 'the payments it books are named before the click');
+  assert.equal(form.match(/nav\.refresh\(\);\n  \};/g)?.length, 2, 'the page reads the books again after every keep and undo');
+  assert.match(readFileSync('src/app/areas/payroll/Payments.tsx', 'utf8'), /data-testid="insurer-kept-undo"/, 'the kept way and its undo on the insurer\'s page');
+});
+
+test('a kept payment no bank account of the firm takes waits for the person: never the model', async () => {
+  const ws = books();
+  const ins = firm().insurances.find((i) => i.kind === 'bvg')!;
+  const b = loadBooks(ws);
+  keepPayrollWay(ws, wayTarget(ins, undefined, loadClassifyContext(ws).counterparties ?? [], 'supplier'), 'liability', b.transactions[0], '2026-11-19');
+  let asked = 0;
+  const out = await classifyTransactions(b, [b.transactions[0]], { ask: async () => { asked++; return '{}'; }, fx: loadFxResolver(), context: { ...loadClassifyContext(ws), bankAccounts: [] } });
+  assert.equal(asked, 0);
+  assert.deepEqual(out.failed.map((f) => f.ref), ['BVG-OCT']);
+  assert.deepEqual(b.journalEntries, []);
 });

@@ -105,7 +105,7 @@ export function PaymentBooking(props: Props) {
           {(['after', 'before'] as const).map((w) => (
             <label key={w}><input type="radio" name="insurer-way" checked={way === w} onChange={() => setWay(w)} /> {t(`journal.byHand.insurerWay.${w}`)}</label>
           ))}
-          {props.canRule !== false && !start.nature.shared ? <KeepWay nav={props.nav} payment={props.payment} way={way} name={start.nature.name} /> : null}
+          {props.canRule !== false && !start.nature.shared && way === 'after' ? <KeepWay nav={props.nav} payment={props.payment} name={start.nature.name} /> : null}
         </div>
       ) : null}
       <BookingForm key={way} {...props} onForm={(el) => { formEl.current = el; props.onForm?.(el); }} accounts={ws.bankAccounts} draft={draft} dimensions={ws.dimensions ?? []} defaults={defaults} pending={known!.books !== props.books} onNotOwn={setNotOwn} />
@@ -115,23 +115,31 @@ export function PaymentBooking(props: Props) {
 }
 
 /**
- * «Immer so» for a payroll insurer's payments (§22 decision 126): the chosen way kept in the company's file of the fund,
- * so the next Akonto is not asked again. «ab dem Lohnstart» books this fund's open payments at once; «Rückgängig»
- * takes the way out of the file again (what it booked stays).
+ * «Immer so» for a payroll insurer's payments (§22 decision 126): «für Monate ab dem Lohnstart» kept in the company's
+ * file of the fund, so the next Akonto is not asked again. The payments it books at once are named before the click
+ * (as a rule's card names them); «Rückgängig» takes the way out of the file again (what it booked stays). «Davor» is
+ * chosen per payment: months before payroll ran here end, so it is never kept.
  */
-function KeepWay({ nav, payment, way, name }: { nav: Nav; payment: string; way: 'after' | 'before'; name: string }) {
-  const [kept, setKept] = useState<{ business: string; path: string; booked: number } | null>(null);
+function KeepWay({ nav, payment, name }: { nav: Nav; payment: string; name: string }) {
+  const [plan, setPlan] = useState<Awaited<ReturnType<typeof api.insurerWayPreview>> | null>(null);
+  const [kept, setKept] = useState<{ business: string; path: string } | null>(null);
+  useEffect(() => {
+    let live = true;
+    api.insurerWayPreview(payment).then((p) => { if (live) setPlan(p); }, () => { if (live) setPlan(null); });
+    return () => { live = false; };
+  }, [payment]);
   const keep = async () => {
     try {
-      const r = await api.keepInsurerWay(payment, way);
-      setKept({ business: r.business, path: r.path, booked: r.booked.length });
-      nav.toast(t(r.booked.length ? 'journal.byHand.insurerWay.keptBooked' : 'journal.byHand.insurerWay.kept', { name, path: r.path, n: r.booked.length }));
-      if (r.booked.length) nav.refresh();
+      const r = await api.keepInsurerWay(payment);
+      setKept({ business: r.business, path: r.path });
+      nav.toast(t('journal.byHand.insurerWay.kept', { name, path: r.path, n: r.booked.length }));
     } catch (e) { nav.toast(errorText(e)); }
+    nav.refresh();
   };
   const undo = async () => {
     if (!kept) return;
     try { await api.forgetInsurerWay(kept.business); setKept(null); nav.toast(t('journal.byHand.insurerWay.forgotten', { name })); } catch (e) { nav.toast(errorText(e)); }
+    nav.refresh();
   };
   if (kept) {
     return (
@@ -141,9 +149,15 @@ function KeepWay({ nav, payment, way, name }: { nav: Nav; payment: string; way: 
       </span>
     );
   }
+  if (!plan) return null;
   return (
-    <span>
-      <AsyncButton type="button" className="golink" data-testid="insurer-way-keep" onClick={keep}>{t(`journal.byHand.insurerWay.keep.${way}`, { name })}</AsyncButton>
+    <span className="insurerkeep" data-testid="insurer-way-plan">
+      <AsyncButton type="button" className="golink" data-testid="insurer-way-keep" onClick={keep}>{t('journal.byHand.insurerWay.keepAfter', { name, n: plan.payments.length })}</AsyncButton>
+      {plan.payments.length ? (
+        <small className="m" data-testid="insurer-way-books">
+          {t('journal.byHand.insurerWay.books', { list: plan.payments.map((p) => `${formatDate(p.date)} ${p.currency} ${fmt(p.amount)}`).join(', ') })}
+        </small>
+      ) : null}
     </span>
   );
 }

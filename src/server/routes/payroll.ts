@@ -16,11 +16,13 @@ import { addCorrection, chartNumbers, closePayslip, payrollContext, reopenPaysli
 import { decemberOpen, monthView, payslipView, employeeRows, yearStrip } from '../../payroll/views.js';
 import { paymentRows } from '../../payroll/payments.js';
 import { bookInsurerPayments, insurancesOfPayment, insurerRows, settlementOf } from '../../payroll/insurers.js';
-import { payrollWays } from '../../payroll/insurers-context.js';
-import { forgetPayrollWay, keepPayrollWay, wayTarget } from '../../payroll/insurer-way.js';
-import type { PayrollWay } from '../../knowledge/payroll-way.js';
+import { payrollInsurerContext } from '../../payroll/insurers-context.js';
+import { forgetPayrollWay, keptText, keptWayOf, wayTarget, writeKept } from '../../payroll/insurer-way.js';
+import { loadKnowledge } from '../../knowledge/layers.js';
+import { APP_ROOT } from '../../workspace/workspace.js';
+import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { bankAccountFor } from '../../workspace/money-accounts.js';
-import { loadClassifyContext, mappedReceipts, payrollInsurerOfPayment } from '../../booking/classify.js';
+import { loadClassifyContext, mappedReceipts, payrollInsurerOfPayment, ruleOfPayment } from '../../booking/classify.js';
 import { businessOfPayment } from '../../intake/batch-payers.js';
 import { closedPayslips, issueLohnausweis, lohnausweisSnapshots, payslipMail, payslipsSent, sendPayslip, setMailPassword } from '../../payroll/service.js';
 import { sendMail } from '../../invoices/mail.js';
@@ -231,7 +233,12 @@ router.get('/api/payroll/payments/:month', run((req, res) => {
 router.get('/api/payroll/insurances', run((req, res) => {
   const year = typeof req.query.year === 'string' && /^\d{4}$/.test(req.query.year) ? req.query.year : today().slice(0, 4);
   const ctx = payrollContext(WS);
-  res.json({ year, rows: insurerRows(readBooks(), ctx.data, ctx.store, year) });
+  const counterparties = loadKnowledge(APP_ROOT, WS.paths.root).counterparties;
+  // Each insurance's kept way («Immer so», §22 decision 126), with the file that keeps it: undone from here too.
+  res.json({ year, rows: insurerRows(readBooks(), ctx.data, ctx.store, year).map((r) => {
+    const kept = keptWayOf(ctx.store.insurances.find((i) => i.id === r.id)!, counterparties);
+    return kept ? { ...r, kept } : r;
+  }) });
 }));
 
 /**
@@ -287,23 +294,22 @@ router.post('/api/payroll/insurances/:id/settle', run((req, res) => {
 
 /** The open payments that pay one of the firm's payroll insurers while payroll runs here: their proof is the payslips, never «kein Beleg». */
 router.get('/api/payroll/insurer-payments', run((_req, res) => {
-  const context = loadClassifyContext(WS);
-  if (!context.payrollInsurer) return void res.json({ refs: [] });
+  // The knowledge and payroll.json only, not the classifier's whole context: this list is read with every load of the books.
+  const counterparties = loadKnowledge(APP_ROOT, WS.paths.root).counterparties;
+  const insurerOf = payrollInsurerContext(WS, counterparties).payrollInsurer;
+  if (!insurerOf) return void res.json({ refs: [] });
   const books = readBooks();
   const lock = periodLock(books);
-  res.json({ refs: books.transactions.filter((tx) => !lock.isClosed(tx.date) && tx.direction === 'DBIT' && !!payrollInsurerOfPayment(books, tx, context)).map((tx) => tx.ref) });
+  const currency = baseCurrency();
+  const context = { payrollInsurer: insurerOf, counterparties };
+  res.json({ refs: books.transactions.filter((tx) => tx.direction === 'DBIT' && tx.currency === currency && !lock.isClosed(tx.date) && !!payrollInsurerOfPayment(books, tx, context)).map((tx) => tx.ref) });
 }));
 
 /**
- * «Immer so» on the hand form of a payment to a payroll insurer: `way` after (months from payroll's start: the liability)
- * or before (as contributions, level A), kept in the company's file of the fund. With «after» code books at once
- * every open payment to that insurance the liability does not cover yet; «before» changes only what comes next.
+ * What «Immer so» on payment `ref` does (§22 decision 126): the insurance it pays, the file that keeps the way, and the open
+ * payments to that insurance the liability way books at once (a company rule's left alone), so the form names them first.
  */
-router.post('/api/payroll/insurer-way', run((req, res) => {
-  const b = body(req);
-  const ref = String(b.ref ?? '');
-  const way: PayrollWay | undefined = b.way === 'after' ? 'liability' : b.way === 'before' ? 'contributions' : undefined;
-  if (!way) throw new PayrollRefusal('badInput', 'Ab dem Lohnstart oder davor.');
+function insurerWayPlan(ref: string) {
   const context = loadClassifyContext(WS);
   const books = readBooks();
   const tx = books.transactions.find((t) => t.ref === ref);
@@ -313,24 +319,48 @@ router.post('/api/payroll/insurer-way', run((req, res) => {
   if (!tx || !pay) throw new PayrollRefusal('notFound', `Keine Zahlung an eine Sozialversicherung: ${ref}.`);
   const ctx = payrollContext(WS);
   const ins = ctx.store.insurances.find((i) => i.id === pay.id)!;
-  const routed = businessOfPayment(tx, mappedReceipts(books, tx), context.counterparties ?? []);
-  const target = wayTarget(ins, routed, context.counterparties ?? [], ctx.data.insurances[ins.kind]?.role ?? 'supplier');
-  const path = keepPayrollWay(WS, target, way, tx, today());
-  let booked: string[] = [];
-  if (way === 'liability') {
-    const fresh = loadClassifyContext(WS).counterparties ?? [];
-    booked = updateBooksWithEffects((index) => bookInsurerPayments(index, ctx.data, ctx.store, periodLock(index),
-      (t) => businessOfPayment(t, mappedReceipts(index, t), fresh), (t) => { try { return bankAccountFor(t, WS.bankAccounts); } catch { return undefined; } },
-      () => idSource.bytes(8).toString('hex'),
-      { currency: baseCurrency(), wayOf: payrollWays(fresh), only: (t) => insurancesOfPayment(t, ctx.store, (x) => businessOfPayment(x, mappedReceipts(index, x), fresh)).some((i) => i.id === ins.id) }));
-  }
-  res.json({ business: target.id, name: ins.name, path, created: target.created, way, booked });
+  const counterparties = context.counterparties ?? [];
+  const routed = businessOfPayment(tx, mappedReceipts(books, tx), counterparties);
+  const target = wayTarget(ins, routed, counterparties, ctx.data.insurances[ins.kind]?.role ?? 'supplier');
+  const fx = loadFxResolver();
+  /** Books (or, on a copy, previews) this insurance's open payments the liability way takes; never one a company rule decides. */
+  const book = (index: Books) => bookInsurerPayments(index, ctx.data, ctx.store, periodLock(index),
+    (t) => businessOfPayment(t, mappedReceipts(index, t), counterparties), (t) => { try { return bankAccountFor(t, WS.bankAccounts); } catch { return undefined; } },
+    () => idSource.bytes(8).toString('hex'),
+    { currency: baseCurrency(), ruled: (t) => !!ruleOfPayment(index, t, context, fx), keep: true,
+      only: (t) => insurancesOfPayment(t, ctx.store, (x) => businessOfPayment(x, mappedReceipts(index, x), counterparties)).some((i) => i.id === ins.id) });
+  const preview = structuredClone(books);
+  const refs = book(preview);
+  const payments = refs.map((r) => books.transactions.find((t) => t.ref === r)!).map((t) => ({ ref: t.ref, date: t.date, amount: Math.abs(t.amount), currency: t.currency }));
+  return { tx, ins, target, book, payments };
+}
+
+/** «Immer so», before the click: the file it keeps the way in and the payments it books at once. */
+router.get('/api/payroll/insurer-way', run((req, res) => {
+  const { ins, target, payments } = insurerWayPlan(String(req.query.ref ?? ''));
+  res.json({ name: ins.name, business: target.id, path: target.path, created: target.created, payments });
 }));
 
-/** «Rückgängig»: the kept way leaves the company's file of `business`; what it booked stays booked. */
+/**
+ * «Immer so» on the hand form of a payment to a payroll insurer: «für Monate ab dem Lohnstart» (`way: after`) kept in the
+ * company's file of the fund; code books at once every open payment to that insurance the liability does not cover yet
+ * (the ones the GET named), never one a company rule decides. «Davor» is chosen per payment and is never kept. The file
+ * is written only once the books took the bookings.
+ */
+router.post('/api/payroll/insurer-way', run((req, res) => {
+  const b = body(req);
+  if (b.way !== 'after') throw new PayrollRefusal('badInput', 'Gemerkt wird nur «für Monate ab dem Lohnstart»: «für Monate davor» wird bei jeder Zahlung gewählt.');
+  const { tx, ins, target, book } = insurerWayPlan(String(b.ref ?? ''));
+  const text = keptText(WS, target, 'liability', tx, today());
+  const booked = updateBooksWithEffects((index) => book(index));
+  const path = writeKept(WS, target, text);
+  res.json({ business: target.id, name: ins.name, path, created: target.created, booked });
+}));
+
+/** «Rückgängig» (`?business=`): the kept way leaves the company's file of the business; what it booked stays booked. */
 router.delete('/api/payroll/insurer-way', run((req, res) => {
-  const id = String(body(req).business ?? '');
-  const cp = (loadClassifyContext(WS).counterparties ?? []).find((c) => c.id === id);
+  const id = String(req.query.business ?? '');
+  const cp = loadKnowledge(APP_ROOT, WS.paths.root).counterparties.find((c) => c.id === id);
   const path = cp && forgetPayrollWay(WS, cp);
   if (!path) throw new PayrollRefusal('gone', `${id} hält keinen Weg für Zahlungen.`);
   res.json({ business: id, path });

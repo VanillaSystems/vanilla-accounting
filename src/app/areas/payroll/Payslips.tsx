@@ -447,8 +447,6 @@ function AddLine({ v, types, nav }: { v: Payslip; types: Map<string, WageType>; 
 function Booking({ v }: { v: Payslip }) {
   const names = getAccountMap();
   const b = v.booking;
-  // The books' own words, as closing writes them (a correction its own line, «Korrektur 08/2026: …»): the journal's texts are German data (§22).
-  const textOf = (p: Payslip['booking']['postings'][number]) => p.text;
   return (
     <div className="psec">
       <h3>{t(v.status === 'closed' ? 'payroll.booking.booked' : 'payroll.booking.preview')}</h3>
@@ -458,7 +456,7 @@ function Booking({ v }: { v: Payslip }) {
         {b.postings.map((p, i) => (
           <div key={i} className="fr">
             <span className="mono" data-tip={names[p.debit]}>{p.debit}</span><span className="mono" data-tip={names[p.credit]}>{p.credit}</span>
-            <span className="pt">{textOf(p)}</span><span className="r mono">{fmt(p.amount)}</span>
+            {/* The books' own words, as closing writes them: the journal's texts are German data (§22 decision 121). */}<span className="pt">{p.text}</span><span className="r mono">{fmt(p.amount)}</span>
           </div>
         ))}
       </div>

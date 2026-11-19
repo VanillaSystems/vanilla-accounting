@@ -233,9 +233,10 @@ Two markers flag an entry you must read before you update:
 ### Fixed
 
 - Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
-  davor» every quarter: «Immer so» keeps the answer in the company's file of the fund
-  (`payroll: { payments: liability }`), and code then books such payments against the liability at
-  once; «Rückgängig» asks again. The bank page no longer shows «kein Beleg» and «Beleg suchen» for a
+  davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund
+  (`payroll: { payments: liability }`), names the open payments it books first, and code then books
+  such payments against the liability; the insurer's page in Lohnzahlungen shows it with
+  «Rückgängig». «Davor» stays a choice per payment. The bank page no longer shows «kein Beleg» and «Beleg suchen» for a
   payment to a payroll insurer: the payslips prove it.
 - Löhne › Lohnzahlungen: the final statement shows the year's contributions in the books and, as the
   total is typed, the difference; the button names its amount and direction («Differenz … buchen:
