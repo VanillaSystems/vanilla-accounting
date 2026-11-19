@@ -2163,6 +2163,16 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     person's language there), and the person's tax-at-source entry on her form. The app does not ask for the
     certificate nor switch the code: the person changes the code, dated back where it was wrong (a Rückwirkende
     Korrektur carries the difference, decision 120).
+124. **Back pay in a later year takes the payment year's rates and ceilings, unless the employment has ended**
+    (BSV, Wegleitung über den massgebenden Lohn (WBB) Rz 2036–2040,
+    https://sozialversicherungen.admin.ch/de/d/6923/download pp. 45–48): by default the year the wage is paid in
+    decides (Rz 2039); paid after the employment with the same employer ended (or the insurance duty lapsed), the
+    year it was earned in decides (Rz 2038), which also covers the ALV ceiling and UVV Art. 22 Abs. 1. A payslip of
+    a month after the exit, in a later year, now reads the law's figures (rates, ceilings, the small-wage limit) on
+    31.12. of the employment's last year (`referenceYear`), as its ceiling and small-wage judgement already counted
+    that year's wages; while employed in the later year, the payment month's figures and that year's wages. The
+    insurers' own rates stay those of the payment day (their contract year). The lapse of the insurance duty without
+    an exit is not told apart.
 
 ---
 

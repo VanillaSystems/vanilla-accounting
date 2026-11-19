@@ -356,6 +356,9 @@ Two markers flag an entry you must read before you update:
 - Löhne: a tax-at-source line with a cross-border code (L to Q) and the person's form say that the
   4.5 % holds only with the certificate of residence (form Gre-1, renewal Gre-2) and that the
   ordinary tariff applies without it, in the payslip's language.
+- Löhne: a Nachzahlung after the exit, in a later year, takes the AHV/ALV rates and ceilings of the
+  year it was earned in (WBB Rz 2038); it took the payment year's rates. **⚠ figures** for such a
+  payslip closed from now on.
 - Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
   davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund
   (`payroll: { payments: liability }`), names the open payments it books first, and code then books

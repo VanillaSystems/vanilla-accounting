@@ -250,3 +250,39 @@ test('the fact of an entry is said on the entry month once, never again', () => 
   const apr = computePayslip(ctxOf(store, closedThrough(store, '2026-04', 'j1')), 'j1', '2026-04')!;
   assert.ok(!facts(apr).includes('entry'));
 });
+
+// ─── back pay in a later year (WBB Rz 2036–2040) ────────────────────────────────
+
+import { historyOf } from '../src/payroll/history.js';
+import type { PayslipEvent } from '../src/payroll/model.js';
+import type { FederalFigure } from '../src/core/modules/schema.js';
+
+/** Invented figures of 2027 that differ from 2026's, so the case shows whose year a line takes: AHV 5.5 %, ALV ceiling 150,000. */
+function yearsWith2027() {
+  const y26 = ch.payrollYears!['2026'];
+  const row = (key: string, value: number): FederalFigure => { const f = y26.figures[key]; return { ...(Array.isArray(f) ? f[0] : f), value, validFrom: '2027-01-01' }; };
+  return { ...ch.payrollYears, 2027: { ...y26, year: 2027, figures: { ...y26.figures, ahvEmployee: row('ahvEmployee', 5.5), ahvEmployer: row('ahvEmployer', 5.5), alvCeiling: row('alvCeiling', 150000) } } };
+}
+
+/** 2026 closed month by month at `wage`, the Anstellung ending `until` (or running on); a bonus of 2,000 paid in February 2027. */
+function backPay(wage: number, until?: string) {
+  const store = firm([staff('p1', { employment: [dated('2026-01-01', monthly(wage), undefined, until)] })]);
+  const years = yearsWith2027();
+  const events: PayslipEvent[] = [];
+  for (let m = 1; m <= 12; m++) { const d = computePayslip({ data: ch.payroll!, years, store, history: historyOf(events) }, 'p1', `2026-${String(m).padStart(2, '0')}`); if (d) events.push(closeOf(d)); }
+  store.monthLines = [{ id: 'm1', employee: 'p1', month: '2027-02', wageType: 'bonus', amount: 2000, enteredAt: '2027-02-10T08:00:00Z' }];
+  return computePayslip({ data: ch.payroll!, years, store, history: historyOf(events) }, 'p1', '2027-02')!;
+}
+
+test('B1 golden case: back pay after the exit takes the rates and ceilings of the year it was earned in (WBB Rz 2038)', () => {
+  // 12,400 a month: 148,800 in 2026, above 2026's ALV ceiling of 148,200; 2027's 150,000 would leave room for 1,200.
+  const d = backPay(12400, '2026-12-31');
+  assert.deepEqual(lines(d).filter(([w]) => w === 'ahv-an' || w === 'alv-an'), [['ahv-an', 2000, 5.3, 106]], '2,000 × 5.3 % of 2026; no ALV: 2026\'s ceiling is reached');
+  assert.ok(facts(d).includes('ceiling'));
+});
+
+test('B1 golden case: back pay while still employed in the later year takes the payment year\'s rates and ceilings (WBB Rz 2039)', () => {
+  const d = backPay(12400);
+  // February 2027 (the only month of 2027 here): 12,400 + 2,000 at 5.5 %; ALV up to 2027's ceiling for one month, 150,000 / 12.
+  assert.deepEqual(lines(d).filter(([w]) => w === 'ahv-an' || w === 'alv-an'), [['ahv-an', 14400, 5.5, 792], ['alv-an', 12500, 1.1, 137.5]]);
+});

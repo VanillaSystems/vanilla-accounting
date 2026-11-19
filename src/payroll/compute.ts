@@ -166,8 +166,12 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     missing.push({ wageType, label: w ? label(w) : wageType, missing: code, ...(days ? { days } : {}) });
   };
 
+  // The law's rates and ceilings: of the payment's month, but a payment after the employment ended, in a later year,
+  // takes those of the year it was earned in, its last year (WBB Rz 2038; while employed, the payment year's, Rz 2039).
+  const earnedIn = referenceYear(e, year);
+  const figureDay = earnedIn === year ? to : `${earnedIn}-12-31`;
   const fig = (key: string) => {
-    const f = federalOn(ctx.years, key, to);
+    const f = federalOn(ctx.years, key, figureDay);
     if (f) used.set(`federal/${key}|${f.validFrom}`, { path: `federal/${key}`, validFrom: f.validFrom, enteredAt: f.validFrom });
     return f;
   };
