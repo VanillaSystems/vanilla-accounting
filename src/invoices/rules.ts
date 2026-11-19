@@ -306,7 +306,7 @@ export type MissingField =
   | 'sender.name' | 'sender.address' | 'sender.uid' | 'payTo'
   | 'customer' | 'customer.name' | 'customer.address'
   | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.price' | 'line.vatRate' | 'line.activity' | 'line.discount' | 'line.discountBase' | 'exemption' | 'total'
-  | 'credit.invoice' | 'credit.sign' | 'credit.exceeds' | 'credit.aboveOpen';
+  | 'credit.invoice' | 'credit.sign' | 'credit.exceeds' | 'credit.aboveOpen' | 'numberYear';
 
 const hasAddress = (a: { postcode?: string; town?: string; country?: string } | undefined) => !!(a?.postcode?.trim() && a.town?.trim() && a.country?.trim());
 
@@ -365,10 +365,14 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
 /**
  * What issuing warns of and the person may issue with all the same («Trotzdem ausstellen», spec
  * 4.11): an item position without a text (Art. 26 Abs. 2 lit. d MWSTG), or without an amount (lit.
- * e: it prints as 0.00), and a Rabatt with nothing above it to take off.
+ * e: it prints as 0.00), a Rabatt with nothing above it to take off, and a kept number of another
+ * year than the date («Nummer 2026-005 im Jahr 2027»).
  */
-export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'>): Missing[] {
-  return draft.lines.flatMap((l, line): Missing[] => {
+export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'> & { number?: string; date?: string }): Missing[] {
+  // A draft back from issue keeps its number; dated into another year, the number names the old one (spec 4.4.2).
+  const year = draft.number && /(?:^|\D)((?:19|20)\d\d)(?:\D|$)/.exec(draft.number)?.[1];
+  const numberYear: Missing[] = year && draft.date && draft.date.slice(0, 4) !== year ? [{ field: 'numberYear' }] : [];
+  return [...numberYear, ...draft.lines.flatMap((l, line): Missing[] => {
     // A Rabatt with no item above it takes nothing.
     if (l.kind === 'discount') return draft.lines.slice(0, line).some(isItem) ? [] : [{ field: 'line.discountBase', line }];
     if (!isItem(l)) return [];
@@ -376,7 +380,7 @@ export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'>
       ...(!l.text.trim() ? [{ field: 'line.text' as const, line }] : []),
       ...(l.quantity === 0 || l.price === 0 ? [{ field: 'line.price' as const, line }] : []),
     ];
-  });
+  })];
 }
 
 /** Why the money of a document cannot move as asked; `code` is what the UI says it in (src/invoices/payments.ts PaymentError, src/types/api-error.ts PaymentErrorBody). */
@@ -391,10 +395,11 @@ export class InvoiceRuleError extends Error {
  * «Zurück zum Entwurf» (backToDraftRefusal): `sent` the document went out (MWSTG Art. 27 Abs. 2), `settled`
  * something was received, credited or written off, `applied` a credit note a payment of its invoice took,
  * `closed` its VAT event lies in a filed period; `numbered` a draft that keeps its number is not deleted.
- * «Konten ändern»: `account` not a revenue account of the chart, or not a position's.
+ * «Konten ändern»: `account` not a revenue account of the chart, or not a position's; `credited` a credit
+ * note's position on an account the change splits over two.
  */
 export type InvoiceRefusal = 'incomplete' | 'unconfirmed' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid' | 'aboveOpen' | 'surplus' | 'beforeInvoice'
-  | 'sent' | 'settled' | 'applied' | 'closed' | 'numbered' | 'account';
+  | 'sent' | 'settled' | 'applied' | 'closed' | 'numbered' | 'account' | 'credited';
 
 /**
  * The draft as an issued invoice: its number (the next of the year), its due date, its payment
@@ -417,7 +422,10 @@ export function issue(draft: Draft, ctx: {
     throw new InvoiceRuleError('incomplete', `Für eine MWST-konforme Rechnung fehlt: ${where(missing)}.`, missing);
   }
   const warnings = warningsForIssue(draft);
-  if (warnings.length && !ctx.confirmed) throw new InvoiceRuleError('unconfirmed', `Eine Position ohne Text oder Betrag: ${where(warnings)}. Sie wird so gedruckt; nur mit «Trotzdem ausstellen».`, warnings);
+  if (warnings.length && !ctx.confirmed) {
+    if (warnings.some((w) => w.field === 'numberYear')) throw new InvoiceRuleError('unconfirmed', `Nummer ${draft.number} im Jahr ${draft.date.slice(0, 4)}: der Entwurf behält die Nummer, mit der er ausgestellt war. Nur mit «Trotzdem ausstellen».`, warnings);
+    throw new InvoiceRuleError('unconfirmed', `Eine Position ohne Text oder Betrag: ${where(warnings)}. Sie wird so gedruckt; nur mit «Trotzdem ausstellen».`, warnings);
+  }
   const terms = termsFor(draft, ctx.paymentTerms, ctx.customer.paymentTermsDays);
   const { comments, status: _, ...content } = draft;
   // A document back from draft is issued again under its number (spec 4.4.2).

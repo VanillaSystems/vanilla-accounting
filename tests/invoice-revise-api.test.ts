@@ -98,7 +98,7 @@ test('Konten ändern of the filed invoice: its plan, then a reclassification wit
   const req = { lines: [{ line: 0, account: '3400' }], date: '2026-08-15' };
   const plan = await api.send('POST', '/api/invoices/in_a/accounts/plan', req);
   assert.equal(plan.status, 200, String(plan.json.error));
-  assert.deepEqual(plan.json.reclass, { ref: 'RE-2026-001-kk-1', date: '2026-08-15', moves: [{ from: '3300', to: '3400', amount: 108.1 }] });
+  assert.deepEqual(plan.json.reclass, [{ ref: 'RE-2026-001-kk-1', number: '2026-001', date: '2026-08-15', moves: [{ from: '3300', to: '3400', amount: 108.1 }] }]);
   assert.deepEqual(rows('RE-2026-001-kk-1'), [], 'the plan writes nothing');
   const bad = await api.send('POST', '/api/invoices/in_a/accounts', { lines: [{ line: 0, account: '6500' }] });
   assert.deepEqual([bad.status, bad.json.invoiceRefusal], [400, 'account']);

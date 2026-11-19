@@ -188,6 +188,8 @@ const refused: Array<Call & { status: number }> = [
   { method: 'DELETE', path: '/api/invoices/in_w/write-offs/wo-1', status: 403 },
   { method: 'POST', path: '/api/invoices/allocation', body: { transactionRef: 'CI', parts: [{ invoiceId: 'in_p', amount: 108.1 }] }, status: 403 },
   // A reclassification of «Konten ändern» is never dated in the filed quarter (spec 4.4.2).
+  // «Zurück zum Entwurf» refused in a filed period (403) needs a VAT event booked there: this fixture is on the cash basis
+  // and its filed part must stay as written (the checks below compare it), so that row is in tests/invoice-revise-api.test.ts.
   { method: 'POST', path: '/api/invoices/in_p/accounts', body: { lines: [{ line: 0, account: '3400' }], date: '2026-06-20' }, status: 403 },
   // Several objects at once (#216): a batch of filed objects only is refused as their single changes are; its undo too.
   { method: 'POST', path: '/api/batch', body: { action: { kind: 'noReceiptNeeded' }, ids: ['C1'] }, status: 403 },

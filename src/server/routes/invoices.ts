@@ -12,7 +12,7 @@ import { WS, assertOpen, readBooks, receiptPath, refDates, updateBooksWithEffect
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { liveCustomers, liveInvoices, type CreditRequest } from '../../invoices/rules.js';
 import {
-  addComment, backToDraft, cancelInvoice, createCreditNote, createCustomer, createDraft, draftReminder, fileReceipts, findInvoice, issueInvoice, issuedPdf,
+  addComment, backToDraft, cancelInvoice, changeAccounts, createCreditNote, createCustomer, createDraft, draftReminder, fileReceipts, findInvoice, issueInvoice, issuedPdf,
   missingOf, parseCustomer, parseDraftPatch, paymentContext, previewHtml, recordSend, removeDraft, replacedPdf, sendReminder, sentPdf, updateCustomer, updateDraft, viewOf,
 } from '../../invoices/service.js';
 import {
@@ -27,6 +27,8 @@ import { bookInvoiceEvents, type EventOutcome } from '../../invoices/events.js';
 import { agreedBasis, baseCurrency, chart } from '../../engines/index.js';
 import { eventRef } from '../../books/refs.js';
 import { applyAccountChange, planAccountChange, takeBackEvent, withAccounts, type AccountContext } from '../../invoices/revise.js';
+import { creditNotesOf } from '../../invoices/rules.js';
+import type { Invoice } from '../../invoices/model.js';
 import { openDay } from '../../accounting/tax-point.js';
 import { periodLock } from '../../books/store.js';
 import type { Books } from '../../books/store.js';
@@ -427,7 +429,9 @@ router.post('/api/invoices/:id/draft', async (req, res) => {
   res.json(await backToDraft(WS, req.params.id, {
     books: (inv) => {
       const ref = eventRef(inv, 'issue');
-      if (!ctx || !readBooks().journalEntries.some((e) => e.transactionRef === ref)) return [];
+      // Its event (the agreed basis), or the receipt a payment matched and released again left (the cash basis).
+      const now = readBooks();
+      if (!ctx || (!now.journalEntries.some((e) => e.transactionRef === ref) && !now.receipts.some((r) => r.id === ctx.receiptId(ctx.pdfOf(inv))))) return [];
       return updateBooksWithEffects((books) => {
         assertOpen(books, refDates(books, ref), 'deleteEntry');
         const { receipts } = takeBackEvent(books, inv, ctx.receiptId(ctx.pdfOf(inv)));
@@ -460,34 +464,34 @@ router.post('/api/invoices/:id/accounts/plan', (req, res) => {
   const { lines, date } = accountRequest(req);
   const ctx = accountContext();
   const books = readBooks();
-  const inv = liveInvoices(loadInvoices(WS)).find((i): i is Issued => i.id === req.params.id && i.status === 'issued');
+  const invoices = liveInvoices(loadInvoices(WS));
+  const inv = invoices.find((i): i is Issued => i.id === req.params.id && i.status === 'issued');
   if (!inv) throw new RequestError(404, 'Keine ausgestellte Rechnung mit dieser Id.');
-  res.json(planAccountChange(books, inv, withAccounts(inv, lines, ctx), date ?? openDay(periodLock(books), today()), ctx));
+  res.json(planAccountChange(books, inv, withAccounts(inv, lines, ctx), date ?? openDay(periodLock(books), today()), ctx, invoices));
 });
 
 /**
  * «Konten ändern» on an issued invoice: the positions' revenue accounts, never an amount, a rate or a
- * code. Its bookings of an open period change account; for those of a filed period a reclassification
- * without a code is booked on `date` (an open day: else 403). The PDF stays as issued.
+ * code; its credit notes' positions follow. Its bookings of an open period change account; for those
+ * of a filed period a reclassification without a code is booked on `date` (an open day: else 403).
+ * The books first, then the documents (src/invoices/service.ts changeAccounts). The PDFs stay as issued.
  */
-router.post('/api/invoices/:id/accounts', (req, res) => {
+router.post('/api/invoices/:id/accounts', async (req, res) => {
   const { lines, date: asked } = accountRequest(req);
   const ctx = accountContext();
   const pay = paymentContext(WS);
-  res.json(updateBooksWithEffects((books) => {
-    const date = asked ?? openDay(periodLock(books), today());
-    assertOpen(books, [date], 'newEntry');
-    const invoices = loadInvoices(WS);
-    const inv = liveInvoices(invoices).find((i): i is Issued => i.id === req.params.id && i.status === 'issued');
-    if (!inv) throw new RequestError(404, 'Keine ausgestellte Rechnung mit dieser Id.');
-    const next = withAccounts(inv, lines, ctx);
-    const plan = planAccountChange(books, inv, next, date, ctx);
+  const book = (from: Issued, to: Issued, invoices: readonly Invoice[], date?: string) => updateBooksWithEffects((books) => {
+    const day = date ?? openDay(periodLock(books), today());
+    assertOpen(books, [day], 'newEntry');
+    const plan = planAccountChange(books, from, to, day, ctx, invoices);
     if (!plan.lines.length) return plan;
     assertOpen(books, plan.rebook.filter((r) => !r.filed).map((r) => r.date), 'editEntry');
-    applyAccountChange(books, inv, plan, ctx, pay?.receiptId(pay.pdfOf(inv)));
-    const change = { at: new Date().toISOString(), lines: plan.lines, refs: plan.rebook.filter((r) => !r.filed).map((r) => r.ref), ...(plan.reclass ? { reclass: plan.reclass.ref } : {}) };
-    invoices.invoices[invoices.invoices.indexOf(inv)] = { ...next, accountChanges: [...(inv.accountChanges ?? []), change] };
-    saveInvoices(WS, invoices);
+    const docs = [from, ...creditNotesOf(from, invoices)];
+    applyAccountChange(books, docs, plan, ctx, (n) => { const d = docs.find((x) => x.number === n); return d && pay ? pay.receiptId(pay.pdfOf(d)) : undefined; });
     return plan;
+  });
+  res.json(await changeAccounts(WS, req.params.id, lines, ctx, {
+    books: (inv, next, invoices) => book(inv, next, invoices, asked),
+    undo: (plan, now, before, invoices) => { book(now, before, invoices, plan.reclass[0]?.date); },
   }));
 });

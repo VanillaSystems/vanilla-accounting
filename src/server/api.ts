@@ -55,7 +55,7 @@ const MAIL_STATUS: Record<MailRefusal, number> = { notConfigured: 409, noPasswor
 
 const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
   incomplete: 400, unconfirmed: 409, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409, uid: 400, aboveOpen: 409, surplus: 409, beforeInvoice: 400,
-  sent: 409, settled: 409, applied: 409, closed: 403, numbered: 409, account: 400,
+  sent: 409, settled: 409, applied: 409, closed: 403, numbered: 409, account: 400, credited: 409,
 };
 
 // From the network only the phone's paths answer (src/server/phone.ts), the API ones only with the

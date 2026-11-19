@@ -1216,17 +1216,36 @@ listed here and updated with phase 2's build:
     and the sales record the PDF became goes with its file when nothing else holds it (named with
     `release`, #405): issuing again books a new receipt under the same file name. On the cash basis the
     books hold nothing of an unpaid document, so nothing is booked or taken back.
-47. **Konten ändern, code by code (slice F2).** For each booking of the invoice (its event, its
-    payments booked from it), the revenue of each VAT code is spread over the accounts the positions
-    now name, in proportion to how the invoice splits it, to the cent; so no code's total moves. A
-    booking of an open period changes in place (its ids kept where the lines are as many). For one of
-    a filed period one reclassification `RE-<n>-kk-<k>` (src/books/refs.ts `reclassRef`) moves the
-    revenue in the books' currency without a VAT code, dated today or the day the person picks in the
-    open period. A payment a person booked herself is named and kept. The position records the new
-    account and `accountChanges` the change (Verlauf); the PDF stays. Refused on a Gutschrift (its own
-    positions carry its accounts) and a cancelled Rechnung (its Storno reverses the event as booked).
-    In a foreign currency a split into more lines may move the converted total of a code by a cent,
-    since each line converts on its own.
+47. **Konten ändern, code by code (slice F2, after review).** For each booking of the invoice and of
+    its credit notes (events, payments booked from them, refunds), the revenue of each VAT code and
+    side (booked, or taken back) is spread over the accounts the positions now name, in proportion
+    to the nets of the positions, to the cent; so no code's total moves. Only the positions whose
+    old account the booking's own lines carry take part: a line a person changed stays hers and her
+    account gets nothing of ours. A booking of an open period changes in place (its ids kept where
+    the lines are as many). A document's filed bookings are taken together with its earlier
+    reclassifications: one reclassification `RE-<n>-kk-<k>` (a credit note's `GS-<n>-kk-<k>`,
+    src/books/refs.ts `reclassRef`) moves, in the books' currency and without a VAT code, what their
+    revenue carries now to where the positions put it; so change, change, change back leaves every
+    account as filed. Dated today or on the open day the person picks. A payment a person booked
+    herself is named and kept. The PDF stays.
+48. **Credit notes follow (slice F2, after review).** A credit note of the whole invoice holds its
+    positions one by one: each follows its own. Any other's position follows its account when the
+    invoice moves that account to one other; when the change splits an account a credit note books
+    on over two, it is refused (`credited`) with the way on (one account each, or cancel and issue
+    the credit note again). The credit notes' positions record the change too. A Storno reverses a
+    document's `-kk-` entries with its event, so no revenue account keeps a part of it.
+49. **Foreign currency (slice F2, after review).** A booking split into more lines spreads the code's
+    total in the books' currency as well; a line whose official rate would round to another cent
+    carries the rate of its share (its converted amount over its amount), so no code's converted total
+    moves. `npm run restamp-fx` would put the official rate back on such a line and with it the cent.
+50. **Order of writes (slice F2, after review).** Both actions write the books first through the
+    write door, then the documents in the invoicing queue (service.ts `backToDraft`,
+    `changeAccounts`). Documents changed meanwhile: back to draft renames the PDF back; Konten ändern
+    books the change back; both refuse with `changed`. Back to draft takes the receipt a matched and
+    released payment left on the cash basis too, and a document issued again files its receipt under
+    a name with the PDF's short checksum, so it never resolves to the replaced PDF's file. A draft
+    that keeps its number, dated into another year, warns («Nummer 2026-005 im Jahr 2027») and is
+    issued on «Trotzdem ausstellen».
 
 ---
 

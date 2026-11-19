@@ -16,11 +16,11 @@ export const eventRef = (doc: { number: string; kind: 'invoice' | 'credit-note' 
 export const writeOffRef = (doc: { number: string }, id: string): string => `RE-${doc.number}-${id}`;
 
 /**
- * The ref of a reclassification «Konten ändern» books (src/invoices/revise.ts): RE-2026-001-kk-1, k
- * from 1 per invoice. It moves revenue a booking of a filed period put on one account to another,
+ * The ref of a reclassification «Konten ändern» books (src/invoices/revise.ts): RE-2026-001-kk-1 (a
+ * credit note's GS-2026-004-kk-1), k from 1 per document. It moves revenue a booking of a filed period put on one account to another,
  * dated in the open period, without a VAT code; no books format change (decision 2), as writeOffRef.
  */
-export const reclassRef = (doc: { number: string }, k: number): string => `RE-${doc.number}-kk-${k}`;
+export const reclassRef = (doc: { number: string; kind: 'invoice' | 'credit-note' }, k: number): string => `${eventRef(doc, 'issue')}-kk-${k}`;
 
 /** Whether the books carry the document's issue: then its payments settle the receivable, whatever the basis is by then. */
 export const hasEvent = (books: { journalEntries: ReadonlyArray<{ transactionRef: string }> }, doc: { number: string; kind: 'invoice' | 'credit-note' }): boolean => {

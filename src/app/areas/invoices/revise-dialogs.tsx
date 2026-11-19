@@ -87,7 +87,7 @@ export function AccountsDialog({ inv, nav }: Props & { inv: Issued }) {
             </label>
           ))}
         </div>
-        {plan?.reclass && <label className="lkr"><span>{t('invoices.accountsDate')}</span><span className="iin"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></span></label>}
+        {!!plan?.reclass.length && <label className="lkr"><span>{t('invoices.accountsDate')}</span><span className="iin"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></span></label>}
         <div className="iwhat" data-testid="accounts-plan">
           <b>{t('invoices.accountsWhat')}</b>
           {error ? <p className="warnline">{error}</p>
@@ -98,7 +98,8 @@ export function AccountsDialog({ inv, nav }: Props & { inv: Issued }) {
                 {plan.rebook.flatMap((r) => (r.filed
                   ? [<li key={r.ref} data-filed>{t('invoices.accountsFiled', { ref: r.ref, date: formatDate(r.date) })}</li>]
                   : r.moves.map((m, k) => <li key={`${r.ref}${k}`}>{t('invoices.accountsRebook', { ref: r.ref, date: formatDate(r.date), amount: money(m.amount, r.currency), from: m.from, to: m.to })}</li>)))}
-                {plan.reclass?.moves.map((m, k) => <li key={`kk${k}`} data-reclass>{t('invoices.accountsReclass', { ref: plan.reclass!.ref, date: formatDate(plan.reclass!.date), amount: money(m.amount, baseCurrency()), from: m.from, to: m.to })}</li>)}
+                {plan.reclass.flatMap((r) => r.moves.map((m, k) => <li key={`${r.ref}${k}`} data-reclass>{t('invoices.accountsReclass', { ref: r.ref, date: formatDate(r.date), amount: money(m.amount, baseCurrency()), from: m.from, to: m.to })}</li>))}
+                {plan.notes.map((n) => <li key={n.id}>{t('invoices.accountsNote', { number: n.number })}</li>)}
                 {plan.kept.map((ref) => <li key={ref}>{t('invoices.accountsKept', { ref })}</li>)}
               </ul>
             )}

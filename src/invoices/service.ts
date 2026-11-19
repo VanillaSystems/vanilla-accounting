@@ -13,7 +13,7 @@ import { defaultTexts, draftDays, issuedIntro, issuedSheet, reminderSheet, sende
 import {
   INVOICE_CURRENCIES, INVOICE_LANGUAGES, DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, LINE_KINDS, PRICES, isItem, type UnitDef,
   type Comment, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
-  type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type SentDocument, type SentKind,
+  type AccountChange, type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type SentDocument, type SentKind,
 } from './model.js';
 import { renderHtml, renderPdf, type Rendered } from './pdf.js';
 import {
@@ -24,6 +24,7 @@ import {
 import type { SheetData } from './sheet.js';
 import { loadInvoices, newEnvelope, readPdf, sha256, storePdf, updateInvoices, writeAtomic } from './store.js';
 import type { PaymentContext, PaymentOutcome } from './payments.js';
+import { notesWithAccounts, withAccounts, type AccountChangePlan, type AccountContext } from './revise.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { creditNoteStatus, type CreditListStatus } from './lists.js';
 import { TEXTS } from './texts.js';
@@ -452,6 +453,49 @@ export function backToDraft(ws: Workspace, id: string, opts: { now?: string; boo
     }
     for (const f of removed) rmSync(f, { force: true });
     return draft;
+  });
+}
+
+// ─── Konten ändern (spec 4.4.2) ────────────────────────────────────────────────
+
+/**
+ * «Konten ändern»: `books` books the change first (the route, through the write door:
+ * src/invoices/revise.ts planAccountChange, applyAccountChange) and returns its plan; then the
+ * invoice's positions, and its credit notes' that follow them, record the new accounts and the
+ * change (`accountChanges`), in this process's queue. Should the documents have changed meanwhile,
+ * `undo` books the change back and the request is refused (`changed`).
+ */
+export function changeAccounts(ws: Workspace, id: string, lines: ReadonlyArray<{ line: number; account: string }>, ctx: AccountContext, opts: {
+  now?: string;
+  books(inv: Issued, next: Issued, invoices: readonly Invoice[]): AccountChangePlan;
+  undo(plan: AccountChangePlan, now: Issued, before: Issued, invoices: readonly Invoice[]): void;
+}): Promise<AccountChangePlan> {
+  return serial(() => {
+    const at = opts.now ?? new Date().toISOString();
+    const book = loadInvoices(ws);
+    const inv = findInvoice(book, id);
+    if (!inv || inv.status !== 'issued') return notFound('Rechnung');
+    const next = withAccounts(inv, lines, ctx);
+    const plan = opts.books(inv, next, liveInvoices(book));
+    if (!plan.lines.length) return plan;
+    const notes = notesWithAccounts(inv, next, liveInvoices(book), ctx);
+    try {
+      updateInvoices(ws, (fresh) => {
+        const same = (x: Invoice) => JSON.stringify(fresh.invoices.find((i) => i.id === x.id)) === JSON.stringify(x);
+        if (!same(inv) || !notes.every((n) => same(n.old))) throw new InvoiceRuleError('changed', 'Die Rechnung oder eine ihrer Gutschriften wurde inzwischen geändert; bitte neu laden.');
+        const change = (d: Issued, ls: AccountChange['lines'], extra: Partial<AccountChange> = {}): Issued => ({ ...d, accountChanges: [...(d.accountChanges ?? []), { at, lines: ls, refs: plan.rebook.filter((r) => !r.filed && r.number === d.number).map((r) => r.ref), ...extra }] });
+        const reclass = (n: string) => plan.reclass.find((r) => r.number === n)?.ref;
+        fresh.invoices[fresh.invoices.findIndex((i) => i.id === inv.id)] = change(next, plan.lines, reclass(inv.number) ? { reclass: reclass(inv.number) } : {});
+        for (const n of notes) {
+          const ls = plan.notes.find((x) => x.id === n.old.id)?.lines ?? [];
+          if (ls.length) fresh.invoices[fresh.invoices.findIndex((i) => i.id === n.old.id)] = change(n.next, ls, reclass(n.old.number) ? { reclass: reclass(n.old.number) } : {});
+        }
+      });
+    } catch (e) {
+      opts.undo(plan, next, inv, liveInvoices(book).map((i) => notes.find((n) => n.old.id === i.id)?.next ?? i));
+      throw e;
+    }
+    return plan;
   });
 }
 
