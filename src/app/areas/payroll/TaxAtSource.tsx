@@ -89,7 +89,7 @@ export function TariffFiles({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
                 <span className="mono">{x.year}</span>
                 <span>{cur ? formatDate(cur.created) : t('payroll.tax.notCurrent')}</span>
                 <span>{cur ? localWhen(cur.fetchedAt).at : ''}</span>
-                <span className="mono" title={cur?.sha256}>{cur ? cur.sha256.slice(0, 12) : ''}{older.length ? <small className="m"> · {t('payroll.tax.olderN', { n: older.length })}</small> : null}</span>
+                <span className="mono" data-tip={cur?.sha256}>{cur ? cur.sha256.slice(0, 12) : ''}{older.length ? <small className="m"> · {t('payroll.tax.olderN', { n: older.length })}</small> : null}</span>
                 <span>{canEdit ? <LoadTariff region={x.region} year={x.year} nav={nav} label={t('payroll.tax.reload')} /> : null}</span>
               </div>
             );
@@ -134,7 +134,7 @@ export function SettlementsView({ year, nav }: { year: string; nav: Nav }) {
             <p className="m">{[s.insurer ? `${s.insurer.name}${s.insurer.customerNumber ? ` · ${t('payroll.insurances.customerNumber')} ${s.insurer.customerNumber}` : ''}` : '', s.files.length ? t('payroll.tax.files', { list: s.files.map(formatDate).join(', ') }) : ''].filter(Boolean).join(' · ')}</p>
             <div className="ftab psettle" role="table" aria-label={t('payroll.tax.listTitle', { month: monthText(s.month), region: s.region })}>
               <div className="fh" role="row">
-                <span>{t('payroll.tax.person')}</span><span>{t('payroll.tax.code')}</span><span className="r">{t('payroll.tax.wage')}</span><span className="r" title={t('payroll.tax.rateIncomeLong')}>{t('payroll.tax.rateIncome')}</span><span className="r">{t('payroll.tax.rate')}</span><span className="r">{t('payroll.tax.tax')}</span><span className="r">{t('payroll.tax.commission')}</span>
+                <span>{t('payroll.tax.person')}</span><span>{t('payroll.tax.code')}</span><span className="r">{t('payroll.tax.wage')}</span><span className="r" data-tip={t('payroll.tax.rateIncomeLong')}>{t('payroll.tax.rateIncome')}</span><span className="r">{t('payroll.tax.rate')}</span><span className="r">{t('payroll.tax.tax')}</span><span className="r">{t('payroll.tax.commission')}</span>
               </div>
               {s.rows.map((r) => (
                 <div key={r.payslip} className="fr" role="row">

@@ -221,6 +221,7 @@ const NO_MODEL: Record<string, string> = {
   'src/desktop/dictation.ts': "macOS's dictation",
   'src/desktop/main.ts': "the app's own server",
   'src/parsers/pdf-pages.ts': 'osascript renders PDF pages',
+  'src/payroll/tariffs.ts': "the tax authority's tariff files",
   'src/platform/ai-cli.ts': 'the CLI\'s --version and auth status, no model',
   'src/platform/browser/chrome.ts': 'Chrome for a source',
   'src/platform/git-program.ts': 'xcode-select',
