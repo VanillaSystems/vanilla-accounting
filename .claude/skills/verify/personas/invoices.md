@@ -43,3 +43,23 @@ The states the demos hold for the walk (tools/demo/kaffee-invoices.ts): sent by 
 and confirmed (2026-010), ausgeziffert (2026-003, 2026-005), Gutschrift applied (2026-011/012),
 cancelled (2026-015), a draft with position kinds, EUR with SCOR (2026-013). The consultant: the
 mandate July to September (paid), the Munich audit in EUR (July paid, September open).
+
+## Phase 2 checkpoints (docs/specs/invoicing.md 5, «Phase 2»)
+
+Walked by hand, without the AI, by Sandra (the painter's office: Angebote for facades, Aufträge,
+Rechnungen) and by the webshop (Corinne of first-run-webshop.md: wholesale to cafés and shops beside
+the shop, by Artikel). Score each 0/1/2 as above, with a screenshot each. Both walk the coffee roaster
+(`demo/`); P2.1 also on `demo-schreinerei/` (the kitchen Angebot and its Auftrag), P2.6 on any demo
+before and after `npm run update`. The states the demos hold for the walk: tools/demo/kaffee-invoices.ts
+and schreinerei-invoices.ts, `sales`.
+
+| # | Checkpoint | Where in the demos | 2 means |
+|---|---|---|---|
+| P2.1 | Angebot for a facade, sent, accepted by phone | `demo/`: Verkauf › Angebote › Neu, any contact, a facade by m²; then «Angenommen». As made: AN-2026-00001 (Beispiel Cafés AG, accepted 19.10.); `demo-schreinerei/`: AN-2026-00001 (Küche in Eiche) | its own number AN-…, PDF, «Angenommen» by the person's click; no booking (`$S diff` no changes) |
+| P2.2 | Angebot → Auftrag → two Lieferscheine (6 and 4 of 10 boxes) → Rechnung | `demo/`: the chain AN-2026-00001 › AU-2026-00001 › LS-2026-00001 (6, Filiale Bern), LS-2026-00002 (4, Filiale Basel) › Rechnung 2026-019; to walk it anew: the open Angebot AN-2026-00003 or a new one | each step one dialog with the open quantities; after the first Lieferschein the Auftrag reads «Teilweise»; after the Rechnung «Erledigt»; each document shows the same chain; the Lieferschein prints no prices; only the Rechnung books |
+| P2.3 | Angebot with two optional positions, one taken | `demo/`: AN-2026-00003 (Muster Hotel: Filterkaffee, the Schulung and the Milchkännchen optional) › «Rechnung erstellen» or «Auftrag erstellen», tick the Schulung | the Angebot's total leaves both out and names them; the conversion lists them unticked; the Rechnung's total and QR amount include the taken one |
+| P2.4 | A wholesale Rechnung from the Artikel list | `demo/`: Rechnung 2026-020 (Beispiel Kantine, four Artikel); to walk it: a new Rechnung › «＋ Artikel» HM-1, ES-1, MU-7 | code, text, unit, price, rate and account from the Artikel; changeable on the position |
+| P2.5 | A café chain with a head office and two branches | `demo/`: Verkauf › Kontakte › Beispiel Cafés AG (Hauptsitz Zürich, Filialen Bern and Basel, Laura Beispiel Einkauf, Marco Muster Buchhaltung); Rechnung 2026-019 | one firm contact with two contact persons and two delivery addresses; the Rechnung goes to the billing address, «z. Hd.» the picked person |
+| P2.6 | An existing workspace after the update | any demo: the issued Rechnungen 2026-001… as before; Firma › Rechnungen › Nummernkreise; a new Rechnung issues 2026-021 (`demo/`); a new firm (`npm run init`, or the desktop's «Neue Buchhaltung») | every issued number as before; the next Rechnung continues the old series; a new firm starts with AN-, AU-, LS-, RE-, GS- |
+| P2.7 | Rechnung issued by mistake, not yet sent | `demo/`: 2026-017 or 2026-018 (issued, not sent) › «Zurück zum Entwurf»; a sent one (2026-019) for the second half | «Zurück zum Entwurf» keeps its number; the PDF stays in the log as replaced; on the agreed basis `RE-<n>` is gone from the open quarter; once sent, the action is not offered and Gutschrift and Storno are |
+| P2.8 | Conversion of an expired Angebot | `demo/`: AN-2026-00002 (Beispiel Bistro, valid until 30.09.) › «Auftrag erstellen» | a warning with the date and what follows; «Trotzdem erstellen» makes the draft |
