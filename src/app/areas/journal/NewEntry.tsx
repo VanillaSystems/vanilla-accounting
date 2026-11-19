@@ -13,6 +13,7 @@ import { localToday, parsePeriod, parseSwissDate } from '../../../accounting/per
 import { firmCodes, formTakes, lookupVatCode } from '../../../accounting/vat-codes.js';
 import type { RouteOf } from '../../shell/route.js';
 import { getAccountMap } from '../../lib/accounts.js';
+import { balancesAt } from '../../lib/account-balances.js';
 import { periodName } from '../../lib/period-label.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
@@ -104,6 +105,8 @@ export function NewEntry(props: Props) {
   const claim = as === 'vat' && corrected && d.vatCode && d.vatCode === claimCode(corrected, d.accountDebit ?? '', rate) ? d.vatCode : undefined;
   const fx = !tx && d.exchangeCurrency && d.exchangeRate ? { currency: d.exchangeCurrency, rate: d.exchangeRate } : undefined;
   const currency = tx?.currency ?? fx?.currency ?? baseCurrency();
+  // The picker names each account's balance at the end of the entry's day (#567).
+  const balances = balancesAt(books, now.draft.date ?? d.date ?? localToday());
   const taxOf = (code: string | undefined) => (corrected && code ? fmt(Math.abs(vat().vatLine({ ...corrected, id: '', transactionRef: '', date: d.date ?? '', vatCode: code })?.tax ?? 0)) : '');
 
   /** The lines of a Sammelbuchung as pairs: the shared account on its side, the line's on the other. */
@@ -357,7 +360,7 @@ export function NewEntry(props: Props) {
           {split ? (
             <>
               <div className="jsides one">
-                <AccountField name={split.side} label={t('journal.split.shared', { side: sideLabel(split.side) })} defaultValue={d[split.side] ?? ''} />
+                <AccountField balances={balances} name={split.side} label={t('journal.split.shared', { side: sideLabel(split.side) })} defaultValue={d[split.side] ?? ''} />
                 {swapButton}
                 <input type="hidden" name={otherSide(split.side)} value="" />
                 <label>{t('journal.split.text')}<input name="description" defaultValue={d.description ?? ''} /></label>
@@ -365,7 +368,7 @@ export function NewEntry(props: Props) {
               <div className="jlines" data-testid="split-lines">
                 {split.lines.map((l, i) => (
                   <div key={i} className="jline" data-line={i}>
-                    <AccountField name={`line-account-${i}`} label={sideLabel(otherSide(split.side))} defaultValue={l.account} />
+                    <AccountField balances={balances} name={`line-account-${i}`} label={sideLabel(otherSide(split.side))} defaultValue={l.account} />
                     <label>{t('journal.field.description')}<input name={`line-text-${i}`} defaultValue={l.description ?? ''} placeholder={now.draft.description || t('journal.split.textPlaceholder')} /></label>
                     {firmCodes().length ? <VatCodeField name={`line-vat-${i}`} label={t('journal.field.vatCode')} defaultValue={l.vatCode ?? ''} placeholder={t('journal.vatPlaceholder')} /> : <span />}
                     <label>{t('journal.amountIn', { currency })}<input className="mono" name={`line-amount-${i}`} defaultValue={l.amount !== undefined && !l.auto ? fmt(l.amount) : ''} style={{ textAlign: 'right' }} data-rest={l.auto && !ownRest.current ? '' : undefined} /></label>
@@ -386,9 +389,9 @@ export function NewEntry(props: Props) {
           ) : (
             <>
               <div className="jsides">
-                <AccountField name="accountDebit" label={t('journal.field.accountDebit')} defaultValue={d.accountDebit ?? ''} />
+                <AccountField balances={balances} name="accountDebit" label={t('journal.field.accountDebit')} defaultValue={d.accountDebit ?? ''} />
                 {swapButton}
-                <AccountField name="accountCredit" label={t('journal.field.accountCredit')} defaultValue={d.accountCredit ?? ''} />
+                <AccountField balances={balances} name="accountCredit" label={t('journal.field.accountCredit')} defaultValue={d.accountCredit ?? ''} />
               </div>
               {firmCodes().length ? (
                 <div className="two">

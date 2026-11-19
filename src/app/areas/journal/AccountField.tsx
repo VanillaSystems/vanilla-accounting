@@ -19,6 +19,7 @@ import { chart } from '../../../engines/index.js';
 import type { AccountType } from '../../../core/modules/schema.js';
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
+import { fmt } from '../../lib/utils.js';
 
 /** An option of the list: an account of the books, the question's offer, or one of the standard chart to add. */
 interface Option { account: Account; kind: 'have' | 'offer' | 'add'; hint?: true }
@@ -36,7 +37,7 @@ export function unknownAccountText(number: string): string {
 /** The words a person types for a class, from the dictionary (one line of words per class). */
 const classWords = (): AccountContext<AccountType>['words'] => ({ revenue: t('accounts.words.revenue').split(/\s+/), expense: t('accounts.words.expense').split(/\s+/) });
 
-export function AccountField({ name, label, defaultValue, readOnly, onPick, offer, prefer, defaults, suggest }: { name: string; label: string; defaultValue: string; readOnly?: boolean; onPick?(): void; offer?: Account; prefer?: AccountType; defaults?: readonly string[]; suggest?: readonly string[] }) {
+export function AccountField({ name, label, defaultValue, readOnly, onPick, offer, prefer, defaults, suggest, balances }: { name: string; label: string; defaultValue: string; readOnly?: boolean; onPick?(): void; offer?: Account; prefer?: AccountType; defaults?: readonly string[]; suggest?: readonly string[]; balances?: ReadonlyMap<string, number> }) {
   const [value, setValue] = useState(defaultValue);
   const [open, setOpen] = useState(false);
   // null: the row of the value the field holds (focused and not typed in yet), so ↵ keeps it; a number once she types or moves.
@@ -99,7 +100,10 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick, offe
     e.stopPropagation();
   }
 
-  const shown = name0 ?? (offered && value === offered.number ? t('combobox.offered', { name: offered.name }) : value ? t('journal.noSuchAccount') : t('journal.noAccount'));
+  // Each account of the books with its balance on the entry's day, under the field and in the list (#567).
+  const balanceOf = (n: string) => (balances ? fmt(balances.get(n) ?? 0) : undefined);
+  const held0 = name0 && balanceOf(value);
+  const shown = name0 && held0 ? t('journal.accountBalance', { name: name0, balance: held0 }) : name0 ?? (offered && value === offered.number ? t('combobox.offered', { name: offered.name }) : value ? t('journal.noSuchAccount') : t('journal.noAccount'));
   return (
     <label className="acf">
       {label}
@@ -121,7 +125,7 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick, offe
       />
       {refused ? <span className="acn warn" role="alert">{refused}</span> : <span className="acn">{shown}</span>}
       {open && (
-        <ul ref={list} id={listId} role="listbox" aria-label={label} className="acl" tabIndex={-1}>
+        <ul ref={list} id={listId} role="listbox" aria-label={label} className={balances ? 'acl bals' : 'acl'} tabIndex={-1}>
           {matches.length === 0 && <li className="none">{t('combobox.none')}</li>}
           {matches.map((m, i) => (
             <li
@@ -134,6 +138,7 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick, offe
               onMouseMove={() => i !== active && setActive(i)}
             >
               <span className="mono">{m.account.number}</span>{m.kind === 'add' ? t('combobox.add', { name: m.account.name }) : m.kind === 'offer' ? t('combobox.offered', { name: m.account.name }) : m.account.name}
+              {m.kind === 'have' && balances ? <span className="mono bal">{balanceOf(m.account.number)}</span> : null}
             </li>
           ))}
           {all.length > matches.length && <li className="none">{t('combobox.more', { n: all.length - matches.length, max: MAX_OPTIONS })}</li>}

@@ -22,6 +22,11 @@ Two markers flag an entry you must read before you update:
   together under one number, each as a pair with the shared account (#567).
 - The same form: ⇄ swaps Soll and Haben, and a date typed short («6.12.» or «6.12.26») is the
   form's year, shown whole once you leave the field.
+- The account list of a hand entry shows each account's balance at the end of the entry's day,
+  and so does the line under a chosen account.
+- ⌘K finds the words known from other bookkeeping tools («Debitoren», «Kontoblatt»,
+  «Saldovortrag», «Manuelle Buchungen», …) and opens the place here that does that job, under its
+  name here.
 - Booking by hand onto Debitoren or Kreditoren (a collective account whose balance is the open
   invoices or bills) warns and books on «Trotzdem buchen».
 

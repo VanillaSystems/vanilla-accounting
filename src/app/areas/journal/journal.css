@@ -70,6 +70,9 @@
 .acl li.on { background: var(--accent-soft); color: var(--ink); }
 .acl li.none { color: var(--muted); cursor: default; }
 .acl li.add { color: var(--accent); }
+/* The account's balance on the entry's day (#567), at the row's end. */
+.acl.bals { width: 340px; }
+.acl li .bal { margin-left: auto; padding-left: 10px; min-width: 0; flex: none; }
 .form .acf .acn.warn { color: var(--warn); white-space: normal; }
 
 /* the new entry */
