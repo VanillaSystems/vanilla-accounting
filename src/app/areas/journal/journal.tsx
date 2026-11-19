@@ -21,6 +21,7 @@ import { I } from '../receipts/icons.js';
 import { at } from '../receipts/view.js';
 import { Kbd } from '../receipts/commands.js';
 import { NO_VAT } from '../codes/model.js';
+import { vatSplitOf } from '../../../accounting/statement-postings.js';
 import { codeLabel, codeText } from '../codes/names.js';
 import { codesUi, setCodesUi } from '../codes/state.js';
 import { byMonth, firstRowTakesOver, rowsOf, JOURNAL_FILTERS, JOURNAL_ORIGINS, type EntryView, type JournalFilter } from './model.js';
@@ -146,9 +147,11 @@ function Row({ v, prev, sel, picked, acName, toast, onClick }: { v: EntryView; p
   const cont = prev?.e.transactionRef === e.transactionRef;
   const side = (n: string, which: 'dr' | 'cr') => {
     const label = which === 'dr' ? t('journal.field.accountDebit') : t('journal.field.accountCredit');
-    return n
-      ? <span className={`mono ${which}`} data-tip={`${label} ${n} ${acName[n] ?? ''}`}>{n}</span>
-      : <span className={`mono ${which} none`} data-tip={t('journal.noCounterSide', { side: label })}>·</span>;
+    if (n) return <span className={`mono ${which}`} data-tip={`${label} ${n} ${acName[n] ?? ''}`}>{n}</span>;
+    // An empty side a code whose amount is the tax itself leaves: the statements fill in the VAT account (as the detail says).
+    const split = e.vatCode ? vatSplitOf(e, Object.keys(acName)) : null;
+    const filled = split?.fillsEmpty && split.side === (which === 'dr' ? 'debit' : 'credit');
+    return <span className={`mono ${which} none`} data-tip={filled ? t('journal.vatSide', { side: label, account: `${split.account} ${acName[split.account] ?? ''}`.trim() }) : t('journal.noCounterSide', { side: label })}>·</span>;
   };
   return (
     <div className={`row${sel ? ' sel' : ''}${picked ? ' picked' : ''}${cont ? ' cont' : ''}`} role="option" aria-selected={sel || picked} tabIndex={sel ? 0 : -1} data-id={e.id} onClick={onClick}>

@@ -118,34 +118,35 @@ export const owesAcquisition = (info: Pick<TaxCodeInfo, 'acquisitionZiffer' | 'i
  * single-leg tax correction (`-2`, empty Soll) posts against its empty side and so balances it.
  */
 export function vatPostings(entries: readonly JournalEntry[], vatAccount: string): VatPosting[] {
-  const out: VatPosting[] = [];
-  for (const e of entries) {
-    const info = e.vatCode ? vat().codes.parse(e.vatCode) : null;
-    const line = vat().vatLine(e);
-    if (!info || !line || line.tax === 0) continue;
-    const acquisition = owesAcquisition(info);
-    if (info.acquisitionZiffer && !acquisition) continue;
-    const owed = !!(info.revenueZiffer || info.correctionZiffer) || acquisition;
-    if (!owed && !info.inputTaxZiffer) continue;
-    const amount = Math.abs(line.tax);
-    // The side that carries the tax: credit for a sale, debit for a purchase and for Bezugsteuer (the expense owes it); a minus code swaps it.
-    const onCredit = acquisition ? info.isNegative : owed !== info.isNegative;
-    const carrier = onCredit ? e.accountCredit : e.accountDebit;
-    // Tax leaves the carrier towards the VAT account when owed, comes back to it when deducted; Bezugsteuer owed is added to its carrier.
-    const toVat = acquisition ? !info.isNegative : onCredit;
-    const [accountDebit, accountCredit] = toVat ? [carrier, vatAccount] : [vatAccount, carrier];
-    out.push({
-      id: `vat:${e.id}`,
-      transactionRef: e.transactionRef,
-      date: e.date,
-      accountDebit,
-      accountCredit,
-      amount,
-      description: `MWST ${e.vatCode} ${e.id}`,
-      code: e.vatCode!,
-    });
-  }
-  return out;
+  return entries.flatMap((e) => vatPostingOf(e, vatAccount) ?? []);
+}
+
+/** The tax one entry's VAT code splits off (see `vatPostings`), or null when it splits off none. */
+export function vatPostingOf(e: JournalEntry, vatAccount: string): VatPosting | null {
+  const info = e.vatCode ? vat().codes.parse(e.vatCode) : null;
+  const line = vat().vatLine(e);
+  if (!info || !line || line.tax === 0) return null;
+  const acquisition = owesAcquisition(info);
+  if (info.acquisitionZiffer && !acquisition) return null;
+  const owed = !!(info.revenueZiffer || info.correctionZiffer) || acquisition;
+  if (!owed && !info.inputTaxZiffer) return null;
+  const amount = Math.abs(line.tax);
+  // The side that carries the tax: credit for a sale, debit for a purchase and for Bezugsteuer (the expense owes it); a minus code swaps it.
+  const onCredit = acquisition ? info.isNegative : owed !== info.isNegative;
+  const carrier = onCredit ? e.accountCredit : e.accountDebit;
+  // Tax leaves the carrier towards the VAT account when owed, comes back to it when deducted; Bezugsteuer owed is added to its carrier.
+  const toVat = acquisition ? !info.isNegative : onCredit;
+  const [accountDebit, accountCredit] = toVat ? [carrier, vatAccount] : [vatAccount, carrier];
+  return {
+    id: `vat:${e.id}`,
+    transactionRef: e.transactionRef,
+    date: e.date,
+    accountDebit,
+    accountCredit,
+    amount,
+    description: `MWST ${e.vatCode} ${e.id}`,
+    code: e.vatCode!,
+  };
 }
 
 export interface ClosingLedger {

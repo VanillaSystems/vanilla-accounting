@@ -36,6 +36,7 @@ const say: Say = (key, vars) => t(key, vars as never);
 import { selectNew, setUi, useUi, type Section } from './state.js';
 import type { EvidenceCheck } from '../../../accounting/evidence-check.js';
 import { bookingWarnings } from '../../../accounting/booking-warnings.js';
+import { vatSplitOf, type VatSplit } from '../../../accounting/statement-postings.js';
 import { isAccrual, newYearAfter, reversalIn } from '../../../accounting/reversal.js';
 import { correctionPeriodName, journalFor, openPeriod, recentlyDeleted, runAct, splitReceipt } from './commands.js';
 import { createEntry, fixEvidence, linkReceipt, reclassify, saveEntry, type Field } from './actions.js';
@@ -62,6 +63,15 @@ import { sameTags, valueLabel } from '../../../books/tags.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
+
+/** A side of the Buchungssatz: its account, or, left empty by a code whose amount is the tax itself, the VAT account the statements fill in. */
+function SideRow({ side, account, split, names }: { side: 'debit' | 'credit'; account: string; split: VatSplit | null; names: Record<string, string> }) {
+  const label = t(side === 'debit' ? 'journal.field.accountDebit' : 'journal.field.accountCredit');
+  if (!account && split?.fillsEmpty && split.side === side) {
+    return <div role="row" data-testid="vat-side"><span className="k">{label}</span><span className="mono n">{split.account}</span><span className="nm">{names[split.account] ?? ''}<span className="m"> · {t('journal.fromVatCode')}</span></span></div>;
+  }
+  return <div role="row"><span className="k">{label}</span><span className="mono n">{account || '–'}</span><span className="nm">{names[account] ?? (account ? '' : t('journal.noCounter'))}</span></div>;
+}
 
 export function Detail(props: Props) {
   const picked = useSelection('entry');
@@ -106,6 +116,8 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
   const acName = getAccountMap();
   const found = e.vatCode ? lookupVatCode(e.vatCode) : null;
   const tax = vat().vatLine(e)?.tax;
+  // Where the code's tax goes, as the Bilanz posts it: the VAT account on a one-sided entry's empty side, or split off the other.
+  const split = vatSplitOf(e, Object.keys(acName));
   const cur = e.exchangeCurrency || baseCurrency();
   const edit = canEdit && !v.locked && e.origin !== 'year-close';
   const siblings = (j.byRef.get(e.transactionRef) ?? []).filter((x) => x !== v);
@@ -133,17 +145,18 @@ function EntryDetail(props: Props & { v: EntryView; j: Journal }) {
       </div>
 
       <div className="satz" role="table" aria-label={t('journal.satz')}>
-        <div role="row"><span className="k">{t('journal.field.accountDebit')}</span><span className="mono n">{e.accountDebit || '–'}</span><span className="nm">{acName[e.accountDebit] ?? (e.accountDebit ? '' : t('journal.noCounter'))}</span></div>
-        <div role="row"><span className="k">{t('journal.field.accountCredit')}</span><span className="mono n">{e.accountCredit || '–'}</span><span className="nm">{acName[e.accountCredit] ?? (e.accountCredit ? '' : t('journal.noCounter'))}</span></div>
+        <SideRow side="debit" account={e.accountDebit} split={split} names={acName} />
+        <SideRow side="credit" account={e.accountCredit} split={split} names={acName} />
         {(e.vatCode || firmCodes().length > 0) && <div role="row">
           <span className="k">{t('journal.field.vatCode')}</span>
           <span className="mono n">{e.vatCode ? <button type="button" className="vlink" data-vat={e.vatCode} data-tip={t('codes.explainCode', { code: e.vatCode })} onClick={() => explain(props, e.vatCode!)}>{e.vatCode}</button> : '–'}</span>
           <span className="nm">
             {e.vatCode
-              ? <>{codeText(e.vatCode)}{!!tax && found?.entry.amountIs !== 'tax' && <span className="mono m"> · {t('journal.vatIncluded', { tax: fmt(Math.abs(tax)) })}</span>}</>
+              ? <>{codeText(e.vatCode)}{!!tax && !split && found?.entry.amountIs !== 'tax' && <span className="mono m"> · {t('journal.vatIncluded', { tax: fmt(Math.abs(tax)) })}</span>}</>
               : t('journal.noVat')}
           </span>
         </div>}
+        {split && !split.fillsEmpty && <div role="row" data-testid="vat-split"><span className="k" /><span /><span className="nm m">{t('journal.vatSplit', { rate: String(vat().codes.parse(e.vatCode!)?.rate ?? ''), tax: fmt(split.tax), currency: baseCurrency() })} <span className="mono" data-tip={acName[split.account] ?? ''}>{split.account}</span></span></div>}
         {fx && fx.check.kind !== 'estv' && <div role="row"><span className="k" /><span /><span className="nm warn">{checkText(fx)}</span></div>}
         {Object.entries(e.tags ?? {}).sort(([a], [b]) => rank(a) - rank(b)).map(([d, value]) => {
           const dim = ws?.dimensions?.find((x) => x.id === d);

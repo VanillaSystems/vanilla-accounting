@@ -16,6 +16,12 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Buchungen: an entry that books only the tax (a code such as `M81-2` or `-I81-2`, one side
+  empty) said «keine Gegenbuchung» on its empty side, which read as an error. The detail now
+  shows the VAT account the Bilanz and the reports fill in there, marked «aus dem MWST-Code», and
+  the list's tooltip says the same. An entry with a rate code shows under its Buchungssatz the tax
+  the code splits off and its account («davon MWST 8.1 %: CHF … → 2201»). Display only: the
+  figures and the books are unchanged.
 - Mac: a downloaded `.vanillashare` file showed as coloured pixel noise in Chrome's download list.
   The app's icon is now built with Apple's `iconutil`, and a Freigabe-Datei (`.vanillashare`,
   `.vanilla`) has its own icon: a page with the Vanilla wave.
