@@ -17,7 +17,7 @@ import { PAYROLL_DOCUMENTS, type PayrollDocument } from '../../shell/route.js';
 import type { AreaProps, Nav } from '../index.js';
 import { files, payrollApi, reloadPayroll, urls, usePayroll, type Documents, type Issued, type LohnausweisData, type SettingsView } from './data.js';
 import { Disclaimer, documentAt, employeeAt, Go, payslipAt, Tabs, YearSwitch, type PayrollRoute } from './common.js';
-import { data, labelOf, monthShort, monthText } from './words.js';
+import { data, labelOf, localWhen, monthShort, monthText } from './words.js';
 
 type Props = AreaProps<PayrollRoute>;
 
@@ -96,6 +96,7 @@ export function DocumentDetail(props: Props) {
   const doc = route.view === 'documents' ? route.doc : undefined;
   if (!doc) return <div className="detail-empty"><div>{t('payroll.docs.noneSelected')}</div></div>;
   if (load.state === 'failed') return <div className="detail-empty"><div>{errorText(load.error)}</div></div>;
+  if (settings.state === 'failed') return <div className="detail-empty"><div>{errorText(settings.error)}</div></div>;
   if (load.state !== 'ready' || settings.state !== 'ready') return <div className="detail-empty"><div>{t('app.loading')}</div></div>;
   const d = load.data;
   const labels = new Map(settings.data.wageTypes.map((w) => [w.key, labelOf(w.label, w.key)]));
@@ -182,11 +183,10 @@ function LohnausweisView({ d, person, labels, nav, canEdit }: Props & { d: Docum
 }
 
 function IssuedLine({ s }: { s: Issued }) {
-  const at = new Date(s.issuedAt);
-  const time = `${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
+  const { at, time } = localWhen(s.issuedAt);
   return (
     <li>
-      <b>{t(KIND[s.kind])}</b> <span className="m">· {t('payroll.docs.issuedAt', { date: formatDate(s.issuedAt.slice(0, 10)), time })} · </span>
+      <b>{t(KIND[s.kind])}</b> <span className="m">· {t('payroll.docs.issuedAt', { date: at, time })} · </span>
       <FileLink href={files.lohnausweisPdf(s.year, s.id)}>{t('payroll.slip.pdf')}</FileLink>
     </li>
   );
@@ -299,7 +299,8 @@ function DeclarationsView({ d, nav }: { d: Documents; nav: Nav }) {
 
 /** The Lohnbuchungen of each month with closed payslips, as a CSV for a fiduciary who keeps the ledger elsewhere. */
 function JournalView({ d }: { d: Documents }) {
-  const ms = MONTHS(d.year).filter((_, i) => d.lohnkonto.totals.gross.months[i] !== 0);
+  // Every month a closed payslip booked something in, a gross of zero too (an employer line, a correction).
+  const ms = MONTHS(d.year).filter((_, i) => d.lohnkonto.rows.some((r) => r.months[i] !== 0) || Object.values(d.lohnkonto.totals).some((x) => x.months[i] !== 0));
   return (
     <div className="detail-in pjournal">
       <Head title={t('payroll.docs.journal')} lead={t('payroll.docs.journalLead', { year: d.year })} />

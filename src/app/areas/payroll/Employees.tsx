@@ -18,6 +18,7 @@ import type { Address } from '../../../invoices/model.js';
 import type { AreaProps, Nav } from '../index.js';
 import { payrollApi, reloadPayroll, urls, usePayroll, type EmployeeDetail, type Overview, type SettingsView } from './data.js';
 import { at, Go, payslipAt, settingsAt, Tabs, type PayrollRoute } from './common.js';
+import { useHandover } from '../../handover/store.js';
 import { DatedField, Fields, numberOf, numText, useBackdated, type FieldDef, type Form, type ValueSpec } from './Dated.js';
 import { data, kindLabel, labelOf, monthShort, statusText } from './words.js';
 
@@ -276,7 +277,10 @@ function Person({ d, settings, nav, canEdit }: Props & { d: EmployeeDetail; sett
  * The password her payslips by mail are locked with (§11): set hers, or have one made and shown once, here
  * only; a date of birth in it warns in the page first (others know it), then «Trotzdem verwenden».
  */
-function MailPassword({ e, nav, canEdit }: { e: EmployeeDetail['employee']; nav: Nav; canEdit: boolean }) {
+function MailPassword({ e, nav, canEdit: may }: { e: EmployeeDetail['employee']; nav: Nav; canEdit: boolean }) {
+  // On a Durchsicht copy the password is the sharer's to give (she sends the payslips).
+  const copy = useHandover()?.durchsicht;
+  const canEdit = may && !copy;
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   const [warn, setWarn] = useState(false);
@@ -290,7 +294,7 @@ function MailPassword({ e, nav, canEdit }: { e: EmployeeDetail['employee']; nav:
       await reloadPayroll();
     } catch (x) { nav.toast(errorText(x)); }
   };
-  const save = async (ev: FormEvent) => { ev.preventDefault(); await run(value.trim() || undefined); };
+  const save = async (ev: FormEvent) => { ev.preventDefault(); await run(value || undefined); };
   return (
     <div className="dated" data-testid="mail-password">
       <span className="dlabel">{t('payroll.password.label')}</span>
@@ -300,6 +304,7 @@ function MailPassword({ e, nav, canEdit }: { e: EmployeeDetail['employee']; nav:
           {canEdit && !open ? <button type="button" className="quiet2" onClick={() => { setOpen(true); setShown(null); }}>{t(e.hasMailPassword ? 'payroll.password.change' : 'payroll.password.setOne')}</button> : null}
         </div>
         <span className="m">{t('payroll.password.lead')}</span>
+        {copy ? <span className="m">{t('payroll.mail.sharer', { name: copy.sharer.name })}</span> : null}
         {shown ? (
           <div className="pcard" role="status" data-testid="password-shown">
             <h4>{t('payroll.password.generated')}</h4>
@@ -313,7 +318,7 @@ function MailPassword({ e, nav, canEdit }: { e: EmployeeDetail['employee']; nav:
             <h4>{t('payroll.password.birthDateTitle')}</h4>
             <p className="m">{t('payroll.password.birthDate')}</p>
             <div className="acts">
-              <AsyncButton type="button" className="btn primary" onClick={() => run(value.trim(), true)}>{t('payroll.password.anyway')}</AsyncButton>
+              <AsyncButton type="button" className="btn primary" onClick={() => run(value, true)}>{t('payroll.password.anyway')}</AsyncButton>
               <button type="button" className="btn ghost" onClick={() => setWarn(false)}>{t('payroll.close.back')}</button>
             </div>
           </div>
@@ -322,7 +327,7 @@ function MailPassword({ e, nav, canEdit }: { e: EmployeeDetail['employee']; nav:
           <AsyncForm className="form inline pform" onSubmit={save}>
             <label className="wide">{t('payroll.password.own')}<input name="password" type="text" autoComplete="off" spellCheck={false} className="mono" value={value} onChange={(x) => setValue(x.target.value)} /><span className="fhint">{t('payroll.password.rules')}</span></label>
             <div className="acts">
-              <AsyncButton type="submit" className="btn primary" disabled={!value.trim()}>{t('payroll.password.save')}</AsyncButton>
+              <AsyncButton type="submit" className="btn primary" disabled={!value}>{t('payroll.password.save')}</AsyncButton>
               <AsyncButton type="button" className="btn" onClick={() => run(undefined)}>{t('payroll.password.generate')}</AsyncButton>
               <button type="button" className="btn ghost" onClick={() => { setOpen(false); setValue(''); }}>{t('common.cancel')}</button>
             </div>

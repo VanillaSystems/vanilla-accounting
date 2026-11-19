@@ -120,3 +120,31 @@ test('Per Mail senden: the recipient and the copy shown before, the password set
     assert.ok(!JSON.stringify((await api.send('GET', url)).json).includes(password), `${url} never carries the password`);
   }
 });
+
+test('Änderungen shows payroll.json without the payslip password and with the number masked', async () => {
+  const { draftDir } = await import('../src/saving/changes.js');
+  const { redactPayroll } = await import('../src/payroll/redact.js');
+  const { mkdirSync, readFileSync, writeFileSync } = await import('node:fs');
+  const { join, relative } = await import('node:path');
+  await api.send('POST', '/api/payroll/employees/e2/mail-password', { password: 'Sonne-und-Mond-7' });
+  const text = readFileSync(api.ws.paths.payroll, 'utf8');
+  assert.ok(text.includes('Sonne-und-Mond-7') && text.includes('756.1234.5678.97'), 'the file keeps both (owner decision 4)');
+  const path = relative(api.ws.paths.root, api.ws.paths.payroll);
+  mkdirSync(draftDir(api.ws), { recursive: true });
+  writeFileSync(join(draftDir(api.ws), path), text.replace('Nora', 'Norah'));
+  const diff = await api.send('GET', `/api/changes/diff?source=draft&path=${encodeURIComponent(path)}`);
+  assert.equal(diff.status, 200);
+  const shown = JSON.stringify(diff.json);
+  assert.ok(!shown.includes('Sonne-und-Mond-7') && !shown.includes('1234.5678'), 'neither the password nor the number in full');
+  assert.ok(shown.includes('756.****.****.97') && shown.includes('••••••') && shown.includes('Norah'));
+  assert.equal(redactPayroll('{"mailPassword": "a\\"b", "socialSecurityNumber":"756.1234.5678.97"}'), '{"mailPassword": "••••••", "socialSecurityNumber":"756.****.****.97"}');
+});
+
+test('a refused password says why, and one with a space at either end is refused, never cut', async () => {
+  const spaced = await api.send('POST', '/api/payroll/employees/e2/mail-password', { password: ' Sonne-und-Mond-8' });
+  assert.deepEqual([spaced.status, spaced.json.params], [400, { why: 'badPassword', field: 'spaces' }]);
+  const short = await api.send('POST', '/api/payroll/employees/e2/mail-password', { password: 'kurz' });
+  assert.deepEqual(short.json.params, { why: 'badPassword', field: 'short' });
+  const lock = await api.fetch('/payroll/documents/2026/lohnausweis.csv');
+  assert.equal(lock.headers.get('cache-control'), 'no-store', 'the table with the number in full is never cached');
+});

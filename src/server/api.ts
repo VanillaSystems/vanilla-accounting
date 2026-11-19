@@ -97,6 +97,9 @@ const SHARER_ONLY: Array<[string, RegExp, string]> = [
   // Invoices and customers are issued and sent by the firm; mailboxes and collectors are its own (a copy reads no mail).
   ['*', /^\/api\/(invoices|customers)(\/|$)/, 'invoices'],
   ['*', /^\/api\/(sources|mail)(\/|$)/, 'sources'],
+  // A payslip goes to the person from the firm's mailbox, locked with the password the firm gave her: the firm's (§22 decision 38).
+  ['POST', /^\/api\/payroll\/payslips\/[^/]+\/send$/, 'payroll'],
+  ['POST', /^\/api\/payroll\/employees\/[^/]+\/mail-password$/, 'payroll'],
 ];
 /** The workflows that file, seal or close: the sharer's. */
 const SHARER_WORKFLOWS: ReadonlySet<string> = new Set(['vat-filing', 'year-close', 'quarter-close']);

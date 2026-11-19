@@ -64,3 +64,10 @@ export const pct = (r: number): string => `${r.toLocaleString('de-CH', { minimum
 
 /** The Inhaber/in, the status and the language of a person, in words. */
 export const statusText = (s: 'active' | 'left' | 'future'): string => t(`payroll.status.${s}`);
+
+/** An instant («2026-11-19T09:37:00Z») as the viewer's day and time: «19.11.2026», «10:37». */
+export function localWhen(iso: string): { at: string; time: string } {
+  const d = new Date(iso);
+  const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return { at: formatDate(day), time: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` };
+}

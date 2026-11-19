@@ -140,8 +140,10 @@ Two markers flag an entry you must read before you update:
   Lohnkonto, the annual declarations' figures and the Lohnbuchungen, each with its CSV. A closed payslip
   has «Per Mail senden» (the recipient and the copy shown first, a refusal said in the page, every mail
   sent listed), a month «Alle per Mail senden»; a person's page sets or generates her payslip password,
-  shown once, and warns before one that holds her date of birth. The password never leaves the server
-  once set. Works without the AI.
+  shown once, and warns before one that holds her date of birth. «Alle per Mail senden» leaves out what was
+  sent already (unless asked) and names what cannot go and why. No page shows a password once set, and
+  Änderungen shows payroll.json with the password hidden and the AHV number masked; on a Durchsicht copy
+  sending and passwords stay the firm's. Works without the AI.
 
 ### Fixed
 

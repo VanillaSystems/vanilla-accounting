@@ -1670,12 +1670,25 @@ non-obvious decision is recorded here when it is taken.
     (`lohnkonto`, `declarations`, `journal`; `/payroll/documents/<year>/<doc>`). The Lohnkonto shows only
     the months with a figure; the CSVs keep all twelve. The declarations' table has one column per person
     and one row per base, so a capped base («bis Höchstbetrag») reads beside its uncapped one.
-37. **A person's payslip password never leaves the server once it is set**: the person page reads only
-    whether one is set (`hasMailPassword`); a generated one is shown once in the answer that set it. Before a
-    send the payslip reads its recipient, the copy and the mails sent so far from `GET
-    /api/payroll/payslips/<id>/mail`; without a sender and a mailbox the page says that no copy goes.
-    «Alle per Mail senden» shows every recipient first and then sends one mail per closed payslip, each
-    refusal named beside its person.
+37. **No page of the app shows a payslip password once it is set, nor the social security number in full
+    outside «anzeigen»**: the person page reads only whether one is set (`hasMailPassword`); a generated
+    one is shown once, in the answer that set it; Änderungen shows payroll.json with the password as
+    «••••••» and the number masked as the lists show it (src/payroll/redact.ts). The file itself keeps both
+    in plain text (owner decision 4), so an export, a hand-over and a share link carry payroll.json whole,
+    password and number included; the AI sidebar never reads it (decision 11). The Lohnausweis and
+    declarations CSVs carry the number in full and are served with `Cache-Control: no-store`. A password is
+    taken exactly as typed: a space at either end is refused with its reason, never cut off.
+38. **Sending payslips and setting their passwords are the firm's, refused on a Durchsicht copy**
+    (`SHARER_ONLY`, action `payroll`): the mail goes from the firm's mailbox to its people with the passwords
+    the firm gave them. The page hides «Per Mail senden», «Alle per Mail senden» and the password's controls
+    there and says who sends. The final statement and the Lohnausweis stay open to the fiduciary: both are
+    bookings or documents a fiduciary prepares for the firm, and the return carries them back.
+39. **Before a send the payslip reads its recipient, the copy and the mails sent so far** from `GET
+    /api/payroll/payslips/<id>/mail`; without a sender and a mailbox the page says that no copy goes, and
+    «Per Mail senden» shows only once there are an address and a password. «Alle per Mail senden» lists
+    every closed payslip first: those without an address or a password as «nicht gesendet: …», those sent
+    already with their day, left out unless «Auch die schon gesendeten nochmals senden» is ticked; the
+    button counts and sends only the rest, one mail each, and names each refusal beside its person.
 
 ---
 

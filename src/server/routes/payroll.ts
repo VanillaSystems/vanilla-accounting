@@ -295,7 +295,11 @@ router.get('/payroll/documents/:year/lohnausweis/:file', run((req, res) => {
 const inYear = (e: PayrollEmployee, closes: readonly PayslipClose[], year: string) =>
   closes.some((c) => c.employee === e.id && c.month.startsWith(year)) || entriesWithin(e.employment, `${year}-01-01`, `${year}-12-31`).some((s) => s.entry);
 
-const sendCsv = (res: Response, name: string, text: string) => res.type('text/csv; charset=utf-8').attachment(name).send(`﻿${text}`);
+/** A table as a download; one that carries the social security number in full is never kept by a cache. */
+const sendCsv = (res: Response, name: string, text: string, secret = false) => {
+  if (secret) res.set('Cache-Control', 'no-store');
+  return res.type('text/csv; charset=utf-8').attachment(name).send(`﻿${text}`);
+};
 
 /** The Lohnausweis figures of every person as a table (the fallback for the free federal tool and the fiduciary). */
 router.get('/payroll/documents/:year/lohnausweis.csv', run((req, res) => {
@@ -308,7 +312,7 @@ router.get('/payroll/documents/:year/lohnausweis.csv', run((req, res) => {
     const l = lohnausweisOf(e, closes, types, ctx.data, year, e.language);
     return [e.id, nameOf(e, `${year}-12-31`), e.socialSecurityNumber, year, l.from, l.to, ...fields.map((k) => l.fields[k] ?? 0), l.remarks.map((r) => `${r.label} ${r.amount.toFixed(2)}`).join(', ')];
   });
-  sendCsv(res, `lohnausweis-${year}.csv`, csv([['id', 'name', 'ssn', 'year', 'from', 'to', ...fields, '15'], ...rows]));
+  sendCsv(res, `lohnausweis-${year}.csv`, csv([['id', 'name', 'ssn', 'year', 'from', 'to', ...fields, '15'], ...rows]), true);
 }));
 
 /** The Lohnkonto: every Lohnart per month, of one person (?employee=) or the firm. */
@@ -330,7 +334,7 @@ router.get('/payroll/documents/:year/declarations.csv', run((req, res) => {
   const rows = declarationRows(ctx.store.employees, [...ctx.history.closed.values()], year);
   const keys = [...new Set(rows.flatMap((r) => Object.keys(r.bases)))].sort();
   const head = (k: string) => `${ctx.data.bases.find((b) => b.key === k.split('|')[0])?.label.de ?? k}${k.includes('|') ? ' (bis Höchstbetrag)' : ''}`;
-  sendCsv(res, `meldungen-${year}.csv`, csv([['id', 'name', 'ssn', 'from', 'to', ...keys.map(head)], ...rows.map((r) => [r.employee, r.name, ctx.store.employees.find((e) => e.id === r.employee)?.socialSecurityNumber, r.from, r.to, ...keys.map((k) => r.bases[k] ?? 0)])]));
+  sendCsv(res, `meldungen-${year}.csv`, csv([['id', 'name', 'ssn', 'from', 'to', ...keys.map(head)], ...rows.map((r) => [r.employee, r.name, ctx.store.employees.find((e) => e.id === r.employee)?.socialSecurityNumber, r.from, r.to, ...keys.map((k) => r.bases[k] ?? 0)])]), true);
 }));
 
 /** The month's Lohnbuchungen as a table, for a fiduciary who keeps the ledger elsewhere. */

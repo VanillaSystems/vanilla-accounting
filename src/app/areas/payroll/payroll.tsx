@@ -62,7 +62,7 @@ export const payroll: Area<PayrollRoute> = {
   legend,
   title: (r) => {
     if (r.view === 'payslips') return r.month ? monthText(r.month) : undefined;
-    if (r.view === 'payments') return r.month ? `${t('payroll.tab.payments')} ${monthText(r.month)}` : undefined;
+    if (r.view === 'payments') return r.month ? t('payroll.payments.title', { month: monthText(r.month) }) : undefined;
     if (r.view === 'documents') return r.year ? `${t('payroll.tab.documents')} ${r.year}` : undefined;
     if (r.view === 'settings' && r.section) return t('payroll.tab.settings');
     if (r.view === 'employees') return r.id === 'new' ? t('payroll.employee.add') : undefined;

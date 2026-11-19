@@ -262,7 +262,7 @@ export async function sendPayslip(ws: Workspace, id: string, send: (message: Mai
   const to = recipientOf(e, close, now);
   if (!e || !to) throw new PayrollRefusal('noEmail', 'Für diese Person ist keine eigene E-Mail-Adresse erfasst.');
   if (!e.mailPassword) throw new PayrollRefusal('noPassword', 'Für diese Person ist kein Passwort für die Lohnabrechnungen gesetzt.');
-  if (passwordCheck(e, e.mailPassword).refused) throw new PayrollRefusal('badPassword', 'Das Passwort dieser Person geht nicht mehr (etwa die AHV-Nummer, seit sie erfasst ist): ein neues setzen.');
+  if (passwordCheck(e, e.mailPassword).refused) throw new PayrollRefusal('badPassword', 'Das Passwort dieser Person geht nicht mehr (etwa die AHV-Nummer, seit sie erfasst ist): ein neues setzen.', 'stale');
   const books = loadBooks(ws);
   const receipt = books.receipts.find((r) => r.id === close.receiptId);
   const path = receipt && receiptFile(ws, books, receipt);
@@ -286,11 +286,14 @@ export function setMailPassword(ws: Workspace, employee: string, given: string |
   return updatePayroll(ws, (s) => {
     const e = s.employees.find((x) => x.id === employee);
     if (!e) throw new PayrollRefusal('notFound', `Keine Person ${employee}.`);
-    const password = given?.trim() || generatedPassword();
+    // Hers exactly as typed: a space at either end is refused, never cut off without a word (she would not know the one that opens).
+    const own = given === undefined || given === '' ? undefined : given;
+    if (own !== undefined && own !== own.trim()) throw new PayrollRefusal('badPassword', 'Das Passwort beginnt oder endet mit einem Leerzeichen.', 'spaces');
+    const password = own ?? generatedPassword();
     const check = passwordCheck(e, password);
-    if (check.refused) throw new PayrollRefusal('badPassword', { short: 'Das Passwort hat mindestens 8 Zeichen.', long: 'Das Passwort hat höchstens 32 Zeichen.', characters: 'Das Passwort hat nur Buchstaben ohne Akzente, Zahlen und Satzzeichen.', socialSecurityNumber: 'Die AHV-Nummer ist nie ein Passwort.' }[check.refused]);
+    if (check.refused) throw new PayrollRefusal('badPassword', { short: 'Das Passwort hat mindestens 8 Zeichen.', long: 'Das Passwort hat höchstens 32 Zeichen.', characters: 'Das Passwort hat nur Buchstaben ohne Akzente, Zahlen und Satzzeichen.', socialSecurityNumber: 'Die AHV-Nummer ist nie ein Passwort.' }[check.refused], check.refused);
     if (check.warn && !confirm) return { warn: check.warn };
     e.mailPassword = password;
-    return given?.trim() ? {} : { password };
+    return own !== undefined ? {} : { password };
   });
 }
