@@ -42,6 +42,8 @@ import { excessOfPayment } from '../accounting/receipt-due.js';
 import { isBankFee } from '../booking/separate-fee.js';
 import { linkCardLines } from '../books/card-lines.js';
 import { unbookPayments } from '../accounting/classify-force.js';
+import { externalPayslip, linkPayslips } from '../booking/payslip.js';
+import { receiptKnowledge } from '../booking/receipt-wait.js';
 
 const MAPPING_THRESHOLD = 0.8;
 const CONCURRENCY = 10;
@@ -220,6 +222,16 @@ export function businessesOf(ws: Pick<Workspace, 'paths' | 'company'>, books?: U
   }
 }
 
+/** Whether a payment's own text is a wage's, on a firm that pays wages (evidence.guide.yaml ev-exempt-wages); none when the workspace's knowledge does not load. */
+function wagesOf(ws: Workspace): (t: BankTransaction) => boolean {
+  try {
+    const wages = receiptKnowledge(loadKnowledge(APP_ROOT, ws.paths.root), ws).wages;
+    return (t) => wages.some((w) => w.test(t.description));
+  } catch {
+    return () => false;
+  }
+}
+
 export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const IMPORT_DIR = ws.paths.inbox;
   const toChf = estvToChf();
@@ -228,14 +240,22 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   const visionNeeded = staged.filter((r) => r.needsVisionReview);
   // A file the reading found no receipt at all (a holiday photo, #361) is set aside under the name it came with: no payment, no name the model makes up.
   const aside = staged.filter((r) => !r.needsVisionReview && r.kind === 'noise');
-  const toRead = staged.filter((r) => !r.needsVisionReview && r.kind !== 'noise');
+  // A payslip of another program is filed and paired by code (§10.2 A1, A8): no model names it or looks for its payment.
+  const slips = staged.filter((r) => !r.needsVisionReview && externalPayslip(r));
+  const toRead = staged.filter((r) => !r.needsVisionReview && r.kind !== 'noise' && !externalPayslip(r));
   // Code first (#187): the staged receipts take part in the chain with the facts code reads off them.
   const early = toRead.flatMap((r) => provisional(r) ?? []);
   // The batch payers with the firm's own UIDs as the books show them now (buyerUids): read again on every run of the code.
   let payers = batchPayersOf(ws, first);
   const noPayment = noPaymentFor(ws);
+  const wage = wagesOf(ws);
+  // A payslip of another program is paired with its wage's bank line by code alone (docs/specs/payroll.md §10.2 A1): its net and its person.
+  const payslips = (noReceipt: ReturnType<typeof noReceiptFor>) => {
+    for (const l of books.update((index) => linkPayslips(index, { isClosed: periodLock(index).isClosed, wage, noReceipt: noReceipt(index) }))) log(`linked the payslip to its wage by code: receipt ${l.receipt} → ${l.payment}`);
+  };
   const byCode = async (stagedNow: readonly Receipt[] = []) => {
     const noReceipt = noReceiptFor(ws);
+    payslips(noReceipt);
     const now = books.read();
     payers = batchPayersOf(ws, now);
     const chain = await runPairChain(books, { ask, toChf, log, staged: stagedNow, noReceipt, noPayment, businesses: businessesOf(ws, now), firm: ws.company && { uid: ws.company.uid, name: ws.company.name, owner: ws.company.owner } });
@@ -293,6 +313,13 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     progress(++completed, total);
     log(target ? `  set aside, no receipt${receipt.kindWhy ? ` (${receipt.kindWhy})` : ''}: ${receipt.filename} → ${target}` : `  warn: ${receipt.filename} is not staged in beleg-import/ any more, skipping`);
   }
+
+  for (const receipt of slips) {
+    const target = archive(receipt, receipt.date ? codeName(receipt.date, undefined, receipt.originalFilename ?? receipt.filename) : receipt.filename, () => undefined);
+    progress(++completed, total);
+    log(target ? `  ${receipt.filename} → ${target}  a payslip: filed by code, paired with its wage by its net and person  (no model match)` : `  warn: ${receipt.filename} is not staged in beleg-import/ any more, skipping`);
+  }
+  if (slips.length) payslips(noReceiptFor(ws));
 
   // ── The receipts the chain paired: archived, named and linked without their model match ──
   const pairedByCode = new Set<string>();

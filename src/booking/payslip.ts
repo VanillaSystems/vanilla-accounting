@@ -317,3 +317,13 @@ export function payslipLinks(books: PairBooks, opts: PairOptions): PayslipLink[]
   }
   return out;
 }
+
+/** The rule a link of a payslip to its wage names (Mapping.rule): code's, by amount and person. */
+export const PAYSLIP_LINK = 'payslip';
+
+/** Links the payslips code pairs (payslipLinks) into `books`, inside the caller's write door. Returns the links. */
+export function linkPayslips(books: PairBooks & { mappings: Mapping[] }, opts: PairOptions): PayslipLink[] {
+  const links = payslipLinks(books, opts);
+  for (const l of links) books.mappings.push({ transactionRef: l.payment, receiptId: l.receipt, by: 'rule', rule: PAYSLIP_LINK });
+  return links;
+}
