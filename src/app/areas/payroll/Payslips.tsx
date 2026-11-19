@@ -475,7 +475,7 @@ function Booking({ v }: { v: Payslip }) {
         {b.postings.map((p, i) => (
           <div key={i} className="fr">
             <span className="mono" data-tip={names[p.debit]}>{p.debit}</span><span className="mono" data-tip={names[p.credit]}>{p.credit}</span>
-            {/* The books' own words, as closing writes them: the journal's texts are German data (§22 decision 121). */}<span className="pt">{p.text}</span><span className="r mono">{fmt(p.amount)}</span>
+            {/* The books' own words, as closing writes them: the journal's texts are German data (§22 decision 54). */}<span className="pt">{p.text}</span><span className="r mono">{fmt(p.amount)}</span>
           </div>
         ))}
       </div>

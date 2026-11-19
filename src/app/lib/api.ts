@@ -26,6 +26,7 @@ import type { PaymentRefusal } from '../../workflows/history.js';
 import type { MailMessage } from '../../invoices/mail.js';
 import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
+import type { PayrollYearEnd } from '../../payroll/year-end.js';
 import { isKey, t, tData } from '../i18n/index.js';
 import { fmt, formatDate } from './utils.js';
 import { bookingWaitsText } from './booking-waits.js';
@@ -478,7 +479,7 @@ export type { JournalEntryInput };
 /** A movement made by hand (#88): on the owner's account without `account`; `role` and `label` add an account the firm lacks. */
 export type ManualTransactionInput = { date: string; description: string; amount: number; currency?: string; direction?: 'DBIT' | 'CRDT'; account?: string; role?: MoneyRole; label?: string };
 export type YearEndEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string; template?: string };
-export type YearCloseView = YearClose & { opening?: Opening };
+export type YearCloseView = YearClose & { opening?: Opening; payroll?: PayrollYearEnd; payrollError?: string };
 export interface InvoiceList { today: string; invoices: Invoice[]; contacts: Contact[]; sent: SentDocument[] }
 /** A contact with its business file (named, or proposed by code) and the customers' business files a person may pick. */
 export interface ContactDetail {

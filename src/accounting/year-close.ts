@@ -28,6 +28,7 @@ import type { TaxCodeInfo } from '../engines/tax-codes.js';
 import { bookedInFiled, bookedWithBase } from '../books/twins.js';
 import type { ReturnFigures } from '../engines/return.js';
 import { turnoverReconciliation, type TurnoverReconciliation } from './turnover.js';
+import { settlementRefPrefix } from '../books/refs.js';
 
 export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances' | 'reconciliations'> & {
   journalEntries: JournalEntry[];
@@ -544,11 +545,28 @@ export function bookedFor(entries: readonly JournalEntry[], year: string, t: Pic
   const onAccounts = (e: JournalEntry) => (!!t.accountDebit || !!t.accountCredit) && e.date === yearEnd(year) && (!t.accountDebit || e.accountDebit === t.accountDebit) && (!t.accountCredit || e.accountCredit === t.accountCredit);
   // The receivables entry carries the year's id, whatever accounts the person picked for it.
   const own = (e: JournalEntry) => t.id === RECEIVABLES_ID && e.id === receivablesEntryId(year);
-  return entries.filter((e) => own(e) || onAccounts(e)).map((e) => ({ id: e.id, transactionRef: e.transactionRef, chf: chfAmount(e) }));
+  return entries.filter((e) => own(e) || onAccounts(e)).map((e) => ({ id: e.id, transactionRef: e.transactionRef, date: e.date, chf: chfAmount(e) }));
+}
+
+/** The template of the social insurances' final statements (modules/ch/year-end.yaml). */
+export const SOCIAL_INSURANCE_ID = 'socialInsurance';
+
+/**
+ * The final statements' differences the payroll booked for `year` (src/payroll/insurers.ts settlementEntry, ref
+ * `LS-<year>-<insurance>`, dated when the statement came): with them the social insurances' step is booked, by the
+ * payroll, whatever day they carry. Which insurer still has none is the payroll check's fact on the same page.
+ */
+export function settlementsOf(entries: readonly JournalEntry[], year: string): BookedEntry[] {
+  return entries.filter((e) => e.transactionRef.startsWith(settlementRefPrefix(year)) && e.by?.kind === 'code' && e.by.check === 'payroll')
+    .map((e) => ({ id: e.id, transactionRef: e.transactionRef, date: e.date, chf: chfAmount(e), payroll: true as const }));
 }
 
 /** An entry that books a step: `chf` is what it adds to the step's figure. */
-export interface BookedEntry { id: string; transactionRef: string; chf: number }
+export interface BookedEntry {
+  id: string; transactionRef: string; date: string; chf: number;
+  /** The payroll's own entry (a final statement's difference): the step's «zurück» and «Neu buchen» leave it. */
+  payroll?: true;
+}
 
 /**
  * A booked step whose figure the books compute differently today (r10c-1): the Debitoren were
@@ -819,7 +837,8 @@ export function yearClose(input: YearCloseInput): YearClose {
     : [];
   const owner = ownerAccountNumber({ bankAccounts: input.bankAccounts, company: { legalForm: input.legalForm } });
   const templates = [...yearEndTemplates(owner, input.legalForm), ...proposed].map((t) => {
-    const booked = bookedFor(books.journalEntries, year, t);
+    const own = bookedFor(books.journalEntries, year, t);
+    const booked = [...own, ...(t.id === SOCIAL_INSURANCE_ID ? settlementsOf(books.journalEntries, year).filter((b) => !own.some((o) => o.id === b.id)) : [])];
     const stale = staleFigure(t, booked);
     return { ...t, state: state.templates[t.id] ?? (booked.length ? 'done' as const : undefined), ...(booked.length && { booked }), ...(stale && { stale }) };
   });

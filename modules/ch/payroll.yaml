@@ -290,7 +290,7 @@ wageTypes:
   - { key: uvgz-ag, group: arbeitgeber, side: employer, label: { de: UVG-Zusatz Arbeitgeber, fr: LAA complémentaire employeur, it: LAINF complementare datore di lavoro, en: Supplementary accident employer }, sign: "+", bases: [], debit: "5730", credit: { insurance: uvgz }, computes: contribution }
   - { key: ktg-ag, group: arbeitgeber, side: employer, label: { de: Krankentaggeld Arbeitgeber, fr: Indemnités journalières maladie employeur, it: Indennità giornaliera malattia datore di lavoro, en: Sick pay insurance employer }, sign: "+", bases: [], debit: "5740", credit: { insurance: ktg }, computes: contribution }
   # The commission the canton leaves the employer on the tax it withholds (Bezugsprovision): taken off what is
-  # owed on 2279 and credited to the personnel expense it compensates (§22 decision 101); not on the payout.
+  # owed on 2279 and credited to the personnel expense it compensates (§22 decision 92); not on the payout.
   - { key: bezugsprovision, group: arbeitgeber, side: employer, label: { de: Bezugsprovision Quellensteuer, fr: Commission de perception IS, it: Provvigione di riscossione IF, en: Tax at source commission }, sign: "-", bases: [], debit: { insurance: qst }, credit: "5890", computes: commission }
   - { key: bvg-ag, group: arbeitgeber, side: employer, label: { de: BVG Arbeitgeber, fr: LPP employeur, it: LPP datore di lavoro, en: BVG employer }, sign: "+", bases: [], debit: "5720", credit: { insurance: bvg }, computes: contribution }
 
@@ -335,7 +335,7 @@ setupDocuments:
 # `regions`: each canton with the model it applies (ESTV KS 45 Ziff. 3; Kanton Aargau, «Info
 # Quellensteuerverfahren 2021», Ziff. 3): the monthly model in 21 cantons, the annual model in FR, GE, TI,
 # VD, VS. The app computes the monthly model; a person of a canton on the annual model gets the line
-# «unvollständig» (§22 decision 102).
+# «unvollständig» (§22 decision 93).
 taxAtSource:
   file:
     url: "https://www.estv2.admin.ch/qst/{year}/loehne/tar{yy}{canton}.zip"

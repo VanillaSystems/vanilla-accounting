@@ -1,5 +1,5 @@
 /**
- * What the second persona walk of payroll B0 found wanting (docs/specs/payroll.md §22 decisions 120 ff.): the
+ * What the second persona walk of payroll B0 found wanting (docs/specs/payroll.md §22 decisions 53 ff.): the
  * company car's rate in percent with its words and default, the federal sources in the person's language,
  * the month states' words, the final statement's December warning and the insurers' «Immer so».
  */

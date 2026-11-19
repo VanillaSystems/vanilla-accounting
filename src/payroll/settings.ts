@@ -606,7 +606,7 @@ function differencesOf(ctx: Pick<PayrollContext, 'data' | 'store'>, before: Pick
   }
   const contribution = (d: { wageType: string }) => types.get(d.wageType)?.computes === 'contribution';
   const wage = out.some((d) => !contribution(d) && (types.get(d.wageType)?.bases.length ?? 0) > 0);
-  // A commission follows the tax it is taken on: the month that carries the tax's correction takes it again (§22 decision 101).
+  // A commission follows the tax it is taken on: the month that carries the tax's correction takes it again (§22 decision 92).
   const commission = (d: { wageType: string }) => types.get(d.wageType)?.computes === 'commission';
   return out.map((d) => ({ ...d, carry: !(wage && contribution(d)) && !commission(d) }));
 }
@@ -633,7 +633,7 @@ export function affectedBetween(ctx: PayrollContext, next: PayrollContext, isClo
 }
 
 /**
- * The closed payslips another tariff file computes otherwise (§22 decision 105): for the Lohnarten of a tariff
+ * The closed payslips another tariff file computes otherwise (§22 decision 96): for the Lohnarten of a tariff
  * kind and the commission only, what the payslip withheld (its own lines, less the corrections a carried line of
  * another month brought, plus the corrections entered on it since its close, as `driftOf` reads it) against
  * what it computes as if open with `next`'s file. So a month closed without a file, corrected by hand since,

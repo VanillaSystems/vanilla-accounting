@@ -1,5 +1,5 @@
 /**
- * The month's payment files hold names, IBANs and net wages (docs/specs/payroll.md §11, §22 decision 69): they
+ * The month's payment files hold names, IBANs and net wages (docs/specs/payroll.md §11, §22 decision 88): they
  * follow the payslips' rules. The AI sidebar never reads them, a hand-over or a share carries them like
  * payroll/payslips.jsonl, the server and the dev proxy treat their URL as a file of the books, and the static audit
  * export (and so the public demo) carries none of them.

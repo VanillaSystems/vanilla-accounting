@@ -156,7 +156,7 @@ export const yearOf = (ctx: PayrollContext, employee: string, year: string): Pay
 
 /**
  * The people whose December payslip of `year` is not closed yet (a draft): a final statement booked before
- * compares a total with a year the books do not hold whole, so it is said first (§22 decision 125).
+ * compares a total with a year the books do not hold whole, so it is said first (§22 decision 58).
  */
 export const decemberOpen = (ctx: PayrollContext, year: string): string[] =>
   monthView(ctx, `${year}-12`).rows.filter((r) => r.status !== 'closed').map((r) => r.name);

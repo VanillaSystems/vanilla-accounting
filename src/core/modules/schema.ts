@@ -432,7 +432,7 @@ export interface InsuranceKindDef {
   account: string;
   /** The jurisdiction's business file of the fund, where the app ships one. */
   business?: string;
-  /** The folder a company's own file of such a fund goes in when the app writes one («Immer so», §22 decision 126); absent: supplier. */
+  /** The folder a company's own file of such a fund goes in when the app writes one («Immer so», §22 decision 59); absent: supplier. */
   role?: 'authority' | 'supplier';
   rates?: Record<string, InsuranceRateDef>;
   /** The contribution is the person's (a pension certificate's figures), not a rate of the firm. */

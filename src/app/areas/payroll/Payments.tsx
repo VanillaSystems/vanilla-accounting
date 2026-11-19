@@ -249,6 +249,7 @@ function Insurer({ row, year, books, nav, canEdit }: Props & { row: InsurerRow; 
       <div className="facts"><span className="mono">{row.account}</span><span>{t('payroll.insurers.openFact')}</span></div>
       <div className="docbody">
         <dl className="pkv">
+          {row.carried ? <><dt>{t('payroll.insurers.carried')}</dt><dd className="mono">{fmt(row.carried)}</dd></> : null}
           <dt>{t('payroll.insurers.accrued')}</dt><dd className="mono">{fmt(row.accrued)}</dd>
           <dt>{t('payroll.insurers.paid')}</dt><dd className="mono">{fmt(row.paid)}</dd>
           <dt>{t('payroll.insurers.open')}</dt><dd className={`mono${row.open < 0 ? ' neg' : ''}`}>{fmt(row.open)}{row.open < 0 ? <small className="m"> · {t('payroll.insurers.ahead')}</small> : null}</dd>
@@ -268,7 +269,7 @@ function Insurer({ row, year, books, nav, canEdit }: Props & { row: InsurerRow; 
 }
 
 /**
- * The way the company keeps for this insurer's payments the accruals do not cover yet («Immer so», §22 decision 126):
+ * The way the company keeps for this insurer's payments the accruals do not cover yet («Immer so», §22 decision 59):
  * where it is kept, and «Rückgängig», which takes it out of the file; payments booked so far stay booked.
  */
 function KeptWay({ row, kept, nav, canEdit }: { row: InsurerRow; kept: NonNullable<InsurerRow['kept']>; nav: Nav; canEdit: boolean }) {

@@ -61,3 +61,6 @@ button.chk:hover { background: var(--hover); }
 .chk .chklinks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; }
 .chk .chklinks a { color: var(--accent); text-decoration: none; }
 .chk .chklinks a:hover { text-decoration: underline; }
+
+/* The payroll's facts (Payroll.tsx): their links in a row, as the unbooked payments' (the block of `.chk .cx span` is for sentences). */
+.chk .cx .chklinks { display: flex; }

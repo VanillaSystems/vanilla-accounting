@@ -148,3 +148,15 @@ test('a final statement of an unknown insurance, with a negative total or for a 
   assert.throws(() => settlementOf(books, ch.payroll!, store, 'ak', '2026', -1, '2027-01-20', id), (e: Error & { code?: string }) => e.code === 'badInput');
   assert.throws(() => settlementOf(books, ch.payroll!, store, 'ak', '2025', 100, '2026-01-20', id), (e: Error & { code?: string }) => e.code === 'nothingAccrued');
 });
+
+test('an insurer\'s row carries last year\'s balance: the opening where written (with a final statement of last year dated in this one), else the entries before', () => {
+  const { store, books } = quarter();
+  const lastYear = insurerRows(books, ch.payroll!, store, '2026').find((r) => r.id === 'ak')!;
+  const next = insurerRows(books, ch.payroll!, store, '2027').find((r) => r.id === 'ak')!;
+  assert.deepEqual([next.carried, next.accrued, next.paid, next.open], [lastYear.open, 0, 0, lastYear.open], 'not opened yet: what 2026 left');
+  const ls = { id: 'ls', transactionRef: 'LS-2026-ak', date: '2027-01-20', accountDebit: '5700', accountCredit: '2271', amount: 14.6, by: { kind: 'code' as const, check: 'payroll' as const } };
+  const opened = { journalEntries: [...books.journalEntries, ls], config: { openingBalances: { '2027': { '2271': lastYear.open } } } };
+  const row = insurerRows(opened, ch.payroll!, store, '2027').find((r) => r.id === 'ak')!;
+  assert.deepEqual([row.carried, row.open], [Math.round((lastYear.open + 14.6) * 100) / 100, Math.round((lastYear.open + 14.6) * 100) / 100]);
+  assert.equal(insurerRows(opened, ch.payroll!, store, '2026').find((r) => r.id === 'ak')!.accrued, Math.round((lastYear.accrued + 14.6) * 100) / 100, 'and 2026 counts it as its own');
+});

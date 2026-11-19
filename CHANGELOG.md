@@ -85,7 +85,7 @@ Two markers flag an entry you must read before you update:
   document states plainly, the AI on your click the rest (without salaries, the AHV number masked);
   you check and keep it, and every rate kept names its document.
 
-- Löhne for staff (phase B1, docs/specs/payroll.md §22 decisions 60–71): an hourly wage gets its holiday
+- Löhne for staff (phase B1, docs/specs/payroll.md §22 decisions 79–90): an hourly wage gets its holiday
   surcharge (4/48, 5/47, 6/46 by the holiday weeks) on its own line and a public-holiday surcharge where the
   contract names one; the holiday balance in days on every payslip; Mitarbeitende › Kinder (the allowance the
   family compensation fund decided, paid with the wage and booked against its account) and › Abwesenheiten
@@ -108,6 +108,16 @@ Two markers flag an entry you must read before you update:
   commission, amount to pay) with its CSV. A new or corrected tariff file never changes a closed
   payslip: the card offers the Rückwirkende Korrektur first. Cantons on the annual model (FR, GE, TI, VD,
   VS) get the line «unvollständig» for now.
+- Abschluss › Prüfen: a section «Löhne» with the payroll's year-end checks as facts (never a block):
+  1091 at 31.12. against the payouts not paid by then, each named; each insurer's account with what
+  the payslips accrued, what was paid and what is open, and «Schlussabrechnung erfassen» while no
+  final statement is booked; 5000 per person and month against the payslips' gross lines, and what
+  it holds without one of the app's payslips; each person's Lohnausweis (field 8 against the gross,
+  issued or not, and whether it still agrees); for wages from other programs' payslips, 2270
+  explained by what the wages withheld and what the funds were paid. The year-end step
+  «Sozialversicherungen» counts as booked by the final statements entered in Löhne. Wages booked before
+  payroll ran here count as the opening's (no difference on 5000), and each insurer shows what was paid
+  for those months.
 - Buchungen › Neue Buchung von Hand: «+ Zeile» makes it a Sammelbuchung, one account against
   several lines (for example Haben 1020 against Soll 6500 and 6570). The last line holds the rest of
   the total until you type there, and ↵ books only once the lines add up. The lines are booked

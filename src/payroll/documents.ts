@@ -29,7 +29,7 @@ export interface Lohnkonto {
 }
 
 /** The person's closes of `year` the year's figures count: none of a month her opening holds. */
-const countedCloses = (e: Pick<PayrollEmployee, 'id' | 'employment' | 'opening'>, closes: readonly PayslipClose[], year: string) =>
+export const countedCloses = (e: Pick<PayrollEmployee, 'id' | 'employment' | 'opening'>, closes: readonly PayslipClose[], year: string) =>
   closes.filter((c) => c.employee === e.id && c.month.startsWith(year) && !inOpening(e, c.month));
 
 /**

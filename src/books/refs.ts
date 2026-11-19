@@ -48,3 +48,6 @@ export const hasEvent = (books: { journalEntries: ReadonlyArray<{ transactionRef
  * that takes back or rebooks its own bookings leaves a ref that carries one as it is (#524).
  */
 export const isPersonsLink = (m: { by?: string }): boolean => m.by === 'human' || m.by === 'llm';
+
+/** The refs of the payroll's final statements of a year (src/payroll/insurers.ts settlementOf): `LS-<year>-<insurance>`; this is the year's prefix. */
+export const settlementRefPrefix = (year: string): string => `LS-${year}-`;

@@ -38,7 +38,7 @@ const MUTED = rgb(0.4, 0.4, 0.4);
 const locale = (lang: PayrollLanguage) => `${lang}-CH`;
 const money = (lang: PayrollLanguage, x: number) => new Intl.NumberFormat(locale(lang), { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(x);
 const num = (lang: PayrollLanguage, x: number) => new Intl.NumberFormat(locale(lang), { maximumFractionDigits: 4 }).format(x);
-/** A rate in percent as the page shows it: two decimals at least («0.90 %», §22 decision 122). */
+/** A rate in percent as the page shows it: two decimals at least («0.90 %», §22 decision 55). */
 const pct2 = (lang: PayrollLanguage, x: number) => new Intl.NumberFormat(locale(lang), { minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(x);
 const dayText = (lang: PayrollLanguage, day: string) => new Intl.DateTimeFormat(locale(lang), { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`));
 const monthText = (lang: PayrollLanguage, month: string) => new Intl.DateTimeFormat(locale(lang), { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}-01T00:00:00Z`));

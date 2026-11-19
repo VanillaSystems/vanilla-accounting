@@ -38,7 +38,7 @@ export async function loadTariff(ws: Workspace, region: string, year: string, op
   const base = { region, year, version, warnings: [] as [] };
   if (current === version.sha256) return { saved: true, ...base, unchanged: true, corrections: [] };
   // Also the first file: a payslip closed without it left its tax out, and the card offers to carry it. Compared with
-  // what each payslip withheld and was corrected by since, never with the file before (§22 decision 105).
+  // what each payslip withheld and was corrected by since, never with the file before (§22 decision 96).
   const affected = affectedByTariff(ctx, { ...ctx, tariffs: tariffSource(ws, loaded) }, isClosed);
   if (affected.length && !opts.backdated) {
     const reopen = reopenOffer(ctx, affected, isClosed);

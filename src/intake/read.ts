@@ -204,7 +204,7 @@ function kindOfText(fresh: Extracted, filename: string, originalFilename: string
   if (statement) return { kind: 'statement', kindBy: 'rule', kindRule: 'document:statement', ...(statement.to ? { date: statement.to } : {}) };
   // A payslip the firm's payroll program or fiduciary issued (docs/specs/payroll.md §10.2 A1): dated by its month's end, its amount the net it pays.
   // One code cannot read, or one of a month the app's own payroll closed (its PDF dropped again), is a payslip all the same: no model reads it,
-  // and the person pairs and books it (§22 decision 54).
+  // and the person pairs and books it (§22 decision 61).
   if (payslipTitled(fresh.text, firm)) {
     const slip = readPayslip(fresh.text);
     if (!slip || closedHere(slip.period, slip.employee)) return { kind: 'payslip', kindBy: 'rule', kindRule: PAYSLIP_UNREAD_RULE };

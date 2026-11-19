@@ -115,7 +115,7 @@ export function PaymentBooking(props: Props) {
 }
 
 /**
- * «Immer so» for a payroll insurer's payments (§22 decision 126): «für Monate ab dem Lohnstart» kept in the company's
+ * «Immer so» for a payroll insurer's payments (§22 decision 59): «für Monate ab dem Lohnstart» kept in the company's
  * file of the fund, so the next Akonto is not asked again. The payments it books at once are named before the click
  * (as a rule's card names them); «Rückgängig» takes the way out of the file again (what it booked stays). «Davor» is
  * chosen per payment: months before payroll ran here end, so it is never kept.

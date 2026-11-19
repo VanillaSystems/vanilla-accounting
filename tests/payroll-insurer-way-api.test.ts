@@ -1,5 +1,5 @@
 /**
- * «Immer so» on the real API (src/server/routes/payroll.ts, docs/specs/payroll.md §22 decision 126): the GET names the
+ * «Immer so» on the real API (src/server/routes/payroll.ts, docs/specs/payroll.md §22 decision 59): the GET names the
  * payments the click books, the POST books exactly those (never one a company rule decides) and then writes the fund's
  * file, «davor» is never kept, the insurer's page shows the kept way, «Rückgängig» takes it out, (a fund's file that is no YAML map is refused with a code: tests/payroll-insurer-way.test.ts). Invented firm: payroll runs here from October, the Akontos of October to December are paid ahead.
  */

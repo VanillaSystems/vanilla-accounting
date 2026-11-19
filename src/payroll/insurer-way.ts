@@ -1,5 +1,5 @@
 /**
- * «Immer so» on a payment to a payroll insurer (docs/specs/payroll.md §22 decision 126): «für Monate ab dem Lohnstart»
+ * «Immer so» on a payment to a payroll insurer (docs/specs/payroll.md §22 decision 59): «für Monate ab dem Lohnstart»
  * kept in the company's file of the fund (`payroll: { payments: liability }`, src/knowledge/payroll-way.ts), which
  * insurerPaymentOf then honours. The file is the insurance's business, else the one the payment routes to, else a new
  * file of the company's own named after the insurer and matched by the payee the bank writes (and its IBAN). The rest

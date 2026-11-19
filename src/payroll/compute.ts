@@ -412,7 +412,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       const commission = [...types.values()].find((x) => x.computes === 'commission');
       const out = taxAtSourceLines({
         data, types, wageType: w, label: label(w), person: tax ?? { subject: false }, month, lines,
-        // The days employed in the firm's own proration, so the extrapolation takes back exactly what the proration cut (§22 decision 103).
+        // The days employed in the firm's own proration, so the extrapolation takes back exactly what the proration cut (§22 decision 94).
         days: employedFraction(e, month, settings.proration) * (data.taxAtSource?.partMonth ?? 30), pensum: job?.pensum ?? (job?.kind === 'monthly' ? 100 : undefined),
         // A payment after the exit (a Nachzahlung) takes the rate with the exit month's income (FAQ KS 45, Frage 16).
         ...(!employed ? { exitIncome: exitIncomeOf(history, e.id, month, w.key, typeof c.base === 'string' ? c.base : '') } : {}),

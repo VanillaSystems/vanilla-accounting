@@ -109,7 +109,7 @@ export function useBackdated(nav: Nav, kind?: string, fieldWord?: (field: string
   return { send, node, open: !!card };
 }
 
-/** A commission on the tax at source: it follows the tax, never carried itself (§22 decision 101). */
+/** A commission on the tax at source: it follows the tax, never carried itself (§22 decision 92). */
 const commission = (wageType: string): boolean => data()?.wageTypes.find((w) => w.key === wageType)?.computes === 'commission';
 
 const signed = (x: number): string => `${x > 0 ? '+' : ''}${fmt(x)}`;
