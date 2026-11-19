@@ -11,19 +11,14 @@
  */
 import { roundCHF } from '../accounting/rappen.js';
 import { baseCurrency, invoicing } from '../engines/index.js';
-import {
-  INVOICE_LANGUAGES,
-  type Contact, type DunningLevel, type DunningSettings, type DunningTexts, type Invoice, type InvoiceBook, type InvoiceLanguage, type InvoicingSettings, type Issued, type Reminder, type ReminderInterest,
-} from './model.js';
+import type { Contact, DunningLevel, DunningSettings, Invoice, InvoiceBook, InvoiceLanguage, InvoicingSettings, Issued, Reminder, ReminderInterest } from './model.js';
 import { InvoiceRuleError, addDays, openAmount, openCharges } from './rules.js';
-
-export { chargesOf, openCharges } from './rules.js';
-import { TEXTS, formatDate, kindTitle } from './texts.js';
+import { TEXTS, formatDate, reminderTitle } from './texts.js';
+import { daysBetween } from './lists.js';
 import { DEFAULT_DUNNING, LEGACY_DUNNING, readDunning } from '../workspace/dunning.js';
-import { reminderTitle } from './texts.js';
 
 export { DEFAULT_DUNNING, LEGACY_DUNNING, readDunning, reminderTitle };
-import { daysBetween } from './lists.js';
+export { chargesOf, openCharges } from './rules.js';
 
 /** At most this many Mahnungen go out in one Mahnlauf; the rest are named («12 weitere nicht»). */
 export const MAX_RUN = 40;

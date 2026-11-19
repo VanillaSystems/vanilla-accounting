@@ -39,7 +39,8 @@ const money = (r: DocRow, n: number) => (r.inv.currency !== baseCurrency() ? <><
 
 /** The status with the sent mark: «Offen · gesendet», «Überfällig · 12 Tage · nicht gesendet», «Entwurf». */
 export function statusText(r: DocRow, kind: DocKind): string {
-  const base = r.overdue > 0 ? t('sales.status.overdueDays', { n: r.overdue }) : t(`sales.status.${groupOf(kind)}.${r.status}` as 'sales.status.invoice.open');
+  // Überfällig with its days and, once reminded, its Mahnstufe beside it (spec 4.8).
+  const base = r.overdue > 0 ? [t('sales.status.overdueDays', { n: r.overdue }), r.levelTitle].filter(Boolean).join(' · ') : t(`sales.status.${groupOf(kind)}.${r.status}` as 'sales.status.invoice.open');
   if (r.inv.status !== 'issued') return base;
   // A cancelled document waits for nothing: it reads «gesendet» when it went out, never «nicht gesendet».
   if (r.status === 'cancelled' && !r.sent.sent) return base;
