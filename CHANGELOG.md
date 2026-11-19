@@ -16,6 +16,12 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- Bilanz & ER: the Bilanz and the Erfolgsrechnung show the prior year beside each figure, as the
+  Swiss Code of Obligations asks of the annual accounts (OR 958d Abs. 2): the Bilanz of 31.12. of
+  the year before, the Erfolgsrechnung of the same days a year earlier. The figures come from the
+  books when they reach back that far, else the Bilanz from the year's opening balances; without
+  either the column stays empty and a line says why (never zeros), with «Eröffnung erfassen». The
+  export (CSV, Excel, PDF) carries the same column. Presentation only: no figure changes (#568).
 - Verkauf › Artikel: the products and services the firm sells, as a table (code, name, Ware or
   Dienstleistung, unit, price, VAT kind), each opened beside it with its form. An Artikel names a
   VAT kind (normal, reduced, accommodation, none), and the rate comes from the law for the

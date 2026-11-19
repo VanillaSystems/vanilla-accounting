@@ -5,7 +5,8 @@
  */
 import { Fragment, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import './reports.css';
-import { localToday, parsePeriod } from '../../../accounting/periods.js';
+import { localToday, parsePeriod, rangeToken } from '../../../accounting/periods.js';
+import { periodName } from '../../lib/period-label.js';
 import type { Report, RouteOf } from '../../shell/route.js';
 import { REPORT_LABEL, Tabs } from './Tabs.js';
 import { CustomDetail, CustomList, customKeys } from './custom/Custom.js';
@@ -19,7 +20,7 @@ import type { Area, AreaProps, LegendItem } from '../index.js';
 import { entryAt } from '../vat/links.js';
 import {
   NO_ACCOUNT, NO_ACCOUNT_SLUG, accountsOf, filterBlocks, incomeColumns, ledgerOf, reportOfAccount, reportView, searchReport,
-  type AccountRow, type Block, type ReportView,
+  priorReason, type AccountRow, type Block, type Prior, type ReportView, type Translate,
 } from './model.js';
 import { SliceBar } from './SliceBar.js';
 import { setSlice, useSliced } from './slice.js';
@@ -62,7 +63,7 @@ function useView({ route, query, books, period }: Pick<Props, 'route' | 'query' 
   const names = getAccountMap();
   const q = query.q ?? '';
   return useMemo(() => {
-    const view = reportView(route.report, books, period, names, all || !!q.trim());
+    const view = reportView(route.report, books, period, names, { all: all || !!q.trim() });
     return filterBlocks(view, q, names, t('reports.vatOnly'));
   }, [route.report, books, period, names, all, q]);
 }
@@ -112,6 +113,9 @@ function List(props: Props) {
     : c.code === 'openingUnbalanced' ? nav.go({ route: { area: 'company', section: 'opening' }, query: {} })
       : inTrial(c.account));
   const sb = route.report === 'trial';
+  const prior = view.prior;
+  /** The prior-year column's figures: shown when there are any, else the column stays empty and a line says why. */
+  const py = prior && 'source' in prior ? (n: number | undefined) => fmt(n ?? 0) : prior ? () => '' : undefined;
   const ws = useWorkspace();
   const year = period.to.slice(0, 4);
   const unopened = useMemo(() => (ws && route.report !== 'income' ? missingOpenings(props.books, ws.bankAccounts, year) : []), [ws, props.books, year, route.report]);
@@ -152,6 +156,13 @@ function List(props: Props) {
           {t(route.report === 'income' ? 'reports.vatNoteIncome' : 'reports.vatNoteBalance', { net: fmt(view.vat.figures.net), parts: vatParts(view.vat.figures).map((x) => t(x.key, { amount: fmt(x.amount) })).join(', ') })}
         </p>
       )}
+      {prior && route.report !== 'trial' && <PriorNote prior={prior} report={route.report} canEdit={canEdit} onOpening={() => nav.go({ route: { area: 'company', section: 'opening' }, query: {} })} />}
+      {view.priorGap && (
+        <div className="notice warn rgap" data-testid="prior-gap">
+          <span className="dot" aria-hidden="true" />
+          <span>{t('reports.priorGap', { assets: fmt(view.priorGap.assets), liabilities: fmt(view.priorGap.liabilities), gap: fmt(view.priorGap.value) })}</span>
+        </div>
+      )}
       {view.gap && (
         <div className="notice warn rgap">
           <span className="dot" aria-hidden="true" />
@@ -173,12 +184,13 @@ function List(props: Props) {
           </span>
         </div>
       ))}
-      <div className={`rows rep${sb ? ' sbal' : ''}${cols ? ' cols' : ''}`} role="listbox" aria-label={t('reports.accounts')} data-columns={cols?.values.length} style={cols ? ({ '--cols': cols.values.length } as CSSProperties) : undefined}>
+      <div className={`rows rep${sb ? ' sbal' : ''}${cols ? ' cols' : ''}${py ? ' py' : ''}`} role="listbox" aria-label={t('reports.accounts')} data-columns={cols?.values.length} style={cols ? ({ '--cols': cols.values.length } as CSSProperties) : undefined}>
         {sb && <div className="group sbh"><span>{t('col.account')}</span><span /><span className="r">{t('reports.opening')}</span><span className="r">{t('reports.debit')}</span><span className="r">{t('reports.credit')}</span><span className="r">{t('reports.balance')}</span></div>}
-        {cols && by && <div className="group sbh" data-testid="slice-head"><span>{t('col.account')}</span><span>{by.label}</span>{cols.values.map((v) => <span key={v} className="r" data-tip={v}>{v ? valueLabel(by, v) : t('tags.without')}</span>)}<span className="r">{t('common.total')}</span></div>}
+        {cols && by && <div className="group sbh" data-testid="slice-head"><span>{t('col.account')}</span><span>{by.label}</span>{cols.values.map((v) => <span key={v} className="r" data-tip={v}>{v ? valueLabel(by, v) : t('tags.without')}</span>)}<span className="r">{t('common.total')}</span>{prior && <span className="r" data-testid="prior-head">{priorLabel(prior, route.report)}</span>}</div>}
+        {!cols && prior && <div className="group sbh" data-testid="prior-head"><span>{t('col.account')}</span><span /><span className="r">{route.report === 'balance' ? formatDate(period.to) : periodName(period)}</span><span className="r">{priorLabel(prior, route.report)}</span></div>}
         {view.blocks.map((b, i) => {
           if (b.kind === 'head') return <div key={i} className="rhead">{t(b.title === 'assets' ? 'balance.assets' : 'balance.liabilities')}</div>;
-          if (b.kind === 'sum') return <div key={i} className={`rsum${b.strong ? ' strong' : ''}`}><span>{t(SUM_LABEL[b.title])}</span>{cols?.sum(b.title).map((x, j) => <span key={j} className="mono f">{fmt(x)}</span>)}<span className="mono">{fmt(b.value)}</span></div>;
+          if (b.kind === 'sum') return <div key={i} className={`rsum${b.strong ? ' strong' : ''}`}><span>{t(SUM_LABEL[b.title])}</span>{cols?.sum(b.title).map((x, j) => <span key={j} className="mono f">{fmt(x)}</span>)}<span className="mono">{fmt(b.value)}</span>{py && <span className="mono f">{py(b.prior)}</span>}</div>;
           const key = `${route.report}:${b.title}`;
           const closed = shut.has(key) && !q;
           return (
@@ -187,9 +199,10 @@ function List(props: Props) {
                 <span><svg className="gch" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>{groupTitle(b)}</span>
                 {cols?.total(b.title).map((x, j) => <span key={j} className="mono f">{fmt(x)}</span>)}
                 <span className="mono">{b.total != null ? fmt(b.total) : ''}</span>
+                {py && <span className="mono f">{b.total != null ? py(b.priorTotal) : ''}</span>}
               </button>
-              {!closed && b.rows.map((r) => <Row key={r.account} r={r} sb={sb} cols={cols?.row(r.account)} sel={r.account === account} names={names} onSelect={(a) => nav.select({ area: 'reports', report: route.report, account: routeAccount(a) })} />)}
-              {!closed && b.plain && <div className="row plain"><span className="d" /><span className="t">{accountingName(b.plain.name)}</span><span className="a mono">{fmt(b.plain.value)}</span></div>}
+              {!closed && b.rows.map((r) => <Row key={r.account} r={r} sb={sb} py={py} cols={cols?.row(r.account)} sel={r.account === account} names={names} onSelect={(a) => nav.select({ area: 'reports', report: route.report, account: routeAccount(a) })} />)}
+              {!closed && b.plain && <div className="row plain"><span className="d" /><span className="t">{accountingName(b.plain.name)}</span><span className="a mono">{fmt(b.plain.value)}</span>{py && <span className="a mono f">{py(b.plain.prior)}</span>}</div>}
             </Fragment>
           );
         })}
@@ -210,8 +223,8 @@ function columnsOf(columns: ReturnType<typeof incomeColumns>) {
   };
 }
 
-function Row({ r, sb, cols, sel, names, onSelect }: { r: AccountRow; sb: boolean; cols?: number[]; sel: boolean; names: Record<string, string>; onSelect(a: string): void }) {
-  const zero = !r.value && !r.open && !r.debit && !r.credit;
+function Row({ r, sb, py, cols, sel, names, onSelect }: { r: AccountRow; sb: boolean; py?: (n: number | undefined) => string; cols?: number[]; sel: boolean; names: Record<string, string>; onSelect(a: string): void }) {
+  const zero = !r.value && !r.prior && !r.open && !r.debit && !r.credit;
   return (
     <div className={`row${sel ? ' sel' : ''}${zero ? ' zero' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-acct={routeAccount(r.account)} onClick={() => onSelect(r.account)}>
       <span className="d mono">{r.account === NO_ACCOUNT ? '·' : r.account}</span>
@@ -225,7 +238,29 @@ function Row({ r, sb, cols, sel, names, onSelect }: { r: AccountRow; sb: boolean
         </>
       )}
       <span className="a mono">{fmt(r.value)}</span>
+      {py && <span className="a mono f">{py(r.prior)}</span>}
     </div>
+  );
+}
+
+/** The prior-year column's head: the Bilanz's day, the Erfolgsrechnung's period a year earlier. */
+function priorLabel(prior: Prior, report: Report): string {
+  if (report === 'balance') return formatDate(prior.to);
+  const p = parsePeriod(rangeToken(prior.from, prior.to), localToday());
+  return p ? periodName(p) : `${formatDate(prior.from)} – ${formatDate(prior.to)}`;
+}
+
+/** Where the prior-year figures come from when not from the books, or why there are none (priorReason). */
+function PriorNote({ prior, report, canEdit, onOpening }: { prior: Prior; report: 'income' | 'balance'; canEdit: boolean; onOpening(): void }) {
+  // The typed `t` checks each key's holes; priorReason fills them as the export's words do.
+  const text = priorReason(prior, report, t as unknown as Translate, priorLabel(prior, report));
+  if (!text) return null;
+  const kind = 'source' in prior ? (prior.source === 'opening' ? 'opening' : 'since') : prior.missing === 'overlap' ? 'overlap' : 'none';
+  return (
+    <p className="m rvat" data-testid="prior-note" data-prior={kind}>
+      {text}{' '}
+      {kind === 'none' && report === 'balance' && canEdit && <button type="button" onClick={onOpening}>{t('reports.openingSet')}</button>}
+    </p>
   );
 }
 

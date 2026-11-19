@@ -104,7 +104,7 @@ test('the Bilanz places a money account by its chart account, never by its role:
     config: {},
   } as unknown as Index;
   const names = { 1000: 'Kasse', 1021: 'Raiffeisen', 2030: 'Visa', 2270: 'Lea Muster', 2451: 'Kontokorrent', 3200: 'Ertrag', 6000: 'Raum', 6500: 'Büro' };
-  const view = reportView('balance', books, parsePeriod('2026', '2026-12-31')!, names, false);
+  const view = reportView('balance', books, parsePeriod('2026', '2026-12-31')!, names, { all: false });
   const side = new Map<string, string>();
   let head = '';
   for (const b of view.blocks) {

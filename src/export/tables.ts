@@ -7,7 +7,7 @@ import type { Index } from '../types/index.js';
 import type { Key } from '../app/i18n/types.js';
 import { chfAmount } from '../accounting/ledger.js';
 import { localToday, type FilingLength, type Period } from '../accounting/periods.js';
-import { NO_ACCOUNT, ledgerOf, reportView, vatParts } from '../app/areas/reports/model.js';
+import { NO_ACCOUNT, ledgerOf, priorReason, reportView, vatParts } from '../app/areas/reports/model.js';
 import { formAmount, rateOf, shownZiffern, vatReturn } from '../app/areas/vat/model.js';
 import { accountsWithActivity, entriesIn, paymentsIn, quartersIn, receiptsIn, type ItemId } from './model.js';
 import type { ReturnFigures } from '../engines/return.js';
@@ -67,22 +67,29 @@ export function tableOf(id: Exclude<ItemId, 'receipts' | 'statements' | 'filings
   const accName = (a: string) => (a === NO_ACCOUNT ? t('reports.noAccount') : c.names[a] ?? a);
   switch (id) {
     case 'income': case 'balance': {
-      const out = table([t('export.colGroup'), t('col.account'), t('col.name'), t('col.amount')], [3]);
-      const view = reportView(id, c.books, c.period, c.names, false);
+      const view = reportView(id, c.books, c.period, c.names, { all: false });
+      // The prior year's column (#568): its figures, or a head that says there are none and empty cells.
+      const shown = view.prior && 'source' in view.prior;
+      // Its head says what the page's line says: where the figures come from, or why there are none.
+      const reason = view.prior && priorReason(view.prior, id, t);
+      const priorHead = !view.prior ? [] : !shown ? [reason ?? t('reports.priorNoneCol')] : [reason ? `${t('reports.priorCol')} (${reason})` : t('reports.priorCol')];
+      const head = [t('export.colGroup'), t('col.account'), t('col.name'), t('col.amount'), ...priorHead];
+      const out = table(head, view.prior ? [3, 4] : [3]);
+      const py = (n: number | undefined): Cell[] => (view.prior ? [shown ? n ?? 0 : ''] : []);
       let side = '';
       for (const b of view.blocks) {
         if (b.kind === 'head') { side = t(b.title === 'assets' ? 'balance.assets' : 'balance.liabilities'); continue; }
-        if (b.kind === 'sum') { out.rows.push([t(REPORT_SUM[b.title]), '', '', b.value]); out.styles.push('total'); continue; }
+        if (b.kind === 'sum') { out.rows.push([t(REPORT_SUM[b.title]), '', '', b.value, ...py(b.prior)]); out.styles.push('total'); continue; }
         const group = [side, c.words.accountingName(b.title)].filter(Boolean).join(' · ');
-        for (const r of b.rows) { out.rows.push([group, r.account, accName(r.account), r.value]); out.styles.push(undefined); }
-        if (b.plain) { out.rows.push([group, '', c.words.accountingName(b.plain.name), b.plain.value]); out.styles.push(undefined); }
-        if (b.total != null) { out.rows.push([`${t('common.total')} ${c.words.accountingName(b.title)}`, '', '', b.total]); out.styles.push('total'); }
+        for (const r of b.rows) { out.rows.push([group, r.account, accName(r.account), r.value, ...py(r.prior)]); out.styles.push(undefined); }
+        if (b.plain) { out.rows.push([group, '', c.words.accountingName(b.plain.name), b.plain.value, ...py(b.plain.prior)]); out.styles.push(undefined); }
+        if (b.total != null) { out.rows.push([`${t('common.total')} ${c.words.accountingName(b.title)}`, '', '', b.total, ...py(b.priorTotal)]); out.styles.push('total'); }
       }
       if (view.vat?.shown === 'net') out.note = t('reports.vatMetaNet', { account: view.vat.account });
       if (view.vat?.shown === 'gross') {
         const { figures } = view.vat;
         const vars = { net: fmt2(figures.net), parts: vatParts(figures).map((x) => t(x.key, { amount: fmt2(x.amount) })).join(', ') };
-        out.rows.push([t(id === 'income' ? 'reports.vatRowIncome' : 'reports.vatRowBalance', vars), '', '', figures.net]);
+        out.rows.push([t(id === 'income' ? 'reports.vatRowIncome' : 'reports.vatRowBalance', vars), '', '', figures.net, ...(view.prior ? [''] : [])]);
         out.styles.push('open');
         out.note = t(id === 'income' ? 'reports.vatMetaIncome' : 'reports.vatMetaBalance', vars);
       }
@@ -90,7 +97,7 @@ export function tableOf(id: Exclude<ItemId, 'receipts' | 'statements' | 'filings
     }
     case 'trial': {
       const out = table([t('col.account'), t('col.name'), t('reports.opening'), t('reports.debit'), t('reports.credit'), t('reports.balance')], [2, 3, 4, 5]);
-      for (const b of reportView('trial', c.books, c.period, c.names, false).blocks) {
+      for (const b of reportView('trial', c.books, c.period, c.names, { all: false }).blocks) {
         if (b.kind !== 'group') continue;
         for (const r of b.rows) { out.rows.push([r.account, accName(r.account), r.open ?? 0, r.debit ?? 0, r.credit ?? 0, r.value]); out.styles.push(undefined); }
       }

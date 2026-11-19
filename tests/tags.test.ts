@@ -196,7 +196,7 @@ test('the Erfolgsrechnung filtered by tags reads only the bookings that carry th
     entry('c1', '6570', '1020', 300, { projekt: 'alpha' }),
     entry('c2', '6500', '1020', 50),
   ]);
-  const result = (b: Index) => reportView('income', b, AUGUST, NAMES, false).headline.value;
+  const result = (b: Index) => reportView('income', b, AUGUST, NAMES, { all: false }).headline.value;
   assert.equal(result(books), 1050);
   assert.equal(result(slicedBooks(books, { projekt: ['alpha'] })), 700);
   assert.equal(result(slicedBooks(books, { projekt: ['alpha', 'beta'] })), 1100);

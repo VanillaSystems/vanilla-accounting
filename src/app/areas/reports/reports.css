@@ -35,6 +35,15 @@
 
 /* Under the result: the figures hold the VAT not yet settled, and how much (r8c-2). */
 .rvat { margin: -8px 0 18px; font-size: 12.5px; line-height: 1.45; }
+.rvat button { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+
+/* The prior year beside Bilanz and Erfolgsrechnung (#568): one more column, in the muted ink. */
+.rows.rep.py:not(.cols) .row, .rows.rep.py:not(.cols) .sbh { grid-template-columns: 52px minmax(0, 1fr) 104px 104px; }
+.rows.rep.py:not(.cols) .group:not(.sbh), .rows.rep.py:not(.cols) .rsum { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) 104px 104px; }
+.rows.rep.py .group:not(.sbh) > .mono, .rows.rep.py .rsum > .mono, .rows.rep.py .row .a { text-align: right; }
+.rows.rep.py .f { color: var(--muted); font-weight: 400; }
+.rows.rep.py .row .f { font-size: 12.5px; }
+.rows.rep.cols.py .row, .rows.rep.cols.py .sbh, .rows.rep.cols.py .group:not(.sbh), .rows.rep.cols.py .rsum { grid-template-columns: 44px minmax(90px, 1fr) repeat(var(--cols), 80px) 88px 88px; min-width: calc(334px + var(--cols) * 88px); }
 
 /* A report the owner asked for (src/app/areas/reports/custom/ReportView.tsx): on the sidebar's card and in Eigene Berichte. */
 .rpt { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
