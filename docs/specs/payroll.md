@@ -1689,6 +1689,13 @@ non-obvious decision is recorded here when it is taken.
     every closed payslip first: those without an address or a password as «nicht gesendet: …», those sent
     already with their day, left out unless «Auch die schon gesendeten nochmals senden» is ticked; the
     button counts and sends only the rest, one mail each, and names each refusal beside its person.
+40. **The document kind `payslip` for payslips of other programs (A1) moves to phase A-2**, with the code
+    that books them (A2, A3): recognising a payslip without booking it would take it out of the pairing
+    that books level A's wages today (src/booking/withheld.ts). In B0 only the payslips the app closes are
+    of kind `payslip`. The masking of A8 is in B0.
+41. **demo-consulting runs the owner's payroll in the app from October**: January to September stay as they
+    were booked by hand (their opening is in payroll.json and books nothing), so no demo figure and no golden
+    file changes; a persona walk closes October to December.
 
 ---
 
