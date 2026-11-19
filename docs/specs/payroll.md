@@ -2182,8 +2182,9 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
 126. **The tax at source is rounded half up to 5 Rappen, though the FAQ's own example rounds a half down.** The
     cantons' FAQ to KS 45 (ESTV, 2022, no. 5,
     https://www.estv.admin.ch/dam/de/sd-web/a7vG5hlZeAdW/dbst-ks-2022-1-045-d-faq-de.pdf) says «kaufmännisch auf-
-    oder abzurunden» in steps of 5 Rappen, which is half up; its example 466.725 → 466.70 contradicts that. The app
-    keeps half up (466.725 → 466.75, 292.725 → 292.75): the rule's words over its example. A canton that rounds as the
+    oder abzurunden» in steps of 5 Rappen, which is half up; its example rounds an amount ending in ,725 down to ,70,
+    which contradicts that. The app keeps half up (,725 to ,75; tests/payroll-tax-at-source.test.ts): the rule's
+    words over its example. A canton that rounds as the
     example does differs by 5 Rappen on such a month; the year-end check of decision 122 shows it on 2279.
 127. **The Bezugsprovision reduces the personnel expense; it stays on 5890, and field 12 is the tax before it.** KS 45
     Ziff. 9.1 treats the commission as a reduction of expense, not as income: booked D 2279 / C 5890, a credit on
