@@ -18,7 +18,8 @@ import { judgedRepayments } from '../booking/owner-judged.js';
 import { payoutWaitOf, providerOfMoneyIn } from '../booking/providers.js';
 import { chartNames } from '../booking/rule-book.js';
 import { isOwnBankFee } from '../booking/bank-fee.js';
-import { payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor } from '../booking/withheld.js';
+import { accountOfKinds, collectorProposal, collectorsOf, kindsOf, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor } from '../booking/withheld.js';
+import { businessOfPayment } from '../intake/batch-payers.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
 import type { PaymentNature } from '../accounting/manual-booking.js';
 import type { BankTransaction } from '../types/index.js';
@@ -228,6 +229,15 @@ const ibanOf = (iban: string) => iban.replace(/\s+/g, '').toUpperCase();
 function contributionsOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, context: ReturnType<typeof loadClassifyContext>, file: Counterparty | undefined): PaymentNature | undefined {
   const w = wageAccounts();
   const businessOf = (t: BankTransaction) => (t.ref === tx.ref ? file?.id : undefined);
+  // A business whose file says it collects the deductions' kinds (`collects: [pension]`): the employees' share of the
+  // whole months its payslips withheld, a bill paid ahead of its quarter too, the rest the firm's (§22 decision 109).
+  const collectors = collectorsOf(context.counterparties ?? []);
+  if (w && context.wageDeductions && file?.collects?.length && accountOfKinds(kindsOf(file.id, collectors)) === w.deductions) {
+    const counterparties = context.counterparties ?? [];
+    const routed = (t: BankTransaction) => (t.ref === tx.ref ? file.id : businessOfPayment(t, mappedReceipts(books, t), counterparties));
+    const p = collectorProposal(books, tx, file.id, routed, collectors);
+    if (p) return { kind: 'contributions', account: p.employer, deductions: w.deductions, open: withheldFor(books, tx, w.deductions) ?? 0, takes: p.share, collector: { name: file.name, months: p.months } };
+  }
   if (!w || !context.wageDeductions || !paysContributions(books, tx, businessOf)) return undefined;
   const open = withheldFor(books, tx, w.deductions) ?? 0;
   if (open <= 0 && !wagesBooked(books, tx)) return undefined;

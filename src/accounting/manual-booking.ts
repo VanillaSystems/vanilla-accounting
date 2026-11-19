@@ -87,7 +87,11 @@ export type PaymentNature =
  */
 export interface PayrollInsurerNature { kind: 'payrollInsurer'; account: string; name: string; covered: boolean; shared?: boolean; before?: ContributionsNature; way?: 'after' | 'before' }
 
-export interface ContributionsNature { kind: 'contributions'; account: string; deductions: string; open: number; takes: number }
+export interface ContributionsNature {
+  kind: 'contributions'; account: string; deductions: string; open: number; takes: number;
+  /** A business whose file says it collects the deductions (src/booking/withheld.ts collectorProposal): `takes` is the employees' share of these months. */
+  collector?: { name: string; months: string[] };
+}
 
 /**
  * A payment provider's payout (#404, src/booking/providers.ts): a settlement of what the provider

@@ -18,6 +18,8 @@ import { paymentRows } from '../../payroll/payments.js';
 import { bookInsurerPayments, insurancesOfPayment, insurerRows, settlementOf } from '../../payroll/insurers.js';
 import { payrollInsurerContext } from '../../payroll/insurers-context.js';
 import { forgetPayrollWay, keptText, keptWayOf, wayTarget, writeKept } from '../../payroll/insurer-way.js';
+import { collectsOffer, keptCollectsText, restoreCollects, writeCollects } from '../../payroll/collects-way.js';
+import { collectorsOf } from '../../booking/withheld.js';
 import { loadKnowledge } from '../../knowledge/layers.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
@@ -400,6 +402,61 @@ router.delete('/api/payroll/insurer-way', run((req, res) => {
   const path = cp && forgetPayrollWay(WS, cp);
   if (!path) throw new PayrollRefusal('gone', `${id} hält keinen Weg für Zahlungen.`);
   res.json({ business: id, path });
+}));
+
+// ─── «Zieht Lohnabzüge ein» (§22 decision 110) ─────────────────────────────────
+
+/** What «Zieht Lohnabzüge ein» offers on payment `ref`: none for a payroll insurer's payment, which stays payroll's (decision 68). */
+function collectsPlan(ref: string) {
+  const context = loadClassifyContext(WS);
+  const books = readBooks();
+  const tx = books.transactions.find((t) => t.ref === ref);
+  if (!tx) throw new PayrollRefusal('notFound', `Keine Zahlung ${ref}.`);
+  if (payrollInsurerOfPayment(books, tx, context)) return { tx, offer: undefined };
+  const counterparties = context.counterparties ?? [];
+  const linked = mappedReceipts(books, tx);
+  const business = businessOfPayment(tx, linked, counterparties);
+  return { tx, offer: collectsOffer({ books, tx, linked, business, collectors: collectorsOf(counterparties), counterparties }) };
+}
+
+/** The undos of «Zieht Lohnabzüge ein», by token: the file's path, its text before the click (none: the click made it) and after it. */
+const collectsUndos = new Map<string, { path: string; before?: string; after: string; at: number }>();
+const COLLECTS_UNDO_MS = 7 * 24 * 3600 * 1000;
+
+/** The offer on a payment: its business, the file, the kinds the payment names; `offer: null` when there is none. */
+router.get('/api/payroll/collects', run((req, res) => {
+  const { offer } = collectsPlan(String(req.query.ref ?? ''));
+  res.json({ offer: offer ? { business: offer.target.id, name: offer.target.name, path: offer.target.path, created: offer.target.created, kinds: offer.kinds, collects: offer.collects } : null });
+}));
+
+/**
+ * «Zieht Lohnabzüge ein: BVG»: `kinds` (of the offer, never others) join the business file's `collects:`; the rest of the
+ * file stays as it was. The books are not written: the payment's hand form proposes the split from now on, and a payment
+ * booked whole is named under «Arbeitnehmeranteil abziehen».
+ */
+router.post('/api/payroll/collects', run((req, res) => {
+  const b = body(req);
+  const { tx, offer } = collectsPlan(String(b.ref ?? ''));
+  const kinds = Array.isArray(b.kinds) ? b.kinds.filter((k): k is string => typeof k === 'string') : [];
+  if (!offer || !kinds.length || kinds.some((k) => !offer.kinds.includes(k))) throw new PayrollRefusal('badInput', 'Diese Zahlung bietet das nicht an: nur die Lohnabzüge, die sie nennt und die noch niemand einzieht.');
+  const { text, before } = keptCollectsText(WS, offer.target, kinds, tx);
+  const path = writeCollects(WS, offer.target.path, text);
+  const undo = idSource.bytes(8).toString('hex');
+  collectsUndos.set(undo, { path, ...(before !== undefined ? { before } : {}), after: text, at: Date.now() });
+  for (const [k, v] of collectsUndos) if (Date.now() - v.at > COLLECTS_UNDO_MS) collectsUndos.delete(k);
+  res.json({ business: offer.target.id, name: offer.target.name, path, created: before === undefined, kinds, undo });
+}));
+
+/** «Rückgängig»: the file as the click found it, only while nobody changed it since. */
+router.post('/api/payroll/collects/undo', run((req, res) => {
+  const token = String(body(req).undo ?? '');
+  const u = collectsUndos.get(token);
+  if (!u) throw new PayrollRefusal('gone', 'Das lässt sich nicht mehr rückgängig machen.');
+  const file = join(WS.paths.root, u.path);
+  if ((existsSync(file) ? readFileSync(file, 'utf8') : undefined) !== u.after) throw new PayrollRefusal('used', `${u.path} hat sich seither geändert: von Hand richten.`);
+  restoreCollects(WS, u.path, u.before);
+  collectsUndos.delete(token);
+  res.json({ path: u.path });
 }));
 
 // ─── Dokumente ─────────────────────────────────────────────────────────────────

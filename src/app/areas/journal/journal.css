@@ -187,3 +187,5 @@ html.phone .counts .origins { padding-left: 0; border-left: 0; flex-basis: 100%;
 .form .tags { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
 .form.pbook .pbl .pbg { grid-column: 1 / 5; }
 @container (max-width: 520px) { .form.pbook .pbl .pbg { grid-column: 1 / -1; } }
+.collectsway { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0; font-size: 13px; color: var(--ink); }
+.collectsway small { flex-basis: 100%; }

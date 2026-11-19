@@ -58,6 +58,7 @@ import { QuestionsOn } from '../../questions/Questions.js';
 import { bookDiffParts, missingOpenings, startGaps } from '../../../accounting/opening-balance.js';
 import { GroupedOffer, ShareOffers } from '../company/RulesSection.js';
 import { WithheldOnPayment } from '../automation/WithheldFix.js';
+import { CollectsOffer } from '../journal/CollectsOffer.js';
 import { Pick } from '../../selection/Pick.js';
 import { ActionsMenu } from '../../selection/ActionsMenu.js';
 import { paymentActions } from './actions-menu.js';
@@ -367,6 +368,8 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
       {edit && entry && tx.direction === 'DBIT' ? <ShareOffers key={`so-${tx.ref}`} refs={[tx.ref]} only="setup" onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
       {/* A contribution payment booked without the employees' share while the deductions account holds it (#476): its fix, here too. */}
       {edit && entry && tx.direction === 'DBIT' ? <WithheldOnPayment books={props.books} tx={tx} nav={nav} /> : null}
+      {/* Booked whole on the firm's contributions while the payee collects a deduction the payslips withheld: one click keeps it so, and the item above names the share (§22 decision 110). */}
+      {edit && entry && tx.direction === 'DBIT' ? <CollectsOffer key={`co-${tx.ref}`} payment={tx.ref} nav={nav} /> : null}
       {edit && receipts.length > 1 ? <GroupedOffer key={`go-${tx.ref}`} payment={tx.ref} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
       {/* Per payment, not per statement: a statement may straddle the locked line. Held or filed, no document may take it (the API refuses it too). */}

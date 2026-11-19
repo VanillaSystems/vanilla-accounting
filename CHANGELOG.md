@@ -411,6 +411,13 @@ Two markers flag an entry you must read before you update:
   card, and «So lassen» holds for the file it was said for.
 - Löhne: after a small-wage year's catch-up, the following months owe ALV on their own wage again
   (a negative ALV base was charged). **⚠ figures** for such a payslip closed from now on.
+- Löhne, payslips from another program: a payment to a pension fund (or another business that
+  collects a deduction the payslips withheld) offers «Zieht Lohnabzüge ein: BVG» on its hand form
+  and on a booked payment; the click keeps `collects:` in the company's file of the fund without
+  editing YAML, with «Rückgängig». The hand form then proposes the employees' share of the months
+  the payment pays on 2270 and the rest on the firm's contribution account, also for a bill paid
+  ahead of its quarter, so 2270 clears; a payment already booked whole on 5720 is named under
+  «Arbeitnehmeranteil abziehen» for that share.
 - Belege: a fund's or insurer's document dropped with the receipts (a Beitragsverfügung, a policy,
   a pension certificate) no longer waits as a receipt «Datum, Betrag fehlt»: it is a document
   without a payment, says so in Belege and in the drop, and links to its card in Löhne ›

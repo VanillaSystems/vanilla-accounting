@@ -17,13 +17,13 @@ import type { PayrollWay } from '../knowledge/payroll-way.js';
 import type { PayrollInsurance } from './model.js';
 import { PayrollRefusal } from './close.js';
 
-const eolOf = (text: string): string => (text.includes('\r\n') ? '\r\n' : '\n');
+export const eolOf = (text: string): string => (text.includes('\r\n') ? '\r\n' : '\n');
 
-/** The lines of the top-level `payroll:` block: its key line and every indented line after it (blank lines inside it too). */
-function blockOf(lines: readonly string[]): { from: number; to: number } | undefined {
-  const from = lines.findIndex((l) => /^payroll\s*:/.test(l));
+/** The lines of a top-level key's block (`payroll:`, `collects:`): its key line and every indented line after it (blank lines inside it too), or a list's items at the margin. */
+export function blockOf(lines: readonly string[], key = 'payroll'): { from: number; to: number } | undefined {
+  const from = lines.findIndex((l) => new RegExp(`^${key}\\s*:`).test(l));
   if (from < 0) return undefined;
-  const indented = (l: string | undefined) => !!l && /^[ \t]/.test(l);
+  const indented = (l: string | undefined) => !!l && /^(?:[ \t]|-(?:\s|$))/.test(l);
   const nextFilled = (i: number) => lines.slice(i + 1).find((l) => l.trim());
   let to = from + 1;
   while (to < lines.length && (indented(lines[to]) || (!lines[to].trim() && indented(nextFilled(to))))) to++;
@@ -31,7 +31,7 @@ function blockOf(lines: readonly string[]): { from: number; to: number } | undef
 }
 
 /** A file's text must be a YAML map to take the block: a broken file or a list is refused with its path, never overwritten. */
-function assertMap(text: string, path: string): void {
+export function assertMap(text: string, path: string): void {
   const doc = parseDocument(text);
   if (doc.errors.length) throw new PayrollRefusal('badInput', `${path} ist kein gültiges YAML (${doc.errors[0].message.split('\n')[0]}): erst die Datei richten.`);
   if (doc.contents !== null && !isMap(doc.contents)) throw new PayrollRefusal('badInput', `${path} ist keine Zuordnung (key: value): erst die Datei richten.`);
@@ -65,7 +65,7 @@ export function withoutPayrollWay(text: string): string | undefined {
   return at ? [...lines.slice(0, at.from), ...lines.slice(at.to)].join(eol) : undefined;
 }
 
-const slug = (s: string): string => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'versicherung';
+export const slug = (s: string): string => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'versicherung';
 
 export interface WayTarget { id: string; role: Role; name: string; path: string; created: boolean }
 
@@ -91,7 +91,7 @@ export function keptWayOf(insurance: Pick<PayrollInsurance, 'business' | 'name'>
 }
 
 /** Writes through a file beside it and a rename: a crash leaves the old file or the new one, never half of one. */
-function writeAtomic(file: string, text: string): void {
+export function writeAtomic(file: string, text: string): void {
   mkdirSync(dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
   writeFileSync(tmp, text);

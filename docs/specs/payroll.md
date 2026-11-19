@@ -2247,6 +2247,23 @@ After the third persona walk (2026-11-19):
      texts (a fund's bill that names a certificate below its title is a receipt, no card). A document read before stays
      as it was read. Contributions typed on a pension certificate's card without the person they are hers are refused
      (`badInput`, field `person`: «Person wählen …»), never dropped.
+109. **A collector's payment is proposed for the months it pays, also ahead of them** (src/booking/withheld.ts
+     `collectorProposal`): for a business whose file collects kinds owed on 2270 (not the withholding tax), the hand form
+     proposes the employees' share of a whole run of the oldest months its payslips withheld that no earlier payment
+     cleared, counting the wages of the whole year, not only those up to the payment's day: the webshop's pension fund
+     bill paid on 10.07. for Q3 clears July to September (597.60). Of the runs the payment can be (twice to three times
+     their share), the one whose share is nearest half of it; the rest on the payee's earlier contribution account, else
+     the kind's (5720). It stays a proposal booked by her click: code does not book a payment ahead of its months
+     (decision 72). The same share is what «Arbeitnehmeranteil abziehen» asks of a payment booked whole on 5720 where
+     nothing was withheld on its day (`withheldSharesOf`), so 2270 clears.
+110. **«Zieht Lohnabzüge ein» marks a collector without editing YAML** (src/payroll/collects-way.ts, `GET|POST
+     /api/payroll/collects`, `POST /api/payroll/collects/undo`): offered on a payment out, unbooked on its hand form and
+     booked on its page, whose payee, text or documents' first lines name a kind the year's payslips withheld and no
+     business collects yet, never for a wage (a payslip is linked) nor a payroll insurer's payment (decision 68). The
+     click writes `collects:` into the company's file of the business the payment routes to (a binding of an app file
+     starts with its id; without one, a new file in knowledge/authorities matched by the payee and its IBAN), only that
+     key changing, through a file beside it and a rename. Nothing is booked. «Rückgängig» (for a week, while the server
+     runs) puts the file back as the click found it, or removes the file it made, refused once the file changed since.
 
 ---
 
