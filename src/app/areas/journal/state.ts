@@ -24,7 +24,7 @@ interface State {
   collapsed: ReadonlySet<string>;
   open: Record<Section, boolean>;
   /** The new-entry dialog with what it starts from. */
-  overlay: { kind: 'new'; draft: Partial<JournalEntryInput>; split?: Split; correcting?: { entry: string; as: CorrectionKind; from?: string } } | null;
+  overlay: { kind: 'new'; draft: Partial<JournalEntryInput>; split?: Split; /** The template the form started from (#567). */ template?: string; correcting?: { entry: string; as: CorrectionKind; from?: string } } | null;
   /** A field of the entry form to focus once it shows. */
   focus?: string;
   /** The entry just deleted: the detail keeps its place with «Rückgängig», so no row moves under the pointer (r6h-28). */

@@ -279,7 +279,11 @@ export type ApiRefusal =
   | { code: 'sourceSecret'; params: { id: string; file: string } }
   | { code: 'sourceAppId'; params: { id: string } }
   /** What a change names is not in the books (any more): a receipt, a booking, a payment, a change by hand since the last save. */
-  | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' | 'file' | 'quarantined' } }
+  | { code: 'gone'; params: { what: 'receipt' | 'entry' | 'payment' | 'handEdit' | 'file' | 'quarantined' | 'template' } }
+  /** An entry template (#567) kept without a name. */
+  | { code: 'templateName' }
+  /** More entry templates than a workspace keeps: `max` of them. */
+  | { code: 'templateLimit'; params: { max: number } }
   /** Firma › Bankkonten › «Entfernen» (or the undo of an add) while statements, bookings or invoices use the account (r9k-1). */
   | { code: 'bankInUse'; params: { account: string; label: string; statements: number; entries: number; invoices: number } }
   /** Firma › Bankkonten › «Bankkonto hinzufügen» on a ledger account another bank account already has (r10h-2): the one that has it. */

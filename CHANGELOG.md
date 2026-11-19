@@ -27,6 +27,10 @@ Two markers flag an entry you must read before you update:
 - ⌘K finds the words known from other bookkeeping tools («Debitoren», «Kontoblatt»,
   «Saldovortrag», «Manuelle Buchungen», …) and opens the place here that does that job, under its
   name here.
+- Named entry templates: «Als Vorlage speichern» in the hand form keeps its accounts, VAT code,
+  text and amount (a Sammelbuchung with its lines) under a name, for entries that come back
+  (depreciation, rent, salary). «Vorlage» on top of the form and ⌘K start the form from one; the
+  date is always the new entry's. They live in the workspace, `master-data/entry-templates.json`.
 - Booking by hand onto Debitoren or Kreditoren (a collective account whose balance is the open
   invoices or bills) warns and books on «Trotzdem buchen».
 

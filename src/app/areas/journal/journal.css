@@ -88,6 +88,13 @@
 .jnew .jswap { margin-top: 22px; padding: 4px 6px; border-radius: 6px; color: var(--muted); font-size: 15px; line-height: 1; }
 .jnew .jswap:hover { color: var(--ink); background: var(--hover); }
 .jnew .jaddl { display: flex; align-items: flex-start; padding-top: 24px; }
+/* Named templates (#567): the picker on top, «Als Vorlage speichern» and its name left of the buttons. */
+.jnew .jtpl { display: flex; gap: 12px; align-items: flex-end; }
+.jnew .jtpl label { flex: 1; }
+.jnew .jtpl .golink { font-size: 12px; color: var(--muted); padding-bottom: 8px; }
+.jnew .dacts .jsave { margin-right: auto; font-size: 12px; color: var(--muted); }
+.jnew .dacts .jname { margin-right: auto; display: flex; gap: 6px; align-items: center; }
+.jnew .dacts .jname input { width: 200px; }
 /* A Sammelbuchung (#567): per line the account opposite the shared one, its code and amount, the text below. */
 .jnew.split { --w: min(660px, 100vw - 32px); width: var(--w); top: 4vh; }
 .jnew .jlines { display: grid; gap: 10px; }
