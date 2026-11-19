@@ -11,7 +11,7 @@
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { entriesForceMayRemove, entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { claimsInputTax, inputTaxWithoutItsReceipt } from '../accounting/evidence-check.js';
-import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, bookWithheldShares, classifyTransactions, loadClassifyContext, mappedReceipts, ruleOfPayment, type ClassifyContext, type ClassifyOutcome } from '../booking/classify.js';
+import { BATCH_SIZE, CONCURRENCY, bookBillCorrections, bookImportVatDeductions, bookPayslipWages, bookWithheldShares, classifyTransactions, loadClassifyContext, mappedReceipts, ruleOfPayment, type ClassifyContext, type ClassifyOutcome } from '../booking/classify.js';
 import { answerSettles, mustSettle, receiptKnowledge, receiptWaitOf } from '../booking/receipt-wait.js';
 import { judgedRepayments, markJudged } from '../booking/owner-judged.js';
 import { loadKnowledge } from '../knowledge/layers.js';
@@ -204,6 +204,9 @@ export function classifyStep({ force = false } = {}): StepRun {
       if (corrected.booked.length) log(`Fee bills : ${corrected.booked.length} provider bill(s): the input tax they show booked as ${corrected.booked.map((b) => b.ref).join(', ')}.`);
       if (corrected.linked.length) log(`Fee bills : ${corrected.linked.length} provider bill(s) linked to the correction that books their input tax: ${corrected.linked.map((b) => b.ref).join(', ')}.`);
       if (corrected.waiting.length) log(`Fee bills : ${corrected.waiting.length} provider bill(s) left to the person (${corrected.waiting.map((w) => `${w.receipt}: ${w.why}`).join(', ')}).`);
+      // A wage the app booked before its payslips came is booked again from them, gross (docs/specs/payroll.md §10.2 A3).
+      const wagesAgain = bookPayslipWages(structuredClone(books.read()), context, fx).length ? books.update((index) => bookPayslipWages(index, context, fx, run)) : [];
+      if (wagesAgain.length) log(`Payslips  : ${wagesAgain.length} wage(s) booked again, gross, from the payslips linked since: ${wagesAgain.join(', ')}.`);
       // A contribution payment the app booked before the payslips came (another run of the same drop) takes the share they withheld now (#489).
       const shares = bookWithheldShares(structuredClone(books.read()), context).length ? books.update((index) => bookWithheldShares(index, context, run)) : [];
       if (shares.length) log(`Withheld  : ${shares.length} contribution payment(s) booked again with the employees' share the payslips withheld: ${shares.join(', ')}.`);

@@ -241,7 +241,8 @@ function mayBePaid(books: Index, r: Receipt): boolean {
 }
 
 export function waitsForCustomer(books: Index, r: Receipt, firm: Firm | undefined): boolean {
-  if (issuedByFirm(r, firm) !== 'uid') return false;
+  // A payslip is the firm's too, but no customer pays it: it waits for its wage (docs/specs/payroll.md §10.2 A1).
+  if (r.kind === 'payslip' || issuedByFirm(r, firm) !== 'uid') return false;
   if (mayBePaid(books, r)) return false;
   if (!agreedBasis()) return true;
   const events = new Set((books.journalEntries ?? []).filter((e) => /^(RE|GS)-/.test(e.transactionRef) && !e.transactionRef.endsWith('-storno')).map((e) => squash(e.transactionRef)));

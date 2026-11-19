@@ -10,7 +10,7 @@ import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { baseCurrency, documents, setup } from '../engines/index.js';
 import { HEAD, wordsRe } from '../core/modules/words.js';
 import { issuedByFirm } from '../intake/own-invoice.js';
-import { CORRECTION, deductionKind, namesWord, payslipDeductions, payslipRows, prose } from './withheld.js';
+import { accountOfKind, CORRECTION, deductionKind, namesWord, payslipDeductions, payslipRows, prose } from './withheld.js';
 
 /** The kindRule of a payslip code recognised (A1): told apart from the app's own (`payroll`). */
 export const PAYSLIP_RULE = 'document:payslip';
@@ -178,13 +178,6 @@ export function payslipOf(text: string, firm: { name?: string; uid?: string } | 
 }
 
 // ─── Booking (A3) ───────────────────────────────────────────────────────────
-
-/** The account a kind's deductions are owed on: setup.yaml `wages.withholdsTo`, else `deductions`; a combined kind only when its parts share one. */
-export function accountOfKind(kind: string): string | undefined {
-  const w = setup().wages;
-  const accounts = new Set(kind.split('+').map((k) => w?.withholdsTo?.[k] ?? w?.deductions));
-  return accounts.size === 1 ? [...accounts][0] : undefined;
-}
 
 /** One line of a wage booked from its payslips: `credit` empty is the bank. */
 export interface WageLine { debit: string; credit: string; amount: number; what: 'net' | 'deductions' | 'allowances' | 'expenses'; employee?: string; period?: string; receipt: string }

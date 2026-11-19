@@ -43,17 +43,50 @@ export function wageAccounts(): { deductions: string; contributions: ReadonlySet
 const fold = (s: string | undefined) => (s ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 
 /**
+ * The businesses that collect deductions the payslips withheld, each with its kinds (docs/specs/payroll.md §10.2 A5):
+ * the jurisdiction's payees (setup.yaml `wages.payees`, each collecting the kind of its id), and every business file
+ * that says `collects: [...]` (a pension fund's, the canton's for the withholding tax), whose word wins.
+ */
+export type Collectors = ReadonlyMap<string, readonly string[]>;
+export function collectorsOf(counterparties: ReadonlyArray<{ id: string; collects?: readonly string[] }>): Collectors {
+  const w = setup().wages;
+  const out = new Map<string, readonly string[]>();
+  for (const id of w?.payees ?? []) if (w?.withholds?.[id]) out.set(id, [id]);
+  for (const c of counterparties) if (c.collects?.length) out.set(c.id, c.collects);
+  return out;
+}
+
+/** The kinds a business collects: its own word (`collectors`), else the kind its id names (setup.yaml `wages.withholds`), else none. */
+export function kindsOf(business: string | undefined, collectors?: Collectors): readonly string[] {
+  if (!business) return [];
+  return collectors?.get(business) ?? (setup().wages?.withholds?.[business] ? [business] : []);
+}
+
+/** The account a kind's deductions are owed on: setup.yaml `wages.withholdsTo`, else `deductions`; a combined kind only when its parts share one. */
+export function accountOfKind(kind: string): string | undefined {
+  const w = setup().wages;
+  const accounts = new Set(kind.split('+').map((k) => w?.withholdsTo?.[k] ?? w?.deductions));
+  return accounts.size === 1 ? [...accounts][0] : undefined;
+}
+
+/** The one account of several kinds, or undefined when they are owed on two. */
+export function accountOfKinds(kinds: readonly string[]): string | undefined {
+  const accounts = new Set(kinds.map(accountOfKind));
+  return accounts.size === 1 ? [...accounts][0] : undefined;
+}
+
+/**
  * Whether a payment out pays social insurance contributions, by what the books know of its payee:
  * the business it routes to is one the jurisdiction names as collecting them (setup.yaml
  * `wages.payees`, the business files' ids), or an earlier payment to the same business (or the same
  * counterparty name) is booked on the deductions account or an employer's contribution account. A
  * wage itself is none.
  */
-export function paysContributions(books: Pick<Books, 'journalEntries'> & { transactions: readonly BankTransaction[] }, tx: BankTransaction, businessOf: (t: BankTransaction) => string | undefined): boolean {
+export function paysContributions(books: Pick<Books, 'journalEntries'> & { transactions: readonly BankTransaction[] }, tx: BankTransaction, businessOf: (t: BankTransaction) => string | undefined, collectors?: Collectors): boolean {
   const w = wageAccounts();
   if (!w || tx.direction !== 'DBIT') return false;
   const business = businessOf(tx);
-  if (business && w.payees.includes(business)) return true;
+  if (business && (w.payees.includes(business) || !!collectors?.has(business))) return true;
   const payee = fold(tx.counterparty);
   const same = (t: BankTransaction) => t.ref !== tx.ref && t.date <= tx.date && ((!!business && businessOf(t) === business) || (!!payee && fold(t.counterparty) === payee));
   const refs = new Set(books.transactions.filter(same).map((t) => t.ref));
@@ -291,11 +324,14 @@ type ShareBooks = Books & { transactions: readonly BankTransaction[]; receipts: 
  * several), whose deductions read per kind and add up to what it put there, and no row names this business's kind
  * together with another's. Undefined otherwise: the model is told the account's credit and the bill decides.
  */
-export function fundShare(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined): number | undefined {
+export function fundShare(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined, collected: readonly string[] = kindsOf(business)): number | undefined {
   const w = setup().wages;
-  const account = w?.deductions;
   const kinds = w?.withholds;
-  if (!account || !kinds || !business || !kinds[business]?.length || tx.direction !== 'DBIT') return undefined;
+  const account = accountOfKinds(collected);
+  if (!account || !kinds || !business || !collected.length || tx.direction !== 'DBIT') return undefined;
+  const mine = new Set(collected);
+  // What of a payslip's deductions goes onto this account: its kinds whose account it is.
+  const onAccount = (m: Map<string, number>) => [...m].reduce((s, [k, v]) => s + (accountOfKind(k) === account ? toRappen(v) : 0), 0);
   const year = tx.date.slice(0, 4);
   if (books.config?.openingBalances?.[year]?.[account]) return undefined;
   const lines = books.journalEntries.filter((e) => e.transactionRef !== tx.ref && e.date.startsWith(year) && e.date <= tx.date);
@@ -305,12 +341,14 @@ export function fundShare(books: ShareBooks, tx: BankTransaction, business: stri
   for (const [ref, rappen] of put) {
     const ids = new Set([...books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId), ...lines.filter((e) => e.transactionRef === ref).flatMap((e) => e.receipts ?? [])]);
     const reads = books.receipts.filter((r) => ids.has(r.id)).flatMap((r) => payslipDeductions(r.extractedText ?? '', undefined, kinds) ?? []);
-    const sum = reads.reduce((s, m) => s + [...m.values()].reduce((a, v) => a + toRappen(v), 0), 0);
+    const sum = reads.reduce((s, m) => s + onAccount(m), 0);
     if (!reads.length || sum !== rappen) return undefined;
     for (const m of reads) for (const [kind, v] of m) {
       const parts = kind.split('+');
-      if (parts.includes(business) && parts.length > 1) return undefined;
-      if (kind === business) withheld += toRappen(v);
+      const ours = parts.filter((k) => mine.has(k)).length;
+      // A row that names this business's kind together with another's: whose part is whose, nothing says.
+      if (ours && ours < parts.length) return undefined;
+      if (ours) withheld += toRappen(v);
     }
   }
   const theirs = new Set(books.transactions.filter((t) => t.ref !== tx.ref && t.date <= tx.date && businessOf(t) === business).map((t) => t.ref));
@@ -323,14 +361,16 @@ export function fundShare(books: ShareBooks, tx: BankTransaction, business: stri
  * The share of each payment out to a business whose deduction kinds setup.yaml names (fundShare), by ref, where code
  * can tell it (#476): the task and «Arbeitnehmeranteil abziehen» then ask for that part, never for all the account holds.
  */
-export function withheldSharesOf(books: ShareBooks, businessOf: (t: BankTransaction) => string | undefined): Record<string, number> {
-  const kinds = setup().wages?.withholds;
-  if (!kinds) return {};
+export function withheldSharesOf(books: ShareBooks, businessOf: (t: BankTransaction) => string | undefined, collectors?: Collectors): Record<string, number> {
+  const w = setup().wages;
+  if (!w?.withholds || !w.deductions) return {};
   const out: Record<string, number> = {};
   for (const t of books.transactions) {
     const b = t.direction === 'DBIT' ? businessOf(t) : undefined;
-    if (!b || !kinds[b]) continue;
-    const share = fundShare(books, t, b, businessOf);
+    const kinds = kindsOf(b, collectors);
+    // The task and its click are the deductions account's: a kind owed elsewhere (the withholding tax) has none.
+    if (!b || !kinds.length || accountOfKinds(kinds) !== w.deductions) continue;
+    const share = fundShare(books, t, b, businessOf, kinds);
     if (share !== undefined) out[t.ref] = share;
   }
   return out;
@@ -399,8 +439,53 @@ export function unclearedContributions(books: Books & { transactions: readonly B
 }
 
 /** The payments out to a business that collects contributions with the employees' share (setup.yaml `wages.payees`), by ref: what the app's task needs of the business files. */
-export function withheldPayeesOf(transactions: readonly BankTransaction[], businessOf: (t: BankTransaction) => string | undefined): string[] {
+export function withheldPayeesOf(transactions: readonly BankTransaction[], businessOf: (t: BankTransaction) => string | undefined, collectors?: Collectors): string[] {
   const w = wageAccounts();
-  if (!w?.payees.length) return [];
-  return transactions.filter((t) => t.direction === 'DBIT' && w.payees.includes(businessOf(t) ?? '')).map((t) => t.ref);
+  if (!w) return [];
+  const collects = (b: string | undefined) => !!b && (w.payees.includes(b) || (!!collectors?.has(b) && accountOfKinds(collectors.get(b)!) === w.deductions));
+  return transactions.filter((t) => t.direction === 'DBIT' && collects(businessOf(t))).map((t) => t.ref);
+}
+
+/** What code books of a payment to a collector without a model (contributionLines): its lines (`credit` empty is the bank), and why. */
+export interface ContributionBooking {
+  lines: Array<{ debit: string; credit: string; amount: number }>;
+  account: string; share: number;
+  /** Where the employer's part went: the payee's earlier contributions' account, else the kind's (setup.yaml `wages.employer`). */
+  employer?: string;
+  /** The collection commission the collector left the employer (setup.yaml `wages.commission`), and its account. */
+  commission?: { amount: number; account: string };
+}
+
+/**
+ * A payment to a business that collects deductions (§10.2 A4, A5), booked by code where it can tell: what the payslips
+ * withheld for its kinds and is not paid yet (fundShare) on their account, and
+ * - the rest, the employer's contributions, on the account the payee's earlier contributions went to, else the kind's
+ *   (setup.yaml `wages.employer`); without one code books nothing;
+ * - a payment short of the share by at most the kind's commission (setup.yaml `wages.commission`, the withholding tax's
+ *   collection commission) clears the share, the rest on the commission's account; short by more, it clears what it pays.
+ * Wages booked net (the account holds nothing while the year has wages): the whole payment is the employer's. Undefined
+ * when code cannot tell the share, the payment pays a kind without an employer's account beyond it, or it is no payment out.
+ */
+export function contributionLines(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined, collectors?: Collectors): ContributionBooking | undefined {
+  const w = setup().wages;
+  const kinds = kindsOf(business, collectors);
+  const account = accountOfKinds(kinds);
+  if (!w || !business || !account || tx.direction !== 'DBIT') return undefined;
+  const open = withheldFor(books, tx, account);
+  if (open === undefined && !wagesBooked(books, tx)) return undefined;
+  const share = open ? fundShare(books, tx, business, businessOf, kinds) : 0;
+  if (share === undefined) return undefined;
+  const paid = toRappen(Math.abs(tx.amount));
+  const owed = toRappen(share);
+  const commission = kinds.map((k) => w.commission?.[k]).find(Boolean);
+  if (paid <= owed) {
+    const short = owed - paid;
+    if (commission && short > 0 && short * 100 <= owed * commission.upTo) {
+      return { account, share, commission: { amount: fromRappen(short), account: commission.account }, lines: [{ debit: account, credit: '', amount: fromRappen(paid) }, { debit: account, credit: commission.account, amount: fromRappen(short) }] };
+    }
+    return { account, share, lines: [{ debit: account, credit: '', amount: fromRappen(paid) }] };
+  }
+  const employer = payeeContributionAccount(books, tx, businessOf) ?? kinds.map((k) => w.employer?.[k]).find(Boolean);
+  if (!employer) return undefined;
+  return { account, share, employer, lines: [...(owed ? [{ debit: account, credit: '', amount: fromRappen(owed) }] : []), { debit: employer, credit: '', amount: fromRappen(paid - owed) }] };
 }
