@@ -70,7 +70,7 @@ test('loading the file: the card first, then «Rückwirkende Korrektur» carries
   const oct = await linesOf('2026-10-q1');
   const tax = oct.lines.filter((l) => l.wageType === 'quellensteuer');
   assert.deepEqual(tax.map((l) => [l.amount, l.corrects ?? null]), [[473.2, '2026-09-q1'], [473.2, null]]);
-  assert.deepEqual(oct.lines.filter((l) => l.wageType === 'bezugsprovision').map((l) => [l.base, l.amount]), [[946.4, 18.93]]);
+  assert.deepEqual(oct.lines.filter((l) => l.wageType === 'bezugsprovision').map((l) => [l.base, l.amount]), [[946.4, 18.95]]);
   const closed = await api.send('POST', '/api/payroll/payslips/2026-10-q1/close', { confirm: true });
   assert.equal(closed.json.closed, true);
 });

@@ -182,13 +182,13 @@ test('the commission is the file\'s electronic rate on the tax, an employer line
   const [c] = line(d, 'bezugsprovision');
   assert.equal(c.base, 473.2);
   assert.equal(c.rate, 2);
-  assert.equal(c.amount, 9.46);
+  assert.equal(c.amount, 9.45, '473.20 × 2 % = 9.464, rounded to 5 Rappen as the tax (§22 decision 121)');
   assert.equal(c.side, 'employer');
   const b = bookingOf(d, ctxOf(firm()).data, firm());
   const tax = b.postings.find((p) => p.wageType === 'quellensteuer')!;
   const com = b.postings.find((p) => p.wageType === 'bezugsprovision')!;
   assert.deepEqual([tax.debit, tax.credit, tax.amount], ['1091', '2279', 473.2]);
-  assert.deepEqual([com.debit, com.credit, com.amount], ['2279', '5890', 9.46]);
+  assert.deepEqual([com.debit, com.credit, com.amount], ['2279', '5890', 9.45]);
   // The payout is net of the tax; the commission is no money of the person's.
   assert.equal(d.net, Math.round((d.gross - d.deductions) * 100) / 100);
   assert.ok(d.lines.every((l) => l.wageType !== 'bezugsprovision' || l.side === 'employer'));
@@ -199,7 +199,7 @@ test('a firm\'s own commission rate for the canton (a paper settlement) replaces
   store.insurances.push({ id: 'qbe', kind: 'qst', name: 'Steuerverwaltung Beispiel', customerNumber: 'QST-1', solutions: [{ code: 'BE', rates: [dated('2026-01-01', { provision: 1 })] }], validFrom: '2026-01-01' });
   const d = computePayslip({ ...ctxOf(store), tariffs }, 'q1', '2026-03')!;
   assert.equal(line(d, 'bezugsprovision')[0].rate, 1);
-  assert.equal(amountOf(d, 'bezugsprovision'), 8.13, '812.50 × 1 %');
+  assert.equal(amountOf(d, 'bezugsprovision'), 8.15, '812.50 × 1 % = 8.125, to 5 Rappen');
 });
 
 test('without the canton\'s file the line is «unvollständig: Tarif ZH 2026 nicht geladen», never a guess', () => {
@@ -230,7 +230,7 @@ test('the settlement list per canton and month equals what the payslips booked o
   assert.deepEqual(lists.map((s) => `${s.month} ${s.region} ${s.rows.length}`), ['2026-03 BE 1', '2026-03 ZH 2']);
   const zh = lists.find((s) => s.region === 'ZH')!;
   assert.equal(zh.totals.tax, 788.2, '473.20 + 315.00');
-  assert.equal(zh.totals.commission, 15.76, '9.46 + 6.30');
+  assert.equal(zh.totals.commission, 15.75, '9.45 + 6.30');
   // 2279's movements of the month: credits the tax, debits the commission.
   let credit = 0; let debit = 0;
   for (const c of closes) for (const p of bookingOf(c, ctx.data, store).postings) {
@@ -274,10 +274,10 @@ test('a canton move ZH → BE with a carried correction and the firm\'s rates: e
   const mar = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-03')!); ev.push(mar, correction(mar.id, 100));
   const apr = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-04')!);
   // April: BE's own tax at BE's 1 %, the ZH correction of 100 at ZH's 2 %, each line naming its canton.
-  assert.deepEqual(line(apr as never, 'bezugsprovision').map((l) => [l.tariff?.region, l.base, l.rate, l.amount]), [['ZH', 100, 2, 2], ['BE', 812.5, 1, 8.13]]);
+  assert.deepEqual(line(apr as never, 'bezugsprovision').map((l) => [l.tariff?.region, l.base, l.rate, l.amount]), [['ZH', 100, 2, 2], ['BE', 812.5, 1, 8.15]]);
   const lists = settlementsOf([mar, apr], '2026', ctxOf(store).data, firmWageTypes(ctxOf(store).data, store), store);
   const april = lists.filter((s) => s.month === '2026-04');
-  assert.deepEqual(april.map((s) => [s.region, s.totals.tax, s.totals.commission, s.insurer?.customerNumber]), [['BE', 812.5, 8.13, 'K-BE'], ['ZH', 100, 2, 'K-ZH']]);
+  assert.deepEqual(april.map((s) => [s.region, s.totals.tax, s.totals.commission, s.insurer?.customerNumber]), [['BE', 812.5, 8.15, 'K-BE'], ['ZH', 100, 2, 'K-ZH']]);
   const all = lists.reduce((s, x) => ({ tax: s.tax + x.totals.tax, commission: s.commission + x.totals.commission }), { tax: 0, commission: 0 });
   const b = byRegionAndBooked([mar, apr], store);
   assert.equal(Math.round(all.tax * 100), Math.round(b.credit * 100), 'the lists\' tax = 2279\'s credits');

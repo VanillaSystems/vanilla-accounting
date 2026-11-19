@@ -5,7 +5,7 @@
  * periodic part of the wage, extrapolated to a whole month when the person enters or leaves in it and to
  * the whole of her employments when she has others (their Pensum, else 100 %, or their income when the
  * firm knows it), plus the aperiodic part as it is. The commission the region leaves the employer is a
- * line of its own on the tax of the month (its corrections included). A missing input is a line
+ * line of its own on the tax of the month (its corrections included), rounded as the tax is. A missing input is a line
  * «unvollständig», never a guess. Code reads the data's keys and the file; no region is named here.
  * Pure and browser-safe.
  */
@@ -168,7 +168,8 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
     const loaded = firm === undefined ? input.tariffs?.(r, year) : undefined;
     const rate = firm ?? (loaded ? provisionOf(loaded.file, t.provision.electronic, to) : undefined);
     if (rate === undefined) { miss(`tariff:${r}:${year}`, c.wageType.key); continue; }
-    const amount = round2(taxed * rate / 100);
+    // Rounded as the tax is (5 Rappen, data `rounding`): money of the same settlement (§22 decision 121).
+    const amount = roundStep(taxed * rate / 100, t.rounding);
     if (amount === 0) continue;
     // The region always on the line, whatever the rate's source: the settlement list reads it.
     out.lines.push({

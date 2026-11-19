@@ -2003,7 +2003,7 @@ Taken while building B2, the Quellensteuer (2026-11-19):
      for the payroll work; a firm re-accounts the Lohnart if its fiduciary wants 3xxx or 7xxx. The rate is the
      firm's solution for the canton (a Quellensteuer insurance whose solution code is the canton, rate
      `provision`: a paper settlement, a canton's own rule), else the file's electronic rate (`PEL`); rounded to
-     the Rappen. It lowers «Total Arbeitgeber». The line always names its canton (also with the firm's rate, and on a month
+     5 Rappen as the tax (decision 121; until then to the Rappen). It lowers «Total Arbeitgeber». The line always names its canton (also with the firm's rate, and on a month
      that only carries a correction, also after the person left or is no longer subject), so the settlement
      list reads it. A correction never carries it: the month that carries the tax's
      correction takes it again, so it is charged once. The canton grants it only for a timely settlement; the
@@ -2128,6 +2128,15 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     canton is shared over its rows at its rate, the rounding left on the month's own row, so the rows add up to
     the line booked on 2279 and the list still equals 2279's movements. The wage total counts the month's own rows
     only (the corrected month declared its wage already). The CSV has one row per such row, `corrects` the month.
+121. **The Bezugsprovision is rounded to 5 Rappen, as the tax is** (`taxAtSource.rounding`, the same step), not to the
+    Rappen: it is money of the same settlement, and no source was found that a canton computes it to the cent. What
+    was read: the cantons publish only its rate (ESTV, «Auskunftsstellen Quellensteuer, Bezugsprovisionen und
+    Kirchensteuer 2026»: Online / Papier per canton); the canton SO's Wegleitung QST-Revision 6.3 and the canton GR's
+    «KS 45 Ergänzungen 2026» Ziff. 6 give the percentage; the BSV's circular on the tax at source (Rz 1076) says that
+    on the monthly model the tax office states the commission in its invoice and deducts it there. So the canton's
+    invoice is what counts: where it computes the commission on the settlement's total and rounds otherwise, a few
+    Rappen stay on 2279, which the year-end's tax-at-source check names (decision 122). The settlement list's row
+    shares are cents of the payslip's line, which is rounded.
 
 ---
 
