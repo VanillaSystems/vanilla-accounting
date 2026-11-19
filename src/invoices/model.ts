@@ -167,13 +167,27 @@ export interface Contact extends Envelope, ContactFields {}
  * A position of a document (spec docs/specs/invoicing.md 4.4.3). Absent `kind` is an item: every
  * line written before the kinds is one.
  */
-export type InvoiceLine = ItemLine | TextLine | SubtotalLine | DiscountLine | PageBreakLine;
-export const LINE_KINDS = ['item', 'text', 'subtotal', 'discount', 'pagebreak'] as const;
+export type InvoiceLine = ItemLine | TextLine | SubtotalLine | DiscountLine | PageBreakLine | GroupLine;
+export const LINE_KINDS = ['item', 'article', 'text', 'subtotal', 'discount', 'pagebreak', 'group'] as const;
 export type LineKind = (typeof LINE_KINDS)[number];
 
-/** A priced position (Standard): quantity × price, less its own discount. */
+/**
+ * A priced position: quantity × price, less its own discount. A Standard position (`item`), or an
+ * Artikel position (`article`, spec 4.4.3): filled from the Artikel `articleId` when it was added,
+ * every field editable since; it prints its `code` where the layout shows article codes.
+ */
 export interface ItemLine {
-  kind?: 'item';
+  kind?: 'item' | 'article';
+  /** An Artikel position: the Artikel it was filled from (articles[].id). */
+  articleId?: string;
+  /** An Artikel position: the Artikel's code as it was when added, printed where the layout shows it. */
+  code?: string;
+  /**
+   * A sub-position of the Gruppe above it (spec 4.4.3): the group is the nearest `group` position
+   * above and holds every position marked so that follows it without a gap. It counts in the totals
+   * as any position (once), and the group prints its sum.
+   */
+  inGroup?: true;
   text: string;
   quantity: number;
   unit?: Unit;
@@ -224,7 +238,84 @@ export interface DiscountLine { kind: 'discount'; text: string; percent?: number
 /** Seitenumbruch: the next position starts a new sheet of the PDF, under the repeated table header. */
 export interface PageBreakLine { kind: 'pagebreak' }
 
-export const isItem = (l: InvoiceLine): l is ItemLine => l.kind === undefined || l.kind === 'item';
+/**
+ * Gruppe (spec 4.4.3): a title over the positions marked `inGroup` right below it, printed with
+ * their sum. The title itself has no amount of its own: its sub-positions are in the totals once.
+ */
+export interface GroupLine { kind: 'group'; text: string }
+
+/** A priced position, Standard or Artikel. */
+export const isItem = (l: InvoiceLine): l is ItemLine => l.kind === undefined || l.kind === 'item' || l.kind === 'article';
+
+/**
+ * The sub-positions of the Gruppe at `k`: the positions marked `inGroup` that follow it without a
+ * gap (indices). Empty for any other position.
+ */
+export function groupMembers(lines: readonly InvoiceLine[], k: number): number[] {
+  if (lines[k]?.kind !== 'group') return [];
+  const out: number[] = [];
+  for (let i = k + 1; i < lines.length; i++) {
+    const l = lines[i];
+    if (!isItem(l) || !l.inGroup) break;
+    out.push(i);
+  }
+  return out;
+}
+
+/**
+ * The positions with every `inGroup` mark that has no Gruppe above it dropped: a sub-position
+ * belongs to the group whose title or sub-position stands right above it. What a move or a removal
+ * leaves behind is so an ordinary position again, never a member of a group it does not stand in.
+ */
+export function withGroups(lines: readonly InvoiceLine[]): InvoiceLine[] {
+  let open = false;
+  return lines.map((l) => {
+    if (l.kind === 'group') { open = true; return l; }
+    if (isItem(l) && l.inGroup) {
+      if (open) return l;
+      const { inGroup: _, ...rest } = l;
+      return rest;
+    }
+    open = false;
+    return l;
+  });
+}
+
+/** An Artikel's kind: goods (Ware) or a service (Dienstleistung). */
+export const ARTICLE_TYPES = ['goods', 'service'] as const;
+export type ArticleType = (typeof ARTICLE_TYPES)[number];
+
+/**
+ * The VAT kind of an Artikel (spec 4.4.3): the percent comes from the jurisdiction for the
+ * supply's day (modules/<j>/invoicing.yaml rateKinds), never from the Artikel; `none` is 0 %.
+ */
+export const VAT_KINDS = ['normal', 'reduced', 'accommodation', 'none'] as const;
+export type VatKind = (typeof VAT_KINDS)[number];
+
+/** Artikel (spec 4.3, 4.4.3): a product or service a position is filled from. */
+export interface ArticleFields {
+  /** Produktcode: unique among the live Artikel when given. */
+  code?: string;
+  type: ArticleType;
+  name: string;
+  /** The text a position prints; absent: the name. */
+  text?: string;
+  unit?: Unit;
+  /** The unit price in the books' currency, net or gross as `prices` says. */
+  price: number;
+  /** Absent: net. A position on a document of the other pricing converts it at its rate, to the cent. */
+  prices?: Prices;
+  vatKind: VatKind;
+  /** The revenue account; absent: the contact's, else the settings'. */
+  account?: string;
+  /** On a firm with two net tax rates: the second (#504). Absent: the first. */
+  activity?: 1 | 2;
+  /** A group of the Artikel list (Produktgruppe), a free text; never printed. */
+  group?: string;
+  /** Named by a document, so kept: out of the picker, restored by hand. */
+  archived?: boolean;
+}
+export interface Article extends Envelope, ArticleFields {}
 
 export interface Comment extends Envelope {
   author: string;
@@ -458,6 +549,7 @@ export const replacedPdfUrl = (id: string, k: number) => `/api/invoices/${encode
 export interface InvoiceBook {
   schema: number;
   contacts: Contact[];
+  articles: Article[];
   invoices: Invoice[];
   sent: SentDocument[];
 }
@@ -468,7 +560,8 @@ export interface InvoiceBook {
 export const INVOICE_FONTS = ['Inter', 'Helvetica'] as const;
 export type InvoiceFont = (typeof INVOICE_FONTS)[number];
 
-export const LAYOUT_ELEMENTS = ['logo', 'senderLine', 'customerVatId', 'intro', 'quantity', 'vatColumn', 'closing', 'footer', 'qrBill'] as const;
+/** `articleCode`: an Artikel position prints its code before its text. */
+export const LAYOUT_ELEMENTS = ['logo', 'senderLine', 'customerVatId', 'intro', 'quantity', 'vatColumn', 'articleCode', 'closing', 'footer', 'qrBill'] as const;
 export type LayoutElement = (typeof LAYOUT_ELEMENTS)[number];
 
 export interface InvoiceLayout {

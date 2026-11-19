@@ -16,6 +16,23 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- Verkauf › Artikel: the products and services the firm sells, as a table (code, name, Ware or
+  Dienstleistung, unit, price, VAT kind), each opened beside it with its form. An Artikel names a
+  VAT kind (normal, reduced, accommodation, none), and the rate comes from the law for the
+  document's supply day. Its price is excl. or incl. VAT and is converted for a document priced the
+  other way. An Artikel a document names is archived, one no document names is deleted. «Importieren»
+  reads Artikel from a CSV with a column mapping, and a row whose code is already there is proposed
+  as the same Artikel.
+- On a draft, «＋ Artikel» searches the Artikel by code or name and fills code, text, unit, price,
+  rate and revenue account into the position, each still editable there. The revenue account comes
+  from the Artikel, else from the contact, else from the settings. Each position shows its account
+  and VAT code on screen. A document prints the Artikel code where Firma › Rechnungslayout shows it
+  (new element «Artikelcode»).
+- «＋ Gruppe» on a draft: a title over sub-positions, printed with their sum. The totals, a Rabatt
+  below it and the bookings count each sub-position once. A conversion takes a group with the
+  sub-positions ticked of it.
+- The AI's invoice draft can name an Artikel by its code or name.
+
 - Verkauf › Weitere › «Zurück zum Entwurf»: a Rechnung or Gutschrift issued by mistake and never
   sent goes back to draft and keeps its number; its PDF stays in the Verlauf, marked as replaced. On
   the agreed basis its booking is taken back and booked again when it is issued again. Once sent,

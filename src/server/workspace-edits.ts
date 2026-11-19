@@ -15,6 +15,8 @@ import { loadInvoices, updateInvoices } from '../invoices/store.js';
 import { InvoiceRuleError, liveDocuments } from '../invoices/rules.js';
 import type { CustomerFields } from '../invoices/model.js';
 import { liveContacts, pickableContacts } from '../invoices/contacts.js';
+import { draftArticleLines } from '../invoices/articles.js';
+import type { InvoiceBook } from '../invoices/model.js';
 import type { Change, ChangeNote, InvoicingSet, WorkspaceChange } from '../types/assistant.js';
 import { RequestError } from './books.js';
 import { askQuestion, closeQuestion, openQuestionOn } from './questions.js';
@@ -101,7 +103,8 @@ export function setCustomerTerms(ws: Pick<Workspace, 'paths'>, to: (days: number
 /** A draft for a customer of the invoices, or for a new one added with it: the same draft «N» in Rechnungen writes. */
 function invoiceDraft(ws: Workspace, c: Extract<WorkspaceChange, { kind: 'invoiceDraft' }>): Applied {
   return checked(() => {
-    const { clear: _, ...draft } = parseDraftPatch(c.draft, loadInvoices(ws), ws.invoicing?.units);
+    const book = loadInvoices(ws);
+    const { clear: _, ...draft } = parseDraftPatch({ ...c.draft, lines: withArticles(book, c.draft, ws) }, book, ws.invoicing?.units);
     const fields = c.newCustomer ? parseCustomer({ language: 'de', ...c.newCustomer }, false) : undefined;
     const customer = fields ? createCustomer(ws, fields as CustomerFields) : pickableContacts(loadInvoices(ws)).find((x) => x.id === c.customer);
     if (!customer) throw new RequestError(400, 'Diesen Kontakt gibt es nicht (oder er ist archiviert): einen neuen mit newCustomer anlegen.', { code: 'unknownCustomer' });
@@ -109,6 +112,13 @@ function invoiceDraft(ws: Workspace, c: Extract<WorkspaceChange, { kind: 'invoic
     return { undo: { kind: 'dropInvoiceDraft', id: made.id, ...(fields ? { customer: customer.id } : {}) }, note: { draft: { id: made.id, customer: customer.name } } };
   });
 }
+
+/** An Artikel the AI's draft names that no code or name finds: refused in the person's words. */
+const unknownArticle = (name: string): never => {
+  throw new RequestError(400, `Keinen Artikel «${name}» gefunden: Code oder Name eines Artikels aus invoices.json articles (nicht archiviert, der Name eindeutig).`, { code: 'unknownArticle' });
+};
+
+const withArticles = (book: InvoiceBook, draft: Record<string, unknown>, ws: Workspace): unknown => draftArticleLines(book, draft, ws.invoicing, unknownArticle);
 
 /** The draft goes as a person deletes one; a customer added with it goes too, while no other invoice names them. */
 function dropInvoiceDraft(ws: Workspace, id: string, customer: string | undefined): Applied {

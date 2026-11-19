@@ -326,6 +326,8 @@ export type ApiRefusal =
   /** Firma › Bankkonten: the IBAN cleared is printed on invoices (invoicing.payTo); pick another account under Rechnungslayout first. */
   | { code: 'ibanOnInvoices'; params: { currency: string; account: string } }
   | { code: 'unknownCustomer' }
+  /** The AI's draft names an Artikel by a code or name no live Artikel has (or two share). */
+  | { code: 'unknownArticle' }
   | { code: 'amountZero' }
   | { code: 'noAccount' }
   | { code: 'unknownVatCode'; params: { code: string } }

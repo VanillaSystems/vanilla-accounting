@@ -10,8 +10,8 @@ import type { Workspace } from '../workspace/workspace.js';
 import { receiptFile, type Books } from '../books/store.js';
 import { defaultTexts, draftDays, issuedIntro, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
 import {
-  INVOICE_CURRENCIES, INVOICE_LANGUAGES, DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, LINE_KINDS, PRICES, isItem, type UnitDef,
-  type Comment, type Contact, type ContactFields, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
+  INVOICE_CURRENCIES, INVOICE_LANGUAGES, DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, LINE_KINDS, PRICES, isItem, withGroups, type UnitDef,
+  type Article, type ArticleFields, type Comment, type Contact, type ContactFields, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
   type AccountChange, type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type SentDocument, type SentKind,
 } from './model.js';
 import { renderHtml, renderPdf, type Rendered } from './pdf.js';
@@ -35,6 +35,7 @@ import { creditNoteStatus, type CreditListStatus } from './lists.js';
 import {
   applyContact, assertNumberFree, checkVatId, contactOfCustomer, documentsOf, draftTermsOf, goneRefs, lineDefaults, liveContacts, numberContact, parseContact, pickableContacts, recipientOf,
 } from './contacts.js';
+import { applyArticle, assertCodeFree, documentsNaming, liveArticles, parseArticle } from './articles.js';
 import { TEXTS } from './texts.js';
 import { baseCurrency, invoiceActivities, invoiceRates, invoicing } from '../engines/index.js';
 import { openItemAccounts } from '../accounting/tax-point.js';
@@ -122,7 +123,8 @@ const bad = (msg: string, missing?: Missing[]): never => { throw new InvoiceRule
  */
 function parseLines(v: unknown, units: readonly string[]): InvoiceLine[] {
   if (!Array.isArray(v)) return bad('lines muss eine Liste sein.');
-  return v.map((raw, i): InvoiceLine => {
+  // A sub-position with no Gruppe above it is an ordinary position (model.ts withGroups).
+  return withGroups(v.map((raw, i): InvoiceLine => {
     const l = (raw ?? {}) as Record<string, unknown>;
     const at = `Position ${i + 1}`;
     const known = (keys: string[]) => { const extra = Object.keys(l).filter((k) => !['kind', ...keys].includes(k)); if (extra.length) bad(`${at}: unbekannte Felder ${extra.join(', ')}.`); };
@@ -139,16 +141,23 @@ function parseLines(v: unknown, units: readonly string[]): InvoiceLine[] {
       case 'pagebreak':
         known([]);
         return { kind: 'pagebreak' };
+      case 'group':
+        known(['text']);
+        return { kind: 'group', text: text() };
       case 'discount': {
         known(['text', 'percent', 'amount']);
         const percent = num('percent'), amount = num('amount');
         if (percent !== undefined && amount !== undefined) bad(`${at}: ein Rabatt hat percent oder amount, nicht beides.`, [{ field: 'line.discount', line: i }]);
         return { kind: 'discount', text: text(), ...(percent !== undefined ? { percent } : {}), ...(amount !== undefined ? { amount } : {}) };
       }
-      case undefined: case 'item': break;
+      case undefined: case 'item': case 'article': break;
       default: return bad(`${at}: kind ist eine von ${LINE_KINDS.join(', ')}.`);
     }
-    known(['text', 'quantity', 'unit', 'price', 'vatRate', 'discount', 'vatIncluded', 'account', 'activity', 'optional', 'ofLine']);
+    known(['text', 'quantity', 'unit', 'price', 'vatRate', 'discount', 'vatIncluded', 'account', 'activity', 'optional', 'ofLine', 'inGroup', ...(l.kind === 'article' ? ['articleId', 'code'] : [])]);
+    // An Artikel position names its Artikel; it stays one when the Artikel is archived or deleted since (its fields are its own).
+    if (l.kind === 'article' && !(isText(l.articleId) && l.articleId)) bad(`${at}: articleId fehlt.`);
+    if (l.code !== undefined && !isText(l.code)) bad(`${at}: code ist ein Text.`);
+    if (l.inGroup !== undefined && typeof l.inGroup !== 'boolean') bad(`${at}: inGroup ist true oder false.`);
     if (l.optional !== undefined && typeof l.optional !== 'boolean') bad(`${at}: optional ist true oder false.`);
     if (l.ofLine !== undefined && !(Number.isInteger(l.ofLine) && (l.ofLine as number) >= 0)) bad(`${at}: ofLine ist die Nummer einer Position.`);
     if (typeof l.quantity !== 'number' || typeof l.price !== 'number') bad(`${at}: quantity und price sind Zahlen.`, [{ field: 'line.quantity', line: i }]);
@@ -161,6 +170,7 @@ function parseLines(v: unknown, units: readonly string[]): InvoiceLine[] {
     const discount = num('discount');
     if (discount !== undefined && !(discount >= 0 && discount <= 100)) bad(`${at}: discount ist ein Prozentsatz von 0 bis 100.`, [{ field: 'line.discount', line: i }]);
     return {
+      ...(l.kind === 'article' ? { kind: 'article' as const, articleId: l.articleId as string, ...(isText(l.code) && l.code.trim() ? { code: l.code.trim() } : {}) } : {}),
       text: text(), quantity: l.quantity as number, price: l.price as number, vatRate: l.vatRate as number,
       ...(l.unit !== undefined ? { unit: l.unit as string } : {}), ...(l.account !== undefined ? { account: String(l.account) } : {}),
       ...(discount ? { discount } : {}),
@@ -170,8 +180,9 @@ function parseLines(v: unknown, units: readonly string[]): InvoiceLine[] {
       ...(l.activity === 2 && invoiceActivities().length && (l.vatRate as number) > 0 ? { activity: 2 as const } : {}),
       ...(l.optional === true ? { optional: true as const } : {}),
       ...(typeof l.ofLine === 'number' ? { ofLine: l.ofLine } : {}),
+      ...(l.inGroup === true ? { inGroup: true as const } : {}),
     };
-  });
+  }));
 }
 
 const DRAFT_FIELDS = ['kind', 'customerId', 'personId', 'addressId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'prices', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs'] as const;
@@ -311,6 +322,59 @@ export function addContacts(ws: Workspace, list: readonly ContactFields[], now =
     return made;
   });
 }
+
+// ─── Artikel ───────────────────────────────────────────────────────────────────
+
+/** The unit ids an Artikel may name: the firm's list. */
+const unitIds = (ws: Workspace) => (ws.invoicing?.units ?? DEFAULT_UNITS).map((u) => u.id);
+const articleGone = (): never => { throw new InvoiceRuleError('articleGone', 'Diesen Artikel gibt es nicht (mehr).'); };
+
+export function createArticle(ws: Workspace, body: unknown, now = new Date().toISOString()): Article {
+  const { clear: _, ...fields } = parseArticle(body, unitIds(ws));
+  return updateInvoices(ws, (book) => {
+    assertCodeFree(book, fields.code);
+    const a: Article = { ...newEnvelope('ar', now), ...(fields as ArticleFields) };
+    book.articles.push(a);
+    return a;
+  });
+}
+
+export function updateArticle(ws: Workspace, id: string, body: unknown): Article {
+  return updateInvoices(ws, (book) => {
+    const i = book.articles.findIndex((a) => a.id === id && !a.deleted);
+    if (i < 0) articleGone();
+    const patch = parseArticle(body, unitIds(ws), book.articles[i]);
+    assertCodeFree(book, patch.code, id);
+    book.articles[i] = applyArticle(book.articles[i], patch);
+    return book.articles[i];
+  });
+}
+
+/**
+ * Takes an Artikel away: archived while any document (a draft too) has a position from it, deleted
+ * when none does (as a contact, spec 4.4.5). An archived Artikel comes back with `archived: false`.
+ */
+export function removeArticle(ws: Workspace, id: string): { article: Article; outcome: 'archived' | 'deleted' } {
+  return updateInvoices(ws, (book) => {
+    const i = book.articles.findIndex((a) => a.id === id && !a.deleted);
+    if (i < 0) articleGone();
+    const outcome = documentsNaming(book, id).length ? 'archived' : 'deleted';
+    book.articles[i] = { ...book.articles[i], ...(outcome === 'archived' ? { archived: true } : { deleted: true }) };
+    return { article: book.articles[i], outcome };
+  });
+}
+
+/** Adds Artikel made elsewhere (the CSV import), each with its own envelope, in one save. */
+export function addArticles(ws: Workspace, list: readonly ArticleFields[], now = new Date().toISOString()): Article[] {
+  return updateInvoices(ws, (book) => {
+    for (const f of list) assertCodeFree(book, f.code);
+    const made = list.map((f): Article => ({ ...newEnvelope('ar', now, 'import'), ...f }));
+    book.articles.push(...made);
+    return made;
+  });
+}
+
+export { liveArticles };
 
 /** Replaces the record `id` in the book as it is now, if it still is what `expected` was; else the change is refused. */
 function commit<T>(ws: Workspace, id: string, expected: Invoice, fn: (book: InvoiceBook, at: number) => T): T {

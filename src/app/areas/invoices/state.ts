@@ -25,6 +25,10 @@ export type Dialog =
   | { kind: 'contact'; id?: string; then?: 'invoice' | { draft: string } | { kind: DocumentKind }; name?: string }
   /** Kontakte importieren: a CSV with its column mapping. */
   | { kind: 'contactImport' }
+  /** A new Artikel; Artikel importieren; «＋ Artikel» on the draft `draft`, after its position `after` (-1: at the end). */
+  | { kind: 'article' }
+  | { kind: 'articleImport' }
+  | { kind: 'articlePick'; draft: string; after: number }
   | { kind: 'cancel' }
   /** «Zahlungseingang erfassen» on the open invoice. */
   | { kind: 'handPayment' }

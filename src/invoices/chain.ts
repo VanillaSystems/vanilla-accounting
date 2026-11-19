@@ -5,7 +5,7 @@
  * Everything here is derived from `from`, `ofLine` and `creditFor`, never stored twice. Pure functions.
  */
 import { addDays, InvoiceRuleError, totals } from './rules.js';
-import { isItem, type DocumentKind, type Draft, type Envelope, type Invoice, type InvoiceLine, type Issued, type ItemLine } from './model.js';
+import { groupMembers, isItem, withGroups, type DocumentKind, type Draft, type Envelope, type Invoice, type InvoiceLine, type Issued, type ItemLine } from './model.js';
 
 /** The conversions each kind offers (4.4.1); a Lieferschein comes only from an Auftrag (decision 21). */
 export const CONVERSIONS: Readonly<Partial<Record<DocumentKind, readonly DocumentKind[]>>> = {
@@ -100,7 +100,8 @@ export const accepted = (quote: Invoice, docs: readonly Invoice[]): boolean =>
 /**
  * The draft a conversion makes: the ticked positions with their text, quantity (as picked), unit,
  * price, rate, account and activity, an option ticked becoming an ordinary position, each with
- * `ofLine`; texts, Zwischentotale, Rabatte and page breaks stay where they stood; the customer,
+ * `ofLine`; texts, Zwischentotale, Rabatte and page breaks stay where they stood, a Gruppe with its
+ * ticked sub-positions (none ticked: the group stays behind); an Artikel position stays one; the customer,
  * currency, language, prices, exemption, subject and the customer's order reference come along,
  * and `from` names the source. `confirmed`: the warnings the person overrode («Trotzdem …»).
  */
@@ -123,13 +124,15 @@ export function convertDraft(source: Invoice, to: DocumentKind, picks: readonly 
     throw new InvoiceRuleError(w.code, `Das Angebot ${source.number} ist ${what}: seine Preise kommen in den Entwurf, und es gilt dann als angenommen. Nur mit «Trotzdem erstellen».`, undefined, { number: source.number, date: w.date });
   }
   const byLine = new Map(valid.map((p) => [p.line, p.quantity]));
-  const lines: InvoiceLine[] = source.lines.flatMap((l, k): InvoiceLine[] => {
+  const copied = withGroups(source.lines.flatMap((l, k): InvoiceLine[] => {
     if (!isItem(l)) return [{ ...l }];
     const quantity = byLine.get(k);
     if (quantity === undefined) return [];
     const { optional: _o, ofLine: _f, ...rest } = l;
     return [{ ...rest, quantity, ofLine: k }];
-  });
+  }));
+  // A Gruppe comes along with the sub-positions ticked of it; one with none ticked stays behind.
+  const lines = copied.filter((l, k) => l.kind !== 'group' || groupMembers(copied, k).length > 0);
   // A structure left with no position above or below it says nothing: leading and trailing page breaks go.
   while (lines.length && lines.at(-1)!.kind === 'pagebreak') lines.pop();
   return {
@@ -153,6 +156,19 @@ export function convertDraft(source: Invoice, to: DocumentKind, picks: readonly 
     from: { id: source.id, kind: source.kind },
     comments: [],
   };
+}
+
+/**
+ * The Gruppen of `source` a conversion with `picks` leaves behind: those with sub-positions, none of
+ * them taken (ticked with a quantity). The dialog names them; the draft does not carry them.
+ */
+export function groupsLeftBehind(source: Pick<Invoice, 'lines'>, picks: readonly Ticked[]): Array<{ line: number; text: string }> {
+  const taken = new Set(picks.filter((p) => p.quantity !== 0).map((p) => p.line));
+  return source.lines.flatMap((l, k) => {
+    if (l.kind !== 'group') return [];
+    const members = groupMembers(source.lines, k);
+    return members.length && !members.some((m) => taken.has(m)) ? [{ line: k, text: l.text }] : [];
+  });
 }
 
 /** The days an Angebot holds by default from its date: a new one's `validUntil`. */

@@ -88,7 +88,8 @@ export const BOOKS_SCHEMA = 11;
  * today's shared series `{JJJJ}-{NNN}` for invoices and credit notes into every manifest that has an
  * `invoicing:` section: no issued number changes, the next continues the old series, nothing gaps. An app
  * of schema 5 would number by its fixed series and drop the formats on its next save, so it must refuse.
- * `invoicing.prices` may name the new kinds too. Further phase-2 settings ride on this step until it is released.
+ * `invoicing.prices` may name the new kinds too, and `invoicing.layout.show.articleCode` (slice G2) the
+ * Artikel code on paper. Further phase-2 settings ride on this step until it is released.
  */
 export const WORKSPACE_SCHEMA = 6;
 /**
@@ -110,6 +111,9 @@ export const WORKSPACE_SCHEMA = 6;
  *    Rechnung, list it, match payments to it and book it, so it must refuse. 
  *    Also in 4 (slice F2): `Draft.number` (a document back to draft keeps its number: one field and
  *    one rule for every kind), `replaced` and `Issued.accountChanges` (back to draft, Konten ändern).
+ *    Also in 4 (slice G2): `articles` (Artikel), the position kinds `article` (`articleId`, `code`) and
+ *    `group`, a position's `inGroup`. A file of schema 3 holds none: the step adds nothing for them,
+ *    and a book read without `articles` has an empty list (store.ts emptyInvoiceBook).
  */
 export const INVOICES_SCHEMA = 4;
 /** 1: payroll.json starts with dated histories (docs/specs/domain-model.md §5.7), so it needs no step yet. */

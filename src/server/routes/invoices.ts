@@ -12,11 +12,14 @@ import { WS, assertOpen, readBooks, receiptPath, refDates, updateBooksWithEffect
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { InvoiceRuleError, liveDocuments, liveInvoices, type CreditRequest } from '../../invoices/rules.js';
 import {
+  addArticles, createArticle, liveArticles, removeArticle, updateArticle,
   addComment, answerQuote, backToDraft, cancelInvoice, changeAccounts, convertDocument, createContact, addContacts, createCreditNote, createDraft, draftReminder, fileReceipts, findInvoice, issueInvoice, issuedPdf,
   missingOf, parseDraftPatch, paymentContext, previewHtml, recordSend, removeContact, removeDraft, reopenDocument, replacedPdf, sendReminder, sentPdf, updateContact, updateDraft, viewOf,
 } from '../../invoices/service.js';
 import { liveContacts, payerIbans, proposeBusiness } from '../../invoices/contacts.js';
 import { importContacts, previewContactImport, type ImportChoice } from '../../invoices/contact-import.js';
+import { importArticles, previewArticleImport } from '../../invoices/article-import.js';
+import { DEFAULT_UNITS } from '../../invoices/model.js';
 import { loadKnowledge } from '../../knowledge/layers.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import {
@@ -64,7 +67,7 @@ const optNumber = (b: Record<string, unknown>, k: string): number | undefined =>
 router.get('/api/invoices', (_req, res) => {
   const book = loadInvoices(WS);
   const day = today();
-  res.json({ today: day, invoices: liveDocuments(book).map((i) => viewOf(book, i, day, WS.invoicing?.shortfallLimit)), contacts: liveContacts(book), sent: book.sent.filter((d) => !d.deleted) });
+  res.json({ today: day, invoices: liveDocuments(book).map((i) => viewOf(book, i, day, WS.invoicing?.shortfallLimit)), contacts: liveContacts(book), articles: liveArticles(book), sent: book.sent.filter((d) => !d.deleted) });
 });
 
 router.get('/api/invoices/sent', (_req, res) => {
@@ -181,6 +184,38 @@ router.post('/api/contacts/import', (req, res) => {
   const plan = importContacts(String(b.csv ?? ''), b.mapping as Record<string, string> | undefined, (b.choices ?? {}) as Record<string, ImportChoice>, liveContacts(loadInvoices(WS)));
   const made = addContacts(WS, plan.contacts);
   res.json({ created: made.length, skipped: plan.skipped, ids: made.map((c) => c.id) });
+});
+
+// ─── Artikel (spec 4.3, 4.4.3): invoices.json only, never the books ─────────────
+
+router.get('/api/articles', (_req, res) => {
+  res.json(liveArticles(loadInvoices(WS)));
+});
+
+router.post('/api/articles', (req, res) => {
+  res.json(createArticle(WS, req.body));
+});
+
+router.patch('/api/articles/:id', (req, res) => {
+  res.json(updateArticle(WS, req.params.id, req.body));
+});
+
+/** Archived while a document has a position from it, else deleted; the answer says which. */
+router.delete('/api/articles/:id', (req, res) => {
+  res.json(removeArticle(WS, req.params.id));
+});
+
+/** A CSV of Artikel read with a column mapping (the proposed one when none is sent): each row as it would be imported, with its problems and its duplicates by code. */
+router.post('/api/articles/import/preview', (req, res) => {
+  const b = body(req);
+  res.json(previewArticleImport(String(b.csv ?? ''), b.mapping as Record<string, string> | undefined, liveArticles(loadInvoices(WS)), WS.invoicing?.units ?? DEFAULT_UNITS, today()));
+});
+
+router.post('/api/articles/import', (req, res) => {
+  const b = body(req);
+  const plan = importArticles(String(b.csv ?? ''), b.mapping as Record<string, string> | undefined, (b.choices ?? {}) as Record<string, ImportChoice>, liveArticles(loadInvoices(WS)), WS.invoicing?.units ?? DEFAULT_UNITS, today());
+  const made = addArticles(WS, plan.articles);
+  res.json({ created: made.length, skipped: plan.skipped, ids: made.map((a) => a.id) });
 });
 
 router.post('/api/invoices', (req, res) => {

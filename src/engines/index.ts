@@ -83,6 +83,25 @@ export const ratesWithoutActivityId = (figures: Record<string, number>): string[
 export const invoiceRates = (): readonly number[] => (chargesVat() ? invoicing().rates : [0]);
 
 /**
+ * The percent of a VAT kind on the supply's day `date` (an Artikel's, spec 4.4.3): the
+ * jurisdiction's entry valid then, the oldest for a day before every entry; 0 for `none` and on a
+ * firm not registered, whose invoices carry no VAT.
+ */
+export function rateOfKind(kind: 'normal' | 'reduced' | 'accommodation' | 'none', date: string): number {
+  if (kind === 'none' || !chargesVat()) return 0;
+  const list = invoicing().rateKinds[kind];
+  return (list.find((r) => r.from <= date) ?? list.at(-1)!).rate;
+}
+
+/** The VAT kind a rate is, on the supply's day `date`: what an Artikel made from a position or a table row names; undefined for a rate no kind has. */
+export function kindOfRate(rate: number, date: string): 'normal' | 'reduced' | 'accommodation' | 'none' | undefined {
+  if (rate === 0) return 'none';
+  // The jurisdiction's kinds, also on a firm not registered (its Artikel keep their kind; its invoices charge 0 %).
+  const kinds = invoicing().rateKinds;
+  return (['normal', 'reduced', 'accommodation'] as const).find((k) => (kinds[k].find((r) => r.from <= date) ?? kinds[k].at(-1)!).rate === rate);
+}
+
+/**
  * The activities an invoice line is assigned to (#504): the firm's two approved net tax rates, the
  * first and the second; none on a firm with one rate or another method, where every line is the
  * first. The screen offers the choice; paper never shows it (an invoice names the statutory rate).

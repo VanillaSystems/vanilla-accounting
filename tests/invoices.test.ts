@@ -284,7 +284,7 @@ test('the sheet on screen: a draft edited in place names each field; texts-only 
   const screen = { qrPlaceholder: 'QR-Zahlteil beim Ausstellen', edit: { scope: 'draft' as const, customers: [{ id: 'cu_1', name: 'Kunde AG' }], customerId: 'cu_1', words } };
   const edited = sheetBlocks({ ...draft, screen }).map((b) => b.html).join('');
   const keys = [...edited.matchAll(/data-ed="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(keys, ['date', 'supplied', 'dueDate', 'intro', 'l:0:text', 'l:0:quantity', 'l:0:unit', 'l:0:price', 'l:0:discount', 'l:0:vatRate', 'l:1:text', 'l:1:quantity', 'l:1:unit', 'l:1:price', 'l:1:discount', 'l:1:vatRate', 'exemption', 'closing']);
+  assert.deepEqual(keys, ['date', 'supplied', 'dueDate', 'intro', 'l:0:text', 'l:0:account', 'l:0:quantity', 'l:0:unit', 'l:0:price', 'l:0:discount', 'l:0:vatRate', 'l:1:text', 'l:1:account', 'l:1:quantity', 'l:1:unit', 'l:1:price', 'l:1:discount', 'l:1:vatRate', 'exemption', 'closing']);
   assert.match(edited, /data-ia="addline"/);
   assert.equal((edited.match(/data-ia="rmline"/g) ?? []).length, 2);
   const blocks = sheetBlocks({ ...draft, screen });

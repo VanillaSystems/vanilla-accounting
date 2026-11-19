@@ -2,3 +2,7 @@ rates: [20, 5, 0]
 exemptions: { abroad: "20", export: "20" }
 territory: [XX]
 placeAbroad: [place of supply]
+rateKinds:
+  normal: [{ rate: 20, from: "2020-01-01" }]
+  reduced: [{ rate: 5, from: "2020-01-01" }]
+  accommodation: [{ rate: 5, from: "2020-01-01" }]

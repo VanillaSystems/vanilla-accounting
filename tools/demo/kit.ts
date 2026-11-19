@@ -5,7 +5,7 @@
  * tools/demo/generate.ts, so they cannot disagree.
  */
 import type { CorrectionCase, QuarterKey, ReceiptKind, VatRateGroup } from '../../src/types/index.js';
-import type { Address, CustomerFields, Exemption, InvoiceCurrency, InvoiceLine, Prices, VatRate, WriteOffReason } from '../../src/invoices/model.js';
+import type { Address, ArticleFields, CustomerFields, Exemption, InvoiceCurrency, InvoiceLine, Prices, VatRate, WriteOffReason } from '../../src/invoices/model.js';
 import type { VatSetup } from '../../src/workspace/vat-setup.js';
 
 export const YEAR = '2026';
@@ -101,6 +101,8 @@ export interface DemoInvoicing {
   manifest: string;
   logo?: { file: string; svg: string };
   customers: Record<string, CustomerFields>;
+  /** Artikel the firm sells (invoices.json articles), made before the documents; none of them is named by a document of the demo, so no figure depends on them. */
+  articles?: ArticleFields[];
   steps: InvoiceStep[];
 }
 

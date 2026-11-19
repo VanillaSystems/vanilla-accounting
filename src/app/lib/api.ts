@@ -34,7 +34,8 @@ import { agreedBasis, baseCurrency, vatSetup } from '../../engines/index.js';
 import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
 import type { ImportChoice, ImportMapping, ImportPreview } from '../../invoices/contact-import.js';
-import type { Comment, Contact, ContactFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, WriteOff, WriteOffReason } from '../../invoices/model.js';
+import type { ArticleImportPreview, ArticleMapping } from '../../invoices/article-import.js';
+import type { Article, ArticleFields, Comment, Contact, ContactFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, WriteOff, WriteOffReason } from '../../invoices/model.js';
 import type { AllocationItem, AllocationPart, PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
@@ -386,6 +387,7 @@ export function errorText(e: unknown): string {
     case 'unitWord': return t('error.unitWord', { id: b.params.id, language: b.params.language.toUpperCase() });
     case 'ibanOnInvoices': return t('error.ibanOnInvoices', b.params);
     case 'unknownCustomer': return t('error.unknownCustomer');
+    case 'unknownArticle': return t('error.unknownArticle');
     case 'amountZero': return t('error.amountZero');
     case 'noAccount': return t('error.noAccount');
     case 'sameAccount': return t('error.sameAccount', b.params);
@@ -480,7 +482,7 @@ export type { JournalEntryInput };
 export type ManualTransactionInput = { date: string; description: string; amount: number; currency?: string; direction?: 'DBIT' | 'CRDT'; account?: string; role?: MoneyRole; label?: string };
 export type YearEndEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string; template?: string };
 export type YearCloseView = YearClose & { opening?: Opening; payroll?: PayrollYearEnd; payrollError?: string };
-export interface InvoiceList { today: string; invoices: Invoice[]; contacts: Contact[]; sent: SentDocument[] }
+export interface InvoiceList { today: string; invoices: Invoice[]; contacts: Contact[]; articles: Article[]; sent: SentDocument[] }
 /** A contact with its business file (named, or proposed by code) and the customers' business files a person may pick. */
 export interface ContactDetail {
   contact: Contact;
@@ -490,6 +492,8 @@ export interface ContactDetail {
 }
 /** A contact as a request writes it: its fields, null clearing an optional one. */
 export type ContactInput = { [K in keyof ContactFields]?: ContactFields[K] | null };
+/** An Artikel as a request writes it: its fields, null clearing an optional one. */
+export type ArticleInput = { [K in keyof ArticleFields]?: ArticleFields[K] | null };
 export type DraftChange = { [K in keyof DraftPatch]?: DraftPatch[K] | null };
 export interface CreditInput { reason: string; amount?: number; settlement?: 'refund' | 'offset' }
 export interface ReminderInput { date?: string; fee?: number; intro?: string; closing?: string; to?: string; email?: MailMessage }
@@ -817,6 +821,11 @@ export const api = {
   contact: (id: string) => request<ContactDetail>('GET', `/api/contacts/${encodeURIComponent(id)}`),
   previewContactImport: (csv: string, mapping?: ImportMapping) => request<ImportPreview>('POST', '/api/contacts/import/preview', { csv, ...(mapping ? { mapping } : {}) }),
   importContacts: (csv: string, mapping: ImportMapping, choices: Record<string, ImportChoice>) => request<{ created: number; skipped: number; ids: string[] }>('POST', '/api/contacts/import', { csv, mapping, choices }),
+  createArticle: (fields: ArticleInput) => request<Article>('POST', '/api/articles', fields),
+  patchArticle: (id: string, fields: ArticleInput) => request<Article>('PATCH', `/api/articles/${encodeURIComponent(id)}`, fields),
+  removeArticle: (id: string) => request<{ article: Article; outcome: 'archived' | 'deleted' }>('DELETE', `/api/articles/${encodeURIComponent(id)}`),
+  previewArticleImport: (csv: string, mapping?: ArticleMapping) => request<ArticleImportPreview>('POST', '/api/articles/import/preview', { csv, ...(mapping ? { mapping } : {}) }),
+  importArticles: (csv: string, mapping: ArticleMapping, choices: Record<string, ImportChoice>) => request<{ created: number; skipped: number; ids: string[] }>('POST', '/api/articles/import', { csv, mapping, choices }),
   createDraft: (input: DraftChange & { customerId: string }) => request<Draft>('POST', '/api/invoices', input),
   patchDraft: (id: string, patch: DraftChange) => request<Draft>('PATCH', `/api/invoices/${id}`, patch),
   deleteDraft: (id: string) => request<{ ok: true }>('DELETE', `/api/invoices/${id}`),

@@ -48,7 +48,7 @@ export function byRouteId(invoices: readonly Invoice[], id: string | undefined):
   return id.startsWith('draft-') ? invoices.find((i) => i.status === 'draft' && i.id === id.slice(6)) : invoices.find((i) => i.number === id && !i.deleted);
 }
 
-export const bookOf = (d: InvoiceList): InvoiceBook => ({ schema: 1, contacts: d.contacts, invoices: d.invoices, sent: d.sent });
+export const bookOf = (d: InvoiceList): InvoiceBook => ({ schema: 1, contacts: d.contacts, articles: d.articles, invoices: d.invoices, sent: d.sent });
 
 /** The contact a document names (archived ones too). */
 export const contactOf = (d: InvoiceList, inv: Pick<Invoice, 'customerId'>): Contact | undefined => d.contacts.find((c) => c.id === inv.customerId);

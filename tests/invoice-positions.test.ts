@@ -134,7 +134,7 @@ test('P1.3 webshop: coffee 2.6 % and grinders 8.1 %, prices incl. VAT, 2 % Rabat
 test('P1.3 agreed basis: RE-<n> books both rates net of the Rabatt', () => {
   setJurisdiction(ch, { registered: true, method: 'effective', reporting: 'agreed', period: 'quarterly' });
   try {
-    const book: InvoiceBook = { schema: INVOICES_SCHEMA, contacts: [asContact(customer)], invoices: [], sent: [] };
+    const book: InvoiceBook = { schema: INVOICES_SCHEMA, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
     const inv: Issued = { ...issue(webshop(), { customer, sender, layout: DEFAULT_LAYOUT, invoices: [], now: '2026-10-15T10:00:00Z' }), pdf: { file: 'invoices/x.pdf', sha256: 'x' } };
     book.invoices.push(inv);
     const books: Books = { receipts: [], transactions: [], mappings: [], bankStatements: [], journalEntries: [], config: { closedThrough: '2026-06-30' } };
@@ -202,7 +202,7 @@ test('an invoice of zero or less is refused (a QR-bill carries no amount below z
   const over = draft([item('A', 1, 'pcs', 100, 8.1), { kind: 'discount', text: 'R', amount: 150 }]);
   assert.deepEqual(missingForIssue(over, { customer, sender, invoices: [] }).map((m) => m.field), ['total']);
   assert.deepEqual(missingForIssue(draft([item('A', 1, 'pcs', 100, 8.1, { discount: 120 })]), { customer, sender, invoices: [] }).map((m) => [m.field, m.line]), [['line.discount', 0], ['total', undefined]]);
-  const book: InvoiceBook = { schema: INVOICES_SCHEMA, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: INVOICES_SCHEMA, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   assert.throws(() => parseDraftPatch({ lines: [{ text: 'A', quantity: 1, price: 1, vatRate: 8.1, discount: -5 }] }, book), /discount ist ein Prozentsatz von 0 bis 100/);
 });
 
@@ -232,7 +232,7 @@ test('write-off accounts: the firm\'s, else the jurisdiction\'s (KMU chart 3800 
 // ─── what a draft may hold ────────────────────────────────────────────────────
 
 test('the API reads each kind; a unit is one of the firm\'s or one the draft holds; a Rabatt has a percent or an amount', () => {
-  const book: InvoiceBook = { schema: INVOICES_SCHEMA, contacts: [asContact(customer)], invoices: [draft([item('Alt', 1, 'sack', 10, 8.1)], { id: 'in_old' })], sent: [] };
+  const book: InvoiceBook = { schema: INVOICES_SCHEMA, contacts: [asContact(customer)], invoices: [draft([item('Alt', 1, 'sack', 10, 8.1)], { id: 'in_old' })], articles: [], sent: [] };
   const lines = parseDraftPatch({ lines: [
     { kind: 'text', text: 'Wohnzimmer', style: 'title' }, { kind: 'text', text: 'Hinweis', style: 'plain' }, { kind: 'subtotal', text: 'Total' },
     { kind: 'discount', text: 'Rabatt', percent: 3 }, { kind: 'pagebreak' }, { text: 'Wand', quantity: 4, unit: 'm2', price: 18.5, vatRate: 8.1, discount: 5 },
@@ -248,7 +248,7 @@ test('the API reads each kind; a unit is one of the firm\'s or one the draft hol
   // A unit an issued document names passes, so «Als Entwurf kopieren» never fails on a unit removed from the list since.
   const issuedBook: InvoiceBook = { ...book, invoices: [{ ...draft([item('Alt', 1, 'fass', 10, 8.1)]), status: 'issued' } as unknown as Issued] };
   assert.equal((parseDraftPatch({ lines: [{ text: 'X', quantity: 1, unit: 'fass', price: 1, vatRate: 8.1 }] }, issuedBook).lines![0] as ItemLine).unit, 'fass');
-  refused({ lines: [{ kind: 'flourish', text: 'R' }] }, /kind ist eine von item, text, subtotal, discount, pagebreak/);
+  refused({ lines: [{ kind: 'flourish', text: 'R' }] }, /kind ist eine von item, article, text, subtotal, discount, pagebreak, group/);
   refused({ lines: [{ kind: 'pagebreak', text: 'x' }] }, /unbekannte Felder text/);
   refused({ prices: 'brutto' }, /prices ist net oder gross/);
   assert.deepEqual(missingForIssue(draft([item('A', 1, 'pcs', 1, 8.1), { kind: 'discount', text: 'R' }]), { customer, sender, invoices: [] }).map((m) => [m.field, m.line]), [['line.discount', 1]]);
@@ -267,7 +267,7 @@ test('the sheet edits each kind: a title or plain text, a Rabatt\'s value and mo
   assert.deepEqual(sheetEdit(d, 'l:1:discount', '-5', ctx), { refused: 'number' });
   assert.deepEqual(sheetEdit(d, 'l:1:unit', 'sack', ctx), { refused: 'value' });
   assert.deepEqual(sheetEdit(d, 'l:1:unit', 'pal', { ...ctx, units: [...DEFAULT_UNITS, { id: 'pal', de: 'Palette', fr: 'palette', it: 'paletta', en: 'pallet' }] }), { change: { lines: d.lines.map((l, i) => (i === 1 ? { ...l, unit: 'pal' } : l)) } });
-  assert.deepEqual(moveLine(d.lines, 8, 0)?.map((l) => l.kind ?? 'item').slice(0, 2), ['discount', 'text']);
+  assert.deepEqual(moveLine(d.lines, 8, 0, 'drop')?.lines.map((l) => l.kind ?? 'item').slice(0, 2), ['discount', 'text']);
   assert.equal(moveLine(d.lines, 0, -1), undefined, 'nothing moves above the first');
   assert.deepEqual(repriced([item('A', 1, 'pcs', 1, 8.1, { vatIncluded: true }), { kind: 'pagebreak' }]), [item('A', 1, 'pcs', 1, 8.1), { kind: 'pagebreak' }]);
   // On screen: a handle to move each position, a button to add each kind, a page break's marker.

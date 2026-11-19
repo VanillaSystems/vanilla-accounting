@@ -35,6 +35,7 @@ import { fixFor, insertLine, moveLine, parseNumber, repriced, sheetEdit, type Fi
 import { setUi, ui, useUi, type Section } from './state.js';
 import { answer, comment, confirmPayment, copyAsDraft, deleteDraft, firstLine, invoiceAt, issue, reopen, saveDraft, send, sendReminder, writeOff } from './actions.js';
 import { ContactPanel } from './contacts.js';
+import { ArticlePanel } from './articles.js';
 import { addressOf, contactDays, goneRefs } from '../../../invoices/contacts.js';
 import { contextOf, draftData, issuedData, reminderData } from './sheets.js';
 import { Sheet } from './Sheet.js';
@@ -56,6 +57,7 @@ export function Detail(props: Props) {
   const d = load.data;
   const { route } = props;
   if (route.view === 'contacts') return <ContactPanel {...props} d={d} />;
+  if (route.view === 'articles') return <ArticlePanel {...props} d={d} />;
   if (route.view === 'sent') return <SentDetail {...props} d={d} />;
   const inv = byRouteId(d.invoices, route.id);
   if (!inv) return <div className="detail-empty"><div>{route.id && route.id !== 'new' ? t('invoices.gone', { id: route.id }) : t('invoices.noneSelected')}</div></div>;
@@ -105,11 +107,13 @@ function InvoiceDetail(props: DetailProps) {
   function action(a: string, k: number, to?: number): string | void {
     if (inv.status !== 'draft') return;
     if (a === 'rmline') void saveDraft(nav, inv, { lines: inv.lines.filter((_, i) => i !== k) });
-    if (a === 'move' && to !== undefined) {
-      const lines = moveLine(inv.lines, k, to);
-      if (lines) void saveDraft(nav, inv, { lines });
-      return lines ? `mv:${to}` : undefined;
+    if ((a === 'move' || a === 'drop') && to !== undefined) {
+      const moved = moveLine(inv.lines, k, to, a === 'drop' ? 'drop' : 'step');
+      if (moved) void saveDraft(nav, inv, { lines: moved.lines });
+      return moved ? `mv:${moved.at}` : undefined;
     }
+    // «＋ Artikel»: the picker puts the Artikel position after the position the person is in.
+    if (a === 'addarticle') { setUi({ dialog: { kind: 'articlePick', draft: inv.id, after: k } }); return; }
     const added = newPosition(a, inv, contactOf(d, inv));
     if (added) {
       // After the position the person is in (k), else at the end; an untouched first item gives way.
@@ -174,6 +178,7 @@ function newPosition(a: string, inv: Draft, contact?: Parameters<typeof firstLin
   switch (a) {
     case 'addline': { const items = inv.lines.filter(isItem); return firstLine(items.length > 0 && items.every((l) => l.vatRate === 0), contact); }
     case 'addtext': return { kind: 'text', text: '', style: 'title' };
+    case 'addgroup': return { kind: 'group', text: '' };
     case 'addsubtotal': return { kind: 'subtotal', text: L.subtotal };
     case 'adddiscount': return { kind: 'discount', text: L.discount, percent: 0 };
     case 'addpagebreak': return { kind: 'pagebreak' };

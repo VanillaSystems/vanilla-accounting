@@ -127,11 +127,11 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
   const field = (e: { target: EventTarget }) => (e.target as HTMLElement).closest?.<HTMLElement>('[data-ed]') ?? null;
   const act = useRef(onAction);
   act.current = onAction;
-  /** Row `from` to `to`, the field being typed in saved first; the caret follows the row. */
-  const move = (from: number, to: number) => {
+  /** Row `from` a step to `to` (Alt+↑/↓, `move`) or dropped on row `to` (`drop`), the field being typed in saved first; the caret follows the row. */
+  const move = (from: number, to: number, how: 'move' | 'drop' = 'move') => {
     const active = document.activeElement as HTMLElement | null;
     if (active?.isContentEditable && active.dataset.ed) onEdit?.(active.dataset.ed, text(active), true);
-    const focus = act.current?.('move', from, to);
+    const focus = act.current?.(how, from, to);
     if (focus) refocus.current = focus;
   };
   const dragging = useRef<number | null>(null);
@@ -206,7 +206,7 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
         for (const x of ref.current?.querySelectorAll('tr.dropat') ?? []) x.classList.remove('dropat');
         if (from === null || !tr) return;
         e.preventDefault();
-        move(from, Number(tr.dataset.row));
+        move(from, Number(tr.dataset.row), 'drop');
       }}
       onClick={(e) => {
         const b = (e.target as HTMLElement).closest<HTMLElement>('[data-ia]');

@@ -44,7 +44,7 @@ function issueWith(ctx: InvoicingContext, d: Draft, invoices: Issued[] = []): Is
   return { ...issue(d, { customer, sender, layout: DEFAULT_LAYOUT, invoices, now: '2026-11-16T10:00:00Z' }), pdf: { file: 'x.pdf', sha256: 'x' } };
 }
 const printed = (inv: Issued): string => {
-  const book: InvoiceBook = { schema: 2, contacts: [asContact(customer)], invoices: [inv], sent: [] } as InvoiceBook;
+  const book: InvoiceBook = { schema: 2, contacts: [asContact(customer)], invoices: [inv], articles: [], sent: [] } as InvoiceBook;
   const d = issuedSheet(book, inv);
   const blocks = sheetBlocks(d);
   return assembleSheets(d, blocks, paginate(blocks, blocks.map(() => 10), { footer: true, qrBill: true }));
@@ -127,7 +127,7 @@ test('API: a QR-IBAN under EUR warns with the rule and is stored only with confi
 test('the payment part carries structured addresses only (address type S, IG v2.3 chapter 4.2.2): street and number apart, postcode and town apart', () => {
   const ctx: InvoicingContext = { company, settings: settings({ account: '1025', iban: EUR_IBAN, bank: 'Raiffeisen' }) };
   const inv = issueWith(ctx, draft('in_s', 'EUR'));
-  const book: InvoiceBook = { schema: 2, contacts: [asContact(customer)], invoices: [inv], sent: [] } as InvoiceBook;
+  const book: InvoiceBook = { schema: 2, contacts: [asContact(customer)], invoices: [inv], articles: [], sent: [] } as InvoiceBook;
   const data = qrBillData(issuedSheet(book, inv), EUR_IBAN);
   // The library's own encoder, beside its public export (as src/desktop/qr.ts reaches its QR generator).
   const require = createRequire(import.meta.url);

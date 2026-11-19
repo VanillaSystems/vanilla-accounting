@@ -60,6 +60,15 @@ export const KAFFEE_INVOICING: DemoInvoicing = {
     fr: { closing: "Payable dans les {days} jours.\\nMeilleures salutations, Anna Muster" }
 `,
   logo: { file: 'logos/logo.svg', svg: LOGO },
+  // The coffee roaster's price list (spec 4.3 Artikel): goods at the reduced rate, a machine and a course at the normal rate.
+  articles: [
+    { code: 'HM-1', type: 'goods', name: 'Hausmischung 1 kg', unit: 'kg', price: 28, vatKind: 'reduced', group: 'Kaffee' },
+    { code: 'ES-1', type: 'goods', name: 'Espresso Bohnen 1 kg', unit: 'kg', price: 32, vatKind: 'reduced', group: 'Kaffee' },
+    { code: 'DC-1', type: 'goods', name: 'Entkoffeiniert 500 g', unit: 'pcs', price: 16.5, vatKind: 'reduced', group: 'Kaffee' },
+    { code: 'MU-7', type: 'goods', name: 'Kaffeemühle Modell 7', unit: 'pcs', price: 349, prices: 'gross', vatKind: 'normal', group: 'Zubehör' },
+    { code: 'KU-1', type: 'service', name: 'Barista-Kurs', text: 'Barista-Kurs, halber Tag', unit: 'flat', price: 180, vatKind: 'normal', group: 'Kurse' },
+    { code: 'SV-1', type: 'service', name: 'Maschinenservice', unit: 'h', price: 95, vatKind: 'normal', account: '3400', group: 'Service' },
+  ],
   customers: {
     bistro: {
       name: 'Beispiel Bistro AG', address: { street: 'Seeweg', number: '12', postcode: '3000', town: 'Bern', country: 'CH' },

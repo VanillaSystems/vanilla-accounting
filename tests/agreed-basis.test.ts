@@ -62,7 +62,7 @@ const balance = (entries: JournalEntry[], account: string) => Math.round(entries
 
 test('agreed basis: invoices are VAT events on their dates, payments settle the receivable, a credit note and a cancellation take it back when they are issued', () => {
   setJurisdiction(ch, AGREED);
-  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   const inv1 = issued(book, draft('i1', '2026-08-20', 1000));
   const inv2 = issued(book, draft('i2', '2026-09-25', 2000));
   const inv3 = issued(book, draft('i3', '2026-09-28', 500));
@@ -157,7 +157,7 @@ test('agreed basis: a payment\'s coded line takes its document\'s date and the o
 
 test('the switch: open invoices of the year before count in the first open period; a document with its event is settled on either basis', () => {
   setJurisdiction(ch, { ...AGREED, reportingSince: 2026 });
-  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   const old = issued(book, draft('o1', '2025-12-10', 1000));
   old.payments.push({ transactionRef: 'p0', date: '2025-12-20', amount: 500, by: 'reference' });
   const b = books('2025-12-31');
@@ -205,7 +205,7 @@ test('settlement lines: a debit left on the open item is a loss, a credit a gain
 
 test('the electronic return on the agreed basis says so (formOfReporting 1) and reads back to the same figures', () => {
   setJurisdiction(ch, AGREED);
-  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   issued(book, draft('i1', '2026-08-20', 1000));
   const b = books('2026-06-30');
   bookInvoiceEvents(b, book, ctx);
@@ -268,7 +268,7 @@ test('a customer\'s prepayment is taxed when it is received, never on the later 
 
 test('confirming a payment a person booked with revenue, on an invoice whose event is booked, is refused naming the event; one she booked on the receivable is kept', () => {
   setJurisdiction(ch, AGREED);
-  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   const inv = issued(book, draft('i1', '2026-08-20', 1000));
   const b = books('2026-06-30', [tx('p1', '2026-09-10', 1081, 'CRDT')]);
   bookInvoiceEvents(b, book, ctx);
@@ -287,7 +287,7 @@ test('confirming a payment a person booked with revenue, on an invoice whose eve
 
 test('an invoice\'s event takes off only what its payments booked as revenue: an allocation booked on the receivable takes nothing off', () => {
   setJurisdiction(ch, AGREED);
-  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   const inv = issued(book, draft('i1', '2026-08-20', 1000));
   const b = books('2026-06-30', [tx('p1', '2026-09-10', 1081, 'CRDT')]);
   b.journalEntries.push({ id: 'hand', transactionRef: 'p1', date: '2026-09-10', accountDebit: '1021', accountCredit: '1100', amount: 1081, description: 'Zahlung Bistro', origin: 'manual' });
@@ -297,7 +297,7 @@ test('an invoice\'s event takes off only what its payments booked as revenue: an
   assert.equal(balance(b.journalEntries, '1100'), 0);
 
   // A payment booked with its revenue before the event existed (cash style): the event books the rest, here nothing.
-  const book2: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book2: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   const inv2 = issued(book2, draft('i2', '2026-08-20', 1000));
   const b2 = books('2026-06-30', [tx('p2', '2026-09-10', 1081, 'CRDT')]);
   b2.journalEntries.push({ id: 'hand', transactionRef: 'p2', date: '2026-09-10', accountDebit: '1021', accountCredit: '3200', amount: 1081, vatCode: 'V81', description: 'Zahlung Bistro', origin: 'manual' });
@@ -309,7 +309,7 @@ test('an invoice\'s event takes off only what its payments booked as revenue: an
 
 test('a customer payment the matcher cannot place is not booked as revenue while it could pay an open invoice; with no open invoice the classifier books it as before', async () => {
   setJurisdiction(ch, AGREED);
-  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   const inv = issued(book, draft('i1', '2026-08-20', 1000));
   const whole = tx('p1', '2026-09-10', 1081, 'CRDT', { description: 'Zahlung Beratung August' });
   const part = tx('p2', '2026-09-12', 500, 'CRDT', { description: 'Teilzahlung', counterparty: 'Beispiel Bistro AG, Bern' });
@@ -332,7 +332,7 @@ test('a customer payment the matcher cannot place is not booked as revenue while
   assert.deepEqual(figures(b.journalEntries, '2026-Q3'), Q3_SALE, 'the revenue once, from the invoice');
 
   const none = books('2026-06-30', [whole]);
-  const free = await classifyTransactions(none, [whole], { ask: answer, fx: { daily: () => undefined, flat: () => undefined }, context: { ...context, invoices: { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] } } });
+  const free = await classifyTransactions(none, [whole], { ask: answer, fx: { daily: () => undefined, flat: () => undefined }, context: { ...context, invoices: { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] } } });
   assert.deepEqual(free.classified, ['p1'], 'no open invoice: booked as before');
   assert.deepEqual(tpRows(none.journalEntries), [['2026-09-10', '1021', '3200', 1081, 'V81', '']]);
   setJurisdiction(ch, EFFECTIVE_QUARTERLY);
@@ -340,7 +340,7 @@ test('a customer payment the matcher cannot place is not booked as revenue while
 
 test('an invoice whose event could not be booked (no rate of its day) is named before a return is written over it', () => {
   setJurisdiction(ch, AGREED);
-  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   const inv = issued(book, draft('i1', '2026-09-01', 1000, { currency: 'EUR' }));
   const b = books('2026-06-30');
   const noRate: PaymentContext = { ...ctx, fx: { daily: () => undefined } };
@@ -357,7 +357,7 @@ test('an invoice whose event could not be booked (no rate of its day) is named b
 
 test('a prepayment confirmed on an invoice dated after it declares its part when it was received; the event keeps the rest (MWSTG Art. 40 Abs. 1 lit. c)', () => {
   setJurisdiction(ch, AGREED);
-  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   const inv = issued(book, draft('i1', '2026-10-20', 1000));
   const b = books('2026-06-30', [tx('p1', '2026-09-28', 500, 'CRDT'), tx('p2', '2026-11-05', 581, 'CRDT')]);
   bookInvoiceEvents(b, book, ctx);
@@ -386,7 +386,7 @@ test('a prepayment confirmed on an invoice dated after it declares its part when
 
 test('a prepayment of the whole invoice, matched by its reference before the invoice date: the revenue on the payment, no event left', () => {
   setJurisdiction(ch, AGREED);
-  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   const inv = issued(book, draft('i1', '2026-10-20', 1000));
   const b = books('2026-06-30', [tx('p1', '2026-09-28', 1081, 'CRDT', { reference: inv.reference })]);
   bookInvoiceEvents(b, book, ctx);
@@ -403,7 +403,7 @@ test('a prepayment of the whole invoice, matched by its reference before the inv
 test('#524 a receipt a person linked to an invoice\'s event: a prepayment of part keeps it on the event booked for the rest; one of the whole takes it along with the event', () => {
   setJurisdiction(ch, AGREED);
   for (const [paid, stays] of [[500, true], [1081, false]] as const) {
-    const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+    const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
     const inv = issued(book, draft('i1', '2026-10-20', 1000));
     const b = books('2026-06-30', [tx('p1', '2026-09-28', paid, 'CRDT', { reference: inv.reference })]);
     bookInvoiceEvents(b, book, ctx);
@@ -418,7 +418,7 @@ test('#524 a receipt a person linked to an invoice\'s event: a prepayment of par
 
 test('a prepayment a person booked with revenue is kept when confirmed: the event keeps the rest, nothing is refused', () => {
   setJurisdiction(ch, AGREED);
-  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   const inv = issued(book, draft('i1', '2026-10-20', 1000));
   const b = books('2026-06-30', [tx('p1', '2026-09-28', 500, 'CRDT')]);
   bookInvoiceEvents(b, book, ctx);
@@ -458,7 +458,7 @@ test('a bill or a sale of a closed earlier agreed year, paid now, goes into that
 
 test('an app invoice of a closed earlier agreed year without its event is booked whole into that period\'s correction; its credit note counts when booked (MWSTG Art. 41)', () => {
   setJurisdiction(ch, AGREED);
-  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   const older = issued(book, draft('i0', '2026-11-10', 1000));
   const b = books('2026-09-30');
   bookInvoiceEvents(b, book, ctx);
@@ -477,7 +477,7 @@ test('an app invoice of a closed earlier agreed year without its event is booked
   // The agreed basis began in 2027: the invoice of December is an open item of the switch, in Q1 for what was open.
   setJurisdiction(ch, { ...AGREED, reportingSince: 2027 });
   const b2 = books('2026-12-31');
-  const book2: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book2: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   issued(book2, draft('i1', '2026-12-10', 1000));
   bookInvoiceEvents(b2, book2, ctx);
   assert.deepEqual(b2.journalEntries.map((e) => [e.date, e.amount, e.vatCode, e.corrects ?? '']), [['2027-01-01', 1081, 'V81', '']]);
