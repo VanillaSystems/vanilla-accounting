@@ -160,7 +160,7 @@ router.delete('/api/transactions/:ref', (req, res) => {
 });
 
 /** One line of a booking by hand: accounts, an amount in the payment's currency, a VAT code, a text. */
-function bookingLine(raw: unknown): BookingLine {
+export function bookingLine(raw: unknown): BookingLine {
   const b = patchBody(raw, ['accountDebit', 'accountCredit', 'amount', 'vatCode', 'description', 'tags']);
   const text = (k: string) => (b[k] === undefined ? '' : stringField(b, k).trim());
   if (typeof b.amount !== 'number') throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.');

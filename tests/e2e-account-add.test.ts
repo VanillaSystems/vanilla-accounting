@@ -64,7 +64,7 @@ test('F07: typing «werbe» in an entry\'s Soll offers «6600 Werbeaufwand anleg
     await page.keyboard.type('6400');
     await page.waitForSelector('.jnew .acl [data-act=account-add]');
     await page.keyboard.press('Enter');
-    await page.waitForFunction(() => document.querySelector('.jnew input[name=accountDebit] ~ .acn')?.textContent === 'Energie- und Entsorgungsaufwand');
+    await page.waitForFunction(() => document.querySelector('.jnew input[name=accountDebit] ~ .acn')?.textContent?.startsWith('Energie- und Entsorgungsaufwand') === true);
     await page.$eval(`${form} button[type=submit]`, (e) => (e as HTMLElement).click());
     for (let i = 0; i < 100 && !(app.books().journalEntries ?? []).some((e) => e.description === 'Strom e2e'); i++) await new Promise((r) => setTimeout(r, 100));
     assert.equal((app.books().journalEntries ?? []).find((e) => e.description === 'Strom e2e')?.accountDebit, '6400', 'booked on the account added in the form');

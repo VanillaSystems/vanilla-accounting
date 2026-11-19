@@ -103,6 +103,11 @@ export interface Receipt {
    * line's index (Mapping.line). Absent: not read yet (books before schema 8 gain them on the next run).
    */
   cardLines?: CardLine[];
+  /**
+   * The day the bill is due, as a person set it (#571, books schema 10): it wins over the one code
+   * reads off its text (src/books/due-date.ts dueOf). Absent: the text's, or none.
+   */
+  dueDate?: string;
 }
 
 /**
@@ -631,7 +636,7 @@ export interface VatFacts { hasSwissVat: boolean; vatSummary: VatRateGroup[]; va
  * undo sends `vatBy: null` with them, to put back facts the AI read.
  */
 export type ReceiptPatch = Partial<Pick<Receipt, 'filename' | 'currency' | 'description' | 'remarks'>>
-  & { date?: string | null; amount?: number | null; kind?: ReceiptKind | null; vat?: VatFacts | null; vatBy?: null };
+  & { date?: string | null; dueDate?: string | null; amount?: number | null; kind?: ReceiptKind | null; vat?: VatFacts | null; vatBy?: null };
 
 /** The body of PATCH /api/transactions/:ref. An empty remark, noReceiptNeeded false or an empty inputTaxProof clears the field. */
 export type TransactionPatch = Partial<Pick<BankTransaction, 'description' | 'remarks' | 'noReceiptNeeded'>> & { inputTaxProof?: string };

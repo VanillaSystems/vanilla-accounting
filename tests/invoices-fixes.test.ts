@@ -15,7 +15,8 @@ import { creditNoteDraft, issue, missingForIssue, revenueSplit, totals } from '.
 import { parseDraftPatch } from '../src/invoices/service.js';
 import { assembleSheets, oneLine, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
 import { fixFor, sheetEdit } from '../src/app/areas/invoices/edit.js';
-import { issuedLater, rowsOf, wasSent } from '../src/app/areas/invoices/model.js';
+import { issuedLater, wasSent } from '../src/app/areas/invoices/model.js';
+import { docRows } from '../src/app/areas/invoices/table.js';
 import { saveFile, sameOrigin } from '../src/desktop/save-file.js';
 import deLocale from '../src/app/i18n/locales/de.js';
 import { DEMO_ROOT } from './support/workspace.js';
@@ -75,10 +76,10 @@ test('the Save dialog: cancelled, nothing written and nothing to record; saved, 
 test('an invoice of an earlier period still open is listed in the current one, and counted as open', () => {
   const book = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as InvoiceBook;
   const d = { today: '2026-12-01', invoices: book.invoices, customers: book.customers, sent: book.sent };
-  const q4 = rowsOf(d, parsePeriod('2026-Q4', '2026-12-01')!, undefined, '2026-12-01');
+  const q4 = docRows(d, 'invoice', parsePeriod('2026-Q4', '2026-12-01')!, undefined, '2026-12-01');
   const earlier = q4.filter((r) => r.inv.date < '2026-10-01');
   assert.ok(earlier.length > 0, 'the demo has open invoices dated before Q4');
-  assert.ok(earlier.every((r) => r.state === 'open' || r.state === 'overdue'), 'only the open ones; paid ones stay in their quarter');
+  assert.ok(earlier.every((r) => r.status === 'open' || r.status === 'partly-paid'), 'only the open ones; paid ones stay in their quarter');
 });
 
 test('a reminder for an invoice never sent; a draft dated before the last issued invoice', () => {

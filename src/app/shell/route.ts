@@ -20,11 +20,24 @@ export type AutomationTab = typeof AUTOMATION_TABS[number];
 /** Segments under /automation that name a page, not a workflow: no workflow may take these ids. */
 export const AUTOMATION_PAGES = ['runs', 'workflows', 'map', 'queue', 'tasks'] as const;
 
-export const INVOICE_STATUSES = ['open', 'overdue', 'draft', 'paid'] as const;
+/**
+ * Verkauf's views (docs/specs/invoicing.md 4.8): `list` is Rechnungen (no segment), then Gutschriften,
+ * Offene Posten, Kunden and Versendet. A document opens under the view it is listed in; /invoices/<number>
+ * stays its link whatever its kind.
+ */
+export const INVOICE_VIEWS = ['list', 'credit-notes', 'open-items', 'customers', 'sent'] as const;
+export type InvoiceView = typeof INVOICE_VIEWS[number];
+
+/**
+ * The status tabs of Rechnungen and Gutschriften (`?status=`), from facts: Rechnungen draft, open, overdue,
+ * partly-paid, paid, cancelled; Gutschriften draft, open, partly, settled; both unsent («Nicht gesendet»).
+ */
+export const INVOICE_STATUSES = ['draft', 'open', 'overdue', 'partly-paid', 'paid', 'cancelled', 'partly', 'settled', 'unsent'] as const;
 export type InvoiceStatus = typeof INVOICE_STATUSES[number];
 
 export type Route =
-  | { area: 'receipts'; id?: string }
+  /** `view: 'bills'`: Zu bezahlen, the bills among the receipts with their due dates (#571), /receipts/bills/<id>. */
+  | { area: 'receipts'; id?: string; view?: 'bills' }
   /** A payment without its statement is /payments/<ref>: the bank area finds the statement. */
   /** `file`: one statement file read in, whole (Kontoauszüge › Dateien, #208): `<account>/<file name>`, /bank/files/<account>/<file name>. */
   | { area: 'bank'; statement?: string; payment?: string; file?: string }
@@ -37,7 +50,7 @@ export type Route =
   | { area: 'close'; step?: string }
   /** An unknown section stays in the route, so the area can say it does not exist (urls.md rule 5). */
   | { area: 'company'; section: CompanySection | (string & {}) }
-  | { area: 'invoices'; view: 'list' | 'customers' | 'sent'; id?: string }
+  | { area: 'invoices'; view: InvoiceView; id?: string }
   /** Automatisierung (docs/0.4.0/ui/design.md): a workflow with its tab, one run, the process map, the queue, the tasks. */
   /** The area's home (Leitstand): what the app did in the period, what waits for the person, what runs. */
   | { area: 'automation'; view: 'home' }
@@ -83,6 +96,8 @@ export interface Query {
   /** A list's filter chips (src/app/shell/chips.ts), `?f=<field>_<value>`, repeated, in their order. */
   chips?: Chip[];
   status?: InvoiceStatus;
+  /** Offene Posten: the reference date (`?date=2026-12-31`); absent: today. */
+  date?: IsoDate;
   vat?: string;
   /** /invoices/new?customer=<id>: the customer of the draft to write. */
   customer?: string;
@@ -112,6 +127,7 @@ export function formatLocation({ route, query }: Location): string {
   const qs = new URLSearchParams();
   if (query.period) qs.set('period', query.period.token.replace('..', '_'));
   if (query.status) qs.set('status', query.status);
+  if (query.date) qs.set('date', query.date);
   if (query.vat) qs.set('vat', query.vat);
   if (query.customer) qs.set('customer', query.customer);
   if (query.payment) qs.set('payment', query.payment);
@@ -126,7 +142,7 @@ export const isRedirect = (p: Location | Redirect): p is Redirect => 'redirect' 
 
 function segmentsOf(r: Route): Array<string | undefined> {
   switch (r.area) {
-    case 'receipts': return ['receipts', r.id];
+    case 'receipts': return r.view ? ['receipts', r.view, r.id] : ['receipts', r.id];
     case 'bank': return r.file ? ['bank', 'files', ...r.file.split(/\/(.*)/s, 2)] : r.statement ? ['bank', r.statement, r.payment] : r.payment ? ['payments', r.payment] : ['bank'];
     case 'journal': return ['journal', r.id];
     case 'vat': return ['vat', r.ziffer];
@@ -144,7 +160,7 @@ function segmentsOf(r: Route): Array<string | undefined> {
 
 function routeOf([a, b, c, d]: string[]): Route {
   switch (a) {
-    case 'receipts': return defined({ area: 'receipts', id: b });
+    case 'receipts': return b === 'bills' ? defined({ area: 'receipts', view: 'bills', id: c }) : defined({ area: 'receipts', id: b });
     case 'bank': return b === 'files' && c && d ? { area: 'bank', file: `${c}/${d}` } : defined({ area: 'bank', statement: b, payment: b && c });
     case 'payments': return defined({ area: 'bank', payment: b });
     case 'journal': return defined({ area: 'journal', id: b });
@@ -152,7 +168,7 @@ function routeOf([a, b, c, d]: string[]): Route {
     case 'reports': return b === 'custom' ? defined({ area: 'reports', report: 'custom', saved: c }) : isOneOf(REPORTS, b) ? defined({ area: 'reports', report: b, account: c }) : { area: 'reports', report: 'income' };
     case 'close': return defined({ area: 'close', step: b });
     case 'company': return { area: 'company', section: b ?? 'profile' };
-    case 'invoices': return b === 'customers' || b === 'sent' ? defined({ area: 'invoices', view: b, id: c }) : defined({ area: 'invoices', view: 'list', id: b });
+    case 'invoices': return b !== 'list' && isOneOf(INVOICE_VIEWS, b) ? defined({ area: 'invoices', view: b, id: c }) : defined({ area: 'invoices', view: 'list', id: b });
     case 'automation': return automationRoute(b, c, d);
     case 'changes': return defined({ area: 'changes', commit: b, file: b ? c : undefined });
     case 'partners': return defined({ area: 'partners', id: b });
@@ -197,11 +213,19 @@ function queryOf(params: URLSearchParams, today: IsoDate): Query {
     q: get('q'),
     chips: chips.length ? chips : undefined,
     status: isOneOf(INVOICE_STATUSES, status) ? status : undefined,
+    date: isDay(get('date')) ? get('date') : undefined,
     vat: get('vat'),
     customer: get('customer'),
     payment: get('payment'),
     by: get('payment') && get('by') === 'text' ? 'text' : undefined,
   });
+}
+
+/** A real day YYYY-MM-DD: 2026-02-30 is none (Date would roll it into March). */
+function isDay(s: string | undefined): s is string {
+  if (!s || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const d = new Date(`${s}T12:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 }
 
 /** urls.md writes a custom range 2026-07-01_2026-09-30; periods.ts and older links use '..'. */

@@ -103,7 +103,7 @@ export const LAYOUT = {
     knowledge: 'company', modules: 'company', workflows: 'company', sources: 'company', 'beleg-import': 'company', history: 'company',
     VERSION: 'app', 'versions.jsonl': 'app', handover: 'app', collected: 'app', 'ledger.json': 'app', 'invoices.json': 'app', 'onboarding.json': 'app', logos: 'app', data: 'app', output: 'app', 'master-data': 'app', 'transactional-data': 'app',
   },
-  masterData: { 'accounts.json': 'company' },
+  masterData: { 'accounts.json': 'company', 'entry-templates.json': 'company' },
   year: { books: 'app', filings: 'app', invoices: 'app', expected: 'app', 'runs.jsonl': 'app', 'questions.jsonl': 'app', receipts: 'company', 'bank-statements': 'company' },
 } as const satisfies Record<string, Record<string, Owner>>;
 

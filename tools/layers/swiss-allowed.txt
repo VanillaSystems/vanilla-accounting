@@ -23,7 +23,6 @@ src/app/areas/invoices/Detail.tsx
 src/app/areas/invoices/Sheet.tsx
 src/app/areas/invoices/actions.ts
 src/app/areas/invoices/address.ts
-src/app/areas/invoices/invoices.tsx
 src/app/areas/invoices/model.ts
 src/app/areas/journal/Detail.tsx
 src/app/areas/journal/NewEntry.tsx

@@ -28,9 +28,68 @@ Two markers flag an entry you must read before you update:
   the Betriebsergebnis as before. The stages are the jurisdiction's (statements.yaml
   `incomeStages`); the payment fees (6840) count as Finanzerfolg, as the chart says. The export
   carries the same rows. Presentation only: the Betriebsergebnis and the result do not change (#568).
+- Buchungen › Neue Buchung von Hand: «+ Zeile» makes it a Sammelbuchung, one account against
+  several lines (for example Haben 1020 against Soll 6500 and 6570). The last line holds the rest of
+  the total until you type there, and ↵ books only once the lines add up. The lines are booked
+  together under one number, each as a pair with the shared account (#567).
+- The same form: ⇄ swaps Soll and Haben, and a date typed short («6.12.» or «6.12.26») is the
+  form's year, shown whole once you leave the field.
+- The account list of a hand entry shows each account's balance at the end of the entry's day,
+  and so does the line under a chosen account.
+- ⌘K finds the words known from other bookkeeping tools («Debitoren», «Kontoblatt»,
+  «Saldovortrag», «Manuelle Buchungen», …) and opens the place here that does that job, under its
+  name here.
+- Named entry templates: «Als Vorlage speichern» in the hand form keeps its accounts, VAT code,
+  text and amount (a Sammelbuchung with its lines) under a name, for entries that come back
+  (depreciation, rent, salary). «Vorlage» on top of the form and ⌘K start the form from one; the
+  date is always the new entry's. They live in the workspace, `master-data/entry-templates.json`.
+- Booking by hand onto Debitoren or Kreditoren (a collective account whose balance is the open
+  invoices or bills) warns and books on «Trotzdem buchen».
+- **Zu bezahlen** in Belege (`/receipts/bills`, #571): the supplier bills of the period with the day
+  each is due, overdue first, then open, then paid, each a fact of the books: a bill is paid once
+  it is linked to its payment (on that payment's day), overdue once its day has passed without one.
+  Filtered by state and by Belege's filters, with the sum still to pay (and how much of it is
+  overdue) per currency, printed as a list and downloaded as CSV. The due date is read by code off
+  the bill's text («zahlbar bis 30.11.2026», «innert 30 Tagen», «10 Tage 2 % Skonto, 30 Tage
+  netto»), without a model and for every receipt already in the books; a receipt's Angaben take a
+  due date by hand («Fällig am»), which wins. No payment files and no bank connection.
+- Books schema 10: a receipt keeps the due date a person set (`dueDate`). `npm run update` writes
+  it by itself; no record changes, and an older app refuses the books.
+- Abschluss › Prüfungen: the turnover reconciliation (Umsatzabstimmung, MWSTV Art. 128). Per VAT
+  period it sets the turnover of the revenue accounts against Ziffer 200 as filed and as the books
+  declare it today, and names each difference with its entries and the period it belongs to:
+  revenue without a code that declares turnover, turnover off a revenue account (a fixed asset
+  sold), a correction booked in one period for another, the year-end's own entries, and the
+  Korrekturabrechnung against the filed return. A fact, never a blocker: a difference is
+  corrected in the open period with `corrects`, never in a filed one. `npm run year:close --
+  <year> --dry-run` prints it too. A firm not
+  registered for VAT has nothing to reconcile (#569).
+- Verkauf: Rechnungen and the new Gutschriften are each one table across the page, with status tabs
+  that count and sum what is in them (Alle, Entwürfe, Offen, Überfällig, Teilbezahlt, Bezahlt,
+  Storniert; for Gutschriften Offen, Teilweise, Abgerechnet, Storniert) and a tab «Nicht gesendet». Every
+  column sorts; a line above says what is open and overdue per currency; a totals row sums what
+  is shown. A row opens the document over the table's right part; Esc or «×» closes it, ↑ ↓ go
+  to the next. Ticked rows can be sent by e-mail together, their PDFs saved, and the table exported
+  as CSV; «⋯» on a row opens, saves, sends, reminds or copies it.
+- Verkauf: what has been sent shows at a glance. The status reads «gesendet» or «nicht gesendet»,
+  a column «Versand» names the last send's day and channel (and the last Mahnung), and the
+  document says above its sheet when and to whom it went, or that it has not gone yet. Its
+  section «Versand» lists every send with time, recipient, channel, Message-ID and checksum, each
+  PDF as it went out.
+- Verkauf › Offene Posten: every invoice with something open on a chosen day, by customer, with
+  the days overdue and the age (0–30, 31–60, 61–90, over 90 days), printable as the Debitorenliste
+  and exported as CSV. On 31.12. it matches the receivables to the cent: on the cash basis the
+  year end's proposal, on the agreed basis what the invoices hold on the receivable account.
+- Verkauf › Versendet: every document sent, filtered by customer, kind and channel.
 
 ### Fixed
 
+- Buchungen: an entry that books only the tax (a code such as `M81-2` or `-I81-2`, one side
+  empty) said «keine Gegenbuchung» on its empty side, which read as an error. The detail now
+  shows the VAT account the Bilanz and the reports fill in there, marked «aus dem MWST-Code», and
+  the list's tooltip says the same. An entry with a rate code shows under its Buchungssatz the tax
+  the code splits off and its account («davon MWST 8.1 %: CHF … → 2201»). Display only: the
+  figures and the books are unchanged.
 - Mac: a downloaded `.vanillashare` file showed as coloured pixel noise in Chrome's download list.
   The app's icon is now built with Apple's `iconutil`, and a Freigabe-Datei (`.vanillashare`,
   `.vanilla`) has its own icon: a page with the Vanilla wave.
@@ -41,6 +100,7 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- The area Rechnungen is now called Verkauf. Old links keep working.
 - The top bar (company, search, period, zoom, export, theme, language) stays open: it no longer
   folds away by itself after three uses, which left most people not knowing it is there. Its pin
   still lets it fold, and that choice is kept. Everyone starts with it open once after this update.

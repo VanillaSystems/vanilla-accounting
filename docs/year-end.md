@@ -77,6 +77,16 @@ same list. Every item is computed from the books:
   carries into the next year is the one Bilanz & ER show on 31.12.
   What is still owed on 31.12. should be the fourth quarter. A difference means a payment to
   the ESTV is missing or was booked twice, or a correction (form 0535) was not paid in the year.
+- **The turnover reconciliation (Umsatzabstimmung, MWSTV Art. 128).** For each VAT period, the
+  turnover of the revenue accounts (gross, by the entry's date) against Ziffer 200 as filed and
+  as today's books declare it. Each difference is named with its entries and the period it
+  belongs to: revenue booked without a code that declares turnover, turnover declared off a
+  revenue account (a fixed asset sold), a year-end entry without a code (the Debitoren on the
+  cash basis, accruals, their reversal: declared when paid), a correction booked in one period for another (booked
+  here, declared in that period's 0535), and what a filed period's 0535 declares against the
+  return as filed. It is a
+  fact and never blocks the close. Nothing is corrected here: what belongs to a filed period is
+  booked in the open period with `corrects` and declared in its 0535 (golden rule 1).
 - **The year-end entries** (step 3).
 - **The closing balance sheet.** Aktiven must equal Passiven plus the result. If not, the
   check names the cause: entries with one account only, an account not in your chart, or

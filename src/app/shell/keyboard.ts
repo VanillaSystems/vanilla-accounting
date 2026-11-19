@@ -101,7 +101,7 @@ export function useShellKeys(keys: ShellKeys) {
 
 /** The keyboard's place in a list: the selected row, in view. */
 export function focusSelectedRow() {
-  const row = document.querySelector<HTMLElement>('.list .row.sel');
+  const row = document.querySelector<HTMLElement>('.list .row.sel, .list tr.trow.sel');
   row?.focus({ preventScroll: true });
   row?.scrollIntoView({ block: 'nearest' });
 }

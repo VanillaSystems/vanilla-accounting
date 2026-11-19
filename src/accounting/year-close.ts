@@ -27,6 +27,7 @@ import { chart, filing, setup, vat, vatSetup, baseCurrency, yearEnd as yearEndDa
 import type { TaxCodeInfo } from '../engines/tax-codes.js';
 import { bookedInFiled, bookedWithBase } from '../books/twins.js';
 import type { ReturnFigures } from '../engines/return.js';
+import { turnoverReconciliation, type TurnoverReconciliation } from './turnover.js';
 
 export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances' | 'reconciliations'> & {
   journalEntries: JournalEntry[];
@@ -118,34 +119,60 @@ export const owesAcquisition = (info: Pick<TaxCodeInfo, 'acquisitionZiffer' | 'i
  * single-leg tax correction (`-2`, empty Soll) posts against its empty side and so balances it.
  */
 export function vatPostings(entries: readonly JournalEntry[], vatAccount: string): VatPosting[] {
-  const out: VatPosting[] = [];
-  for (const e of entries) {
-    const info = e.vatCode ? vat().codes.parse(e.vatCode) : null;
-    const line = vat().vatLine(e);
-    if (!info || !line || line.tax === 0) continue;
-    const acquisition = owesAcquisition(info);
-    if (info.acquisitionZiffer && !acquisition) continue;
-    const owed = !!(info.revenueZiffer || info.correctionZiffer) || acquisition;
-    if (!owed && !info.inputTaxZiffer) continue;
-    const amount = Math.abs(line.tax);
-    // The side that carries the tax: credit for a sale, debit for a purchase and for Bezugsteuer (the expense owes it); a minus code swaps it.
-    const onCredit = acquisition ? info.isNegative : owed !== info.isNegative;
-    const carrier = onCredit ? e.accountCredit : e.accountDebit;
+  return entries.flatMap((e) => vatPostingOf(e, vatAccount) ?? []);
+}
+
+/**
+ * How an entry's code splits its tax off, before any account is named (see `vatPostings`):
+ * `carrier`, the entry's side that carries the tax; `toVat`, whether the tax goes to the VAT
+ * account (it then sits on the posting's credit side) or comes back from it (debit side);
+ * `onTop`, Bezugsteuer owed without a deduction, added to the purchase; `amountIsTax`, the code
+ * books the entry's amount as the tax itself.
+ */
+export interface VatShape {
+  amount: number;
+  carrier: 'debit' | 'credit';
+  toVat: boolean;
+  onTop: boolean;
+  amountIsTax: boolean;
+}
+
+export function vatShapeOf(e: JournalEntry): VatShape | null {
+  const info = e.vatCode ? vat().codes.parse(e.vatCode) : null;
+  const line = vat().vatLine(e);
+  if (!info || !line || line.tax === 0) return null;
+  const acquisition = owesAcquisition(info);
+  if (info.acquisitionZiffer && !acquisition) return null;
+  const owed = !!(info.revenueZiffer || info.correctionZiffer) || acquisition;
+  if (!owed && !info.inputTaxZiffer) return null;
+  // The side that carries the tax: credit for a sale, debit for a purchase and for Bezugsteuer (the expense owes it); a minus code swaps it.
+  const onCredit = acquisition ? info.isNegative : owed !== info.isNegative;
+  return {
+    amount: Math.abs(line.tax),
+    carrier: onCredit ? 'credit' : 'debit',
     // Tax leaves the carrier towards the VAT account when owed, comes back to it when deducted; Bezugsteuer owed is added to its carrier.
-    const toVat = acquisition ? !info.isNegative : onCredit;
-    const [accountDebit, accountCredit] = toVat ? [carrier, vatAccount] : [vatAccount, carrier];
-    out.push({
-      id: `vat:${e.id}`,
-      transactionRef: e.transactionRef,
-      date: e.date,
-      accountDebit,
-      accountCredit,
-      amount,
-      description: `MWST ${e.vatCode} ${e.id}`,
-      code: e.vatCode!,
-    });
-  }
-  return out;
+    toVat: acquisition ? !info.isNegative : onCredit,
+    onTop: acquisition,
+    amountIsTax: info.amountIs === 'tax',
+  };
+}
+
+/** The tax one entry's VAT code splits off (see `vatPostings`), or null when it splits off none. */
+export function vatPostingOf(e: JournalEntry, vatAccount: string): VatPosting | null {
+  const shape = vatShapeOf(e);
+  if (!shape) return null;
+  const carrier = shape.carrier === 'credit' ? e.accountCredit : e.accountDebit;
+  const [accountDebit, accountCredit] = shape.toVat ? [carrier, vatAccount] : [vatAccount, carrier];
+  return {
+    id: `vat:${e.id}`,
+    transactionRef: e.transactionRef,
+    date: e.date,
+    accountDebit,
+    accountCredit,
+    amount: shape.amount,
+    description: `MWST ${e.vatCode} ${e.id}`,
+    code: e.vatCode!,
+  };
 }
 
 export interface ClosingLedger {
@@ -620,6 +647,8 @@ export interface YearClose {
   checks: Check[];
   revaluations: Revaluation[];
   vat: VatCheck;
+  /** The turnover the revenue accounts hold against the turnover the returns declare, each difference named (#569); absent for a firm that files no return. Never a blocker. */
+  turnover?: TurnoverReconciliation;
   /** `state` as marked, or 'done' when an entry of the year's 31.12. books on the template's accounts (`booked`: those entries); `stale` while their figure is not today's (r10c-1). */
   templates: Array<EntryTemplate & { state?: TemplateState; booked?: BookedEntry[]; stale?: StaleFigure }>;
   receivables: Receivables;
@@ -817,6 +846,7 @@ export function yearClose(input: YearCloseInput): YearClose {
     checks,
     revaluations: reval,
     vat: vatCheck(books, year, input.filed, accounts),
+    ...(vatSetup().registered && { turnover: turnoverReconciliation(books.journalEntries, quartersOf(year), input.filed, new Set(templates.flatMap((t) => (t.booked ?? []).map((b) => b.id)))) }),
     templates,
     receivables,
     ledger,

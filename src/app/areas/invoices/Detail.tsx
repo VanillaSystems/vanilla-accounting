@@ -1,5 +1,5 @@
 /**
- * The right side of Rechnungen: an invoice on its A4 sheet (a draft edited in place, a reminder
+ * A document of Verkauf (the panel over a table, layout A): an invoice on its A4 sheet (a draft edited in place, a reminder
  * written on the sheet before it goes out) with its state, actions and margin; a customer with
  * their invoices; a sent document as the PDF that went out.
  */
@@ -31,6 +31,7 @@ import { Sheet } from './Sheet.js';
 import { hrefOf } from '../../shell/history.js';
 import { countryName } from './address.js';
 import { AsyncButton } from '../../shell/AsyncButton.js';
+import { SentLine, SentList } from './Sent.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
 
@@ -116,6 +117,7 @@ function InvoiceDetail(props: DetailProps) {
       </div>
       <Status {...props} state={state} reminder={!!reminder} />
       <Actions {...props} state={state} reminderLevel={reminder ? reminderDraft(inv, d.invoices, today).level : undefined} />
+      {!reminder && <SentLine sent={d.sent} inv={inv} onSend={canEdit ? () => setUi({ dialog: { kind: 'send' } }) : undefined} />}
       <div className="body">
         <div className="desk">
           <Sheet data={data} editing={editing} onEdit={edit} onAction={action} focus={editing ? s.focus : undefined} onFocused={() => setUi({ focus: undefined })} />
@@ -182,8 +184,6 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
       </div>
     );
   }
-  const sent = d.sent.filter((x) => x.invoiceId === inv.id).sort((a, b) => a.sentAt.localeCompare(b.sentAt));
-  const firstSent = sent.find((x) => x.kind === 'invoice' || x.kind === 'credit-note');
   let line: ReactNode = null;
   if (state === 'cancelled' && inv.cancelled) line = <span className="notice">{t('invoices.cancelledStatus', { date: formatDate(inv.cancelled.date) })}{inv.cancelled.reason ? ` · ${inv.cancelled.reason}` : ''}</span>;
   else if (state === 'credit') {
@@ -210,7 +210,6 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
       ...(r ? [t('invoices.lastReminder', { level: r.level, date: formatDate(r.date) })] : []),
       ...(paid ? [t('invoices.partlyPaid', { paid: fmt(paid), open: fmt(openAmount(inv, d.invoices)) })] : []),
       ...(openFees(inv) > 0 ? [t('invoices.feeOpen', { amount: `${inv.currency} ${fmt(openFees(inv))}` })] : []),
-      firstSent ? t('invoices.sentOn', { date: formatDate(firstSent.sentAt.slice(0, 10)) }) : t('invoices.notSent'),
     ];
     line = <span className={`notice${state === 'overdue' ? ' warn' : ''}`}>{state === 'overdue' && I.dot}{parts.join(' · ')}</span>;
   }
@@ -298,10 +297,7 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
       <div className="ivacts">
         {preview}
         <AsyncButton type="button" className="btn primary" data-act="issue" aria-describedby={missing.length ? 'ivmissing' : undefined} onClick={tryIssue}>{t(inv.kind === 'credit-note' ? 'invoices.issueCredit' : 'invoices.issue')}</AsyncButton>
-        <AsyncButton type="button" className="btn ghost danger" data-act="delete" onClick={() => {
-          const i = d.invoices.indexOf(inv);
-          return deleteDraft(nav, inv, d.invoices[i + 1] ?? d.invoices[i - 1]);
-        }}>{t('common.delete')}</AsyncButton>
+        <AsyncButton type="button" className="btn ghost danger" data-act="delete" onClick={() => deleteDraft(nav, inv)}>{t('common.delete')}</AsyncButton>
         {missing.length > 0 && <MissingList {...props} inv={inv} missing={missing} />}
       </div>
     );
@@ -400,20 +396,10 @@ function CustomerSec({ d, inv, canEdit }: DetailProps) {
 }
 
 function SentSec({ d, inv, nav }: DetailProps & { inv: Issued }) {
-  const docs = d.sent.filter((x) => x.invoiceId === inv.id).sort((a, b) => b.sentAt.localeCompare(a.sentAt));
+  const n = d.sent.filter((x) => x.invoiceId === inv.id && !x.deleted).length;
   return (
-    <Sec k="sent" label={t('invoices.sec.sent')} val={docs.length ? String(docs.length) : '–'}>
-      {docs.length ? (
-        <div className="ivsent">
-          {docs.map((x) => (
-            <button key={x.id} type="button" className="sdoc" onClick={() => nav.go({ route: { area: 'invoices', view: 'sent', id: x.id }, query: {} })}>
-              <span className="mono">{formatDate(x.sentAt.slice(0, 10))}</span>
-              <span>{x.title}<small>{x.to === 'download' ? t('invoices.toDownload') : x.to} · {new Date(x.sentAt).toTimeString().slice(0, 5)}</small></span>
-              <span className="m">{t('invoices.view')}</span>
-            </button>
-          ))}
-        </div>
-      ) : <p className="m">{t('invoices.nothingSentYet')}</p>}
+    <Sec k="sent" label={t('sales.sec.sent')} val={n ? String(n) : '–'}>
+      <SentList sent={d.sent} inv={inv} nav={nav} />
     </Sec>
   );
 }
