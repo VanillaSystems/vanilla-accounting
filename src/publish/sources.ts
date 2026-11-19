@@ -7,6 +7,7 @@ import { parse as parseEnv } from 'dotenv';
 import { loadBooks } from '../books/store.js';
 import { loadMailConfig, mailboxesOf } from '../platform/sources/mail.js';
 import { loadKnowledge } from '../knowledge/layers.js';
+import { loadPayroll } from '../payroll/store.js';
 import { APP_ROOT, appFolderIn, filesOfPart, openWorkspace, type Workspace } from '../workspace/workspace.js';
 import { isAllowed, parseAllowlist, scan, secretsOf, type Allowlist, type Finding, type PublicFile, type Secret } from './leak-guard.js';
 
@@ -53,8 +54,15 @@ export function workspaceSecrets(ws: Workspace): Secret[] {
   const env = existsSync(envFile) ? parseEnv(readFileSync(envFile, 'utf8')) : {};
   const logins = mail.map((m) => env[`${m.env}_IMAP_USER`]).filter((u): u is string => !!u?.includes('@'));
   const boxes = mailboxesOf(ws, APP_ROOT).flatMap((b) => [b.address, b.account, ...(b.to ? [b.to] : [])]).filter((a) => a.includes('@'));
+  const people = loadPayroll(ws).employees;
+  const payroll = {
+    names: people.flatMap((p) => p.name.flatMap((n) => [`${n.value.first} ${n.value.last}`, `${n.value.last} ${n.value.first}`])),
+    numbers: people.flatMap((p) => (p.socialSecurityNumber ? [p.socialSecurityNumber] : [])),
+    ibans: people.flatMap((p) => p.bank.map((b) => b.value.iban)),
+  };
   return secretsOf({
     company: ws.company,
+    payroll,
     mailboxes: [...new Set([...mail.flatMap((m) => [m.address, ...(m.filterTo ? [m.filterTo] : [])]), ...logins, ...boxes])],
     books: loadBooks(ws),
     counterparties: knowledge.counterparties,

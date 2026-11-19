@@ -21,7 +21,7 @@ import type { NoAccess } from './desktop.js';
 export const CLOSED_REASONS = [
   'editTransaction', 'deleteTransaction', 'newTransaction', 'mapping',
   'editReceipt', 'deleteReceipt', 'editEntry', 'deleteEntry', 'newStatement', 'newEntry',
-  'openingBalance', 'discardFile', 'vatAdjustment',
+  'openingBalance', 'discardFile', 'vatAdjustment', 'payroll',
 ] as const;
 export type ClosedReason = (typeof CLOSED_REASONS)[number];
 

@@ -5,6 +5,7 @@
  */
 import { INCOME_SECTIONS, STATEMENTS_VAT, type BoxId, type Formula, type Jurisdiction, type ReturnData } from './schema.js';
 import { FILING_LENGTHS } from '../../accounting/periods.js';
+import { checkPayroll } from './check-payroll.js';
 
 export interface ModuleProblem {
   file: string;
@@ -88,6 +89,7 @@ export function checkJurisdiction(j: Jurisdiction): ModuleProblem[] {
   if (!STATEMENTS_VAT.includes(j.statements.vat)) add('statements.yaml', 'vat', `"${j.statements.vat}" is not one of ${STATEMENTS_VAT.join(', ')}`);
   if (!FILING_LENGTHS.includes(j.periods.vat.length)) add('periods.yaml', 'vat.length', `"${j.periods.vat.length}" is not one of ${FILING_LENGTHS.join(', ')}`);
   if (!(j.periods.vat.dueDays >= 0)) add('periods.yaml', 'vat.dueDays', 'must be a number of days');
+  problems.push(...checkPayroll(j));
   return problems;
 }
 

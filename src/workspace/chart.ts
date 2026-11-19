@@ -34,6 +34,8 @@ export interface ChartAccount {
   names?: Partial<Record<LegalForm, string>>;
   /** Words a person types for the account besides its name («Miete», «Benzin»): an account field finds it by them (#365, #47). */
   hints?: string[];
+  /** Only in a chart of a firm that pays wages (the setup's answer `employees`); Löhne › Einstellungen adds it to any other. */
+  payroll?: boolean;
 }
 
 export interface Chart {
@@ -63,7 +65,7 @@ const TYPE_RULES: Record<AccountType, { statement: Statement; classes: string }>
 };
 
 /** The keys an account of the chart may have. */
-const ACCOUNT_KEYS = new Set(['number', 'name', 'type', 'line', 'profiles', 'legalForms', 'names', 'hints']);
+const ACCOUNT_KEYS = new Set(['number', 'name', 'type', 'line', 'profiles', 'legalForms', 'names', 'hints', 'payroll']);
 
 export class ChartError extends Error {}
 
@@ -97,10 +99,10 @@ export function loadChart(path: string = KMU_CHART): Chart {
 }
 
 /** The accounts of a new workspace with this profile and legal form, as accounts.json holds them. */
-export function chartFor(chart: Chart, profile: BusinessProfile, legalForm: LegalForm): WorkspaceAccount[] {
+export function chartFor(chart: Chart, profile: BusinessProfile, legalForm: LegalForm, wages = false): WorkspaceAccount[] {
   const inProfile = (a: ChartAccount) => !a.profiles || profile === 'both' || a.profiles.includes(profile);
   const inForm = (a: ChartAccount) => !a.legalForms || a.legalForms.includes(legalForm);
-  return chart.accounts.filter((a) => inProfile(a) && inForm(a)).map((a) => ({
+  return chart.accounts.filter((a) => inProfile(a) && inForm(a) && (wages || !a.payroll)).map((a) => ({
     number: a.number,
     name: a.names?.[legalForm] ?? a.name,
     type: a.type,

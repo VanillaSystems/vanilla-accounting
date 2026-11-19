@@ -43,6 +43,13 @@ Two markers flag an entry you must read before you update:
   due date by hand («Fällig am»), which wins. No payment files and no bank connection.
 - Books schema 10: a receipt keeps the due date a person set (`dueDate`). `npm run update` writes
   it by itself; no record changes, and an older app refuses the books.
+- Payroll, first slice (docs/specs/payroll.md, phase B0): the Swiss Lohnart catalogue, the kinds of
+  social insurance and the federal figures of 2026 with their sources ship as module data
+  (`modules/ch/payroll.yaml`, `modules/ch/payroll/2026.yaml`); `payroll.json` and the year's
+  `payroll/payslips.jsonl` join the workspace's layout. Nothing is computed or booked yet. A new
+  workspace of a firm that pays wages gets the accounts 1091 Lohndurchlaufkonto and 2271–2275 (one
+  liability account per insurer). Books schema 11: an entry may be booked by payroll; `npm run update`
+  writes it, no record changes.
 
 ### Fixed
 
