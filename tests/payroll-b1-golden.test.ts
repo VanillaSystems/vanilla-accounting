@@ -286,3 +286,19 @@ test('B1 golden case: back pay while still employed in the later year takes the 
   // February 2027 (the only month of 2027 here): 12,400 + 2,000 at 5.5 %; ALV up to 2027's ceiling for one month, 150,000 / 12.
   assert.deepEqual(lines(d).filter(([w]) => w === 'ahv-an' || w === 'alv-an'), [['ahv-an', 14400, 5.5, 792], ['alv-an', 12500, 1.1, 137.5]]);
 });
+
+import { addAbsence } from '../src/payroll/settings.js';
+
+test('B1 golden case: military service, EO allowance and the employer\'s top-up: the top-up is UVG premium wage, the allowance is not (UVV Art. 115 Abs. 1 lit. d)', () => {
+  const store = firm([staff('p1', { employment: [dated('2026-01-01', monthly(6000))] })]);
+  addAbsence(store, ch.payroll!, 'p1', { kind: 'military', from: '2026-09-01', to: '2026-09-30', continuedPay: 100, dailyAllowance: 160 }, 'a1', 'now');
+  const d = computePayslip(ctxOf(store), 'p1', '2026-09')!;
+  const eo = amountOf(d, 'taggeld-eo');
+  const topUp = amountOf(d, 'lohnfortzahlung');
+  assert.ok(eo > 0 && topUp > 0, 'the fund\'s allowance and the employer\'s top-up to the full wage');
+  assert.equal(Math.round((eo + topUp) * 100) / 100, 6000);
+  // The UVG base: the month's wage less the absent days, plus the top-up; never the allowance.
+  assert.equal(line(d, 'nbu-an')[0].base, d.bases.uvg?.month);
+  assert.equal(d.bases.uvg?.month, Math.round((6000 - eo) * 100) / 100, 'the full wage less the EO allowance: the top-up counts, the allowance does not');
+  assert.equal(d.bases.ahv?.month, 6000, 'the allowance is AHV wage (AHVG Art. 19a)');
+});

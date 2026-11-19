@@ -2173,6 +2173,12 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     that year's wages; while employed in the later year, the payment month's figures and that year's wages. The
     insurers' own rates stay those of the payment day (their contract year). The lapse of the insurance duty without
     an exit is not told apart.
+125. **The EO allowance is no UVG premium wage; the employer's top-up beyond it is** (UVV Art. 115 Abs. 1 lit. d,
+    https://www.fedlex.admin.ch/eli/cc/1983/38_38_38/de, replacing the insurers' wage declarations cited before):
+    the Lohnart `taggeld-eo` has no `uvg`/`uvgz` base, `lohnfortzahlung` keeps them, so a month of service with
+    continued pay has as UVG wage the full wage less the allowance. The supplementary accident insurance (UVGZ)
+    follows the insurer's terms (AVB), not the law: the shipped bases are the usual case and stay data, which a firm
+    changes on the Lohnart (Einstellungen › Lohnarten).
 
 ---
 
