@@ -39,6 +39,7 @@ test('«Ausstellen» with something missing: each item says it in words and lead
     ['sender.address', { company: 'profile' }],
     ['sender.uid', { company: 'profile' }],
     ['payTo', { company: 'invoice-layout' }],
+    ['total', undefined],
   ]);
   // A position without text or amount is a warning the person may issue over («Trotzdem ausstellen», spec 4.11), each leading to its field.
   assert.deepEqual(warningsForIssue(draft({ lines: [{ text: ' ', quantity: 1, price: 0, vatRate: 8.1 }] })).map((m) => [m.field, fixFor(m)]), [

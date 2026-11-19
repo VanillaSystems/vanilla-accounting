@@ -2303,6 +2303,7 @@ export default {
     'invoice.missing.line.price': 'un importo (quantità e prezzo diversi da 0)',
     'invoice.missing.line.discount': 'per lo sconto, una percentuale o un importo',
     'invoice.missing.line.discountBase': 'per lo sconto, posizioni sopra da cui detrarlo',
+    'invoice.missing.total': 'un totale superiore a zero: una sezione pagamento QR non porta importi negativi (uno sconto superiore al totale va in una nota di credito)',
     'invoice.missing.exemption': 'il motivo dello 0 % (estero o esportazione)',
     'invoice.missing.credit.invoice': 'la fattura accreditata',
     'invoice.missing.credit.sign': 'un importo negativo',

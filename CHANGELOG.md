@@ -84,6 +84,8 @@ Two markers flag an entry you must read before you update:
 - Rechnungen: a position without text or amount, and a Rabatt with nothing above it, no longer
   stop the issue: the app says what would be printed and why it matters, and «Trotzdem
   ausstellen» issues the invoice as it is.
+- Rechnungen: an invoice whose total is zero or less (a Rabatt above the total) is not issued: a
+  QR-bill carries no amount below zero; what is owed back goes on a Gutschrift.
 
 ### Changed
 

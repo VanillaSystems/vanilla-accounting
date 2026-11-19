@@ -1077,15 +1077,20 @@ listed here and updated with phase 2's build:
 37. **Rabatt on the total (slice B).** A Rabatt takes its percent of, or its amount off, the running
     total of everything above it: the item positions and the Rabatte above it, so several combine
     one after the other (10 %, then CHF 5, then a 2 % Zuschlag). Its total is rounded to the Rappen
-    first and then split over the groups above it (rate, net or gross pricing, revenue account) in
-    proportion, by largest remainder, so the parts add up to the printed line exactly and every
+    first and then split over the groups above it (rate, net or gross pricing, revenue account), by
+    largest remainder: a percent takes its share of each group with the group's sign (a deposit taken
+    back at 0 % shrinks too), an amount is spread by the groups' size whatever their sign, so
+    positions that nearly cancel never blow it up, so the parts add up to the printed line exactly and every
     rate's net, VAT and gross stay consistent (`priced` in `src/invoices/rules.ts`). An amount is in
     the document's prices (net or gross). On a credit note (negative positions) a Rabatt reduces the
-    credit. A Rabatt with nothing above it takes nothing and is warned of before issue
-    («Trotzdem ausstellen»).
+    credit. A Rabatt with no item above it takes nothing and is warned of before issue
+    («Trotzdem ausstellen»). An invoice whose total is zero or less (a Rabatt above the total) is
+    refused, not warned of: a QR-bill carries no amount below zero (a third party's format); what is
+    owed back is a Gutschrift. A position's own discount lies within 0 to 100 %.
 38. **Discount per position.** The position's amount is quantity × price to the Rappen, less its
     percent of that, to the Rappen. A Zwischentotal sums the item positions (after their own
-    discount) since the last Zwischentotal; Rabatte do not count in it.
+    discount) since the last Zwischentotal; Rabatte do not count in it. A Seitenumbruch breaks only
+    after a table row on its sheet: one as the first position or a second in a row is no blank sheet.
 39. **Prices per document.** `prices: 'net' | 'gross'`; absent reads as net. The step 2 → 3 sets
     `gross` on a document whose every line above 0 % had `vatIncluded` (the credit notes «by
     amount»), else `net`; a line whose flag differs from its document keeps it as `true` or
@@ -1095,7 +1100,9 @@ listed here and updated with phase 2's build:
 40. **Units.** Ids with a word per document language; the old ids keep their meaning. The German
     word of `h` is «Std.». An issued document freezes the definitions of the units it names
     (`Issued.units`, riding on `invoices.json` schema 3), so a later reminder prints the words the
-    invoice printed. A unit is added in Firma › Rechnungslayout with its four words, its id made from
+    invoice printed; the step 2 → 3 freezes the words of 0.6.0 (`h` as «h») on every document issued
+    before. A unit an issued document names passes the API even when the list no longer has it, so
+    «Als Entwurf kopieren» never fails on it; it prints as the copy's list words it, else its id. A unit is added in Firma › Rechnungslayout with its four words, its id made from
     the German word; it is removed only while no draft uses it (`unitInUse`); a draft that holds a
     removed unit keeps it and prints its id if no list names it.
 41. **«Trotzdem ausstellen».** No such path existed for issuing. A position without text or amount

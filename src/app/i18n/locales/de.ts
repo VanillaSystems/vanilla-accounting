@@ -2300,6 +2300,7 @@ export const messages = {
   'invoice.missing.line.price': 'ein Betrag (Menge und Preis nicht 0)',
   'invoice.missing.line.discount': 'beim Rabatt ein Prozentsatz oder ein Betrag',
   'invoice.missing.line.discountBase': 'beim Rabatt Positionen darüber, von denen er abzieht',
+  'invoice.missing.total': 'ein Total über null: ein QR-Zahlteil trägt keinen Betrag unter null (ein Rabatt über dem Total gehört in eine Gutschrift)',
   'invoice.missing.exemption': 'der Grund für 0 % MWST (Ausland oder Ausfuhr)',
   'invoice.missing.credit.invoice': 'die Rechnung, die gutgeschrieben wird',
   'invoice.missing.credit.sign': 'ein negativer Betrag',

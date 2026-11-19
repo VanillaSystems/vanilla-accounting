@@ -144,9 +144,30 @@ export const manifestText = (doc: Document): string => doc.toString({ lineWidth:
 export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {
   // No line has `vatIncluded` before; the number makes an older app refuse the file.
   1: (doc) => doc,
-  // Every line is an item (no `kind`); each document names its prices, and a line keeps `vatIncluded` only where it differs from them.
-  2: (doc) => ({ ...doc, invoices: Array.isArray(doc.invoices) ? doc.invoices.map(pricesOfDocument) : doc.invoices }),
+  // Every line is an item (no `kind`); each document names its prices, and a line keeps `vatIncluded` only where it
+  // differs from them; an issued document freezes the words its units printed with.
+  2: (doc) => ({ ...doc, invoices: Array.isArray(doc.invoices) ? doc.invoices.map((d) => unitsOfIssued(pricesOfDocument(d))) : doc.invoices }),
 };
+
+/** The words the units of schema 2 printed with (src/invoices/texts.ts at 0.6.0). */
+const UNITS_OF_SCHEMA_2: Record<string, Record<'de' | 'fr' | 'it' | 'en', string>> = {
+  h: { de: 'h', fr: 'h', it: 'h', en: 'h' },
+  day: { de: 'Tag', fr: 'jour', it: 'giorno', en: 'day' },
+  pcs: { de: 'Stk.', fr: 'pce', it: 'pz.', en: 'pcs' },
+  flat: { de: 'pauschal', fr: 'forfait', it: 'forfait', en: 'flat rate' },
+  km: { de: 'km', fr: 'km', it: 'km', en: 'km' },
+};
+
+/**
+ * Step 2 → 3 on an issued document: `units`, the words its units printed with, so a reminder prints
+ * them as the invoice did (the app's defaults since name the hour «Std.»).
+ */
+export function unitsOfIssued(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || (raw as { status?: unknown }).status !== 'issued') return raw;
+  const doc = raw as { lines?: Array<{ unit?: unknown }> };
+  const named = [...new Set((doc.lines ?? []).flatMap((l) => (typeof l.unit === 'string' && UNITS_OF_SCHEMA_2[l.unit] ? [l.unit] : [])))];
+  return named.length ? { ...doc, units: named.map((id) => ({ id, ...UNITS_OF_SCHEMA_2[id] })) } : raw;
+}
 
 /**
  * Step 2 → 3 on one document: `prices: 'gross'` when every line at a rate above 0 has

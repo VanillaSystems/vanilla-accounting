@@ -2303,6 +2303,7 @@ export default {
     'invoice.missing.line.price': 'an amount (quantity and price other than 0)',
     'invoice.missing.line.discount': 'a percentage or an amount for the discount',
     'invoice.missing.line.discountBase': 'positions above the discount for it to take off',
+    'invoice.missing.total': 'a total above zero: a QR-bill payment part carries no amount below zero (a discount above the total belongs in a credit note)',
     'invoice.missing.exemption': 'the reason for 0 % VAT (abroad or export)',
     'invoice.missing.credit.invoice': 'the invoice being credited',
     'invoice.missing.credit.sign': 'a negative amount',

@@ -97,10 +97,10 @@ test('Art. 26 MWSTG: issue refuses an invoice that lacks what the law asks, and 
   assert.deepEqual(fields(missingForIssue(draft([line(0, 100, 8.1, ' ')]), {
     customer: { ...customer, address: { ...customer.address, postcode: '' } },
     sender: { ...sender, uid: '', address: { postcode: '8000', town: 'Zürich', country: 'CH' } }, invoices: [],
-  })), ['sender.address', 'sender.uid', 'customer.address']);
+  })), ['sender.address', 'sender.uid', 'customer.address', 'total']);
   // Spec 4.11: «Eine Position ohne Text oder Preis» is a warning; issuing takes the person's «Trotzdem ausstellen».
-  const empty = draft([line(0, 100, 8.1, ' ')]);
-  assert.deepEqual(fields(warningsForIssue(empty)), ['line.text#0', 'line.price#0']);
+  const empty = draft([line(1, 100, 8.1), line(0, 100, 8.1, ' ')]);
+  assert.deepEqual(fields(warningsForIssue(empty)), ['line.text#1', 'line.price#1']);
   assert.throws(() => issued(empty), (e: InvoiceRuleError) => e.code === 'unconfirmed' && e.missing?.length === 2);
   const anyway = { ...issue(empty, { customer, sender, layout: DEFAULT_LAYOUT, invoices: [], now: '2026-10-05T10:00:00Z', confirmed: true }) };
   assert.equal(anyway.number, '2026-001', 'issued as it is, with no mark of the warning');

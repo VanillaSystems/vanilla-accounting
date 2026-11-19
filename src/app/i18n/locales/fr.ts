@@ -2303,6 +2303,7 @@ export default {
     'invoice.missing.line.price': 'un montant (quantité et prix autres que 0)',
     'invoice.missing.line.discount': 'pour le rabais, un pourcentage ou un montant',
     'invoice.missing.line.discountBase': 'pour le rabais, des positions au-dessus dont il est déduit',
+    'invoice.missing.total': 'un total supérieur à zéro : une section paiement QR ne porte aucun montant négatif (un rabais supérieur au total va dans une note de crédit)',
     'invoice.missing.exemption': 'le motif du taux de 0 % (étranger ou exportation)',
     'invoice.missing.credit.invoice': 'la facture créditée',
     'invoice.missing.credit.sign': 'un montant négatif',

@@ -123,6 +123,7 @@ function parseLines(v: unknown, units: readonly string[]): InvoiceLine[] {
     // The activity of a firm with two approved net rates (#504): 2 books the second rate.
     if (l.activity !== undefined && l.activity !== 1 && l.activity !== 2) bad(`${at}: activity ist 1 oder 2.`, [{ field: 'line.activity', line: i }]);
     const discount = num('discount');
+    if (discount !== undefined && !(discount >= 0 && discount <= 100)) bad(`${at}: discount ist ein Prozentsatz von 0 bis 100.`, [{ field: 'line.discount', line: i }]);
     return {
       text: text(), quantity: l.quantity as number, price: l.price as number, vatRate: l.vatRate as number,
       ...(l.unit !== undefined ? { unit: l.unit as string } : {}), ...(l.account !== undefined ? { account: String(l.account) } : {}),
@@ -140,7 +141,7 @@ export type DraftPatch = Partial<Pick<InvoiceContent, (typeof DRAFT_FIELDS)[numb
 
 /**
  * A draft patch from a request body; `null` clears an optional field. A position's unit is one of
- * `units` (the firm's list) or one the draft `id` holds already.
+ * `units` (the firm's list), one the draft `id` holds already, or one an issued document names.
  */
 export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonly UnitDef[] = DEFAULT_UNITS, id?: string): DraftPatch & { clear: string[] } {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return bad('JSON-Objekt erwartet.');
@@ -160,7 +161,9 @@ export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonl
     else if (k === 'currency') { if (!INVOICE_CURRENCIES.includes(v as never)) bad('currency ist CHF oder EUR.'); out.currency = v as InvoiceContent['currency']; }
     else if (k === 'language') { if (!INVOICE_LANGUAGES.includes(v as never)) bad(`language ist eine von ${INVOICE_LANGUAGES.join(', ')}.`); out.language = v as InvoiceContent['language']; }
     else if (k === 'lines') {
-      const held = findInvoice(book, id ?? '')?.lines.flatMap((l) => (isItem(l) && l.unit ? [l.unit] : [])) ?? [];
+      // A unit removed from the list since stays where a document names it: the draft itself, or an issued document copied («Als Entwurf kopieren»).
+      const named = (ls: readonly InvoiceLine[]) => ls.flatMap((l) => (isItem(l) && l.unit ? [l.unit] : []));
+      const held = [...named(findInvoice(book, id ?? '')?.lines ?? []), ...liveInvoices(book).flatMap((i) => (i.status === 'issued' ? named(i.lines) : []))];
       out.lines = parseLines(v, [...units.map((u) => u.id), ...held]);
     }
     else if (k === 'prices') { if (!PRICES.includes(v as never)) bad(`prices ist ${PRICES.join(' oder ')}.`); out.prices = v as InvoiceContent['prices']; }

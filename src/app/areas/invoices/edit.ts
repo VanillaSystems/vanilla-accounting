@@ -100,7 +100,7 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { custome
   }
   if (field === 'discount') {
     const n = value.trim() ? parseNumber(value.replace(/%\s*$/, '')) : 0;
-    if (n === null || n >= 100) return { refused: 'number' };
+    if (n === null || n < 0 || n > 100) return { refused: 'number' };
     if (n === (line.discount ?? 0)) return undefined;
     if (n) line.discount = n; else delete line.discount;
     return changed({ lines });

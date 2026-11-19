@@ -128,11 +128,15 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .a4 tr.dropat td { box-shadow: inset 0 .5mm 0 var(--iva); }
 .a4 tr.pbreak td { border-bottom: 0; padding: 1mm; text-align: center; color: #8a909c; font-size: 7.5pt; background: repeating-linear-gradient(90deg, #c7ccd4 0 2mm, transparent 2mm 4mm) center / 100% .2mm no-repeat; }
 .a4 tr.pbreak td span { background: #fff; padding: 0 2mm; }
-.a4 .edstyle { margin-left: 2mm; font-weight: 400; font-size: 7.5pt; color: #8a909c; }
+.a4 .edstyle { font-weight: 400; font-size: 7.5pt; color: #8a909c; }
 .a4 .ed-off { white-space: nowrap; }
-/* a position's own discount field shows when it has one, on hover and while it is typed in */
-.a4 .ed-off:not(.on) { opacity: 0; }
-.a4 table.tb:hover .ed-off, .a4 .ed-off:focus-within { opacity: 1; }
+/* a position's own discount and a text's style show when set, on hover and while typed in; else they take no room */
+.a4 td:has(> .ed-off), .a4 td:has(> .edstyle) { position: relative; }
+.a4 .ed-off:not(.on), .a4 .edstyle { position: absolute; right: 1mm; top: calc(100% - 1.2mm); z-index: 2; background: #fff; padding: 0 .8mm; border-radius: .6mm; opacity: 0; pointer-events: none; }
+.a4 .edstyle { right: auto; left: 1mm; }
+.a4 table.tb:hover .ed-off, .a4 .ed-off:focus-within, .a4 table.tb:hover .edstyle, .a4 .edstyle:focus-within { opacity: 1; pointer-events: auto; box-shadow: 0 .3mm 1mm rgba(0,0,0,.12); }
+.a4 .ed-off.on { position: static; opacity: 1; }
+.a4 .dval select.edsel { text-align: left; field-sizing: content; }
 .ivsheet.editing .a4 .ed-off .ed:empty::before { content: '0'; }
 .lkunits .lkut { width: 100%; border-collapse: collapse; font-size: 12px; }
 .lkunits .lkut th { text-align: left; font-weight: 500; color: var(--muted); padding: 2px 4px; }
@@ -247,3 +251,4 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .ivleft { margin: 8px 0; }
 .ivtake { display: grid; gap: 2px; margin: 0 0 8px; font-size: 13px; }
 .ivleft .l { display: block; }
+.ivsheet.editing .a4 .dval .ed { min-width: 2mm; }

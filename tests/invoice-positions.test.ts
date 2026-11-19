@@ -173,13 +173,36 @@ test('Rabatte combined: each on the running total above it, after the earlier on
   const above = draft([{ kind: 'discount', text: 'R', percent: 5 }, item('A', 1, 'pcs', 100, 8.1)]);
   assert.deepEqual(lineAmounts(above), [0, 100]);
   assert.deepEqual(warningsForIssue(above), [{ field: 'line.discountBase', line: 0 }], 'it is warned of: it prints as 0.00');
+  assert.deepEqual(warningsForIssue(draft([item('A', 1, 'pcs', 0.1, 8.1), { kind: 'discount', text: 'R', percent: 1 }])), [], 'one that rounds to 0.00 over an item is no warning');
   // An odd split: 3 Rappen over three equal groups is one each; 1 Rappen goes to the largest remainder, the parts add up.
   assert.deepEqual(apportion(-3, [1, 1, 1]), [-1, -1, -1]);
   assert.deepEqual(apportion(10, [1, 1, 1]), [4, 3, 3]);
+  assert.deepEqual(apportion(10, [5, -5]), [5, 5], 'by size, whatever the sign');
   const odd = draft([item('A', 1, 'pcs', 33.33, 8.1), item('B', 1, 'pcs', 33.33, 2.6, { account: '3400' }), item('C', 1, 'pcs', 33.34, 0), { kind: 'discount', text: 'R', percent: 7 }], { exemption: 'export' });
   const amounts = lineAmounts(odd);
   assert.equal(amounts[3], -7, '7 % of 100.00');
   assert.equal(sum(revenueSplit(odd, totals(odd).gross, '3200')), totals(odd).gross);
+});
+
+test('positions that nearly cancel: an amount Rabatt is spread by size, never blown up; a percent takes each group\'s share with its sign', () => {
+  // 100.00 at 8.1 % and −99.99 at 2.6 % (0.01 net in all), CHF 5 off: by size 2.50 each, not 5 × 100 / 0.01.
+  const near = draft([item('A', 1, 'pcs', 100, 8.1), item('Rückgabe', 1, 'pcs', -99.99, 2.6), { kind: 'discount', text: 'R', amount: 5 }]);
+  assert.deepEqual(lineAmounts(near), [100, -99.99, -5]);
+  assert.deepEqual(rates(totals(near)), [[8.1, 97.5, 7.9, 105.4], [2.6, -102.49, -2.66, -105.15]]);
+  assert.equal(sum(revenueSplit(near, totals(near).gross, '3200')), totals(near).gross);
+  // A deposit taken back at 0 %: 10 % takes 10 % of each, the deposit's refund shrinks with the rest.
+  const deposit = draft([item('Kaffee', 10, 'pcs', 30, 2.6), item('Depot Mühle zurück', 1, 'pcs', -50, 0), { kind: 'discount', text: 'Rabatt', percent: 10 }], { exemption: 'export' });
+  // 300 − 50 = 250, 10 % = 25.00: −30.00 on the coffee, +5.00 on the deposit.
+  assert.deepEqual(lineAmounts(deposit), [300, -50, -25]);
+  assert.deepEqual(rates(totals(deposit)), [[2.6, 270, 7.02, 277.02], [0, -45, 0, -45]]);
+});
+
+test('an invoice of zero or less is refused (a QR-bill carries no amount below zero); a position\'s discount stays within 0 to 100', () => {
+  const over = draft([item('A', 1, 'pcs', 100, 8.1), { kind: 'discount', text: 'R', amount: 150 }]);
+  assert.deepEqual(missingForIssue(over, { customer, sender, invoices: [] }).map((m) => m.field), ['total']);
+  assert.deepEqual(missingForIssue(draft([item('A', 1, 'pcs', 100, 8.1, { discount: 120 })]), { customer, sender, invoices: [] }).map((m) => [m.field, m.line]), [['line.discount', 0], ['total', undefined]]);
+  const book: InvoiceBook = { schema: INVOICES_SCHEMA, customers: [customer], invoices: [], sent: [] };
+  assert.throws(() => parseDraftPatch({ lines: [{ text: 'A', quantity: 1, price: 1, vatRate: 8.1, discount: -5 }] }, book), /discount ist ein Prozentsatz von 0 bis 100/);
 });
 
 test('a discount per position: printed beside it, the line less its share to the Rappen', () => {
@@ -221,6 +244,9 @@ test('the API reads each kind; a unit is one of the firm\'s or one the draft hol
   refused({ lines: [{ text: 'X', quantity: 1, unit: 'sack', price: 1, vatRate: 8.1 }] }, /unit ist eine von h, day/);
   assert.equal((parseDraftPatch({ lines: [{ text: 'X', quantity: 1, unit: 'sack', price: 1, vatRate: 8.1 }] }, book, DEFAULT_UNITS, 'in_old').lines![0] as ItemLine).unit, 'sack', 'a unit removed from the list stays on the draft that holds it');
   refused({ lines: [{ kind: 'discount', text: 'R', percent: 3, amount: 5 }] }, /percent oder amount/);
+  // A unit an issued document names passes, so «Als Entwurf kopieren» never fails on a unit removed from the list since.
+  const issuedBook: InvoiceBook = { ...book, invoices: [{ ...draft([item('Alt', 1, 'fass', 10, 8.1)]), status: 'issued' } as unknown as Issued] };
+  assert.equal((parseDraftPatch({ lines: [{ text: 'X', quantity: 1, unit: 'fass', price: 1, vatRate: 8.1 }] }, issuedBook).lines![0] as ItemLine).unit, 'fass');
   refused({ lines: [{ kind: 'flourish', text: 'R' }] }, /kind ist eine von item, text, subtotal, discount, pagebreak/);
   refused({ lines: [{ kind: 'pagebreak', text: 'x' }] }, /unbekannte Felder text/);
   refused({ prices: 'brutto' }, /prices ist net oder gross/);
@@ -236,7 +262,8 @@ test('the sheet edits each kind: a title or plain text, a Rabatt\'s value and mo
   assert.deepEqual((change('l:8:discount', '5') as InvoiceLine[])[8], { kind: 'discount', text: 'Rabatt', percent: 5 });
   assert.deepEqual((change('l:8:dmode', 'amount') as InvoiceLine[])[8], { kind: 'discount', text: 'Rabatt', amount: 3 }, 'the value stays, its mode changes');
   assert.deepEqual((change('l:1:discount', '10 %') as InvoiceLine[])[1], { ...(painter()[1] as ItemLine), discount: 10 });
-  assert.deepEqual(sheetEdit(d, 'l:1:discount', '100', ctx), { refused: 'number' });
+  assert.deepEqual(sheetEdit(d, 'l:1:discount', '101', ctx), { refused: 'number' });
+  assert.deepEqual(sheetEdit(d, 'l:1:discount', '-5', ctx), { refused: 'number' });
   assert.deepEqual(sheetEdit(d, 'l:1:unit', 'sack', ctx), { refused: 'value' });
   assert.deepEqual(sheetEdit(d, 'l:1:unit', 'pal', { ...ctx, units: [...DEFAULT_UNITS, { id: 'pal', de: 'Palette', fr: 'palette', it: 'paletta', en: 'pallet' }] }), { change: { lines: d.lines.map((l, i) => (i === 1 ? { ...l, unit: 'pal' } : l)) } });
   assert.deepEqual(moveLine(d.lines, 8, 0)?.map((l) => l.kind ?? 'item').slice(0, 2), ['discount', 'text']);
@@ -253,10 +280,12 @@ test('the sheet edits each kind: a title or plain text, a Rabatt\'s value and mo
   assert.match(html, /data-ed="l:9:dmode"/);
 });
 
-test('pagination: a page break ends its sheet and the next row starts under the repeated header; one at the end leaves no empty sheet', () => {
+test('pagination: a page break ends its sheet and the next row starts under the repeated header; one at the end, two in a row or one first leave no blank sheet', () => {
   const blocks = [{}, { head: true }, { row: true }, { pagebreak: true }, { row: true }, {}];
   assert.deepEqual(paginate(blocks, [10, 8, 7, 0, 7, 20], { footer: true, qrBill: false }).pages, [[0, 1, 2, 3], [-1, 4, 5]]);
   assert.deepEqual(paginate([{}, { head: true }, { row: true }, { pagebreak: true }], [10, 8, 7, 0], { footer: true, qrBill: false }).pages, [[0, 1, 2, 3]]);
+  assert.deepEqual(paginate([{}, { head: true }, { row: true }, { pagebreak: true }, { pagebreak: true }, { row: true }], [10, 8, 7, 0, 0, 7], { footer: true, qrBill: false }).pages, [[0, 1, 2, 3], [4, -1, 5]], 'two in a row are one');
+  assert.deepEqual(paginate([{}, { head: true }, { pagebreak: true }, { row: true }], [10, 8, 0, 7], { footer: true, qrBill: false }).pages, [[0, 1, 2, 3]], 'one first breaks nothing');
 });
 
 // ─── invoices.json 2 → 3 keeps every figure ───────────────────────────────────
@@ -335,8 +364,15 @@ test('invoices.json 2 → 3: every document of every demo and of a mixed file ke
       }
       assert.equal((inv as Issued).reference, was.reference, `${what}: reference`);
       assert.ok(inv.lines.every((l) => l.kind === undefined), `${what}: every line is an item`);
+      const named = [...new Set((was.lines as Array<{ unit?: string }>).flatMap((l) => (l.unit ? [l.unit] : [])))];
+      if (was.status === 'issued' && named.length) assert.deepEqual((inv as Issued).units?.map((u) => u.id), named, `${what}: the units it printed, frozen`);
     });
   }
+  // The demo's 2026-001 printed «3 h»: a reminder of it still prints «h», not today's «Std.».
+  const demo = climb<Record<string, unknown>>(schema2Files()[0][1], 2, INVOICES_SCHEMA, INVOICES_MIGRATIONS, 'demo', (x) => structuredClone(x)) as unknown as InvoiceBook;
+  const first = demo.invoices.find((i): i is Issued => i.status === 'issued' && i.number === '2026-001')!;
+  assert.deepEqual(first.units, [{ id: 'pcs', de: 'Stk.', fr: 'pce', it: 'pz.', en: 'pcs' }, { id: 'h', de: 'h', fr: 'h', it: 'h', en: 'h' }]);
+  assert.match(sheetBlocks({ ...sheetOf(first as unknown as Draft), units: first.units }).map((b) => b.html).join(''), /3 h</);
   // How each flag lands: a gross document drops its lines' flags; a net one keeps a gross line's as the exception.
   const one = (lines: OldLine[]) => pricesOfDocument({ lines }) as { prices: string; lines: Array<Record<string, unknown>> };
   assert.deepEqual(one([{ quantity: 1, price: 5, vatRate: 8.1, vatIncluded: true }, { quantity: 1, price: 5, vatRate: 0 }]), { prices: 'gross', lines: [{ quantity: 1, price: 5, vatRate: 8.1 }, { quantity: 1, price: 5, vatRate: 0 }] });

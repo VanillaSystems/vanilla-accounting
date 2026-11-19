@@ -264,22 +264,28 @@ export function paginate(blocks: ReadonlyArray<Pick<Block, 'head' | 'row' | 'pag
   const pages: number[][] = [[]];
   let y: number = PAGE.firstTop;
   let broken = false;
+  // A page break ends its sheet only after a table row on it: one as the first position, or a second in a row, leaves no blank sheet and no lonely header.
+  let rows = false;
   blocks.forEach((b, i) => {
     const keep = b.head ? mm[i + 1] ?? 0 : 0;
     if (b.pagebreak) {
       pages[pages.length - 1].push(i);
+      if (!rows) return;
       pages.push([]);
       y = PAGE.nextTop;
       broken = true;
+      rows = false;
       return;
     }
     if (y + mm[i] + keep > limit && pages[pages.length - 1].length) {
       pages.push([]);
       y = PAGE.nextTop;
       broken = true;
+      rows = false;
     }
     if (broken && b.row && headIndex >= 0 && i > headIndex) { pages[pages.length - 1].push(-1); y += headMm; }
     broken = false;
+    if (b.row) rows = true;
     pages[pages.length - 1].push(i);
     y += mm[i];
   });

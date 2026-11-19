@@ -43,17 +43,25 @@ export interface Part { line: ItemLine; gross: boolean; rappen: number }
  */
 const splitKey = (p: Part): string => `${p.line.vatRate}|${p.gross}|${p.line.account ?? ''}|${p.line.activity ?? 1}`;
 
-/** `total` (Rappen) over `weights` in proportion, by largest remainder: the parts add up to `total` exactly. */
-export function apportion(total: number, weights: readonly number[]): number[] {
-  const sum = weights.reduce((a, b) => a + b, 0);
-  if (sum === 0) return weights.map(() => 0);
-  const raw = weights.map((w) => (total * w) / sum);
-  const out = raw.map((x) => Math.trunc(x));
+/**
+ * `total` (Rappen) as whole Rappen near `targets` (each part's exact share), by largest remainder:
+ * the parts add up to `total` exactly and each stays within a Rappen of its target.
+ */
+export function distribute(total: number, targets: readonly number[]): number[] {
+  const out = targets.map((x) => Math.trunc(x));
   let left = total - out.reduce((a, b) => a + b, 0);
-  const order = raw.map((x, i) => [Math.abs(x - out[i]), i] as const).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+  if (!out.length) return out;
   const step = Math.sign(left);
+  // The Rappen left go to the parts furthest from their target in that direction.
+  const order = targets.map((x, i) => [(x - out[i]) * step, i] as const).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
   for (let k = 0; left !== 0; k++) { out[order[k % order.length][1]] += step; left -= step; }
   return out;
+}
+
+/** `total` (Rappen) over `weights` in proportion to their size; the parts add up to `total` exactly. */
+export function apportion(total: number, weights: readonly number[]): number[] {
+  const sum = weights.reduce((a, b) => a + Math.abs(b), 0);
+  return sum === 0 ? weights.map(() => 0) : distribute(total, weights.map((w) => (total * Math.abs(w)) / sum));
 }
 
 /**
@@ -83,8 +91,11 @@ export function priced(doc: Priced): { parts: Part[]; amounts: Array<number | un
     }
     const base = [...groups.values()];
     const sum = base.reduce((s, p) => s + p.rappen, 0);
-    const total = l.percent !== undefined ? -toRappen(fromRappen(sum) * l.percent / 100) : -toRappen(l.amount ?? 0) * Math.sign(sum);
-    const shares = apportion(total, base.map((p) => p.rappen));
+    // A percent takes its share of each group, with the group's sign (a deposit taken back shrinks too); an
+    // amount is spread by the groups' size, so positions that nearly cancel never blow it up.
+    const shares = l.percent !== undefined
+      ? distribute(-toRappen(fromRappen(sum) * l.percent / 100), base.map((p) => -p.rappen * l.percent! / 100))
+      : apportion(-toRappen(l.amount ?? 0) * (Math.sign(sum) || 1), base.map((p) => p.rappen));
     base.forEach((p, k) => { if (shares[k]) parts.push({ ...p, rappen: shares[k] }); });
     return fromRappen(shares.reduce((s, x) => s + x, 0));
   });
@@ -256,7 +267,7 @@ export interface Missing { field: MissingField; line?: number }
 export type MissingField =
   | 'sender.name' | 'sender.address' | 'sender.uid' | 'payTo'
   | 'customer' | 'customer.name' | 'customer.address'
-  | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.price' | 'line.vatRate' | 'line.activity' | 'line.discount' | 'line.discountBase' | 'exemption'
+  | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.price' | 'line.vatRate' | 'line.activity' | 'line.discount' | 'line.discountBase' | 'exemption' | 'total'
   | 'credit.invoice' | 'credit.sign' | 'credit.exceeds';
 
 const hasAddress = (a: { postcode?: string; town?: string; country?: string } | undefined) => !!(a?.postcode?.trim() && a.town?.trim() && a.country?.trim());
@@ -292,9 +303,12 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
       return;
     }
     if (!isItem(l)) return;
-    if (!Number.isFinite(l.quantity) || !Number.isFinite(l.price) || (l.discount !== undefined && !Number.isFinite(l.discount))) out.push({ field: 'line.quantity', line });
+    if (!Number.isFinite(l.quantity) || !Number.isFinite(l.price)) out.push({ field: 'line.quantity', line });
+    if (l.discount !== undefined && !(l.discount >= 0 && l.discount <= 100)) out.push({ field: 'line.discount', line });
     if (!invoiceRates().includes(l.vatRate)) out.push({ field: 'line.vatRate', line });
   });
+  // An invoice asks for money: a QR-bill carries no amount below zero (SIX IG), so a Rabatt over the total is refused, not warned of.
+  if (draft.kind === 'invoice' && items.length && totals(draft).gross <= 0) out.push({ field: 'total' });
   // A firm not registered charges no VAT: a line at 0 % needs no reason.
   if (chargesVat() && items.some((l) => l.vatRate === 0) && !draft.exemption) out.push({ field: 'exemption' });
   if (draft.kind === 'credit-note') {
@@ -316,10 +330,9 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
  * e: it prints as 0.00), and a Rabatt with nothing above it to take off.
  */
 export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'>): Missing[] {
-  const amounts = priced(draft).amounts;
   return draft.lines.flatMap((l, line): Missing[] => {
-    // A Rabatt with its value that takes nothing: no position above it.
-    if (l.kind === 'discount') return (l.percent || l.amount) && amounts[line] === 0 ? [{ field: 'line.discountBase', line }] : [];
+    // A Rabatt with no item above it takes nothing.
+    if (l.kind === 'discount') return draft.lines.slice(0, line).some(isItem) ? [] : [{ field: 'line.discountBase', line }];
     if (!isItem(l)) return [];
     return [
       ...(!l.text.trim() ? [{ field: 'line.text' as const, line }] : []),
