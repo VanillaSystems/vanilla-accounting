@@ -85,7 +85,7 @@ test('Dokumente: the year\'s figures, a Lohnausweis issued and its PDF, the tabl
   assert.equal(docs.status, 200);
   const people = docs.json.people as Array<{ employee: string; lohnausweis: { fields: Record<string, number>; openMonths: string[] } }>;
   assert.ok(people.find((p) => p.employee === 'e1')!.lohnausweis.fields['8'] > 0);
-  const issued = await api.send('POST', '/api/payroll/documents/2026/lohnausweis', { employee: 'e1' });
+  const issued = await api.send('POST', '/api/payroll/documents/2026/lohnausweis', { employee: 'e1', confirm: true });
   assert.equal(issued.status, 200);
   const pdf = await api.fetch(`/payroll/documents/2026/lohnausweis/${issued.json.id as string}.pdf`);
   assert.equal(pdf.headers.get('content-type'), 'application/pdf');

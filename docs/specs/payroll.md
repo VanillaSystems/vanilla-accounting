@@ -1612,6 +1612,9 @@ non-obvious decision is recorded here when it is taken.
     number): the free federal tool's import format was not verified, so the table is what a person or a
     fiduciary types in or maps. The declarations' CSV holds every base of the year as the payslips kept it,
     the ALV and UVG wages as capped.
+    The Lohnausweis's fields are whole francs, each rounded before the sums, so 8 and 11 add up on paper;
+    it is issued once every payslip of the person's year is closed, before only after the warning; a gross
+    Lohnart without a field is named. Daily allowances stay in field 1, as the market maps them.
 22. **The final statement's (Schlussabrechnung) total is entered by the person** off the statement; code
     books its difference to what the payslips accrued (D 57xx / C 227x, or back), ref `LS-<year>-<insurance>`,
     once. Reading the total off the statement's PDF is for the AI on her drop, later.

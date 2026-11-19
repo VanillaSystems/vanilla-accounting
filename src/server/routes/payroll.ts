@@ -18,7 +18,8 @@ import { closedPayslips, issueLohnausweis, lohnausweisSnapshots } from '../../pa
 import { csv, declarationRows, journalOf, lohnausweisOf, lohnkonto } from '../../payroll/documents.js';
 import { firmWageTypes } from '../../payroll/catalogue.js';
 import { nameOf } from '../../payroll/views.js';
-import { valueOn } from '../../core/dated.js';
+import { entriesWithin, valueOn } from '../../core/dated.js';
+import type { PayrollEmployee, PayslipClose } from '../../payroll/model.js';
 import { join } from 'node:path';
 import { idSource, sha256 } from '../../invoices/store.js';
 import { loadPayroll, updatePayroll } from '../../payroll/store.js';
@@ -250,8 +251,7 @@ router.get('/api/payroll/documents/:year', run((req, res) => {
   const canton = valueOn(ctx.store.company.canton, `${year}-12-31`);
   res.json({
     year,
-    people: ctx.store.employees.map((e) => ({ employee: e.id, name: nameOf(e, `${year}-12-31`), lohnausweis: lohnausweisOf(e, closes, types, ctx.data, year, e.language) }))
-      .filter((p) => Object.keys(p.lohnausweis.fields).length || p.lohnausweis.openMonths.length),
+    people: ctx.store.employees.filter((e) => inYear(e, closes, year)).map((e) => ({ employee: e.id, name: nameOf(e, `${year}-12-31`), lohnausweis: lohnausweisOf(e, closes, types, ctx.data, year, e.language) })),
     issued: lohnausweisSnapshots(WS, year).map(({ data: _, ...s }) => s),
     declarations: declarationRows(ctx.store.employees, closes, year),
     lohnkonto: lohnkonto(closes, types, year),
@@ -264,7 +264,9 @@ router.post('/api/payroll/documents/:year/lohnausweis', run(async (req, res) => 
   const year = yearParam(req);
   const b = body(req);
   const kind = b.kind === 'replacement' || b.kind === 'correction' ? b.kind : 'original';
-  const { data: _, ...snap } = await issueLohnausweis(WS, String(b.employee ?? ''), year, kind);
+  const out = await issueLohnausweis(WS, String(b.employee ?? ''), year, kind, new Date().toISOString(), b.confirm === true);
+  if ('issued' in out) return void res.json(out);
+  const { data: _, ...snap } = out;
   res.json(snap);
 }));
 
@@ -272,11 +274,16 @@ router.post('/api/payroll/documents/:year/lohnausweis', run(async (req, res) => 
 router.get('/payroll/documents/:year/lohnausweis/:file', run((req, res) => {
   const m = /^(la_[A-Za-z0-9_-]+)\.pdf$/.exec(String(req.params.file));
   const snap = m && lohnausweisSnapshots(WS, yearParam(req)).find((s) => s.id === m[1]);
-  if (!snap) throw new PayrollRefusal('notFound', 'Kein solcher Lohnausweis.');
-  const bytes = readFileSync(join(WS.paths.root, snap.file));
-  if (sha256(bytes) !== snap.sha256) throw new RequestError(409, `${snap.file}: die Datei passt nicht mehr zu ihrer Prüfsumme.`);
+  const path = snap && join(WS.paths.root, snap.file);
+  if (!snap || !path || !existsSync(path)) throw new PayrollRefusal('notFound', 'Kein solcher Lohnausweis.');
+  const bytes = readFileSync(path);
+  if (sha256(bytes) !== snap.sha256) throw new PayrollRefusal('notFound', `${snap.file}: die Datei passt nicht mehr zu ihrer Prüfsumme.`);
   res.type('application/pdf').send(bytes);
 }));
+
+/** A person the year's documents are for: employed in it, or with a closed payslip of it (a payment after the exit). */
+const inYear = (e: PayrollEmployee, closes: readonly PayslipClose[], year: string) =>
+  closes.some((c) => c.employee === e.id && c.month.startsWith(year)) || entriesWithin(e.employment, `${year}-01-01`, `${year}-12-31`).some((s) => s.entry);
 
 const sendCsv = (res: Response, name: string, text: string) => res.type('text/csv; charset=utf-8').attachment(name).send(`﻿${text}`);
 
@@ -287,7 +294,7 @@ router.get('/payroll/documents/:year/lohnausweis.csv', run((req, res) => {
   const types = firmWageTypes(ctx.data, ctx.store);
   const closes = [...ctx.history.closed.values()];
   const fields = (ctx.data.lohnausweis?.fields ?? []).filter((f) => !f.remark).map((f) => f.key);
-  const rows = ctx.store.employees.map((e) => {
+  const rows = ctx.store.employees.filter((e) => inYear(e, closes, year)).map((e) => {
     const l = lohnausweisOf(e, closes, types, ctx.data, year, e.language);
     return [e.id, nameOf(e, `${year}-12-31`), e.socialSecurityNumber, year, l.from, l.to, ...fields.map((k) => l.fields[k] ?? 0), l.remarks.map((r) => `${r.label} ${r.amount.toFixed(2)}`).join(', ')];
   });
@@ -312,7 +319,8 @@ router.get('/payroll/documents/:year/declarations.csv', run((req, res) => {
   const ctx = payrollContext(WS);
   const rows = declarationRows(ctx.store.employees, [...ctx.history.closed.values()], year);
   const keys = [...new Set(rows.flatMap((r) => Object.keys(r.bases)))].sort();
-  sendCsv(res, `meldungen-${year}.csv`, csv([['id', 'name', 'ssn', 'from', 'to', ...keys], ...rows.map((r) => [r.employee, r.name, ctx.store.employees.find((e) => e.id === r.employee)?.socialSecurityNumber, r.from, r.to, ...keys.map((k) => r.bases[k] ?? 0)])]));
+  const head = (k: string) => `${ctx.data.bases.find((b) => b.key === k.split('|')[0])?.label.de ?? k}${k.includes('|') ? ' (bis Höchstbetrag)' : ''}`;
+  sendCsv(res, `meldungen-${year}.csv`, csv([['id', 'name', 'ssn', 'from', 'to', ...keys.map(head)], ...rows.map((r) => [r.employee, r.name, ctx.store.employees.find((e) => e.id === r.employee)?.socialSecurityNumber, r.from, r.to, ...keys.map((k) => r.bases[k] ?? 0)])]));
 }));
 
 /** The month's Lohnbuchungen as a table, for a fiduciary who keeps the ledger elsewhere. */

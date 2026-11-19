@@ -157,13 +157,15 @@ export function lohnausweisSnapshots(ws: Pick<Workspace, 'paths'>, year: string)
  * Issues the Lohnausweis of `employee` for `year` from her closed payslips: the PDF in the year's payroll
  * folder and its snapshot appended. A second one is a replacement (all figures again) or a correction.
  */
-export async function issueLohnausweis(ws: Workspace, employee: string, year: string, kind: LohnausweisSnapshot['kind'] = 'original', now = new Date().toISOString()): Promise<LohnausweisSnapshot> {
+export async function issueLohnausweis(ws: Workspace, employee: string, year: string, kind: LohnausweisSnapshot['kind'] = 'original', now = new Date().toISOString(), confirm = false): Promise<LohnausweisSnapshot | { issued: false; openMonths: string[] }> {
   const ctx = payrollContext(ws);
   const e = ctx.store.employees.find((x) => x.id === employee);
   if (!e) throw new PayrollRefusal('notFound', `Keine Person ${employee}.`);
   const types = firmWageTypes(ctx.data, ctx.store);
   const closes = [...ctx.history.closed.values()];
   const data = lohnausweisOf(e, closes, types, ctx.data, year, e.language);
+  // Ready once every payslip of the person's year is closed (§6.7); before, only after the warning, and the snapshot names the open months.
+  if (data.openMonths.length && !confirm) return { issued: false, openMonths: data.openMonths };
   const day = now.slice(0, 10);
   const settings = valueOn(ctx.store.company.lohnausweis, `${year}-12-31`);
   const name = valueOn(e.name, `${year}-12-31`) ?? e.name.at(-1)?.value;
@@ -171,20 +173,24 @@ export async function issueLohnausweis(ws: Workspace, employee: string, year: st
   const earlier = lohnausweisSnapshots(ws, year).filter((s) => s.employee === employee);
   const last = earlier.at(-1);
   const words = ctx.data.lohnausweis?.[kind === 'correction' ? 'corrects' : 'replaces'];
-  const note = last && words ? (words[e.language] ?? words.de).replace('{date}', new Intl.DateTimeFormat(`${e.language}-CH`, { timeZone: 'UTC' }).format(new Date(last.issuedAt))) : undefined;
+  const dd = (d: string) => new Intl.DateTimeFormat(`${e.language}-CH`, { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${d.slice(0, 10)}T00:00:00Z`));
+  const note = last && words ? (words[e.language] ?? words.de).replace('{date}', dd(last.issuedAt)) : undefined;
+  const rules = settings?.expenseRules && ctx.data.lohnausweis?.expenseRules;
+  const rulesText = rules ? (rules[e.language] ?? rules.de).replace('{canton}', settings!.expenseRules!.canton).replace('{date}', dd(settings!.expenseRules!.approvedOn)) : undefined;
+  const remarks = [rulesText, settings?.remarks].filter(Boolean).join('; ');
   const pdf = await lohnausweisPdf({
     data, language: e.language,
     person: { name: name ? `${name.first} ${name.last}` : e.id, ...(address ? { address } : {}), ...(e.socialSecurityNumber ? { socialSecurityNumber: e.socialSecurityNumber } : {}), birthDate: e.birthDate },
     firm: { name: ws.company.name, ...(ws.company.address ? { address: ws.company.address } : {}), ...(ctx.store.company.contact ? { contact: ctx.store.company.contact } : {}) },
-    boxes: { F: !!settings?.transportF, G: !!settings?.canteenG }, ...(settings?.remarks ? { remarks: settings.remarks } : {}),
+    boxes: { F: !!settings?.transportF, G: !!settings?.canteenG }, ...(remarks ? { remarks } : {}),
     place: ws.company.address?.town ?? '', day, ...(note ? { note } : {}),
   }, ctx.data);
   const id = `la_${idSource.bytes(6).toString('hex')}`;
   const dir = yearPaths(ws.paths, year).payroll;
-  const file = join(dir, `lohnausweis-${year}-${employee}-${earlier.length + 1}.pdf`);
+  // Named by the snapshot's id: two issues at once never write one file.
+  const file = join(dir, `lohnausweis-${year}-${employee}-${id}.pdf`);
   writeAtomic(file, pdf);
-  const snap: LohnausweisSnapshot = { id, employee, year, kind: earlier.length ? kind : 'original', issuedAt: now, data, file: relative(ws.paths.root, file), sha256: sha256(pdf) };
-  mkdirSync(dir, { recursive: true });
+  const snap: LohnausweisSnapshot = { id, employee, year, kind: !earlier.length ? 'original' : kind === 'original' ? 'replacement' : kind, issuedAt: now, data, file: relative(ws.paths.root, file), sha256: sha256(pdf) };
   appendFileSync(snapshotsFile(ws, year), JSON.stringify(snap) + '\n');
   return snap;
 }
