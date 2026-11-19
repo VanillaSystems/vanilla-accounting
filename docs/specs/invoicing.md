@@ -1,6 +1,7 @@
 # Spec: invoicing (Verkauf) after the market leader's approach
 
-Status: rewritten 2026-11-19, on `0.6.0`. The owner decided that day that invoicing follows the
+Status: decided 2026-11-19, on `0.6.0` (owner questions O1 to O4 answered the same day, section 7;
+the sent state made visible at a glance, 4.8). The owner decided that day that invoicing follows the
 concept of the Swiss market leader closely, because «many in Switzerland are used to that
 concept». This version replaces the concept of 2026-11-14/15: the documents, their chain, the
 statuses, the terms and the phases now follow the market leader's way of working, with Swiss
@@ -206,7 +207,7 @@ The app and its documents use these names. The code names are those of `src/invo
 - **Rights per document kind and «own records only».** Roles stay as ADR 0010 says until
   collaboration (ADR 0003) ships.
 - **Debitoren in the books during the year on the cash basis.** The cash basis keeps booking revenue
-  at payment, as built (section 8, owner question O2).
+  at payment, as built (section 8, decision 19).
 
 ### 4.3 Data model additions
 
@@ -309,7 +310,7 @@ Every status but the two of a quote's customer is a fact. The list tabs and chip
 | | Storniert | cancelled with date and reason; refused while an issued Rechnung of it stands, warned while a Lieferschein does |
 | Lieferschein | Entwurf, Ausgeführt, Storniert | issued = ausgeführt |
 | Rechnung | Entwurf | not issued |
-| | Offen | issued, nothing received |
+| | Offen | issued, nothing received; «gesendet» or «nicht gesendet» beside it from the sent log (4.8) |
 | | Teilbezahlt | something received, credited or written off, something open |
 | | Bezahlt | nothing open |
 | | Überfällig | Offen or Teilbezahlt past the printed due date (derived; with «N Tage»); the Mahnstufe beside it |
@@ -522,6 +523,8 @@ Every status but the two of a quote's customer is a fact. The list tabs and chip
   end's receivables proposal to the Rappen.
 - **Fakturajournal:** every position of the issued Rechnungen and Gutschriften of a period, to CSV.
 - **Export** of every list (current tab, filter and search) to CSV.
+- **Versendet:** the sent log as a list of its own (date and time, document, kind, recipient,
+  channel, checksum), filterable by contact, kind and channel; each row links to its document.
 
 ### 4.5 How each event is booked
 
@@ -611,14 +614,29 @@ The new UI's rules apply (`docs/redesign/architecture.md`, AGENTS.md «UI links�
   Abgelehnt · Abgelaufen». Aufträge: «Alle · Entwürfe · Offen · Teilweise · Erledigt · Abos».
   Gutschriften: «Alle · Entwürfe · Offen · Abgerechnet». «Eigene Filter» saved from a tab and a search,
   a viewer's preference. One line of facts above the table: what is open and overdue, per currency.
-  Columns of Rechnungen: Datum · Nr. · Kontakt (with the title) · Status · Fällig · Währung · Brutto ·
-  Offen · gesendet · Mahnstufe; of Aufträge: Datum · Nr. · Kontakt · Status · geliefert · verrechnet ·
+  Columns of Rechnungen: Datum · Nr. · Kontakt (with the title) · Status · Versand · Fällig · Währung ·
+  Brutto · Offen · Mahnstufe; of Aufträge: Datum · Nr. · Kontakt · Status · geliefert · verrechnet ·
   Brutto · nächste Rechnung (Abo). Every column sorts; amounts right-aligned in tabular figures; EUR
   rows with their CHF value in muted text; a totals row for the current tab, filter and search. Ticked
   rows get a bulk bar: «Mahnen», «PDF», «Senden», «Export CSV», «Als Kontext an die KI», each dialog
   naming what it leaves out and why. «⋯» on a row: Öffnen, PDF, Senden, the next Mahnung, the
   conversions, Als Entwurf kopieren. Page size 50, the rest named. ↑ ↓ move through the rows while a
   document is open.
+- **The sent state at a glance** (owner, 2026-11-19). The owner found it hard today to see what has
+  been sent. Every document table therefore shows it from the sent log, never set by hand:
+  - The status chip reads «Offen · gesendet» or «Offen · nicht gesendet» on an issued document; the
+    other statuses (Entwurf, Teilbezahlt, Bezahlt, Überfällig, Storniert) carry the same mark.
+  - A column «Versand»: the last send's date and channel («12.11.2026 · E-Mail», «03.11.2026 ·
+    Download», later «eBill»), a dash when never sent; on hover every send with time and recipient.
+    For a Rechnung with Mahnungen it also names the last Mahnung sent («2. Mahnung 18.11.»).
+  - A filter tab «Nicht gesendet» beside the status tabs of each kind: issued documents with no entry
+    in the sent log, counted and summed like any tab. The bulk bar on it offers «Senden».
+  - On the detail, the margin's section «Versand» lists every send of the document and of its
+    Mahnungen and instalment notices: time, recipient(s), CC, channel, Message-ID or download, the
+    PDF's checksum, each PDF openable as it went out. Above the sheet the four figures carry a fifth
+    fact, «gesendet am … an …» or «noch nicht gesendet» with «Senden».
+  - A document sent outside the app is first downloaded; the download is its entry (channel
+    «Download»). There is no click «als gesendet markieren».
 - **Table and detail: layout A** (decided 2026-11-15): the table full width; a row opens the document
   as a panel over the right part of the table; Esc or «×» closes it. AGENTS.md names these views as
   the exception to the list + detail rule when built.
@@ -715,7 +733,7 @@ Kept as hard rules, each for its reason:
   filed quarter changes. «Zurück zum Entwurf» is refused when the Rechnung's `RE-` entry lies in a filed
   period.
 - **A sent Rechnung or Gutschrift is kept as sent** (OR Art. 958f, GeBüV, MWSTG Art. 27 Abs. 2): never
-  changed in place, deleted or printed again; Gutschrift and Storno are the ways on (owner question O1).
+  changed in place, deleted or printed again; Gutschrift and Storno are the ways on (decision 18).
 - **Who issues on which device** (decision 7.4): two devices issuing would give one number twice.
 - **Security boundaries:** the SMTP password, the mailbox, a workspace's private data.
 
@@ -796,6 +814,8 @@ Scope:
   rate), Seitenumbruch, discount % per position; **prices incl. or excl. VAT per document**; **units**
   as the firm's list (m², m, m³, l, kg, Mt. added).
 - **Offene Posten** (by contact, age bands, printable, CSV).
+- **The sent state at a glance** (4.8): the chip mark, the «Versand» column, the tab «Nicht gesendet»,
+  the margin's «Versand» section and the «Versendet» list, all from the sent log.
 - F2; the warnings of 4.11 this phase touches; the `invoicing:` section in the three demos that lack it.
 - One `invoices.json` step (2→3: line kinds, `prices`, `activity`, `payments.source`, `allocations`,
   `writeOffs`, `terms`) and one manifest step (units, Zahlungskonditionen, write-off accounts, limit).
@@ -805,7 +825,8 @@ declared on money never received; F3 books the wrong rate. The Ausziffern dialog
 are what users of the market leader use daily after the invoice, so they come before the work before
 the invoice. The golden figures of the existing demos stay.
 
-Acceptance (persona `invoices.md`, Sandra, the consultant, the Schreinerei, the Treuhänderin):
+Acceptance (persona `invoices.md`, Sandra, the consultant, the Schreinerei, the Treuhänderin). The
+Treuhänderin also walks P1.2 to P1.11 by hand, no AI asked; each scores 2 only if she can:
 
 | # | Checkpoint | 2 means |
 |---|---|---|
@@ -819,8 +840,8 @@ Acceptance (persona `invoices.md`, Sandra, the consultant, the Schreinerei, the 
 | P1.8 | Gutschrift for 2 of 10 m² from a Rechnung | applied to that Rechnung at once; the Gutschrift reads «Abgerechnet»; the four figures show it under «gutgeschrieben»; on the cash basis the payment of the rest books revenue less the Gutschrift's positions with the minus code |
 | P1.9 | Schreinerei with two net rates (#504) | a position of the second activity books F2; the half year's form shows it in the second rate's row (333; the box numbers are marked uncertain in AGENTS.md) |
 | P1.10 | Offene Posten on 31.12. | equals the year end's receivables proposal to the Rappen; prints and exports |
-| P1.11 | Storno of a paid Rechnung | a warning with the payment, the rule and what follows; «Gutschrift statt Storno» offered; «Trotzdem stornieren» leaves the payment unmatched; the log holds it as an ordinary entry |
-| P1.12 | Treuhänderin without AI | P1.2 to P1.10 done by hand, no AI asked |
+| P1.11 | Eight issued Rechnungen, five sent by mail, one downloaded, two not sent | the tab «Nicht gesendet» shows the two with count and total; «Versand» shows date and channel for the six; the detail lists each send with recipient and checksum; nothing was set by hand |
+| P1.12 | Storno of a paid Rechnung | a warning with the payment, the rule and what follows; «Gutschrift statt Storno» offered; «Trotzdem stornieren» leaves the payment unmatched; the log holds it as an ordinary entry |
 
 ### Phase 2: Angebot, Auftrag, Lieferschein, Artikel, Kontakte
 
@@ -979,6 +1000,19 @@ listed here and updated with phase 2's build:
 16. **Invoicing follows the market leader's concept closely.** Documents, chain, statuses, terms and
     phases as in sections 4 and 5. Kept from our own: statuses from facts, numbers at issue, the
     cash- and agreed-basis bookings as built, golden rule 1, warn-then-decide, MISSION.md, ADR 0015.
+17. **An open point follows the market leader.** «If you have a question, look at how [the market
+    leader] does it»: any open point of this spec is settled by the market leader's way (internal
+    research), unless it breaks golden rule 1, warn-then-decide or «everything doable without the AI».
+    The public repo never names it or copies its wording.
+18. **O1 (back to draft):** ours is kept. Only before sending; a sent Rechnung is cancelled or
+    credited.
+19. **O2 (Debitoren on the cash basis):** kept as built. The cash basis books no Debitoren at issue; the
+    agreed basis does (`RE-<n>`).
+20. **O3 (time):** Leistungen without a timer or budgets are enough for now.
+21. **O4 (Lieferschein):** only from an Auftrag.
+22. **The sent state at a glance** (4.8): status mark, «Versand» column with date and channel, the tab
+    «Nicht gesendet», the send history on the detail and the «Versendet» list, all from the sent log,
+    never set by hand; built in phase 1.
 
 ---
 
@@ -1004,6 +1038,7 @@ listed here and updated with phase 2's build:
 | C16 | One layout per firm | Several Vorlagen, texts per kind and language, a fixed attachment, e-mail templates, several recipients and CC | As in the market leader's sales |
 | C17 | Phases: 1 correct and closed (incl. dated values), 2 quotes and partial invoices, 3 recurring, hours, articles, 4 dunning run, currencies, import, channels | 1 correct and closed in the market leader's terms; 2 Angebot, Auftrag, Lieferschein, Artikel, Kontakte; 3 Teilrechnungen, Mahnwesen, Vorlagen, dated values; 4 Abos, Leistungen, Spesen, Kundenguthaben, Quittung; 5 currencies, switch, channels | Phase 1 stays the fixes plus what users of the market leader use after every invoice; the Mahnlauf moves from 4 to 3; dated values from 1 to 3 (only `Issued.terms` stays in 1, for Skonto) |
 | C18 | Overpayment not handled | Kundenguthaben on 2030, applied to the next Rechnung or paid back | The market leader books a surplus as customer credit |
+| C19 | A tick «gesendet» column, its detail on hover only | The sent state at a glance: chip mark, «Versand» with date and channel, tab «Nicht gesendet», send history in the margin, «Versendet» list; phase 1 | The owner (2026-11-19): it is hard today to see what has been sent. The market leader shows it per document; here it stays a fact of the sent log |
 
 **Not taken from the market leader, each for its reason** (the internal synthesis has the detail):
 
@@ -1012,9 +1047,9 @@ listed here and updated with phase 2's build:
 - **Entries into a filed VAT quarter**, which the market leader allows after a quarter is marked billed,
   so that late VAT appears in no return: here golden rule 1 refuses them; corrections go into the open
   period and form 0535.
-- **A sent invoice back to draft:** here only an unsent one (owner question O1).
+- **A sent invoice back to draft:** here only an unsent one (decision 18).
 - **Debitoren on 1100 all year on the cash basis:** here the cash basis books at payment as built
-  (owner question O2).
+  (decision 19).
 - **Reminder fees as a separate invoice or by rewriting the invoice:** here the fee is on the Mahnung
   and booked when paid.
 - **A bad debt written off against revenue:** here against Verluste aus Forderungen with the VAT
@@ -1023,20 +1058,13 @@ listed here and updated with phase 2's build:
 - **A timer, project budgets, stock, online view with read tracking, payment links, rights per
   kind:** non-goals (4.2).
 
-### Questions for the owner
+### Owner questions, answered (2026-11-19)
 
-- **O1 A sent Rechnung back to draft.** The market leader allows it while unpaid. The spec allows it only
-  before sending: after sending, the customer holds a document that would differ from the books under
-  the same number, and on a VAT invoice the tax shown is owed until corrected (MWSTG Art. 27 Abs. 2). A
-  middle way would be a new version «ersetzt Version vom …», sent again, with the old one kept in the
-  sent log. Keep the rule, or allow the new version?
-- **O2 Debitoren in the books on the cash basis.** The market leader books every invoice on 1100 at issue
-  and reports VAT by payment. The app on the cash basis books at payment and shows open invoices in
-  Offene Posten and at year end. Taking the market leader's way changes how the cash-basis return is
-  derived and every golden figure. Kept as built unless the owner wants it.
-- **O3 Time tracking.** The spec takes the Leistungen and their billing, not a timer or budgets. Enough?
-- **O4 Lieferschein only from an Auftrag.** Taken from the market leader; the webshop makes an Auftrag
-  first. Keep?
+- **O1 A sent Rechnung back to draft:** no. Only before sending; a sent one is cancelled or credited
+  (decision 18).
+- **O2 Debitoren in the books on the cash basis:** kept as built (decision 19).
+- **O3 Time tracking:** Leistungen without timer or budgets are enough for now (decision 20).
+- **O4 Lieferschein only from an Auftrag:** yes (decision 21).
 
 ## Sources
 
