@@ -453,6 +453,8 @@ test('two Nachzahlungen: the later one, computed while the earlier is open, says
   store.monthLines = [bonusIn('2027-02', 500), bonusIn('2027-03', 500)];
   const mar = computePayslip({ data: ch.payroll!, years, store, history: historyOf(events) }, 'p1', '2027-03')!;
   assert.ok(mar.facts.some((f) => f.key === 'earlierOpen' && f.vars?.month === '2027-02'));
+});
+
 test('walk 3: the entry fact names the pension fund only for a person it insures (§22 decision 107)', () => {
   const at = (amount: number, more: Partial<PayrollEmployee> = {}) => computePayslip(ctxOf(firm([staff('j1', { employment: [dated('2026-03-10', monthly(amount))], ...more })])), 'j1', '2026-03')!;
   const below = at(1500);
