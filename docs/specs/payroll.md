@@ -1784,6 +1784,14 @@ merge:
      description code writes («Zahlung …», «Schlussabrechnung …»). The payslip, its PDF and the forms speak
      the person's or the UI's language; the preview of a draft shows the texts closing will book, not a
      translation of them.
+122. **A Lohnart's rate may be entered in percent, with a default, and its missing input says a sentence of its own**,
+     all data (`units: { rate: percent }`, `defaults: { rate: 0.9 }`, `missing` in payroll.yaml, checked by
+     check-payroll): the company car is typed «0.9» under «Satz % pro Monat», prefilled, and kept as the fraction
+     the payslip computes with (0.009: price × 0.9 %), so a stored value and every computed figure stay as they
+     were. The payslip, its PDF and the forms show it as «0.90 %». A car without its price reads «Kaufpreis des
+     Fahrzeugs (ohne MWST) fehlt». The month's «Lohnart hinzufügen» and a person's «Wiederkehrende Lohnart»
+     share one set of fields (src/app/areas/payroll/inputs.ts), and a refusal names the field by the word the
+     form shows («Kaufpreis ohne MWST», not «Menge»).
 
 ---
 

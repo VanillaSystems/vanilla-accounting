@@ -376,6 +376,12 @@ export interface WageTypeDef {
   input?: 'amount' | 'quantity';
   /** What its inputs are called in the form and in the line «unvollständig» («Kaufpreis» for a quantity); absent: the app's words. */
   inputs?: Partial<Record<'quantity' | 'rate' | 'amount', Labels>>;
+  /** The unit an input is entered and shown in: `percent` (a car's 0.9 % a month); the line computes with the fraction (0.009). */
+  units?: { rate?: 'percent' };
+  /** What the forms prefill, in the unit they show (0.9 for 0.9 %). */
+  defaults?: { quantity?: number; rate?: number };
+  /** The sentence a line «unvollständig» says when that input is missing («Kaufpreis des Fahrzeugs (ohne MWST) fehlt»); absent: «<its word> fehlt». */
+  missing?: Partial<Record<'quantity' | 'rate' | 'amount', Labels>>;
   computes?: WageTypeComputes;
 }
 

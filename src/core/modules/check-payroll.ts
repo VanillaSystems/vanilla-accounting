@@ -60,6 +60,17 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
       if (!['quantity', 'rate', 'amount'].includes(k)) add(F, `${at}.inputs.${k}`, 'an input is quantity, rate or amount');
       labels(F, `${at}.inputs.${k}`, l);
     }
+    for (const [k, u] of Object.entries(w.units ?? {})) {
+      if (k !== 'rate' || u !== 'percent') add(F, `${at}.units.${k}`, 'only the rate has a unit, and it is percent');
+    }
+    for (const [k, v] of Object.entries(w.defaults ?? {})) {
+      if (!['quantity', 'rate'].includes(k) || typeof v !== 'number' || !Number.isFinite(v)) add(F, `${at}.defaults.${k}`, 'a default is a number for quantity or rate');
+    }
+    for (const [k, l] of Object.entries(w.missing ?? {})) {
+      if (!['quantity', 'rate', 'amount'].includes(k)) add(F, `${at}.missing.${k}`, 'an input is quantity, rate or amount');
+      labels(F, `${at}.missing.${k}`, l);
+    }
+    if ((w.units || w.defaults) && w.input !== 'quantity') add(F, at, 'units and defaults are for a Lohnart entered as quantity × rate');
     if (w.sign !== '+' && w.sign !== '-') add(F, `${at}.sign`, 'is + or -');
     for (const b of w.bases ?? []) if (!bases.has(b)) add(F, `${at}.bases`, `base "${b}" does not exist`);
     if (w.side === 'employer' && (w.gross || w.bases.length)) add(F, at, 'an employer line counts for no gross and no base');

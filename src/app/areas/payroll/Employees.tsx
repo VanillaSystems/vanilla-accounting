@@ -21,6 +21,8 @@ import { at, Go, payslipAt, settingsAt, Tabs, useRefusal, type PayrollRoute } fr
 import { useHandover } from '../../handover/store.js';
 import { DatedField, Fields, numberOf, numText, useBackdated, type FieldDef, type Form, type ValueSpec } from './Dated.js';
 import { data, kindLabel, labelOf, monthShort, monthText, statusText } from './words.js';
+import { calcText, fieldWord, inputDefaults, inputFields, inputForm, inputValue, switchedTo } from './inputs.js';
+import type { WageTypeDef } from '../../../core/modules/schema.js';
 
 type Props = AreaProps<PayrollRoute>;
 export const listedEmployees: { ids: string[] } = { ids: [] };
@@ -195,13 +197,13 @@ const insuranceSpec = (insurances: readonly PayrollInsurance[]): ValueSpec<Perso
   },
 });
 
-const recurringSpec = (quantity: boolean): ValueSpec<{ amount?: number; quantity?: number; rate?: number; text?: string }> => ({
-  fields: quantity
-    ? [{ k: 'quantity', label: t('payroll.field.quantity'), type: 'number' }, { k: 'rate', label: t('payroll.field.unitRate'), type: 'number' }, { k: 'text', label: t('payroll.field.text'), wide: true }]
-    : [{ k: 'amount', label: t('payroll.field.amount'), type: 'number', hint: t('payroll.field.recurringEnd') }, { k: 'text', label: t('payroll.field.text'), wide: true }],
-  from: (v) => ({ amount: numText(v?.amount), quantity: numText(v?.quantity), rate: numText(v?.rate), text: s(v?.text) }),
-  to: (f) => (quantity ? { quantity: numberOf(f.quantity), rate: numberOf(f.rate), text: f.text } : { amount: numberOf(f.amount), text: f.text }),
-  show: (v) => <><span className="mono">{v.amount !== undefined ? fmt(v.amount) : `${v.quantity} × ${fmt(v.rate ?? 0)}`}</span>{v.text ? ` · ${v.text}` : ''}{v.amount === 0 ? <span className="m"> · {t('payroll.employee.recurringEnded')}</span> : null}</>,
+/** A recurring Lohnart's value: the same inputs, words, unit and defaults as the month's form (inputs.ts). */
+const recurringSpec = (w: WageTypeDef | undefined): ValueSpec<{ amount?: number; quantity?: number; rate?: number; text?: string }> => ({
+  fields: [...inputFields(w, { amountHint: t('payroll.field.recurringEnd') }), { k: 'text', label: t('payroll.field.text'), wide: true }],
+  from: (v) => ({ ...inputForm(w, v), text: s(v?.text) }),
+  to: (f) => ({ ...inputValue(w, f), text: f.text }),
+  show: (v) => <><span className="mono">{v.amount !== undefined ? fmt(v.amount) : calcText(w, v.quantity, v.rate)}</span>{v.text ? ` · ${v.text}` : ''}{v.amount === 0 ? <span className="m"> · {t('payroll.employee.recurringEnded')}</span> : null}</>,
+  fieldWord: fieldWord(w),
 });
 
 // ─── the opening (a start here mid-year, §22 decision 43) ─────────────────────
@@ -317,7 +319,7 @@ function Person({ d, settings, nav, canEdit }: Props & { d: EmployeeDetail; sett
       <Section title={t('payroll.sec.recurring')}>
         {e.recurring.length ? e.recurring.map((r) => {
           const w = types.get(r.wageType);
-          return <DatedField key={r.wageType} label={labelOf(w?.label, r.wageType)} path={`${base}/recurring/${r.wageType}`} history={r.value} spec={recurringSpec(w?.input === 'quantity')} {...common} />;
+          return <DatedField key={r.wageType} label={labelOf(w?.label, r.wageType)} path={`${base}/recurring/${r.wageType}`} history={r.value} spec={recurringSpec(w)} {...common} />;
         }) : <p className="m">{t('payroll.employee.noRecurring')}</p>}
         {canEdit ? <AddRecurring e={e} settings={settings} defaultFrom={d.defaultFrom} nav={nav} /> : null}
       </Section>
@@ -503,10 +505,11 @@ function AddRecurring({ e, settings, defaultFrom, nav }: { e: EmployeeDetail['em
   const [open, setOpen] = useState(false);
   const options = settings.wageTypes.filter((w) => !w.computes && !e.recurring.some((r) => r.wageType === w.key))
     .map((w) => [w.key, `${labelOf(d?.groups.find((g) => g.key === w.group)?.label)} · ${labelOf(w.label, w.key)}`] as const);
-  const [f, setF] = useState<Form>({ wageType: options[0]?.[0] ?? '', validFrom: defaultFrom });
-  const w = settings.wageTypes.find((x) => x.key === f.wageType);
-  const spec = recurringSpec(w?.input === 'quantity');
-  const card = useBackdated(nav);
+  const typeOf = (key: string) => settings.wageTypes.find((x) => x.key === key);
+  const [f, setF] = useState<Form>(() => ({ wageType: options[0]?.[0] ?? '', validFrom: defaultFrom, ...inputDefaults(typeOf(options[0]?.[0] ?? '')) }));
+  const w = typeOf(f.wageType);
+  const spec = recurringSpec(w);
+  const card = useBackdated(nav, undefined, spec.fieldWord);
   const save = async (ev: FormEvent) => {
     ev.preventDefault();
     await card.send((how) => payrollApi.addEntry({ path: `employees/${e.id}/recurring/${f.wageType}`, validFrom: f.validFrom, value: spec.to(f) }, how), () => setOpen(false));
@@ -515,7 +518,7 @@ function AddRecurring({ e, settings, defaultFrom, nav }: { e: EmployeeDetail['em
   return (
     <>
       <AsyncForm className="form inline pform" onSubmit={save}>
-        <Fields fields={[{ k: 'wageType', label: t('payroll.field.wageType'), type: 'select', options, wide: true }, ...spec.fields, { k: 'validFrom', label: t('payroll.dated.validFrom'), type: 'date' }]} f={f} set={setF} />
+        <Fields fields={[{ k: 'wageType', label: t('payroll.field.wageType'), type: 'select', options, wide: true }, ...spec.fields, { k: 'validFrom', label: t('payroll.dated.validFrom'), type: 'date' }]} f={f} set={(next) => setF(switchedTo(f, next, typeOf(next.wageType)))} />
         <div className="acts"><AsyncButton type="submit" className="btn primary">{t('common.save')}</AsyncButton><button type="button" className="btn ghost" onClick={() => setOpen(false)}>{t('common.cancel')}</button></div>
       </AsyncForm>
       {card.node}

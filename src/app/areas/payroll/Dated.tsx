@@ -28,6 +28,8 @@ export interface ValueSpec<T> {
   from(v: T | undefined): Record<string, string>;
   to(f: Record<string, string>): unknown;
   show(v: T): ReactNode;
+  /** A refusal's field by the word this form shows it with (src/app/areas/payroll/inputs.ts fieldWord). */
+  fieldWord?(field: string): string | undefined;
 }
 
 export type Form = Record<string, string>;
@@ -70,10 +72,10 @@ export function numberOf(s: string | undefined): number | undefined {
 export const numText = (n: number | undefined): string => (n === undefined ? '' : String(n));
 
 /** The card of §19.3 and the ways on; `act` sends the change again with the chosen way. */
-export function useBackdated(nav: Nav, kind?: string) {
+export function useBackdated(nav: Nav, kind?: string, fieldWord?: (field: string) => string | undefined) {
   const [card, setCard] = useState<{ res: Extract<Saved, { saved: false }>; retry(how: Backdated): Promise<Saved>; done?(): void } | null>(null);
   // A refusal stays in the page beside the form, never only a toast.
-  const refusal = useRefusal();
+  const refusal = useRefusal(fieldWord);
   const finish = async (r: Saved, done?: () => void) => {
     if (!r.saved) return;
     setCard(null);
@@ -167,7 +169,7 @@ export function DatedField<T>({ label, path, history, spec, today, defaultFrom, 
   const [edit, setEdit] = useState(false);
   const [f, setF] = useState<Form>({});
   const [from, setFrom] = useState(defaultFrom);
-  const card = useBackdated(nav, kind);
+  const card = useBackdated(nav, kind, spec.fieldWord);
   const begin = () => { setF(spec.from((ahead.at(-1) ?? now)?.value)); setFrom(defaultFrom); setEdit(true); };
   const key = (e: DatedEntry<T>) => `${path}|${e.validFrom}|${e.enteredAt}`;
 

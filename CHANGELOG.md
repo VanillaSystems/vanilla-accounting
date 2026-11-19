@@ -232,6 +232,10 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Löhne: the company car's rate is typed in percent («Satz % pro Monat», 0.9 prefilled) in both the
+  month's and the recurring form, which now share their fields and words (Kaufpreis / Satz %); the
+  payslip still computes price × 0.009. A missing price reads «Kaufpreis des Fahrzeugs (ohne MWST)
+  fehlt», and a refusal names the field as the form shows it, not «(Menge)».
 - Löhne: a Rückwirkende Korrektur carried into a month is booked as its own entry, «Korrektur 08/2026:
   BVG Arbeitnehmer …», no longer merged into that month's BVG line; the preview shows it the same way.
   A payslip's booking texts are the books' German words for every person (the preview no longer

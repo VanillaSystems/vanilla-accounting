@@ -9,7 +9,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import type { PayrollData } from '../core/modules/schema.js';
 import type { Address } from '../invoices/model.js';
-import type { WageType } from './catalogue.js';
+import { ratePercent, rateShown, type WageType } from './catalogue.js';
 import type { PayrollLanguage, PayslipLine } from './model.js';
 
 export interface PayslipSheet {
@@ -103,7 +103,8 @@ export async function payslipPdf(sheet: PayslipSheet, data: PayrollData, types: 
     const label = l.corrects ? `${words('correction')} ${monthText(lang, l.corrects.slice(0, 7))}: ${l.label}` : l.label;
     text(l.text ? `${label} (${l.text})` : label, left, 9.5);
     if (l.quantity !== undefined && l.rate !== undefined && l.base === undefined) {
-      rightText(num(lang, l.quantity), colBase, 9.5); rightText(num(lang, l.rate), colRate, 9.5);
+      // A rate in percent (a car's 0.9 % a month) prints as such; the line computed with the fraction.
+      rightText(num(lang, l.quantity), colBase, 9.5); rightText(ratePercent(w) ? `${num(lang, rateShown(w, l.rate))} %` : num(lang, l.rate), colRate, 9.5);
     } else {
       if (l.base !== undefined) rightText(money(lang, l.base), colBase, 9.5);
       if (l.rate !== undefined) rightText(`${num(lang, l.rate)} %`, colRate, 9.5);

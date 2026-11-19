@@ -52,3 +52,12 @@ export function resolveAccount(ref: PayrollAccountRef | undefined, data: Payroll
   if (typeof ref === 'string') return ref;
   return insurance?.kind === ref.insurance && insurance.account ? insurance.account : data.insurances[ref.insurance]?.account;
 }
+
+/** Whether a Lohnart's rate is entered and shown in percent (payroll.yaml `units`): a car's 0.9 % a month, computed as 0.009. */
+export const ratePercent = (w: Pick<WageTypeDef, 'units'> | undefined): boolean => w?.units?.rate === 'percent';
+
+/** A stored rate as the forms and the payslip show it: 0.009 as 0.9 where the Lohnart's rate is in percent. */
+export const rateShown = (w: Pick<WageTypeDef, 'units'> | undefined, rate: number): number => (ratePercent(w) ? Number((rate * 100).toPrecision(12)) : rate);
+
+/** A rate as a person typed it, as the payslip computes with it: 0.9 (%) as 0.009 where the Lohnart's rate is in percent. */
+export const rateStored = (w: Pick<WageTypeDef, 'units'> | undefined, typed: number): number => (ratePercent(w) ? Number((typed / 100).toPrecision(12)) : typed);

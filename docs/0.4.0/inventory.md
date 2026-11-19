@@ -77,7 +77,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/books/company.ts` | ESTV 1 |
 | `src/books/year-close.ts` | CHF 2, ESTV 4, camt.053 2 |
 | `src/core/modules/check.ts` | Ziffer 9 |
-| `src/core/modules/schema.ts` | MWST 3, eCH-0217 1 |
+| `src/core/modules/schema.ts` | MWST 4, eCH-0217 1 |
 | `src/types/api-error.ts` | CHF 1, MWST 1, camt.053 4, QR-bill 3 |
 | `src/types/index.ts` | CHF 2, MWST 4, ESTV 3, Ziffer 2, form 0535 2, camt.053 9, Rappen 1 |
 | `src/workspace/bank-statements.ts` | camt.053 7 |

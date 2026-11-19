@@ -22,10 +22,11 @@ import type { AreaProps, Nav } from '../index.js';
 import { payrollApi, reloadPayroll, urls, usePayroll, type Payslip, type PayslipMail, type PayslipSent, type SettingsView } from './data.js';
 import type { MonthView } from '../../../payroll/views.js';
 import { at, Disclaimer, employeeAt, Go, inPeriodOf, MonthSwitch, payslipAt, settingsAt, Tabs, useRefusal, type PayrollRoute } from './common.js';
-import { data, factText, inputLabel, labelOf, lang, localWhen, missingText, monthText, pct, wageTypeLabel, warningText } from './words.js';
+import { data, factText, labelOf, lang, localWhen, missingText, monthText, pct, wageTypeLabel, warningText } from './words.js';
 import { lineSource, sourceText } from '../../../payroll/sources.js';
 import { useHandover } from '../../handover/store.js';
 import { Fields, numberOf, type FieldDef, type Form } from './Dated.js';
+import { calcText, fieldWord, inputDefaults, inputFields, inputValue, switchedTo } from './inputs.js';
 
 type Props = AreaProps<PayrollRoute>;
 
@@ -334,7 +335,7 @@ function Lines({ s, types, employer, insurances }: { s: Slip; types: Map<string,
               {lines.map((l, i) => <LineRow key={i} l={l} w={types.get(l.wageType)} source={sourceOf(l)} />)}
               {miss.map((m, i) => (
                 <div key={`m${i}`} className="pl miss" role="row">
-                  <span className="pt">{wageTypeLabel(m.wageType, m.label, types)}<small>{t('payroll.slip.incomplete')}: {missingText(m.missing, m.wageType, types.get(m.wageType)?.inputs)}{m.days ? ` · ${formatDate(m.days.from)}–${formatDate(m.days.to)}` : ''}</small></span>
+                  <span className="pt">{wageTypeLabel(m.wageType, m.label, types)}<small>{t('payroll.slip.incomplete')}: {missingText(m.missing, m.wageType, types.get(m.wageType))}{m.days ? ` · ${formatDate(m.days.from)}–${formatDate(m.days.to)}` : ''}</small></span>
                   <span className="pb" /><span className="pa mono">—</span>
                 </div>
               ))}
@@ -355,7 +356,7 @@ function Lines({ s, types, employer, insurances }: { s: Slip; types: Map<string,
 
 function LineRow({ l, w, source }: { l: PayslipLine; w?: WageType; source?: string }) {
   const minus = w?.sign === '-' && w.side !== 'employer';
-  const calc = l.quantity !== undefined && l.rate !== undefined && l.base === undefined ? `${fmt(l.quantity).replace(/\.00$/, '')} × ${fmt(l.rate)}`
+  const calc = l.quantity !== undefined && l.rate !== undefined && l.base === undefined ? calcText(w, l.quantity, l.rate)
     : l.base !== undefined && l.rate !== undefined ? `${fmt(l.base)} × ${pct(l.rate)}`
     : '';
   const notes = [
@@ -385,7 +386,7 @@ function MonthLines({ v, types, nav }: { v: Payslip; types: Map<string, WageType
       <ul className="plain">
         {v.monthLines.map((l) => (
           <li key={l.id}>
-            {labelOf(types.get(l.wageType)?.label, l.wageType)} · <span className="mono">{l.amount !== undefined ? fmt(l.amount) : `${l.quantity ?? '…'} × ${l.rate ?? '…'}`}</span>{l.text ? ` · ${l.text}` : ''}
+            {labelOf(types.get(l.wageType)?.label, l.wageType)} · <span className="mono">{l.amount !== undefined ? fmt(l.amount) : calcText(types.get(l.wageType), l.quantity, l.rate)}</span>{l.text ? ` · ${l.text}` : ''}
             {' '}<AsyncButton type="button" className="quiet2" onClick={() => remove(l.id)}>{t('payroll.slip.removeLine')}</AsyncButton>
           </li>
         ))}
@@ -408,13 +409,13 @@ function enterable(types: Map<string, WageType>, withContributions = false): Rea
 function AddLine({ v, types, nav }: { v: Payslip; types: Map<string, WageType>; nav: Nav }) {
   const [open, setOpen] = useState(false);
   const options = enterable(types);
-  const [f, setF] = useState<Form>({ wageType: options[0]?.[0] ?? '' });
+  const fresh = (key: string): Form => ({ wageType: key, ...inputDefaults(types.get(key)) });
+  const [f, setF] = useState<Form>(() => fresh(options[0]?.[0] ?? ''));
   const w = types.get(f.wageType);
-  const refusal = useRefusal();
-  const quantity = w?.input === 'quantity';
+  const refusal = useRefusal(fieldWord(w));
   const fields: FieldDef[] = [
     { k: 'wageType', label: t('payroll.field.wageType'), type: 'select', options, wide: true },
-    ...(quantity ? [{ k: 'quantity', label: inputLabel(f.wageType, 'quantity', w?.inputs) ?? t('payroll.field.quantity'), type: 'number' as const }, { k: 'rate', label: inputLabel(f.wageType, 'rate', w?.inputs) ?? t('payroll.field.unitRate'), type: 'number' as const, hint: w?.hours ? t('payroll.field.rateFromEmployment') : undefined }] : [{ k: 'amount', label: inputLabel(f.wageType, 'amount', w?.inputs) ?? t('payroll.field.amount'), type: 'number' as const }]),
+    ...inputFields(w),
     { k: 'text', label: t('payroll.field.text'), wide: true },
   ];
   const save = async (e: FormEvent) => {
@@ -422,10 +423,10 @@ function AddLine({ v, types, nav }: { v: Payslip; types: Map<string, WageType>; 
     try {
       await payrollApi.addLine({
         employee: v.employee, month: v.month, wageType: f.wageType,
-        ...(quantity ? { quantity: numberOf(f.quantity), ...(numberOf(f.rate) !== undefined ? { rate: numberOf(f.rate) } : {}) } : { amount: numberOf(f.amount) }),
+        ...Object.fromEntries(Object.entries(inputValue(w, f)).filter(([, x]) => x !== undefined)),
         ...(f.text?.trim() ? { text: f.text.trim() } : {}),
       });
-      setOpen(false); setF({ wageType: f.wageType }); refusal.clear();
+      setOpen(false); setF(fresh(f.wageType)); refusal.clear();
       await reloadPayroll();
     } catch (x) { refusal.refuse(x); }
   };
@@ -434,7 +435,7 @@ function AddLine({ v, types, nav }: { v: Payslip; types: Map<string, WageType>; 
     <div className="psec">
       <h3>{t('payroll.slip.addLine')}</h3>
       <AsyncForm className="form inline pform" onSubmit={save}>
-        <Fields fields={fields} f={f} set={setF} />
+        <Fields fields={fields} f={f} set={(next) => setF(switchedTo(f, next, types.get(next.wageType)))} />
         {refusal.node}
         <div className="acts"><AsyncButton type="submit" className="btn primary">{t('payroll.slip.addLineSave')}</AsyncButton><button type="button" className="btn ghost" onClick={() => setOpen(false)}>{t('common.cancel')}</button></div>
       </AsyncForm>

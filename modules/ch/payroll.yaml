@@ -21,6 +21,11 @@
 #   hours        the Lohnart an hourly Anstellung is paid by: its hours entered for the month × the hourly wage
 #   inputs       what the form and the line «unvollständig» call its inputs (quantity, rate, amount), in each
 #                language: «Kaufpreis» rather than «Menge»; absent: the app's words
+#   units        the unit an input is entered and shown in: { rate: percent } (a car's 0.9 % a month); the line
+#                still computes with the fraction (0.9 % of the price is price × 0.009)
+#   defaults     what the forms prefill, in the unit they show: { rate: 0.9 }
+#   missing      the sentence a line «unvollständig» says when that input is missing, in each language;
+#                absent: «<the input's word> fehlt»
 #   computes     how code fills it: monthly (the Anstellung's amount), thirteenth (the 13th salary in its
 #                payout months), contribution (a row of contributions below); absent: entered by a person
 schema: 1
@@ -193,7 +198,7 @@ wageTypes:
   - { key: provision, group: einmalig, label: { de: Provision, fr: Commission, it: Provvigione, en: Commission }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst], lohnausweis: "1", debit: "5000", credit: "1091" }
   - { key: dienstaltersgeschenk, group: einmalig, label: { de: Dienstaltersgeschenk, fr: Cadeau d'ancienneté, it: Regalo per anzianità di servizio, en: Long-service award }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "3", debit: "5000", credit: "1091" }
   # Naturalleistungen: in the gross and the bases, no money paid; booked as wage against the cost they relieve.
-  - { key: privatanteil-fahrzeug, group: natural, label: { de: Privatanteil Geschäftsfahrzeug, fr: Part privée du véhicule de service, it: Quota privata veicolo aziendale, en: Private use of the company car }, sign: "+", gross: true, cash: false, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "2.2", debit: "5000", credit: "6200", input: quantity, inputs: { quantity: { de: Kaufpreis ohne MWST, fr: Prix d’achat hors TVA, it: Prezzo d’acquisto senza IVA, en: Purchase price without VAT }, rate: { de: "Satz pro Monat (0.9 % = 0.009)", fr: "Taux par mois (0,9 % = 0.009)", it: "Aliquota mensile (0,9 % = 0.009)", en: "Rate per month (0.9 % = 0.009)" } } }
+  - { key: privatanteil-fahrzeug, group: natural, label: { de: Privatanteil Geschäftsfahrzeug, fr: Part privée du véhicule de service, it: Quota privata veicolo aziendale, en: Private use of the company car }, sign: "+", gross: true, cash: false, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "2.2", debit: "5000", credit: "6200", input: quantity, inputs: { quantity: { de: Kaufpreis ohne MWST, fr: Prix d’achat hors TVA, it: Prezzo d’acquisto senza IVA, en: Purchase price without VAT }, rate: { de: "Satz % pro Monat", fr: "Taux % par mois", it: "Aliquota % al mese", en: "Rate % per month" } }, units: { rate: percent }, defaults: { rate: 0.9 }, missing: { quantity: { de: Kaufpreis des Fahrzeugs (ohne MWST) fehlt, fr: Prix d’achat du véhicule (hors TVA) manquant, it: Manca il prezzo d’acquisto del veicolo (senza IVA), en: Purchase price of the vehicle (without VAT) missing } } }
   - { key: verpflegung, group: natural, label: { de: Verpflegung, fr: Repas, it: Vitto, en: Meals }, sign: "+", gross: true, cash: false, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "2.1", debit: "5000", credit: "5880" }
   - { key: wohnung, group: natural, label: { de: Unterkunft, fr: Logement, it: Alloggio, en: Housing }, sign: "+", gross: true, cash: false, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "2.3", debit: "5000", credit: "5880" }
   # Ersatzleistungen (phase B1: with the Abwesenheiten)

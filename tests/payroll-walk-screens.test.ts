@@ -83,7 +83,7 @@ test('a missing input of a quantity Lohnart is named for what it lacks: the quan
   assert.deepEqual(d.missing.map((m) => [m.wageType, m.missing]), [['privatanteil-fahrzeug', 'unitRate'], ['ueberstunden', 'quantity']]);
   const car = data.wageTypes.find((w) => w.key === 'privatanteil-fahrzeug')!;
   assert.equal(car.inputs?.quantity?.de, 'Kaufpreis ohne MWST');
-  assert.match(car.inputs?.rate?.de ?? '', /0\.9 %/);
+  assert.equal(car.inputs?.rate?.de, 'Satz % pro Monat', 'typed in percent, 0.9 prefilled (payroll-walk2.test.ts)');
   assert.equal(data.wageTypes.find((w) => w.key === 'stundenlohn')!.inputs?.quantity?.de, 'Stunden');
   const broken = structuredClone(ch);
   broken.payroll!.wageTypes.find((w) => w.key === 'stundenlohn')!.inputs = { quantity: { de: 'Stunden', fr: '', it: 'Ore', en: 'Hours' } };
@@ -98,7 +98,8 @@ test('the UI names an input by its Lohnart\'s word and a Lohnart in the UI\'s la
   const words = readFileSync('src/app/areas/payroll/words.ts', 'utf8');
   assert.match(words, /if \(said\) return t\('payroll\.missing\.input', \{ what: said \}\)/);
   const payslips = readFileSync('src/app/areas/payroll/Payslips.tsx', 'utf8');
-  assert.match(payslips, /inputLabel\(f\.wageType, 'quantity', w\?\.inputs\) \?\? t\('payroll\.field\.quantity'\)/, 'the form calls the car\'s quantity «Kaufpreis»');
+  assert.match(payslips, /\.\.\.inputFields\(w\)/, 'the form calls the car\'s quantity «Kaufpreis»');
+  assert.match(readFileSync('src/app/areas/payroll/inputs.ts', 'utf8'), /inputLabel\(w\.key, 'quantity', w\.inputs\) \?\? t\('payroll\.field\.quantity'\)/);
   assert.match(payslips, /\{w \? labelOf\(w\.label, l\.label\) : l\.label\}/, 'a line in the UI\'s language, not the person\'s');
   assert.match(payslips, /const textOf = \(p: [^)]*\) => p\.text;/, 'the preview shows the books\' words as closing writes them (German data, a correction its own line)');
   for (const lang of ['de', 'fr', 'it', 'en'] as const) assert.equal(typeof data.wageTypes.find((w) => w.key === 'ahv-an')!.label[lang], 'string');
