@@ -22,6 +22,15 @@ Two markers flag an entry you must read before you update:
   together under one number, each as a pair with the shared account (#567).
 - The same form: ⇄ swaps Soll and Haben, and a date typed short («6.12.» or «6.12.26») is the
   form's year, shown whole once you leave the field.
+- The account list of a hand entry shows each account's balance at the end of the entry's day,
+  and so does the line under a chosen account.
+- ⌘K finds the words known from other bookkeeping tools («Debitoren», «Kontoblatt»,
+  «Saldovortrag», «Manuelle Buchungen», …) and opens the place here that does that job, under its
+  name here.
+- Named entry templates: «Als Vorlage speichern» in the hand form keeps its accounts, VAT code,
+  text and amount (a Sammelbuchung with its lines) under a name, for entries that come back
+  (depreciation, rent, salary). «Vorlage» on top of the form and ⌘K start the form from one; the
+  date is always the new entry's. They live in the workspace, `master-data/entry-templates.json`.
 - Booking by hand onto Debitoren or Kreditoren (a collective account whose balance is the open
   invoices or bills) warns and books on «Trotzdem buchen».
 

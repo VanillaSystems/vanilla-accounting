@@ -13,6 +13,7 @@ import { localToday, parsePeriod, parseSwissDate } from '../../../accounting/per
 import { firmCodes, formTakes, lookupVatCode } from '../../../accounting/vat-codes.js';
 import type { RouteOf } from '../../shell/route.js';
 import { getAccountMap } from '../../lib/accounts.js';
+import { balancesAt } from '../../lib/account-balances.js';
 import { periodName } from '../../lib/period-label.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
@@ -27,7 +28,8 @@ import type { JournalEntryInput } from '../../lib/api.js';
 import { AccountField, unknownAccountText } from './AccountField.js';
 import { VatCodeField } from '../codes/VatCodeField.js';
 import { codeLabel } from '../codes/names.js';
-import { listed, setUi, useUi, type Side, type Split, type SplitLine } from './state.js';
+import { listed, setUi, ui, useUi, type Side, type Split, type SplitLine } from './state.js';
+import { dropTemplate, keepTemplate, startFrom, useTemplates } from './templates.js';
 import { accountCorrectionCode, banksMoved, claimCode, correctionKinds, isNetRateSale, type CorrectionKind } from '../../../accounting/correction.js';
 import { collectiveOf, correct, isBankAccount, isPrivateAccount, journalFor, receiptRateOf } from './commands.js';
 import { baseCurrency, chargesVat, chart, vat, withoutInputTax } from '../../../engines/index.js';
@@ -59,6 +61,9 @@ export function NewEntry(props: Props) {
   /** The last line's amount was typed in this round: it no longer holds the rest. */
   const ownRest = useRef(false);
   const autoCode = useRef<string>();
+  /** «Als Vorlage speichern» asks the template's name in place of the buttons (#567). */
+  const [naming, setNaming] = useState(false);
+  const templates = useTemplates();
   const dimensions = ws?.dimensions ?? [];
   // A form started again (another kind of correction, a payment picked, ⇄, a line more) is read once it is there.
   useEffect(() => { ownRest.current = false; redraw((n) => n + 1); }, [round]);
@@ -73,7 +78,8 @@ export function NewEntry(props: Props) {
   if (s.overlay?.kind !== 'new') return null;
   const d = s.overlay.draft;
   const split = s.overlay.split;
-  const close = () => { setSure(false); setUi({ overlay: null }); };
+  const close = () => { setSure(false); setNaming(false); setUi({ overlay: null }); };
+  const template = s.overlay.template ? templates.find((x) => x.id === s.overlay?.template) : undefined;
   const filed = d.corrects && parsePeriod(d.corrects, localToday());
   const tx = d.transactionRef ? books.transactions.find((x) => x.ref === d.transactionRef) : undefined;
   const year = (d.date ?? localToday()).slice(0, 4);
@@ -104,6 +110,8 @@ export function NewEntry(props: Props) {
   const claim = as === 'vat' && corrected && d.vatCode && d.vatCode === claimCode(corrected, d.accountDebit ?? '', rate) ? d.vatCode : undefined;
   const fx = !tx && d.exchangeCurrency && d.exchangeRate ? { currency: d.exchangeCurrency, rate: d.exchangeRate } : undefined;
   const currency = tx?.currency ?? fx?.currency ?? baseCurrency();
+  // The picker names each account's balance at the end of the entry's day (#567).
+  const balances = balancesAt(books, now.draft.date ?? d.date ?? localToday());
   const taxOf = (code: string | undefined) => (corrected && code ? fmt(Math.abs(vat().vatLine({ ...corrected, id: '', transactionRef: '', date: d.date ?? '', vatCode: code })?.tax ?? 0)) : '');
 
   /** The lines of a Sammelbuchung as pairs: the shared account on its side, the line's on the other. */
@@ -163,7 +171,7 @@ export function NewEntry(props: Props) {
   /** The form drawn again from what it holds, with `change` applied: ⇄, a line more or less. */
   function again(change: (now: { draft: Partial<JournalEntryInput>; split?: Split }) => { draft: Partial<JournalEntryInput>; split?: Split }, focus?: string) {
     const next = change(typed());
-    setUi({ overlay: { kind: 'new', draft: next.draft, ...(next.split && { split: next.split }), ...(s.overlay?.kind === 'new' && s.overlay.correcting && { correcting: s.overlay.correcting }) } });
+    setUi({ overlay: { kind: 'new', draft: next.draft, ...(next.split && { split: next.split }), ...(s.overlay?.kind === 'new' && s.overlay.correcting && { correcting: s.overlay.correcting }), ...(s.overlay?.kind === 'new' && s.overlay.template && { template: s.overlay.template }) } });
     setRound(round + 1);
     setErr('');
     setSure(false);
@@ -209,6 +217,31 @@ export function NewEntry(props: Props) {
     const [only] = lines;
     return { draft: { ...draft, [otherSide(split.side)]: only?.account ?? '', vatCode: only?.vatCode ?? '', amount: only?.amount ?? draft.amount, description: only?.description?.trim() || draft.description } };
   });
+
+  /** A template picked: the form starts again from it, on the date it holds now. */
+  function pickTemplate(id: string) {
+    const x = templates.find((y) => y.id === id);
+    if (!x) { if (s.overlay?.kind === 'new') setUi({ overlay: { ...s.overlay, template: undefined } }); return; }
+    startFrom(books, x, typed().draft.date);
+    setRound(round + 1);
+    setErr('');
+    setSure(false);
+  }
+
+  /** The form as it stands, kept as a template under `name`: accounts, code, text, amount where typed; never the date or the payment. */
+  async function keepAs(name: string) {
+    const now = typed();
+    const { draft: x, split: sp } = now;
+    const kept = await keepTemplate(nav, {
+      name, accountDebit: x.accountDebit ?? '', accountCredit: x.accountCredit ?? '',
+      ...(x.amount && { amount: x.amount }), ...(x.vatCode && { vatCode: x.vatCode }), ...(x.description?.trim() && { description: x.description.trim() }), ...(x.tags && { tags: x.tags }),
+      ...(sp && { split: { side: sp.side, lines: sp.lines.map((l) => ({ account: l.account, ...(l.amount !== undefined && !l.auto && { amount: l.amount }), ...(l.vatCode && { vatCode: l.vatCode }), ...(l.description?.trim() && { description: l.description.trim() }) })) } }),
+    });
+    if (!kept || ui().overlay?.kind !== 'new') return;
+    setNaming(false);
+    setUi({ overlay: { ...ui().overlay!, draft: x, ...(sp && { split: sp }), template: kept.id } as typeof s.overlay });
+    setRound(round + 1);
+  }
 
   /** A pick from the payments: the entry books it, on its date, its amount and bank side filled where empty. */
   function pickPayment(ref: string | undefined) {
@@ -300,7 +333,8 @@ export function NewEntry(props: Props) {
 
   function onKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
-    else if (e.key === 'Enter' && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); book(); }
+    // ↵ on a button or the template list does that control's own thing, never books.
+    else if (e.key === 'Enter' && !e.defaultPrevented && !['BUTTON', 'SELECT'].includes((e.target as HTMLElement).tagName)) { e.preventDefault(); e.stopPropagation(); book(); }
   }
 
   /** A short date («6.12.», «6.12.26») is shown whole once the field is left, so she sees the day it is. */
@@ -347,6 +381,17 @@ export function NewEntry(props: Props) {
           )}
         </div>
         <AsyncForm key={round} ref={form} className="form" autoComplete="off" onKeyDown={onKeyDown} onInput={onInput} onSubmit={(e) => { e.preventDefault(); return book(); }}>
+          {!filed && !tx && !s.overlay.correcting && templates.length > 0 && (
+            <div className="jtpl">
+              <label>{t('journal.template.pick')}
+                <select name="template" value={template?.id ?? ''} onChange={(e) => pickTemplate(e.target.value)}>
+                  <option value="">{t('journal.template.none')}</option>
+                  {templates.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                </select>
+              </label>
+              {template ? <AsyncButton type="button" className="golink" data-act="delete-template" onClick={async () => { if (await dropTemplate(nav, template) && ui().overlay?.kind === 'new') setUi({ overlay: { ...ui().overlay!, template: undefined } as typeof s.overlay }); }}>{t('journal.template.delete')}</AsyncButton> : null}
+            </div>
+          )}
           {!filed && <PaymentField books={books} picked={tx} amount={d.amount} onPick={pickPayment} />}
           <div className="two">
             <label>{t('journal.field.date')}<input className="mono" name="date" defaultValue={formatDate(d.date ?? localToday())} readOnly={!!tx} data-tip={tx ? t('journal.payment.dateIs') : t('journal.dateShortTip')} autoFocus={!round} onBlur={completeDate} /></label>
@@ -357,7 +402,7 @@ export function NewEntry(props: Props) {
           {split ? (
             <>
               <div className="jsides one">
-                <AccountField name={split.side} label={t('journal.split.shared', { side: sideLabel(split.side) })} defaultValue={d[split.side] ?? ''} />
+                <AccountField balances={balances} name={split.side} label={t('journal.split.shared', { side: sideLabel(split.side) })} defaultValue={d[split.side] ?? ''} />
                 {swapButton}
                 <input type="hidden" name={otherSide(split.side)} value="" />
                 <label>{t('journal.split.text')}<input name="description" defaultValue={d.description ?? ''} /></label>
@@ -365,7 +410,7 @@ export function NewEntry(props: Props) {
               <div className="jlines" data-testid="split-lines">
                 {split.lines.map((l, i) => (
                   <div key={i} className="jline" data-line={i}>
-                    <AccountField name={`line-account-${i}`} label={sideLabel(otherSide(split.side))} defaultValue={l.account} />
+                    <AccountField balances={balances} name={`line-account-${i}`} label={sideLabel(otherSide(split.side))} defaultValue={l.account} />
                     <label>{t('journal.field.description')}<input name={`line-text-${i}`} defaultValue={l.description ?? ''} placeholder={now.draft.description || t('journal.split.textPlaceholder')} /></label>
                     {firmCodes().length ? <VatCodeField name={`line-vat-${i}`} label={t('journal.field.vatCode')} defaultValue={l.vatCode ?? ''} placeholder={t('journal.vatPlaceholder')} /> : <span />}
                     <label>{t('journal.amountIn', { currency })}<input className="mono" name={`line-amount-${i}`} defaultValue={l.amount !== undefined && !l.auto ? fmt(l.amount) : ''} style={{ textAlign: 'right' }} data-rest={l.auto && !ownRest.current ? '' : undefined} /></label>
@@ -386,9 +431,9 @@ export function NewEntry(props: Props) {
           ) : (
             <>
               <div className="jsides">
-                <AccountField name="accountDebit" label={t('journal.field.accountDebit')} defaultValue={d.accountDebit ?? ''} />
+                <AccountField balances={balances} name="accountDebit" label={t('journal.field.accountDebit')} defaultValue={d.accountDebit ?? ''} />
                 {swapButton}
-                <AccountField name="accountCredit" label={t('journal.field.accountCredit')} defaultValue={d.accountCredit ?? ''} />
+                <AccountField balances={balances} name="accountCredit" label={t('journal.field.accountCredit')} defaultValue={d.accountCredit ?? ''} />
               </div>
               {firmCodes().length ? (
                 <div className="two">
@@ -433,6 +478,18 @@ export function NewEntry(props: Props) {
           )}
           <div className="err" role="alert">{err}</div>
           <div className="dacts">
+            {filed ? null : naming ? (
+              <span className="jname">
+                <input name="templateName" aria-label={t('journal.template.name')} placeholder={t('journal.template.name')} defaultValue={template?.name ?? now.draft.description ?? ''} autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); const v = e.currentTarget.value.trim(); if (v) void keepAs(v); }
+                    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setNaming(false); }
+                  }} />
+                <AsyncButton type="button" className="btn" data-act="keep-template" onClick={() => { const v = (form.current?.elements.namedItem('templateName') as HTMLInputElement | null)?.value.trim(); return v ? keepAs(v) : undefined; }}>{t('journal.template.keep')}</AsyncButton>
+              </span>
+            ) : (
+              <button type="button" className="golink jsave" data-act="save-template" data-tip={t('journal.template.saveTip')} onClick={() => setNaming(true)}>{t('journal.template.save')}</button>
+            )}
             <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')} <span className="k">{t('codes.escKey')}</span></button>
             <AsyncButton type="submit" className="btn primary">{sure ? t('journal.bookAnyway') : t('journal.book')} <span className="k">↵</span></AsyncButton>
           </div>

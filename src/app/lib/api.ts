@@ -12,6 +12,7 @@ import type { StatementRemoved } from '../../server/routes/statements.js';
 import type { PaymentReleased } from '../../invoices/payments.js';
 export type { StatementRemoved };
 import type { BookingLine } from '../../accounting/manual-booking.js';
+import type { EntryTemplate } from '../../workspace/entry-templates.js';
 import type { EstvRateTable } from '../../accounting/fx-conversion.js';
 import type { WorkspaceModules } from '../../core/modules/load.js';
 import type { Account } from './accounts.js';
@@ -374,6 +375,8 @@ export function errorText(e: unknown): string {
     case 'rule': { const k = refusalKey(b.params.refusal); return t(k.key, k.vars as never); }
     case 'report': return t('error.report', { why: refusalText(b.params.refusal, (k, v) => t(k, v as never)) });
     case 'noDescription': return t('error.noDescription');
+    case 'templateName': return t('error.templateName');
+    case 'templateLimit': return t('error.templateLimit', { max: String(b.params.max) });
     case 'accountNumber': return t('error.accountNumber', b.params);
     case 'accountName': return t('error.accountName', b.params);
     case 'questionChoices': return t('error.questionChoices', {
@@ -504,6 +507,10 @@ export const api = {
     request<Ok>('PATCH', `/api/journal-entries/${encodeURIComponent(id)}`, patch),
   createJournalEntry: (input: JournalEntryInput) =>
     request<{ entry: JournalEntry }>('POST', '/api/journal-entries', input).then((r) => r.entry),
+  /** The company's named entry templates (#567, src/server/routes/entry-templates.ts). */
+  entryTemplates: () => request<{ templates: EntryTemplate[]; max: number }>('GET', '/api/entry-templates'),
+  saveEntryTemplate: (t: Omit<EntryTemplate, 'id'> & { id?: string }) => request<{ template: EntryTemplate; replaced?: EntryTemplate }>('POST', '/api/entry-templates', t),
+  deleteEntryTemplate: (id: string) => request<{ template: EntryTemplate }>('DELETE', `/api/entry-templates/${encodeURIComponent(id)}`),
   /** A Sammelbuchung (#567): its lines under one new ref, booked together. */
   createJournalEntries: (date: string, lines: BookingLine[]) =>
     request<{ entries: JournalEntry[] }>('POST', '/api/journal-entries/lines', { date, lines }).then((r) => r.entries),

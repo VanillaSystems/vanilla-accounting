@@ -31,6 +31,7 @@ import { PRESETS } from '../../export/model.js';
 import { accountOfRoute } from '../areas/reports/view.js';
 import { focusSelectedRow, useShellKeys } from './keyboard.js';
 import { Menu } from './Menu.js';
+import { synonymHits, synonymPlace } from './synonyms.js';
 import { Palette, type PaletteGroup } from './Palette.js';
 import { PeriodPicker } from './PeriodPicker.js';
 import { nextTheme, useNavWide, usePersistedFlag, useTheme, useZoom, type Theme } from './prefs.js';
@@ -310,7 +311,12 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     const areas: PaletteItem[] = DOCK.flat().map((id) => ({ label: AREAS[id].label(), side: `G ${AREAS[id].dock!.key.toUpperCase()}`, run: () => goArea(id) })).filter(hit);
     // The Aktionen of what is open or picked (#216), first: the A key's menu, by name.
     const here: PaletteItem[] = actionsNow().map((a) => ({ label: a.label, side: a.key, run: a.run })).filter(hit);
-    return [[t('actions.palette'), here], ...objects, [t('shell.actions'), actions], [t('shell.areas'), areas]].filter(([, xs]) => xs.length > 0) as PaletteGroup[];
+    // A word of another tool («Debitoren», «Kontoblatt») opens our place for it, under our name (#567).
+    const known: PaletteItem[] = synonymHits(q).map(({ id, term }) => {
+      const to = synonymPlace(id);
+      return { label: t(`shell.synonymPlace.${id}`), side: t('shell.synonymSide', { term }), run: () => go({ route: to.route, query: { ...to.query, ...(p.query.period && { period: p.query.period }) } }) };
+    });
+    return [[t('actions.palette'), here], [t('shell.synonymsGroup'), known], ...objects, [t('shell.actions'), actions], [t('shell.areas'), areas]].filter(([, xs]) => xs.length > 0) as PaletteGroup[];
   }, [go, goArea]);
 
   // The filing periods that hold payments: quarters, or half years on a half-yearly setup (r6f-29).
