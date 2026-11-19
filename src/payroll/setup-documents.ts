@@ -37,6 +37,38 @@ export function setupKindOf(text: string, data: Pick<PayrollData, 'setupDocument
   return Object.entries(kinds).find(([, words]) => words.length && wordRe(words).test(head))?.[0];
 }
 
+/** Where the first lines name a kind's document (setupKindOf), as an offset into `text`; Infinity when they do not. */
+export function setupWordAt(text: string, data: Pick<PayrollData, 'setupDocuments'>): number {
+  const words = Object.values(data.setupDocuments?.kinds ?? {}).flat();
+  if (!words.length) return Infinity;
+  // The end of the first HEAD_LINES lines that hold something, as setupKindOf reads them.
+  let end = 0;
+  for (let n = 0; n < HEAD_LINES && end < text.length; ) {
+    const next = text.indexOf('\n', end);
+    const line = text.slice(end, next < 0 ? text.length : next);
+    end = next < 0 ? text.length : next + 1;
+    if (line.trim()) n++;
+  }
+  return wordRe(words).exec(text.slice(0, end))?.index ?? Infinity;
+}
+
+/**
+ * Whether a text is a fund's or insurer's document: its first lines name one (setupWordAt) before any receipt title of
+ * `titles`, a compound one too («Beitragsrechnung Q3», «Prämienrechnung»): the fund's bill is a receipt to pay.
+ */
+export function namesSetupFirst(text: string, data: Pick<PayrollData, 'setupDocuments'>, titles: readonly string[]): boolean {
+  const at = setupWordAt(text, data);
+  if (at === Infinity) return false;
+  if (!titles.length) return true;
+  const title = new RegExp(`(?<![\\p{L}\\d])\\p{L}*(?:${titles.map(escape).join('|')})(?![\\p{L}\\d])`, 'iu').exec(text.slice(0, at));
+  return !title;
+}
+
+/** The kindRule of a fund's or insurer's document code recognised (a decision, a policy, a pension certificate): no payment belongs to it, its card in Löhne › Einstellungen takes it (§22 decision 108). */
+export const SETUP_DOCUMENT_RULE = 'document:payroll-setup';
+/** Whether a receipt is such a document: it never reaches a model's VAT reading, title or match (a pension certificate names an insured wage). */
+export const isSetupDocument = (r: Pick<Receipt, 'kindRule'>): boolean => r.kindRule === SETUP_DOCUMENT_RULE;
+
 /** A number the text prints after one of its labels, on the same line («Abrechnungsnummer: 100.2345»). */
 function numberAfter(text: string, labels: readonly string[] | undefined): string | undefined {
   if (!labels?.length) return undefined;
@@ -209,9 +241,10 @@ export function usedDocuments(store: Pick<PayrollStore, 'insurances' | 'employee
  * it) and not set aside, with what code read and what the AI added; `exists`: the firm's insurance of that kind it
  * would add rates to. Derived on every read: a better reader reads old documents again.
  */
-export function setupCards(receipts: readonly Pick<Receipt, 'id' | 'filename' | 'date' | 'extractedText' | 'kind'>[], store: Pick<PayrollStore, 'insurances' | 'employees'>, data: Pick<PayrollData, 'setupDocuments' | 'insurances'>, state: SetupState): SetupCard[] {
+export function setupCards(receipts: readonly Pick<Receipt, 'id' | 'filename' | 'date' | 'extractedText' | 'kind'>[], store: Pick<PayrollStore, 'insurances' | 'employees'>, data: Pick<PayrollData, 'setupDocuments' | 'insurances'>, state: SetupState, titles: readonly string[] = []): SetupCard[] {
   const used = usedDocuments(store);
-  return receipts.filter((r) => r.kind !== 'payslip' && !used.has(r.id) && !state[r.id]?.dismissed && !state[r.id]?.kept && setupKindOf(r.extractedText ?? '', data))
+  // `titles` (the receipt titles of documents.yaml): a fund's bill that names a document below its title is no card.
+  return receipts.filter((r) => r.kind !== 'payslip' && !used.has(r.id) && !state[r.id]?.dismissed && !state[r.id]?.kept && setupKindOf(r.extractedText ?? '', data) && namesSetupFirst(r.extractedText ?? '', data, titles))
     .map((r) => {
       const items = withModel(readSetupDocument(r.extractedText ?? '', data), state[r.id]?.ai ?? []).map((p) => {
         const exists = store.insurances.find((i) => i.kind === p.kind && !i.validUntil)?.id;

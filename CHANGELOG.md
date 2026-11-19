@@ -411,6 +411,12 @@ Two markers flag an entry you must read before you update:
   card, and «So lassen» holds for the file it was said for.
 - Löhne: after a small-wage year's catch-up, the following months owe ALV on their own wage again
   (a negative ALV base was charged). **⚠ figures** for such a payslip closed from now on.
+- Belege: a fund's or insurer's document dropped with the receipts (a Beitragsverfügung, a policy,
+  a pension certificate) no longer waits as a receipt «Datum, Betrag fehlt»: it is a document
+  without a payment, says so in Belege and in the drop, and links to its card in Löhne ›
+  Einstellungen › Sozialversicherungen. No AI reads it while it is filed. On a pension
+  certificate's card, contributions typed without the person are refused with «Person wählen»
+  instead of being left out.
 - Löhne: the entry fact of a new person («Eintritt am …: Anmeldung bei …») no longer names the
   pension fund for a person without occupational pension (below the entry threshold, or a firm
   without a pension fund).

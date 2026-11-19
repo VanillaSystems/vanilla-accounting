@@ -2238,6 +2238,15 @@ After the third persona walk (2026-11-19):
      above a threshold (the pension's, payroll.yaml `requiredAbove`), neither computed nor «unvollständig»: below the
      entry threshold, or a firm without a pension fund. A person above it without her certificate yet is still named
      with the pension fund: she is to be registered.
+108. **A fund's or insurer's document is no receipt and reaches no model** (src/intake/read.ts, src/payroll/setup-documents.ts
+     `namesSetupFirst`): a text whose first lines name a kind's document (payroll.yaml `setupDocuments.kinds`) before any
+     receipt title, a compound one too («Beitragsrechnung Q3»), is kept as `supporting` with kindRule
+     `document:payroll-setup`: never «wartet auf dich: Datum, Betrag fehlt», never in «Braucht dich», filed without the
+     model's VAT reading, title or match (a pension certificate names an insured wage and a birth date). Belege and the
+     drop say what it is and link to its card in Löhne › Einstellungen › Sozialversicherungen; the card lists only such
+     texts (a fund's bill that names a certificate below its title is a receipt, no card). A document read before stays
+     as it was read. Contributions typed on a pension certificate's card without the person they are hers are refused
+     (`badInput`, field `person`: «Person wählen …»), never dropped.
 
 ---
 

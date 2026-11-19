@@ -13,6 +13,7 @@
  * a payout has no receipt of its own, #203) and several receipts that add up to one payment (receipt-sets.ts).
  * A link to a payment of a filed quarter is never made (golden rule 1).
  */
+import { isSetupDocument } from '../payroll/setup-documents.js';
 import { existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { buildMatchPrompt, parseMatchResult, type MatchResult } from '../llm/prompts.js';
@@ -243,7 +244,9 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   // A payslip of another program is filed and paired by code (§10.2 A1, A8): no model names it or looks for its payment.
   // One code cannot read is filed too, unlinked: the person pairs it, no model sees it.
   const slips = staged.filter((r) => !r.needsVisionReview && r.kind === 'payslip');
-  const toRead = staged.filter((r) => !r.needsVisionReview && r.kind !== 'noise' && r.kind !== 'payslip');
+  // A fund's or insurer's document (a decision, a policy, a pension certificate) has no payment and no model reads it: filed as it is (§22 decision 108).
+  const setup = staged.filter((r) => !r.needsVisionReview && isSetupDocument(r));
+  const toRead = staged.filter((r) => !r.needsVisionReview && r.kind !== 'noise' && r.kind !== 'payslip' && !isSetupDocument(r));
   // Code first (#187): the staged receipts take part in the chain with the facts code reads off them.
   const early = toRead.flatMap((r) => provisional(r) ?? []);
   // The batch payers with the firm's own UIDs as the books show them now (buyerUids): read again on every run of the code.
@@ -315,6 +318,11 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     log(target ? `  set aside, no receipt${receipt.kindWhy ? ` (${receipt.kindWhy})` : ''}: ${receipt.filename} → ${target}` : `  warn: ${receipt.filename} is not staged in beleg-import/ any more, skipping`);
   }
 
+  for (const receipt of setup) {
+    const target = archive(receipt, receipt.filename, () => undefined);
+    progress(++completed, total);
+    log(target ? `  ${receipt.filename} → ${target}  a fund's or insurer's document: no payment, its card is in Löhne › Einstellungen (no model match)` : `  warn: ${receipt.filename} is not staged in beleg-import/ any more, skipping`);
+  }
   for (const receipt of slips) {
     const target = archive(receipt, receipt.date ? codeName(receipt.date, undefined, receipt.originalFilename ?? receipt.filename) : receipt.filename, () => undefined);
     progress(++completed, total);

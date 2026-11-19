@@ -31,7 +31,7 @@ export const STAGE_OF = {
   statement: 'statements',
   matched: 'matched',
   read: 'read',
-  feeBill: 'other', supporting: 'other', beside: 'other', balanceSheet: 'other', orderPage: 'other', report: 'other',
+  feeBill: 'other', supporting: 'other', beside: 'other', balanceSheet: 'other', payrollSetup: 'other', orderPage: 'other', report: 'other',
   none: 'out', known: 'out', aside: 'out', refused: 'out', undone: 'out',
 } as const satisfies Record<ClosingGroup, Stage>;
 

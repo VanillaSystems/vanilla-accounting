@@ -900,7 +900,8 @@ export function keepSetupCard(store: PayrollStore, data: PayrollData, receiptId:
     }
     out.insurances.push(ins.id);
     if (item.person !== undefined && data.insurances[item.kind].perPerson) {
-      if (!isObj(item.person) || typeof item.person.name !== 'string' || !item.person.name.trim()) bad('Die versicherte Person: ihr Name.', 'person');
+      // Contributions typed without the person they are hers: refused, never dropped (walk 3, §22 decision 108).
+      if (!isObj(item.person) || typeof item.person.name !== 'string' || !item.person.name.trim()) bad('Person wählen: für wen gelten die Beiträge des Vorsorgeausweises? Ihren Namen bei «Versicherte Person» eintragen.', 'person');
       const want = foldName(item.person.name);
       const e = store.employees.find((x) => { const n = x.name.at(-1)?.value; return !!n && foldName(`${n.first} ${n.last}`) === want || (!!n && foldName(`${n.last} ${n.first}`) === want); });
       if (!e) { out.persons.push(item.person.name); continue; }

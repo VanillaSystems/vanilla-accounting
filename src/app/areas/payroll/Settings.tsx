@@ -205,7 +205,9 @@ function DocumentCard({ c, ai, nav, canEdit }: { c: SetupCard; ai: boolean; nav:
   const itemsOf = (): KeptItem[] => c.items.map((p, n) => {
     const v = (k: string) => f[`${n}.${k}`]?.trim() || undefined;
     const rates = Object.fromEntries(Object.keys(d?.insurances[p.kind]?.rates ?? {}).flatMap((k) => (numberOf(f[`${n}.rates.${k}`]) === undefined ? [] : [[k, numberOf(f[`${n}.rates.${k}`])!]])));
-    const person = v('person') ? { name: v('person')!, ...(numberOf(f[`${n}.employee`]) !== undefined ? { employee: numberOf(f[`${n}.employee`]) } : {}), ...(numberOf(f[`${n}.employer`]) !== undefined ? { employer: numberOf(f[`${n}.employer`]) } : {}) } : undefined;
+    // Contributions typed without a person go to the server too, which refuses them with «Person wählen»: never dropped.
+    const paid = { ...(numberOf(f[`${n}.employee`]) !== undefined ? { employee: numberOf(f[`${n}.employee`]) } : {}), ...(numberOf(f[`${n}.employer`]) !== undefined ? { employer: numberOf(f[`${n}.employer`]) } : {}) };
+    const person = v('person') || Object.keys(paid).length ? { name: v('person') ?? '', ...paid } : undefined;
     return { kind: p.kind, name: v('name'), memberNumber: v('memberNumber'), contractNumber: v('contractNumber'), code: v('code'), rates, validFrom: f[`${n}.validFrom`] || yearStart(c.date), ...(person ? { person } : {}) };
   });
   const keep = async (e: FormEvent) => {

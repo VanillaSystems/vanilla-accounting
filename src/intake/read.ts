@@ -34,9 +34,10 @@ import { fileReceipts, paymentContext } from '../invoices/service.js';
 import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
 import { putInQuarantine } from './quarantine.js';
 import { documentKind } from './document-kind.js';
+import { namesSetupFirst, SETUP_DOCUMENT_RULE } from '../payroll/setup-documents.js';
 import { askKind, asksModel, kindOfModel, MODEL_RULE, MODEL_TEXT, NOT_A_RECEIPT, visionVerdict, type ModelKind } from './unclear.js';
 import { statementFacts } from '../books/statement-facts.js';
-import { documents } from '../engines/index.js';
+import { documents, payroll } from '../engines/index.js';
 import { monthEnd, PAYSLIP_RULE, PAYSLIP_UNREAD_RULE, payslipTitled, readPayslip } from '../booking/payslip.js';
 import { closedPayslips } from '../payroll/service.js';
 import { periodLock, release, type Books } from '../books/store.js';
@@ -193,6 +194,15 @@ function unmatchedOf(bank: BankFiles): string[] {
 interface Extracted { text: string; method: Receipt['extractionMethod']; fileSize: number; verdict?: ModelKind }
 
 /**
+ * Whether a text is a fund's or insurer's document for the payroll's setup: its first lines name one before any receipt
+ * title, a compound one too («Beitragsrechnung Q3», «Prämienrechnung»): the fund's bill is a receipt to pay.
+ */
+function setupDocument(text: string): boolean {
+  const data = payroll();
+  return !!data?.setupDocuments && namesSetupFirst(text, data, documents().receipt.title);
+}
+
+/**
  * What a fresh receipt's text says it is (src/intake/document-kind.ts): an order confirmation or a
  * delivery note is kept beside its invoice, never paid on its own. That a text is no receipt at all
  * decides only for what the model read (a photo): a PDF's own text was judged at the drop already,
@@ -210,6 +220,9 @@ function kindOfText(fresh: Extracted, filename: string, originalFilename: string
     if (!slip || closedHere(slip.period, slip.employee)) return { kind: 'payslip', kindBy: 'rule', kindRule: PAYSLIP_UNREAD_RULE };
     return { kind: 'payslip', kindBy: 'rule', kindRule: PAYSLIP_RULE, amount: slip.net, currency: slip.currency, ...(slip.period ? { date: monthEnd(slip.period) } : {}) };
   }
+  // A fund's or insurer's document (a contribution decision, a policy, a pension certificate) named so before any invoice title:
+  // no payment belongs to it, and Löhne › Einstellungen proposes what it says (docs/specs/payroll.md §22 decision 108).
+  if (setupDocument(fresh.text)) return { kind: 'supporting', kindBy: 'rule', kindRule: SETUP_DOCUMENT_RULE };
   const v = documentKind(fresh.text, documents());
   // A customs assessment keeps its tax and day: a payment to the customs office is paired with it by them (#197).
   if (v.is === 'supporting') return { kind: 'supporting', kindBy: 'rule', kindRule: `document:${v.why}`, ...(v.why === 'customs-assessment' ? assessmentFacts(fresh.text, documents().customs) : {}) };
@@ -307,8 +320,9 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   const unclear = ask ? toExtract.filter((f) => {
     const read = extracted.get(f.id);
     return !again.has(f.id) && !known.get(f.id)?.kind && !known.get(f.id)?.kindBy && !!read && !read.verdict && textProves({ extractedText: read.text, extractionMethod: read.method }) && asksModel(read.text, documents())
-      // A payslip code reads is never shown to the model: it carries a salary and a person (§10.2 A8).
-      && !payslipTitled(read.text, ws.company);
+      // A payslip code reads is never shown to the model: it carries a salary and a person (§10.2 A8); nor a fund's document
+      // (a pension certificate names an insured wage): only its card's allow-list reaches a model, on the person's click.
+      && !payslipTitled(read.text, ws.company) && !setupDocument(read.text);
   }) : [];
   await Promise.all(unclear.map((f) => pool(async () => {
     try {
