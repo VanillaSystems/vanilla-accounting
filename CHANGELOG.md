@@ -95,6 +95,19 @@ Two markers flag an entry you must read before you update:
   the pension fund's expected wages, and the persons exempt on the annual declarations. Lohnzahlungen:
   «Zahlungsdatei», the month's payouts not paid yet as a pain.001 file for e-banking. demo-schreinerei runs its
   payroll in the app from October.
+- Löhne computes the **Quellensteuer** (phase B2, monthly model) from the canton's tariff file, which
+  «Tarif laden» (Einstellungen › Sozialversicherungen, or beside a payslip's line «unvollständig») or
+  `npm run fetch-qst -- ZH 2026` fetches from the Federal Tax Administration into the workspace's
+  `data/qst/<year>/` with its checksum and date (never git); a downloaded file can be loaded by hand. The
+  person's tariff code, church tax and other employments come from her declaration (Mitarbeitende ›
+  Quellensteuer). The rate-determining income extrapolates an entry or exit month to 30 days and other
+  employments to their whole; aperiodic payments are added as they are. The line names the tariff, its
+  date, the code and the rate-determining income; it books D 1091 / C 2279. The canton's commission
+  (Bezugsprovision) is an employer line D 2279 / C 5890 (new account «Bezugsprovision Quellensteuer»).
+  Dokumente › Quellensteuer lists the settlement per canton and month (persons, wage, tariff, tax,
+  commission, amount to pay) with its CSV. A new or corrected tariff file never changes a closed
+  payslip: the card offers the Rückwirkende Korrektur first. Cantons on the annual model (FR, GE, TI, VD,
+  VS) get the line «unvollständig» for now.
 - Buchungen › Neue Buchung von Hand: «+ Zeile» makes it a Sammelbuchung, one account against
   several lines (for example Haben 1020 against Soll 6500 and 6570). The last line holds the rest of
   the total until you type there, and ↵ books only once the lines add up. The lines are booked
