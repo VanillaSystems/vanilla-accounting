@@ -10,7 +10,8 @@ import { computePayslip } from '../src/payroll/compute.js';
 import { firmWageTypes, ratePercent, rateShown, rateStored } from '../src/payroll/catalogue.js';
 import { checkPayroll } from '../src/core/modules/check-payroll.js';
 import type { Jurisdiction } from '../src/core/modules/schema.js';
-import { amountOf, ch, ctxOf, dated, firm, owner } from './support/payroll.js';
+import { amountOf, ch, closedThrough, ctxOf, dated, firm, owner } from './support/payroll.js';
+import { decemberOpen } from '../src/payroll/views.js';
 
 const data = ch.payroll!;
 const car = data.wageTypes.find((w) => w.key === 'privatanteil-fahrzeug')!;
@@ -101,4 +102,17 @@ test('the month states read alike: in French, Italian and English every state is
     }
   }
   assert.match(readFileSync('src/app/areas/payroll/Payslips.tsx', 'utf8'), /<h2>\{t\('payroll\.month\.openingTitle'\)\}<\/h2>/, 'a heading keeps its capital');
+});
+
+test('the final statement: December still a draft is named before booking; the button says the difference and its direction', () => {
+  const store = firm();
+  assert.deepEqual(decemberOpen(ctxOf(store, closedThrough(store, '2026-12')), '2026'), ['Mila Beispiel'], 'closed through November');
+  // «up to 2026-13»: through December.
+  assert.deepEqual(decemberOpen(ctxOf(store, closedThrough(store, '2026-13')), '2026'), [], 'December closed: nothing to say');
+  const payments = readFileSync('src/app/areas/payroll/Payments.tsx', 'utf8');
+  assert.match(payments, /round2\(total - known\.compare\.books\)/, 'the difference as she types');
+  assert.match(payments, /diff > 0 \? t\('payroll\.settle\.saveMore'[\s\S]*diff < 0 \? t\('payroll\.settle\.saveBack'/, 'the button names the amount and the direction');
+  assert.match(payments, /data-testid="settle-december"/);
+  const route = readFileSync('src/server/routes/payroll.ts', 'utf8');
+  assert.match(route, /if \(entry && \(compare\.large \|\| december\.length\) && b\.confirm !== true\)/);
 });

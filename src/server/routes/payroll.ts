@@ -13,7 +13,7 @@ import { ClosedPeriodError, periodLock, receiptFile, type Books } from '../../bo
 import { CatalogueError } from '../../payroll/catalogue.js';
 import { PayrollRefusal, assertNotOpening, planClose } from '../../payroll/close.js';
 import { addCorrection, chartNumbers, closePayslip, payrollContext, reopenPayslip, type BooksWriter } from '../../payroll/service.js';
-import { monthView, payslipView, employeeRows, yearStrip } from '../../payroll/views.js';
+import { decemberOpen, monthView, payslipView, employeeRows, yearStrip } from '../../payroll/views.js';
 import { paymentRows } from '../../payroll/payments.js';
 import { insurerRows, settlementOf } from '../../payroll/insurers.js';
 import { loadClassifyContext, mappedReceipts } from '../../booking/classify.js';
@@ -231,11 +231,31 @@ router.get('/api/payroll/insurances', run((req, res) => {
 }));
 
 /**
+ * What a final statement of `year` is compared with, before a total is typed (§22 decision 125): the year's
+ * contributions in the books, so the page says the difference and its direction as the total is typed, and the
+ * people whose December is not closed yet. `compare: null` with the reason when the year has nothing to compare.
+ */
+router.get('/api/payroll/insurances/:id/compare', run((req, res) => {
+  const year = typeof req.query.year === 'string' && /^\d{4}$/.test(req.query.year) ? req.query.year : today().slice(0, 4);
+  const ctx = payrollContext(WS);
+  const counterparties = loadClassifyContext(WS).counterparties ?? [];
+  const books = readBooks();
+  try {
+    const { compare } = settlementOf(books, ctx.data, ctx.store, String(req.params.id), year, 0, `${year}-12-31`, () => '',
+      (tx) => businessOfPayment(tx, mappedReceipts(books, tx), counterparties), baseCurrency());
+    res.json({ year, compare, decemberOpen: decemberOpen(ctx, year) });
+  } catch (e) {
+    if (!(e instanceof PayrollRefusal) || e.code === 'unknownInsurance') throw e;
+    res.json({ year, compare: null, why: e.code, decemberOpen: decemberOpen(ctx, year) });
+  }
+}));
+
+/**
  * A final statement (Schlussabrechnung): the year's total the statement shows; code books its difference to the
  * year's contributions in the books (what the payslips accrued, and the payments booked for the months before payroll
  * ran here) on the employer's contribution account against the insurance's liability, on `date` (the statement's day,
- * in an open period). A difference over 5 % of the year is said first and booked only with `confirm` («Trotzdem
- * buchen», §18); every answer carries the comparison.
+ * in an open period). A difference over 5 % of the year, or a December of the year a person's payslip is still a
+ * draft of, is said first and booked only with `confirm` («Trotzdem buchen», §18); every answer carries the comparison.
  */
 router.post('/api/payroll/insurances/:id/settle', run((req, res) => {
   const b = body(req);
@@ -245,13 +265,14 @@ router.post('/api/payroll/insurances/:id/settle', run((req, res) => {
   if (!/^\d{4}$/.test(year) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(total)) throw new PayrollRefusal('badInput', 'Jahr, Datum und Total der Schlussabrechnung.');
   const ctx = payrollContext(WS);
   const counterparties = loadClassifyContext(WS).counterparties ?? [];
+  const december = decemberOpen(ctx, year);
   const out = updateBooksWithEffects((books) => {
     const lock = periodLock(books);
     if (lock.isClosed(date)) throw new ClosedPeriodError(`${lock.closedText(date)} Neue Buchungen müssen in der offenen Periode liegen.`, lock.closedThrough, 'newEntry');
     const { entry, compare } = settlementOf(books, ctx.data, ctx.store, String(req.params.id), year, total, date, () => idSource.bytes(8).toString('hex'),
       (tx) => businessOfPayment(tx, mappedReceipts(books, tx), counterparties), baseCurrency());
-    // A large difference is said before it is booked: the person decides (§18).
-    if (entry && compare.large && b.confirm !== true) return { booked: null, warning: true, compare };
+    // A large difference, or a December not closed yet, is said before it is booked: the person decides (§18).
+    if (entry && (compare.large || december.length) && b.confirm !== true) return { booked: null, warning: true, compare, ...(december.length ? { decemberOpen: december } : {}) };
     if (entry) books.journalEntries.push(entry);
     return entry ? { booked: entry.id, amount: entry.amount, debit: entry.accountDebit, credit: entry.accountCredit, compare } : { booked: null, compare };
   });

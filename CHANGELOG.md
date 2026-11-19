@@ -232,6 +232,10 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Löhne › Lohnzahlungen: the final statement shows the year's contributions in the books and, as the
+  total is typed, the difference; the button names its amount and direction («Differenz … buchen:
+  Nachzahlung an …»). Booking it while a December payslip of that year is still a draft is said first
+  in the page, then «Trotzdem buchen».
 - Löhne: a payslip line's federal source names the articles in the person's or the UI's language
   («LAVS art. 5, 13 …» in French, no «AHVG … Abs.»); the year file's figures carry `cite` per
   language. The month states are lower case in French, Italian and English throughout («ouverture»

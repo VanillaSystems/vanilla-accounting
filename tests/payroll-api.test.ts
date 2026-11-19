@@ -75,9 +75,22 @@ test('Lohnzahlungen and the insurers: the month\'s rows with what is paid, the a
   const ins = await api.send('GET', '/api/payroll/insurances?year=2026');
   const ahv = (ins.json.rows as Array<{ kind: string; accrued: number; open: number }>).find((r) => r.kind === 'ahv')!;
   assert.ok(ahv.accrued > 0 && ahv.open === ahv.accrued);
-  const settle = await api.send('POST', '/api/payroll/insurances/ak/settle', { year: '2026', total: ahv.accrued + 10, date: '2026-12-31' });
+  // The books' sum is read before a total is typed: the page says the difference live.
+  const compare = await api.send('GET', '/api/payroll/insurances/ak/compare?year=2026');
+  assert.equal((compare.json.compare as { books: number }).books, ahv.accrued);
+  assert.deepEqual((compare.json.decemberOpen as string[]).length, 2, 'both people\'s December is a draft');
+  // December not closed yet: said first, booked only on «Trotzdem buchen», even for a small difference.
+  const warned = await api.send('POST', '/api/payroll/insurances/ak/settle', { year: '2026', total: ahv.accrued + 10, date: '2026-12-31' });
+  assert.equal(warned.json.booked, null);
+  assert.equal(warned.json.warning, true);
+  assert.equal((warned.json.decemberOpen as string[]).length, 2);
+  assert.equal((warned.json.compare as { large: boolean }).large, false);
+  const settle = await api.send('POST', '/api/payroll/insurances/ak/settle', { year: '2026', total: ahv.accrued + 10, date: '2026-12-31', confirm: true });
   assert.equal(settle.status, 200);
   assert.equal((settle.json as { amount: number }).amount, 10);
+  const none = await api.send('GET', '/api/payroll/insurances/ak/compare?year=2024');
+  assert.equal(none.json.compare, null, 'a year without payslips has nothing to compare');
+  assert.equal(none.json.why, 'nothingAccrued');
 });
 
 test('Dokumente: the year\'s figures, a Lohnausweis issued and its PDF, the tables as CSV', async () => {
