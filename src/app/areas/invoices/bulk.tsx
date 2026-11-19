@@ -17,7 +17,7 @@ import { download } from './actions.js';
 import { reloadInvoices } from './data.js';
 import { routeId } from './model.js';
 import { setUi } from './state.js';
-import { Frame, close } from './dialogs.js';
+import { Frame, close } from './frame.js';
 import { PDF_LIMIT, SEND_LIMIT, bulkPdfPlan, bulkSendPlan, type LeftOut } from './bulk-plan.js';
 
 const name = (inv: Invoice) => (inv.status === 'issued' ? inv.number : t('invoices.draft'));

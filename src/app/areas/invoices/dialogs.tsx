@@ -25,6 +25,7 @@ import { cancel, creditNote, newDraftFor, saveCustomer, saveDraft, send, sendRem
 import { COUNTRIES, addressRule, countryName, countryOf, languageFor, numberFirst, vatRule } from './address.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 import { BulkDialogs } from './bulk.js';
+import { Frame, close } from './frame.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
 
@@ -46,21 +47,6 @@ export function Dialogs(props: Props) {
     case 'send': return inv?.status === 'issued' ? <SendDialog {...props} inv={inv} reminder={s.dialog.reminder} issued={s.dialog.issued} /> : null;
     default: return null;
   }
-}
-
-export const close = () => setUi({ dialog: null });
-
-export function Frame({ label, title, children, foot, className = '' }: { label: string; title: ReactNode; children: ReactNode; foot?: ReactNode; className?: string }) {
-  return (
-    <>
-      <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 45%, transparent)' }} onClick={close} />
-      <div className={`palette idlg ${className}`} role="dialog" aria-label={label} onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') close(); }}>
-        <div className="ihd"><span className="lbl">{label}</span><b>{title}</b></div>
-        {children}
-        {foot && <div className="ift">{foot}</div>}
-      </div>
-    </>
-  );
 }
 
 function NewInvoice({ customers, nav }: Props & { customers: Customer[] }) {
