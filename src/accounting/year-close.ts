@@ -28,6 +28,7 @@ import type { TaxCodeInfo } from '../engines/tax-codes.js';
 import { bookedInFiled, bookedWithBase } from '../books/twins.js';
 import type { ReturnFigures } from '../engines/return.js';
 import { turnoverReconciliation, type TurnoverReconciliation } from './turnover.js';
+import { settlementRefPrefix } from '../payroll/model.js';
 
 export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances' | 'reconciliations'> & {
   journalEntries: JournalEntry[];
@@ -547,6 +548,19 @@ export function bookedFor(entries: readonly JournalEntry[], year: string, t: Pic
   return entries.filter((e) => own(e) || onAccounts(e)).map((e) => ({ id: e.id, transactionRef: e.transactionRef, chf: chfAmount(e) }));
 }
 
+/** The template of the social insurances' final statements (modules/ch/year-end.yaml). */
+export const SOCIAL_INSURANCE_ID = 'socialInsurance';
+
+/**
+ * The final statements' differences the payroll booked for `year` (src/payroll/insurers.ts settlementEntry, ref
+ * `LS-<year>-<insurance>`, dated when the statement came): with them the social insurances' step is booked, by the
+ * payroll, whatever day they carry. Which insurer still has none is the payroll check's fact on the same page.
+ */
+export function settlementsOf(entries: readonly JournalEntry[], year: string): BookedEntry[] {
+  return entries.filter((e) => e.transactionRef.startsWith(settlementRefPrefix(year)) && e.by?.kind === 'code' && e.by.check === 'payroll')
+    .map((e) => ({ id: e.id, transactionRef: e.transactionRef, chf: chfAmount(e) }));
+}
+
 /** An entry that books a step: `chf` is what it adds to the step's figure. */
 export interface BookedEntry { id: string; transactionRef: string; chf: number }
 
@@ -819,7 +833,7 @@ export function yearClose(input: YearCloseInput): YearClose {
     : [];
   const owner = ownerAccountNumber({ bankAccounts: input.bankAccounts, company: { legalForm: input.legalForm } });
   const templates = [...yearEndTemplates(owner, input.legalForm), ...proposed].map((t) => {
-    const booked = bookedFor(books.journalEntries, year, t);
+    const booked = [...bookedFor(books.journalEntries, year, t), ...(t.id === SOCIAL_INSURANCE_ID ? settlementsOf(books.journalEntries, year) : [])];
     const stale = staleFigure(t, booked);
     return { ...t, state: state.templates[t.id] ?? (booked.length ? 'done' as const : undefined), ...(booked.length && { booked }), ...(stale && { stale }) };
   });

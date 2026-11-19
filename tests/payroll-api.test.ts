@@ -174,3 +174,14 @@ test('the insurers\' payments: listed for the bank page; «Immer so» refuses a 
   const gone = await api.send('DELETE', '/api/payroll/insurer-way?business=nobody');
   assert.equal(gone.json.code, 'payroll');
 });
+
+test('GET /api/year-close/<year> carries the payroll\'s checks beside the checklist: the payouts not paid on the clearing account, per person on the wage account', async () => {
+  const { status, json } = await api.send('GET', '/api/year-close/2026');
+  assert.equal(status, 200);
+  const p = json.payroll as { clearing: { unpaid: Array<{ employee: string }>; difference: number }; wages: { persons: Array<{ employee: string; difference: number }> }; statements: Array<{ employee: string; issued?: unknown }> };
+  assert.ok(p.clearing.unpaid.length > 0, 'the closed payslips are not paid in these books');
+  assert.equal(p.clearing.difference, 0, 'the clearing account holds exactly their payouts');
+  assert.ok(p.wages.persons.every((x) => x.difference === 0));
+  assert.ok(p.statements.some((s) => s.employee === 'e1'));
+  assert.ok(!(json.blockers as Array<{ code: string }>).some((b) => b.code.startsWith('payroll')), 'a fact, never a blocker');
+});

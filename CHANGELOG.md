@@ -108,6 +108,14 @@ Two markers flag an entry you must read before you update:
   commission, amount to pay) with its CSV. A new or corrected tariff file never changes a closed
   payslip: the card offers the Rückwirkende Korrektur first. Cantons on the annual model (FR, GE, TI, VD,
   VS) get the line «unvollständig» for now.
+- Abschluss › Prüfen: a section «Löhne» with the payroll's year-end checks as facts (never a block):
+  1091 at 31.12. against the payouts not paid by then, each named; each insurer's account with what
+  the payslips accrued, what was paid and what is open, and «Schlussabrechnung erfassen» while no
+  final statement is booked; 5000 per person and month against the payslips' gross lines, and what
+  it holds without one of the app's payslips; each person's Lohnausweis (field 8 against the gross,
+  issued or not, and whether it still agrees); for wages from other programs' payslips, 2270
+  explained by what the wages withheld and what the funds were paid. The year-end step
+  «Sozialversicherungen» counts as booked by the final statements entered in Löhne.
 - Buchungen › Neue Buchung von Hand: «+ Zeile» makes it a Sammelbuchung, one account against
   several lines (for example Haben 1020 against Soll 6500 and 6570). The last line holds the rest of
   the total until you type there, and ↵ books only once the lines add up. The lines are booked

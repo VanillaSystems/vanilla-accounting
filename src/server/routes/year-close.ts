@@ -12,6 +12,7 @@ import {
   setYearEndBalance, YearCloseRefused, yearCloseOf, yearEndDocumentOf,
 } from '../../books/year-close.js';
 import { RequestError, WS, assertOpen, patchBody, readBooks, stringField } from '../books.js';
+import { payrollYearEndOf } from '../../payroll/service.js';
 
 export const router = Router();
 
@@ -34,8 +35,10 @@ async function answer(res: Response, run: () => unknown): Promise<void> {
 router.get('/api/year-close/:year', async (req, res) => {
   const year = yearOf(req.params.year);
   await answer(res, () => {
-    const close = yearCloseOf(WS, year);
-    return { ...close, opening: close.closed ? openingFor(WS, year) : undefined };
+    const books = readBooks();
+    const close = yearCloseOf(WS, year, undefined, books);
+    // The payroll's checks are facts beside the checklist (docs/specs/payroll.md §6.7): never a blocker of the close.
+    return { ...close, opening: close.closed ? openingFor(WS, year) : undefined, payroll: payrollYearEndOf(WS, year, books) };
   });
 });
 

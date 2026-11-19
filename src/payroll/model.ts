@@ -268,3 +268,5 @@ export type PayslipCorrection = Extract<PayslipEvent, { event: 'correction' }>;
 export const payslipId = (month: string, employee: string): string => `${month}-${employee}`;
 /** The ref of the entries a closed payslip books (§7.2). */
 export const payslipRef = (month: string, employee: string): string => `LR-${month}-${employee}`;
+/** The ref of a final statement's difference (§6.4): `LS-<year>-<insurance>`; this is its year's prefix. */
+export const settlementRefPrefix = (year: string): string => `LS-${year}-`;

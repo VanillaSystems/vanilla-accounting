@@ -29,6 +29,7 @@ import { at } from '../receipts/view.js';
 import { VatCodeField } from '../codes/VatCodeField.js';
 import { codeLabel } from '../codes/names.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
+import { PayrollChecks } from './Payroll.js';
 
 type Props = AreaProps<RouteOf<'close'>>;
 
@@ -143,6 +144,7 @@ function Checks(p: StepProps) {
       <YearEndBalances {...p} />
       {chargesVat() && <VatReconciliation d={d} />}
       {d.turnover && <TurnoverReconciliation d={d} books={books} nav={nav} />}
+      {d.payroll && <PayrollChecks d={d} nav={nav} />}
     </>
   );
 }

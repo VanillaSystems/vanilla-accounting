@@ -9,7 +9,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { ClosedPeriodError, loadBooks, periodLock, receiptFile, type Books } from '../books/store.js';
-import { payroll, payrollYears } from '../engines/index.js';
+import { chart, payroll, payrollYears, setup } from '../engines/index.js';
 import { writeAtomic, idSource, sha256 } from '../invoices/store.js';
 import { accountsOf } from '../workspace/reads.js';
 import { setAccountName } from '../workspace/accounts-write.js';
@@ -31,6 +31,8 @@ import { encryptPdf, generatedPassword } from './pdf-encrypt.js';
 import { sendingAddress, type MailMessage } from '../invoices/mail.js';
 import type { PayrollEmployee, PayrollStore, PayslipClose, PayslipCorrection } from './model.js';
 import type { PaymentFileRecord } from './payment-file.js';
+import { payrollYearEnd, type PayrollYearEnd } from './year-end.js';
+import { providerIssuesIn } from '../intake/pair-chain.js';
 
 /** A change to the books inside the caller's write door; `fn` is synchronous. */
 export type BooksWriter = <T>(fn: (books: Books) => T) => T;
@@ -326,4 +328,25 @@ export function keepPaymentFile(ws: Pick<Workspace, 'paths'>, record: PaymentFil
   mkdirSync(join(yearPaths(ws.paths, year).payroll, 'payment-files'), { recursive: true });
   writeAtomic(path, Buffer.from(xml, 'utf8'));
   appendFileSync(paymentFilesLog(ws, year), JSON.stringify(record) + '\n');
+}
+
+// ─── the year-end ──────────────────────────────────────────────────────────────
+
+/**
+ * The payroll's checks of the year's close (§6.7, A7) from the workspace as it is now: undefined where the
+ * jurisdiction has no payroll, and where the year has neither a payslip nor a wage booked (nothing to check).
+ */
+export function payrollYearEndOf(ws: Workspace, year: string, books: Books = loadBooks(ws)): PayrollYearEnd | undefined {
+  if (!payroll()) return undefined;
+  const ctx = payrollContext(ws);
+  const wages = setup().wages;
+  const issues = wages?.deductions ? providerIssuesIn(ws, books) : undefined;
+  const out = payrollYearEnd({
+    year, books, closes: [...ctx.history.closed.values()], employees: ctx.store.employees, data: ctx.data, store: ctx.store,
+    issued: lohnausweisSnapshots(ws, year), isDebitNormal: (a) => chart().isDebitNormal(a),
+    ...(wages?.account ? { wageAccount: wages.account } : {}), ...(wages?.deductions ? { deductionsAccount: wages.deductions } : {}),
+    withheldPayees: new Set(issues?.withheldPayees ?? []), withheldShares: issues?.withheldShares ?? {},
+  });
+  const something = out.clearing || out.insurers.length || out.wages || out.statements.length || out.withheld;
+  return something ? out : undefined;
 }

@@ -40,11 +40,24 @@ steps:
     phase: revalue
     duration: 20m
 
+  - id: payroll-check
+    name: Check the wage accounts against the payslips
+    icon: calculator
+    note: >
+      Abschluss › Prüfen, section Löhne (docs/specs/payroll.md §6.7): the clearing account at 31.12. against
+      the payouts not paid by then; each insurer's account (accrued, paid, open) and its final statement;
+      the wage account per person against the payslips; each person's wage statement; the collective
+      account of wages from other programs explained. Facts only: a difference is named, never booked,
+      and nothing here keeps the year from closing
+    needs: [book_diff]
+    phase: close
+    duration: 15m
+
   - id: reports
     name: Produce the balance sheet and the income statement
     icon: file-output
     note: "the Jahresabschluss tab's closing balance sheet (VAT split off by code), and the tabs Bilanz, Erfolgsrechnung, Kontenblätter"
-    needs: [book_diff, find.rebook]
+    needs: [payroll-check, find.rebook]
     phase: close
     duration: 5m
 
