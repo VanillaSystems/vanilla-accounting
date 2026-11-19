@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadChart, ChartError } from '../src/workspace/chart.js';
 
-const KEYS = new Set(['number', 'name', 'type', 'line', 'profiles', 'legalForms', 'names', 'hints']);
+const KEYS = new Set(['number', 'name', 'type', 'line', 'profiles', 'legalForms', 'names', 'hints', 'payroll']);
 
 test('every account of the shipped chart has only the keys the loader knows', () => {
   for (const a of loadChart().accounts) assert.deepEqual(Object.keys(a).filter((k) => !KEYS.has(k)), [], a.number);
