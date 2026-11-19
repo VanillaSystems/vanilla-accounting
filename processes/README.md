@@ -397,7 +397,7 @@ payroll:
 advance payments twice; `payments: contributions` is refused. A covered payment is booked against
 the liability whatever the file says. Remove the section (or «Rückgängig» on the insurer's page in
 Löhne › Lohnzahlungen) to be asked again; what was booked stays booked (src/knowledge/payroll-way.ts,
-docs/specs/payroll.md §22 decision 126).
+docs/specs/payroll.md §22 decision 59).
 
 ## A business that collects wage deductions
 

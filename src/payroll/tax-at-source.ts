@@ -117,7 +117,7 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
     if (base <= 0) return undefined;
 
     // The rate-determining income (KS 45 Ziff. 6): what the firm prorated in a part month back to a whole month;
-    // what is paid as worked (hours, a month's line) counts as paid (§22 decision 103); other employments to their whole.
+    // what is paid as worked (hours, a month's line) counts as paid (§22 decision 94); other employments to their whole.
     let income = periodic + (input.days > 0 && input.days < t.partMonth ? prorated * t.partMonth / input.days : prorated);
     const median = loaded.file.median;
     const other = person.otherEmployment;

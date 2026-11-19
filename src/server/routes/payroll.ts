@@ -270,7 +270,7 @@ router.get('/api/payroll/insurances', run((req, res) => {
   const year = typeof req.query.year === 'string' && /^\d{4}$/.test(req.query.year) ? req.query.year : today().slice(0, 4);
   const ctx = payrollContext(WS);
   const counterparties = loadKnowledge(APP_ROOT, WS.paths.root).counterparties;
-  // Each insurance's kept way («Immer so», §22 decision 126), with the file that keeps it: undone from here too.
+  // Each insurance's kept way («Immer so», §22 decision 59), with the file that keeps it: undone from here too.
   res.json({ year, rows: insurerRows(readBooks(), ctx.data, ctx.store, year).map((r) => {
     const kept = keptWayOf(ctx.store.insurances.find((i) => i.id === r.id)!, counterparties);
     return kept ? { ...r, kept } : r;
@@ -278,7 +278,7 @@ router.get('/api/payroll/insurances', run((req, res) => {
 }));
 
 /**
- * What a final statement of `year` is compared with, before a total is typed (§22 decision 125): the year's
+ * What a final statement of `year` is compared with, before a total is typed (§22 decision 58): the year's
  * contributions in the books, so the page says the difference and its direction as the total is typed, and the
  * people whose December is not closed yet. `compare: null` with the reason when the year has nothing to compare.
  */
@@ -342,7 +342,7 @@ router.get('/api/payroll/insurer-payments', run((_req, res) => {
 }));
 
 /**
- * What «Immer so» on payment `ref` does (§22 decision 126): the insurance it pays, the file that keeps the way, and the open
+ * What «Immer so» on payment `ref` does (§22 decision 59): the insurance it pays, the file that keeps the way, and the open
  * payments to that insurance the liability way books at once (a company rule's left alone), so the form names them first.
  */
 function insurerWayPlan(ref: string) {

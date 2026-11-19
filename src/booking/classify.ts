@@ -1122,7 +1122,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
       outcome.failed.push({ ref: tx.ref, reason: `Zahlung an ${insurer.name}: ${insurer.account} deckt sie nicht. Für Monate ab dem Lohnstart gegen ${insurer.account}, für Monate davor als Beiträge buchen (von Hand).` });
       continue;
     }
-    // One the liability covers, or whose fund's file keeps the liability way («Immer so», §22 decision 126): bank / liability by code,
+    // One the liability covers, or whose fund's file keeps the liability way («Immer so», §22 decision 59): bank / liability by code,
     // as the intake's payroll step books it, never the model, which would expense the contributions a second time. A company rule still decides its own.
     if (insurer?.books && !ruleOfPayment(books, tx, context, fx)) {
       let bank: string | undefined;

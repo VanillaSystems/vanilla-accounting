@@ -725,7 +725,7 @@ person pays in e-banking. The bank statement brings the line; code matches it by
 person's name or IBAN valid on the payday and books D 1091 / C bank; the list shows «bezahlt» with
 the bank line. A payment of several wages in one line is split by the payslips it covers. In B1 the
 list writes a pain.001 file of the payouts not paid yet; no payments channel existed, so payroll
-writes it itself (§21 decision 5, §22 decision 69).
+writes it itself (§21 decision 5, §22 decision 88).
 
 ### 6.4 Sozialversicherungen through the year
 
@@ -1007,7 +1007,7 @@ doctor` names them.
   without me answering anything. The Akonto clears exactly what was withheld.»
 - *Matthias (consulting):* «Without an AI subscription my salary is still booked gross.»
 - *Sandra (painter):* she has only net bank lines. Code books no wage without its payslip (the
-  owner's decision on #359, §22 decision 53): the wage rule is offered in one click on Aufgaben,
+  owner's decision on #359, §22 decision 60): the wage rule is offered in one click on Aufgaben,
   and once she keeps it the wages are booked net on 5000. No question is asked.
 
 ### 10.2 Changes
@@ -1016,13 +1016,13 @@ doctor` names them.
 |---|---|---|---|
 | A1 | **Document kind `payslip`.** Recognised by code: the firm is the issuer (`issuedByFirm` ≠ false), the head names a payslip word (a new `documents.yaml` list `payslip: [Lohnabrechnung, Lohnblatt, Salärabrechnung, Gehaltsabrechnung, Décompte de salaire, Bulletin de salaire, Conteggio salario, Busta paga, Payslip]`) and `payslipDeductions` reads. A payslip is never an «own invoice» waiting for its customer (`waitsForCustomer`) and never a bill. | code | modules/ch/documents.yaml, src/intake/document-kind.ts, src/intake/own-invoice.ts, period-issues.ts |
 | A2 | **`readPayslip(text)` → `{ employee, period, gross, net, deductions: Map<kind, amount>, allowances, expenses }`**, built on `payslipDeductions`. It needs gross − Σ deductions + allowances + expenses = net to the Rappen, else undefined. The words for gross, net, allowance and expenses come from `setup.yaml wages.payslip` (data, de/fr/it/en), never from code. | code | src/booking/withheld.ts (or a new src/booking/payslip.ts), modules/ch/setup.yaml |
-| A3 | **Code books `cls-salary`.** A wage payment linked to a payslip that reads, with net = the bank amount: D 5000 / C bank (net); D 5000 / C 2270 for the social deductions; D 5000 / C 2279 for kind `tax`; an allowance D 2270 / C bank (the fund refunds it on its bill; §16, decision 10; level B books it on the FAK’s own account, §7.2); expenses D 5820/5830 / C bank. `by: { kind: 'code', check: 'payslip' }`. A payment of several wages (one bank line, several payslips) books each payslip as its own lines. The model is not asked. Without a payslip code books nothing (§22 decision 53): the wage is booked by the wage rule the person keeps in one click (#383), or by the model, and when a payslip comes later, code books it again (as `bookWithheldShares` does, never a person's booking). | code | src/booking/classify.ts, processes/booking.guide.yaml cls-salary (→ status: accepted), **books schema step** for the new check (§9.1) |
+| A3 | **Code books `cls-salary`.** A wage payment linked to a payslip that reads, with net = the bank amount: D 5000 / C bank (net); D 5000 / C 2270 for the social deductions; D 5000 / C 2279 for kind `tax`; an allowance D 2270 / C bank (the fund refunds it on its bill; §16, decision 10; level B books it on the FAK’s own account, §7.2); expenses D 5820/5830 / C bank. `by: { kind: 'code', check: 'payslip' }`. A payment of several wages (one bank line, several payslips) books each payslip as its own lines. The model is not asked. Without a payslip code books nothing (§22 decision 60): the wage is booked by the wage rule the person keeps in one click (#383), or by the model, and when a payslip comes later, code books it again (as `bookWithheldShares` does, never a person's booking). | code | src/booking/classify.ts, processes/booking.guide.yaml cls-salary (→ status: accepted), **books schema step** for the new check (§9.1) |
 | A4 | **Quellensteuer as a kind with a payee.** `setup.yaml wages.withholdsTo: { tax: "2279" }` (per-kind deductions account; 2270 stays the default). A business file whose `collects: [tax]` names the cantonal tax office routes its payment to clear 2279. The Bezugsprovision (payment < 2279's share) books C 3xxx/6xxx «Bezugsprovision Quellensteuer» (account in setup.yaml). | code; the person names the tax office's file once | modules/ch/setup.yaml, processes/authorities/steuerverwaltung.yaml (fact `withholding`, DBG Art. 88), src/booking/withheld.ts `fundShare` per account |
 | A5 | **Generic payees for pension, accident, sickness.** A business file may say `collects: [pension]` (a contract, not a name). The app's `wages.payees` becomes «ausgleichskasse **plus** every file that declares `collects`». The workspace grows the fund's file. The AI drafts it from the first bill, and the person keeps it on its card. `fundShare` then works for the pension fund too. | code + AI drafts + person keeps | src/knowledge/ (file schema), src/booking/withheld.ts, processes/README.md |
 | A6 | **Payroll journal import.** A payroll program's CSV export, recognised by the columns a business file names (`payroll: { reports: { journal: { columns: … } } }`, exactly like `provider.reports.sales` in src/booking/sales-report.ts). It is booked as entries per employee and month by ref `LJ-<business>-<period>-<employee>`, once. The person names the program's file. The app ships the contract and one reference file in tests, no vendor (ADR 0015 row 4). | code (contract), AI writes the column map with the person | src/intake/ (new payroll-journal-import.ts), src/booking/ |
 | A7 | **Year-close checks (facts, not reminders):** (a) 5000 of the year = Σ gross of the year's payslips, per employee; difference named. (b) 2270 at 31.12. = Σ what the funds still bill, per kind (from `fundShare`'s arithmetic). (c) The final statement of the fund (Schlussabrechnung) is booked: its difference to the Akontos on 5700 against 2270, proposed by code from the statement's total and the Akontos booked (the `socialInsurance` template becomes a proposal). (d) Per-employee year totals in Lohnausweis fields 1, 8, 9, 10.1, 11, 12, 13 from the payslips read, shown on a «Lohnausweis-Daten» page and exported as CSV for the person or the Treuhänder. | code | src/accounting/year-close.ts, src/app/areas/close/steps.ts, modules/ch/year-end.yaml, processes/year-close.flow.yaml (new step `payroll_check`) |
 | A8 | **Salary data marked as such.** A receipt of kind `payslip` is sent to the model only when code cannot read it, and then without its AHV number (a 756.xxxx.xxxx.xx pattern masked before the call, and never in a model prompt). The AI's facts name totals, not persons' wages, unless the person asks about one. | code | src/llm/prompts.ts, src/intake/ (a mask step), docs/0.4.0/ privacy note |
-| A9 | #383 and #359 on the way: the wage rule books when kept (tests/rule-keep-books.test.ts) and a payslip completes its net booking (§22 decision 56); without an AI code books the bank's fee row and a wage from its payslip, never a wage without one (the owner's decision on #359, §22 decision 53). | code | src/saving/wage-rule.ts, src/booking/classify.ts |
+| A9 | #383 and #359 on the way: the wage rule books when kept (tests/rule-keep-books.test.ts) and a payslip completes its net booking (§22 decision 63); without an AI code books the bank's fee row and a wage from its payslip, never a wage without one (the owner's decision on #359, §22 decision 60). | code | src/saving/wage-rule.ts, src/booking/classify.ts |
 
 ### 10.3 Data
 
@@ -1046,7 +1046,7 @@ Scored on the first-run walks (first-run.md checkpoints), with the AI **off** fo
    whenever the funds billed the quarter.
 2. Consulting: the same with one person. With the AI off, the three wages are still gross.
 3. Huber: net bank lines only. Code books no wage; the wage rule is offered in one click and, kept,
-   books them net. No payment on 2270, no question asked (§22 decision 53).
+   books them net. No payment on 2270, no question asked (§22 decision 60).
 4. Treuhänder: a synthetic Lohnjournal CSV of 3 people × 3 months is booked once. A second drop
    books nothing. «Rückgängig» takes only its entries.
 5. Year close on demo-consulting: the A7 checks show 0 differences. Breaking one payslip by
@@ -1254,7 +1254,7 @@ checkpoint 1 counts with the forms).
 | 1 | Six payslips of Q3 and the camt.053 dropped: every wage booked gross by code (`by.check: payslip`) | K.O. | 30 |
 | 2 | The Akonto clears exactly the AHV/IV/EO/ALV share (withheld-fund-476); the pension fund's payment clears the BVG share once its file has `collects: [pension]` | | 25 |
 | 3 | A payslip with Quellensteuer books 2279 | | 15 |
-| 4 | Huber: net bank lines only, not booked by code; the wage rule offered in one click, no question asked (§22 decision 53) | | 15 |
+| 4 | Huber: net bank lines only, not booked by code; the wage rule offered in one click, no question asked (§22 decision 60) | | 15 |
 | 5 | withheld-*.test.ts stay green; no `756.` in any prompt | K.O. | 15 |
 
 Bar: all K.O. and at least 80.
@@ -1770,72 +1770,19 @@ Taken after the scored persona walk of B0 (2026-11-19, AI on 73, AI off 83, bar 
     months are not the VAT period's. A month path `/payroll/payslips/<yyyy-mm>` opens that month.
 52. **A Lohnausweis for a person without a social security number is said first** (field C stays empty),
     then «Trotzdem erstellen» (§18), as an open month is.
-90. **The year-end's payroll checks are facts in their own section of Abschluss › Prüfen** (src/payroll/year-end.ts,
-    src/app/areas/close/Payroll.tsx), summed up in one row of the checklist («Löhne»), and never a blocker of the
-    close: a difference is named with its payslip, insurer or person and a link to where it is seen or booked. They
-    are computed in the API's year-close route beside the checklist, in a try of their own: a failure there is said
-    on the page and leaves the close as it is. The close's code (src/books, src/accounting/year-close.ts) imports no
-    payroll module (the final statements' ref prefix lives in src/books/refs.ts), so `npm run year:close` does not
-    print them.
-91. **The wage account is compared with what each payslip booked onto it when it closed, not with the gross**: a
-    daily allowance is gross but booked on the insurer's account (`taggeld-*`), so 5000 = Σ gross would differ by
-    design. Per person and month by the payslip's ref (`LR-<month>-<person>`): a person's change of one entry shows
-    on that month. What it booked when it closed is the postings recomputed from its lines while every entry the
-    close booked still reads so; once a Lohnart's accounts changed since, the entries as booked (the payroll's own,
-    a person's changed one by `by.was`), and where that is not known, the month names the cause («Konten seit dem
-    Abschluss geändert») and no difference. What 5000 holds under no payslip's ref (hand bookings, level A) is named
-    as «ohne Lohnabrechnung der App», a fact, not a difference. A-2 plugs in as rows of the same shape (`WageRow`,
-    source `external`) with the refs of the payments its read payslips book.
-92. **The clearing account is checked against every closed payslip not paid by 31.12.**, by the bank line linked
-    to its PDF and dated on or before 31.12. (a December wage paid in January is unpaid at 31.12.), less what
-    that line paid for it (decision 42), with `paidFor` signed off the clearing account in the books' currency (a
-    wage paid from a foreign-currency account at the entry's rate); where a line's share cannot be told, a payment
-    linked to the payslip counts as its payout. A year not opened yet carries what the entries before it left.
-93. **An insurer's fact is its liability account at 31.12.**: what it carried into the year (the opening, else the
-    entries before the year; an earlier year's final statement dated later counts there), the year's accrual and
-    payments, and open = carried + accrued − paid, in `insurerRows` itself, so Lohnzahlungen shows the carry-over
-    too («Übertrag aus dem Vorjahr»). Insurances sharing an account (accident and its supplement) are one fact. It is
-    settled when a final statement's difference is booked (`LS-<year>-<insurance>`) or nothing is open; open without
-    one is a fact with «Schlussabrechnung erfassen» (Löhne › Lohnzahlungen, decision 35), offered only for an
-    insurance whose statement `settlementOf` takes (not the tax at source). A statement whose total agreed with
-    the payslips books nothing and so is not seen: while something is open the check still says «keine
-    Schlussabrechnung gebucht», which is what the books show.
-94. **The year-end step «Sozialversicherungen» (5700 / 2270) counts as booked by the payroll's final statements**
-    of the year (`settlementsOf` in src/accounting/year-close.ts): the page names them as its bookings, each linked
-    in the period of its own date, and «zurück» and «Neu buchen» neither remove nor name them (they are the
-    payroll's, not the step's). Level A gets no amount proposal: the fund's final total is not in the books until
-    A-2 or the person brings it.
-95. **The Lohnausweis check compares the form's gross field with her gross as the form counts it**: the closed
-    payslips' lines whose Lohnart names one of the field's parts (a family allowance paid with the wage too, though
-    no gross line), signed as the form signs them, and the opening's parts; within the rounding to francs (half a
-    franc per field that holds something). It names the Lohnarten without a field, and compares the newest issued
-    snapshot's gross field with today's; a person with closed payslips and no snapshot is a fact «noch nicht
-    ausgestellt». The gross field is found as the form's sum that takes nothing off, not by its number.
-96. **Level A's collective account at 31.12. is explained as opening + withheld (its credits on a wage's ref)
-    − paid (its debits on a payment out) ± other**, and the contribution payments that left the employees' share
-    on it (unclearedContributions, with the payees and shares the business files give) are named with links. The
-    business files are read only when the account moved in the year.
-97. **The opening's months are a fact on the wage account, never a difference** (decision 91's check, on the walk
-    fixes): what 5000 holds under no payslip's ref up to the end of the opening's last month (`through`, over every
-    person) is shown beside the opening's gross by its Lohnausweis fields, without a hint either way (field 1 holds
-    what was booked elsewhere too, an allowance on the fund's account); only what is booked otherwise after it is
-    named as «ohne Lohnabrechnung der App». An insurer shows, beside accrued, paid and open, what the final
-    statement's comparison counts for those months (`settlementOf`'s `before`).
+Taken after the second persona walk of B0 (2026-11-19, AI on 90, AI off 100):
 
-Taken after the second persona walk of B0 (2026-11-19, AI on 90, AI off 100); numbered from 120, renumbered at
-merge:
-
-120. **A carried correction is booked as an entry of its own**, one per Lohnart, account pair and payslip it
+53. **A carried correction is booked as an entry of its own**, one per Lohnart, account pair and payslip it
      corrects, never merged into the month's regular line of the same Lohnart (src/payroll/booking.ts
      `bookingOf`): «Korrektur 08/2026: BVG Arbeitnehmer <Name>». The payslip it corrects stays on the payslip's
      line (`corrects`) and on the posting; the journal entry carries no `corrects`, which names a filed VAT
      period (AGENTS.md golden rule 1). The preview and the close show the same postings and texts.
-121. **The journal's texts are the books' words, German data, whatever the person's or the UI's language**: a
+54. **The journal's texts are the books' words, German data, whatever the person's or the UI's language**: a
      payslip's postings read the Lohnart's German label («AHV/IV/EO 10/2026 Lukas Beispiel»), as every other
      description code writes («Zahlung …», «Schlussabrechnung …»). The payslip, its PDF and the forms speak
      the person's or the UI's language; the preview of a draft shows the texts closing will book, not a
      translation of them.
-122. **A Lohnart's rate may be entered in percent, with a default, and its missing input says a sentence of its own**,
+55. **A Lohnart's rate may be entered in percent, with a default, and its missing input says a sentence of its own**,
      all data (`units: { rate: percent }`, `defaults: { rate: 0.9 }`, `missing` in payroll.yaml, checked by
      check-payroll): the company car is typed «0.9» under «Satz % pro Monat», prefilled, and kept as the fraction
      the payslip computes with (0.009: price × 0.9 %), so a stored value and every computed figure stay as they
@@ -1843,16 +1790,16 @@ merge:
      Fahrzeugs (ohne MWST) fehlt». The month's «Lohnart hinzufügen» and a person's «Wiederkehrende Lohnart»
      share one set of fields (src/app/areas/payroll/inputs.ts), and a refusal names the field by the word the
      form shows («Kaufpreis ohne MWST», not «Menge»).
-123. **A federal figure names its articles per language** (`cite: { de, fr, it, en }` beside `source` in
+56. **A federal figure names its articles per language** (`cite: { de, fr, it, en }` beside `source` in
      payroll/<year>.yaml): the payslip line, its page and its PDF read them in the person's or the UI's
      language («Valeur fédérale 2026 · LAVS art. 5, 13; LAI art. 3; RAPG art. 36»). `source` stays the
      maintainers' one string; a figure without `cite` names the head of its `source` in every language, as
      before, so an older year file reads as it did. check-payroll wants all four languages once `cite` is there.
-124. **The month states are written alike in every language**: lower case in French, Italian and English
+57. **The month states are written alike in every language**: lower case in French, Italian and English
      («clôturé», «ouvert», «à venir», «ouverture», «brouillon»), as the German adjectives are; German keeps
      its nouns capitalised («Eröffnung», «Entwurf») by its grammar. A heading uses its own key
      (`payroll.month.openingTitle`).
-125. **The final statement says its difference before it is booked, and a December still open first**: the page
+58. **The final statement says its difference before it is booked, and a December still open first**: the page
      reads the year's contributions in the books when it opens (`GET /api/payroll/insurances/<id>/compare`,
      decision 44's sum, with no total), shows «In den Büchern …» and, as the total is typed, «Differenz +…»;
      the button names the amount and the direction («Differenz <Betrag> buchen: Nachzahlung an …», «…: Guthaben
@@ -1861,7 +1808,7 @@ merge:
      whatever the difference's size, and booked only on «Trotzdem buchen» (§18): the books do not hold the year
      whole yet, so the difference would hold December too. One «Trotzdem buchen» covers both warnings. A refusal
      shows as a panel beside the form (decision 50).
-126. **«Immer so» keeps «für Monate ab dem Lohnstart» for a fund, in the company's file of the fund** (`payroll: {
+59. **«Immer so» keeps «für Monate ab dem Lohnstart» for a fund, in the company's file of the fund** (`payroll: {
      payments: liability, source }`, src/knowledge/payroll-way.ts, validated with the business files; the app layer
      may not say it). Only that way is kept: «für Monate davor» pays months before payroll ran here, which end, so kept
      for good it would expense later advance payments a second time; it stays a choice per payment, and the file
@@ -1884,56 +1831,56 @@ merge:
 
 Taken while building A-2 (2026-11-19):
 
-53. **A wage without its payslip is not booked by code** (the owner's decision on #359 of 2026-11-12, kept by
+60. **A wage without its payslip is not booked by code** (the owner's decision on #359 of 2026-11-12, kept by
     the coordinator for A-2): a net wage booked by code would contradict `cls-salary`. It stays a one-click
     proposal (the wage rule of #383 on Aufgaben, or the model with an AI); its payslip, when it comes, books it
     gross by code. §10.1 (Sandra), §10.2 A3, §10.4 3 and §15.2 4 say so; there is no «Löhne netto gebucht» fact,
     since nothing is booked net without the person's click.
-54. **A payslip of another program is its kind only when it reads** (`kindRule: document:payslip`, src/booking/
+61. **A payslip of another program is its kind only when it reads** (`kindRule: document:payslip`, src/booking/
     payslip.ts): the firm issued it (its name in the letterhead, or its UID as the only one shown: a payslip
     prints no VAT number, so `issuedByFirm`'s UID test alone would refuse every payslip of a firm with a UID), a
     payslip title from documents.yaml is in its first lines, and gross − deductions + allowances + expenses is
     its net to the cent. One that does not read stays a receipt like any other, which the model may read, masked
     (§11). Only payslips read at the drop are typed; one read before this build keeps its kind.
-55. **A payslip is dated by its month's end and its amount is the net it pays**; it is paired by code alone with
+62. **A payslip is dated by its month's end and its amount is the net it pays**; it is paired by code alone with
     the payment out of its net to the cent that names its person (the bank's counterparty in its text, or its
     person in the payment's), from 20 days before its month ends to a month after, the nearest first; one line
     equal to all of a month's payslips pays each. The link is `rule: payslip`. Neither the model's match nor the
     titles call sees a payslip that reads, and the chain's general search never takes one (pairableReceipt).
-56. **The wage rule (#383) books what a payslip completes**: a company rule that books the payment whole on the wage
+63. **The wage rule (#383) books what a payslip completes**: a company rule that books the payment whole on the wage
     account is replaced by the payslip's booking, at once or when the payslip comes later; a rule that books
     elsewhere stays the rule's. The rebooking takes only the app's lines (the model's, this check's, that rule's).
-57. **The allowances paid with a wage go onto the deductions account (2270), the expenses by their kind** (setup.yaml
+64. **The allowances paid with a wage go onto the deductions account (2270), the expenses by their kind** (setup.yaml
     `wages.payslip.expenses`: flat 5830 first, effective 5820), as §16 decision 10 says for level A.
-58. **A business file's `collects:` makes it a collector** (A5) beside setup.yaml `wages.payees`; a kind it does not
+65. **A business file's `collects:` makes it a collector** (A5) beside setup.yaml `wages.payees`; a kind it does not
     name of the jurisdiction refuses the file. A collector's payment needs no receipt, as the compensation fund's.
     `fundShare` works per account: the kinds a business collects must all be owed on one account (2270, or 2279 for
     the withholding tax, `wages.withholdsTo`).
-59. **Without a model, code books a collector's payment where it knows the share**: the share on its account, the
+66. **Without a model, code books a collector's payment where it knows the share**: the share on its account, the
     rest the employer's on the payee's earlier contribution account, else the kind's (`wages.employer`: 5700, 5720).
     The family allowances billed with the compensation fund's contributions land on 5700 then; with a model the bill
-    splits them. (Which months a payment clears, and when code books nothing: decision 65.) A pension fund
+    splits them. (Which months a payment clears, and when code books nothing: decision 72.) A pension fund
     without `collects` stays the person's without a model. Payments to collectors are booked after the run's other
     payments, so the wages booked now are on the books first.
-60. **The withholding tax's payment is booked by code with or without a model** (it is fully decided by the
+67. **The withholding tax's payment is booked by code with or without a model** (it is fully decided by the
     payslips): 2279 cleared by what was withheld; a shortfall up to 5 % of it (`wages.commission`, DBG Art. 88 Abs.
     4 names 1 to 2 %, a canton its own rate) is the collection commission (Bezugsprovision), credited to 6500 as a
     lower administration cost; short by more, the payment clears only what it pays; more than owed is the person's.
     Name the canton's file by what tells its withholding-tax payments apart: the same office collects the firm's
     direct taxes.
-61. **A payroll insurer's payment stays payroll's** (decision 45): level A's collector booking skips a payment
+68. **A payroll insurer's payment stays payroll's** (decision 45): level A's collector booking skips a payment
     `insurerPaymentOf` names, covered or not.
-62. **The setup cards are derived from Belege on every read** (src/payroll/setup-documents.ts): a document whose
+69. **The setup cards are derived from Belege on every read** (src/payroll/setup-documents.ts): a document whose
     first lines name a kind's document (payroll.yaml `setupDocuments.kinds`) is a card until payroll.json names it
     (`source.receiptId` on a rate entry, a person's insurances entry, or the new insurance's `source`), it is kept or
     set aside (data/payroll-setup.json, beside the books, with the AI's reading once asked). Code reads the
     letterhead's name, a number after its label and a rate in % on the line of its words; a compensation fund's
     decision proposes the family allowances' insurance beside it when it names that rate.
-63. **The AI reads only on the person's click** («Fehlendes von der KI lesen lassen», step `payroll-setup`), never
+70. **The AI reads only on the person's click** («Fehlendes von der KI lesen lassen», step `payroll-setup`), never
     by itself, from the document's lines without a salary, an insured wage or a birth date (`notToModel`), the
     social security number masked; code checks the answer (known kinds and rate keys, rates within their ranges)
     and the AI only fills what code left empty. Each field on the card says who read it.
-64. **«Übernehmen» writes what the forms write**, through the same comparison with closed payslips (§19.3): a new
+71. **«Übernehmen» writes what the forms write**, through the same comparison with closed payslips (§19.3): a new
     insurance as «Versicherung erfassen» does, or, for a kind the firm has, its rates as a dated entry of its
     solution (with the rates the document does not name carried over) and the numbers it lacks; a pension
     certificate's person her contributions as a dated entry of her insurances, matched by her name; a name payroll.json
@@ -1941,33 +1888,33 @@ Taken while building A-2 (2026-11-19):
 
 After the independent review of A-2 (2026-11-19):
 
-65. **A collector's payment clears whole months, the oldest first** (src/booking/withheld.ts `withheldMonths`,
+72. **A collector's payment clears whole months, the oldest first** (src/booking/withheld.ts `withheldMonths`,
     `contributionLines`), never what a later month withheld: the withholding tax's payment is a run of the oldest open
     months' tax, or that less the collection commission between `from` and `upTo` percent (setup.yaml, 0.5 to 5), else
     it clears only what it pays; a fund's payment is a run of the oldest open months' employees' share and the employer's
-    beside it, so between twice and three times that share, else it is the person's (or the model's). Decision 59's
+    beside it, so between twice and three times that share, else it is the person's (or the model's). Decision 66's
     «whole payment the employer's» without a model is gone: on thin evidence code books nothing.
-66. **Never at the year's start without the year before's balance**: while the year before has books and no opening of
+73. **Never at the year's start without the year before's balance**: while the year before has books and no opening of
     the year says what the account carried over, code books no collector's payment (a January payment of Q4's).
-67. **A payslip's nearest payment is its only one**: chosen among every payment that fits, filed or linked ones too; when
+74. **A payslip's nearest payment is its only one**: chosen among every payment that fits, filed or linked ones too; when
     that one is filed, linked or nearer to another payslip, the payslip gets no link (it never reaches a month off). Its
     person is read below its title, never from the firm's letterhead.
-68. **Nothing of a payslip reaches a model**: a text the firm issued and titles a payslip is of kind `payslip` whether it
+75. **Nothing of a payslip reaches a model**: a text the firm issued and titles a payslip is of kind `payslip` whether it
     reads or not (`document:payslip-unread`, filed for the person), and so is one of a month the app's own payroll closed
     (its PDF dropped again); neither goes to the kind, title or match calls, and a payment with a payslip linked that code
     does not book is the person's, never the model's. A program that prints its deductions without a minus reads when the
     net proves them.
-69. **A setup document's lines for a model are an allow-list** (`linesForModel`): the letterhead's first two lines, a line
+76. **A setup document's lines for a model are an allow-list** (`linesForModel`): the letterhead's first two lines, a line
     with a %, a line with a word of the rates, numbers, kinds or `toModel`; never an amount alone, a line with a day, or one
     that holds a word of `notToModel` anywhere (substrings, any case). The card is keyed by whether the AI was asked, so
     its reading shows.
-70. **A kept card writes only what it says**: a blank contribution stays as the person's entry valid on that day says, or
+77. **A kept card writes only what it says**: a blank contribution stays as the person's entry valid on that day says, or
     her part is not taken (and the card stays); the rates and her insurances carried over are the entry valid on the
     card's day, not the last entered.
-71. **A payslip's currency is the one its amounts name** (else the books'); a wage less its deductions at or below
+78. **A payslip's currency is the one its amounts name** (else the books'); a wage less its deductions at or below
     nothing books nothing; the withholding tax's collector is told what 2279 holds, with a reason of its own.
 
-60. **The holiday surcharge of an hourly wage is computed, on its own line** (Lohnart `ferienzuschlag`, `computes:
+79. **The holiday surcharge of an hourly wage is computed, on its own line** (Lohnart `ferienzuschlag`, `computes:
     holiday`): weeks / (weeksPerYear − weeks) to two decimals (4/48, 5/47, 6/46), the
     weeks from the Anstellung's holiday days by `payroll.yaml holidays.daysPerWeek`, else the legal minimum by age
     (5 weeks before the 20th birthday, then 4), said as the line's source. Its base is the wage of the hours lines
@@ -1975,19 +1922,19 @@ After the independent review of A-2 (2026-11-19):
     hourly Anstellung names in % (`publicHolidaySurcharge`, Lohnart `feiertagszuschlag`). An hourly person who takes
     her holidays as paid leave (`holidayPay: leave`) gets no surcharge and a holiday balance instead. Overtime
     carries none.
-61. **The holiday balance is in days, from January or the entry**: the year's holiday days by the share of each month
+80. **The holiday balance is in days, from January or the entry**: the year's holiday days by the share of each month
     employed, less the absences of kind `holiday` in working days (Monday to Friday, by the share of the day).
     A balance carried from last year is not known to the app (a later opening field may take it). It is printed on
     the payslip and its PDF, and said on the exit month as a fact; holidays paid out at the exit are a
     `ferienentschaedigung` the person adds.
-62. **A wage up to the small-wage limit owes no AHV/IV/EO, ALV and FAK** (`smallWage` on those contributions, AHVV
+81. **A wage up to the small-wage limit owes no AHV/IV/EO, ALV and FAK** (`smallWage` on those contributions, AHVV
     Art. 34d), unless the person asked (Versicherungen «auf Verlangen beitragspflichtig»). The year is judged by what
     the Anstellung promises (a monthly wage × Pensum × the months employed, with a 13th), or for an hourly wage by its
     average month so far over the months employed, and by the year's base so far. Once either passes the limit,
     the month charges its base and the months left out, once (`base#smallWageLimit` kept on each close as what was
     charged); the payslip says so («smallWageCaught»). The UVG premiums are owed from the first franc.
     A payment after the exit in a later year is judged against the exit year's wage (review 2026-11-19), as its ceilings are.
-63. **An absence takes its days' wage off and pays what the employer continues beyond the insurer's daily
+82. **An absence takes its days' wage off and pays what the employer continues beyond the insurer's daily
     allowance**, by kind as `payroll.yaml absences` names the Lohnarten: `loss` (Lohnausfall, every base), the
     insurer's daily allowance per calendar day from its decision and from the day it pays (`allowance`: KTG/UVG
     Taggeld no AHV wage, EO Taggeld AHV wage, as their flags say), and `wage` (Lohn bei Krankheit/Unfall,
@@ -1996,26 +1943,26 @@ After the independent review of A-2 (2026-11-19):
     fact. An hourly wage's absence pays what its hours entered say (a fact names the Lohnart). No diagnosis is
     kept (§11).
     Absences over the same days take a day's wage off once (the later one only what the earlier left; the form says so first, a fact on the payslip); two kinds a fund pays in one month each top up only their own allowance. The EO's allowance is no premium wage of the accident insurance (UVV Art. 115; its Lohnart has no UVG bases).
-64. **A child's allowance is the fund's decision, dated, prorated to the days employed**; a birth allowance (`once`)
+83. **A child's allowance is the fund's decision, dated, prorated to the days employed**; a birth allowance (`once`)
     is paid in the month its entry begins. The federal minimum and the age after which the allowance ends are
     checked as facts (`allowance.minimum`, `untilAge`), never applied: the fund decides. A child the app paid for is
     never removed; its allowance ends with an entry of 0.
     The one-off allowance (at the birth) is the child's `birth`, apart from the monthly history, paid with the wage of its month; the monthly allowance runs from the month of the birth (FamZG Art. 3), which the form proposes.
-65. **«Nachzahlung» is a payslip of only the Lohnarten added for a month after the exit**: no monthly wage, no 13th,
+84. **«Nachzahlung» is a payslip of only the Lohnarten added for a month after the exit**: no monthly wage, no 13th,
     no BVG (the fund insured the employment, which ended), no family allowance. Offered on a person who left this or
     last year. In a later year its ALV and UVG ceilings are those of the exit year, less what that year used (the
     market's assignment of a back payment to the year it was earned for; to check with the fund in a real case).
-66. **The pension fund's expected wages are the wage on 1 January (or the entry) × 12, with a 13th where the
+85. **The pension fund's expected wages are the wage on 1 January (or the entry) × 12, with a 13th where the
     Anstellung pays one**; an hourly wage takes its first closed month's pension base × 12. Below the federal entry
     threshold it is said, not left out: the plan may insure less.
-67. **The FAK statement is computed from closed payslips**: the allowances per person and child by month, the
+86. **The FAK statement is computed from closed payslips**: the allowances per person and child by month, the
     fund's contributions, and their balance, which is exactly what the payslips booked on the fund's liability
     account; the page compares it with the account's accruals in the books and names a difference.
-68. **The first pillar's declaration names the persons exempt in part or whole** (`declarations.liable` in
+87. **The first pillar's declaration names the persons exempt in part or whole** (`declarations.liable` in
     payroll.yaml): the AHV wage less what the liable contribution charged, with the reason (not yet liable by age, a
     pensioner's allowance, a small wage).
     A person without a birth date or whose line was missing for another reason (no fund, a line «unvollständig») is named as such, never as a small wage: that one is read from the base each close kept as charged.
-69. **Payroll writes the payment file itself** (§21 decision 5): next has no payments channel. pain.001.001.09 in the
+88. **Payroll writes the payment file itself** (§21 decision 5): next has no payments channel. pain.001.001.09 in the
     Swiss Payment Standards' shape (src/providers/pain001/xml.ts): one debit on the payday (today when it is past),
     category purpose SALA, structured addresses, the debtor agent by the IID inside a Swiss or Liechtenstein IBAN. It
     pays the month's payouts not paid yet with an IBAN, from a bank account of the firm in the books' currency with an
@@ -2023,19 +1970,19 @@ After the independent review of A-2 (2026-11-19):
     statement. Checked against the schema's sequences, counts and lengths in a test; the XSD is not in the repo.
     When the invoicing work builds a payments channel, payroll hands its rows to it.
     Review 2026-11-19: an IBAN for payment references only (IID 30000–31999) is never debited nor paid, a payout to one or to an account abroad is left out with its reason; the texts are mapped to the SPS character set (Latin letters with their accents kept, anything else «.»), ids lose a leading «/» and «//»; an empty name or purpose, a non-finite or sub-cent amount and a debtor abroad are refused; the creation time is local with its offset. Each file made is kept with its record (`payroll/payment-files.jsonl`, its bytes beside it): the rows say «Datei erstellt am …», and a second file for the same payslips is said first (uploading both pays twice), then made on «Trotzdem».
-70. **The simplified procedure (VAV, BGSA, §3i) is left out of B1.** It is a separate path, not a variant of a
+89. **The simplified procedure (VAV, BGSA, §3i) is left out of B1.** It is a separate path, not a variant of a
     payslip: the fund collects AHV/IV/EO/ALV, FAK and a flat tax at source once a year on one statement, only for an
     Einzelfirma (not for a GmbH or AG, not for the owner's family) within two limits, and it replaces the
     Lohnbescheinigung and the Lohnausweis' tax part. It needs its own insurance kind and account, an eligibility
     check, the annual statement and a persona to walk it (the coiffeur with a helper); no demo has one. A firm on it
     can run its payroll here with the ordinary insurances and settle with the fund by its statement.
-71. **demo-schreinerei runs payroll in the app from October**: Marco's January to September stay as booked by hand
+90. **demo-schreinerei runs payroll in the app from October**: Marco's January to September stay as booked by hand
     (his opening), his child's allowance from October; Nina joins hourly on 1 October.
     Its chart carries payroll's accounts (no warning on the first close) and its bank account its IBAN, so a walk can make the payment file.
 
-Taken while building B2, the Quellensteuer (2026-11-19; numbered from 100, the coordinator renumbers at merge):
+Taken while building B2, the Quellensteuer (2026-11-19):
 
-100. **The tariff files are the ESTV's files for wages** (`tarJJkt.txt`, «Quellensteuertarife: Import in
+91. **The tariff files are the ESTV's files for wages** (`tarJJkt.txt`, «Quellensteuertarife: Import in
      Lohnbuchhaltungssysteme», record format «Löhne» valid from 2025 and unchanged for 2027), not the files of
      «übrige Einkünfte» (`vsl…`: pensions, capital, replacement income) the Sources linked before; the link is
      corrected. Fetched on demand (`npm run fetch-qst`, «Tarif laden»; a past year from the ESTV's archive, a
@@ -2049,7 +1996,7 @@ Taken while building B2, the Quellensteuer (2026-11-19; numbered from 100, the c
      The reader is a provider (src/providers/tax-at-source/); payroll reads it through a generic
      `TariffSource` and names no canton. All 26 cantons share the format; ZH, BE, LU and AG of 2026 were
      fetched and read whole (24'978 to 98'923 records each).
-101. **The Bezugsprovision is a payslip line of the employer** (Lohnart `bezugsprovision`, `computes:
+92. **The Bezugsprovision is a payslip line of the employer** (Lohnart `bezugsprovision`, `computes:
      commission`): the canton's rate on the month's tax at source, carried corrections included, booked D 2279 /
      C 5890 «Bezugsprovision Quellensteuer» (new payroll account, Personalaufwand). As income it is a credit; it
      sits in the personnel expense because OR 959b knows no other operating income line and the commission pays
@@ -2061,10 +2008,10 @@ Taken while building B2, the Quellensteuer (2026-11-19; numbered from 100, the c
      list reads it. A correction never carries it: the month that carries the tax's
      correction takes it again, so it is charged once. The canton grants it only for a timely settlement; the
      app does not know the payment's date and books it with the payslip.
-102. **The monthly model only.** FR, GE, TI, VD and VS apply the annual model (KS 45 Ziff. 3); a person whose
+93. **The monthly model only.** FR, GE, TI, VD and VS apply the annual model (KS 45 Ziff. 3); a person whose
      canton is one of them gets the line «unvollständig: <Kanton> rechnet nach dem Jahresmodell». The regions
      and their model are data (`payroll.yaml taxAtSource.regions`).
-103. **The rate-determining income** (KS 45 Ziff. 6, FAQ KS 45 of the cantons' working group, 2026): the
+94. **The rate-determining income** (KS 45 Ziff. 6, FAQ KS 45 of the cantons' working group, 2026): the
      month's lines that count for the QST base, split by their Lohnausweis field into periodic and aperiodic
      (fields 3, 4, 5 aperiodic, FAQ Frage 14; data `aperiodic`); a carried correction counts as aperiodic (a
      back payment, FAQ). The 13th is periodic (FAQ Frage 6). An entry or exit month extrapolates to 30 days
@@ -2084,11 +2031,11 @@ Taken while building B2, the Quellensteuer (2026-11-19; numbered from 100, the c
      income known, added. An hourly wage without a Pensum and with other employments takes the file's median
      (`MED`) at least (FAQ Frage 11–12). Then the aperiodic part is added as it is. The 180-hours rule for
      wages not paid monthly is not built.
-104. **The bracket is the lower step and the tax is rounded commercially to 5 Rappen** (FAQ Frage 4 and 5;
+95. **The bracket is the lower step and the tax is rounded commercially to 5 Rappen** (FAQ Frage 4 and 5;
      data `rounding`), whatever the firm's line rounding. A canton's minimum tax (in 2026 LU's and AG's files carry one)
      applies when the wage is above zero. A two-character tariff code (A0) takes the person's church flag; a
      canton whose file lists only one variant is read in that one (format Ziff. 4.2).
-105. **A new file is compared with every closed payslip before it counts** (also the first one, so a month
+96. **A new file is compared with every closed payslip before it counts** (also the first one, so a month
      closed without it offers its missing tax): for the tax and the commission only, what the payslip withheld
      (its own lines, plus the corrections entered on it since its close, as `driftOf` reads it) against what it
      computes as if open with the new file. Not against the old file (review, 2026-11-19): a month closed without
@@ -2096,7 +2043,7 @@ Taken while building B2, the Quellensteuer (2026-11-19; numbered from 100, the c
      0 → the new tax when a corrected file comes. The corrections are appended before the file becomes current. The card of §19.3 comes first; until the click the file is kept but not current. The tax line
      names the file (canton, year, the canton's date), the code and the rate-determining income, on the page and
      in the PDF; the close's `used` keeps `tariffs/<kt>/<year>` with the date and the checksum.
-106. **The settlement list is read from the closed payslips** per month of the payslip and canton: each person
+97. **The settlement list is read from the closed payslips** per month of the payslip and canton: each person
      with the QST wage, the code, the rate-determining income, the rate, the tax and the commission; a carried
      correction in the month that carried it, naming the month it corrects; what is to pay is the tax less the
      commission, which is exactly what the payslips moved on 2279. Its CSV carries the social security number in
@@ -2104,11 +2051,65 @@ Taken while building B2, the Quellensteuer (2026-11-19; numbered from 100, the c
      holds the canton's customer number for the list, its own liability account if the firm keeps one per
      canton (a tax line and its commission book on the insurance of their canton), and the firm's commission
      rate where it differs from the file's.
-107. **Left out of B2 for now**, each a line «unvollständig» or not offered: the annual model; tariff codes D
+98. **Left out of B2 for now**, each a line «unvollständig» or not offered: the annual model; tariff codes D
      (GE), E (simplified procedure), G/Q (replacement income not paid by the employer) as payroll cases; the
      French cross-border special agreement (`SF`); days worked abroad (`daysInCountry`); the report of a new
      employee within 8 days and the submission of the settlement (ELM or the canton's portal); a commission
      lost for a late settlement.
+
+Taken while building the year-end checks (2026-11-19):
+
+99. **The year-end's payroll checks are facts in their own section of Abschluss › Prüfen** (src/payroll/year-end.ts,
+    src/app/areas/close/Payroll.tsx), summed up in one row of the checklist («Löhne»), and never a blocker of the
+    close: a difference is named with its payslip, insurer or person and a link to where it is seen or booked. They
+    are computed in the API's year-close route beside the checklist, in a try of their own: a failure there is said
+    on the page and leaves the close as it is. The close's code (src/books, src/accounting/year-close.ts) imports no
+    payroll module (the final statements' ref prefix lives in src/books/refs.ts), so `npm run year:close` does not
+    print them.
+100. **The wage account is compared with what each payslip booked onto it when it closed, not with the gross**: a
+    daily allowance is gross but booked on the insurer's account (`taggeld-*`), so 5000 = Σ gross would differ by
+    design. Per person and month by the payslip's ref (`LR-<month>-<person>`): a person's change of one entry shows
+    on that month. What it booked when it closed is the postings recomputed from its lines while every entry the
+    close booked still reads so; once a Lohnart's accounts changed since, the entries as booked (the payroll's own,
+    a person's changed one by `by.was`), and where that is not known, the month names the cause («Konten seit dem
+    Abschluss geändert») and no difference. What 5000 holds under no payslip's ref (hand bookings, level A) is named
+    as «ohne Lohnabrechnung der App», a fact, not a difference. A-2 plugs in as rows of the same shape (`WageRow`,
+    source `external`) with the refs of the payments its read payslips book.
+101. **The clearing account is checked against every closed payslip not paid by 31.12.**, by the bank line linked
+    to its PDF and dated on or before 31.12. (a December wage paid in January is unpaid at 31.12.), less what
+    that line paid for it (decision 42), with `paidFor` signed off the clearing account in the books' currency (a
+    wage paid from a foreign-currency account at the entry's rate); where a line's share cannot be told, a payment
+    linked to the payslip counts as its payout. A year not opened yet carries what the entries before it left.
+102. **An insurer's fact is its liability account at 31.12.**: what it carried into the year (the opening, else the
+    entries before the year; an earlier year's final statement dated later counts there), the year's accrual and
+    payments, and open = carried + accrued − paid, in `insurerRows` itself, so Lohnzahlungen shows the carry-over
+    too («Übertrag aus dem Vorjahr»). Insurances sharing an account (accident and its supplement) are one fact. It is
+    settled when a final statement's difference is booked (`LS-<year>-<insurance>`) or nothing is open; open without
+    one is a fact with «Schlussabrechnung erfassen» (Löhne › Lohnzahlungen, decision 35), offered only for an
+    insurance whose statement `settlementOf` takes (not the tax at source). A statement whose total agreed with
+    the payslips books nothing and so is not seen: while something is open the check still says «keine
+    Schlussabrechnung gebucht», which is what the books show.
+103. **The year-end step «Sozialversicherungen» (5700 / 2270) counts as booked by the payroll's final statements**
+    of the year (`settlementsOf` in src/accounting/year-close.ts): the page names them as its bookings, each linked
+    in the period of its own date, and «zurück» and «Neu buchen» neither remove nor name them (they are the
+    payroll's, not the step's). Level A gets no amount proposal: the fund's final total is not in the books until
+    A-2 or the person brings it.
+104. **The Lohnausweis check compares the form's gross field with her gross as the form counts it**: the closed
+    payslips' lines whose Lohnart names one of the field's parts (a family allowance paid with the wage too, though
+    no gross line), signed as the form signs them, and the opening's parts; within the rounding to francs (half a
+    franc per field that holds something). It names the Lohnarten without a field, and compares the newest issued
+    snapshot's gross field with today's; a person with closed payslips and no snapshot is a fact «noch nicht
+    ausgestellt». The gross field is found as the form's sum that takes nothing off, not by its number.
+105. **Level A's collective account at 31.12. is explained as opening + withheld (its credits on a wage's ref)
+    − paid (its debits on a payment out) ± other**, and the contribution payments that left the employees' share
+    on it (unclearedContributions, with the payees and shares the business files give) are named with links. The
+    business files are read only when the account moved in the year.
+106. **The opening's months are a fact on the wage account, never a difference** (decision 100's check, on the walk
+    fixes): what 5000 holds under no payslip's ref up to the end of the opening's last month (`through`, over every
+    person) is shown beside the opening's gross by its Lohnausweis fields, without a hint either way (field 1 holds
+    what was booked elsewhere too, an allowance on the fund's account); only what is booked otherwise after it is
+    named as «ohne Lohnabrechnung der App». An insurer shows, beside accrued, paid and open, what the final
+    statement's comparison counts for those months (`settlementOf`'s `before`).
 
 ---
 
@@ -2138,7 +2139,7 @@ Figures 2026 (checked 2026-11-13):
   verify against the FamZV text.
 - ESTV Quellensteuer: https://www.estv.admin.ch/de/quellensteuer; tariff files:
   https://www.estv.admin.ch/de/quellensteuertarife-fuer-uebrige-einkuenfte; publication 2026:
-  https://www.estv.admin.ch/de/newnsb/zvrg4CYct6xo; the files for wages (B2, §22 decision 100):
+  https://www.estv.admin.ch/de/newnsb/zvrg4CYct6xo; the files for wages (B2, §22 decision 91):
   https://www.estv.admin.ch/de/quellensteuertarife-import-in-lohnbuchhaltungssysteme, record format for
   wages (2025, unchanged 2027):
   https://www.estv.admin.ch/dam/de/sd-web/AvojuyFCZY95/qst-tarife-recordformate-loehne-2025-de.pdf; the

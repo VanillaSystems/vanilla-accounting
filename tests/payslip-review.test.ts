@@ -1,5 +1,5 @@
 /**
- * The review of A-2 (docs/specs/payroll.md §22 decisions 65–71): the withholding tax's payment matched against whole months,
+ * The review of A-2 (docs/specs/payroll.md §22 decisions 72–78): the withholding tax's payment matched against whole months,
  * never a commission invented from the next month's tax; a payslip never paired a month off; nothing of a payslip, read or
  * not, in a prompt; no salary, birth date or bare amount in a setup document's lines for a model; a collector's payment
  * at the year's start, or on thin evidence, left to the person; a wage a person booked never rebooked. Invented people only.

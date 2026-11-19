@@ -1,5 +1,5 @@
 /**
- * A business's `payroll:` section (docs/specs/payroll.md §22 decision 126): the firm books a payment to this fund
+ * A business's `payroll:` section (docs/specs/payroll.md §22 decision 59): the firm books a payment to this fund
  * or insurer that the payslips' accruals do not cover yet (an Akonto paid ahead) against the insurance's liability,
  * by code, without asking «für Monate ab dem Lohnstart / davor» again: kept once with «Immer so».
  *

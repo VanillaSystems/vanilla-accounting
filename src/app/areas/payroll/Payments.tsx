@@ -269,7 +269,7 @@ function Insurer({ row, year, books, nav, canEdit }: Props & { row: InsurerRow; 
 }
 
 /**
- * The way the company keeps for this insurer's payments the accruals do not cover yet («Immer so», §22 decision 126):
+ * The way the company keeps for this insurer's payments the accruals do not cover yet («Immer so», §22 decision 59):
  * where it is kept, and «Rückgängig», which takes it out of the file; payments booked so far stay booked.
  */
 function KeptWay({ row, kept, nav, canEdit }: { row: InsurerRow; kept: NonNullable<InsurerRow['kept']>; nav: Nav; canEdit: boolean }) {

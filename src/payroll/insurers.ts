@@ -89,7 +89,7 @@ export function insurerPaymentOf(
     .reduce((s, e) => s + (e.accountCredit === account ? e.amount : 0) - (e.accountDebit === account ? e.amount : 0), 0));
   const shared = all.length > 1;
   const covered = !shared && held + 0.005 >= Math.abs(tx.amount);
-  // «Immer so» (§22 decision 126): the insurance's business file, else the one the payment routes to, keeps the way.
+  // «Immer so» (§22 decision 59): the insurance's business file, else the one the payment routes to, keeps the way.
   const routed = businessOf(tx);
   const business = [ins.business, routed].find((b) => !!b && wayOf(b)) ?? ins.business ?? routed;
   const kept = business ? wayOf(business) : undefined;

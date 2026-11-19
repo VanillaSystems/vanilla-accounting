@@ -342,7 +342,7 @@ test('«So lassen» on the first file, then a corrected file: the card shows wha
   assert.equal(aff[0].differences.find((d) => d.wageType === 'bezugsprovision')?.carry, false);
 });
 
-test('an hourly wage from the 16th: what is paid as worked counts as paid, never extrapolated (§22 decision 103)', () => {
+test('an hourly wage from the 16th: what is paid as worked counts as paid, never extrapolated (§22 decision 94)', () => {
   const p = subject(0, { subject: true, canton: 'ZH', code: 'A0' }, { employment: [dated('2026-11-16', { kind: 'hourly' as const, amount: 40, hoursPerWeek: 42, holidayDays: 25 })] });
   const store = firm([p]);
   store.monthLines = [{ id: 'm1', employee: 'q1', month: '2026-11', wageType: 'stundenlohn', quantity: 80, enteredAt: '2026-11-01T00:00:00Z' }];

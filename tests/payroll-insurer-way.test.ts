@@ -1,5 +1,5 @@
 /**
- * «Immer so» on a payroll insurer's payment (docs/specs/payroll.md §22 decision 126): the hand form's choice kept in
+ * «Immer so» on a payroll insurer's payment (docs/specs/payroll.md §22 decision 59): the hand form's choice kept in
  * the company's file of the fund (`payroll: { payments }`, src/knowledge/payroll-way.ts), honoured by insurerPaymentOf
  * so an Akonto paid ahead is booked against the liability by code; undone by taking the section out of the file. Such a
  * payment needs no receipt. Invented firm.

@@ -85,7 +85,7 @@ Two markers flag an entry you must read before you update:
   document states plainly, the AI on your click the rest (without salaries, the AHV number masked);
   you check and keep it, and every rate kept names its document.
 
-- Löhne for staff (phase B1, docs/specs/payroll.md §22 decisions 60–71): an hourly wage gets its holiday
+- Löhne for staff (phase B1, docs/specs/payroll.md §22 decisions 79–90): an hourly wage gets its holiday
   surcharge (4/48, 5/47, 6/46 by the holiday weeks) on its own line and a public-holiday surcharge where the
   contract names one; the holiday balance in days on every payslip; Mitarbeitende › Kinder (the allowance the
   family compensation fund decided, paid with the wage and booked against its account) and › Abwesenheiten
