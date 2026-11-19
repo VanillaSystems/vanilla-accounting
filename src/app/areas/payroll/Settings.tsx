@@ -182,6 +182,7 @@ function InsuranceCard({ i, v, nav, canEdit }: { i: PayrollInsurance; v: Setting
         <dt>{t('payroll.insurances.account')}</dt><dd className="mono">{i.account ?? def?.account}</dd>
         <dt>{t('payroll.insurances.since')}</dt><dd>{formatDate(i.validFrom)}{i.validUntil ? ` – ${formatDate(i.validUntil)}` : ''}</dd>
       </dl>
+      <KindAccounts kind={i.kind} v={v} nav={nav} canEdit={canEdit} />
       {canEdit && !edit ? <button type="button" className="quiet2" onClick={begin}>{t('payroll.dated.change')}</button> : null}
       {edit ? (
         <AsyncForm className="form inline pform" onSubmit={save}>
@@ -204,6 +205,29 @@ function InsuranceCard({ i, v, nav, canEdit }: { i: PayrollInsurance; v: Setting
   );
 }
 
+/**
+ * The accounts an insurance's contributions book on that the chart lacks (its liability account, its expense
+ * account), offered beside it: «Konten anlegen» adds them at once, as Konten does for each.
+ */
+function KindAccounts({ kind, v, nav, canEdit }: { kind: string; v: SettingsView; nav: Nav; canEdit: boolean }) {
+  const own = new Set((data()?.contributions ?? []).filter((c) => c.insurance === kind).map((c) => c.wageType));
+  const missing = v.accounts.filter((a) => !a.exists && a.wageTypes.some((k) => own.has(k)));
+  if (!missing.length) return null;
+  const add = async () => {
+    try {
+      for (const a of missing) await payrollApi.addAccount(a.number);
+      nav.toast(t('payroll.accounts.addedN', { list: missing.map((a) => a.number).join(', ') }));
+      await reloadPayroll(); nav.refresh();
+    } catch (e) { nav.toast(errorText(e)); }
+  };
+  return (
+    <div className="notice warn" data-testid="kind-accounts">
+      {t('payroll.insurances.accountsMissing', { list: missing.map((a) => `${a.number}${a.name ? ` ${a.name}` : ''}`).join(', ') })}
+      {canEdit ? <> <AsyncButton type="button" className="btn" onClick={add}>{t('payroll.insurances.addAccounts')}</AsyncButton></> : null}
+    </div>
+  );
+}
+
 function NewInsurance({ v, nav, onDone }: { v: SettingsView; nav: Nav; onDone(): void }) {
   const d = data();
   const kinds = Object.entries(d?.insurances ?? {}).filter(([, k]) => k.computed !== false);
@@ -213,7 +237,7 @@ function NewInsurance({ v, nav, onDone }: { v: SettingsView; nav: Nav; onDone():
   const card = useBackdated(nav, kind);
   const fields: FieldDef[] = [
     { k: 'kind', label: t('payroll.insurances.kind'), type: 'select', options: kinds.map(([k, x]) => [k, labelOf(x.label, k)] as const), wide: true },
-    { k: 'name', label: t('payroll.insurances.nameOf', { fund: labelOf(d?.insurances[kind]?.fund) }), wide: true },
+    { k: 'name', label: labelOf(d?.insurances[kind]?.nameOf, t('payroll.insurances.name')), wide: true },
     { k: 'memberNumber', label: t('payroll.insurances.memberNumber'), mono: true }, { k: 'contractNumber', label: t('payroll.insurances.contractNumber'), mono: true },
     { k: 'account', label: t('payroll.insurances.account'), mono: true, hint: t('payroll.insurances.accountHint', { account: d?.insurances[kind]?.account ?? '' }) },
     { k: 'validFrom', label: t('payroll.dated.validFrom'), type: 'date' },

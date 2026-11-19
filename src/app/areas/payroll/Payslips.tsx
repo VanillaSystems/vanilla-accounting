@@ -11,7 +11,7 @@ import { errorText } from '../../lib/api.js';
 import { getAccountMap } from '../../lib/accounts.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { localToday } from '../../../accounting/periods.js';
-import { baseCurrency } from '../../../engines/index.js';
+import { baseCurrency, payrollYears } from '../../../engines/index.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 import { ListHead } from '../../shell/ListHead.js';
 import type { CloseWarning } from '../../../payroll/close.js';
@@ -21,8 +21,9 @@ import type { WageType } from '../../../payroll/catalogue.js';
 import type { AreaProps, Nav } from '../index.js';
 import { payrollApi, reloadPayroll, urls, usePayroll, type Payslip, type PayslipMail, type PayslipSent, type SettingsView } from './data.js';
 import type { MonthView } from '../../../payroll/views.js';
-import { at, Disclaimer, employeeAt, Go, inPeriodOf, MonthSwitch, payslipAt, settingsAt, Tabs, type PayrollRoute } from './common.js';
-import { data, factText, labelOf, localWhen, missingText, monthText, pct, warningText } from './words.js';
+import { at, Disclaimer, employeeAt, Go, inPeriodOf, MonthSwitch, payslipAt, settingsAt, Tabs, useRefusal, type PayrollRoute } from './common.js';
+import { data, factText, inputLabel, labelOf, lang, localWhen, missingText, monthText, pct, wageTypeLabel, warningText } from './words.js';
+import { lineSource, sourceText } from '../../../payroll/sources.js';
 import { useHandover } from '../../handover/store.js';
 import { Fields, numberOf, type FieldDef, type Form } from './Dated.js';
 
@@ -54,6 +55,7 @@ export function PayslipList(props: Props) {
       <div className="plist">
         <MonthSwitch month={month} onMonth={(m) => nav.go(at({ area: 'payroll', view: 'payslips', month: m }))} />
         {load.state !== 'ready' ? <div className="empty"><p>{load.state === 'loading' ? t('app.loading') : errorText(load.error)}</p></div>
+          : !rows.length && load.data.opening?.length ? <div className="empty" data-testid="month-opening-list"><h2>{t('payroll.state.opening')}</h2>{load.data.opening.map((o) => <p key={o.employee}>{t('payroll.month.opening', { name: o.name, through: monthText(o.through) })}</p>)}</div>
           : !rows.length ? <div className="empty"><h2>{t('payroll.month.none')}</h2><p>{t('payroll.month.noneText')}</p><p><Go nav={nav} loc={employeeAt('new')}>{t('payroll.employee.add')}</Go></p></div>
             : <MonthRows {...props} view={load.data} selected={selected} />}
       </div>
@@ -90,17 +92,20 @@ function MonthRows({ view, selected, nav, canEdit }: Props & { view: MonthView; 
 /** «Alle abschliessen»: the warnings of every person first, then «Trotzdem abschliessen». */
 function CloseAll({ view, nav }: { view: MonthView; nav: Nav }) {
   const [warned, setWarned] = useState<Array<{ id: string; name: string; warnings: CloseWarning[] }> | null>(null);
+  const refusal = useRefusal();
   const run = async (confirm: boolean) => {
     try {
       const r = await payrollApi.closeMonth(view.month, confirm);
+      refusal.clear();
       if (r.warned.length) { setWarned(r.warned); return; }
       setWarned(null);
       nav.toast(t('payroll.closedN', { n: r.closed.length }));
       await reloadPayroll();
-    } catch (e) { nav.toast(errorText(e)); }
+    } catch (e) { refusal.refuse(e); }
   };
   return (
     <div className="closeall">
+      {refusal.node}
       {warned ? (
         <div className="pcard warnpanel" role="alert">
           <h4>{t('payroll.close.warnTitleAll')}</h4>
@@ -131,7 +136,7 @@ function SendAll({ view, nav }: { view: MonthView; nav: Nav }) {
     setPlan(await Promise.all(closed.map((r) => payrollApi.mailOf(r.id).then((mail) => ({ id: r.id, name: r.name, mail }), (e: unknown) => ({ id: r.id, name: r.name, refused: errorText(e) })))));
   };
   // Sent only what can go: an address and a password; one sent already only when asked to send it again.
-  const goes = (p: Plan) => !!p.mail?.to && !!p.mail.password && (again || !p.mail.sent.length);
+  const goes = (p: Plan) => !!p.mail?.outbox && !!p.mail.to && !!p.mail.password && (again || !p.mail.sent.length);
   const sending = plan?.filter(goes) ?? [];
   const resent = plan?.some((p) => p.mail?.to && p.mail.password && p.mail.sent.length);
   const send = async () => {
@@ -146,6 +151,7 @@ function SendAll({ view, nav }: { view: MonthView; nav: Nav }) {
   };
   const line = (p: Plan) => {
     if (p.refused) return <span className="neg">{t('payroll.mail.notSent', { why: p.refused })}</span>;
+    if (!p.mail?.outbox) return <span className="neg">{t('payroll.mail.notSent', { why: t('payroll.mail.noOutboxShort') })}</span>;
     if (!p.mail?.to) return <span className="neg">{t('payroll.mail.notSent', { why: t('payroll.mail.noEmail') })}</span>;
     if (!p.mail.password) return <span className="neg">{t('payroll.mail.notSent', { why: t('payroll.mail.noPassword') })}</span>;
     const last = p.mail.sent.at(-1);
@@ -182,13 +188,15 @@ type Plan = { id: string; name: string; mail?: PayslipMail; refused?: string };
 /** A text on every payslip of the month («Frohe Festtage»). */
 function MonthText({ view, nav }: { view: MonthView; nav: Nav }) {
   const [text, setText] = useState(view.text ?? '');
+  const refusal = useRefusal();
   useEffect(() => setText(view.text ?? ''), [view.month, view.text]);
   const save = async (e: FormEvent) => {
     e.preventDefault();
-    try { await payrollApi.monthText(view.month, text); nav.toast(t('payroll.saved')); await reloadPayroll(); } catch (x) { nav.toast(errorText(x)); }
+    try { await payrollApi.monthText(view.month, text); refusal.clear(); nav.toast(t('payroll.saved')); await reloadPayroll(); } catch (x) { refusal.refuse(x); }
   };
   return (
     <AsyncForm className="form inline monthtext" onSubmit={save}>
+      {refusal.node}
       <label className="wide">{t('payroll.month.text')}<input name="text" value={text} onChange={(e) => setText(e.target.value)} /></label>
       {text !== (view.text ?? '') ? <div className="acts"><AsyncButton type="submit" className="btn">{t('common.save')}</AsyncButton></div> : null}
     </AsyncForm>
@@ -200,9 +208,16 @@ export function MonthRun({ month, nav, canEdit }: { month: string; nav: Nav; can
   const load = usePayroll<MonthView>(urls.month(month));
   if (load.state !== 'ready') return <p className="m">{load.state === 'loading' ? t('app.loading') : errorText(load.error)}</p>;
   const v = load.data;
-  if (!v.rows.length) return <p className="m">{t('payroll.month.noneText')}</p>;
+  // The persons whose opening holds the month: paid and booked before payroll ran here, no payslip (§22 decision 43).
+  const opening = v.opening?.length ? (
+    <div className="notice" data-testid="month-opening">
+      {v.opening.map((o) => <p key={o.employee}>{t('payroll.month.opening', { name: o.name, through: monthText(o.through) })} <Go nav={nav} loc={employeeAt(o.employee)}>{t('payroll.month.openingPerson')}</Go></p>)}
+    </div>
+  ) : null;
+  if (!v.rows.length) return opening ?? <p className="m">{t('payroll.month.noneText')}</p>;
   return (
     <>
+      {opening}
       <p className="lead">{t('payroll.month.closedOf', { closed: v.closed, of: v.of })}</p>
       <div className="ftab prun">
         <div className="fh"><span>{t('payroll.col.person')}</span><span className="r">{t('payroll.col.gross')}</span><span className="r">{t('payroll.col.deductions')}</span><span className="r">{t('payroll.col.payout')}</span><span className="r">{t('payroll.col.employer')}</span><span>{t('payroll.col.status')}</span></div>
@@ -231,7 +246,7 @@ export function PayslipDetail(props: Props) {
   if (!id) return <div className="detail-empty"><div>{t('payroll.slip.noneSelected')}</div></div>;
   if (load.state === 'failed') return <div className="detail-empty"><div>{errorText(load.error)}</div></div>;
   if (load.state !== 'ready' || settings.state !== 'ready') return <div className="detail-empty"><div>{t('app.loading')}</div></div>;
-  return <SlipView key={id} {...props} v={load.data} types={new Map(settings.data.wageTypes.map((w) => [w.key, w]))} />;
+  return <SlipView key={id} {...props} v={load.data} types={new Map(settings.data.wageTypes.map((w) => [w.key, w]))} insurances={settings.data.insurances} />;
 }
 
 type Slip = PayslipDraft | PayslipClose;
@@ -239,7 +254,7 @@ const missingOf = (s: Slip) => ('missing' in s ? s.missing : s.left);
 const factsOf = (s: Slip) => ('facts' in s ? s.facts : []);
 const deductionsOf = (s: Slip) => ('deductions' in s ? s.deductions : Math.round((s.gross - s.net) * 100) / 100);
 
-function SlipView({ v, types, nav, canEdit }: Props & { v: Payslip; types: Map<string, WageType & { used: boolean }> }) {
+function SlipView({ v, types, insurances, nav, canEdit }: Props & { v: Payslip; types: Map<string, WageType & { used: boolean }>; insurances: SettingsView['insurances'] }) {
   const [employer, setEmployer] = useState(false);
   const s = v.slip;
   const closed = v.status === 'closed';
@@ -260,10 +275,10 @@ function SlipView({ v, types, nav, canEdit }: Props & { v: Payslip; types: Map<s
         <label className="pswitch"><input type="checkbox" checked={employer} onChange={(e) => setEmployer(e.target.checked)} /> {t('payroll.slip.employer')}</label>
         {closed ? <a className="clink" href={`/payroll/payslips/${v.id}.pdf`} target="_blank" rel="noreferrer">{t('payroll.slip.pdf')}</a> : null}
       </div>
-      <Lines s={s} types={types} employer={employer} />
-      <Disclaimer />
+      <Lines s={s} types={types} employer={employer} insurances={insurances} />
+      <Disclaimer year={v.month.slice(0, 4)} />
       {!closed && canEdit ? <><MonthLines v={v} types={types} nav={nav} /><AddLine v={v} types={types} nav={nav} /></> : null}
-      <Booking v={v} />
+      <Booking v={v} types={types} />
       {canEdit ? (closed ? <ClosedActions v={v} types={types} nav={nav} /> : <CloseAction v={v} nav={nav} />) : null}
       {closed ? <Mail v={v} nav={nav} canEdit={canEdit} /> : null}
       <Corrections v={v} nav={nav} types={types} />
@@ -291,7 +306,7 @@ function SlipFacts({ v, nav }: { v: Payslip; nav: Nav }) {
 }
 
 /** The lines in their groups, in print order, with the totals after each stage. */
-function Lines({ s, types, employer }: { s: Slip; types: Map<string, WageType>; employer: boolean }) {
+function Lines({ s, types, employer, insurances }: { s: Slip; types: Map<string, WageType>; employer: boolean; insurances: SettingsView['insurances'] }) {
   const d = data();
   if (!d) return null;
   const groupOf = (wt: string) => types.get(wt)?.group;
@@ -303,6 +318,8 @@ function Lines({ s, types, employer }: { s: Slip; types: Map<string, WageType>; 
     employer: [[labelOf(d.totals.employer), s.employer]],
   };
   const stages = ['gross', 'deduction', 'after', 'employer'] as const;
+  // Where each rate comes from, in the UI's language (§5.5): the law's figure, the insurer's solution, the certificate.
+  const sourceOf = (l: PayslipLine) => { const x = lineSource(l, s, d, payrollYears(), insurances); return x && sourceText(x, d.documents, lang()); };
   return (
     <div className="plines" role="table" aria-label={t('payroll.slip.lines')}>
       {stages.filter((st) => st !== 'employer' || employer).map((st) => {
@@ -314,10 +331,10 @@ function Lines({ s, types, employer }: { s: Slip; types: Map<string, WageType>; 
           return (
             <div key={g.key} className="pgroup" role="rowgroup">
               <div className="pg">{labelOf(g.label)}</div>
-              {lines.map((l, i) => <LineRow key={i} l={l} w={types.get(l.wageType)} />)}
+              {lines.map((l, i) => <LineRow key={i} l={l} w={types.get(l.wageType)} source={sourceOf(l)} />)}
               {miss.map((m, i) => (
                 <div key={`m${i}`} className="pl miss" role="row">
-                  <span className="pt">{m.label}<small>{t('payroll.slip.incomplete')}: {missingText(m.missing, m.wageType)}{m.days ? ` · ${formatDate(m.days.from)}–${formatDate(m.days.to)}` : ''}</small></span>
+                  <span className="pt">{wageTypeLabel(m.wageType, m.label, types)}<small>{t('payroll.slip.incomplete')}: {missingText(m.missing, m.wageType, types.get(m.wageType)?.inputs)}{m.days ? ` · ${formatDate(m.days.from)}–${formatDate(m.days.to)}` : ''}</small></span>
                   <span className="pb" /><span className="pa mono">—</span>
                 </div>
               ))}
@@ -336,7 +353,7 @@ function Lines({ s, types, employer }: { s: Slip; types: Map<string, WageType>; 
   );
 }
 
-function LineRow({ l, w }: { l: PayslipLine; w?: WageType }) {
+function LineRow({ l, w, source }: { l: PayslipLine; w?: WageType; source?: string }) {
   const minus = w?.sign === '-' && w.side !== 'employer';
   const calc = l.quantity !== undefined && l.rate !== undefined && l.base === undefined ? `${fmt(l.quantity).replace(/\.00$/, '')} × ${fmt(l.rate)}`
     : l.base !== undefined && l.rate !== undefined ? `${fmt(l.base)} × ${pct(l.rate)}`
@@ -345,10 +362,11 @@ function LineRow({ l, w }: { l: PayslipLine; w?: WageType }) {
     l.corrects ? t('payroll.line.correction', { month: monthText(l.corrects.slice(0, 7)) }) : '',
     l.days ? `${formatDate(l.days.from)}–${formatDate(l.days.to)}` : '',
     l.text ?? '',
+    source ?? '',
   ].filter(Boolean).join(' · ');
   return (
     <div className={`pl${l.corrects ? ' corr' : ''}`} role="row">
-      <span className="pt">{l.label}{notes ? <small>{notes}</small> : null}</span>
+      <span className="pt">{w ? labelOf(w.label, l.label) : l.label}{notes ? <small data-testid={source ? 'line-source' : undefined}>{notes}</small> : null}</span>
       <span className="pb mono">{calc}</span>
       <span className="pa mono">{minus ? `−${fmt(l.amount)}` : fmt(l.amount)}</span>
     </div>
@@ -357,15 +375,17 @@ function LineRow({ l, w }: { l: PayslipLine; w?: WageType }) {
 
 /** The Lohnarten added to this month, each with «entfernen». */
 function MonthLines({ v, types, nav }: { v: Payslip; types: Map<string, WageType>; nav: Nav }) {
+  const refusal = useRefusal();
   if (!v.monthLines.length) return null;
-  const remove = async (id: string) => { try { await payrollApi.removeLine(id); await reloadPayroll(); } catch (e) { nav.toast(errorText(e)); } };
+  const remove = async (id: string) => { try { await payrollApi.removeLine(id); refusal.clear(); await reloadPayroll(); } catch (e) { refusal.refuse(e); } };
   return (
     <div className="psec">
       <h3>{t('payroll.slip.added')}</h3>
+      {refusal.node}
       <ul className="plain">
         {v.monthLines.map((l) => (
           <li key={l.id}>
-            {labelOf(types.get(l.wageType)?.label, l.wageType)} · <span className="mono">{l.amount !== undefined ? fmt(l.amount) : `${l.quantity} × ${l.rate ?? '…'}`}</span>{l.text ? ` · ${l.text}` : ''}
+            {labelOf(types.get(l.wageType)?.label, l.wageType)} · <span className="mono">{l.amount !== undefined ? fmt(l.amount) : `${l.quantity ?? '…'} × ${l.rate ?? '…'}`}</span>{l.text ? ` · ${l.text}` : ''}
             {' '}<AsyncButton type="button" className="quiet2" onClick={() => remove(l.id)}>{t('payroll.slip.removeLine')}</AsyncButton>
           </li>
         ))}
@@ -390,10 +410,11 @@ function AddLine({ v, types, nav }: { v: Payslip; types: Map<string, WageType>; 
   const options = enterable(types);
   const [f, setF] = useState<Form>({ wageType: options[0]?.[0] ?? '' });
   const w = types.get(f.wageType);
+  const refusal = useRefusal();
   const quantity = w?.input === 'quantity';
   const fields: FieldDef[] = [
     { k: 'wageType', label: t('payroll.field.wageType'), type: 'select', options, wide: true },
-    ...(quantity ? [{ k: 'quantity', label: t('payroll.field.quantity'), type: 'number' as const }, { k: 'rate', label: t('payroll.field.unitRate'), type: 'number' as const, hint: w?.hours ? t('payroll.field.rateFromEmployment') : undefined }] : [{ k: 'amount', label: t('payroll.field.amount'), type: 'number' as const }]),
+    ...(quantity ? [{ k: 'quantity', label: inputLabel(f.wageType, 'quantity', w?.inputs) ?? t('payroll.field.quantity'), type: 'number' as const }, { k: 'rate', label: inputLabel(f.wageType, 'rate', w?.inputs) ?? t('payroll.field.unitRate'), type: 'number' as const, hint: w?.hours ? t('payroll.field.rateFromEmployment') : undefined }] : [{ k: 'amount', label: inputLabel(f.wageType, 'amount', w?.inputs) ?? t('payroll.field.amount'), type: 'number' as const }]),
     { k: 'text', label: t('payroll.field.text'), wide: true },
   ];
   const save = async (e: FormEvent) => {
@@ -404,9 +425,9 @@ function AddLine({ v, types, nav }: { v: Payslip; types: Map<string, WageType>; 
         ...(quantity ? { quantity: numberOf(f.quantity), ...(numberOf(f.rate) !== undefined ? { rate: numberOf(f.rate) } : {}) } : { amount: numberOf(f.amount) }),
         ...(f.text?.trim() ? { text: f.text.trim() } : {}),
       });
-      setOpen(false); setF({ wageType: f.wageType });
+      setOpen(false); setF({ wageType: f.wageType }); refusal.clear();
       await reloadPayroll();
-    } catch (x) { nav.toast(errorText(x)); }
+    } catch (x) { refusal.refuse(x); }
   };
   if (!open) return <div className="psec"><button type="button" className="btn ghost" onClick={() => setOpen(true)}>{t('payroll.slip.addLine')}</button></div>;
   return (
@@ -414,6 +435,7 @@ function AddLine({ v, types, nav }: { v: Payslip; types: Map<string, WageType>; 
       <h3>{t('payroll.slip.addLine')}</h3>
       <AsyncForm className="form inline pform" onSubmit={save}>
         <Fields fields={fields} f={f} set={setF} />
+        {refusal.node}
         <div className="acts"><AsyncButton type="submit" className="btn primary">{t('payroll.slip.addLineSave')}</AsyncButton><button type="button" className="btn ghost" onClick={() => setOpen(false)}>{t('common.cancel')}</button></div>
       </AsyncForm>
     </div>
@@ -421,9 +443,12 @@ function AddLine({ v, types, nav }: { v: Payslip; types: Map<string, WageType>; 
 }
 
 /** «Bucht beim Abschliessen» (a draft) or «Gebucht» (a closed one): debit, credit, text, amount, the date and ref. */
-function Booking({ v }: { v: Payslip }) {
+function Booking({ v, types }: { v: Payslip; types: Map<string, WageType> }) {
   const names = getAccountMap();
   const b = v.booking;
+  // The preview names each Lohnart in the UI's language; what closing books (and a closed payslip shows) is the server's text.
+  const [y, mo] = v.month.split('-');
+  const textOf = (p: Payslip['booking']['postings'][number]) => (v.status === 'closed' ? p.text : `${wageTypeLabel(p.wageType, p.text, types)} ${mo}/${y} ${v.slip.person.name}`);
   return (
     <div className="psec">
       <h3>{t(v.status === 'closed' ? 'payroll.booking.booked' : 'payroll.booking.preview')}</h3>
@@ -433,7 +458,7 @@ function Booking({ v }: { v: Payslip }) {
         {b.postings.map((p, i) => (
           <div key={i} className="fr">
             <span className="mono" data-tip={names[p.debit]}>{p.debit}</span><span className="mono" data-tip={names[p.credit]}>{p.credit}</span>
-            <span className="pt">{p.text}</span><span className="r mono">{fmt(p.amount)}</span>
+            <span className="pt">{textOf(p)}</span><span className="r mono">{fmt(p.amount)}</span>
           </div>
         ))}
       </div>
@@ -445,18 +470,21 @@ function Booking({ v }: { v: Payslip }) {
 /** «Abschliessen»: what is off first, as a panel in the page; then «Trotzdem abschliessen» or «Zurück» (§18). */
 function CloseAction({ v, nav }: { v: Payslip; nav: Nav }) {
   const [warnings, setWarnings] = useState<CloseWarning[] | null>(null);
+  const refusal = useRefusal();
   const run = async (confirm: boolean) => {
     try {
       const r = await payrollApi.close(v.id, confirm);
+      refusal.clear();
       if (!r.closed) { setWarnings(r.warnings); return; }
       setWarnings(null);
       nav.toast(r.accountsAdded.length ? t('payroll.close.doneAccounts', { accounts: r.accountsAdded.join(', ') }) : t('payroll.close.done'));
       await reloadPayroll();
       nav.refresh();
-    } catch (e) { nav.toast(errorText(e)); }
+    } catch (e) { refusal.refuse(e); }
   };
   return (
     <div className="psec pacts">
+      {refusal.node}
       {warnings ? (
         <div className="pcard warnpanel" role="alert" data-testid="close-warnings">
           <h4>{t('payroll.close.warnTitle')}</h4>
@@ -475,6 +503,7 @@ function CloseAction({ v, nav }: { v: Payslip; nav: Nav }) {
 /** A closed payslip: «Korrektur erfassen» first; «Wieder öffnen» only on the person's latest month in an open period (§6.5). */
 function ClosedActions({ v, types, nav }: { v: Payslip; types: Map<string, WageType>; nav: Nav }) {
   const [mode, setMode] = useState<'none' | 'correct' | 'reopen'>('none');
+  const refusal = useRefusal();
   const options = enterable(types, true);
   const [f, setF] = useState<Form>({ wageType: v.drift[0]?.wageType ?? options[0]?.[0] ?? '', how: 'amount', amount: v.drift[0] ? String(v.drift[0].diff) : '' });
   const fields: FieldDef[] = [
@@ -490,16 +519,18 @@ function ClosedActions({ v, types, nav }: { v: Payslip; types: Map<string, WageT
     try {
       await payrollApi.correct(v.id, { wageType: f.wageType, ...(f.how === 'rate' ? { base: numberOf(f.base), rateDiff: numberOf(f.rateDiff) } : { amount: numberOf(f.amount) }), ...(f.text?.trim() ? { text: f.text.trim() } : {}) });
       setMode('none');
+      refusal.clear();
       nav.toast(t('payroll.correction.done'));
       await reloadPayroll();
-    } catch (x) { nav.toast(errorText(x)); }
+    } catch (x) { refusal.refuse(x); }
   };
   const reopen = async () => {
-    try { await payrollApi.reopen(v.id); setMode('none'); nav.toast(t('payroll.reopen.done')); await reloadPayroll(); nav.refresh(); } catch (e) { nav.toast(errorText(e)); }
+    try { await payrollApi.reopen(v.id); setMode('none'); refusal.clear(); nav.toast(t('payroll.reopen.done')); await reloadPayroll(); nav.refresh(); } catch (e) { refusal.refuse(e); }
   };
   const pending = v.corrections.filter((c) => !c.carriedBy);
   return (
     <div className="psec pacts">
+      {refusal.node}
       {mode === 'none' ? (
         <div className="acts">
           <button type="button" className="btn primary" onClick={() => setMode('correct')}>{t('payroll.correction.add')}</button>
@@ -549,11 +580,12 @@ function Mail({ v, nav, canEdit }: { v: Payslip; nav: Nav; canEdit: boolean }) {
       await reloadPayroll();
     } catch (e) { setRefused(errorText(e)); }
   };
-  const ready = !!m.to && m.password;
+  const ready = !!m.to && m.password && m.outbox;
   return (
     <div className="psec pmail" data-testid="payslip-mail">
       <h3>{t('payroll.mail.title')}</h3>
       {m.to ? <p className="m" data-testid="mail-to">{toText(m.to, m.copyTo)}</p> : <p className="warnline">{t('payroll.mail.noEmailFact')} · {person('payroll.mail.toPerson')}</p>}
+      {!m.outbox && !copy ? <p className="warnline" data-testid="mail-no-outbox">{t('payroll.mail.noOutbox')}</p> : null}
       {!m.password ? <p className="warnline">{t('payroll.mail.noPassword')} · {person('payroll.mail.toPersonPassword')}</p> : <p className="m">{t('payroll.mail.lockedText')}</p>}
       {copy ? <p className="m" data-testid="mail-copy">{t('payroll.mail.sharer', { name: copy.sharer.name })}</p>
         : canEdit && ready ? <div className="acts"><AsyncButton type="button" className="btn" onClick={send}>{t(m.sent.length ? 'payroll.mail.again' : 'payroll.mail.send')}</AsyncButton></div> : null}

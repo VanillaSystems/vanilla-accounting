@@ -177,6 +177,41 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Löhne: the months of a person's opening (paid and booked by hand before payroll ran here, January to
+  the opening's last month) are «Eröffnung» in the year strip and on her timeline. They get no draft, no
+  «noch offen» on a later month, and closing one is refused with its reason (the wage is booked
+  already). The Lohnausweis, the declarations and the Lohnkonto count each month once (the opening's
+  figures and the closes after it) and show the opening beside the months. The opening names its last
+  month (`through` in payroll.json, schema 1 unchanged: an opening without it reads its `months` from
+  January). The demo-consulting walk now starts with October as the first draft.
+- Löhne: a final statement (Schlussabrechnung) compares its total with the year's contributions in the
+  books: what the payslips accrued, and the payments to the insurer booked for the months before payroll
+  ran here. A difference over 5 % of the year is shown with these figures first and booked only on
+  «Trotzdem buchen». Before, a full-year total was booked against October and November alone.
+- Löhne: a payment to a fund or pension fund in a month whose payslips accrue (an Akonto on the 28th, a
+  BVG payment on the 15th, before the month-end posting) is booked against the insurer's liability
+  account, as is one from the first month payroll runs here. The hand form proposes that account, without
+  a VAT code, instead of the expense the payslips booked already, and such a payment needs no receipt.
+- Löhne: a person's opening (months already paid this year, their bases and Lohnausweis fields) is
+  entered in «Person hinzufügen» and on the person's page; the settings API checks it and refuses one
+  over a month closed here.
+- Löhne: a daily sickness allowance (KTG) or supplementary accident insurance the firm adds holds only
+  for the persons put in it, no longer for everyone at once; the person form offers «nicht versichert».
+  An insurance whose accounts the chart lacks offers «Konten anlegen» on its card.
+- Löhne: a Lohnausweis for a person without an AHV number is said first, then «Trotzdem erstellen».
+- Löhne: each payslip line names its rate's source (federal figure with its articles, insurer and
+  solution, pension certificate), on the page and in the PDF.
+- Löhne: a missing input is named by its own word («Kaufpreis ohne MWST fehlt» for the company car,
+  «Stunden»), and the form uses those words.
+- Löhne: the note under payslips and the Lohnausweis is neutral («Berechnet aus den erfassten Sätzen und
+  den Bundeswerten 2026.»), no longer «vom Treuhänder zu prüfen».
+- Löhne: «Name des Versicherers» / «Nom de l’assureur» and other French fixes («Compte de passif»);
+  Lohnart labels and the booking preview follow the UI language.
+- Löhne: Lohnzahlungen shows «bezahlt» right after a bank statement drop, without a reload.
+- Löhne: without an outgoing mailbox the mail panel says «keine Kopie» and sends nothing; refusals (the
+  AHV number as a password, a line without an amount) stay visible in the page.
+- Löhne: `/payroll/payslips/2026-10` opens October; the AI sidebar on Löhne no longer shows the VAT
+  period's status.
 - Löhne: a payslip paid, reopened and closed again with another payout now says what stays open on the
   Lohndurchlaufkonto (on the payslip and in Lohnzahlungen) instead of leaving the difference unnamed.
 - Buchungen: an entry that books only the tax (a code such as `M81-2` or `-I81-2`, one side

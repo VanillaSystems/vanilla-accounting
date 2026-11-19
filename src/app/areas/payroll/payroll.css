@@ -21,6 +21,8 @@
 [data-area="payroll"] .ym.closed .ms { color: var(--pos); }
 [data-area="payroll"] .ym.partial .ms, [data-area="payroll"] .ym.open .ms { color: var(--warn); }
 [data-area="payroll"] .ym.none { color: var(--faint); }
+[data-area="payroll"] .ym.opening { background: var(--hover); }
+[data-area="payroll"] .ym.opening .ms { color: var(--muted); }
 [data-area="payroll"] .ym.none .ms, [data-area="payroll"] .ym.future .ms { color: var(--faint); }
 [data-area="payroll"] .pfactlist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
 [data-area="payroll"] .pfactlist li { padding: 8px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); }

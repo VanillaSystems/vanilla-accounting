@@ -157,10 +157,15 @@ function LohnausweisView({ d, person, labels, nav, canEdit }: Props & { d: Docum
         ) : null}
         {l.unmapped?.length ? <div className="notice warn">{t('payroll.docs.unmapped', { list: l.unmapped.map((k) => labels.get(k) ?? k).join(', ') })}</div> : null}
         {d.copyToTaxOffice ? <div className="notice" data-testid="copy-tax-office">{t('payroll.docs.copyToTaxOffice')}</div> : null}
+        {l.opening ? (
+          <div className="notice" data-testid="lohnausweis-opening">
+            {t('payroll.docs.openingFields', { through: monthText(l.opening.through), list: Object.entries(l.opening.fields).map(([k, v]) => `${k}: ${fmt(v)}`).join(', ') || '—' })}
+          </div>
+        ) : null}
       </div>
       <div className="docbody">
         <FormFields l={l} />
-        <Disclaimer />
+        <Disclaimer year={d.year} />
         {canEdit ? <Issue d={d} person={person} issued={issued} nav={nav} /> : null}
         <div className="psec">
           <h3>{t('payroll.docs.issuedTitle')}</h3>
@@ -194,11 +199,11 @@ function IssuedLine({ s }: { s: Issued }) {
 
 /** «Lohnausweis erstellen», later «ersetzen» (all figures again) or «korrigieren»; an open month warns first, as a panel (§18). */
 function Issue({ d, person, issued, nav }: { d: Documents; person: Documents['people'][number]; issued: Issued[]; nav: Nav }) {
-  const [warned, setWarned] = useState<{ kind?: 'replacement' | 'correction'; openMonths: string[] } | null>(null);
+  const [warned, setWarned] = useState<{ kind?: 'replacement' | 'correction'; openMonths: string[]; noSocialSecurityNumber?: true } | null>(null);
   const run = async (kind: 'replacement' | 'correction' | undefined, confirm: boolean) => {
     try {
       const r = await payrollApi.issueLohnausweis(d.year, { employee: person.employee, ...(kind ? { kind } : {}), ...(confirm ? { confirm } : {}) });
-      if ('issued' in r) { setWarned({ ...(kind ? { kind } : {}), openMonths: r.openMonths }); return; }
+      if ('issued' in r) { setWarned({ ...(kind ? { kind } : {}), openMonths: r.openMonths, ...(r.noSocialSecurityNumber ? { noSocialSecurityNumber: true as const } : {}) }); return; }
       setWarned(null);
       nav.toast(t('payroll.docs.done', { kind: t(KIND[r.kind]) }));
       await reloadPayroll();
@@ -207,9 +212,14 @@ function Issue({ d, person, issued, nav }: { d: Documents; person: Documents['pe
   if (warned) {
     return (
       <div className="pcard warnpanel" role="alert" data-testid="issue-warning">
-        <h4>{t('payroll.docs.warnTitle')}</h4>
-        <ul>{warned.openMonths.map((m) => <li key={m}><Go nav={nav} loc={payslipAt(`${m}-${person.employee}`)}>{monthText(m)}</Go></li>)}</ul>
-        <p className="m">{t('payroll.docs.warnRule')}</p>
+        {warned.noSocialSecurityNumber ? <p data-testid="issue-no-ssn">{t('payroll.docs.noSsn')} <Go nav={nav} loc={employeeAt(person.employee)}>{t('payroll.docs.person')}</Go></p> : null}
+        {warned.openMonths.length ? (
+          <>
+            <h4>{t('payroll.docs.warnTitle')}</h4>
+            <ul>{warned.openMonths.map((m) => <li key={m}><Go nav={nav} loc={payslipAt(`${m}-${person.employee}`)}>{monthText(m)}</Go></li>)}</ul>
+            <p className="m">{t('payroll.docs.warnRule')}</p>
+          </>
+        ) : null}
         <div className="acts">
           <AsyncButton type="button" className="btn primary" onClick={() => run(warned.kind, true)}>{t('payroll.docs.anyway')}</AsyncButton>
           <button type="button" className="btn ghost" onClick={() => setWarned(null)}>{t('payroll.close.back')}</button>
@@ -256,11 +266,25 @@ function LohnkontoView({ d, labels }: { d: Documents; labels: Map<string, string
             </table>
           </div>
         )}
+        {k.opening ? <OpeningTable bases={k.opening.bases} through={k.opening.people.map((p) => p.through).sort().at(-1)!} /> : null}
         <p className="plinks">
           <FileLink href={files.lohnkontoCsv(d.year)}>{t('payroll.docs.lohnkontoCsv')}</FileLink>
           {d.people.map((p) => <FileLink key={p.employee} href={files.lohnkontoCsv(d.year, p.employee)}>{t('payroll.docs.lohnkontoCsvOf', { name: p.name })}</FileLink>)}
         </p>
       </div>
+    </div>
+  );
+}
+
+/** The opening's bases (§22 decision 43): the months paid before payroll ran here, which have no Lohnart here. */
+function OpeningTable({ bases, through }: { bases: Record<string, number>; through: string }) {
+  return (
+    <div className="psec" data-testid="lohnkonto-opening">
+      <h3>{t('payroll.docs.openingTitle', { through: monthText(through) })}</h3>
+      <p className="m">{t('payroll.docs.openingText')}</p>
+      <table className="ptable" aria-label={t('payroll.docs.openingTitle', { through: monthText(through) })}>
+        <tbody>{Object.entries(bases).map(([k, v]) => <tr key={k}><td>{baseLabel(k)}</td><td className="r mono">{fmt(v)}</td></tr>)}</tbody>
+      </table>
     </div>
   );
 }
@@ -282,10 +306,10 @@ function DeclarationsView({ d, nav }: { d: Documents; nav: Nav }) {
         {!d.declarations.length ? <p className="m">{t('payroll.docs.lohnkontoNone', { year: d.year })}</p> : (
           <div className="pscroll">
             <table className="ptable" aria-label={t('payroll.docs.declarations')}>
-              <thead><tr><th>{t('payroll.docs.base')}</th>{d.declarations.map((r) => <th key={r.employee} className="r"><Go nav={nav} loc={employeeAt(r.employee)}>{r.name}</Go></th>)}</tr></thead>
+              <thead><tr><th>{t('payroll.docs.base')}</th>{d.declarations.map((r) => [<th key={r.employee} className="r"><Go nav={nav} loc={employeeAt(r.employee)}>{r.name}</Go></th>, r.opening ? <th key={`${r.employee}-o`} className="r m">{t('payroll.docs.ofOpening', { through: monthShort(r.opening.through) })}</th> : null])}</tr></thead>
               <tbody>
-                <tr><td>{t('payroll.docs.spanCol')}</td>{d.declarations.map((r) => <td key={r.employee} className="r mono">{r.from && r.to ? `${formatDate(r.from)}–${formatDate(r.to)}` : ''}</td>)}</tr>
-                {keys.map((k) => <tr key={k}><td>{baseLabel(k)}</td>{d.declarations.map((r) => <td key={r.employee} className="r mono">{fmt(r.bases[k] ?? 0)}</td>)}</tr>)}
+                <tr><td>{t('payroll.docs.spanCol')}</td>{d.declarations.map((r) => [<td key={r.employee} className="r mono">{r.from && r.to ? `${formatDate(r.from)}–${formatDate(r.to)}` : ''}</td>, r.opening ? <td key={`${r.employee}-o`} /> : null])}</tr>
+                {keys.map((k) => <tr key={k}><td>{baseLabel(k)}</td>{d.declarations.map((r) => [<td key={r.employee} className="r mono">{fmt(r.bases[k] ?? 0)}</td>, r.opening ? <td key={`${r.employee}-o`} className="r mono m">{r.opening.bases[k] ? fmt(r.opening.bases[k]) : ''}</td> : null])}</tr>)}
               </tbody>
             </table>
           </div>

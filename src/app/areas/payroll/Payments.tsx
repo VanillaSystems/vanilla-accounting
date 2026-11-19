@@ -15,6 +15,7 @@ import { fmt, formatDate } from '../../lib/utils.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 import { ListHead } from '../../shell/ListHead.js';
 import type { JournalEntry } from '../../../types/index.js';
+import type { SettlementCompare } from '../../../payroll/insurers.js';
 import type { AreaProps, Nav } from '../index.js';
 import { payrollApi, reloadPayroll, urls, usePayroll, type InsurerRow, type Insurers, type PaymentRow, type Payments } from './data.js';
 import { at, Go, inPeriodOf, MonthSwitch, payslipAt, Tabs, type PayrollRoute } from './common.js';
@@ -207,34 +208,59 @@ function Insurer({ row, year, books, nav, canEdit }: Props & { row: InsurerRow; 
   );
 }
 
-/** The final statement: its total and its day; code books the difference to what the payslips accrued, once. */
+/**
+ * The final statement: its total and its day; code books the difference to the year's contributions in the books
+ * (the payslips' and, for the months before payroll ran here, the payments booked otherwise), once. A large
+ * difference is shown with its figures in the page first, then «Trotzdem buchen» (§18).
+ */
 function Settle({ row, year, nav, again }: { row: InsurerRow; year: string; nav: Nav; again: boolean }) {
   const today = localToday();
   const [f, setF] = useState<Form>({ total: '', date: today });
   const [result, setResult] = useState<string | null>(null);
+  const [warned, setWarned] = useState<SettlementCompare | null>(null);
   const total = numberOf(f.total);
-  const diff = total === undefined ? undefined : Math.round((total - row.accrued) * 100) / 100;
-  const save = async (e: FormEvent) => {
-    e.preventDefault();
+  const run = async (confirm: boolean) => {
     if (total === undefined) return;
     try {
-      const r = await payrollApi.settle(row.id, { year, total, date: f.date });
-      setResult(r.booked ? t('payroll.settle.booked', { amount: fmt(r.amount), debit: r.debit, credit: r.credit }) : t('payroll.settle.agrees'));
+      const r = await payrollApi.settle(row.id, { year, total, date: f.date, ...(confirm ? { confirm } : {}) });
+      if (!r.booked && 'warning' in r && r.warning) { setWarned(r.compare); setResult(null); return; }
+      setWarned(null);
+      setResult(r.booked ? `${t('payroll.settle.booked', { amount: fmt(r.amount), debit: r.debit, credit: r.credit })} ${compareText(r.compare)}` : t('payroll.settle.agrees'));
       setF({ ...f, total: '' });
       await reloadPayroll();
       nav.refresh();
     } catch (x) { setResult(null); nav.toast(errorText(x)); }
   };
+  const save = async (e: FormEvent) => { e.preventDefault(); await run(false); };
   return (
     <div className="psec">
       <h3>{t('payroll.settle.title', { year })}</h3>
       {again ? <p className="m">{t('payroll.settle.again')}</p> : <p className="m">{t('payroll.settle.lead')}</p>}
       <AsyncForm className="form inline pform" onSubmit={save}>
-        <Fields fields={[{ k: 'total', label: t('payroll.settle.total', { year }), type: 'number' }, { k: 'date', label: t('payroll.settle.date'), type: 'date' }]} f={f} set={setF} />
-        {diff !== undefined ? <p className="m wide" data-testid="settle-diff">{diff === 0 ? t('payroll.settle.diffNone') : t('payroll.settle.diff', { diff: fmt(diff), accrued: fmt(row.accrued) })}</p> : null}
+        <Fields fields={[{ k: 'total', label: t('payroll.settle.total', { year }), type: 'number' }, { k: 'date', label: t('payroll.settle.date'), type: 'date' }]} f={f} set={(x) => { setWarned(null); setF(x); }} />
         <div className="acts"><AsyncButton type="submit" className="btn primary" disabled={total === undefined || !f.date}>{t('payroll.settle.save')}</AsyncButton></div>
       </AsyncForm>
+      {warned ? (
+        <div className="pcard warnpanel" role="alert" data-testid="settle-warning">
+          <h4>{t('payroll.settle.warnTitle', { diff: fmt(warned.difference), pct: Math.round(Math.abs(warned.difference) / Math.max(warned.total, warned.books, 1) * 100) })}</h4>
+          <dl className="kv2">
+            <dt>{t('payroll.settle.accrued')}</dt><dd className="mono">{fmt(warned.accrued)}</dd>
+            <dt>{warned.openingThrough ? t('payroll.settle.beforeOpening', { through: monthText(warned.openingThrough) }) : t('payroll.settle.before')}</dt><dd className="mono">{fmt(warned.before)}</dd>
+            <dt>{t('payroll.settle.inBooks')}</dt><dd className="mono">{fmt(warned.books)}</dd>
+            <dt>{t('payroll.settle.statement')}</dt><dd className="mono">{fmt(warned.total)}</dd>
+          </dl>
+          {warned.openingThrough && warned.before === 0 ? <p>{t('payroll.settle.noBefore', { through: monthText(warned.openingThrough) })}</p> : null}
+          <p className="m">{t('payroll.settle.warnRule')}</p>
+          <div className="acts">
+            <AsyncButton type="button" className="btn primary" onClick={() => run(true)}>{t('payroll.settle.anyway')}</AsyncButton>
+            <button type="button" className="btn ghost" onClick={() => setWarned(null)}>{t('payroll.close.back')}</button>
+          </div>
+        </div>
+      ) : null}
       {result ? <p className="notice" role="status" data-testid="settle-result">{result}</p> : null}
     </div>
   );
 }
+
+/** The comparison a booked difference rests on, in one line. */
+const compareText = (c: SettlementCompare): string => t('payroll.settle.compare', { accrued: fmt(c.accrued), before: fmt(c.before), books: fmt(c.books), total: fmt(c.total) });

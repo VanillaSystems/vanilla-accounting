@@ -1,6 +1,7 @@
-/** Small pieces every page of Löhne uses: a link that goes inside the app, the tabs, a month's switch. */
-import type { MouseEvent, ReactNode } from 'react';
+/** Small pieces every page of Löhne uses: a link that goes inside the app, the tabs, a month's switch, a refusal in the page. */
+import { useState, type MouseEvent, type ReactNode } from 'react';
 import { t } from '../../i18n/index.js';
+import { errorText } from '../../lib/api.js';
 import { hrefOf } from '../../shell/history.js';
 import type { Location, Route, RouteOf } from '../../shell/route.js';
 import { localToday, parsePeriod, periodContaining } from '../../../accounting/periods.js';
@@ -76,5 +77,20 @@ export function YearSwitch({ year, onYear }: { year: string; onYear(y: string): 
   );
 }
 
-/** The app's disclaimer under every computed figure (§16 decision 14). */
-export const Disclaimer = () => <p className="pdisclaimer">{t('payroll.disclaimer')}</p>;
+/** The app's note under every computed figure (§22 decision 47, replacing the wording of §16 decision 14): what it is computed from, the federal figures of `year`. */
+export const Disclaimer = ({ year }: { year: string }) => <p className="pdisclaimer">{t('payroll.disclaimer', { year })}</p>;
+
+/**
+ * A refusal of the server (a line without an amount, the social security number as a password, a closed period) as a
+ * panel in the page, where the person acts: it stays until she hides it or tries again, never only a toast.
+ */
+export function useRefusal(): { node: ReactNode; refuse(e: unknown): void; clear(): void } {
+  const [why, setWhy] = useState<string | null>(null);
+  const node = why ? (
+    <div className="pcard warnpanel" role="alert" data-testid="refused">
+      <p>{why}</p>
+      <button type="button" className="quiet2" onClick={() => setWhy(null)}>{t('payroll.mail.dismiss')}</button>
+    </div>
+  ) : null;
+  return { node, refuse: (e) => setWhy(errorText(e)), clear: () => setWhy(null) };
+}

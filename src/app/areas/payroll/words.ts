@@ -22,6 +22,13 @@ export const monthText = (month: string): string => new Date(Number(month.slice(
 /** «Sep». */
 export const monthShort = (month: string): string => new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1, 1).toLocaleDateString(monthLocale(), { month: 'short' });
 
+/**
+ * A Lohnart's label in the UI's language: the firm's (a rename, a copy) where `types` has it, else the
+ * catalogue's, else what the server wrote (in the person's language, on her payslip).
+ */
+export const wageTypeLabel = (key: string, fallback: string, types?: ReadonlyMap<string, { label: Partial<Labels> }>): string =>
+  labelOf(types?.get(key)?.label ?? data()?.wageTypes.find((w) => w.key === key)?.label, fallback);
+
 export const kindLabel = (kind: string): string => labelOf(data()?.insurances[kind]?.label, kind);
 export const rateLabel = (kind: string, key: string): string => labelOf(data()?.insurances[kind]?.rates?.[key]?.label, key);
 
@@ -36,8 +43,17 @@ export function factText(f: PayslipFact): string {
   return tWith(`payroll.fact.${f.key}`, vars);
 }
 
-/** What a line «unvollständig» lacks: a rate of the insurance names that rate. */
-export function missingText(code: string, wageType: string): string {
+/** What the form and the line «unvollständig» call a Lohnart's input (a car's price, «Stunden»), from the data; undefined: the app's word. */
+export const inputLabel = (wageType: string, input: 'quantity' | 'rate' | 'amount', inputs?: Partial<Record<'quantity' | 'rate' | 'amount', Labels>>): string | undefined => {
+  const l = (inputs ?? data()?.wageTypes.find((w) => w.key === wageType)?.inputs)?.[input];
+  return l ? labelOf(l) : undefined;
+};
+
+/** What a line «unvollständig» lacks: a rate of the insurance names that rate, an input its Lohnart's word for it (a car's price). */
+export function missingText(code: string, wageType: string, inputs?: Partial<Record<'quantity' | 'rate' | 'amount', Labels>>): string {
+  const input = code === 'quantity' ? 'quantity' : code === 'unitRate' ? 'rate' : code === 'amount' ? 'amount' : undefined;
+  const said = input && inputLabel(wageType, input, inputs);
+  if (said) return t('payroll.missing.input', { what: said });
   if (code.startsWith('rate:')) {
     const kind = kindOfWageType(wageType);
     return t('payroll.missing.rate', { rate: kind ? rateLabel(kind, code.slice(5)) : code.slice(5), insurance: kind ? kindLabel(kind) : '' });
@@ -48,7 +64,7 @@ export function missingText(code: string, wageType: string): string {
 
 export function warningText(w: CloseWarning): string {
   switch (w.key) {
-    case 'missing': return t('payroll.warn.missing', { label: w.label, what: missingText(w.missing, w.wageType) });
+    case 'missing': return t('payroll.warn.missing', { label: wageTypeLabel(w.wageType, w.label), what: missingText(w.missing, w.wageType) });
     case 'earlierOpen': return t('payroll.warn.earlierOpen', { month: monthText(w.month) });
     case 'accountMissing': return t('payroll.warn.accountMissing', { account: w.account });
     case 'withoutAccount': return t('payroll.warn.withoutAccount', { wageType: w.wageType });
