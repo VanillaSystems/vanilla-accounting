@@ -532,7 +532,7 @@ export interface PayrollData {
    */
   setupDocuments?: { kinds: Record<string, string[]>; numbers: Partial<Record<'memberNumber' | 'contractNumber', string[]>>; rates: Record<string, Record<string, string[]>>; toModel?: string[]; notToModel: string[] };
   /** The words of the payroll's documents, in each language. */
-  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate' | 'holidays' | 'holidaysMinimum' | 'sourceTariff', Labels>;
+  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate' | 'holidays' | 'holidaysMinimum' | 'sourceTariff' | 'sourceTariffUnits', Labels>;
   /** The tax at source by tariff files (payroll.yaml `taxAtSource`); absent: the jurisdiction has none. */
   taxAtSource?: TaxAtSourceData;
 }
@@ -551,6 +551,16 @@ export interface TaxAtSourceData {
   provision: { electronic: string; paper?: string };
   /** What a tax line and the person's form say beside a tariff code matching `codes` (a pattern): what its rate depends on. */
   codeNotes?: Array<{ codes: string; text: Labels }>;
+  /**
+   * A wage not paid monthly (paid weekly, or by the timesheets handed in): its rate-determining income is the average
+   * rate of a unit's Lohnarten (`counts` give the units worked, `with` are paid on them) times `per` units a month, plus
+   * the lines of the groups `asPaid` as they are; nothing else of the month counts for the rate.
+   */
+  notMonthly?: {
+    units: Array<{ key: string; label: Labels; counts: string[]; with?: string[]; per: number }>;
+    asPaid: string[];
+    source: string;
+  };
   source: string;
   /** Each region with the model it applies; the app computes `monthly`. */
   regions: Record<string, { model: 'monthly' | 'annual' }>;

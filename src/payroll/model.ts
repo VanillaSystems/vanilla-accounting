@@ -113,7 +113,8 @@ export interface TaxAtSource {
   code?: string;
   church?: boolean;
   otherEmployment?: { pensum?: number; income?: number } | 'unknown';
-  daysInCountry?: number;
+  /** The wage is not paid monthly (weekly, or by the timesheets handed in): its rate-determining income is extrapolated from the units worked. */
+  notMonthly?: boolean;
 }
 
 /** One person (§5.4). Entry is the first employment's validFrom, exit the last one's validUntil. */
@@ -228,7 +229,11 @@ export interface PayslipLine {
    * correction of the tax: the month it corrects as computed when the correction was made (its taxable wage
    * and rate too), which the settlement list declares beside the corrected month (§22 decision 111).
    */
-  tariff?: { region: string; code: string; income: number; created?: string; version?: string; wage?: number; rate?: number };
+  tariff?: {
+    region: string; code: string; income: number; created?: string; version?: string; wage?: number; rate?: number;
+    /** A wage not paid monthly: what was paid on the units worked, how many, and the units of a month it was extrapolated to. */
+    units?: { key: string; paid: number; quantity: number; per: number };
+  };
 }
 
 /** The corrected month's tax as computed when a correction was made: what the settlement list declares for it. */

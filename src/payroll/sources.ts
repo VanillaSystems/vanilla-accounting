@@ -16,6 +16,8 @@ export type LineSource =
     kind: 'tariff'; region: string; year: string; created: string; code: string; income: number; fileOnly?: boolean;
     /** What the code's rate depends on (data `taxAtSource.codeNotes`), said beside the tax line. */
     note?: Labels;
+    /** A wage not paid monthly: what was paid on the units worked, how many, the units of a month, and the units' name. */
+    units?: { paid: number; quantity: number; per: number; label: Labels };
   };
 
 /** The head of a figure's source: its articles, before the first explanation or the publication in brackets. */
@@ -49,7 +51,9 @@ export function lineSource(
     // The commission names only the file its rate comes from; the tax names the code and the income it was looked up with.
     const tax = data.contributions.some((c) => c.wageType === line.wageType);
     const note = tax ? codeNoteOf(data, t.code) : undefined;
-    return { kind: 'tariff', region: t.region, year: key.split(':')[1] ?? slip.month.slice(0, 4), created: t.created!, code: t.code, income: t.income, ...(tax ? {} : { fileOnly: true }), ...(note ? { note } : {}) };
+    const unit = t.units ? data.taxAtSource?.notMonthly?.units.find((u) => u.key === t.units!.key) : undefined;
+    const units = t.units && unit ? { paid: t.units.paid, quantity: t.units.quantity, per: t.units.per, label: unit.label } : undefined;
+    return { kind: 'tariff', region: t.region, year: key.split(':')[1] ?? slip.month.slice(0, 4), created: t.created!, code: t.code, income: t.income, ...(tax ? {} : { fileOnly: true }), ...(note ? { note } : {}), ...(units ? { units } : {}) };
   }
   if (kind === 'federal') {
     // The row the payslip read (a figure may change inside the year; a payment after the exit reads its earned year's), else the latest.
@@ -75,8 +79,9 @@ export function lineSource(
 /** The source in words of `lang`, from the jurisdiction's document words. */
 const day = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`;
 const amount = (x: number) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(x);
+const units = (x: number) => new Intl.NumberFormat('de-CH', { maximumFractionDigits: 3 }).format(x);
 
-export function sourceText(s: LineSource, documents: Pick<PayrollData['documents'], 'sourceFederal' | 'sourceSolution' | 'sourceCertificate'> & Partial<Pick<PayrollData['documents'], 'sourceTariff'>>, lang: keyof Labels): string {
+export function sourceText(s: LineSource, documents: Pick<PayrollData['documents'], 'sourceFederal' | 'sourceSolution' | 'sourceCertificate'> & Partial<Pick<PayrollData['documents'], 'sourceTariff' | 'sourceTariffUnits'>>, lang: keyof Labels): string {
   const w = (l: Labels) => l[lang] ?? l.de;
   switch (s.kind) {
     case 'federal': return `${w(documents.sourceFederal).replace('{year}', s.year)} · ${w(s.cite)}`;
@@ -84,7 +89,9 @@ export function sourceText(s: LineSource, documents: Pick<PayrollData['documents
     case 'certificate': return `${w(documents.sourceCertificate)} ${s.insurer}`;
     case 'tariff': return (documents.sourceTariff
       ? (s.fileOnly ? w(documents.sourceTariff).split(' · ')[0] : w(documents.sourceTariff)).replace('{region}', s.region).replace('{year}', s.year).replace('{date}', day(s.created)).replace('{code}', s.code).replace('{income}', amount(s.income))
-      : `${s.region} ${s.year} ${s.code}`) + (s.note ? ` · ${w(s.note)}` : '');
+      : `${s.region} ${s.year} ${s.code}`)
+      + (s.units && documents.sourceTariffUnits ? ` · ${w(documents.sourceTariffUnits).replace('{paid}', amount(s.units.paid)).replace('{quantity}', units(s.units.quantity)).replace('{per}', units(s.units.per)).replace(/\{unit\}/g, w(s.units.label))}` : '')
+      + (s.note ? ` · ${w(s.note)}` : '');
   }
 }
 

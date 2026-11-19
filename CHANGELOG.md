@@ -153,6 +153,11 @@ Two markers flag an entry you must read before you update:
   commission, amount to pay) with its CSV. A new or corrected tariff file never changes a closed
   payslip: the card offers the Rückwirkende Korrektur first. Cantons on the annual model (FR, GE, TI, VD,
   VS) get the line «unvollständig» for now.
+- Löhne › Quellensteuer: a wage not paid monthly (hourly or daily, paid weekly or by the timesheets
+  handed in) takes its rate from the average rate × 180 hours (21.667 days), as the Federal Tax
+  Administration's circular no. 45 prescribes: tick «Lohn nicht monatlich» on the person's tax-at-source
+  entry. The holiday and public-holiday pay count in the rate, the family allowances are added as paid;
+  the tax line says «… für 72 Stunden, auf 180 Stunden hochgerechnet».
 - Abschluss › Prüfen: a section «Löhne» with the payroll's year-end checks as facts (never a block):
   1091 at 31.12. against the payouts not paid by then, each named; each insurer's account with what
   the payslips accrued, what was paid and what is open, and «Schlussabrechnung erfassen» while no

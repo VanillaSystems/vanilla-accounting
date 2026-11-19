@@ -2030,7 +2030,7 @@ Taken while building B2, the Quellensteuer (2026-11-19):
      her Pensum here is lower; their Pensum known, to her whole Pensum (it may pass 100 %, FAQ Frage 8); their
      income known, added. An hourly wage without a Pensum and with other employments takes the file's median
      (`MED`) at least (FAQ Frage 11–12). Then the aperiodic part is added as it is. The 180-hours rule for
-     wages not paid monthly is not built.
+     wages not paid monthly: decision 119.
 95. **The bracket is the lower step and the tax is rounded commercially to 5 Rappen** (FAQ Frage 4 and 5;
      data `rounding`), whatever the firm's line rounding. A canton's minimum tax (in 2026 LU's and AG's files carry one)
      applies when the wage is above zero. A two-character tariff code (A0) takes the person's church flag; a
@@ -2231,6 +2231,38 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     source read here (it is treated as no turnover, no code on the line); a firm that learns otherwise changes the
     Lohnart. The Lohnausweis's field 12 (Quellensteuerabzug) sums the tax lines as withheld, before the commission
     the employer keeps (the commission is an employer line of its own and enters no field; test).
+
+Taken while building the rest of B2 (2026-11-19). The circular itself was read this time: ESTV, Kreisschreiben Nr. 45
+«Quellenbesteuerung des Erwerbseinkommens von Arbeitnehmern» of 12.6.2019 (1-045-D-2019-d,
+https://www.estv.admin.ch/dam/de/sd-web/I3YyTvU3ThVA/dbst-ks-2019-1-045-d-de.pdf; the canton GR publishes the same
+text as «KS 45-2026-de.pdf»), so the Ziffern cited below are its own, not the FAQ's or a canton's. The FAQ the canton GR
+publishes as «FAQ_KS45 2026.pdf» is the working group's FAQ of 26.9.2022, word for word the ESTV's «FAQ 2022»
+(https://www.estv.admin.ch/dam/de/sd-web/a7vG5hlZeAdW/dbst-ks-2022-1-045-d-faq-de.pdf); its questions are numbered
+1–19 (decision 94's «Frage 16» on a payment after the exit is no. 15 there, under Ziff. 6.9).
+
+119. **A wage not paid monthly takes its rate from 180 hours or 21.667 days** (KS 45 Ziff. 6.5 and its Beispiele 1–6,
+    Ziff. 7.3.3 for the annual model; FAQ Frage 13: only when the wage is not paid monthly, never as a choice). The
+    person's tax-at-source entry says «Lohn nicht monatlich» (`notMonthly`: paid weekly, or by the timesheets handed in,
+    as the circular's examples are); the app's payslip is still the month's. Then the rate-determining income is what
+    the unit's Lohnarten paid over the units worked, times 180 hours (21.667 days for a daily wage): the weighted
+    average the circular prescribes for several rates in a month (Ziff. 6.5: «Total ausbezahlter Stunden- bzw.
+    Tageslohn inkl. Ferien- und Feiertagsentschädigung / geleistete Stunden bzw. Tage … x 180 Stunden bzw. 21.667
+    Tage»). As data (`taxAtSource.notMonthly`): the hours are those of the Stundenlohn and of the overtime (hours
+    worked), paid on them the holiday and public-holiday surcharges and the holiday and public-holiday pay entered;
+    the days those of the Taglohn. Only the family allowances are added as paid (the circular: «einzig noch
+    Kapitalabfindungen für in der Regel wiederkehrende Leistungen – und zwar ohne Umrechnung»; its Beispiel 6 adds the
+    month's allowance with the back pay, 1'200, as paid). Everything else is taxed but sets no rate: a daily allowance
+    (Beispiel 6: taxable 5'825, rate-determining 7'500), a bonus (by the word «einzig»; no example). The rule covers
+    other employments and a part month (Ziff. 6.5: «sowohl die Fälle mit mehreren Erwerbstätigkeiten als auch
+    diejenigen mit Ein- und Austritten»), so neither is extrapolated on top and the median is not used. A month with
+    hours and days is «unvollständig» (no source says which unit then holds). The line names what was paid, the units
+    and the units of a month (`tariff.units`, on the page and in the PDF). Tests: tests/payroll-tax-at-source-cases.test.ts
+    (Beispiele 2, 3, 4, 6 of Ziff. 6.5 with the ZH rates of 2026). Found on reading the circular, not changed here:
+    Ziff. 6.6 says the extrapolation of an entry or exit month to 30 days «gilt auch für Anstellungen im Stunden- und
+    Tageslohn, sofern die Lohnzahlungen auf der Basis eines Monatslohnes erfolgen», which reads against decision 94's
+    «an hourly wage's hours count as paid» in a part month; whether «auf der Basis eines Monatslohnes» means an hourly
+    wage paid monthly or a monthly salary is for the owner (or a canton) to settle, and a change would move figures of
+    the scenario golden file.
 
 ---
 

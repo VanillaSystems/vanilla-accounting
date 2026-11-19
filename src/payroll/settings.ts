@@ -259,7 +259,7 @@ function taxValue(v: unknown): TaxAtSource {
     : isObj(o) && o.pensum !== undefined && o.pensum !== '' ? { pensum: num(o.pensum, 'Pensum der anderen Stellen (1 bis 100 %)', 1, 100) }
     : isObj(o) && o.income !== undefined && o.income !== '' ? { income: num(o.income, 'Einkommen der anderen Stellen', 0) }
     : bad('Quellensteuer: andere Stellen: keine, unbekannt, ein Pensum oder ein Einkommen.');
-  return clean({ subject: v.subject, canton: optStr(v.canton)?.toUpperCase(), municipality: optStr(v.municipality), code, church: typeof v.church === 'boolean' ? v.church : undefined, otherEmployment: other });
+  return clean({ subject: v.subject, canton: optStr(v.canton)?.toUpperCase(), municipality: optStr(v.municipality), code, church: typeof v.church === 'boolean' ? v.church : undefined, otherEmployment: other, notMonthly: v.notMonthly === true ? true : undefined });
 }
 
 function recurringValue(v: unknown, quantity: boolean) {

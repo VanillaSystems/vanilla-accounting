@@ -23,7 +23,7 @@ export interface LoadedTariff { region: string; year: string; file: TariffFile; 
 export type TariffSource = (region: string, year: string) => LoadedTariff | undefined;
 
 /** Where a tax line comes from: the file, the code and the rate-determining income it was looked up with. */
-export interface TariffUse { region: string; code: string; income: number; created?: string; version?: string }
+export interface TariffUse { region: string; code: string; income: number; created?: string; version?: string; units?: UnitsUse }
 
 export interface TaxAtSourceInput {
   data: PayrollData;
@@ -116,24 +116,31 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
     const base = round2(prorated + periodic + aperiodic);
     if (base <= 0) return undefined;
 
-    // The rate-determining income (KS 45 Ziff. 6): what the firm prorated in a part month back to a whole month;
-    // what is paid as worked (hours, a month's line) counts as paid (§22 decision 94); other employments to their whole.
-    let income = periodic + (input.days > 0 && input.days < t.partMonth ? prorated * t.partMonth / input.days : prorated);
-    const median = loaded.file.median;
-    const other = person.otherEmployment;
-    if (other !== undefined) {
-      const own = input.pensum;
-      if (typeof other === 'object' && typeof other.income === 'number') income += other.income;
-      else if (own && own > 0) {
-        const whole = other === 'unknown' ? 100 : own + (typeof other === 'object' ? other.pensum ?? 0 : 0);
-        if (other === 'unknown' ? own < 100 : true) income = income * whole / own;
-      } else if (median !== undefined) {
-        // Her own Pensum cannot be told (an hourly wage): the canton's median stands for a whole employment.
-        income = Math.max(income, median);
+    // A wage not paid monthly: its average rate per unit worked, times the units of a month (§22 decision 119).
+    const units = person.notMonthly ? unitIncome(t, types, lines, baseKey(data, input.wageType.key)) : undefined;
+    if (units === 'mixed') return miss('notMonthlyMixed');
+    let income: number;
+    if (units) income = units.income;
+    else {
+      // The rate-determining income (KS 45 Ziff. 6): what the firm prorated in a part month back to a whole month;
+      // what is paid as worked (hours, a month's line) counts as paid (§22 decision 94); other employments to their whole.
+      income = periodic + (input.days > 0 && input.days < t.partMonth ? prorated * t.partMonth / input.days : prorated);
+      const median = loaded.file.median;
+      const other = person.otherEmployment;
+      if (other !== undefined) {
+        const own = input.pensum;
+        if (typeof other === 'object' && typeof other.income === 'number') income += other.income;
+        else if (own && own > 0) {
+          const whole = other === 'unknown' ? 100 : own + (typeof other === 'object' ? other.pensum ?? 0 : 0);
+          if (other === 'unknown' ? own < 100 : true) income = income * whole / own;
+        } else if (median !== undefined) {
+          // Her own Pensum cannot be told (an hourly wage): the canton's median stands for a whole employment.
+          income = Math.max(income, median);
+        }
       }
+      if (input.exitIncome !== undefined) income += input.exitIncome;
+      income = round2(income + aperiodic);
     }
-    if (input.exitIncome !== undefined) income += input.exitIncome;
-    income = round2(income + aperiodic);
 
     let file = code;
     let bracket = bracketOf(loaded.file, file, income, to);
@@ -146,7 +153,7 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
     let amount = roundStep(base * bracket.rate / 100, t.rounding);
     if (amount < bracket.minimum) amount = bracket.minimum;
     if (amount === 0) return undefined;
-    const tariff: TariffUse = { region, code: file, income, created: loaded.file.created, version: loaded.sha256.slice(0, 12) };
+    const tariff: TariffUse = { region, code: file, income, created: loaded.file.created, version: loaded.sha256.slice(0, 12), ...(units ? { units: units.used } : {}) };
     out.lines.push({ wageType: input.wageType.key, label: input.label, base, rate: bracket.rate, amount, side: 'employee', source: `tariff:${region}:${year}`, tariff });
     return undefined;
   });
@@ -179,6 +186,38 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
     });
   }
   return out;
+}
+
+/** How a wage not paid monthly was extrapolated: what was paid on the units worked, how many, and to how many a month. */
+export interface UnitsUse { key: string; paid: number; quantity: number; per: number }
+
+/**
+ * The rate-determining income of a wage not paid monthly (data `notMonthly`): what the unit's Lohnarten paid, over the
+ * units worked, times the units of a month, and the lines of the `asPaid` groups as they are. Undefined when the month
+ * has no line of a unit (the ordinary rule holds); `mixed` when it has lines of two units (hours and days).
+ */
+export function unitIncome(t: TaxAtSourceData, types: ReadonlyMap<string, WageType>, lines: readonly PayslipLine[], base: string): { income: number; used: UnitsUse } | 'mixed' | undefined {
+  const rules = t.notMonthly;
+  if (!rules) return undefined;
+  const counted = (l: PayslipLine) => {
+    const w = types.get(l.wageType);
+    return w && w.side !== 'employer' && w.bases.includes(base) && !l.corrects ? w : undefined;
+  };
+  const signed = (l: PayslipLine, w: WageType) => (w.sign === '-' ? -l.amount : l.amount);
+  const hit = rules.units.filter((u) => lines.some((l) => counted(l) && u.counts.includes(l.wageType) && (l.quantity ?? 0) !== 0));
+  if (hit.length > 1) return 'mixed';
+  const unit = hit[0];
+  if (!unit) return undefined;
+  let paid = 0; let quantity = 0; let asPaid = 0;
+  for (const l of lines) {
+    const w = counted(l);
+    if (!w) continue;
+    if (unit.counts.includes(l.wageType)) { paid += signed(l, w); quantity += l.quantity ?? 0; }
+    else if (unit.with?.includes(l.wageType)) paid += signed(l, w);
+    else if (rules.asPaid.includes(w.group)) asPaid += signed(l, w);
+  }
+  if (quantity <= 0) return undefined;
+  return { income: round2(paid / quantity * unit.per + asPaid), used: { key: unit.key, paid: round2(paid), quantity: round2(quantity), per: unit.per } };
 }
 
 /** The base the tax's contribution row takes (the taxable wage). */

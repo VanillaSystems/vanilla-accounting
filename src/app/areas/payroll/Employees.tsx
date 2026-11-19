@@ -152,17 +152,19 @@ const taxSpec = (): ValueSpec<TaxAtSource> => ({
     { k: 'church', label: t('payroll.field.church'), type: 'check' },
     { k: 'other', label: t('payroll.field.otherEmployment'), type: 'select', options: [['none', t('payroll.tax.other.none')], ['unknown', t('payroll.tax.other.unknown')], ['pensum', t('payroll.tax.other.pensum')], ['income', t('payroll.tax.other.income')]] },
     { k: 'otherValue', label: t('payroll.field.otherValue'), type: 'number', hint: t('payroll.tax.other.valueHint') },
+    { k: 'notMonthly', label: t('payroll.field.notMonthly'), type: 'check', hint: t('payroll.tax.notMonthlyHint') },
   ],
   from: (v) => ({
-    subject: String(!!v?.subject), canton: s(v?.canton), municipality: s(v?.municipality), code: s(v?.code), church: String(!!v?.church), other: otherOf(v),
+    subject: String(!!v?.subject), canton: s(v?.canton), municipality: s(v?.municipality), code: s(v?.code), church: String(!!v?.church), other: otherOf(v), notMonthly: String(!!v?.notMonthly),
     otherValue: typeof v?.otherEmployment === 'object' ? String(v.otherEmployment.income ?? v.otherEmployment.pensum ?? '') : '',
   }),
   to: (f) => ({
     subject: f.subject === 'true', canton: f.canton, municipality: f.municipality, code: f.code, church: f.church === 'true',
+    ...(f.notMonthly === 'true' ? { notMonthly: true } : {}),
     ...(f.other === 'unknown' ? { otherEmployment: 'unknown' } : f.other === 'pensum' ? { otherEmployment: { pensum: numberOf(f.otherValue) } } : f.other === 'income' ? { otherEmployment: { income: numberOf(f.otherValue) } } : {}),
   }),
   // A code whose rate depends on a certificate says so (data `taxAtSource.codeNotes`).
-  show: (v) => (v.subject ? [t('payroll.employee.taxSubject'), v.canton, v.municipality, v.code ? `${v.code}${v.code.length === 2 ? (v.church ? 'Y' : 'N') : ''}` : '', otherText(v), labelOf(codeNoteOf(data() ?? {}, v.code))].filter(Boolean).join(' · ') : t('payroll.employee.taxNot')),
+  show: (v) => (v.subject ? [t('payroll.employee.taxSubject'), v.canton, v.municipality, v.code ? `${v.code}${v.code.length === 2 ? (v.church ? 'Y' : 'N') : ''}` : '', otherText(v), v.notMonthly ? t('payroll.tax.notMonthlyShort') : '', labelOf(codeNoteOf(data() ?? {}, v.code))].filter(Boolean).join(' · ') : t('payroll.employee.taxNot')),
 });
 
 /** The person's insurances: per kind the firm has, the insurance and its solution (a pension certificate: the two monthly figures). */

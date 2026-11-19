@@ -360,6 +360,17 @@ taxAtSource:
         fr: "Barème frontalier 4.5 % seulement avec une attestation de résidence valable (formulaire Gre-1, prolongation Gre-2) ; sans elle, le barème ordinaire s’applique"
         it: "Tariffa per frontalieri 4.5 % solo con un certificato di residenza valido (modulo Gre-1, proroga Gre-2); senza, si applica la tariffa ordinaria"
         en: "Cross-border rate 4.5 % only with a valid certificate of residence (form Gre-1, renewal Gre-2); without it the ordinary tariff applies"
+  # A wage not paid monthly (hourly or daily, paid weekly or by the timesheets handed in): the rate-determining income
+  # is the average rate × 180 hours or 21.667 days a month, the holiday and public-holiday pay and what else is paid on
+  # the hours in it; only a capital settlement for recurring benefits (the family allowances, Beispiel 6) is added as
+  # paid. It covers other employments and a part month (KS 45 Ziff. 6.5; FAQ KS 45 Frage 13: only when not paid
+  # monthly) (§22 decision 119).
+  notMonthly:
+    units:
+      - { key: hours, label: { de: Stunden, fr: heures, it: ore, en: hours }, counts: [stundenlohn, ueberstunden], with: [ferienzuschlag, feiertagszuschlag, ferienentschaedigung, feiertagsentschaedigung], per: 180 }
+      - { key: days, label: { de: Tage, fr: jours, it: giorni, en: days }, counts: [taglohn], per: 21.667 }
+    asPaid: [familienzulagen]
+    source: "ESTV KS 45 (12.6.2019) Ziff. 6.5 with Beispiele 1-6, Ziff. 7.3.3; FAQ KS 45 (Arbeitsgruppe Quellensteuern, 26.9.2022) Frage 13"
   source: "DBG Art. 83-88, QStV (SR 642.118.2), ESTV Kreisschreiben Nr. 45; FAQ KS 45 der Arbeitsgruppe Quellensteuern (2026)"
   regions:
     AG: { model: monthly }
@@ -413,6 +424,8 @@ documents:
   sourceSolution: { de: "Lösung {code}", fr: "solution {code}", it: "soluzione {code}", en: "solution {code}" }
   sourceCertificate: { de: Vorsorgeausweis, fr: Certificat de prévoyance, it: Certificato di previdenza, en: Pension certificate }
   sourceTariff: { de: "Tarif {region} {year} vom {date} · {code} · satzbestimmend {income}", fr: "Barème {region} {year} du {date} · {code} · revenu déterminant {income}", it: "Tariffa {region} {year} del {date} · {code} · reddito determinante {income}", en: "Tariff {region} {year} of {date} · {code} · rate-determining {income}" }
+  # A wage not paid monthly (taxAtSource.notMonthly): what was paid on the units worked, extrapolated to a month's units.
+  sourceTariffUnits: { de: "{paid} für {quantity} {unit}, auf {per} {unit} hochgerechnet", fr: "{paid} pour {quantity} {unit}, extrapolé à {per} {unit}", it: "{paid} per {quantity} {unit}, estrapolato a {per} {unit}", en: "{paid} for {quantity} {unit}, extrapolated to {per} {unit}" }
 
 # The Lohnausweis (Form 11, ESTV/SSK Wegleitung 2026): its numbered fields in print order, each with its
 # label in the person's language. `sum`: computed from other fields (8 = 1 to 7; 11 = 8 less 9 and 10);

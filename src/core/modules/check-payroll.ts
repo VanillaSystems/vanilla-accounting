@@ -138,6 +138,15 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
     });
     for (const [r, x] of Object.entries(t.regions ?? {})) if (x.model !== 'monthly' && x.model !== 'annual') add(F, `taxAtSource.regions.${r}.model`, 'monthly or annual');
     for (const f of t.aperiodic ?? []) if (p.lohnausweis && !p.lohnausweis.fields.some((x) => x.key === f)) add(F, 'taxAtSource.aperiodic', `field "${f}" does not exist`);
+    if (t.notMonthly) {
+      const keys = new Set(p.wageTypes.map((w) => w.key));
+      t.notMonthly.units.forEach((u, i) => {
+        if (!(u.per > 0)) add(F, `taxAtSource.notMonthly.units.${i}.per`, 'units a month');
+        for (const k of [...u.counts, ...(u.with ?? [])]) if (!keys.has(k)) add(F, `taxAtSource.notMonthly.units.${i}`, `Lohnart "${k}" does not exist`);
+        for (const l of ['de', 'fr', 'it', 'en'] as const) if (!u.label?.[l]?.trim()) add(F, `taxAtSource.notMonthly.units.${i}.label.${l}`, 'missing');
+      });
+      for (const g of t.notMonthly.asPaid) if (!p.groups.some((x) => x.key === g)) add(F, 'taxAtSource.notMonthly.asPaid', `group "${g}" does not exist`);
+    }
   }
 
   for (const [k, ins] of Object.entries(p.insurances)) {
