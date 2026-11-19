@@ -91,6 +91,8 @@ export interface Area<R extends Route = Route> {
   fullPage?(route: R): boolean;
   /** Pages without a period (company, codes): no period in the top bar or the heading. */
   periodless?: boolean;
+  /** The AI sidebar shows no card of the open period before the first message here: the page is of another subject (Löhne, whose months are not the VAT period's). */
+  noPeriodCard?: boolean;
   /** The date of its newest row kept outside the books (an issued invoice): a page without a period shows that period when it is newer than the books' data. */
   newest?(): string | undefined;
   /** The period its page shows when the link names none, instead of the newest data's (the return: the oldest one not filed, `booksOpenPeriod`); undefined: the newest data's. */

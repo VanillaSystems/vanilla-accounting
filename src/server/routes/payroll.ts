@@ -8,14 +8,16 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { existsSync, readFileSync } from 'node:fs';
 import { WS, readBooks, updateBooksWithEffects, RequestError } from '../books.js';
-import { payrollClearing } from '../../engines/index.js';
+import { baseCurrency, payrollClearing } from '../../engines/index.js';
 import { ClosedPeriodError, periodLock, receiptFile, type Books } from '../../books/store.js';
 import { CatalogueError } from '../../payroll/catalogue.js';
-import { PayrollRefusal, planClose } from '../../payroll/close.js';
+import { PayrollRefusal, assertNotOpening, planClose } from '../../payroll/close.js';
 import { addCorrection, chartNumbers, closePayslip, payrollContext, reopenPayslip, type BooksWriter } from '../../payroll/service.js';
 import { monthView, payslipView, employeeRows, yearStrip } from '../../payroll/views.js';
 import { paymentRows } from '../../payroll/payments.js';
-import { insurerRows, settlementEntry } from '../../payroll/insurers.js';
+import { insurerRows, settlementOf } from '../../payroll/insurers.js';
+import { loadClassifyContext, mappedReceipts } from '../../booking/classify.js';
+import { businessOfPayment } from '../../intake/batch-payers.js';
 import { closedPayslips, issueLohnausweis, lohnausweisSnapshots, payslipMail, payslipsSent, sendPayslip, setMailPassword } from '../../payroll/service.js';
 import { sendMail } from '../../invoices/mail.js';
 import { csv, declarationRows, journalOf, lohnausweisOf, lohnkonto } from '../../payroll/documents.js';
@@ -92,6 +94,8 @@ router.get('/api/payroll/payslips/:id', run((req, res) => {
   const { month, employee } = idParts(String(req.params.id));
   const ctx = payrollContext(WS);
   const view = payslipView(ctx, employee, month, periodLock(readBooks()));
+  // A month of her opening has no payslip here: said why, never «not found».
+  if (!view) assertNotOpening(ctx, employee, month);
   if (!view) throw new PayrollRefusal('notFound', `Keine Lohnabrechnung ${req.params.id}.`);
   // A closed payslip the values of today compute otherwise says so, as a fact (§19.3 «So lassen»).
   const close = ctx.history.closed.get(view.id);
@@ -172,6 +176,7 @@ router.post('/api/payroll/month-lines', run((req, res) => {
   const ctx = payrollContext(WS);
   if (!ctx.store.employees.some((e) => e.id === employee)) throw new PayrollRefusal('notFound', `Keine Person ${employee}.`);
   if (ctx.history.closed.has(`${month}-${employee}`)) throw new PayrollRefusal('alreadyClosed', 'Der Monat ist abgeschlossen: eine Änderung als Rückwirkende Korrektur erfassen.');
+  assertNotOpening(ctx, employee, month);
   assertMonthOpen(month);
   const wageType = String(b.wageType ?? '');
   if (!ctx.data.wageTypes.some((w) => w.key === wageType) && !ctx.store.wageTypes.some((w) => w.key === wageType)) throw new PayrollRefusal('unknownWageType', `Lohnart ${wageType} gibt es nicht.`);
@@ -226,9 +231,11 @@ router.get('/api/payroll/insurances', run((req, res) => {
 }));
 
 /**
- * A final statement (Schlussabrechnung): the year's total the statement shows; code books its difference to
- * what the payslips accrued on the employer's contribution account against the insurance's liability, on `date`
- * (the statement's day, in an open period).
+ * A final statement (Schlussabrechnung): the year's total the statement shows; code books its difference to the
+ * year's contributions in the books (what the payslips accrued, and the payments booked for the months before payroll
+ * ran here) on the employer's contribution account against the insurance's liability, on `date` (the statement's day,
+ * in an open period). A difference over 5 % of the year is said first and booked only with `confirm` («Trotzdem
+ * buchen», §18); every answer carries the comparison.
  */
 router.post('/api/payroll/insurances/:id/settle', run((req, res) => {
   const b = body(req);
@@ -237,12 +244,16 @@ router.post('/api/payroll/insurances/:id/settle', run((req, res) => {
   const total = typeof b.total === 'number' && Number.isFinite(b.total) ? b.total : NaN;
   if (!/^\d{4}$/.test(year) || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(total)) throw new PayrollRefusal('badInput', 'Jahr, Datum und Total der Schlussabrechnung.');
   const ctx = payrollContext(WS);
+  const counterparties = loadClassifyContext(WS).counterparties ?? [];
   const out = updateBooksWithEffects((books) => {
     const lock = periodLock(books);
     if (lock.isClosed(date)) throw new ClosedPeriodError(`${lock.closedText(date)} Neue Buchungen müssen in der offenen Periode liegen.`, lock.closedThrough, 'newEntry');
-    const entry = settlementEntry(books, ctx.data, ctx.store, String(req.params.id), year, total, date, () => idSource.bytes(8).toString('hex'));
+    const { entry, compare } = settlementOf(books, ctx.data, ctx.store, String(req.params.id), year, total, date, () => idSource.bytes(8).toString('hex'),
+      (tx) => businessOfPayment(tx, mappedReceipts(books, tx), counterparties), baseCurrency());
+    // A large difference is said before it is booked: the person decides (§18).
+    if (entry && compare.large && b.confirm !== true) return { booked: null, warning: true, compare };
     if (entry) books.journalEntries.push(entry);
-    return entry ? { booked: entry.id, amount: entry.amount, debit: entry.accountDebit, credit: entry.accountCredit } : { booked: null };
+    return entry ? { booked: entry.id, amount: entry.amount, debit: entry.accountDebit, credit: entry.accountCredit, compare } : { booked: null, compare };
   });
   res.json(out);
 }));
@@ -267,7 +278,7 @@ router.get('/api/payroll/documents/:year', run((req, res) => {
     people: ctx.store.employees.filter((e) => inYear(e, closes, year)).map((e) => ({ employee: e.id, name: nameOf(e, `${year}-12-31`), lohnausweis: lohnausweisOf(e, closes, types, ctx.data, year, e.language) })),
     issued: lohnausweisSnapshots(WS, year).map(({ data: _, ...s }) => s),
     declarations: declarationRows(ctx.store.employees, closes, year),
-    lohnkonto: lohnkonto(closes, types, year),
+    lohnkonto: lohnkonto(closes, types, year, 'de', ctx.store.employees),
     copyToTaxOffice: !!canton && (ctx.data.lohnausweis?.copyToTaxOffice ?? []).includes(canton),
   });
 }));
@@ -324,10 +335,13 @@ router.get('/payroll/documents/:year/lohnkonto.csv', run((req, res) => {
   const ctx = payrollContext(WS);
   const who = typeof req.query.employee === 'string' ? req.query.employee : undefined;
   const closes = [...ctx.history.closed.values()].filter((c) => !who || c.employee === who);
-  const k = lohnkonto(closes, firmWageTypes(ctx.data, ctx.store), year);
+  const k = lohnkonto(closes, firmWageTypes(ctx.data, ctx.store), year, 'de', ctx.store.employees.filter((e) => !who || e.id === who));
   const head = ['wageType', 'label', ...Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')), 'total'];
   const totals = (['gross', 'net', 'payout', 'employer'] as const).map((t) => [t, ctx.data.totals[t].de, ...k.totals[t].months, k.totals[t].total]);
-  sendCsv(res, `lohnkonto-${year}${who ? `-${who}` : ''}.csv`, csv([head, ...k.rows.map((r) => [r.wageType, r.label, ...r.months, r.total]), ...totals]));
+  // The opening's bases (the months paid before payroll ran here), each in the total column only: no month of it has a payslip here.
+  const through = k.opening?.people.flatMap((p) => p.through ?? []).sort().at(-1) ?? '—';
+  const opening = Object.entries(k.opening?.bases ?? {}).map(([b, v]) => [`opening:${b}`, `Eröffnung bis ${through}: ${ctx.data.bases.find((x) => x.key === b)?.label.de ?? b}`, ...Array(12).fill(undefined), v]);
+  sendCsv(res, `lohnkonto-${year}${who ? `-${who}` : ''}.csv`, csv([head, ...k.rows.map((r) => [r.wageType, r.label, ...r.months, r.total]), ...totals, ...opening]));
 }));
 
 /** The declarations' figures: per person each base of the year (AHV, ALV to the ceiling, UVG, …), for the funds' portals. */
@@ -337,7 +351,9 @@ router.get('/payroll/documents/:year/declarations.csv', run((req, res) => {
   const rows = declarationRows(ctx.store.employees, [...ctx.history.closed.values()], year);
   const keys = [...new Set(rows.flatMap((r) => Object.keys(r.bases)))].sort();
   const head = (k: string) => `${ctx.data.bases.find((b) => b.key === k.split('|')[0])?.label.de ?? k}${k.includes('|') ? ' (bis Höchstbetrag)' : ''}`;
-  sendCsv(res, `meldungen-${year}.csv`, csv([['id', 'name', 'ssn', 'from', 'to', ...keys.map(head)], ...rows.map((r) => [r.employee, r.name, ctx.store.employees.find((e) => e.id === r.employee)?.socialSecurityNumber, r.from, r.to, ...keys.map((k) => r.bases[k] ?? 0)])]), true);
+  // Beside each base what of it the opening holds («davon Eröffnung»): the months paid before payroll ran here.
+  sendCsv(res, `meldungen-${year}.csv`, csv([['id', 'name', 'ssn', 'from', 'to', ...keys.map(head), 'openingThrough', ...keys.map((k) => `${head(k)} davon Eröffnung`)],
+    ...rows.map((r) => [r.employee, r.name, ctx.store.employees.find((e) => e.id === r.employee)?.socialSecurityNumber, r.from, r.to, ...keys.map((k) => r.bases[k] ?? 0), r.opening?.through, ...keys.map((k) => r.opening?.bases[k] ?? 0)])]), true);
 }));
 
 /** The month's Lohnbuchungen as a table, for a fiduciary who keeps the ledger elsewhere. */

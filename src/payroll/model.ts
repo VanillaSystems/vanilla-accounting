@@ -129,8 +129,13 @@ export interface PayrollEmployee {
   children?: Array<{ name: string; birthDate: string; allowance: Dated<{ wageType: string; amount: number }> }>;
   absences?: Array<{ from: string; to: string; kind: string; incapacity?: number; continuedPay?: number }>;
   taxAtSource?: Dated<TaxAtSource>;
-  /** Totals of the year before payroll started here (a firm starting mid-year): per base and Lohnausweis field, no booking. */
-  opening?: Record<string, { bases?: Record<string, number>; fields?: Record<string, number>; months?: number }>;
+  /**
+   * Totals of the year before payroll started here (a firm starting mid-year): per base and Lohnausweis field, no
+   * booking. `through` (YYYY-MM): its last month, January to it being the opening's months (src/payroll/opening.ts);
+   * absent (written before it existed): January and the months after it, `months` of them (a part month whole); with
+   * neither, its figures count and it holds no month.
+   */
+  opening?: Record<string, { through?: string; bases?: Record<string, number>; fields?: Record<string, number>; months?: number }>;
 }
 
 /** A line added to one month's payslip by a person (hours, a bonus, an expense, a text). */

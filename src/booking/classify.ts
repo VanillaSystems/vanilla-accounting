@@ -35,6 +35,7 @@ import { codeOfFacts, formTakes, lookupVatCode } from '../accounting/vat-codes.j
 import { zeroCodeOff } from './rule-vat.js';
 import { receiptWordings, repaymentsOf } from './receipt-wait.js';
 import { employs } from '../workspace/setup.js';
+import { payrollInsurerContext, type PayrollInsurerOf } from '../payroll/insurers-context.js';
 import { bookVatCorrections, type CorrectionsDone } from './vat-corrections.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
 import { acquisitionCodeOf, acquisitionReason, readSupplier, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
@@ -215,6 +216,12 @@ export interface ClassifyContext extends ClassifyPromptContext {
   wageDeductions?: string;
   /** The wordings of a wage on a firm that pays wages (evidence.guide.yaml, receipt-wait.ts receiptWordings): a payment to the owner so worded repays no outlays (#402). */
   wageWordings?: ReadonlyArray<{ test(s: string): boolean }>;
+  /**
+   * The firm's payroll insurance a payment goes to while payroll runs here (src/payroll/insurers.ts insurerPaymentOf),
+   * its liability account and whether the liability covers it: such a payment needs no receipt and is never the
+   * model's; the hand form proposes that account (§22 decision 45). `business`: the business the payment routes to.
+   */
+  payrollInsurer?: PayrollInsurerOf;
 }
 
 /** At most this many casebook examples in one call: the best of each transaction first. */
@@ -316,6 +323,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     companyUid: ws.company.uid,
     ...bankFeeContext(ws, chartOfAccounts),
     wageWordings: employs(ws.profile) ? receiptWordings(knowledge, 'employer') : [],
+    ...payrollInsurerContext(ws),
   };
 }
 
@@ -361,6 +369,13 @@ export function paymentFacts(books: Books, tx: BankTransaction, context: Classif
     tx, counterparty: routing.kind === 'known' ? routing.counterparty : undefined,
     bankAccount: bankAccountFor(tx, context.bankAccounts), amount: tx.amount * rate,
   };
+}
+
+/** The payroll insurer `tx` pays while payroll runs here (ClassifyContext.payrollInsurer), by the business it routes to. */
+export function payrollInsurerOfPayment(books: Pick<Books, 'journalEntries' | 'mappings' | 'receipts'>, tx: BankTransaction, context: Pick<ClassifyContext, 'payrollInsurer' | 'counterparties'>): ReturnType<PayrollInsurerOf> {
+  if (!context.payrollInsurer) return undefined;
+  const routing = identify(signalsOfTransaction(tx, mappedReceipts(books as Books, tx)), context.counterparties ?? []);
+  return context.payrollInsurer(tx, routing.kind === 'known' ? routing.counterparty : undefined, books.journalEntries);
 }
 
 /** The rule that decides `tx`, if one does. */
@@ -992,6 +1007,14 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     if (waits) {
       log(`  ${tx.ref}  payout of ${waits.provider.name}: waits for the person (${waits.why})`);
       outcome.failed.push({ ref: tx.ref, reason: payoutWaitReason(waits) });
+      continue;
+    }
+    // A payroll insurer's payment the liability does not cover (§22 decision 45): it may pay months before payroll ran here,
+    // which level A books otherwise. The person decides on its hand form; never the model, which would expense it again.
+    const insurer = payrollInsurerOfPayment(books, tx, context);
+    if (insurer && !insurer.covered) {
+      log(`  ${tx.ref}  payment to ${insurer.name}: waits for the person (the liability ${insurer.account} does not cover it)`);
+      outcome.failed.push({ ref: tx.ref, reason: `Zahlung an ${insurer.name}: ${insurer.account} deckt sie nicht. Für Monate ab dem Lohnstart gegen ${insurer.account}, für Monate davor als Beiträge buchen (von Hand).` });
       continue;
     }
     const provider = providerOfPayment(tx, mappedReceipts(books, tx), context.counterparties ?? []);

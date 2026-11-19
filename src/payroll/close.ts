@@ -14,6 +14,7 @@ import { latestClosed } from './history.js';
 import { firmWageTypes } from './catalogue.js';
 import type { PayslipClose, PayslipCorrection, PayslipEvent } from './model.js';
 import { payslipRef } from './model.js';
+import { inOpening, openingOf } from './opening.js';
 
 /** What closing would do that the person should know first; each a fact, none a block. */
 export type CloseWarning =
@@ -31,7 +32,7 @@ export interface ClosePlan {
 }
 
 /** Why a payroll action does not apply; the settings add a malformed input, an entry a closed payslip used, a number that is none, a duplicate. */
-export type PayrollRefusalCode = 'notFound' | 'alreadyClosed' | 'notClosed' | 'notLatest' | 'unknownWageType' | 'badAmount' | 'badInput' | 'unknownInsurance' | 'noExpenseAccount' | 'nothingAccrued' | 'noEmail' | 'noPassword' | 'badPassword' | 'used' | 'socialSecurityNumber' | 'iban' | 'exists' | 'gone' | 'closedPeriod';
+export type PayrollRefusalCode = 'notFound' | 'alreadyClosed' | 'notClosed' | 'notLatest' | 'unknownWageType' | 'badAmount' | 'badInput' | 'unknownInsurance' | 'noExpenseAccount' | 'nothingAccrued' | 'noEmail' | 'noPassword' | 'noOutbox' | 'badPassword' | 'used' | 'socialSecurityNumber' | 'iban' | 'exists' | 'gone' | 'closedPeriod' | 'opening';
 
 export class PayrollRefusal extends Error {
   /** `field`: the input it is about, a key of the UI's `payroll.field.*` words. */
@@ -41,6 +42,7 @@ export class PayrollRefusal extends Error {
 /** The plan of closing `employee`'s `month`: the draft, the entries it books, what to say first. */
 export function planClose(ctx: PayrollContext, employee: string, month: string, chart: ReadonlySet<string>, books?: Pick<Books, 'journalEntries'>): ClosePlan {
   if (ctx.history.closed.has(`${month}-${employee}`)) throw new PayrollRefusal('alreadyClosed', `Die Lohnabrechnung ${month} ist schon abgeschlossen.`);
+  assertNotOpening(ctx, employee, month);
   const draft = computePayslip(ctx, employee, month);
   if (!draft) throw new PayrollRefusal('notFound', `Keine Lohnabrechnung ${month} für ${employee}.`);
   const booking = bookingOf(draft, ctx.data, ctx.store);
@@ -53,6 +55,18 @@ export function planClose(ctx: PayrollContext, employee: string, month: string, 
   const hand = (books?.journalEntries ?? []).filter((e) => e.transactionRef === booking.ref && !isOwn(e)).map((e) => e.id);
   if (hand.length) warnings.push({ key: 'handEntries', entries: hand });
   return { draft, booking, warnings };
+}
+
+/**
+ * A month of the person's opening is never closed here (§22 decision 43): its wage was paid and booked by hand
+ * before payroll ran in the app, so a payslip would book it a second time. Not a warning: a boundary of the books.
+ */
+export function assertNotOpening(ctx: Pick<PayrollContext, 'store'>, employee: string, month: string): void {
+  const e = ctx.store.employees.find((x) => x.id === employee);
+  if (!e || !inOpening(e, month)) return;
+  const o = openingOf(e, month.slice(0, 4))!;
+  const name = (m: string) => new Intl.DateTimeFormat('de-CH', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${m}-01T00:00:00Z`));
+  throw new PayrollRefusal('opening', `${name(month)} gehört zur Eröffnung (Januar bis ${name(o.through!)}): dieser Lohn ist schon bezahlt und von Hand gebucht, eine Lohnabrechnung würde ihn ein zweites Mal buchen. Ändern lässt sich die Eröffnung bei der Person.`);
 }
 
 /** The journal entries of a plan, with ids from `id`: one per posting, on the posting date, by payroll's check, no VAT code. */

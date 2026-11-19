@@ -11,6 +11,7 @@ import type { JournalEntry } from '../types/index.js';
 import type { WageType } from './catalogue.js';
 import type { PayrollEmployee, PayslipClose } from './model.js';
 import { round2 } from './money.js';
+import { inOpening, openingOf } from './opening.js';
 
 const months = (year: string) => Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
 
@@ -19,12 +20,26 @@ export interface Lohnkonto {
   year: string;
   rows: LohnkontoRow[];
   totals: Record<'gross' | 'net' | 'payout' | 'employer', { months: number[]; total: number }>;
+  /**
+   * The openings of the year (§22 decision 43): the months paid before payroll ran here, per person her last
+   * month, and their bases summed. No Lohnart: those months have no payslip here, so the rows and totals hold none.
+   */
+  opening?: { people: Array<{ employee: string; through?: string }>; bases: Record<string, number> };
 }
 
-/** Every Lohnart of the closed payslips summed per month, in the catalogue's order; corrections in the month that carried them. */
-export function lohnkonto(closes: readonly PayslipClose[], types: ReadonlyMap<string, WageType>, year: string, lang: 'de' | 'fr' | 'it' | 'en' = 'de'): Lohnkonto {
+/** The person's closes of `year` the year's figures count: none of a month her opening holds. */
+const countedCloses = (e: Pick<PayrollEmployee, 'id' | 'employment' | 'opening'>, closes: readonly PayslipClose[], year: string) =>
+  closes.filter((c) => c.employee === e.id && c.month.startsWith(year) && !inOpening(e, c.month));
+
+/**
+ * Every Lohnart of the closed payslips summed per month, in the catalogue's order; corrections in the month
+ * that carried them. With `employees`, a close of a month a person's opening holds counts no more, and the
+ * openings stand beside the months.
+ */
+export function lohnkonto(closes: readonly PayslipClose[], types: ReadonlyMap<string, WageType>, year: string, lang: 'de' | 'fr' | 'it' | 'en' = 'de', employees?: readonly PayrollEmployee[]): Lohnkonto {
   const ms = months(year);
-  const of = closes.filter((c) => c.month.startsWith(year));
+  const who = employees ? new Map(employees.map((e) => [e.id, e])) : undefined;
+  const of = closes.filter((c) => c.month.startsWith(year) && !(who?.get(c.employee) && inOpening(who.get(c.employee)!, c.month)));
   const order = [...types.keys()];
   const byType = new Map<string, number[]>();
   for (const c of of) {
@@ -43,7 +58,14 @@ export function lohnkonto(closes: readonly PayslipClose[], types: ReadonlyMap<st
     const m = ms.map((month) => round2(of.filter((c) => c.month === month).reduce((s, c) => s + c[k], 0)));
     return { months: m, total: round2(m.reduce((s, x) => s + x, 0)) };
   };
-  return { year, rows, totals: { gross: total('gross'), net: total('net'), payout: total('payout'), employer: total('employer') } };
+  const people = new Set(of.map((c) => c.employee));
+  const openings = (employees ?? []).filter((e) => people.has(e.id) || closes.some((c) => c.employee === e.id)).flatMap((e) => { const o = openingOf(e, year); return o ? [{ employee: e.id, o }] : []; });
+  const bases: Record<string, number> = {};
+  for (const { o } of openings) for (const [k, v] of Object.entries(o.bases)) bases[k] = round2((bases[k] ?? 0) + v);
+  return {
+    year, rows, totals: { gross: total('gross'), net: total('net'), payout: total('payout'), employer: total('employer') },
+    ...(openings.length ? { opening: { people: openings.map(({ employee, o }) => ({ employee, through: o.through })), bases } } : {}),
+  };
 }
 
 export interface LohnausweisData {
@@ -59,6 +81,8 @@ export interface LohnausweisData {
   openMonths: string[];
   /** Lohnarten of the gross that name no field: field 8 is short of the gross by their lines. */
   unmapped?: string[];
+  /** The opening the fields count (§22 decision 43): its last month and its own fields. */
+  opening?: { through?: string; fields: Record<string, number> };
 }
 
 /**
@@ -72,7 +96,9 @@ export function lohnausweisOf(e: PayrollEmployee, closes: readonly PayslipClose[
   const remarks = new Map<string, { label: string; amount: number }>();
   const deduction = new Set((form?.fields ?? []).filter((f) => f.deduction).map((f) => f.key));
   const remark = new Set((form?.fields ?? []).filter((f) => f.remark).map((f) => f.key));
-  const mine = closes.filter((c) => c.employee === e.id && c.month.startsWith(year));
+  // Each month once: the opening's fields for its months, the closes of the months after it.
+  const mine = countedCloses(e, closes, year);
+  const opening = openingOf(e, year);
   for (const c of mine) {
     for (const l of c.lines) {
       const w = types.get(l.wageType);
@@ -88,7 +114,7 @@ export function lohnausweisOf(e: PayrollEmployee, closes: readonly PayslipClose[
       fields[field] = round2((fields[field] ?? 0) + amount);
     }
   }
-  for (const [k, v] of Object.entries(e.opening?.[year]?.fields ?? {})) fields[k] = round2((fields[k] ?? 0) + v);
+  for (const [k, v] of Object.entries(opening?.fields ?? {})) fields[k] = round2((fields[k] ?? 0) + v);
   // The form takes whole francs, and its sums must add up on paper: each field rounded first, the sums from the rounded ones.
   for (const k of Object.keys(fields)) fields[k] = Math.round(fields[k]);
   for (const r of remarks.values()) r.amount = Math.round(r.amount);
@@ -101,9 +127,8 @@ export function lohnausweisOf(e: PayrollEmployee, closes: readonly PayslipClose[
   // A gross line whose Lohnart names no field (a firm's own) would leave field 8 short of the gross: named, never hidden.
   const unmapped = [...new Set(mine.flatMap((c) => c.lines.filter((l) => { const w = types.get(l.wageType); return !!w && w.stage === 'gross' && !w.lohnausweis; }).map((l) => l.wageType)))];
   const spans = entriesWithin(e.employment, `${year}-01-01`, `${year}-12-31`).filter((s) => s.entry);
-  // The months an opening covers were paid elsewhere: open are only the months from payroll's first here on.
-  const first = e.opening?.[year] ? mine[0]?.month : undefined;
-  const employedMonths = new Set(spans.flatMap((s) => months(year).filter((m) => m >= s.from.slice(0, 7) && m <= s.to.slice(0, 7) && (!e.opening?.[year] || (!!first && m >= first)))));
+  // The months an opening covers were paid before payroll ran here: open are only the months after it.
+  const employedMonths = new Set(spans.flatMap((s) => months(year).filter((m) => m >= s.from.slice(0, 7) && m <= s.to.slice(0, 7) && !inOpening(e, m))));
   const closedMonths = new Set(mine.map((c) => c.month));
   return {
     employee: e.id, year,
@@ -111,6 +136,7 @@ export function lohnausweisOf(e: PayrollEmployee, closes: readonly PayslipClose[
     fields, remarks: [...remarks.values()].filter((r) => r.amount !== 0),
     openMonths: [...employedMonths].filter((m) => !closedMonths.has(m)).sort(),
     ...(unmapped.length ? { unmapped } : {}),
+    ...(opening ? { opening: { through: opening.through, fields: opening.fields } } : {}),
   };
 }
 
@@ -119,20 +145,24 @@ export interface DeclarationRow {
   /** The base of each base key and each capped base of the year (AHV wage, ALV wage to the ceiling, UVG wage, …). */
   bases: Record<string, number>;
   from?: string; to?: string;
+  /** What of `bases` the opening holds (§22 decision 43): its last month and its bases (a capped one as the engine capped it). */
+  opening?: { through?: string; bases: Record<string, number> };
 }
 
 /** The figures of the annual declarations per person: each base of the year as the closed payslips kept it. */
 export function declarationRows(employees: readonly PayrollEmployee[], closes: readonly PayslipClose[], year: string): DeclarationRow[] {
   return employees.flatMap((e) => {
-    const mine = closes.filter((c) => c.employee === e.id && c.month.startsWith(year));
+    const mine = countedCloses(e, closes, year);
     if (!mine.length) return [];
+    const o = openingOf(e, year);
     const bases: Record<string, number> = {};
-    for (const [k, v] of Object.entries(e.opening?.[year]?.bases ?? {})) bases[k] = round2((bases[k] ?? 0) + v);
+    for (const [k, v] of Object.entries(o?.bases ?? {})) bases[k] = round2((bases[k] ?? 0) + v);
     for (const c of mine) for (const [k, v] of Object.entries(c.bases)) bases[k] = round2((bases[k] ?? 0) + v.month);
     // A capped base (`alv|alvCeiling`) counts the opening of its base too, as the engine capped it (src/payroll/compute.ts cumulative).
-    for (const k of Object.keys(bases)) if (k.includes('|')) bases[k] = round2(bases[k] + (e.opening?.[year]?.bases?.[k.split('|')[0]] ?? 0));
+    const ofOpening: Record<string, number> = { ...(o?.bases ?? {}) };
+    for (const k of Object.keys(bases)) if (k.includes('|')) { const v = o?.bases[k.split('|')[0]] ?? 0; bases[k] = round2(bases[k] + v); if (v) ofOpening[k] = v; }
     const spans = entriesWithin(e.employment, `${year}-01-01`, `${year}-12-31`).filter((s) => s.entry);
-    return [{ employee: e.id, name: mine.at(-1)!.person.name, bases, ...(spans.length ? { from: spans[0].from, to: spans.at(-1)!.to } : {}) }];
+    return [{ employee: e.id, name: mine.at(-1)!.person.name, bases, ...(spans.length ? { from: spans[0].from, to: spans.at(-1)!.to } : {}), ...(o ? { opening: { through: o.through, bases: ofOpening } } : {}) }];
   });
 }
 

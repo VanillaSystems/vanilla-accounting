@@ -79,6 +79,8 @@ export type NoWait =
   | 'wording'
   /** Its text is a wage's, on a firm that pays wages: booked without waiting, and still a candidate for a receipt (never in NONE_OF_ITS_OWN). */
   | 'wage'
+  /** It pays one of the firm's payroll insurers whose contributions the payslips accrue (ClassifyContext.payrollInsurer): the payslips prove it; its bill still pairs (never in NONE_OF_ITS_OWN). */
+  | 'payrollInsurer'
   /** The firm claims no input tax (not registered, or the net tax rate method): a receipt changes no code. */
   | 'noInputTax';
 
@@ -98,6 +100,8 @@ export interface WaitFacts {
   payout?: boolean;
   /** It pays the owner back her outlays (repaysOwner). */
   repaysOwner?: boolean;
+  /** It pays one of the firm's payroll insurers, in a year payroll runs here (ClassifyContext.payrollInsurer). */
+  payrollInsurer?: boolean;
 }
 
 /** What the decision reads of the firm. */
@@ -133,6 +137,7 @@ export function receiptWait(tx: BankTransaction, facts: WaitFacts, ctx: WaitCont
   if (facts.ruleAsks) return book('ruleAsks');
   if (facts.repaysOwner) return book('repaysOwner');
   if (facts.business && ctx.free.has(facts.business)) return book(ctx.pairs?.has(facts.business) ? 'businessBill' : 'business');
+  if (facts.payrollInsurer) return book('payrollInsurer');
   if (ctx.wordings.some((w) => w.test(`${tx.description} ${tx.counterparty ?? ''}`))) return book('wording');
   // The text only: a counterparty may be called like a wage word (a surname, a place, a firm).
   if (ctx.wages?.some((w) => w.test(tx.description))) return book('wage');
@@ -320,7 +325,8 @@ export function receiptWaitOf(books: Books, tx: BankTransaction, context: Classi
   const ruleAccount = then?.kind === 'book' ? then.booking.account : then?.booking?.account;
   const payout = !!providerOfPayment(tx, linked, context.counterparties ?? []);
   const repays = toOwnerByName(tx, context) && !then && repaymentsOf(books, context, known.wages, fx).has(tx.ref);
-  return receiptWait(tx, { linked: linkedOf(linked, tx), ...(routing.kind === 'known' && { business: routing.counterparty }), ...(ruleAccount && { ruleAccount }), ...(then?.kind === 'ask' && { ruleAsks: true }), ...(payout && { payout }), ...(repays && { repaysOwner: true }) }, {
+  const insurer = !!context.payrollInsurer?.(tx, routing.kind === 'known' ? routing.counterparty : undefined, books.journalEntries);
+  return receiptWait(tx, { linked: linkedOf(linked, tx), ...(routing.kind === 'known' && { business: routing.counterparty }), ...(ruleAccount && { ruleAccount }), ...(then?.kind === 'ask' && { ruleAsks: true }), ...(payout && { payout }), ...(repays && { repaysOwner: true }), ...(insurer && { payrollInsurer: true }) }, {
     ...known,
     ownIbans: new Set(context.bankAccounts.flatMap((a) => (a.iban ? [ibanOf(a.iban)] : []))),
     settles: settlementAccount(context),

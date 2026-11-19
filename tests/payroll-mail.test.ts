@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import { encryptPdf } from '../src/payroll/pdf-encrypt.js';
-import { closePayslip, passwordCheck, payslipsSent, sendPayslip, setMailPassword, type BooksWriter } from '../src/payroll/service.js';
+import { closePayslip, passwordCheck, payslipMail, payslipsSent, sendPayslip, setMailPassword, type BooksWriter } from '../src/payroll/service.js';
 import { savePayroll, loadPayroll } from '../src/payroll/store.js';
 import { PERSON, updateSaved, type Books } from '../src/books/store.js';
 import { textPdf } from './support/text-pdf.js';
@@ -55,7 +55,8 @@ test('the mail goes to the person\'s own address with the copy to the sender, th
   const write: BooksWriter = <T>(fn: (b: Books) => T) => updateSaved(ws, PERSON, fn);
   await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
   const outbox: Array<{ to: string; bcc?: string; subject: string; content: Buffer }> = [];
-  const sent = await sendPayslip(ws, '2026-09-e1', async (m, pdf) => { outbox.push({ to: m.to, bcc: m.bcc, subject: m.subject, content: pdf.content }); return { to: m.to, messageId: '<1@x>' }; });
+  const sending = { ...ws, outgoingMail: { host: 'smtp.example', port: 587, security: 'starttls' as const, fromAddress: 'post@firma.example' } } as typeof ws;
+  const sent = await sendPayslip(sending, '2026-09-e1', async (m, pdf) => { outbox.push({ to: m.to, bcc: m.bcc, subject: m.subject, content: pdf.content }); return { to: m.to, messageId: '<1@x>' }; });
   assert.deepEqual([outbox[0].to, outbox[0].bcc, outbox[0].subject], ['mila@beispiel.example', 'lohn@firma.example', 'Lohnabrechnung September 2026']);
   const file = join(mkdtempSync(join(tmpdir(), 'payroll-sent-')), 'x.pdf');
   writeFileSync(file, outbox[0].content);
@@ -83,4 +84,22 @@ test('without a sender set, the copy goes to the mailbox the firm sends from', a
   let bcc: string | undefined;
   await sendPayslip(sending, '2026-09-e1', async (m) => { bcc = m.bcc; return { to: m.to, messageId: '<2@x>' }; });
   assert.equal(bcc, 'lohn@firma.example');
+});
+
+test('without a mailbox to send from, no copy is named and nothing is sent, whatever the sender says (§22 decision 39)', async () => {
+  const ws = tempWorkspace('payroll-mail-');
+  writeIndex(ws, { journalEntries: [], config: {} });
+  const store = firm([owner({ email: [dated('2026-01-01', 'mila@beispiel.example')], mailPassword: 'Sonne-und-Mond' })]);
+  store.company.sender = { copyTo: 'lohn@firma.example' };
+  savePayroll(ws, store);
+  const write: BooksWriter = <T>(fn: (b: Books) => T) => updateSaved(ws, PERSON, fn);
+  await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
+  const mail = payslipMail(ws, '2026-09-e1');
+  assert.equal(mail.outbox, false);
+  assert.equal(mail.copyTo, undefined, 'the walk read «Blindkopie an lohn@…» without an outbox');
+  let called = false;
+  await assert.rejects(sendPayslip(ws, '2026-09-e1', async (m) => { called = true; return { to: m.to, messageId: '<3@x>' }; }), (e: Error & { code?: string }) => e.code === 'noOutbox');
+  assert.equal(called, false);
+  const sending = { ...ws, outgoingMail: { host: 'smtp.example', port: 587, security: 'starttls' as const, fromAddress: 'post@firma.example' } } as typeof ws;
+  assert.deepEqual([payslipMail(sending, '2026-09-e1').outbox, payslipMail(sending, '2026-09-e1').copyTo], [true, 'lohn@firma.example']);
 });

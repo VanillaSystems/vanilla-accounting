@@ -218,4 +218,8 @@ test('Löhne: every tab of §12.1 by its path, and its spellings', () => {
   const to = (url: string) => { const p = parse(url); assert.ok(isRedirect(p), `${url} should redirect`); return formatLocation(p.redirect); };
   assert.equal(to('/payroll/payments/september'), '/payroll/payments');
   assert.equal(to('/payroll/documents/26/lohnkonto'), '/payroll/documents');
+  // A month under «payslips» opens that month (the walk's /payroll/payslips/2026-10 opened November).
+  assert.equal(to('/payroll/payslips/2026-10'), '/payroll/2026-10');
+  assert.equal(to('/payroll/payslips/2026-10/lukas'), '/payroll/2026-10/lukas');
+  assert.equal(to('/payroll/payslips/oktober'), '/payroll/payslips');
 });

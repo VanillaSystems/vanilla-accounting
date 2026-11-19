@@ -683,6 +683,8 @@ persons) or «korrigieren» (some), each kept beside the first.
    ALV wage, BVG, QST): one opening line per Lohnart group, so the ceilings and the Lohnausweis
    count from January. The opening books nothing: the books already carry those months; it feeds
    only the cumulation of the bases and the Lohnausweis.
+   Its months (January to its last, `through`) have no payslip here and are never closed here (§22
+   decision 43).
 
 ### 6.2 The month
 
@@ -1336,7 +1338,8 @@ says how. The section numbers inside refer to the spec of 2026-11-15.
     release and payment. Level A keeps booking the net against the bank.
 13. **Rounding to 0.05 per line**, as data in `modules/ch/payroll.yaml`, so a firm can switch it.
 14. **The disclaimer** «Berechnung aus den erfassten Sätzen, vom Treuhänder zu prüfen» stands on
-    the run's detail and in the payslip's footer in small print, never as a dialog.
+    the run's detail and in the payslip's footer in small print, never as a dialog. *Its wording is
+    replaced by §22 decision 47 (2026-11-19): neutral, since the owner who runs payroll himself reads it too.*
 
 
 ---
@@ -1699,6 +1702,74 @@ non-obvious decision is recorded here when it is taken.
 42. **A payslip paid before it was reopened and closed again with another payout names the difference**
     (its payout less what the bank line paid for it) on the payslip and in Lohnzahlungen, as a fact: that much
     stays on 1091 until a payment or a booking settles it. The app books nothing for it by itself.
+
+Taken after the scored persona walk of B0 (2026-11-19, AI on 73, AI off 83, bar 85):
+
+43. **A person's opening names its months: January to `through`** (`opening[year].through`, YYYY-MM, in
+    payroll.json; src/payroll/opening.ts). An opening written before (only `months`) covers January and the
+    months after it, that many, a part month whole: the same file reads the same, so `PAYROLL_SCHEMA` stays 1.
+    One with neither (written by hand) still counts its bases and fields and holds no month; the settings API
+    takes none without `through`, and `months`, when given, lies above zero and within January to `through`
+    (an edit without it lets the months follow `through`). The year strip shows the opening's months also for a
+    person whose employment is recorded only from after it.
+    The opening's months were paid and booked by hand before payroll ran here: they are «Eröffnung» (year
+    strip, timeline, the month's run), get no draft, are never «noch offen» for a later month, and closing
+    one is refused (`opening`, 409), not warned: it would book the wage a second time, a boundary of the
+    books like a closed period. Reopening is unchanged. The year's figures count each month once: the
+    opening's bases and Lohnausweis fields, and the closes of the months after it; a close of an opening
+    month made before the opening said so counts no more (it stands in the history until reopened). The
+    Lohnkonto shows the opening's bases beside the months (it has no Lohnart), the declarations a column
+    «davon Eröffnung», the Lohnausweis what of its fields the opening holds. The opening is set in «Person
+    hinzufügen» and on the person's page (`PUT /api/payroll/employees/:id/opening/:year`, through the same
+    comparison with closed payslips as any change); it is refused over a month closed here.
+44. **A final statement is compared with the year's contributions in the books**: what the payslips
+    accrued on the liability account (and an earlier statement), plus what was paid for the opening's months:
+    the payments out to that insurer alone, in the books' currency, dated from 1 February (a January payment
+    settles the year before) to the day before payroll's start, not booked on its liability account (level A).
+    A payee that takes several of the firm's insurances (AHV and FAK at one fund) cannot be split per
+    insurance: its payments count for none, and the panel says so («nicht aufgeteilt»). The opening carries no
+    contributions: the books hold what was paid, and the person would only retype it. The difference booked is
+    the total less that sum; a total below zero is refused. When the difference is more than 5 % of the year
+    (the larger of the total and the books' sum), the page shows the figures first and books only on
+    «Trotzdem buchen» (§18); a smaller one is booked at once and the answer names the figures. One month's
+    contributions is about 8 % of a year, so the 5 % rule also catches a month counted twice or missing.
+45. **One decision for a payment to a payroll insurer** (src/payroll/insurers.ts `insurerPaymentOf`), read by
+    the classifier's code booking, receipt-wait and the hand form alike, and only where the jurisdiction's
+    payroll books through its clearing account. Payroll runs here for the insurer's account once a payslip
+    accrued on it, or, in a year a person has an opening, from payroll's first month after it
+    (`payrollSince`); a firm with persons but neither keeps level A's way. Such a payment needs no receipt
+    (receipt-wait `payrollInsurer`; its bill still pairs) and is never the model's. Code books it bank /
+    liability by itself only when the account's credit at the end of the payment's month (the accruals through
+    that month, less what was paid before) covers it: an Akonto of the 28th or a BVG payment of the 15th of a
+    month whose payslip is closed. Otherwise it waits for the person (it may pay months before payroll ran here,
+    a quarter in arrears), and the hand form offers both bookings plainly: «für Monate ab dem Lohnstart» (bank /
+    liability, no VAT code) and «für Monate davor» (level A's contributions: the withheld share on the
+    deductions account, the rest on the employer's account, as setup.yaml `wages` says). A payee of several
+    insurances is never booked by code. By payroll.json's insurers, business file or name, never a named fund.
+46. **An insurance the law does not require of everyone holds only for the persons put in it** (a kind
+    without `required`, `perPerson` or `requiredAbove`: KTG, UVGZ): a person without her own solution of the
+    kind gets none of its lines but a fact on her payslip («Nicht in der Krankentaggeldversicherung
+    versichert»), and the person form offers «nicht versichert» for it. A required kind still
+    takes the insurance's first solution when the person names none. An insurance's card offers «Konten
+    anlegen» for the accounts of its contributions the chart lacks.
+47. **The note under every payslip, PDF and Lohnausweis is neutral**: «Berechnet aus den erfassten Sätzen und
+    den Bundeswerten <Jahr>.». It replaces §16 decision 14's «vom Treuhänder zu prüfen», because an owner who
+    runs payroll himself reads it too. It is module data (`documents.disclaimer` with `{year}`), checked by
+    check-payroll.
+48. **Each payslip line names where its rate comes from**, on the page and in the PDF: a law figure as
+    «Bundeswert <Jahr> · <articles>» (the yaml source up to its first explanation, from the row the payslip
+    read), a firm's rate as the insurer and the solution the payslip read, a certificate as «Vorsorgeausweis
+    <insurer>». The Lohnausweis prints none.
+49. **A Lohnart's inputs carry their own words as data** (`inputs` in payroll.yaml: «Kaufpreis ohne MWST»,
+    «Stunden»). A line «unvollständig» names which input is missing (the quantity or the rate per unit) by
+    that word, and the forms label their fields with it.
+50. **Without an outgoing mailbox no copy is named and no payslip is sent** (`noOutbox`), even when the
+    sender names one; the page says so instead of «Blindkopie an …». A refusal shows as a panel in the
+    page beside the action and stays until hidden or retried, never only as a toast.
+51. **Löhne shows no card of the open VAT period in the AI sidebar** (`Area.noPeriodCard`): the payroll's
+    months are not the VAT period's. A month path `/payroll/payslips/<yyyy-mm>` opens that month.
+52. **A Lohnausweis for a person without a social security number is said first** (field C stays empty),
+    then «Trotzdem erstellen» (§18), as an open month is.
 
 ---
 

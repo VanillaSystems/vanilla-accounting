@@ -17,10 +17,12 @@ import { listedSections, SettingsDetail, SettingsList } from './Settings.js';
 import { listedPayments, PaymentDetail, PaymentList, paymentMonth, routeOfSelection, selectionOf } from './Payments.js';
 import { DocumentDetail, DocumentList, documentYear, listedDocuments } from './Documents.js';
 import { monthText } from './words.js';
+import { useReloadOnBooks } from './data.js';
 
 type Props = AreaProps<PayrollRoute>;
 
 function List(props: Props) {
+  useReloadOnBooks(props.books);
   switch (props.route.view) {
     case 'overview': return <OverviewList {...props} />;
     case 'payslips': return <PayslipList {...props} />;
@@ -54,6 +56,8 @@ export const payroll: Area<PayrollRoute> = {
   List,
   Detail,
   periodless: true,
+  // The sidebar's card of the open VAT period says nothing of the payroll's months (§22).
+  noPeriodCard: true,
   add: {
     label: () => t('payroll.employee.addShort'),
     title: () => t('payroll.employee.add'),

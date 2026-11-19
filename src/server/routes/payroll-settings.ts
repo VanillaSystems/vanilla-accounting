@@ -16,7 +16,7 @@ import { chartNumbers, payrollContext } from '../../payroll/service.js';
 import { appendPayslipEvents, updatePayroll } from '../../payroll/store.js';
 import {
   addDatedEntry, addSolution, affectedBy, backdatedCorrections, keepEvents, copyWageType, createEmployee, createInsurance, employeeDetail, patchEmployee,
-  patchInsurance, payrollAccounts, removeWageType, reopenOffer, setWageType, settingsView, withdrawDatedEntry, type RateWarning,
+  patchInsurance, payrollAccounts, removeWageType, reopenOffer, setOpening, setWageType, settingsView, withdrawDatedEntry, type RateWarning,
 } from '../../payroll/settings.js';
 import type { PayrollStore, PayslipEvent } from '../../payroll/model.js';
 import { maskedNumber } from '../../payroll/views.js';
@@ -35,7 +35,8 @@ const hex = (n: number) => idSource.bytes(n).toString('hex');
 const STATUS: Record<PayrollRefusal['code'], number> = {
   notFound: 404, badAmount: 400, unknownWageType: 400, badInput: 400, socialSecurityNumber: 400, iban: 400,
   alreadyClosed: 409, notClosed: 409, notLatest: 409, used: 409, exists: 409,
-  unknownInsurance: 404, gone: 404, closedPeriod: 403, noExpenseAccount: 409, nothingAccrued: 409, noEmail: 409, noPassword: 409, badPassword: 400,
+  unknownInsurance: 404, gone: 404, closedPeriod: 403, noExpenseAccount: 409, nothingAccrued: 409, noEmail: 409, noPassword: 409, noOutbox: 409, badPassword: 400,
+  opening: 409,
 };
 
 const run = (fn: (req: Request, res: Response) => void) => (req: Request, res: Response, next: NextFunction) => {
@@ -115,6 +116,18 @@ router.patch('/api/payroll/employees/:id', run((req, res) => {
   const { backdated: _, ...patch } = body(req);
   const data = payrollContext(WS).data;
   save(req, res, { path: `employees/${req.params.id}` }, (s) => patchEmployee(s, data, String(req.params.id), patch), () => ({ id: req.params.id }));
+}));
+
+/**
+ * A person's opening of a year (a start here mid-year, §22 decision 43): January to `through` paid and booked
+ * before payroll ran here, with their bases and Lohnausweis fields; `null` removes it. Its figures change the
+ * ceilings of the months after it, so a closed payslip it computes otherwise answers with the card first.
+ */
+router.put('/api/payroll/employees/:id/opening/:year', run((req, res) => {
+  const ctx = payrollContext(WS);
+  const { backdated: _, ...rest } = body(req);
+  const value = 'value' in rest ? rest.value : rest;
+  save(req, res, { path: `employees/${req.params.id}/opening` }, (s) => setOpening(s, ctx.data, ctx.history, String(req.params.id), String(req.params.year), value), () => ({ id: req.params.id }));
 }));
 
 /** A dated value from a day («gilt ab»): of a person, of the Stammdaten, of a solution's rates (the path a close's `used` names). */

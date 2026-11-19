@@ -479,7 +479,9 @@ export function bankOf(books: Index, accounts: readonly Account[], today: IsoDat
     },
     entriesOf: (ref) => entries.get(ref) ?? [],
     txByRef,
-    needsReceipt: (t) => !isBankFee(t) && t.amount !== 0 && !t.noReceiptNeeded && !(receipts.get(t.ref) ?? []).length,
+    // A payment the payroll's code booked (a wage, a fund's or insurer's contribution) has its proof in the payslips: no «kein Beleg».
+    needsReceipt: (t) => !isBankFee(t) && t.amount !== 0 && !t.noReceiptNeeded && !(receipts.get(t.ref) ?? []).length
+      && !(entries.get(t.ref) ?? []).some((e) => e.by?.kind === 'code' && e.by.check === 'payroll'),
     unbooked,
     strays: (from, to) => (books.journalEntries ?? []).filter((e) => e.date >= from && e.date <= to && e.origin !== 'year-close'
       && e.accountDebit !== e.accountCredit && !txByRef.has(e.transactionRef)

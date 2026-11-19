@@ -51,9 +51,11 @@ test('a Lohnausweis is issued as a PDF and a snapshot; a replacement stays besid
   writeIndex(ws, { journalEntries: [], config: {} });
   savePayroll(ws, store);
   appendPayslipEvents(ws, '2026', events);
-  const first = await issueLohnausweis(ws, 'e1', '2026', 'original', '2027-01-15T09:00:00.000Z') as LohnausweisSnapshot;
+  // Without the person's social security number the form lacks field C: said first (§18), issued after «Trotzdem erstellen».
+  assert.deepEqual(await issueLohnausweis(ws, 'e1', '2026', 'original', '2027-01-15T09:00:00.000Z'), { issued: false, openMonths: [], noSocialSecurityNumber: true });
+  const first = await issueLohnausweis(ws, 'e1', '2026', 'original', '2027-01-15T09:00:00.000Z', true) as LohnausweisSnapshot;
   assert.equal(readFileSync(join(ws.paths.root, first.file)).subarray(0, 5).toString(), '%PDF-');
-  const second = await issueLohnausweis(ws, 'e1', '2026', 'original', '2027-02-01T09:00:00.000Z') as LohnausweisSnapshot;
+  const second = await issueLohnausweis(ws, 'e1', '2026', 'original', '2027-02-01T09:00:00.000Z', true) as LohnausweisSnapshot;
   assert.deepEqual(lohnausweisSnapshots(ws, '2026').map((s) => [s.kind, s.data.fields['8']]), [['original', 130000], ['replacement', 130000]]);
   assert.notEqual(first.file, second.file);
   assert.ok(!first.file.includes('756'));
@@ -71,7 +73,7 @@ test('the form\'s sums add up in whole francs; a year with open months is issued
   writeIndex(ws, { journalEntries: [], config: {} });
   savePayroll(ws, store);
   appendPayslipEvents(ws, '2026', events);
-  assert.deepEqual(await issueLohnausweis(ws, 'e1', '2026'), { issued: false, openMonths: l.openMonths });
+  assert.deepEqual(await issueLohnausweis(ws, 'e1', '2026'), { issued: false, openMonths: l.openMonths, noSocialSecurityNumber: true });
   assert.equal(lohnausweisSnapshots(ws, '2026').length, 0);
   assert.ok('id' in await issueLohnausweis(ws, 'e1', '2026', 'original', undefined, true));
 });

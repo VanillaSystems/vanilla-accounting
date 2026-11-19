@@ -211,7 +211,8 @@ const MONTH = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 function payrollRoute(b?: string, c?: string, d?: string, e?: string): Route {
   if (b && MONTH.test(b)) return defined({ area: 'payroll', view: 'payslips', month: b, employee: c });
-  if (b === 'payslips') return { area: 'payroll', view: 'payslips' };
+  // «/payroll/payslips/<month>/<person>» names the month too: it opens that month, never this one.
+  if (b === 'payslips') return c && MONTH.test(c) ? defined({ area: 'payroll', view: 'payslips', month: c, employee: d }) : { area: 'payroll', view: 'payslips' };
   if (b === 'payments') {
     if (!c || !MONTH.test(c)) return { area: 'payroll', view: 'payments' };
     return d === 'insurances' ? defined({ area: 'payroll', view: 'payments', month: c, insurance: e }) : defined({ area: 'payroll', view: 'payments', month: c, employee: d });

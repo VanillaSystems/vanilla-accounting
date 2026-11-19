@@ -213,6 +213,7 @@
       ],
       "opening": {
         "2026": {
+          "through": "2026-09",
           "months": 9,
           "bases": {
             "ahv": 77400,

@@ -109,6 +109,6 @@ export async function lohnausweisPdf(sheet: LohnausweisSheet, payroll: PayrollDa
   const fa = sheet.firm.address;
   text([sheet.firm.name, fa ? [[fa.street, fa.number].filter(Boolean).join(' '), [fa.postcode, fa.town].join(' ')].filter((l) => l.trim()).join(', ') : ''].filter(Boolean).join(', '), left, y, 8.5);
   if (sheet.firm.contact?.name || sheet.firm.contact?.phone) { y -= 12; text([sheet.firm.contact.name, sheet.firm.contact.phone].filter(Boolean).join(', '), left, y, 8.5); }
-  text(safe(regular, payroll.documents.disclaimer[lang] ?? payroll.documents.disclaimer.de), left, 30, 7, regular, MUTED);
+  text(safe(regular, (payroll.documents.disclaimer[lang] ?? payroll.documents.disclaimer.de).replace('{year}', sheet.data.year)), left, 30, 7, regular, MUTED);
   return Buffer.from(await doc.save({ useObjectStreams: false }));
 }

@@ -64,7 +64,7 @@ import { totals as invoiceTotals } from '../../invoices/rules.js';
 import type { InvoiceLine } from '../../invoices/model.js';
 
 /** `onGoTo`: to a place with its period, for a link to an object of another period than the one shown. */
-interface Props { page: ContextRef | undefined; books: Index; onGo(route: Route): void; onGoTo(loc: Location): void }
+interface Props { page: ContextRef | undefined; books: Index; onGo(route: Route): void; onGoTo(loc: Location): void; /** No card of the open period before the first message (Area.noPeriodCard). */ noPeriodCard?: boolean }
 
 /** A booking's fields as they read on a card: accounts, VAT code, amount, date, text. */
 function entryWhat(set: EntrySet, withText = true): string {
@@ -383,7 +383,7 @@ function SentFile({ a, conversation }: { a: Attachment; conversation: string | u
   );
 }
 
-export function Sidebar({ page, books, onGo, onGoTo }: Props) {
+export function Sidebar({ page, books, onGo, onGoTo, noPeriodCard }: Props) {
   const columnNoAi = useColumnNoAi(() => onGo({ area: 'company', section: 'ai' }));
   const s = useAssistant();
   const [text, setText] = useState('');
@@ -572,7 +572,7 @@ export function Sidebar({ page, books, onGo, onGoTo }: Props) {
         <div className="aiturns">
           {noAi?.card}
           {/* Before the first message: where the open period stands, drawn by code, so it is there without an AI too (#342). */}
-          {s.turns.length === 0 && !setup ? <OpenPeriodCard books={books} onGo={onGoTo} /> : null}
+          {s.turns.length === 0 && !setup && !noPeriodCard ? <OpenPeriodCard books={books} onGo={onGoTo} /> : null}
           {s.turns.length === 0 && !noAi ? <p className="m aiempty">{t('assistant.empty')}</p> : null}
           {setup ? <SetupConversation turns={s.turns} turn={turnView} onGo={onGo} noAi={!!noAi} /> : s.turns.map(turnView)}
           {s.error ? <p className="warnline">{s.error}</p> : null}

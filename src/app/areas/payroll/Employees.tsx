@@ -17,10 +17,10 @@ import type { Employment, PayrollInsurance, PersonInsurances, TaxAtSource } from
 import type { Address } from '../../../invoices/model.js';
 import type { AreaProps, Nav } from '../index.js';
 import { payrollApi, reloadPayroll, urls, usePayroll, type EmployeeDetail, type Overview, type SettingsView } from './data.js';
-import { at, Go, payslipAt, settingsAt, Tabs, type PayrollRoute } from './common.js';
+import { at, Go, payslipAt, settingsAt, Tabs, useRefusal, type PayrollRoute } from './common.js';
 import { useHandover } from '../../handover/store.js';
 import { DatedField, Fields, numberOf, numText, useBackdated, type FieldDef, type Form, type ValueSpec } from './Dated.js';
-import { data, kindLabel, labelOf, monthShort, statusText } from './words.js';
+import { data, kindLabel, labelOf, monthShort, monthText, statusText } from './words.js';
 
 type Props = AreaProps<PayrollRoute>;
 export const listedEmployees: { ids: string[] } = { ids: [] };
@@ -147,7 +147,9 @@ export function insuranceFields(insurances: readonly PayrollInsurance[]): FieldD
           { k: `${kind}.employer`, label: t('payroll.field.certEmployer'), type: 'number' },
         ];
       }
-      return [{ k: `${kind}.code`, label: kindLabel(kind), type: 'select', options: [['', t('payroll.employee.firstSolution')], ...of.flatMap((i) => i.solutions.map((x) => [`${i.id}:${x.code}`, `${i.name} · ${x.code}`] as const))] }];
+      // A kind the law requires of everyone takes the first solution without a choice; any other holds only for whom the firm puts in it (§22 decision 46).
+      const optional = !d?.insurances[kind]?.required && !d?.insurances[kind]?.requiredAbove;
+      return [{ k: `${kind}.code`, label: kindLabel(kind), type: 'select', options: [['', t(optional ? 'payroll.employee.notInsured' : 'payroll.employee.firstSolution')], ...of.flatMap((i) => i.solutions.map((x) => [`${i.id}:${x.code}`, `${i.name} · ${x.code}`] as const))] }];
     }),
     { k: 'pensioner', label: t('payroll.field.pensioner'), type: 'select', options: [['', '—'], ['allowance', t('payroll.employee.pensionerAllowance')], ['waiver', t('payroll.employee.pensionerWaiver')]] },
   ];
@@ -202,6 +204,68 @@ const recurringSpec = (quantity: boolean): ValueSpec<{ amount?: number; quantity
   show: (v) => <><span className="mono">{v.amount !== undefined ? fmt(v.amount) : `${v.quantity} × ${fmt(v.rate ?? 0)}`}</span>{v.text ? ` · ${v.text}` : ''}{v.amount === 0 ? <span className="m"> · {t('payroll.employee.recurringEnded')}</span> : null}</>,
 });
 
+// ─── the opening (a start here mid-year, §22 decision 43) ─────────────────────
+
+/** The opening's inputs: its last month, each base of the jurisdiction, each Lohnausweis field a person enters. */
+export function openingFields(year: string): FieldDef[] {
+  const d = data();
+  const months = Array.from({ length: 12 }, (_, i) => `${year}-${String(i + 1).padStart(2, '0')}`);
+  return [
+    { k: 'through', label: t('payroll.field.openingThrough'), type: 'select', options: [['', t('payroll.opening.none')], ...months.map((m) => [m, monthText(m)] as const)], hint: t('payroll.opening.throughHint') },
+    ...(d?.bases ?? []).map((b): FieldDef => ({ k: `base.${b.key}`, label: labelOf(b.label, b.key), type: 'number' })),
+    ...(d?.lohnausweis?.fields ?? []).filter((f) => !f.sum && !f.remark).map((f): FieldDef => ({ k: `field.${f.key}`, label: `${f.key} ${labelOf(f.label)}`, type: 'number' })),
+  ];
+}
+
+/** The opening as the API takes it from the form; undefined without its last month. */
+export function openingOf(f: Form): Record<string, unknown> | undefined {
+  if (!f.through) return undefined;
+  const pick = (prefix: string) => Object.fromEntries(Object.entries(f).flatMap(([k, v]) => (k.startsWith(prefix) && numberOf(v) !== undefined ? [[k.slice(prefix.length), numberOf(v)]] : [])));
+  return { through: f.through, bases: pick('base.'), fields: pick('field.') };
+}
+
+/**
+ * Her opening of the year: January to its last month paid and booked before payroll ran here (no payslip,
+ * never closed here), with the bases and Lohnausweis fields of those months; «Ändern» and «Entfernen».
+ */
+function OpeningSection({ d, nav, canEdit }: { d: EmployeeDetail; nav: Nav; canEdit: boolean }) {
+  const year = d.opening?.year ?? localToday().slice(0, 4);
+  const o = d.opening;
+  const [edit, setEdit] = useState(false);
+  const was: Form = { through: o?.through ?? '', ...Object.fromEntries(Object.entries(o?.bases ?? {}).map(([k, v]) => [`base.${k}`, numText(v)])), ...Object.fromEntries(Object.entries(o?.fields ?? {}).map(([k, v]) => [`field.${k}`, numText(v)])) };
+  const [f, setF] = useState<Form>(was);
+  const card = useBackdated(nav);
+  const save = async (ev: FormEvent) => {
+    ev.preventDefault();
+    await card.send((how) => payrollApi.setOpening(d.employee.id, year, openingOf(f) ?? null, how), () => setEdit(false));
+  };
+  const bases = Object.entries(o?.bases ?? {}).filter(([, v]) => v);
+  const fields = Object.entries(o?.fields ?? {}).filter(([, v]) => v);
+  return (
+    <div className="dated" data-testid="opening">
+      <div className="dlabel">{t('payroll.opening.label', { year })}</div>
+      <div className="dbody">
+        {o ? (
+          <>
+            <p>{o.through ? t(o.months === 1 ? 'payroll.opening.textOne' : 'payroll.opening.text', { through: monthText(o.through), months: Math.round(o.months * 100) / 100 }) : t('payroll.opening.noMonths')}</p>
+            {bases.length ? <p className="m">{bases.map(([k, v]) => `${labelOf(data()?.bases.find((b) => b.key === k)?.label, k)} ${fmt(v)}`).join(' · ')}</p> : null}
+            {fields.length ? <p className="m">{t('payroll.opening.fields', { list: fields.map(([k, v]) => `${k}: ${fmt(v)}`).join(' · ') })}</p> : null}
+          </>
+        ) : <p className="m">{t('payroll.opening.empty')}</p>}
+        {canEdit && !edit ? <button type="button" className="quiet2" onClick={() => { setF(was); setEdit(true); }}>{o ? t('payroll.dated.change') : t('payroll.opening.add')}</button> : null}
+        {edit ? (
+          <AsyncForm className="form inline pform" onSubmit={save}>
+            <p className="m wide">{t('payroll.opening.lead')}</p>
+            <Fields fields={openingFields(year)} f={f} set={setF} />
+            <div className="acts"><AsyncButton type="submit" className="btn primary">{t('common.save')}</AsyncButton><button type="button" className="btn ghost" onClick={() => setEdit(false)}>{t('common.cancel')}</button></div>
+          </AsyncForm>
+        ) : null}
+        {card.node}
+      </div>
+    </div>
+  );
+}
+
 // ─── the detail ────────────────────────────────────────────────────────────────
 
 export function EmployeeDetailView(props: Props) {
@@ -248,6 +312,7 @@ function Person({ d, settings, nav, canEdit }: Props & { d: EmployeeDetail; sett
       <Section title={t('payroll.sec.employment')}>
         <DatedField label={t('payroll.sec.employment')} path={`${base}/employment`} history={e.employment} spec={employmentSpec()} {...common} />
         {canEdit ? <Exit e={e} nav={nav} /> : null}
+        <OpeningSection d={d} nav={nav} canEdit={canEdit} />
       </Section>
       <Section title={t('payroll.sec.recurring')}>
         {e.recurring.length ? e.recurring.map((r) => {
@@ -285,14 +350,17 @@ function MailPassword({ e, nav, canEdit: may }: { e: EmployeeDetail['employee'];
   const [value, setValue] = useState('');
   const [warn, setWarn] = useState(false);
   const [shown, setShown] = useState<string | null>(null);
+  // A refused password (the social security number, too short) stays beside the field, never only a toast.
+  const refusal = useRefusal();
   const run = async (password: string | undefined, confirm = false) => {
     try {
       const r = await payrollApi.mailPassword(e.id, { ...(password ? { password } : {}), ...(confirm ? { confirm } : {}) });
+      refusal.clear();
       if (r.warn) { setWarn(true); return; }
       setWarn(false); setOpen(false); setValue('');
       if (r.password) setShown(r.password); else { setShown(null); nav.toast(t('payroll.password.set')); }
       await reloadPayroll();
-    } catch (x) { nav.toast(errorText(x)); }
+    } catch (x) { refusal.refuse(x); }
   };
   const save = async (ev: FormEvent) => { ev.preventDefault(); await run(value || undefined); };
   return (
@@ -305,6 +373,7 @@ function MailPassword({ e, nav, canEdit: may }: { e: EmployeeDetail['employee'];
         </div>
         <span className="m">{t('payroll.password.lead')}</span>
         {copy ? <span className="m">{t('payroll.mail.sharer', { name: copy.sharer.name })}</span> : null}
+        {refusal.node}
         {shown ? (
           <div className="pcard" role="status" data-testid="password-shown">
             <h4>{t('payroll.password.generated')}</h4>
@@ -479,6 +548,7 @@ function NewEmployee({ settings, nav }: Props & { settings: SettingsView }) {
       address: { street: f.street, number: f.number, postcode: f.postcode, town: f.town, country: f.country, canton: f.canton, municipality: f.municipality },
       bank: { iban: f.iban, holder: f.holder },
       insurances: insurancesOf(f, settings.insurances),
+      ...(openingOf(f) ? { opening: openingOf(f) } : {}),
     };
     let id = '';
     const ok = await card.send(async (how) => { const r = await payrollApi.createEmployee(body, how); if (r.saved) id = r.id; return r; });
@@ -490,6 +560,10 @@ function NewEmployee({ settings, nav }: Props & { settings: SettingsView }) {
       <AsyncForm className="form pnew" onSubmit={save}>
         <Section title={t('payroll.sec.person')}><div className="form inline pform"><Fields fields={person} f={f} set={setF} /></div></Section>
         <Section title={t('payroll.sec.employment')}><div className="form inline pform"><Fields fields={[{ k: 'validFrom', label: t('payroll.field.entry'), type: 'date' }, ...employmentFields()]} f={f} set={setF} /></div></Section>
+        <Section title={t('payroll.opening.title')}>
+          <p className="m">{t('payroll.opening.lead')}</p>
+          <div className="form inline pform"><Fields fields={f.through ? openingFields(localToday().slice(0, 4)) : openingFields(localToday().slice(0, 4)).slice(0, 1)} f={f} set={setF} /></div>
+        </Section>
         <Section title={t('payroll.sec.address')}><div className="form inline pform"><Fields fields={address} f={f} set={setF} /></div></Section>
         <Section title={t('payroll.sec.bank')}><div className="form inline pform"><Fields fields={bankSpec().fields} f={f} set={setF} /></div></Section>
         <Section title={t('payroll.sec.insurances')}>

@@ -123,7 +123,7 @@ export function OverviewDetail(props: Props) {
       <div className="docbody">
         <MonthRun month={month} nav={nav} canEdit={canEdit} />
         <p><Go nav={nav} loc={at({ area: 'payroll', view: 'payslips', month })}>{t('payroll.run.open')}</Go></p>
-        <Disclaimer />
+        <Disclaimer year={month.slice(0, 4)} />
       </div>
     </div>
   );

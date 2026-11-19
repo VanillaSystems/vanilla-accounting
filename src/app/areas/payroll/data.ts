@@ -3,14 +3,15 @@
  * URL, kept while the page is open and read again after every change: a close, a correction, a new entry
  * changes the year, the month, the payslips and the people at once.
  */
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { request } from '../../lib/api.js';
+import { booksChanged } from './books-seen.js';
 import type { EmployeeRow, MonthView, PayslipView, YearMonth } from '../../../payroll/views.js';
 import type { Affected, Difference, EmployeeDetail, RateWarning, SettingsView } from '../../../payroll/settings.js';
 import type { CloseWarning } from '../../../payroll/close.js';
 import type { MonthLine, PayslipCorrection } from '../../../payroll/model.js';
 import type { PaymentRow } from '../../../payroll/payments.js';
-import type { InsurerRow } from '../../../payroll/insurers.js';
+import type { InsurerRow, SettlementCompare } from '../../../payroll/insurers.js';
 import type { DeclarationRow, Lohnkonto, LohnausweisData } from '../../../payroll/documents.js';
 import type { LohnausweisSnapshot, PayslipMail, PayslipSent } from '../../../payroll/service.js';
 
@@ -48,6 +49,14 @@ export function usePayroll<T>(url: string | undefined): Load<T> {
 /** Reads everything shown again (after a change); resolves when it is in. */
 export function reloadPayroll(): Promise<void> {
   return Promise.all([...cache.keys()].map(fetchInto)).then(() => undefined);
+}
+
+/**
+ * Reads the area's data again whenever the books change under it (a bank statement dropped pays a wage,
+ * a run books an insurer's payment): Lohnzahlungen says «bezahlt» without a reload.
+ */
+export function useReloadOnBooks(books: object): void {
+  useEffect(() => { if (booksChanged(books)) void reloadPayroll(); }, [books]);
 }
 
 export const urls = {
@@ -108,8 +117,9 @@ export const payrollApi = {
   copyWageType: (body: Record<string, unknown>, backdated?: Backdated) => request<Saved<{ key: string }>>('POST', '/api/payroll/wage-types', { ...body, ...(backdated ? { backdated } : {}) }),
   removeWageType: (key: string, backdated?: Backdated) => request<Saved>('DELETE', `/api/payroll/wage-types/${encodeURIComponent(key)}`, backdated ? { backdated } : undefined),
   addAccount: (number: string) => request<{ number: string; name: string }>('POST', '/api/payroll/accounts', { number }),
-  settle: (id: string, body: { year: string; total: number; date: string }) => request<{ booked: string; amount: number; debit: string; credit: string } | { booked: null }>('POST', `/api/payroll/insurances/${encodeURIComponent(id)}/settle`, body),
-  issueLohnausweis: (year: string, body: { employee: string; kind?: 'replacement' | 'correction'; confirm?: boolean }) => request<Issued | { issued: false; openMonths: string[] }>('POST', `/api/payroll/documents/${year}/lohnausweis`, body),
+  settle: (id: string, body: { year: string; total: number; date: string; confirm?: boolean }) => request<{ booked: string; amount: number; debit: string; credit: string; compare: SettlementCompare } | { booked: null; warning?: true; compare: SettlementCompare }>('POST', `/api/payroll/insurances/${encodeURIComponent(id)}/settle`, body),
+  setOpening: (id: string, year: string, value: Record<string, unknown> | null, backdated?: Backdated) => request<Saved>('PUT', `/api/payroll/employees/${encodeURIComponent(id)}/opening/${year}`, { value, ...(backdated ? { backdated } : {}) }),
+  issueLohnausweis: (year: string, body: { employee: string; kind?: 'replacement' | 'correction'; confirm?: boolean }) => request<Issued | { issued: false; openMonths: string[]; noSocialSecurityNumber?: true }>('POST', `/api/payroll/documents/${year}/lohnausweis`, body),
   mailOf: (id: string) => request<PayslipMail>('GET', `/api/payroll/payslips/${id}/mail`),
   send: (id: string) => request<PayslipSent>('POST', `/api/payroll/payslips/${id}/send`),
   mailPassword: (employee: string, body: { password?: string; confirm?: boolean }) => request<{ password?: string; warn?: 'birthDate' }>('POST', `/api/payroll/employees/${encodeURIComponent(employee)}/mail-password`, body),

@@ -7,12 +7,12 @@
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { entryOn, planned, type DatedEntry } from '../../../core/dated.js';
 import { t } from '../../i18n/index.js';
-import { errorText } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 import type { Nav } from '../index.js';
 import { payrollApi, reloadPayroll, type Backdated, type Saved } from './data.js';
-import { monthText, rateWarningText } from './words.js';
+import { monthText, rateWarningText, wageTypeLabel } from './words.js';
+import { useRefusal } from './common.js';
 
 /** One input of a value's form. */
 export interface FieldDef {
@@ -72,9 +72,12 @@ export const numText = (n: number | undefined): string => (n === undefined ? '' 
 /** The card of §19.3 and the ways on; `act` sends the change again with the chosen way. */
 export function useBackdated(nav: Nav, kind?: string) {
   const [card, setCard] = useState<{ res: Extract<Saved, { saved: false }>; retry(how: Backdated): Promise<Saved>; done?(): void } | null>(null);
+  // A refusal stays in the page beside the form, never only a toast.
+  const refusal = useRefusal();
   const finish = async (r: Saved, done?: () => void) => {
     if (!r.saved) return;
     setCard(null);
+    refusal.clear();
     // A rate outside its range is said with the save, never refused (§18).
     const warn = kind && r.warnings.length ? ` ${r.warnings.map((w) => rateWarningText(kind, w)).join(' · ')}` : '';
     nav.toast((r.corrections.length ? t('payroll.saved.corrections', { n: r.corrections.length }) : t('payroll.saved')) + warn);
@@ -88,7 +91,7 @@ export function useBackdated(nav: Nav, kind?: string) {
       if (!r.saved) { setCard({ res: r, retry: call, done }); return false; }
       await finish(r, done);
       return true;
-    } catch (e) { nav.toast(errorText(e)); return false; }
+    } catch (e) { refusal.refuse(e); return false; }
   };
   const choose = async (how: Backdated, reopen?: string) => {
     if (!card) return;
@@ -98,9 +101,9 @@ export function useBackdated(nav: Nav, kind?: string) {
       const r = await card.retry(how);
       if (!r.saved) { setCard({ ...card, res: r }); return; }
       await finish(r, card.done);
-    } catch (e) { nav.toast(errorText(e)); }
+    } catch (e) { refusal.refuse(e); }
   };
-  const node = card ? <BackdatedCard res={card.res} onChoose={choose} onCancel={() => setCard(null)} /> : null;
+  const node = card ? <BackdatedCard res={card.res} onChoose={choose} onCancel={() => setCard(null)} /> : refusal.node;
   return { send, node, open: !!card };
 }
 
@@ -117,11 +120,11 @@ function BackdatedCard({ res, onChoose, onCancel }: { res: Extract<Saved, { save
           <ul>
             {a.differences.filter((d) => d.carry).map((d) => (
               <li key={`${d.wageType}|${d.side}`}>
-                {t('payroll.backdated.line', { label: d.label, before: fmt(d.before), after: fmt(d.after), diff: signed(d.diff) })}
+                {t('payroll.backdated.line', { label: wageTypeLabel(d.wageType, d.label), before: fmt(d.before), after: fmt(d.after), diff: signed(d.diff) })}
               </li>
             ))}
             {a.differences.some((d) => !d.carry) ? (
-              <li className="m">{t('payroll.backdated.follows', { list: a.differences.filter((d) => !d.carry).map((d) => `${d.label} ${signed(d.diff)}`).join(', ') })}</li>
+              <li className="m">{t('payroll.backdated.follows', { list: a.differences.filter((d) => !d.carry).map((d) => `${wageTypeLabel(d.wageType, d.label)} ${signed(d.diff)}`).join(', ') })}</li>
             ) : null}
           </ul>
         </div>
