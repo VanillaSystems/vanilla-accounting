@@ -7,6 +7,7 @@
  * and only what a figure needs. Nothing is used before the person keeps the card: keeping writes the same insurances and
  * dated entries the forms write, each naming the document (`source.receiptId`). Pure and browser-safe.
  */
+import type { DocumentsData } from '../core/modules/schema.js';
 import type { PayrollData } from '../core/modules/schema.js';
 import type { Receipt } from '../types/index.js';
 import type { PayrollStore } from './model.js';
@@ -41,7 +42,11 @@ export function setupKindOf(text: string, data: Pick<PayrollData, 'setupDocument
 export function setupWordAt(text: string, data: Pick<PayrollData, 'setupDocuments'>): number {
   const words = Object.values(data.setupDocuments?.kinds ?? {}).flat();
   if (!words.length) return Infinity;
-  // The end of the first HEAD_LINES lines that hold something, as setupKindOf reads them.
+  return wordRe(words).exec(text.slice(0, headEnd(text)))?.index ?? Infinity;
+}
+
+/** The end of the first HEAD_LINES lines that hold something, as setupKindOf reads them. */
+function headEnd(text: string): number {
   let end = 0;
   for (let n = 0; n < HEAD_LINES && end < text.length; ) {
     const next = text.indexOf('\n', end);
@@ -49,25 +54,37 @@ export function setupWordAt(text: string, data: Pick<PayrollData, 'setupDocument
     end = next < 0 ? text.length : next + 1;
     if (line.trim()) n++;
   }
-  return wordRe(words).exec(text.slice(0, end))?.index ?? Infinity;
+  return end;
 }
+
+/** What tells a bill (documents.yaml `receipt`, `notCompound`): its titles, its total, its due date, its payment slip. */
+export type BillWords = Pick<DocumentsData, 'receipt' | 'notCompound'>;
 
 /**
- * Whether a text is a fund's or insurer's document: its first lines name one (setupWordAt) before any receipt title of
- * `titles`, a compound one too («Beitragsrechnung Q3», «Prämienrechnung»): the fund's bill is a receipt to pay.
+ * Whether a text is a fund's or insurer's document, not its bill (review of walk 3): its first lines name a kind's document
+ * (setupWordAt), and nothing in it says bill: no receipt title in those lines in any order, a compound one too
+ * («Prämienrechnung», «Rechnung Nr.», never one of `notCompound` such as «Abrechnung»), no due date or payment slip word,
+ * and no total's word as a word of its own beside an amount («Total 1'250.00»; «Lohnsumme» is none). Without `bill`
+ * (a caller that has no documents.yaml), the setup word alone.
  */
-export function namesSetupFirst(text: string, data: Pick<PayrollData, 'setupDocuments'>, titles: readonly string[]): boolean {
+export function namesSetupFirst(text: string, data: Pick<PayrollData, 'setupDocuments'>, bill?: BillWords): boolean {
   const at = setupWordAt(text, data);
   if (at === Infinity) return false;
-  if (!titles.length) return true;
-  const title = new RegExp(`(?<![\\p{L}\\d])\\p{L}*(?:${titles.map(escape).join('|')})(?![\\p{L}\\d])`, 'iu').exec(text.slice(0, at));
-  return !title;
+  if (!bill) return true;
+  const head = text.slice(0, headEnd(text));
+  const not = (bill.notCompound ?? []).map((w) => w.toLowerCase());
+  const titles = bill.receipt.title;
+  if (titles.length) {
+    const re = new RegExp(`(?<![\\p{L}\\d])\\p{L}*(?:${titles.map(escape).join('|')})(?![\\p{L}\\d])`, 'giu');
+    for (const m of head.matchAll(re)) if (!not.some((w) => m[0].toLowerCase().endsWith(w))) return false;
+  }
+  const words = [...bill.receipt.due, ...bill.receipt.slip];
+  if (words.length && wordRe(words).test(text)) return false;
+  const total = bill.receipt.total.length ? new RegExp(`(?<![\\p{L}\\d])(?:${bill.receipt.total.map(escape).join('|')})(?![\\p{L}\\d])[^\\n]*\\d[\\d'’ ]*[.,]\\d{2}`, 'iu') : undefined;
+  return !total?.test(text);
 }
 
-/** The kindRule of a fund's or insurer's document code recognised (a decision, a policy, a pension certificate): no payment belongs to it, its card in Löhne › Einstellungen takes it (§22 decision 108). */
-export const SETUP_DOCUMENT_RULE = 'document:payroll-setup';
-/** Whether a receipt is such a document: it never reaches a model's VAT reading, title or match (a pension certificate names an insured wage). */
-export const isSetupDocument = (r: Pick<Receipt, 'kindRule'>): boolean => r.kindRule === SETUP_DOCUMENT_RULE;
+export { SETUP_DOCUMENT_RULE, isSetupDocument } from '../booking/payslip.js';
 
 /** A number the text prints after one of its labels, on the same line («Abrechnungsnummer: 100.2345»). */
 function numberAfter(text: string, labels: readonly string[] | undefined): string | undefined {
@@ -241,10 +258,10 @@ export function usedDocuments(store: Pick<PayrollStore, 'insurances' | 'employee
  * it) and not set aside, with what code read and what the AI added; `exists`: the firm's insurance of that kind it
  * would add rates to. Derived on every read: a better reader reads old documents again.
  */
-export function setupCards(receipts: readonly Pick<Receipt, 'id' | 'filename' | 'date' | 'extractedText' | 'kind'>[], store: Pick<PayrollStore, 'insurances' | 'employees'>, data: Pick<PayrollData, 'setupDocuments' | 'insurances'>, state: SetupState, titles: readonly string[] = []): SetupCard[] {
+export function setupCards(receipts: readonly Pick<Receipt, 'id' | 'filename' | 'date' | 'extractedText' | 'kind'>[], store: Pick<PayrollStore, 'insurances' | 'employees'>, data: Pick<PayrollData, 'setupDocuments' | 'insurances'>, state: SetupState, bill?: BillWords): SetupCard[] {
   const used = usedDocuments(store);
-  // `titles` (the receipt titles of documents.yaml): a fund's bill that names a document below its title is no card.
-  return receipts.filter((r) => r.kind !== 'payslip' && !used.has(r.id) && !state[r.id]?.dismissed && !state[r.id]?.kept && setupKindOf(r.extractedText ?? '', data) && namesSetupFirst(r.extractedText ?? '', data, titles))
+  // `bill` (documents.yaml): a fund's bill that names a document is no card (namesSetupFirst).
+  return receipts.filter((r) => r.kind !== 'payslip' && !used.has(r.id) && !state[r.id]?.dismissed && !state[r.id]?.kept && setupKindOf(r.extractedText ?? '', data) && namesSetupFirst(r.extractedText ?? '', data, bill))
     .map((r) => {
       const items = withModel(readSetupDocument(r.extractedText ?? '', data), state[r.id]?.ai ?? []).map((p) => {
         const exists = store.insurances.find((i) => i.kind === p.kind && !i.validUntil)?.id;

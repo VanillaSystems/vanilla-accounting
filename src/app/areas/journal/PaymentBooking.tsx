@@ -229,7 +229,8 @@ function noteText(n: DraftNote): string {
       if (n.way === 'before') return t(n.before ? 'journal.byHand.note.payrollInsurerBefore' : 'journal.byHand.note.payrollInsurerBeforeNone', vars);
       return t(n.shared ? 'journal.byHand.note.payrollInsurerShared' : n.covered ? 'journal.byHand.note.payrollInsurer' : 'journal.byHand.note.payrollInsurerUncovered', vars);
     }
-    case 'contributions': if (n.collector) return t('journal.byHand.note.contributionsCollector', { name: n.collector.name, months: monthsText(n.collector.months), deductions: n.deductions, account: n.account, takes: `${baseCurrency()} ${fmt(n.takes)}` });
+    case 'contributions': if (n.collector?.unsure) return t('journal.byHand.note.contributionsCollectorUnsure', { name: n.collector.name, months: monthsText(n.collector.months), deductions: n.deductions, account: n.account });
+      if (n.collector) return t('journal.byHand.note.contributionsCollector', { name: n.collector.name, months: monthsText(n.collector.months), deductions: n.deductions, account: n.account, takes: `${baseCurrency()} ${fmt(n.takes)}` });
       return t(n.open <= 0 ? 'journal.byHand.note.contributionsNone' : n.takes > 0 ? 'journal.byHand.note.contributions' : 'journal.byHand.note.contributionsUnsure', { deductions: n.deductions, account: n.account, open: `${baseCurrency()} ${fmt(n.open)}`, takes: `${baseCurrency()} ${fmt(n.takes)}` });
     default: return t(`journal.byHand.note.${n.kind}`);
   }

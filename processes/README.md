@@ -448,17 +448,18 @@ What follows from it (src/booking/withheld.ts, src/booking/classify.ts):
   is booked both ways (tests/payslip-review.test.ts).
 
 The person adds `collects:` without editing the file: on a payment out whose payee or text names a
-kind the year's payslips withheld and no business collects yet, the payment offers «Zieht
-Lohnabzüge ein: BVG» (src/payroll/collects-way.ts), which writes the line into the company's file
-of that business (a new file matched by the payee where the company has none), the rest of the file
-as it was, with «Rückgängig» on the payment or the fund's page (from the file, a restart changes
-nothing). A new file goes into the folder of the kind's collector (setup.yaml `wages.roles`). By hand in the file, or the AI drafting the fund's file with her on
-its knowledge card, does the same. From then on the payment's hand form proposes the employees'
-share of the oldest whole months its payslips withheld, counting the whole year's wages, so a bill
-paid ahead of its quarter clears the months it pays, and a payment booked whole on the firm's
-contribution account is named under «Arbeitnehmeranteil abziehen» for that share (docs/specs/
-payroll.md §22 decisions 109, 110). Code books such a payment by itself only where it pays months
-already withheld on its day (decision 72).
+kind the year's payslips withheld and no business collects yet, the payment offers «Zieht Lohnabzüge
+ein: BVG» (src/payroll/collects-way.ts), which writes the line into the company's file of that
+business (a new file matched by the payee where the company has none, in the folder of the kind's
+collector, setup.yaml `wages.roles`; none without the payee's name), the rest of the file as it was,
+with «Rückgängig» on the payment or the fund's page, from the file alone. By hand in the file, or
+the AI drafting the fund's file with her on its knowledge card, does the same. From then on the
+payment's hand form proposes the employees' share of the oldest whole months its payslips withheld,
+counting the whole year's wages, so a bill paid ahead of its quarter clears the months it pays (a
+whole quarter where several runs fit; months the payslips do not tell for sure are said, not
+proposed), and a payment booked whole on the firm's contribution account is named under
+«Arbeitnehmeranteil abziehen» for that share (docs/specs/payroll.md §22 decisions 109, 110). Code
+books such a payment by itself only where it pays months already withheld on its day (decision 72).
 
 ## The contract
 

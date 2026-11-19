@@ -2246,7 +2246,12 @@ After the third persona walk (2026-11-19):
      drop say what it is and link to its card in Löhne › Einstellungen › Sozialversicherungen; the card lists only such
      texts (a fund's bill that names a certificate below its title is a receipt, no card). A document read before stays
      as it was read. Contributions typed on a pension certificate's card without the person they are hers are refused
-     (`badInput`, field `person`: «Person wählen …»), never dropped.
+     (`badInput`, field `person`: «Person wählen …»), never dropped. After the review: a text that says bill anywhere is
+     never such a document, whatever comes first (a receipt title in its first lines, a compound one too, never one of
+     `notCompound`; a due date or payment slip word; a total's word as a word of its own before an amount): an insurer's
+     «Kollektiv-Krankentaggeldversicherung … Prämienrechnung … Zahlbar bis» is a receipt. Such a document linked to a
+     payment by hand is left out of the booking's prompt (`classifyInput`, as a payslip). A document read before is kinded
+     so once by the read step, unless a person gave it a kind, a payment is linked to it or its day is closed.
 109. **A collector's payment is proposed for the months it pays, also ahead of them** (src/booking/withheld.ts
      `collectorProposal`): for a business whose file collects kinds owed on 2270 (not the withholding tax), the hand form
      proposes the employees' share of a whole run of the oldest months its payslips withheld that no earlier payment
@@ -2255,7 +2260,10 @@ After the third persona walk (2026-11-19):
      their share), the one whose share is nearest half of it; the rest on the payee's earlier contribution account, else
      the kind's (5720). It stays a proposal booked by her click: code does not book a payment ahead of its months
      (decision 72). The same share is what «Arbeitnehmeranteil abziehen» asks of a payment booked whole on 5720 where
-     nothing was withheld on its day (`withheldSharesOf`), so 2270 clears.
+     nothing was withheld on its day (`withheldSharesOf`), so 2270 clears. After the review: of several runs that fit,
+     a whole quarter; else the one run that is sure (it ends with a quarter, or the next month is withheld already). Two
+     runs without a quarter, or one that later payslips may still lengthen (a bill paid before the quarter's last
+     payslip), are `unsure`: the form proposes nothing off 2270 and names the months; `withheldSharesOf` takes no share.
 110. **«Zieht Lohnabzüge ein» marks a collector without editing YAML** (src/payroll/collects-way.ts, `GET|POST|DELETE
      /api/payroll/collects`): offered on a payment out, unbooked on its hand form and
      booked on its page, whose payee, text or documents' first lines name a kind the year's payslips withheld and no
@@ -2268,6 +2276,13 @@ After the third persona walk (2026-11-19):
      fund's page in Lohnzahlungen (beside the kept way) it takes the kinds out of `collects:` again, and removes a file
      the click made (its first line says so) once it holds nothing else. A collector's payment is on the list of payments
      proven elsewhere (`GET /api/payroll/insurer-payments`), so the bank page never says «kein Beleg · Beleg suchen».
+     After the review: a payment without the payee's name gets no offer (its whole text would name and match a file).
+     The marker line names the hash of what the click wrote besides `collects:` (a binding too): «Rückgängig» deletes the
+     file only while it holds exactly that, else takes out the key. The writer's output is read again before it is
+     written (as decision 59's): a file shaped otherwise is refused (`badInput`). Without a click in this view, the
+     payment's «Rückgängig» takes back only the kinds the payment names. The offer says its payments then wait for no
+     receipt; the routes read the knowledge, not the classifier's context, and the list of payments to collectors is
+     kept per books and knowledge.
 
 ---
 

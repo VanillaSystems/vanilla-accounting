@@ -8,17 +8,18 @@
  * a binding of an app file starts with its id. «Rückgängig» works from the file alone, after a restart too: it takes the
  * kinds out of `collects:` again, and removes a file the click made (its first line says so) once it holds nothing else.
  */
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { identify } from '../knowledge/counterparties.js';
 import { join } from 'node:path';
 import { parseDocument } from 'yaml';
 import type { BankTransaction, Receipt } from '../types/index.js';
 import type { Workspace } from '../workspace/workspace.js';
 import { homeOf } from '../knowledge/layers.js';
-import type { Counterparty, Role } from '../knowledge/counterparties.js';
+import { identify, type Counterparty, type Role } from '../knowledge/counterparties.js';
 import { accountOfKinds, namesWord, withheldKinds, type Collectors } from '../booking/withheld.js';
 import { setup } from '../engines/index.js';
 import { assertMap, blockOf, eolOf, slug, writeAtomic } from './insurer-way.js';
+import { PayrollRefusal } from './close.js';
 
 /** Where `collects:` is written: the business's own file in the company's knowledge, made when `created`. */
 export interface CollectsTarget { id: string; role: Role; name: string; path: string; created: boolean }
@@ -26,34 +27,50 @@ export interface CollectsTarget { id: string; role: Role; name: string; path: st
 /** What the payment's hand form offers: the business, its file, the kinds it may collect (each named by the payment or its documents). */
 export interface CollectsOffer { target: CollectsTarget; kinds: string[]; collects: string[] }
 
-/** The first line of a file the click made: «Rückgängig» removes such a file once it holds nothing else. */
-export const MADE_LINE = '# Made by «Zieht Lohnabzüge ein» (Löhne): removed again by its «Rückgängig».';
+/** The marker a file the click made starts with, naming the hash of what it wrote besides `collects:`. */
+const MADE = /^# Made by «Zieht Lohnabzüge ein» \(Löhne\) ([0-9a-f]{12}): removed again by its «Rückgängig»\.\r?\n/;
+const hashOf = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 12);
+/** The first line of a file the click made over `rest` (what it wrote besides `collects:`): «Rückgängig» removes the file while it still holds exactly that. */
+export const madeLine = (rest: string): string => `# Made by «Zieht Lohnabzüge ein» (Löhne) ${hashOf(rest)}: removed again by its «Rückgängig».`;
 
-/** The file's text with its top-level `collects:` set to `kinds` (taken out when there are none), everything else as it was. */
-export function withCollects(text: string, kinds: readonly string[], id: string, create?: { name: string; payee: string; iban?: string }, path = `${id}.yaml`): string {
+const collectsOfText = (text: string): string[] => {
+  const c = (parseDocument(text).toJSON() as { collects?: unknown } | null)?.collects;
+  return Array.isArray(c) ? c.filter((k): k is string => typeof k === 'string') : [];
+};
+
+/**
+ * The file's text with its top-level `collects:` set to `kinds` (taken out when there are none), everything else as it was.
+ * A file without content gets its head (a binding of an app file: its id alone; `create`: a whole business), after a
+ * marker line (madeLine). The result is read again: one that is no YAML map or does not say exactly `kinds` (a quoted
+ * key, a second document) is refused, never written.
+ */
+export function withCollects(text: string, kinds: readonly string[], id: string, create?: { name: string; payee?: string; iban?: string }, path = `${id}.yaml`): string {
   const eol = eolOf(text);
   assertMap(text, path);
   const head = create
-    ? [MADE_LINE, `id: ${JSON.stringify(id)}`, `name: ${JSON.stringify(create.name)}`, 'match:', `  payee: [${JSON.stringify(create.payee)}]`, ...(create.iban ? [`  iban: [${JSON.stringify(create.iban)}]`] : [])].join(eol) + eol
+    ? [`id: ${JSON.stringify(id)}`, `name: ${JSON.stringify(create.name)}`, 'match:', ...(create.payee ? [`  payee: [${JSON.stringify(create.payee)}]`] : []), ...(create.iban ? [`  iban: [${JSON.stringify(create.iban)}]`] : [])].join(eol) + eol
     : `id: ${JSON.stringify(id)}${eol}`;
   const empty = parseDocument(text).contents === null;
-  const base = !empty || !kinds.length ? text : text.trim() ? `${text}${text.endsWith(eol) ? '' : eol}${head}` : head;
+  const base = !empty || !kinds.length ? text : text.trim() ? `${text}${text.endsWith(eol) ? '' : eol}${head}` : `${madeLine(head)}${eol}${head}`;
   const line = kinds.length ? [`collects: [${kinds.join(', ')}]`] : [];
   const lines = base.split(eol);
   const at = blockOf(lines, 'collects');
-  if (at) return [...lines.slice(0, at.from), ...line, ...lines.slice(at.to)].join(eol);
-  if (!kinds.length) return base;
-  return `${base}${base.endsWith(eol) ? '' : eol}${line[0]}${eol}`;
+  const out = at ? [...lines.slice(0, at.from), ...line, ...lines.slice(at.to)].join(eol) : !kinds.length ? base : `${base}${base.endsWith(eol) ? '' : eol}${line[0]}${eol}`;
+  const doc = parseDocument(out);
+  if (doc.errors.length || doc.contents === null || JSON.stringify(collectsOfText(out)) !== JSON.stringify([...kinds])) throw new PayrollRefusal('badInput', `${path}: «collects:» lässt sich hier nicht sicher setzen (die Datei ist anders aufgebaut): von Hand richten.`);
+  return out;
 }
 
 /** The folder of a new file of the collector of `kinds`: setup.yaml `wages.roles`, an authority where any kind says so, else a supplier. */
 export const roleOfKinds = (kinds: readonly string[]): Role => (kinds.some((k) => setup().wages?.roles?.[k] === 'authority') ? 'authority' : 'supplier');
 
 /** Where the payment's business keeps `collects:`: the file it routes to, else a new company file named after the payee, in the folder of `kinds`' collector. */
-export function collectsTarget(routed: string | undefined, tx: Pick<BankTransaction, 'counterparty' | 'description'>, counterparties: readonly Pick<Counterparty, 'id' | 'role' | 'name'>[], kinds: readonly string[] = []): CollectsTarget {
+export function collectsTarget(routed: string | undefined, tx: Pick<BankTransaction, 'counterparty' | 'description'>, counterparties: readonly Pick<Counterparty, 'id' | 'role' | 'name'>[], kinds: readonly string[] = []): CollectsTarget | undefined {
   const known = counterparties.find((c) => c.id === routed);
   if (known) return { id: known.id, role: known.role, name: known.name, path: homeOf('workspace', known.role, known.id), created: false };
-  const name = tx.counterparty?.trim() || tx.description.trim();
+  // Without the payee's name the bank wrote, no file is made: its whole text would name and match it (review of walk 3).
+  const name = tx.counterparty?.trim();
+  if (!name) return undefined;
   const taken = new Set(counterparties.map((c) => c.id));
   const base = slug(name);
   let id = base;
@@ -80,17 +97,25 @@ export function offeredKinds(input: {
   const taken = new Set([...input.collectors.values()].flat());
   const own = input.business ? input.collectors.get(input.business) ?? [] : [];
   const account = own.length ? accountOfKinds(own) : undefined;
-  const said = [input.tx.counterparty ?? '', input.tx.description, ...input.linked.map((r) => (r.extractedText ?? '').split('\n').slice(0, 12).join('\n'))].join('\n');
+  const named = namedKinds(input.tx, input.linked);
   return [...withheldKinds(input.books, input.tx.date.slice(0, 4))]
-    .filter((k) => !taken.has(k) && words[k]?.length && namesWord(words[k])(said) && (!account || accountOfKinds([...own, k]) === account))
+    .filter((k) => !taken.has(k) && named.includes(k) && (!account || accountOfKinds([...own, k]) === account))
     .sort();
+}
+
+/** The deduction kinds a payment names: by its payee, its text or the first lines of its documents (setup.yaml `wages.withholds` words). */
+export function namedKinds(tx: Pick<BankTransaction, 'counterparty' | 'description'>, linked: readonly Pick<Receipt, 'extractedText'>[]): string[] {
+  const words = setup().wages?.withholds ?? {};
+  const said = [tx.counterparty ?? '', tx.description, ...linked.map((r) => (r.extractedText ?? '').split('\n').slice(0, 12).join('\n'))].join('\n');
+  return Object.keys(words).filter((k) => words[k]?.length && namesWord(words[k])(said));
 }
 
 /** The offer for a payment, or undefined: its target file and the kinds it may name. */
 export function collectsOffer(input: Parameters<typeof offeredKinds>[0] & { counterparties: readonly Counterparty[] }): CollectsOffer | undefined {
   const kinds = offeredKinds(input);
-  if (!kinds.length) return undefined;
-  return { target: collectsTarget(input.business, input.tx as BankTransaction, input.counterparties, kinds), kinds, collects: [...(input.business ? input.collectors.get(input.business) ?? [] : [])] };
+  const target = kinds.length ? collectsTarget(input.business, input.tx as BankTransaction, input.counterparties, kinds) : undefined;
+  if (!target) return undefined;
+  return { target, kinds, collects: [...(input.business ? input.collectors.get(input.business) ?? [] : [])] };
 }
 
 /** The text the target's file takes with `kinds` added to what it collects; refused (nothing written) when the file is no YAML map. */
@@ -99,9 +124,9 @@ export function keptCollectsText(ws: Pick<Workspace, 'paths'>, target: CollectsT
   const before = existsSync(file) ? readFileSync(file, 'utf8') : undefined;
   const text = before ?? '';
   const had = collectsOfText(text);
-  const payee = tx.counterparty?.trim() || target.name;
+  const payee = tx.counterparty?.trim();
   const iban = tx.counterpartyIban?.replace(/\s/g, '').toUpperCase();
-  const create = target.created && !text.trim() ? { name: target.name, payee, ...(iban ? { iban } : {}) } : undefined;
+  const create = target.created && !text.trim() ? { name: target.name, ...(payee ? { payee } : {}), ...(iban ? { iban } : {}) } : undefined;
   return { text: withCollects(text, [...new Set([...had, ...kinds])], target.id, create, target.path), before };
 }
 
@@ -110,11 +135,6 @@ export function writeCollects(ws: Pick<Workspace, 'paths'>, path: string, text: 
   writeAtomic(join(ws.paths.root, path), text);
   return path;
 }
-
-const collectsOfText = (text: string): string[] => {
-  const c = (parseDocument(text).toJSON() as { collects?: unknown } | null)?.collects;
-  return Array.isArray(c) ? c.filter((k): k is string => typeof k === 'string') : [];
-};
 
 /** What the company's file of a business collects, where it says so: the file and its kinds; undefined without such a file. */
 export function keptCollects(ws: Pick<Workspace, 'paths'>, business: Pick<Counterparty, 'id' | 'role' | 'name'>): { business: string; name: string; path: string; kinds: string[] } | undefined {
@@ -133,8 +153,9 @@ export function keptCollectsOf(ws: Pick<Workspace, 'paths'>, insurance: { busine
 }
 
 /**
- * «Rückgängig», from the file alone: `kinds` (absent: all) leave the company file's `collects:`; a file the click made
- * (its first line MADE_LINE) that then holds only its id, name and match goes. The path, or undefined when it collects none of them.
+ * «Rückgängig», from the file alone: `kinds` (absent: all) leave the company file's `collects:`; a file the click made goes
+ * once it holds exactly what the click wrote besides (its marker's hash: a file a person edited since only loses the
+ * key). The path, or undefined when it collects none of them.
  */
 export function forgetCollects(ws: Pick<Workspace, 'paths'>, business: Pick<Counterparty, 'id' | 'role'>, kinds?: readonly string[]): string | undefined {
   const path = homeOf('workspace', business.role, business.id);
@@ -145,9 +166,8 @@ export function forgetCollects(ws: Pick<Workspace, 'paths'>, business: Pick<Coun
   const left = kinds ? had.filter((k) => !kinds.includes(k)) : [];
   if (left.length === had.length) return undefined;
   const next = withCollects(text, left, business.id, undefined, path);
-  const rest = parseDocument(next).toJSON() as Record<string, unknown> | null;
-  const bare = !!rest && Object.keys(rest).every((k) => k === 'id' || k === 'name' || k === 'match');
-  if (next.startsWith(MADE_LINE) && bare) rmSync(file, { force: true });
+  const made = MADE.exec(next);
+  if (made && !left.length && hashOf(next.slice(made[0].length)) === made[1]) rmSync(file, { force: true });
   else writeAtomic(file, next);
   return path;
 }

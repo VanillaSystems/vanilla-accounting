@@ -18,7 +18,7 @@ import { judgedRepayments } from '../booking/owner-judged.js';
 import { payoutWaitOf, providerOfMoneyIn } from '../booking/providers.js';
 import { chartNames } from '../booking/rule-book.js';
 import { isOwnBankFee } from '../booking/bank-fee.js';
-import { accountOfKinds, collectorProposal, collectorsOf, kindsOf, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor } from '../booking/withheld.js';
+import { accountOfKinds, collectorProposal, collectorsOf, employerAccountOf, kindsOf, payeeContributionAccount, paysContributions, wageAccounts, wagesBooked, withheldFor } from '../booking/withheld.js';
 import { businessOfPayment } from '../intake/batch-payers.js';
 import type { Counterparty } from '../knowledge/counterparties.js';
 import type { PaymentNature } from '../accounting/manual-booking.js';
@@ -236,7 +236,11 @@ function contributionsOf(books: ReturnType<typeof loadBooks>, tx: BankTransactio
     const counterparties = context.counterparties ?? [];
     const routed = (t: BankTransaction) => (t.ref === tx.ref ? file.id : businessOfPayment(t, mappedReceipts(books, t), counterparties));
     const p = collectorProposal(books, tx, file.id, routed, collectors);
-    if (p) return { kind: 'contributions', account: p.employer, deductions: w.deductions, open: withheldFor(books, tx, w.deductions) ?? 0, takes: p.share, collector: { name: file.name, months: p.months } };
+    const open = withheldFor(books, tx, w.deductions) ?? 0;
+    if (p && !('unsure' in p)) return { kind: 'contributions', account: p.employer, deductions: w.deductions, open, takes: p.share, collector: { name: file.name, months: p.months } };
+    // Which months it pays the payslips do not tell for sure (several runs fit, or later payslips may lengthen the run): nothing off 2270, said so.
+    const employer = p && employerAccountOf(books, tx, routed, kindsOf(file.id, collectors));
+    if (p && employer) return { kind: 'contributions', account: employer, deductions: w.deductions, open, takes: 0, collector: { name: file.name, months: p.unsure, unsure: true } };
   }
   if (!w || !context.wageDeductions || !paysContributions(books, tx, businessOf)) return undefined;
   const open = withheldFor(books, tx, w.deductions) ?? 0;

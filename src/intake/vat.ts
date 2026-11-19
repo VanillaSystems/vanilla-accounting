@@ -24,7 +24,7 @@
  * (vatGivenUp), the step leaves it and its run note says so, and its payment waits for the person
  * under «Beleg nicht lesbar». A read that succeeds or a new text clears the count.
  */
-import { isSetupDocument } from '../payroll/setup-documents.js';
+import { isSetupDocument } from '../booking/payslip.js';
 import { creditSigned } from '../accounting/credit-signed.js';
 import { buildReceiptVatPrompt, parseReceiptVat, type ReceiptVatResult } from '../llm/prompts.js';
 import { runAdaptivePool, isRateLimitSignal } from '../llm/adaptive-pool.js';

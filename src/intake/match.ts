@@ -13,7 +13,7 @@
  * a payout has no receipt of its own, #203) and several receipts that add up to one payment (receipt-sets.ts).
  * A link to a payment of a filed quarter is never made (golden rule 1).
  */
-import { isSetupDocument } from '../payroll/setup-documents.js';
+import { isSetupDocument } from '../booking/payslip.js';
 import { existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { buildMatchPrompt, parseMatchResult, type MatchResult } from '../llm/prompts.js';

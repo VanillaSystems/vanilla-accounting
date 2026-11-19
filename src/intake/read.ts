@@ -34,11 +34,11 @@ import { fileReceipts, paymentContext } from '../invoices/service.js';
 import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
 import { putInQuarantine } from './quarantine.js';
 import { documentKind } from './document-kind.js';
-import { namesSetupFirst, SETUP_DOCUMENT_RULE } from '../payroll/setup-documents.js';
+import { namesSetupFirst } from '../payroll/setup-documents.js';
 import { askKind, asksModel, kindOfModel, MODEL_RULE, MODEL_TEXT, NOT_A_RECEIPT, visionVerdict, type ModelKind } from './unclear.js';
 import { statementFacts } from '../books/statement-facts.js';
 import { documents, payroll } from '../engines/index.js';
-import { monthEnd, PAYSLIP_RULE, PAYSLIP_UNREAD_RULE, payslipTitled, readPayslip } from '../booking/payslip.js';
+import { isSetupDocument, monthEnd, PAYSLIP_RULE, PAYSLIP_UNREAD_RULE, payslipTitled, readPayslip, SETUP_DOCUMENT_RULE } from '../booking/payslip.js';
 import { closedPayslips } from '../payroll/service.js';
 import { periodLock, release, type Books } from '../books/store.js';
 import { entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
@@ -199,7 +199,7 @@ interface Extracted { text: string; method: Receipt['extractionMethod']; fileSiz
  */
 function setupDocument(text: string): boolean {
   const data = payroll();
-  return !!data?.setupDocuments && namesSetupFirst(text, data, documents().receipt.title);
+  return !!data?.setupDocuments && namesSetupFirst(text, data, documents());
 }
 
 /**
@@ -352,6 +352,16 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
     const stillUnmatched = unmatchedOf(now);
     if (stillUnmatched.length) throw new Error(`Kontoauszug ohne Bankkonto: ${stillUnmatched.join('; ')}`);
     const byId = new Map(index.receipts.map((r) => [r.id, r]));
+    // A fund's or insurer's document read before code told them apart (walk 3): kinded so once, unless a person gave it a kind, a
+    // payment is linked to it or it lies in a closed period; from then on no model reads it (§22 decision 108).
+    const lock = periodLock(index);
+    const linkedIds = new Set(index.mappings.map((m) => m.receiptId));
+    const setupKindAgain = (r: Receipt): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule'> | Record<string, never> => {
+      if (isSetupDocument(r) || r.kindBy === 'human' || (r.kind && r.kind !== 'invoice') || linkedIds.has(r.id) || r.filedPayment || (r.date && lock.isClosed(r.date))) return {};
+      if (!setupDocument(r.extractedText ?? '')) return {};
+      log(`  ${r.filename}: a fund's or insurer's document, no receipt of a payment: no model reads it from now on`);
+      return { kind: 'supporting', kindBy: 'rule', kindRule: SETUP_DOCUMENT_RULE };
+    };
     const receipts = files.filter((f) => existsSync(f.filepath)).flatMap(({ id, filename, location }): Receipt[] => {
       const existing = byId.get(id);
       const read = extracted.get(id);
@@ -369,7 +379,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
         return [r];
       }
       const fresh = existing?.extractedText ? undefined : read;
-      if (!fresh) return existing ? [{ ...existing, filename, location, remarks: existing.remarks ?? detectVatProofIssue(existing.extractedText) }] : [];
+      if (!fresh) return existing ? [{ ...existing, filename, location, remarks: existing.remarks ?? detectVatProofIssue(existing.extractedText), ...setupKindAgain(existing) }] : [];
       // Without a model nothing else reads the date and the total; what the text states plainly is taken.
       const plain = ask ? {} : textFacts(fresh.text);
       const originalFilename = existing?.originalFilename ?? filename;

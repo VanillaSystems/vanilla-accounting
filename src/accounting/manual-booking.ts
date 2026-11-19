@@ -90,7 +90,7 @@ export interface PayrollInsurerNature { kind: 'payrollInsurer'; account: string;
 export interface ContributionsNature {
   kind: 'contributions'; account: string; deductions: string; open: number; takes: number;
   /** A business whose file says it collects the deductions (src/booking/withheld.ts collectorProposal): `takes` is the employees' share of these months. */
-  collector?: { name: string; months: string[] };
+  collector?: { name: string; months: string[]; unsure?: true };
 }
 
 /**

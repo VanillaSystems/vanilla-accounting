@@ -48,7 +48,7 @@ import { businessGuidance, companyGuidance } from '../knowledge/guidance.js';
 import { partPayment, partReceipts, partsOf, partText } from '../accounting/batch-parts.js';
 import { cardLinesOf, cardPart, cardParts, lineReceiptsOf } from '../books/card-lines.js';
 import { wordsIn } from '../export/texts.js';
-import { paidBySlips, wageLines, type WageLine } from './payslip.js';
+import { isSetupDocument, paidBySlips, wageLines, type WageLine } from './payslip.js';
 import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 import { businessVat, capAtBills, capAtReceipts, settlesVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
@@ -904,7 +904,9 @@ export function classifyInput(books: Books, tx: BankTransaction, legs: readonly 
   const cp = routing.kind === 'known' ? counterparties.find((c) => c.id === routing.counterparty) : undefined;
   const guidance = cp ? businessGuidance(cp) : [];
   const receipts = linked
-    // A photo nothing could read counts by what a person entered on it (#438).
+    // A photo nothing could read counts by what a person entered on it (#438). A payslip and a fund's document (a pension
+    // certificate names a person and her insured wage) never reach a model, even linked to the payment (§22 decisions 75, 108).
+    .filter((r) => r.kind !== 'payslip' && !isSetupDocument(r))
     .filter((r) => (r.extractedText && r.extractedText.length > 10) || r.vatBy === 'human')
     .map((r) => ({
       text: r.extractedText,

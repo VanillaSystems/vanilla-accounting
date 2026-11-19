@@ -233,7 +233,7 @@ router.post('/api/payroll/accounts', run((req, res) => {
 
 // ─── the funds' documents (§6.1 step 2, src/payroll/setup-documents.ts) ─────────
 
-const cardsNow = () => { const ctx = payrollContext(WS); return setupCards(readBooks().receipts, ctx.store, ctx.data, loadSetupState(WS), documents().receipt.title); };
+const cardsNow = () => { const ctx = payrollContext(WS); return setupCards(readBooks().receipts, ctx.store, ctx.data, loadSetupState(WS), documents()); };
 const receiptOf = (id: string) => readBooks().receipts.find((r) => r.id === id) ?? (() => { throw new PayrollRefusal('notFound', `Keinen Beleg ${id}.`); })();
 
 /** The cards: each document of a fund or insurer in Belege not kept or set aside, with what code and the AI read; `ai`: whether a model can read the rest. */

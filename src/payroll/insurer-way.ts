@@ -53,8 +53,11 @@ export function withPayrollWay(text: string, way: PayrollWay, source: string, id
   const block = ['payroll:', `  payments: ${way}`, `  source: ${source}`];
   const lines = base.split(eol);
   const at = blockOf(lines);
-  if (at) return [...lines.slice(0, at.from), ...block, ...lines.slice(at.to)].join(eol);
-  return `${base}${base.endsWith(eol) ? '' : eol}${block.join(eol)}${eol}`;
+  const out = at ? [...lines.slice(0, at.from), ...block, ...lines.slice(at.to)].join(eol) : `${base}${base.endsWith(eol) ? '' : eol}${block.join(eol)}${eol}`;
+  // Read again: a file shaped otherwise (a quoted key, a second document) is refused, never written half right.
+  const doc = parseDocument(out);
+  if (doc.errors.length || (doc.toJSON() as { payroll?: { payments?: unknown } } | null)?.payroll?.payments !== way) throw new PayrollRefusal('badInput', `${path}: «payroll:» lässt sich hier nicht sicher setzen (die Datei ist anders aufgebaut): von Hand richten.`);
+  return out;
 }
 
 /** The file's text without its `payroll:` block, everything else as it was; undefined when it has none. */

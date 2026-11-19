@@ -42,7 +42,8 @@ export function CollectsOffer({ payment, nav }: { payment: string; nav: Pick<Nav
   };
   const undo = async (kept: NonNullable<Offer>['kept']) => {
     if (!kept) return;
-    const kinds = mine ?? kept.kinds;
+    // Without a click here, only the kinds this payment names: a fund's other kinds are not this payment's to take back.
+    const kinds = mine ?? kept.named;
     try { await api.forgetCollects(kept.business, kinds); setMine(null); nav.toast(t('journal.byHand.collects.undone', { name: kept.name })); await load(); } catch (e) { nav.toast(errorText(e)); }
     nav.refresh();
   };
@@ -52,7 +53,7 @@ export function CollectsOffer({ payment, nav }: { payment: string; nav: Pick<Nav
     return (
       <p className="collectsway m" data-testid="collects-kept">
         {t('journal.byHand.collects.keptNote', { name: kept.name, kinds: kinds.map(collectsKindLabel).join(', '), path: kept.path })}{' '}
-        <AsyncButton type="button" className="golink" data-testid="collects-undo" onClick={() => undo(kept)}>{t('journal.byHand.collects.undo')}</AsyncButton>
+        {(mine ?? kept.named).length ? <AsyncButton type="button" className="golink" data-testid="collects-undo" onClick={() => undo(kept)}>{t('journal.byHand.collects.undo')}</AsyncButton> : null}
       </p>
     );
   }

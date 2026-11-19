@@ -4,7 +4,7 @@
  * facts (match.ts); this step gives it to receipts read before, 100 to one model call. A title is
  * shown, never booked, so a receipt of a filed quarter gets one too.
  */
-import { isSetupDocument } from '../payroll/setup-documents.js';
+import { isSetupDocument } from '../booking/payslip.js';
 import { parseTitle, TITLE_RULES } from '../llm/prompts.js';
 import type { Receipt, ReceiptTitle } from '../types/index.js';
 import type { Ask, IntakeNote, StepRun } from './pipeline.js';
