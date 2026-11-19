@@ -7139,7 +7139,7 @@ export const messages = {
   "payroll.settle.warnTitle": "Die Differenz von {diff} ist {pct} % des Jahres",
   "payroll.settle.accrued": "Aufgelaufen aus den Lohnabrechnungen",
   "payroll.settle.before": "Für andere Monate gebucht (Zahlungen an die Versicherung)",
-  "payroll.settle.beforeOpening": "Für Januar bis {through} gebucht (Zahlungen an die Versicherung)",
+  "payroll.settle.beforeOpening": "Bezahlt für Januar bis {through} (Zahlungen vom 1. Februar bis {until})",
   "payroll.settle.inBooks": "Beiträge des Jahres in den Büchern",
   "payroll.settle.statement": "Total der Schlussabrechnung",
   "payroll.settle.noBefore": "Für Januar bis {through} halten die Bücher keine Zahlung an diese Versicherung: sind sie anders gebucht, gehört die Differenz nicht auf den Aufwand.",
@@ -7148,6 +7148,16 @@ export const messages = {
   "payroll.settle.compare": "(Lohnabrechnungen {accrued}, andere Monate {before}, in den Büchern {books}, Schlussabrechnung {total})",
   "journal.byHand.from.payrollInsurer": "Sozialversicherung: die Lohnabrechnungen buchen die Beiträge auf ihr Verbindlichkeitskonto, die Zahlung gleicht es aus",
   "journal.byHand.note.payrollInsurer": "Zahlung an {name}: die Lohnabrechnungen haben die Beiträge schon als Aufwand gebucht und auf {account} gutgeschrieben. Die Zahlung gleicht {account} aus, ohne MWST; ein Beleg ist dafür nicht nötig.",
+  "journal.byHand.insurerWay.after": "für Monate ab dem Lohnstart hier: gegen das Verbindlichkeitskonto",
+  "journal.byHand.insurerWay.before": "für Monate davor: als Beiträge, wie bisher gebucht",
+  "journal.byHand.note.payrollInsurerUncovered": "Zahlung an {name}: {account} hält an diesem Monatsende weniger, als bezahlt wird. Bezahlt sie Monate ab dem Lohnstart hier (ein Akonto im Voraus), geht sie gegen {account}; bezahlt sie Monate davor, als Beiträge wie bisher. Ohne MWST, ohne Beleg; die KI bucht sie nicht.",
+  "journal.byHand.note.payrollInsurerShared": "Zahlung an {name}: diese Stelle nimmt mehrere Versicherungen der Firma entgegen; die Zahlung ist auf ihre Verbindlichkeitskonten aufzuteilen. Vorgeschlagen ist {account}.",
+  "journal.byHand.note.payrollInsurerBefore": "Für Monate vor dem Lohnstart hier: als Beiträge, wie die Zahlungen an {name} bisher gebucht sind.",
+  "journal.byHand.note.payrollInsurerBeforeNone": "Für Monate vor dem Lohnstart hier: die Bücher sagen nicht, wie sie gebucht sind; das Konto selbst wählen.",
+  "payroll.settle.shared": "Zahlungen an {list} decken mehrere Versicherungen: nicht aufgeteilt, darum hier nicht gezählt.",
+  "payroll.opening.textOne": "Januar bis {through} ({months} Monat): vor dem Lohnlauf hier bezahlt und von Hand gebucht.",
+  "payroll.opening.noMonths": "Eine Eröffnung ohne Monate: ihre Zahlen zählen, ein Monat gehört ihr nicht.",
+  "payroll.fact.notInsured": "Nicht in der {kind} versichert: die Firma hat sie, diese Person ist ihr nicht zugeteilt.",
   // payroll-walkfix-books:end
   // payroll-ui:end
 } as const;

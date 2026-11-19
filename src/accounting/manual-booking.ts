@@ -80,7 +80,12 @@ export type PaymentNature =
   /** A payment to one of the firm's payroll insurers while payroll runs here (§22 decision 45): its liability account `account`, which the payslips credit, without a code; never an expense again. */
   | PayrollInsurerNature;
 
-export interface PayrollInsurerNature { kind: 'payrollInsurer'; account: string; name: string }
+/**
+ * A payment to a payroll insurer while payroll runs here (§22 decision 45). `covered`: the liability holds it (code books
+ * such a payment itself). `shared`: the payee takes several of the firm's insurances. `before`: level A's booking of the
+ * contributions, for months before payroll ran here; with `way: 'before'` the form proposes it instead of the liability.
+ */
+export interface PayrollInsurerNature { kind: 'payrollInsurer'; account: string; name: string; covered: boolean; shared?: boolean; before?: ContributionsNature; way?: 'after' | 'before' }
 
 export interface ContributionsNature { kind: 'contributions'; account: string; deductions: string; open: number; takes: number }
 
@@ -560,6 +565,14 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   // A payroll insurer's payment while payroll runs here: its liability account, before any precedent (level A's booked an expense; the payslips book that now).
   if (proposes && !moneyIn && nature?.kind === 'payrollInsurer') {
     notes.push(nature);
+    // «Für Monate davor»: level A's contributions, as the books say (the withheld share on the deductions account, the rest the employer's).
+    if (nature.way === 'before') {
+      const b = nature.before;
+      if (!b) return result([place('', paid, '')]);
+      const held = Math.min(toRappen(Math.max(b.takes, 0)), toRappen(paid));
+      const rest = toRappen(paid) - held;
+      return result([...(held ? [place(b.deductions, fromRappen(held), '')] : []), ...(rest ? [place(b.account, fromRappen(rest), '')] : [])]);
+    }
     return result([place(nature.account, paid, '', { account: { from: 'payrollInsurer' } })]);
   }
   // Contributions (#470): proposed by the books, before any precedent (an earlier booking may have put it all on the deductions account); its account is the payee's own earlier one.

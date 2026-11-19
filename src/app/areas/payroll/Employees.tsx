@@ -247,7 +247,7 @@ function OpeningSection({ d, nav, canEdit }: { d: EmployeeDetail; nav: Nav; canE
       <div className="dbody">
         {o ? (
           <>
-            <p>{t('payroll.opening.text', { through: monthText(o.through), months: o.months })}</p>
+            <p>{o.through ? t(o.months === 1 ? 'payroll.opening.textOne' : 'payroll.opening.text', { through: monthText(o.through), months: Math.round(o.months * 100) / 100 }) : t('payroll.opening.noMonths')}</p>
             {bases.length ? <p className="m">{bases.map(([k, v]) => `${labelOf(data()?.bases.find((b) => b.key === k)?.label, k)} ${fmt(v)}`).join(' · ')}</p> : null}
             {fields.length ? <p className="m">{t('payroll.opening.fields', { list: fields.map(([k, v]) => `${k}: ${fmt(v)}`).join(' · ') })}</p> : null}
           </>
@@ -562,7 +562,7 @@ function NewEmployee({ settings, nav }: Props & { settings: SettingsView }) {
         <Section title={t('payroll.sec.employment')}><div className="form inline pform"><Fields fields={[{ k: 'validFrom', label: t('payroll.field.entry'), type: 'date' }, ...employmentFields()]} f={f} set={setF} /></div></Section>
         <Section title={t('payroll.opening.title')}>
           <p className="m">{t('payroll.opening.lead')}</p>
-          <div className="form inline pform"><Fields fields={f.through ? openingFields((f.validFrom || localToday()).slice(0, 4)) : openingFields((f.validFrom || localToday()).slice(0, 4)).slice(0, 1)} f={f} set={setF} /></div>
+          <div className="form inline pform"><Fields fields={f.through ? openingFields(localToday().slice(0, 4)) : openingFields(localToday().slice(0, 4)).slice(0, 1)} f={f} set={setF} /></div>
         </Section>
         <Section title={t('payroll.sec.address')}><div className="form inline pform"><Fields fields={address} f={f} set={setF} /></div></Section>
         <Section title={t('payroll.sec.bank')}><div className="form inline pform"><Fields fields={bankSpec().fields} f={f} set={setF} /></div></Section>

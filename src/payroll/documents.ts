@@ -24,7 +24,7 @@ export interface Lohnkonto {
    * The openings of the year (§22 decision 43): the months paid before payroll ran here, per person her last
    * month, and their bases summed. No Lohnart: those months have no payslip here, so the rows and totals hold none.
    */
-  opening?: { people: Array<{ employee: string; through: string }>; bases: Record<string, number> };
+  opening?: { people: Array<{ employee: string; through?: string }>; bases: Record<string, number> };
 }
 
 /** The person's closes of `year` the year's figures count: none of a month her opening holds. */
@@ -82,7 +82,7 @@ export interface LohnausweisData {
   /** Lohnarten of the gross that name no field: field 8 is short of the gross by their lines. */
   unmapped?: string[];
   /** The opening the fields count (§22 decision 43): its last month and its own fields. */
-  opening?: { through: string; fields: Record<string, number> };
+  opening?: { through?: string; fields: Record<string, number> };
 }
 
 /**
@@ -146,7 +146,7 @@ export interface DeclarationRow {
   bases: Record<string, number>;
   from?: string; to?: string;
   /** What of `bases` the opening holds (§22 decision 43): its last month and its bases (a capped one as the engine capped it). */
-  opening?: { through: string; bases: Record<string, number> };
+  opening?: { through?: string; bases: Record<string, number> };
 }
 
 /** The figures of the annual declarations per person: each base of the year as the closed payslips kept it. */

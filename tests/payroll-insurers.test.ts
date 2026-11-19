@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { BankTransaction, JournalEntry } from '../src/types/index.js';
-import { bookInsurerPayments, insurerRows, payrollSince, settlementOf } from '../src/payroll/insurers.js';
+import { bookInsurerPayments, insurerPaymentOf, insurerRows, payrollSince, settlementOf } from '../src/payroll/insurers.js';
 import { dated, owner } from './support/payroll.js';
 import { computePayslip } from '../src/payroll/compute.js';
 import { bookingOf } from '../src/payroll/booking.js';
@@ -72,40 +72,65 @@ test('a fund payment dated before the month\'s posting date is the liability\'s:
   assert.deepEqual([paid.accountDebit, paid.accountCredit], ['2275', '1020']);
 });
 
-test('from the first month payroll runs here a fund payment is the liability\'s, before that month\'s payslip is closed; before it, level A keeps it', () => {
+test('one decision for every path: from payroll\'s first month a fund payment is the insurer\'s; code books it only where the liability covers it, else it waits for the person', () => {
   const { store, books } = quarter();
-  // Closes of July to September exist; October is not closed yet. Payroll runs here from July (the opening holds January to June).
   store.employees[0].opening = { 2026: { through: '2026-06', bases: { ahv: 60000 } } };
   assert.equal(payrollSince(store, '2026'), '2026-07-01');
-  const pay = (ref: string, date: string) => ({ ref, bank: 'Bank', date, amount: -100, currency: 'CHF', direction: 'DBIT' as const, description: 'Akonto', counterparty: 'Ausgleichskasse Beispiel' });
-  // Only September's payslip is in the books: an August payment falls before every accrual, but after payroll's start.
+  const pay = (ref: string, date: string, amount = 100) => ({ ref, bank: 'Bank', date, amount: -amount, currency: 'CHF', direction: 'DBIT' as const, description: 'Akonto', counterparty: 'Ausgleichskasse Beispiel' });
+  // Only September's payslip is in the books: an August payment falls after payroll's start but before every accrual.
   books.journalEntries = books.journalEntries.filter((e) => e.transactionRef.startsWith('LR-2026-09'));
-  books.transactions.push(pay('AUG', '2026-08-05'), pay('JUN', '2026-06-20'));
-  assert.deepEqual(bookInsurerPayments(structuredClone(books), ch.payroll!, store, open, () => undefined, () => '1020', id, { currency: 'CHF' }), [], 'without the start only the months of an accrual count');
-  assert.deepEqual(bookInsurerPayments(books, ch.payroll!, store, open, () => undefined, () => '1020', id, { currency: 'CHF', since: (y) => payrollSince(store, y) }), ['AUG']);
+  books.transactions.push(pay('AUG', '2026-08-05'), pay('JUN', '2026-06-20'), pay('SEP', '2026-09-20'));
+  const of = (ref: string) => insurerPaymentOf(books.transactions.find((t) => t.ref === ref)!, books.journalEntries, ch.payroll!, store, () => undefined, 'CHF');
+  assert.equal(of('JUN'), undefined, 'the opening\'s months stay level A\'s');
+  assert.deepEqual([of('AUG')?.account, of('AUG')?.covered], ['2271', false], 'the insurer\'s, but nothing accrued covers it: the person decides');
+  assert.equal(of('SEP')?.covered, true, 'September\'s payslip covers a payment of its month, dated before its posting');
+  assert.deepEqual(bookInsurerPayments(books, ch.payroll!, store, open, () => undefined, () => '1020', id, { currency: 'CHF' }), ['SEP']);
+});
+
+test('a quarter paid in arrears for the opening\'s months is not booked against the liability: October\'s accrual does not cover it', () => {
+  const store = firm([owner({ opening: { 2026: { through: '2026-09', bases: { ahv: 90000 } } } })]);
+  const d = computePayslip(ctxOf(store), 'e1', '2026-10')!;
+  const books = { transactions: [{ ref: 'AK-Q3', bank: 'B', date: '2026-10-10', amount: -3935.4, currency: 'CHF', direction: 'DBIT' as const, description: 'Akonto Q3', counterparty: 'Ausgleichskasse Beispiel' }] as BankTransaction[], journalEntries: entriesOf({ booking: bookingOf(d, ch.payroll!, store) }, id) };
+  assert.deepEqual(bookInsurerPayments(books, ch.payroll!, store, open, () => undefined, () => '1020', id, { currency: 'CHF' }), []);
+  assert.equal(insurerPaymentOf(books.transactions[0], books.journalEntries, ch.payroll!, store, () => undefined, 'CHF')?.covered, false);
+});
+
+test('a firm with persons but no payroll here (no opening, nothing accrued) keeps level A\'s way', () => {
+  const store = firm();
+  const tx = { ref: 'AK', bank: 'B', date: '2026-10-10', amount: -500, currency: 'CHF', direction: 'DBIT' as const, description: 'Akonto', counterparty: 'Ausgleichskasse Beispiel' };
+  assert.equal(insurerPaymentOf(tx, [], ch.payroll!, store, () => undefined, 'CHF'), undefined);
 });
 
 test('the final statement compares with the year\'s contributions in the books: the payslips\' and the payments booked for the opening\'s months; a large difference is said, never silent', () => {
   const { store, books } = quarter();
   store.employees[0].opening = { 2026: { through: '2026-06', bases: { ahv: 60000 } } };
-  // January to June were paid by hand: two Akonto payments booked on 2270 / 5700 (level A).
-  for (const [ref, date] of [['AK-Q1', '2026-04-10'], ['AK-Q2', '2026-07-08']] as const) {
-    books.transactions.push({ ref, bank: 'Bank', date, amount: -3935.4, currency: 'CHF', direction: 'DBIT', description: 'Akonto', counterparty: 'Ausgleichskasse Beispiel' });
-    books.journalEntries.push({ id: id(), transactionRef: ref, date, accountDebit: '5700', accountCredit: '1020', amount: 3935.4, description: 'Akonto' });
-  }
-  const year = 3 * 3935.4 + 3935.4;
-  const fair = settlementOf(books, ch.payroll!, store, 'ak', '2026', 11821.2, '2027-01-20', id);
-  assert.equal(fair.compare.before, 7870.8, 'the level-A payments of the year count');
+  // January to June were paid by hand: two Akonto payments booked on 5700 (level A), dated from 1 February to payroll's start.
+  const levelA = (ref: string, date: string, amount: number, direction: 'DBIT' | 'CRDT' = 'DBIT', currency = 'CHF') => {
+    books.transactions.push({ ref, bank: 'Bank', date, amount: direction === 'DBIT' ? -amount : amount, currency, direction, description: 'Akonto', counterparty: 'Ausgleichskasse Beispiel' });
+    books.journalEntries.push({ id: id(), transactionRef: ref, date, accountDebit: direction === 'DBIT' ? '5700' : '1020', accountCredit: direction === 'DBIT' ? '1020' : '5000', amount, description: 'Akonto' });
+  };
+  levelA('AK-Q1', '2026-04-10', 3935.4);
+  levelA('AK-Q2', '2026-06-28', 3935.4);
+  levelA('AK-JAN', '2026-01-12', 500, 'DBIT');
+  levelA('EO', '2026-05-10', 2000, 'CRDT');
+  levelA('EUR', '2026-05-11', 100, 'DBIT', 'EUR');
+  const fair = settlementOf(books, ch.payroll!, store, 'ak', '2026', 11821.2, '2027-01-20', id, () => undefined, 'CHF');
+  assert.equal(fair.compare.before, 7870.8, 'payments out in the books\' currency, 1 February to the day before payroll\'s start: not January\'s (last year\'s), not a benefit paid in, not euros');
+  assert.equal(fair.compare.beforeUntil, '2026-06-30');
   assert.equal(fair.compare.books, 11806.2);
   assert.equal(fair.compare.difference, 15);
   assert.equal(fair.compare.large, false);
   assert.equal(fair.compare.openingThrough, '2026-06');
-  assert.ok(year > 0);
   // A total for the whole year against the payslips' quarter alone would have booked 7,870.80 more: now it is said first.
   const wrong = settlementOf({ ...books, transactions: [] }, ch.payroll!, store, 'ak', '2026', 11821.2, '2027-01-20', id);
   assert.equal(wrong.compare.before, 0);
   assert.equal(wrong.compare.difference, 7885.8);
   assert.equal(wrong.compare.large, true, 'more than 5 % of the year: the page asks first');
+  // The fund also takes the family allowances: its payments cover two insurances and are not split, so none counts, and it is said.
+  const both = structuredClone(store);
+  for (const i of both.insurances.filter((x) => x.id === 'ak' || x.id === 'fak')) i.business = 'fund';
+  const shared = settlementOf(books, ch.payroll!, both, 'ak', '2026', 11821.2, '2027-01-20', id, () => 'fund', 'CHF');
+  assert.deepEqual([shared.compare.before, shared.compare.sharedPayees], [0, ['Ausgleichskasse Beispiel']]);
 });
 
 test('payroll runs here from a person\'s first month after her opening; without an opening from her entry', () => {

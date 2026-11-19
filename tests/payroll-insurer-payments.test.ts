@@ -12,7 +12,7 @@ import { dirname } from 'node:path';
 import { loadChart } from '../src/workspace/chart.js';
 import { handStart } from '../src/saving/hand-rule.js';
 import { bookingDraft } from '../src/accounting/manual-booking.js';
-import { loadClassifyContext } from '../src/booking/classify.js';
+import { classifyTransactions, loadClassifyContext } from '../src/booking/classify.js';
 import { receiptKnowledge, receiptWait, receiptWaitOf, settlementAccount } from '../src/booking/receipt-wait.js';
 import { loadKnowledge } from '../src/knowledge/layers.js';
 import { loadFxResolver } from '../src/accounting/fx-rates.js';
@@ -46,10 +46,13 @@ function books(): Workspace {
 test('the hand form of a payroll insurer\'s payment proposes its liability account without a code; a payment of the opening\'s months does not', () => {
   const ws = books();
   const start = handStart(ws, 'BVG-OCT')!;
-  assert.deepEqual(start.nature, { kind: 'payrollInsurer', account: '2275', name: 'Pensionskasse Beispiel' });
+  // October is not closed yet: nothing on 2275 covers the payment, so it waits for the person, who chooses the months it pays.
+  assert.deepEqual(start.nature, { kind: 'payrollInsurer', account: '2275', name: 'Pensionskasse Beispiel', covered: false, shared: false });
   const draft = bookingDraft(loadBooks(ws), 'BVG-OCT', ws.bankAccounts, [], { nature: start.nature! })!;
-  assert.deepEqual(draft.lines.map((l) => [l.accountDebit, l.amount, l.vat]), [['2275', 600, '']]);
+  assert.deepEqual(draft.lines.map((l) => [l.accountDebit, l.amount, l.vat]), [['2275', 600, '']], '«für Monate ab dem Lohnstart»: the liability');
   assert.deepEqual(draft.notes.map((n) => n.kind), ['payrollInsurer']);
+  const before = bookingDraft(loadBooks(ws), 'BVG-OCT', ws.bankAccounts, [], { nature: { ...start.nature!, way: 'before', before: { kind: 'contributions', account: '5720', deductions: '2270', open: 200, takes: 200 } } as never })!;
+  assert.deepEqual(before.lines.map((l) => [l.accountDebit, l.amount]), [['2270', 200], ['5720', 400]], '«für Monate davor»: level A\'s contributions');
   assert.notEqual(handStart(ws, 'BVG-AUG')!.nature?.kind, 'payrollInsurer', 'August is the opening\'s: level A booked such payments');
   assert.notEqual(handStart(ws, 'SHOP')!.nature?.kind, 'payrollInsurer');
 });
@@ -67,4 +70,16 @@ test('a payroll insurer\'s payment needs no receipt while payroll runs here; it 
   // The decision itself: the fact books it at once, after a business's own rule.
   const ctx = { free: new Set<string>(), assumesUnread: new Set<string>(), wordings: [], ownIbans: new Set<string>(), settles: settlementAccount({ moneyAccounts: new Set(['1020']), ownerAccount: '2850' }), inputTax: true };
   assert.deepEqual(receiptWait(pay('X', '2026-10-15', 1, 'Y'), { linked: 'none', payrollInsurer: true }, ctx), { wait: false, why: 'payrollInsurer' });
+});
+
+test('the classifier holds a payroll insurer\'s payment the liability does not cover for the person: the model is never asked', async () => {
+  const ws = books();
+  const b = loadBooks(ws);
+  const context = loadClassifyContext(ws);
+  let asked = 0;
+  const ask = async () => { asked++; return JSON.stringify({}); };
+  const out = await classifyTransactions(b, [b.transactions.find((t) => t.ref === 'BVG-OCT')!], { ask, fx: loadFxResolver(), context });
+  assert.equal(asked, 0);
+  assert.deepEqual(out.failed.map((f) => f.ref), ['BVG-OCT']);
+  assert.ok(!b.journalEntries.some((e) => e.transactionRef === 'BVG-OCT'));
 });

@@ -11,8 +11,11 @@ import type { PayrollEmployee } from './model.js';
 import { daysIn, firstDay, lastDay, monthsBetween } from './money.js';
 
 export interface Opening {
-  /** The opening's last month (YYYY-MM): January to it are paid and booked before payroll ran here. */
-  through: string;
+  /**
+   * The opening's last month (YYYY-MM): January to it are paid and booked before payroll ran here. Absent for an
+   * opening that names neither `through` nor `months` (written by hand): its figures count, it holds no month.
+   */
+  through?: string;
   /** The months it counts for the ceilings (part months by their days). */
   months: number;
   bases: Record<string, number>;
@@ -31,21 +34,22 @@ function throughOf(year: string, months: number): string | undefined {
   return `${year}-${String(Math.min(12, Math.ceil(months - 1e-6))).padStart(2, '0')}`;
 }
 
-/** The person's opening of `year`, its months explicit; undefined without one, or with one that covers no month. */
+/** The person's opening of `year`, its months explicit; undefined without one. */
 export function openingOf(e: Pick<PayrollEmployee, 'employment' | 'opening'>, year: string): Opening | undefined {
   const o = e.opening?.[year];
   if (!o) return undefined;
   const through = o.through && o.through.startsWith(`${year}-`) ? o.through : throughOf(year, o.months ?? 0);
-  if (!through) return undefined;
+  const figures = { bases: { ...(o.bases ?? {}) }, fields: { ...(o.fields ?? {}) } };
+  if (!through) return { months: 0, ...figures };
   // Without `months`: the months of the opening the person was employed in, by their days; none recorded (she was paid
   // before her employment here was entered): each month whole.
   const share = monthsBetween(`${year}-01`, through).reduce((a, m) => a + shareOf(e, m), 0);
   const months = o.months ?? (share > 0 ? share : Number(through.slice(5)));
-  return { through, months: Math.round(months * 1e4) / 1e4, bases: { ...(o.bases ?? {}) }, fields: { ...(o.fields ?? {}) } };
+  return { through, months: Math.round(months * 1e4) / 1e4, ...figures };
 }
 
 /** Whether `month` is one of the person's opening months: paid and booked before payroll ran here. */
 export function inOpening(e: Pick<PayrollEmployee, 'employment' | 'opening'>, month: string): boolean {
   const o = openingOf(e, month.slice(0, 4));
-  return !!o && month <= o.through;
+  return !!o?.through && month <= o.through;
 }

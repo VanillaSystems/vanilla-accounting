@@ -159,3 +159,49 @@ test('routes: a final statement for the whole year against October alone is said
   assert.equal(typeof booked.json.booked, 'string');
   assert.equal(booked.json.amount, compare.difference);
 });
+
+test('review: an opening without `through` or `months` (by hand) still counts its figures and holds no month', () => {
+  const e = owner({ opening: { 2026: { bases: { ahv: 90000 }, fields: { 1: 90000 } } } });
+  const o = openingOf(e, '2026')!;
+  assert.deepEqual([o.through, o.months, o.bases.ahv, o.fields['1']], [undefined, 0, 90000, 90000]);
+  assert.equal(inOpening(e, '2026-01'), false);
+  const store = firm([e]);
+  assert.equal(computePayslip(ctxOf(store), 'e1', '2026-10')!.bases.ahv.year, 100000, 'the opening\'s base counts once');
+});
+
+test('review: the strip shows the opening\'s months also when the employment is recorded only from after it', () => {
+  const late = firm([owner({ employment: [dated('2026-10-01', { kind: 'monthly' as const, amount: 6000 })], opening: { 2026: { through: '2026-09', bases: { ahv: 54000 } } } })]);
+  assert.deepEqual(yearStrip(ctxOf(late), '2026', '2026-11-19').map((m) => m.state).slice(0, 10), [...Array(9).fill('opening'), 'open']);
+  assert.equal(monthView(ctxOf(late), '2026-05').opening.length, 1);
+});
+
+test('review: setting an opening checks its months against `through`; the refusal names the months', () => {
+  const store = firm([owner()]);
+  assert.throws(() => setOpening(store, data, historyOf([]), 'e1', '2026', { through: '2026-09', months: 0 }), refused('badInput'), 'no months with a last month');
+  assert.throws(() => setOpening(store, data, historyOf([]), 'e1', '2026', { through: '2026-03', months: 9 }), refused('badInput'), 'more months than January to March');
+  setOpening(store, data, historyOf([]), 'e1', '2026', { through: '2026-09', months: 8.5 });
+  setOpening(store, data, historyOf([]), 'e1', '2026', { through: '2026-06' });
+  assert.equal(store.employees[0].opening?.['2026']?.months, undefined, 'an edit without months drops the stored ones: they follow `through`');
+  assert.throws(() => planClose(ctxOf(store), 'e1', '2026-05', new Set()), (e: unknown) => e instanceof PayrollRefusal && /Mai 2026 .*Januar bis Juni 2026/.test(e.message));
+});
+
+test('review: «Person hinzufügen» takes the opening\'s year from today, not from the entry day', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync('src/app/areas/payroll/Employees.tsx', 'utf8');
+  assert.ok(src.includes('openingFields(localToday().slice(0, 4))'));
+  assert.ok(!/openingFields\(\(f\.validFrom/.test(src));
+});
+
+test('review: a KTG the person is not in leaves her a fact, so the change is visible', () => {
+  const store = firm([owner({ insurances: [dated('2026-01-01', { bvg: { insurance: 'pk', employee: 300, employer: 300 }, uvg: { insurance: 'uvg', code: 'A1' } })] })]);
+  const d = computePayslip(ctxOf(store), 'e1', '2026-10')!;
+  assert.ok(!d.lines.some((l) => l.wageType.startsWith('ktg')));
+  assert.deepEqual(d.facts.filter((f) => f.key === 'notInsured').map((f) => f.vars?.kind), ['ktg']);
+});
+
+test('review: the declarations CSV says what of each base the opening holds', async () => {
+  const r = await fetch(`http://127.0.0.1:${api.port}/payroll/documents/2026/declarations.csv`);
+  const text = await r.text();
+  assert.ok(text.split('\n')[0].includes('davon Eröffnung'));
+  assert.ok(text.split('\n')[0].includes('openingThrough'));
+});

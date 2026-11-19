@@ -1708,6 +1708,10 @@ Taken after the scored persona walk of B0 (2026-11-19, AI on 73, AI off 83, bar 
 43. **A person's opening names its months: January to `through`** (`opening[year].through`, YYYY-MM, in
     payroll.json; src/payroll/opening.ts). An opening written before (only `months`) covers January and the
     months after it, that many, a part month whole: the same file reads the same, so `PAYROLL_SCHEMA` stays 1.
+    One with neither (written by hand) still counts its bases and fields and holds no month; the settings API
+    takes none without `through`, and `months`, when given, lies above zero and within January to `through`
+    (an edit without it lets the months follow `through`). The year strip shows the opening's months also for a
+    person whose employment is recorded only from after it.
     The opening's months were paid and booked by hand before payroll ran here: they are «Eröffnung» (year
     strip, timeline, the month's run), get no draft, are never «noch offen» for a later month, and closing
     one is refused (`opening`, 409), not warned: it would book the wage a second time, a boundary of the
@@ -1719,24 +1723,33 @@ Taken after the scored persona walk of B0 (2026-11-19, AI on 73, AI off 83, bar 
     hinzufügen» and on the person's page (`PUT /api/payroll/employees/:id/opening/:year`, through the same
     comparison with closed payslips as any change); it is refused over a month closed here.
 44. **A final statement is compared with the year's contributions in the books**: what the payslips
-    accrued on the liability account (and an earlier statement), plus the year's payments to that insurer
-    booked elsewhere than on it (level A's, for the months before payroll ran here). The opening carries no
-    contributions: the books hold what was paid, and the person would only retype it. The difference
-    booked is the total less that sum. When it is more than 5 % of the year (the larger of the total and the
-    books' sum), the page shows the four figures first and books only on «Trotzdem buchen» (§18); a smaller
-    one is booked at once and the answer names the figures. One month's contributions is about 8 % of a
-    year, so the 5 % rule also catches a month counted twice or missing.
-45. **A payment to a payroll insurer is the liability's from the month the payslips accrue**: one dated
-    in a month whose payslip credits the account (an Akonto of the 28th, a BVG payment of the 15th, before
-    the month-end posting date), or from the first month payroll runs here (the first month after the
-    openings, `payrollSince`) once a payslip accrued on that account, is booked against the liability by
-    code. The hand form proposes the same (bank / liability, no VAT code; nature `payrollInsurer`) for a
-    payment to one of the firm's insurances from that first month, and such a payment needs no receipt
-    (receipt-wait `payrollInsurer`, still paired with its bill), for every insurer of payroll.json by its
-    business file or name, never by a named fund. Before that month a payment stays level A's.
+    accrued on the liability account (and an earlier statement), plus what was paid for the opening's months:
+    the payments out to that insurer alone, in the books' currency, dated from 1 February (a January payment
+    settles the year before) to the day before payroll's start, not booked on its liability account (level A).
+    A payee that takes several of the firm's insurances (AHV and FAK at one fund) cannot be split per
+    insurance: its payments count for none, and the panel says so («nicht aufgeteilt»). The opening carries no
+    contributions: the books hold what was paid, and the person would only retype it. The difference booked is
+    the total less that sum; a total below zero is refused. When the difference is more than 5 % of the year
+    (the larger of the total and the books' sum), the page shows the figures first and books only on
+    «Trotzdem buchen» (§18); a smaller one is booked at once and the answer names the figures. One month's
+    contributions is about 8 % of a year, so the 5 % rule also catches a month counted twice or missing.
+45. **One decision for a payment to a payroll insurer** (src/payroll/insurers.ts `insurerPaymentOf`), read by
+    the classifier's code booking, receipt-wait and the hand form alike, and only where the jurisdiction's
+    payroll books through its clearing account. Payroll runs here for the insurer's account once a payslip
+    accrued on it, or, in a year a person has an opening, from payroll's first month after it
+    (`payrollSince`); a firm with persons but neither keeps level A's way. Such a payment needs no receipt
+    (receipt-wait `payrollInsurer`; its bill still pairs) and is never the model's. Code books it bank /
+    liability by itself only when the account's credit at the end of the payment's month (the accruals through
+    that month, less what was paid before) covers it: an Akonto of the 28th or a BVG payment of the 15th of a
+    month whose payslip is closed. Otherwise it waits for the person (it may pay months before payroll ran here,
+    a quarter in arrears), and the hand form offers both bookings plainly: «für Monate ab dem Lohnstart» (bank /
+    liability, no VAT code) and «für Monate davor» (level A's contributions: the withheld share on the
+    deductions account, the rest on the employer's account, as setup.yaml `wages` says). A payee of several
+    insurances is never booked by code. By payroll.json's insurers, business file or name, never a named fund.
 46. **An insurance the law does not require of everyone holds only for the persons put in it** (a kind
     without `required`, `perPerson` or `requiredAbove`: KTG, UVGZ): a person without her own solution of the
-    kind gets none of its lines, and the person form offers «nicht versichert» for it. A required kind still
+    kind gets none of its lines but a fact on her payslip («Nicht in der Krankentaggeldversicherung
+    versichert»), and the person form offers «nicht versichert» for it. A required kind still
     takes the insurance's first solution when the person names none. An insurance's card offers «Konten
     anlegen» for the accounts of its contributions the chart lacks.
 47. **The note under every payslip, PDF and Lohnausweis is neutral**: «Berechnet aus den erfassten Sätzen und

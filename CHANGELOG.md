@@ -185,13 +185,14 @@ Two markers flag an entry you must read before you update:
   month (`through` in payroll.json, schema 1 unchanged: an opening without it reads its `months` from
   January). The demo-consulting walk now starts with October as the first draft.
 - Löhne: a final statement (Schlussabrechnung) compares its total with the year's contributions in the
-  books: what the payslips accrued, and the payments to the insurer booked for the months before payroll
-  ran here. A difference over 5 % of the year is shown with these figures first and booked only on
+  books: what the payslips accrued, and the payments out to that insurer booked for the opening's months
+  (from 1 February to payroll's start; a fund that takes several insurances is not split and says so). A difference over 5 % of the year is shown with these figures first and booked only on
   «Trotzdem buchen». Before, a full-year total was booked against October and November alone.
-- Löhne: a payment to a fund or pension fund in a month whose payslips accrue (an Akonto on the 28th, a
-  BVG payment on the 15th, before the month-end posting) is booked against the insurer's liability
-  account, as is one from the first month payroll runs here. The hand form proposes that account, without
-  a VAT code, instead of the expense the payslips booked already, and such a payment needs no receipt.
+- Löhne: a payment to a fund or pension fund while payroll runs here is decided once for every path. Code
+  books it against the insurer's liability account when what the payslips accrued through its month covers
+  it (an Akonto on the 28th, a BVG payment on the 15th, before the month-end posting); otherwise it waits for
+  the person, never the model, and the hand form offers «für Monate ab dem Lohnstart» (the liability, without
+  a VAT code) or «für Monate davor» (the contributions as booked so far). Such a payment needs no receipt.
 - Löhne: a person's opening (months already paid this year, their bases and Lohnausweis fields) is
   entered in «Person hinzufügen» and on the person's page; the settings API checks it and refuses one
   over a month closed here.

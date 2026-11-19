@@ -245,11 +245,12 @@ function Settle({ row, year, nav, again }: { row: InsurerRow; year: string; nav:
           <h4>{t('payroll.settle.warnTitle', { diff: fmt(warned.difference), pct: Math.round(Math.abs(warned.difference) / Math.max(warned.total, warned.books, 1) * 100) })}</h4>
           <dl className="kv2">
             <dt>{t('payroll.settle.accrued')}</dt><dd className="mono">{fmt(warned.accrued)}</dd>
-            <dt>{warned.openingThrough ? t('payroll.settle.beforeOpening', { through: monthText(warned.openingThrough) }) : t('payroll.settle.before')}</dt><dd className="mono">{fmt(warned.before)}</dd>
+            <dt>{warned.openingThrough && warned.beforeUntil ? t('payroll.settle.beforeOpening', { through: monthText(warned.openingThrough), until: formatDate(warned.beforeUntil) }) : t('payroll.settle.before')}</dt><dd className="mono">{fmt(warned.before)}</dd>
             <dt>{t('payroll.settle.inBooks')}</dt><dd className="mono">{fmt(warned.books)}</dd>
             <dt>{t('payroll.settle.statement')}</dt><dd className="mono">{fmt(warned.total)}</dd>
           </dl>
-          {warned.openingThrough && warned.before === 0 ? <p>{t('payroll.settle.noBefore', { through: monthText(warned.openingThrough) })}</p> : null}
+          {warned.sharedPayees?.length ? <p data-testid="settle-shared">{t('payroll.settle.shared', { list: warned.sharedPayees.join(', ') })}</p> : null}
+          {warned.openingThrough && warned.before === 0 && !warned.sharedPayees?.length ? <p>{t('payroll.settle.noBefore', { through: monthText(warned.openingThrough) })}</p> : null}
           <p className="m">{t('payroll.settle.warnRule')}</p>
           <div className="acts">
             <AsyncButton type="button" className="btn primary" onClick={() => run(true)}>{t('payroll.settle.anyway')}</AsyncButton>

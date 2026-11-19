@@ -132,7 +132,8 @@ export interface PayrollEmployee {
   /**
    * Totals of the year before payroll started here (a firm starting mid-year): per base and Lohnausweis field, no
    * booking. `through` (YYYY-MM): its last month, January to it being the opening's months (src/payroll/opening.ts);
-   * absent (written before it existed): the person's first `months` employed months of the year.
+   * absent (written before it existed): January and the months after it, `months` of them (a part month whole); with
+   * neither, its figures count and it holds no month.
    */
   opening?: Record<string, { through?: string; bases?: Record<string, number>; fields?: Record<string, number>; months?: number }>;
 }

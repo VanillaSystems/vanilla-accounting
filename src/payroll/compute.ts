@@ -290,7 +290,11 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     }
     // An insurance the law does not require of everyone (a daily sickness allowance, a supplementary accident
     // cover) holds only for the persons the firm put in it: their own solution of the kind (§22 decision 46).
-    if (kind && !kind.required && !kind.perPerson && !kind.requiredAbove && !insurancesOn[c.insurance]) continue;
+    if (kind && !kind.required && !kind.perPerson && !kind.requiredAbove && !insurancesOn[c.insurance]) {
+      // Said once per kind, so a firm that adds the insurance sees whom it does not cover.
+      if (!facts.some((f) => f.key === 'notInsured' && f.vars?.kind === c.insurance)) facts.push({ key: 'notInsured', vars: { kind: c.insurance } });
+      continue;
+    }
     // Liability by age, and past the reference age.
     if (c.liable) {
       const age = fig(c.liable);

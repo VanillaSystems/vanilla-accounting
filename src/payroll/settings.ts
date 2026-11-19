@@ -316,7 +316,8 @@ function openingValue(e: PayrollEmployee, data: PayrollData, year: string, v: Re
     const def = form.find((f) => f.key === k && !f.sum && !f.remark) ?? bad(`${k} ist kein Feld des Lohnausweises, das sich eintragen lässt.`, 'openingField');
     fields[k] = round2(num(x, `${def.key} ${def.label.de}`, 0));
   }
-  const months = optNum(v.months, 'Monate', 0, 12);
+  // Its months for the ceilings, when given: more than none, at most the months January to `through` (a part month by its days).
+  const months = optNum(v.months, 'Monate', 0.01, Number(through.slice(5)));
   return clean({ through, ...(months !== undefined ? { months } : {}), bases, fields });
 }
 
@@ -572,7 +573,7 @@ export interface EmployeeDetail {
   months: Array<{ month: string; status: 'closed' | 'draft' | 'opening'; payslip: string }>;
   defaultFrom: string;
   /** Her opening of the year with its months made explicit (src/payroll/opening.ts), when she has one. */
-  opening?: { year: string; through: string; months: number; bases: Record<string, number>; fields: Record<string, number> };
+  opening?: { year: string; through?: string; months: number; bases: Record<string, number>; fields: Record<string, number> };
 }
 
 export function employeeDetail(ctx: PayrollContext, id: string, year: string, today: string, mask: (n: string) => string): EmployeeDetail {

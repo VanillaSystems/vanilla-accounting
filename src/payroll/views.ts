@@ -73,7 +73,7 @@ export function monthView(ctx: PayrollContext, month: string): MonthView {
   for (const e of ctx.store.employees) {
     // A close made before the opening said so still shows: it stands until reopened.
     if (inOpening(e, month) && !ctx.history.closed.has(payslipId(month, e.id))) {
-      opening.push({ employee: e.id, name: nameOf(e, `${month}-28`), through: openingOf(e, month.slice(0, 4))!.through });
+      opening.push({ employee: e.id, name: nameOf(e, `${month}-28`), through: openingOf(e, month.slice(0, 4))!.through! });
       continue;
     }
     const s = slipOf(ctx, e.id, month);
@@ -103,7 +103,8 @@ export interface YearMonth { month: string; state: 'closed' | 'open' | 'partial'
  */
 export function yearStrip(ctx: PayrollContext, year: string, today: string): YearMonth[] {
   return monthsBetween(`${year}-01`, `${year}-12`).map((month) => {
-    const all = ctx.store.employees.filter((e) => employedFraction(e, month, 'calendar-days') > 0);
+    // A person whose employment is recorded only from after her opening still has the opening's months.
+    const all = ctx.store.employees.filter((e) => employedFraction(e, month, 'calendar-days') > 0 || inOpening(e, month));
     const employed = all.filter((e) => !inOpening(e, month) || ctx.history.closed.has(payslipId(month, e.id)));
     const closed = employed.filter((e) => ctx.history.closed.has(payslipId(month, e.id)));
     const gross = sum(closed.map((e) => ctx.history.closed.get(payslipId(month, e.id))!.gross));

@@ -65,7 +65,8 @@ export function assertNotOpening(ctx: Pick<PayrollContext, 'store'>, employee: s
   const e = ctx.store.employees.find((x) => x.id === employee);
   if (!e || !inOpening(e, month)) return;
   const o = openingOf(e, month.slice(0, 4))!;
-  throw new PayrollRefusal('opening', `${month} gehört zur Eröffnung (Januar bis ${o.through}): dieser Lohn ist schon bezahlt und von Hand gebucht, eine Lohnabrechnung würde ihn ein zweites Mal buchen. Ändern lässt sich die Eröffnung bei der Person.`);
+  const name = (m: string) => new Intl.DateTimeFormat('de-CH', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${m}-01T00:00:00Z`));
+  throw new PayrollRefusal('opening', `${name(month)} gehört zur Eröffnung (Januar bis ${name(o.through!)}): dieser Lohn ist schon bezahlt und von Hand gebucht, eine Lohnabrechnung würde ihn ein zweites Mal buchen. Ändern lässt sich die Eröffnung bei der Person.`);
 }
 
 /** The journal entries of a plan, with ids from `id`: one per posting, on the posting date, by payroll's check, no VAT code. */

@@ -39,7 +39,7 @@ const kindOfWageType = (wageType: string): string | undefined => data()?.contrib
 export function factText(f: PayslipFact): string {
   const v = f.vars ?? {};
   const vars: Record<string, string | number> = {};
-  for (const [k, x] of Object.entries(v)) vars[k] = k === 'date' ? formatDate(String(x)) : k === 'month' ? monthText(String(x)) : k === 'amount' ? fmt(Number(x)) : x;
+  for (const [k, x] of Object.entries(v)) vars[k] = k === 'date' ? formatDate(String(x)) : k === 'month' ? monthText(String(x)) : k === 'amount' ? fmt(Number(x)) : k === 'kind' ? kindLabel(String(x)) : x;
   return tWith(`payroll.fact.${f.key}`, vars);
 }
 

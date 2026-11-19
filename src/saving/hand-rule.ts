@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { parseDocument, YAMLMap, YAMLSeq } from 'yaml';
 import { loadBooks } from '../books/store.js';
-import { loadClassifyContext, mappedReceipts, paymentFacts, ruleBookingLines, ruleOfPayment, type RuleLine } from '../booking/classify.js';
+import { loadClassifyContext, mappedReceipts, paymentFacts, payrollInsurerOfPayment, ruleBookingLines, ruleOfPayment, type RuleLine } from '../booking/classify.js';
 import { stableWords } from '../knowledge/gaps.js';
 import { awaitsOutlays, paysOwner, receiptKnowledge, repaymentsOf } from '../booking/receipt-wait.js';
 import { baseCurrency } from '../engines/index.js';
@@ -274,8 +274,13 @@ function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, cont
     // In the books' currency, not covered while outlays are open (or none booked yet, receipts of hers filed: open 0, #457), no rule deciding it: it waits for them, and the form says so (#428).
     if (toOwner && awaitsOutlays(books, tx, context, wages(), loadFxResolver())) return { kind: 'ownerWaits', account: context.ownerAccount!, open: outlaysOpen(books, ownerFactsOf(context)!, tx.date), owner: context.ownerName ?? '' };
     // A payroll insurer of the firm while payroll runs here: the liability the payslips credit (§22 decision 45), never an expense again.
-    const insurer = context.payrollInsurer?.(tx, file?.id);
-    if (insurer) return { kind: 'payrollInsurer', account: insurer.account, name: insurer.name };
+    // Its months from payroll's start go against the liability; months before it (a quarter paid in arrears) are level A's
+    // contributions (`before`): the form offers both, the liability first when it covers the payment.
+    const insurer = payrollInsurerOfPayment(books, tx, context);
+    if (insurer) {
+      const before = contributionsOf(books, tx, context, file);
+      return { kind: 'payrollInsurer', account: insurer.account, name: insurer.name, covered: insurer.covered, shared: insurer.shared, ...(before?.kind === 'contributions' ? { before } : {}) };
+    }
     if (!context.wageAccount || !wages().some((w) => w.test(tx.description))) return contributionsOf(books, tx, context, file);
     // Books that carry wages with their deductions (cls-salary): the payslip's lines are hers, no account is proposed.
     const deductions = context.wageDeductions;
