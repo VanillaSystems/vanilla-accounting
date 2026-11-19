@@ -24,8 +24,10 @@ import type { PayrollContext } from './compute.js';
 import { historyOf } from './history.js';
 import { PayrollRefusal, applyClose, applyReopen, assertReopenable, closeEventOf, correctionOf, entriesOf, payslipReceipt, planClose, reopenEventOf, type ClosePlan, type CloseWarning } from './close.js';
 import { payslipPdf } from './pdf.js';
-import { allPayslipEvents, appendPayslipEvents, loadPayroll } from './store.js';
-import type { PayslipCorrection } from './model.js';
+import { allPayslipEvents, appendPayslipEvents, loadPayroll, updatePayroll } from './store.js';
+import { encryptPdf, generatedPassword } from './pdf-encrypt.js';
+import type { MailMessage } from '../invoices/mail.js';
+import type { PayrollEmployee, PayslipCorrection } from './model.js';
 
 /** A change to the books inside the caller's write door; `fn` is synchronous. */
 export type BooksWriter = <T>(fn: (books: Books) => T) => T;
@@ -193,4 +195,75 @@ export async function issueLohnausweis(ws: Workspace, employee: string, year: st
   const snap: LohnausweisSnapshot = { id, employee, year, kind: !earlier.length ? 'original' : kind === 'original' ? 'replacement' : kind, issuedAt: now, data, file: relative(ws.paths.root, file), sha256: sha256(pdf) };
   appendFileSync(snapshotsFile(ws, year), JSON.stringify(snap) + '\n');
   return snap;
+}
+
+// ─── payslips by mail ──────────────────────────────────────────────────────────
+
+/** One payslip mail as sent: who got it, the copy, when, the server's id. A resend is a line of its own. */
+export interface PayslipSent { payslip: string; to: string; copyTo?: string; at: string; messageId: string }
+
+const sentFile = (ws: Pick<Workspace, 'paths'>, year: string) => join(yearPaths(ws.paths, year).payroll, 'sent.jsonl');
+
+export function payslipsSent(ws: Pick<Workspace, 'paths'>, year: string): PayslipSent[] {
+  const f = sentFile(ws, year);
+  return existsSync(f) ? readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as PayslipSent) : [];
+}
+
+const digits = (s: string | undefined) => (s ?? '').replace(/\D/g, '');
+
+/**
+ * Why a password may not lock a payslip, or a warning to show first: the social security number never
+ * (AHVG Art. 153c: it is for social insurance only), the date of birth only after a warning (others know it).
+ */
+export function passwordCheck(e: PayrollEmployee, password: string): { refused?: 'short' | 'socialSecurityNumber'; warn?: 'birthDate' } {
+  if (password.length < 8) return { refused: 'short' };
+  const ssn = digits(e.socialSecurityNumber);
+  if (ssn && (digits(password).includes(ssn.slice(3)) || digits(password) === ssn)) return { refused: 'socialSecurityNumber' };
+  const [y, m, d] = (e.birthDate ?? '').split('-');
+  if (y && [`${d}${m}${y}`, `${y}${m}${d}`, `${d}${m}${y.slice(2)}`].some((b) => digits(password).includes(b))) return { warn: 'birthDate' };
+  return {};
+}
+
+/**
+ * Sends a closed payslip to the person's own address as a PDF locked with her password, the copy to the
+ * firm's sender; every mail is logged. Without an address or a password nothing is sent.
+ */
+export async function sendPayslip(ws: Workspace, id: string, send: (message: MailMessage, pdf: { filename: string; content: Buffer }) => Promise<{ to: string; messageId: string }>, now = new Date().toISOString()): Promise<PayslipSent> {
+  const ctx = payrollContext(ws);
+  const close = ctx.history.closed.get(id);
+  if (!close) throw new PayrollRefusal('notClosed', `Die Lohnabrechnung ${id} ist nicht abgeschlossen.`);
+  const e = ctx.store.employees.find((x) => x.id === close.employee);
+  const to = e && valueOn(e.email, close.payday);
+  if (!e || !to) throw new PayrollRefusal('noEmail', 'Für diese Person ist keine eigene E-Mail-Adresse erfasst.');
+  if (!e.mailPassword || passwordCheck(e, e.mailPassword).refused) throw new PayrollRefusal('noPassword', 'Für diese Person ist kein Passwort für die Lohnabrechnungen gesetzt.');
+  const books = loadBooks(ws);
+  const receipt = books.receipts.find((r) => r.id === close.receiptId);
+  const path = receipt && receiptFile(ws, books, receipt);
+  if (!path || !existsSync(path)) throw new PayrollRefusal('notFound', `Das PDF der Lohnabrechnung ${id} fehlt.`);
+  const lang = e.language;
+  const month = new Intl.DateTimeFormat(`${lang}-CH`, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${close.month}-01T00:00:00Z`));
+  const words = (k: keyof PayrollData['documents']) => ctx.data.documents[k][lang] ?? ctx.data.documents[k].de;
+  const locked = await encryptPdf(readFileSync(path), e.mailPassword);
+  const copyTo = ctx.store.company.sender?.copyTo;
+  const out = await send({ to, subject: `${words('payslip')} ${month}`, body: words('mailBody').replace('{month}', month).replace('{firm}', ws.company.name), ...(copyTo ? { bcc: copyTo } : {}) },
+    { filename: `${words('payslip')}-${close.month}.pdf`.replace(/\s+/g, '-'), content: locked });
+  const sent: PayslipSent = { payslip: id, to: out.to, ...(copyTo ? { copyTo } : {}), at: now, messageId: out.messageId };
+  const dir = yearPaths(ws.paths, close.month.slice(0, 4)).payroll;
+  mkdirSync(dir, { recursive: true });
+  appendFileSync(sentFile(ws, close.month.slice(0, 4)), JSON.stringify(sent) + '\n');
+  return sent;
+}
+
+/** Sets a person's payslip password: hers when given and allowed, else one generated and returned once. */
+export function setMailPassword(ws: Workspace, employee: string, given: string | undefined, confirm = false): { password?: string; warn?: 'birthDate' } {
+  return updatePayroll(ws, (s) => {
+    const e = s.employees.find((x) => x.id === employee);
+    if (!e) throw new PayrollRefusal('notFound', `Keine Person ${employee}.`);
+    const password = given?.trim() || generatedPassword();
+    const check = passwordCheck(e, password);
+    if (check.refused) throw new PayrollRefusal('badPassword', check.refused === 'short' ? 'Das Passwort hat mindestens 8 Zeichen.' : 'Die AHV-Nummer ist nie ein Passwort.');
+    if (check.warn && !confirm) return { warn: check.warn };
+    e.mailPassword = password;
+    return given?.trim() ? {} : { password };
+  });
 }
