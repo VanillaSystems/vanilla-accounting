@@ -56,6 +56,8 @@ const MAIL_STATUS: Record<MailRefusal, number> = { notConfigured: 409, noPasswor
 const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
   incomplete: 400, unconfirmed: 409, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409, uid: 400, aboveOpen: 409, surplus: 409, beforeInvoice: 400,
   sent: 409, settled: 409, applied: 409, closed: 403, numbered: 409, account: 400, credited: 409,
+  refTaken: 409, numberFormat: 400, convert: 400, nothingTicked: 400, expired: 409, declined: 409, overOpen: 409, sentVersion: 409, orderDelivered: 409, orderInvoiced: 409, notReopenable: 409, notQuote: 409,
+  referenceTaken: 409, deliveryFromOrder: 400, orderDrafts: 409, sourceCancelled: 409,
 };
 
 // From the network only the phone's paths answer (src/server/phone.ts), the API ones only with the
@@ -132,7 +134,7 @@ app.use((err: unknown, req: express.Request, res: express.Response, _next: expre
   else if (err instanceof StaleBooksError) res.status(409).json({ error: err.message, ...refusalOf(err) } satisfies ApiErrorBody);
   else if (err instanceof RequestError) res.status(err.status).json({ error: err.message, ...err.refusal } satisfies ApiErrorBody);
   else if (err instanceof InvoiceRuleError) {
-    res.status(INVOICE_STATUS[err.code]).json({ error: err.message, invoiceRefusal: err.code, ...(err.missing ? { missing: err.missing } : {}) } satisfies InvoiceErrorBody);
+    res.status(INVOICE_STATUS[err.code]).json({ error: err.message, invoiceRefusal: err.code, ...(err.missing ? { missing: err.missing } : {}), ...(err.params ? { params: err.params } : {}) } satisfies InvoiceErrorBody);
   } else if (err instanceof PaymentError) res.status(err.code === 'notFound' ? 404 : 409).json({ error: err.message, paymentRefusal: err.code } satisfies ApiErrorBody);
   else if (err instanceof MailError) res.status(MAIL_STATUS[err.code]).json({ error: err.message, mailRefusal: err.code, ...(err.detail ? { detail: err.detail } : {}) } satisfies ApiErrorBody);
   else if (err instanceof NoClaudeError) res.status(503).json({ error: err.message, code: 'noClaude', params: err.step ? { step: err.step } : {} } satisfies ApiErrorBody);

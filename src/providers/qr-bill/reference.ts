@@ -5,6 +5,7 @@
  * digits). The bank hands the reference back in the camt.053 line, which is how a payment finds
  * its invoice (src/invoices/payments.ts).
  */
+import { checkFormat, checkNumbering, type DocumentKind, type FormatRefusal, type NumberFormat, type Numbering } from '../../workspace/numbering.js';
 
 const MOD10 = [0, 9, 4, 6, 8, 2, 7, 1, 3, 5];
 
@@ -24,9 +25,17 @@ function mod97(s: string): number {
   return m;
 }
 
-/** The QR reference for an invoice number: its digits, left-padded to 26, and the check digit. */
+/**
+ * The digits of a number's QR reference: its digits, and a letter of its prefix as two (A = 10 … Z = 35,
+ * as ISO 7064 reads it), so RE-2026-00001 and GS-2026-00001 get references of their own. A number
+ * without letters (2026-001) keeps its digits as before.
+ */
+const qrrDigitsOf = (invoiceNumber: string): string =>
+  invoiceNumber.toUpperCase().replace(/[^0-9A-Z]/g, '').replace(/[A-Z]/g, (c) => String(c.charCodeAt(0) - 55));
+
+/** The QR reference for an invoice number: its digits (qrrDigitsOf), left-padded to 26, and the check digit. */
 export function qrReference(invoiceNumber: string): string {
-  const digits = invoiceNumber.replace(/\D/g, '');
+  const digits = qrrDigitsOf(invoiceNumber);
   if (!digits || digits.length > 26) throw new Error(`${invoiceNumber}: an invoice number needs 1 to 26 digits for a QR reference`);
   const body = digits.padStart(26, '0');
   return body + qrrCheckDigit(body);
@@ -37,6 +46,25 @@ export function scorReference(invoiceNumber: string): string {
   const body = invoiceNumber.toUpperCase().replace(/[^0-9A-Z]/g, '');
   if (!body || body.length > 21) throw new Error(`${invoiceNumber}: an invoice number needs 1 to 21 letters or digits for a creditor reference`);
   return `RF${String(98 - mod97(`${body}RF00`)).padStart(2, '0')}${body}`;
+}
+
+/** Whether a number fits both references a QR-bill may carry: QRR's 26 digits (a letter is two) and SCOR's 21 characters. */
+export function referenceTooLong(invoiceNumber: string): 'tooLongQrr' | 'tooLongScor' | undefined {
+  if (qrrDigitsOf(invoiceNumber).length > 26) return 'tooLongQrr';
+  if (invoiceNumber.toUpperCase().replace(/[^0-9A-Z]/g, '').length > 21) return 'tooLongScor';
+  return undefined;
+}
+
+/** A kind's number format checked with the references a QR-bill carries (src/workspace/numbering.ts checkFormat). */
+export const formatFits = (kind: DocumentKind, nf: NumberFormat): FormatRefusal | undefined => checkFormat(kind, nf, referenceTooLong);
+/** The firm's whole numbering so checked. */
+export const numberingFits = (n: Numbering) => checkNumbering(n, referenceTooLong);
+
+/** Whether two numbers make the same QR or creditor reference (2026-001 and 2026001 do): a payment could not tell them apart. */
+export function sameReference(a: string, b: string): boolean {
+  const safe = (f: (n: string) => string, n: string) => { try { return f(n); } catch { return undefined; } };
+  const qa = safe(qrReference, a), sa = safe(scorReference, a);
+  return (!!qa && qa === safe(qrReference, b)) || (!!sa && sa === safe(scorReference, b));
 }
 
 export type ReferenceKind = 'QRR' | 'SCOR';

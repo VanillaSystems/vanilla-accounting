@@ -5,7 +5,7 @@
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
-import { issuedPdfUrl, type Customer, type CustomerFields, type Invoice, type Issued } from '../../../invoices/model.js';
+import { isBooked, issuedPdfUrl, type DocumentKind, type Customer, type CustomerFields, type Invoice, type Issued } from '../../../invoices/model.js';
 import { Paper } from '../receipts/Paper.js';
 import { openAmount, paidAmount, totals, creditable } from '../../../invoices/rules.js';
 import type { RouteOf } from '../../shell/route.js';
@@ -21,10 +21,11 @@ import { useWorkspace } from '../../hooks/use-workspace.js';
 import { mailText, type MailDocument } from '../../../invoices/documents.js';
 import type { MailMessage } from '../../../invoices/mail.js';
 import type { MailStatus } from '../../../types/api-error.js';
-import { cancel, creditNote, newDraftFor, saveCustomer, saveDraft, send, sendReminder } from './actions.js';
+import { cancel, cancelDocument, creditNote, newDraftFor, saveCustomer, saveDraft, send, sendReminder } from './actions.js';
 import { COUNTRIES, addressRule, countryName, countryOf, languageFor, numberFirst, vatRule } from './address.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 import { BulkDialogs } from './bulk.js';
+import { ConvertDialog, WarnDialog } from './convert.js';
 import { Frame, close } from './frame.js';
 import { AllocateDialog, HandPaymentDialog, WriteOffDialog } from './money-dialogs.js';
 import { AccountsDialog, BackToDraftDialog } from './revise-dialogs.js';
@@ -42,9 +43,11 @@ export function Dialogs(props: Props) {
   if (s.dialog.kind === 'bulk-send') return <BulkDialogs d={d} nav={props.nav} ids={s.dialog.ids} kind="bulk-send" />;
   const inv = byRouteId(d.invoices, props.route.view === 'customers' || props.route.view === 'sent' ? undefined : props.route.id);
   switch (s.dialog.kind) {
-    case 'new': return <NewInvoice {...props} customers={d.customers} />;
+    case 'new': return <NewInvoice {...props} customers={d.customers} doc={s.dialog.doc ?? 'invoice'} />;
+    case 'convert': return inv?.status === 'issued' ? <ConvertDialog {...props} inv={inv} to={s.dialog.to} invoices={d.invoices} /> : null;
+    case 'warn': return <WarnDialog title={s.dialog.title} text={s.dialog.text} anyway={s.dialog.anyway} run={s.dialog.run} />;
     case 'customer': return <CustomerDialog {...props} customer={d.customers.find((c) => c.id === (s.dialog as { id?: string }).id)} />;
-    case 'cancel': return inv?.status === 'issued' ? <CancelDialog {...props} inv={inv} /> : null;
+    case 'cancel': return inv?.status === 'issued' ? (isBooked(inv) ? <CancelDialog {...props} inv={inv} /> : <CancelPlainDialog {...props} inv={inv} />) : null;
     case 'credit': return inv?.status === 'issued' ? <CreditDialog {...props} inv={inv} invoices={d.invoices} /> : null;
     case 'send': return inv?.status === 'issued' ? <SendDialog {...props} inv={inv} reminder={s.dialog.reminder} issued={s.dialog.issued} /> : null;
     case 'handPayment': return inv?.status === 'issued' ? <HandPaymentDialog {...props} inv={inv} invoices={d.invoices} /> : null;
@@ -56,18 +59,34 @@ export function Dialogs(props: Props) {
   }
 }
 
-function NewInvoice({ customers, nav }: Props & { customers: Customer[] }) {
+/** The «＋» of Lieferscheine: a Lieferschein comes only from an Auftrag (decision 21), so it says so and leads there. */
+function DeliveryFromOrder({ nav }: Props) {
+  return (
+    <Frame label={t('sales.newTitle.delivery-note')} title={t('sales.deliveryFromOrder')} foot={<>
+      <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button>
+      <button type="button" className="btn primary" autoFocus data-act="to-orders" onClick={() => { close(); nav.go({ route: { area: 'invoices', view: 'orders' }, query: {} }); }}>{t('sales.toOrders')}</button>
+    </>}>
+      <div className="ibody"><p className="m">{t('sales.deliveryFromOrderText')}</p></div>
+    </Frame>
+  );
+}
+
+function NewInvoice(props: Props & { customers: Customer[]; doc: DocumentKind }) {
+  return props.doc === 'delivery-note' ? <DeliveryFromOrder {...props} /> : <PickCustomer {...props} />;
+}
+
+function PickCustomer({ customers, nav, doc }: Props & { customers: Customer[]; doc: DocumentKind }) {
   const [q, setQ] = useState('');
   const [at, setAt] = useState(0);
   const list = useMemo(() => [...customers].sort((a, b) => a.name.localeCompare(b.name)).filter((c) => !q || `${c.name} ${c.address.town}`.toLowerCase().includes(q.toLowerCase())), [customers, q]);
   const pick = (k: number) => {
     const c = list[k];
-    if (!c) { setUi({ dialog: { kind: 'customer', then: 'invoice', ...(q.trim() && { name: q.trim() }) } }); return; }
+    if (!c) { setUi({ dialog: { kind: 'customer', then: doc === 'invoice' ? 'invoice' : { kind: doc }, ...(q.trim() && { name: q.trim() }) } }); return; }
     close();
-    void newDraftFor(nav, c);
+    void newDraftFor(nav, c, doc);
   };
   return (
-    <Frame label={t('invoices.new')} title={t('invoices.forWhom')}>
+    <Frame label={t(`sales.newTitle.${doc}` as 'sales.newTitle.invoice')} title={t('invoices.forWhom')}>
       <input className="isearch" autoFocus placeholder={t('invoices.searchCustomer')} aria-label={t('invoices.searchCustomer')} value={q}
         onChange={(e) => { setQ(e.target.value); setAt(0); }}
         onKeyDown={(e) => {
@@ -163,6 +182,7 @@ function CustomerDialog({ customer, nav }: Props & { customer?: Customer }) {
       nav.toast(t('customer.saved', { name: saved.name }), () => { void saveCustomer(nav, before.id, was); });
       return;
     }
+    if (then && typeof then === 'object' && 'kind' in then) { void newDraftFor(nav, saved, then.kind); return; }
     if (then && typeof then === 'object') {
       const draft = invoicesNow()?.invoices.find((i) => i.id === then.draft);
       if (draft?.status === 'draft') void saveDraft(nav, draft, customerChange(draft, saved));
@@ -321,6 +341,25 @@ function CancelDialog({ inv, nav }: Props & { inv: Issued }) {
         <label className="lkr"><span /><span className="iin"><input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} /> {t('invoices.cancelNotify')}</span></label>
         {notify && <MailFields mail={mail} value={m ?? mail.defaults} onChange={setM} nav={nav} />}
         <p className="m ivhint">{t('invoices.cancelHint', { number: inv.number })}</p>
+      </div>
+    </Frame>
+  );
+}
+
+/** Storno of an Auftrag or Lieferschein: date and reason; nothing is booked, no notice goes out. */
+function CancelPlainDialog({ inv, nav }: Props & { inv: Issued }) {
+  const [reason, setReason] = useState('');
+  const [date, setDate] = useState(localToday());
+  const run = () => cancelDocument(nav, inv, { date, reason });
+  return (
+    <Frame label={t('sales.cancelTitle', { number: inv.number })} title={inv.customer.name} foot={<>
+      <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button>
+      <AsyncButton type="button" className="btn primary danger" data-act="cancel-ok" onClick={() => run()}>{t('invoices.cancel')}</AsyncButton>
+    </>}>
+      <div className="ibody lkf">
+        <label className="lkr"><span>{t('invoices.reason')}</span><input autoFocus value={reason} placeholder={t('invoices.cancelReasonPh')} onChange={(e) => setReason(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') void run(); }} /></label>
+        <label className="lkr"><span>{t('invoices.date')}</span><span className="iin"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></span></label>
+        <p className="m ivhint">{t('sales.cancelPlainHint')}</p>
       </div>
     </Frame>
   );

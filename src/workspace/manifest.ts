@@ -10,10 +10,11 @@ import { MANUAL_BANK, MONEY_ROLES, STATEMENT_KINDS, bankKind, parseIban, type Mo
 import { BUSINESS_PROFILES, LEGAL_FORMS, PRESET_NAMES, QUESTIONS, VAT_QUESTIONS, kindsOf, optionOf, type BusinessProfile, type GoodsKind, type LegalForm, type Preset, type SalesKind } from './setup.js';
 import { parseVatSetup } from './vat-setup.js';
 import {
-  DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, INVOICE_CURRENCIES, INVOICE_FONTS, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, MAIL_SECURITY, NET_TERMS, OWN_TEXTS, PRICES,
-  type Address, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type MailSecurity, type OutgoingMail, type PaymentTerms, type Prices, type UnitDef,
+  DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, DOCUMENT_KINDS, INVOICE_CURRENCIES, INVOICE_FONTS, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, MAIL_SECURITY, NET_TERMS, OWN_TEXTS, PRICES,
+  type Address, type DocumentKind, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type MailSecurity, type OutgoingMail, type PaymentTerms, type Prices, type UnitDef,
 } from '../invoices/model.js';
-import { isQrIban } from '../providers/qr-bill/reference.js';
+import { isQrIban, referenceTooLong } from '../providers/qr-bill/reference.js';
+import { DEFAULT_NUMBERING, checkNumbering, type Numbering } from './numbering.js';
 import { readDimensions, type Dimension } from '../books/tags.js';
 
 const PROFILE_KEYS = Object.keys(QUESTIONS).filter((k) => k !== 'legalForm' && !(VAT_QUESTIONS as readonly string[]).includes(k)) as ProfileKey[];
@@ -211,6 +212,7 @@ function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: 
     texts,
     units: readUnits(raw.units, fail),
     prices: readPrices(raw.prices, fail),
+    numbering: readNumbering(raw.numbering, fail),
     paymentTerms: terms,
     ...(raw.defaultTerms === undefined ? {} : { defaultTerms: String(raw.defaultTerms) }),
     ...(isMap(wo) ? { writeOffAccount: { skonto: account(wo.skonto, 'invoicing.writeOffAccount.skonto'), loss: account(wo.loss, 'invoicing.writeOffAccount.loss') } } : {}),
@@ -241,13 +243,34 @@ function readUnits(raw: unknown, fail: (msg: string) => never): UnitDef[] {
 
 /** Net or gross prices per kind of document; absent: net for each. */
 function readPrices(raw: unknown, fail: (msg: string) => never): InvoicingSettings['prices'] {
-  const out: InvoicingSettings['prices'] = { invoice: 'net', 'credit-note': 'net' };
+  const out = Object.fromEntries(DOCUMENT_KINDS.map((k) => [k, 'net'])) as InvoicingSettings['prices'];
   if (raw === undefined) return out;
-  if (!isMap(raw)) return fail('invoicing.prices must map a kind (invoice, credit-note) to net or gross');
+  if (!isMap(raw)) return fail(`invoicing.prices must map a kind (${DOCUMENT_KINDS.join(', ')}) to net or gross`);
   for (const [kind, v] of Object.entries(raw)) {
-    if (!(kind in out) || !PRICES.includes(v as Prices)) fail(`invoicing.prices.${kind}: a kind (invoice, credit-note), ${PRICES.join(' or ')}`);
+    if (!(kind in out) || !PRICES.includes(v as Prices)) fail(`invoicing.prices.${kind}: a kind (${DOCUMENT_KINDS.join(', ')}), ${PRICES.join(' or ')}`);
     out[kind as keyof typeof out] = v as Prices;
   }
+  return out;
+}
+
+/**
+ * The number series per kind (docs/specs/invoicing.md 4.4.4): `{ format, restartYearly }` per kind;
+ * a kind the file names not takes the new firm's default (DEFAULT_NUMBERING). A format a payment
+ * reference cannot hold, or a restart without the year, is refused (src/invoices/numbering.ts checkNumbering).
+ */
+function readNumbering(raw: unknown, fail: (msg: string) => never): Numbering {
+  const out: Numbering = { ...DEFAULT_NUMBERING };
+  if (raw === undefined) return out;
+  if (!isMap(raw)) return fail(`invoicing.numbering must map a kind (${DOCUMENT_KINDS.join(', ')}) to { format, restartYearly }`);
+  for (const [kind, v] of Object.entries(raw)) {
+    const where = `invoicing.numbering.${kind}`;
+    if (!DOCUMENT_KINDS.includes(kind as DocumentKind)) fail(`${where}: a kind (${DOCUMENT_KINDS.join(', ')})`);
+    if (!isMap(v) || typeof v.format !== 'string' || (v.restartYearly !== undefined && typeof v.restartYearly !== 'boolean')) fail(`${where} must be { format, restartYearly }`);
+    const m = v as Record<string, unknown>;
+    out[kind as DocumentKind] = { format: m.format as string, restartYearly: m.restartYearly !== false };
+  }
+  const bad = checkNumbering(out, referenceTooLong);
+  if (bad) fail(`invoicing.numbering.${bad.kind}: "${out[bad.kind].format}" cannot be taken (${bad.refusal})`);
   return out;
 }
 

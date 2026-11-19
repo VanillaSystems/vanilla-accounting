@@ -9,6 +9,7 @@ import { localToday } from '../../../accounting/periods.js';
 import type { Issued } from '../../../invoices/model.js';
 import { csvOf } from '../../../invoices/lists.js';
 import { reminderDraft } from '../../../invoices/rules.js';
+import { CONVERSIONS } from '../../../invoices/chain.js';
 import type { RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
 import { Menu, type MenuItem } from '../../shell/Menu.js';
@@ -23,7 +24,7 @@ import { byRouteId } from './model.js';
 import { copyAsDraft, invoiceAt, saveText } from './actions.js';
 import { listed, setUi, toggleTick, useUi } from './state.js';
 import {
-  PAGE_SIZE, docRows, factsOf, inTab, kindOfView, sortRows, sumsOf, tabCounts, tabOf,
+  PAGE_SIZE, docRows, factsOf, groupOf, inTab, kindOfView, sortRows, sumsOf, tabCounts, tabOf,
   type DocKind, type DocRow, type DocView, type SortKey, type Sum, type Tab,
 } from './table.js';
 import { SentCell, channelText, rowTab } from './Sent.js';
@@ -37,7 +38,7 @@ const money = (r: DocRow, n: number) => (r.inv.currency !== baseCurrency() ? <><
 
 /** The status with the sent mark: «Offen · gesendet», «Überfällig · 12 Tage · nicht gesendet», «Entwurf». */
 export function statusText(r: DocRow, kind: DocKind): string {
-  const base = r.overdue > 0 ? t('sales.status.overdueDays', { n: r.overdue }) : t(`sales.status.${kind === 'invoice' ? 'invoice' : 'credit'}.${r.status}` as 'sales.status.invoice.open');
+  const base = r.overdue > 0 ? t('sales.status.overdueDays', { n: r.overdue }) : t(`sales.status.${groupOf(kind)}.${r.status}` as 'sales.status.invoice.open');
   if (r.inv.status !== 'issued') return base;
   // A cancelled document waits for nothing: it reads «gesendet» when it went out, never «nicht gesendet».
   if (r.status === 'cancelled' && !r.sent.sent) return base;
@@ -59,6 +60,23 @@ function columns(kind: DocKind, go: (loc: ReturnType<typeof invoiceAt>) => void)
     csv: (r) => (r.sent.last ? `${formatDate(r.sent.last.sentAt.slice(0, 10))} ${channelText(r.sent.last)}` : ''),
   };
   const gross: Column = { key: 'gross', label: t('sales.col.gross'), num: true, cell: (r) => money(r, r.gross), csv: (r) => r.gross };
+  const share = (key: 'delivered' | 'invoiced'): Column => ({
+    key, label: t(`sales.col.${key}`), num: true,
+    cell: (r) => (r[key] === undefined ? '–' : <span className={r[key]! >= 1 ? 'full' : ''}>{Math.round(r[key]! * 100)} %</span>), csv: (r) => (r[key] === undefined ? '' : `${Math.round(r[key]! * 100)} %`),
+  });
+  if (kind === 'quote') {
+    const until: Column = { key: 'validUntil', label: t('sales.col.validUntil'), cell: (r) => (r.inv.validUntil ? <span className={`mono${r.status === 'expired' ? ' late' : ''}`}>{formatDate(r.inv.validUntil)}</span> : '–'), csv: (r) => (r.inv.validUntil ? formatDate(r.inv.validUntil) : '') };
+    return [date, number, contact, status, sent, until, gross];
+  }
+  if (kind === 'sales-order') return [date, number, contact, status, share('delivered'), share('invoiced'), gross];
+  if (kind === 'delivery-note') {
+    const order: Column = {
+      key: 'order', label: t('sales.col.order'),
+      cell: (r) => (r.target ? <a className="golink mono" href={hrefOf(invoiceAt(r.target))} onClick={(e) => { e.stopPropagation(); if (e.metaKey || e.ctrlKey) return; e.preventDefault(); go(invoiceAt(r.target!)); }}>{r.target.number}</a> : '–'),
+      csv: (r) => r.target?.number ?? '',
+    };
+    return [date, number, contact, order, status, sent];
+  }
   if (kind === 'credit-note') {
     const invoice: Column = {
       key: 'invoice', label: t('sales.col.invoice'),
@@ -143,8 +161,8 @@ export function DocTable(props: Props & { d: InvoiceList; view: DocView }) {
       )}
       {shown.length === 0 ? (
         <div className="empty">
-          <h2>{query.q ? t('invoices.nothingFound') : t(kind === 'invoice' ? 'invoices.none' : 'sales.noCredits', { period: periodName(period) })}</h2>
-          <p>{query.q ? t('invoices.nothingFoundText', { q: query.q }) : t(kind === 'invoice' ? 'invoices.noneText' : 'sales.noCreditsText')}</p>
+          <h2>{query.q ? t('invoices.nothingFound') : t(kind === 'invoice' ? 'invoices.none' : kind === 'credit-note' ? 'sales.noCredits' : `sales.none.${groupOf(kind)}` as 'sales.noCredits', { period: periodName(period) })}</h2>
+          <p>{query.q ? t('invoices.nothingFoundText', { q: query.q }) : t(kind === 'invoice' ? 'invoices.noneText' : kind === 'credit-note' ? 'sales.noCreditsText' : `sales.noneText.${groupOf(kind)}` as 'sales.noCreditsText')}</p>
         </div>
       ) : (
         <div className="ivscroll">
@@ -212,9 +230,9 @@ function Tabs({ nav, kind, tab, rows }: Props & { kind: DocKind; tab: Tab; rows:
       {counts.map((c) => (
         <button key={c.tab} type="button" role="tab" aria-selected={tab === c.tab} className={`${tab === c.tab ? 'on' : ''}${c.tab === 'unsent' ? ' apart' : ''}`} data-status={c.tab}
           onClick={() => nav.setQuery({ status: c.tab === 'all' ? undefined : c.tab })}>
-          <span className="l">{t(`sales.tab.${kind === 'invoice' ? 'invoice' : 'credit'}.${c.tab}` as 'sales.tab.invoice.all')}</span>
+          <span className="l">{t(`sales.tab.${groupOf(kind)}.${c.tab}` as 'sales.tab.invoice.all')}</span>
           <span className="n mono">{c.n}</span>
-          {c.n > 0 && <small className="mono">{sumText(c.sums, 'gross')}</small>}
+          {c.n > 0 && kind !== 'delivery-note' && <small className="mono">{sumText(c.sums, 'gross')}</small>}
         </button>
       ))}
     </div>
@@ -223,6 +241,16 @@ function Tabs({ nav, kind, tab, rows }: Props & { kind: DocKind; tab: Tab; rows:
 
 /** One line of facts above the table: what is open and what of it is overdue, per currency. */
 function FactLine({ rows, kind, onExport }: { rows: DocRow[]; kind: DocKind; onExport(): void }) {
+  // An Angebot, Auftrag or Lieferschein asks for no money: the line names what waits, by count.
+  if (kind !== 'invoice' && kind !== 'credit-note') {
+    const waiting = rows.filter((r) => r.status === 'open' || r.status === 'partly').length;
+    return (
+      <p className="ivfacts" data-testid="facts-line">
+        <span>{kind === 'delivery-note' ? t('sales.facts.deliveries', { n: rows.filter((r) => r.status === 'done').length }) : t(`sales.facts.waiting.${groupOf(kind)}` as 'sales.facts.waiting.quote', { n: waiting })}</span>
+        <button type="button" className="quiet2" data-act="csv" onClick={onExport}>{t('sales.exportCsv')}</button>
+      </p>
+    );
+  }
   const facts = factsOf(rows);
   const open = facts.map((f) => `${f.currency} ${fmt(f.open)}`).join(' + ');
   const overdue = facts.filter((f) => f.overdue > 0).map((f) => `${f.currency} ${fmt(f.overdue)}`).join(' + ');
@@ -244,7 +272,9 @@ function RowMenu({ r, at, view, nav, canEdit, d, onClose }: Props & { d: Invoice
     items.push({ label: t('sales.bulk.pdf'), run: () => { const a = Object.assign(document.createElement('a'), { href: sources.invoicePdf(inv.number), download: `${inv.number}.pdf` }); document.body.append(a); a.click(); a.remove(); } });
     if (canEdit && !inv.cancelled) items.push({ label: r.sent.sent ? t('invoices.resend') : t('invoices.send'), run: () => { go(); setUi({ dialog: { kind: 'send' } }); } });
     if (canEdit && inv.kind === 'invoice' && !inv.cancelled && r.open > 0) items.push({ label: t('invoices.remind', { level: reminderDraft(inv, d.invoices, localToday()).level }), run: () => { go(); setUi({ reminder: { invoiceId: inv.id }, preview: false, dialog: null }); } });
-    if (canEdit && inv.kind === 'invoice') items.push({ label: t('invoices.copy'), run: () => { void copyAsDraft(nav, inv as Issued); } });
+    if (canEdit && !inv.cancelled) for (const to of CONVERSIONS[inv.kind] ?? []) items.push({ label: t(`sales.convert.${to}` as 'sales.convert.invoice'), run: () => { go(); setUi({ dialog: { kind: 'convert', to } }); } });
+    // A Lieferschein comes only from an Auftrag: it is not copied into a draft of its own.
+    if (canEdit && inv.kind !== 'credit-note' && inv.kind !== 'delivery-note') items.push({ label: t('invoices.copy'), run: () => { void copyAsDraft(nav, inv as Issued); } });
   }
   return (
     // The menu keeps its keys: ↑ ↓ move in it, not through the table's rows; Esc closes it, not the panel.

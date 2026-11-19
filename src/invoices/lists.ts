@@ -6,7 +6,8 @@
  */
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import type { Invoice, Issued, SentDocument, SentKind } from './model.js';
-import { creditBeyond, openOn, paidAmount, refundDue, status, totals } from './rules.js';
+import { creditBeyond, creditable, openOn, paidAmount, refundDue, status, totals } from './rules.js';
+import { accepted, madeFrom, positions } from './chain.js';
 import { baseCurrency } from '../engines/index.js';
 
 // ─── the sent log ────────────────────────────────────────────────────────────
@@ -17,7 +18,7 @@ export type Channel = 'email' | 'download';
 export const channelOf = (doc: Pick<SentDocument, 'channel' | 'to'>): Channel => doc.channel ?? (doc.to === 'download' ? 'download' : 'email');
 
 /** The kinds that are the document itself going out (not a reminder or a notice about it). */
-const OWN_KINDS: readonly SentKind[] = ['invoice', 'credit-note', 'resend'];
+const OWN_KINDS: readonly SentKind[] = ['invoice', 'credit-note', 'resend', 'quote', 'sales-order', 'delivery-note'];
 
 /** Every entry of the sent log for a document, its reminders and notices included, oldest first. */
 export const sendsOf = (sent: readonly SentDocument[], inv: Pick<Invoice, 'id'>): SentDocument[] =>
@@ -99,6 +100,56 @@ export function creditNoteStatus(cn: Invoice, invoices: readonly Invoice[]): Cre
   return applied || paidAmount(cn) > 0 ? 'partly' : 'open';
 }
 
+/** An Angebot's status (4.4.2): Angenommen and Abgelehnt are the two of the customer, the person's click; Abgelaufen is derived. */
+export type QuoteListStatus = 'draft' | 'open' | 'accepted' | 'declined' | 'expired';
+
+/**
+ * The one place an Angebot's status is decided: Angenommen by the person's click or as a fact (an
+ * Auftrag or Rechnung made from it, which wins over a decline: «Trotzdem erstellen» made it); Abgelehnt
+ * by her click; Abgelaufen once `validUntil` passed while it was open; else Offen.
+ */
+export function quoteStatus(q: Invoice, docs: readonly Invoice[], today: string): QuoteListStatus {
+  if (q.status === 'draft') return 'draft';
+  if (accepted(q, docs)) return 'accepted';
+  if (q.declined) return 'declined';
+  return q.validUntil && q.validUntil < today ? 'expired' : 'open';
+}
+
+/** An Auftrag's status (4.4.2). */
+export type OrderListStatus = 'draft' | 'open' | 'partly' | 'done' | 'cancelled';
+
+/**
+ * The one place an Auftrag's status is decided, from the documents made from it: Erledigt once every
+ * position (options left out) is invoiced in full and, where a Lieferschein exists, delivered in full;
+ * Teilweise once something of it is delivered or invoiced; else Offen. Storniert with its Storno.
+ */
+export function orderStatus(o: Invoice, docs: readonly Invoice[]): OrderListStatus {
+  if (o.status === 'draft') return 'draft';
+  if (o.cancelled) return 'cancelled';
+  const ps = positions(o, docs).filter((p) => !p.item.optional);
+  const delivers = ps.some((p) => p.delivered > 0);
+  if (ps.length && ps.every((p) => p.invoiced >= p.item.quantity && (!delivers || p.delivered >= p.item.quantity))) return 'done';
+  return ps.some((p) => p.delivered > 0 || p.invoiced > 0) ? 'partly' : 'open';
+}
+
+/** A Lieferschein's status (4.4.2): issued is ausgeführt. */
+export type DeliveryListStatus = 'draft' | 'done' | 'cancelled';
+export const deliveryStatus = (n: Invoice): DeliveryListStatus => (n.status === 'draft' ? 'draft' : n.cancelled ? 'cancelled' : 'done');
+
+/**
+ * Whether an Auftrag may be cancelled (4.4.2): refused while an issued Rechnung of it stands, not
+ * cancelled and not credited in full (the claim stays; a Gutschrift or the Rechnung's Storno first), a warning while a Lieferschein does
+ * (`orderDelivered`, «Trotzdem stornieren»). Undefined: nothing in the way.
+ */
+export function orderCancelBlock(o: Invoice, docs: readonly Invoice[]): { code: 'orderInvoiced' | 'orderDelivered'; numbers: string[] } | undefined {
+  const made = madeFrom(o, docs).filter((d): d is Issued => d.status === 'issued' && !d.cancelled);
+  // A Rechnung credited in full (or cancelled) claims nothing any more: it no longer holds the Auftrag.
+  const invoices = made.filter((d) => d.kind === 'invoice' && creditable(d, docs) > 0).map((d) => d.number);
+  if (invoices.length) return { code: 'orderInvoiced', numbers: invoices };
+  const notes = made.filter((d) => d.kind === 'delivery-note').map((d) => d.number);
+  return notes.length ? { code: 'orderDelivered', numbers: notes } : undefined;
+}
+
 // ─── the status tabs ─────────────────────────────────────────────────────────
 
 /** The tabs of Rechnungen beside «Alle», in their order, and «Nicht gesendet» after them. */
@@ -107,6 +158,10 @@ export type InvoiceTab = (typeof INVOICE_TABS)[number];
 /** The tabs of Gutschriften beside «Alle» (Storniert counts what a total leaves out), and «Nicht gesendet». */
 export const CREDIT_TABS = ['draft', 'open', 'partly', 'settled', 'cancelled', 'unsent'] as const;
 export type CreditTab = (typeof CREDIT_TABS)[number];
+/** The tabs of Angebote, Aufträge and Lieferscheine beside «Alle» (spec 4.8), and «Nicht gesendet». */
+export const QUOTE_TABS = ['draft', 'open', 'accepted', 'declined', 'expired', 'unsent'] as const;
+export const ORDER_TABS = ['draft', 'open', 'partly', 'done', 'cancelled', 'unsent'] as const;
+export const DELIVERY_TABS = ['draft', 'done', 'cancelled', 'unsent'] as const;
 
 /** Issued, not cancelled, and never sent itself: what «Nicht gesendet» holds. */
 export const unsent = (inv: Invoice, sent: readonly SentDocument[]): boolean => inv.status === 'issued' && !inv.cancelled && !wasSent(sent, inv);

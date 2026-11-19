@@ -10,7 +10,7 @@
  * one row with its amount.
  */
 import type { Index, JournalEntry, Receipt } from '../types/index.js';
-import type { Invoice, Issued } from '../invoices/model.js';
+import { isBooked, type Invoice, type Issued } from '../invoices/model.js';
 import { chfAmount } from '../accounting/ledger.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import type { Period } from '../accounting/periods.js';
@@ -154,7 +154,8 @@ function receiptRows(s: ReportSection, books: Index, period: Period): ReportRow[
 
 function invoiceRows(s: ReportSection, invoices: readonly Invoice[], period: Period): ReportRow[] {
   const f = s.filter;
-  return invoices.filter((i): i is Issued => i.status === 'issued' && !i.deleted && !i.cancelled && inside(period, i.date)).flatMap((i): ReportRow[] => {
+  // What was invoiced: a Rechnung or Gutschrift; an Angebot, Auftrag or Lieferschein claims nothing.
+  return invoices.filter((i): i is Issued => i.status === 'issued' && !i.deleted && !i.cancelled && isBooked(i) && inside(period, i.date)).flatMap((i): ReportRow[] => {
     if (f.currencies && !f.currencies.includes(i.currency)) return [];
     const text = [i.number, i.customer.name, i.subject].filter(Boolean).join(' · ');
     if (!textMatches(f, text)) return [];

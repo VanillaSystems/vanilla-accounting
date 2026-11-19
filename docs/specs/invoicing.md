@@ -1286,6 +1286,103 @@ listed here and updated with phase 2's build:
     The PDF of a cancelled invoice, filed as its payment's receipt, is a receipt without a payment
     of its own (`noPaymentFor`): no pairing path (chain, near pairs, proposals, the intake's match)
     ties it to the payment again after «Trotzdem stornieren».
+58. **Phase 2, one record shape (slice F1).** Angebot, Auftrag and Lieferschein are records of
+    `invoices.json` like a Rechnung (`kind` `quote`, `sales-order`, `delivery-note`), on the same sheet
+    and editor. `liveInvoices` holds only the kinds that are booked (Rechnung, Gutschrift), so payment
+    matching, VAT events, Offene Posten, the year end's receivables and the reports never see the other
+    three; `liveDocuments` holds every kind. A payment naming an Angebot's number names no claim.
+59. **No payment part outside the Rechnung.** An Angebot, Auftrag (also as Proformarechnung) and
+    Lieferschein carry no QR-bill and no payment reference (`reference` is empty) and need no account
+    to pay to before issue. A prepayment asked for with a Proformarechnung is paid against the Rechnung
+    made from the Auftrag.
+60. **Pro forma is chosen on the draft.** `printAs` of an Auftrag picks the title (Auftragsbestätigung
+    or Proformarechnung) and its texts; the issued PDF keeps what it printed (never printed again). It
+    carries the Auftrag's own number (AU-…), never one of the invoice series.
+61. **Number formats.** A format is letters, digits, `-` and `_`, at most one `{JJJJ}` (the document's
+    year) and exactly one `{N…}` (the counter, as many digits as N's, 1 to 9; it grows past them). A
+    slash or space is refused (`syntax`): it would break a link, a file name and a ref. A yearly
+    restart needs `{JJJJ}` (`restartYearly` without it gives a number twice). Kinds with the same
+    format share one counter, and must then restart alike (`sharedRestart`). The next number is one
+    more than the highest of the series (cancelled ones count); a number some other document holds
+    (a format changed back and forth) is passed over. Absent in the manifest: the defaults
+    AN-/AU-/LS-/RE-/GS-`{JJJJ}-{NNNNN}`; the manifest step 5 → 6 writes `{JJJJ}-{NNN}` for invoices and
+    credit notes into every manifest with an `invoicing:` section, so an existing workspace numbers on
+    (the demo's generator writes the same line). The grammar is core (`src/workspace/numbering.ts`),
+    the reference check the provider's (`src/providers/qr-bill/reference.ts` `formatFits`).
+62. **QR reference of a number with letters.** QRR holds digits only: a letter of the number counts
+    as two digits (A = 10 … Z = 35, as ISO 7064 reads it), so RE-2026-00001 and GS-2026-00001 get
+    references of their own. A number without letters keeps its reference exactly (2026-007 as before). A format is refused (`numberFormat`, `tooLongQrr` or `tooLongScor`) when its widest
+    number at its digit count exceeds QRR's 26 digits or SCOR's 21 characters; only the kinds with a
+    reference are checked. If a counter grows past its digits so that a reference no longer fits,
+    issuing refuses with `numberFormat`.
+63. **Booking refs of the new numbers.** A number that begins with a letter is its own ref
+    (`docRef`: RE-2026-00001, its Storno RE-2026-00001-storno, a write-off RE-2026-00001-wo-1), never
+    «RE-RE-…»; a number that begins with a digit keeps `RE-`/`GS-` before it, as before. Refs are
+    only compared, never parsed. Should a format make a number whose ref another document holds (a
+    switch from `{JJJJ}-{NNN}` to `RE-{JJJJ}-{NNN}` in the same year), issuing is refused (`refTaken`,
+    a hard rule: two documents with one ref would break the books). `namesNumber` stays as it was: a
+    text «RE-2026-001» names 2026-001 too, and `namedInvoice` takes a payment by number only when
+    exactly one document is named. Receipt file names (`<date>-rechnung-<number>.pdf`) and links
+    (`/invoices/<number>`) carry the allowed characters as they are.
+64. **Open quantities.** A converted position keeps `ofLine`, the index of the source's position.
+    What an Auftrag delivered and invoiced of a position is the sum of the issued, uncancelled
+    Lieferscheine and Rechnungen made from it (drafts do not count); a Gutschrift of such a Rechnung
+    takes back the quantities of its positions that carry `ofLine` (a Gutschrift of the whole Rechnung
+    copies them), while a Gutschrift by amount is a price reduction and leaves the quantities. An
+    Angebot is taken once: what its Aufträge and Rechnungen took together. An Angebot or Auftrag back
+    to draft is edited freely; a position moved then names the index it had.
+65. **Statuses (4.4.2).** An Angebot is Angenommen by the click or as a fact (an Auftrag or Rechnung
+    made from it, a draft included), which wins over Abgelehnt, since «Trotzdem erstellen» made it;
+    the click Abgelehnt is not offered once something was made from it. An Auftrag is Erledigt when
+    every position (options left out) is invoiced in full and, where any Lieferschein delivered
+    something, delivered in full; Teilweise once something is delivered or invoiced. A Lieferschein is
+    Ausgeführt when issued. The columns «geliefert» and «verrechnet» show the share of the Auftrag's
+    value done (each position at most its quantity, weighted by its amount).
+66. **Conversions.** Allowed: Angebot → Auftrag or Rechnung, Auftrag → Lieferschein or Rechnung; the
+    source must be issued and not cancelled. Texts, Zwischentotale, Rabatte and page breaks stay
+    where they stood (a Rabatt by amount too: the person sees it on the draft); a trailing page break
+    goes. A Lieferschein keeps the prices, unprinted. The request names the warnings the person
+    overrode (`confirm: ['expired', 'overOpen']`); each refusal names its facts (`params`). Nothing
+    ticked is refused (`nothingTicked`) and makes no draft. The draft takes the customer, currency,
+    language, prices, exemption, subject and the customer's order reference (`ordered`); a Rechnung its
+    terms; `from` names the source. Conversions write only `invoices.json`, never the books.
+67. **Back to draft (Angebot, Auftrag).** The one route of «Zurück zum Entwurf», `POST
+    /api/invoices/:id/draft`, takes an Angebot or Auftrag too (F2's rules hold for Rechnung and
+    Gutschrift). Refused for a cancelled one and for one something was made from. The draft keeps its
+    number in `Draft.number` (decision 45) and is issued under it again. Unlike a Rechnung's, it may
+    have been sent: after a send it warns (`sentVersion`, date and recipient) until «Trotzdem
+    bearbeiten», and its PDF is not renamed, since the sent log names that file; the new PDF takes
+    `<number>-2.pdf`, so the version sent stays byte-exact in the log. It books nothing.
+68. **Storno outside the Rechnung.** An Auftrag and a Lieferschein are cancelled with date and reason,
+    no notice and no booking; an Auftrag is refused while an issued Rechnung of it stands
+    (`orderInvoiced`) and warned while a Lieferschein does (`orderDelivered`, «Trotzdem stornieren»).
+    An Angebot is declined, not cancelled.
+69. **Copy and defaults.** «Als Entwurf kopieren» makes a draft of the same kind with every position
+    (no `from`, no `ofLine`); a Gutschrift's copy stays a Rechnung, as before. A Lieferschein is not
+    copied and not created on its own: it comes only from an Auftrag (decision 21); the API refuses
+    `kind: delivery-note` on a new draft (`deliveryFromOrder`), and the «＋» of Lieferscheine says so and
+    leads to Aufträge. A new Angebot holds 30 days (`validUntil`, changed on the sheet). The «＋» of each
+    other table makes its kind; on Gutschriften a Rechnung, since a Gutschrift comes only from its Rechnung.
+70. **Numbers held by drafts (review of F1, with F2).** A draft back from issue keeps its number in
+    `Draft.number`, one field and one rule for every kind (F2 uses it for Rechnungen): the number stays
+    taken for every series (`nextNumberFor` counts it), the draft is issued again under it, never
+    deleted (`numbered`), and its number's link opens it.
+71. **Only a Rechnung is open money.** `openAmount`, `openOn` and `isOverdue` are 0 and false for every
+    kind but the Rechnung; `status` says nothing more than issued for the others (their statuses are in
+    lists.ts).
+72. **Unique references.** Issuing refuses a number whose payment reference an issued Rechnung or
+    Gutschrift carries (`referenceTaken`: a number with and without its dashes makes one QR reference). Firma › Nummern
+    refuses a format whose next number would meet an issued document's reference or booking ref, a
+    format whose number reads as a link to a draft or a ref of the books (`reserved`: `draft-…`, a
+    manual ref M2026-001, `-storno`, `-wo-<k>`), and a Rechnung's or Gutschrift's series shared with a
+    kind that is not booked (`sharedKinds`).
+73. **Storno of an Auftrag (review of F1).** A Rechnung of it credited in full, or cancelled, no longer
+    holds it. Drafts made from it warn first (`orderDrafts`); after the Storno each warns at its issue
+    (`sourceCancelled`). Every «Trotzdem» names its own warning: the request carries a list of codes, and
+    a code confirms only its warning (`paid` never passes `orderDelivered`). A Rechnung and a Gutschrift
+    need an account to pay to before issue, as before; the other kinds none.
+74. **Formats of phase 2.** `invoices.json` step 3 → 4 (no transform; the contacts slice G1 joins it)
+    and manifest step 5 → 6 (`invoicing.numbering`; `invoicing.prices` takes the new kinds).
 
 ---
 

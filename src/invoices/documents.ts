@@ -7,7 +7,7 @@ import type { Company } from '../workspace/workspace.js';
 import { DEFAULT_LAYOUT, type Customer, type Draft, type Invoice, type InvoiceBook, type InvoiceContent, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type Issued, type Reminder, type Sender } from './model.js';
 import { addDays, openAmount, openFees, paidAmount, skontoOffer, termsFor, totals } from './rules.js';
 import type { SheetData } from './sheet.js';
-import { TEXTS, formatDate } from './texts.js';
+import { TEXTS, formatDate, kindTitle } from './texts.js';
 
 export interface InvoicingContext { company: Company; settings: InvoicingSettings | undefined }
 
@@ -28,9 +28,14 @@ export function senderFor(ctx: InvoicingContext, currency: InvoiceCurrency): Omi
  * `{days}` is the payment term. `salutation`: the greeting line above the intro of an invoice, a
  * setting of its own so a greeting never replaces the intro; none unless the workspace sets one.
  */
-export function defaultTexts(ctx: InvoicingContext, kind: InvoiceContent['kind'], lang: InvoiceLanguage, days: number): { salutation: string; intro: string; closing: string } {
+export function defaultTexts(ctx: InvoicingContext, kind: InvoiceContent['kind'], lang: InvoiceLanguage, days: number, printAs?: InvoiceContent['printAs']): { salutation: string; intro: string; closing: string } {
   const L = TEXTS[lang];
   if (kind === 'credit-note') return { salutation: '', intro: '', closing: L.creditClosing };
+  // An Angebot, Auftrag and Lieferschein speak of themselves; the firm's own texts are those of its invoices.
+  if (kind !== 'invoice') {
+    const which = kind === 'sales-order' && printAs === 'proforma' ? 'proforma' : kind;
+    return { salutation: ctx.settings?.texts[lang]?.salutation ?? '', intro: L.kindIntro[which], closing: L.kindClosing[which] };
+  }
   const own = ctx.settings?.texts[lang];
   return { salutation: own?.salutation ?? '', intro: own?.intro ?? L.intro, closing: (own?.closing ?? L.closing(days)).replaceAll('{days}', String(days)) };
 }
@@ -54,7 +59,7 @@ export type MailDocument = { kind: 'invoice' } | { kind: 'reminder'; level: numb
 export function mailText(settings: InvoicingSettings | undefined, inv: Issued, doc: MailDocument, company: string): { subject: string; body: string } {
   const L = TEXTS[inv.language];
   const own = settings?.texts[inv.language];
-  const what = `${inv.kind === 'credit-note' ? L.credit : L.invoice} ${inv.number}`;
+  const what = `${kindTitle(L, inv.kind, inv.printAs)} ${inv.number}`;
   const document = doc.kind === 'reminder' ? `${L.reminder(doc.level)} · ${what}`
     : doc.kind === 'cancellation' ? L.cancelNotice(inv.number, formatDate(inv.date, inv.language))
     : what;
@@ -77,10 +82,11 @@ function termsOnPaper(inv: Pick<Issued, 'date' | 'terms' | 'lines' | 'prices' | 
 
 export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draft, customer: Customer | undefined, logoSrc?: string): SheetData {
   const terms = draftDays(ctx, draft, customer);
-  const texts = defaultTexts(ctx, draft.kind, draft.language, terms);
+  const texts = defaultTexts(ctx, draft.kind, draft.language, terms, draft.printAs);
   const picked = ctx.settings?.paymentTerms.some((x) => x.id === draft.termsId) ? termsFor(draft, ctx.settings?.paymentTerms, terms) : undefined;
   return {
     kind: draft.kind,
+    ...kindFacts(draft),
     language: draft.language,
     date: draft.date,
     ...(draft.supplied ? { supplied: draft.supplied } : {}),
@@ -102,10 +108,18 @@ export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draf
   };
 }
 
+/** What the paper names of an Angebot or Auftrag: its print variant, its last day, the customer's order reference. */
+const kindFacts = (d: InvoiceContent): Pick<SheetData, 'printAs' | 'validUntil' | 'ordered'> => ({
+  ...(d.kind === 'sales-order' && d.printAs ? { printAs: d.printAs } : {}),
+  ...(d.kind === 'quote' && d.validUntil ? { validUntil: d.validUntil } : {}),
+  ...(d.ordered ? { ordered: d.ordered } : {}),
+});
+
 /** An issued invoice or credit note as it was issued; `cancelled` shows the stamp (the cancellation notice). */
 export function issuedSheet(book: InvoiceBook, inv: Issued, logoSrc?: string): SheetData {
   return {
     kind: inv.kind,
+    ...kindFacts(inv),
     language: inv.language,
     number: inv.number,
     date: inv.date,

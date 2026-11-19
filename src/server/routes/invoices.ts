@@ -10,10 +10,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WS, assertOpen, readBooks, receiptPath, refDates, updateBooksWithEffects, RequestError } from '../books.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
-import { liveCustomers, liveInvoices, type CreditRequest } from '../../invoices/rules.js';
+import { liveCustomers, liveDocuments, liveInvoices, type CreditRequest } from '../../invoices/rules.js';
 import {
-  addComment, backToDraft, cancelInvoice, changeAccounts, createCreditNote, createCustomer, createDraft, draftReminder, fileReceipts, findInvoice, issueInvoice, issuedPdf,
-  missingOf, parseCustomer, parseDraftPatch, paymentContext, previewHtml, recordSend, removeDraft, replacedPdf, sendReminder, sentPdf, updateCustomer, updateDraft, viewOf,
+  addComment, answerQuote, backToDraft, cancelInvoice, changeAccounts, convertDocument, createCreditNote, createCustomer, createDraft, draftReminder, fileReceipts, findInvoice, issueInvoice, issuedPdf,
+  missingOf, parseCustomer, parseDraftPatch, paymentContext, previewHtml, recordSend, removeDraft, reopenDocument, replacedPdf, sendReminder, sentPdf, updateCustomer, updateDraft, viewOf,
 } from '../../invoices/service.js';
 import {
   allocatePayment, allocationProposal, confirmPayment, paymentProposals, recordHandPayment, releasePayment, removeHandPayment, removeWriteOff, writeOffRest,
@@ -60,7 +60,7 @@ const optNumber = (b: Record<string, unknown>, k: string): number | undefined =>
 router.get('/api/invoices', (_req, res) => {
   const book = loadInvoices(WS);
   const day = today();
-  res.json({ today: day, invoices: liveInvoices(book).map((i) => viewOf(book, i, day, WS.invoicing?.shortfallLimit)), customers: liveCustomers(book), sent: book.sent.filter((d) => !d.deleted) });
+  res.json({ today: day, invoices: liveDocuments(book).map((i) => viewOf(book, i, day, WS.invoicing?.shortfallLimit)), customers: liveCustomers(book), sent: book.sent.filter((d) => !d.deleted) });
 });
 
 router.get('/api/invoices/sent', (_req, res) => {
@@ -107,7 +107,7 @@ router.get('/api/customers/:id', (req, res) => {
   const book = loadInvoices(WS);
   const c = liveCustomers(book).find((x) => x.id === req.params.id);
   if (!c) throw new RequestError(404, 'Kunde nicht gefunden.');
-  res.json({ ...c, invoices: liveInvoices(book).filter((i) => i.customerId === c.id).map((i) => viewOf(book, i, today())) });
+  res.json({ ...c, invoices: liveDocuments(book).filter((i) => i.customerId === c.id).map((i) => viewOf(book, i, today())) });
 });
 
 /** A logo an invoice is laid out with: the layout's, or one an issued invoice froze; no other file. */
@@ -174,9 +174,13 @@ function bookEvents(books: Books): EventOutcome | undefined {
   return out;
 }
 
-/** `{ confirm: 'unconfirmed' }`: the person's «Trotzdem ausstellen» over a position without text or amount (spec 4.11). */
+/**
+ * `{ confirm: 'unconfirmed' }`: the person's «Trotzdem ausstellen» over a position without text or amount (spec 4.11);
+ * `sourceCancelled` over a draft whose Auftrag or Angebot was cancelled since. One code or a list; each confirms its own warning.
+ */
 router.post('/api/invoices/:id/issue', async (req, res) => {
-  const issued = await issueInvoice(WS, req.params.id, { confirmed: (req.body as { confirm?: unknown } | undefined)?.confirm === 'unconfirmed' });
+  const confirm = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? confirms(req.body as Record<string, unknown>) : [];
+  const issued = await issueInvoice(WS, req.params.id, { confirmed: confirm.includes('unconfirmed'), confirm });
   if (agreedBasis()) updateBooksWithEffects(bookEvents);
   res.json(issued);
 });
@@ -203,12 +207,13 @@ router.post('/api/invoices/:id/send', async (req, res) => {
  */
 router.post('/api/invoices/:id/cancel', async (req, res) => {
   const b = body(req);
-  const confirmed = b.confirm === 'paid';
+  // «Trotzdem stornieren», each code its own warning: a paid Rechnung (`paid`), an Auftrag with a Lieferschein (`orderDelivered`) or drafts (`orderDrafts`).
+  const confirm = confirms(b);
   const before = liveInvoices(loadInvoices(WS)).find((i): i is Issued => i.id === req.params.id && i.status === 'issued');
-  const paid = confirmed ? before?.payments ?? [] : [];
+  const paid = confirm.includes('paid') ? before?.payments ?? [] : [];
   if (paid.length) assertOpen(readBooks(), paid.map((p) => p.date), 'mapping');
   const cancelled = await cancelInvoice(WS, req.params.id, {
-    date: optText(b, 'date') ?? today(), reason: optText(b, 'reason') ?? '', notify: b.notify === true, to: optText(b, 'to'), confirmed,
+    date: optText(b, 'date') ?? today(), reason: optText(b, 'reason') ?? '', notify: b.notify === true, to: optText(b, 'to'), confirm,
   }, { deliver: delivery(b) });
   const unbooked: string[] = [];
   if (paid.length) {
@@ -224,6 +229,40 @@ router.post('/api/invoices/:id/cancel', async (req, res) => {
   } else if (agreedBasis()) updateBooksWithEffects(bookEvents);
   for (const ref of unbooked) await bookAgain(ref);
   res.json(cancelled);
+});
+
+// ─── phase 2: conversions, the customer's answer, back to draft (invoices.json only, never the books) ───
+
+/** The confirmations a request carries: one code or a list (`confirm: ['expired', 'overOpen']`), each the person's «Trotzdem …». */
+const confirms = (b: Record<string, unknown>): string[] => {
+  const c = b.confirm;
+  if (c === undefined) return [];
+  if (typeof c === 'string') return [c];
+  if (Array.isArray(c) && c.every((x) => typeof x === 'string')) return c as string[];
+  throw new RequestError(400, 'confirm ist ein Code oder eine Liste von Codes.');
+};
+
+/**
+ * «Auftrag erstellen», «Lieferschein erstellen», «Rechnung erstellen» (spec 4.4.1):
+ * `{ to, lines: [{ line, quantity }], confirm? }`. Warns (409, `expired`, `declined`, `overOpen`)
+ * unless `confirm` names the warning; the draft is a draft, so nothing is booked.
+ */
+router.post('/api/invoices/:id/convert', (req, res) => {
+  const b = body(req);
+  if (!Array.isArray(b.lines)) throw new RequestError(400, 'lines: eine Liste { line, quantity }.');
+  const lines = (b.lines as unknown[]).map((x, i) => {
+    const p = (x ?? {}) as Record<string, unknown>;
+    if (!Number.isInteger(p.line) || typeof p.quantity !== 'number' || !Number.isFinite(p.quantity)) throw new RequestError(400, `lines[${i}]: { line, quantity } mit Zahlen.`);
+    return { line: p.line as number, quantity: p.quantity as number };
+  });
+  res.json(convertDocument(WS, req.params.id, { to: String(b.to ?? '') as never, lines, confirm: confirms(b) }));
+});
+
+/** The customer's answer to an Angebot: `{ answer: 'accepted' | 'declined' | null, date? }` (today by default). */
+router.post('/api/invoices/:id/answer', (req, res) => {
+  const b = body(req);
+  if (b.answer !== null && b.answer !== 'accepted' && b.answer !== 'declined') throw new RequestError(400, 'answer ist accepted, declined oder null.');
+  res.json(answerQuote(WS, req.params.id, b.answer as 'accepted' | 'declined' | null, WS.company.owner, optText(b, 'date') ?? today()));
 });
 
 router.post('/api/invoices/:id/credit-note', (req, res) => {
@@ -423,8 +462,16 @@ router.post('/api/invoices/allocation', (req, res) => {
  * off, becomes a draft and keeps its number. A sent one is refused (`sent`, MWSTG Art. 27 Abs. 2): a
  * Gutschrift or a Storno corrects it. Its VAT event (the agreed basis) comes off the books first,
  * refused while it lies in a filed period (403), with the receipt its PDF became.
+ * An Angebot or Auftrag takes the same way and books nothing: once sent it warns (`sentVersion`), and
+ * `confirm: 'sentVersion'` is «Trotzdem bearbeiten»; the version sent stays in the sent log as it went out.
  */
 router.post('/api/invoices/:id/draft', async (req, res) => {
+  const doc = findInvoice(loadInvoices(WS), req.params.id);
+  if (doc && (doc.kind === 'quote' || doc.kind === 'sales-order')) {
+    const b = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? (req.body as Record<string, unknown>) : {};
+    res.json(reopenDocument(WS, req.params.id, confirms(b).includes('sentVersion')));
+    return;
+  }
   const ctx = paymentContext(WS);
   res.json(await backToDraft(WS, req.params.id, {
     books: (inv) => {

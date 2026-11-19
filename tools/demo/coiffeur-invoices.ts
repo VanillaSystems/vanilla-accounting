@@ -13,6 +13,9 @@ export const COIFFEUR_INVOICING: DemoInvoicing = {
     CHF: { account: "1020", qrIban: CH12 3080 8000 0000 0000 4 }
   revenueAccount: "3400"
   paymentTermsDays: 20
+  numbering:
+    invoice: { format: "{JJJJ}-{NNN}", restartYearly: true }
+    credit-note: { format: "{JJJJ}-{NNN}", restartYearly: true }
   texts:
     de: { closing: "Zahlbar innert {days} Tagen. Herzlichen Dank und alles Gute!\\nBella Beispiel" }
 `,

@@ -12,7 +12,7 @@ import { patchManifest } from '../workspace/manifest-write.js';
 import { APP_ROOT, WorkspaceError, type Workspace } from '../workspace/workspace.js';
 import { createCustomer, createDraft, parseCustomer, parseDraftPatch, removeDraft } from '../invoices/service.js';
 import { loadInvoices, updateInvoices } from '../invoices/store.js';
-import { InvoiceRuleError, liveCustomers, liveInvoices } from '../invoices/rules.js';
+import { InvoiceRuleError, liveCustomers, liveDocuments } from '../invoices/rules.js';
 import type { Customer, CustomerFields } from '../invoices/model.js';
 import type { Change, ChangeNote, InvoicingSet, WorkspaceChange } from '../types/assistant.js';
 import { RequestError } from './books.js';
@@ -111,7 +111,7 @@ function dropInvoiceDraft(ws: Workspace, id: string, customer: string | undefine
   if (customer) {
     updateInvoices(ws, (book) => {
       const i = book.customers.findIndex((c) => c.id === customer);
-      if (i >= 0 && !liveInvoices(book).some((inv) => inv.customerId === customer)) book.customers[i] = { ...book.customers[i], deleted: true };
+      if (i >= 0 && !liveDocuments(book).some((inv) => inv.customerId === customer)) book.customers[i] = { ...book.customers[i], deleted: true };
     });
   }
   return {};

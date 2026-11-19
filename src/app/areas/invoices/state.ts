@@ -6,15 +6,23 @@
  */
 import { useSyncExternalStore } from 'react';
 import { store, stored } from '../../shell/storage.js';
-import { DEFAULT_SORT, type Sort } from './table.js';
-import type { WriteOffReason } from '../../../invoices/model.js';
+import { DEFAULT_SORT, DOC_VIEWS, type DocView, type Sort } from './table.js';
+import type { DocumentKind, WriteOffReason } from '../../../invoices/model.js';
 
-export type Section = 'draft' | 'look' | 'customer' | 'money' | 'sent' | 'comments' | 'log';
+export type Section = 'draft' | 'look' | 'chain' | 'customer' | 'money' | 'sent' | 'comments' | 'log';
 
 export type Dialog =
-  | { kind: 'new' }
+  /** Whom a new document is for; `doc`: its kind (absent: a Rechnung). */
+  | { kind: 'new'; doc?: DocumentKind }
+  /** A conversion of the open document into `to` (spec 4.4.1): its positions with the quantities still open. */
+  | { kind: 'convert'; to: DocumentKind }
+  /**
+   * A warning of spec 4.11 the API gave (`code`, its words in `text`): «Trotzdem …» (`anyway`, the
+   * button's words) runs `run` again with the person's confirmation.
+   */
+  | { kind: 'warn'; title: string; text: string; anyway: string; run: () => Promise<unknown> }
   /** The customer form; `then` names what follows a new customer: a draft for it, or the draft being written gets it. */
-  | { kind: 'customer'; id?: string; then?: 'invoice' | { draft: string }; name?: string }
+  | { kind: 'customer'; id?: string; then?: 'invoice' | { draft: string } | { kind: DocumentKind }; name?: string }
   | { kind: 'cancel' }
   /** «Zahlungseingang erfassen» on the open invoice. */
   | { kind: 'handPayment' }
@@ -36,8 +44,8 @@ export type Dialog =
   | { kind: 'bulk-send'; ids: string[] }
   | { kind: 'bulk-pdf'; ids: string[] };
 
-/** The tables that sort: Rechnungen, Gutschriften. */
-export type Sorted = 'list' | 'credit-notes';
+/** The tables that sort: one per kind of document. */
+export type Sorted = DocView;
 
 /** Versendet's filters: a contact (its id), a kind of document, a channel; absent: all. */
 export interface SentFilter { customer?: string; kind?: string; channel?: string }
@@ -66,8 +74,8 @@ let state: State = {
   dialog: null,
   preview: false,
   reminder: null,
-  open: { draft: true, look: false, customer: false, money: true, sent: true, comments: true, log: false, ...read<Partial<Record<Section, boolean>>>('invoices.open', {}) },
-  sort: { list: DEFAULT_SORT, 'credit-notes': DEFAULT_SORT, ...read<Partial<Record<Sorted, Sort>>>('invoices.sort', {}) },
+  open: { draft: true, look: false, chain: true, customer: false, money: true, sent: true, comments: true, log: false, ...read<Partial<Record<Section, boolean>>>('invoices.open', {}) },
+  sort: { ...(Object.fromEntries(DOC_VIEWS.map((v) => [v, DEFAULT_SORT])) as Record<Sorted, Sort>), ...read<Partial<Record<Sorted, Sort>>>('invoices.sort', {}) },
   ticked: new Set(),
   sentFilter: {},
 };

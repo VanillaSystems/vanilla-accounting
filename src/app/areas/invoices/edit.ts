@@ -26,7 +26,7 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { custome
     if (value === (inv[key] ?? def)) return undefined;
     return changed({ [key]: value === def ? null : value });
   }
-  if (key === 'date' || key === 'dueDate') {
+  if (key === 'date' || key === 'dueDate' || key === 'validUntil') {
     const iso = parseSwissDate(value);
     if (!iso) return { refused: 'date' };
     return iso === inv[key] ? undefined : changed({ [key]: iso });
@@ -117,6 +117,13 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { custome
     if (!invoicing().rates.includes(rate)) return { refused: 'value' };
     if (rate === line.vatRate) return undefined;
     line.vatRate = rate;
+    return changed({ lines });
+  }
+  if (field === 'optional') {
+    // An option of an Angebot or Auftrag (spec 4.4.1): never in a total.
+    const on = value === 'yes';
+    if (on === !!line.optional) return undefined;
+    if (on) line.optional = true; else delete line.optional;
     return changed({ lines });
   }
   if (field === 'activity') {

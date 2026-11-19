@@ -240,24 +240,24 @@ test('manifest schema 4 (#452): a manifest of schema 3 loads with its UID, npm r
 });
 
 test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defaults, npm run update writes only the number; the settings parse typed; an app of schema 4 refuses one of 5', async () => {
-  assert.equal(WORKSPACE_SCHEMA, 5);
+  assert.ok(WORKSPACE_SCHEMA >= 5);
   const dir = mkdtempSync(join(tmpdir(), 'manifest-5-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const path = workspaceAt(dir).paths.manifest;
   const current = readFileSync(path, 'utf8');
   // A manifest of 4 knows none of the fields 5 brought: the demo's named payment terms come off.
-  const old = current.replace(/^schema: 5\n/m, 'schema: 4\n').replace(/^ {2}paymentTerms:\n(?: {4}- .*\n)*/m, '').replace(/^ {2}defaultTerms: .*\n/m, '');
+  const old = current.replace(new RegExp(`^schema: ${WORKSPACE_SCHEMA}\n`, 'm'), 'schema: 4\n').replace(/^ {2}paymentTerms:\n(?: {4}- .*\n)*/m, '').replace(/^ {2}defaultTerms: .*\n/m, '');
   writeFileSync(path, old);
   const inv = readManifest(path).invoicing!;
   assert.deepEqual(inv.units.map((u) => u.id), ['h', 'day', 'pcs', 'flat', 'km', 'm2', 'm', 'm3', 'l', 'kg', 'month'], 'the default units, the old ids first');
   assert.deepEqual(inv.units.find((u) => u.id === 'm2'), { id: 'm2', de: 'm²', fr: 'm²', it: 'm²', en: 'm²' });
-  assert.deepEqual(inv.prices, { invoice: 'net', 'credit-note': 'net' });
+  assert.deepEqual(inv.prices, { quote: 'net', 'sales-order': 'net', 'delivery-note': 'net', invoice: 'net', 'credit-note': 'net' });
   assert.deepEqual(inv.paymentTerms, [{ id: `net${inv.paymentTermsDays}`, name: `${inv.paymentTermsDays} Tage netto`, days: inv.paymentTermsDays }]);
   assert.equal(inv.shortfallLimit, 5);
   assert.equal(inv.writeOffAccount, undefined, 'absent: the jurisdiction\'s accounts');
   const { done } = await upgradeWorkspace(workspaceAt(dir));
-  assert.deepEqual(done.filter((d) => d.file === path).map((d) => [d.from, d.to]), [[4, 5]]);
-  assert.equal(readFileSync(path, 'utf8'), old.replace(/^schema: 4\n/m, 'schema: 5\n'), 'only the number changed');
+  assert.deepEqual(done.filter((d) => d.file === path).map((d) => [d.from, d.to]), [[4, WORKSPACE_SCHEMA]]);
+  assert.equal(readFileSync(path, 'utf8'), old.replace(/^schema: 4\n/m, `schema: ${WORKSPACE_SCHEMA}\n`), 'only the number changed');
 
   const own = old.replace(/^schema: 4\n/m, 'schema: 5\n').replace(/^invoicing:\n/m, [
     'invoicing:',
@@ -272,7 +272,7 @@ test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defa
   writeFileSync(path, own);
   const set = readManifest(path).invoicing!;
   assert.deepEqual(set.units.map((u) => u.en), ['m²', 'pallet']);
-  assert.deepEqual(set.prices, { invoice: 'gross', 'credit-note': 'net' });
+  assert.deepEqual(set.prices, { quote: 'net', 'sales-order': 'net', 'delivery-note': 'net', invoice: 'gross', 'credit-note': 'net' });
   assert.deepEqual(set.paymentTerms, [{ id: 'skonto', name: '10 Tage 2 %, 30 Tage netto', days: 30, skonto: { percent: 2, days: 10 } }]);
   assert.deepEqual([set.defaultTerms, set.writeOffAccount, set.shortfallLimit], ['skonto', { skonto: '3800', loss: '3805' }, 10]);
   for (const [bad, msg] of [
@@ -285,6 +285,48 @@ test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defa
     assert.throws(() => readManifest(path), (e: Error) => msg.test(e.message), msg.source);
   }
   assert.throws(() => climb(parseDocument(current), 5, 4, MANIFEST_MIGRATIONS, path, (d) => d.clone()), (e: Error) => e instanceof SchemaTooNewError);
+});
+
+test('manifest schema 6 (invoicing phase 2, number series): a manifest of 5 with invoicing keeps today\'s one series of invoices and credit notes, npm run update writes it; one without invoicing gains nothing; a new firm numbers AN-, AU-, LS-, RE-, GS-; a format no reference holds is refused; an app of 5 refuses 6', async () => {
+  assert.equal(WORKSPACE_SCHEMA, 6);
+  const dir = mkdtempSync(join(tmpdir(), 'manifest-6-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const path = workspaceAt(dir).paths.manifest;
+  const current = readFileSync(path, 'utf8');
+  // The demo as a manifest of 5 had it: no numbering.
+  const old = current.replace(/^schema: 6\n/m, 'schema: 5\n').replace(/^ {2}numbering:\n( {4}.*\n)+/m, '');
+  assert.doesNotMatch(old, /numbering/);
+  writeFileSync(path, old);
+  const legacy = readManifest(path).invoicing!.numbering;
+  assert.deepEqual([legacy.invoice, legacy['credit-note']], [{ format: '{JJJJ}-{NNN}', restartYearly: true }, { format: '{JJJJ}-{NNN}', restartYearly: true }], 'the old series, shared');
+  assert.equal(legacy.quote.format, 'AN-{JJJJ}-{NNNNN}', 'a kind it never had takes the new default');
+  const { done } = await upgradeWorkspace(workspaceAt(dir));
+  assert.deepEqual(done.filter((d) => d.file === path).map((d) => [d.from, d.to]), [[5, 6]]);
+  const written = readFileSync(path, 'utf8');
+  assert.match(written, /^schema: 6\n/m);
+  assert.match(written, /^ {2}numbering:\n {4}invoice: \{ format: "\{JJJJ\}-\{NNN\}", restartYearly: true \}\n {4}credit-note: \{ format: "\{JJJJ\}-\{NNN\}", restartYearly: true \}\n/m);
+  assert.deepEqual(readManifest(path).invoicing!.numbering, legacy, 'the written file reads as the migrated one');
+
+  // No invoicing: nothing to keep, the step adds nothing.
+  const bare = old.replace(/^invoicing:\n( {2}.*\n)+/m, '');
+  writeFileSync(path, bare);
+  await upgradeWorkspace(workspaceAt(dir));
+  assert.doesNotMatch(readFileSync(path, 'utf8'), /numbering/);
+
+  // A new firm (schema 6, no numbering): the prefixes per kind.
+  writeFileSync(path, current.replace(/^ {2}numbering:\n( {4}.*\n)+/m, ''));
+  const fresh = readManifest(path).invoicing!.numbering;
+  assert.deepEqual(Object.values(fresh).map((n) => n.format), ['AN-{JJJJ}-{NNNNN}', 'AU-{JJJJ}-{NNNNN}', 'LS-{JJJJ}-{NNNNN}', 'RE-{JJJJ}-{NNNNN}', 'GS-{JJJJ}-{NNNNN}']);
+  for (const [bad, msg] of [
+    ['  numbering: { invoice: { format: "RE-{JJJJ}-{NNNNNNNNN}-ABCDEFGHIJ", restartYearly: true } }', /tooLong/],
+    ['  numbering: { invoice: { format: "RE-{NNNNN}", restartYearly: true } }', /restartWithoutYear/],
+    ['  numbering: { invoice: { format: "RE/{JJJJ}/{NNN}" } }', /syntax/],
+    ['  numbering: { offer: { format: "{NNN}" } }', /invoicing\.numbering\.offer/],
+  ] as const) {
+    writeFileSync(path, current.replace(/^ {2}numbering:\n( {4}.*\n)+/m, '').replace(/^invoicing:\n/m, `invoicing:\n${bad}\n`));
+    assert.throws(() => readManifest(path), (e: Error) => msg.test(e.message), msg.source);
+  }
+  assert.throws(() => climb(parseDocument(current), 6, 5, MANIFEST_MIGRATIONS, path, (d) => d.clone()), (e: Error) => e instanceof SchemaTooNewError);
 });
 
 function booksFiles(dir: string): string[] {

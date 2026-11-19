@@ -312,6 +312,8 @@ export type ApiRefusal =
   | { code: 'unitId'; params: { id: string } }
   | { code: 'unitWord'; params: { id: string; language: string } }
   | { code: 'unitTwice'; params: { id: string } }
+  /** Firma › Rechnungslayout › Nummern: a kind's number format no number or payment reference can hold (src/invoices/numbering.ts FormatRefusal). */
+  | { code: 'numberFormat'; params: { kind: string; refusal: string; format: string } }
   | { code: 'unitInUse'; params: { id: string } }
   /** Firma › Bankkonten: a text that is no IBAN (length or check digits). */
   /** Firma › Bankkonten: the IBAN cleared is printed on invoices (invoicing.payTo); pick another account under Rechnungslayout first. */
@@ -427,7 +429,8 @@ export interface StatementParams {
 }
 
 /** An invoicing refusal: which rule of src/invoices/rules.ts refused, and for an incomplete invoice what Art. 26 MWSTG still asks for. */
-export type InvoiceErrorBody = { error: string; code?: undefined; invoiceRefusal: InvoiceRefusal | 'noBrowser' | 'printFailed'; missing?: Missing[] };
+/** `params`: the facts a phase-2 refusal names (a date, a number, a quantity), filled into its words. */
+export type InvoiceErrorBody = { error: string; code?: undefined; invoiceRefusal: InvoiceRefusal | 'noBrowser' | 'printFailed'; missing?: Missing[]; params?: Record<string, string | number> };
 
 /** An e-mail the company's mailbox did not send (src/invoices/mail.ts); nothing was recorded. */
 export type MailErrorBody = { error: string; code?: undefined; mailRefusal: MailRefusal; detail?: string };

@@ -17,12 +17,18 @@ import {
 } from './model.js';
 import { renderHtml, renderPdf, type Rendered } from './pdf.js';
 import {
-  InvoiceRuleError, asDraft, assertCreditWithinOpen, backToDraftRefusal, cancel, creditNoteDraft, deleteDraft, figures, isOverdue, issue, liveCustomers, liveInvoices, missingForIssue,
+  InvoiceRuleError, KIND_WORD, asDraft, assertCreditWithinOpen, backToDraftRefusal, cancel, creditNoteDraft, deleteDraft, figures, isOverdue, issue, liveCustomers, liveDocuments, liveInvoices, missingForIssue,
   openAmount, reminderDraft, shortfallOf, skontoOffer, status, totals, writeOffAccounts,
   type CreditRequest, type Figures, type InvoiceRefusal, type InvoiceStatus, type Missing, type Totals,
 } from './rules.js';
 import type { SheetData } from './sheet.js';
 import { loadInvoices, newEnvelope, readPdf, sha256, storePdf, updateInvoices, writeAtomic } from './store.js';
+import { yearPaths } from '../workspace/workspace.js';
+import { DEFAULT_NUMBERING } from './numbering.js';
+import { convertDraft, defaultValidUntil, type Ticked } from './chain.js';
+import { orderCancelBlock, ownSends } from './lists.js';
+import { isBooked } from './model.js';
+import { kindTitle } from './texts.js';
 import type { PaymentContext, PaymentOutcome } from './payments.js';
 import { notesWithAccounts, withAccounts, type AccountChangePlan, type AccountContext } from './revise.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
@@ -96,8 +102,9 @@ export function viewOf(book: InvoiceBook, inv: Invoice, today: string, shortfall
   } };
 }
 
+/** A document of any kind by its id or its number; a draft back from issue keeps its number, and its link with it. */
 export function findInvoice(book: InvoiceBook, idOrNumber: string): Invoice | undefined {
-  return liveInvoices(book).find((i) => i.id === idOrNumber || (i.status === 'issued' && i.number === idOrNumber));
+  return liveDocuments(book).find((i) => i.id === idOrNumber || (!!i.number && i.number === idOrNumber));
 }
 
 // ─── validation at the boundary ───────────────────────────────────────────────
@@ -138,7 +145,9 @@ function parseLines(v: unknown, units: readonly string[]): InvoiceLine[] {
       case undefined: case 'item': break;
       default: return bad(`${at}: kind ist eine von ${LINE_KINDS.join(', ')}.`);
     }
-    known(['text', 'quantity', 'unit', 'price', 'vatRate', 'discount', 'vatIncluded', 'account', 'activity']);
+    known(['text', 'quantity', 'unit', 'price', 'vatRate', 'discount', 'vatIncluded', 'account', 'activity', 'optional', 'ofLine']);
+    if (l.optional !== undefined && typeof l.optional !== 'boolean') bad(`${at}: optional ist true oder false.`);
+    if (l.ofLine !== undefined && !(Number.isInteger(l.ofLine) && (l.ofLine as number) >= 0)) bad(`${at}: ofLine ist die Nummer einer Position.`);
     if (typeof l.quantity !== 'number' || typeof l.price !== 'number') bad(`${at}: quantity und price sind Zahlen.`, [{ field: 'line.quantity', line: i }]);
     if (!invoiceRates().includes(l.vatRate as number)) bad(`${at}: vatRate ist einer von ${invoiceRates().join(', ')}.`, [{ field: 'line.vatRate', line: i }]);
     if (l.unit !== undefined && !units.includes(l.unit as string)) bad(`${at}: unit ist eine von ${units.join(', ')}.`);
@@ -156,11 +165,13 @@ function parseLines(v: unknown, units: readonly string[]): InvoiceLine[] {
       ...(typeof l.vatIncluded === 'boolean' && (l.vatRate as number) > 0 ? { vatIncluded: l.vatIncluded } : {}),
       // A 2 on a firm with one net rate (a draft from before it went back to one) is dropped, not refused: the line books the first and stays editable.
       ...(l.activity === 2 && invoiceActivities().length && (l.vatRate as number) > 0 ? { activity: 2 as const } : {}),
+      ...(l.optional === true ? { optional: true as const } : {}),
+      ...(typeof l.ofLine === 'number' ? { ofLine: l.ofLine } : {}),
     };
   });
 }
 
-const DRAFT_FIELDS = ['customerId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'prices', 'intro', 'closing', 'exemption', 'settlement', 'termsId'] as const;
+const DRAFT_FIELDS = ['kind', 'customerId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'prices', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs'] as const;
 export type DraftPatch = Partial<Pick<InvoiceContent, (typeof DRAFT_FIELDS)[number]>>;
 
 /**
@@ -174,7 +185,13 @@ export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonl
   if (unknown.length) bad(`Unbekannte Felder: ${unknown.join(', ')}`);
   const out: DraftPatch & { clear: string[] } = { clear: [] };
   for (const [k, v] of Object.entries(b)) {
-    if (v === null && ['supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement', 'termsId'].includes(k)) { out.clear.push(k); continue; }
+    if (v === null && ['supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs'].includes(k)) { out.clear.push(k); continue; }
+    // A draft is of one kind from its start (a conversion makes one of another); a credit note only from its invoice.
+    // A Lieferschein comes only from an Auftrag (decision 21), by «Lieferschein erstellen».
+    if (k === 'kind' && v === 'delivery-note') throw new InvoiceRuleError('deliveryFromOrder', 'Ein Lieferschein entsteht aus einem Auftrag: dort «Lieferschein erstellen».');
+    if (k === 'kind') { if (id !== undefined || !['quote', 'sales-order', 'invoice'].includes(v as string)) bad('kind ist quote, sales-order oder invoice, beim Anlegen.'); out.kind = v as InvoiceContent['kind']; continue; }
+    if (k === 'validUntil') { if (!isDate(v)) bad('validUntil ist ein Datum JJJJ-MM-TT.'); out.validUntil = v as string; continue; }
+    if (k === 'printAs') { if (v !== 'confirmation' && v !== 'proforma') bad('printAs ist confirmation oder proforma.'); out.printAs = v as 'confirmation' | 'proforma'; continue; }
     if (k === 'customerId') { if (!liveCustomers(book).some((c) => c.id === v)) bad('Kunde nicht gefunden.', [{ field: 'customer' }]); out.customerId = v as string; }
     else if (k === 'date' || k === 'dueDate') { if (!isDate(v)) bad(`${k} ist ein Datum JJJJ-MM-TT.`); out[k] = v as string; }
     else if (k === 'supplied') {
@@ -187,7 +204,7 @@ export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonl
     else if (k === 'lines') {
       // A unit removed from the list since stays where a document names it: the draft itself, or an issued document copied («Als Entwurf kopieren»).
       const named = (ls: readonly InvoiceLine[]) => ls.flatMap((l) => (isItem(l) && l.unit ? [l.unit] : []));
-      const held = [...named(findInvoice(book, id ?? '')?.lines ?? []), ...liveInvoices(book).flatMap((i) => (i.status === 'issued' ? named(i.lines) : []))];
+      const held = [...named(findInvoice(book, id ?? '')?.lines ?? []), ...liveDocuments(book).flatMap((i) => (i.status === 'issued' ? named(i.lines) : []))];
       out.lines = parseLines(v, [...units.map((u) => u.id), ...held]);
     }
     else if (k === 'prices') { if (!PRICES.includes(v as never)) bad(`prices ist ${PRICES.join(' oder ')}.`); out.prices = v as InvoiceContent['prices']; }
@@ -260,17 +277,24 @@ function commit<T>(ws: Workspace, id: string, expected: Invoice, fn: (book: Invo
 export function createDraft(ws: Workspace, input: { customerId: string } & DraftPatch, now = new Date().toISOString()): Draft {
   return updateInvoices(ws, (book) => {
     const customer = liveCustomers(book).find((c) => c.id === input.customerId) ?? notFound('Kunde');
-    const terms = draftTerms(ws.invoicing, customer.paymentTermsDays);
+    const kind = input.kind ?? 'invoice';
+    // A Lieferschein comes only from an Auftrag, a Gutschrift only from its Rechnung (convertDocument, createCreditNote).
+    if (kind === 'delivery-note') throw new InvoiceRuleError('deliveryFromOrder', 'Ein Lieferschein entsteht aus einem Auftrag: dort «Lieferschein erstellen».');
+    if (kind === 'credit-note') throw new InvoiceRuleError('incomplete', 'Eine Gutschrift entsteht aus ihrer Rechnung.');
+    const terms = kind === 'invoice' ? draftTerms(ws.invoicing, customer.paymentTermsDays) : undefined;
+    const date = input.date ?? now.slice(0, 10);
     const draft: Draft = {
       ...newEnvelope('in', now),
       status: 'draft',
-      kind: 'invoice',
-      date: now.slice(0, 10),
+      kind,
+      date,
       currency: 'CHF',
       language: customer.language,
       lines: [],
-      prices: ws.invoicing?.prices.invoice ?? 'net',
+      prices: ws.invoicing?.prices[kind] ?? 'net',
       ...(terms ? { termsId: terms } : {}),
+      // An Angebot holds for 30 days unless the person sets another day.
+      ...(kind === 'quote' ? { validUntil: defaultValidUntil(date) } : {}),
       ...input,
       comments: [],
     };
@@ -312,30 +336,39 @@ export function missingOf(ws: Workspace, id: string): Missing[] {
   const book = loadInvoices(ws);
   const inv = findInvoice(book, id) ?? notFound('Rechnung');
   if (inv.status !== 'draft') return [];
-  return missingForIssue(inv, { customer: book.customers.find((c) => c.id === inv.customerId), sender: senderFor(invoicingContext(ws), inv.currency), invoices: liveInvoices(book) });
+  return missingForIssue(inv, { customer: book.customers.find((c) => c.id === inv.customerId), sender: senderFor(invoicingContext(ws), inv.currency), invoices: liveDocuments(book) });
 }
 
 // ─── issuing and sending ───────────────────────────────────────────────────────
 
 /** Gives the draft its number, freezes it, prints its PDF once and stores it with its checksum. */
-/** `confirmed`: the person's «Trotzdem ausstellen» over the warnings of warningsForIssue (spec 4.11). */
-export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; printer?: Printer; confirmed?: boolean } = {}): Promise<Issued> {
+/**
+ * `confirmed`: the person's «Trotzdem ausstellen» over the warnings of warningsForIssue (spec 4.11);
+ * `confirm`: the other warnings she overrode by their codes, `sourceCancelled` a draft made from a
+ * document cancelled since.
+ */
+export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; printer?: Printer; confirmed?: boolean; confirm?: readonly string[] } = {}): Promise<Issued> {
   return serial(async () => {
     const now = opts.now ?? new Date().toISOString();
     const book = loadInvoices(ws);
     const draft = findInvoice(book, id) ?? notFound('Rechnung');
     if (draft.status !== 'draft') throw new InvoiceRuleError('notDraft', `Rechnung ${draft.number} ist schon ausgestellt.`);
+    // A draft made from an Auftrag or Angebot cancelled since: a warning (the chain would hang on a Storno).
+    const source = draft.from ? findInvoice(book, draft.from.id) : undefined;
+    if (source?.status === 'issued' && source.cancelled && !opts.confirm?.includes('sourceCancelled')) {
+      throw new InvoiceRuleError('sourceCancelled', `${KIND_WORD[source.kind]} ${source.number} ist storniert: dieser Entwurf stammt daraus. Nur mit «Trotzdem ausstellen».`, undefined, { number: source.number });
+    }
     const ctx = invoicingContext(ws);
     const customer = liveCustomers(book).find((c) => c.id === draft.customerId);
-    const texts = defaultTexts(ctx, draft.kind, draft.language, draftDays(ctx, draft, customer));
+    const texts = defaultTexts(ctx, draft.kind, draft.language, draftDays(ctx, draft, customer), draft.printAs);
     const frozen: Draft = { ...draft, intro: issuedIntro(texts.salutation, draft.intro ?? texts.intro), closing: draft.closing ?? texts.closing };
     // A credit note above what its invoice has open: a warning (spec 4.11), the rest is paid back.
     assertCreditWithinOpen(draft, liveInvoices(book), opts.confirmed);
-    const issued = issue(frozen, { customer, sender: senderFor(ctx, draft.currency), layout: ctx.settings?.layout ?? DEFAULT_LAYOUT, units: ctx.settings?.units, invoices: liveInvoices(book), now, confirmed: opts.confirmed, paymentTerms: ctx.settings?.paymentTerms });
+    const issued = issue(frozen, { customer, sender: senderFor(ctx, draft.currency), layout: ctx.settings?.layout ?? DEFAULT_LAYOUT, units: ctx.settings?.units, invoices: liveDocuments(book), now, confirmed: opts.confirmed, paymentTerms: ctx.settings?.paymentTerms, numbering: ctx.settings?.numbering ?? DEFAULT_NUMBERING });
     const printed = await (opts.printer ?? chromium).pdf(issuedSheet(book, issued as Issued, logoSrc(ws, issued.layout.logo)), now);
     return commit(ws, draft.id, draft, (fresh, at) => {
-      if (nextNumberTaken(fresh, issued.number)) throw new InvoiceRuleError('changed', `Die Nummer ${issued.number} wurde inzwischen vergeben; bitte erneut ausstellen.`);
-      const done: Issued = { ...issued, pdf: storePdf(ws, now.slice(0, 4), `${issued.number}.pdf`, printed.pdf) };
+      if (nextNumberTaken(fresh, issued.number, draft.id)) throw new InvoiceRuleError('changed', `Die Nummer ${issued.number} wurde inzwischen vergeben; bitte erneut ausstellen.`);
+      const done: Issued = { ...issued, pdf: storePdf(ws, now.slice(0, 4), pdfName(ws, now.slice(0, 4), issued.number, printed.pdf), printed.pdf) };
       fresh.invoices[at] = done;
       return done;
     });
@@ -346,7 +379,19 @@ function sentTitle(inv: Issued, kind: SentKind, level?: number): string {
   const L = TEXTS[inv.language];
   if (kind === 'reminder') return `${L.reminder(level ?? 1)} · ${L.invoice} ${inv.number}`;
   if (kind === 'cancellation') return `${L.stamp}: ${L.invoice} ${inv.number}`;
-  return `${inv.kind === 'credit-note' ? L.credit : L.invoice} ${inv.number}`;
+  return `${kindTitle(L, inv.kind, inv.printAs)} ${inv.number}`;
+}
+
+/**
+ * The file an issued PDF takes: `<number>.pdf`, or `<number>-2.pdf`, … when an Angebot or Auftrag
+ * back from draft is issued again under its number: the version that went out stays as it was sent.
+ */
+function pdfName(ws: Workspace, year: string, number: string, pdf: Buffer): string {
+  for (let k = 1; ; k++) {
+    const name = k === 1 ? `${number}.pdf` : `${number}-${k}.pdf`;
+    const path = join(yearPaths(ws.paths, year).invoices, name);
+    if (!existsSync(path) || readFileSync(path).equals(pdf)) return name;
+  }
 }
 
 /**
@@ -377,8 +422,9 @@ export function recordSend(ws: Workspace, id: string, opts: { to?: string; deliv
     const now = opts.now ?? new Date().toISOString();
     return updateInvoices(ws, (book) => {
       const fresh = sendable(book, id);
-      const first = !book.sent.some((d) => d.invoiceId === fresh.id && (d.kind === 'invoice' || d.kind === 'credit-note'));
-      const kind: SentKind = first ? (fresh.kind === 'credit-note' ? 'credit-note' : 'invoice') : 'resend';
+      // The first send of this version (an Angebot back from draft is issued again under its number) is the document; a later one a resend.
+      const first = !book.sent.some((d) => d.invoiceId === fresh.id && d.file === fresh.pdf.file && d.kind !== 'reminder' && d.kind !== 'cancellation');
+      const kind: SentKind = first ? fresh.kind : 'resend';
       const doc: SentDocument = { ...newEnvelope('sd', now), invoiceId: fresh.id, kind, title: sentTitle(fresh, kind), ...fresh.pdf, sentAt: now, ...recipient(fresh, opts.to, delivered) };
       book.sent.push(doc);
       return doc;
@@ -386,7 +432,8 @@ export function recordSend(ws: Workspace, id: string, opts: { to?: string; deliv
   });
 }
 
-const nextNumberTaken = (book: InvoiceBook, number: string) => book.invoices.some((i) => i.status === 'issued' && i.number === number);
+/** Whether another document holds `number` by now: issued, or a draft that keeps it (Draft.number). */
+const nextNumberTaken = (book: InvoiceBook, number: string, id?: string) => book.invoices.some((i) => !i.deleted && i.id !== id && i.number === number);
 
 /**
  * Prints a document of its own (reminder, cancellation notice), stores its PDF and hands it to
@@ -508,15 +555,29 @@ export function replacedPdf(ws: Workspace, id: string, k: number): Buffer {
 
 // ─── cancelling, crediting, reminding, commenting ─────────────────────────────
 
-export function cancelInvoice(ws: Workspace, id: string, req: { date: string; reason: string; notify?: boolean; to?: string; confirmed?: boolean }, opts: { now?: string; printer?: Printer; deliver?: Deliver } = {}): Promise<{ invoice: Issued; sent?: SentDocument }> {
+/**
+ * Storno. `confirm`: the warnings the person overrode, each by its own code: `paid` (a paid Rechnung),
+ * `orderDelivered` and `orderDrafts` (an Auftrag with a Lieferschein, or with drafts made from it); a
+ * code confirms only its own warning.
+ */
+export function cancelInvoice(ws: Workspace, id: string, req: { date: string; reason: string; notify?: boolean; to?: string; confirm?: readonly string[] }, opts: { now?: string; printer?: Printer; deliver?: Deliver } = {}): Promise<{ invoice: Issued; sent?: SentDocument }> {
   return serial(async () => {
     const now = opts.now ?? new Date().toISOString();
     const book = loadInvoices(ws);
     const inv = findInvoice(book, id) ?? notFound('Rechnung');
     if (!isDate(req.date)) bad('date ist ein Datum JJJJ-MM-TT.');
     if (typeof req.reason !== 'string') bad('reason ist ein Text.');
-    const cancelled = cancel(inv, req);
-    const sent = req.notify ? await printOwnDocument(ws, cancelled, 'cancellation', issuedSheet(book, cancelled, logoSrc(ws, cancelled.layout.logo)), req.to, now, opts.printer ?? chromium, opts.deliver) : undefined;
+    if (inv.kind === 'quote') throw new InvoiceRuleError('notQuote', 'Ein Angebot wird abgelehnt, nicht storniert.');
+    // An Auftrag with a Rechnung that stands keeps it: refused; with a Lieferschein, a warning (spec 4.4.2).
+    const block = inv.kind === 'sales-order' ? orderCancelBlock(inv, liveDocuments(book)) : undefined;
+    if (block?.code === 'orderInvoiced') throw new InvoiceRuleError('orderInvoiced', `Aus dem Auftrag ist ${block.numbers.join(', ')} ausgestellt: erst die Rechnung stornieren oder gutschreiben, dann den Auftrag.`, undefined, { numbers: block.numbers.join(', ') });
+    const confirm = req.confirm ?? [];
+    if (block?.code === 'orderDelivered' && !confirm.includes('orderDelivered')) throw new InvoiceRuleError('orderDelivered', `Zum Auftrag ist ${block.numbers.join(', ')} ausgeführt: die Lieferung bleibt, nur der Auftrag wird storniert. Nur mit «Trotzdem stornieren».`, undefined, { numbers: block.numbers.join(', ') });
+    // Drafts made from it would hang on a Storno: named first, and each warns again at its issue.
+    const drafts = inv.kind === 'sales-order' ? liveDocuments(book).filter((d) => d.status === 'draft' && d.from?.id === inv.id) : [];
+    if (drafts.length && !confirm.includes('orderDrafts')) throw new InvoiceRuleError('orderDrafts', `Aus ${inv.number} ${drafts.length === 1 ? 'ist ein Entwurf' : `sind ${drafts.length} Entwürfe`} angelegt: storniert, kann ${drafts.length === 1 ? 'er' : 'jeder'} nur mit «Trotzdem ausstellen» ausgestellt werden. Nur mit «Trotzdem stornieren».`, undefined, { number: inv.number ?? '', n: drafts.length });
+    const cancelled = cancel(inv, { ...req, confirmed: !isBooked(inv) || confirm.includes('paid') });
+    const sent = req.notify && isBooked(inv) ? await printOwnDocument(ws, cancelled, 'cancellation', issuedSheet(book, cancelled, logoSrc(ws, cancelled.layout.logo)), req.to, now, opts.printer ?? chromium, opts.deliver) : undefined;
     return commit(ws, inv.id, inv, (fresh, at) => {
       fresh.invoices[at] = cancelled;
       if (sent) fresh.sent.push(sent);
@@ -533,6 +594,69 @@ export function createCreditNote(ws: Workspace, id: string, req: CreditRequest, 
     const credit = { ...draft, closing: texts.closing };
     book.invoices.push(credit);
     return credit;
+  });
+}
+
+// ─── the chain of phase 2: conversions, the customer's answer, back to draft ───
+
+/**
+ * «Auftrag erstellen», «Lieferschein erstellen», «Rechnung erstellen» (spec 4.4.1): a draft of `to`
+ * with the ticked positions and quantities, `from` naming the source. `confirm`: the warnings the
+ * person overrode («Trotzdem erstellen», «Trotzdem übernehmen»), the codes of convertWarnings.
+ */
+export function convertDocument(ws: Workspace, id: string, req: { to: InvoiceContent['kind']; lines: Ticked[]; confirm?: string[] }, now = new Date().toISOString()): Draft {
+  return updateInvoices(ws, (book) => {
+    const source = findInvoice(book, id) ?? notFound('Dokument');
+    const docs = liveDocuments(book);
+    const draft = convertDraft(source, req.to, req.lines, docs, newEnvelope('in', now), now.slice(0, 10), now.slice(0, 10), req.confirm ?? []);
+    const customer = liveCustomers(book).find((c) => c.id === draft.customerId);
+    const terms = req.to === 'invoice' && !draft.termsId && customer ? draftTerms(ws.invoicing, customer.paymentTermsDays) : undefined;
+    const done: Draft = { ...draft, ...(terms ? { termsId: terms } : {}) };
+    book.invoices.push(done);
+    return done;
+  });
+}
+
+/**
+ * The customer's answer to an Angebot, a person's click (spec 4.4.2): `accepted` or `declined` on
+ * `date`, recorded with who clicked; `null` takes the answer back. Refused on a draft and on any other kind.
+ */
+export function answerQuote(ws: Workspace, id: string, answer: 'accepted' | 'declined' | null, by: string, date: string): Issued {
+  return updateInvoices(ws, (book) => {
+    const q = findInvoice(book, id) ?? notFound('Angebot');
+    if (q.kind !== 'quote') throw new InvoiceRuleError('notQuote', 'Nur ein Angebot wird angenommen oder abgelehnt.');
+    if (q.status !== 'issued') throw new InvoiceRuleError('notIssued', 'Ein Entwurf wird erst ausgestellt, dann angenommen oder abgelehnt.');
+    if (!isDate(date)) bad('date ist ein Datum JJJJ-MM-TT.');
+    const { accepted: _a, declined: _d, ...rest } = q;
+    const next: Issued = { ...rest, ...(answer ? { [answer]: { date, by } } : {}) };
+    book.invoices[book.invoices.indexOf(q)] = next;
+    return next;
+  });
+}
+
+/**
+ * An issued Angebot or Auftrag back to draft (spec 4.4.2), keeping its number; issued again it takes
+ * that number and a PDF of its own. Once sent it warns (`sentVersion`, «Trotzdem bearbeiten»): the
+ * customer may hold the version sent, which stays in the sent log. A Rechnung and a Gutschrift are not
+ * taken back here; a cancelled document, or one with documents made from it, neither.
+ */
+export function reopenDocument(ws: Workspace, id: string, confirmed: boolean): Draft {
+  return updateInvoices(ws, (book) => {
+    const inv = findInvoice(book, id) ?? notFound('Dokument');
+    if (inv.kind !== 'quote' && inv.kind !== 'sales-order') throw new InvoiceRuleError('notReopenable', 'Nur ein Angebot oder ein Auftrag geht hier zurück zum Entwurf.');
+    if (inv.status !== 'issued') throw new InvoiceRuleError('notIssued', 'Das ist schon ein Entwurf.');
+    if (inv.cancelled) throw new InvoiceRuleError('cancelled', `${inv.number} ist storniert.`, undefined, { number: inv.number });
+    const made = liveDocuments(book).filter((d) => d.from?.id === inv.id);
+    if (made.length) throw new InvoiceRuleError('notReopenable', `Aus ${inv.number} sind schon Dokumente entstanden: es bleibt, wie es ist.`, undefined, { number: inv.number });
+    const last = ownSends(book.sent, inv).at(-1);
+    if (last && !confirmed) {
+      const to = last.to;
+      throw new InvoiceRuleError('sentVersion', `Gesendet am ${last.sentAt.slice(0, 10)} an ${to}: diese Fassung bleibt im Versandprotokoll, der Kunde hat sie vielleicht. Nur mit «Trotzdem bearbeiten».`, undefined, { date: last.sentAt.slice(0, 10), to });
+    }
+    const { status: _s, issuedAt: _i, reference: _r, customer: _c, sender: _se, layout: _l, units: _u, pdf: _p, payments: _pa, writeOffs: _w, terms: _t, reminders: _re, cancelled: _cx, dueDate: _due, ...content } = inv;
+    const draft: Draft = { ...content, status: 'draft' };
+    book.invoices[book.invoices.indexOf(inv)] = draft;
+    return draft;
   });
 }
 

@@ -16,6 +16,9 @@ export const SCHREINEREI_INVOICING: DemoInvoicing = {
     CHF: { account: "1020", qrIban: CH39 3080 8000 0000 0000 3 }
   revenueAccount: "3400"
   paymentTermsDays: 30
+  numbering:
+    invoice: { format: "{JJJJ}-{NNN}", restartYearly: true }
+    credit-note: { format: "{JJJJ}-{NNN}", restartYearly: true }
   prices: { invoice: gross, credit-note: gross }
   paymentTerms:
     - { id: net30, name: "30 Tage netto", days: 30 }

@@ -2,7 +2,7 @@
  * What the buttons of Rechnungen do: each call goes to the invoicing API, its refusal is shown
  * in the user's language (Art. 26 MWSTG gaps named one by one), and the records are read again.
  */
-import { isItem, issuedPdfUrl, sentPdfUrl, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceLine, type Issued, type WriteOff, type WriteOffReason } from '../../../invoices/model.js';
+import { isItem, issuedPdfUrl, sentPdfUrl, type DocumentKind, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceLine, type Issued, type WriteOff, type WriteOffReason } from '../../../invoices/model.js';
 import type { AllocationPart } from '../../../invoices/payments.js';
 import type { MailMessage } from '../../../invoices/mail.js';
 import { api, errorText, type AccountsInput, type CreditInput, type DraftChange } from '../../lib/api.js';
@@ -14,11 +14,12 @@ import { setUi } from './state.js';
 import { edits, put, reloadInvoices } from './data.js';
 import { inOrder } from '../../lib/in-order.js';
 import { customerChange, routeId } from './model.js';
+import { viewOfKind } from './table.js';
 import { filing, invoiceRates, invoicing } from '../../../engines/index.js';
 import { desktop } from '../../desktop/bridge.js';
 
-/** A document's place: a Rechnung in Rechnungen, a Gutschrift in Gutschriften (/invoices/<number> opens either). */
-export const invoicePath = (inv: Invoice) => ({ area: 'invoices' as const, view: inv.kind === 'credit-note' ? 'credit-notes' as const : 'list' as const, id: routeId(inv) });
+/** A document's place: the table of its kind (/invoices/<number> opens any). */
+export const invoicePath = (inv: Invoice) => ({ area: 'invoices' as const, view: viewOfKind(inv.kind), id: routeId(inv) });
 
 /** An invoice's link in a period that holds its date (a draft shows in every period). */
 export const invoiceAt = (inv: Invoice, current?: Period): Location =>
@@ -46,9 +47,9 @@ export async function newDraft(nav: Nav, customer: Pick<Customer, 'id' | 'name'>
   return draft;
 }
 
-/** A new draft for `c`: one line to type over, the customer's language, 0 % for a customer abroad. */
-export const newDraftFor = (nav: Nav, c: Pick<Customer, 'id' | 'name' | 'language' | 'address'>) =>
-  newDraft(nav, c, { lines: [firstLine(false)], ...customerChange({ lines: [firstLine(false)], currency: 'CHF' }, c) });
+/** A new draft of `kind` for `c`: one line to type over, the customer's language, 0 % for a customer abroad. */
+export const newDraftFor = (nav: Nav, c: Pick<Customer, 'id' | 'name' | 'language' | 'address'>, kind: DocumentKind = 'invoice') =>
+  newDraft(nav, c, { ...(kind !== 'invoice' ? { kind } : {}), lines: [firstLine(false)], ...customerChange({ lines: [firstLine(false)], currency: 'CHF' }, c) });
 
 const draftSaves = inOrder();
 
@@ -77,13 +78,13 @@ export async function deleteDraft(nav: Nav, draft: Draft): Promise<void> {
  * Issues the draft, shows it in a period that holds its date (F10): the period on screen, `current`,
  * when it does, and opens the send window with its PDF.
  */
-export async function issue(nav: Nav, draft: Draft, current: Period, anyway = false): Promise<Issued | undefined> {
-  const issued = await run(nav, api.issue(draft.id, anyway));
-  if (!issued) return undefined;
-  await reloadInvoices();
-  nav.go(invoiceAt(issued, current));
-  setUi({ dialog: { kind: 'send', issued: true }, preview: false });
-  return issued;
+export function issue(nav: Nav, draft: Draft, current: Period, anyway = false): Promise<Issued | undefined> {
+  // A draft whose Auftrag or Angebot was cancelled since asks first («Trotzdem ausstellen»).
+  return withWarnings(nav, t('invoices.issue'), (confirm) => api.issue(draft.id, anyway, confirm), async (issued) => {
+    await reloadInvoices();
+    nav.go(invoiceAt(issued, current));
+    setUi({ dialog: { kind: 'send', issued: true }, preview: false });
+  });
 }
 
 /**
@@ -143,11 +144,85 @@ export async function changeAccounts(nav: Nav, inv: Issued, input: AccountsInput
   return true;
 }
 
+/**
+ * «Als Entwurf kopieren» (spec 4.4.1): a draft of the same kind with every position, no `from`; a
+ * Gutschrift's copy is a Rechnung with the prices turned round, since a Gutschrift comes only from its Rechnung.
+ */
 export async function copyAsDraft(nav: Nav, inv: Issued): Promise<void> {
-  const { customerId, currency, language, subject, lines, prices, intro, closing, exemption } = inv;
-  const lines2 = inv.kind === 'credit-note' ? lines.map((l) => (isItem(l) ? { ...l, price: -l.price } : l)) : lines;
-  const draft = await newDraft(nav, { id: customerId, name: inv.customer.name }, { currency, language, lines: lines2, ...(prices ? { prices } : {}), ...(subject ? { subject } : {}), ...(intro ? { intro } : {}), ...(closing ? { closing } : {}), ...(exemption ? { exemption } : {}) });
+  const { customerId, currency, language, subject, lines, prices, intro, closing, exemption, ordered, printAs } = inv;
+  // A copy stands alone: its positions name no position of a source.
+  const lines2 = lines.map((l) => { if (!isItem(l)) return l; const { ofLine: _f, ...rest } = l; return inv.kind === 'credit-note' ? { ...rest, price: -l.price } : rest; });
+  const kind = inv.kind === 'credit-note' ? undefined : inv.kind;
+  const draft = await newDraft(nav, { id: customerId, name: inv.customer.name }, {
+    ...(kind && kind !== 'invoice' ? { kind } : {}), currency, language, lines: lines2, ...(prices ? { prices } : {}), ...(subject ? { subject } : {}), ...(intro ? { intro } : {}), ...(closing ? { closing } : {}), ...(exemption ? { exemption } : {}),
+    ...(ordered ? { ordered } : {}), ...(kind === 'sales-order' && printAs ? { printAs } : {}),
+  });
   if (draft) nav.toast(t('invoices.copied', { number: inv.number }));
+}
+
+/** The warnings of spec 4.11 a phase-2 action may meet: each opens «Trotzdem …» instead of a toast. */
+const WARNINGS = ['expired', 'declined', 'overOpen', 'sentVersion', 'orderDelivered', 'orderDrafts', 'sourceCancelled'] as const;
+type Warning = (typeof WARNINGS)[number];
+
+/**
+ * Runs `call(confirmed)`; a warning of the API opens the warning dialog, whose «Trotzdem …» runs it
+ * again with that warning confirmed too (several may come one after the other).
+ */
+async function withWarnings<T>(nav: Nav, title: string, call: (confirmed: Warning[]) => Promise<T>, done: (r: T) => void | Promise<void>, confirmed: Warning[] = []): Promise<T | undefined> {
+  try {
+    const r = await call(confirmed);
+    await done(r);
+    return r;
+  } catch (e) {
+    const body = (e as { body?: { invoiceRefusal?: string } }).body;
+    const code = body?.invoiceRefusal as Warning | undefined;
+    if (code && WARNINGS.includes(code) && !confirmed.includes(code)) {
+      setUi({ dialog: { kind: 'warn', title, text: errorText(e), anyway: t(`sales.anyway.${code}`), run: () => withWarnings(nav, title, call, done, [...confirmed, code]) } });
+      return undefined;
+    }
+    nav.toast(errorText(e));
+    return undefined;
+  }
+}
+
+/** «Auftrag erstellen», «Lieferschein erstellen», «Rechnung erstellen»: the new draft opens; nothing ticked is said by the API. */
+export function convert(nav: Nav, inv: Issued, to: DocumentKind, lines: Array<{ line: number; quantity: number }>): Promise<Draft | undefined> {
+  return withWarnings(nav, t(`sales.convert.${to}` as 'sales.convert.invoice'), (confirm) => api.convert(inv.id, { to, lines, ...(confirm.length ? { confirm } : {}) }), async (draft) => {
+    setUi({ dialog: null });
+    put({ invoice: draft });
+    await reloadInvoices();
+    nav.select(invoicePath(draft));
+    nav.toast(t('sales.converted', { number: inv.number }));
+  });
+}
+
+/** «Angenommen» or «Abgelehnt» on an Angebot, the person's click; null takes it back. */
+export async function answer(nav: Nav, inv: Issued, a: 'accepted' | 'declined' | null): Promise<boolean> {
+  const done = await run(nav, api.answer(inv.id, a));
+  if (!done) return false;
+  put({ invoice: done });
+  await reloadInvoices();
+  nav.toast(t(a ? `sales.answered.${a}` : 'sales.answered.none', { number: inv.number }));
+  return true;
+}
+
+/** An Angebot or Auftrag back to draft; once sent, «Trotzdem bearbeiten» first. */
+export function reopen(nav: Nav, inv: Issued): Promise<Draft | undefined> {
+  return withWarnings(nav, t('sales.reopen'), (confirm) => api.reopen(inv.id, confirm.includes('sentVersion')), async (draft) => {
+    setUi({ dialog: null });
+    await reloadInvoices();
+    nav.select(invoicePath(draft));
+    nav.toast(t('sales.reopened', { number: inv.number }));
+  });
+}
+
+/** Storno of an Auftrag or Lieferschein: no notice, nothing booked; an Auftrag with a Lieferschein asks «Trotzdem stornieren». */
+export function cancelDocument(nav: Nav, inv: Issued, input: { date: string; reason: string }): Promise<unknown> {
+  return withWarnings(nav, t('sales.cancelTitle', { number: inv.number }), (confirm) => api.cancelInvoice(inv.id, { ...input, notify: false, ...(confirm.length ? { confirm } : {}) }), async () => {
+    setUi({ dialog: null });
+    await reloadInvoices();
+    nav.toast(t('sales.cancelledDoc', { number: inv.number }));
+  });
 }
 
 export async function cancel(nav: Nav, inv: Issued, input: { date: string; reason: string; notify: boolean; confirm?: 'paid' }, email?: MailMessage): Promise<boolean> {

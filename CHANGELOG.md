@@ -35,6 +35,26 @@ Two markers flag an entry you must read before you update:
   the hair salon writes one invoice without VAT for a wedding. **⚠ figures** (the demos only): the
   coffee roaster's Q3 and Q4, the joinery's H2 and the hair salon's Q2 gain these sales; no filed
   period changes.
+- Verkauf › Angebote, Aufträge and Lieferscheine. They are written on the same sheet as an invoice,
+  get their own numbers (AN-, AU-, LS-) and book nothing. An Angebot holds until its «gültig bis»
+  day; you mark it «Angenommen» or «Abgelehnt», and after that day it reads «Abgelaufen». An
+  Auftrag prints as Auftragsbestätigung or Proformarechnung. A Lieferschein prints no prices.
+- «Auftrag erstellen», «Lieferschein erstellen» and «Rechnung erstellen». They show the positions
+  with what is still open, each ticked and editable, and the total of what is ticked. An Auftrag
+  reads «Teilweise» once something of it is delivered or invoiced, and «Erledigt» once all of it is
+  invoiced (and delivered, where it has a Lieferschein). A Gutschrift takes its quantities back. An
+  expired or declined Angebot, and more than is still open, warn first.
+- Options on an Angebot or Auftrag: printed with «Option», never in the total. The total names
+  what it leaves out. A conversion lists them unticked.
+- The Belegkette in the margin links every document of the chain: Angebot, Auftrag,
+  Lieferscheine, Rechnung, Gutschrift.
+- An Angebot or Auftrag goes back to draft with its number. Once it was sent, this asks first;
+  the version sent stays in Versendet.
+- Firma › Rechnungslayout › Nummern: a number format for each kind, with the next number shown.
+  A change applies from the next number. A new firm starts with AN-, AU-, LS-, RE- and GS- and
+  the year, five digits, new each year. An existing workspace keeps its numbers: invoices and
+  credit notes continue their one series (2026-001) until you change it.
+
 - Buchungen › Neue Buchung von Hand: «+ Zeile» makes it a Sammelbuchung, one account against
   several lines (for example Haben 1020 against Soll 6500 and 6570). The last line holds the rest of
   the total until you type there, and ↵ books only once the lines add up. The lines are booked
