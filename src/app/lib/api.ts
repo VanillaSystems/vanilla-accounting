@@ -32,7 +32,7 @@ import { bookingWaitsText } from './booking-waits.js';
 import { agreedBasis, baseCurrency, vatSetup } from '../../engines/index.js';
 import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
-import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminder, SentDocument, WriteOff, WriteOffReason } from '../../invoices/model.js';
+import type { Comment, Customer, CustomerFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, WriteOff, WriteOffReason } from '../../invoices/model.js';
 import type { AllocationItem, AllocationPart, PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
@@ -187,7 +187,7 @@ export function errorText(e: unknown): string {
   if (e instanceof DesktopCallError) return t(e.text);
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e);
   const b = e.body;
-  if ('invoiceRefusal' in b) return invoiceRefusalText(b.invoiceRefusal, b.missing);
+  if ('invoiceRefusal' in b) return invoiceRefusalText(b.invoiceRefusal, b.missing, b.params);
   if ('paymentRefusal' in b) return t(`invoice.payment.${b.paymentRefusal}`);
   if ('mailRefusal' in b) return t(`mail.refusal.${b.mailRefusal}`, { detail: b.detail ?? '' });
   switch (b.code) {
@@ -376,6 +376,7 @@ export function errorText(e: unknown): string {
     case 'notQrIban': return t('error.notQrIban', b.params);
     case 'qrIbanNotChf': return t('error.qrIbanNotChf', b.params);
     case 'unitId': case 'unitTwice': case 'unitInUse': return t(`error.${b.code}`, { id: b.params.id });
+    case 'numberFormat': return numberFormatText(b.params.refusal, b.params.kind, b.params.format);
     case 'unitWord': return t('error.unitWord', { id: b.params.id, language: b.params.language.toUpperCase() });
     case 'ibanOnInvoices': return t('error.ibanOnInvoices', b.params);
     case 'unknownCustomer': return t('error.unknownCustomer');
@@ -444,14 +445,20 @@ export function setupText(r: SetupRefusal): string {
   }
 }
 
+/** Why a number format cannot be taken (src/invoices/numbering.ts FormatRefusal), the tokens named as the person types them. */
+export const numberFormatText = (refusal: string, kind: string, format: string): string =>
+  (t as (key: string, vars: Record<string, string>) => string)(`error.numberFormat.${refusal}`, { kind: t(`invoices.docKind.${kind}` as 'invoices.docKind.invoice'), format, year: '{JJJJ}', counter: '{NNNNN}' });
+
 /** What an invoice still needs before it is issued (Art. 26 MWSTG), one phrase per gap; `line` counts from 0. */
 export const missingText = (m: Missing): string =>
   m.line === undefined ? t(`invoice.missing.${m.field}`) : t('invoice.missingLine', { line: m.line + 1, what: t(`invoice.missing.${m.field}`) });
 
-function invoiceRefusalText(code: InvoiceRefusal | 'noBrowser' | 'printFailed', missing?: Missing[]): string {
+function invoiceRefusalText(code: InvoiceRefusal | 'noBrowser' | 'printFailed', missing?: Missing[], params?: Record<string, string | number>): string {
   // A customer's field is filled in where the customer is kept: the line says so.
   if (code === 'incomplete' && missing?.length) return t('invoice.refusal.incompleteList', { list: missing.map(missingText).join(', ') }) + (missing.some((m) => m.field.startsWith('customer.')) ? ` ${t('invoice.refusal.customerWhere')}` : '');
-  return t(`invoice.refusal.${code}`);
+  // A date a refusal names is the person's way of writing it.
+  const named = Object.fromEntries(Object.entries(params ?? {}).map(([k, v]) => [k, typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? formatDate(v) : k === 'to' && v === 'download' ? t('sales.channel.download') : v]));
+  return (t as (key: string, vars: Record<string, string | number>) => string)(`invoice.refusal.${code}`, named);
 }
 
 type Ok = { ok: true };
@@ -791,7 +798,10 @@ export const api = {
   patchDraft: (id: string, patch: DraftChange) => request<Draft>('PATCH', `/api/invoices/${id}`, patch),
   deleteDraft: (id: string) => request<{ ok: true }>('DELETE', `/api/invoices/${id}`),
   /** `anyway`: the person's «Trotzdem ausstellen» over a position without text or amount (spec 4.11). */
-  issue: (id: string, anyway = false) => request<Issued>('POST', `/api/invoices/${id}/issue`, anyway ? { confirm: 'unconfirmed' } : undefined),
+  issue: (id: string, anyway = false, confirm: readonly string[] = []) => {
+    const all = [...(anyway ? ['unconfirmed'] : []), ...confirm];
+    return request<Issued>('POST', `/api/invoices/${id}/issue`, all.length ? { confirm: all } : undefined);
+  },
   /** With `email` the PDF goes out through the company's mailbox; without, the send is recorded as a download to `to`. */
   recordSend: (id: string, send: { to?: string; email?: MailMessage }) => request<SentDocument>('POST', `/api/invoices/${id}/send`, send),
   mailStatus: () => request<MailStatus>('GET', '/api/mail'),
@@ -827,7 +837,14 @@ export const api = {
   /** The Ausziffern dialog of an incoming payment, and its «Buchen». */
   allocation: (transactionRef: string, customerId?: string) => request<{ transaction: BankTransaction; items: AllocationItem[]; left: number }>('GET', `/api/invoices/allocation?transactionRef=${encodeURIComponent(transactionRef)}${customerId ? `&customerId=${encodeURIComponent(customerId)}` : ''}`),
   allocate: (transactionRef: string, parts: AllocationPart[]) => request<{ paid: Array<{ number: string; amount: number }> }>('POST', '/api/invoices/allocation', { transactionRef, parts }),
-  cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage; confirm?: 'paid' }) =>
+  /** A conversion (spec 4.4.1): `confirm` names the warnings the person overrode («Trotzdem erstellen», «Trotzdem übernehmen»). */
+  convert: (id: string, input: { to: DocumentKind; lines: Array<{ line: number; quantity: number }>; confirm?: string[] }) => request<Draft>('POST', `/api/invoices/${id}/convert`, input),
+  /** The customer's answer to an Angebot, the person's click; null takes it back. */
+  answer: (id: string, answer: 'accepted' | 'declined' | null) => request<Issued>('POST', `/api/invoices/${id}/answer`, { answer }),
+  /** An Angebot or Auftrag back to draft; `anyway`: «Trotzdem bearbeiten» once it was sent. */
+  /** An Angebot or Auftrag back to draft (the one route of «Zurück zum Entwurf»); `anyway`: «Trotzdem bearbeiten» once it was sent. */
+  reopen: (id: string, anyway = false) => request<Draft>('POST', `/api/invoices/${id}/draft`, anyway ? { confirm: 'sentVersion' } : {}),
+  cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage; confirm?: 'paid' | readonly string[] }) =>
     request<{ invoice: Issued; sent?: SentDocument }>('POST', `/api/invoices/${id}/cancel`, input),
   creditNote: (id: string, input: CreditInput) => request<Draft>('POST', `/api/invoices/${id}/credit-note`, input),
   /** «Zurück zum Entwurf» of an unsent document (spec 4.4.2): it keeps its number; refused once sent (`sent`). */

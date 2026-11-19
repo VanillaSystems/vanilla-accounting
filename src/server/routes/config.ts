@@ -14,9 +14,12 @@ import { payoutSales, salesDefaults } from '../../workspace/sells.js';
 import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { SALES_KINDS, salesKinds, type SalesKind } from '../../workspace/setup.js';
-import { INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS, PRICES, isItem, type InvoiceLanguage, type PaymentTerms, type UnitDef } from '../../invoices/model.js';
+import { DOCUMENT_KINDS, INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS, PRICES, isBooked, isItem, type DocumentKind, type Issued, type InvoiceLanguage, type PaymentTerms, type UnitDef } from '../../invoices/model.js';
+import { DEFAULT_NUMBERING, nextNumberFor, type Numbering } from '../../invoices/numbering.js';
+import { numberingFits, sameReference } from '../../providers/qr-bill/reference.js';
+import { docRef } from '../../books/refs.js';
 import { loadInvoices, writeAtomic } from '../../invoices/store.js';
-import { liveInvoices } from '../../invoices/rules.js';
+import { liveDocuments } from '../../invoices/rules.js';
 import { accountName, removeAccount, setAccountName } from '../../workspace/accounts-write.js';
 import { standardAccounts } from '../../workspace/chart.js';
 import { readBankStatements } from '../../workspace/bank-statements.js';
@@ -227,10 +230,45 @@ function qrIbanOf(to: Record<string, unknown>, currency: string, confirm: unknow
   return qrIban;
 }
 
+/**
+ * Firma › Rechnungslayout › Nummern: a format per kind, checked with the firm's other formats as they
+ * would stand (src/invoices/numbering.ts checkNumbering); a format no number or payment reference can
+ * hold is refused with `numberFormat`. It applies from the next number: issued numbers never change.
+ */
+function numberingPatch(raw: unknown): NonNullable<InvoicingPatch['numbering']> {
+  const p = patchBody(raw, DOCUMENT_KINDS);
+  const out: NonNullable<InvoicingPatch['numbering']> = {};
+  for (const [kind, v] of Object.entries(p)) {
+    const f = patchBody(v, ['format', 'restartYearly']);
+    if (typeof f.format !== 'string' || (f.restartYearly !== undefined && typeof f.restartYearly !== 'boolean')) throw new RequestError(400, `numbering.${kind}: { format, restartYearly }.`);
+    out[kind as DocumentKind] = { format: f.format.trim(), restartYearly: f.restartYearly !== false };
+  }
+  const merged = { ...(WS.invoicing?.numbering ?? DEFAULT_NUMBERING), ...out };
+  const bad = numberingFits(merged) ?? referenceClash(merged, Object.keys(out) as DocumentKind[]);
+  if (bad) throw new RequestError(400, `Nummernformat «${merged[bad.kind].format}» (${bad.kind}) geht nicht: ${bad.refusal}.`, { code: 'numberFormat', params: { kind: bad.kind, refusal: bad.refusal, format: merged[bad.kind].format } });
+  return out;
+}
+
+/**
+ * A changed format whose next number would make the payment reference or the booking ref of a
+ * document issued already (2026-001 then 2026001 make one QR reference): refused as `referenceTaken`.
+ */
+function referenceClash(n: Numbering, changed: readonly DocumentKind[]): { kind: DocumentKind; refusal: 'referenceTaken' } | undefined {
+  const docs = liveDocuments(loadInvoices(WS));
+  const issued = docs.filter((d): d is Issued => d.status === 'issued' && isBooked(d));
+  const today = new Date().toISOString().slice(0, 10);
+  for (const kind of changed.filter((k) => k === 'invoice' || k === 'credit-note')) {
+    const next = nextNumberFor(docs, kind, today, n);
+    if (issued.some((d) => sameReference(next, d.number) || docRef(d) === docRef({ number: next, kind }))) return { kind, refusal: 'referenceTaken' };
+  }
+  return undefined;
+}
+
 /** The layout's values are checked by the manifest's reader; here only their kinds. */
 function invoicingPatch(raw: unknown): InvoicingPatch {
-  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo', 'confirm', 'units', 'prices', 'paymentTerms', 'defaultTerms']);
   const out: InvoicingPatch = {};
+  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo', 'confirm', 'units', 'prices', 'paymentTerms', 'defaultTerms', 'numbering']);
+  if (b.numbering !== undefined) out.numbering = numberingPatch(b.numbering);
   if (b.paymentTerms !== undefined) out.paymentTerms = b.paymentTerms === null ? null : termsPatch(b.paymentTerms);
   if (b.defaultTerms !== undefined) {
     if (b.defaultTerms !== null && typeof b.defaultTerms !== 'string') throw new RequestError(400, 'defaultTerms: die Id einer Zahlungskondition.');
@@ -238,7 +276,7 @@ function invoicingPatch(raw: unknown): InvoicingPatch {
   }
   if (b.units !== undefined) out.units = b.units === null ? null : unitsPatch(b.units);
   if (b.prices !== undefined) {
-    const p = patchBody(b.prices, ['invoice', 'credit-note']);
+    const p = patchBody(b.prices, DOCUMENT_KINDS);
     for (const [kind, v] of Object.entries(p)) if (v !== null && !PRICES.includes(v as never)) throw new RequestError(400, `prices.${kind}: net oder gross.`);
     out.prices = p as NonNullable<InvoicingPatch['prices']>;
   }
@@ -335,7 +373,7 @@ function unitsPatch(raw: unknown): UnitDef[] {
   const twice = units.find((u, i) => units.findIndex((x) => x.id === u.id) !== i);
   if (twice) throw new RequestError(400, `units: ${twice.id} steht zweimal.`, { code: 'unitTwice', params: { id: twice.id } });
   const kept = new Set(units.map((u) => u.id));
-  const used = liveInvoices(loadInvoices(WS)).filter((i) => i.status === 'draft').flatMap((i) => i.lines.flatMap((l) => (isItem(l) && l.unit && !kept.has(l.unit) ? [l.unit] : [])));
+  const used = liveDocuments(loadInvoices(WS)).filter((i) => i.status === 'draft').flatMap((i) => i.lines.flatMap((l) => (isItem(l) && l.unit && !kept.has(l.unit) ? [l.unit] : [])));
   if (used.length) throw new RequestError(409, `Die Einheit ${used[0]} steht in einem Entwurf: dort zuerst ändern.`, { code: 'unitInUse', params: { id: used[0] } });
   return units;
 }

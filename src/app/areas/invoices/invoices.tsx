@@ -21,6 +21,8 @@ import { Detail } from './Detail.js';
 import { Dialogs } from './dialogs.js';
 import { countryName } from './address.js';
 import { DocTable } from './DocTable.js';
+import { DOC_VIEWS, kindOfView, type DocView } from './table.js';
+import type { DocumentKind } from '../../../invoices/model.js';
 import { OpenItems } from './OpenItems.js';
 import { SentLog } from './SentLog.js';
 import { Search, Views } from './views.js';
@@ -49,7 +51,7 @@ function List(props: Props) {
   if (load.state !== 'ready') {
     return (
       <div className="page">
-        <ListHead {...props} noPeriod={route.view !== 'list' && route.view !== 'credit-notes'} />
+        <ListHead {...props} noPeriod={!(DOC_VIEWS as readonly string[]).includes(route.view)} />
         <div className="empty"><p>{load.state === 'loading' ? t('app.loading') : t('invoices.unavailable')}</p></div>
       </div>
     );
@@ -103,6 +105,13 @@ function CustomerList(props: Props & { d: Records }) {
   );
 }
 
+/** The kind the «+» of a view makes: its own; a Gutschrift comes only from its Rechnung, so there a Rechnung. */
+const newKind = (view: RouteOf<'invoices'>['view']): DocumentKind => {
+  if (!(DOC_VIEWS as readonly string[]).includes(view)) return 'invoice';
+  const k = kindOfView(view as DocView);
+  return k === 'credit-note' ? 'invoice' : k;
+};
+
 /** Layout A: every view but Kunden is a table; its document opens as a panel while the route names one. */
 const tableOf = (r: RouteOf<'invoices'>) => (r.view === 'customers' ? undefined : { open: !!r.id && r.id !== 'new', close: { area: 'invoices' as const, view: r.view } });
 
@@ -122,10 +131,11 @@ export const invoices: Area<RouteOf<'invoices'>> = {
   newest: newestIssued,
   List: (props) => <><List {...props} /><Dialogs {...props} /></>,
   Detail,
+  // The «+» of each table makes a document of its kind (spec 4.8); elsewhere a Rechnung.
   add: {
-    label: (r) => t(r.view === 'customers' ? 'invoices.sec.customer' : 'invoices.docKind.invoice'),
-    title: (r) => t(r.view === 'customers' ? 'invoices.newCustomer' : 'invoices.newTitle'),
-    run: (p) => setUi({ dialog: p.route.area === 'invoices' && p.route.view === 'customers' ? { kind: 'customer' } : { kind: 'new' } }),
+    label: (r) => (r.view === 'customers' ? t('invoices.sec.customer') : t(`invoices.docKind.${newKind(r.view)}`)),
+    title: (r) => (r.view === 'customers' ? t('invoices.newCustomer') : t(`sales.newTitle.${newKind(r.view)}` as 'sales.newTitle.invoice')),
+    run: (p) => setUi({ dialog: p.route.area === 'invoices' && p.route.view === 'customers' ? { kind: 'customer' } : { kind: 'new', doc: p.route.area === 'invoices' ? newKind(p.route.view) : 'invoice' } }),
   },
   legend,
   table: tableOf,

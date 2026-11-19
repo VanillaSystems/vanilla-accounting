@@ -48,7 +48,10 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/company/<section>` | `profile`, `vat`, `banks`, `invoice-layout`, `mail`, `sources`, `rules`, `accounts`, `dimensions`, `periods`, `opening`, `display` |
 | `/company/rules?payment=<ref>` | the form of a new rule, started from that payment (`&by=text`: with the payment's lasting words instead of its payer) |
 | `/invoices` | Verkauf › Rechnungen; `?status=draft\|open\|overdue\|partly-paid\|paid\|cancelled\|unsent` (`unsent`: «Nicht gesendet») |
-| `/invoices/<number>` | an issued invoice or credit note, e.g. `/invoices/2026-006`; a credit note opens in Gutschriften (`/invoices/credit-notes/<number>`) |
+| `/invoices/<number>` | an issued document of any kind, e.g. `/invoices/2026-006`, `/invoices/AN-2026-00004`; it opens in the view of its kind (a credit note in Gutschriften, `/invoices/credit-notes/<number>`; an Angebot in Angebote, …) |
+| `/invoices/quotes` and `/invoices/quotes/<number>` | Angebote and one open over the table; `?status=draft\|open\|accepted\|declined\|expired\|unsent` |
+| `/invoices/orders` and `/invoices/orders/<number>` | Aufträge; `?status=draft\|open\|partly\|done\|cancelled\|unsent` |
+| `/invoices/deliveries` and `/invoices/deliveries/<number>` | Lieferscheine; `?status=draft\|done\|cancelled\|unsent` |
 | `/invoices/credit-notes` and `/invoices/credit-notes/<number>` | Gutschriften and one open over the table; `?status=draft\|open\|partly\|settled\|unsent` |
 | `/invoices/open-items` and `/invoices/open-items/<number>` | Offene Posten on today, or on `?date=2026-12-31`, and one invoice open over it |
 | `/invoices/draft-<id>` | a draft (it has no number until it is issued) |

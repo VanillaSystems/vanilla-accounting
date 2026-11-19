@@ -111,3 +111,18 @@ test('Konten ändern of the filed invoice: its plan, then a reclassification wit
   assert.deepEqual(inv.accountChanges?.map((c) => [c.lines, c.refs, c.reclass]), [[[{ line: 0, from: '3300', to: '3400' }], [], 'RE-2026-001-kk-1']], 'and its history says so');
   assert.equal(inv.pdf.sha256, createHash('sha256').update(pdfOf('2026-001')).digest('hex'), 'the PDF stays as issued');
 });
+
+test('the one route of «Zurück zum Entwurf» takes an Angebot too: once sent it warns (`sentVersion`), «Trotzdem bearbeiten» makes it a draft that keeps its number, and nothing is booked', async () => {
+  const b = book();
+  const quote: Issued = { ...b.invoices[0] as Issued, id: 'in_q', kind: 'quote', number: 'AN-2026-00001', reference: '', date: '2026-08-20', issuedAt: '2026-08-20T09:00:00Z', payments: [], reminders: [] };
+  writeFileSync(join(api.root, 'invoices.json'), JSON.stringify({ ...b, invoices: [...b.invoices, quote], sent: [...b.sent, { id: 'sd_q', createdAt: '2026-08-20T10:00:00Z', origin: 'manual', deleted: false, invoiceId: 'in_q', kind: 'quote', title: 'Angebot AN-2026-00001', file: quote.pdf.file, sha256: quote.pdf.sha256, sentAt: '2026-08-20T10:00:00Z', to: 'kunde@example.ch', channel: 'email', messageId: 'm' }] }));
+  const entries = loadBooks(api.ws).journalEntries.length;
+  const warned = await api.send('POST', '/api/invoices/in_q/draft');
+  assert.equal(warned.status, 409);
+  assert.equal((warned.json as { invoiceRefusal?: string }).invoiceRefusal, 'sentVersion');
+  const back = await api.send('POST', '/api/invoices/in_q/draft', { confirm: 'sentVersion' });
+  assert.equal(back.status, 200);
+  assert.deepEqual([(back.json as unknown as Draft).status, (back.json as unknown as Draft).number], ['draft', 'AN-2026-00001']);
+  assert.equal(loadBooks(api.ws).journalEntries.length, entries, 'an Angebot books nothing');
+  assert.ok(existsSync(join(api.root, quote.pdf.file)), 'the PDF sent stays where the sent log names it');
+});

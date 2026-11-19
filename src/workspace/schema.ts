@@ -13,8 +13,9 @@
  * A books step never changes a record dated on or before closedThrough: the seals of the filed
  * quarters (src/books/seal.ts) are checked after it and refuse books it changed.
  */
-import { isMap, isSeq, type Document } from 'yaml';
+import { isMap, isSeq, type Document, type YAMLMap } from 'yaml';
 import { roleBefore } from './banks.js';
+import { LEGACY_FORMAT } from './numbering.js';
 
 /**
  * 2: the books split by fiscal year (ADR 0013); the move itself is the layout migration (src/workspace/layout.ts).
@@ -81,8 +82,15 @@ export const BOOKS_SCHEMA = 11;
  * the step changes nothing; an app of schema 4 would refuse these keys as it should, by the number,
  * instead of dropping them on its next save of Firma › Rechnungslayout. Further phase-1 settings
  * ride on this step until it is released.
+ * 6: the number series per kind of invoicing phase 2 (docs/specs/invoicing.md 4.4.4): `invoicing.numbering`,
+ * `{ format, restartYearly }` per kind (quote, sales-order, delivery-note, invoice, credit-note). A manifest
+ * without it numbers by the new firm's defaults (AN-, AU-, LS-, RE-, GS-{JJJJ}-{NNNNN}), so the step writes
+ * today's shared series `{JJJJ}-{NNN}` for invoices and credit notes into every manifest that has an
+ * `invoicing:` section: no issued number changes, the next continues the old series, nothing gaps. An app
+ * of schema 5 would number by its fixed series and drop the formats on its next save, so it must refuse.
+ * `invoicing.prices` may name the new kinds too. Further phase-2 settings ride on this step until it is released.
  */
-export const WORKSPACE_SCHEMA = 5;
+export const WORKSPACE_SCHEMA = 6;
 /**
  * 2: a line may be priced with the VAT in it (`InvoiceLine.vatIncluded`, a credit note of «500 VAT
  * included»). An app of schema 1 would read that price as net and add the VAT to it, so it must refuse.
@@ -93,11 +101,18 @@ export const WORKSPACE_SCHEMA = 5;
  *    Also in 3 (unreleased, phase 1 of invoicing, so no step of their own): `InvoiceLine.activity`
  *    (the net tax rate of a position on a firm with two), `payments[].source`, `allocations`,
  *    `writeOffs` and `Issued.terms`. A file of schema 2 holds none: the step adds nothing for them.
- *    Phase 2 (slice F2) adds `Draft.number`, `replaced` and `Issued.accountChanges` (back to draft,
- *    Konten ändern); they need no transform and ride on phase 2's step 3 → 4 (slice G1), so an app of
- *    schema 3 never issues a draft that keeps its number under a new one.
+ * 4: invoicing phase 2 (docs/specs/invoicing.md 4.3). The document kinds `quote`, `sales-order` and
+ *    `delivery-note` beside invoice and credit note, with `validUntil`, `accepted` / `declined`
+ *    (`{ date, by }`), `from` (`{ id, kind }`, the document a conversion made it from), `ordered`, `printAs`
+ *    (an Auftrag's print variant); a position's `optional` and `ofLine`; a draft's `number` (an Angebot or
+ *    Auftrag back to draft keeps it); sent-log kinds `quote`, `sales-order`, `delivery-note`. A file of
+ *    schema 3 holds none of them: the step adds nothing. An app of schema 3 would read an Angebot as a
+ *    Rechnung, list it, match payments to it and book it, so it must refuse. The contacts of phase 2
+ *    (slice G1) transform `customers` in this same step.
+ *    Also in 4 (slice F2): `Draft.number` (a document back to draft keeps its number: one field and
+ *    one rule for every kind), `replaced` and `Issued.accountChanges` (back to draft, Konten ändern).
  */
-export const INVOICES_SCHEMA = 3;
+export const INVOICES_SCHEMA = 4;
 /** 1: payroll.json starts with dated histories (docs/specs/domain-model.md §5.7), so it needs no step yet. */
 export const PAYROLL_SCHEMA = 1;
 export const PAYROLL_MIGRATIONS: Ladder<Record<string, unknown>> = {};
@@ -144,6 +159,20 @@ export const MANIFEST_MIGRATIONS: Ladder<Document> = {
   3: (doc) => doc,
   // No manifest has the phase-1 invoicing settings before; absent means the defaults. The number makes an older app refuse them.
   4: (doc) => doc,
+  // An invoicing section keeps today's one series of invoices and credit notes (absent would mean the new prefixes).
+  5: (doc) => {
+    const inv = doc.get('invoicing');
+    if (!isMap(inv) || inv.has('numbering')) return doc;
+    // One line per kind, `invoice: { format: "{JJJJ}-{NNN}", restartYearly: true }`, as Firma › Rechnungslayout writes it.
+    const numbering = doc.createNode({}) as YAMLMap;
+    for (const kind of ['invoice', 'credit-note']) {
+      const line = doc.createNode({ format: LEGACY_FORMAT.format, restartYearly: LEGACY_FORMAT.restartYearly }) as YAMLMap;
+      line.flow = true;
+      numbering.set(kind, line);
+    }
+    inv.set('numbering', numbering);
+    return doc;
+  },
 };
 
 /** The manifest document named at the current schema: its `schema:` set where it stands (its comments with it), else added as the first key. */
@@ -162,6 +191,8 @@ export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {
   // Every line is an item (no `kind`); each document names its prices, and a line keeps `vatIncluded` only where it
   // differs from them; an issued document freezes the words its units printed with.
   2: (doc) => ({ ...doc, invoices: Array.isArray(doc.invoices) ? doc.invoices.map((d) => unitsOfIssued(pricesOfDocument(d))) : doc.invoices }),
+  // No document is of a phase-2 kind before; the number makes an older app refuse the file.
+  3: (doc) => doc,
 };
 
 /** The words the units of schema 2 printed with (src/invoices/texts.ts at 0.6.0). */

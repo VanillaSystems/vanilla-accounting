@@ -29,9 +29,12 @@ export { wasSent } from '../../../invoices/lists.js';
  * The last document issued in the draft's year with a later date: the draft would take the next
  * number with an earlier date, and the numbers would no longer follow the dates.
  */
-export function issuedLater(invoices: readonly Invoice[], draft: Pick<Draft, 'date'>): Issued | undefined {
+export function issuedLater(invoices: readonly Invoice[], draft: Pick<Draft, 'date'> & { kind?: Draft['kind'] }): Issued | undefined {
+  const kind = draft.kind ?? 'invoice';
+  // The same series: the same kind, or the other of a Rechnung and Gutschrift sharing today's series.
+  const series = (k: Draft['kind']) => k === kind || ((k === 'invoice' || k === 'credit-note') && (kind === 'invoice' || kind === 'credit-note'));
   return invoices
-    .filter((i): i is Issued => i.status === 'issued' && !i.deleted && i.number.startsWith(`${draft.date.slice(0, 4)}-`) && i.date > draft.date)
+    .filter((i): i is Issued => i.status === 'issued' && !i.deleted && series(i.kind) && i.date.slice(0, 4) === draft.date.slice(0, 4) && i.date > draft.date)
     .sort((a, b) => b.date.localeCompare(a.date))[0];
 }
 

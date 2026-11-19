@@ -9,19 +9,25 @@ import { fromRappen, toRappen } from '../../../accounting/rappen.js';
 import type { Invoice, Issued } from '../../../invoices/model.js';
 import { isOverdue, openAmount, totals } from '../../../invoices/rules.js';
 import {
-  CREDIT_TABS, INVOICE_TABS, creditNoteStatus, creditRest, daysBetween, invoiceStatus, sentFacts, unsent,
-  type CreditListStatus, type CreditTab, type InvoiceListStatus, type InvoiceTab, type SentFacts,
+  CREDIT_TABS, DELIVERY_TABS, INVOICE_TABS, ORDER_TABS, QUOTE_TABS, creditNoteStatus, creditRest, daysBetween, deliveryStatus, invoiceStatus, orderStatus, quoteStatus, sentFacts, unsent,
+  type CreditListStatus, type CreditTab, type DeliveryListStatus, type InvoiceListStatus, type InvoiceTab, type OrderListStatus, type QuoteListStatus, type SentFacts,
 } from '../../../invoices/lists.js';
+import { doneShare } from '../../../invoices/chain.js';
 import type { InvoiceList } from '../../lib/api.js';
 import type { InvoiceView } from '../../shell/route.js';
 import { baseCurrency } from '../../../engines/index.js';
 import { customerOf, routeId } from './model.js';
 
 export type DocKind = Invoice['kind'];
-/** The views that are a table of documents. */
-export type DocView = Extract<InvoiceView, 'list' | 'credit-notes'>;
-export const kindOfView = (view: DocView): DocKind => (view === 'credit-notes' ? 'credit-note' : 'invoice');
-export const viewOfKind = (kind: DocKind): DocView => (kind === 'credit-note' ? 'credit-notes' : 'list');
+/** The views that are a table of documents, one per kind. */
+export type DocView = Extract<InvoiceView, 'list' | 'credit-notes' | 'quotes' | 'orders' | 'deliveries'>;
+const VIEW_OF: Record<DocKind, DocView> = { invoice: 'list', 'credit-note': 'credit-notes', quote: 'quotes', 'sales-order': 'orders', 'delivery-note': 'deliveries' };
+export const kindOfView = (view: DocView): DocKind => (Object.keys(VIEW_OF) as DocKind[]).find((k) => VIEW_OF[k] === view)!;
+export const viewOfKind = (kind: DocKind): DocView => VIEW_OF[kind];
+export const DOC_VIEWS: readonly DocView[] = Object.values(VIEW_OF);
+/** The word group of a kind's statuses and tabs in the dictionaries (sales.status.<group>.…, sales.tab.<group>.…). */
+export const groupOf = (kind: DocKind): 'invoice' | 'credit' | 'quote' | 'order' | 'delivery' =>
+  ({ invoice: 'invoice', 'credit-note': 'credit', quote: 'quote', 'sales-order': 'order', 'delivery-note': 'delivery' } as const)[kind];
 
 export const PAGE_SIZE = 50;
 
@@ -30,7 +36,7 @@ export interface DocRow {
   /** Its id in a link (number or draft-<id>). */
   id: string;
   customer: string;
-  status: InvoiceListStatus | CreditListStatus;
+  status: InvoiceListStatus | CreditListStatus | QuoteListStatus | OrderListStatus | DeliveryListStatus;
   /** Days past the due date while something is open; 0 otherwise. */
   overdue: number;
   /** Issued, not cancelled, never sent itself. */
@@ -41,8 +47,22 @@ export interface DocRow {
   open: number;
   /** The Mahnstufe reached (the last Mahnung's level); 0 without one. */
   level: number;
-  /** A Gutschrift's Rechnung. */
+  /** A Gutschrift's Rechnung, a Lieferschein's Auftrag. */
   target?: Issued;
+  /** An Auftrag: the share of its value delivered and invoiced, 0 to 1 (chain.ts doneShare). */
+  delivered?: number;
+  invoiced?: number;
+}
+
+/** A document's status in the list of its kind: the one function of lists.ts each kind has. */
+export function statusOfKind(inv: Invoice, invoices: readonly Invoice[], today: string): DocRow['status'] {
+  switch (inv.kind) {
+    case 'invoice': return invoiceStatus(inv, invoices);
+    case 'credit-note': return creditNoteStatus(inv, invoices);
+    case 'quote': return quoteStatus(inv, invoices, today);
+    case 'sales-order': return orderStatus(inv, invoices);
+    case 'delivery-note': return deliveryStatus(inv);
+  }
 }
 
 const matches = (r: DocRow, needle: string) =>
@@ -58,23 +78,27 @@ export function docRows(d: InvoiceList, kind: DocKind, period: Period, q: string
   return d.invoices
     .filter((inv) => inv.kind === kind && !inv.deleted)
     .map((inv): DocRow => {
-      const open = kind === 'invoice' ? openAmount(inv, d.invoices) : creditRest(inv, d.invoices);
-      const target = inv.creditFor ? d.invoices.find((i): i is Issued => i.id === inv.creditFor && i.status === 'issued') : undefined;
-      const status = kind === 'invoice' ? invoiceStatus(inv, d.invoices) : creditNoteStatus(inv, d.invoices);
+      const open = kind === 'invoice' ? openAmount(inv, d.invoices) : kind === 'credit-note' ? creditRest(inv, d.invoices) : 0;
+      const targetId = inv.creditFor ?? (kind === 'delivery-note' ? inv.from?.id : undefined);
+      const target = targetId ? d.invoices.find((i): i is Issued => i.id === targetId && i.status === 'issued') : undefined;
+      const status = statusOfKind(inv, d.invoices, today);
       const due = inv.status === 'issued' && kind === 'invoice' && isOverdue(inv, d.invoices, today) ? daysBetween(inv.dueDate, today) : 0;
       return {
         inv, id: routeId(inv), customer: customerOf(d, inv)?.name ?? '', status, overdue: due, unsent: unsent(inv, d.sent),
         sent: sentFacts(d.sent, inv), gross: totals(inv).gross, open,
         level: inv.status === 'issued' ? inv.reminders.reduce((m, r) => Math.max(m, r.level), 0) : 0,
         ...(target ? { target } : {}),
+        ...(kind === 'sales-order' && inv.status === 'issued' ? { delivered: doneShare(inv, d.invoices, 'delivered'), invoiced: doneShare(inv, d.invoices, 'invoiced') } : {}),
       };
     })
-    .filter((r) => r.inv.status === 'draft' || (r.inv.date >= period.from && r.inv.date <= period.to) || (r.inv.date < period.from && r.open > 0))
+    // An earlier period's document still counts while something of it waits: money open, an Angebot open, an Auftrag not done.
+    .filter((r) => r.inv.status === 'draft' || (r.inv.date >= period.from && r.inv.date <= period.to) || (r.inv.date < period.from && (r.open > 0 || ((kind === 'quote' || kind === 'sales-order') && (r.status === 'open' || r.status === 'partly')))))
     .filter((r) => !needle || matches(r, needle));
 }
 
-export type Tab = 'all' | InvoiceTab | CreditTab;
-export const tabsOf = (kind: DocKind): readonly Tab[] => ['all', ...(kind === 'invoice' ? INVOICE_TABS : CREDIT_TABS)];
+export type Tab = 'all' | InvoiceTab | CreditTab | (typeof QUOTE_TABS)[number] | (typeof ORDER_TABS)[number] | (typeof DELIVERY_TABS)[number];
+const TABS: Record<DocKind, readonly Tab[]> = { invoice: INVOICE_TABS, 'credit-note': CREDIT_TABS, quote: QUOTE_TABS, 'sales-order': ORDER_TABS, 'delivery-note': DELIVERY_TABS };
+export const tabsOf = (kind: DocKind): readonly Tab[] => ['all', ...TABS[kind]];
 
 /** A row in a tab: Überfällig overlaps Offen and Teilbezahlt, as the mark beside the status does. */
 export function inTab(r: DocRow, tab: Tab | undefined): boolean {
@@ -126,12 +150,12 @@ export function factsOf(rows: readonly DocRow[]): Facts[] {
   return [...by.values()].sort((a, b) => (a.currency === base ? -1 : b.currency === base ? 1 : a.currency.localeCompare(b.currency)));
 }
 
-export const SORT_KEYS = ['date', 'number', 'contact', 'invoice', 'status', 'sent', 'due', 'currency', 'gross', 'open', 'level'] as const;
+export const SORT_KEYS = ['date', 'number', 'contact', 'invoice', 'status', 'sent', 'due', 'currency', 'gross', 'open', 'level', 'validUntil', 'delivered', 'invoiced', 'order'] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 export interface Sort { key: SortKey; dir: 1 | -1 }
 export const DEFAULT_SORT: Sort = { key: 'date', dir: -1 };
 
-const STATUS_ORDER = ['draft', 'open', 'partly-paid', 'partly', 'paid', 'written-off', 'settled', 'cancelled'];
+const STATUS_ORDER = ['draft', 'open', 'expired', 'partly-paid', 'partly', 'accepted', 'declined', 'paid', 'written-off', 'settled', 'done', 'cancelled'];
 const text = (a: string, b: string) => a.localeCompare(b, 'de', { numeric: true, sensitivity: 'base' });
 
 function compare(a: DocRow, b: DocRow, key: SortKey): number {
@@ -147,6 +171,10 @@ function compare(a: DocRow, b: DocRow, key: SortKey): number {
     case 'gross': return a.gross - b.gross;
     case 'open': return a.open - b.open;
     case 'level': return a.level - b.level;
+    case 'validUntil': return (a.inv.validUntil ?? '').localeCompare(b.inv.validUntil ?? '');
+    case 'delivered': return (a.delivered ?? 0) - (b.delivered ?? 0);
+    case 'invoiced': return (a.invoiced ?? 0) - (b.invoiced ?? 0);
+    case 'order': return text(a.target?.number ?? '', b.target?.number ?? '');
   }
 }
 

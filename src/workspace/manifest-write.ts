@@ -9,7 +9,8 @@ import type { StatementKind } from './banks.js';
 import { readFileSync } from 'node:fs';
 import { isMap, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
 import { writeAtomic } from '../invoices/store.js';
-import type { Address, InvoiceContent, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail, PayToPatch, PaymentTerms, Prices, UnitDef } from '../invoices/model.js';
+import type { Address, DocumentKind, InvoiceContent, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail, PayToPatch, PaymentTerms, Prices, UnitDef } from '../invoices/model.js';
+import type { NumberFormat } from './numbering.js';
 import { parseIban, roleBefore, type MoneyRole } from './banks.js';
 import { parseManifest, type Manifest } from './manifest.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
@@ -69,6 +70,8 @@ export interface InvoicingPatch {
   paymentTerms?: PaymentTerms[] | null;
   /** The id of the terms a new invoice takes; null: the first. */
   defaultTerms?: string | null;
+  /** The number series of a kind (spec 4.4.4), each written as one line; applies from the next number. */
+  numbering?: Partial<Record<DocumentKind, NumberFormat>>;
 }
 
 /** Firma › E-Mail: the outgoing mailbox, field by field; null removes a field, `outgoingMail: null` the block. */
@@ -203,6 +206,8 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     else if (inv.paymentTerms) doc.setIn(['invoicing', 'paymentTerms'], doc.createNode(inv.paymentTerms.map((x) => { const n = doc.createNode(x) as YAMLMap; n.flow = true; return n; })));
     if (inv.defaultTerms !== undefined) set(doc, ['invoicing', 'defaultTerms'], inv.defaultTerms);
     for (const [kind, value] of Object.entries(inv.prices ?? {})) set(doc, ['invoicing', 'prices', kind], value);
+    // One line per kind, `invoice: { format: "RE-{JJJJ}-{NNNNN}", restartYearly: true }`.
+    for (const [kind, value] of Object.entries(inv.numbering ?? {})) { const n = doc.createNode(value) as YAMLMap; n.flow = true; doc.setIn(['invoicing', 'numbering', kind], n); }
     if (isMap(doc.getIn(['invoicing', 'prices'])) && (doc.getIn(['invoicing', 'prices']) as YAMLMap).items.length === 0) doc.deleteIn(['invoicing', 'prices']);
   }
   if (patch.sells) {

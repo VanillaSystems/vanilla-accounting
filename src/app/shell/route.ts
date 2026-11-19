@@ -21,18 +21,18 @@ export type AutomationTab = typeof AUTOMATION_TABS[number];
 export const AUTOMATION_PAGES = ['runs', 'workflows', 'map', 'queue', 'tasks'] as const;
 
 /**
- * Verkauf's views (docs/specs/invoicing.md 4.8): `list` is Rechnungen (no segment), then Gutschriften,
- * Offene Posten, Kunden and Versendet. A document opens under the view it is listed in; /invoices/<number>
- * stays its link whatever its kind.
+ * Verkauf's views (docs/specs/invoicing.md 4.8): `list` is Rechnungen (no segment), then Angebote,
+ * Aufträge, Lieferscheine, Gutschriften, Offene Posten, Kunden and Versendet. A document opens under the
+ * view it is listed in; /invoices/<number> stays its link whatever its kind.
  */
-export const INVOICE_VIEWS = ['list', 'credit-notes', 'open-items', 'customers', 'sent'] as const;
+export const INVOICE_VIEWS = ['list', 'quotes', 'orders', 'deliveries', 'credit-notes', 'open-items', 'customers', 'sent'] as const;
 export type InvoiceView = typeof INVOICE_VIEWS[number];
 
 /**
  * The status tabs of Rechnungen and Gutschriften (`?status=`), from facts: Rechnungen draft, open, overdue,
  * partly-paid, paid, cancelled; Gutschriften draft, open, partly, settled; both unsent («Nicht gesendet»).
  */
-export const INVOICE_STATUSES = ['draft', 'open', 'overdue', 'partly-paid', 'paid', 'cancelled', 'partly', 'settled', 'unsent'] as const;
+export const INVOICE_STATUSES = ['draft', 'open', 'overdue', 'partly-paid', 'paid', 'cancelled', 'partly', 'settled', 'unsent', 'accepted', 'declined', 'expired', 'done'] as const;
 
 /** Löhne › Einstellungen: its sections, by their English slugs (docs/urls.md). */
 export const PAYROLL_SECTIONS = ['company', 'insurances', 'wage-types', 'accounts'] as const;

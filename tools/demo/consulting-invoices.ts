@@ -33,6 +33,9 @@ export const CONSULTING_INVOICING: DemoInvoicing = {
     EUR: { account: "1021" }
   revenueAccount: "3400"
   paymentTermsDays: 30
+  numbering:
+    invoice: { format: "{JJJJ}-{NNN}", restartYearly: true }
+    credit-note: { format: "{JJJJ}-{NNN}", restartYearly: true }
   paymentTerms:
     - { id: net30, name: "30 Tage netto", days: 30 }
   texts:

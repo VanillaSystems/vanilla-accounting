@@ -9,7 +9,9 @@ import type {
   Comment, Customer, CustomerFields, Draft, Envelope, Exemption, Invoice, InvoiceBook, InvoiceContent, InvoiceLayout,
   InvoiceLine, InvoicingSettings, Issued, IssuedTerms, ItemLine, PaymentAllocation, PaymentTerms, Prices, Reminder, ReplacedPdf, Sender, SentDocument, UnitDef, VatRate, WriteOff,
 } from './model.js';
-import { isItem } from './model.js';
+import { isBooked, isItem, type DocumentKind } from './model.js';
+import { LEGACY_NUMBERING, nextNumberFor, type Numbering } from './numbering.js';
+import { docRef } from '../books/refs.js';
 import { chargesVat, invoiceActivities, invoiceRates, invoicing, vat, vatSetup } from '../engines/index.js';
 import { parseReference, referenceFor } from '../providers/qr-bill/reference.js';
 import type { BankTransaction } from '../types/index.js';
@@ -78,6 +80,8 @@ export function priced(doc: Priced): { parts: Part[]; amounts: Array<number | un
   const amounts = doc.lines.map((l): number | undefined => {
     if (isItem(l)) {
       const rappen = toRappen(lineAmount(l));
+      // An option prints its amount, never in a total, a Rabatt's base or a Zwischentotal (spec 4.4.1).
+      if (l.optional) return fromRappen(rappen);
       parts.push({ line: l, gross: l.vatRate > 0 && pricedGross(l, doc.prices), rappen });
       since += rappen;
       return fromRappen(rappen);
@@ -100,6 +104,12 @@ export function priced(doc: Priced): { parts: Part[]; amounts: Array<number | un
     return fromRappen(shares.reduce((s, x) => s + x, 0));
   });
   return { parts, amounts };
+}
+
+/** The optional positions of a document and what they would add, in its prices (net or gross as its positions): what its total names it leaves out. */
+export function optionsOf(doc: Priced): { n: number; amount: number } {
+  const xs = doc.lines.filter((l): l is ItemLine => isItem(l) && !!l.optional);
+  return { n: xs.length, amount: fromRappen(xs.reduce((s, l) => s + toRappen(lineAmount(l)), 0)) };
 }
 
 /** Each position's printed amount, by index: an item's, a Rabatt's, a Zwischentotal's; undefined for a text or a page break. */
@@ -147,7 +157,8 @@ export const paidAmount = (inv: Issued): number => fromRappen(inv.payments.reduc
  * (by `asOf`: a credit note written after a payment does not make that payment too much). Never below 0.
  */
 export function openAmount(inv: Invoice, invoices: readonly Invoice[], asOf?: string): number {
-  if (inv.status !== 'issued' || inv.kind === 'credit-note' || inv.cancelled) return 0;
+  // Only a Rechnung is owed: a Gutschrift, an Angebot, an Auftrag or a Lieferschein never is.
+  if (inv.status !== 'issued' || inv.kind !== 'invoice' || inv.cancelled) return 0;
   const credited = creditNotesOf(inv, invoices, asOf).reduce((s, c) => s - toRappen(totals(c).gross), 0);
   return fromRappen(Math.max(0, toRappen(totals(inv).gross) - toRappen(paidAmount(inv)) - credited - writtenOff(inv)));
 }
@@ -193,7 +204,7 @@ export function creditable(inv: Invoice, invoices: readonly Invoice[]): number {
 }
 
 export function openOn(inv: Invoice, invoices: readonly Invoice[], date: string): number {
-  if (inv.status !== 'issued' || inv.kind === 'credit-note' || inv.date > date || (inv.cancelled && inv.cancelled.date <= date)) return 0;
+  if (inv.status !== 'issued' || inv.kind !== 'invoice' || inv.date > date || (inv.cancelled && inv.cancelled.date <= date)) return 0;
   const credited = creditNotesOf(inv, invoices, date).reduce((s, c) => s - toRappen(totals(c).gross), 0);
   const paid = inv.payments.filter((p) => p.date <= date).reduce((s, p) => s + toRappen(p.amount), 0);
   return fromRappen(Math.max(0, toRappen(totals(inv).gross) - paid - credited - writtenOff(inv, date)));
@@ -215,7 +226,8 @@ export function refundDue(cn: Invoice, invoices: readonly Invoice[]): number {
  * text carries. A cancelled invoice too: the hand form then says so instead of booking revenue (r8c-5).
  */
 export function namedInvoice(tx: Pick<BankTransaction, 'reference' | 'description' | 'counterparty' | 'parts'>, invoices: readonly Invoice[]): Issued | undefined {
-  const issued = invoices.filter((i): i is Issued => i.status === 'issued' && !i.deleted);
+  // Only a Rechnung or Gutschrift is paid: an Angebot's or Auftrag's number in a payment's text names no claim.
+  const issued = invoices.filter((i): i is Issued => i.status === 'issued' && !i.deleted && isBooked(i));
   const refs = [tx.reference, ...(tx.parts ?? []).map((p) => p.reference)].flatMap((r) => (r ? [parseReference(r)?.reference] : []));
   const byRef = issued.find((i) => refs.includes(i.reference));
   if (byRef) return byRef;
@@ -259,7 +271,8 @@ export function openFees(inv: Issued): number {
 export function status(inv: Invoice, invoices: readonly Invoice[]): InvoiceStatus {
   if (inv.status === 'draft') return 'draft';
   if (inv.cancelled) return 'cancelled';
-  if (inv.kind === 'credit-note') return 'issued';
+  // A Gutschrift has its own status (lists.ts creditNoteStatus); an unbooked kind is never paid (lists.ts per kind).
+  if (inv.kind !== 'invoice') return 'issued';
   if (openAmount(inv, invoices) === 0) return 'paid';
   // Teilbezahlt: something received, credited or written off, and something open (spec 4.4.2).
   return inv.payments.length || inv.writeOffs?.length || creditNotesOf(inv, invoices).length ? 'partly-paid' : 'issued';
@@ -279,22 +292,18 @@ export function creditBeyond(cn: Issued, invoices: readonly Invoice[]): number {
 }
 
 export function isOverdue(inv: Invoice, invoices: readonly Invoice[], today: string): boolean {
-  return inv.status === 'issued' && openAmount(inv, invoices) > 0 && inv.dueDate < today;
+  return inv.status === 'issued' && inv.kind === 'invoice' && openAmount(inv, invoices) > 0 && inv.dueDate < today;
 }
 
 // ─── numbering ───────────────────────────────────────────────────────────────
 
 /**
- * The next number of the invoice date's year, YYYY-NNN: one more than the highest number that
- * year has given, cancelled invoices included, so no number is ever given twice. A draft has none,
- * unless it went back to draft and keeps its number (Draft.number): that one stays taken.
+ * The next number of a kind's series for a document dated `date` (src/invoices/numbering.ts): one
+ * more than the highest its series has given, cancelled documents included, so no number is ever
+ * given twice. Drafts have none. Without settings: the series a book had before phase 2 (2026-001).
  */
-export function nextNumber(invoices: readonly Invoice[], date: string): string {
-  const year = date.slice(0, 4);
-  const taken = invoices
-    .flatMap((i) => (i.number?.startsWith(`${year}-`) ? [i.number] : []))
-    .map((n) => Number(n.slice(5)));
-  return `${year}-${String(Math.max(0, ...taken) + 1).padStart(3, '0')}`;
+export function nextNumber(invoices: readonly Invoice[], date: string, kind: DocumentKind = 'invoice', numbering: Numbering = LEGACY_NUMBERING): string {
+  return nextNumberFor(invoices, kind, date, numbering);
 }
 
 // ─── issuing ─────────────────────────────────────────────────────────────────
@@ -307,7 +316,7 @@ export type MissingField =
   | 'sender.name' | 'sender.address' | 'sender.uid' | 'payTo'
   | 'customer' | 'customer.name' | 'customer.address'
   | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.price' | 'line.vatRate' | 'line.activity' | 'line.discount' | 'line.discountBase' | 'exemption' | 'total'
-  | 'credit.invoice' | 'credit.sign' | 'credit.exceeds' | 'credit.aboveOpen' | 'numberYear';
+  | 'credit.invoice' | 'credit.sign' | 'credit.exceeds' | 'credit.aboveOpen' | 'numberYear' | 'line.optional';
 
 const hasAddress = (a: { postcode?: string; town?: string; country?: string } | undefined) => !!(a?.postcode?.trim() && a.town?.trim() && a.country?.trim());
 
@@ -326,7 +335,8 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
   if (!sender.address || !sender.address.street?.trim() || !hasAddress(sender.address)) out.push({ field: 'sender.address' });
   // The VAT number on an invoice with VAT (MWSTG Art. 26 Abs. 2 lit. a); the setup does not ask it (#452), so the first such invoice does.
   if (chargesVat() && !sender.uid?.trim()) out.push({ field: 'sender.uid' });
-  if (!sender.payTo) out.push({ field: 'payTo' });
+  // A Rechnung and a Gutschrift carry a reference to pay or pay back; an Angebot, Auftrag or Lieferschein carries none.
+  if (!sender.payTo && isBooked(draft)) out.push({ field: 'payTo' });
   if (!customer) out.push({ field: 'customer' });
   else {
     if (!customer.name.trim()) out.push({ field: 'customer.name' });
@@ -342,6 +352,8 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
       return;
     }
     if (!isItem(l)) return;
+    // An option belongs to an Angebot or Auftrag; a conversion makes a ticked one an ordinary position.
+    if (l.optional && draft.kind !== 'quote' && draft.kind !== 'sales-order') out.push({ field: 'line.optional', line });
     if (!Number.isFinite(l.quantity) || !Number.isFinite(l.price)) out.push({ field: 'line.quantity', line });
     if (l.discount !== undefined && !(l.discount >= 0 && l.discount <= 100)) out.push({ field: 'line.discount', line });
     if (!invoiceRates().includes(l.vatRate)) out.push({ field: 'line.vatRate', line });
@@ -369,7 +381,7 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
  * e: it prints as 0.00), a Rabatt with nothing above it to take off, and a kept number of another
  * year than the date («Nummer 2026-005 im Jahr 2027»).
  */
-export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'> & { number?: string; date?: string }): Missing[] {
+export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'> & { number?: string; date?: string; kind?: InvoiceContent['kind'] }): Missing[] {
   // A draft back from issue keeps its number; dated into another year, the number names the old one (spec 4.4.2).
   const year = draft.number && /(?:^|\D)((?:19|20)\d\d)(?:\D|$)/.exec(draft.number)?.[1];
   const numberYear: Missing[] = year && draft.date && draft.date.slice(0, 4) !== year ? [{ field: 'numberYear' }] : [];
@@ -379,7 +391,8 @@ export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'>
     if (!isItem(l)) return [];
     return [
       ...(!l.text.trim() ? [{ field: 'line.text' as const, line }] : []),
-      ...(l.quantity === 0 || l.price === 0 ? [{ field: 'line.price' as const, line }] : []),
+      // A Lieferschein prints no prices: only a quantity of 0 is a gap there.
+      ...(l.quantity === 0 || (l.price === 0 && draft.kind !== 'delivery-note') ? [{ field: 'line.price' as const, line }] : []),
     ];
   })];
 }
@@ -389,7 +402,8 @@ export type PaymentRefusal = 'notFound' | 'noPayment' | 'cancelled' | 'currency'
   | 'noWriteOff' | 'moneyAccount' | 'amount' | 'noHandPayment' | 'confirmed' | 'noParts' | 'overAllocated' | 'twice';
 
 export class InvoiceRuleError extends Error {
-  constructor(readonly code: InvoiceRefusal, message: string, readonly missing?: Missing[]) { super(message); }
+  /** `params`: the facts a refusal names (a date, a number, a quantity), for its words in the UI. */
+  constructor(readonly code: InvoiceRefusal, message: string, readonly missing?: Missing[], readonly params?: Record<string, string | number>) { super(message); }
 }
 /**
  * `unconfirmed`: issuing warns (warningsForIssue) and the request did not carry the person's «Trotzdem ausstellen».
@@ -398,9 +412,19 @@ export class InvoiceRuleError extends Error {
  * `closed` its VAT event lies in a filed period; `numbered` a draft that keeps its number is not deleted.
  * «Konten ändern»: `account` not a revenue account of the chart, or not a position's; `credited` a credit
  * note's position on an account the change splits over two.
+ * The chain of phase 2 (src/invoices/chain.ts): `refTaken` a number whose booking ref another document's is,
+ * `referenceTaken` one whose payment reference another carries; `numberFormat` a format no number or payment
+ * reference can hold; `convert` a conversion its kinds do not take; `nothingTicked`; `deliveryFromOrder` a
+ * Lieferschein not made from an Auftrag; the warnings `expired`, `declined`, `overOpen`, `sentVersion`,
+ * `orderDelivered`, `orderDrafts` and `sourceCancelled` (spec 4.11, «Trotzdem …»); the hard rule `orderInvoiced`.
  */
 export type InvoiceRefusal = 'incomplete' | 'unconfirmed' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid' | 'aboveOpen' | 'surplus' | 'beforeInvoice'
-  | 'sent' | 'settled' | 'applied' | 'closed' | 'numbered' | 'account' | 'credited';
+  | 'sent' | 'settled' | 'applied' | 'closed' | 'numbered' | 'account' | 'credited'
+  | 'refTaken' | 'numberFormat' | 'convert' | 'nothingTicked' | 'expired' | 'declined' | 'overOpen' | 'sentVersion' | 'orderDelivered' | 'orderInvoiced' | 'notReopenable' | 'notQuote'
+  | 'referenceTaken' | 'deliveryFromOrder' | 'orderDrafts' | 'sourceCancelled';
+
+/** A kind's name in the German messages of a refusal (the UI words its own, src/app/i18n). */
+export const KIND_WORD: Record<DocumentKind, string> = { quote: 'Angebot', 'sales-order': 'Auftrag', 'delivery-note': 'Lieferschein', invoice: 'Rechnung', 'credit-note': 'Gutschrift' };
 
 /**
  * The draft as an issued invoice: its number (the next of the year), its due date, its payment
@@ -415,11 +439,14 @@ export function issue(draft: Draft, ctx: {
   confirmed?: boolean;
   /** The firm's payment terms: the draft's `termsId` picks one, frozen as printed; without, the customer's days net. */
   paymentTerms?: readonly PaymentTerms[];
+  /** The series per kind; absent: LEGACY_NUMBERING. */
+  numbering?: Numbering;
 }): Omit<Issued, 'pdf'> {
   if (draft.status !== 'draft' || draft.deleted) throw new InvoiceRuleError('notDraft', 'Nur ein Entwurf kann ausgestellt werden.');
   const missing = missingForIssue(draft, { ...ctx, sender: ctx.sender });
   const where = (ms: Missing[]) => ms.map((m) => m.field + (m.line === undefined ? '' : ` (Position ${m.line + 1})`)).join(', ');
-  if (missing.length || !ctx.customer || !('payTo' in ctx.sender)) {
+  const booked = isBooked(draft);
+  if (missing.length || !ctx.customer || (booked && !('payTo' in ctx.sender))) {
     throw new InvoiceRuleError('incomplete', `Für eine MWST-konforme Rechnung fehlt: ${where(missing)}.`, missing);
   }
   const warnings = warningsForIssue(draft);
@@ -428,9 +455,24 @@ export function issue(draft: Draft, ctx: {
     throw new InvoiceRuleError('unconfirmed', `Eine Position ohne Text oder Betrag: ${where(warnings)}. Sie wird so gedruckt; nur mit «Trotzdem ausstellen».`, warnings);
   }
   const terms = termsFor(draft, ctx.paymentTerms, ctx.customer.paymentTermsDays);
-  const { comments, status: _, ...content } = draft;
-  // A document back from draft is issued again under its number (spec 4.4.2).
-  const number = draft.number ?? nextNumber(ctx.invoices, draft.date);
+  const { comments, status: _, number: kept, ...content } = draft;
+  // An Angebot or Auftrag back from draft keeps its number; any other takes the next of its series.
+  const number = kept ?? nextNumber(ctx.invoices, draft.date, draft.kind, ctx.numbering);
+  // Booking refs are only compared (src/books/refs.ts docRef): two documents must never share one.
+  if (booked) {
+    const ref = docRef({ number, kind: draft.kind });
+    const holder = ctx.invoices.find((i): i is Issued => i.status === 'issued' && !i.deleted && isBooked(i) && i.id !== draft.id && docRef(i) === ref);
+    if (holder) throw new InvoiceRuleError('refTaken', `Die Nummer ${number} ergäbe die Buchungsreferenz ${ref}, die ${holder.number} schon trägt: das Nummernformat in Firma › Rechnungslayout › Nummern ändern.`);
+  }
+  let reference = '';
+  if (booked && 'payTo' in ctx.sender) {
+    try { reference = referenceFor(number, ctx.sender.payTo); } catch {
+      throw new InvoiceRuleError('numberFormat', `Die Nummer ${number} passt in keine Zahlungsreferenz (QRR 26 Ziffern, SCOR 21 Zeichen): das Nummernformat kürzen.`);
+    }
+    // A payment finds its document by the reference: two documents with one would be paid by one payment (2026-001 and 2026001 make the same QRR).
+    const twin = ctx.invoices.find((i): i is Issued => i.status === 'issued' && !i.deleted && isBooked(i) && i.id !== draft.id && i.reference === reference);
+    if (twin) throw new InvoiceRuleError('referenceTaken', `Die Nummer ${number} ergäbe die Zahlungsreferenz von ${twin.number}: das Nummernformat in Firma › Rechnungslayout › Nummern ändern.`, undefined, { number, other: twin.number });
+  }
   const { id: _id, createdAt: _c, origin: _o, deleted: _d, ...customer } = ctx.customer;
   const named = new Set(draft.lines.flatMap((l) => (isItem(l) && l.unit ? [l.unit] : [])));
   const units = (ctx.units ?? []).filter((u) => named.has(u.id));
@@ -441,9 +483,9 @@ export function issue(draft: Draft, ctx: {
     issuedAt: ctx.now,
     dueDate: draft.dueDate ?? addDays(draft.date, terms?.days ?? ctx.customer.paymentTermsDays),
     ...(terms ? { terms } : {}),
-    reference: referenceFor(number, ctx.sender.payTo),
+    reference,
     customer,
-    sender: ctx.sender,
+    sender: ctx.sender as Sender,
     layout: ctx.layout,
     ...(units.length ? { units: units.map((u) => ({ ...u })) } : {}),
     payments: [],
@@ -491,7 +533,8 @@ export function creditAboveOpen(draft: InvoiceContent, invoices: readonly Invoic
  */
 export function deleteDraft(inv: Invoice): Invoice {
   if (inv.status !== 'draft') throw new InvoiceRuleError('notDraft', 'Eine ausgestellte Rechnung wird storniert, nicht gelöscht.');
-  if (inv.number) throw new InvoiceRuleError('numbered', `Der Entwurf behält die Nummer ${inv.number}: er wird wieder ausgestellt und, wenn nicht mehr gewollt, storniert, damit die Nummern lückenlos bleiben.`);
+  // A draft back from issue keeps its number: issued again (and cancelled if no longer wanted), the series stays without a gap.
+  if (inv.number) throw new InvoiceRuleError('numbered', `Der Entwurf behält die Nummer ${inv.number}: er wird wieder ausgestellt und, wenn nicht mehr gewollt, storniert, damit die Nummern lückenlos bleiben.`, undefined, { number: inv.number });
   return { ...inv, deleted: true };
 }
 
@@ -544,7 +587,7 @@ export function asDraft(inv: Issued, replaced: ReplacedPdf, salutation = ''): Dr
  */
 export function cancel(inv: Invoice, c: { date: string; reason: string; confirmed?: boolean }): Issued {
   if (inv.status !== 'issued') throw new InvoiceRuleError('notIssued', 'Ein Entwurf wird gelöscht, nicht storniert.');
-  if (inv.cancelled) throw new InvoiceRuleError('cancelled', `Rechnung ${inv.number} ist schon storniert.`);
+  if (inv.cancelled) throw new InvoiceRuleError('cancelled', `${KIND_WORD[inv.kind]} ${inv.number} ist schon storniert.`, undefined, { number: inv.number });
   // A warning (spec 4.11): the Storno undoes the claim, the money stays received; «Trotzdem stornieren» releases the payments (the caller).
   if (inv.payments.length && !c.confirmed) {
     const named = inv.payments.map((p) => `${inv.currency} ${p.amount.toFixed(2)} vom ${p.date}`).join(', ');
@@ -842,8 +885,13 @@ export function withPayment(inv: Issued, p: PaymentAllocation): Issued {
 /** The document without the payment `transactionRef` («Lösen», r10c-3). */
 export const withoutPayment = (inv: Issued, transactionRef: string): Issued => ({ ...inv, payments: inv.payments.filter((p) => p.transactionRef !== transactionRef) });
 
-/** The book without deleted records. */
-export const liveInvoices = (book: InvoiceBook): Invoice[] => live(book.invoices);
+/**
+ * The book's Rechnungen and Gutschriften without deleted records: what is booked, paid and open. An
+ * Angebot, Auftrag or Lieferschein is in none of it; liveDocuments has every kind.
+ */
+export const liveInvoices = (book: InvoiceBook): Invoice[] => live(book.invoices).filter(isBooked);
+/** Every document of the book, whatever its kind, without deleted records. */
+export const liveDocuments = (book: InvoiceBook): Invoice[] => live(book.invoices);
 export const liveCustomers = (book: InvoiceBook): Customer[] => live(book.customers);
 
 /**

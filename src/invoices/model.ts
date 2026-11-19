@@ -5,6 +5,8 @@
  * its payment reference and its PDF, and freezes what it says.
  */
 
+import type { Numbering } from '../workspace/numbering.js';
+
 export const INVOICE_LANGUAGES = ['de', 'fr', 'it', 'en'] as const;
 export type InvoiceLanguage = (typeof INVOICE_LANGUAGES)[number];
 
@@ -121,6 +123,16 @@ export interface ItemLine {
    * it at the second rate (#504). Absent: the first. Shown on screen only, never printed.
    */
   activity?: 1 | 2;
+  /**
+   * An option of an Angebot or Auftrag (spec 4.4.1): priced and printed with «Option», never in a
+   * total, a VAT figure or a QR amount. A conversion lists it unticked; ticked it becomes an ordinary position.
+   */
+  optional?: true;
+  /**
+   * The position of the document this one was made from (`from`), by its index there: what a
+   * conversion copied, so the Auftrag counts what of each position was delivered and invoiced (src/invoices/chain.ts).
+   */
+  ofLine?: number;
 }
 
 /** A text between positions: a title (bold) or plain; no amount. */
@@ -146,9 +158,23 @@ export interface Comment extends Envelope {
   text: string;
 }
 
+/**
+ * The kinds of document (spec 4.3 «Terms»): Angebot, Auftrag and Lieferschein book nothing; Rechnung
+ * and Gutschrift are booked (BOOKED_KINDS). One record shape for all.
+ */
+export { DOCUMENT_KINDS, type DocumentKind } from '../workspace/numbering.js';
+import type { DocumentKind } from '../workspace/numbering.js';
+/** The kinds that are a claim of the firm or against it: numbered with a payment reference, booked, paid. */
+export type BookedKind = 'invoice' | 'credit-note';
+export const BOOKED_KINDS: readonly DocumentKind[] = ['invoice', 'credit-note'];
+export const isBooked = (d: { kind: DocumentKind }): d is { kind: BookedKind } => d.kind === 'invoice' || d.kind === 'credit-note';
+
+/** A person's click on an Angebot: the customer accepted or declined it, on `date`, as `by` recorded. */
+export interface Answer { date: string; by: string }
+
 /** What a draft holds and an issued invoice keeps, frozen. */
 export interface InvoiceContent {
-  kind: 'invoice' | 'credit-note';
+  kind: DocumentKind;
   customerId: string;
   /** The invoice date. */
   date: string;
@@ -177,6 +203,18 @@ export interface InvoiceContent {
   settlement?: 'refund' | 'offset';
   /** The id of the firm's payment terms (invoicing.paymentTerms) an invoice prints; absent: the customer's own days net. */
   termsId?: string;
+  /** An Angebot: the last day it holds; after it an open Angebot is Abgelaufen (derived). */
+  validUntil?: string;
+  /** An Angebot the customer accepted (by phone, by mail): the person's click; a document made from it accepts it as a fact. */
+  accepted?: Answer;
+  /** An Angebot the customer declined: the person's click. */
+  declined?: Answer;
+  /** The document this one was made from by a conversion (spec 4.4.1); the Belegkette follows it. «Als Entwurf kopieren» sets none. */
+  from?: { id: string; kind: DocumentKind };
+  /** The customer's own order reference («Ihre Bestellung»), printed. */
+  ordered?: string;
+  /** An Auftrag prints as Auftragsbestätigung (absent) or Proformarechnung: a print variant, no number of the invoice series, no booking. */
+  printAs?: 'confirmation' | 'proforma';
 }
 
 export interface Draft extends Envelope, InvoiceContent {
@@ -184,7 +222,8 @@ export interface Draft extends Envelope, InvoiceContent {
   comments: Comment[];
   /**
    * The number an issued document kept when it went back to draft («Zurück zum Entwurf», spec
-   * 4.4.2): issued again, it takes this number, never a new one, and no other document takes it.
+   * 4.4.2), whatever its kind (a Rechnung, a Gutschrift, an Angebot, an Auftrag): issued again, it
+   * takes this number, never a new one, and no other document takes it (numbering.ts nextNumberFor).
    */
   number?: string;
   /** The PDFs it was issued with before it went back to draft, oldest first. */
@@ -282,7 +321,7 @@ export interface Issued extends Envelope, InvoiceContent {
   number: string;
   issuedAt: string;
   dueDate: string;
-  /** QRR (27 digits, with a QR-IBAN) or SCOR (RF…, with a plain IBAN), without spaces. */
+  /** QRR (27 digits, with a QR-IBAN) or SCOR (RF…, with a plain IBAN), without spaces; empty on a kind that is not paid (Angebot, Auftrag, Lieferschein). */
   reference: string;
   customer: CustomerFields;
   sender: Sender;
@@ -307,7 +346,8 @@ export interface Issued extends Envelope, InvoiceContent {
 
 export type Invoice = Draft | Issued;
 
-export const SENT_KINDS = ['invoice', 'resend', 'reminder', 'credit-note', 'cancellation'] as const;
+/** `quote`, `sales-order`, `delivery-note`: the document itself going out, as `invoice` and `credit-note` are. */
+export const SENT_KINDS = ['invoice', 'resend', 'reminder', 'credit-note', 'cancellation', 'quote', 'sales-order', 'delivery-note'] as const;
 export type SentKind = (typeof SENT_KINDS)[number];
 
 /** A document as it went out: its PDF, byte-exact, with checksum, time and recipient. */
@@ -396,7 +436,9 @@ export interface InvoicingSettings {
   /** The units a position may be counted in; absent in the file: DEFAULT_UNITS. */
   units: UnitDef[];
   /** Whether a new document of a kind is priced net or gross; absent in the file: net. */
-  prices: Record<InvoiceContent['kind'], Prices>;
+  prices: Record<DocumentKind, Prices>;
+  /** The number series per kind (spec 4.4.4); absent in the file: DEFAULT_NUMBERING (src/invoices/numbering.ts). */
+  numbering: Numbering;
   /** Named payment terms (phase 1, read only yet); absent in the file: one of `paymentTermsDays` days net. */
   paymentTerms: PaymentTerms[];
   /** The id of the terms a new document takes; absent: the first. */

@@ -14,7 +14,7 @@ import { saleProofOf } from './sale-document.js';
 import { fromRappen, toRappen } from './rappen.js';
 import { hasEvent, isManualRef } from '../books/refs.js';
 import type { Tags } from '../books/tags.js';
-import type { Invoice } from '../invoices/model.js';
+import { isBooked, type Invoice } from '../invoices/model.js';
 import { namedInvoice, namesNumber, openAmount, revenueSplit } from '../invoices/rules.js';
 import { saleProposal, saleVatCode } from './sales-without-vat.js';
 import type { SaleChoice } from '../questions/model.js';
@@ -282,7 +282,7 @@ function refundOf(books: Books, tx: BankTransaction, bankAccounts: Set<string>, 
     && [...vendorKeys(books, byRef.get(e.transactionRef) ?? ({ ref: e.transactionRef } as BankTransaction))].some((k) => mine.has(k)))
     .reduce((s, e) => s + toRappen(Number(e.amount)), 0);
   const text = [tx.description, tx.reference ?? ''].join(' ');
-  const ours = (invoices ?? []).some((i) => i.status === 'issued' && namesNumber(text, i.number));
+  const ours = (invoices ?? []).some((i) => i.status === 'issued' && isBooked(i) && namesNumber(text, i.number));
   return toRappen(amount) <= spent && !ours ? bought : undefined;
 }
 

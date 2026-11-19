@@ -312,3 +312,29 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .iaccounts .iwhat ul { margin: 6px 0 0; padding-left: 18px; }
 .iaccounts .iwhat li { margin: 3px 0; }
 @media (max-width: 560px) { .iaccounts .iacc .fr { grid-template-columns: minmax(0, 1fr) auto; } .iaccounts .iacc .fr select { grid-column: 1 / -1; } }
+/* Phase 2: the conversion dialog, the Belegkette, options (docs/specs/invoicing.md 4.4.1). */
+.idlg.iconvert { width: min(760px, 96vw); top: 8vh; }
+.iconvert .ibody { max-height: 64vh; overflow: auto; }
+.ivconv { margin: 4px 0 10px; }
+.ivconv tr.gone td { color: var(--faint); }
+.ivconv td.c-contact { white-space: normal; }
+.ivconv input.ivqty { width: 72px; text-align: right; font: 13px var(--font-mono); padding: 3px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.ivconv input.ivqty.over { border-color: var(--warn); background: var(--warn-soft); }
+.ivconv input.ivqty:disabled { opacity: .5; }
+.ivopt { display: inline-block; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line-2); border-radius: 4px; padding: 0 4px; margin-right: 4px; }
+.ivchain { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.ivchain li { padding: 3px 0; }
+.ivchain li.on b { color: var(--ink); }
+.ivt td .full { color: var(--pos); }
+.lknumbers input.mono { font-family: var(--font-mono); width: 100%; box-sizing: border-box; }
+.lknumbers .warn { color: var(--warn); }
+@media (max-width: 640px) {
+  .ivconv th:nth-child(3), .ivconv td:nth-child(3) { display: none; }
+}
+.lknumbers .lknumrows { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 6px; }
+.lknumbers .lknum { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; font-size: 12.5px; }
+.lknumbers .lknum input.mono { min-width: 0; font-size: 12px; padding: 4px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.lknumbers .lknum input[aria-invalid="true"] { border-color: var(--warn); }
+.lknumbers .lknr { color: var(--muted); white-space: nowrap; font-size: 12px; }
+.lknumbers .lknext { grid-column: 2 / -1; color: var(--muted); font-size: 12px; }
+.lknumbers .lknext b { color: var(--ink); font-weight: 500; }

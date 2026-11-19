@@ -51,6 +51,9 @@ export const KAFFEE_INVOICING: DemoInvoicing = {
     - { id: net20, name: "20 Tage netto", days: 20 }
     - { id: skonto2, name: "10 Tage 2 %, 30 Tage netto", days: 30, skonto: { percent: 2, days: 10 }, text: "Zahlbar innert 10 Tagen mit 2 % Skonto oder innert 30 Tagen netto." }
   defaultTerms: net30
+  numbering:
+    invoice: { format: "{JJJJ}-{NNN}", restartYearly: true }
+    credit-note: { format: "{JJJJ}-{NNN}", restartYearly: true }
   layout: { logo: logos/logo.svg, accent: "#5a3a22" }
   texts:
     de: { closing: "Zahlbar innert {days} Tagen.\\nFreundliche Grüsse, Anna Muster" }

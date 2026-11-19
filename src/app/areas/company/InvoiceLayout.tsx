@@ -12,7 +12,7 @@ import { builtInTexts } from '../../../invoices/texts.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { InvoicingPatch } from '../../../workspace/manifest-write.js';
 import { ApiError, api, errorText } from '../../lib/api.js';
-import { qrIbanTakes } from '../../../providers/qr-bill/reference.js';
+import { formatFits, qrIbanTakes } from '../../../providers/qr-bill/reference.js';
 import { reloadWorkspace } from '../../hooks/use-workspace.js';
 import { localToday } from '../../../accounting/periods.js';
 import { getAccountMap } from '../../lib/accounts.js';
@@ -27,6 +27,7 @@ import '../invoices/invoices.css';
 import { chargesVat, invoiceRates } from '../../../engines/index.js';
 import { AsyncButton } from '../../shell/AsyncButton.js';
 import { PaymentTermsSection } from './PaymentTerms.js';
+import { NumberingSection } from './Numbering.js';
 
 const LANGS: InvoiceLanguage[] = ['de', 'fr', 'it', 'en'];
 const ACCENTS: Array<[string, 'black' | 'blue' | 'green' | 'bordeaux' | 'ochre']> = [['#141a26', 'black'], ['#1d4ed8', 'blue'], ['#0f766e', 'green'], ['#9f1239', 'bordeaux'], ['#b45309', 'ochre']];
@@ -121,6 +122,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
         <PayTo ws={ws} nav={nav} canEdit={canEdit} />
         <Units ws={ws} nav={nav} canEdit={canEdit} drafts={load.state === 'ready' ? load.data.invoices.filter((i) => i.status === 'draft') : []} />
         <PaymentTermsSection ws={ws} nav={nav} canEdit={canEdit} />
+        <NumberingSection ws={ws} nav={nav} canEdit={canEdit} docs={load.state === 'ready' ? load.data.invoices : []} fits={formatFits} />
         <div className="lkf" key={`greet-${lang}`}>
           <label className="lkr"><span>{t('invoiceLayout.salutation')}</span><input name="salutation" defaultValue={texts.salutation} placeholder={t('invoiceLayout.salutationHint')} disabled={!canEdit} onBlur={(e) => saveText('salutation', e.target.value.trim())} /></label>
         </div>
