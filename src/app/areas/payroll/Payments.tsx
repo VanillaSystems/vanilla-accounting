@@ -3,7 +3,7 @@
  * payout, purpose «Lohn MM/YYYY», value date), each «bezahlt» with the bank line that paid it once the
  * statement brought it and code booked it (never a click); and per insurer of the month's year what the
  * payslips accrued, what was paid, what is open, with the final statement (Schlussabrechnung) the person
- * enters off the insurer's statement. The person pays in e-banking; no payment file in B0 (§21 decision 5).
+ * enters off the insurer's statement. The person pays in e-banking, from the payment file of the month (pain.001, B1).
  */
 import { useEffect, useState, type FormEvent } from 'react';
 import { localToday } from '../../../accounting/periods.js';
@@ -17,7 +17,7 @@ import { ListHead } from '../../shell/ListHead.js';
 import type { JournalEntry } from '../../../types/index.js';
 import type { SettlementCompare } from '../../../payroll/insurers.js';
 import type { AreaProps, Nav } from '../index.js';
-import { payrollApi, reloadPayroll, urls, usePayroll, type InsurerRow, type Insurers, type PaymentRow, type Payments } from './data.js';
+import { files, payrollApi, reloadPayroll, urls, usePayroll, type InsurerRow, type Insurers, type PaymentRow, type Payments } from './data.js';
 import { at, Go, inPeriodOf, MonthSwitch, payslipAt, Tabs, useRefusal, type PayrollRoute } from './common.js';
 import { round2 } from '../../../payroll/money.js';
 import { Fields, numberOf, type Form } from './Dated.js';
@@ -78,6 +78,7 @@ export function PaymentList(props: Props) {
                     );
                   })}
                 </div>
+                <PaymentFile month={month} plan={load.data.file} />
               </>
             )}
             <h3 className="plabel">{t('payroll.insurers.title', { year })}</h3>
@@ -99,6 +100,32 @@ export function PaymentList(props: Props) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * «Zahlungsdatei»: the month's payouts not paid yet as a file for e-banking (pain.001), from the firm's chosen
+ * account; the payouts it leaves out are named with why. «bezahlt» still comes only from the bank statement.
+ */
+function PaymentFile({ month, plan }: { month: string; plan: Payments['file'] }) {
+  const [account, setAccount] = useState(plan.accounts[0]?.account ?? '');
+  if (!plan.included.length && !plan.left.some((l) => l.why === 'noIban')) return null;
+  const total = Math.round(plan.included.reduce((s, p) => s + p.amount, 0) * 100) / 100;
+  return (
+    <div className="psec ppayfile" data-testid="payment-file">
+      <h3>{t('payroll.payfile.title')}</h3>
+      {!plan.accounts.length ? <p className="warnline">{t('payroll.payfile.noAccount')}</p> : !plan.included.length ? null : (
+        <>
+          <p className="m">{t('payroll.payfile.lead', { n: plan.included.length, amount: fmt(total), date: formatDate(plan.executionDate) })}</p>
+          {plan.accounts.length > 1 ? (
+            <label className="pswitch">{t('payroll.payfile.from')} <select value={account} onChange={(e) => setAccount(e.target.value)}>{plan.accounts.map((a) => <option key={a.account} value={a.account}>{a.account} {a.label}</option>)}</select></label>
+          ) : <p className="m mono">{t('payroll.payfile.fromOne', { account: `${plan.accounts[0].account} ${plan.accounts[0].label}`, iban: iban(plan.accounts[0].iban) })}</p>}
+          <div className="acts"><a className="btn" href={files.paymentFile(month, account)} download>{t('payroll.payfile.download')}</a></div>
+        </>
+      )}
+      {plan.left.length ? <ul className="plain">{plan.left.map((l) => <li key={l.id} className="m">{t(l.why === 'paid' ? 'payroll.payfile.leftPaid' : 'payroll.payfile.leftNoIban', { name: l.name })}</li>)}</ul> : null}
+      <p className="m">{t('payroll.payfile.status')}</p>
     </div>
   );
 }

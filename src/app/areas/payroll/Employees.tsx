@@ -19,6 +19,7 @@ import type { AreaProps, Nav } from '../index.js';
 import { payrollApi, reloadPayroll, urls, usePayroll, type EmployeeDetail, type Overview, type SettingsView } from './data.js';
 import { at, Go, payslipAt, settingsAt, Tabs, useRefusal, type PayrollRoute } from './common.js';
 import { useHandover } from '../../handover/store.js';
+import { AfterExit, Absences, Children } from './People.js';
 import { DatedField, Fields, numberOf, numText, useBackdated, type FieldDef, type Form, type ValueSpec } from './Dated.js';
 import { data, kindLabel, labelOf, monthShort, monthText, statusText } from './words.js';
 import { calcText, fieldWord, inputDefaults, inputFields, inputForm, inputValue, switchedTo } from './inputs.js';
@@ -107,16 +108,20 @@ export const employmentFields = (): FieldDef[] => [
   { k: 'hoursPerWeek', label: t('payroll.field.hoursPerWeek'), type: 'number' },
   { k: 'holidayDays', label: t('payroll.field.holidayDays'), type: 'number' },
   { k: 'thirteenth', label: t('payroll.field.thirteenth'), hint: t('payroll.field.thirteenthHint') },
+  // An hourly wage: how its holidays are paid, and a public-holiday surcharge where the contract names one (§3h).
+  { k: 'holidayPay', label: t('payroll.field.holidayPay'), type: 'select', options: [['surcharge', t('payroll.employee.holidaySurcharge')], ['leave', t('payroll.employee.holidayLeave')]], hint: t('payroll.field.hourlyOnly') },
+  { k: 'publicHolidaySurcharge', label: t('payroll.field.publicHolidaySurcharge'), type: 'number', hint: t('payroll.field.publicHolidayHint') },
 ];
 
 export const employmentOf = (f: Form): Record<string, unknown> => ({
   kind: f.kind || 'monthly', amount: numberOf(f.amount), pensum: numberOf(f.pensum), hoursPerWeek: numberOf(f.hoursPerWeek), holidayDays: numberOf(f.holidayDays),
   ...(f.thirteenth?.trim() ? { thirteenth: { months: months13(f.thirteenth) } } : {}),
+  ...(f.kind === 'hourly' ? { holidayPay: f.holidayPay || 'surcharge', publicHolidaySurcharge: numberOf(f.publicHolidaySurcharge) } : {}),
 });
 
 const employmentSpec = (): ValueSpec<Employment> => ({
   fields: employmentFields(),
-  from: (v) => ({ kind: v?.kind ?? 'monthly', amount: numText(v?.amount), pensum: numText(v?.pensum ?? 100), hoursPerWeek: numText(v?.hoursPerWeek), holidayDays: numText(v?.holidayDays), thirteenth: v?.thirteenth?.months.join(', ') ?? '' }),
+  from: (v) => ({ kind: v?.kind ?? 'monthly', amount: numText(v?.amount), pensum: numText(v?.pensum ?? 100), hoursPerWeek: numText(v?.hoursPerWeek), holidayDays: numText(v?.holidayDays), thirteenth: v?.thirteenth?.months.join(', ') ?? '', holidayPay: v?.holidayPay ?? 'surcharge', publicHolidaySurcharge: numText(v?.publicHolidaySurcharge) }),
   to: employmentOf,
   show: (v) => [
     `${t(v.kind === 'monthly' ? 'payroll.kind.monthly' : 'payroll.kind.hourly')} ${fmt(v.amount)}`,
@@ -124,6 +129,8 @@ const employmentSpec = (): ValueSpec<Employment> => ({
     v.hoursPerWeek !== undefined ? t('payroll.employee.hours', { n: v.hoursPerWeek }) : '',
     v.holidayDays !== undefined ? t('payroll.employee.holidays', { n: v.holidayDays }) : '',
     v.thirteenth ? t('payroll.employee.thirteenth', { months: v.thirteenth.months.map((m) => monthShort(`2026-${String(m).padStart(2, '0')}`)).join(', ') }) : '',
+    v.kind === 'hourly' ? t(v.holidayPay === 'leave' ? 'payroll.employee.holidayLeave' : 'payroll.employee.holidaySurcharge') : '',
+    v.kind === 'hourly' && v.publicHolidaySurcharge ? t('payroll.employee.publicHoliday', { rate: v.publicHolidaySurcharge }) : '',
     v.exitReason ? v.exitReason : '',
   ].filter(Boolean).join(' · '),
 });
@@ -154,6 +161,7 @@ export function insuranceFields(insurances: readonly PayrollInsurance[]): FieldD
       return [{ k: `${kind}.code`, label: kindLabel(kind), type: 'select', options: [['', t(optional ? 'payroll.employee.notInsured' : 'payroll.employee.firstSolution')], ...of.flatMap((i) => i.solutions.map((x) => [`${i.id}:${x.code}`, `${i.name} · ${x.code}`] as const))] }];
     }),
     { k: 'pensioner', label: t('payroll.field.pensioner'), type: 'select', options: [['', '—'], ['allowance', t('payroll.employee.pensionerAllowance')], ['waiver', t('payroll.employee.pensionerWaiver')]] },
+    { k: 'smallWage', label: t('payroll.field.smallWageLiable'), type: 'check', hint: t('payroll.field.smallWageHint') },
   ];
 }
 
@@ -169,13 +177,14 @@ export function insurancesOf(f: Form, insurances: readonly PayrollInsurance[]): 
     }
   }
   if (f.pensioner) out.pensioner = f.pensioner;
+  if (f.smallWage === 'true') out.smallWage = 'liable';
   return out;
 }
 
 const insuranceSpec = (insurances: readonly PayrollInsurance[]): ValueSpec<PersonInsurances> => ({
   fields: insuranceFields(insurances),
   from: (v) => {
-    const f: Form = { pensioner: s(v?.pensioner) };
+    const f: Form = { pensioner: s(v?.pensioner), smallWage: String(v?.smallWage === 'liable') };
     for (const [kind, x] of Object.entries(v ?? {})) {
       if (!x || typeof x !== 'object') continue;
       const o = x as { insurance: string; code?: string; employee?: number; employer?: number };
@@ -188,6 +197,7 @@ const insuranceSpec = (insurances: readonly PayrollInsurance[]): ValueSpec<Perso
   show: (v) => {
     const parts = Object.entries(v).flatMap(([kind, x]) => {
       if (kind === 'pensioner') return [x === 'waiver' ? t('payroll.employee.pensionerWaiver') : t('payroll.employee.pensionerAllowance')];
+      if (kind === 'smallWage') return x === 'liable' ? [t('payroll.field.smallWageLiable')] : [];
       if (!x || typeof x !== 'object') return [];
       const o = x as { insurance: string; code?: string; employee?: number; employer?: number };
       const name = insurances.find((i) => i.id === o.insurance)?.name ?? o.insurance;
@@ -314,6 +324,7 @@ function Person({ d, settings, nav, canEdit }: Props & { d: EmployeeDetail; sett
       <Section title={t('payroll.sec.employment')}>
         <DatedField label={t('payroll.sec.employment')} path={`${base}/employment`} history={e.employment} spec={employmentSpec()} {...common} />
         {canEdit ? <Exit e={e} nav={nav} /> : null}
+        {canEdit ? <AfterExit e={e} settings={settings} nav={nav} /> : null}
         <OpeningSection d={d} nav={nav} canEdit={canEdit} />
       </Section>
       <Section title={t('payroll.sec.recurring')}>
@@ -332,6 +343,12 @@ function Person({ d, settings, nav, canEdit }: Props & { d: EmployeeDetail; sett
       <Section title={t('payroll.sec.insurances')}>
         <DatedField label={t('payroll.sec.insurances')} path={`${base}/insurances`} history={e.insurances} spec={insuranceSpec(settings.insurances)} {...common}
           note={!settings.insurances.length ? <Go nav={nav} loc={settingsAt('insurances')}>{t('payroll.overview.addInsurances')}</Go> : undefined} />
+      </Section>
+      <Section title={t('payroll.sec.children')}>
+        <Children e={e} settings={settings} common={common} />
+      </Section>
+      <Section title={t('payroll.sec.absences')}>
+        <Absences e={e} common={common} />
       </Section>
       <Section title={t('payroll.sec.tax')}>
         <DatedField label={t('payroll.sec.tax')} path={`${base}/taxAtSource`} history={e.taxAtSource} spec={taxSpec()} {...common} note={t('payroll.employee.taxNote')} />

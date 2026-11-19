@@ -288,11 +288,16 @@ function SlipView({ v, types, insurances, nav, canEdit }: Props & { v: Payslip; 
   );
 }
 
+/** Days as the payslip prints them: up to two decimals, no trailing zeros. */
+const days = (n: number): string => n.toLocaleString('de-CH', { maximumFractionDigits: 2 });
+
 function SlipFacts({ v, nav }: { v: Payslip; nav: Nav }) {
   const facts = factsOf(v.slip);
-  if (!facts.length && !v.drift.length && !v.paidDifference) return null;
+  const holidays = v.slip.holidays;
+  if (!facts.length && !v.drift.length && !v.paidDifference && !holidays) return null;
   return (
     <div className="pfacts">
+      {holidays ? <div className="notice" data-testid="holidays">{t('payroll.slip.holidays', { balance: days(holidays.balance), earned: days(holidays.earned), taken: days(holidays.taken) })}</div> : null}
       {facts.map((f, i) => (
         <div key={i} className="notice">{factText(f)}{f.key === 'earlierOpen' && f.vars?.month ? <> · <Go nav={nav} loc={payslipAt(`${f.vars.month}-${v.employee}`)}>{monthText(String(f.vars.month))}</Go></> : null}</div>
       ))}
