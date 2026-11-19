@@ -400,6 +400,13 @@ taxAtSource:
       - { key: days, label: { de: Tage, fr: jours, it: giorni, en: days }, counts: [taglohn], per: 21.667 }
     asPaid: [familienzulagen]
     source: "ESTV KS 45 (12.6.2019) Ziff. 6.5 with Beispiele 1-6, Ziff. 7.3.3; FAQ KS 45 (Arbeitsgruppe Quellensteuern, 26.9.2022) Frage 13"
+  # Days worked abroad by a person resident abroad (a cross-border commuter, an international weekly resident): the
+  # taxable wage is the share of the Swiss working days, 20 a month less the days actually worked abroad (paid absences
+  # such as holidays are no such days); the rate is that of the whole wage (§22 decision 121).
+  abroad:
+    workdays: 20
+    country: CH
+    source: "ESTV KS 45 Ziff. 3.2.2, 6.7 (Beispiele 1-2), 7.5.1; FAQ KS 45 Frage 1"
   source: "DBG Art. 83-88, QStV (SR 642.118.2), ESTV Kreisschreiben Nr. 45; FAQ KS 45 der Arbeitsgruppe Quellensteuern (2026)"
   regions:
     AG: { model: monthly }
@@ -454,6 +461,8 @@ documents:
   sourceCertificate: { de: Vorsorgeausweis, fr: Certificat de prévoyance, it: Certificato di previdenza, en: Pension certificate }
   sourceTariff: { de: "Tarif {region} {year} vom {date} · {code} · satzbestimmend {income}", fr: "Barème {region} {year} du {date} · {code} · revenu déterminant {income}", it: "Tariffa {region} {year} del {date} · {code} · reddito determinante {income}", en: "Tariff {region} {year} of {date} · {code} · rate-determining {income}" }
   # A wage not paid monthly (taxAtSource.notMonthly): what was paid on the units worked, extrapolated to a month's units.
+  # Days worked abroad (taxAtSource.abroad): the Swiss working days of the month, and the whole wage the share was taken of.
+  sourceTariffAbroad: { de: "{swiss} von {total} Arbeitstagen in der Schweiz (ganzer Lohn {wage})", fr: "{swiss} jours de travail en Suisse sur {total} (salaire entier {wage})", it: "{swiss} giorni lavorativi in Svizzera su {total} (salario intero {wage})", en: "{swiss} of {total} working days in Switzerland (whole wage {wage})" }
   sourceTariffUnits: { de: "{paid} für {quantity} {unit}, auf {per} {unit} hochgerechnet", fr: "{paid} pour {quantity} {unit}, extrapolé à {per} {unit}", it: "{paid} per {quantity} {unit}, estrapolato a {per} {unit}", en: "{paid} for {quantity} {unit}, extrapolated to {per} {unit}" }
 
 # The Lohnausweis (Form 11, ESTV/SSK Wegleitung 2026): its numbered fields in print order, each with its

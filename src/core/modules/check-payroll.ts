@@ -136,6 +136,7 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
       try { new RegExp(n.codes); } catch { add(F, `taxAtSource.codeNotes.${i}.codes`, 'no pattern'); }
       for (const l of ['de', 'fr', 'it', 'en'] as const) if (!n.text?.[l]?.trim()) add(F, `taxAtSource.codeNotes.${i}.text.${l}`, 'missing');
     });
+    if (t.abroad && !(t.abroad.workdays > 0)) add(F, 'taxAtSource.abroad.workdays', 'working days a month');
     (t.codeRules ?? []).forEach((n, i) => {
       try { new RegExp(n.codes); } catch { add(F, `taxAtSource.codeRules.${i}.codes`, 'no pattern'); }
       if (!!n.refuse === !!n.report) add(F, `taxAtSource.codeRules.${i}`, 'refuse or report, one of them');

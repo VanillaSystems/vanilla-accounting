@@ -532,7 +532,7 @@ export interface PayrollData {
    */
   setupDocuments?: { kinds: Record<string, string[]>; numbers: Partial<Record<'memberNumber' | 'contractNumber', string[]>>; rates: Record<string, Record<string, string[]>>; toModel?: string[]; notToModel: string[] };
   /** The words of the payroll's documents, in each language. */
-  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate' | 'holidays' | 'holidaysMinimum' | 'sourceTariff' | 'sourceTariffUnits', Labels>;
+  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate' | 'holidays' | 'holidaysMinimum' | 'sourceTariff' | 'sourceTariffUnits' | 'sourceTariffAbroad', Labels>;
   /** The tax at source by tariff files (payroll.yaml `taxAtSource`); absent: the jurisdiction has none. */
   taxAtSource?: TaxAtSourceData;
 }
@@ -566,6 +566,11 @@ export interface TaxAtSourceData {
     asPaid: string[];
     source: string;
   };
+  /**
+   * Days worked abroad: the working days a month counts (`workdays`), of which those abroad are taken off the taxable
+   * wage; `country`: the jurisdiction's own (an address there is a resident's, who is taxed on them unless a treaty says otherwise).
+   */
+  abroad?: { workdays: number; country: string; source: string };
   source: string;
   /** Each region with the model it applies; the app computes `monthly`. */
   regions: Record<string, { model: 'monthly' | 'annual' }>;

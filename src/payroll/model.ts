@@ -202,6 +202,12 @@ export interface PayrollStore {
   monthLines: MonthLine[];
   /** A free text for every payslip of a month («Frohe Festtage»), by month. */
   monthTexts?: Record<string, string>;
+  /**
+   * The working days a person worked abroad in a month not yet closed, by payslip id (YYYY-MM-<employee>): the tax at
+   * source is withheld on the Swiss days' share of the wage (§22 decision 121). `total`: the month's working days
+   * (absent: the jurisdiction's); a closed payslip keeps the days on its tax line.
+   */
+  taxDays?: Record<string, { abroad: number; total?: number; enteredAt: string }>;
 }
 
 /** One line of a payslip: base × rate = amount, with where it came from. */
@@ -233,6 +239,8 @@ export interface PayslipLine {
     region: string; code: string; income: number; created?: string; version?: string; wage?: number; rate?: number;
     /** A wage not paid monthly: what was paid on the units worked, how many, and the units of a month it was extrapolated to. */
     units?: { key: string; paid: number; quantity: number; per: number };
+    /** Days worked abroad: the month's working days, those abroad, and the whole taxable wage the Swiss share was taken of. */
+    abroad?: { days: number; total: number; wage: number };
   };
 }
 

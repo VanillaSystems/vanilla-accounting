@@ -110,7 +110,9 @@ router.get('/api/payroll/payslips/:id', run((req, res) => {
   const monthLines = close ? [] : ctx.store.monthLines.filter((l) => l.employee === employee && l.month === month && !l.removed);
   // A payslip paid before it was reopened and closed again with another payout: the difference on 1091, as a fact.
   const paidRow = close ? paymentRows(readBooks(), [...ctx.history.closed.values()], close.month, payrollClearing() ?? '1091').find((r) => r.id === close.id) : undefined;
-  res.json({ ...view, drift: close ? driftOf(ctx, close) : [], monthLines, ...(paidRow?.difference && paidRow.paid?.forThis !== undefined ? { paidDifference: { difference: paidRow.difference, paid: paidRow.paid.forThis, account: paidRow.account!, ref: paidRow.paid.ref, date: paidRow.paid.date } } : {}) });
+  // The working days abroad entered for an open month (§22 decision 121); a closed payslip keeps them on its tax line.
+  const taxDays = close ? undefined : ctx.store.taxDays?.[view.id];
+  res.json({ ...view, drift: close ? driftOf(ctx, close) : [], monthLines, ...(taxDays ? { taxDays } : {}), ...(paidRow?.difference && paidRow.paid?.forThis !== undefined ? { paidDifference: { difference: paidRow.difference, paid: paidRow.paid.forThis, account: paidRow.account!, ref: paidRow.paid.ref, date: paidRow.paid.date } } : {}) });
 }));
 
 /** The PDF of a closed payslip, exactly as it lies in Belege. */
@@ -207,6 +209,36 @@ router.delete('/api/payroll/month-lines/:id', run((req, res) => {
   assertMonthOpen(line.month);
   updatePayroll(WS, (s) => { const l = s.monthLines.find((x) => x.id === line.id); if (l) l.removed = true; });
   res.json({ removed: line.id });
+}));
+
+/**
+ * The working days a person worked abroad in an open month, for the tax at source (§22 decision 121): `abroad` days of
+ * `total` (absent: the jurisdiction's working days a month). 0 or nothing removes them.
+ */
+router.put('/api/payroll/payslips/:id/days-abroad', run((req, res) => {
+  const { month, employee } = idParts(String(req.params.id));
+  const b = body(req);
+  const ctx = payrollContext(WS);
+  if (!ctx.store.employees.some((e) => e.id === employee)) throw new PayrollRefusal('notFound', `Keine Person ${employee}.`);
+  const id = `${month}-${employee}`;
+  if (ctx.history.closed.has(id)) throw new PayrollRefusal('alreadyClosed', 'Der Monat ist abgeschlossen: eine Änderung als Rückwirkende Korrektur erfassen.');
+  assertNotOpening(ctx, employee, month);
+  assertMonthOpen(month);
+  const workdays = ctx.data.taxAtSource?.abroad?.workdays;
+  if (!workdays) throw new PayrollRefusal('badInput', 'Diese Rechtsordnung kennt keine Arbeitstage im Ausland.');
+  const whole = (k: string) => (b[k] === undefined || b[k] === null || b[k] === '' ? undefined : typeof b[k] === 'number' && Number.isInteger(b[k]) && (b[k] as number) >= 0 ? b[k] as number : NaN);
+  const abroad = whole('abroad');
+  const total = whole('total');
+  if (Number.isNaN(abroad) || Number.isNaN(total)) throw new PayrollRefusal('badAmount', 'Arbeitstage: ganze Tage, 0 oder mehr.');
+  if (total !== undefined && (total < 1 || total > 31)) throw new PayrollRefusal('badAmount', 'Arbeitstage des Monats: 1 bis 31.');
+  if (abroad !== undefined && abroad > (total ?? workdays)) throw new PayrollRefusal('badAmount', `Mehr Tage im Ausland (${abroad}) als Arbeitstage im Monat (${total ?? workdays}).`);
+  updatePayroll(WS, (s) => {
+    const days = { ...(s.taxDays ?? {}) };
+    if (abroad) days[id] = { abroad, ...(total !== undefined && total !== workdays ? { total } : {}), enteredAt: new Date().toISOString() };
+    else delete days[id];
+    s.taxDays = days;
+  });
+  res.json({ id, abroad: abroad ?? 0, total: total ?? workdays });
 }));
 
 /** A text for every payslip of a month («Frohe Festtage»); empty removes it. */

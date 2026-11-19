@@ -280,7 +280,7 @@ function SlipView({ v, types, insurances, nav, canEdit }: Props & { v: Payslip; 
       <Lines s={s} types={types} employer={employer} insurances={insurances} />
       {!closed && canEdit ? <TariffsMissing s={s} nav={nav} /> : null}
       <Disclaimer year={v.month.slice(0, 4)} />
-      {!closed && canEdit ? <><MonthLines v={v} types={types} nav={nav} /><AddLine v={v} types={types} nav={nav} /></> : null}
+      {!closed && canEdit ? <><MonthLines v={v} types={types} nav={nav} /><AddLine v={v} types={types} nav={nav} /><DaysAbroad v={v} /></> : null}
       <Booking v={v} />
       {canEdit ? (closed ? <ClosedActions v={v} types={types} nav={nav} /> : <CloseAction v={v} nav={nav} />) : null}
       {closed ? <Mail v={v} nav={nav} canEdit={canEdit} /> : null}
@@ -389,6 +389,53 @@ function LineRow({ l, w, source }: { l: PayslipLine; w?: WageType; source?: stri
       <span className="pt">{w ? labelOf(w.label, l.label) : l.label}{notes ? <small data-testid={source ? 'line-source' : undefined}>{notes}</small> : null}</span>
       <span className="pb mono">{calc}</span>
       <span className="pa mono">{minus ? `−${fmt(l.amount)}` : fmt(l.amount)}</span>
+    </div>
+  );
+}
+
+/**
+ * The working days the person worked abroad this month, for the tax at source (§22 decision 121): shown where the
+ * payslip computes the tax (its line, or its line «unvollständig») or days are entered.
+ */
+function DaysAbroad({ v }: { v: Payslip }) {
+  const d = data();
+  const workdays = d?.taxAtSource?.abroad?.workdays;
+  const tax = new Set(d?.contributions.filter((c) => d.insurances[c.insurance]?.tariff).map((c) => c.wageType) ?? []);
+  const taxed = v.slip.lines.some((l) => tax.has(l.wageType) && !l.corrects) || missingOf(v.slip).some((m) => tax.has(m.wageType));
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState<Form>({ abroad: String(v.taxDays?.abroad ?? ''), total: String(v.taxDays?.total ?? workdays ?? '') });
+  const refusal = useRefusal();
+  if (!workdays || (!taxed && !v.taxDays)) return null;
+  const save = async (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      const total = numberOf(f.total);
+      await payrollApi.daysAbroad(v.id, { abroad: numberOf(f.abroad) ?? 0, ...(total !== undefined ? { total } : {}) });
+      setOpen(false); refusal.clear();
+      await reloadPayroll();
+    } catch (x) { refusal.refuse(x); }
+  };
+  const days = v.taxDays;
+  if (!open) {
+    return (
+      <div className="psec" data-testid="days-abroad">
+        {days ? <p>{t('payroll.slip.daysAbroadSet', { abroad: days.abroad, total: days.total ?? workdays })}</p> : null}
+        <button type="button" className="btn ghost" onClick={() => setOpen(true)}>{days ? t('payroll.slip.daysAbroadChange') : t('payroll.slip.daysAbroad')}</button>
+      </div>
+    );
+  }
+  const fields: FieldDef[] = [
+    { k: 'abroad', label: t('payroll.field.daysAbroad'), type: 'number', hint: t('payroll.slip.daysAbroadHint') },
+    { k: 'total', label: t('payroll.field.workdays'), type: 'number', hint: t('payroll.slip.workdaysHint', { n: workdays }) },
+  ];
+  return (
+    <div className="psec" data-testid="days-abroad">
+      <h3>{t('payroll.slip.daysAbroad')}</h3>
+      <AsyncForm className="form inline pform" onSubmit={save}>
+        <Fields fields={fields} f={f} set={setF} />
+        {refusal.node}
+        <div className="acts"><AsyncButton type="submit" className="btn primary">{t('payroll.slip.daysAbroadSave')}</AsyncButton><button type="button" className="btn ghost" onClick={() => setOpen(false)}>{t('common.cancel')}</button></div>
+      </AsyncForm>
     </div>
   );
 }

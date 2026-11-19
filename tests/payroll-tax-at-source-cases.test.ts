@@ -181,3 +181,58 @@ test('a fixed-rate code (D: persons refunded their AHV contributions, only in th
   assert.equal(ge.tariffs.get('D0N')?.[0].brackets[0].rate, 10);
   for (const [kt, f] of Object.entries(FILES)) assert.equal(f.file.tariffs.has('D0N'), false, `${kt} 2026 has no D`);
 });
+
+// ─── 3. Days worked abroad (KS 45 Ziff. 3.2.2, 6.7) ─────────────────────────────
+
+/** A person resident in Germany (her address), on a monthly wage, with days worked abroad in `month`. */
+function abroadSlip(amount: number, abroad: { abroad: number; total?: number }, month = '2026-09', lines: MonthLine[] = [], country = 'DE') {
+  const p = monthly(amount, { code: 'A0' });
+  p.address = [dated('2026-01-01', { street: 'Hauptstrasse', number: '5', postcode: '79539', town: 'Lörrach', country })];
+  const store = firm([p]);
+  store.monthLines = lines;
+  store.taxDays = { [`${month}-h1`]: { ...abroad, enteredAt: '2026-09-01T00:00:00Z' } };
+  return computePayslip({ ...ctxOf(store), tariffs }, 'h1', month)!;
+}
+
+test('KS 45 Ziff. 6.7 Beispiel 1: 8000 a month, 5 of 20 working days abroad: taxed 6000 at the rate of 8000', () => {
+  const d = abroadSlip(8000, { abroad: 5 });
+  const [l] = line(d, 'quellensteuer');
+  assert.equal(l.base, 6000, '8000 / 20 × 15');
+  assert.equal(l.tariff?.income, 8000, 'the rate is the whole wage\'s');
+  assert.deepEqual(l.tariff?.abroad, { days: 5, total: 20, wage: 8000 });
+  // ZH A0N 7'951–8'000: 8.66 %; 6000 × 8.66 % = 519.60.
+  assert.equal(l.rate, 8.66);
+  assert.equal(l.amount, 519.6);
+  assert.ok(!d.facts.some((f) => f.key.startsWith('abroad')), 'nothing aperiodic, not resident: no fact');
+  const src = lineSource(l, d, ch.payroll!, ch.payrollYears, [])!;
+  assert.match(sourceText(src, ch.payroll!.documents, 'de'), /satzbestimmend 8'000\.00 · 15 von 20 Arbeitstagen in der Schweiz \(ganzer Lohn 8'000\.00\)$/);
+  assert.match(sourceText(src, ch.payroll!.documents, 'it'), /15 giorni lavorativi in Svizzera su 20 \(salario intero 8'000\.00\)$/);
+});
+
+test('FAQ KS 45 Frage 1: 10\'000, 8 of 20 days abroad: 6\'000 taxed at the rate of 10\'000; the commission on that tax', () => {
+  const d = abroadSlip(10000, { abroad: 8 });
+  const [l] = line(d, 'quellensteuer');
+  assert.deepEqual([l.base, l.tariff?.income, l.rate, l.amount], [6000, 10000, 10.59, 635.4], 'ZH A0N 9\'951–10\'000: 10.59 %');
+  assert.equal(line(d, 'bezugsprovision')[0].base, 635.4);
+});
+
+test('KS 45 Ziff. 6.7 Beispiel 2: a bonus of an earlier period is taxed whole, and the payslip says the circular would take its period\'s share', () => {
+  const d = abroadSlip(10000, { abroad: 4 }, '2026-04', [{ id: 'b', employee: 'h1', month: '2026-04', wageType: 'bonus', amount: 30000, enteredAt: '2026-04-01T00:00:00Z' }]);
+  const [l] = line(d, 'quellensteuer');
+  // The circular: 8000 + 30000 / 240 × 200 = 33000, with the year before's 200 Swiss days of 240; the app has no such days.
+  assert.equal(l.base, 38000, '10000 / 20 × 16 + the bonus whole');
+  assert.equal(l.tariff?.income, 40000, '10000 + 30000, as the circular');
+  assert.equal(l.rate, 26, 'ZH A0N 35\'001–40\'000: 26.00 %');
+  assert.deepEqual(d.facts.find((f) => f.key === 'abroadAperiodic')?.vars, { amount: 30000 });
+});
+
+test('another number of working days, all of them abroad, and a resident: each as the person entered it', () => {
+  const total = line(abroadSlip(8000, { abroad: 6, total: 22 }), 'quellensteuer')[0];
+  assert.equal(total.base, 5818.18, '8000 / 22 × 16');
+  assert.deepEqual(total.tariff?.abroad, { days: 6, total: 22, wage: 8000 });
+  const all = abroadSlip(8000, { abroad: 20 });
+  assert.equal(line(all, 'quellensteuer').length, 0, 'no Swiss day: no tax, no line');
+  const resident = abroadSlip(8000, { abroad: 5 }, '2026-09', [], 'CH');
+  assert.equal(line(resident, 'quellensteuer')[0].base, 6000, 'warn, don\'t block: taken off as entered');
+  assert.ok(resident.facts.some((f) => f.key === 'abroadResident'), 'but said: a resident is taxed on them unless a treaty says otherwise');
+});

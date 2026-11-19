@@ -2053,7 +2053,7 @@ Taken while building B2, the Quellensteuer (2026-11-19):
      rate where it differs from the file's.
 98. **Left out of B2 for now**, each a line «unvollständig» or not offered: the annual model; tariff codes D
      (GE), E (simplified procedure), G/Q (replacement income not paid by the employer) as payroll cases; the
-     French cross-border special agreement (`SF`); days worked abroad (`daysInCountry`); the report of a new
+     French cross-border special agreement (`SF`); days worked abroad (`daysInCountry`) (these: decisions 119–121); the report of a new
      employee within 8 days and the submission of the settlement (ELM or the canton's portal); a commission
      lost for a late settlement.
 
@@ -2297,6 +2297,27 @@ publishes as «FAQ_KS45 2026.pdf» is the working group's FAQ of 26.9.2022, word
       persons abroad) and NO (a correction for a person wrongly taxed) are read if entered, not offered.
     Tests: tests/payroll-tax-at-source-cases.test.ts (E0N, G9N, Q9N from the ZH file, SFN from the BE file; D from the
     format's own example records in an invented file, since no 2026 file has one).
+121. **Days worked abroad reduce the taxable wage, never the rate** (KS 45 Ziff. 3.2.2, 6.7 with Beispiele 1–2, 7.5.1 for
+    the annual model; FAQ Frage 1; the canton GE's Directives 2026, Ziff. 3.2.2, Exemple 3, the same rule). A person
+    resident abroad who works for a Swiss employer is taxable here only on the wage of her Swiss working days; the
+    rate-determining income stays the whole wage (Art. 7 Abs. 1 DBG). The employer «kann» take the days off as follows:
+    the Swiss days are 20 a month less the days actually worked abroad (travel days worked mainly abroad count; paid
+    absences, holidays and illness, do not), the taxable wage is wage / 20 × Swiss days. A per-month input on the open
+    payslip, «Arbeitstage im Ausland» (days abroad, and the month's working days where they are not 20), kept in
+    payroll.json `taxDays` by payslip id until the month closes (an optional field, as `monthTexts`; no schema step); the
+    closed payslip keeps the days on its tax line (`tariff.abroad`: days, total, the whole wage), so it never changes,
+    and a change after the close is refused. The line says «15 von 20 Arbeitstagen in der Schweiz (ganzer Lohn
+    …)» on the page and in the PDF; its base is the Swiss share, which is the wage the settlement list declares.
+    The share is taken of the periodic wage only: an aperiodic payment (a bonus) is taxable in the share of the Swiss
+    days of the period it was earned in (Ziff. 3.2.2; Beispiel 2: the previous year's 200 of 240 days), which the app
+    does not hold, so it is taxed whole and the payslip says so (`abroadAperiodic`; the person may ask for a
+    recomputation until 31 March, Ziff. 6.7). A person whose address is in the country gets the days taken off as
+    entered, with the fact that a resident is taxed on them unless a treaty says otherwise (`abroadResident`, Ziff. 6.7
+    first paragraph): warn, don't block. Not built: the calendar of the days (Kalendarium) the circular wants with the
+    settlement (the hint says it belongs to it; ELM is out of scope), and a cross-border commuter's non-return days
+    (Gre-3, decision 120). As data: `taxAtSource.abroad` (20 working days, the country of residents). Tests:
+    tests/payroll-tax-at-source-cases.test.ts (Beispiele 1–2 of Ziff. 6.7 and FAQ Frage 1 with the ZH rates of 2026),
+    tests/payroll-days-abroad-api.test.ts (the input, its refusals, the close).
 
 ---
 

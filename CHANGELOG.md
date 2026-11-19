@@ -162,6 +162,10 @@ Two markers flag an entry you must read before you update:
   insurer pays directly) are refused with their reason instead of computed; SF (French cross-border
   commuters under the special agreement) is declared at 0 % with the wage in the settlement list. The
   note on L–P names the 60 days without returning home (form Gre-3) beside the certificate.
+- Löhne › a payslip: «Arbeitstage im Ausland» for a person resident abroad: the days she worked
+  abroad (of 20 a month) take their share off the taxable wage, while the whole wage sets the rate;
+  the tax line says «15 von 20 Arbeitstagen in der Schweiz (ganzer Lohn …)». A bonus is taxed whole,
+  and the payslip says so; a person living in the country gets a fact that only a treaty frees those days.
 - Abschluss › Prüfen: a section «Löhne» with the payroll's year-end checks as facts (never a block):
   1091 at 31.12. against the payouts not paid by then, each named; each insurer's account with what
   the payslips accrued, what was paid and what is open, and «Schlussabrechnung erfassen» while no

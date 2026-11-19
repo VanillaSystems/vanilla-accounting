@@ -447,6 +447,8 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
         data, types, wageType: w, label: label(w), person: tax ?? { subject: false }, month, lines,
         // The days employed in the firm's own proration, so the extrapolation takes back exactly what the proration cut (§22 decision 94).
         days: employedFraction(e, month, settings.proration) * (data.taxAtSource?.partMonth ?? 30), pensum: job?.pensum ?? (job?.kind === 'monthly' ? 100 : undefined),
+        // The working days she worked abroad this month (§22 decision 121); her address says whether she lives in the country.
+        ...(store.taxDays?.[payslipId(month, e.id)] ? { abroad: store.taxDays[payslipId(month, e.id)], resident: read(`employees/${e.id}/address`, e.address, to)?.country?.toUpperCase() === (data.taxAtSource?.abroad?.country ?? '') } : {}),
         // A payment after the exit (a Nachzahlung) takes the rate with the exit month's income (FAQ KS 45, Frage 16).
         ...(!employed ? { exitIncome: exitIncomeOf(history, e.id, month, w.key, typeof c.base === 'string' ? c.base : '') } : {}),
         tariffs: ctx.tariffs, insurances: store.insurances,
@@ -456,6 +458,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       // The commission prints after the employer's contributions, the tax in its place.
       for (const l of out.lines) (l.side === 'employer' ? commissionLines : lines).push(l);
       for (const m of out.missing) miss(m.wageType, m.code);
+      for (const f of out.facts) fact(f.key, f.vars);
       for (const u of out.used) used.set(`${u.path}|${u.validFrom}|${u.enteredAt}`, u);
       continue;
     }

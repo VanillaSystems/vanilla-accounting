@@ -30,7 +30,7 @@ export interface Overview {
   federal: string[];
 }
 
-export type Payslip = PayslipView & { drift: Difference[]; monthLines: MonthLine[]; paidDifference?: { difference: number; paid: number; account: string; ref: string; date: string } };
+export type Payslip = PayslipView & { drift: Difference[]; monthLines: MonthLine[]; taxDays?: { abroad: number; total?: number }; paidDifference?: { difference: number; paid: number; account: string; ref: string; date: string } };
 
 export type Load<T> = { state: 'loading' } | { state: 'failed'; error: unknown } | { state: 'ready'; data: T };
 
@@ -130,6 +130,7 @@ export const payrollApi = {
   addLine: (body: { employee: string; month: string; wageType: string; amount?: number; quantity?: number; rate?: number; text?: string }) => request<MonthLine>('POST', '/api/payroll/month-lines', body),
   removeLine: (id: string) => request<{ removed: string }>('DELETE', `/api/payroll/month-lines/${id}`),
   monthText: (month: string, text: string) => request<{ text: string }>('PUT', `/api/payroll/months/${month}/text`, { text }),
+  daysAbroad: (id: string, body: { abroad?: number; total?: number }) => request<{ id: string; abroad: number; total: number }>('PUT', `/api/payroll/payslips/${encodeURIComponent(id)}/days-abroad`, body),
   createEmployee: (body: Record<string, unknown>, backdated?: Backdated) => request<Saved<{ id: string }>>('POST', '/api/payroll/employees', { ...body, ...(backdated ? { backdated } : {}) }),
   patchEmployee: (id: string, body: Record<string, unknown>, backdated?: Backdated) => request<Saved>('PATCH', `/api/payroll/employees/${encodeURIComponent(id)}`, { ...body, ...(backdated ? { backdated } : {}) }),
   socialSecurityNumber: (id: string) => request<{ socialSecurityNumber: string | null }>('GET', `/api/payroll/employees/${encodeURIComponent(id)}/social-security-number`),

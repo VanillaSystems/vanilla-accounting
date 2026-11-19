@@ -24,7 +24,7 @@ export interface LoadedTariff { region: string; year: string; file: TariffFile; 
 export type TariffSource = (region: string, year: string) => LoadedTariff | undefined;
 
 /** Where a tax line comes from: the file, the code and the rate-determining income it was looked up with. */
-export interface TariffUse { region: string; code: string; income: number; created?: string; version?: string; units?: UnitsUse }
+export interface TariffUse { region: string; code: string; income: number; created?: string; version?: string; units?: UnitsUse; abroad?: { days: number; total: number; wage: number } }
 
 export interface TaxAtSourceInput {
   data: PayrollData;
@@ -44,6 +44,10 @@ export interface TaxAtSourceInput {
   exitIncome?: number;
   /** Her Pensum in %, when the Anstellung states one (an hourly wage may not). */
   pensum?: number;
+  /** The working days she worked abroad this month (and the month's working days, absent: the data's), §22 decision 121. */
+  abroad?: { abroad: number; total?: number };
+  /** Her address on the month's last day is in the jurisdiction's own country: days abroad are taken off only where a treaty says so. */
+  resident?: boolean;
   tariffs?: TariffSource;
   insurances: readonly PayrollInsurance[];
   /** The region of a closed payslip's tax, for a correction carried from it. */
@@ -55,6 +59,8 @@ export interface TaxAtSourceResult {
   lines: PayslipLine[];
   missing: Array<{ wageType: string; code: string }>;
   used: UsedEntry[];
+  /** What the payslip says beside the tax (days abroad of a resident, an aperiodic payment taxed whole). */
+  facts: Array<{ key: string; vars?: Record<string, string | number> }>;
 }
 
 /** The tariff code the file names: a letter, the children and the church tax (A0N); two characters take the church flag. */
@@ -80,7 +86,7 @@ const rules = (data: PayrollData): TaxAtSourceData | undefined => data.taxAtSour
 /** The tax at source and its commission for one payslip. */
 export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
   const { data, types, person, month, lines } = input;
-  const out: TaxAtSourceResult = { lines: [], missing: [], used: [] };
+  const out: TaxAtSourceResult = { lines: [], missing: [], used: [], facts: [] };
   const t = rules(data);
   const year = month.slice(0, 4);
   const to = `${month}-${String(new Date(Date.UTC(Number(year), Number(month.slice(5, 7)), 0)).getUTCDate()).padStart(2, '0')}`;
@@ -146,6 +152,20 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
       income = round2(income + aperiodic);
     }
 
+    // Days worked abroad (KS 45 Ziff. 3.2.2, 6.7): the tax on the Swiss days' share of the periodic wage, at the rate of
+    // the whole wage. An aperiodic payment was earned over another period, whose share the app does not know: taxed whole.
+    let taxable = base;
+    let abroad: TariffUse['abroad'];
+    if (input.abroad && input.abroad.abroad > 0 && t.abroad) {
+      const total = input.abroad.total ?? t.abroad.workdays;
+      const swiss = Math.max(0, total - input.abroad.abroad);
+      taxable = round2((prorated + periodic) * swiss / total + aperiodic);
+      abroad = { days: input.abroad.abroad, total, wage: base };
+      if (round2(aperiodic) !== 0) out.facts.push({ key: 'abroadAperiodic', vars: { amount: round2(aperiodic) } });
+      if (input.resident) out.facts.push({ key: 'abroadResident' });
+      if (taxable <= 0) return undefined;
+    }
+
     let file = code;
     let bracket = bracketOf(loaded.file, file, income, to);
     // A region whose tariffs are only with or only without the church tax lists one of them (format, Ziff. 4.2.4).
@@ -154,11 +174,11 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
       if (!loaded.file.tariffs.has(file)) file = code; else bracket = bracketOf(loaded.file, file, income, to);
     }
     if (!bracket) return miss(`taxCodeUnknown:${code}`);
-    let amount = roundStep(base * bracket.rate / 100, t.rounding);
+    let amount = roundStep(taxable * bracket.rate / 100, t.rounding);
     if (amount < bracket.minimum) amount = bracket.minimum;
     if (amount === 0 && !rule?.report) return undefined;
-    const tariff: TariffUse = { region, code: file, income, created: loaded.file.created, version: loaded.sha256.slice(0, 12), ...(units ? { units: units.used } : {}) };
-    out.lines.push({ wageType: input.wageType.key, label: input.label, base, rate: bracket.rate, amount, side: 'employee', source: `tariff:${region}:${year}`, tariff });
+    const tariff: TariffUse = { region, code: file, income, created: loaded.file.created, version: loaded.sha256.slice(0, 12), ...(units ? { units: units.used } : {}), ...(abroad ? { abroad } : {}) };
+    out.lines.push({ wageType: input.wageType.key, label: input.label, base: taxable, rate: bracket.rate, amount, side: 'employee', source: `tariff:${region}:${year}`, tariff });
     return undefined;
   });
   tax();
