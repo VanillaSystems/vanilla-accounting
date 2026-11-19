@@ -21,7 +21,7 @@ export interface Overview {
   federal: string[];
 }
 
-export type Payslip = PayslipView & { drift: Difference[]; monthLines: MonthLine[]; paidDifference?: { difference: number; paid: number; ref: string; date: string } };
+export type Payslip = PayslipView & { drift: Difference[]; monthLines: MonthLine[]; paidDifference?: { difference: number; paid: number; account: string; ref: string; date: string } };
 
 export type Load<T> = { state: 'loading' } | { state: 'failed'; error: unknown } | { state: 'ready'; data: T };
 

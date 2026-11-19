@@ -171,3 +171,4 @@
   [data-area="payroll"] .pkv dd { margin-bottom: 6px; }
 }
 [data-area="payroll"] .pcard p { margin: 0; font-size: 13px; }
+[data-area="payroll"] .row.ppay .a small.pdiff { display: block; font-size: 12px; color: var(--neg); }

@@ -108,40 +108,63 @@ export function bookWagePayments(
 }
 
 /**
- * What the bank line paid for this payslip: its entries off 1091 that name the payslip's PDF (one line may pay
- * a whole month); a line booked by hand naming no PDF counts whole when it pays only this payslip.
+ * What the books paid for this payslip off the clearing account, signed (a payment out debits it, a repayment
+ * in credits it): on every bank line its PDF is linked to (a second line that pays a difference too) the entries
+ * on the clearing account that name its PDF; a line whose entries name none counts whole when it holds this
+ * payslip alone, and for several payslips only when it pays exactly what they pay out together; plus entries
+ * without a bank line (a person's settlement) that name the PDF. Undefined when what a line paid for this payslip
+ * cannot be told: then no difference is said.
  */
-export function paidFor(books: BooksLike, tx: BankTransaction, c: Pick<PayslipClose, 'receiptId'>): number {
-  const onRef = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
-  const named = onRef.filter((e) => c.receiptId && e.receipts?.includes(c.receiptId));
-  const lines = named.length ? named : books.mappings.filter((m) => m.transactionRef === tx.ref).length <= 1 ? onRef : [];
-  return round2(lines.reduce((s, e) => s + e.amount, 0));
+export function paidFor(books: BooksLike, c: Pick<PayslipClose, 'receiptId' | 'payout' | 'id'>, clearing: string, all: readonly Pick<PayslipClose, 'receiptId' | 'payout'>[] = []): number | undefined {
+  if (!c.receiptId) return undefined;
+  const rid = c.receiptId;
+  const signed = (e: JournalEntry) => (e.accountDebit === clearing ? e.amount : 0) - (e.accountCredit === clearing ? e.amount : 0);
+  const txRefs = new Set(books.transactions.map((t) => t.ref));
+  const refs = new Set(books.mappings.filter((m) => m.receiptId === rid && txRefs.has(m.transactionRef)).map((m) => m.transactionRef));
+  let paid = 0;
+  for (const ref of refs) {
+    const onRef = books.journalEntries.filter((e) => e.transactionRef === ref && (e.accountDebit === clearing || e.accountCredit === clearing));
+    if (onRef.some((e) => e.receipts?.length)) { paid += onRef.filter((e) => e.receipts?.includes(rid)).reduce((s, e) => s + signed(e), 0); continue; }
+    const slips = new Set(books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId));
+    const others = all.filter((x) => x.receiptId && x.receiptId !== rid && slips.has(x.receiptId));
+    const total = round2(onRef.reduce((s, e) => s + signed(e), 0));
+    if (!others.length) paid += total;
+    else if (total === round2(c.payout + others.reduce((s, x) => s + x.payout, 0))) paid += c.payout;
+    else return undefined;
+  }
+  // A settlement booked by hand on no bank line, naming the payslip (not the payslip's own entries).
+  paid += books.journalEntries.filter((e) => !txRefs.has(e.transactionRef) && !e.transactionRef.startsWith('LR-') && e.receipts?.includes(rid)).reduce((s, e) => s + signed(e), 0);
+  return round2(paid);
 }
 
 export interface PaymentRow {
   id: string; employee: string; name: string; iban?: string; payout: number;
   purpose: string; valueDate: string;
-  /** The bank line that paid it, once a booking holds it: the line's amount, and what of it paid this payslip. */
-  paid?: { ref: string; date: string; amount: number; forThis: number };
+  /** The bank line that paid it, once a booking holds it; what the books paid for this payslip (undefined: cannot be told); whether the line pays other payslips too. */
+  paid?: { ref: string; date: string; amount: number; currency: string; forThis?: number; together: boolean };
   /**
    * The payout less what the bank paid for it, when they differ (a payslip reopened and closed again with
-   * another payout after its wage was paid): that much stays on 1091 until a payment or a booking settles it.
+   * another payout after its wage was paid): that much stays on the clearing account until a payment or a booking settles it.
    */
   difference?: number;
+  /** The clearing account the difference stays on. */
+  account?: string;
 }
 
-/** The month's Lohnzahlungen: one row per closed payslip with something to pay. */
-export function paymentRows(books: BooksLike, closes: readonly PayslipClose[], month: string): PaymentRow[] {
-  return closes.filter((c) => c.month === month && c.payout !== 0).map((c) => {
+/** The month's Lohnzahlungen: one row per closed payslip with something to pay, or that was paid (a payout closed again at 0 too). */
+export function paymentRows(books: BooksLike, closes: readonly PayslipClose[], month: string, clearing = '1091'): PaymentRow[] {
+  return closes.filter((c) => c.month === month).flatMap((c) => {
     const tx = paymentOf(books, c);
+    if (c.payout === 0 && !tx) return [];
     const [y, m] = c.month.split('-');
-    const forThis = tx ? paidFor(books, tx, c) : 0;
-    const difference = tx ? round2(c.payout - forThis) : 0;
-    return {
+    const forThis = tx ? paidFor(books, c, clearing, closes) : undefined;
+    const difference = forThis === undefined ? 0 : round2(c.payout - forThis);
+    const together = !!tx && new Set(books.mappings.filter((x) => x.transactionRef === tx.ref).map((x) => x.receiptId)).size > 1;
+    return [{
       id: c.id, employee: c.employee, name: c.person.name, ...(c.person.iban ? { iban: c.person.iban } : {}), payout: c.payout,
       purpose: `Lohn ${m}/${y}`, valueDate: c.payday,
-      ...(tx ? { paid: { ref: tx.ref, date: tx.date, amount: Math.abs(tx.amount), forThis } } : {}),
-      ...(difference ? { difference } : {}),
-    };
+      ...(tx ? { paid: { ref: tx.ref, date: tx.date, amount: Math.abs(tx.amount), currency: tx.currency, ...(forThis !== undefined ? { forThis } : {}), together } } : {}),
+      ...(difference ? { difference, account: clearing } : {}),
+    }];
   });
 }
