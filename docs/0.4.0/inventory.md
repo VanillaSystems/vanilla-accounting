@@ -146,7 +146,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/invoices/texts.ts` | MWST 5 |
 | `src/knowledge/cases.ts` | MWST 5, ESTV 4, Ziffer 4, camt.053 1 |
 | `src/knowledge/layers.ts` | CHF 1 |
-| `src/parsers/receipt-text.ts` | CHF 5, MWST 21, UID 3 |
+| `src/parsers/receipt-text.ts` | CHF 5, MWST 21 |
 
 ## infrastructure
 
@@ -171,7 +171,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/invoices/Detail.tsx` | CHF 1, QR-bill 1 |
 | `src/app/areas/invoices/Sheet.tsx` | QR-bill 2 |
 | `src/app/areas/invoices/actions.ts` | CHF 1 |
-| `src/app/areas/invoices/address.ts` | MWST 1, UID 1, QR-bill 1 |
+| `src/app/areas/invoices/address.ts` | MWST 1, QR-bill 1 |
 | `src/app/areas/invoices/model.ts` | CHF 1 |
 | `src/app/areas/journal/Detail.tsx` | CHF 1 |
 | `src/app/areas/journal/NewEntry.tsx` | CHF 1, form 0535 1, Rappen 1 |
