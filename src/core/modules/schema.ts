@@ -434,6 +434,16 @@ export interface PayrollData {
   wageTypes: WageTypeDef[];
   /** The clearing account every payslip's payout passes (Lohndurchlaufkonto): credited by the close, cleared by the bank payment. */
   clearing: string;
+  /** The Lohnausweis (the jurisdiction's annual wage statement): its fields in print order and its words. */
+  lohnausweis?: {
+    title: Labels;
+    /** «Ersetzt / Korrigiert den Lohnausweis vom {date}»: printed on a later statement. */
+    replaces: Labels;
+    corrects: Labels;
+    letters: Record<string, Labels>;
+    fields: Array<{ key: string; label: Labels; sum?: { plus: string[]; minus?: string[] }; deduction?: boolean; remark?: boolean }>;
+    copyToTaxOffice?: string[];
+  };
   /** How a social security number looks (a regular expression) and what stands for it in a text sent to a model. */
   socialSecurityNumber: { pattern: string; masked: string };
   /** The words of the payroll's documents, in each language. */

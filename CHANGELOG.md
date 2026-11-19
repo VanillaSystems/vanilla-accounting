@@ -112,6 +112,10 @@ Two markers flag an entry you must read before you update:
   wages are paid. A payment to a fund or insurer clears its liability account (2271–2275) and is never
   expensed a second time; each insurance shows what the payslips accrued, what was paid and what is open;
   a final statement's difference is booked from its total.
+- Payroll, Dokumente (phase B0): the Lohnausweis per person from the closed payslips, each Lohnart in
+  its field, as a PDF of Form 11 and as a table; a later one replaces or corrects it and both stay. The
+  Lohnkonto per person and for the firm, the declarations' figures (AHV and ALV wages, the insured wages)
+  and the month's Lohnbuchungen as CSV.
 
 ### Fixed
 
