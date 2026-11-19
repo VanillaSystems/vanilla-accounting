@@ -107,6 +107,8 @@ export type ApiRefusal =
   | { code: 'notByReceipt' }
   /** «Arbeitnehmeranteil abziehen» on a payment that has no employees' share open (#476). */
   | { code: 'withheldNone' }
+  /** A payroll action that does not apply (src/payroll/close.ts PayrollRefusal): the payslip is gone, closed already, not closed, not the latest closed month, the Lohnart unknown, the amount missing. */
+  | { code: 'payroll'; params: { why: 'notFound' | 'alreadyClosed' | 'notClosed' | 'notLatest' | 'unknownWageType' | 'badAmount' | 'badInput' } }
   | { code: 'decidedByHand' }
   | { code: 'changedSince' }
   | { code: 'undoGone' }

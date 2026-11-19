@@ -430,6 +430,8 @@ export interface PayrollData {
   contributions: ContributionDef[];
   rounding: number[];
   wageTypes: WageTypeDef[];
+  /** How a social security number looks (a regular expression) and what stands for it in a text sent to a model. */
+  socialSecurityNumber: { pattern: string; masked: string };
   /** The words of the payroll's documents, in each language. */
   documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer', Labels>;
 }

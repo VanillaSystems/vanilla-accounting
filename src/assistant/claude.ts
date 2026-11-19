@@ -15,6 +15,7 @@
  * customizing folders, which a person keeps with «Behalten» on a rule's card or saves in Änderungen
  * (docs/0.4.0/saving.md).
  */
+import { maskForModel } from '../llm/mask.js';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
@@ -200,11 +201,11 @@ export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: st
 
 /** The message: what the app tells the model first (`notes`), what the person refers to, as the server read it now, then their words. */
 export function assistantPrompt(text: string, context: string[], notes: string[] = []): string {
-  return [
+  return maskForModel([
     ...notes,
     context.length ? ['The person refers to:', ...context.map((c) => `- ${c}`)].join('\n') : '',
     text.trim(),
-  ].filter(Boolean).join('\n\n');
+  ].filter(Boolean).join('\n\n'));
 }
 
 type Block = { type: string; text?: string; name?: string; id?: string; input?: Record<string, unknown> };

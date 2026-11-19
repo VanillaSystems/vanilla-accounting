@@ -226,6 +226,7 @@ export function errorText(e: unknown): string {
     case 'hasEntries': return t('error.hasEntries');
     case 'notByReceipt': return t('error.notByReceipt');
     case 'withheldNone': return t('error.withheldNone');
+    case 'payroll': return t(`error.payroll.${b.params.why}`);
     case 'decidedByHand': return t('error.decidedByHand');
     case 'changedSince': return t('error.changedSince');
     case 'undoGone': return t('error.undoGone');

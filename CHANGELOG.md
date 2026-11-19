@@ -50,6 +50,13 @@ Two markers flag an entry you must read before you update:
   workspace of a firm that pays wages gets the accounts 1091 Lohndurchlaufkonto and 2271–2275 (one
   liability account per insurer). Books schema 11: an entry may be booked by payroll; `npm run update`
   writes it, no record changes.
+- Payroll, closing (phase B0): a payslip is closed per person or for the whole month («Alle
+  abschliessen»). Before, the app says what is off (a line «unvollständig», an earlier month still open, an
+  account the chart lacks) and closes after «Trotzdem abschliessen»: it books exactly the preview through
+  1091 and the insurers' accounts (ref `LR-<yyyy>-<mm>-<person>`), files the payslip PDF in Belege and adds
+  a missing account from the standard chart. The latest closed month can be reopened; an earlier one, or one
+  in a closed period, is corrected by a Rückwirkende Korrektur that the next open month carries. A social
+  security number is masked in everything sent to an AI model.
 
 ### Fixed
 
