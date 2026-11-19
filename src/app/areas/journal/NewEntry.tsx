@@ -389,7 +389,7 @@ export function NewEntry(props: Props) {
                   {templates.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                 </select>
               </label>
-              {template ? <button type="button" className="golink" data-act="delete-template" onClick={async () => { if (await dropTemplate(nav, template) && ui().overlay?.kind === 'new') setUi({ overlay: { ...ui().overlay!, template: undefined } as typeof s.overlay }); }}>{t('journal.template.delete')}</button> : null}
+              {template ? <AsyncButton type="button" className="golink" data-act="delete-template" onClick={async () => { if (await dropTemplate(nav, template) && ui().overlay?.kind === 'new') setUi({ overlay: { ...ui().overlay!, template: undefined } as typeof s.overlay }); }}>{t('journal.template.delete')}</AsyncButton> : null}
             </div>
           )}
           {!filed && <PaymentField books={books} picked={tx} amount={d.amount} onPick={pickPayment} />}
