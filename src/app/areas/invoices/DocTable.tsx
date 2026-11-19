@@ -51,7 +51,7 @@ function StatusChip({ r, kind }: { r: DocRow; kind: DocKind }) {
 
 function columns(kind: DocKind, go: (loc: ReturnType<typeof invoiceAt>) => void): Column[] {
   const date: Column = { key: 'date', label: t('sales.col.date'), cell: (r) => <span className="mono">{formatDate(r.inv.date)}</span>, csv: (r) => formatDate(r.inv.date) };
-  const number: Column = { key: 'number', label: t('sales.col.number'), cell: (r) => (r.inv.status === 'issued' ? <span className="mono">{r.inv.number}</span> : <span className="draftno">{t('invoices.draft')}</span>), csv: (r) => (r.inv.status === 'issued' ? r.inv.number : '') };
+  const number: Column = { key: 'number', label: t('sales.col.number'), cell: (r) => (r.inv.status === 'issued' ? <span className="mono">{r.inv.number}</span> : <span className="draftno" data-tip={r.inv.number ? t('invoices.draftKeeps', { number: r.inv.number }) : undefined}>{t('invoices.draft')}{r.inv.number ? ` ${r.inv.number}` : ''}</span>), csv: (r) => r.inv.number ?? '' };
   const contact: Column = { key: 'contact', label: t('sales.col.contact'), cell: (r) => <span className="tt">{r.customer}{r.inv.subject && <small>{r.inv.subject}</small>}</span>, csv: (r) => [r.customer, r.inv.subject].filter(Boolean).join(' · ') };
   const status: Column = { key: 'status', label: t('sales.col.status'), cell: (r) => <StatusChip r={r} kind={kind} />, csv: (r) => statusText(r, kind) };
   const sent: Column = {

@@ -36,6 +36,10 @@ import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminde
 import type { AllocationItem, AllocationPart, PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
+import type { AccountChangePlan } from '../../invoices/revise.js';
+
+/** «Konten ändern»: the positions' new revenue accounts (index in `lines`), and the day a reclassification takes. */
+export interface AccountsInput { lines: Array<{ line: number; account: string }>; date?: string }
 import type { AiAvailability, DesktopInfo, FolderLook, HomeFolders, KnownBooks, PhoneInfo } from '../../types/desktop.js';
 import type { Opened } from '../handover/store.js';
 import { DesktopCallError } from '../desktop/bridge.js';
@@ -826,6 +830,11 @@ export const api = {
   cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage; confirm?: 'paid' }) =>
     request<{ invoice: Issued; sent?: SentDocument }>('POST', `/api/invoices/${id}/cancel`, input),
   creditNote: (id: string, input: CreditInput) => request<Draft>('POST', `/api/invoices/${id}/credit-note`, input),
+  /** «Zurück zum Entwurf» of an unsent document (spec 4.4.2): it keeps its number; refused once sent (`sent`). */
+  backToDraft: (id: string) => request<Draft>('POST', `/api/invoices/${id}/draft`),
+  /** What «Konten ändern» would book, nothing written. */
+  accountsPlan: (id: string, input: AccountsInput) => request<AccountChangePlan>('POST', `/api/invoices/${id}/accounts/plan`, input),
+  changeAccounts: (id: string, input: AccountsInput) => request<AccountChangePlan>('POST', `/api/invoices/${id}/accounts`, input),
   sendReminder: (id: string, input: ReminderInput) => request<{ reminder: Reminder; sent: SentDocument }>('POST', `/api/invoices/${id}/reminders`, input),
   addComment: (id: string, text: string) => request<Comment>('POST', `/api/invoices/${id}/comments`, { text }),
   /** Links a payment to an invoice; `booked` false when a person's booking of the payment stays as the revenue (r9c-3). */

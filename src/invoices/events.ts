@@ -141,8 +141,9 @@ export function bookInvoiceEvents(books: Books, book: InvoiceBook, ctx: PaymentC
     const stornoRef = eventRef(inv, 'storno');
     if (inv.cancelled && refs.has(issueRef) && !refs.has(stornoRef)) {
       const day = openDay(lock, inv.cancelled.date);
-      // The write-offs go with the claim: the storno reverses them too, so the receivable nets to zero.
-      const issued = books.journalEntries.filter((e) => e.transactionRef === issueRef || (inv.writeOffs ?? []).some((w) => e.transactionRef === writeOffRef(inv, w.id)));
+      // The write-offs go with the claim: the storno reverses them too, so the receivable nets to zero; so do the
+      // reclassifications «Konten ändern» booked for it (`-kk-`), so no revenue account keeps a part of it.
+      const issued = books.journalEntries.filter((e) => e.transactionRef === issueRef || e.transactionRef.startsWith(`${issueRef}-kk-`) || (inv.writeOffs ?? []).some((w) => e.transactionRef === writeOffRef(inv, w.id)));
       const text = `Storno ${TEXTS.de.invoice} ${inv.number} ${inv.customer.name}`;
       books.journalEntries.push(...issued.map((e): JournalEntry => ({
         ...reversalOf(e, day, text),
@@ -200,7 +201,8 @@ export function invoiceReceipt(books: Books, inv: Issued, ctx: Pick<PaymentConte
   const pdf = ctx.pdfOf(inv);
   const id = ctx.receiptId(pdf);
   if (books.receipts.some((r) => r.id === id)) return id;
-  const filename = `${inv.date.replace(/-/g, '')}-${word.toLowerCase()}-${inv.number}.pdf`;
+  // Issued again after «Zurück zum Entwurf»: a name of its own, so the file of the replaced PDF's receipt is never taken for it.
+  const filename = `${inv.date.replace(/-/g, '')}-${word.toLowerCase()}-${inv.number}${inv.replaced?.length ? `-${id.slice(0, 8)}` : ''}.pdf`;
   const t = totals(inv);
   const receipt: Receipt = {
     id,

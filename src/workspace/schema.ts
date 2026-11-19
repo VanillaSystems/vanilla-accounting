@@ -93,6 +93,9 @@ export const WORKSPACE_SCHEMA = 5;
  *    Also in 3 (unreleased, phase 1 of invoicing, so no step of their own): `InvoiceLine.activity`
  *    (the net tax rate of a position on a firm with two), `payments[].source`, `allocations`,
  *    `writeOffs` and `Issued.terms`. A file of schema 2 holds none: the step adds nothing for them.
+ *    Phase 2 (slice F2) adds `Draft.number`, `replaced` and `Issued.accountChanges` (back to draft,
+ *    Konten ändern); they need no transform and ride on phase 2's step 3 → 4 (slice G1), so an app of
+ *    schema 3 never issues a draft that keeps its number under a new one.
  */
 export const INVOICES_SCHEMA = 3;
 /** 1: payroll.json starts with dated histories (docs/specs/domain-model.md §5.7), so it needs no step yet. */

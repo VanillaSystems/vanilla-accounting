@@ -5,7 +5,7 @@
 import { isItem, issuedPdfUrl, sentPdfUrl, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceLine, type Issued, type WriteOff, type WriteOffReason } from '../../../invoices/model.js';
 import type { AllocationPart } from '../../../invoices/payments.js';
 import type { MailMessage } from '../../../invoices/mail.js';
-import { api, errorText, type CreditInput, type DraftChange } from '../../lib/api.js';
+import { api, errorText, type AccountsInput, type CreditInput, type DraftChange } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
 import { localToday, parsePeriod, periodContaining, type Period } from '../../../accounting/periods.js';
@@ -121,6 +121,25 @@ export async function send(nav: Nav, inv: Issued, email?: MailMessage): Promise<
   if (!doc) return false;
   await reloadInvoices();
   nav.toast(email ? t('invoices.mailed', { number: inv.number, to: doc.to }) : t(doc.kind === 'resend' ? 'invoices.resent' : 'invoices.sent', { number: inv.number }));
+  return true;
+}
+
+/** «Zurück zum Entwurf»: the document is a draft again under its number, shown as such. */
+export async function backToDraft(nav: Nav, inv: Issued): Promise<boolean> {
+  const draft = await run(nav, api.backToDraft(inv.id));
+  if (!draft) return false;
+  put({ invoice: draft });
+  await booked(nav);
+  nav.select(invoicePath(draft));
+  nav.toast(t('invoices.backDone', { number: inv.number }));
+  return true;
+}
+
+/** «Konten ändern»: the positions' accounts, and the bookings with them. */
+export async function changeAccounts(nav: Nav, inv: Issued, input: AccountsInput): Promise<boolean> {
+  if (!(await run(nav, api.changeAccounts(inv.id, input)))) return false;
+  await booked(nav);
+  nav.toast(t('invoices.accountsDone'));
   return true;
 }
 

@@ -8,12 +8,12 @@
 import { Router, type Request } from 'express';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { WS, assertOpen, readBooks, updateBooksWithEffects, RequestError } from '../books.js';
+import { WS, assertOpen, readBooks, receiptPath, refDates, updateBooksWithEffects, RequestError } from '../books.js';
 import { loadInvoices, saveInvoices } from '../../invoices/store.js';
 import { liveCustomers, liveInvoices, type CreditRequest } from '../../invoices/rules.js';
 import {
-  addComment, cancelInvoice, createCreditNote, createCustomer, createDraft, draftReminder, fileReceipts, findInvoice, issueInvoice, issuedPdf,
-  missingOf, parseCustomer, parseDraftPatch, paymentContext, previewHtml, recordSend, removeDraft, sendReminder, sentPdf, updateCustomer, updateDraft, viewOf,
+  addComment, backToDraft, cancelInvoice, changeAccounts, createCreditNote, createCustomer, createDraft, draftReminder, fileReceipts, findInvoice, issueInvoice, issuedPdf,
+  missingOf, parseCustomer, parseDraftPatch, paymentContext, previewHtml, recordSend, removeDraft, replacedPdf, sendReminder, sentPdf, updateCustomer, updateDraft, viewOf,
 } from '../../invoices/service.js';
 import {
   allocatePayment, allocationProposal, confirmPayment, paymentProposals, recordHandPayment, releasePayment, removeHandPayment, removeWriteOff, writeOffRest,
@@ -24,7 +24,13 @@ import { WRITE_OFF_REASONS, type Issued, type WriteOffReason } from '../../invoi
 import { openAmount } from '../../invoices/rules.js';
 import { isIsoDate } from '../../accounting/periods.js';
 import { bookInvoiceEvents, type EventOutcome } from '../../invoices/events.js';
-import { agreedBasis } from '../../engines/index.js';
+import { agreedBasis, baseCurrency, chart } from '../../engines/index.js';
+import { eventRef } from '../../books/refs.js';
+import { applyAccountChange, planAccountChange, takeBackEvent, withAccounts, type AccountContext } from '../../invoices/revise.js';
+import { creditNotesOf } from '../../invoices/rules.js';
+import type { Invoice } from '../../invoices/model.js';
+import { openDay } from '../../accounting/tax-point.js';
+import { periodLock } from '../../books/store.js';
 import type { Books } from '../../books/store.js';
 import { recordReplaced, takeReplaced } from '../link-history.js';
 import { bookAgain } from './automation.js';
@@ -119,6 +125,12 @@ router.get('/invoices/:file', (req, res, next) => {
   const m = /^(.+)\.pdf$/.exec(req.params.file);
   if (!m) return next();
   res.type('application/pdf').send(issuedPdf(WS, m[1]));
+});
+/** A PDF the document was issued with before it went back to draft (Draft.replaced), `k` from 1. */
+router.get('/api/invoices/:id/replaced/:file', (req, res, next) => {
+  const m = /^(\d+)\.pdf$/.exec(req.params.file);
+  if (!m) return next();
+  res.type('application/pdf').send(replacedPdf(WS, req.params.id, Number(m[1])));
 });
 router.get('/invoices/sent/:file', (req, res, next) => {
   const m = /^(.+)\.pdf$/.exec(req.params.file);
@@ -402,4 +414,84 @@ router.post('/api/invoices/allocation', (req, res) => {
     return { paid: result.paid };
   });
   res.json(out);
+});
+
+// ─── back to draft, Konten ändern (spec 4.4.2) ─────────────────────────────────
+
+/**
+ * «Zurück zum Entwurf»: an issued document never sent, with nothing received, credited or written
+ * off, becomes a draft and keeps its number. A sent one is refused (`sent`, MWSTG Art. 27 Abs. 2): a
+ * Gutschrift or a Storno corrects it. Its VAT event (the agreed basis) comes off the books first,
+ * refused while it lies in a filed period (403), with the receipt its PDF became.
+ */
+router.post('/api/invoices/:id/draft', async (req, res) => {
+  const ctx = paymentContext(WS);
+  res.json(await backToDraft(WS, req.params.id, {
+    books: (inv) => {
+      const ref = eventRef(inv, 'issue');
+      // Its event (the agreed basis), or the receipt a payment matched and released again left (the cash basis).
+      const now = readBooks();
+      if (!ctx || (!now.journalEntries.some((e) => e.transactionRef === ref) && !now.receipts.some((r) => r.id === ctx.receiptId(ctx.pdfOf(inv))))) return [];
+      return updateBooksWithEffects((books) => {
+        assertOpen(books, refDates(books, ref), 'deleteEntry');
+        const { receipts } = takeBackEvent(books, inv, ctx.receiptId(ctx.pdfOf(inv)));
+        return receipts.map((r) => receiptPath(books, r));
+      });
+    },
+  }));
+});
+
+const accountContext = (): AccountContext => {
+  const s = WS.invoicing;
+  if (!s) throw new RequestError(400, 'belege.workspace.yaml hat keinen invoicing-Block.');
+  return { revenueAccount: s.revenueAccount, isRevenue: (a) => chart().typeOf(a) === 'revenue', base: baseCurrency() };
+};
+
+/** `{ lines: [{ line, account }], date? }`: the positions' new revenue accounts, and the day a reclassification takes (today by default). */
+function accountRequest(req: Request): { lines: Array<{ line: number; account: string }>; date?: string } {
+  const b = body(req);
+  if (!Array.isArray(b.lines)) throw new RequestError(400, 'lines: [{ line, account }] erwartet.');
+  const lines = (b.lines as unknown[]).map((raw) => {
+    const l = (raw ?? {}) as Record<string, unknown>;
+    if (!Number.isInteger(l.line) || typeof l.account !== 'string') throw new RequestError(400, 'Eine Zeile ist { line, account }.');
+    return { line: l.line as number, account: l.account };
+  });
+  return { lines, date: isoField(b, 'date') };
+}
+
+/** What «Konten ändern» would book, nothing written: the dialog shows it. */
+router.post('/api/invoices/:id/accounts/plan', (req, res) => {
+  const { lines, date } = accountRequest(req);
+  const ctx = accountContext();
+  const books = readBooks();
+  const invoices = liveInvoices(loadInvoices(WS));
+  const inv = invoices.find((i): i is Issued => i.id === req.params.id && i.status === 'issued');
+  if (!inv) throw new RequestError(404, 'Keine ausgestellte Rechnung mit dieser Id.');
+  res.json(planAccountChange(books, inv, withAccounts(inv, lines, ctx), date ?? openDay(periodLock(books), today()), ctx, invoices));
+});
+
+/**
+ * «Konten ändern» on an issued invoice: the positions' revenue accounts, never an amount, a rate or a
+ * code; its credit notes' positions follow. Its bookings of an open period change account; for those
+ * of a filed period a reclassification without a code is booked on `date` (an open day: else 403).
+ * The books first, then the documents (src/invoices/service.ts changeAccounts). The PDFs stay as issued.
+ */
+router.post('/api/invoices/:id/accounts', async (req, res) => {
+  const { lines, date: asked } = accountRequest(req);
+  const ctx = accountContext();
+  const pay = paymentContext(WS);
+  const book = (from: Issued, to: Issued, invoices: readonly Invoice[], date?: string) => updateBooksWithEffects((books) => {
+    const day = date ?? openDay(periodLock(books), today());
+    assertOpen(books, [day], 'newEntry');
+    const plan = planAccountChange(books, from, to, day, ctx, invoices);
+    if (!plan.lines.length) return plan;
+    assertOpen(books, plan.rebook.filter((r) => !r.filed).map((r) => r.date), 'editEntry');
+    const docs = [from, ...creditNotesOf(from, invoices)];
+    applyAccountChange(books, docs, plan, ctx, (n) => { const d = docs.find((x) => x.number === n); return d && pay ? pay.receiptId(pay.pdfOf(d)) : undefined; });
+    return plan;
+  });
+  res.json(await changeAccounts(WS, req.params.id, lines, ctx, {
+    books: (inv, next, invoices) => book(inv, next, invoices, asked),
+    undo: (plan, now, before, invoices) => { book(now, before, invoices, plan.reclass[0]?.date); },
+  }));
 });

@@ -40,7 +40,8 @@ export const routeId = (inv: Invoice): string => (inv.status === 'issued' ? inv.
 
 export function byRouteId(invoices: readonly Invoice[], id: string | undefined): Invoice | undefined {
   if (!id) return undefined;
-  return id.startsWith('draft-') ? invoices.find((i) => i.status === 'draft' && i.id === id.slice(6)) : invoices.find((i) => i.status === 'issued' && i.number === id);
+  // A number's link still finds its document after it went back to draft (Draft.number).
+  return id.startsWith('draft-') ? invoices.find((i) => i.status === 'draft' && i.id === id.slice(6)) : invoices.find((i) => i.number === id && !i.deleted);
 }
 
 export const bookOf = (d: InvoiceList): InvoiceBook => ({ schema: 1, customers: d.customers, invoices: d.invoices, sent: d.sent });

@@ -7,7 +7,7 @@ import { fromRappen, roundCHF, toRappen } from '../accounting/rappen.js';
 import { TEXTS, formatDate } from './texts.js';
 import type {
   Comment, Customer, CustomerFields, Draft, Envelope, Exemption, Invoice, InvoiceBook, InvoiceContent, InvoiceLayout,
-  InvoiceLine, InvoicingSettings, Issued, IssuedTerms, ItemLine, PaymentAllocation, PaymentTerms, Prices, Reminder, Sender, UnitDef, VatRate, WriteOff,
+  InvoiceLine, InvoicingSettings, Issued, IssuedTerms, ItemLine, PaymentAllocation, PaymentTerms, Prices, Reminder, ReplacedPdf, Sender, SentDocument, UnitDef, VatRate, WriteOff,
 } from './model.js';
 import { isItem } from './model.js';
 import { chargesVat, invoiceActivities, invoiceRates, invoicing, vat, vatSetup } from '../engines/index.js';
@@ -285,13 +285,14 @@ export function isOverdue(inv: Invoice, invoices: readonly Invoice[], today: str
 
 /**
  * The next number of the invoice date's year, YYYY-NNN: one more than the highest number that
- * year has given, cancelled invoices included, so no number is ever given twice. Drafts have none.
+ * year has given, cancelled invoices included, so no number is ever given twice. A draft has none,
+ * unless it went back to draft and keeps its number (Draft.number): that one stays taken.
  */
 export function nextNumber(invoices: readonly Invoice[], date: string): string {
   const year = date.slice(0, 4);
   const taken = invoices
-    .filter((i): i is Issued => i.status === 'issued' && i.number.startsWith(`${year}-`))
-    .map((i) => Number(i.number.slice(5)));
+    .flatMap((i) => (i.number?.startsWith(`${year}-`) ? [i.number] : []))
+    .map((n) => Number(n.slice(5)));
   return `${year}-${String(Math.max(0, ...taken) + 1).padStart(3, '0')}`;
 }
 
@@ -305,7 +306,7 @@ export type MissingField =
   | 'sender.name' | 'sender.address' | 'sender.uid' | 'payTo'
   | 'customer' | 'customer.name' | 'customer.address'
   | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.price' | 'line.vatRate' | 'line.activity' | 'line.discount' | 'line.discountBase' | 'exemption' | 'total'
-  | 'credit.invoice' | 'credit.sign' | 'credit.exceeds' | 'credit.aboveOpen';
+  | 'credit.invoice' | 'credit.sign' | 'credit.exceeds' | 'credit.aboveOpen' | 'numberYear';
 
 const hasAddress = (a: { postcode?: string; town?: string; country?: string } | undefined) => !!(a?.postcode?.trim() && a.town?.trim() && a.country?.trim());
 
@@ -364,10 +365,14 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
 /**
  * What issuing warns of and the person may issue with all the same («Trotzdem ausstellen», spec
  * 4.11): an item position without a text (Art. 26 Abs. 2 lit. d MWSTG), or without an amount (lit.
- * e: it prints as 0.00), and a Rabatt with nothing above it to take off.
+ * e: it prints as 0.00), a Rabatt with nothing above it to take off, and a kept number of another
+ * year than the date («Nummer 2026-005 im Jahr 2027»).
  */
-export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'>): Missing[] {
-  return draft.lines.flatMap((l, line): Missing[] => {
+export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'> & { number?: string; date?: string }): Missing[] {
+  // A draft back from issue keeps its number; dated into another year, the number names the old one (spec 4.4.2).
+  const year = draft.number && /(?:^|\D)((?:19|20)\d\d)(?:\D|$)/.exec(draft.number)?.[1];
+  const numberYear: Missing[] = year && draft.date && draft.date.slice(0, 4) !== year ? [{ field: 'numberYear' }] : [];
+  return [...numberYear, ...draft.lines.flatMap((l, line): Missing[] => {
     // A Rabatt with no item above it takes nothing.
     if (l.kind === 'discount') return draft.lines.slice(0, line).some(isItem) ? [] : [{ field: 'line.discountBase', line }];
     if (!isItem(l)) return [];
@@ -375,7 +380,7 @@ export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'>
       ...(!l.text.trim() ? [{ field: 'line.text' as const, line }] : []),
       ...(l.quantity === 0 || l.price === 0 ? [{ field: 'line.price' as const, line }] : []),
     ];
-  });
+  })];
 }
 
 /** Why the money of a document cannot move as asked; `code` is what the UI says it in (src/invoices/payments.ts PaymentError, src/types/api-error.ts PaymentErrorBody). */
@@ -385,8 +390,16 @@ export type PaymentRefusal = 'notFound' | 'noPayment' | 'cancelled' | 'currency'
 export class InvoiceRuleError extends Error {
   constructor(readonly code: InvoiceRefusal, message: string, readonly missing?: Missing[]) { super(message); }
 }
-/** `unconfirmed`: issuing warns (warningsForIssue) and the request did not carry the person's «Trotzdem ausstellen». */
-export type InvoiceRefusal = 'incomplete' | 'unconfirmed' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid' | 'aboveOpen' | 'surplus' | 'beforeInvoice';
+/**
+ * `unconfirmed`: issuing warns (warningsForIssue) and the request did not carry the person's «Trotzdem ausstellen».
+ * «Zurück zum Entwurf» (backToDraftRefusal): `sent` the document went out (MWSTG Art. 27 Abs. 2), `settled`
+ * something was received, credited or written off, `applied` a credit note a payment of its invoice took,
+ * `closed` its VAT event lies in a filed period; `numbered` a draft that keeps its number is not deleted.
+ * «Konten ändern»: `account` not a revenue account of the chart, or not a position's; `credited` a credit
+ * note's position on an account the change splits over two.
+ */
+export type InvoiceRefusal = 'incomplete' | 'unconfirmed' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid' | 'aboveOpen' | 'surplus' | 'beforeInvoice'
+  | 'sent' | 'settled' | 'applied' | 'closed' | 'numbered' | 'account' | 'credited';
 
 /**
  * The draft as an issued invoice: its number (the next of the year), its due date, its payment
@@ -409,10 +422,14 @@ export function issue(draft: Draft, ctx: {
     throw new InvoiceRuleError('incomplete', `Für eine MWST-konforme Rechnung fehlt: ${where(missing)}.`, missing);
   }
   const warnings = warningsForIssue(draft);
-  if (warnings.length && !ctx.confirmed) throw new InvoiceRuleError('unconfirmed', `Eine Position ohne Text oder Betrag: ${where(warnings)}. Sie wird so gedruckt; nur mit «Trotzdem ausstellen».`, warnings);
+  if (warnings.length && !ctx.confirmed) {
+    if (warnings.some((w) => w.field === 'numberYear')) throw new InvoiceRuleError('unconfirmed', `Nummer ${draft.number} im Jahr ${draft.date.slice(0, 4)}: der Entwurf behält die Nummer, mit der er ausgestellt war. Nur mit «Trotzdem ausstellen».`, warnings);
+    throw new InvoiceRuleError('unconfirmed', `Eine Position ohne Text oder Betrag: ${where(warnings)}. Sie wird so gedruckt; nur mit «Trotzdem ausstellen».`, warnings);
+  }
   const terms = termsFor(draft, ctx.paymentTerms, ctx.customer.paymentTermsDays);
   const { comments, status: _, ...content } = draft;
-  const number = nextNumber(ctx.invoices, draft.date);
+  // A document back from draft is issued again under its number (spec 4.4.2).
+  const number = draft.number ?? nextNumber(ctx.invoices, draft.date);
   const { id: _id, createdAt: _c, origin: _o, deleted: _d, ...customer } = ctx.customer;
   const named = new Set(draft.lines.flatMap((l) => (isItem(l) && l.unit ? [l.unit] : [])));
   const units = (ctx.units ?? []).filter((u) => named.has(u.id));
@@ -467,10 +484,56 @@ export function creditAboveOpen(draft: InvoiceContent, invoices: readonly Invoic
   return fromRappen(Math.max(0, -toRappen(totals(draft).gross) - toRappen(openAmount(target, invoices))));
 }
 
-/** A draft can be deleted (a flag, ADR 0004); an issued invoice never is. */
+/**
+ * A draft can be deleted (a flag, ADR 0004); an issued invoice never is, nor a draft that keeps its
+ * number: the series stays without a gap, so it is issued again and cancelled.
+ */
 export function deleteDraft(inv: Invoice): Invoice {
   if (inv.status !== 'draft') throw new InvoiceRuleError('notDraft', 'Eine ausgestellte Rechnung wird storniert, nicht gelöscht.');
+  if (inv.number) throw new InvoiceRuleError('numbered', `Der Entwurf behält die Nummer ${inv.number}: er wird wieder ausgestellt und, wenn nicht mehr gewollt, storniert, damit die Nummern lückenlos bleiben.`);
   return { ...inv, deleted: true };
+}
+
+// ─── back to draft (spec 4.4.2) ──────────────────────────────────────────────
+
+/**
+ * Why an issued document may not go back to draft, or undefined when it may: it went out (any
+ * document of it in the sent log, a download included: MWSTG Art. 27 Abs. 2, the customer holds it),
+ * it is cancelled, something was received, credited or written off, or (a credit note) a payment of
+ * its invoice took it (on the cash basis that payment's booking carries the credit's minus lines).
+ * Whether its VAT event lies in a filed period is the books' to say (src/invoices/revise.ts).
+ */
+export function backToDraftRefusal(inv: Invoice, invoices: readonly Invoice[], sent: readonly SentDocument[]): InvoiceRefusal | undefined {
+  if (inv.status !== 'issued') return 'notIssued';
+  if (sent.some((d) => d.invoiceId === inv.id && !d.deleted)) return 'sent';
+  if (inv.cancelled) return 'cancelled';
+  if (inv.payments.length || inv.writeOffs?.length || (inv.kind === 'invoice' && creditNotesOf(inv, invoices).length)) return 'settled';
+  if (inv.kind === 'credit-note') {
+    const target = live(invoices).find((i): i is Issued => i.id === inv.creditFor && i.status === 'issued');
+    if (target?.payments.some((p) => p.date >= inv.date)) return 'applied';
+  }
+  return undefined;
+}
+
+/**
+ * The issued document as a draft again: its content as issued, its number kept, the PDF it was
+ * issued with named as replaced. The intro loses the greeting issuing put above it (`salutation`),
+ * and a due date the terms gave is dropped, so a new date gives a new one.
+ */
+export function asDraft(inv: Issued, replaced: ReplacedPdf, salutation = ''): Draft {
+  const {
+    status: _s, number, issuedAt: _i, dueDate, reference: _r, customer: _c, sender: _se, layout: _l, units: _u, pdf: _p, cancelled: _x,
+    payments: _pa, writeOffs: _w, terms, reminders: _re, comments, replaced: before, accountChanges: _a, ...content
+  } = inv;
+  const greeting = salutation.trim() ? `${salutation.trim()}\n\n` : '';
+  const intro = greeting && content.intro?.startsWith(greeting) ? content.intro.slice(greeting.length) : content.intro;
+  const days = terms?.days ?? inv.customer.paymentTermsDays;
+  return {
+    ...content,
+    ...(intro !== undefined ? { intro } : {}),
+    ...(dueDate !== addDays(inv.date, days) ? { dueDate } : {}),
+    status: 'draft', number, comments, replaced: [...(before ?? []), replaced],
+  };
 }
 
 /**

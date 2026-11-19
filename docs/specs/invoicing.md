@@ -1197,6 +1197,56 @@ listed here and updated with phase 2's build:
     its statuses draft, open, partly, settled, cancelled); slice C widened it: Teilweise also when part
     of the note is applied to its invoice while a rest waits to go back. The four figures share
     `.ivtop` with D's sent line above the status and the actions.
+44. **Back to draft: what «sent» means (slice F2).** The way back is refused once the sent log holds
+    any document of it (an e-mail, the send dialog's download, a reminder). The plain «PDF
+    herunterladen» link records nothing, so the dialog says that the sent log shows no sending and
+    that a PDF passed on another way is better corrected by Gutschrift or Storno. Also refused: a
+    Rechnung with a payment, a write-off or an issued Gutschrift; a cancelled one; a Gutschrift that a
+    payment of its Rechnung dated on or after it took (on the cash basis that payment's booking carries
+    the credit's minus lines).
+45. **The replaced PDF (slice F2).** The file keeps its bytes and moves to
+    `invoices/<number>.replaced-<k>.pdf` beside the number's file, which issuing again needs (storePdf
+    never replaces a file). The record names it in `replaced: [{ file, sha256, issuedAt, replacedAt }]`
+    (on the draft and, after issuing again, on the issued document); Verlauf shows it with a link
+    (`/api/invoices/<id>/replaced/<k>.pdf`). The draft keeps its number in `Draft.number`; the next
+    number skips it, issuing takes it again with its reference, and such a draft is not deleted (code
+    `numbered`): it is issued again and cancelled, so the series has no gap. The intro loses the
+    greeting issuing put above it; a due date the terms gave is dropped.
+46. **Back to draft on the books (slice F2).** The `RE-`/`GS-` entries go with every link on that ref,
+    and the sales record the PDF became goes with its file when nothing else holds it (named with
+    `release`, #405): issuing again books a new receipt under the same file name. On the cash basis the
+    books hold nothing of an unpaid document, so nothing is booked or taken back.
+47. **Konten ändern, code by code (slice F2, after review).** For each booking of the invoice and of
+    its credit notes (events, payments booked from them, refunds), the revenue of each VAT code and
+    side (booked, or taken back) is spread over the accounts the positions now name, in proportion
+    to the nets of the positions, to the cent; so no code's total moves. Only the positions whose
+    old account the booking's own lines carry take part: a line a person changed stays hers and her
+    account gets nothing of ours. A booking of an open period changes in place (its ids kept where
+    the lines are as many). A document's filed bookings are taken together with its earlier
+    reclassifications: one reclassification `RE-<n>-kk-<k>` (a credit note's `GS-<n>-kk-<k>`,
+    src/books/refs.ts `reclassRef`) moves, in the books' currency and without a VAT code, what their
+    revenue carries now to where the positions put it; so change, change, change back leaves every
+    account as filed. Dated today or on the open day the person picks. A payment a person booked
+    herself is named and kept. The PDF stays.
+48. **Credit notes follow (slice F2, after review).** A credit note of the whole invoice holds its
+    positions one by one: each follows its own. Any other's position follows its account when the
+    invoice moves that account to one other; when the change splits an account a credit note books
+    on over two, it is refused (`credited`) with the way on (one account each, or cancel and issue
+    the credit note again). The credit notes' positions record the change too. A Storno reverses a
+    document's `-kk-` entries with its event, so no revenue account keeps a part of it.
+49. **Foreign currency (slice F2, after review).** Every line keeps the official daily sell rate of
+    its booking (AGENTS.md, ADR 0001); no rate of our own. A booking split into more lines converts
+    each line on its own, so a code's total in the books' currency may move by a cent. The plan names
+    it (`rounding` on the booking) and the dialog says so as a fact («Rundung: CHF 0.01 durch die
+    Aufteilung von …»); the change goes ahead (warn, don't block).
+50. **Order of writes (slice F2, after review).** Both actions write the books first through the
+    write door, then the documents in the invoicing queue (service.ts `backToDraft`,
+    `changeAccounts`). Documents changed meanwhile: back to draft renames the PDF back; Konten ändern
+    books the change back; both refuse with `changed`. Back to draft takes the receipt a matched and
+    released payment left on the cash basis too, and a document issued again files its receipt under
+    a name with the PDF's short checksum, so it never resolves to the replaced PDF's file. A draft
+    that keeps its number, dated into another year, warns («Nummer 2026-005 im Jahr 2027») and is
+    issued on «Trotzdem ausstellen».
 
 ---
 

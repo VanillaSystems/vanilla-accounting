@@ -299,3 +299,15 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .ivother label { min-width: 0; }
 .ivother { min-width: 0; overflow: hidden; }
 .ivother .acts { display: flex; gap: 10px; }
+
+/* «Konten ändern» (spec 4.4.2): a position per row, its amount and its revenue account; below, what will be booked. */
+.iaccounts { width: min(620px, 94vw); }
+.iaccounts .iacc { display: grid; gap: 2px; margin: 10px 0; }
+.iaccounts .iacc .fr { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(180px, 220px); gap: 12px; align-items: center; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.iaccounts .iacc .fr.head { color: var(--muted); font-size: 11.5px; }
+.iaccounts .iacc .fr .tt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.iaccounts .iacc select { width: 100%; min-width: 0; }
+.iaccounts .iwhat { margin-top: 10px; }
+.iaccounts .iwhat ul { margin: 6px 0 0; padding-left: 18px; }
+.iaccounts .iwhat li { margin: 3px 0; }
+@media (max-width: 560px) { .iaccounts .iacc .fr { grid-template-columns: minmax(0, 1fr) auto; } .iaccounts .iacc .fr select { grid-column: 1 / -1; } }

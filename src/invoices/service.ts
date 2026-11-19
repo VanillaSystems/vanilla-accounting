@@ -4,26 +4,27 @@
  * print a PDF are asynchronous; they run one at a time in this process, so a number is never
  * given twice and nothing saves over another change.
  */
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { parseUid } from '../workspace/uid.js';
-import { extname, join } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import { receiptFile, type Books } from '../books/store.js';
 import { defaultTexts, draftDays, issuedIntro, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
 import {
   INVOICE_CURRENCIES, INVOICE_LANGUAGES, DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, LINE_KINDS, PRICES, isItem, type UnitDef,
   type Comment, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
-  type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type SentDocument, type SentKind,
+  type AccountChange, type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type SentDocument, type SentKind,
 } from './model.js';
 import { renderHtml, renderPdf, type Rendered } from './pdf.js';
 import {
-  InvoiceRuleError, assertCreditWithinOpen, cancel, creditNoteDraft, deleteDraft, figures, isOverdue, issue, liveCustomers, liveInvoices, missingForIssue,
+  InvoiceRuleError, asDraft, assertCreditWithinOpen, backToDraftRefusal, cancel, creditNoteDraft, deleteDraft, figures, isOverdue, issue, liveCustomers, liveInvoices, missingForIssue,
   openAmount, reminderDraft, shortfallOf, skontoOffer, status, totals, writeOffAccounts,
-  type CreditRequest, type Figures, type InvoiceStatus, type Missing, type Totals,
+  type CreditRequest, type Figures, type InvoiceRefusal, type InvoiceStatus, type Missing, type Totals,
 } from './rules.js';
 import type { SheetData } from './sheet.js';
 import { loadInvoices, newEnvelope, readPdf, sha256, storePdf, updateInvoices, writeAtomic } from './store.js';
 import type { PaymentContext, PaymentOutcome } from './payments.js';
+import { notesWithAccounts, withAccounts, type AccountChangePlan, type AccountContext } from './revise.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
 import { creditNoteStatus, type CreditListStatus } from './lists.js';
 import { TEXTS } from './texts.js';
@@ -404,6 +405,105 @@ async function printOwnDocument(ws: Workspace, inv: Issued, kind: SentKind, shee
     throw e;
   }
   return { ...env, invoiceId: inv.id, kind, title, ...pdf, sentAt: now, ...recipient(inv, to, delivered) };
+}
+
+// ─── back to draft (spec 4.4.2) ────────────────────────────────────────────────
+
+const BACK_REFUSED: Partial<Record<InvoiceRefusal, (n: string) => string>> = {
+  notIssued: () => 'Ein Entwurf ist schon ein Entwurf.',
+  sent: (n) => `${n} ist gesendet oder heruntergeladen: der Kunde hat sie, sie bleibt ausgestellt (MWSTG Art. 27 Abs. 2). Eine Gutschrift oder ein Storno korrigiert sie.`,
+  cancelled: (n) => `${n} ist storniert.`,
+  settled: (n) => `Auf ${n} ist etwas eingegangen, gutgeschrieben oder ausgebucht: sie bleibt ausgestellt.`,
+  applied: (n) => `${n} ist mit einer Zahlung ihrer Rechnung verrechnet: sie bleibt ausgestellt.`,
+};
+
+/**
+ * «Zurück zum Entwurf» (spec 4.4.2, P2.7): an issued document never sent, with nothing received,
+ * credited or written off, becomes a draft again and keeps its number (Draft.number). Its PDF stays,
+ * renamed to invoices/<number>.replaced-<k>.pdf and named in `replaced`; issuing it again prints a new
+ * one under the number. `books` takes its VAT event off the books first (the route, through the
+ * write door: src/invoices/revise.ts takeBackEvent) and returns the receipt files that went with it,
+ * removed here once the document is a draft. Refused with the rule's code (backToDraftRefusal).
+ */
+export function backToDraft(ws: Workspace, id: string, opts: { now?: string; books?: (inv: Issued) => string[] } = {}): Promise<Draft> {
+  return serial(() => {
+    const now = opts.now ?? new Date().toISOString();
+    const book = loadInvoices(ws);
+    const inv = findInvoice(book, id) ?? notFound('Rechnung');
+    const refusal = backToDraftRefusal(inv, liveInvoices(book), book.sent);
+    if (refusal || inv.status !== 'issued') throw new InvoiceRuleError(refusal ?? 'notIssued', (BACK_REFUSED[refusal ?? 'notIssued'] ?? (() => ''))(inv.status === 'issued' ? inv.number : ''));
+    const k = (inv.replaced?.length ?? 0) + 1;
+    const file = join(dirname(inv.pdf.file), `${basename(inv.pdf.file, '.pdf')}.replaced-${k}.pdf`);
+    if (existsSync(join(ws.paths.root, file))) throw new InvoiceRuleError('changed', `${file} gibt es schon; bitte neu laden.`);
+    const removed = opts.books?.(inv) ?? [];
+    renameSync(join(ws.paths.root, inv.pdf.file), join(ws.paths.root, file));
+    const ctx = invoicingContext(ws);
+    const customer = liveCustomers(book).find((c) => c.id === inv.customerId);
+    const { salutation } = defaultTexts(ctx, inv.kind, inv.language, draftDays(ctx, inv, customer));
+    let draft: Draft;
+    try {
+      draft = commit(ws, inv.id, inv, (fresh, at) => {
+        const d = asDraft(inv, { file, sha256: inv.pdf.sha256, issuedAt: inv.issuedAt, replacedAt: now }, salutation);
+        fresh.invoices[at] = d;
+        return d;
+      });
+    } catch (e) {
+      renameSync(join(ws.paths.root, file), join(ws.paths.root, inv.pdf.file));
+      throw e;
+    }
+    for (const f of removed) rmSync(f, { force: true });
+    return draft;
+  });
+}
+
+// ─── Konten ändern (spec 4.4.2) ────────────────────────────────────────────────
+
+/**
+ * «Konten ändern»: `books` books the change first (the route, through the write door:
+ * src/invoices/revise.ts planAccountChange, applyAccountChange) and returns its plan; then the
+ * invoice's positions, and its credit notes' that follow them, record the new accounts and the
+ * change (`accountChanges`), in this process's queue. Should the documents have changed meanwhile,
+ * `undo` books the change back and the request is refused (`changed`).
+ */
+export function changeAccounts(ws: Workspace, id: string, lines: ReadonlyArray<{ line: number; account: string }>, ctx: AccountContext, opts: {
+  now?: string;
+  books(inv: Issued, next: Issued, invoices: readonly Invoice[]): AccountChangePlan;
+  undo(plan: AccountChangePlan, now: Issued, before: Issued, invoices: readonly Invoice[]): void;
+}): Promise<AccountChangePlan> {
+  return serial(() => {
+    const at = opts.now ?? new Date().toISOString();
+    const book = loadInvoices(ws);
+    const inv = findInvoice(book, id);
+    if (!inv || inv.status !== 'issued') return notFound('Rechnung');
+    const next = withAccounts(inv, lines, ctx);
+    const plan = opts.books(inv, next, liveInvoices(book));
+    if (!plan.lines.length) return plan;
+    const notes = notesWithAccounts(inv, next, liveInvoices(book), ctx);
+    try {
+      updateInvoices(ws, (fresh) => {
+        const same = (x: Invoice) => JSON.stringify(fresh.invoices.find((i) => i.id === x.id)) === JSON.stringify(x);
+        if (!same(inv) || !notes.every((n) => same(n.old))) throw new InvoiceRuleError('changed', 'Die Rechnung oder eine ihrer Gutschriften wurde inzwischen geändert; bitte neu laden.');
+        const change = (d: Issued, ls: AccountChange['lines'], extra: Partial<AccountChange> = {}): Issued => ({ ...d, accountChanges: [...(d.accountChanges ?? []), { at, lines: ls, refs: plan.rebook.filter((r) => !r.filed && r.number === d.number).map((r) => r.ref), ...extra }] });
+        const reclass = (n: string) => plan.reclass.find((r) => r.number === n)?.ref;
+        fresh.invoices[fresh.invoices.findIndex((i) => i.id === inv.id)] = change(next, plan.lines, reclass(inv.number) ? { reclass: reclass(inv.number) } : {});
+        for (const n of notes) {
+          const ls = plan.notes.find((x) => x.id === n.old.id)?.lines ?? [];
+          if (ls.length) fresh.invoices[fresh.invoices.findIndex((i) => i.id === n.old.id)] = change(n.next, ls, reclass(n.old.number) ? { reclass: reclass(n.old.number) } : {});
+        }
+      });
+    } catch (e) {
+      opts.undo(plan, next, inv, liveInvoices(book).map((i) => notes.find((n) => n.old.id === i.id)?.next ?? i));
+      throw e;
+    }
+    return plan;
+  });
+}
+
+/** A PDF the document was issued with before it went back to draft, `k` from 1, checked against its checksum. */
+export function replacedPdf(ws: Workspace, id: string, k: number): Buffer {
+  const inv = findInvoice(loadInvoices(ws), id) ?? notFound('Rechnung');
+  const r = inv.replaced?.[k - 1] ?? notFound('PDF');
+  return readPdf(ws, r);
 }
 
 // ─── cancelling, crediting, reminding, commenting ─────────────────────────────
