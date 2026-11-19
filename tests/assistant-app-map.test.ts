@@ -88,7 +88,7 @@ test('a drafted rule is kept with «Behalten» on its card, and the prompt never
 
 test('Verkauf names «Zurück zum Entwurf» with when it is offered, and «Konten ändern» with its reclassification (spec 4.4.2)', () => {
   const sales = AREA_PLACES.invoices.does;
-  assert.match(sales, /«Zurück zum Entwurf», offered only while the document was never sent or downloaded/);
+  assert.match(sales, /«Zurück zum Entwurf», (?:offered|possible) only while the document was never sent or downloaded/);
   assert.match(sales, /a sent one stays issued and is corrected by a credit note or a Storno/);
   assert.match(sales, /«Konten ändern».*never an amount, rate or code.*RE-<number>-kk-<k> without a VAT code in the open period/);
 });

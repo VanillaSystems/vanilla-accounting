@@ -1448,7 +1448,6 @@ listed here and updated with phase 2's build:
 87. **Layout A for Kontakte** (decision 30 foresaw it): the table across the width, a contact as the
     panel over its right part. The table's tabs (Alle, Firmen, Personen, Archiviert) are a view's state,
     not in the link.
-
 88. **Artikel (slice G2, invoices.json schema 4).** `articles` join the step 3 → 4 as «Also in 4»: a file
     of schema 3 has none, so no transform; a book read without them has an empty list. An Artikel is
     an envelope with `code?` (unique among live Artikel, at most 30 characters, like the market
@@ -1511,6 +1510,39 @@ listed here and updated with phase 2's build:
     fields over it, priced as createDraft prices the draft (the prices it names, else the firm's default
     for its kind); an Artikel no code or name finds, or one whose name two share, is refused
     (`unknownArticle`).
+
+96. **Ausziffern where the money is seen (slice H).** The bank's page of an incoming payment no
+    document holds offers «Ausziffern» beside «Rechnung zuordnen», decided per payment (its date after
+    the locked line), not per statement; a contact with open Rechnungen offers «Zahlung ausziffern»,
+    which picks one of the open periods' incoming payments not yet allocated first. Both open the one
+    dialog of Verkauf. Its contact is the one it was opened from, else code's proposal: the contact
+    whose invoice number the text names; else, by the IBAN, the one contact whose issued invoices were
+    ever paid from it, if it has something open (an IBAN that paid two contacts, a shared account,
+    proposes no one, whatever is open); else the one whose every name word the text names. An IBAN and
+    a name that point to two contacts propose no one; the dialog names both. It says how a contact was
+    found; the person picks any other contact with open Rechnungen, or all of them, which shows every
+    open item and proposes only those the text names. A payment a waiting reconciliation holds or one
+    booked in a filed period already is offered neither «Rechnung zuordnen» nor «Ausziffern», and the
+    API refuses both for it (`held`, `filedTwin`), as code's matching skips it. A proposal that cannot
+    be read closes the dialog and says why.
+97. **«PDF herunterladen» asks once per download (slice H).** The market leader keeps a download and
+    a «mark as sent» apart: its PDF is a view, and sending outside the app is a click of its own.
+    Ours has no such click (4.8): the download is the entry. So on the detail of an issued Rechnung or
+    Gutschrift the sent log never saw, «PDF herunterladen» (and D) asks «Als gesendet festhalten?
+    (Download)»: «Ja, festhalten» saves the PDF and records it as sent (channel Download, with its
+    checksum), the same entry as the send dialog's download; «Nur ansehen» saves it and records
+    nothing. It asks on every download while nothing is recorded, never once something is: then, and
+    on a cancelled document, an Angebot, Auftrag or Lieferschein, and for a viewer who cannot change
+    anything, the link stays a plain download. The bulk «PDF» and the preview stay views (decision 28).
+    «Zurück zum Entwurf» is refused once the sent log holds any document of it, a recorded download
+    included (decision 44); where sending is the only reason, the action is still offered in
+    «Weitere» and its dialog names each send (date and channel or recipient) and the ways on,
+    Gutschrift or Storno, instead of the button.
+98. **Replaced PDFs in the audit export (slice H).** Each PDF of an issued document's `replaced` goes
+    into the static export as `invoices/<number>.replaced-<k>.pdf`, beside `invoices/<number>.pdf`,
+    copied only while it matches the checksum its record kept (else named in `missing`), and
+    `verify-audit` checks it against that checksum like the issued PDF. A draft's replaced PDFs stay
+    out with the draft (an export is the record, not work in progress); issued again, they come with it.
 
 ---
 

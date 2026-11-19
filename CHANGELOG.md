@@ -28,6 +28,17 @@ Two markers flag an entry you must read before you update:
   the Betriebsergebnis as before. The stages are the jurisdiction's (statements.yaml
   `incomeStages`); the payment fees (6840) count as Finanzerfolg, as the chart says. The export
   carries the same rows. Presentation only: the Betriebsergebnis and the result do not change (#568).
+- Bank › an incoming payment no invoice holds: «Ausziffern» spreads it over open Rechnungen. The
+  app proposes the contact by an invoice number in the payment, by the IBAN that paid its invoices
+  before, or by its name, and says which; you can pick another contact or all of them.
+- Verkauf › Kontakte: a contact with open Rechnungen offers «Zahlung ausziffern»: pick the incoming
+  payment, then spread it over that contact's open Rechnungen.
+- Verkauf › «PDF herunterladen» of a Rechnung or Gutschrift never sent asks «Als gesendet
+  festhalten?»: «Ja, festhalten» records the download in Versendet as its sending, «Nur ansehen»
+  records nothing. «Zurück zum Entwurf» of a sent document now says why it is refused (when and how
+  it went out) instead of being hidden.
+- The audit export holds the PDFs a document was issued with before it went back to draft, beside
+  the issued PDF, each checked against its checksum.
 - Verkauf › Artikel: the products and services the firm sells, as a table (code, name, Ware or
   Dienstleistung, unit, price, VAT kind), each opened beside it with its form. An Artikel names a
   VAT kind (normal, reduced, accommodation, none), and the rate comes from the law for the

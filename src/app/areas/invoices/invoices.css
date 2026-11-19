@@ -347,7 +347,10 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .cpanel .csec h3 { margin: 0; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
 .cpanel .csec p { margin: 0; }
 .cpanel .csec .ftab { max-width: none; }
-.cpanel .csec .ftab .fr { grid-template-columns: 96px minmax(0, 1fr) auto auto; padding: 4px 6px; }
+.cpanel .csec .ftab .fr { grid-template-columns: 72px minmax(0, 1fr) auto auto; padding: 4px 6px; }
+/* A long subject or due date is cut with «…» in its own column, never drawn over the status beside it. */
+.cpanel .csec .ftab .fr { column-gap: 10px; }
+.cpanel .csec .ftab .fr > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cpanel .caddr { display: grid; gap: 1px; }
 .cpanel .cpick { display: grid; gap: 4px; }
 .cpanel .cpick select, .cdlg.contact select, .cimport select { font: 12.5px var(--font-sans); padding: 4px 6px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); max-width: 100%; }
@@ -380,3 +383,6 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .apick .apq { width: 100%; margin-bottom: 10px; }
 .apick .apl { max-height: min(55vh, 420px); overflow-y: auto; }
 .apick .apl .fr { grid-template-columns: 70px minmax(0, 1fr) auto 80px; }
+.ivacts button.dl { background: none; border: 0; padding: 0; cursor: pointer; }
+/* The Ausziffern table scrolls sideways in a narrow dialog (a phone) instead of spilling over its edge. */
+.allocwrap { overflow-x: auto; }

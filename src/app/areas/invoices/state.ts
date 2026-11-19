@@ -45,6 +45,8 @@ export type Dialog =
    * Sending the invoice with its PDF shown, or the reminder written on the sheet, by e-mail or as a download.
    * `issued`: opened by «Ausstellen» itself, so the document to take away is in front of the person at once.
    */
+  /** «PDF herunterladen» of a Rechnung or Gutschrift never sent: «Ja, festhalten» records the download as its sending, «Nur ansehen» saves it only. */
+  | { kind: 'download' }
   | { kind: 'send'; reminder?: Omit<ReminderEdit, 'invoiceId'> & { level: number }; issued?: true }
   /** The ticked documents (their ids), sent by e-mail one by one, or their PDFs downloaded. */
   | { kind: 'bulk-send'; ids: string[] }

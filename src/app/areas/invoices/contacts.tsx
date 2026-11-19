@@ -144,6 +144,7 @@ export function ContactPanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
       {canEdit && (
         <div className="ivacts">
           {!c.archived && <AsyncButton type="button" className="btn primary" data-act="new-invoice" onClick={() => newDraftFor(nav, c)}>{t('invoices.new')}</AsyncButton>}
+          {open.length > 0 && <button type="button" className="btn ghost" data-act="allocate-contact" data-tip={t('contacts.allocateTip')} onClick={() => setUi({ dialog: { kind: 'allocate', transactionRef: '', customerId: c.id } })}>{t('contacts.allocate')}</button>}
           <button type="button" className="btn ghost" data-act="edit-contact" onClick={() => setUi({ dialog: { kind: 'contact', id: c.id } })}>{t('contacts.edit')}</button>
           {c.archived
             ? <AsyncButton type="button" className="btn ghost" data-act="restore-contact" onClick={() => restoreContact(nav, c)}>{t('contacts.restore')}</AsyncButton>
@@ -225,7 +226,7 @@ export function ContactPanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
             {docs.length ? docs.map((i) => (
               <button key={i.id} type="button" className="fr" onClick={() => nav.go(invoiceAt(i))}>
                 <span className="mono">{i.status === 'issued' ? i.number : t('invoices.draft')}</span>
-                <span>{i.subject ?? ''}</span>
+                <span data-tip={i.subject || undefined}>{i.subject ?? ''}</span>
                 <span className="m">{t(`invoices.state.${rowState(i, d.invoices, today)}`)}</span>
                 <span className="r mono">{i.currency} {fmt(totals(i).gross)}</span>
               </button>

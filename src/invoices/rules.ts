@@ -408,7 +408,7 @@ export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'>
 
 /** Why the money of a document cannot move as asked; `code` is what the UI says it in (src/invoices/payments.ts PaymentError, src/types/api-error.ts PaymentErrorBody). */
 export type PaymentRefusal = 'notFound' | 'noPayment' | 'cancelled' | 'currency' | 'allocated' | 'doubleRevenue' | 'surplus' | 'notAllocated' | 'closed'
-  | 'noWriteOff' | 'moneyAccount' | 'amount' | 'noHandPayment' | 'confirmed' | 'noParts' | 'overAllocated' | 'twice';
+  | 'noWriteOff' | 'moneyAccount' | 'amount' | 'noHandPayment' | 'confirmed' | 'noParts' | 'overAllocated' | 'twice' | 'held' | 'filedTwin';
 
 export class InvoiceRuleError extends Error {
   /** `params`: the facts a refusal names (a date, a number, a quantity), for its words in the UI. */

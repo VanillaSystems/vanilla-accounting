@@ -94,7 +94,8 @@ export async function buildAuditExport(
 
 /**
  * The invoicing records as GET /api/invoices serves them on the day of the export, with every issued
- * invoice's and credit note's PDF and every sent document's PDF as stored, and the logos the sheets
+ * invoice's and credit note's PDF, each PDF it was issued with before it went back to draft
+ * (`replaced`), and every sent document's PDF as stored, and the logos the sheets
  * show (#516). Drafts are left out: an export is the record, not work in progress. A PDF that is gone or
  * no longer matches its checksum, and a logo the API would not serve, is named, not copied; a failed write
  * fails the export.
@@ -117,6 +118,8 @@ function writeInvoices(ws: Workspace, out: string, day: string): string[] {
     writeOut(out, path, bytes);
   };
   for (const inv of issued) copyPdf(EXPORT_FILES.invoicePdf(inv.number), inv.pdf, `invoice ${inv.number}`);
+  // The PDFs it was issued with before it went back to draft: the record of what was once issued under the number.
+  for (const inv of issued) (inv.replaced ?? []).forEach((r, k) => copyPdf(EXPORT_FILES.replacedPdf(inv, k + 1), r, `invoice ${inv.number} replaced ${k + 1}`));
   for (const doc of sent) copyPdf(EXPORT_FILES.sentPdf(doc.id), doc, `sent document ${doc.id}`);
   const logos = new Set([ws.invoicing?.layout.logo, ...issued.map((i) => i.layout.logo)]);
   for (const logo of logos) {

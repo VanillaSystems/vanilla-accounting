@@ -77,12 +77,13 @@ function invoiceProblems(dir: string, manifest: ExportManifest): string[] {
   const file = join(dir, EXPORT_FILES.invoices());
   if (!existsSync(file)) return [];
   const { invoices, sent } = JSON.parse(readFileSync(file, 'utf8')) as {
-    invoices: Array<{ status: string; number?: string; pdf?: { sha256: string } }>;
+    invoices: Array<{ id: string; status: string; number?: string; pdf?: { sha256: string }; replaced?: Array<{ sha256: string }> }>;
     sent: Array<{ id: string; sha256: string }>;
   };
   const hashes = new Map(manifest.files.map((f) => [f.path, f.sha256]));
   const docs = [
     ...invoices.flatMap((i) => (i.status === 'issued' && i.number && i.pdf ? [{ what: `invoice ${i.number}`, path: EXPORT_FILES.invoicePdf(i.number), sha256: i.pdf.sha256 }] : [])),
+    ...invoices.flatMap((i) => (i.status === 'issued' && i.number ? (i.replaced ?? []).map((r, k) => ({ what: `invoice ${i.number} replaced ${k + 1}`, path: EXPORT_FILES.replacedPdf({ id: i.id, number: i.number! }, k + 1), sha256: r.sha256 })) : [])),
     ...sent.map((d) => ({ what: `sent document ${d.id}`, path: EXPORT_FILES.sentPdf(d.id), sha256: d.sha256 })),
   ];
   return docs.flatMap(({ what, path, sha256: want }) => {

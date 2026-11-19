@@ -21,7 +21,7 @@ import { useWorkspace } from '../../hooks/use-workspace.js';
 import { mailText, type MailDocument } from '../../../invoices/documents.js';
 import type { MailMessage } from '../../../invoices/mail.js';
 import type { MailStatus } from '../../../types/api-error.js';
-import { cancel, cancelDocument, creditNote, newDraftFor, send, sendReminder } from './actions.js';
+import { cancel, cancelDocument, creditNote, newDraftFor, savePdf, send, sendReminder } from './actions.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 import { ContactDialog, ImportDialog } from './contacts.js';
 import { ArticleDialog, ArticleImportDialog, ArticlePicker } from './articles.js';
@@ -54,6 +54,7 @@ export function Dialogs(props: Props) {
     case 'articlePick': { const draft = d.invoices.find((i) => i.id === (s.dialog as { draft: string }).draft); return draft?.status === 'draft' ? <ArticlePicker {...props} d={d} draft={draft} after={s.dialog.after} /> : null; }
     case 'cancel': return inv?.status === 'issued' ? (isBooked(inv) ? <CancelDialog {...props} inv={inv} /> : <CancelPlainDialog {...props} inv={inv} />) : null;
     case 'credit': return inv?.status === 'issued' ? <CreditDialog {...props} inv={inv} invoices={d.invoices} /> : null;
+    case 'download': return inv?.status === 'issued' ? <DownloadDialog {...props} inv={inv} /> : null;
     case 'send': return inv?.status === 'issued' ? <SendDialog {...props} inv={inv} reminder={s.dialog.reminder} issued={s.dialog.issued} /> : null;
     case 'handPayment': return inv?.status === 'issued' ? <HandPaymentDialog {...props} inv={inv} invoices={d.invoices} /> : null;
     case 'writeOff': return inv?.status === 'issued' ? <WriteOffDialog {...props} inv={inv} invoices={d.invoices} reason={s.dialog.reason} amount={s.dialog.amount} /> : null;
@@ -177,6 +178,29 @@ function SendDialog({ inv, nav, reminder, issued }: Props & { inv: Issued; remin
         {issued && <p className="m ivhint">{t('invoices.issuedNext')}</p>}
         <MailFields mail={mail} value={value} onChange={setM} nav={nav} />
         <p className="m ivhint">{t('invoices.mailAttached', { file: reminder ? t('invoices.reminderFile', { level: reminder.level }) : `${inv.number}.pdf` })}</p>
+      </div>
+    </Frame>
+  );
+}
+
+/**
+ * «PDF herunterladen» of a Rechnung or Gutschrift the sent log never saw (spec 4.8, decision 97): a
+ * document sent outside the app is downloaded first, and the download is its entry. So it asks once
+ * per download: «Ja, festhalten» saves the PDF and records the download as its sending (channel
+ * Download, with the checksum), «Nur ansehen» saves it and records nothing.
+ */
+function DownloadDialog({ inv, nav }: Props & { inv: Issued }) {
+  const credit = inv.kind === 'credit-note';
+  const view = async () => { if (await savePdf(nav, inv)) close(); };
+  return (
+    <Frame label={t('invoices.downloadAskTitle', { number: inv.number })} title={`${inv.customer.name} · ${inv.currency} ${fmt(totals(inv).gross)}`}
+      foot={<>
+        <AsyncButton type="button" className="btn ghost" data-act="view-only" onClick={view}>{t('invoices.downloadViewOnly')}</AsyncButton>
+        <AsyncButton type="button" className="btn primary" autoFocus data-act="record-download" onClick={async () => { if (await send(nav, inv)) close(); }}>{t('invoices.downloadRecord')}</AsyncButton>
+      </>}>
+      <div className="ibody" data-testid="download-ask">
+        <p>{t(credit ? 'invoices.downloadAskCredit' : 'invoices.downloadAsk', { number: inv.number })}</p>
+        <p className="m ivhint">{t('invoices.downloadAskHint')}</p>
       </div>
     </Frame>
   );

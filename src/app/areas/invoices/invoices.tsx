@@ -145,7 +145,7 @@ export const invoices: Area<RouteOf<'invoices'>> = {
     if (e.metaKey || e.ctrlKey || e.altKey) return false;
     switch (e.key) {
       case 'd': case 'D': {
-        const a = document.querySelector<HTMLAnchorElement>('.detail a.dl');
+        const a = document.querySelector<HTMLElement>('.detail .ivacts .dl, .detail a.dl');
         a?.click();
         return !!a;
       }

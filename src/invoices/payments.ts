@@ -357,6 +357,7 @@ export function confirmPayment(books: Books, book: InvoiceBook, invoiceId: strin
   if (inv.cancelled) throw new PaymentError('cancelled', `${what} ist storniert.`);
   if (inv.currency !== tx.currency) throw new PaymentError('currency', `${what} ist in ${inv.currency}, die Zahlung in ${tx.currency}.`);
   if (inv.payments.some((p) => p.transactionRef === tx.ref)) throw new PaymentError('allocated', `Die Zahlung ist ${what} schon zugeordnet.`);
+  refuseHeld(books, tx, ctx);
   const keep = books.journalEntries.some((e) => e.transactionRef === tx.ref && e.origin !== 'classify');
   // A document with its event carries its revenue on the receivable already: a kept booking of the payment with a sale code would count it twice.
   // Not so for a prepayment: its revenue is the payment's, the event is booked again for the rest.
@@ -427,6 +428,16 @@ export function releasePayment(books: Books, book: InvoiceBook, invoiceId: strin
 }
 
 export type { PaymentRefusal };
+/**
+ * A payment no document may take: one a waiting reconciliation holds (its movement may still be the
+ * PDF's twin of the bank file's) or one the books carry in a filed period already (`filedTwin`).
+ * Code's matching skips them (matchPayments); a person's link and Ausziffern are refused the same.
+ */
+export function refuseHeld(books: Books, tx: BankTransaction, ctx: Pick<PaymentContext, 'held'>): void {
+  if (ctx.held(books).has(tx.ref)) throw new PaymentError('held', 'Die Zahlung wartet auf den Abgleich ihres Kontos mit der Datei der Bank: erst dort bestätigen.');
+  if (bookedInFiled(tx)) throw new PaymentError('filedTwin', 'Die Zahlung ist schon in einer eingereichten Periode gebucht.');
+}
+
 export class PaymentError extends Error {
   constructor(readonly code: PaymentRefusal, message: string) { super(message); }
 }
@@ -528,22 +539,47 @@ export interface AllocationPart { invoiceId: string; amount: number; rest?: Writ
 /** An invoice the Ausziffern dialog offers, with what code proposes to allocate to it. */
 export interface AllocationItem { invoiceId: string; number: string; customerId: string; customerName: string; date: string; dueDate: string; open: number; named: boolean; proposed: number }
 
+/** How the contact of a payment was found: the person gave it, the text names its invoice's number, the IBAN paid its invoices before, the text names it. */
+export type AllocationBy = 'given' | 'number' | 'iban' | 'name';
+
+/** A contact the Ausziffern dialog can be switched to: one with open Rechnungen in the payment's currency. */
+export interface AllocationContact { id: string; name: string; open: number; n: number }
+
+export interface AllocationView {
+  transaction: BankTransaction;
+  items: AllocationItem[];
+  left: number;
+  /** The contact whose open items are shown (absent: every contact's) and how it was found. */
+  customerId?: string;
+  by?: AllocationBy;
+  /** Every contact with open Rechnungen in the payment's currency, by name: the person can pick another. */
+  customers: AllocationContact[];
+  /** Why no contact is proposed although two point to it (the IBAN one, the name another): both, for the person to pick. */
+  hints: Array<AllocationHint & { name: string }>;
+}
+
+export interface AllocationHint { id: string; by: 'iban' | 'name' }
+
+const bareIban = (s: string | undefined) => (s ?? '').replace(/\s+/g, '').toUpperCase();
+
 /**
  * What the Ausziffern dialog shows for an incoming payment (spec 4.8): the open invoices of its
- * customer in its currency (the customer given, else the one whose invoices the text names, else
- * the one whose every name word it names; none found: every open invoice in the currency), and
- * code's proposal: the invoices the text names first, then the oldest by due date, each up to what
- * is open, until the payment is used up. `left`: what the proposal leaves of the payment.
+ * contact in its currency, and code's proposal. The contact is the one given (`''`: none, every
+ * contact's), else the one whose invoice number the text names, else the one alone whose earlier
+ * invoices the payment's IBAN paid, else the one whose every name word the text names; none found:
+ * every open invoice in the currency, nothing proposed but what the text names. The proposal: the
+ * invoices the text names first, then the oldest by due date, each up to what is open, until the
+ * payment is used up. `left`: what the proposal leaves of the payment.
  */
-export function allocationProposal(books: Books, book: InvoiceBook, transactionRef: string, customerId?: string): { transaction: BankTransaction; items: AllocationItem[]; left: number } {
+export function allocationProposal(books: Books, book: InvoiceBook, transactionRef: string, customerId?: string): AllocationView {
   const tx = books.transactions.find((t) => t.ref === transactionRef && t.direction === 'CRDT');
   if (!tx) throw new PaymentError('noPayment', 'Keine eingehende Zahlung mit dieser Referenz.');
   const invoices = liveInvoices(book);
   const text = [tx.description, tx.reference, tx.counterparty, ...(tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference])].filter(Boolean).join(' ');
   const open = invoices.filter((i): i is Issued => i.status === 'issued' && i.kind === 'invoice' && !i.cancelled && i.currency === tx.currency && openAmount(i, invoices) > 0);
-  const who = customerId
-    ?? open.find((i) => namesNumber(text, i.number))?.customerId
-    ?? open.find((i) => { const n = nameWords(i.customer.name); return n.length > 0 && n.every((w) => words(text).includes(w)); })?.customerId;
+  const proposal = customerId !== undefined ? { found: customerId ? { id: customerId, by: 'given' as AllocationBy } : undefined, hints: [] } : proposeContact(books, invoices, open, tx, text);
+  const found = proposal.found;
+  const who = found?.id;
   const mine = (who ? open.filter((i) => i.customerId === who) : open)
     .sort((a, b) => Number(namesNumber(text, b.number)) - Number(namesNumber(text, a.number)) || a.dueDate.localeCompare(b.dueDate) || a.number.localeCompare(b.number));
   let left = Math.round(tx.amount * 100);
@@ -554,7 +590,37 @@ export function allocationProposal(books: Books, book: InvoiceBook, transactionR
     left -= proposed;
     return { invoiceId: i.id, number: i.number, customerId: i.customerId, customerName: i.customer.name, date: i.date, dueDate: i.dueDate, open: due / 100, named, proposed: proposed / 100 };
   });
-  return { transaction: tx, items, left: left / 100 };
+  const customers = new Map<string, AllocationContact>();
+  for (const i of open) {
+    const c = customers.get(i.customerId) ?? { id: i.customerId, name: book.contacts.find((x) => x.id === i.customerId)?.name ?? i.customer.name, open: 0, n: 0 };
+    customers.set(i.customerId, { ...c, open: Math.round((c.open + openAmount(i, invoices)) * 100) / 100, n: c.n + 1 });
+  }
+  return { transaction: tx, items, left: left / 100, ...(found ? { customerId: found.id, by: found.by } : {}), customers: [...customers.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    hints: proposal.hints.map((h) => ({ ...h, name: book.contacts.find((c) => c.id === h.id)?.name ?? invoices.find((i): i is Issued => i.customerId === h.id && i.status === 'issued')?.customer.name ?? h.id })) };
+}
+
+/**
+ * The contact code proposes for an incoming payment, among those with open Rechnungen: by the number
+ * its text names; else by the IBAN when exactly one contact's invoices, of all issued ones, were paid
+ * from it before and that one has something open; else by the name its text names. An IBAN and a name
+ * that point to two contacts propose no one: both are named as hints, the person picks.
+ */
+function proposeContact(books: Books, invoices: readonly Invoice[], open: readonly Issued[], tx: BankTransaction, text: string): { found?: { id: string; by: AllocationBy }; hints: AllocationHint[] } {
+  const byNumber = open.find((i) => namesNumber(text, i.number))?.customerId;
+  if (byNumber) return { found: { id: byNumber, by: 'number' }, hints: [] };
+  const candidates = new Set(open.map((i) => i.customerId));
+  const iban = bareIban(tx.counterpartyIban);
+  let byIban: string | undefined;
+  if (iban) {
+    const paidFrom = new Map(books.transactions.flatMap((t) => (t.ref !== tx.ref && t.counterpartyIban ? [[t.ref, bareIban(t.counterpartyIban)] as const] : [])));
+    // Every contact ever paid from it, open or not: a shared account (a family, a holding) proposes no one.
+    const payers = new Set(invoices.flatMap((i) => (i.status === 'issued' && i.payments.some((p) => paidFrom.get(p.transactionRef) === iban) ? [i.customerId] : [])));
+    if (payers.size === 1) byIban = [...payers][0];
+  }
+  const byName = open.find((i) => { const n = nameWords(i.customer.name); return n.length > 0 && n.every((w) => words(text).includes(w)); })?.customerId;
+  if (byIban && byName && byIban !== byName) return { hints: [{ id: byIban, by: 'iban' }, { id: byName, by: 'name' }] };
+  if (byIban && candidates.has(byIban)) return { found: { id: byIban, by: 'iban' }, hints: [] };
+  return byName ? { found: { id: byName, by: 'name' }, hints: [] } : { hints: [] };
 }
 
 /**
@@ -571,6 +637,7 @@ export function allocatePayment(books: Books, book: InvoiceBook, transactionRef:
   const tx = books.transactions.find((t) => t.ref === transactionRef);
   if (!tx || tx.direction !== 'CRDT') throw new PaymentError('noPayment', 'Keine eingehende Zahlung mit dieser Referenz.');
   if (periodLock(books).isClosed(tx.date)) throw new PaymentError('closed', `Die Zahlung vom ${tx.date} liegt in einer abgeschlossenen Periode.`);
+  refuseHeld(books, tx, ctx);
   if (!parts.length) throw new PaymentError('noParts', 'Keine Rechnung gewählt.');
   const invoices = liveInvoices(book);
   if (invoices.some((i) => i.status === 'issued' && i.payments.some((p) => p.transactionRef === tx.ref))) throw new PaymentError('allocated', 'Die Zahlung ist schon zugeordnet: erst lösen.');
