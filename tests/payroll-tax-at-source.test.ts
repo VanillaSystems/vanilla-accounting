@@ -463,10 +463,10 @@ test('an L code\'s tax line says the 4.5 % depends on the certificate of residen
     const s = lineSource(l, d, data, ch.payrollYears, []);
     return s && sourceText(s, data.documents, lang);
   };
-  assert.equal(textOf('L0', 'quellensteuer', 'de'), 'Tarif ZH 2026 vom 08.12.2025 · L0N · satzbestimmend 7\'000.00 · Grenzgängertarif 4.5 % nur mit gültiger Ansässigkeitsbescheinigung (Formular Gre-1, Verlängerung Gre-2); ohne sie gilt der ordentliche Tarif');
-  assert.match(textOf('M2', 'quellensteuer', 'fr')!, /attestation de résidence valable \(formulaire Gre-1, prolongation Gre-2\) ; sans elle, le barème ordinaire s’applique$/);
+  assert.equal(textOf('L0', 'quellensteuer', 'de'), 'Tarif ZH 2026 vom 08.12.2025 · L0N · satzbestimmend 7\'000.00 · Grenzgängertarif 4.5 % nur mit gültiger Ansässigkeitsbescheinigung (Formular Gre-1, Verlängerung Gre-2) und an höchstens 60 Nichtrückkehrtagen im Jahr (Formular Gre-3); sonst gilt der ordentliche Tarif');
+  assert.match(textOf('M2', 'quellensteuer', 'fr')!, /attestation de résidence valable \(formulaire Gre-1, prolongation Gre-2\) et au plus 60 jours de non-retour par an \(formulaire Gre-3\) ; sinon, le barème ordinaire s’applique$/);
   assert.match(textOf('L0', 'quellensteuer', 'it')!, /certificato di residenza.*Gre-1.*tariffa ordinaria$/);
-  assert.match(textOf('L0', 'quellensteuer', 'en')!, /certificate of residence \(form Gre-1, renewal Gre-2\); without it the ordinary tariff applies$/);
+  assert.match(textOf('L0', 'quellensteuer', 'en')!, /certificate of residence \(form Gre-1, renewal Gre-2\) and at most 60 days a year without returning home \(form Gre-3\); otherwise the ordinary tariff applies$/);
   assert.doesNotMatch(textOf('A0', 'quellensteuer', 'de')!, /Gre-1/);
   assert.doesNotMatch(textOf('L0', 'bezugsprovision', 'de')!, /Gre-1/, 'the commission names only its file');
 });

@@ -84,7 +84,8 @@ export function settlementsOf(closes: readonly PayslipClose[], year: string, dat
       const list = [...byMonth.values()].sort((a, b) => (a.corrects ?? '').localeCompare(b.corrects ?? ''));
       shareCommission(list, commission.get(region));
       // A row that nets to nothing (a correction taken back in the same month) is not declared; nor a list left empty.
-      const kept = list.filter((r) => r.tax !== 0 || r.commission !== 0);
+      // A month's own row at 0 % (a code the canton lists without tax, §22 decision 120) is declared with its wage.
+      const kept = list.filter((r) => r.tax !== 0 || r.commission !== 0 || (!r.corrects && !!r.wage && r.code !== undefined));
       if (!kept.length) continue;
       const k = `${c.month}|${region}`;
       const s = lists.get(k) ?? { region, month: c.month, rows: [], totals: { wage: 0, tax: 0, commission: 0, payable: 0 }, files: [] };

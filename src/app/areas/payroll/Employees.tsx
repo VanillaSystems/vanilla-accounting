@@ -24,7 +24,7 @@ import { DatedField, Fields, numberOf, numText, useBackdated, type FieldDef, typ
 import { data, kindLabel, labelOf, monthShort, monthText, statusText } from './words.js';
 import { calcText, fieldWord, inputDefaults, inputFields, inputForm, inputValue, switchedTo } from './inputs.js';
 import type { WageTypeDef } from '../../../core/modules/schema.js';
-import { codeNoteOf } from '../../../payroll/sources.js';
+import { codeNoteOf, codeRuleOf } from '../../../payroll/sources.js';
 
 type Props = AreaProps<PayrollRoute>;
 export const listedEmployees: { ids: string[] } = { ids: [] };
@@ -164,7 +164,7 @@ const taxSpec = (): ValueSpec<TaxAtSource> => ({
     ...(f.other === 'unknown' ? { otherEmployment: 'unknown' } : f.other === 'pensum' ? { otherEmployment: { pensum: numberOf(f.otherValue) } } : f.other === 'income' ? { otherEmployment: { income: numberOf(f.otherValue) } } : {}),
   }),
   // A code whose rate depends on a certificate says so (data `taxAtSource.codeNotes`).
-  show: (v) => (v.subject ? [t('payroll.employee.taxSubject'), v.canton, v.municipality, v.code ? `${v.code}${v.code.length === 2 ? (v.church ? 'Y' : 'N') : ''}` : '', otherText(v), v.notMonthly ? t('payroll.tax.notMonthlyShort') : '', labelOf(codeNoteOf(data() ?? {}, v.code))].filter(Boolean).join(' · ') : t('payroll.employee.taxNot')),
+  show: (v) => (v.subject ? [t('payroll.employee.taxSubject'), v.canton, v.municipality, v.code ? `${v.code}${v.code.length === 2 ? (v.church ? 'Y' : 'N') : ''}` : '', otherText(v), v.notMonthly ? t('payroll.tax.notMonthlyShort') : '', labelOf(codeNoteOf(data() ?? {}, v.code) ?? codeRuleOf(data() ?? {}, v.code)?.text)].filter(Boolean).join(' · ') : t('payroll.employee.taxNot')),
 });
 
 /** The person's insurances: per kind the firm has, the insurance and its solution (a pension certificate: the two monthly figures). */

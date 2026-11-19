@@ -2263,6 +2263,40 @@ publishes as «FAQ_KS45 2026.pdf» is the working group's FAQ of 26.9.2022, word
     «an hourly wage's hours count as paid» in a part month; whether «auf der Basis eines Monatslohnes» means an hourly
     wage paid monthly or a monthly salary is for the owner (or a canton) to settle, and a change would move figures of
     the scenario golden file.
+120. **The tariff codes beyond A–H and L–P are data: refused with their reason, or reported at 0 %** (`taxAtSource.codeRules`:
+    a pattern on the code, `refuse` or `report`, words in the four languages). What each code is, from the record format
+    of the tariff files (ESTV, «Aufbau und Recordformate der Quellensteuer-Tarife ab 2025 (Löhne)», Ziff. 4.2, 4.4, 4.5)
+    and KS 45 Ziff. 4:
+    - **D is no longer the tariff for a side job.** The format defines D as «Tarif für Personen, denen Beiträge an die AHV
+      zurückerstattet werden», a fixed rate in the canton GE's file only (Ziff. 4.4); the 2026 files read (ZH, GE, VD, TI,
+      FR, VS, BS) carry no D at all. A second job is taxed by the ordinary code with the rate-determining income converted
+      (KS 45 Ziff. 4.1: «Geht eine Person mehreren Erwerbstätigkeiten nach, sind die einzelnen Einkünfte mit dem
+      ordentlichen Quellensteuertarif zu besteuern»; Ziff. 6.4), which decision 94's other employments already do. So D
+      gets no rule: a file that carries it is read as any code (its fixed rate whatever the income); a file without it
+      says «den Tarifcode D0N hat der Tarif nicht».
+    - **E (simplified procedure) is refused**: its tax (5 % in the files, record E0N/E0Y) is collected by the AHV
+      compensation fund with the contributions, under its own procedure (KS 45 Ziff. 4.4; QStV Art. 21–24; BGSA Art. 2–3),
+      not withheld and settled by the payslip; decision 89 left that procedure out of B1. The line says why.
+    - **G, Q and V are refused**: they are for replacement income an insurer, a compensation fund or an unemployment fund
+      pays to the person directly (KS 45 Ziff. 4.1, 6.11; Q the German cross-border commuter's, V the Italian's of the
+      2024 agreement). A daily allowance the insurer pays to the employer and the employer pays with the wage is taxed by
+      the person's ordinary code with the rest of the wage (Ziff. 6.10: «wendet darauf den massgebenden Tarifcode bzw.
+      Steuersatz an»), as the app already does (the allowance Lohnarten count for the QST base). The brief's «G:
+      replacement income paid by the employer» is the opposite of the circular; the payslip never applies G.
+    - **SF (French cross-border commuters under the special agreement of BE, BS, BL, JU, NE, SO, VD and VS) is reported at
+      0 %**: the file's record 11 SFN has rate 0 «für die Meldung von Bruttolöhnen» (Ziff. 4.5). The tax line stays with
+      the wage, rate 0 and amount 0 (no booking, no commission), and the settlement list declares the person with her
+      wage; the line says «Sondervereinbarung mit Frankreich: keine Quellensteuer, der Lohn wird dem Kanton gemeldet». A
+      code of two letters takes the church flag as one of a letter and a digit does (SF → SFN).
+    - **L to P keep the flat 4.5 % of the file, with the conditions said** (decision 114's note, now on L–P): the
+      certificate Gre-1/Gre-2, and at most 60 days a year the person cannot return home for work (Nichtrückkehrtage,
+      form Gre-3), else the ordinary tariffs apply and the canton recomputes (KS 45 Ziff. 4.6). The app neither counts
+      those days nor switches the code; the person changes it, dated back where it was wrong (decision 114).
+    - F (Italian cross-border commuters of the 1974 agreement, TI, VS, GR) and R, S, T, U (the 2024 agreement, GR, TI,
+      VS) are progressive tariffs of the file and computed as any code; HE/ME (board fees, employee participations of
+      persons abroad) and NO (a correction for a person wrongly taxed) are read if entered, not offered.
+    Tests: tests/payroll-tax-at-source-cases.test.ts (E0N, G9N, Q9N from the ZH file, SFN from the BE file; D from the
+    format's own example records in an invented file, since no 2026 file has one).
 
 ---
 

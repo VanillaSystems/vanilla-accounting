@@ -10,6 +10,7 @@ import type { Labels, PayrollData, WageTypeDef } from '../../../core/modules/sch
 import type { PayslipFact } from '../../../payroll/compute.js';
 import type { CloseWarning } from '../../../payroll/close.js';
 import type { RateWarning } from '../../../payroll/settings.js';
+import { codeRuleOf } from '../../../payroll/sources.js';
 
 /** The jurisdiction's payroll data; the area shows without it only that the books have none. */
 export const data = (): PayrollData | undefined => { try { return payroll(); } catch { return undefined; } };
@@ -70,6 +71,7 @@ export function missingText(code: string, wageType: string, w?: Pick<WageTypeDef
   if (head === 'annualModel') return t('payroll.missing.annualModel', { region: a });
   if (head === 'taxRegionUnknown') return t('payroll.missing.taxRegionUnknown', { region: a });
   if (head === 'taxCodeUnknown') return t('payroll.missing.taxCodeUnknown', { code: a });
+  if (head === 'taxCodeRefused') return t('payroll.missing.taxCodeRefused', { code: a, why: labelOf(codeRuleOf(data() ?? {}, a)?.text) });
   if (code === 'insurance') { const kind = kindOfWageType(wageType); return t('payroll.missing.insurance', { insurance: kind ? kindLabel(kind) : '' }); }
   return tWith(`payroll.missing.${code}`, {});
 }

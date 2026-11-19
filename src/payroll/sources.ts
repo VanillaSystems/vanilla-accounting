@@ -50,7 +50,7 @@ export function lineSource(
     const t = line.tariff;
     // The commission names only the file its rate comes from; the tax names the code and the income it was looked up with.
     const tax = data.contributions.some((c) => c.wageType === line.wageType);
-    const note = tax ? codeNoteOf(data, t.code) : undefined;
+    const note = tax ? codeNoteOf(data, t.code) ?? codeRuleOf(data, t.code)?.text : undefined;
     const unit = t.units ? data.taxAtSource?.notMonthly?.units.find((u) => u.key === t.units!.key) : undefined;
     const units = t.units && unit ? { paid: t.units.paid, quantity: t.units.quantity, per: t.units.per, label: unit.label } : undefined;
     return { kind: 'tariff', region: t.region, year: key.split(':')[1] ?? slip.month.slice(0, 4), created: t.created!, code: t.code, income: t.income, ...(tax ? {} : { fileOnly: true }), ...(note ? { note } : {}), ...(units ? { units } : {}) };
@@ -93,6 +93,12 @@ export function sourceText(s: LineSource, documents: Pick<PayrollData['documents
       + (s.units && documents.sourceTariffUnits ? ` · ${w(documents.sourceTariffUnits).replace('{paid}', amount(s.units.paid)).replace('{quantity}', units(s.units.quantity)).replace('{per}', units(s.units.per)).replace(/\{unit\}/g, w(s.units.label))}` : '')
       + (s.note ? ` · ${w(s.note)}` : '');
   }
+}
+
+/** The data's rule for a tariff code (`taxAtSource.codeRules`): refused on a payslip, or reported at 0 %; the first whose pattern matches. */
+export function codeRuleOf(data: Partial<Pick<PayrollData, 'taxAtSource'>>, code: string | undefined): NonNullable<NonNullable<PayrollData['taxAtSource']>['codeRules']>[number] | undefined {
+  if (!code) return undefined;
+  return data.taxAtSource?.codeRules?.find((n) => new RegExp(n.codes).test(code.toUpperCase()));
 }
 
 /** What a tariff code's rate depends on, where the data says (`taxAtSource.codeNotes`): the first note whose pattern matches. */

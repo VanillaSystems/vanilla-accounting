@@ -354,12 +354,41 @@ taxAtSource:
   partMonth: 30
   provision: { electronic: PEL, paper: PPA }
   codeNotes:
-    - codes: "^[L-Q]"
+    - codes: "^[L-P]"
       text:
-        de: "Grenzgängertarif 4.5 % nur mit gültiger Ansässigkeitsbescheinigung (Formular Gre-1, Verlängerung Gre-2); ohne sie gilt der ordentliche Tarif"
-        fr: "Barème frontalier 4.5 % seulement avec une attestation de résidence valable (formulaire Gre-1, prolongation Gre-2) ; sans elle, le barème ordinaire s’applique"
-        it: "Tariffa per frontalieri 4.5 % solo con un certificato di residenza valido (modulo Gre-1, proroga Gre-2); senza, si applica la tariffa ordinaria"
-        en: "Cross-border rate 4.5 % only with a valid certificate of residence (form Gre-1, renewal Gre-2); without it the ordinary tariff applies"
+        de: "Grenzgängertarif 4.5 % nur mit gültiger Ansässigkeitsbescheinigung (Formular Gre-1, Verlängerung Gre-2) und an höchstens 60 Nichtrückkehrtagen im Jahr (Formular Gre-3); sonst gilt der ordentliche Tarif"
+        fr: "Barème frontalier 4.5 % seulement avec une attestation de résidence valable (formulaire Gre-1, prolongation Gre-2) et au plus 60 jours de non-retour par an (formulaire Gre-3) ; sinon, le barème ordinaire s’applique"
+        it: "Tariffa per frontalieri 4.5 % solo con un certificato di residenza valido (modulo Gre-1, proroga Gre-2) e al massimo 60 giorni di mancato rientro all’anno (modulo Gre-3); altrimenti si applica la tariffa ordinaria"
+        en: "Cross-border rate 4.5 % only with a valid certificate of residence (form Gre-1, renewal Gre-2) and at most 60 days a year without returning home (form Gre-3); otherwise the ordinary tariff applies"
+  # Tariff codes a payslip does not compute (`refuse`: the line «unvollständig» with these words) or declares at their
+  # rate of 0 % (`report`: the wage is listed for the canton though no tax is withheld) (§22 decision 120). E: the
+  # simplified procedure, settled by the AHV compensation fund (KS 45 Ziff. 4.4; QStV Art. 21-24; BGSA Art. 2-3).
+  # G, Q, V: replacement income an insurer pays to the person directly; a daily allowance paid through the wage is
+  # taxed by the person's ordinary code (KS 45 Ziff. 6.10, 6.11; format Ziff. 4.2). SF: a cross-border commuter from
+  # France under the special agreement of the cantons BE, BS, BL, JU, NE, SO, VD and VS (format Ziff. 4.5: rate 0,
+  # the wage reported).
+  codeRules:
+    - codes: "^E"
+      refuse: true
+      text:
+        de: "Tarifcode E gilt im vereinfachten Abrechnungsverfahren: die Ausgleichskasse erhebt die Quellensteuer mit den Beiträgen, nicht die Lohnabrechnung"
+        fr: "le code E vaut pour la procédure de décompte simplifiée : la caisse de compensation perçoit l’impôt à la source avec les cotisations, pas le décompte de salaire"
+        it: "il codice E vale per la procedura di conteggio semplificata: la cassa di compensazione riscuote l’imposta alla fonte con i contributi, non il conteggio dello stipendio"
+        en: "code E is for the simplified procedure: the compensation fund collects the tax at source with the contributions, not the payslip"
+    - codes: "^[GQV]"
+      refuse: true
+      text:
+        de: "Tarifcode G, Q oder V gilt für Ersatzeinkünfte, die der Versicherer direkt auszahlt; ein Taggeld über den Lohn wird mit dem ordentlichen Tarifcode der Person besteuert"
+        fr: "le code G, Q ou V vaut pour les revenus acquis en compensation versés directement par l’assureur ; une indemnité journalière versée avec le salaire est imposée au barème ordinaire de la personne"
+        it: "il codice G, Q o V vale per i redditi compensativi versati direttamente dall’assicuratore; un’indennità giornaliera versata con il salario è imposta con il codice ordinario della persona"
+        en: "code G, Q or V is for replacement income an insurer pays to the person directly; a daily allowance paid with the wage is taxed by the person's ordinary code"
+    - codes: "^SF"
+      report: true
+      text:
+        de: "Sondervereinbarung mit Frankreich: keine Quellensteuer, der Lohn wird dem Kanton gemeldet"
+        fr: "accord spécial avec la France : pas d’impôt à la source, le salaire est annoncé au canton"
+        it: "accordo speciale con la Francia: nessuna imposta alla fonte, il salario è notificato al Cantone"
+        en: "special agreement with France: no tax at source, the wage is reported to the canton"
   # A wage not paid monthly (hourly or daily, paid weekly or by the timesheets handed in): the rate-determining income
   # is the average rate × 180 hours or 21.667 days a month, the holiday and public-holiday pay and what else is paid on
   # the hours in it; only a capital settlement for recurring benefits (the family allowances, Beispiel 6) is added as

@@ -116,3 +116,68 @@ test('the tax line says how its rate was found, on the page and in the PDF', () 
   assert.equal(sourceText(src, ch.payroll!.documents, 'de'), "Tarif ZH 2026 vom 08.12.2025 · A0N · satzbestimmend 6'300.00 · 2'520.00 für 72 Stunden, auf 180 Stunden hochgerechnet");
   assert.match(sourceText(src, ch.payroll!.documents, 'fr'), /2'520\.00 pour 72 heures, extrapolé à 180 heures$/);
 });
+
+// ─── 2. Codes beyond A–H and L–P (KS 45 Ziff. 4; format Ziff. 4.2, 4.4, 4.5) ──
+
+/** An invented person on a monthly wage of `amount`, subject to the tax with `code` in `region`. */
+function monthly(amount: number, tax: Partial<TaxAtSource>) {
+  return owner({
+    id: 'h1', isOwner: false,
+    employment: [dated('2026-01-01', { kind: 'monthly' as const, amount, pensum: 100, hoursPerWeek: 42, holidayDays: 25 })],
+    insurances: [dated('2026-01-01', { uvg: { insurance: 'uvg', code: 'A1' } })],
+    taxAtSource: [dated('2026-01-01', { subject: true, canton: 'ZH', code: 'A0', ...tax })],
+  });
+}
+const missingOf = (d: ReturnType<typeof slip>) => d.missing.find((m) => m.wageType === 'quellensteuer')?.missing;
+
+test('code E (simplified procedure) is refused with its reason: the compensation fund collects it, though the ZH file carries E0N at 5 %', () => {
+  assert.equal(FILES.ZH.file.tariffs.get('E0N')?.[0].brackets[0].rate, 5, 'the file has the flat 5 %');
+  const d = slip(monthly(1500, { code: 'E0' }), '2026-03', []);
+  assert.equal(line(d, 'quellensteuer').length, 0);
+  assert.equal(missingOf(d), 'taxCodeRefused:E0N');
+  assert.equal(line(d, 'bezugsprovision').length, 0, 'no commission on a tax not withheld');
+});
+
+test('codes G and Q (replacement income an insurer pays) are refused: a daily allowance through the wage takes the ordinary code (KS 45 Ziff. 6.10)', () => {
+  assert.equal(FILES.ZH.file.tariffs.get('G9N')?.[0].brackets.find((b) => b.from === 6451)?.rate, 11.93, 'the ZH file has G9N, progressive');
+  for (const code of ['G9N', 'Q9N']) assert.equal(missingOf(slip(monthly(6500, { code }), '2026-03', [])), `taxCodeRefused:${code}`);
+  // The ordinary code on a month with a daily allowance paid through the wage: all of it taxed at A0N (Ziff. 6.10, Beispiel: 4500 + 1000).
+  const d = slip(monthly(6500, { code: 'A0' }), '2026-03', entered('2026-03', [{ wageType: 'taggeld-uvg', amount: 1000 }]));
+  assert.equal(line(d, 'quellensteuer')[0].base, 7500);
+  assert.equal(line(d, 'quellensteuer')[0].tariff?.code, 'A0N');
+});
+
+test('code SF (France, special agreement): no tax, but the wage is declared at 0 % in the canton\'s list (BE file, record 11 SFN)', async () => {
+  FILES.BE = loaded('be');
+  const p = monthly(6500, { canton: 'BE', code: 'SF' });
+  const store = firm([p]);
+  const d = computePayslip({ ...ctxOf(store), tariffs }, 'h1', '2026-03')!;
+  const [l] = line(d, 'quellensteuer');
+  assert.deepEqual([l.base, l.rate, l.amount, l.tariff?.code], [6500, 0, 0, 'SFN']);
+  assert.equal(line(d, 'bezugsprovision').length, 0);
+  const { settlementsOf } = await import('../src/payroll/settlement.js');
+  const { firmWageTypes } = await import('../src/payroll/catalogue.js');
+  const { closeOf } = await import('./support/payroll.js');
+  const [list] = settlementsOf([closeOf(d)], '2026', ch.payroll!, firmWageTypes(ch.payroll!, store), store);
+  assert.deepEqual([list.region, list.rows[0].code, list.rows[0].wage, list.rows[0].tax, list.totals.payable], ['BE', 'SFN', 6500, 0, 0]);
+  const src = lineSource(l, d, ch.payroll!, ch.payrollYears, [])!;
+  assert.match(sourceText(src, ch.payroll!.documents, 'de'), /Sondervereinbarung mit Frankreich/);
+});
+
+test('L to P: the 4.5 % note names the certificate and the 60 days without returning home (KS 45 Ziff. 4.6, Gre-3)', () => {
+  const d = slip(monthly(7000, { code: 'L0' }), '2026-03', []);
+  const [l] = line(d, 'quellensteuer');
+  assert.equal(l.rate, 4.5);
+  const src = lineSource(l, d, ch.payroll!, ch.payrollYears, [])!;
+  assert.match(sourceText(src, ch.payroll!.documents, 'de'), /Gre-1.*Gre-3/);
+});
+
+test('a fixed-rate code (D: persons refunded their AHV contributions, only in the GE file, format Ziff. 4.4) is read as any code of the file', () => {
+  // The format's own example records (Ziff. 4.4: «0601GED0N … 0000000000001000»), in an invented file; the 2026 files carry no D.
+  const rec = (kind: string, code: string, rate: string) => `${kind}01GE${code.padEnd(10)}20260101000000100099999900 00000000000${rate}   `;
+  const lines = [`00GE${' '.repeat(15)}20251201${' '.repeat(35)}`, rec('06', 'D0N', '01000'), rec('12', 'PEL', '00100')];
+  const text = [...lines, `99${' '.repeat(15)}GE${String(lines.length + 1).padStart(8, '0')}`].join('\r\n');
+  const ge = parseTariffFile(text);
+  assert.equal(ge.tariffs.get('D0N')?.[0].brackets[0].rate, 10);
+  for (const [kt, f] of Object.entries(FILES)) assert.equal(f.file.tariffs.has('D0N'), false, `${kt} 2026 has no D`);
+});

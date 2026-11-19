@@ -13,6 +13,7 @@ import type { PayrollData, TaxAtSourceData } from '../core/modules/schema.js';
 import { valueOn } from '../core/dated.js';
 import { bracketOf, provisionOf, type TariffFile } from '../providers/tax-at-source/tariff-file.js';
 import type { WageType } from './catalogue.js';
+import { codeRuleOf } from './sources.js';
 import type { PayrollInsurance, PayslipLine, TaxAtSource, UsedEntry } from './model.js';
 import { round2, roundStep } from './money.js';
 
@@ -60,7 +61,7 @@ export interface TaxAtSourceResult {
 export function tariffCode(code: string | undefined, church: boolean | undefined): string | undefined {
   const c = (code ?? '').trim().toUpperCase();
   if (/^[A-Z][0-9A-Z][NY]$/.test(c)) return c;
-  if (/^[A-Z][0-9]$/.test(c)) return `${c}${church ? 'Y' : 'N'}`;
+  if (/^[A-Z][0-9A-Z]$/.test(c)) return `${c}${church ? 'Y' : 'N'}`;
   return undefined;
 }
 
@@ -98,6 +99,9 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
     if (model !== 'monthly') return miss(`annualModel:${region}`);
     const code = tariffCode(person.code, person.church);
     if (!code) return miss('taxCode');
+    // A code the payslip does not compute (the simplified procedure, an insurer's replacement income), or reports at 0 % (§22 decision 120).
+    const rule = codeRuleOf(data, code);
+    if (rule?.refuse) return miss(`taxCodeRefused:${code}`);
     const loaded = input.tariffs?.(region, year);
     if (!loaded) return miss(`tariff:${region}:${year}`);
     out.used.push({ path: `tariffs/${region}/${year}`, validFrom: loaded.file.created, enteredAt: loaded.sha256.slice(0, 12) });
@@ -152,7 +156,7 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
     if (!bracket) return miss(`taxCodeUnknown:${code}`);
     let amount = roundStep(base * bracket.rate / 100, t.rounding);
     if (amount < bracket.minimum) amount = bracket.minimum;
-    if (amount === 0) return undefined;
+    if (amount === 0 && !rule?.report) return undefined;
     const tariff: TariffUse = { region, code: file, income, created: loaded.file.created, version: loaded.sha256.slice(0, 12), ...(units ? { units: units.used } : {}) };
     out.lines.push({ wageType: input.wageType.key, label: input.label, base, rate: bracket.rate, amount, side: 'employee', source: `tariff:${region}:${year}`, tariff });
     return undefined;

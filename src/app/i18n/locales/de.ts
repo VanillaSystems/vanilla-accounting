@@ -7531,6 +7531,7 @@ export const messages = {
   "payroll.missing.annualModel": "{region} rechnet nach dem Jahresmodell, das die App noch nicht rechnet",
   "payroll.missing.taxRegionUnknown": "{region} ist kein Kanton der Tarifdateien",
   "payroll.missing.taxCodeUnknown": "den Tarifcode {code} hat der Tarif nicht",
+  "payroll.missing.taxCodeRefused": "Tarifcode {code}: {why}",
   "payroll.missing.taxRegion": "Kanton der Quellensteuer fehlt",
   "payroll.missing.taxCode": "Tarifcode fehlt",
   "payroll.missing.notMonthlyMixed": "Stunden und Tage im selben Monat: ob 180 Stunden oder 21,667 Tage satzbestimmend sind, ist nicht eindeutig",

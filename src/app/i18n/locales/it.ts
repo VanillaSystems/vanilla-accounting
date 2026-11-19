@@ -7533,6 +7533,7 @@ export default {
     "payroll.missing.annualModel": "{region} applica il modello annuale, che l’app non calcola ancora",
     "payroll.missing.taxRegionUnknown": "{region} non è un cantone dei file delle tariffe",
     "payroll.missing.taxCodeUnknown": "la tariffa non ha il codice {code}",
+    "payroll.missing.taxCodeRefused": "codice {code}: {why}",
     "payroll.missing.taxRegion": "manca il cantone dell’imposta alla fonte",
     "payroll.missing.taxCode": "manca il codice tariffale",
     "payroll.missing.notMonthlyMixed": "ore e giorni nello stesso mese: non è chiaro se siano determinanti 180 ore o 21,667 giorni",

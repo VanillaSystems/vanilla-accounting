@@ -552,6 +552,11 @@ export interface TaxAtSourceData {
   /** What a tax line and the person's form say beside a tariff code matching `codes` (a pattern): what its rate depends on. */
   codeNotes?: Array<{ codes: string; text: Labels }>;
   /**
+   * Tariff codes matching `codes` (a pattern) a payslip does not compute (`refuse`: the tax line «unvollständig» with
+   * `text`), or declares at the file's rate of 0 % with the wage (`report`), `text` beside the line.
+   */
+  codeRules?: Array<{ codes: string; refuse?: boolean; report?: boolean; text: Labels }>;
+  /**
    * A wage not paid monthly (paid weekly, or by the timesheets handed in): its rate-determining income is the average
    * rate of a unit's Lohnarten (`counts` give the units worked, `with` are paid on them) times `per` units a month, plus
    * the lines of the groups `asPaid` as they are; nothing else of the month counts for the rate.
