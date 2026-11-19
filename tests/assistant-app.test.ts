@@ -303,7 +303,7 @@ test('an invoice draft by Artikel: code or name, the Artikel\'s code, text, unit
   const made = await s.answer([{ kind: 'invoiceDraft', customer: customer.id, draft: { lines: [{ article: 'HM-1', quantity: 12 }, { article: 'Maschinenservice', quantity: 2, price: 90 }] } }]);
   assert.equal(made.refused, undefined, made.refused?.message);
   const draft = s.invoices().invoices.find((i) => i.id === made.made[0].note?.draft?.id)!;
-  const [beans, service] = draft.lines as Array<Record<string, unknown>>;
+  const [beans, service] = draft.lines as unknown as Array<Record<string, unknown>>;
   assert.deepEqual([beans.kind, beans.code, beans.text, beans.unit, beans.price, beans.vatRate, beans.quantity], ['article', 'HM-1', 'Hausmischung 1 kg', 'kg', 28, 2.6, 12]);
   assert.deepEqual([service.code, service.price, service.vatRate, service.account], ['SV-1', 90, 8.1, '3400']);
   const none = await s.answer([{ kind: 'invoiceDraft', customer: customer.id, draft: { lines: [{ article: 'Gibt es nicht', quantity: 1 }] } }]);
