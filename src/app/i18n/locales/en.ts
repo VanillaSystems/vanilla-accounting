@@ -4394,6 +4394,8 @@ export default {
     'receipts.payrollSetupOpen': 'To the card in Payroll',
     'receipts.setupSuggested': "Looks like a social insurance document (decision, policy, pension certificate), not a receipt of a payment. Until you answer, no AI reads it and no payment is matched to it.",
     'receipts.setupFile': "File as a document",
+    'receipts.setupSuggestedShort': "Social insurance document?",
+    'receipts.keptFromModels': "Not shown to the AI: personal data (a social insurance document, a payslip, an AHV number or an insured person).",
     'receipts.setupFiled': "{file}: filed as a social insurance document.",
     'receipts.cardStatement.split': 'Card statement: taken as the receipt of the debit of {date}, its lines booked one by one. The app does not read card statements as bank statements.',
     'receipts.cardStatement.linked': 'Card statement: taken as the receipt of the debit of {date}. The app does not read card statements as bank statements.',

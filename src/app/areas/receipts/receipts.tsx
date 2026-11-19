@@ -2,6 +2,7 @@
  * Belege: the receipts of a period, what needs you first, then month by month; the receipt with
  * its paper, its payment, its details and its file on the right (the mockup's Belege).
  */
+import { isSetupSuggested } from '../../../booking/payslip.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, errorText } from '../../lib/api.js';
 import type { InboxFile } from '../../../types/index.js';
@@ -250,7 +251,7 @@ function Row({ v, proc, view, sel, picked, same, canEdit, onSelect, onClick, toa
     >
       <Pick kind="receipt" id={r.id} on={picked} label={v.vendor || r.filename} toast={toast} />
       <span className="d mono">{same ? <span className="sr">{formatDate(v.date)}</span> : v.date ? <><span className="dl">{formatDate(v.date)}</span><span className="ds">{formatDate(v.date).slice(0, 6)}</span></> : <span className="d none" data-testid={waitsForReading(r) ? 'row-not-read' : undefined}>{t(waitsForReading(r) ? 'receipts.notRead' : 'receipts.noDate')}</span>}</span>
-      <span className="t">{inProcess(proc) ? <span className="spin small" aria-hidden="true" /> : isOpen(v) && !v.locked && !v.none && !v.orderPage && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}{inProcess(proc) && <small className="proc" data-testid="row-processing"> · {processingText(proc, view)}</small>}{v.none && <small className="nonewhy" data-testid="none-why" data-by={v.noneBy} data-tip={noneText(v)}> · {noneText(v)}</small>}</span>
+      <span className="t">{inProcess(proc) ? <span className="spin small" aria-hidden="true" /> : isOpen(v) && !v.locked && !v.none && !v.orderPage && I.dot}{v.vendor}{v.desc && <small> {v.desc}</small>}{inProcess(proc) && <small className="proc" data-testid="row-processing"> · {processingText(proc, view)}</small>}{v.none && <small className="nonewhy" data-testid="none-why" data-by={v.noneBy} data-tip={noneText(v)}> · {noneText(v)}</small>}{isSetupSuggested(v.r) && <small className="nonewhy" data-testid="setup-suggested-row" data-tip={t('receipts.setupSuggested')}> · {t('receipts.setupSuggestedShort')}</small>}</span>
       <span className="a mono">{ownAmount(r) != null && <>{(r.currency ?? baseCurrency()) !== baseCurrency() && <span className="c">{r.currency}</span>}{fmt(r.amount!)}</>}</span>
       <span className="acts">
         {v.none ? (

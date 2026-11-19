@@ -4394,6 +4394,8 @@ export default {
     'receipts.payrollSetupOpen': 'Vers la carte dans Salaires',
     'receipts.setupSuggested': "Ressemble à un document d’une assurance sociale (décision, police, certificat de prévoyance), pas à un justificatif de paiement. Tant que tu n’as pas répondu, aucune IA ne le lit et aucun paiement ne lui est attribué.",
     'receipts.setupFile': "Classer comme document",
+    'receipts.setupSuggestedShort': "Document d’assurance sociale?",
+    'receipts.keptFromModels': "N’est pas montré à l’IA : données personnelles (un document d’assurance sociale, un décompte de salaire, un numéro AVS ou une personne assurée).",
     'receipts.setupFiled': "{file} : classé comme document d’assurance sociale.",
     'receipts.cardStatement.split': 'Relevé de carte : pris comme justificatif du débit du {date}, ses lignes comptabilisées une à une. L’app ne lit pas les relevés de carte comme relevés de compte.',
     'receipts.cardStatement.linked': 'Relevé de carte : pris comme justificatif du débit du {date}. L’app ne lit pas les relevés de carte comme relevés de compte.',

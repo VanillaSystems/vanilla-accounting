@@ -323,7 +323,7 @@ setupDocuments:
   # with its colon, or a person of payroll.json named beside a birth date's or an insured wage's word (and, always, a
   # social security number).
   personLabels: [Versicherte Person, Personne assurée, Persona assicurata, Insured person, Name der versicherten Person]
-  birth: [Geburtsdatum, geb., geboren, Date de naissance, né le, née le, Data di nascita, nato il, nata il, Date of birth, Born]
+  birth: [Geburtsdatum, geb. am, geboren am, Date de naissance, né le, née le, Data di nascita, nato il, nata il, Date of birth]
   insuredWage: [Versicherter Lohn, Koordinierter Lohn, Gemeldeter Jahreslohn, Massgebender Lohn, Altersguthaben, Freizügigkeitsleistung, Salaire assuré, Salaire coordonné, Salaire annuel annoncé, Avoir de vieillesse, Salario assicurato, Salario coordinato, Salario annuo notificato, Avere di vecchiaia, Insured salary, Retirement savings]
   numbers:
     memberNumber: [Abrechnungsnummer, Abrechnungs-Nr., Abrechnungs-Nr, Mitgliednummer, Mitglied-Nr., Mitgliedernummer, Kassen-Nr., Kundennummer, N° d'affilié, Numéro d'affilié, No d'affilié, N. affiliato, Numero d'affiliazione]

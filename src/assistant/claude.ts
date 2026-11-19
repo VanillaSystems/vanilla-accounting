@@ -17,7 +17,7 @@
  */
 import { maskForModel } from '../llm/mask.js';
 import { loadBooks } from '../books/store.js';
-import { isSetupDocument } from '../booking/payslip.js';
+import { isSetupDocument, isSetupSuggested } from '../booking/payslip.js';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
@@ -185,11 +185,11 @@ export const NEVER_DRAFTED = ['data/draft/master-data/accounts.json'];
 export const NEVER_READ = ['**/payroll.json', '**/transactional-data/*/payroll/**', '**/transactional-data/*/receipts/*-lohnabrechnung-*'];
 
 /**
- * The receipt files of a fund's or insurer's documents (§22 decision 108: a pension certificate names a person and her
+ * The receipt files of a fund's or insurer's documents, filed or suggested (§22 decision 108: a pension certificate names a person and her
  * insured wage), denied to the sidebar beside NEVER_READ, by their names in the receipts' folders.
  */
 export function setupDocumentFiles(ws: Pick<Workspace, 'paths' | 'company' | 'bankAccounts'>): string[] {
-  try { return loadBooks(ws as Workspace).receipts.filter(isSetupDocument).map((r) => `**/transactional-data/*/receipts/${r.filename}`); } catch { return []; }
+  try { return loadBooks(ws as Workspace).receipts.filter((r) => isSetupDocument(r) || isSetupSuggested(r)).map((r) => `**/transactional-data/*/receipts/${r.filename}`); } catch { return []; }
 }
 
 export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: string | undefined, repository: string, owner: string, map = '', term?: number, neverRead: readonly string[] = []): string[] {

@@ -38,6 +38,10 @@ test('decision 108, per document: what keeps a text from models, and what does n
     assert.ok(textKeptFromModels('Fondation Exemple\nPersonne assurée: Corinne Wyss'), 'a person\'s label');
     assert.ok(textKeptFromModels('Pensionskasse\nBeispiel Mila\nGeburtsdatum 12.05.1980'), 'her name beside her birth date');
     for (const ordinary of [SWISSCOM, TEMP, AVOIR]) assert.equal(textKeptFromModels(ordinary.join('\n')), false, ordinary[0]);
+    // Last review: the detail beside her name (same or next line), a birth word with its date, the number with its check digit.
+    assert.equal(textKeptFromModels('Mila Beispiel\nTeegasse 1\n6300 Zug\nRechnung\nGeburtsdatum 12.05.1980'), false, 'her birth date far from her name');
+    assert.equal(textKeptFromModels('Mila Beispiel, geb. Muster\nGeburtsdatum fehlt'), false, 'a birth word without a date');
+    assert.equal(textKeptFromModels(`Beleg\nRef ${SSN.slice(0, -1)}8`), false, 'a number whose check digit is wrong');
   } finally { setPayrollPeople(() => []); }
 });
 
@@ -80,4 +84,21 @@ test('decision 108 through the real ask path: four certificates reach no prompt;
 test('decision 108: the sidebar is denied the files of a fund\'s documents', () => {
   const args = assistantArgs({ language: 'de' }, undefined, '/repo', '2850', '', undefined, ['**/transactional-data/*/receipts/20260701-vorsorgeausweis.pdf']);
   assert.ok(args.includes('Read(**/transactional-data/*/receipts/20260701-vorsorgeausweis.pdf)'));
+});
+
+test('last review: the titles step never names a receipt kept from models', async () => {
+  const { titlesStep } = await import('../src/intake/titles.js');
+  const { storePort } = await import('../src/intake/pipeline.js');
+  const { moduleActor } = await import('../src/books/store.js');
+  const ws = firm('Teegarten Wyss GmbH', []);
+  const books = loadBooks(ws);
+  update(books, PERSON, (b) => {
+    b.receipts.push({ id: 'c1', filename: 'c1.pdf', location: 'archived', indexedAt: '', fileSize: 1, extractionMethod: 'pdftotext', extractedText: cert('Vorsorgeausweis per 1.7.2026').join('\n') } as never);
+    b.receipts.push({ id: 'o1', filename: 'o1.pdf', location: 'archived', indexedAt: '', fileSize: 1, extractionMethod: 'pdftotext', extractedText: SWISSCOM.join('\n') } as never);
+  });
+  saveBooks(ws, books);
+  const prompts: string[] = [];
+  await titlesStep()({ ws, books: storePort(ws, moduleActor('titles')), ask: async (p: string) => { prompts.push(p); return '{}'; }, progress: () => {}, log: () => {} } as never);
+  assert.ok(prompts.some((p) => p.includes('Swisscom')), 'an ordinary receipt is named');
+  assert.ok(prompts.every((p) => !p.includes(SSN) && !p.includes('Versicherte Person')), 'the certificate is not');
 });

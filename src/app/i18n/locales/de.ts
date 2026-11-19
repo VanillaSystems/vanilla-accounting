@@ -4391,6 +4391,8 @@ export const messages = {
   'receipts.payrollSetupOpen': 'Zur Karte in Löhne',
   'receipts.setupSuggested': "Sieht aus wie ein Dokument der Sozialversicherung (Verfügung, Police, Vorsorgeausweis), kein Beleg einer Zahlung. Bis du antwortest, liest keine KI es und keine Zahlung wird ihm zugeordnet.",
   'receipts.setupFile': "Als Dokument ablegen",
+  'receipts.setupSuggestedShort': "Dokument der Sozialversicherung?",
+  'receipts.keptFromModels': "Wird der KI nicht gezeigt: Personendaten (ein Dokument der Sozialversicherung, eine Lohnabrechnung, eine AHV-Nummer oder eine versicherte Person).",
   'receipts.setupFiled': "{file}: als Dokument der Sozialversicherung abgelegt.",
   'receipts.cardStatement.split': 'Kartenabrechnung: als Beleg der Belastung vom {date} genommen, ihre Zeilen einzeln gebucht. Kartenabrechnungen liest die App nicht als Kontoauszug.',
   'receipts.cardStatement.linked': 'Kartenabrechnung: als Beleg der Belastung vom {date} genommen. Kartenabrechnungen liest die App nicht als Kontoauszug.',

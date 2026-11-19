@@ -8,6 +8,8 @@
  * workspace the app has opened on this computer (its switch-on record): only the app takes the baseline.
  */
 import 'dotenv/config';
+import { setPayrollPeople } from '../booking/kept-from-models.js';
+import { payrollPeople } from '../payroll/store.js';
 import { loadBooks, periodLock } from '../books/store.js';
 import { askIfReady } from '../intake/run.js';
 import { lockIntake } from '../intake/pipeline.js';
@@ -24,6 +26,8 @@ if (!id || !arg) {
   process.exit(1);
 }
 const ws = openWorkspace();
+// The people of these books' payroll: a document that names one with her birth date or insured wage reaches no model.
+setPayrollPeople(() => payrollPeople(ws));
 const line = (r: Run) => { const s = summaryOf(r); return `${s.id}  ${s.mode.padEnd(6)}  ${s.status.padEnd(8)}  ${s.item.id}  ${r.steps.map((x) => `${x.step}:${x.outcome ?? x.error ?? '?'}`).join(' → ')}`; };
 const API = `http://127.0.0.1:${process.env.PORT ?? 3456}`;
 

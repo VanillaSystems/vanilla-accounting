@@ -321,7 +321,9 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   }
 
   for (const receipt of setup) {
-    const target = archive(receipt, receipt.filename, () => undefined);
+    // Dated and summed by what code reads off its text: once she says «Ist ein Beleg», the chain pairs it like any receipt.
+    const p = provisional(receipt);
+    const target = archive(receipt, receipt.filename, (r) => { if (p) Object.assign(r, keepHand(r, { date: p.date, amount: p.amount, currency: p.currency })); });
     progress(++completed, total);
     log(target ? `  ${receipt.filename} → ${target}  looks like a fund's or insurer's document: Belege asks the person, no model reads it (no model match)` : `  warn: ${receipt.filename} is not staged in beleg-import/ any more, skipping`);
   }

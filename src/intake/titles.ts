@@ -40,8 +40,8 @@ export async function titlesFor(ask: Ask, all: readonly Receipt[], log: (line: s
 
 export function titlesStep({ force = false } = {}): StepRun {
   return async ({ books, ask, progress, log }) => {
-    // A payslip is never named by a model: it carries a salary and a person (docs/specs/payroll.md §10.2 A8).
-    const todo = books.read().receipts.filter((r) => r.kind !== 'payslip' && (force || !r.title));
+    // A payslip, a fund's document and a text with a person's data are never named by a model (src/booking/kept-from-models.ts, §10.2 A8).
+    const todo = books.read().receipts.filter((r) => !keptFromModels(r) && (force || !r.title));
     if (!todo.length) { log('Every receipt has its title.'); return { notes: [] }; }
     if (!ask) return { notes: [{ code: 'noModel', waiting: todo.length }] };
     const notes: IntakeNote[] = [];

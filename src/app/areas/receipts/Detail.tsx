@@ -2,6 +2,7 @@
  * One receipt: who and what, the amount, one line of facts, its payment (or the suggestion, or
  * what is missing), the paper, and in the margin Zahlung, Angaben and Datei.
  */
+import { keptFromModels } from '../../../booking/kept-from-models.js';
 import { isSetupSuggested } from '../../../booking/payslip.js';
 import { hrefOf } from '../../shell/history.js';
 import type { OrderPage } from '../../../booking/order-pages.js';
@@ -229,6 +230,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
           <AsyncButton type="button" className="linkbtn" onClick={() => linkCardLine(nav, v, o.payment, o.index, o.line.merchant)}>{t('receipts.cardLine.link')}</AsyncButton>
         </div>
       ))}
+      {keptFromModels(r) ? <div className="notice" data-testid="kept-from-models">{t('receipts.keptFromModels')}</div> : null}
       {r.report?.held?.length ? <ReportHeld receipt={r.id} report={r.report} canEdit={canEdit} closedThrough={props.books.config?.closedThrough} said={(message, ok) => { if (ok) nav.refresh(); nav.toast(message); }} /> : null}
       <ReportCorrections receipt={r.id} books={props.books} canEdit={canEdit} said={(message) => { nav.refresh(); nav.toast(message); }} />
       {sheet

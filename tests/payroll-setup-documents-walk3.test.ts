@@ -150,3 +150,20 @@ test('third review of walk 3: her answer is kept: «Als Dokument ablegen» files
     assert.deepEqual(setupCards(after, emptyPayroll(), ch.payroll!, {}, documents()).map((c) => c.receipt), ['s1'], 'her receipt is no card');
   } finally { await api.stop(); }
 });
+
+test('last review: a suggested text that is a bill is paired once she says «Ist ein Beleg», with a model too', async () => {
+  const BILL_LIKE = ['Ausgleichskasse Beispiel', 'Akontoverfügung 3. Quartal 2026', 'Abrechnungsnummer: 100.2345', 'Datum: 01.10.2026', "AHV/IV/EO-Beiträge CHF 3'180.00", 'ALV-Beiträge CHF 660.00', 'Verwaltungskosten CHF 79.50', "Total CHF 3'919.50", 'Valuta 10.10.2026'];
+  // A model that says the pair it is asked to check fits.
+  const ask: Ask = async (_p, opts) => (opts.step === 'receipt-pair' && opts.detail === 'check' ? '[{"i":0,"fits":true}]' : '{}');
+  const ws = firm('Teegarten Wyss GmbH', [pay('AK', '2026-10-10', 3919.5, 'Ausgleichskasse Beispiel', 'Akontobeitrag Q3 2026 100.2345')]);
+  await drop(ws, [['ak-q3.pdf', textPdf(BILL_LIKE)]]);
+  await run(ws, ask);
+  let books = loadBooks(ws);
+  const r = books.receipts[0];
+  assert.deepEqual([r.kindRule, r.date, r.amount, books.mappings.length], [SETUP_SUGGESTED_RULE, '2026-10-01', 3919.5, 0], 'suggested, dated and summed by code, not paired');
+  update(books, PERSON, (b) => { Object.assign(b.receipts[0], { kind: 'invoice', kindBy: 'human' }); delete b.receipts[0].kindRule; });
+  saveBooks(ws, books);
+  await run(ws, ask);
+  books = loadBooks(ws);
+  assert.deepEqual(books.mappings.map((m) => [m.transactionRef, m.receiptId]), [['AK', r.id]], 'paired after her answer');
+});

@@ -4394,6 +4394,8 @@ export default {
     'receipts.payrollSetupOpen': 'Alla scheda in Salari',
     'receipts.setupSuggested': "Sembra un documento di un’assicurazione sociale (decisione, polizza, certificato di previdenza), non un giustificativo di pagamento. Finché non rispondi, nessuna IA lo legge e nessun pagamento gli viene attribuito.",
     'receipts.setupFile': "Archiviare come documento",
+    'receipts.setupSuggestedShort': "Documento di assicurazione sociale?",
+    'receipts.keptFromModels': "Non viene mostrato all’IA: dati personali (un documento di assicurazione sociale, un conteggio salariale, un numero AVS o una persona assicurata).",
     'receipts.setupFiled': "{file}: archiviato come documento di assicurazione sociale.",
     'receipts.cardStatement.split': 'Estratto conto della carta: preso come giustificativo dell’addebito del {date}, le sue righe registrate una per una. L’app non legge gli estratti conto delle carte come estratti conto bancari.',
     'receipts.cardStatement.linked': 'Estratto conto della carta: preso come giustificativo dell’addebito del {date}. L’app non legge gli estratti conto delle carte come estratti conto bancari.',
