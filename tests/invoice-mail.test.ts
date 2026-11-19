@@ -173,3 +173,53 @@ test('the password comes from the secret store: none there is a clear refusal; t
   }
   assert.ok(!existsSync(join(ws.paths.root, 'invoices.json')), 'sendMail records nothing itself');
 });
+
+test('P3.6 the Vorlage «Regie» with the Rapport, picked on one Rechnung: sent to two recipients, a CC and a copy to the firm, with both PDFs; the sent log keeps both checksums', async () => {
+  const { storeAttachment } = await import('../src/invoices/attachments.js');
+  const { createCustomer, createDraft, issueInvoice, updateDraft } = await import('../src/invoices/service.js');
+  const RAPPORT = Buffer.from('%PDF-1.4 Regierapport KW 46\n%%EOF\n');
+  const rapport = storeAttachment(workspaceAt(api.root), 'Rapport KW 46.pdf', RAPPORT, '2026-11-19');
+  const added = await api.send('PATCH', '/api/workspace', { invoicing: { templates: { add: { id: 'regie', name: 'Regie' }, attachment: { id: 'regie', value: { name: rapport.name, file: rapport.file, kinds: ['invoice'] } } } } });
+  assert.equal(added.status, 200, String(added.json.error));
+  const ws = workspaceAt(api.root);
+  assert.deepEqual(ws.invoicing!.templates.map((t) => [t.id, t.attachment?.file]), [['standard', undefined], ['regie', rapport.file]]);
+  const c = createCustomer(ws, { name: 'Regie Kunde AG', address: { postcode: '3000', town: 'Bern', country: 'CH' }, language: 'de', paymentTermsDays: 30 });
+  const draft = createDraft(ws, { customerId: c.id, date: '2026-11-19', lines: [{ text: 'Regiearbeit', quantity: 10, price: 95, vatRate: 8.1, unit: 'h' }] }, '2026-11-19T08:00:00Z');
+  const picked = await api.send('PATCH', `/api/invoices/${draft.id}`, { templateId: 'regie' });
+  assert.equal(picked.status, 200, String(picked.json.error));
+  assert.equal((await api.send('PATCH', `/api/invoices/${draft.id}`, { templateId: 'nope' })).json.invoiceRefusal, 'templateGone');
+  const INVOICE = Buffer.from('%PDF-1.4 Regierechnung\n%%EOF\n');
+  const issued = await issueInvoice(ws, draft.id, { now: '2026-11-19T09:00:00Z', printer: { pdf: async () => ({ html: '', pages: 1, pdf: INVOICE }), html: async () => ({ html: '', pages: 1 }) } });
+  assert.deepEqual(issued.attachments, [rapport]);
+
+  const res = await api.send('POST', `/api/invoices/${issued.id}/send`, { email: { to: ['chefin@kunde.example', 'buchhaltung@kunde.example'], cc: 'bauleiter@kunde.example', copy: true, subject: `Rechnung ${issued.number}`, body: 'Im Anhang Rechnung und Rapport.' } });
+  assert.equal(res.status, 200, String(res.json.error));
+  const doc = res.json as unknown as SentDocument;
+  const { rcpt, mail } = inbox.at(-1)!;
+  assert.deepEqual([...rcpt].sort(), ['bauleiter@kunde.example', 'buchhaltung@kunde.example', 'chefin@kunde.example', USER].sort(), 'every recipient, the CC and the firm\'s own copy');
+  assert.deepEqual(mail.to && !Array.isArray(mail.to) ? mail.to.value.map((a) => a.address) : [], ['chefin@kunde.example', 'buchhaltung@kunde.example']);
+  assert.deepEqual(mail.cc && !Array.isArray(mail.cc) ? mail.cc.value.map((a) => a.address) : [], ['bauleiter@kunde.example']);
+  assert.equal(mail.bcc, undefined, 'the copy to the firm is blind');
+  assert.deepEqual(mail.attachments.map((a) => [a.filename, sha(a.content)]), [[`${issued.number}.pdf`, sha(INVOICE)], [rapport.name, sha(RAPPORT)]], 'both PDFs, byte for byte');
+  assert.deepEqual([doc.to, doc.cc, doc.bcc], ['chefin@kunde.example, buchhaltung@kunde.example', ['bauleiter@kunde.example'], [USER]]);
+  assert.deepEqual([doc.sha256, doc.attachments?.map((a) => [a.name, a.sha256])], [sha(INVOICE), [[rapport.name, sha(RAPPORT)]]], 'the sent log keeps both checksums');
+  assert.deepEqual(sentLog().at(-1), doc);
+
+  // A recipient the server refuses among several: nothing goes on record.
+  const before = readFileSync(join(api.root, 'invoices.json'));
+  const refused = await api.send('POST', `/api/invoices/${issued.id}/send`, { email: { to: 'chefin@kunde.example, abgelehnt@kunde.example', subject: 's', body: 'b' } });
+  assert.equal(refused.status, 502);
+  assert.ok(readFileSync(join(api.root, 'invoices.json')).equals(before));
+  const wrong = await api.send('POST', `/api/invoices/${issued.id}/send`, { email: { to: 'chefin@kunde.example', cc: 'kein-mail', subject: 's', body: 'b' } });
+  assert.deepEqual([wrong.status, wrong.json.mailRefusal], [400, 'recipient']);
+});
+
+test('the Kontoauszug of a contact over the API: per currency, the balance Offene Posten names; a period backwards is refused', async () => {
+  const book = JSON.parse(readFileSync(join(api.root, 'invoices.json'), 'utf8')) as InvoiceBook;
+  const contact = book.contacts.find((c) => c.name === 'Regie Kunde AG')!;
+  const view = await api.send('GET', `/api/contacts/${contact.id}/statement?from=2026-01-01&to=2026-12-31`);
+  assert.equal(view.status, 200, String(view.json.error));
+  const sections = (view.json as { sections: Array<{ currency: string; closing: number }> }).sections;
+  assert.deepEqual(sections.map((s) => [s.currency, s.closing]), [['CHF', 1026.95]]);
+  assert.equal((await api.send('GET', `/api/contacts/${contact.id}/statement?from=2026-12-31&to=2026-01-01`)).status, 400);
+});
