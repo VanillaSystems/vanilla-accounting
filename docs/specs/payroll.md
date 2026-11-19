@@ -2024,7 +2024,11 @@ Taken while building B2, the Quellensteuer (2026-11-19; numbered from 100, the c
      (an hourly wage's hours, an allowance entered in full) counts as paid: extrapolating it would tax a
      part-month's hours as a whole month's (review, 2026-11-19). Sources: FAQ Frage 6 and 15 (read); KS 45
      Ziff. 6.3 and 6.5 themselves could not be read (the circular's PDF was not reachable), so the rule for
-     hourly wages in a part month is the app's reading of the FAQ, to be checked against the circular. Other employments: none, the wage as it is (FAQ Frage 13); unknown, extrapolated to 100 % when
+     hourly wages in a part month is the app's reading of the FAQ, to be checked against the circular.
+     A payment after the exit (a Nachzahlung, B1) is taxed at the rate of the exit month's rate-determining income
+     plus the payment (FAQ Frage 16, monthly model, the month's other income not being known); an absence month
+     (continued pay, the daily allowances paid through the wage) is taxed on every line that counts for the base,
+     the allowance included, as a whole month. Other employments: none, the wage as it is (FAQ Frage 13); unknown, extrapolated to 100 % when
      her Pensum here is lower; their Pensum known, to her whole Pensum (it may pass 100 %, FAQ Frage 8); their
      income known, added. An hourly wage without a Pensum and with other employments takes the file's median
      (`MED`) at least (FAQ Frage 11–12). Then the aperiodic part is added as it is. The 180-hours rule for

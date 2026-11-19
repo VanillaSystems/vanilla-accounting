@@ -36,6 +36,11 @@ export interface TaxAtSourceInput {
   lines: readonly PayslipLine[];
   /** The days of the month the person is employed, as the firm prorates them, scaled to `partMonth` (30) for a whole month. */
   days: number;
+  /**
+   * A month after her exit (a Nachzahlung): the rate-determining income of her exit month, added to what is paid now
+   * (FAQ KS 45, Frage 16, monthly model: the periodic income of the exit month where the month's other income is not known).
+   */
+  exitIncome?: number;
   /** Her Pensum in %, when the Anstellung states one (an hourly wage may not). */
   pensum?: number;
   tariffs?: TariffSource;
@@ -127,6 +132,7 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
         income = Math.max(income, median);
       }
     }
+    if (input.exitIncome !== undefined) income += input.exitIncome;
     income = round2(income + aperiodic);
 
     let file = code;

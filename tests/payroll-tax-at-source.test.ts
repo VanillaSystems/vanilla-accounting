@@ -5,7 +5,7 @@
  * tests/fixtures/qst/tar26<kt>-excerpt.txt are excerpts of the ESTV's files for wages (tar26zh.txt of
  * 08.12.2025, tar26be.txt of 27.11.2025, tar26lu.txt of 26.11.2025, tar26ag.txt of 04.03.2026, the AG file
  * corrected during the year), fetched 2026-11-19 from www.estv2.admin.ch/qst/2026/loehne/: the header,
- * the brackets around the incomes below of ten codes, the commission and median records unchanged; the
+ * the brackets around the incomes of the tests of ten codes, the commission and median records unchanged; the
  * trailer's count is that of the excerpt. The expected rates and minimums are the full files' for those
  * incomes (looked up in them, not in the excerpts); the taxes are base × rate, rounded to 5 Rappen.
  */
@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { bracketOf, parseTariffFile, provisionOf, TariffFileError } from '../src/providers/tax-at-source/tariff-file.js';
 import { computePayslip } from '../src/payroll/compute.js';
 import { tariffCode, type LoadedTariff } from '../src/payroll/tax-at-source.js';
+import { roundStep } from '../src/payroll/money.js';
 import { bookingOf } from '../src/payroll/booking.js';
 import { settlementsOf } from '../src/payroll/settlement.js';
 import { firmWageTypes } from '../src/payroll/catalogue.js';
@@ -345,9 +346,12 @@ test('an hourly wage from the 16th: what is paid as worked counts as paid, never
   const p = subject(0, { subject: true, canton: 'ZH', code: 'A0' }, { employment: [dated('2026-11-16', { kind: 'hourly' as const, amount: 40, hoursPerWeek: 42, holidayDays: 25 })] });
   const store = firm([p]);
   store.monthLines = [{ id: 'm1', employee: 'q1', month: '2026-11', wageType: 'stundenlohn', quantity: 80, enteredAt: '2026-11-01T00:00:00Z' }];
-  const [l] = line(computePayslip({ ...ctxOf(store), tariffs }, 'q1', '2026-11')!, 'quellensteuer');
-  assert.equal(l.base, 3200);
-  assert.equal(l.tariff?.income, 3200);
+  const d = computePayslip({ ...ctxOf(store), tariffs }, 'q1', '2026-11')!;
+  const [l] = line(d, 'quellensteuer');
+  // 80 h × 40 and the holiday surcharge on them (B1), all paid as worked.
+  assert.equal(l.base, d.gross);
+  assert.ok(l.base! > 3200);
+  assert.equal(l.tariff?.income, l.base, 'not extrapolated to 30 days');
 });
 
 test('a monthly wage from the 16th with a child allowance entered in full: only the prorated wage is extrapolated', () => {
@@ -370,4 +374,36 @@ test('the commission books on the canton\'s own insurance (one per canton, each 
 test('a byte-order mark before the header is read past', () => {
   assert.equal(parseTariffFile(`﻿${text('zh')}`).canton, 'ZH');
   assert.equal(parseTariffFile(`ï»¿${text('zh')}`).canton, 'ZH');
+});
+
+// ─── with B1 (absences, the Nachzahlung after the exit) ─────────────────────────
+
+test('a month of illness with daily allowances: the tax on the whole taxable wage, the allowance included, a full month not extrapolated', () => {
+  const p = subject(6500, { subject: true, canton: 'ZH', code: 'A0' }, {
+    absences: [{ id: 'ab1', kind: 'illness', from: '2026-09-07', to: '2026-09-20', continuedPay: 100, dailyAllowance: 157.8, allowanceFrom: '2026-09-09', enteredAt: '2026-09-21T00:00:00Z' }],
+  });
+  const d = computePayslip({ ...ctxOf(firm([p])), tariffs }, 'q1', '2026-09')!;
+  const types = firmWageTypes(ctxOf(firm()).data, firm());
+  const qstBase = d.lines.filter((l) => types.get(l.wageType)?.bases.includes('qst') && l.side === 'employee').reduce((s, l) => s + (types.get(l.wageType)!.sign === '-' ? -l.amount : l.amount), 0);
+  const [l] = line(d, 'quellensteuer');
+  assert.ok(d.lines.some((x) => x.wageType === 'taggeld-ktg'), 'the daily allowance is on the payslip');
+  assert.equal(l.base, Math.round(qstBase * 100) / 100, 'every line counting for the tax at source, the allowance included');
+  assert.equal(l.tariff?.income, l.base, 'a whole month employed: nothing extrapolated');
+  assert.equal(l.rate, bracketOf(FILES.ZH.file, 'A0N', l.base!, '2026-09-30')!.rate);
+  assert.equal(line(d, 'bezugsprovision')[0].base, l.amount);
+});
+
+test('a Nachzahlung after the exit: taxed at the rate of the exit month\'s income plus the payment (FAQ KS 45, Frage 16)', () => {
+  const p = subject(6500, { subject: true, canton: 'ZH', code: 'A0' }, { employment: [dated('2026-01-01', { kind: 'monthly' as const, amount: 6500, pensum: 100, hoursPerWeek: 42, holidayDays: 25 }, undefined, '2026-06-30')] });
+  const store = firm([p]);
+  const ev: PayslipEvent[] = [];
+  for (const m of ['2026-05', '2026-06']) ev.push(closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', m)!));
+  store.monthLines = [{ id: 'nz', employee: 'q1', month: '2026-12', wageType: 'bonus', amount: 1000, enteredAt: '2026-12-02T00:00:00Z' }];
+  const d = computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-12')!;
+  const [l] = line(d, 'quellensteuer');
+  assert.equal(l.base, 1000);
+  assert.equal(l.tariff?.income, 7500, 'June\'s 6,500 + the 1,000 paid now');
+  assert.equal(l.rate, bracketOf(FILES.ZH.file, 'A0N', 7500, '2026-12-31')!.rate);
+  assert.equal(l.amount, roundStep(1000 * l.rate! / 100, 0.05));
+  assert.equal(line(d, 'bezugsprovision')[0].tariff?.region, 'ZH');
 });
