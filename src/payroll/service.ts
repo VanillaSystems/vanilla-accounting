@@ -7,9 +7,9 @@
  * appended to payslips.jsonl only once the books are saved.
  */
 import { existsSync, rmSync } from 'node:fs';
-import { ClosedPeriodError, periodLock, receiptFile, type Books } from '../books/store.js';
+import { ClosedPeriodError, loadBooks, periodLock, receiptFile, type Books } from '../books/store.js';
 import { payroll, payrollYears } from '../engines/index.js';
-import { writeAtomic, idSource } from '../invoices/store.js';
+import { writeAtomic, idSource, sha256 } from '../invoices/store.js';
 import { accountsOf } from '../workspace/reads.js';
 import { setAccountName } from '../workspace/accounts-write.js';
 import { standardAccounts } from '../workspace/chart.js';
@@ -63,7 +63,10 @@ export type CloseOutcome =
 export async function closePayslip(ws: Workspace, write: BooksWriter, employee: string, month: string, opts: { confirm?: boolean; now?: string } = {}): Promise<CloseOutcome> {
   const now = opts.now ?? new Date().toISOString();
   const ctx = payrollContext(ws);
-  const plan: ClosePlan = planClose(ctx, employee, month, chartNumbers(ws));
+  const current = loadBooks(ws);
+  const plan: ClosePlan = planClose(ctx, employee, month, chartNumbers(ws), current);
+  // A closed period is refused before anything is written, the chart included; the write door checks again.
+  closedRefusal(current, plan.booking.date, CLOSED_TEXT);
   if (plan.warnings.length && !opts.confirm) return { closed: false, warnings: plan.warnings };
   const employeeRecord = ctx.store.employees.find((e) => e.id === employee);
   const pdf = await payslipPdf({
@@ -74,19 +77,23 @@ export async function closePayslip(ws: Workspace, write: BooksWriter, employee: 
     ...(plan.draft.text ? { text: plan.draft.text } : {}), at: now,
   }, ctx.data, firmWageTypes(ctx.data, ctx.store));
   const id = () => idSource.bytes(8).toString('hex');
-  const receiptId = id();
+  // Keyed by its content, as the read step keys every file of receipts/: the next run finds this record, never a new one.
+  const receiptId = sha256(pdf).slice(0, 16);
   const filename = `${plan.draft.postingDate.replace(/-/g, '')}-lohnabrechnung-${month}-${employee}.pdf`;
   const receipt = payslipReceipt(plan, receiptId, filename, pdf.length, now);
   const entries = entriesOf(plan, id, receiptId);
   const missingAccounts = plan.warnings.flatMap((w) => (w.key === 'accountMissing' ? [w.account] : []));
-  const result = write((books) => {
-    closedRefusal(books, plan.booking.date, CLOSED_TEXT);
-    applyClose(books, plan, entries, receipt);
-    writeAtomic(receiptFile(ws, books, receipt), pdf);
-    return true;
-  });
+  // The accounts first: they hold no booking, and a close whose books save fails leaves them harmless.
   const accountsAdded = addAccounts(ws, ctx.data, missingAccounts);
-  if (result) appendPayslipEvents(ws, month.slice(0, 4), [closeEventOf(plan, now, receiptId, entries)]);
+  // The file only once the books are saved: a refused save leaves no PDF in receipts/ for the next run to read.
+  const { path, gone } = write((books) => {
+    closedRefusal(books, plan.booking.date, CLOSED_TEXT);
+    const replaced = applyClose(books, plan, entries, receipt);
+    return { path: receiptFile(ws, books, receipt), gone: replaced.map((r) => receiptFile(ws, books, r)) };
+  });
+  appendPayslipEvents(ws, month.slice(0, 4), [closeEventOf(plan, now, receiptId, entries)]);
+  for (const g of gone) if (g !== path && existsSync(g)) rmSync(g);
+  writeAtomic(path, pdf);
   return { closed: true, id: plan.draft.id, ref: plan.booking.ref, entries: entries.map((e) => e.id), receiptId, accountsAdded, warnings: plan.warnings };
 }
 

@@ -8,7 +8,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ClosedPeriodError, loadBooks, PERSON, receiptFile, saveBooks, updateSaved, type Books } from '../src/books/store.js';
+import { ClosedPeriodError, loadBooks, moduleActor, PERSON, receiptFile, saveBooks, updateSaved, type Books } from '../src/books/store.js';
+import { runIntake, storePort } from '../src/intake/pipeline.js';
+import { readStep } from '../src/intake/read.js';
 import { addCorrection, closePayslip, payrollContext, reopenPayslip, type BooksWriter } from '../src/payroll/service.js';
 import { bookingOf } from '../src/payroll/booking.js';
 import { computePayslip } from '../src/payroll/compute.js';
@@ -107,4 +109,64 @@ test('a correction entered before its month is reopened is void once the month c
   await closePayslip(ws, write, 'e1', '2026-09', { confirm: true, now: '2026-10-03T11:00:00.000Z' });
   const oct = computePayslip(payrollContext(ws), 'e1', '2026-10')!;
   assert.equal(oct.lines.filter((l) => l.corrects).length, 0);
+});
+
+test('the next intake read keeps the payslip\'s receipt as it is: its id, its kind, its link, its text without salary', async () => {
+  const { ws, write } = setup([owner({ socialSecurityNumber: ['756', '1234', '5678', '97'].join('.') })]);
+  await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
+  const before = loadBooks(ws).receipts.find((r) => r.kind === 'payslip')!;
+  await runIntake({ ws, books: storePort(ws, moduleActor('intake')), steps: [['read', readStep]] });
+  const after = loadBooks(ws);
+  assert.deepEqual(after.receipts.map((r) => [r.id, r.kind, r.extractedText]), [[before.id, 'payslip', before.extractedText]]);
+  assert.ok(after.mappings.some((m) => m.receiptId === before.id && m.transactionRef === 'LR-2026-09-e1'));
+  assert.ok(after.journalEntries.filter((e) => e.transactionRef === 'LR-2026-09-e1').every((e) => e.receipts?.[0] === before.id));
+});
+
+test('closing again after a reopen names an entry a person changed, and «Trotzdem» replaces it: the ref is booked once', async () => {
+  const { ws, write } = setup();
+  await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
+  write((b) => { const e = b.journalEntries.find((x) => x.transactionRef === 'LR-2026-09-e1')!; e.by = { kind: 'person', at: '2026-10-01T00:00:00Z' }; e.accountDebit = '5001'; });
+  const out = reopenPayslip(ws, write, '2026-09-e1');
+  assert.equal(out.kept.length, 1);
+  const warned = await closePayslip(ws, write, 'e1', '2026-09');
+  assert.equal(warned.closed, false);
+  assert.ok(warned.warnings.some((w) => w.key === 'handEntries'));
+  await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
+  assert.equal(loadBooks(ws).journalEntries.filter((e) => e.transactionRef === 'LR-2026-09-e1').length, 13);
+});
+
+test('a refused save leaves no PDF in receipts/, and entries without their close event are replaced by the next close', async () => {
+  const { ws, write } = setup();
+  const refusing: BooksWriter = <T>(fn: (b: Books) => T) => updateSaved(ws, PERSON, (b) => { fn(b); throw new Error('stale'); });
+  await assert.rejects(closePayslip(ws, refusing, 'e1', '2026-09', { confirm: true }), /stale/);
+  assert.equal(existsSync(join(yearPaths(ws.paths, '2026').receipts, '20260930-lohnabrechnung-2026-09-e1.pdf')), false);
+  // A close whose event was lost after the books were saved: its entries stand, nothing in payslips.jsonl.
+  const lost: BooksWriter = <T>(fn: (b: Books) => T) => { const r = updateSaved(ws, PERSON, fn); throw Object.assign(new Error('crash'), { r }); };
+  await assert.rejects(closePayslip(ws, lost, 'e1', '2026-09', { confirm: true }), /crash/);
+  assert.equal(loadBooks(ws).journalEntries.length, 13);
+  assert.equal(payslipEvents(ws, '2026').length, 0);
+  await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
+  assert.equal(loadBooks(ws).journalEntries.length, 13, 'replaced, not booked twice');
+  assert.equal(payslipEvents(ws, '2026').length, 1);
+});
+
+test('reopening a paid payslip keeps its PDF linked to the payment; closing again hands the link to the new PDF', async () => {
+  const { ws, write } = setup();
+  await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
+  const first = loadBooks(ws).receipts.find((r) => r.kind === 'payslip')!;
+  write((b) => {
+    b.transactions.push({ ref: 'BANK-9', bank: 'Bank', date: '2026-09-25', amount: -8910, currency: 'CHF', direction: 'DBIT', description: 'Lohn' });
+    b.journalEntries.push({ id: 'p1', transactionRef: 'BANK-9', date: '2026-09-25', accountDebit: '1091', accountCredit: '1020', amount: 8910, by: { kind: 'code', check: 'payroll' }, receipts: [first.id] });
+    b.mappings.push({ transactionRef: 'BANK-9', receiptId: first.id, by: 'rule', rule: 'payroll' });
+  });
+  reopenPayslip(ws, write, '2026-09-e1');
+  assert.ok(loadBooks(ws).mappings.some((m) => m.transactionRef === 'BANK-9' && m.receiptId === first.id), 'the payment keeps its proof');
+  savePayroll(ws, firm([owner({ recurring: [{ wageType: 'pauschalspesen', value: [dated('2026-01-01', { amount: 100 })] }] })]));
+  await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
+  const books = loadBooks(ws);
+  const now = books.receipts.filter((r) => r.kind === 'payslip');
+  assert.equal(now.length, 1);
+  assert.notEqual(now[0].id, first.id);
+  assert.ok(books.mappings.some((m) => m.transactionRef === 'BANK-9' && m.receiptId === now[0].id));
+  assert.deepEqual(books.journalEntries.find((e) => e.id === 'p1')?.receipts, [now[0].id]);
 });

@@ -20,7 +20,9 @@ export type CloseWarning =
   | { key: 'missing'; wageType: string; label: string; missing: string }
   | { key: 'earlierOpen'; month: string }
   | { key: 'accountMissing'; account: string }
-  | { key: 'withoutAccount'; wageType: string };
+  | { key: 'withoutAccount'; wageType: string }
+  /** Entries of the payslip's ref a person booked or changed (after a reopening): closing replaces them with the payslip's. */
+  | { key: 'handEntries'; entries: string[] };
 
 export interface ClosePlan {
   draft: PayslipDraft;
@@ -33,7 +35,7 @@ export class PayrollRefusal extends Error {
 }
 
 /** The plan of closing `employee`'s `month`: the draft, the entries it books, what to say first. */
-export function planClose(ctx: PayrollContext, employee: string, month: string, chart: ReadonlySet<string>): ClosePlan {
+export function planClose(ctx: PayrollContext, employee: string, month: string, chart: ReadonlySet<string>, books?: Pick<Books, 'journalEntries'>): ClosePlan {
   if (ctx.history.closed.has(`${month}-${employee}`)) throw new PayrollRefusal('alreadyClosed', `Die Lohnabrechnung ${month} ist schon abgeschlossen.`);
   const draft = computePayslip(ctx, employee, month);
   if (!draft) throw new PayrollRefusal('notFound', `Keine Lohnabrechnung ${month} für ${employee}.`);
@@ -44,6 +46,8 @@ export function planClose(ctx: PayrollContext, employee: string, month: string, 
     ...booking.withoutAccount.map((w) => ({ key: 'withoutAccount' as const, wageType: w })),
     ...[...new Set(booking.postings.flatMap((p) => [p.debit, p.credit]))].filter((a) => !chart.has(a)).sort().map((account) => ({ key: 'accountMissing' as const, account })),
   ];
+  const hand = (books?.journalEntries ?? []).filter((e) => e.transactionRef === booking.ref && !isOwn(e)).map((e) => e.id);
+  if (hand.length) warnings.push({ key: 'handEntries', entries: hand });
   return { draft, booking, warnings };
 }
 
@@ -66,14 +70,29 @@ export function payslipReceipt(plan: Pick<ClosePlan, 'draft'>, id: string, filen
   };
 }
 
-/** Books a plan into `books` (inside the caller's write door): its entries, its receipt and the receipt's link to the ref. */
-export function applyClose(books: Books, plan: ClosePlan, entries: readonly JournalEntry[], receipt: Receipt): void {
-  if (books.journalEntries.some((e) => e.transactionRef === plan.booking.ref && e.by?.kind === 'code' && e.by.check === 'payroll')) {
-    throw new PayrollRefusal('alreadyClosed', `${plan.booking.ref} ist schon gebucht.`);
+const isOwn = (e: JournalEntry) => e.by?.kind === 'code' && e.by.check === 'payroll';
+
+/**
+ * Books a plan into `books` (inside the caller's write door, as the person who confirmed it): every entry
+ * the ref holds goes first (code's own left by a close that never got its event, and a person's the warning
+ * named), then the plan's entries, its receipt and the receipt's link to the ref. An earlier PDF of the same
+ * payslip (kept after a reopening because a payment is linked to it) hands its links to the new one and goes.
+ * Returns the receipts taken out, whose files the caller removes when their name differs.
+ */
+export function applyClose(books: Books, plan: ClosePlan, entries: readonly JournalEntry[], receipt: Receipt): Receipt[] {
+  const ref = plan.booking.ref;
+  books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== ref);
+  const before = books.receipts.filter((r) => r.kind === 'payslip' && r.kindRule === 'payroll' && r.filename === receipt.filename && r.id !== receipt.id);
+  const old = new Set(before.map((r) => r.id));
+  if (old.size) {
+    books.mappings = books.mappings.flatMap((m) => (!old.has(m.receiptId) ? [m] : m.transactionRef === ref ? [] : [{ ...m, receiptId: receipt.id }]));
+    for (const e of books.journalEntries) if (e.receipts?.some((r) => old.has(r))) e.receipts = e.receipts.map((r) => (old.has(r) ? receipt.id : r));
+    books.receipts = books.receipts.filter((r) => !old.has(r.id));
   }
   books.journalEntries.push(...entries);
-  books.receipts.push(receipt);
-  books.mappings.push({ transactionRef: plan.booking.ref, receiptId: receipt.id });
+  if (!books.receipts.some((r) => r.id === receipt.id)) books.receipts.push(receipt);
+  if (!books.mappings.some((m) => m.receiptId === receipt.id && m.transactionRef === ref)) books.mappings.push({ transactionRef: ref, receiptId: receipt.id, by: 'rule', rule: 'payroll' });
+  return before;
 }
 
 /** The close event of a plan (§9.3): the payslip as it stands from now, with what it used and booked. */
@@ -98,20 +117,23 @@ export function assertReopenable(ctx: PayrollContext, id: string): PayslipClose 
 
 /**
  * Takes back what a close booked (inside the caller's write door, as the person): its entries the app
- * booked under the ref, its receipt and link. An entry a person changed since stays hers (`kept`).
+ * booked under the ref and the PDF's link to the ref. An entry a person changed since stays hers (`kept`;
+ * closing again names it and replaces it). The PDF goes from Belege (`receipt`, its file the caller's)
+ * unless a payment is linked to it: then it stays that payment's proof until the next close replaces it.
  */
 export function applyReopen(books: Books, close: PayslipClose): { removed: string[]; kept: string[]; receipt?: Receipt } {
   const ref = payslipRef(close.month, close.employee);
-  const own = (e: JournalEntry) => e.transactionRef === ref && e.by?.kind === 'code' && e.by.check === 'payroll';
+  const own = (e: JournalEntry) => e.transactionRef === ref && isOwn(e);
   const removed = books.journalEntries.filter(own).map((e) => e.id);
   const kept = books.journalEntries.filter((e) => e.transactionRef === ref && !own(e)).map((e) => e.id);
   books.journalEntries = books.journalEntries.filter((e) => !own(e));
+  books.mappings = books.mappings.filter((m) => !(m.receiptId === close.receiptId && m.transactionRef === ref));
   const receipt = books.receipts.find((r) => r.id === close.receiptId);
-  if (receipt) {
+  if (receipt && !books.mappings.some((m) => m.receiptId === receipt.id)) {
     books.receipts = books.receipts.filter((r) => r.id !== receipt.id);
-    books.mappings = books.mappings.filter((m) => m.receiptId !== receipt.id);
+    return { removed, kept, receipt };
   }
-  return { removed, kept, ...(receipt ? { receipt } : {}) };
+  return { removed, kept };
 }
 
 export const reopenEventOf = (close: PayslipClose, now: string): PayslipEvent => ({ event: 'reopen', id: close.id, at: now, by: 'person' });

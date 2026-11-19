@@ -1,7 +1,8 @@
 /**
  * What never reaches a model (docs/specs/payroll.md §11, #508): a social security number, found by the
  * jurisdiction's pattern (payroll.yaml `socialSecurityNumber`), is replaced before every prompt, system
- * text and judged state leaves the app. Without a jurisdiction loaded nothing is known to mask.
+ * text and judged state leaves the app. Without a jurisdiction loaded nothing is known to mask. An image or
+ * a PDF attached to a call is not masked: payroll attaches none (a payslip's receipt is never read again).
  */
 import { payroll } from '../engines/index.js';
 

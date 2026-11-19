@@ -86,7 +86,7 @@ async function extractTextFast(
  * its VAT was declared as booked.
  */
 export const readsAgain = (books: Parameters<typeof filedReceipt>[0], r: Receipt): boolean =>
-  !!r.extractedText && noiseText(r) && !filedReceipt(books, r);
+  r.kind !== 'payslip' && !!r.extractedText && noiseText(r) && !filedReceipt(books, r);
 
 // ─── Concurrency pool ───────────────────────────────────────────────────────
 
