@@ -155,24 +155,54 @@ insurances:
 # 1 January after the birthday of this age (federal key). `pensioner`: past the reference age the base
 # is reduced by an allowance per month (`allowance: <federal key>`), or the line ends (`ends`) from the
 # month after it. `share`: the rate is split between the sides by a firm rate (the employer's share in %).
-# `minHours`: owed only from these weekly hours (federal key).
+# `minHours`: owed only from these weekly hours (federal key). `smallWage`: not owed while the person's base of the
+# year stays at or below this yearly amount (federal key; AHVV Art. 34d), unless she asked to pay (Versicherungen
+# «auf Verlangen beitragspflichtig»); once the year passes it, owed on the whole year's base (the earlier months caught up).
 contributions:
-  - { wageType: ahv-an, insurance: ahv, base: ahv, rate: { federal: ahvEmployee }, liable: liableFromAge, pensioner: { allowance: pensionerAllowance } }
-  - { wageType: alv-an, insurance: ahv, base: alv, rate: { federal: alvEmployee }, ceiling: alvCeiling, liable: liableFromAge, pensioner: ends }
+  - { wageType: ahv-an, insurance: ahv, base: ahv, rate: { federal: ahvEmployee }, liable: liableFromAge, pensioner: { allowance: pensionerAllowance }, smallWage: smallWageLimit }
+  - { wageType: alv-an, insurance: ahv, base: alv, rate: { federal: alvEmployee }, ceiling: alvCeiling, liable: liableFromAge, pensioner: ends, smallWage: smallWageLimit }
   - { wageType: nbu-an, insurance: uvg, base: uvg, rate: { insurance: nbu }, share: { employer: nbuEmployerShare }, ceiling: uvgCeiling, minHours: nbuMinHours }
   - { wageType: uvgz-an, insurance: uvgz, base: uvgz, rate: { insurance: employee } }
   - { wageType: ktg-an, insurance: ktg, base: ktg, rate: { insurance: employee } }
   - { wageType: bvg-an, insurance: bvg, base: bvg, rate: { person: employee } }
   - { wageType: quellensteuer, insurance: qst, base: qst, rate: { insurance: tariff } }
-  - { wageType: ahv-ag, insurance: ahv, base: ahv, rate: { federal: ahvEmployer }, liable: liableFromAge, pensioner: { allowance: pensionerAllowance } }
-  - { wageType: alv-ag, insurance: ahv, base: alv, rate: { federal: alvEmployer }, ceiling: alvCeiling, liable: liableFromAge, pensioner: ends }
+  - { wageType: ahv-ag, insurance: ahv, base: ahv, rate: { federal: ahvEmployer }, liable: liableFromAge, pensioner: { allowance: pensionerAllowance }, smallWage: smallWageLimit }
+  - { wageType: alv-ag, insurance: ahv, base: alv, rate: { federal: alvEmployer }, ceiling: alvCeiling, liable: liableFromAge, pensioner: ends, smallWage: smallWageLimit }
   - { wageType: verwaltungskosten, insurance: ahv, base: { lines: [ahv-an, ahv-ag] }, rate: { insurance: adminCost } }
-  - { wageType: fak-ag, insurance: fak, base: ahv, rate: { insurance: employer }, liable: liableFromAge, pensioner: { allowance: pensionerAllowance } }
+  - { wageType: fak-ag, insurance: fak, base: ahv, rate: { insurance: employer }, liable: liableFromAge, pensioner: { allowance: pensionerAllowance }, smallWage: smallWageLimit }
   - { wageType: bu-ag, insurance: uvg, base: uvg, rate: { insurance: bu }, ceiling: uvgCeiling }
   - { wageType: nbu-ag, insurance: uvg, base: uvg, rate: { insurance: nbu }, share: { employer: nbuEmployerShare }, ceiling: uvgCeiling, minHours: nbuMinHours }
   - { wageType: uvgz-ag, insurance: uvgz, base: uvgz, rate: { insurance: employer } }
   - { wageType: ktg-ag, insurance: ktg, base: ktg, rate: { insurance: employer } }
   - { wageType: bvg-ag, insurance: bvg, base: bvg, rate: { person: employer } }
+
+# Holidays (OR Art. 329a, BGE 129 III 493): holiday days to weeks by the working days of a week; an hourly wage paid
+# with the holidays in it carries the surcharge weeks / (weeksPerYear - weeks): 4/48, 5/47, 6/46, to two decimals.
+# Without holiday days in the Anstellung the legal minimum: 5 weeks up to the 20th birthday, then 4.
+holidays:
+  daysPerWeek: 5
+  weeksPerYear: 52
+  minimum: [{ untilAge: 20, weeks: 5 }, { weeks: 4 }]
+  source: "OR Art. 329a Abs. 1; BGE 129 III 493 (the surcharge shown apart in the contract and on every payslip)"
+
+# The kinds of absence (Mitarbeitende › Abwesenheiten; no diagnosis, docs/specs/payroll.md §11): the Lohnart that
+# takes the absent days' wage off (`loss`), the wage the employer continues beyond the insurer's daily allowance
+# (`wage`, the continued-pay percentage less the allowance), and the daily allowance itself (`allowance`: the
+# insurer's amount per calendar day, from its decision). The allowance of the accident and sick-pay insurers is no
+# AHV wage (AHVV Art. 6 Abs. 2 lit. b), the EO's is (AHVG Art. 19a): the Lohnarten's bases say so.
+absences:
+  illness: { label: { de: Krankheit, fr: Maladie, it: Malattia, en: Illness }, loss: lohnausfall, wage: lohn-krankheit, allowance: taggeld-ktg }
+  accident: { label: { de: Unfall, fr: Accident, it: Infortunio, en: Accident }, loss: lohnausfall, wage: lohn-unfall, allowance: taggeld-uvg }
+  maternity: { label: { de: Mutterschaft, fr: Maternité, it: Maternità, en: Maternity }, loss: lohnausfall, wage: lohnfortzahlung, allowance: taggeld-eo }
+  paternity: { label: { de: Vaterschaft / anderer Elternteil, fr: Paternité / autre parent, it: Paternità / altro genitore, en: Paternity / other parent }, loss: lohnausfall, wage: lohnfortzahlung, allowance: taggeld-eo }
+  military: { label: { de: "Militär, Zivildienst, Zivilschutz", fr: "Service militaire, civil, protection civile", it: "Servizio militare, civile, protezione civile", en: Military or civil service }, loss: lohnausfall, wage: lohnfortzahlung, allowance: taggeld-eo }
+  unpaid: { label: { de: Unbezahlter Urlaub, fr: Congé non payé, it: Congedo non pagato, en: Unpaid leave }, loss: unbezahlter-urlaub, unpaid: true }
+  holiday: { label: { de: Ferien, fr: Vacances, it: Vacanze, en: Holidays }, holiday: true }
+
+# The annual declarations: the first pillar's liable wage is the base of this contribution (a person exempt by age,
+# small wage or a pensioner's allowance shows the difference to her AHV wage, AHVV Art. 34d, 6quater).
+declarations:
+  liable: { contribution: ahv-an, base: ahv }
 
 # Rounding of a line (Stammdaten): 0.05 the default (owner 2026-11-14 decision 13), 0.01 a choice.
 rounding: [0.05, 0.01]
@@ -187,6 +217,13 @@ wageTypes:
   - { key: ueberstunden, group: lohn, label: { de: Überstunden 125 %, fr: Heures supplémentaires 125 %, it: Ore straordinarie 125 %, en: Overtime 125 % }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst], lohnausweis: "1", debit: "5000", credit: "1091", input: quantity, inputs: { quantity: { de: Stunden, fr: Heures, it: Ore, en: Hours }, rate: { de: Ansatz pro Stunde (mit Zuschlag), fr: Taux horaire (majoration comprise), it: Tariffa oraria (supplemento compreso), en: Rate per hour (with the supplement) } } }
   - { key: ferienentschaedigung, group: lohn, label: { de: Ferienentschädigung, fr: Indemnité de vacances, it: Indennità per vacanze, en: Holiday pay }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
   - { key: feiertagsentschaedigung, group: lohn, label: { de: Feiertagsentschädigung, fr: Indemnité de jours fériés, it: Indennità per giorni festivi, en: Public holiday pay }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
+  # Hourly wage (phase B1): the holiday surcharge on the hours of an hourly Anstellung, on its own line (BGE 129 III
+  # 493: 4/48, 5/47, 6/46 by the holiday weeks), and the public-holiday surcharge its contract or GAV names.
+  - { key: ferienzuschlag, group: lohn, computes: holiday, label: { de: Ferienentschädigung (Zuschlag), fr: Indemnité de vacances (supplément), it: Indennità per vacanze (supplemento), en: Holiday surcharge }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
+  - { key: feiertagszuschlag, group: lohn, computes: publicHoliday, label: { de: Feiertagsentschädigung (Zuschlag), fr: Indemnité de jours fériés (supplément), it: Indennità per giorni festivi (supplemento), en: Public holiday surcharge }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
+  # Abwesenheiten (phase B1): the absent days' wage taken off, the wage the employer continues beyond the daily allowance.
+  - { key: lohnausfall, group: lohn, computes: absence, label: { de: Lohnausfall Abwesenheit, fr: Perte de salaire absence, it: Perdita di salario assenza, en: Wage lost to an absence }, sign: "-", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "1091", credit: "5000" }
+  - { key: lohnfortzahlung, group: lohn, label: { de: Lohnfortzahlung, fr: Maintien du salaire, it: Continuazione del pagamento del salario, en: Continued pay }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
   - { key: unbezahlter-urlaub, group: lohn, label: { de: Unbezahlter Urlaub, fr: Congé non payé, it: Congedo non pagato, en: Unpaid leave }, sign: "-", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "1091", credit: "5000" }
   # Zulagen
   - { key: funktionszulage, group: zulagen, label: { de: Funktionszulage, fr: Allocation de fonction, it: Indennità di funzione, en: Function allowance }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
@@ -204,7 +241,9 @@ wageTypes:
   - { key: verpflegung, group: natural, label: { de: Verpflegung, fr: Repas, it: Vitto, en: Meals }, sign: "+", gross: true, cash: false, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "2.1", debit: "5000", credit: "5880" }
   - { key: wohnung, group: natural, label: { de: Unterkunft, fr: Logement, it: Alloggio, en: Housing }, sign: "+", gross: true, cash: false, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "2.3", debit: "5000", credit: "5880" }
   # Ersatzleistungen (phase B1: with the Abwesenheiten)
-  - { key: taggeld-eo, group: ersatz, label: { de: EO-Entschädigung, fr: Allocation APG, it: Indennità IPG, en: EO allowance }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst], lohnausweis: "1", debit: "2271", credit: "1091" }
+  # The EO's allowance is AHV wage (AHVG Art. 19a) but no premium wage of the accident insurance (UVV Art. 115 Abs. 1;
+  # the insurers' wage declarations list EO allowances for military, civil service and maternity as premium-free).
+  - { key: taggeld-eo, group: ersatz, label: { de: EO-Entschädigung, fr: Allocation APG, it: Indennità IPG, en: EO allowance }, sign: "+", gross: true, bases: [ahv, alv, ktg, bvg, qst], lohnausweis: "1", debit: "2271", credit: "1091" }
   - { key: taggeld-uvg, group: ersatz, label: { de: UVG-Taggeld, fr: Indemnité journalière LAA, it: Indennità giornaliera LAINF, en: UVG daily allowance }, sign: "+", gross: true, bases: [qst], lohnausweis: "1", debit: "2273", credit: "1091" }
   - { key: taggeld-ktg, group: ersatz, label: { de: KTG-Taggeld, fr: Indemnité journalière maladie, it: Indennità giornaliera malattia, en: Sick pay allowance }, sign: "+", gross: true, bases: [qst], lohnausweis: "1", debit: "2274", credit: "1091" }
   # Abzüge (employee shares); their accounts are the insurance's liability account
@@ -217,12 +256,15 @@ wageTypes:
   - { key: bvg-einkauf, group: abzuege, label: { de: BVG-Einkauf, fr: Rachat LPP, it: Riscatto LPP, en: BVG buy-in }, sign: "-", bases: [], lohnausweis: "10.2", debit: "1091", credit: { insurance: bvg } }
   # Quellensteuer (computed from phase B2; until then «unvollständig» for a person subject to it)
   - { key: quellensteuer, group: quellensteuer, label: { de: Quellensteuer, fr: Impôt à la source, it: Imposta alla fonte, en: Tax at source }, sign: "-", bases: [], lohnausweis: "12", debit: "1091", credit: { insurance: qst }, computes: contribution }
-  # Familienzulagen: no gross for AHV, counted for the tax at source; paid with the wage, refunded by the FAK
-  - { key: kinderzulage, group: familienzulagen, label: { de: Kinderzulage, fr: Allocation pour enfant, it: Assegno per i figli, en: Child allowance }, sign: "+", bases: [qst], lohnausweis: "1", debit: { insurance: fak }, credit: "1091" }
-  - { key: ausbildungszulage, group: familienzulagen, label: { de: Ausbildungszulage, fr: Allocation de formation, it: Assegno di formazione, en: Education allowance }, sign: "+", bases: [qst], lohnausweis: "1", debit: { insurance: fak }, credit: "1091" }
-  - { key: geburtszulage, group: familienzulagen, label: { de: Geburtszulage, fr: Allocation de naissance, it: Assegno di nascita, en: Birth allowance }, sign: "+", bases: [qst], lohnausweis: "3", debit: { insurance: fak }, credit: "1091" }
+  # Familienzulagen: no gross for AHV, counted for the tax at source; paid with the wage, refunded by the FAK. A child's
+  # allowance is the FAK's decision (Mitarbeitende › Kinder); `allowance.minimum` the federal minimum it is checked
+  # against (FamZG Art. 5), `untilAge` the age after whose month the payslip says the allowance ends (a fact, the FAK
+  # decides); `once`: paid in the month its entry begins.
+  - { key: kinderzulage, group: familienzulagen, allowance: { minimum: childAllowanceMin, untilAge: 16 }, label: { de: Kinderzulage, fr: Allocation pour enfant, it: Assegno per i figli, en: Child allowance }, sign: "+", bases: [qst], lohnausweis: "1", debit: { insurance: fak }, credit: "1091" }
+  - { key: ausbildungszulage, group: familienzulagen, allowance: { minimum: educationAllowanceMin, untilAge: 25 }, label: { de: Ausbildungszulage, fr: Allocation de formation, it: Assegno di formazione, en: Education allowance }, sign: "+", bases: [qst], lohnausweis: "1", debit: { insurance: fak }, credit: "1091" }
+  - { key: geburtszulage, group: familienzulagen, once: true, label: { de: Geburtszulage, fr: Allocation de naissance, it: Assegno di nascita, en: Birth allowance }, sign: "+", bases: [qst], lohnausweis: "3", debit: { insurance: fak }, credit: "1091" }
   # Spesen: outside the gross
-  - { key: spesen-reise, group: spesen, label: { de: Reise-, Verpflegungs- und Übernachtungsspesen, fr: Frais de voyage, de repas et de nuitée, it: Spese di viaggio, vitto e alloggio, en: Travel, meal and lodging expenses }, sign: "+", bases: [], lohnausweis: "13.1.1", debit: "5820", credit: "1091" }
+  - { key: spesen-reise, group: spesen, label: { de: "Reise-, Verpflegungs- und Übernachtungsspesen", fr: "Frais de voyage, de repas et de nuitée", it: "Spese di viaggio, vitto e alloggio", en: "Travel, meal and lodging expenses" }, sign: "+", bases: [], lohnausweis: "13.1.1", debit: "5820", credit: "1091" }
   - { key: spesen-effektiv, group: spesen, label: { de: Übrige effektive Spesen, fr: Autres frais effectifs, it: Altre spese effettive, en: Other actual expenses }, sign: "+", bases: [], lohnausweis: "13.1.2", debit: "5820", credit: "1091" }
   - { key: pauschalspesen-repraesentation, group: spesen, label: { de: Pauschalspesen Repräsentation, fr: Frais forfaitaires de représentation, it: Spese forfettarie di rappresentanza, en: Flat entertainment expenses }, sign: "+", bases: [], lohnausweis: "13.2.1", debit: "5830", credit: "1091" }
   - { key: pauschalspesen-auto, group: spesen, label: { de: Pauschalspesen Auto, fr: Frais forfaitaires de voiture, it: Spese forfettarie auto, en: Flat car expenses }, sign: "+", bases: [], lohnausweis: "13.2.2", debit: "5830", credit: "1091" }
@@ -283,6 +325,8 @@ documents:
   missing: { de: unvollständig, fr: incomplet, it: incompleto, en: incomplete }
   employer: { de: Arbeitgeberbeiträge (zur Information), fr: Cotisations de l'employeur (pour information), it: Contributi del datore di lavoro (per informazione), en: Employer contributions (for information) }
   mailBody: { de: "Guten Tag\n\nIm Anhang die Lohnabrechnung {month}. Das PDF ist mit Ihrem Passwort geschützt.\n\nFreundliche Grüsse\n{firm}", fr: "Bonjour\n\nVous trouverez ci-joint le décompte de salaire {month}. Le PDF est protégé par votre mot de passe.\n\nMeilleures salutations\n{firm}", it: "Buongiorno\n\nIn allegato il conteggio dello stipendio {month}. Il PDF è protetto dalla sua password.\n\nCordiali saluti\n{firm}", en: "Hello\n\nAttached is your payslip for {month}. The PDF is protected with your password.\n\nKind regards\n{firm}" }
+  holidaysMinimum: { de: "ohne Ferientage im Vertrag: gesetzliches Minimum {weeks} Wochen (OR Art. 329a)", fr: "sans jours de vacances au contrat : minimum légal {weeks} semaines (CO art. 329a)", it: "senza giorni di vacanza nel contratto: minimo legale {weeks} settimane (CO art. 329a)", en: "no holiday days in the contract: the legal minimum of {weeks} weeks (OR Art. 329a)" }
+  holidays: { de: "Ferien: Saldo {balance} Tage (Anspruch bis Monatsende {earned}, bezogen {taken})", fr: "Vacances : solde {balance} jours (droit à la fin du mois {earned}, pris {taken})", it: "Vacanze: saldo {balance} giorni (diritto a fine mese {earned}, godute {taken})", en: "Holidays: balance {balance} days (earned by the month's end {earned}, taken {taken})" }
   # What a payslip and a Lohnausweis are computed from, said neutrally: the owner who runs the payroll himself
   # reads it as well as a fiduciary (docs/specs/payroll.md §22 decision 47). {year}: the year of the federal figures.
   disclaimer: { de: "Berechnet aus den erfassten Sätzen und den Bundeswerten {year}.", fr: "Calculé à partir des taux saisis et des valeurs fédérales {year}.", it: "Calcolato dalle aliquote registrate e dai valori federali {year}.", en: "Computed from the rates entered and the federal figures {year}." }

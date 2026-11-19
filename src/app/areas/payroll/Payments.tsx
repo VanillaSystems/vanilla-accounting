@@ -3,7 +3,7 @@
  * payout, purpose «Lohn MM/YYYY», value date), each «bezahlt» with the bank line that paid it once the
  * statement brought it and code booked it (never a click); and per insurer of the month's year what the
  * payslips accrued, what was paid, what is open, with the final statement (Schlussabrechnung) the person
- * enters off the insurer's statement. The person pays in e-banking; no payment file in B0 (§21 decision 5).
+ * enters off the insurer's statement. The person pays in e-banking, from the payment file of the month (pain.001, B1).
  */
 import { useEffect, useState, type FormEvent } from 'react';
 import { localToday } from '../../../accounting/periods.js';
@@ -17,11 +17,12 @@ import { ListHead } from '../../shell/ListHead.js';
 import type { JournalEntry } from '../../../types/index.js';
 import type { SettlementCompare } from '../../../payroll/insurers.js';
 import type { AreaProps, Nav } from '../index.js';
-import { payrollApi, reloadPayroll, urls, usePayroll, type InsurerRow, type Insurers, type PaymentRow, type Payments } from './data.js';
+import { files, payrollApi, reloadPayroll, urls, usePayroll, type InsurerRow, type Insurers, type PaymentRow, type Payments } from './data.js';
 import { at, Go, inPeriodOf, MonthSwitch, payslipAt, Tabs, useRefusal, type PayrollRoute } from './common.js';
 import { round2 } from '../../../payroll/money.js';
 import { Fields, numberOf, type Form } from './Dated.js';
-import { kindLabel, monthText } from './words.js';
+import { kindLabel, localWhen, monthText } from './words.js';
+import type { PaymentFileRecord } from '../../../payroll/payment-file.js';
 
 type Props = AreaProps<PayrollRoute>;
 
@@ -54,6 +55,8 @@ export function PaymentList(props: Props) {
   const first = listedPayments.ids[0];
   useEffect(() => { if (!selected && first) nav.select(routeOfSelection(month, first)); }, [selected, first, month]);
   const paid = rows.filter((r) => r.paid).length;
+  /** The latest payment file made with this payslip. */
+  const madeOf = (id: string) => (load.state === 'ready' ? load.data.file.made.filter((m) => m.payslips.includes(id)).at(-1) : undefined);
   const total = Math.round(rows.reduce((s, r) => s + r.payout, 0) * 100) / 100;
   const pick = (id: string) => nav.select(routeOfSelection(month, id));
   return (
@@ -72,12 +75,13 @@ export function PaymentList(props: Props) {
                     return (
                       <div key={r.id} className={`row slip ppay${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={r.id} onClick={() => pick(r.employee)}>
                         <span className={`d pstate ${r.paid ? 'closed' : 'draft'}`}>{t(r.paid ? 'payroll.payments.paid' : 'payroll.payments.unpaid')}</span>
-                        <span className="t">{r.name}<small className="mono">{iban(r.iban) || t('payroll.payments.noIban')}</small></span>
+                        <span className="t">{r.name}<small className="mono">{iban(r.iban) || t('payroll.payments.noIban')}</small>{madeOf(r.id) ? <small data-testid="file-made">{t('payroll.payfile.rowMade', localWhen(madeOf(r.id)!.at))}</small> : null}</span>
                         <span className="a mono">{fmt(r.payout)}{r.difference ? <small className="pdiff" data-tip={t('payroll.payments.differenceTip', { difference: fmt(r.difference), account: r.account ?? '' })}>{t('payroll.payments.differenceShort', { difference: fmt(r.difference) })}</small> : null}</span>
                       </div>
                     );
                   })}
                 </div>
+                <PaymentFile month={month} plan={load.data.file} nav={nav} />
               </>
             )}
             <h3 className="plabel">{t('payroll.insurers.title', { year })}</h3>
@@ -99,6 +103,59 @@ export function PaymentList(props: Props) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * «Zahlungsdatei»: the month's payouts not paid yet as a file for e-banking (pain.001), from the firm's chosen
+ * account; the payouts it leaves out are named with why. «bezahlt» still comes only from the bank statement.
+ */
+function PaymentFile({ month, plan, nav }: { month: string; plan: Payments['file']; nav: Nav }) {
+  const [account, setAccount] = useState(plan.accounts[0]?.account ?? '');
+  const [earlier, setEarlier] = useState<PaymentFileRecord[] | null>(null);
+  const refusal = useRefusal();
+  if (!plan.included.length && !plan.left.some((l) => l.why !== 'paid') && !plan.made.length) return null;
+  const total = Math.round(plan.included.reduce((s, p) => s + p.amount, 0) * 100) / 100;
+  const make = async (confirm: boolean) => {
+    try {
+      const r = await payrollApi.makePaymentFile(month, { account, confirm });
+      if (!r.made) { setEarlier(r.earlier); return; }
+      setEarlier(null); refusal.clear();
+      // The kept file, downloaded as the browser saves any file.
+      const a = document.createElement('a');
+      a.href = r.url; a.download = ''; document.body.appendChild(a); a.click(); a.remove();
+      nav.toast(t('payroll.payfile.made'));
+      await reloadPayroll();
+    } catch (e) { refusal.refuse(e); }
+  };
+  const whyKey = { paid: 'payroll.payfile.leftPaid', noIban: 'payroll.payfile.leftNoIban', referenceIban: 'payroll.payfile.leftReferenceIban', foreignIban: 'payroll.payfile.leftForeign' } as const;
+  return (
+    <div className="psec ppayfile" data-testid="payment-file">
+      <h3>{t('payroll.payfile.title')}</h3>
+      {!plan.accounts.length ? <p className="warnline">{t('payroll.payfile.noAccount')}</p> : !plan.included.length ? null : (
+        <>
+          <p className="m">{t('payroll.payfile.lead', { n: plan.included.length, amount: fmt(total), date: formatDate(plan.executionDate) })}</p>
+          {plan.accounts.length > 1 ? (
+            <label className="pswitch">{t('payroll.payfile.from')} <select value={account} onChange={(e) => setAccount(e.target.value)}>{plan.accounts.map((a) => <option key={a.account} value={a.account}>{a.account} {a.label}</option>)}</select></label>
+          ) : <p className="m">{t('payroll.payfile.fromOne', { account: `${plan.accounts[0].account} ${plan.accounts[0].label}`, iban: iban(plan.accounts[0].iban) })}</p>}
+          {earlier ? (
+            <div className="pcard warnpanel" role="alert" data-testid="payment-file-again">
+              <h4>{t('payroll.payfile.againTitle')}</h4>
+              <ul>{earlier.map((m) => <li key={m.id}>{t('payroll.payfile.madeOn', { ...localWhen(m.at), amount: fmt(m.total), n: m.payslips.length })}</li>)}</ul>
+              <p className="m">{t('payroll.payfile.againRule')}</p>
+              <div className="acts">
+                <AsyncButton type="button" className="btn primary" onClick={() => make(true)}>{t('payroll.payfile.again')}</AsyncButton>
+                <button type="button" className="btn ghost" onClick={() => setEarlier(null)}>{t('payroll.close.back')}</button>
+              </div>
+            </div>
+          ) : <div className="acts"><AsyncButton type="button" className="btn" onClick={() => make(false)}>{t('payroll.payfile.download')}</AsyncButton></div>}
+          {refusal.node}
+        </>
+      )}
+      {plan.made.length ? <ul className="plain" data-testid="payment-files-made">{plan.made.map((m) => <li key={m.id} className="m">{t('payroll.payfile.madeOn', { ...localWhen(m.at), amount: fmt(m.total), n: m.payslips.length })} · <a className="clink" href={files.paymentFileMade(month, m.id)} download>{t('payroll.payfile.downloadAgain')}</a></li>)}</ul> : null}
+      {plan.left.length ? <ul className="plain">{plan.left.map((l) => <li key={l.id} className="m">{t(whyKey[l.why], { name: l.name })}</li>)}</ul> : null}
+      <p className="m">{t('payroll.payfile.status')}</p>
     </div>
   );
 }

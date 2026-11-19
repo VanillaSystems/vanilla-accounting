@@ -38,7 +38,7 @@ export const INVOICE_STATUSES = ['draft', 'open', 'overdue', 'partly-paid', 'pai
 export const PAYROLL_SECTIONS = ['company', 'insurances', 'wage-types', 'accounts'] as const;
 export type PayrollSection = typeof PAYROLL_SECTIONS[number];
 /** Löhne › Dokumente: the firm's documents of a year beside each person's Lohnausweis (a person's id never is one of these). */
-export const PAYROLL_DOCUMENTS = ['lohnkonto', 'declarations', 'journal'] as const;
+export const PAYROLL_DOCUMENTS = ['lohnkonto', 'declarations', 'family', 'pension', 'journal'] as const;
 export type PayrollDocument = typeof PAYROLL_DOCUMENTS[number];
 export type InvoiceStatus = typeof INVOICE_STATUSES[number];
 

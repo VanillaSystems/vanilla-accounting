@@ -182,3 +182,18 @@
 [data-area="payroll"] .setupcard .setupitem { display: contents; }
 [data-area="payroll"] .setupcard .setupitem > b { grid-column: 1 / -1; font-size: 13px; }
 [data-area="payroll"] .setupcard .inshead { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+/* B1: Kinder, Abwesenheiten, Nachzahlung, Zahlungsdatei, Familienzulagen, Vorsorge */
+[data-area="payroll"] .psub > .m { color: var(--muted); font-size: 12.5px; margin: 8px 0 0; }
+[data-area="payroll"] .psub > .btn { margin-top: 8px; }
+[data-area="payroll"] .pchild { display: flex; flex-direction: column; }
+[data-area="payroll"] .pchild > .quiet2 { align-self: flex-end; margin: -4px 0 4px; }
+[data-area="payroll"] .pabsences { margin: 6px 0 0; padding: 0; }
+[data-area="payroll"] .pabsences li { padding: 7px 0; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+[data-area="payroll"] .pabsences li .m { color: var(--muted); font-size: 12.5px; }
+[data-area="payroll"] .ppayfile { margin: 14px 16px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; }
+[data-area="payroll"] .ppayfile h3 { margin-top: 0; }
+[data-area="payroll"] .ppayfile .acts { margin: 8px 0; }
+[data-area="payroll"] .ppayfile select { margin-left: 6px; }
+[data-area="payroll"] .pform > .m.wide { color: var(--muted); font-size: 12.5px; margin: 0; }
+[data-area="payroll"] .ppayfile a.btn { text-decoration: none; display: inline-block; }
+[data-area="payroll"] .pfamily .pscroll, [data-area="payroll"] .ppension .pscroll { margin-bottom: 14px; }

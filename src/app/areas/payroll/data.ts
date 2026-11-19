@@ -12,7 +12,8 @@ import type { CloseWarning } from '../../../payroll/close.js';
 import type { MonthLine, PayslipCorrection } from '../../../payroll/model.js';
 import type { PaymentRow } from '../../../payroll/payments.js';
 import type { InsurerRow as InsurerFigures, SettlementCompare } from '../../../payroll/insurers.js';
-import type { DeclarationRow, Lohnkonto, LohnausweisData } from '../../../payroll/documents.js';
+import type { FamilyAllowanceStatement, PensionWageRow, DeclarationRow, Lohnkonto, LohnausweisData } from '../../../payroll/documents.js';
+import type { PaymentFilePlan, PaymentFileRecord } from '../../../payroll/payment-file.js';
 import type { LohnausweisSnapshot, PayslipMail, PayslipSent } from '../../../payroll/service.js';
 import type { SetupCard } from '../../../payroll/setup-documents.js';
 import type { KeptItem } from '../../../payroll/settings.js';
@@ -83,10 +84,13 @@ export const files = {
   lohnausweisCsv: (year: string) => `/payroll/documents/${year}/lohnausweis.csv`,
   lohnkontoCsv: (year: string, employee?: string) => `/payroll/documents/${year}/lohnkonto.csv${employee ? `?employee=${encodeURIComponent(employee)}` : ''}`,
   declarationsCsv: (year: string) => `/payroll/documents/${year}/declarations.csv`,
+  familyCsv: (year: string) => `/payroll/documents/${year}/family.csv`,
+  pensionCsv: (year: string) => `/payroll/documents/${year}/pension.csv`,
+  paymentFileMade: (month: string, id: string) => `/payroll/payments/${month}/payment-files/${id}.xml`,
   journalCsv: (month: string) => `/payroll/documents/journal/${month}.csv`,
 };
 
-export interface Payments { month: string; rows: PaymentRow[] }
+export interface Payments { month: string; rows: PaymentRow[]; file: PaymentFilePlan }
 /** An insurer's figures, and the way its uncovered payments are booked when the company keeps one («Immer so», §22 decision 126). */
 export type InsurerRow = InsurerFigures & { kept?: { business: string; path: string; source?: string } };
 export interface Insurers { year: string; rows: InsurerRow[] }
@@ -98,6 +102,8 @@ export interface Documents {
   issued: Issued[];
   declarations: DeclarationRow[];
   lohnkonto: Lohnkonto;
+  family: FamilyAllowanceStatement & { account?: InsurerRow };
+  pension: PensionWageRow[];
   copyToTaxOffice: boolean;
 }
 
@@ -134,6 +140,11 @@ export const payrollApi = {
   readSetupCard: (receipt: string) => request<{ cards: SetupCard[] }>('POST', `/api/payroll/setup-cards/${encodeURIComponent(receipt)}/read`),
   dismissSetupCard: (receipt: string) => request<{ cards: SetupCard[] }>('POST', `/api/payroll/setup-cards/${encodeURIComponent(receipt)}/dismiss`),
   keepSetupCard: (receipt: string, items: KeptItem[], backdated?: Backdated) => request<Saved<{ insurances: string[]; persons: string[] }>>('POST', `/api/payroll/setup-cards/${encodeURIComponent(receipt)}/keep`, { items, ...(backdated ? { backdated } : {}) }),
+  makePaymentFile: (month: string, body: { account?: string; confirm?: boolean }) => request<{ made: true; record: PaymentFileRecord; url: string } | { made: false; earlier: PaymentFileRecord[] }>('POST', `/api/payroll/payments/${month}/payment-file`, body),
+  addChild: (employee: string, body: Record<string, unknown>, backdated?: Backdated) => request<Saved<{ id: string }>>('POST', `/api/payroll/employees/${encodeURIComponent(employee)}/children`, { ...body, ...(backdated ? { backdated } : {}) }),
+  removeChild: (employee: string, child: string, backdated?: Backdated) => request<Saved>('DELETE', `/api/payroll/employees/${encodeURIComponent(employee)}/children/${encodeURIComponent(child)}`, backdated ? { backdated } : undefined),
+  addAbsence: (employee: string, body: Record<string, unknown>, backdated?: Backdated) => request<Saved<{ id: string }>>('POST', `/api/payroll/employees/${encodeURIComponent(employee)}/absences`, { ...body, ...(backdated ? { backdated } : {}) }),
+  removeAbsence: (employee: string, absence: string, backdated?: Backdated) => request<Saved>('DELETE', `/api/payroll/employees/${encodeURIComponent(employee)}/absences/${encodeURIComponent(absence)}`, backdated ? { backdated } : undefined),
   mailPassword: (employee: string, body: { password?: string; confirm?: boolean }) => request<{ password?: string; warn?: 'birthDate' }>('POST', `/api/payroll/employees/${encodeURIComponent(employee)}/mail-password`, body),
 };
 

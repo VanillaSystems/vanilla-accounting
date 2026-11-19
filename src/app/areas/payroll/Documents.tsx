@@ -77,6 +77,8 @@ export function DocumentList(props: Props) {
             <div className="rows" role="listbox" aria-label={t('payroll.docs.firm')}>
               {row('lohnkonto', null, t('payroll.docs.lohnkonto'), t('payroll.docs.lohnkontoSub'), fmt(d.lohnkonto.totals.gross.total))}
               {row('declarations', null, t('payroll.docs.declarations'), t('payroll.docs.declarationsSub'), String(d.declarations.length))}
+              {row('family', null, t('payroll.docs.family'), t('payroll.docs.familySub'), fmt(d.family.totals.allowances))}
+              {row('pension', null, t('payroll.docs.pension'), t('payroll.docs.pensionSub'), String(d.pension.length))}
               {row('journal', null, t('payroll.docs.journal'), t('payroll.docs.journalSub'), '')}
             </div>
           </>
@@ -103,6 +105,8 @@ export function DocumentDetail(props: Props) {
   if (doc === 'lohnkonto') return <LohnkontoView d={d} labels={labels} />;
   if (doc === 'declarations') return <DeclarationsView d={d} nav={props.nav} />;
   if (doc === 'journal') return <JournalView d={d} />;
+  if (doc === 'family') return <FamilyView d={d} nav={props.nav} />;
+  if (doc === 'pension') return <PensionView d={d} nav={props.nav} />;
   const person = d.people.find((p) => p.employee === doc);
   if (!person || isDocument(doc)) return <div className="detail-empty"><div>{t('payroll.docs.gone', { year })}</div></div>;
   return <LohnausweisView key={`${year}-${doc}`} {...props} d={d} person={person} labels={labels} />;
@@ -314,6 +318,16 @@ function DeclarationsView({ d, nav }: { d: Documents; nav: Nav }) {
             </table>
           </div>
         )}
+        {d.declarations.some((r) => r.exempt) ? (
+          <div className="psec" data-testid="exempt">
+            <h3>{t('payroll.docs.exemptTitle')}</h3>
+            <ul className="plain">
+              {d.declarations.filter((r) => r.exempt).map((r) => (
+                <li key={r.employee}><Go nav={nav} loc={employeeAt(r.employee)}>{r.name}</Go> · {t(`payroll.docs.exempt.${r.exempt!.reason}`, { amount: fmt(r.exempt!.amount), liable: fmt(r.exempt!.liable) })}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <p className="m">{t('payroll.docs.declarationsText')}</p>
         <p className="plinks"><FileLink href={files.declarationsCsv(d.year)}>{t('payroll.docs.declarationsCsv')}</FileLink></p>
       </div>
@@ -334,6 +348,70 @@ function JournalView({ d }: { d: Documents }) {
             {ms.map((m) => <li key={m}><FileLink href={files.journalCsv(m)}>{t('payroll.docs.journalCsv', { month: monthText(m) })}</FileLink></li>)}
           </ul>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** The family allowances paid with the wage, per person and child by month, against the fund's contributions and its account (§5.6). */
+function FamilyView({ d, nav }: { d: Documents; nav: Nav }) {
+  const f = d.family;
+  const ms = MONTHS(d.year).map((m, i) => ({ m, i })).filter(({ i }) => f.rows.some((r) => r.children.some((c) => c.months[i] !== 0)));
+  const differs = f.account && Math.round((f.account.accrued - f.totals.balance) * 100) !== 0;
+  return (
+    <div className="detail-in pfamily" data-testid="family">
+      <Head title={t('payroll.docs.family')} lead={t('payroll.docs.familyLead', { year: d.year })} amount={f.totals.allowances} />
+      <div className="docbody wide">
+        {!f.rows.length ? <p className="m">{t('payroll.docs.familyNone', { year: d.year })}</p> : (
+          <div className="pscroll">
+            <table className="ptable" aria-label={t('payroll.docs.family')}>
+              <thead><tr><th>{t('payroll.col.person')}</th><th>{t('payroll.docs.child')}</th>{ms.map(({ m }) => <th key={m} className="r">{monthShort(m)}</th>)}<th className="r">{t('common.total')}</th></tr></thead>
+              <tbody>
+                {f.rows.flatMap((r) => r.children.map((c) => (
+                  <tr key={`${r.employee}|${c.child}|${c.wageType}`}><td><Go nav={nav} loc={employeeAt(r.employee)}>{r.name}</Go></td><td>{c.child} · {c.label}</td>{ms.map(({ i }) => <td key={i} className="r mono">{c.months[i] ? fmt(c.months[i]) : ''}</td>)}<td className="r mono">{fmt(c.total)}</td></tr>
+                )))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <dl className="pkv">
+          <dt>{t('payroll.docs.familyContributions')}</dt><dd className="mono">{fmt(f.totals.contributions)}</dd>
+          <dt>{t('payroll.docs.familyAllowances')}</dt><dd className="mono">−{fmt(f.totals.allowances)}</dd>
+          <dt>{t('payroll.docs.familyBalance')}</dt><dd className="mono">{fmt(f.totals.balance)}</dd>
+          {f.account ? <><dt>{t('payroll.docs.familyAccount', { account: f.account.account })}</dt><dd className="mono">{fmt(f.account.accrued)}</dd></> : null}
+        </dl>
+        {f.account ? <p className={differs ? 'warnline' : 'm'} data-testid="family-agrees">{t(differs ? 'payroll.docs.familyDiffers' : 'payroll.docs.familyAgrees', { account: f.account.account, paid: fmt(f.account.paid), open: fmt(f.account.open) })}</p> : null}
+        <p className="m">{t('payroll.docs.familyText')}</p>
+        <p className="plinks"><FileLink href={files.familyCsv(d.year)}>{t('payroll.docs.familyCsv')}</FileLink></p>
+      </div>
+    </div>
+  );
+}
+
+/** The pension fund's expected wages: the wage of January (or the entry) × 12, with a 13th; below the entry threshold said. */
+function PensionView({ d, nav }: { d: Documents; nav: Nav }) {
+  return (
+    <div className="detail-in ppension" data-testid="pension">
+      <Head title={t('payroll.docs.pension')} lead={t('payroll.docs.pensionLead', { year: d.year })} />
+      <div className="docbody wide">
+        {!d.pension.length ? <p className="m">{t('payroll.docs.lohnkontoNone', { year: d.year })}</p> : (
+          <div className="pscroll">
+            <table className="ptable" aria-label={t('payroll.docs.pension')}>
+              <thead><tr><th>{t('payroll.col.person')}</th><th>{t('payroll.docs.pensionOn')}</th><th className="r">{t('payroll.docs.pensionMonthly')}</th><th className="r">{t('payroll.docs.pensionYearly')}</th><th>{t('payroll.docs.pensionNote')}</th></tr></thead>
+              <tbody>
+                {d.pension.map((r) => (
+                  <tr key={r.employee}>
+                    <td><Go nav={nav} loc={employeeAt(r.employee)}>{r.name}</Go></td><td>{formatDate(r.on)}</td>
+                    <td className="r mono">{r.monthly !== undefined ? fmt(r.monthly) : ''}</td><td className="r mono">{r.yearly !== undefined ? fmt(r.yearly) : ''}</td>
+                    <td className="m">{r.yearly === undefined ? t('payroll.docs.pensionHourly') : r.belowThreshold !== undefined ? t('payroll.docs.pensionBelow', { amount: fmt(r.belowThreshold) }) : r.insured ? '' : t('payroll.docs.pensionNotInsured')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <p className="m">{t('payroll.docs.pensionText')}</p>
+        <p className="plinks"><FileLink href={files.pensionCsv(d.year)}>{t('payroll.docs.pensionCsv')}</FileLink></p>
       </div>
     </div>
   );

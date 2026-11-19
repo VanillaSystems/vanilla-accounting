@@ -16,6 +16,8 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
   const add = (file: string, path: string, message: string) => problems.push({ file, path, message });
   const labels = (file: string, path: string, l: Labels | undefined) => {
     for (const lang of LANGUAGES) if (typeof l?.[lang] !== 'string' || !l[lang].trim()) add(file, path, `label without ${lang}`);
+    // A comma in an unquoted flow mapping splits the label into keys of its own: quote it.
+    for (const k of Object.keys(l ?? {})) if (!(LANGUAGES as readonly string[]).includes(k)) add(file, path, `"${k}" is no language: a label with a comma is quoted`);
   };
   const F = 'payroll.yaml';
   const groups = new Set(p.groups.map((g) => g.key));
@@ -97,6 +99,22 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
     if (c.share && kind && !kind.rates?.[c.share.employer]) add(F, `${at}.share`, `insurance "${c.insurance}" states no rate "${c.share.employer}"`);
   });
   for (const w of p.wageTypes) if (w.computes === 'contribution' && !computed.has(w.key)) add(F, `wageTypes.${w.key}`, 'marked computes: contribution, but no contribution computes it');
+  for (const one of ['monthly', 'thirteenth', 'holiday', 'publicHoliday'] as const) if (p.wageTypes.filter((w) => w.computes === one).length > 1) add(F, 'wageTypes', `at most one Lohnart computes ${one}`);
+  for (const [k, a] of Object.entries(p.absences ?? {})) {
+    labels(F, `absences.${k}.label`, a.label);
+    for (const role of ['loss', 'wage', 'allowance'] as const) {
+      const key = a[role];
+      if (key !== undefined && !keys.has(key)) add(F, `absences.${k}.${role}`, `Lohnart "${key}" does not exist`);
+    }
+    if (a.holiday && (a.loss || a.wage || a.allowance)) add(F, `absences.${k}`, 'holidays taken book no line');
+  }
+  if (p.holidays) {
+    if (!(p.holidays.daysPerWeek > 0) || !(p.holidays.weeksPerYear > 0)) add(F, 'holidays', 'daysPerWeek and weeksPerYear are positive');
+    if (!p.holidays.minimum?.some((r) => r.untilAge === undefined)) add(F, 'holidays.minimum', 'a row without untilAge holds for every age');
+  }
+  const liable = p.declarations?.liable;
+  if (liable && !p.contributions.some((c) => c.wageType === liable.contribution)) add(F, 'declarations.liable.contribution', `"${liable.contribution}" is no contribution`);
+  if (liable && !bases.has(liable.base)) add(F, 'declarations.liable.base', `base "${liable.base}" does not exist`);
   for (const r of p.rounding) if (!(r > 0)) add(F, 'rounding', `${r} is no step`);
 
   for (const [k, ins] of Object.entries(p.insurances)) {
@@ -104,10 +122,11 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
   }
   if (p.bases.filter((b) => b.thirteenth).length > 1) add(F, 'bases', 'at most one base is the 13th salary\'s');
   const federal = new Set(p.contributions.flatMap((c) => [
-    ...('federal' in c.rate ? [c.rate.federal] : []), c.ceiling, c.liable, c.minHours,
+    ...('federal' in c.rate ? [c.rate.federal] : []), c.ceiling, c.liable, c.minHours, c.smallWage,
     ...(typeof c.pensioner === 'object' ? [c.pensioner.allowance] : []),
   ]).filter((k): k is string => !!k));
   for (const ins of Object.values(p.insurances)) if (ins.requiredAbove) federal.add(ins.requiredAbove.figure);
+  for (const w of p.wageTypes) if (w.allowance?.minimum) federal.add(w.allowance.minimum);
   for (const [year, y] of Object.entries(j.payrollYears ?? {})) {
     const file = `payroll/${year}.yaml`;
     if (String(y.year) !== year) add(file, 'year', `says ${y.year}`);

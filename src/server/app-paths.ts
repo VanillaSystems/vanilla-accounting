@@ -5,8 +5,8 @@
  */
 const API_PREFIXES = ['/api', '/scan', '/books.json', '/modules.json'];
 const FILE = /\.[A-Za-z0-9]+$/;
-/** A file of the books: a receipt, a statement, an invoice PDF, a closed payslip's PDF, a payroll document. */
-const BOOKS_FILE = '^/(receipts|bank-statements|invoices|payroll/payslips|payroll/documents)/[^?]*\\.[A-Za-z0-9]+(\\?|$)';
+/** A file of the books: a receipt, a statement, an invoice PDF, a closed payslip's PDF, a payroll document, a month's payment file. */
+const BOOKS_FILE = '^/(receipts|bank-statements|invoices|payroll/payslips|payroll/documents|payroll/payments)/[^?]*\\.[A-Za-z0-9]+(\\?|$)';
 
 export function isAppPath(path: string): boolean {
   return !API_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`)) && !FILE.test(path);

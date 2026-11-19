@@ -116,6 +116,9 @@ function Company({ v, nav, canEdit }: Props & { v: SettingsView }) {
       <DatedField label={t('payroll.company.thirteenth')} path="company/thirteenth" history={c.thirteenth}
         spec={selectSpec(t('payroll.company.thirteenth'), [['twelfth', t('payroll.company.twelfth')], ['percent', t('payroll.company.percent')]] as const)} {...common}
         note={!c.thirteenth.length ? t('payroll.company.default', { value: t('payroll.company.twelfth') }) : undefined} />
+      <DatedField label={t('payroll.company.holidayBasis')} path="company/holidayBasis" history={c.holidayBasis}
+        spec={selectSpec(t('payroll.company.holidayBasis'), [['wage', t('payroll.company.holidayWage')], ['wage-with-surcharge', t('payroll.company.holidayWithSurcharge')]] as const)} {...common}
+        note={!c.holidayBasis?.length ? t('payroll.company.default', { value: t('payroll.company.holidayWage') }) : t('payroll.company.holidayBasisNote')} />
     </>
   );
 }
