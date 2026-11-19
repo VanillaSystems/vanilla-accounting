@@ -2,7 +2,7 @@
  * What every route shares: the books through src/books/store.ts, golden rule 1's refusals,
  * request errors, and where the receipt PDFs live.
  */
-import { setMaskPeople } from '../llm/mask.js';
+import { setPayrollPeople } from '../booking/kept-from-models.js';
 import { payrollPeople } from '../payroll/store.js';
 import type { Response } from 'express';
 import type { Index, Receipt } from '../types/index.js';
@@ -20,8 +20,8 @@ import { byKind, danglingRefsOf } from '../accounting/integrity.js';
  * otherwise the located ones, a bundled demo as its copy, never the original in the repository.
  */
 export let WS = openWorkspace(() => demoCopy(locateWorkspace()));
-// The people of the open books' payroll: never named to a model (src/llm/mask.ts), whichever books are open now.
-setMaskPeople(() => payrollPeople(WS));
+// The people of the open books' payroll: a document that names one with her birth date or insured wage reaches no model (src/booking/kept-from-models.ts).
+setPayrollPeople(() => payrollPeople(WS));
 
 export function reopenWorkspace(root: string = WS.paths.root): void {
   WS = openWorkspaceAt(root);

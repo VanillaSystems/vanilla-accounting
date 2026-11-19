@@ -637,7 +637,9 @@ export interface VatFacts { hasSwissVat: boolean; vatSummary: VatRateGroup[]; va
  * undo sends `vatBy: null` with them, to put back facts the AI read.
  */
 export type ReceiptPatch = Partial<Pick<Receipt, 'filename' | 'currency' | 'description' | 'remarks'>>
-  & { date?: string | null; dueDate?: string | null; amount?: number | null; kind?: ReceiptKind | null; vat?: VatFacts | null; vatBy?: null };
+  & { date?: string | null; dueDate?: string | null; amount?: number | null; kind?: ReceiptKind | null; vat?: VatFacts | null; vatBy?: null;
+    /** With `kind: 'supporting'`: filed as a fund's or insurer's document (her answer «Als Dokument ablegen», §22 decision 108). */
+    setupDocument?: true };
 
 /** The body of PATCH /api/transactions/:ref. An empty remark, noReceiptNeeded false or an empty inputTaxProof clears the field. */
 export type TransactionPatch = Partial<Pick<BankTransaction, 'description' | 'remarks' | 'noReceiptNeeded'>> & { inputTaxProof?: string };

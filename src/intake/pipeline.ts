@@ -5,7 +5,7 @@
  * (POST /api/intake) all four as a job. Every step only takes up what is still to do, so a second
  * run changes nothing; one runs at a time per workspace (data/intake.lock), CLI and app alike.
  */
-import { setMaskPeople } from '../llm/mask.js';
+import { setPayrollPeople } from '../booking/kept-from-models.js';
 import { payrollPeople } from '../payroll/store.js';
 import type { LeftPayment } from '../types/api-error.js';
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeSync } from 'node:fs';
@@ -180,8 +180,8 @@ export interface RunOptions {
 
 /** Runs the steps in order under the workspace's lock. A step that stops, or throws, ends the job. */
 export async function runIntake({ ws, books, ask, steps, log = () => {}, onChange = () => {} }: RunOptions): Promise<IntakeJob> {
-  // The people of these books' payroll are never named to a model (src/llm/mask.ts), also from a run outside the server.
-  setMaskPeople(() => payrollPeople(ws));
+  // The people of these books' payroll: a document naming one with her birth date or insured wage reaches no model (src/booking/kept-from-models.ts).
+  setPayrollPeople(() => payrollPeople(ws));
   const job: IntakeJob = {
     id: new Date().toISOString(),
     startedAt: new Date().toISOString(),

@@ -2,6 +2,7 @@
  * One receipt: who and what, the amount, one line of facts, its payment (or the suggestion, or
  * what is missing), the paper, and in the margin Zahlung, Angaben and Datei.
  */
+import { isSetupSuggested } from '../../../booking/payslip.js';
 import { hrefOf } from '../../shell/history.js';
 import type { OrderPage } from '../../../booking/order-pages.js';
 import type { VatCorrection } from '../../../booking/vat-corrections.js';
@@ -33,7 +34,7 @@ import { amountOf, at, balanceSheetLine, bankOf, cardLineText, cardStatementLine
 import { Kbd, accept, runAct } from './commands.js';
 import { correctionPeriodName } from '../journal/commands.js';
 import { QuestionsOn } from '../../questions/Questions.js';
-import { bookVatCorrection, correctFiled, deleteReceipt, linkCardLine, linkPayment, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
+import { bookVatCorrection, correctFiled, fileSetupDocument, deleteReceipt, linkCardLine, linkPayment, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
 import { FindPair, NearList, madeBy } from './FindPair.js';
 import { offersInBooks } from '../../../intake/near-pairs.js';
@@ -233,6 +234,10 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
       {sheet
         ? <div className="notice" data-testid="balance-sheet-notice">{balanceSheetLine(sheet)}{' '}
           {sheet.opens && <a href="#" data-testid="balance-sheet-to-opening" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'opening' }, query: {} }); }}>{t('reports.openingSet')}</a>}</div>
+        : isSetupSuggested(r)
+        ? <div className="notice" data-testid="setup-suggested">{t('receipts.setupSuggested')}{' '}
+          {canEdit && <><AsyncButton type="button" className="linkbtn" data-testid="setup-file" onClick={() => fileSetupDocument(nav, v)}>{t('receipts.setupFile')}</AsyncButton>{' '}
+          <AsyncButton type="button" className="linkbtn" data-testid="setup-is-receipt" onClick={() => runAct(props, 'mark')}>{t('receipts.isReceipt')}</AsyncButton></>}</div>
         : v.none && v.r.kind === 'supporting' && v.noneWhy === 'payroll-setup'
         ? <div className="notice" data-testid="payroll-setup-notice">{t('receipts.payrollSetupNotice', { what: t('receipts.why.payroll-setup') })}{' '}
           <a href={hrefOf({ route: { area: 'payroll', view: 'settings', section: 'insurances' }, query: {} })} data-testid="payroll-setup-card" onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); nav.go({ route: { area: 'payroll', view: 'settings', section: 'insurances' }, query: {} }); }}>{t('receipts.payrollSetupOpen')}</a>{' '}

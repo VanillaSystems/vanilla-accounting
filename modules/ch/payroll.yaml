@@ -304,24 +304,27 @@ wageTypes:
 # beside it. `notToModel`: a line with one of these words (a salary, a person's insured wage) is never sent to a model.
 setupDocuments:
   kinds:
-    ahv: [Beitragsverfügung, Verfügung über die Akontobeiträge, Akontoverfügung, Décision de cotisations, Décision de cotisations d'acomptes, Decisione di contributi, Decisione sui contributi d'acconto]
+    ahv: [Beitragsverfügung, Verfügung über die Akontobeiträge, Akontoverfügung, Décision de fixation, Decisione di fissazione, Décision de cotisations, Décision de cotisations d'acomptes, Decisione di contributi, Decisione sui contributi d'acconto]
     bvg: [Vorsorgeausweis, Versicherungsausweis, Persönlicher Ausweis, Certificat de prévoyance, Certificat d'assurance, Certificato di previdenza, Certificato d'assicurazione, Pension certificate]
     uvgz: [UVG-Zusatzversicherung, Zusatzversicherung zum UVG, UVG-Zusatz, Assurance complémentaire LAA, Assicurazione complementare LAINF]
-    uvg: [UVG-Police, Police Unfallversicherung, Unfallversicherungspolice, Unfallversicherung nach UVG, Police d'assurance-accidents, Assurance-accidents LAA, Polizza assicurazione infortuni, Assicurazione infortuni LAINF]
+    uvg: [UVG-Police, Einreihungsverfügung, Police Unfallversicherung, Unfallversicherungspolice, Unfallversicherung nach UVG, Police d'assurance-accidents, Assurance-accidents LAA, Polizza assicurazione infortuni, Assicurazione infortuni LAINF]
     ktg: [Krankentaggeldversicherung, Krankentaggeld-Police, Police Krankentaggeld, Assurance d'indemnités journalières, Indemnités journalières maladie, Assicurazione d'indennità giornaliera, Indennità giornaliera di malattia]
-  # A document is a fund's or insurer's (and no receipt) only by its title: one of its first five lines names one of
-  # `titles` and is no reference line («Police Nr. 44.555», «N° de police: …»), and the text names no bill: no title of
-  # `bills` or of documents.yaml receipt.title in its first lines, no payment slip word, no line of `payable` with a
-  # date or an amount. A product name («Krankentaggeldversicherung») or a total is no sign either way.
-  titles: [Police, Versicherungspolice, UVG-Police, Unfallversicherungspolice, Krankentaggeld-Police, Polizza, Policy, Ausweis, Vorsorgeausweis, Versicherungsausweis, Verfügung, Beitragsverfügung, Akontoverfügung, Décision, Certificat, Certificato, Decisione, Pension certificate]
+  # A text looks like a fund's or insurer's document (a suggestion the person answers, never a kind code sets) by its
+  # title: a line of its first fifteen starts with one of `titles` (behind a letterhead and an address block too); a title
+  # followed by its number («Police Nr. 15.123.456») only where the next line names a kind. And the text names no bill:
+  # no title of `bills` or of documents.yaml receipt.title, no payment slip word or IBAN, no word of `billSigns` (a
+  # reminder, a premium notice, a balance), no line of `payable` with one dated day or an amount (a schedule of several
+  # days is a decision's). A product name («Krankentaggeldversicherung») or a total is no sign either way.
+  titles: [Police, Versicherungspolice, UVG-Police, Unfallversicherungspolice, Krankentaggeld-Police, Polizza, Policy, Persönlicher Ausweis, Ausweis, Vorsorgeausweis, Versicherungsausweis, Verfügung, Beitragsverfügung, Akontoverfügung, Einreihungsverfügung, Décision, Certificat, Certificato, Decisione, Attestation, Pension certificate]
+  billSigns: [Mahnung, Zahlungserinnerung, Rappel, Sollecito, Reminder, Avis de prime, Avviso di premio, Bordereau de prime, Prämienfaktura, Saldo zu unseren Gunsten, zu unseren Gunsten, Solde en notre faveur, en notre faveur, Saldo a nostro favore, a nostro favore, Offener Betrag, Montant dû, Importo dovuto, Prime échue, Premio scaduto, Kontokorrentauszug, Kontoauszug, Décompte final, Conteggio finale, Schlussabrechnung, Definitive Abrechnung, eBill, LSV, Lastschrift, Prélèvement, Addebito]
   bills: [Prämienabrechnung, Beitragsabrechnung, Prämienrechnung, Beitragsrechnung, Akontorechnung, Décompte de primes, Décompte de cotisations, Facture de primes, Conteggio dei premi, Conteggio dei contributi, Fattura dei premi, Premium statement, Premium invoice]
-  payable: [Zu bezahlender Betrag, zu bezahlen, zahlbar bis, zahlbar innert, Bitte überweisen, Konto belastet, Montant à payer, Montant à régler, à payer jusqu'au, payable jusqu'au, Importo da pagare, Da pagare entro, pagabile entro, Amount due, Payable by, Please pay]
-  # The labels a person's name follows on a fund's document or any receipt: what follows on the line is masked before a
-  # model (src/llm/mask.ts), as are the names of payroll.json, social security numbers, birth dates and wage amounts.
-  personLabels: [Versicherte Person, Personne assurée, Persona assicurata, Insured person, Arbeitnehmer/in, Mitarbeiter/in, Name der versicherten Person]
+  payable: [Zu bezahlender Betrag, zu bezahlen, zu zahlen, zahlbar bis, zahlbar innert, Fällig am, fällig per, Bitte überweisen, Überweisung bis, Konto belastet, Montant à payer, Montant à régler, à payer, à verser, Veuillez verser, payable jusqu'au, Importo da pagare, Da pagare entro, da versare, Vogliate versare, pagabile entro, Amount due, Payable by, Please pay]
+  # What keeps a document from every model, whatever it was taken for (src/booking/kept-from-models.ts): a person's label
+  # with its colon, or a person of payroll.json named beside a birth date's or an insured wage's word (and, always, a
+  # social security number).
+  personLabels: [Versicherte Person, Personne assurée, Persona assicurata, Insured person, Name der versicherten Person]
   birth: [Geburtsdatum, geb., geboren, Date de naissance, né le, née le, Data di nascita, nato il, nata il, Date of birth, Born]
-  # Matched at the start of a word: «Jahreslohn» is not, «Lohnsumme» and «Lohn» are; the amount on such a line is masked.
-  wage: [Lohn, Löhne, Jahreslohn, Monatslohn, Gehalt, Salär, Verdienst, Einkommen, Altersguthaben, Guthaben, Freizügigkeitsleistung, Salaire, Revenu, Avoir, Salario, Reddito, Avere, Salary, Wage, Income, Savings]
+  insuredWage: [Versicherter Lohn, Koordinierter Lohn, Gemeldeter Jahreslohn, Massgebender Lohn, Altersguthaben, Freizügigkeitsleistung, Salaire assuré, Salaire coordonné, Salaire annuel annoncé, Avoir de vieillesse, Salario assicurato, Salario coordinato, Salario annuo notificato, Avere di vecchiaia, Insured salary, Retirement savings]
   numbers:
     memberNumber: [Abrechnungsnummer, Abrechnungs-Nr., Abrechnungs-Nr, Mitgliednummer, Mitglied-Nr., Mitgliedernummer, Kassen-Nr., Kundennummer, N° d'affilié, Numéro d'affilié, No d'affilié, N. affiliato, Numero d'affiliazione]
     contractNumber: [Vertragsnummer, Vertrags-Nr., Vertrag Nr., Policennummer, Policen-Nr., Police Nr., Police-Nr., Anschlussvertrag, N° de contrat, N° de police, Numéro de police, N. contratto, N. polizza, Numero di polizza]

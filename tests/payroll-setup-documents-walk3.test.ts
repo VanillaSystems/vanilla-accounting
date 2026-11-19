@@ -13,12 +13,13 @@ import { classifyInput, loadClassifyContext } from '../src/booking/classify.js';
 import type { Ask } from '../src/intake/pipeline.js';
 import { cleanUp, drop, firm, pay, run } from './support/payslip-firm.js';
 import { textPdf } from './support/text-pdf.js';
-import { SETUP_DOCUMENT_RULE, setupCards } from '../src/payroll/setup-documents.js';
+import { setupCards } from '../src/payroll/setup-documents.js';
+import { SETUP_SUGGESTED_RULE } from '../src/booking/payslip.js';
+import { pairableReceipt } from '../src/intake/pairing.js';
 import { keepSetupCard } from '../src/payroll/settings.js';
 import { PayrollRefusal } from '../src/payroll/close.js';
 import { emptyPayroll } from '../src/payroll/store.js';
 import { receiptStateOf, closingGroupOf } from '../src/app/shell/drop-summary.js';
-import { isNoReceipt } from '../src/books/discard.js';
 import { ch } from './support/payroll.js';
 import { documents } from '../src/engines/index.js';
 
@@ -37,18 +38,18 @@ test('walk 3 / decision 108: a fund\'s decision, a policy, a pension certificate
   await drop(ws, [['Beitragsverfuegung_2026.pdf', textPdf(DECISION)], ['UVG_Police_2026.pdf', textPdf(POLICY)], ['Vorsorgeausweis_Beispiel_2026.pdf', textPdf(CERT)], ['Beitragsrechnung_Q3.pdf', textPdf(BILL)]]);
   await run(ws, ask);
   const books = loadBooks(ws);
-  const setup = books.receipts.filter((r) => r.kindRule === SETUP_DOCUMENT_RULE);
+  const setup = books.receipts.filter((r) => r.kindRule === SETUP_SUGGESTED_RULE);
   assert.equal(setup.length, 3, 'the decision, the policy and the certificate');
   for (const r of setup) {
-    assert.equal(r.kind, 'supporting');
-    assert.ok(isNoReceipt(r, 0), 'no receipt of a payment: never «Braucht dich»');
+    assert.equal(r.kind, undefined, 'a suggestion, never a kind code sets (second review of walk 3)');
+    assert.ok(!pairableReceipt(r, new Set()), 'paired with no payment until she answers');
     assert.equal(receiptStateOf(r, 0, false), 'supporting', 'never «wartet auf dich: Datum, Betrag fehlt»');
   }
-  const bill = books.receipts.find((r) => r.kindRule !== SETUP_DOCUMENT_RULE && /Beitragsrechnung/.test(r.extractedText ?? ''));
+  const bill = books.receipts.find((r) => r.kindRule !== SETUP_SUGGESTED_RULE && /Beitragsrechnung/.test(r.extractedText ?? ''));
   assert.ok(bill && bill.kind !== 'supporting', 'the fund\'s bill is a receipt to pay');
   assert.ok(prompts.every((p) => !p.includes('Mila') && !p.includes('92\'000') && !p.includes('Vorsorgeausweis per')), 'nothing of the funds\' documents reached a prompt');
   assert.deepEqual(setupCards(books.receipts, emptyPayroll(), ch.payroll!, {}, documents()).map((c) => c.items[0].kind).sort(), ['ahv', 'bvg', 'uvg'], 'each still a card in Löhne › Einstellungen');
-  assert.equal(closingGroupOf({ state: 'taken' } as Parameters<typeof closingGroupOf>[0], { kind: 'payrollSetup' }), 'payrollSetup', 'the drop says it apart');
+  assert.equal(closingGroupOf({ state: 'taken' } as Parameters<typeof closingGroupOf>[0], { kind: 'payrollSetup', suggested: true }), 'asks', 'the drop asks her in its row');
 });
 
 test('walk 3 / decision 108: contributions typed on a pension certificate\'s card without a person are refused with «Person wählen», never dropped', () => {
@@ -72,8 +73,8 @@ test('review of walk 3: a fund\'s or insurer\'s bill that names its policy or de
   await run(ws, ask);
   let books = loadBooks(ws);
   const of = (word: string) => books.receipts.find((r) => (r.extractedText ?? '').includes(word))!;
-  for (const w of ['Kollektiv-Krankentaggeld', 'Unfallversicherung nach UVG', 'Akontobeiträge 3. Quartal']) assert.notEqual(of(w).kindRule, SETUP_DOCUMENT_RULE, `${w}: a bill`);
-  assert.equal(of('Vorsorgeausweis').kindRule, SETUP_DOCUMENT_RULE);
+  for (const w of ['Kollektiv-Krankentaggeld', 'Unfallversicherung nach UVG', 'Akontobeiträge 3. Quartal']) assert.notEqual(of(w).kindRule, SETUP_SUGGESTED_RULE, `${w}: a bill`);
+  assert.equal(of('Vorsorgeausweis').kindRule, SETUP_SUGGESTED_RULE);
   assert.deepEqual(setupCards(books.receipts, emptyPayroll(), ch.payroll!, {}, documents()).map((c) => c.items[0].kind), ['bvg'], 'the bills are no cards');
   // She links the certificate to the fund's payment: the booking's prompt still never carries it.
   update(books, PERSON, (b) => { b.mappings.push({ transactionRef: 'P1', receiptId: of('Vorsorgeausweis').id, rule: 'manual' } as never); });
@@ -99,14 +100,14 @@ test('review of walk 3: a certificate read before code told such documents apart
   saveBooks(ws, books);
   await run(ws, ask);
   const r = loadBooks(ws).receipts.find((x) => (x.extractedText ?? '').includes('Vorsorgeausweis'))!;
-  assert.deepEqual([r.kind, r.kindRule], ['supporting', SETUP_DOCUMENT_RULE]);
+  assert.deepEqual([r.kind, r.kindRule], [undefined, SETUP_SUGGESTED_RULE], 'suggested, not filed');
   assert.ok(prompts.every((p) => !p.includes('Mila') && !p.includes("92'000")), 'no model reads it');
   // Once per receipt: taken back to no kind, the next run leaves it so.
   const again = loadBooks(ws);
   update(again, moduleActor('test'), (b) => { for (const x of b.receipts) { delete x.kind; delete x.kindBy; delete x.kindRule; } });
   saveBooks(ws, again);
   await run(ws);
-  assert.equal(loadBooks(ws).receipts.find((x) => x.id === r.id)!.kind, undefined, 'looked at once, never again');
+  assert.equal(loadBooks(ws).receipts.find((x) => x.id === r.id)!.kindRule, undefined, 'looked at once, never suggested again');
 });
 
 test('second review of walk 3: a linked certificate is kinded too (its link stays); a model\'s invoice with its date and amount read is left as it is', async () => {
@@ -123,7 +124,29 @@ test('second review of walk 3: a linked certificate is kinded too (its link stay
   saveBooks(ws, books);
   await run(ws);
   const after = loadBooks(ws);
-  assert.equal(after.receipts.find((x) => x.id === a)!.kindRule, SETUP_DOCUMENT_RULE);
+  assert.equal(after.receipts.find((x) => x.id === a)!.kindRule, SETUP_SUGGESTED_RULE);
   assert.ok(after.mappings.some((m) => m.receiptId === a && m.transactionRef === 'P1'), 'the link stays');
   assert.equal(after.receipts.find((x) => x.id === b)!.kind, 'invoice', 'the model\'s invoice stays');
+});
+
+test('third review of walk 3: her answer is kept: «Als Dokument ablegen» files it as a fund\'s document, «Ist ein Beleg» makes it a receipt never asked again', async () => {
+  const { startApi } = await import('./support/api-server.js');
+  const { SETUP_DOCUMENT_RULE } = await import('../src/booking/payslip.js');
+  const api = await startApi('tests/fixtures/payroll-insurer-way-index.json');
+  try {
+    const books = loadBooks(api.ws);
+    update(books, PERSON, (b) => {
+      for (const id of ['s1', 's2']) b.receipts.push({ id, filename: `${id}.pdf`, location: 'archived', indexedAt: '', fileSize: 1, extractionMethod: 'pdftotext', extractedText: CERT.join('\n'), kindRule: SETUP_SUGGESTED_RULE } as never);
+    });
+    saveBooks(api.ws, books);
+    assert.equal((await api.send('PATCH', '/api/receipts/s1', { setupDocument: true })).status, 400, 'only with the kind of a document beside');
+    assert.equal((await api.send('PATCH', '/api/receipts/s1', { kind: 'supporting', setupDocument: true })).status, 200);
+    assert.equal((await api.send('PATCH', '/api/receipts/s2', { kind: 'invoice' })).status, 200);
+    const after = loadBooks(api.ws).receipts;
+    const s1 = after.find((r) => r.id === 's1')!;
+    const s2 = after.find((r) => r.id === 's2')!;
+    assert.deepEqual([s1.kind, s1.kindBy, s1.kindRule], ['supporting', 'human', SETUP_DOCUMENT_RULE]);
+    assert.deepEqual([s2.kind, s2.kindBy, s2.kindRule], ['invoice', 'human', undefined]);
+    assert.deepEqual(setupCards(after, emptyPayroll(), ch.payroll!, {}, documents()).map((c) => c.receipt), ['s1'], 'her receipt is no card');
+  } finally { await api.stop(); }
 });

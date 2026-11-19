@@ -11,6 +11,7 @@
  * payment's best receipt by a margin. A receipt with a few candidates (a short list) is the
  * model's to choose from; with none, or more than a short list, it is the person's.
  */
+import { isSetupSuggested } from '../booking/payslip.js';
 import type { BankTransaction, Mapping, Receipt } from '../types/index.js';
 import { numbersIn, squash, tokensIn } from '../accounting/document-numbers.js';
 import { creditSigned } from '../accounting/credit-signed.js';
@@ -235,7 +236,8 @@ const amountIn = (text: string): number => Number(text.replace(/[.,](\d{2})$/, '
  * (fitOf holds it to a payment that names its number).
  */
 export function pairableReceipt(r: Receipt, linked: ReadonlySet<string>, noPayment?: (r: Receipt) => boolean): boolean {
-  return r.location === 'archived' && !linked.has(r.id) && !r.filedPayment && (!r.kind || r.kind === 'invoice' || r.kind === 'sales-record' || (r.kind === 'supporting' && namesAssessment(r, documents().customs)))
+  // A text suggested as a fund's document waits for the person's answer first (src/booking/payslip.ts SETUP_SUGGESTED_RULE).
+  return r.location === 'archived' && !linked.has(r.id) && !r.filedPayment && !isSetupSuggested(r) && (!r.kind || r.kind === 'invoice' || r.kind === 'sales-record' || (r.kind === 'supporting' && namesAssessment(r, documents().customs)))
     && !!r.amount && !!r.date && !r.payout && !r.order && !noPayment?.(r);
 }
 

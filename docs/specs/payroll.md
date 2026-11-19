@@ -2246,21 +2246,25 @@ After the third persona walk (2026-11-19):
      drop say what it is and link to its card in Löhne › Einstellungen › Sozialversicherungen; the card lists only such
      texts (a fund's bill that names a certificate below its title is a receipt, no card). A document read before stays
      as it was read. Contributions typed on a pension certificate's card without the person they are hers are refused
-     (`badInput`, field `person`: «Person wählen …»), never dropped. After the second review (a corpus of 27 realistic texts in German, French and Italian,
-     tests/payroll-setup-corpus.test.ts): a text is such a document by its title, not by word signals: one of its first
-     five lines names a document of payroll.yaml `setupDocuments.titles` (Police, Verfügung, Vorsorgeausweis, Certificat,
-     Décision, …) and is no reference line («Police Nr. 44.555»), the text names a kind, and nothing says bill: no title
-     of `bills` (Prämienabrechnung, Décompte de primes, Conteggio dei premi, …) or of documents.yaml `receipt.title` in its
-     first lines as a whole word («Altersgutschrift» is none), no payment slip word, no line of `payable` («Zu
-     bezahlender Betrag», «zahlbar bis», «Montant à régler», «Da pagare entro», «Konto belastet», …) with a date or an
-     amount. A product name or a total says nothing either way. A picture named as such a document is not read by a
-     model's vision. Privacy does not hang on the kind: src/llm/mask.ts masks, in every prompt and system text
-     (src/llm/ask.ts) and in the sidebar's, the full names of the people of payroll.json (given back in the answer), a
-     social security number, what follows a person's label («Versicherte Person:»), a date beside a birth date's word and,
-     once a person is named, an amount beside a wage's word, line by line and never across a quote (a prompt's JSON keys
-     and numbers are its own); the sidebar is denied the receipt files of such documents. A document read before is
-     kinded so once per receipt (the ids looked at kept in data/setup-documents-looked.json), linked or not, unless a
-     person gave it a kind, the model took it for an invoice whose date and amount were read, or its day is closed.
+     (`badInput`, field `person`: «Person wählen …»), never dropped. After the third review, the kind is a suggestion and privacy is per document. Code
+     never files a receipt as `supporting` by itself: a text that looks like a fund's document (`isSetupText`, a corpus
+     of 87 realistic texts in German, French and Italian, tests/payroll-setup-corpus.test.ts) gets kindRule
+     `suggest:payroll-setup`, no kind. Its title: a line of its first fifteen starts with a word of payroll.yaml
+     `setupDocuments.titles`, behind a letterhead and an address block too, one followed by its number only where the next
+     line names a kind; and nothing says bill: no title of `bills` or of documents.yaml `receipt.title` as a whole word, no
+     payment slip word, no IBAN, no word of `billSigns` (a reminder, a premium notice, a balance, a direct debit), no line of
+     `payable` with one dated day or an amount (a schedule of several days is a decision's). Belege and the drop ask «Als
+     Dokument ablegen» (her kind `supporting`, kindRule `document:payroll-setup`, beside its card) or «Ist ein Beleg» (her
+     `invoice`, never asked again, no card); meanwhile it waits for no date or amount and is paired with no payment. A
+     receipt read before is suggested so once (the ids looked at in data/setup-documents-looked.json), unless a person gave
+     it a kind, the model took it for an invoice whose date and amount were read, or its day is closed. No model reads a
+     receipt by `keptFromModels` (src/booking/kept-from-models.ts), decided per document on every path (the kind question,
+     the VAT reading, the titles, the match, the pair chain, the booking's prompt, a vision read again): a payslip, one
+     suggested or filed as a fund's document, or one whose own text carries a social security number, a person's label
+     with its colon, or a person of payroll.json beside a birth date's or an insured wage's word. Such a receipt is still
+     paired by code and by the person. Prompts are not masked beyond the social security number (src/llm/mask.ts as
+     before). The sidebar is denied such receipts' files; receipts.jsonl stays readable to it. A vision read a person asks
+     for in Belege is hers.
 109. **A collector's payment is proposed for the months it pays, also ahead of them** (src/booking/withheld.ts
      `collectorProposal`): for a business whose file collects kinds owed on 2270 (not the withholding tax), the hand form
      proposes the employees' share of a whole run of the oldest months its payslips withheld that no earlier payment

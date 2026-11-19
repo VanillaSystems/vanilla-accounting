@@ -540,14 +540,16 @@ export interface PayrollData {
     titles?: string[];
     /** Titles of a fund's or insurer's bill (beside documents.yaml receipt.title): such a text is a receipt, never a setup document. */
     bills?: string[];
-    /** Words of an amount to pay: on a line with a date or an amount, the text is a bill. */
+    /** Words of an amount to pay: on a line with one dated day or an amount, the text is a bill. */
     payable?: string[];
-    /** Labels a person's name follows («Versicherte Person:»): the rest of such a line never reaches a model (src/llm/mask.ts). */
+    /** Words that say bill wherever they stand: a reminder, a premium notice, a balance in the fund's favour, a direct debit. */
+    billSigns?: string[];
+    /** Labels a person's name follows («Versicherte Person:»): a text with one reaches no model (src/booking/kept-from-models.ts). */
     personLabels?: string[];
-    /** Words of a birth date: a date on their line never reaches a model (src/llm/mask.ts). */
+    /** Words of a birth date: a text naming a person of payroll.json beside one reaches no model (src/booking/kept-from-models.ts). */
     birth?: string[];
-    /** Words of a wage, an insured wage or retirement savings: an amount on their line never reaches a model once the text names a person (src/llm/mask.ts). */
-    wage?: string[];
+    /** Words of an insured wage or retirement savings: a text naming a person of payroll.json beside one reaches no model (src/booking/kept-from-models.ts). */
+    insuredWage?: string[];
     numbers: Partial<Record<'memberNumber' | 'contractNumber', string[]>>; rates: Record<string, Record<string, string[]>>; toModel?: string[]; notToModel: string[] };
   /** The words of the payroll's documents, in each language. */
   documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate' | 'holidays' | 'holidaysMinimum' | 'sourceTariff', Labels>;

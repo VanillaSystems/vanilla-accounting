@@ -420,17 +420,19 @@ Two markers flag an entry you must read before you update:
   ahead of its quarter, so 2270 clears; a payment already booked whole on 5720 is named under
   «Arbeitnehmeranteil abziehen» for that share.
 - Belege: a fund's or insurer's document dropped with the receipts (a Beitragsverfügung, a policy,
-  a pension certificate) no longer waits as a receipt «Datum, Betrag fehlt»: it is a document
-  without a payment, says so in Belege and in the drop, and links to its card in Löhne ›
-  Einstellungen › Sozialversicherungen. It is told apart from the fund's bill by its title
-  (Police, Verfügung, Vorsorgeausweis, Certificat, …) and by saying nothing about paying. On a
+  a pension certificate) no longer waits as a receipt «Datum, Betrag fehlt». Where its title says
+  it is one (Police, Verfügung, Vorsorgeausweis, Certificat, …) and nothing says to pay, Belege
+  and the drop ask «Sieht aus wie ein Dokument der Sozialversicherung»: «Als Dokument ablegen»
+  files it beside its card in Löhne › Einstellungen › Sozialversicherungen, «Ist ein Beleg» keeps
+  it a receipt and it is not asked again. Until she answers it is matched with no payment. On a
   pension certificate's card, contributions typed without the person are refused with «Person
   wählen» instead of being left out.
-- AI: no prompt names a person of the payroll, whatever a document was taken for: their names
-  (given back in the answer), social security numbers, what follows «Versicherte Person:», birth
-  dates and, where a person is named, wages are masked before any model call and in the sidebar,
-  which also may not read a fund's documents. A photo named as a fund's document is not read by
-  the AI.
+- AI: a receipt suggested or filed as such a document, or whose own text carries a social
+  security number, «Versicherte Person:» or a person of the payroll beside her birth date or
+  insured wage, is sent to no AI: not to read its kind, its VAT or its title, not to match it
+  with a payment and not in a booking's question. Other receipts are sent as before. The AI
+  sidebar may not open such a receipt's file; it can still read the books' receipts list
+  (receipts.jsonl), which holds every receipt's text, as before.
 - Löhne: the entry fact of a new person («Eintritt am …: Anmeldung bei …») no longer names the
   pension fund for a person without occupational pension (below the entry threshold, or a firm
   without a pension fund).

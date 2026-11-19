@@ -4,7 +4,7 @@
  * facts (match.ts); this step gives it to receipts read before, 100 to one model call. A title is
  * shown, never booked, so a receipt of a filed quarter gets one too.
  */
-import { isSetupDocument } from '../booking/payslip.js';
+import { keptFromModels } from '../booking/kept-from-models.js';
 import { parseTitle, TITLE_RULES } from '../llm/prompts.js';
 import type { Receipt, ReceiptTitle } from '../types/index.js';
 import type { Ask, IntakeNote, StepRun } from './pipeline.js';
@@ -24,7 +24,7 @@ ${JSON.stringify(receipts.map(item))}`;
 /** The titles of `receipts` from the fast model, 100 to a call; a receipt the answer leaves out has none. A failed call is logged, not thrown: a title is shown, never booked. */
 export async function titlesFor(ask: Ask, all: readonly Receipt[], log: (line: string) => void = () => {}): Promise<Map<string, ReceiptTitle>> {
   const out = new Map<string, ReceiptTitle>();
-  const receipts = all.filter((r) => r.kind !== 'payslip' && !isSetupDocument(r));
+  const receipts = all.filter((r) => !keptFromModels(r));
   for (let i = 0; i < receipts.length; i += BATCH) {
     const batch = receipts.slice(i, i + BATCH);
     try {

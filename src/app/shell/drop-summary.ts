@@ -4,6 +4,7 @@
  * a payment or not), and the period most of it landed in. Read from the books the page holds, never
  * stored; pure, so tests run it as it is.
  */
+import { isSetupSuggested } from '../../booking/payslip.js';
 import type { BankTransaction, Index } from '../../types/index.js';
 import type { DropRow } from '../../types/drop.js';
 import type { Question } from '../../questions/model.js';
@@ -49,7 +50,8 @@ export type ReceiptState = 'matched' | 'supporting' | 'none' | 'copy' | 'unread'
 
 export function receiptStateOf(r: Receipt, links: number, copy: boolean): ReceiptState {
   if (links > 0) return 'matched';
-  if (r.kind === 'supporting') return 'supporting';
+  // A text suggested as a fund's document waits for her answer, not for its date or amount (§22 decision 108).
+  if (r.kind === 'supporting' || isSetupSuggested(r)) return 'supporting';
   if (isNoReceipt(r, links)) return 'none';
   if (copy) return 'copy';
   if (waitsForReading(r)) return 'unread';
@@ -72,8 +74,8 @@ export type FileState = { kind: 'working'; step?: string; doing?: Doing } | { ki
   | { kind: 'none'; why: string } | { kind: 'twin'; of: string; name: string; why: TwinWhy } | { kind: 'supporting'; why?: string; of?: { id: string; name: string } }
   /** A balance sheet (#427): no payment belongs to it; the one of the year before's last day is offered for the opening. */
   | { kind: 'balanceSheet'; sheet?: BalanceSheet }
-  /** A fund's or insurer's document for the payroll's setup (a decision, a policy, a pension certificate): no payment belongs to it, its card in Löhne takes it. */
-  | { kind: 'payrollSetup' };
+  /** A fund's or insurer's document for the payroll's setup (a decision, a policy, a pension certificate): no payment belongs to it, its card in Löhne takes it; `suggested`: code only thinks so, the row asks her. */
+  | { kind: 'payrollSetup'; suggested?: true };
 
 /**
  * The row of a taken receipt whose own run stopped (#483): what the books made of it stands when
@@ -125,7 +127,7 @@ export function closingGroupOf(r: DropRow, x: FileState | undefined): ClosingGro
     case 'twin': return 'copy';
     case 'supporting': return x!.kind === 'supporting' && x.of ? 'supporting' : 'beside';
     case 'balanceSheet': return 'balanceSheet';
-    case 'payrollSetup': return 'payrollSetup';
+    case 'payrollSetup': return x!.kind === 'payrollSetup' && x.suggested ? 'asks' : 'payrollSetup';
   }
 }
 

@@ -6,7 +6,7 @@
  * small action, «Rückgängig» for a taken one. Further drops, onto the window or the dialog, add
  * rows until it closes; the work goes on when it does.
  */
-import { SETUP_DOCUMENT_RULE } from '../../payroll/setup-documents.js';
+import { isSetupSuggested, SETUP_DOCUMENT_RULE } from '../../booking/payslip.js';
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { outlayWaitsNow, refusedWhy, unbookedText } from '../lib/order-pages.js';
 import { createPortal } from 'react-dom';
@@ -526,6 +526,7 @@ function atRest(id: string, receipt: Index['receipts'][number], books: Index): F
   const sheet = st === 'supporting' ? balanceSheetOf(receipt, books, localToday()) : undefined;
   if (sheet) return { kind: 'balanceSheet', sheet };
   if (st === 'supporting' && receipt.kindRule === SETUP_DOCUMENT_RULE) return { kind: 'payrollSetup' };
+  if (st === 'supporting' && isSetupSuggested(receipt)) return { kind: 'payrollSetup', suggested: true };
   if (st === 'supporting') {
     const of = v?.twin?.relation === 'companion' ? ledger.byId.get(v.twin.of) : undefined;
     return { kind: 'supporting', ...(v ? { why: noneText(v) } : {}), ...(of ? { of: { id: of.r.id, name: of.vendor ? `${of.vendor}${of.desc ? ` ${of.desc}` : ''}` : of.r.filename } } : {}) };
@@ -709,6 +710,11 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
   const lineFits = receipt && !card && !cardLine ? cardLineOffers(receipt, books) : [];
   const currencyOf = (ref: string) => books.transactions.find((x) => x.ref === ref)?.currency ?? baseCurrency();
   // «Ist doch ein Beleg» (#361): the person's word, as Belege takes it; the run then reads the file again, never asking whether it is one.
+  // Her answer to «Sieht aus wie ein Dokument der Sozialversicherung» (§22 decision 108): filed as one, its card in Löhne takes it.
+  const asSetupDocument = () => {
+    setBusy(true);
+    return api.patchReceipt(receipt!.id, { kind: 'supporting', setupDocument: true }).then(() => refresh(), (e) => set({ error: errorText(e) })).finally(() => setBusy(false));
+  };
   const isReceipt = () => {
     setBusy(true);
     return api.patchReceipt(receipt!.id, { kind: 'invoice' }).then(() => { refresh(); void startIntake(); }, (e) => set({ error: errorText(e) })).finally(() => setBusy(false));
@@ -731,7 +737,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
             : x.kind === 'none' ? <small className="dwhy" data-testid="drop-none">{x.why}</small>
             : x.kind === 'supporting' ? <small className="dwhy" data-testid="drop-supporting">{x.of ? t('drop.p.supportingOf', { what: x.why || t('receipts.why.supporting'), name: x.of.name }) : t('drop.p.supportingAlone', { what: x.why || t('receipts.why.supporting') })}</small>
             : x.kind === 'balanceSheet' && x.sheet ? <small className="dwhy" data-testid="drop-balance-sheet">{balanceSheetLine(x.sheet)}</small>
-            : x.kind === 'payrollSetup' ? <small className="dwhy" data-testid="drop-payroll-setup">{t('drop.p.payrollSetupWhy')}</small>
+            : x.kind === 'payrollSetup' ? <small className="dwhy" data-testid="drop-payroll-setup">{t(x.suggested ? 'receipts.setupSuggested' : 'drop.p.payrollSetupWhy')}</small>
             : x.kind === 'twin' ? <small className="dwhy" data-testid="drop-twin">{t('drop.twin.duplicate', { name: x.name })} · {t(`drop.twin.why.${x.why}`)}</small> : null}
           {card ? <small className="dwhy" data-testid="drop-card-statement">{cardStatementLine(card)}</small> : null}
           {cardLine ? <small className="dwhy" data-testid="drop-card-line">{t('receipts.cardLine.bill', { line: cardLineText(cardLine, currencyOf(cardLine.payment)) })}</small> : null}
@@ -748,7 +754,8 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
             {byBank ? <AsyncButton type="button" className="linkbtn" data-testid="drop-other-account" disabled={running || busy} data-tip={t('drop.byBankChangeTip')} onClick={() => { setBusy(true); return act(session, r, { kind: 'otherAccount' }).finally(() => setBusy(false)); }}>{t('drop.byBankChange')}</AsyncButton> : null}
             {statementAt ? <button type="button" className="linkbtn" data-testid="drop-open-file" onClick={() => { closeDrop(); onGo(statementAt); }}>{t('drop.openStatement')}</button> : null}
             {x.kind === 'supporting' && x.of ? <button type="button" className="linkbtn" data-testid="drop-open-invoice" onClick={() => go({ area: 'receipts', id: x.of!.id }, books.receipts.find((y) => y.id === x.of!.id)?.date)}>{t('drop.p.openInvoice')}</button> : null}
-            {x.kind === 'payrollSetup' ? <button type="button" className="linkbtn" data-testid="drop-to-setup-card" onClick={() => go({ area: 'payroll', view: 'settings', section: 'insurances' })}>{t('receipts.payrollSetupOpen')}</button> : null}
+            {x.kind === 'payrollSetup' && x.suggested && receipt ? <AsyncButton type="button" className="linkbtn" data-testid="drop-as-setup-document" disabled={busy} onClick={asSetupDocument}>{t('receipts.setupFile')}</AsyncButton> : null}
+            {x.kind === 'payrollSetup' && !x.suggested ? <button type="button" className="linkbtn" data-testid="drop-to-setup-card" onClick={() => go({ area: 'payroll', view: 'settings', section: 'insurances' })}>{t('receipts.payrollSetupOpen')}</button> : null}
             {x.kind === 'balanceSheet' && x.sheet?.opens ? <button type="button" className="linkbtn" data-testid="drop-to-opening" onClick={() => go({ area: 'company', section: 'opening' })}>{t('reports.openingSet')}</button> : null}
             {(x.kind === 'none' || x.kind === 'supporting' || x.kind === 'balanceSheet' || x.kind === 'payrollSetup') && receipt && receipt.kind !== 'statement' && receipt.kind !== 'duplicate' ? <AsyncButton type="button" className="linkbtn" data-testid="drop-is-receipt" disabled={busy} onClick={isReceipt}>{t(markLabel(receipt))}</AsyncButton> : null}
             {x.kind === 'stuck' ? <button type="button" className="linkbtn" data-testid="drop-stuck-run" onClick={() => go({ area: 'automation', view: 'run', run: x.run })}>{t('processing.toRun')}</button> : null}
