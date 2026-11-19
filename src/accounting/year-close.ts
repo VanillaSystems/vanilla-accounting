@@ -121,8 +121,22 @@ export function vatPostings(entries: readonly JournalEntry[], vatAccount: string
   return entries.flatMap((e) => vatPostingOf(e, vatAccount) ?? []);
 }
 
-/** The tax one entry's VAT code splits off (see `vatPostings`), or null when it splits off none. */
-export function vatPostingOf(e: JournalEntry, vatAccount: string): VatPosting | null {
+/**
+ * How an entry's code splits its tax off, before any account is named (see `vatPostings`):
+ * `carrier`, the entry's side that carries the tax; `toVat`, whether the tax goes to the VAT
+ * account (it then sits on the posting's credit side) or comes back from it (debit side);
+ * `onTop`, Bezugsteuer owed without a deduction, added to the purchase; `amountIsTax`, the code
+ * books the entry's amount as the tax itself.
+ */
+export interface VatShape {
+  amount: number;
+  carrier: 'debit' | 'credit';
+  toVat: boolean;
+  onTop: boolean;
+  amountIsTax: boolean;
+}
+
+export function vatShapeOf(e: JournalEntry): VatShape | null {
   const info = e.vatCode ? vat().codes.parse(e.vatCode) : null;
   const line = vat().vatLine(e);
   if (!info || !line || line.tax === 0) return null;
@@ -130,20 +144,31 @@ export function vatPostingOf(e: JournalEntry, vatAccount: string): VatPosting | 
   if (info.acquisitionZiffer && !acquisition) return null;
   const owed = !!(info.revenueZiffer || info.correctionZiffer) || acquisition;
   if (!owed && !info.inputTaxZiffer) return null;
-  const amount = Math.abs(line.tax);
   // The side that carries the tax: credit for a sale, debit for a purchase and for Bezugsteuer (the expense owes it); a minus code swaps it.
   const onCredit = acquisition ? info.isNegative : owed !== info.isNegative;
-  const carrier = onCredit ? e.accountCredit : e.accountDebit;
-  // Tax leaves the carrier towards the VAT account when owed, comes back to it when deducted; Bezugsteuer owed is added to its carrier.
-  const toVat = acquisition ? !info.isNegative : onCredit;
-  const [accountDebit, accountCredit] = toVat ? [carrier, vatAccount] : [vatAccount, carrier];
+  return {
+    amount: Math.abs(line.tax),
+    carrier: onCredit ? 'credit' : 'debit',
+    // Tax leaves the carrier towards the VAT account when owed, comes back to it when deducted; Bezugsteuer owed is added to its carrier.
+    toVat: acquisition ? !info.isNegative : onCredit,
+    onTop: acquisition,
+    amountIsTax: info.amountIs === 'tax',
+  };
+}
+
+/** The tax one entry's VAT code splits off (see `vatPostings`), or null when it splits off none. */
+export function vatPostingOf(e: JournalEntry, vatAccount: string): VatPosting | null {
+  const shape = vatShapeOf(e);
+  if (!shape) return null;
+  const carrier = shape.carrier === 'credit' ? e.accountCredit : e.accountDebit;
+  const [accountDebit, accountCredit] = shape.toVat ? [carrier, vatAccount] : [vatAccount, carrier];
   return {
     id: `vat:${e.id}`,
     transactionRef: e.transactionRef,
     date: e.date,
     accountDebit,
     accountCredit,
-    amount,
+    amount: shape.amount,
     description: `MWST ${e.vatCode} ${e.id}`,
     code: e.vatCode!,
   };

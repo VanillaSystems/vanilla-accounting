@@ -328,6 +328,7 @@ export default {
     'journal.fromVatCode': 'from the VAT code',
     'journal.vatSide': '{side}: {account}, from the VAT code',
     'journal.vatSplit': 'of which VAT {rate} %: {currency} {tax} →',
+    'journal.vatOnTop': 'plus VAT {rate} %: {currency} {tax} →',
     'journal.vatLabel': 'VAT {code}: {text}',
     'journal.noVat': 'no VAT',
     'journal.field.date': 'Date',

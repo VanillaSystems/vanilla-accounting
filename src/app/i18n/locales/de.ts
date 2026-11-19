@@ -325,6 +325,7 @@ export const messages = {
   'journal.fromVatCode': 'aus dem MWST-Code',
   'journal.vatSide': '{side}: {account}, aus dem MWST-Code',
   'journal.vatSplit': 'davon MWST {rate} %: {currency} {tax} →',
+  'journal.vatOnTop': 'zusätzlich MWST {rate} %: {currency} {tax} →',
   'journal.vatLabel': 'MWST {code}: {text}',
   'journal.noVat': 'ohne MWST',
   'journal.field.date': 'Datum',

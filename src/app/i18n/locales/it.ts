@@ -328,6 +328,7 @@ export default {
     'journal.fromVatCode': 'dal codice IVA',
     'journal.vatSide': '{side}: {account}, dal codice IVA',
     'journal.vatSplit': 'di cui IVA {rate} %: {currency} {tax} →',
+    'journal.vatOnTop': 'in aggiunta IVA {rate} %: {currency} {tax} →',
     'journal.vatLabel': 'IVA {code}: {text}',
     'journal.noVat': 'senza IVA',
     'journal.field.date': 'Data',

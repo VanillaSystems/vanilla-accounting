@@ -7,7 +7,7 @@
  */
 import type { JournalEntry } from '../types/index.js';
 import { statements } from '../engines/index.js';
-import { vatPostingOf, vatPostings, yearEndAccounts } from './year-close.js';
+import { vatPostings, vatShapeOf, yearEndAccounts } from './year-close.js';
 import type { Postings } from './ledger.js';
 
 export type { Postings };
@@ -28,25 +28,25 @@ export function statementPostings(entries: readonly JournalEntry[], chart: reado
   return all as unknown as Postings;
 }
 
-/**
- * Where one entry's tax goes, as the statements and the year close post it (`vatPostingOf` on
- * `statementVatAccount`): the tax, the VAT account and the side it lands on. `fillsEmpty`: the
- * entry leaves that side empty (a code whose amount is the tax itself), so the VAT account is
- * its counter side; otherwise the code splits the tax off the account on the other side.
- */
-export interface VatSplit {
-  tax: number;
-  account: string;
-  side: 'debit' | 'credit';
-  fillsEmpty: boolean;
-}
+/** The account the statements post the tax to, or null where they show it gross (no derived postings to fill a side with). */
+export const statementVatAccountOrNone = (chart: readonly string[]): string | null => (statements().vat === 'net' ? statementVatAccount(chart) : null);
 
-export function vatSplitOf(e: JournalEntry, chart: readonly string[]): VatSplit | null {
-  const account = statementVatAccount(chart);
-  const p = vatPostingOf(e, account);
-  if (!p) return null;
-  const side = p.accountDebit === account ? 'debit' : 'credit';
-  const carrier = side === 'debit' ? p.accountCredit : p.accountDebit;
-  const own = side === 'debit' ? e.accountDebit : e.accountCredit;
-  return { tax: p.amount, account, side, fillsEmpty: !carrier && !own };
+/**
+ * Where one entry's tax goes, as the statements post it (`vatShapeOf`, the shape `vatPostingOf`
+ * builds the derived posting from), on the account `statementVatAccountOrNone` gives:
+ * - `included`: the tax a gross amount holds, split off the other account;
+ * - `onTop`: tax owed on top of the amount (Bezugsteuer without a deduction);
+ * - `tax`: the amount is the tax itself. `fills` then names the entry's side the VAT account
+ *   balances, when the entry leaves it empty; a filled side keeps its own account.
+ */
+export type VatSplit =
+  | { kind: 'included' | 'onTop'; tax: number; account: string }
+  | { kind: 'tax'; tax: number; account: string; fills?: 'debit' | 'credit' };
+
+export function vatSplitOf(e: JournalEntry, vatAccount: string | null): VatSplit | null {
+  const shape = vatAccount ? vatShapeOf(e) : null;
+  if (!shape || !vatAccount) return null;
+  if (!shape.amountIsTax) return { kind: shape.onTop ? 'onTop' : 'included', tax: shape.amount, account: vatAccount };
+  const empty = !(shape.carrier === 'debit' ? e.accountDebit : e.accountCredit);
+  return { kind: 'tax', tax: shape.amount, account: vatAccount, ...(empty && { fills: shape.carrier }) };
 }

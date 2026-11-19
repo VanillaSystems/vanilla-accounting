@@ -328,6 +328,7 @@ export default {
     'journal.fromVatCode': 'd’après le code TVA',
     'journal.vatSide': '{side}: {account}, d’après le code TVA',
     'journal.vatSplit': 'dont TVA {rate} %: {currency} {tax} →',
+    'journal.vatOnTop': 'en sus TVA {rate} %: {currency} {tax} →',
     'journal.vatLabel': 'TVA {code}: {text}',
     'journal.noVat': 'sans TVA',
     'journal.field.date': 'Date',
