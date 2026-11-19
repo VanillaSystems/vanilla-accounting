@@ -115,6 +115,7 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
         if (typeof row.value !== 'number' || !Number.isFinite(row.value)) add(file, `figures.${k}.value`, 'a number');
         if (typeof row.validFrom !== 'string' || !DAY.test(row.validFrom) || !row.validFrom.startsWith(year)) add(file, `figures.${k}.validFrom`, `a day of ${year}`);
         if (typeof row.source !== 'string' || !row.source.trim()) add(file, `figures.${k}.source`, 'every figure names its source');
+        if (row.cite !== undefined) labels(file, `figures.${k}.cite`, row.cite as Labels);
       }
     }
     for (const k of federal) if (!y.figures?.[k]) add(file, `figures.${k}`, 'missing: a contribution of payroll.yaml reads it');

@@ -463,7 +463,13 @@ export interface PayrollData {
 }
 
 /** One figure of the law: its value from a day, with its source. */
-export interface FederalFigure { value: number; validFrom: string; source: string }
+export interface FederalFigure {
+  value: number; validFrom: string;
+  /** Where it comes from, with its explanation: the maintainers' note, one string. */
+  source: string;
+  /** The articles a payslip line names, per language («LAVS art. 5, 13» in French); absent: the head of `source` in every language. */
+  cite?: Partial<Labels>;
+}
 
 /** The reference age for those born from a year on. */
 export interface ReferenceAgeRow { bornFrom: number; years: number; months: number }

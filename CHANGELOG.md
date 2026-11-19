@@ -232,6 +232,10 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- Löhne: a payslip line's federal source names the articles in the person's or the UI's language
+  («LAVS art. 5, 13 …» in French, no «AHVG … Abs.»); the year file's figures carry `cite` per
+  language. The month states are lower case in French, Italian and English throughout («ouverture»
+  beside «ouvert»).
 - Löhne: the company car's rate is typed in percent («Satz % pro Monat», 0.9 prefilled) in both the
   month's and the recurring form, which now share their fields and words (Kaufpreis / Satz %); the
   payslip still computes price × 0.009. A missing price reads «Kaufpreis des Fahrzeugs (ohne MWST)

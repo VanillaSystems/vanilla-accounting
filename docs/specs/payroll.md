@@ -1792,6 +1792,15 @@ merge:
      Fahrzeugs (ohne MWST) fehlt». The month's «Lohnart hinzufügen» and a person's «Wiederkehrende Lohnart»
      share one set of fields (src/app/areas/payroll/inputs.ts), and a refusal names the field by the word the
      form shows («Kaufpreis ohne MWST», not «Menge»).
+123. **A federal figure names its articles per language** (`cite: { de, fr, it, en }` beside `source` in
+     payroll/<year>.yaml): the payslip line, its page and its PDF read them in the person's or the UI's
+     language («Valeur fédérale 2026 · LAVS art. 5, 13; LAI art. 3; RAPG art. 36»). `source` stays the
+     maintainers' one string; a figure without `cite` names the head of its `source` in every language, as
+     before, so an older year file reads as it did. check-payroll wants all four languages once `cite` is there.
+124. **The month states are written alike in every language**: lower case in French, Italian and English
+     («clôturé», «ouvert», «à venir», «ouverture», «brouillon»), as the German adjectives are; German keeps
+     its nouns capitalised («Eröffnung», «Entwurf») by its grammar. A heading uses its own key
+     (`payroll.month.openingTitle`).
 
 ---
 

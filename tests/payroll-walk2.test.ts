@@ -64,3 +64,41 @@ test('the checker refuses a unit, a default or a missing sentence that does not 
   assert.ok(found.some((f) => f.includes('missing.quantity') && f.includes('without fr')));
   assert.ok(found.some((f) => f.includes('quantity × rate')));
 });
+
+test('a federal line names its articles in the reader\'s language; a figure with only a plain source keeps its head in all', async () => {
+  const { lineSource, sourceText, citesOf } = await import('../src/payroll/sources.js');
+  const store = firm();
+  const d = computePayslip(ctxOf(store), 'e1', '2026-10')!;
+  const of = (wageType: string, lang: 'de' | 'fr' | 'it' | 'en') => {
+    const s = lineSource(d.lines.find((x) => x.wageType === wageType)!, d, data, ch.payrollYears, store.insurances)!;
+    return sourceText(s, data.documents, lang);
+  };
+  assert.equal(of('ahv-an', 'de'), 'Bundeswert 2026 · AHVG Art. 5, 13; IVG Art. 3; EOV Art. 36');
+  assert.match(of('ahv-an', 'fr'), /· LAVS art\. 5, 13; LAI art\. 3; RAPG art\. 36$/);
+  assert.match(of('alv-an', 'fr'), /· LACI art\. 3 al\. 1-2$/);
+  assert.match(of('alv-an', 'it'), /· LADI art\. 3 cpv\. 1-2$/);
+  assert.doesNotMatch(of('alv-an', 'fr'), /AVIG|Abs\./);
+  assert.deepEqual(citesOf({ source: 'XG Art. 1: an explanation' }), { de: 'XG Art. 1', fr: 'XG Art. 1', it: 'XG Art. 1', en: 'XG Art. 1' }, 'a plain string as before');
+  // Every figure of the year names its articles in all four languages, and the French ones carry no German abbreviation.
+  for (const [k, rows] of Object.entries(ch.payrollYears!['2026'].figures)) {
+    for (const row of Array.isArray(rows) ? rows : [rows]) {
+      for (const lang of ['de', 'fr', 'it', 'en'] as const) assert.ok(row.cite?.[lang], `${k} cites in ${lang}`);
+      assert.doesNotMatch(row.cite!.fr!, /\b(AHVG|AHVV|AVIG|UVG|UVV|BVG|BVV|IVG|EOV|FamZG|FamZV|Abs\.|lit\.)/, `${k} in French`);
+    }
+  }
+  const bad = structuredClone(ch) as Jurisdiction;
+  (bad.payrollYears!['2026'].figures.ahvEmployee as { cite?: unknown }).cite = { de: 'AHVG Art. 5' };
+  assert.ok(checkPayroll(bad).some((p) => p.path === 'figures.ahvEmployee.cite' && p.message.includes('without fr')));
+});
+
+test('the month states read alike: in French, Italian and English every state is lower case, as the German adjectives are', async () => {
+  for (const lang of ['fr', 'it', 'en'] as const) {
+    const dict = readFileSync(`src/app/i18n/locales/${lang}.ts`, 'utf8');
+    for (const key of ['payroll.state.closed', 'payroll.state.open', 'payroll.state.future', 'payroll.state.opening', 'payroll.slip.draft', 'payroll.slip.closed', 'payroll.slip.opening']) {
+      const v = new RegExp(`"${key.replace(/\./g, '\\.')}": "([^"]*)"`).exec(dict)?.[1];
+      assert.ok(v, `${lang} ${key}`);
+      assert.equal(v[0], v[0].toLowerCase(), `${lang} ${key}: «${v}»`);
+    }
+  }
+  assert.match(readFileSync('src/app/areas/payroll/Payslips.tsx', 'utf8'), /<h2>\{t\('payroll\.month\.openingTitle'\)\}<\/h2>/, 'a heading keeps its capital');
+});

@@ -56,7 +56,7 @@ export function PayslipList(props: Props) {
       <div className="plist">
         <MonthSwitch month={month} onMonth={(m) => nav.go(at({ area: 'payroll', view: 'payslips', month: m }))} />
         {load.state !== 'ready' ? <div className="empty"><p>{load.state === 'loading' ? t('app.loading') : errorText(load.error)}</p></div>
-          : !rows.length && load.data.opening?.length ? <div className="empty" data-testid="month-opening-list"><h2>{t('payroll.state.opening')}</h2>{load.data.opening.map((o) => <p key={o.employee}>{t('payroll.month.opening', { name: o.name, through: monthText(o.through) })}</p>)}</div>
+          : !rows.length && load.data.opening?.length ? <div className="empty" data-testid="month-opening-list"><h2>{t('payroll.month.openingTitle')}</h2>{load.data.opening.map((o) => <p key={o.employee}>{t('payroll.month.opening', { name: o.name, through: monthText(o.through) })}</p>)}</div>
           : !rows.length ? <div className="empty"><h2>{t('payroll.month.none')}</h2><p>{t('payroll.month.noneText')}</p><p><Go nav={nav} loc={employeeAt('new')}>{t('payroll.employee.add')}</Go></p></div>
             : <MonthRows {...props} view={load.data} selected={selected} />}
       </div>

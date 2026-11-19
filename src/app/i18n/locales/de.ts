@@ -7304,6 +7304,7 @@ export const messages = {
   "payroll.mail.toPersonPassword": "unter Mitarbeitende setzen",
   // payroll-walkfix-books:start
   "payroll.state.opening": "Eröffnung",
+  "payroll.month.openingTitle": "Eröffnung",
   "payroll.slip.opening": "Eröffnung",
   "payroll.month.opening": "{name}: Januar bis {through} sind die Eröffnung, vor dem Lohnlauf hier bezahlt und von Hand gebucht. Für diese Monate gibt es keine Lohnabrechnung.",
   "payroll.month.openingPerson": "Eröffnung ansehen",
