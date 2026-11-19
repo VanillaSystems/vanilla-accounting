@@ -11,7 +11,7 @@ and the providers.
 | core | 83 | 23 |
 | engine | 4 | 1 |
 | provider | 15 | 11 |
-| split | 134 | 26 |
+| split | 135 | 26 |
 | infrastructure | 84 | 4 |
 | workflow | 31 | 0 |
 | view | 398 | 55 |
@@ -190,10 +190,10 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/desktop/StartScreen.tsx` | CHF 1 |
 | `src/app/hooks/use-fx.tsx` | CHF 1, ESTV 2 |
 | `src/app/i18n/index.ts` | CHF 1 |
-| `src/app/i18n/locales/de.ts` | CHF 44, MWST 442, ESTV 52, Ziffer 61, form 0535 1, camt.053 24, QR-bill 1, Rappen 3 |
-| `src/app/i18n/locales/en.ts` | CHF 44, MWST 5, ESTV 31, form 0535 1, camt.053 24, QR-bill 4 |
-| `src/app/i18n/locales/fr.ts` | CHF 44, MWST 1, form 0535 1, camt.053 24, QR-bill 1 |
-| `src/app/i18n/locales/it.ts` | CHF 44, MWST 1, form 0535 1, camt.053 24, QR-bill 1 |
+| `src/app/i18n/locales/de.ts` | CHF 51, MWST 442, ESTV 52, Ziffer 63, form 0535 1, camt.053 24, QR-bill 1, Rappen 3 |
+| `src/app/i18n/locales/en.ts` | CHF 51, MWST 5, ESTV 31, form 0535 1, camt.053 24, QR-bill 4 |
+| `src/app/i18n/locales/fr.ts` | CHF 51, MWST 1, form 0535 1, camt.053 24, QR-bill 1 |
+| `src/app/i18n/locales/it.ts` | CHF 51, MWST 1, form 0535 1, camt.053 24, QR-bill 1 |
 | `src/app/lib/api.ts` | MWST 1, camt.053 3 |
 | `src/app/lib/fx-text.ts` | ESTV 1 |
 | `src/cli/check-processes.ts` | ESTV 1 |

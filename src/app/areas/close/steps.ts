@@ -10,6 +10,7 @@ import { t } from '../../i18n/index.js';
 import { filingKeyOf } from '../../../accounting/periods.js';
 import { chargesVat, filing } from '../../../engines/index.js';
 import { correctionName } from '../../lib/vat-words.js';
+import { turnoverNeedsLook } from '../../../accounting/turnover.js';
 
 export { STEPS, DEFAULT_STEP, groupsFor, stepGone, stepOf, stepsFor, type Step } from './model.js';
 import { STEPS, type Step } from './model.js';
@@ -118,6 +119,15 @@ export function checkRows(d: YearCloseView, today: string): CheckRow[] {
     id: 'vat', label: t('close.check.vat'),
     ...(d.vat.unexplained === 0 ? { state: 'ok', detail: t('yearClose.vatExplained') } : { state: over ? 'warn' : 'later', detail: t('yearClose.vatUnexplained', { amount: fmt(d.vat.unexplained), correction: correctionName() }) }),
   }] : [];
+  // The turnover reconciliation is a fact (#569): a hint where revenue declares nothing or a correction is still to declare, never a blocker.
+  const tr = d.turnover;
+  const named = tr ? tr.periods.reduce((n, p) => n + p.differences.length + (p.correction !== 0 ? 1 : 0), 0) : 0;
+  const turnover: CheckRow[] = tr ? [{
+    id: 'turnover', label: t('close.check.turnover'),
+    ...(turnoverNeedsLook(tr) ? { state: 'warn', detail: t('close.turnoverLook', { n: named }) }
+      : named ? { state: 'ok', detail: t('close.turnoverExplained', { n: named }) }
+      : { state: 'ok', detail: t('close.turnoverAgrees') }),
+  }] : [];
   const decided = d.templates.filter((tp) => tp.state).length;
   // A booked step whose figure changed since is a hint, not done (r10c-1).
   const stale = d.templates.filter((tp) => tp.stale).map((tp) => problemText({ code: 'entryStale', template: tp.id, ...tp.stale! }, year));
@@ -133,7 +143,7 @@ export function checkRows(d: YearCloseView, today: string): CheckRow[] {
   const balance: CheckRow = l.balanced
     ? { id: 'balance', label: t('close.check.balance'), state: 'ok', detail: t('yearClose.balanced') }
     : { id: 'balance', label: t('close.check.balance'), state: 'warn', detail: [...(l.residual === 0 ? [] : [t('yearClose.unbalanced', { amount: fmt(l.residual) })]), ...l.causes.map(causeText)].join(' · '), go: { area: 'balance' } };
-  return [...engine, fx, ...vat, entries, invoices, balance];
+  return [...engine, fx, ...vat, ...turnover, entries, invoices, balance];
 }
 
 /** What still keeps "Jahr abschliessen" shut, besides the Kursdifferenz the close books itself. */

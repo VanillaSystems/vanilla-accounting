@@ -8,7 +8,7 @@ import type { EntryTemplate, TemplateState } from '../../../accounting/year-clos
 import type { JournalEntry } from '../../../types/index.js';
 import { dividendSplit } from '../../../accounting/year-close.js';
 import { addDays, booksOpenPeriod, localToday, parsePeriod } from '../../../accounting/periods.js';
-import { chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
+import { chargesVat, filing, vat, withoutInputTax } from '../../../engines/index.js';
 import type { RouteOf } from '../../shell/route.js';
 import { api, errorText, type YearCloseView, type YearEndEntryInput } from '../../lib/api.js';
 import { getAccountMap, getAccounts } from '../../lib/accounts.js';
@@ -142,6 +142,7 @@ function Checks(p: StepProps) {
       </div>
       <YearEndBalances {...p} />
       {chargesVat() && <VatReconciliation d={d} />}
+      {d.turnover && <TurnoverReconciliation d={d} books={books} nav={nav} />}
     </>
   );
 }
@@ -264,6 +265,68 @@ function VatReconciliation({ d }: { d: YearCloseView }) {
       {v.unexplained === 0
         ? <p className="okline">{I.check}{t('yearClose.vatExplained')}</p>
         : <p className="warnline">{I.dot}{t('yearClose.vatUnexplained', { amount: fmt(v.unexplained), correction: correctionName() })}</p>}
+    </>
+  );
+}
+
+type Difference = NonNullable<YearCloseView['turnover']>['periods'][number]['differences'][number];
+
+/**
+ * The turnover the revenue accounts hold against the turnover the returns declare (#569), period
+ * by period, each difference with its entries and the period it belongs to: a fact, never booked
+ * here. A filed period is corrected in the open one (`corrects`) and declared in its correction.
+ */
+function TurnoverReconciliation({ d, books, nav }: { d: YearCloseView; books: StepProps['books']; nav: Nav }) {
+  const r = d.turnover!;
+  const form = vat().form;
+  const correction = correctionName();
+  const entry = (id: string) => (books.journalEntries ?? []).find((e) => e.id === id);
+  const links = (ids: readonly string[]) => (
+    <span className="chklinks">{ids.map((id) => <Go key={id} to={at({ area: 'journal', id }, entry(id)?.date)} nav={nav} className="mono">{entry(id)?.transactionRef ?? id} →</Go>)}</span>
+  );
+  const say = (period: string, x: Difference) => tx(`yearClose.turnover.${x.code}`, { period, amount: fmt(x.amount), correction, ...('in' in x && { in: x.in }) });
+  const named = r.periods.filter((p) => p.differences.length || p.correction !== 0);
+  return (
+    <>
+      <h3>{t('yearClose.sectionTurnover')}</h3>
+      <p className="m">{t('yearClose.turnoverIntro', { box: form.turnoverBox, label: form.turnoverLabel, correction })}</p>
+      <div className="ftab turnq">
+        <div className="fh"><span>{t('yearClose.colQuarter')}</span><span className="r">{t('yearClose.colBooked')}</span><span className="r">{t('yearClose.colDeclared', { box: form.turnoverBox })}</span><span className="r">{t('yearClose.colFiled')}</span><span className="r">{t('yearClose.colCorrection')}</span></div>
+        {r.periods.map((p) => (
+          <div key={p.period} className="fr" data-period={p.period}>
+            <span className="mono">{p.period}</span>
+            <span className={`r mono${p.booked !== p.declared ? ' warn' : ''}`}>{fmt(p.booked)}</span>
+            <span className="r mono">{fmt(p.declared)}</span>
+            <span className="r mono">{p.filed === undefined ? <span className="m">{t('yearClose.notFiled')}</span> : fmt(p.filed)}</span>
+            <span className={`r mono${p.correction !== 0 ? ' warn' : ''}`}>{p.correction === 0 ? '–' : fmt(p.correction)}</span>
+          </div>
+        ))}
+        <div className="fr tot"><span>{t('yearClose.turnoverTotal')}</span><span className="r mono">{fmt(r.booked)}</span><span className="r mono">{fmt(r.declared)}</span><span className="r mono">{fmt(r.filed)}</span><span className="r mono">{r.correction === 0 ? '–' : fmt(r.correction)}</span></div>
+      </div>
+      {named.length === 0
+        ? <p className="okline">{I.check}{t('close.turnoverAgrees')}</p>
+        : (
+          <div className="checks turnd">
+            {named.map((p) => (
+              <Fragment key={p.period}>
+                {p.differences.map((x) => (
+                  <div key={`${p.period}-${x.code}-${'in' in x ? x.in : ''}`} className={`chk st-${x.code === 'undeclared' || x.code === 'differs' ? 'warn' : 'ok'}`} data-difference={x.code}>
+                    <span className="ic">{x.code === 'undeclared' || x.code === 'differs' ? '!' : I.check}</span>
+                    <span className="cx"><b><span className="mono">{p.period}</span> {say(p.period, x)}</b>{links(x.entryIds)}</span>
+                    <span />
+                  </div>
+                ))}
+                {p.correction !== 0 && (
+                  <div className="chk st-open" data-difference="correction">
+                    <span className="ic">○</span>
+                    <span className="cx"><b><span className="mono">{p.period}</span> {t('yearClose.turnover.correction', { amount: fmt(p.correction), correction })}</b>{p.correctionEntryIds.length ? links(p.correctionEntryIds) : <span>{t('yearClose.turnover.recomputed', { correction })}</span>}</span>
+                    <span />
+                  </div>
+                )}
+              </Fragment>
+            ))}
+          </div>
+        )}
     </>
   );
 }

@@ -52,6 +52,8 @@ button.chk:hover { background: var(--hover); }
 .hcard code { font: 11.5px var(--font-mono); color: var(--ink-2); }
 .ftab.fx .fh, .ftab.fx .fr { grid-template-columns: minmax(0, 1fr) repeat(5, minmax(84px, auto)); }
 .ftab.vatq .fh, .ftab.vatq .fr { grid-template-columns: minmax(0, 1fr) repeat(3, minmax(110px, auto)); }
+.ftab.turnq .fh, .ftab.turnq .fr { grid-template-columns: minmax(72px, 1fr) repeat(4, minmax(0, 128px)); }
+.checks.turnd { margin-top: 8px; }
 .ftab.sums .fr { grid-template-columns: minmax(0, 1fr) auto; }
 .ftab.open .fh, .ftab.open .fr { grid-template-columns: 64px minmax(0, 1fr) minmax(130px, auto); }
 

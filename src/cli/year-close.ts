@@ -24,6 +24,7 @@ import { causeText, chf, problemText } from './year-close-text.js';
 import { readFileSync } from 'node:fs';
 import { bookRevaluation, closeYear, markTemplate, ratesOf, setCashCount, setYearEndBalance, YearCloseRefused, yearCloseOf } from '../books/year-close.js';
 import { openWorkspace } from '../workspace/workspace.js';
+import { vat } from '../engines/index.js';
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -89,6 +90,17 @@ function print(c: YearClose): void {
   console.log(`  owed on 1.1. ${chf(v.opening)} + tax of the year ${chf(v.booked)} − paid ${chf(v.paid)} = owed on 31.12. ${chf(v.owed)}`);
   console.log(`  expected: the fourth quarter and quarters not filed yet ${chf(v.expected)}; rounding per entry ${chf(v.rounding)}`);
   console.log(`  ${v.unexplained === 0 ? '✓ explained' : `! unexplained CHF ${chf(v.unexplained)}: a payment to the ESTV missing or booked twice, or a Korrekturabrechnung (0535) not paid in the year`}`);
+
+  if (c.turnover) {
+    const box = vat().form.turnoverBox;
+    console.log(`\nTurnover reconciliation (revenue accounts against box ${box})`);
+    for (const p of c.turnover.periods) {
+      const filed = p.filed === undefined ? 'not filed' : `filed ${chf(p.filed)}`;
+      const corr = p.correction !== 0 ? `, correction ${chf(p.correction)} (${p.correctionEntryIds.join(', ') || 'recomputed'})` : '';
+      console.log(`  ${p.period}: booked ${chf(p.booked).padStart(10)}, declared ${chf(p.declared).padStart(10)}, ${filed}${corr}`);
+      for (const d of p.differences) console.log(`      ${d.code}${'in' in d ? ` ${d.in}` : ''} ${chf(d.amount)}: ${d.entryIds.join(', ')}`);
+    }
+  }
 
   console.log('\nGuided year-end entries (book in the Jahresabschluss view, or mark with --done / --na)');
   for (const t of c.templates) {
