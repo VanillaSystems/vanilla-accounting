@@ -168,7 +168,7 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
     const loaded = firm === undefined ? input.tariffs?.(r, year) : undefined;
     const rate = firm ?? (loaded ? provisionOf(loaded.file, t.provision.electronic, to) : undefined);
     if (rate === undefined) { miss(`tariff:${r}:${year}`, c.wageType.key); continue; }
-    // Rounded as the tax is (5 Rappen, data `rounding`): money of the same settlement (§22 decision 121).
+    // Rounded as the tax is (the data's step `rounding`): money of the same settlement (§22 decision 121).
     const amount = roundStep(taxed * rate / 100, t.rounding);
     if (amount === 0) continue;
     // The region always on the line, whatever the rate's source: the settlement list reads it.
