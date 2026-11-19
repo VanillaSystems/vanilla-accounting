@@ -222,7 +222,7 @@ test('the browser driver blocks a navigation its guard refuses before the reques
   await new Promise((r) => server.once('listening', r));
   const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
   const guard = (url: string) => url.startsWith(`${base}/inbox`) || url.startsWith(`${base}/attachment/`);
-  const driver = await playwrightDriver('test-web', guard, { headless: true });
+  const driver = await playwrightDriver('test-web', guard, { headless: true, mockKeychain: true });
   try {
     assert.deepEqual(await driver.goto(`${base}/inbox`), { url: `${base}/inbox` });
     const page = await driver.read();

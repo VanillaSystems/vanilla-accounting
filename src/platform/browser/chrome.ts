@@ -50,9 +50,11 @@ export interface OpenSession {
 /**
  * Attaches to the session's Chrome, starting it when none runs. `url` is opened in a new window
  * when Chrome is started. `headless` only for tests: a run reads in a headed window, so the site
- * sees the same browser the person signed in with.
+ * sees the same browser the person signed in with. `mockKeychain` only for tests too: the session
+ * keeps its cookies outside the macOS Keychain, which a test's Chrome cannot be let into (Chrome
+ * for Testing 156 waits for it before its first request, so every navigation hung).
  */
-export async function openSession(session: string, opts: { url?: string; headless?: boolean } = {}): Promise<OpenSession> {
+export async function openSession(session: string, opts: { url?: string; headless?: boolean; mockKeychain?: boolean } = {}): Promise<OpenSession> {
   const dir = sessionDir(session);
   mkdirSync(dir, { recursive: true });
   let port = await runningPort(dir);
@@ -63,7 +65,7 @@ export async function openSession(session: string, opts: { url?: string; headles
     rmSync(join(dir, 'DevToolsActivePort'), { force: true });
     const args = [
       `--user-data-dir=${dir}`, '--remote-debugging-port=0', '--remote-debugging-address=127.0.0.1',
-      '--no-first-run', '--no-default-browser-check', ...(opts.headless ?? process.env.VANILLA_BROWSER_HEADLESS === '1' ? ['--headless=new'] : []), opts.url ?? 'about:blank',
+      '--no-first-run', '--no-default-browser-check', ...(opts.mockKeychain ? ['--use-mock-keychain'] : []), ...(opts.headless ?? process.env.VANILLA_BROWSER_HEADLESS === '1' ? ['--headless=new'] : []), opts.url ?? 'about:blank',
     ];
     spawn(exe, args, { detached: true, stdio: 'ignore' }).unref();
     for (let i = 0; i < 100 && port === undefined; i++) {

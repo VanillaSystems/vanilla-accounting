@@ -25,7 +25,7 @@ const nameOf = (url: string, disposition?: string): string => {
 export class NoChromeError extends Error {}
 
 /** Opens the session (starting its Chrome when none runs) and a tab for this run. */
-export async function playwrightDriver(session: string, guard: (url: string) => boolean, opts: { headless?: boolean } = {}): Promise<WebDriver> {
+export async function playwrightDriver(session: string, guard: (url: string) => boolean, opts: { headless?: boolean; mockKeychain?: boolean } = {}): Promise<WebDriver> {
   if (!process.env.CHROME_PATH && !findBrowser()) throw new NoChromeError('no Chromium browser installed');
   const open = await openSession(session, opts);
   const context = open.browser.contexts()[0] ?? await open.browser.newContext();
