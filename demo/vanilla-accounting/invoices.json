@@ -1,5 +1,5 @@
 {
-  "schema": 4,
+  "schema": 5,
   "contacts": [
     {
       "id": "cu_5GQVervgd2rF",
@@ -1077,11 +1077,31 @@
       "reminders": [
         {
           "level": 1,
+          "title": "Zahlungserinnerung",
           "date": "2026-09-28",
           "dueDate": "2026-10-08",
           "intro": "Unsere Rechnung 2026-006 vom 17.08.2026 war am 16.09.2026 fällig. Bis heute haben wir keine Zahlung erhalten. Bitte überweisen Sie den offenen Betrag innert 10 Tagen.",
           "closing": "Falls Sie inzwischen bezahlt haben, betrachten Sie dieses Schreiben als gegenstandslos.\nFreundliche Grüsse",
           "documentId": "sd_ECh_PIGkfghW"
+        },
+        {
+          "level": 2,
+          "title": "1. Mahnung",
+          "date": "2026-11-02",
+          "dueDate": "2026-11-12",
+          "intro": "Trotz unserer Mahnung vom 28.09.2026 ist die Rechnung 2026-006 vom 17.08.2026 noch offen. Bitte überweisen Sie den Betrag innert 10 Tagen.",
+          "closing": "Falls Sie inzwischen bezahlt haben, betrachten Sie dieses Schreiben als gegenstandslos.\nFreundliche Grüsse",
+          "documentId": "sd_AnI9rq4qagTX"
+        },
+        {
+          "level": 3,
+          "title": "2. Mahnung",
+          "date": "2026-11-16",
+          "dueDate": "2026-11-26",
+          "intro": "Trotz unserer Mahnung vom 02.11.2026 ist die Rechnung 2026-006 vom 17.08.2026 noch offen. Bitte überweisen Sie den Betrag innert 10 Tagen.",
+          "closing": "Falls Sie inzwischen bezahlt haben, betrachten Sie dieses Schreiben als gegenstandslos.\nFreundliche Grüsse",
+          "fee": 20,
+          "documentId": "sd_lHQFxK7sZA6P"
         }
       ],
       "comments": [
@@ -3553,9 +3573,9 @@
       "deleted": false,
       "invoiceId": "in_aI3ItU60xlva",
       "kind": "reminder",
-      "title": "1. Mahnung · Rechnung 2026-006",
+      "title": "Zahlungserinnerung · Rechnung 2026-006",
       "file": "transactional-data/2026/invoices/sent/sd_ECh_PIGkfghW.pdf",
-      "sha256": "b98855c54ecd5180f70d6b2b69f1979f90190753128c6c480d729cdb104bae5d",
+      "sha256": "8a3ac06774cb2fc7ac6ac9854912c4ba7133640be1a494b1e4273674c53c6986",
       "sentAt": "2026-09-28T09:00:00.000Z",
       "to": "buchhaltung@bistro.example",
       "channel": "download"
@@ -3615,6 +3635,34 @@
       "sha256": "3fea7bb5e5645a729c85a28b42268c0069fcc7be2b714abe8b1a237614c37f5a",
       "sentAt": "2026-10-05T07:30:00.000Z",
       "to": "download",
+      "channel": "download"
+    },
+    {
+      "id": "sd_AnI9rq4qagTX",
+      "createdAt": "2026-11-02T08:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_aI3ItU60xlva",
+      "kind": "reminder",
+      "title": "1. Mahnung · Rechnung 2026-006",
+      "file": "transactional-data/2026/invoices/sent/sd_AnI9rq4qagTX.pdf",
+      "sha256": "a9ec41c4ee3096258a6e13054bf8cb19b057b3d1adc3543c028f5575fb1a4dc1",
+      "sentAt": "2026-11-02T08:30:00.000Z",
+      "to": "buchhaltung@bistro.example",
+      "channel": "download"
+    },
+    {
+      "id": "sd_lHQFxK7sZA6P",
+      "createdAt": "2026-11-16T08:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_aI3ItU60xlva",
+      "kind": "reminder",
+      "title": "2. Mahnung · Rechnung 2026-006",
+      "file": "transactional-data/2026/invoices/sent/sd_lHQFxK7sZA6P.pdf",
+      "sha256": "e5b13983e24d84127be1b259f4246e94239efb94065c489652043456bb4d2384",
+      "sentAt": "2026-11-16T08:30:00.000Z",
+      "to": "buchhaltung@bistro.example",
       "channel": "download"
     },
     {

@@ -118,7 +118,7 @@ test('Versendet: the log newest first, filtered by contact, kind and channel', (
   assert.deepEqual(sentRows(d, undefined, { kind: 'reminder' }).map((x) => x.title), ['2. Mahnung · Rechnung 2026-006', '1. Mahnung · Rechnung 2026-006', 'Zahlungserinnerung · Rechnung 2026-006']);
   const bistro = book.contacts.find((c) => c.name.includes('Bistro'))!;
   assert.ok(sentRows(d, undefined, { customer: bistro.id }).every((x) => book.invoices.find((i) => i.id === x.invoiceId)?.customerId === bistro.id));
-  assert.deepEqual([sentRows(d, undefined, { channel: 'email' }).length, sentRows(d, undefined, { channel: 'download' }).length], [20, 6],
+  assert.deepEqual([sentRows(d, undefined, { channel: 'email' }).length, sentRows(d, undefined, { channel: 'download' }).length], [20, 8],
     'the demo sent its documents by e-mail; 2026-014 and 2026-016 were downloaded, and so were the three Mahnungen, the Storno notice and the two Lieferscheine');
 });
 
