@@ -331,7 +331,7 @@ test('a booking a person partly changed: only the lines code owns are spread, ov
   assert.deepEqual(rows(b, 'P1').map((r) => r.slice(1)).sort(), [['3000', 'V81', 648.6], ['3600', 'V81', 432.4]], 'her line as she left it; ours whole on the new account, none of it on 3400');
 });
 
-test('a foreign currency: the CHF of each code stays to the cent when a booking splits into more lines', () => {
+test('a foreign currency: every line keeps the official rate; the cent the split moves is named in the plan', () => {
   setJurisdiction(ch, EFFECTIVE_QUARTERLY);
   const eur: PaymentContext = { ...ctx, bankAccounts: [...ctx.bankAccounts, { bank: 'Raiffeisen', currency: 'EUR', account: '1022', label: 'Bank EUR', role: 'bank' }], fx: { daily: () => 0.9337 } };
   const book = newBook();
@@ -339,16 +339,18 @@ test('a foreign currency: the CHF of each code stays to the cent when a booking 
   const g = totals(a).gross;
   const b = books([{ ...paying('P1', '2026-08-04', g, a.reference), currency: 'EUR' }]);
   matchPayments(b, book, eur);
-  const chfBefore = b.journalEntries.filter((e) => e.vatCode === 'V81').reduce((s, e) => s + Math.round(chfAmount(e) * 100), 0);
+  const cents = (es: JournalEntry[]) => es.reduce((s, e) => s + Math.round(chfAmount(e) * 100), 0);
+  const chfBefore = cents(b.journalEntries.filter((e) => e.vatCode === 'V81'));
   const inv = book.invoices[0] as Issued;
   const plan = planAccountChange(b, inv, withAccounts(inv, [{ line: 1, account: '3400' }], acc()), '2026-08-20', acc());
-  const naive = plan.rebook[0].next.reduce((s, n) => s + Math.round(Math.round(n.amount * 0.9337 * 100 + 1e-9)), 0);
-  assert.notEqual(naive, chfBefore, 'the case: converted line by line at the official rate, the code would move a cent');
   update(b, PERSON, (x) => applyAccountChange(x, [inv], plan, acc()));
   const after = b.journalEntries.filter((e) => e.vatCode === 'V81');
   assert.equal(after.length, 2);
-  assert.equal(after.reduce((s, e) => s + Math.round(chfAmount(e) * 100), 0), chfBefore, 'the code\'s CHF as it was');
-  assert.equal(Math.round(after.reduce((s, e) => s + e.amount, 0) * 100), Math.round(g * 100), 'and its EUR');
+  assert.ok(after.every((e) => e.exchangeRate === 0.9337 && e.exchangeCurrency === 'EUR'), 'the official rate on every line, never one of our own');
+  assert.equal(Math.round(after.reduce((s, e) => s + e.amount, 0) * 100), Math.round(g * 100), 'the code\'s EUR as it was');
+  const moved = cents(after) - chfBefore;
+  assert.notEqual(moved, 0, 'the case: line by line the code moves a cent');
+  assert.equal(Math.round((plan.rebook[0].rounding ?? 0) * 100), moved, 'and the plan names that cent, for the dialog to say');
 });
 
 test('a draft that keeps its number, dated into another year: a warning, issued only with «Trotzdem ausstellen»', () => {

@@ -98,6 +98,7 @@ export function AccountsDialog({ inv, nav }: Props & { inv: Issued }) {
                 {plan.rebook.flatMap((r) => (r.filed
                   ? [<li key={r.ref} data-filed>{t('invoices.accountsFiled', { ref: r.ref, date: formatDate(r.date) })}</li>]
                   : r.moves.map((m, k) => <li key={`${r.ref}${k}`}>{t('invoices.accountsRebook', { ref: r.ref, date: formatDate(r.date), amount: money(m.amount, r.currency), from: m.from, to: m.to })}</li>)))}
+                {plan.rebook.filter((r) => r.rounding).map((r) => <li key={`rd${r.ref}`} data-rounding>{t('invoices.accountsRounding', { ref: r.ref, amount: money(Math.abs(r.rounding!), baseCurrency()) })}</li>)}
                 {plan.reclass.flatMap((r) => r.moves.map((m, k) => <li key={`${r.ref}${k}`} data-reclass>{t('invoices.accountsReclass', { ref: r.ref, date: formatDate(r.date), amount: money(m.amount, baseCurrency()), from: m.from, to: m.to })}</li>))}
                 {plan.notes.map((n) => <li key={n.id}>{t('invoices.accountsNote', { number: n.number })}</li>)}
                 {plan.kept.map((ref) => <li key={ref}>{t('invoices.accountsKept', { ref })}</li>)}

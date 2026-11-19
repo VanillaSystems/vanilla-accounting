@@ -76,7 +76,13 @@ export interface AccountRebooking {
   filed: boolean;
   moves: AccountMove[];
   /** Its revenue lines as they will be (an open booking), in its currency, with their amount in the books' currency where it converts. */
-  next: Array<{ side: Side; vatCode?: string; account: string; amount: number; chf?: number }>;
+  next: Array<{ side: Side; vatCode?: string; account: string; amount: number }>;
+  /**
+   * A foreign booking split into more lines: each line converts at the official rate on its own, so
+   * the converted revenue may move by a cent; by how much, in the books' currency (a fact the dialog
+   * names, never a rate of our own). Absent: nothing moves.
+   */
+  rounding?: number;
 }
 
 export interface AccountChangePlan {
@@ -254,6 +260,7 @@ export function planAccountChange(books: Books, inv: Issued, next: Issued, date:
       const groups = new Map<string, typeof own>();
       for (const l of own) groups.set(`${l.side}|${l.e.vatCode ?? ''}`, [...(groups.get(`${l.side}|${l.e.vatCode ?? ''}`) ?? []), l]);
       const before = new Map<string, number>(), after = new Map<string, number>();
+      let rounding = 0;
       const nextLines: AccountRebooking['next'] = [];
       for (const [key, ls] of groups) {
         const [side, code] = key.split('|') as [Side, string];
@@ -271,19 +278,19 @@ export function planAccountChange(books: Books, inv: Issued, next: Issued, date:
         const total = ls.reduce((s, l) => s + toRappen(l.e.amount), 0);
         const target = spread(total, ws, base, accounts);
         if (!target.size) { for (const l of ls) nextLines.push({ side, ...(code ? { vatCode: code } : {}), account: l.account, amount: l.e.amount }); continue; }
-        // In a foreign currency the books' total of the code is spread too, so no code's converted total moves (each line then carries its own rate).
-        const rate = ls[0].e.exchangeRate;
-        const chf = rate !== undefined ? spread(ls.reduce((s, l) => s + toRappen(chfAmount(l.e)), 0), ws, base, accounts) : undefined;
-        for (const l of ls) add(before, l.account, toRappen(l.e.amount));
+        // Every line keeps the official rate of its booking (ADR 0001); what the split moves in the books' currency is named.
+        const fx = ls[0].e.exchangeRate !== undefined ? { exchangeCurrency: ls[0].e.exchangeCurrency, exchangeRate: ls[0].e.exchangeRate } : {};
+        const converted = (amount: number) => toRappen(chfAmount({ ...ls[0].e, ...fx, amount }));
+        for (const l of ls) { add(before, l.account, toRappen(l.e.amount)); rounding -= sign * toRappen(chfAmount(l.e)); }
         for (const [a, r] of target) {
           add(after, a, r);
-          if (r) nextLines.push({ side, ...(code ? { vatCode: code } : {}), account: a, amount: fromRappen(r), ...(chf ? { chf: fromRappen(chf.get(a) ?? 0) } : {}) });
+          if (r) { nextLines.push({ side, ...(code ? { vatCode: code } : {}), account: a, amount: fromRappen(r) }); rounding += sign * converted(fromRappen(r)); }
         }
       }
       const moves = movesOf(before, after).map((m) => ({ ...m, amount: fromRappen(m.amount) }));
       const e0 = own[0].e;
       if (filed) plan.rebook.push({ ref, number: d.old.number, date: e0.date, currency: e0.exchangeCurrency ?? ctx.base, filed, moves: [], next: [] });
-      else if (moves.length) plan.rebook.push({ ref, number: d.old.number, date: e0.date, currency: e0.exchangeCurrency ?? ctx.base, filed, moves, next: nextLines });
+      else if (moves.length) plan.rebook.push({ ref, number: d.old.number, date: e0.date, currency: e0.exchangeCurrency ?? ctx.base, filed, moves, next: nextLines, ...(rounding ? { rounding: fromRappen(rounding) } : {}) });
     }
     if (!filedNow.size) continue;
     // Where the filed revenue stands now: as filed, moved by the document's earlier reclassifications.
@@ -312,12 +319,9 @@ export function applyAccountChange(books: Books, docs: readonly Issued[], plan: 
     const ids = own.map((l) => l.e.id);
     const fresh = r.next.map((n, k): JournalEntry => {
       const t = templates.get(`${n.side}|${n.vatCode ?? ''}`)!;
-      // A foreign line converts to its share of the code's converted total: its rate is that share over its amount when the official rate rounds otherwise.
-      const rate = t.exchangeRate !== undefined && n.chf !== undefined && toRappen(n.amount * t.exchangeRate) !== toRappen(n.chf) ? n.chf / n.amount : t.exchangeRate;
       return {
         ...t, id: ids[k] ?? idSource.bytes(8).toString('hex'), amount: n.amount,
         ...(n.side === 'sale' ? { accountCredit: n.account } : { accountDebit: n.account }),
-        ...(rate !== undefined ? { exchangeRate: rate } : {}),
       };
     });
     const at = books.journalEntries.indexOf(own[0].e);

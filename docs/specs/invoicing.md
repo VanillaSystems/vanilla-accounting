@@ -1234,10 +1234,11 @@ listed here and updated with phase 2's build:
     on over two, it is refused (`credited`) with the way on (one account each, or cancel and issue
     the credit note again). The credit notes' positions record the change too. A Storno reverses a
     document's `-kk-` entries with its event, so no revenue account keeps a part of it.
-49. **Foreign currency (slice F2, after review).** A booking split into more lines spreads the code's
-    total in the books' currency as well; a line whose official rate would round to another cent
-    carries the rate of its share (its converted amount over its amount), so no code's converted total
-    moves. `npm run restamp-fx` would put the official rate back on such a line and with it the cent.
+49. **Foreign currency (slice F2, after review).** Every line keeps the official daily sell rate of
+    its booking (AGENTS.md, ADR 0001); no rate of our own. A booking split into more lines converts
+    each line on its own, so a code's total in the books' currency may move by a cent. The plan names
+    it (`rounding` on the booking) and the dialog says so as a fact («Rundung: CHF 0.01 durch die
+    Aufteilung von …»); the change goes ahead (warn, don't block).
 50. **Order of writes (slice F2, after review).** Both actions write the books first through the
     write door, then the documents in the invoicing queue (service.ts `backToDraft`,
     `changeAccounts`). Documents changed meanwhile: back to draft renames the PDF back; Konten ändern

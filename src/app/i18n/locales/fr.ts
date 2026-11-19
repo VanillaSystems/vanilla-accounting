@@ -2977,6 +2977,7 @@ export default {
     'invoices.downloadInstead': 'Télécharger le PDF',
     'invoice.refusal.credited': "Une note de crédit comptabilise sur un compte que la modification répartit sur deux comptes : modifier chaque compte vers un seul, ou annuler la note de crédit et l’émettre à nouveau.",
     'invoices.accountsNote': "Les positions de la note de crédit {number} suivent, avec leurs écritures.",
+    'invoices.accountsRounding': "Arrondi : {amount} dû à la répartition de {ref} (chaque ligne convertie au cours officiel)",
     'invoice.missing.numberYear': "un numéro d’une autre année que la date",
     'invoice.refusal.sent': "Envoyé ou téléchargé : le client détient le document, il reste émis (art. 27 al. 2 LTVA). Une note de crédit ou une annulation le corrige.",
     'invoice.refusal.settled': "Un montant a été reçu, crédité ou passé en perte : le document reste émis.",

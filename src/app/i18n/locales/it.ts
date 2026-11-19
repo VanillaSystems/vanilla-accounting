@@ -2977,6 +2977,7 @@ export default {
     'invoices.downloadInstead': 'Scaricare il PDF',
     'invoice.refusal.credited': "Una nota di credito registra su un conto che la modifica ripartisce su due conti: cambiare ogni conto verso uno solo, oppure stornare la nota di credito ed emetterla di nuovo.",
     'invoices.accountsNote': "Le posizioni della nota di credito {number} seguono, con le loro registrazioni.",
+    'invoices.accountsRounding': "Arrotondamento: {amount} dovuto alla ripartizione di {ref} (ogni riga convertita al cambio ufficiale)",
     'invoice.missing.numberYear': "un numero di un anno diverso dalla data",
     'invoice.refusal.sent': "Inviato o scaricato: il cliente ha il documento, resta emesso (art. 27 cpv. 2 LIVA). Una nota di credito o uno storno lo corregge.",
     'invoice.refusal.settled': "È stato incassato, accreditato o stralciato un importo: il documento resta emesso.",

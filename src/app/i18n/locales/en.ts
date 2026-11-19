@@ -2977,6 +2977,7 @@ export default {
     'invoices.downloadInstead': 'Download the PDF',
     'invoice.refusal.credited': "A credit note books on an account the change splits over two: change each account to one, or cancel the credit note and issue it again.",
     'invoices.accountsNote': "The positions of credit note {number} follow, with their bookings.",
+    'invoices.accountsRounding': "Rounding: {amount} from splitting {ref} (each line converted at the official rate)",
     'invoice.missing.numberYear': "a number of another year than the date",
     'invoice.refusal.sent': "Sent or downloaded: the customer holds the document, so it stays issued (Art. 27 para. 2 VAT Act). A credit note or a cancellation corrects it.",
     'invoice.refusal.settled': "Something was received, credited or written off: the document stays issued.",

@@ -2974,6 +2974,7 @@ export const messages = {
   'invoices.downloadInstead': 'PDF herunterladen',
   'invoice.refusal.credited': "Eine Gutschrift bucht auf ein Konto, das die Änderung auf zwei Konten aufteilt: jedes Konto auf eines ändern, oder die Gutschrift stornieren und neu ausstellen.",
   'invoices.accountsNote': "Die Positionen der Gutschrift {number} folgen, mit ihren Buchungen.",
+  'invoices.accountsRounding': "Rundung: {amount} durch die Aufteilung von {ref} (jede Zeile zum offiziellen Kurs umgerechnet)",
   'invoice.missing.numberYear': "eine Nummer aus einem anderen Jahr als das Datum",
   'invoice.refusal.sent': "Gesendet oder heruntergeladen: der Kunde hat das Dokument, es bleibt ausgestellt (MWSTG Art. 27 Abs. 2). Eine Gutschrift oder ein Storno korrigiert es.",
   'invoice.refusal.settled': "Darauf ist etwas eingegangen, gutgeschrieben oder ausgebucht: das Dokument bleibt ausgestellt.",
