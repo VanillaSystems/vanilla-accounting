@@ -177,8 +177,8 @@ contributions:
   - { wageType: bvg-ag, insurance: bvg, base: bvg, rate: { person: employer } }
 
 # Holidays (OR Art. 329a, BGE 129 III 493): holiday days to weeks by the working days of a week; an hourly wage paid
-# with the holidays in it carries the surcharge weeks / (weeksPerYear - weeks): 4/48 = 8.33 %, 5/47 = 10.64 %,
-# 6/46 = 13.04 %. Without holiday days in the Anstellung the legal minimum: 5 weeks up to the 20th birthday, then 4.
+# with the holidays in it carries the surcharge weeks / (weeksPerYear - weeks): 4/48, 5/47, 6/46, to two decimals.
+# Without holiday days in the Anstellung the legal minimum: 5 weeks up to the 20th birthday, then 4.
 holidays:
   daysPerWeek: 5
   weeksPerYear: 52

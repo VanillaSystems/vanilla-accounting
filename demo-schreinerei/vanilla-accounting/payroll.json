@@ -1,0 +1,325 @@
+{
+  "schema": 1,
+  "company": {
+    "canton": [
+      {
+        "validFrom": "2026-01-01",
+        "enteredAt": "2026-10-01T08:00:00.000Z",
+        "value": "SG"
+      }
+    ],
+    "payday": [
+      {
+        "validFrom": "2026-01-01",
+        "enteredAt": "2026-10-01T08:00:00.000Z",
+        "value": 25
+      }
+    ],
+    "postingDate": [
+      {
+        "validFrom": "2026-01-01",
+        "enteredAt": "2026-10-01T08:00:00.000Z",
+        "value": "month-end"
+      }
+    ],
+    "rounding": [
+      {
+        "validFrom": "2026-01-01",
+        "enteredAt": "2026-10-01T08:00:00.000Z",
+        "value": 0.05
+      }
+    ],
+    "proration": [
+      {
+        "validFrom": "2026-01-01",
+        "enteredAt": "2026-10-01T08:00:00.000Z",
+        "value": "calendar-days"
+      }
+    ],
+    "thirteenth": [
+      {
+        "validFrom": "2026-01-01",
+        "enteredAt": "2026-10-01T08:00:00.000Z",
+        "value": "twelfth"
+      }
+    ],
+    "contact": {
+      "name": "Reto Beispiel",
+      "phone": "071 000 00 00"
+    }
+  },
+  "insurances": [
+    {
+      "id": "ak",
+      "kind": "ahv",
+      "business": "ausgleichskasse",
+      "name": "Ausgleichskasse Muster",
+      "memberNumber": "200.1357",
+      "solutions": [
+        {
+          "code": "A",
+          "rates": [
+            {
+              "validFrom": "2026-01-01",
+              "enteredAt": "2026-10-01T08:00:00.000Z",
+              "value": {
+                "adminCost": 2.5
+              }
+            }
+          ]
+        }
+      ],
+      "validFrom": "2026-01-01"
+    },
+    {
+      "id": "fak",
+      "kind": "fak",
+      "name": "Familienausgleichskasse Muster",
+      "solutions": [
+        {
+          "code": "A",
+          "rates": [
+            {
+              "validFrom": "2026-01-01",
+              "enteredAt": "2026-10-01T08:00:00.000Z",
+              "value": {
+                "employer": 1.6
+              }
+            }
+          ]
+        }
+      ],
+      "validFrom": "2026-01-01"
+    },
+    {
+      "id": "uvg",
+      "kind": "uvg",
+      "name": "Muster Unfallversicherung AG",
+      "contractNumber": "UV-2026-41",
+      "solutions": [
+        {
+          "code": "A1",
+          "label": "Werkstatt",
+          "rates": [
+            {
+              "validFrom": "2026-01-01",
+              "enteredAt": "2026-10-01T08:00:00.000Z",
+              "value": {
+                "bu": 1.8,
+                "nbu": 1.4,
+                "nbuEmployerShare": 0
+              }
+            }
+          ]
+        }
+      ],
+      "validFrom": "2026-01-01"
+    },
+    {
+      "id": "pk",
+      "kind": "bvg",
+      "name": "Pensionskasse Muster",
+      "contractNumber": "PK-7-2026",
+      "solutions": [
+        {
+          "code": "K",
+          "rates": []
+        }
+      ],
+      "validFrom": "2026-01-01"
+    }
+  ],
+  "wageTypes": [],
+  "employees": [
+    {
+      "id": "marco",
+      "language": "de",
+      "birthDate": "1988-11-02",
+      "sex": "m",
+      "name": [
+        {
+          "validFrom": "2026-01-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "first": "Marco",
+            "last": "Beispiel"
+          }
+        }
+      ],
+      "address": [
+        {
+          "validFrom": "2026-01-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "street": "Lindenweg",
+            "number": "14",
+            "postcode": "9008",
+            "town": "St. Gallen",
+            "country": "CH"
+          }
+        }
+      ],
+      "bank": [
+        {
+          "validFrom": "2026-01-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "iban": "CH5604835012345678009",
+            "holder": "Marco Beispiel"
+          }
+        }
+      ],
+      "employment": [
+        {
+          "validFrom": "2026-01-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "kind": "monthly",
+            "amount": 6200,
+            "pensum": 100,
+            "hoursPerWeek": 42,
+            "holidayDays": 25
+          }
+        }
+      ],
+      "recurring": [],
+      "insurances": [
+        {
+          "validFrom": "2026-10-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "bvg": {
+              "insurance": "pk",
+              "solution": "K",
+              "employee": 210,
+              "employer": 210
+            },
+            "uvg": {
+              "insurance": "uvg",
+              "code": "A1"
+            }
+          }
+        }
+      ],
+      "children": [
+        {
+          "id": "k1",
+          "name": "Lea",
+          "birthDate": "2018-04-23",
+          "allowance": [
+            {
+              "validFrom": "2026-10-01",
+              "enteredAt": "2026-10-01T08:00:00.000Z",
+              "value": {
+                "wageType": "kinderzulage",
+                "amount": 230
+              }
+            }
+          ]
+        }
+      ],
+      "absences": [
+        {
+          "id": "ab1",
+          "kind": "holiday",
+          "from": "2026-10-12",
+          "to": "2026-10-16",
+          "enteredAt": "2026-10-01T08:00:00.000Z"
+        }
+      ],
+      "opening": {
+        "2026": {
+          "through": "2026-09",
+          "months": 9,
+          "bases": {
+            "ahv": 55800,
+            "alv": 55800,
+            "uvg": 55800,
+            "uvgz": 55800,
+            "ktg": 55800,
+            "bvg": 55800,
+            "qst": 55800
+          },
+          "fields": {
+            "1": 55800,
+            "9": 3571.2
+          }
+        }
+      }
+    },
+    {
+      "id": "nina",
+      "language": "de",
+      "birthDate": "1999-02-17",
+      "sex": "f",
+      "name": [
+        {
+          "validFrom": "2026-10-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "first": "Nina",
+            "last": "Muster"
+          }
+        }
+      ],
+      "address": [
+        {
+          "validFrom": "2026-10-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "street": "Bachstrasse",
+            "number": "3",
+            "postcode": "9014",
+            "town": "St. Gallen",
+            "country": "CH"
+          }
+        }
+      ],
+      "bank": [
+        {
+          "validFrom": "2026-10-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "iban": "CH4431999123000889012",
+            "holder": "Nina Muster"
+          }
+        }
+      ],
+      "employment": [
+        {
+          "validFrom": "2026-10-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "kind": "hourly",
+            "amount": 26.5,
+            "holidayDays": 20
+          }
+        }
+      ],
+      "recurring": [],
+      "insurances": [
+        {
+          "validFrom": "2026-10-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "uvg": {
+              "insurance": "uvg",
+              "code": "A1"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "monthLines": [
+    {
+      "id": "ml-nina-10",
+      "employee": "nina",
+      "month": "2026-10",
+      "wageType": "stundenlohn",
+      "quantity": 64,
+      "text": "Werkstatt",
+      "enteredAt": "2026-10-01T08:00:00.000Z"
+    }
+  ]
+}
