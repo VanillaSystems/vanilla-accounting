@@ -128,18 +128,18 @@ Records carry the ADR 0004 envelope (`id`, `createdAt`, `origin`, `deleted`).
 
 ## 2. Planned entities
 
-### 2.1 Invoicing (docs/specs/invoicing.md on `spec/invoicing`, decided 2026-11-14)
+### 2.1 Invoicing (docs/specs/invoicing.md, decided 2026-11-14, rewritten 2026-11-19 after the market leader's approach)
 
 All in `invoices.json`, one `INVOICES_SCHEMA` step per phase (3 in phase 1, then one each in
 phases 2 and 3), settings in the manifest's `invoicing:` (one `WORKSPACE_SCHEMA` step in phase 1).
 
 | Entity (code / UI) | Shape | Booked |
 |---|---|---|
-| Quote / Offerte | `kind: 'quote'`, series `OF-YYYY-NNN`, `validUntil`, `status` draft → sent → accepted / declined / expired | nothing |
-| Order confirmation / Auftragsbestätigung | the accepted quote sent again with that title; no record of its own | nothing |
+| Quote / Angebot | `kind: 'quote'`, series `AN-…`, `validUntil`; status Entwurf → Offen → Angenommen / Abgelehnt / Abgelaufen | nothing |
+| Sales order / Auftrag | `kind: 'sales-order'`, series `AU-…`; positions with `delivered` and `invoiced` derived from the documents made from it; `stages` (Teilrechnungsplan), `repetition` (Abo); printed as Auftragsbestätigung or Proformarechnung; status Offen → Teilweise → Erledigt from facts. Not a Bestellung (2.3), which can become one | nothing |
 | Delivery note / Lieferschein | `kind: 'delivery-note'`, series `LS-…`, no prices on paper | nothing |
 | Invoice / Rechnung | gains `from: { id, kind }` (the quote or order), `ordered` (the customer's reference), `role: 'partial' \| 'final'`, `schedule` (instalments, retention), `offsets` (credit notes set off), `paidAtIssue` (Quittung) | as today; on the agreed basis `RE-<n>` |
-| Credit note / Gutschrift | as today; set off as a deduction line (`InvoiceLine.deducts`) on the next invoice | as today |
+| Credit note / Gutschrift | own series `GS-…`; applied to open Rechnungen as `allocations` (Verrechnung), or paid back | as today |
 | Write-off / Abschreibung, Skonto, Debitorenverlust | `writeOffs: [{ date, amount, reason, note }]` on an issued invoice | cash basis: nothing; agreed: `RE-<n>-wo-<k>` |
 | Recurring invoice / Abo | `recurring: [Envelope & { customerId, template, every, next, until, issue }]` | as each invoice it makes |
 | Article / Artikel | `articles: [Envelope & { number, text, unit, price: Dated, vatRate, account }]` | nothing |
