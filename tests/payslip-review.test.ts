@@ -133,3 +133,21 @@ test('the AI\'s answer and a kept card: items that are no object are left out; a
   assert.deepEqual(keepSetupCard(none, ch.payroll!, 'cert', [{ kind: 'bvg', validFrom: '2026-01-01', person: { name: 'Mila Beispiel', employee: 310 } }], () => 'inY', '2026-01-06T00:00:00.000Z').persons, ['Mila Beispiel'], 'no employer contribution anywhere: her part is not taken');
   assert.throws(() => keepSetupCard(store, ch.payroll!, 'cert', [{ kind: 'bvg', validFrom: '2026-01-01', person: { employee: 1 } as never }], () => 'inZ', '2026-01-06T00:00:00.000Z'), (e) => e instanceof PayrollRefusal);
 });
+
+test('a fund that both collects deductions and keeps the liability way («Immer so») is booked exactly once, by payroll, while its payroll runs here', async () => {
+  const { classifyTransactions, loadClassifyContext, bookWithheldShares } = await import('../src/booking/classify.js');
+  const { loadFxResolver } = await import('../src/accounting/fx-rates.js');
+  const file = { 'knowledge/authorities/pensionskasse-zentral.yaml': 'id: pensionskasse-zentral\nname: Pensionskasse Zentral\nmatch:\n  payee: ["Pensionskasse Zentral"]\ncollects: [pension]\npayroll:\n  payments: liability\n  source: hand 2026-11-19\n' };
+  const ws = firm('Muster Malerei GmbH', [pay('LM-07', '2026-07-25', 7650, 'Sandra Muster', 'Lohn Juli 2026'), pay('PK', '2026-07-30', 700, 'Pensionskasse Zentral', 'Beiträge Juli 2026')], file);
+  await drop(ws, [['l7.pdf', textPdf(['Muster Malerei GmbH', 'Lohnabrechnung Juli 2026', 'Sandra Muster', "Bruttolohn 8'000.00", 'BVG -350.00', "Nettolohn 7'650.00"])]]);
+  await run(ws);
+  const books = loadBooks(ws);
+  books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== 'PK');
+  // Payroll runs here for the pension fund: its one decision (§22 decision 45, 126) says to book bank / liability.
+  const context = { ...loadClassifyContext(ws), payrollInsurer: () => ({ id: 'pk', name: 'Pensionskasse Zentral', account: '2275', covered: false, shared: false, books: true }) };
+  await classifyTransactions(books, books.transactions.filter((t) => t.ref === 'PK'), { fx: loadFxResolver(), context });
+  bookWithheldShares(books, context);
+  await classifyTransactions(books, [], { fx: loadFxResolver(), context });
+  const pk = books.journalEntries.filter((e) => e.transactionRef === 'PK');
+  assert.deepEqual(pk.map((e) => [e.accountDebit, e.amount]), [['2275', 700]], 'once, against the liability; nothing on 2270 or 5720');
+});

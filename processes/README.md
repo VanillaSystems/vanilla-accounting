@@ -441,8 +441,11 @@ What follows from it (src/booking/withheld.ts, src/booking/classify.ts):
 - A file that names no kind of the jurisdiction is refused when the knowledge loads. Name the tax
   office's file for the withholding tax only by what tells its payments apart (`tx`): the same office
   is paid the firm's own direct taxes too.
-- A payment to one of the firm's insurers while its payroll runs in the app is payroll's
-  (§22 decision 45), whatever the file says.
+- A payment to one of the firm's insurers while its payroll runs in the app is payroll's (§22
+  decision 45, the section above), whatever `collects:` says: the same file may say both, and
+  `payroll: { payments: liability }` then books it bank / liability, once. `collects:` is level A's:
+  for a firm whose payroll runs elsewhere, or a payment of months before payroll ran here. No payment
+  is booked both ways (tests/payslip-review.test.ts).
 
 The person adds `collects:` by hand in the file, or the AI drafts the fund's file with her on its
 knowledge card, as for any business.
