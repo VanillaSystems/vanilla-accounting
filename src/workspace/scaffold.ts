@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { stringify } from 'yaml';
 import { bankKind, roleBefore, type Iban } from './banks.js';
 import { chartFor, type Chart, type WorkspaceAccount } from './chart.js';
-import { VAT_QUESTIONS, goodsOf, profileOf, type Preset, type SupportedAnswers } from './setup.js';
+import { VAT_QUESTIONS, employs, goodsOf, profileOf, type Preset, type SupportedAnswers } from './setup.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
 import { BOOKS_SCHEMA, WORKSPACE_SCHEMA } from './schema.js';
 import { OUTPUT_DIR, repositoryAgents, withAgentsImport, withSection } from './terminal-agents.js';
@@ -69,7 +69,7 @@ export function accountsOf(input: InitInput, chart: Chart): WorkspaceAccount[] {
   const { sells, legalForm, payouts, imports } = input.answers;
   const { answers, bankAccounts } = ch().setup;
   const extra = new Set([...(payouts === 'yes' ? answers.payouts.accounts : []), ...(imports === 'yes' ? answers.imports : [])]);
-  const base = chartFor(chart, profileOf(sells), legalForm);
+  const base = chartFor(chart, profileOf(sells), legalForm, employs(input.answers));
   const byNumber = new Map(base.map((a) => [a.number, a]));
   for (const a of chartFor(chart, 'both', legalForm)) if (extra.has(a.number)) byNumber.set(a.number, a);
   for (const b of bankAccountsOf(input)) {

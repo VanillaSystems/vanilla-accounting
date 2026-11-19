@@ -36,6 +36,7 @@ export const LAYER_OF: [prefix: string, layer: Layer][] = [
   ['src/booking/', 'split'],
   ['src/intake/', 'split'],
   ['src/invoices/', 'split'],
+  ['src/payroll/', 'split'],
   ['src/knowledge/', 'split'],
   ['src/collect/', 'split'],
   ['src/workflows/', 'workflow'],

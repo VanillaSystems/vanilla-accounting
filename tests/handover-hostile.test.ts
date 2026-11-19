@@ -329,7 +329,7 @@ test('API 2: on a copy invoices, customers and mail sources are the sharer\'s; h
   assert.equal((await rcpt.send('PATCH', `/api/journal-entries/${open.id}`, { accountDebit: '6510' })).status, 200);
   for (const [m, p, b] of [
     ['POST', '/API/Automation/', { kind: 'start', workflow: 'quarter-close', item: { kind: 'period', id: '2026-Q3' } }],
-    ['POST', '/api/customers', { name: 'Kunde AG' }],
+    ['POST', '/api/contacts', { name: 'Kunde AG' }],
     ['POST', '/api/invoices', { customer: 'x' }],
     ['POST', '/api/invoices/in_p/issue', {}],
     ['POST', '/api/invoices/in_p/send', {}],

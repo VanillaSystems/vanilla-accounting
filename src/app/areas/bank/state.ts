@@ -3,6 +3,7 @@
  * open detail sections (per viewer, in this browser: docs/urls.md), the preview overlay; and the
  * bank model of the loaded books, with the list as last shown for the keys.
  */
+import { insurerPaymentsNow } from '../../lib/order-pages.js';
 import { useSyncExternalStore } from 'react';
 import type { Index } from '../../../types/index.js';
 import { localToday } from '../../../accounting/periods.js';
@@ -53,14 +54,15 @@ export function toggleGroup(key: string): void {
   setUi({ collapsed: next });
 }
 
-let memo: { books: Index; accounts: readonly Account[]; bank: Bank } | undefined;
+let memo: { books: Index; accounts: readonly Account[]; proof: ReadonlySet<string>; bank: Bank } | undefined;
 
 const NONE: readonly Account[] = [];
 
 /** The bank of these books and the manifest's accounts, computed once per load. */
 export function bankFor(books: Index, accounts: readonly Account[] | undefined = workspaceNow()?.bankAccounts): Bank {
   const list = accounts ?? NONE;
-  if (memo?.books !== books || memo.accounts !== list) memo = { books, accounts: list, bank: bankOf(books, list, localToday()) };
+  const proof = insurerPaymentsNow();
+  if (memo?.books !== books || memo.accounts !== list || memo.proof !== proof) memo = { books, accounts: list, proof, bank: bankOf(books, list, localToday(), proof) };
   return memo.bank;
 }
 

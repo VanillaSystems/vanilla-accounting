@@ -17,7 +17,7 @@ import type { EstvRateTable } from '../../accounting/fx-conversion.js';
 import type { WorkspaceModules } from '../../core/modules/load.js';
 import type { Account } from './accounts.js';
 import type { CompanyInfo } from '../../books/company.js';
-import type { ManifestPatch } from '../../workspace/manifest-write.js';
+import type { InvoicingPatch, ManifestPatch } from '../../workspace/manifest-write.js';
 import type { QuestionId } from '../../onboarding/model.js';
 import type { SetupView } from '../../onboarding/facts.js';
 import type { VatSetup } from '../../workspace/vat-setup.js';
@@ -26,16 +26,23 @@ import type { PaymentRefusal } from '../../workflows/history.js';
 import type { MailMessage } from '../../invoices/mail.js';
 import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
-import { t, tData } from '../i18n/index.js';
+import type { PayrollYearEnd } from '../../payroll/year-end.js';
+import { isKey, t, tData } from '../i18n/index.js';
 import { fmt, formatDate } from './utils.js';
 import { bookingWaitsText } from './booking-waits.js';
 import { agreedBasis, baseCurrency, vatSetup } from '../../engines/index.js';
 import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
-import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminder, SentDocument } from '../../invoices/model.js';
-import type { PaymentProposal } from '../../invoices/payments.js';
+import type { ImportChoice, ImportMapping, ImportPreview } from '../../invoices/contact-import.js';
+import type { ArticleImportPreview, ArticleMapping } from '../../invoices/article-import.js';
+import type { Article, ArticleFields, Comment, Contact, ContactFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, WriteOff, WriteOffReason } from '../../invoices/model.js';
+import type { AllocationItem, AllocationPart, PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
+import type { AccountChangePlan } from '../../invoices/revise.js';
+
+/** «Konten ändern»: the positions' new revenue accounts (index in `lines`), and the day a reclassification takes. */
+export interface AccountsInput { lines: Array<{ line: number; account: string }>; date?: string }
 import type { AiAvailability, DesktopInfo, FolderLook, HomeFolders, KnownBooks, PhoneInfo } from '../../types/desktop.js';
 import type { Opened } from '../handover/store.js';
 import { DesktopCallError } from '../desktop/bridge.js';
@@ -183,7 +190,8 @@ export function errorText(e: unknown): string {
   if (e instanceof DesktopCallError) return t(e.text);
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e);
   const b = e.body;
-  if ('invoiceRefusal' in b) return invoiceRefusalText(b.invoiceRefusal, b.missing);
+  if ('invoiceRefusal' in b) return invoiceRefusalText(b.invoiceRefusal, b.missing, b.params);
+  if ('paymentRefusal' in b) return t(`invoice.payment.${b.paymentRefusal}`);
   if ('mailRefusal' in b) return t(`mail.refusal.${b.mailRefusal}`, { detail: b.detail ?? '' });
   switch (b.code) {
     case 'readonly': return t(DEMO ? 'error.demo' : 'error.readonly');
@@ -197,6 +205,8 @@ export function errorText(e: unknown): string {
     case 'foreignOrigin': return t('error.foreignOrigin');
     case 'shareNotPackage': return t('error.shareNotPackage');
     case 'shareTooLarge': return t('error.shareTooLarge', { limit: b.params.limit });
+    case 'importTooLarge': return t('error.importTooLarge', { limit: b.params.limit, rows: b.params.rows });
+    case 'bodyTooLarge': return t('error.bodyTooLarge', { limit: b.params.limit });
     case 'shareUnknownBase': return t('error.shareUnknownBase', { name: b.params.name });
     case 'shareUpdateFailed': return t('error.shareUpdateFailed', { why: b.params.why });
     case 'shareOwnBooks': return t('error.shareOwnBooks', { version: b.params.version, name: b.params.name });
@@ -226,6 +236,15 @@ export function errorText(e: unknown): string {
     case 'hasEntries': return t('error.hasEntries');
     case 'notByReceipt': return t('error.notByReceipt');
     case 'withheldNone': return t('error.withheldNone');
+    case 'payroll': {
+      // A tariff file that could not be loaded says why (not found, the network, not a tariff file, …).
+      if (b.params.why === 'tariff') return b.params.tariff === 'tooLarge' ? t('error.payroll.tariff.tooLarge', { limit: b.params.limit ?? '' }) : t(`error.payroll.tariff.${b.params.tariff ?? 'notFound'}`);
+      // A refusal with a reason of its own (a password too short, …) says that reason.
+      if (b.params.field && isKey(`error.payroll.${b.params.why}.${b.params.field}`)) return t(`error.payroll.${b.params.why}.${b.params.field}` as 'error.payroll.badPassword');
+      // The field it is about, in the person's words, after the reason.
+      const field = b.params.field && isKey(`payroll.field.${b.params.field}`) ? tData(`payroll.field.${b.params.field}`) : '';
+      return field ? `${t(`error.payroll.${b.params.why}`)} (${field})` : t(`error.payroll.${b.params.why}`);
+    }
     case 'decidedByHand': return t('error.decidedByHand');
     case 'changedSince': return t('error.changedSince');
     case 'undoGone': return t('error.undoGone');
@@ -361,8 +380,14 @@ export function errorText(e: unknown): string {
     case 'invoice': return invoiceRefusalText(b.params.refusal, b.params.missing);
     case 'invoicingNotSetUp': return t('error.invoicingNotSetUp');
     case 'payToAccount': return t('error.payToAccount', b.params);
+    case 'notQrIban': return t('error.notQrIban', b.params);
+    case 'qrIbanNotChf': return t('error.qrIbanNotChf', b.params);
+    case 'unitId': case 'unitTwice': case 'unitInUse': return t(`error.${b.code}`, { id: b.params.id });
+    case 'numberFormat': return numberFormatText(b.params.refusal, b.params.kind, b.params.format);
+    case 'unitWord': return t('error.unitWord', { id: b.params.id, language: b.params.language.toUpperCase() });
     case 'ibanOnInvoices': return t('error.ibanOnInvoices', b.params);
     case 'unknownCustomer': return t('error.unknownCustomer');
+    case 'unknownArticle': return t('error.unknownArticle');
     case 'amountZero': return t('error.amountZero');
     case 'noAccount': return t('error.noAccount');
     case 'sameAccount': return t('error.sameAccount', b.params);
@@ -428,14 +453,20 @@ export function setupText(r: SetupRefusal): string {
   }
 }
 
+/** Why a number format cannot be taken (src/invoices/numbering.ts FormatRefusal), the tokens named as the person types them. */
+export const numberFormatText = (refusal: string, kind: string, format: string): string =>
+  (t as (key: string, vars: Record<string, string>) => string)(`error.numberFormat.${refusal}`, { kind: t(`invoices.docKind.${kind}` as 'invoices.docKind.invoice'), format, year: '{JJJJ}', counter: '{NNNNN}' });
+
 /** What an invoice still needs before it is issued (Art. 26 MWSTG), one phrase per gap; `line` counts from 0. */
 export const missingText = (m: Missing): string =>
   m.line === undefined ? t(`invoice.missing.${m.field}`) : t('invoice.missingLine', { line: m.line + 1, what: t(`invoice.missing.${m.field}`) });
 
-function invoiceRefusalText(code: InvoiceRefusal | 'noBrowser' | 'printFailed', missing?: Missing[]): string {
+function invoiceRefusalText(code: InvoiceRefusal | 'noBrowser' | 'printFailed', missing?: Missing[], params?: Record<string, string | number>): string {
   // A customer's field is filled in where the customer is kept: the line says so.
   if (code === 'incomplete' && missing?.length) return t('invoice.refusal.incompleteList', { list: missing.map(missingText).join(', ') }) + (missing.some((m) => m.field.startsWith('customer.')) ? ` ${t('invoice.refusal.customerWhere')}` : '');
-  return t(`invoice.refusal.${code}`);
+  // A date a refusal names is the person's way of writing it.
+  const named = Object.fromEntries(Object.entries(params ?? {}).map(([k, v]) => [k, typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? formatDate(v) : k === 'to' && v === 'download' ? t('sales.channel.download') : v]));
+  return (t as (key: string, vars: Record<string, string | number>) => string)(`invoice.refusal.${code}`, named);
 }
 
 type Ok = { ok: true };
@@ -450,8 +481,19 @@ export type { JournalEntryInput };
 /** A movement made by hand (#88): on the owner's account without `account`; `role` and `label` add an account the firm lacks. */
 export type ManualTransactionInput = { date: string; description: string; amount: number; currency?: string; direction?: 'DBIT' | 'CRDT'; account?: string; role?: MoneyRole; label?: string };
 export type YearEndEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string; template?: string };
-export type YearCloseView = YearClose & { opening?: Opening };
-export interface InvoiceList { today: string; invoices: Invoice[]; customers: Customer[]; sent: SentDocument[] }
+export type YearCloseView = YearClose & { opening?: Opening; payroll?: PayrollYearEnd; payrollError?: string };
+export interface InvoiceList { today: string; invoices: Invoice[]; contacts: Contact[]; articles: Article[]; sent: SentDocument[] }
+/** A contact with its business file (named, or proposed by code) and the customers' business files a person may pick. */
+export interface ContactDetail {
+  contact: Contact;
+  business?: { id: string; name: string; known: boolean };
+  proposal?: { id: string; name: string; by: string };
+  businesses: Array<{ id: string; name: string }>;
+}
+/** A contact as a request writes it: its fields, null clearing an optional one. */
+export type ContactInput = { [K in keyof ContactFields]?: ContactFields[K] | null };
+/** An Artikel as a request writes it: its fields, null clearing an optional one. */
+export type ArticleInput = { [K in keyof ArticleFields]?: ArticleFields[K] | null };
 export type DraftChange = { [K in keyof DraftPatch]?: DraftPatch[K] | null };
 export interface CreditInput { reason: string; amount?: number; settlement?: 'refund' | 'offset' }
 export interface ReminderInput { date?: string; fee?: number; intro?: string; closing?: string; to?: string; email?: MailMessage }
@@ -591,6 +633,10 @@ export const api = {
   draftRules: (path: string) => request<DraftView>('GET', `/api/rules/draft?path=${encodeURIComponent(path)}`),
   draftCommand: (c: DraftCommand) => request<KeepResult | { ok: boolean }>('POST', '/api/rules/draft', c),
   outlayWaits: () => request<{ refs: string[] }>('GET', '/api/rules/outlay-waits'),
+  insurerPayments: () => request<{ refs: string[] }>('GET', '/api/payroll/insurer-payments'),
+  insurerWayPreview: (ref: string) => request<{ name: string; business: string; path: string; created: boolean; payments: Array<{ ref: string; date: string; amount: number; currency: string }> }>('GET', `/api/payroll/insurer-way?ref=${encodeURIComponent(ref)}`),
+  keepInsurerWay: (ref: string) => request<{ business: string; name: string; path: string; created: boolean; booked: string[] }>('POST', '/api/payroll/insurer-way', { ref, way: 'after' }),
+  forgetInsurerWay: (business: string) => request<{ business: string; path: string }>('DELETE', `/api/payroll/insurer-way?business=${encodeURIComponent(business)}`),
   refusals: () => request<{ refusals: PaymentRefusal[] }>('GET', '/api/automation/refusals'),
   setupOffers: () => request<{ offers: PendingOffer[] }>('GET', '/api/rules/share-offers'),
   shareOffer: (ref: string) => request<{ offer: ShareOffer | null }>('GET', `/api/rules/share?ref=${encodeURIComponent(ref)}`),
@@ -757,7 +803,8 @@ export const api = {
   },
   /** «Handy koppeln», step 1: where the receipt app is downloaded, and its QR code. */
   phoneApp: () => request<{ url: string; qr: string }>('GET', '/api/phone/app'),
-  patchWorkspace: (patch: ManifestPatch) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
+  /** `invoicing.confirm`: the person's «Trotzdem speichern» on a warning of that code (a QR-IBAN outside CHF, #506). */
+  patchWorkspace: (patch: Omit<ManifestPatch, 'invoicing'> & { invoicing?: InvoicingPatch & { confirm?: 'qrIbanNotChf' } }) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
   removeAccount: (number: string) => request<Ok>('DELETE', `/api/accounts/${number}`),
   setAccountName: (number: string, name: string) => request<{ number: string; name: string; added: boolean }>('PUT', `/api/accounts/${number}`, { name }),
   uploadLogo: (file: Blob, type: string) => upload<CompanyInfo>('/api/workspace/logo', file, type),
@@ -768,12 +815,25 @@ export const api = {
 
   invoices: () => request<InvoiceList>('GET', sources.invoices()),
   paymentProposals: () => request<{ proposals: PaymentProposal[] }>('GET', '/api/invoices/payments').then((r) => r.proposals),
-  createCustomer: (fields: CustomerFields) => request<Customer>('POST', '/api/customers', fields),
-  patchCustomer: (id: string, fields: Partial<CustomerFields>) => request<Customer>('PATCH', `/api/customers/${id}`, fields),
+  createContact: (fields: ContactInput) => request<Contact>('POST', '/api/contacts', fields),
+  patchContact: (id: string, fields: ContactInput | Record<string, unknown>) => request<Contact>('PATCH', `/api/contacts/${encodeURIComponent(id)}`, fields),
+  removeContact: (id: string) => request<{ contact: Contact; outcome: 'archived' | 'deleted' }>('DELETE', `/api/contacts/${encodeURIComponent(id)}`),
+  contact: (id: string) => request<ContactDetail>('GET', `/api/contacts/${encodeURIComponent(id)}`),
+  previewContactImport: (csv: string, mapping?: ImportMapping) => request<ImportPreview>('POST', '/api/contacts/import/preview', { csv, ...(mapping ? { mapping } : {}) }),
+  importContacts: (csv: string, mapping: ImportMapping, choices: Record<string, ImportChoice>) => request<{ created: number; skipped: number; ids: string[] }>('POST', '/api/contacts/import', { csv, mapping, choices }),
+  createArticle: (fields: ArticleInput) => request<Article>('POST', '/api/articles', fields),
+  patchArticle: (id: string, fields: ArticleInput) => request<Article>('PATCH', `/api/articles/${encodeURIComponent(id)}`, fields),
+  removeArticle: (id: string) => request<{ article: Article; outcome: 'archived' | 'deleted' }>('DELETE', `/api/articles/${encodeURIComponent(id)}`),
+  previewArticleImport: (csv: string, mapping?: ArticleMapping) => request<ArticleImportPreview>('POST', '/api/articles/import/preview', { csv, ...(mapping ? { mapping } : {}) }),
+  importArticles: (csv: string, mapping: ArticleMapping, choices: Record<string, ImportChoice>) => request<{ created: number; skipped: number; ids: string[] }>('POST', '/api/articles/import', { csv, mapping, choices }),
   createDraft: (input: DraftChange & { customerId: string }) => request<Draft>('POST', '/api/invoices', input),
   patchDraft: (id: string, patch: DraftChange) => request<Draft>('PATCH', `/api/invoices/${id}`, patch),
   deleteDraft: (id: string) => request<{ ok: true }>('DELETE', `/api/invoices/${id}`),
-  issue: (id: string) => request<Issued>('POST', `/api/invoices/${id}/issue`),
+  /** `anyway`: the person's «Trotzdem ausstellen» over a position without text or amount (spec 4.11). */
+  issue: (id: string, anyway = false, confirm: readonly string[] = []) => {
+    const all = [...(anyway ? ['unconfirmed'] : []), ...confirm];
+    return request<Issued>('POST', `/api/invoices/${id}/issue`, all.length ? { confirm: all } : undefined);
+  },
   /** With `email` the PDF goes out through the company's mailbox; without, the send is recorded as a download to `to`. */
   recordSend: (id: string, send: { to?: string; email?: MailMessage }) => request<SentDocument>('POST', `/api/invoices/${id}/send`, send),
   mailStatus: () => request<MailStatus>('GET', '/api/mail'),
@@ -800,9 +860,30 @@ export const api = {
   /** An empty `text`: the CLI starts with no prompt (issue #210). */
   openTerminal: (text: string, choice: { cli?: TerminalCli; app?: TerminalApp } = {}) =>
     request<{ cli: TerminalCli; app: TerminalApp }>('POST', '/api/terminal/open', { ...(text.trim() ? { request: text } : {}), ...choice }),
-  cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage }) =>
+  /** «Zahlungseingang erfassen» (spec 4.4.6): a hand movement on a bank or the cash box, allocated and booked. */
+  handPayment: (id: string, input: { date: string; account: string; amount: number }) => request<{ transaction: BankTransaction }>('POST', `/api/invoices/${id}/hand-payments`, input),
+  removeHandPayment: (id: string, ref: string) => request<{ ok?: true }>('DELETE', `/api/invoices/${id}/hand-payments/${encodeURIComponent(ref)}`),
+  /** «Rest ausbuchen»; `confirm: 'aboveOpen'` is «Trotzdem ausbuchen». */
+  writeOff: (id: string, input: { reason: WriteOffReason; date?: string; amount?: number; note?: string; confirm?: 'aboveOpen' }) => request<{ writeOff: WriteOff }>('POST', `/api/invoices/${id}/write-offs`, input),
+  removeWriteOff: (id: string, wo: string) => request<{ writeOff: WriteOff }>('DELETE', `/api/invoices/${id}/write-offs/${encodeURIComponent(wo)}`),
+  /** The Ausziffern dialog of an incoming payment, and its «Buchen». */
+  allocation: (transactionRef: string, customerId?: string) => request<{ transaction: BankTransaction; items: AllocationItem[]; left: number }>('GET', `/api/invoices/allocation?transactionRef=${encodeURIComponent(transactionRef)}${customerId ? `&customerId=${encodeURIComponent(customerId)}` : ''}`),
+  allocate: (transactionRef: string, parts: AllocationPart[]) => request<{ paid: Array<{ number: string; amount: number }> }>('POST', '/api/invoices/allocation', { transactionRef, parts }),
+  /** A conversion (spec 4.4.1): `confirm` names the warnings the person overrode («Trotzdem erstellen», «Trotzdem übernehmen»). */
+  convert: (id: string, input: { to: DocumentKind; lines: Array<{ line: number; quantity: number }>; confirm?: string[] }) => request<Draft>('POST', `/api/invoices/${id}/convert`, input),
+  /** The customer's answer to an Angebot, the person's click; null takes it back. */
+  answer: (id: string, answer: 'accepted' | 'declined' | null) => request<Issued>('POST', `/api/invoices/${id}/answer`, { answer }),
+  /** An Angebot or Auftrag back to draft; `anyway`: «Trotzdem bearbeiten» once it was sent. */
+  /** An Angebot or Auftrag back to draft (the one route of «Zurück zum Entwurf»); `anyway`: «Trotzdem bearbeiten» once it was sent. */
+  reopen: (id: string, anyway = false) => request<Draft>('POST', `/api/invoices/${id}/draft`, anyway ? { confirm: 'sentVersion' } : {}),
+  cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage; confirm?: 'paid' | readonly string[] }) =>
     request<{ invoice: Issued; sent?: SentDocument }>('POST', `/api/invoices/${id}/cancel`, input),
   creditNote: (id: string, input: CreditInput) => request<Draft>('POST', `/api/invoices/${id}/credit-note`, input),
+  /** «Zurück zum Entwurf» of an unsent document (spec 4.4.2): it keeps its number; refused once sent (`sent`). */
+  backToDraft: (id: string) => request<Draft>('POST', `/api/invoices/${id}/draft`),
+  /** What «Konten ändern» would book, nothing written. */
+  accountsPlan: (id: string, input: AccountsInput) => request<AccountChangePlan>('POST', `/api/invoices/${id}/accounts/plan`, input),
+  changeAccounts: (id: string, input: AccountsInput) => request<AccountChangePlan>('POST', `/api/invoices/${id}/accounts`, input),
   sendReminder: (id: string, input: ReminderInput) => request<{ reminder: Reminder; sent: SentDocument }>('POST', `/api/invoices/${id}/reminders`, input),
   addComment: (id: string, text: string) => request<Comment>('POST', `/api/invoices/${id}/comments`, { text }),
   /** Links a payment to an invoice; `booked` false when a person's booking of the payment stays as the revenue (r9c-3). */

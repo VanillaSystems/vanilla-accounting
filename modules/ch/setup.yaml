@@ -51,6 +51,32 @@ wages:
     accident: [UVG, NBU, NBUV, LAA, AANP, AINF]
     sickness: [KTG, Krankentaggeld, IJM, IGM]
     tax: [Quellensteuer, "impôt à la source", "imposta alla fonte"]
+  # The account a kind's deductions are owed on until its collector is paid, where it is not `deductions`:
+  # the withholding tax (Quellensteuer) is owed to the canton on 2279 (DBG Art. 88), not to a fund
+  # (docs/specs/payroll.md §10.2 A4). A business file that says `collects: [tax]` clears it.
+  withholdsTo: { tax: "2279" }
+  # The employer's own contribution account of a kind (src/booking/withheld.ts contributionLines): where code
+  # books what a payment to its collector pays beyond the employees' share when no model splits the bill and
+  # no earlier payment to the same collector says where it goes. The family allowances (5710) are billed with
+  # the compensation fund's contributions; a model or the person books them apart.
+  employer: { ausgleichskasse: "5700", pension: "5720" }
+  # What the collector of a kind leaves the employer of what was withheld: the withholding tax's collection
+  # commission (Bezugsprovision, DBG Art. 88 Abs. 4: 1 to 2 %, a canton at its own rate). A payment that
+  # clears whole months of the tax owed, the oldest first, less `from` to `upTo` percent of them, books the
+  # rest here, as a lower administration cost; one that fits no such months clears only what it pays.
+  commission: { tax: { account: "6500", from: 0.5, upTo: 5 } }
+  # How a payslip another program or a fiduciary issued names its figures (src/booking/payslip.ts, docs/specs/
+  # payroll.md §10.2 A2), in de/fr/it/en; the deductions by `withholds` above. The gross, the net paid out,
+  # the family allowances paid with the wage (the fund pays them back on its bill: booked onto `deductions`,
+  # §16 decision 10) and the expenses (each kind on its account; the flat ones first, «Pauschalspesen» is no
+  # «Spesen»). A payslip reads when gross − deductions + allowances + expenses is its net to the cent.
+  payslip:
+    gross: [Bruttolohn, Bruttogehalt, Bruttosalär, Total brutto, Lohn brutto, Salaire brut, Salario lordo, Retribuzione lorda, Gross salary, Gross pay, Gross wage]
+    net: [Nettolohn, Nettogehalt, Nettosalär, Auszahlung, Auszahlungsbetrag, Salaire net, Montant versé, Salario netto, Importo versato, Net salary, Net pay, Net wage]
+    allowances: [Kinderzulage, Kinderzulagen, Familienzulage, Familienzulagen, Ausbildungszulage, Ausbildungszulagen, Allocation familiale, Allocations familiales, Allocation pour enfant, Allocations pour enfants, Assegno familiare, Assegni familiari, Assegno per i figli, Family allowance, Family allowances, Child allowance]
+    expenses:
+      - { account: "5830", words: [Pauschalspesen, Spesenpauschale, Spesen pauschal, Frais forfaitaires, Spese forfettarie, Flat expenses, Expense allowance] }
+      - { account: "5820", words: [Spesen, Spesenersatz, Spesenvergütung, Spesenentschädigung, Frais effectifs, Rimborso spese, Expenses, Expense refund] }
 
 
 # What the setup's «private use» names, by the account its costs are booked on: a share of it the person

@@ -24,8 +24,8 @@ import { pdfRuns, textOf } from '../src/parsers/pdf-text.js';
 
 /** Every demo tools/demo/generate.ts writes; the last test fails when the app root holds another. */
 const DEMOS = ['demo', 'demo-consulting', 'demo-coiffeur', 'demo-schreinerei'];
-/** Demos whose invoices Chrome prints: without a browser they cannot be generated, and their test skips. */
-const PRINTED = new Set(['demo']);
+/** Demos whose invoices Chrome prints (every one now invoices): without a browser they cannot be generated, and their test skips. */
+const PRINTED = new Set(['demo', 'demo-consulting', 'demo-coiffeur', 'demo-schreinerei']);
 const FIX = 'run `npm run demo:generate` and commit the result. Stop instead when entries.jsonl, a filed return or tests/golden change with it: '
   + 'no booking or figure may change by a regeneration. A seal\'s sha256 may change only because its sealed records gained fields the generator '
   + 'writes now; check that by recomputing the seal without those fields (#374)';

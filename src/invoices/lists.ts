@@ -6,7 +6,8 @@
  */
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import type { Invoice, Issued, SentDocument, SentKind } from './model.js';
-import { openOn, paidAmount, refundDue, status } from './rules.js';
+import { creditBeyond, creditable, openOn, paidAmount, refundDue, status, totals } from './rules.js';
+import { accepted, madeFrom, positions } from './chain.js';
 import { baseCurrency } from '../engines/index.js';
 
 // ─── the sent log ────────────────────────────────────────────────────────────
@@ -17,7 +18,7 @@ export type Channel = 'email' | 'download';
 export const channelOf = (doc: Pick<SentDocument, 'channel' | 'to'>): Channel => doc.channel ?? (doc.to === 'download' ? 'download' : 'email');
 
 /** The kinds that are the document itself going out (not a reminder or a notice about it). */
-const OWN_KINDS: readonly SentKind[] = ['invoice', 'credit-note', 'resend'];
+const OWN_KINDS: readonly SentKind[] = ['invoice', 'credit-note', 'resend', 'quote', 'sales-order', 'delivery-note'];
 
 /** Every entry of the sent log for a document, its reminders and notices included, oldest first. */
 export const sendsOf = (sent: readonly SentDocument[], inv: Pick<Invoice, 'id'>): SentDocument[] =>
@@ -57,10 +58,17 @@ export function sentFacts(sent: readonly SentDocument[], inv: Invoice): SentFact
 
 // ─── statuses ────────────────────────────────────────────────────────────────
 
-/** A Rechnung's status (4.4.2): Überfällig is derived beside it, see `isOverdue`. */
-export type InvoiceListStatus = 'draft' | 'open' | 'partly-paid' | 'paid' | 'cancelled';
+/**
+ * A Rechnung's status (4.4.2): Überfällig is derived beside it, see `isOverdue`. One closed with a
+ * loss written off (Verlust) reads «Ausgebucht», whatever was paid before: the customer did not pay
+ * it all. A Skonto, Rabatt, Spesen or Rundung rest keeps «Bezahlt» (decision 56). Ausgebucht counts
+ * in the tab «Bezahlt», the closed ones, as the market leader keeps no tab of its own for it.
+ */
+export type InvoiceListStatus = 'draft' | 'open' | 'partly-paid' | 'paid' | 'written-off' | 'cancelled';
+export const closedByLoss = (inv: Invoice): boolean => inv.status === 'issued' && (inv.writeOffs ?? []).some((w) => w.reason === 'loss');
 export const invoiceStatus = (inv: Invoice, invoices: readonly Invoice[]): InvoiceListStatus => {
   const s = status(inv, invoices);
+  if (s === 'paid' && closedByLoss(inv)) return 'written-off';
   return s === 'issued' ? 'open' : s;
 };
 
@@ -77,12 +85,69 @@ export function creditRest(cn: Invoice, invoices: readonly Invoice[]): number {
   return refundDue(cn.settlement === 'offset' ? { ...cn, settlement: 'refund' } : cn, invoices);
 }
 
-/** The one place a Gutschrift's status is decided (slice C widens it with allocations). */
+/**
+ * The one place a Gutschrift's status is decided (spec 4.4.2): Abgerechnet once nothing of it waits
+ * (applied to its invoice at once, the rest paid back); Teilweise while a rest waits and something
+ * of it is applied to its invoice (Verrechnung, after that invoice's payments and write-offs) or
+ * paid back; Offen while all of it waits. A rest set off against a next invoice waits for phase 4.
+ */
 export function creditNoteStatus(cn: Invoice, invoices: readonly Invoice[]): CreditListStatus {
   if (cn.status === 'draft') return 'draft';
   if (cn.cancelled) return 'cancelled';
-  if (creditRest(cn, invoices) === 0) return 'settled';
-  return paidAmount(cn) > 0 ? 'partly' : 'open';
+  const rest = creditRest(cn, invoices);
+  if (rest === 0) return 'settled';
+  const applied = -toRappen(totals(cn).gross) - toRappen(creditBeyond(cn, invoices)) > 0;
+  return applied || paidAmount(cn) > 0 ? 'partly' : 'open';
+}
+
+/** An Angebot's status (4.4.2): Angenommen and Abgelehnt are the two of the customer, the person's click; Abgelaufen is derived. */
+export type QuoteListStatus = 'draft' | 'open' | 'accepted' | 'declined' | 'expired';
+
+/**
+ * The one place an Angebot's status is decided: Angenommen by the person's click or as a fact (an
+ * Auftrag or Rechnung made from it, which wins over a decline: «Trotzdem erstellen» made it); Abgelehnt
+ * by her click; Abgelaufen once `validUntil` passed while it was open; else Offen.
+ */
+export function quoteStatus(q: Invoice, docs: readonly Invoice[], today: string): QuoteListStatus {
+  if (q.status === 'draft') return 'draft';
+  if (accepted(q, docs)) return 'accepted';
+  if (q.declined) return 'declined';
+  return q.validUntil && q.validUntil < today ? 'expired' : 'open';
+}
+
+/** An Auftrag's status (4.4.2). */
+export type OrderListStatus = 'draft' | 'open' | 'partly' | 'done' | 'cancelled';
+
+/**
+ * The one place an Auftrag's status is decided, from the documents made from it: Erledigt once every
+ * position (options left out) is invoiced in full and, where a Lieferschein exists, delivered in full;
+ * Teilweise once something of it is delivered or invoiced; else Offen. Storniert with its Storno.
+ */
+export function orderStatus(o: Invoice, docs: readonly Invoice[]): OrderListStatus {
+  if (o.status === 'draft') return 'draft';
+  if (o.cancelled) return 'cancelled';
+  const ps = positions(o, docs).filter((p) => !p.item.optional);
+  const delivers = ps.some((p) => p.delivered > 0);
+  if (ps.length && ps.every((p) => p.invoiced >= p.item.quantity && (!delivers || p.delivered >= p.item.quantity))) return 'done';
+  return ps.some((p) => p.delivered > 0 || p.invoiced > 0) ? 'partly' : 'open';
+}
+
+/** A Lieferschein's status (4.4.2): issued is ausgeführt. */
+export type DeliveryListStatus = 'draft' | 'done' | 'cancelled';
+export const deliveryStatus = (n: Invoice): DeliveryListStatus => (n.status === 'draft' ? 'draft' : n.cancelled ? 'cancelled' : 'done');
+
+/**
+ * Whether an Auftrag may be cancelled (4.4.2): refused while an issued Rechnung of it stands, not
+ * cancelled and not credited in full (the claim stays; a Gutschrift or the Rechnung's Storno first), a warning while a Lieferschein does
+ * (`orderDelivered`, «Trotzdem stornieren»). Undefined: nothing in the way.
+ */
+export function orderCancelBlock(o: Invoice, docs: readonly Invoice[]): { code: 'orderInvoiced' | 'orderDelivered'; numbers: string[] } | undefined {
+  const made = madeFrom(o, docs).filter((d): d is Issued => d.status === 'issued' && !d.cancelled);
+  // A Rechnung credited in full (or cancelled) claims nothing any more: it no longer holds the Auftrag.
+  const invoices = made.filter((d) => d.kind === 'invoice' && creditable(d, docs) > 0).map((d) => d.number);
+  if (invoices.length) return { code: 'orderInvoiced', numbers: invoices };
+  const notes = made.filter((d) => d.kind === 'delivery-note').map((d) => d.number);
+  return notes.length ? { code: 'orderDelivered', numbers: notes } : undefined;
 }
 
 // ─── the status tabs ─────────────────────────────────────────────────────────
@@ -93,6 +158,10 @@ export type InvoiceTab = (typeof INVOICE_TABS)[number];
 /** The tabs of Gutschriften beside «Alle» (Storniert counts what a total leaves out), and «Nicht gesendet». */
 export const CREDIT_TABS = ['draft', 'open', 'partly', 'settled', 'cancelled', 'unsent'] as const;
 export type CreditTab = (typeof CREDIT_TABS)[number];
+/** The tabs of Angebote, Aufträge and Lieferscheine beside «Alle» (spec 4.8), and «Nicht gesendet». */
+export const QUOTE_TABS = ['draft', 'open', 'accepted', 'declined', 'expired', 'unsent'] as const;
+export const ORDER_TABS = ['draft', 'open', 'partly', 'done', 'cancelled', 'unsent'] as const;
+export const DELIVERY_TABS = ['draft', 'done', 'cancelled', 'unsent'] as const;
 
 /** Issued, not cancelled, and never sent itself: what «Nicht gesendet» holds. */
 export const unsent = (inv: Invoice, sent: readonly SentDocument[]): boolean => inv.status === 'issued' && !inv.cancelled && !wasSent(sent, inv);
@@ -103,13 +172,13 @@ export const unsent = (inv: Invoice, sent: readonly SentDocument[]): boolean => 
 export const daysBetween = (from: string, to: string): number => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 864e5);
 
 /**
- * The age bands of the Debitorenliste. The age counts from the invoice date: the four bands then
- * hold every open item, the not yet due ones too, and the days overdue (from the due date) stand
- * in a column of their own (docs/specs/invoicing.md section 7, decisions in the build).
+ * The age bands of the Debitorenliste, by the days past the due date (the column «Tage überfällig»
+ * beside them): not yet due, then 1–30, 31–60, 61–90 and more than 90 days overdue
+ * (docs/specs/invoicing.md section 7, decision 23 as changed on 2026-11-19).
  */
-export const AGE_BANDS = ['0-30', '31-60', '61-90', '90+'] as const;
+export const AGE_BANDS = ['not-due', '1-30', '31-60', '61-90', '90+'] as const;
 export type AgeBand = (typeof AGE_BANDS)[number];
-export const ageBand = (days: number): AgeBand => (days <= 30 ? '0-30' : days <= 60 ? '31-60' : days <= 90 ? '61-90' : '90+');
+export const ageBand = (overdue: number): AgeBand => (overdue <= 0 ? 'not-due' : overdue <= 30 ? '1-30' : overdue <= 60 ? '31-60' : overdue <= 90 ? '61-90' : '90+');
 
 export interface OpenItem {
   inv: Issued;
@@ -128,14 +197,15 @@ export function openItems(invoices: readonly Invoice[], date: string): OpenItem[
     .filter((i): i is Issued => i.status === 'issued' && i.kind === 'invoice' && !i.deleted)
     .map((inv) => {
       const age = Math.max(0, daysBetween(inv.date, date));
-      return { inv, open: openOn(inv, invoices, date), age, band: ageBand(age), overdue: Math.max(0, daysBetween(inv.dueDate, date)) };
+      const overdue = Math.max(0, daysBetween(inv.dueDate, date));
+      return { inv, open: openOn(inv, invoices, date), age, band: ageBand(overdue), overdue };
     })
     .filter((x) => x.open > 0)
     .sort((a, b) => a.inv.date.localeCompare(b.inv.date) || a.inv.number.localeCompare(b.inv.number));
 }
 
 export type BandSums = Record<AgeBand, number>;
-const noBands = (): BandSums => ({ '0-30': 0, '31-60': 0, '61-90': 0, '90+': 0 });
+const noBands = (): BandSums => ({ 'not-due': 0, '1-30': 0, '31-60': 0, '61-90': 0, '90+': 0 });
 
 export interface OpenGroup { customerId: string; name: string; currency: string; items: OpenItem[]; total: number; bands: BandSums }
 export interface OpenTotal { currency: string; total: number; bands: BandSums; count: number }

@@ -242,7 +242,7 @@ async function undoRecordChange(c: Extract<RecordChange, { undo: unknown }>, nav
     const u = c.undo;
     switch (u.kind) {
       case 'deleteDraft': await api.deleteDraft(u.id); break;
-      case 'customerBack': await api.patchCustomer(u.id, u.fields); break;
+      case 'customerBack': await api.patchContact(u.id, u.fields); break;
       case 'accountRemove': await api.removeAccount(u.number); break;
       case 'accountRename': await api.setAccountName(u.number, u.name); break;
       case 'templateBack': await api.markYearEndEntry(u.year, u.template, u.state); break;
@@ -260,7 +260,7 @@ async function undoRecordChange(c: Extract<RecordChange, { undo: unknown }>, nav
 function recordRoute(c: RecordChange): Parameters<Nav['go']>[0] {
   switch (c.kind) {
     case 'invoice': return at({ area: 'invoices', view: 'list', id: c.number ?? `draft-${c.id}` }, c.date);
-    case 'customer': return { route: { area: 'invoices', view: 'customers', id: c.id }, query: {} };
+    case 'customer': return { route: { area: 'invoices', view: 'contacts', id: c.id }, query: {} };
     case 'statement': return at({ area: 'bank' }, c.to);
     case 'yearClose': return { route: { area: 'close', step: 'entries' }, query: { period: parsePeriod(c.year, localToday())! } };
     case 'account': return { route: { area: 'company', section: 'accounts' }, query: {} };

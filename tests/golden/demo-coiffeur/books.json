@@ -1,33 +1,6 @@
 {
- "note": "The books of Salon Beispiel frozen on 2026-10-16, the golden master's input.",
+ "note": "The books of Salon Beispiel frozen on 2026-11-19, the golden master's input.",
  "journalEntries": [
-  {
-   "id": "05c78ff7fe392d63",
-   "transactionRef": "90000000080",
-   "date": "2026-09-30",
-   "accountDebit": "6940",
-   "accountCredit": "1020",
-   "amount": 8,
-   "description": "Raiffeisen, Kontoführung Q3"
-  },
-  {
-   "id": "0697c066928fbcb1",
-   "transactionRef": "90000000068",
-   "date": "2026-08-26",
-   "accountDebit": "2850",
-   "accountCredit": "1020",
-   "amount": 2500,
-   "description": "Privatbezug August 2026, Bella Beispiel"
-  },
-  {
-   "id": "0844c4317d2d6690",
-   "transactionRef": "90000000079",
-   "date": "2026-09-30",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 1835.1,
-   "description": "Kasse, Bareinnahmen Coiffure September 2026"
-  },
   {
    "id": "0b35a5e2f155aba4",
    "transactionRef": "90000000039",
@@ -54,15 +27,6 @@
    "accountCredit": "3400",
    "amount": 1134.2,
    "description": "Kasse, Bareinnahmen Coiffure April 2026"
-  },
-  {
-   "id": "0ded262aaa3c8940",
-   "transactionRef": "90000000053",
-   "date": "2026-06-30",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 1705.6,
-   "description": "Kasse, Bareinnahmen Coiffure Juni 2026"
   },
   {
    "id": "10ecc8219efa280b",
@@ -101,24 +65,6 @@
    "description": "TWINT, Zahlungen Coiffure März 2026"
   },
   {
-   "id": "1d41695834ab1bb3",
-   "transactionRef": "90000000061",
-   "date": "2026-07-27",
-   "accountDebit": "2850",
-   "accountCredit": "1020",
-   "amount": 2500,
-   "description": "Privatbezug Juli 2026, Bella Beispiel"
-  },
-  {
-   "id": "1eb6872df0de85fd",
-   "transactionRef": "90000000064",
-   "date": "2026-08-10",
-   "accountDebit": "4400",
-   "accountCredit": "1020",
-   "amount": 200.8,
-   "description": "Beispiel Haarkosmetik, Farben und Verbrauchsmaterial August 2026"
-  },
-  {
    "id": "228b371788a00e7f",
    "transactionRef": "90000000034",
    "date": "2026-04-27",
@@ -128,15 +74,6 @@
    "description": "TWINT, Zahlungen Coiffure April 2026"
   },
   {
-   "id": "24d2aa04c5461cc0",
-   "transactionRef": "90000000058",
-   "date": "2026-07-20",
-   "accountDebit": "1020",
-   "accountCredit": "3200",
-   "amount": 213.65,
-   "description": "SumUp, Kartenzahlungen Produkte Juli 2026"
-  },
-  {
    "id": "25a6e2f7ffd5f002",
    "transactionRef": "90000000013",
    "date": "2026-02-18",
@@ -144,15 +81,6 @@
    "accountCredit": "1020",
    "amount": 59,
    "description": "Muster Telecom, Telefon und Internet Februar 2026"
-  },
-  {
-   "id": "2e100442f7d8fd3a",
-   "transactionRef": "90000000060",
-   "date": "2026-07-27",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 648.9,
-   "description": "TWINT, Zahlungen Coiffure Juli 2026"
   },
   {
    "id": "3565426d22e5adf7",
@@ -171,15 +99,6 @@
    "accountCredit": "3200",
    "amount": 327.5,
    "description": "SumUp, Kartenzahlungen Produkte Februar 2026"
-  },
-  {
-   "id": "3a00c8c9167d4ff1",
-   "transactionRef": "90000000062",
-   "date": "2026-07-31",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 1201.75,
-   "description": "Kasse, Bareinnahmen Coiffure Juli 2026"
   },
   {
    "id": "3b6fade26a27079a",
@@ -209,15 +128,6 @@
    "description": "Muster Immobilien, Miete Salon Februar 2026"
   },
   {
-   "id": "3f83d2653b0cdfc4",
-   "transactionRef": "90000000058",
-   "date": "2026-07-20",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 858.8,
-   "description": "SumUp, Kartenzahlungen Coiffure Juli 2026"
-  },
-  {
    "id": "407739fc9d32a1c9",
    "transactionRef": "90000000003",
    "date": "2026-01-14",
@@ -225,15 +135,6 @@
    "accountCredit": "3400",
    "amount": 1601.65,
    "description": "Kasse, Bareinnahmen Coiffure Januar 2026"
-  },
-  {
-   "id": "41f24a41ee040c67",
-   "transactionRef": "90000000071",
-   "date": "2026-09-01",
-   "accountDebit": "6000",
-   "accountCredit": "1020",
-   "amount": 1450,
-   "description": "Muster Immobilien, Miete Salon September 2026"
   },
   {
    "id": "44c01743e1c29547",
@@ -245,24 +146,6 @@
    "description": "SumUp, Kartenzahlungen Produkte März 2026"
   },
   {
-   "id": "4516305e8009d720",
-   "transactionRef": "90000000067",
-   "date": "2026-08-20",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 941.4,
-   "description": "SumUp, Kartenzahlungen Coiffure August 2026"
-  },
-  {
-   "id": "46a79516892745b1",
-   "transactionRef": "90000000073",
-   "date": "2026-09-14",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 1654.2,
-   "description": "Kasse, Bareinnahmen Coiffure September 2026"
-  },
-  {
    "id": "4a7e2f7176ad6c86",
    "transactionRef": "90000000005",
    "date": "2026-01-20",
@@ -270,15 +153,6 @@
    "accountCredit": "3200",
    "amount": 474.7,
    "description": "SumUp, Kartenzahlungen Produkte Januar 2026"
-  },
-  {
-   "id": "4be8575d9926d3db",
-   "transactionRef": "90000000057",
-   "date": "2026-07-14",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 1561.05,
-   "description": "Kasse, Bareinnahmen Coiffure Juli 2026"
   },
   {
    "id": "4cefe3d6364871ca",
@@ -299,15 +173,6 @@
    "description": "Muster Telecom, Telefon und Internet Mai 2026"
   },
   {
-   "id": "5220d6f058f4049b",
-   "transactionRef": "90000000070",
-   "date": "2026-08-31",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 1674.65,
-   "description": "Kasse, Bareinnahmen Coiffure August 2026"
-  },
-  {
    "id": "568ebd42745fdbbe",
    "transactionRef": "90000000041",
    "date": "2026-05-20",
@@ -324,15 +189,6 @@
    "accountCredit": "3400",
    "amount": 1676.6,
    "description": "Kasse, Bareinnahmen Coiffure Februar 2026"
-  },
-  {
-   "id": "6c1d0331543f4975",
-   "transactionRef": "90000000066",
-   "date": "2026-08-18",
-   "accountDebit": "6510",
-   "accountCredit": "1020",
-   "amount": 59,
-   "description": "Muster Telecom, Telefon und Internet August 2026"
   },
   {
    "id": "6d385a56041c9217",
@@ -371,24 +227,6 @@
    "description": "SumUp, Kartenzahlungen Coiffure Januar 2026"
   },
   {
-   "id": "738c01da7cc7001c",
-   "transactionRef": "90000000055",
-   "date": "2026-07-01",
-   "accountDebit": "6000",
-   "accountCredit": "1020",
-   "amount": 1450,
-   "description": "Muster Immobilien, Miete Salon Juli 2026"
-  },
-  {
-   "id": "73e73f5d28c34372",
-   "transactionRef": "90000000064",
-   "date": "2026-08-10",
-   "accountDebit": "4200",
-   "accountCredit": "1020",
-   "amount": 410.55,
-   "description": "Beispiel Haarkosmetik, Verkaufsprodukte August 2026"
-  },
-  {
    "id": "7592ad33ec4c2b9d",
    "transactionRef": "90000000006",
    "date": "2026-01-21",
@@ -396,15 +234,6 @@
    "accountCredit": "1020",
    "amount": 680,
    "description": "Muster Versicherungen, Betriebshaftpflicht 2026"
-  },
-  {
-   "id": "7d7f179e367ed078",
-   "transactionRef": "90000000074",
-   "date": "2026-09-14",
-   "accountDebit": "6400",
-   "accountCredit": "1020",
-   "amount": 189.45,
-   "description": "Stadtwerk Beispiel, Strom und Wasser Q3 2026"
   },
   {
    "id": "7fdc868b96e8a18a",
@@ -416,24 +245,6 @@
    "description": "Beispiel Haarkosmetik, Farben und Verbrauchsmaterial Mai 2026"
   },
   {
-   "id": "8194a068c1be023e",
-   "transactionRef": "90000000069",
-   "date": "2026-08-27",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 670.9,
-   "description": "TWINT, Zahlungen Coiffure August 2026"
-  },
-  {
-   "id": "82132cf4492e0b89",
-   "transactionRef": "90000000072",
-   "date": "2026-09-09",
-   "accountDebit": "4200",
-   "accountCredit": "1020",
-   "amount": 227.9,
-   "description": "Beispiel Haarkosmetik, Verkaufsprodukte September 2026"
-  },
-  {
    "id": "83557dd9ede17684",
    "transactionRef": "90000000030",
    "date": "2026-04-09",
@@ -443,15 +254,6 @@
    "description": "Beispiel Haarkosmetik, Verkaufsprodukte April 2026"
   },
   {
-   "id": "8cd8ae3fd0fb065c",
-   "transactionRef": "90000000076",
-   "date": "2026-09-21",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 1200.65,
-   "description": "SumUp, Kartenzahlungen Coiffure September 2026"
-  },
-  {
    "id": "8f7617ef74112b9c",
    "transactionRef": "90000000008",
    "date": "2026-01-27",
@@ -459,15 +261,6 @@
    "accountCredit": "3400",
    "amount": 787.35,
    "description": "TWINT, Zahlungen Coiffure Januar 2026"
-  },
-  {
-   "id": "911ec57169079c09",
-   "transactionRef": "90000000077",
-   "date": "2026-09-28",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 445.9,
-   "description": "TWINT, Zahlungen Coiffure September 2026"
   },
   {
    "id": "936052b8cd6eb9fa",
@@ -486,24 +279,6 @@
    "accountCredit": "1020",
    "amount": 59,
    "description": "Muster Telecom, Telefon und Internet April 2026"
-  },
-  {
-   "id": "9a6e4039e787c62c",
-   "transactionRef": "90000000076",
-   "date": "2026-09-21",
-   "accountDebit": "1020",
-   "accountCredit": "3200",
-   "amount": 461.45,
-   "description": "SumUp, Kartenzahlungen Produkte September 2026"
-  },
-  {
-   "id": "a0252c5543ee84ca",
-   "transactionRef": "90000000059",
-   "date": "2026-07-20",
-   "accountDebit": "6510",
-   "accountCredit": "1020",
-   "amount": 59,
-   "description": "Muster Telecom, Telefon und Internet Juli 2026"
   },
   {
    "id": "a35b34e4f215b649",
@@ -542,15 +317,6 @@
    "description": "Kasse, Bareinnahmen Coiffure Mai 2026"
   },
   {
-   "id": "aee3a9aa151a75a6",
-   "transactionRef": "90000000065",
-   "date": "2026-08-14",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 1891.5,
-   "description": "Kasse, Bareinnahmen Coiffure August 2026"
-  },
-  {
    "id": "aef1a9e8719e3c1c",
    "transactionRef": "90000000032",
    "date": "2026-04-20",
@@ -558,24 +324,6 @@
    "accountCredit": "3400",
    "amount": 1054.25,
    "description": "SumUp, Kartenzahlungen Coiffure April 2026"
-  },
-  {
-   "id": "b203d6ac22bd87be",
-   "transactionRef": "90000000056",
-   "date": "2026-07-09",
-   "accountDebit": "4400",
-   "accountCredit": "1020",
-   "amount": 118.6,
-   "description": "Beispiel Haarkosmetik, Farben und Verbrauchsmaterial Juli 2026"
-  },
-  {
-   "id": "b7079c34e41daf84",
-   "transactionRef": "90000000072",
-   "date": "2026-09-09",
-   "accountDebit": "4400",
-   "accountCredit": "1020",
-   "amount": 194.25,
-   "description": "Beispiel Haarkosmetik, Farben und Verbrauchsmaterial September 2026"
   },
   {
    "id": "b7993a933f2b6101",
@@ -603,15 +351,6 @@
    "accountCredit": "3400",
    "amount": 815.7,
    "description": "SumUp, Kartenzahlungen Coiffure Mai 2026"
-  },
-  {
-   "id": "bd99dc7f1fd46934",
-   "transactionRef": "90000000056",
-   "date": "2026-07-09",
-   "accountDebit": "4200",
-   "accountCredit": "1020",
-   "amount": 393.15,
-   "description": "Beispiel Haarkosmetik, Verkaufsprodukte Juli 2026"
   },
   {
    "id": "be79fbaa19281a28",
@@ -677,15 +416,6 @@
    "description": "Privatbezug Januar 2026, Bella Beispiel"
   },
   {
-   "id": "cb81d1072a39749c",
-   "transactionRef": "90000000054",
-   "date": "2026-06-30",
-   "accountDebit": "6940",
-   "accountCredit": "1020",
-   "amount": 8,
-   "description": "Raiffeisen, Kontoführung Q2"
-  },
-  {
    "id": "d05230c47dd4c418",
    "transactionRef": "90000000020",
    "date": "2026-03-12",
@@ -749,15 +479,6 @@
    "description": "Raiffeisen, Kontoführung Q1"
   },
   {
-   "id": "de9bbad101f334c4",
-   "transactionRef": "90000000063",
-   "date": "2026-08-03",
-   "accountDebit": "6000",
-   "accountCredit": "1020",
-   "amount": 1450,
-   "description": "Muster Immobilien, Miete Salon August 2026"
-  },
-  {
    "id": "e12b32a16cd8b10b",
    "transactionRef": "90000000016",
    "date": "2026-02-27",
@@ -803,24 +524,6 @@
    "description": "Muster Immobilien, Miete Salon März 2026"
   },
   {
-   "id": "f1fb2c4ad18691d3",
-   "transactionRef": "90000000067",
-   "date": "2026-08-20",
-   "accountDebit": "1020",
-   "accountCredit": "3200",
-   "amount": 284.65,
-   "description": "SumUp, Kartenzahlungen Produkte August 2026"
-  },
-  {
-   "id": "f20c49f966d7fa29",
-   "transactionRef": "90000000052",
-   "date": "2026-06-29",
-   "accountDebit": "1020",
-   "accountCredit": "3400",
-   "amount": 565.3,
-   "description": "TWINT, Zahlungen Coiffure Juni 2026"
-  },
-  {
    "id": "f26716c1b0d7dce7",
    "transactionRef": "90000000015",
    "date": "2026-02-26",
@@ -828,15 +531,6 @@
    "accountCredit": "1020",
    "amount": 2500,
    "description": "Privatbezug Februar 2026, Bella Beispiel"
-  },
-  {
-   "id": "f46cf757412e4f99",
-   "transactionRef": "90000000078",
-   "date": "2026-09-28",
-   "accountDebit": "2850",
-   "accountCredit": "1020",
-   "amount": 2500,
-   "description": "Privatbezug September 2026, Bella Beispiel"
   },
   {
    "id": "fa97142ba4558bb4",
@@ -866,8 +560,224 @@
    "description": "SumUp, Kartenzahlungen Coiffure Juni 2026"
   },
   {
-   "id": "fda91b688a056819",
-   "transactionRef": "90000000075",
+   "id": "05c78ff7fe392d63",
+   "transactionRef": "90000000080",
+   "date": "2026-09-30",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 1835.1,
+   "description": "Kasse, Bareinnahmen Coiffure September 2026"
+  },
+  {
+   "id": "0697c066928fbcb1",
+   "transactionRef": "90000000068",
+   "date": "2026-08-20",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 941.4,
+   "description": "SumUp, Kartenzahlungen Coiffure August 2026"
+  },
+  {
+   "id": "0844c4317d2d6690",
+   "transactionRef": "90000000079",
+   "date": "2026-09-28",
+   "accountDebit": "2850",
+   "accountCredit": "1020",
+   "amount": 2500,
+   "description": "Privatbezug September 2026, Bella Beispiel"
+  },
+  {
+   "id": "0ded262aaa3c8940",
+   "transactionRef": "90000000053",
+   "date": "2026-06-29",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 565.3,
+   "description": "TWINT, Zahlungen Coiffure Juni 2026"
+  },
+  {
+   "id": "1b104277908469a8",
+   "transactionRef": "90000000059",
+   "date": "2026-07-20",
+   "accountDebit": "1020",
+   "accountCredit": "3200",
+   "amount": 213.65,
+   "description": "SumUp, Kartenzahlungen Produkte Juli 2026"
+  },
+  {
+   "id": "1d41695834ab1bb3",
+   "transactionRef": "90000000061",
+   "date": "2026-07-27",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 648.9,
+   "description": "TWINT, Zahlungen Coiffure Juli 2026"
+  },
+  {
+   "id": "2b65b8a9426e166e",
+   "transactionRef": "90000000073",
+   "date": "2026-09-09",
+   "accountDebit": "4400",
+   "accountCredit": "1020",
+   "amount": 194.25,
+   "description": "Beispiel Haarkosmetik, Farben und Verbrauchsmaterial September 2026"
+  },
+  {
+   "id": "2e100442f7d8fd3a",
+   "transactionRef": "90000000060",
+   "date": "2026-07-20",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 59,
+   "description": "Muster Telecom, Telefon und Internet Juli 2026"
+  },
+  {
+   "id": "3a00c8c9167d4ff1",
+   "transactionRef": "90000000062",
+   "date": "2026-07-27",
+   "accountDebit": "2850",
+   "accountCredit": "1020",
+   "amount": 2500,
+   "description": "Privatbezug Juli 2026, Bella Beispiel"
+  },
+  {
+   "id": "3f83d2653b0cdfc4",
+   "transactionRef": "90000000058",
+   "date": "2026-07-14",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 1561.05,
+   "description": "Kasse, Bareinnahmen Coiffure Juli 2026"
+  },
+  {
+   "id": "41f24a41ee040c67",
+   "transactionRef": "90000000071",
+   "date": "2026-08-31",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 1674.65,
+   "description": "Kasse, Bareinnahmen Coiffure August 2026"
+  },
+  {
+   "id": "4516305e8009d720",
+   "transactionRef": "90000000067",
+   "date": "2026-08-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 59,
+   "description": "Muster Telecom, Telefon und Internet August 2026"
+  },
+  {
+   "id": "46a79516892745b1",
+   "transactionRef": "90000000073",
+   "date": "2026-09-09",
+   "accountDebit": "4200",
+   "accountCredit": "1020",
+   "amount": 227.9,
+   "description": "Beispiel Haarkosmetik, Verkaufsprodukte September 2026"
+  },
+  {
+   "id": "483cfe5551ce220c",
+   "transactionRef": "90000000077",
+   "date": "2026-09-21",
+   "accountDebit": "1020",
+   "accountCredit": "3200",
+   "amount": 461.45,
+   "description": "SumUp, Kartenzahlungen Produkte September 2026"
+  },
+  {
+   "id": "4be8575d9926d3db",
+   "transactionRef": "90000000057",
+   "date": "2026-07-09",
+   "accountDebit": "4200",
+   "accountCredit": "1020",
+   "amount": 393.15,
+   "description": "Beispiel Haarkosmetik, Verkaufsprodukte Juli 2026"
+  },
+  {
+   "id": "5220d6f058f4049b",
+   "transactionRef": "90000000070",
+   "date": "2026-08-27",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 670.9,
+   "description": "TWINT, Zahlungen Coiffure August 2026"
+  },
+  {
+   "id": "6c1d0331543f4975",
+   "transactionRef": "90000000066",
+   "date": "2026-08-14",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 1891.5,
+   "description": "Kasse, Bareinnahmen Coiffure August 2026"
+  },
+  {
+   "id": "73536913a789fd27",
+   "transactionRef": "90000000065",
+   "date": "2026-08-10",
+   "accountDebit": "4400",
+   "accountCredit": "1020",
+   "amount": 200.8,
+   "description": "Beispiel Haarkosmetik, Farben und Verbrauchsmaterial August 2026"
+  },
+  {
+   "id": "738c01da7cc7001c",
+   "transactionRef": "90000000055",
+   "date": "2026-06-30",
+   "accountDebit": "6940",
+   "accountCredit": "1020",
+   "amount": 8,
+   "description": "Raiffeisen, Kontoführung Q2"
+  },
+  {
+   "id": "73e73f5d28c34372",
+   "transactionRef": "90000000064",
+   "date": "2026-08-03",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 1450,
+   "description": "Muster Immobilien, Miete Salon August 2026"
+  },
+  {
+   "id": "742de4ec942e68c6",
+   "transactionRef": "90000000057",
+   "date": "2026-07-09",
+   "accountDebit": "4400",
+   "accountCredit": "1020",
+   "amount": 118.6,
+   "description": "Beispiel Haarkosmetik, Farben und Verbrauchsmaterial Juli 2026"
+  },
+  {
+   "id": "7d7f179e367ed078",
+   "transactionRef": "90000000074",
+   "date": "2026-09-14",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 1654.2,
+   "description": "Kasse, Bareinnahmen Coiffure September 2026"
+  },
+  {
+   "id": "8194a068c1be023e",
+   "transactionRef": "90000000069",
+   "date": "2026-08-26",
+   "accountDebit": "2850",
+   "accountCredit": "1020",
+   "amount": 2500,
+   "description": "Privatbezug August 2026, Bella Beispiel"
+  },
+  {
+   "id": "82132cf4492e0b89",
+   "transactionRef": "90000000072",
+   "date": "2026-09-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 1450,
+   "description": "Muster Immobilien, Miete Salon September 2026"
+  },
+  {
+   "id": "8cd8ae3fd0fb065c",
+   "transactionRef": "90000000076",
    "date": "2026-09-18",
    "accountDebit": "6510",
    "accountCredit": "1020",
@@ -875,13 +785,113 @@
    "description": "Muster Telecom, Telefon und Internet September 2026"
   },
   {
-   "id": "fe35aade6ffcb9c4",
+   "id": "911ec57169079c09",
+   "transactionRef": "90000000077",
+   "date": "2026-09-21",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 1200.65,
+   "description": "SumUp, Kartenzahlungen Coiffure September 2026"
+  },
+  {
+   "id": "93d2ed5f3d262b0c",
+   "transactionRef": "90000000068",
+   "date": "2026-08-20",
+   "accountDebit": "1020",
+   "accountCredit": "3200",
+   "amount": 284.65,
+   "description": "SumUp, Kartenzahlungen Produkte August 2026"
+  },
+  {
+   "id": "a0252c5543ee84ca",
+   "transactionRef": "90000000059",
+   "date": "2026-07-20",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 858.8,
+   "description": "SumUp, Kartenzahlungen Coiffure Juli 2026"
+  },
+  {
+   "id": "aee3a9aa151a75a6",
+   "transactionRef": "90000000065",
+   "date": "2026-08-10",
+   "accountDebit": "4200",
+   "accountCredit": "1020",
+   "amount": 410.55,
+   "description": "Beispiel Haarkosmetik, Verkaufsprodukte August 2026"
+  },
+  {
+   "id": "b952c744cc17beaf",
+   "transactionRef": "90000000081",
+   "date": "2026-09-30",
+   "accountDebit": "6940",
+   "accountCredit": "1020",
+   "amount": 8,
+   "description": "Raiffeisen, Kontoführung Q3"
+  },
+  {
+   "id": "bd99dc7f1fd46934",
+   "transactionRef": "90000000056",
+   "date": "2026-07-01",
+   "accountDebit": "6000",
+   "accountCredit": "1020",
+   "amount": 1450,
+   "description": "Muster Immobilien, Miete Salon Juli 2026"
+  },
+  {
+   "id": "c5e03ae69a9b757f",
    "transactionRef": "90000000051",
+   "date": "2026-06-24",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 685,
+   "description": "Rechnung 2026-001 Lena Muster",
+   "origin": "invoice"
+  },
+  {
+   "id": "cb81d1072a39749c",
+   "transactionRef": "90000000054",
+   "date": "2026-06-30",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 1705.6,
+   "description": "Kasse, Bareinnahmen Coiffure Juni 2026"
+  },
+  {
+   "id": "de9bbad101f334c4",
+   "transactionRef": "90000000063",
+   "date": "2026-07-31",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 1201.75,
+   "description": "Kasse, Bareinnahmen Coiffure Juli 2026"
+  },
+  {
+   "id": "f20c49f966d7fa29",
+   "transactionRef": "90000000052",
    "date": "2026-06-26",
    "accountDebit": "2850",
    "accountCredit": "1020",
    "amount": 2500,
    "description": "Privatbezug Juni 2026, Bella Beispiel"
+  },
+  {
+   "id": "f46cf757412e4f99",
+   "transactionRef": "90000000078",
+   "date": "2026-09-28",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 445.9,
+   "description": "TWINT, Zahlungen Coiffure September 2026"
+  },
+  {
+   "id": "fda91b688a056819",
+   "transactionRef": "90000000075",
+   "date": "2026-09-14",
+   "accountDebit": "6400",
+   "accountCredit": "1020",
+   "amount": 189.45,
+   "description": "Stadtwerk Beispiel, Strom und Wasser Q3 2026"
   }
  ],
  "config": {

@@ -15,6 +15,7 @@
  * customizing folders, which a person keeps with «Behalten» on a rule's card or saves in Änderungen
  * (docs/0.4.0/saving.md).
  */
+import { maskForModel } from '../llm/mask.js';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,6 +31,7 @@ import { wordsIn } from '../export/texts.js';
 import { FEW_PAYMENTS } from './held.js';
 import { setupSpecialist } from '../onboarding/prompt.js';
 import { TEXTS } from '../invoices/texts.js';
+import { DEFAULT_UNITS } from '../invoices/model.js';
 import type { AssistantEvent, AssistantSend } from '../types/assistant.js';
 
 /** The packaged app's files Claude reads (AGENTS.md, workflows/) lie beside its archive, unpacked (electron-builder asarUnpack). */
@@ -105,7 +107,7 @@ export function assistantSystem(language: string, owner: string, map: string, te
   const { t } = wordsIn(language);
   return [
     'You work on the books of one company in Vanilla Accounting, a Swiss bookkeeping app, for the person who keeps them. They are not an accountant and not technical. Do what they ask.',
-    'The current directory is the company\'s app folder: ledger.json (config.closedThrough: the last day of the filed quarters), master-data/accounts.json (the chart), transactional-data/<year>/books/*.jsonl (receipts, a receipt of "kind" duplicate or noise being set aside already; transactions = payments, mappings = links, journalEntries = bookings), transactional-data/<year>/questions.jsonl (the questions), invoices.json (customers, invoices and drafts), knowledge/ (rules, counterparties), workflows/, belege.workspace.yaml (the company, its bank accounts, invoicing: payment term, layout, texts).',
+    'The current directory is the company\'s app folder: ledger.json (config.closedThrough: the last day of the filed quarters), master-data/accounts.json (the chart), transactional-data/<year>/books/*.jsonl (receipts, a receipt of "kind" duplicate or noise being set aside already; transactions = payments, mappings = links, journalEntries = bookings), transactional-data/<year>/questions.jsonl (the questions), invoices.json (contacts, invoices and drafts), knowledge/ (rules, counterparties), workflows/, belege.workspace.yaml (the company, its bank accounts, invoicing: payment term, layout, texts).',
     `The app's own rules: ${join(APP_FILES, 'AGENTS.md')}. Its workflows: ${join(APP_FILES, 'workflows')}/<id>/workflow.yaml and <step>/step.yaml. The tax codes and the chart of the books' country: ${join(APP_FILES, 'modules')}/<country>/tax-codes.yaml and chart.yaml. The company's notes: ../docs/company/AGENTS.md when it exists.`,
     map,
     'To change the books, the chart, the invoicing settings or invoices, never edit their files. End your answer with exactly one block that lists the changes, and the app applies them at once, all or none, each with an undo for the person:',
@@ -120,7 +122,7 @@ export function assistantSystem(language: string, owner: string, map: string, te
     ' {"kind":"deleteEntry","id":"<journal entry id>"},',
     ' {"kind":"account","number":"4000","name":"Materialaufwand"},',
     ' {"kind":"invoicing","set":{"paymentTermsDays":10,"texts":{"de":{"salutation":"Grüezi","closing":"… zahlbar innert {days} Tagen …"}}}},',
-    ' {"kind":"invoiceDraft","customer":"<customer id>","draft":{"subject":"Malerarbeiten Küche","lines":[{"text":"Malerarbeiten","quantity":12,"unit":"h","price":95,"vatRate":8.1}]}},',
+    ' {"kind":"invoiceDraft","customer":"<contact id>","draft":{"subject":"Malerarbeiten Küche","lines":[{"text":"Malerarbeiten","quantity":12,"unit":"h","price":95,"vatRate":8.1}]}},',
     ' {"kind":"export","preset":"treuhand","period":"2026-Q3"}, {"kind":"bookAgain"}, {"kind":"openPeriod"},',
     ' {"kind":"mailbox","address":"belege@firma.ch"}, {"kind":"source","id":"<a source you wrote in data/draft/sources/>"}, {"kind":"setupTopic","topic":"bank","state":"done"}, {"kind":"setupAnswer","question":"vat","value":"effective"},',
     ' {"kind":"question","on":{"kind":"payment","id":"<transaction ref>"},"text":"Wofür war dieser Einkauf?","choices":["private","business"]}]',
@@ -145,7 +147,7 @@ export function assistantSystem(language: string, owner: string, map: string, te
     firmCodesNote(),
     'The VAT setup (registered or not, method, period, rate; the company\'s VAT section) holds for whole years: the app refuses a change while the open year has bookings, and allows it from 1 January after the year close. A firm that passed the registration threshold registers with the tax authority and is usually liable from the following 1 January (the authority\'s ruling names the date): say so instead of sending the person to change the setup now.',
     'A firm the tax authority registered from a date inside the year (its ruling names the date: a new firm, a voluntary registration) charges VAT on every invoice and owes it from that date on, whatever the setup here says: never tell such a person that they show no VAT or owe none after their registration date. The app cannot keep a year split at that date yet: say that the registration date rules, that the books of this year belong to the accountant (Treuhänder) or are set up anew from that date, and that the setup here changes on 1 January after the year close.',
-    `Invoices: "invoiceDraft" writes a draft for a customer of invoices.json ("customer": its id), or for a new one ("newCustomer": {"name","address":{"street","number","postcode","town","country"},"language"} instead of "customer"); unit is one of h, day, pcs, flat, km; prices are net. The person issues and sends it in Rechnungen; you never do. "invoicing" changes the settings of every invoice: "paymentTermsDays" (also for each customer who had the old term) and per language the texts "salutation", "intro", "closing", "mailSubject", "mailBody" (null: the app's own text again; {days} is the customer's payment term). "salutation" is the greeting line above the intro, none unless set: a greeting («Grüezi», «Sehr geehrte Damen und Herren») goes there and never replaces the intro. Change a text only as far as asked: Read the current one first (belege.workspace.yaml invoicing.texts, where {days} stands for the term; else the app's own, as they read with the company's term of ${term} days: ${JSON.stringify(Object.fromEntries((['de', 'fr', 'it', 'en'] as const).map((l) => [l, { intro: TEXTS[l].intro, closing: TEXTS[l].closing(term) }])))}) and keep the rest of it word for word, with {days} where the term goes; never claim it said what it does not say.`,
+    `Invoices: "invoiceDraft" writes a draft for a contact of invoices.json ("customer": the id of one of its "contacts", a firm or a person; not an archived one), or for a new firm ("newCustomer": {"name","address":{"street","number","postcode","town","country"},"language"} instead of "customer": its address becomes the billing address); the draft takes the contact's language, currency, terms, and its revenue account and standing discount on each position that names none; a line is an item {"text","quantity","unit","price","vatRate","discount"?: percent off this line}, a text {"kind":"text","text","style":"title"} (style absent: plain), a subtotal {"kind":"subtotal","text"} (the sum of the items since the last one), a Rabatt on the total above it {"kind":"discount","text","percent"} or {"kind":"discount","text","amount"} (a minus is a surcharge), or {"kind":"pagebreak"}; a Gruppe {"kind":"group","text"} (a title printed with the sum of its sub-positions) followed by its sub-positions, items with "inGroup": true; an Artikel of invoices.json "articles" (not archived) is {"article":"<its code or name>","quantity"}: code, text, unit, price, VAT rate and account come from the Artikel, any field you add to it (a price, a text) stands over the Artikel's; unit is the id of one of the firm's units (belege.workspace.yaml invoicing.units; absent there: ${DEFAULT_UNITS.map((u) => u.id).join(', ')}); "prices" of the draft is "net" (the firm's default unless it set invoicing.prices) or "gross" when the prices include the VAT. The person issues and sends it in Rechnungen; you never do. "invoicing" changes the settings of every invoice: "paymentTermsDays" (also for each customer who had the old term) and per language the texts "salutation", "intro", "closing", "mailSubject", "mailBody" (null: the app's own text again; {days} is the customer's payment term). "salutation" is the greeting line above the intro, none unless set: a greeting («Grüezi», «Sehr geehrte Damen und Herren») goes there and never replaces the intro. Change a text only as far as asked: Read the current one first (belege.workspace.yaml invoicing.texts, where {days} stands for the term; else the app's own, as they read with the company's term of ${term} days: ${JSON.stringify(Object.fromEntries((['de', 'fr', 'it', 'en'] as const).map((l) => [l, { intro: TEXTS[l].intro, closing: TEXTS[l].closing(term) }])))}) and keep the rest of it word for word, with {days} where the term goes; never claim it said what it does not say.`,
     '"export" packs a preset of the export dialog for a period (a quarter 2026-Q3, a year 2026; left out: the preset\'s own) and the person downloads it from the card; sending it to anyone the app cannot do.',
     'A period\'s code form (2026-Q3, 2026-H1) belongs in change blocks and links only; in your words say a period as the app shows it («Q3 2026», «1. Semester 2026»).',
     `"report" makes a report the person asks for in words («alle Spesen im Q3 nach Konto», «was kam in EUR rein»): {"kind":"report","spec":{"title":"Spesen nach Konto","period":"2026-Q3","sections":[{"source":"entries","filter":{"accounts":["6000-6999"]},"group":"account","columns":["date","text","account","vatCode","net","tax","amount"]}],"comment":"Im Zeitraum {period}: {count} Buchungen, zusammen {total}."}}. You write only what the report shows; the app runs the spec on the books, fills every figure and shows it on a card under your answer with «PDF», «CSV» and «${t('custom.save')}» (saved, it is listed under ${t('area.reports')} › ${t('custom.tab')} and runs for any period). "period": a year 2026, a half 2026-H1, a quarter 2026-Q3, a month 2026-09, a range 2026-01-01..2026-03-31, or last-quarter, last-month, ytd, last-year. A section's "source": "entries" (bookings; every filter, grouping and column), "payments" (filters accounts (the accounts their bookings use), text, receipt, currencies; no VAT columns), "receipts" or "invoices" (filters text and currencies; grouped by none, month, quarter or counterparty). "filter": "accounts" (numbers or ranges of the chart: "6510", "6000-6999"), "vatCodes", "text" (a part of the text or the other party's name), "origins" (classify: the app; manual: a person; invoice; year-close; other), "receipt" ("with" or "without"), "currencies". "group": none, month, quarter, account, counterparty, vatCode. "columns": date, text, account, counterAccount, vatCode, amount, net, tax, currency, receipt. With an account filter a booking counts on the account's normal side, a refund against it.`,
@@ -174,9 +176,15 @@ export function assistantSystem(language: string, owner: string, map: string, te
 /** What the block changes at once with an undo is never drafted: the chart (an account of it is a change of the books' answer). */
 export const NEVER_DRAFTED = ['data/draft/master-data/accounts.json'];
 
+/**
+ * What the sidebar never reads (docs/specs/payroll.md §11, #508): the payroll's people, their wages and
+ * social security numbers, and the payslips' PDFs. A Read rule holds for Grep and Glob too.
+ */
+export const NEVER_READ = ['**/payroll.json', '**/transactional-data/*/payroll/**', '**/transactional-data/*/receipts/*-lohnabrechnung-*'];
+
 export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: string | undefined, repository: string, owner: string, map = '', term?: number): string[] {
   const writes = draftPatterns().flatMap((p) => [`Edit(${p})`, `Write(${p})`]);
-  const never = NEVER_DRAFTED.flatMap((p) => [`Edit(${p})`, `Write(${p})`]);
+  const never = [...NEVER_DRAFTED.flatMap((p) => [`Edit(${p})`, `Write(${p})`]), ...NEVER_READ.map((p) => `Read(${p})`)];
   return [
     '-p',
     '--model', sidebarModel(),
@@ -194,11 +202,11 @@ export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: st
 
 /** The message: what the app tells the model first (`notes`), what the person refers to, as the server read it now, then their words. */
 export function assistantPrompt(text: string, context: string[], notes: string[] = []): string {
-  return [
+  return maskForModel([
     ...notes,
     context.length ? ['The person refers to:', ...context.map((c) => `- ${c}`)].join('\n') : '',
     text.trim(),
-  ].filter(Boolean).join('\n\n');
+  ].filter(Boolean).join('\n\n'));
 }
 
 type Block = { type: string; text?: string; name?: string; id?: string; input?: Record<string, unknown> };

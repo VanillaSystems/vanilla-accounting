@@ -5,9 +5,23 @@
 # The first is the normal rate, a new line's default.
 rates: [8.1, 2.6, 3.8, 0]
 
+# The percent of each VAT kind an Artikel names (Art. 25 MWSTG), by the day of the supply: a
+# position from an Artikel takes the rate valid on its document's supply day (Art. 115 MWSTG). The
+# kind `none` is 0 %. Newest first; a day before the first entry takes the oldest. Only rates an
+# invoice may charge (rates above) are listed: the app books no superseded rate on a new invoice.
+rateKinds:
+  normal: [{ rate: 8.1, from: "2024-01-01" }]
+  reduced: [{ rate: 2.6, from: "2024-01-01" }]
+  accommodation: [{ rate: 3.8, from: "2024-01-01" }]
+
 exemptions:
   abroad: "221"   # a service whose place of supply is abroad (Art. 8 MWSTG)
   export: "220"   # an export of goods (Art. 23 MWSTG)
+
+# Where the rest of an invoice is written off while the firm names no accounts of its own
+# (belege.workspace.yaml invoicing.writeOffAccount): a Skonto, Rabatt, fee or rounding on the
+# Erlösminderungen, a loss on the Verluste aus Forderungen of the KMU chart (accounts.yaml).
+writeOff: { skonto: "3800", loss: "3805" }
 
 # The countries of the VAT territory (Art. 3 MWSTG: Switzerland and Liechtenstein), by the first
 # two letters of an IBAN: a customer payment in CHF from such an IBAN is proposed as a domestic

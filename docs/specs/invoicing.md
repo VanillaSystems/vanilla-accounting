@@ -518,8 +518,8 @@ Every status but the two of a quote's customer is a fact. The list tabs and chip
 
 #### 4.4.12 Lists and exports
 
-- **Offene Posten:** every Rechnung with something open, by contact, with age bands (0–30, 31–60,
-  61–90, > 90 days), printable as the Debitorenliste and exported to CSV. On 31.12. it equals the year
+- **Offene Posten:** every Rechnung with something open, by contact, with age bands by the days
+  past due (nicht fällig, 1–30, 31–60, 61–90, > 90 days; decision 23), printable as the Debitorenliste and exported to CSV. On 31.12. it equals the year
   end's receivables proposal to the Rappen.
 - **Fakturajournal:** every position of the issued Rechnungen and Gutschriften of a period, to CSV.
 - **Export** of every list (current tab, filter and search) to CSV.
@@ -1016,10 +1016,11 @@ listed here and updated with phase 2's build:
 
 ### Decisions in the build (2026-11-19)
 
-23. **The age of an open item counts from the invoice date.** The market leader's notes capture its
-    open-items list only as a download at a key date, with no age basis. Counted from the invoice date,
-    the four bands (0–30, 31–60, 61–90, > 90 days) hold every open item, the not yet due ones too; the
-    days past the due date stand in a column of their own. Offene Posten takes its reference date as
+23. **The age of an open item counts from the due date** (changed by the lead on 2026-11-19, after the
+    phase-1 walk; first built from the invoice date). The market leader's notes capture its open-items
+    list only as a download at a key date, with no age basis. Counted from the invoice date, an item 63
+    days overdue stood under «> 90 Tage» beside its «Tage überfällig»; now the five bands are the
+    days overdue themselves: «nicht fällig», 1–30, 31–60, 61–90 and > 90 days. Offene Posten takes its reference date as
     `?date=` (default today) and sums `openOn`, the year end's own figure. On 31.12. it equals, on the
     cash basis, the year end's receivables proposal (which leaves out only invoices whose event the
     books carry); on the agreed basis, where every app invoice has its event, what the app's invoices
@@ -1048,6 +1049,468 @@ listed here and updated with phase 2's build:
     Offene Posten and Versendet are tables; Kunden stays list + detail until Kontakte (phase 2). A row
     of Versendet opens the PDF as sent; its document column links the document.
 31. **Sorting is a viewer's preference**, kept in the browser per table, not in the link.
+32. **F1 follows 4.11 literally (lead).** A QR-IBAN under any currency but CHF warns when saved (API code
+    `qrIbanNotChf`: what is off, SIX IG v2.4 with v2.3 valid until November 2027, banks refuse it after);
+    «Trotzdem speichern» sends `invoicing.confirm: 'qrIbanNotChf'` on that one request and the QR-IBAN is
+    stored like any other value, nothing else recorded. One stored so, or written by hand before the
+    fix, shows the same warning beside the field as a fact. An invoice issued with it carries QRR (the
+    person decided); without one a EUR invoice carries the plain IBAN with SCOR, as before. No manifest
+    step: the format is unchanged.
+33. **Where a QR-IBAN is entered.** No app path wrote one before (only the YAML by hand, and the AI's
+    `invoicing` change has no `payTo`), so there was nothing to warn on. Firma › Rechnungslayout ›
+    Zahlungskonten gets a QR-IBAN field under each currency's account; `PATCH /api/workspace` takes
+    `payTo.<cur>.qrIban` (null takes it out; a text that is no QR-IBAN is refused, `notQrIban`). The
+    QR-IBAN stays while its currency keeps the same account and leaves with a change of account.
+34. **Structured addresses (v2.3, 4.2.2).** swissqrbill 4.4.2 writes address type S for creditor and
+    debtor, street and number apart, postcode and town apart; `line2` has no field there. Proven with
+    the library's own encoder (tests/invoice-qr-v24.test.ts); nothing to fix.
+35. **`activity` on a position (F3).** 1 is the default and is not stored; 2 is. The picker sits under
+    the rate on screen, on a firm with two approved rates only, and not on a 0 % line (its code is the
+    exemption's; a 0 % line keeps no activity). A 2 on a firm with one rate (a draft or an invoice from
+    before it went back to one) is never refused: a draft drops it at its next save, so it stays
+    editable, and booking takes the first rate (`netRateCode(activity) ?? netRateCode(1)`), so a
+    statement import never stops on it. A credit note for part of the total splits each rate over its
+    activities on a firm with two rates, each line named by the first position of its activity, so a
+    credit of activity 2 takes back F2; on any other firm one line per rate as before. The default
+    from the Artikel or Tätigkeit (4.4.3) comes with those in phase 2.
+36. **Format.** `activity` rides on the one invoices.json step 2→3 of phase 1 (introduced by the
+    positions slice); this slice adds no step of its own.
+37. **Rabatt on the total (slice B).** A Rabatt takes its percent of, or its amount off, the running
+    total of everything above it: the item positions and the Rabatte above it, so several combine
+    one after the other (10 %, then CHF 5, then a 2 % Zuschlag). Its total is rounded to the Rappen
+    first and then split over the groups above it (rate, net or gross pricing, revenue account), by
+    largest remainder: a percent takes its share of each group with the group's sign (a deposit taken
+    back at 0 % shrinks too), an amount is spread by the groups' size whatever their sign, so
+    positions that nearly cancel never blow it up, so the parts add up to the printed line exactly and every
+    rate's net, VAT and gross stay consistent (`priced` in `src/invoices/rules.ts`). An amount is in
+    the document's prices (net or gross). On a credit note (negative positions) a Rabatt reduces the
+    credit. A Rabatt with no item above it takes nothing and is warned of before issue
+    («Trotzdem ausstellen»). An invoice whose total is zero or less (a Rabatt above the total) is
+    refused, not warned of: a QR-bill carries no amount below zero (a third party's format); what is
+    owed back is a Gutschrift. A position's own discount lies within 0 to 100 %.
+38. **Discount per position.** The position's amount is quantity × price to the Rappen, less its
+    percent of that, to the Rappen. A Zwischentotal sums the item positions (after their own
+    discount) since the last Zwischentotal; Rabatte do not count in it. A Seitenumbruch breaks only
+    after a table row on its sheet: one as the first position or a second in a row is no blank sheet.
+39. **Prices per document.** `prices: 'net' | 'gross'`; absent reads as net. The step 2 → 3 sets
+    `gross` on a document whose every line above 0 % had `vatIncluded` (the credit notes «by
+    amount»), else `net`; a line whose flag differs from its document keeps it as `true` or
+    `false`, which totals still honour, so no issued figure changes (proved in
+    `tests/invoice-positions.test.ts` on the demo and on a mixed file). New lines never carry the
+    flag; switching a draft's prices drops it. The VAT rate picker no longer offers «inkl.» per line.
+40. **Units.** Ids with a word per document language; the old ids keep their meaning. The German
+    word of `h` is «Std.». An issued document freezes the definitions of the units it names
+    (`Issued.units`, riding on `invoices.json` schema 3), so a later reminder prints the words the
+    invoice printed; the step 2 → 3 freezes the words of 0.6.0 (`h` as «h») on every document issued
+    before. A unit an issued document names passes the API even when the list no longer has it, so
+    «Als Entwurf kopieren» never fails on it; it prints as the copy's list words it, else its id. A unit is added in Firma › Rechnungslayout with its four words, its id made from
+    the German word; it is removed only while no draft uses it (`unitInUse`); a draft that holds a
+    removed unit keeps it and prints its id if no list names it.
+41. **«Trotzdem ausstellen».** No such path existed for issuing. A position without text or amount
+    and a Rabatt with nothing above it are warnings (`warningsForIssue`), no longer gaps: issuing
+    refuses with `unconfirmed` unless the request carries `confirm: 'unconfirmed'`, and the invoice
+    is then issued with no mark of it. The other Art. 26 gaps stay refusals; turning them into
+    warnings is a change of its own.
+42. **Phase-1 settings without behaviour yet** (manifest schema 5): the terms a firm names none of
+    are one, id `net<N>`, named «N Tage netto» (the words per language in `NET_TERMS`); the write-off
+    accounts default to the jurisdiction's (`modules/ch/invoicing.yaml` `writeOff`: 3800, 3805),
+    read through `writeOffAccounts`; `shortfallLimit` defaults to 5.
+43. **Positions at the API.** Each kind takes only its own fields (an unknown field is refused), so
+    a field a later slice adds (`activity`) is added to the item's list in `parseLines`.
+30. **A Zahlungseingang by hand is a hand movement (slice C).** «Zahlungseingang erfassen» (date, a
+    bank or cash account of the manifest in the invoice's currency, the amount prefilled with what is
+    open) adds a movement `source: 'manual'` on that account, allocated to the Rechnung with
+    `PaymentAllocation.source: 'hand'` and booked as a statement's payment is (`recordHandPayment`). A
+    statement imported later confirms it through `matchStatementRows` (`statement` on the movement):
+    nothing is booked twice and the margin names the confirmation. The spec's `account` and
+    `linkedTransaction` on the allocation are not needed: the movement carries its account and its
+    statement row. A cash payment stays a hand movement. Its «Rückgängig» (open period only) takes the
+    movement, its bookings and the allocation; one a statement confirmed is a bank row and is only
+    released («Lösen»). The owner's, an employee's or a card account is refused: an invoice is paid
+    to the firm.
+31. **One payment over several Rechnungen** is one allocation per Rechnung on the same
+    `transactionRef`, each booked as that Rechnung's payment; no `allocations[]` array in phase 1
+    (payment → invoice lives in `payments[]`, a Gutschrift → its Rechnung in `creditFor`). A surplus is
+    refused with the code `surplus` and stays unallocated, so the payment remains a question: the
+    Kundenguthaben on 2030 is phase 4. A part above what a Rechnung has open is refused the same way.
+32. **Write-offs** (`Issued.writeOffs`, ids `wo-1`, `wo-2`, … per invoice): `openAmount`, `openOn`,
+    `refundDue` and the statuses subtract them. Cash basis: nothing in the books (decision 3). A
+    document whose `RE-` event the books carry books `RE-<n>-wo-<k>` on the write-off's date: the
+    Skonto account (Skonto, Rabatt, Spesen, Rundung) or the loss account (Verlust) against the
+    receivable, the invoice's mix of rates with the minus sale codes, one line per code, at the rate
+    the receivable holds, the invoice PDF as its receipt. The date lies in an open period (golden rule
+    1); no `corrects` (MWSTG Art. 41 Abs. 1: the tax is adjusted when the correction is booked). A
+    write-off account the chart lacks joins it under the jurisdiction chart's name when a write-off
+    books on it. A Storno reverses the write-offs' entries with the event (`RE-<n>-storno`), so the
+    receivable nets to zero.
+33. **Skonto by code.** `Issued.terms` freezes the terms printed. A payment found by reference or by
+    number is taken for the Skonto when it is the invoice's first, comes on or after the invoice date
+    and within the Skonto days, and pays what is open less the Skonto (percent of what is open, to the
+    Rappen) within 5 Rappen either way (`SKONTO_TOLERANCE`: a customer's bank may round to 5 Rappen);
+    the rest is written off as `skonto` by `code` with the payment's ref, and goes with the payment
+    when it is released. Further off it is a short payment for the person (Ausziffern). The paper
+    prints the terms' text and «Bei Zahlung bis … 2 % Skonto (CHF …): zu zahlen CHF …» only for terms
+    with a Skonto; net terms leave the paper as it was (the closing names the days).
+34. **Which terms a draft takes.** A new draft takes the firm's default terms when their days are the
+    customer's; a customer with days of its own (`paymentTermsDays`) gets no `termsId` and prints its
+    days net, frozen as `net<N>`. A draft may pick any of the firm's terms (`termsId`).
+35. **Shortfall below the limit** (`shortfallLimit`, the books' currency): a rest of at most the limit
+    after a payment, on an invoice in the books' currency, is a fact on the detail with «als Spesen
+    ausbuchen»; code never books it.
+36. **Statuses.** Teilbezahlt once something was received, credited or written off and something is
+    open; Bezahlt when nothing is. A Gutschrift is Abgerechnet once nothing of it waits (applied to its
+    Rechnung at once, the rest paid back), Teilweise while part of a refund waits and something is
+    applied or back, Offen while all of it waits; a rest set off against a next invoice waits for
+    phase 4 (`creditNoteStatus`).
+37. **A Gutschrift above what is open** warns at issue (`unconfirmed` with `credit.aboveOpen`,
+    «Trotzdem ausstellen»); above the invoice's total it stays refused.
+38. **Verrechnung on the cash basis.** A payment of a Rechnung with Gutschriften applied by its date
+    books its share of the Rechnung's positions with the sale codes and its share of the Gutschriften's
+    applied parts with the minus codes, in proportion to what each still has unbooked (the earlier
+    payments replayed in date order, `cashRevenue`); the lines add up to the payment to the Rappen and,
+    once paid in full, each rate is right within a Rappen.
+39. **Storno of a paid Rechnung** is a warning (`paid`, the payments named); «Trotzdem stornieren»
+    (`confirm: 'paid'`) cancels it and releases its payments, which wait unmatched again and go to the
+    booking run. A payment of a filed period is never released, so such a Storno is refused.
+40. **The four figures** are one pure function (`figures` in `src/invoices/rules.ts`): Betrag, erhalten
+    (the payments without their reminder fees), gutgeschrieben (Gutschriften and write-offs) and offen
+    = Betrag − erhalten − gutgeschrieben, which may be below zero (a credit of the customer, phase 4);
+    `openAmount` is the same figure, never below zero.
+41. **Where the money shows (slice C UI).** The four figures sit between the actions and the sheet
+    of every issued, uncancelled Rechnung, in a component of their own (`Figures.tsx`), each figure's
+    sources on hover. The margin's «Zahlungen» lists the payments (statement or by hand, a hand one
+    with the statement row that confirmed it), the write-offs with «Rückgängig» and the entries each
+    event made, each a link to `/journal/<id>`. A shortfall under the limit is a fact on the status
+    with one button «Rest … als Spesen ausbuchen». «Ausziffern» opens from a payment proposed for the
+    Rechnung and from «Andere Zahlung zuordnen»; Firma › Rechnungslayout › Konditionen lists the terms
+    with one default; a draft picks its terms in its margin.
+42. **One payment, several documents, one «Lösen» each (review of slice C).** Every entry a payment
+    books for a document names the document's number in its text (invoices and credit notes share
+    one series), so «Lösen» or «Trotzdem stornieren» takes off only that document's part (`bookedFor`).
+    What an Ausziffern replaced is kept beside the books for the payment, not for one invoice, and
+    comes back, with the booking run, only when the last allocation leaves the payment. A write-off
+    of a cancelled invoice stays (its Storno reversed it); one dated before the invoice is refused
+    (`beforeInvoice`). A write-off recorded while the agreed basis's event waited for its rate is
+    booked with the event. A hand movement names no counterparty, so a statement row of whoever paid
+    confirms it. The write-off account joins the chart in the booking itself (`ensureAccount`),
+    whoever books it, code's Skonto included. A refusal of the money carries `paymentRefusal`.
+43. **One Gutschrift status.** `creditNoteStatus` lives in `src/invoices/lists.ts` (slice D's, with
+    its statuses draft, open, partly, settled, cancelled); slice C widened it: Teilweise also when part
+    of the note is applied to its invoice while a rest waits to go back. The four figures share
+    `.ivtop` with D's sent line above the status and the actions.
+44. **Back to draft: what «sent» means (slice F2).** The way back is refused once the sent log holds
+    any document of it (an e-mail, the send dialog's download, a reminder). The plain «PDF
+    herunterladen» link records nothing, so the dialog says that the sent log shows no sending and
+    that a PDF passed on another way is better corrected by Gutschrift or Storno. Also refused: a
+    Rechnung with a payment, a write-off or an issued Gutschrift; a cancelled one; a Gutschrift that a
+    payment of its Rechnung dated on or after it took (on the cash basis that payment's booking carries
+    the credit's minus lines).
+45. **The replaced PDF (slice F2).** The file keeps its bytes and moves to
+    `invoices/<number>.replaced-<k>.pdf` beside the number's file, which issuing again needs (storePdf
+    never replaces a file). The record names it in `replaced: [{ file, sha256, issuedAt, replacedAt }]`
+    (on the draft and, after issuing again, on the issued document); Verlauf shows it with a link
+    (`/api/invoices/<id>/replaced/<k>.pdf`). The draft keeps its number in `Draft.number`; the next
+    number skips it, issuing takes it again with its reference, and such a draft is not deleted (code
+    `numbered`): it is issued again and cancelled, so the series has no gap. The intro loses the
+    greeting issuing put above it; a due date the terms gave is dropped.
+46. **Back to draft on the books (slice F2).** The `RE-`/`GS-` entries go with every link on that ref,
+    and the sales record the PDF became goes with its file when nothing else holds it (named with
+    `release`, #405): issuing again books a new receipt under the same file name. On the cash basis the
+    books hold nothing of an unpaid document, so nothing is booked or taken back.
+47. **Konten ändern, code by code (slice F2, after review).** For each booking of the invoice and of
+    its credit notes (events, payments booked from them, refunds), the revenue of each VAT code and
+    side (booked, or taken back) is spread over the accounts the positions now name, in proportion
+    to the nets of the positions, to the cent; so no code's total moves. Only the positions whose
+    old account the booking's own lines carry take part: a line a person changed stays hers and her
+    account gets nothing of ours. A booking of an open period changes in place (its ids kept where
+    the lines are as many). A document's filed bookings are taken together with its earlier
+    reclassifications: one reclassification `RE-<n>-kk-<k>` (a credit note's `GS-<n>-kk-<k>`,
+    src/books/refs.ts `reclassRef`) moves, in the books' currency and without a VAT code, what their
+    revenue carries now to where the positions put it; so change, change, change back leaves every
+    account as filed. Dated today or on the open day the person picks. A payment a person booked
+    herself is named and kept. The PDF stays.
+48. **Credit notes follow (slice F2, after review).** A credit note of the whole invoice holds its
+    positions one by one: each follows its own. Any other's position follows its account when the
+    invoice moves that account to one other; when the change splits an account a credit note books
+    on over two, it is refused (`credited`) with the way on (one account each, or cancel and issue
+    the credit note again). The credit notes' positions record the change too. A Storno reverses a
+    document's `-kk-` entries with its event, so no revenue account keeps a part of it.
+49. **Foreign currency (slice F2, after review).** Every line keeps the official daily sell rate of
+    its booking (AGENTS.md, ADR 0001); no rate of our own. A booking split into more lines converts
+    each line on its own, so a code's total in the books' currency may move by a cent. The plan names
+    it (`rounding` on the booking) and the dialog says so as a fact («Rundung: CHF 0.01 durch die
+    Aufteilung von …»); the change goes ahead (warn, don't block).
+50. **Order of writes (slice F2, after review).** Both actions write the books first through the
+    write door, then the documents in the invoicing queue (service.ts `backToDraft`,
+    `changeAccounts`). Documents changed meanwhile: back to draft renames the PDF back; Konten ändern
+    books the change back; both refuse with `changed`. Back to draft takes the receipt a matched and
+    released payment left on the cash basis too, and a document issued again files its receipt under
+    a name with the PDF's short checksum, so it never resolves to the replaced PDF's file. A draft
+    that keeps its number, dated into another year, warns («Nummer 2026-005 im Jahr 2027») and is
+    issued on «Trotzdem ausstellen».
+
+51. **The demos' sales (slice E).** The generator plays every document step through the invoicing
+    service and every step a person takes after the import (Zahlungseingang by hand, the statement
+    row that confirms it, Ausziffern, Rest ausbuchen) through the same functions the API calls
+    (`recordHandPayment`, `matchStatementRows`, `allocatePayment`, `writeOffRest`), so a demo can
+    hold no state the app could not reach. Payments still lie in Q1 to Q3 only: the demos' bank
+    statements end on 30.09., so a payment in Q4 is a cash one entered by hand.
+52. **The consultant's invoices replace his old ones from July.** `demo-consulting/` invoices in the
+    app from July (the monthly mandate by the hour, the Munich audit in EUR with the place-of-supply
+    note); the Q3 sales the generator booked before as sales records of the old tool are these
+    invoices now, with the same amounts, so no figure of the consultant moves. Its numbers start at
+    2026-001 beside the old tool's 2026-011 … 2026-084, as at a switch in the middle of a year.
+53. **A second net rate for the joinery from January.** `demo-schreinerei/` holds a second approved
+    rate (2.1 %, trade in appliances) for the whole year, as the method holds for whole years
+    (Firma › MWST refuses a change while the year has entries). H1 had no trade turnover: its filed
+    return and seal stay byte for byte; its figures gain the row 333 at 0. The appliances of the
+    August kitchen book F2.
+54. **Golden master re-frozen.** The four demos' frozen books (`tests/golden/<demo>/books.json`) are
+    frozen again from today's demos, the entries of the old freeze in their old order, so that every
+    file of a filed period stays byte for byte except the 333 row above.
+55. **The Skonto line says «Sie überweisen», not «zu zahlen».** «zu zahlen» is a total word of the
+    receipt reader (modules/ch/documents.yaml), so a paid invoice filed as its payment's receipt read
+    as the Skonto amount, not its total. The reader also takes ʼ (U+02BC, how the PDF reader gives the
+    printed ’) as a thousands mark: before, an amount with it lost its thousands.
+56. **«Ausgebucht», and the write-offs as a figure of their own** (lead, after the phase-1 walk). A
+    Rechnung closed with a loss written off (`reason: loss`, any amount) reads «Ausgebucht», paid in
+    part or not: the customer did not pay it. A rest closed as Skonto, Rabatt, Spesen or Rundung keeps
+    «Bezahlt». The market leader clears a bad debt with a credit note and keeps no tab for it, so
+    «Ausgebucht» counts in the tab «Bezahlt», the closed ones. The figures show the write-offs as
+    «ausgebucht» beside «gutgeschrieben», only when there is one: Betrag − erhalten − gutgeschrieben −
+    ausgebucht = offen; «gutgeschrieben» holds the Gutschriften alone (4.8 named both under it).
+57. **Where a new position goes; a cancelled invoice pairs with nothing** (lead, after the walk).
+    «＋ Position», «＋ Text», «＋ Zwischentotal», «＋ Rabatt» and «＋ Seitenumbruch» put the new
+    position after the one the person is in, else at the end; a draft whose only position is its
+    first item, untouched, starts with the new one instead, so a painter starts with a room's title.
+    The PDF of a cancelled invoice, filed as its payment's receipt, is a receipt without a payment
+    of its own (`noPaymentFor`): no pairing path (chain, near pairs, proposals, the intake's match)
+    ties it to the payment again after «Trotzdem stornieren».
+58. **Phase 2, one record shape (slice F1).** Angebot, Auftrag and Lieferschein are records of
+    `invoices.json` like a Rechnung (`kind` `quote`, `sales-order`, `delivery-note`), on the same sheet
+    and editor. `liveInvoices` holds only the kinds that are booked (Rechnung, Gutschrift), so payment
+    matching, VAT events, Offene Posten, the year end's receivables and the reports never see the other
+    three; `liveDocuments` holds every kind. A payment naming an Angebot's number names no claim.
+59. **No payment part outside the Rechnung.** An Angebot, Auftrag (also as Proformarechnung) and
+    Lieferschein carry no QR-bill and no payment reference (`reference` is empty) and need no account
+    to pay to before issue. A prepayment asked for with a Proformarechnung is paid against the Rechnung
+    made from the Auftrag.
+60. **Pro forma is chosen on the draft.** `printAs` of an Auftrag picks the title (Auftragsbestätigung
+    or Proformarechnung) and its texts; the issued PDF keeps what it printed (never printed again). It
+    carries the Auftrag's own number (AU-…), never one of the invoice series.
+61. **Number formats.** A format is letters, digits, `-` and `_`, at most one `{JJJJ}` (the document's
+    year) and exactly one `{N…}` (the counter, as many digits as N's, 1 to 9; it grows past them). A
+    slash or space is refused (`syntax`): it would break a link, a file name and a ref. A yearly
+    restart needs `{JJJJ}` (`restartYearly` without it gives a number twice). Kinds with the same
+    format share one counter, and must then restart alike (`sharedRestart`). The next number is one
+    more than the highest of the series (cancelled ones count); a number some other document holds
+    (a format changed back and forth) is passed over. Absent in the manifest: the defaults
+    AN-/AU-/LS-/RE-/GS-`{JJJJ}-{NNNNN}`; the manifest step 5 → 6 writes `{JJJJ}-{NNN}` for invoices and
+    credit notes into every manifest with an `invoicing:` section, so an existing workspace numbers on
+    (the demo's generator writes the same line). The grammar is core (`src/workspace/numbering.ts`),
+    the reference check the provider's (`src/providers/qr-bill/reference.ts` `formatFits`).
+62. **QR reference of a number with letters.** QRR holds digits only: a letter of the number counts
+    as two digits (A = 10 … Z = 35, as ISO 7064 reads it), so RE-2026-00001 and GS-2026-00001 get
+    references of their own. A number without letters keeps its reference exactly (2026-007 as before). A format is refused (`numberFormat`, `tooLongQrr` or `tooLongScor`) when its widest
+    number at its digit count exceeds QRR's 26 digits or SCOR's 21 characters; only the kinds with a
+    reference are checked. If a counter grows past its digits so that a reference no longer fits,
+    issuing refuses with `numberFormat`.
+63. **Booking refs of the new numbers.** A number that begins with a letter is its own ref
+    (`docRef`: RE-2026-00001, its Storno RE-2026-00001-storno, a write-off RE-2026-00001-wo-1), never
+    «RE-RE-…»; a number that begins with a digit keeps `RE-`/`GS-` before it, as before. Refs are
+    only compared, never parsed. Should a format make a number whose ref another document holds (a
+    switch from `{JJJJ}-{NNN}` to `RE-{JJJJ}-{NNN}` in the same year), issuing is refused (`refTaken`,
+    a hard rule: two documents with one ref would break the books). `namesNumber` stays as it was: a
+    text «RE-2026-001» names 2026-001 too, and `namedInvoice` takes a payment by number only when
+    exactly one document is named. Receipt file names (`<date>-rechnung-<number>.pdf`) and links
+    (`/invoices/<number>`) carry the allowed characters as they are.
+64. **Open quantities.** A converted position keeps `ofLine`, the index of the source's position.
+    What an Auftrag delivered and invoiced of a position is the sum of the issued, uncancelled
+    Lieferscheine and Rechnungen made from it (drafts do not count); a Gutschrift of such a Rechnung
+    takes back the quantities of its positions that carry `ofLine` (a Gutschrift of the whole Rechnung
+    copies them), while a Gutschrift by amount is a price reduction and leaves the quantities. An
+    Angebot is taken once: what its Aufträge and Rechnungen took together. An Angebot or Auftrag back
+    to draft is edited freely; a position moved then names the index it had.
+65. **Statuses (4.4.2).** An Angebot is Angenommen by the click or as a fact (an Auftrag or Rechnung
+    made from it, a draft included), which wins over Abgelehnt, since «Trotzdem erstellen» made it;
+    the click Abgelehnt is not offered once something was made from it. An Auftrag is Erledigt when
+    every position (options left out) is invoiced in full and, where any Lieferschein delivered
+    something, delivered in full; Teilweise once something is delivered or invoiced. A Lieferschein is
+    Ausgeführt when issued. The columns «geliefert» and «verrechnet» show the share of the Auftrag's
+    value done (each position at most its quantity, weighted by its amount).
+66. **Conversions.** Allowed: Angebot → Auftrag or Rechnung, Auftrag → Lieferschein or Rechnung; the
+    source must be issued and not cancelled. Texts, Zwischentotale, Rabatte and page breaks stay
+    where they stood (a Rabatt by amount too: the person sees it on the draft); a trailing page break
+    goes. A Lieferschein keeps the prices, unprinted. The request names the warnings the person
+    overrode (`confirm: ['expired', 'overOpen']`); each refusal names its facts (`params`). Nothing
+    ticked is refused (`nothingTicked`) and makes no draft. The draft takes the customer, currency,
+    language, prices, exemption, subject and the customer's order reference (`ordered`); a Rechnung its
+    terms; `from` names the source. Conversions write only `invoices.json`, never the books.
+67. **Back to draft (Angebot, Auftrag).** The one route of «Zurück zum Entwurf», `POST
+    /api/invoices/:id/draft`, takes an Angebot or Auftrag too (F2's rules hold for Rechnung and
+    Gutschrift). Refused for a cancelled one and for one something was made from. The draft keeps its
+    number in `Draft.number` (decision 45) and is issued under it again. Unlike a Rechnung's, it may
+    have been sent: after a send it warns (`sentVersion`, date and recipient) until «Trotzdem
+    bearbeiten», and its PDF is not renamed, since the sent log names that file; the new PDF takes
+    `<number>-2.pdf`, so the version sent stays byte-exact in the log. It books nothing.
+68. **Storno outside the Rechnung.** An Auftrag and a Lieferschein are cancelled with date and reason,
+    no notice and no booking; an Auftrag is refused while an issued Rechnung of it stands
+    (`orderInvoiced`) and warned while a Lieferschein does (`orderDelivered`, «Trotzdem stornieren»).
+    An Angebot is declined, not cancelled.
+69. **Copy and defaults.** «Als Entwurf kopieren» makes a draft of the same kind with every position
+    (no `from`, no `ofLine`); a Gutschrift's copy stays a Rechnung, as before. A Lieferschein is not
+    copied and not created on its own: it comes only from an Auftrag (decision 21); the API refuses
+    `kind: delivery-note` on a new draft (`deliveryFromOrder`), and the «＋» of Lieferscheine says so and
+    leads to Aufträge. A new Angebot holds 30 days (`validUntil`, changed on the sheet). The «＋» of each
+    other table makes its kind; on Gutschriften a Rechnung, since a Gutschrift comes only from its Rechnung.
+70. **Numbers held by drafts (review of F1, with F2).** A draft back from issue keeps its number in
+    `Draft.number`, one field and one rule for every kind (F2 uses it for Rechnungen): the number stays
+    taken for every series (`nextNumberFor` counts it), the draft is issued again under it, never
+    deleted (`numbered`), and its number's link opens it.
+71. **Only a Rechnung is open money.** `openAmount`, `openOn` and `isOverdue` are 0 and false for every
+    kind but the Rechnung; `status` says nothing more than issued for the others (their statuses are in
+    lists.ts).
+72. **Unique references.** Issuing refuses a number whose payment reference an issued Rechnung or
+    Gutschrift carries (`referenceTaken`: a number with and without its dashes makes one QR reference). Firma › Nummern
+    refuses a format whose next number would meet an issued document's reference or booking ref, a
+    format whose number reads as a link to a draft or a ref of the books (`reserved`: `draft-…`, a
+    manual ref M2026-001, `-storno`, `-wo-<k>`), and a Rechnung's or Gutschrift's series shared with a
+    kind that is not booked (`sharedKinds`).
+73. **Storno of an Auftrag (review of F1).** A Rechnung of it credited in full, or cancelled, no longer
+    holds it. Drafts made from it warn first (`orderDrafts`); after the Storno each warns at its issue
+    (`sourceCancelled`). Every «Trotzdem» names its own warning: the request carries a list of codes, and
+    a code confirms only its warning (`paid` never passes `orderDelivered`). A Rechnung and a Gutschrift
+    need an account to pay to before issue, as before; the other kinds none.
+74. **Formats of phase 2.** `invoices.json` step 3 → 4 (nothing to add for the kinds; slice G1 maps `customers` to `contacts` in it, decision 76)
+    and manifest step 5 → 6 (`invoicing.numbering`; `invoicing.prices` takes the new kinds).
+
+75. **Contacts in invoices.json (slice G1, schema 4).** `contacts` replace `customers`; a document keeps
+    the field `customerId`, which now names a contact, so no document changes. A contact's `name` is
+    stored for a person too (its first and last name, derived on every save), so lists, payment
+    matching and the bookings' texts read one field.
+76. **The step 3 → 4** maps each customer to a firm contact under the same id: its address the one
+    address, marked billing; its `attn` a line of that address (a free text such as «Küche, z. H. Herr
+    Beispiel» is not parsed into a person); its e-mail the first of `emails`; its days `paymentDays`. Issued documents keep their frozen `customer`; tests/contacts.test.ts proves on the demo,
+    the schema-2 fixture and a mixed file that every document, the sent log and every draft's printed
+    sheet stay as they were.
+77. **What a document prints of its contact** (`recipientOf`, src/invoices/contacts.ts): the name (a
+    person's with the salutation before it), the picked address or else the billing address (the first
+    when none is marked), its line, and «z. Hd. <person>» in the document's language after that line;
+    the picked person's e-mail, else the contact's first. At issue this is frozen as `Issued.customer`
+    in the shape it always had, so the PDF, reminders and bookings read it as before.
+78. **Terms of a contact.** `paymentTerms` is the id of one of the firm's terms, `paymentDays` days net
+    of its own, never both (two fields, so a migrated customer of 10 days never meets a firm's terms
+    whose id happens to be «net10»); neither, the contact pays in the firm's default. A new draft takes
+    the named terms; with own days the firm's default only when its days are those (as decision 34 did
+    for a customer's days), else plain N days net. A new default term in Firma moves the contacts whose
+    own days were the old default's, as it moved customers before.
+79. **The customer number** is `K-` and five digits, the next above the highest K-number given,
+    assigned when a contact's first document is issued (a draft takes none, as document numbers). A
+    number typed by hand may be any text up to 20 characters; one another live contact holds is
+    refused (`numberTaken`): a number names one contact. The CSV import keeps a row's number unless
+    another contact holds it.
+80. **Archive, not delete.** «Löschen» on a contact archives it while any document (a draft too)
+    names it, else deletes it (the flag of ADR 0004); the answer says which. An archived contact is
+    in the tab Archiviert, offered in no picker and refused for a new or another draft (`archived`);
+    a draft that names it already keeps it and may be issued. `archived: false` restores it.
+81. **Defaults on positions.** The contact's revenue account and standing discount fill a position
+    when it is made (the UI's «＋ Position», the AI's lines that name none); a position keeps what it
+    has, so the person removes either on the position. The contact's currency is the new draft's.
+82. **Contact persons and addresses** carry random ids (`p-…`, `a-…`): an id the contact no longer has
+    is never given again, so a draft that named a removed person never names the next one added. A
+    document names them (`personId`, `addressId`); another contact on a draft drops both. The person
+    and the address are picked in the draft's margin «Kontakt», under the contact picked on the sheet.
+    A draft whose person or address was removed since shows it in that section, and issuing warns
+    (`customer.person`, `customer.addressGone`); «Trotzdem ausstellen» issues it without «z. Hd.», to
+    the billing address. Every kind picks them so (Angebot, Auftrag, Lieferschein, Rechnung); a
+    conversion carries the source's person and address to the new draft.
+83. **A person's salutation is printed, never matched.** Payment matching reads a customer's name
+    without its salutation words (Herr, Frau, Familie, Monsieur, Madame, Signora, Mrs, … in the four
+    languages): «LEA FREI» pays «Frau Lea Frei», and a refund that says only «Frau» matches no one.
+84. **Import transport.** The import routes take a body of up to 8 MB (2000 wide rows as text); any
+    body over a limit is refused with a code that names it (`importTooLarge`, `bodyTooLarge`). The file
+    is read as UTF-8, else Windows-1252 (MacRoman cannot be told from it reliably and is not guessed).
+    A row's line is the file's line it starts on; a number over 20 characters and a contact person's
+    invalid e-mail are named and left out. Änderungen never undoes a customer number: the first issued
+    document gives it.
+85. **The business file.** `business` names a knowledge file id. Code proposes one with the routing
+    the books use (`identify`: its UID, the IBANs that paid its invoices, its name), only when exactly
+    one file answers; the person keeps it («Übernehmen») or picks another of the customers' files.
+    Geschäftspartner then shows the contact and the file as one partner (its id the file's, with the
+    contact's invoices and their payments); a link to a file that is gone is shown as such.
+86. **CSV import.** Any CSV (comma, semicolon or tab); code proposes the mapping from the header words
+    in four languages and as other tools name them; the person changes any column. A row without a name
+    and a Swiss UID with a wrong check digit are not imported; the others come in with what is wrong
+    named (no full address, a country or language not recognised, an e-mail or payment term not read).
+    A row with the name or UID of a contact already there, or of an earlier row, is proposed as the same
+    contact and not imported again unless the person says «als neuer Kontakt». At most 2000 rows per
+    import, the rest named.
+87. **Layout A for Kontakte** (decision 30 foresaw it): the table across the width, a contact as the
+    panel over its right part. The table's tabs (Alle, Firmen, Personen, Archiviert) are a view's state,
+    not in the link.
+
+88. **Artikel (slice G2, invoices.json schema 4).** `articles` join the step 3 → 4 as «Also in 4»: a file
+    of schema 3 has none, so no transform; a book read without them has an empty list. An Artikel is
+    an envelope with `code?` (unique among live Artikel, at most 30 characters, like the market
+    leader's «Produktcode bereits in Gebrauch»), `type` goods or service, `name`, `text?` (the printed
+    text, absent: the name), `unit?`, `price`, `prices?`, `vatKind`, `account?`, `activity?`, `group?`
+    (a free text of the list, never printed) and `archived?`.
+89. **The VAT kind's percent** comes from modules/ch/invoicing.yaml `rateKinds`, a dated list per kind
+    read for the document's supply day (its `supplied.to`, else `from`, else its date); `none` is 0 %
+    and so is every kind on a firm not registered. The list holds only rates an invoice may charge:
+    the app books no superseded rate on a new invoice, so a supply before 2024 takes today's rate and
+    the person changes it on the position. Phase 3 dates the Artikel's price; the kind stays undated.
+90. **Net or gross per Artikel.** `prices` on the Artikel (absent: net), the same word as a document's.
+    A position on a document of the other pricing converts the price at the position's rate to the
+    cent (net × (100 + rate) / 100, or back), once, when the position is made; the position keeps it,
+    so the person may correct a cent. At 0 % nothing converts. The price is taken in the document's
+    currency as it is: an EUR document gets the CHF figure, and the person changes it.
+91. **Artikel position** (`kind: 'article'`, `articleId`, `code`): code, text, unit, price, rate,
+    account and activity are copied when the position is added, and the contact's standing discount
+    as on any position; each stays editable on the position, the code too. A later change to the
+    Artikel changes no position. The account chain is the Artikel's, else the contact's
+    `revenueAccount`, else none on the position (the settings' account books it); the code follows
+    from the rate, the document's exemption and the VAT setup (`revenueVatCode`) and is shown on
+    screen beside the editable account, never asked.
+92. **Gruppen are flat.** A group is a position `{ kind: 'group', text }`; its sub-positions are the
+    priced positions right below it marked `inGroup: true` (as the market leader's sub-positions name a
+    parent). Totals, Rabatte, the revenue split, the bookings and «Konten ändern» stay as they were,
+    because a sub-position is an ordinary position by index; the group prints the sum of its
+    sub-positions (options left out). A mark with no group above it is dropped on every save
+    (`withGroups`), but no move or insert leaves one: a position changes its group only when the person
+    moves a priced position into or out of one (`moveLine`, `insertLine` in src/app/areas/invoices/edit.ts).
+    A group moves whole, its title with its sub-positions: Alt+↑/↓ passes the whole block or line beside
+    it, a drop lands before (up) or after (down) the block it falls on. A priced position steps into a
+    group (down onto its title: the first sub-position; up from just below it: the last, in place) and
+    out of it (down from the last sub-position, in place; up from the first: above the title); dropped
+    on a group's sub-position, or down on its title, it joins that group. A text, Zwischentotal, Rabatt,
+    page break or a new group never goes inside a group: moved or inserted there, it lands before or
+    after the block. Issuing warns of a group without a title or without sub-positions («Trotzdem
+    ausstellen»). A conversion copies a group with the sub-positions ticked of it; a group with none
+    ticked stays behind, and the dialog names it. Open quantities are per sub-position, as for any
+    position.
+93. **Archive or delete an Artikel** as a contact (decision 80): archived while any document, a draft
+    too, has a position from it, else deleted. An archived Artikel is in no picker and found by no AI
+    draft; positions made from it keep it named.
+94. **The Artikel import** shares the contact import's reader (src/invoices/table-import.ts: mapping
+    proposed from header words, UTF-8 else Windows-1252, 2000 rows with the rest named, 8 MB per
+    request with `importTooLarge`). A row without a name or with a price that cannot be read is not
+    imported, and neither is a price that reads two ways («1,200», «1.200»: a thousand or one and a
+    fifth), named instead of guessed. A price may carry thousands marks, a decimal comma and a
+    currency before or after it. A VAT cell is read before any number, as a word, a rate with or
+    without its point («8.1», «2,6 %», «81», «26») or a code ending in one («UN81», «UN26», «V81»).
+    A unit not in the firm's list, an account not of four digits, a code over 30 characters and a
+    VAT cell not recognised are named; the field is left out, and VAT is read as the normal rate.
+    Prices are read as net. Duplicates are by code only (an Artikel or an earlier row), proposed as the same Artikel;
+    taken as new, the row comes without its code.
+95. **«＋ Artikel»** is a search by code, name and group: code matches first, at most 50 shown, with
+    the rest named. The layout element `articleCode` (Firma › Rechnungslayout, on by default) prints
+    the code before the position's text. It rides on the manifest step 5 → 6, unreleased, as a further
+    phase-2 setting; an issued document froze its layout and prints as it was. The AI's
+    `invoiceDraft` takes `{ "article": "<code or name>", … }`, the Artikel position with the line's own
+    fields over it, priced as createDraft prices the draft (the prices it names, else the firm's default
+    for its kind); an Artikel no code or name finds, or one whose name two share, is refused
+    (`unknownArticle`).
 
 ---
 

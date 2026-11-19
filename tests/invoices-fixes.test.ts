@@ -10,8 +10,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parsePeriod } from '../src/accounting/periods.js';
-import { DEFAULT_LAYOUT, type Customer, type Draft, type InvoiceBook, type Issued } from '../src/invoices/model.js';
-import { creditNoteDraft, issue, missingForIssue, revenueSplit, totals } from '../src/invoices/rules.js';
+import { DEFAULT_LAYOUT, type Draft, type InvoiceBook, type Issued, type ItemLine } from '../src/invoices/model.js';
+import { asContact, type Customer } from './support/invoice-fixtures.js';
+import { creditNoteDraft, issue, missingForIssue, revenueSplit, totals, warningsForIssue } from '../src/invoices/rules.js';
 import { parseDraftPatch } from '../src/invoices/service.js';
 import { assembleSheets, oneLine, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
 import { fixFor, sheetEdit } from '../src/app/areas/invoices/edit.js';
@@ -21,6 +22,7 @@ import { saveFile, sameOrigin } from '../src/desktop/save-file.js';
 import deLocale from '../src/app/i18n/locales/de.js';
 import { DEMO_ROOT } from './support/workspace.js';
 import './support/jurisdiction.js';
+import { invoiceBookOf } from '../src/invoices/store.js';
 
 const customer: Customer = {
   id: 'cu_1', createdAt: '2026-07-01T08:00:00Z', origin: 'manual', deleted: false,
@@ -39,7 +41,12 @@ test('«Ausstellen» with something missing: each item says it in words and lead
     ['sender.address', { company: 'profile' }],
     ['sender.uid', { company: 'profile' }],
     ['payTo', { company: 'invoice-layout' }],
+    ['total', undefined],
+  ]);
+  // A position without text or amount is a warning the person may issue over («Trotzdem ausstellen», spec 4.11), each leading to its field.
+  assert.deepEqual(warningsForIssue(draft({ lines: [{ text: ' ', quantity: 1, price: 0, vatRate: 8.1 }] })).map((m) => [m.field, fixFor(m)]), [
     ['line.text', { field: 'l:0:text' }],
+    ['line.price', { field: 'l:0:price' }],
   ]);
   const words = Object.entries(deLocale.messages).filter(([k]) => k.startsWith('invoice.missing.')).map(([, v]) => String(v));
   assert.deepEqual(words.filter((w) => /[a-z]+\.[a-z]+[A-Z]/.test(w)), [], 'no config key (invoicing.payTo) in what a person reads');
@@ -47,7 +54,7 @@ test('«Ausstellen» with something missing: each item says it in words and lead
 });
 
 test('the date or period of the supply: typed on the sheet, stored, printed', () => {
-  const ctx = { customers: [customer], defaultTexts: { intro: '', closing: '' } };
+  const ctx = { contacts: [asContact(customer)], defaultTexts: { intro: '', closing: '' } };
   const d = draft();
   assert.deepEqual(sheetEdit(d, 'supplied', '01.09. – 15.09.2026', ctx), { change: { supplied: { from: '2026-09-01', to: '2026-09-15' } } });
   assert.deepEqual(sheetEdit(d, 'supplied', '03.09.2026', ctx), { change: { supplied: { from: '2026-09-03' } } });
@@ -74,8 +81,8 @@ test('the Save dialog: cancelled, nothing written and nothing to record; saved, 
 });
 
 test('an invoice of an earlier period still open is listed in the current one, and counted as open', () => {
-  const book = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as InvoiceBook;
-  const d = { today: '2026-12-01', invoices: book.invoices, customers: book.customers, sent: book.sent };
+  const book = invoiceBookOf(JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as Record<string, unknown>, 'invoices.json');
+  const d = { today: '2026-12-01', invoices: book.invoices, contacts: book.contacts, articles: [], sent: book.sent };
   const q4 = docRows(d, 'invoice', parsePeriod('2026-Q4', '2026-12-01')!, undefined, '2026-12-01');
   const earlier = q4.filter((r) => r.inv.date < '2026-10-01');
   assert.ok(earlier.length > 0, 'the demo has open invoices dated before Q4');
@@ -93,39 +100,39 @@ test('a reminder for an invoice never sent; a draft dated before the last issued
   assert.equal(issuedLater([inv], { date: '2025-08-20' }), undefined, 'another year has its own numbers');
 });
 
-test('a credit note for part of an invoice reads «1 × −200.00» VAT included, titled for the invoice it credits', () => {
+test('a credit note for part of an invoice reads «1 × −200.00», priced with the VAT in it, titled for the invoice it credits', () => {
   const inv = { ...issue(draft({ lines: [{ text: 'Malerarbeiten', quantity: 1, price: 2352.5, vatRate: 8.1 }] }), { customer, sender, layout: DEFAULT_LAYOUT, invoices: [], now: '2026-10-15T10:00:00Z' }), pdf: { file: 'x', sha256: 'x' } } as Issued;
   const cn = creditNoteDraft(inv, { amount: 200, reason: 'Kratzer im Parkett, Kulanz' }, env('cn'), '2026-10-15');
-  assert.deepEqual(cn.lines.map((l) => [l.quantity, l.unit, l.price, l.vatIncluded]), [[1, undefined, -200, true]]);
-  assert.equal(totals(cn.lines).gross, -200);
+  assert.deepEqual((cn.lines as ItemLine[]).map((l) => [l.quantity, l.unit, l.price, l.vatIncluded]), [[1, undefined, -200, undefined]]);
+  assert.equal(cn.prices, 'gross', 'the document is priced gross; its line carries no flag of its own');
+  assert.equal(totals(cn).gross, -200);
   assert.equal(cn.subject, 'zu Rechnung 2026-001');
   const whole = creditNoteDraft(inv, { reason: '' }, env('cn2'), '2026-10-15');
-  assert.deepEqual(whole.lines.map((l) => [l.quantity, l.price]), [[1, -2352.5]]);
+  assert.deepEqual((whole.lines as ItemLine[]).map((l) => [l.quantity, l.price]), [[1, -2352.5]]);
 });
 
 test('«CHF 500 inkl. MWST» stays 500.00: the VAT is derived from the gross, the sheet, the QR-bill and the booking carry the same figures (F04)', () => {
   const inv = { ...issue(draft({ lines: [{ text: 'Workshop Strategie', quantity: 1, price: 3000, vatRate: 8.1 }] }), { customer, sender, layout: DEFAULT_LAYOUT, invoices: [], now: '2026-10-15T10:00:00Z' }), pdf: { file: 'x', sha256: 'x' } } as Issued;
   const cn = creditNoteDraft(inv, { amount: 500, reason: 'Workshop Oktober' }, env('cn'), '2026-11-02');
-  const t = totals(cn.lines);
+  const t = totals(cn);
   assert.deepEqual([t.gross, t.vat, t.net], [-500, -37.47, -462.53], 'no net price at 8.1 % gives 500.00; the gross does');
   assert.deepEqual(revenueSplit(cn, -500, '3200'), [{ account: '3200', vatCode: 'V81', amount: -500 }], 'the booking takes the same gross');
-  const data: SheetData = { kind: 'credit-note', language: 'de', date: cn.date, currency: 'CHF', customer, sender, lines: cn.lines, intro: '', closing: '', layout: DEFAULT_LAYOUT };
+  const data: SheetData = { kind: 'credit-note', language: 'de', date: cn.date, currency: 'CHF', customer, sender, lines: cn.lines, prices: cn.prices, intro: '', closing: '', layout: DEFAULT_LAYOUT };
   const html = sheetBlocks(data).map((b) => b.html).join('');
   assert.match(html, /8.1 % inkl\./, 'the line says its price has the VAT in it');
   assert.match(html, /Total CHF<\/span><span>−500\.00/);
   assert.match(html, /MWST 8.1 % auf −462\.53<\/span><span>−37\.47/);
   // A net-priced line is computed as before: VAT on the net.
-  assert.deepEqual([totals(inv.lines).gross, totals(inv.lines).vat], [3243, 243]);
-  // Editing keeps the line priced with its VAT in it; the rate pick switches it.
+  assert.deepEqual([totals(inv).gross, totals(inv).vat], [3243, 243]);
+  // Editing keeps the document priced with its VAT in it; the rate pick changes the rate only (the document's prices are its own switch).
   const d = { ...cn, lines: cn.lines } as Draft;
-  const ctx = { customers: [customer], defaultTexts: { intro: '', closing: '' } };
+  const ctx = { contacts: [asContact(customer)], defaultTexts: { intro: '', closing: '' } };
   assert.deepEqual(sheetEdit(d, 'l:0:price', '−450', ctx), { change: { lines: [{ ...cn.lines[0], price: -450 }] } }, 'a typed minus (U+2212) stays a minus');
-  assert.deepEqual(sheetEdit(d, 'l:0:vatRate', '8.1', ctx), { change: { lines: [{ text: cn.lines[0].text, quantity: 1, price: -500, vatRate: 8.1 }] } }, 'net again');
-  assert.equal(sheetEdit(d, 'l:0:vatRate', 'incl:8.1', ctx), undefined);
-  assert.deepEqual(sheetEdit(draft(), 'l:0:vatRate', 'incl:8.1', ctx), { change: { lines: [{ ...draft().lines[0], vatIncluded: true }] } });
-  assert.deepEqual(sheetEdit(draft(), 'l:0:vatRate', 'incl:0', ctx), { refused: 'value' });
-  const book: InvoiceBook = { schema: 2, customers: [customer], invoices: [], sent: [] };
-  assert.deepEqual(parseDraftPatch({ lines: cn.lines }, book).lines, cn.lines, 'the API keeps the line priced with its VAT in it');
+  assert.deepEqual(sheetEdit(d, 'l:0:vatRate', '2.6', ctx), { change: { lines: [{ ...cn.lines[0], vatRate: 2.6 }] } });
+  assert.equal(sheetEdit(d, 'l:0:vatRate', '8.1', ctx), undefined);
+  assert.deepEqual(sheetEdit(draft(), 'l:0:vatRate', 'incl:8.1', ctx), { refused: 'value' }, 'no rate «incl.» per line any more');
+  const book: InvoiceBook = { schema: 3, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
+  assert.deepEqual(parseDraftPatch({ lines: cn.lines, prices: 'gross' }, book), { clear: [], lines: cn.lines, prices: 'gross' }, 'the API keeps the document priced with its VAT in it');
 });
 
 test('a company without its address yet: no dangling commas on the sheet', () => {

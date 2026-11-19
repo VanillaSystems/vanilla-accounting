@@ -12,6 +12,11 @@ import {
   setYearEndBalance, YearCloseRefused, yearCloseOf, yearEndDocumentOf,
 } from '../../books/year-close.js';
 import { RequestError, WS, assertOpen, patchBody, readBooks, stringField } from '../books.js';
+import { payrollYearEndOf } from '../../payroll/service.js';
+import type { PayrollYearEnd } from '../../payroll/year-end.js';
+import type { BankTransaction } from '../../types/index.js';
+import { loadClassifyContext, mappedReceipts } from '../../booking/classify.js';
+import { businessOfPayment } from '../../intake/batch-payers.js';
 
 export const router = Router();
 
@@ -31,11 +36,29 @@ async function answer(res: Response, run: () => unknown): Promise<void> {
   }
 }
 
+/**
+ * The payroll's checks beside the checklist (docs/specs/payroll.md §6.7): facts, never a blocker of the close. A failure in
+ * them is said on the page (`payrollError`) and leaves the rest of the close as it is. The business files are read only
+ * when a check asks whose a payment is (a final statement's comparison with an opening).
+ */
+function payrollOf(year: string, books: ReturnType<typeof readBooks>): { payroll?: PayrollYearEnd; payrollError?: string } {
+  try {
+    let counterparties: ReturnType<typeof loadClassifyContext>['counterparties'] | undefined;
+    const businessOf = (tx: BankTransaction) => businessOfPayment(tx, mappedReceipts(books, tx), (counterparties ??= loadClassifyContext(WS).counterparties ?? []));
+    const payroll = payrollYearEndOf(WS, year, books, businessOf);
+    return payroll ? { payroll } : {};
+  } catch (e) {
+    console.error(`year-close ${year}: the payroll's checks failed:`, e);
+    return { payrollError: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 router.get('/api/year-close/:year', async (req, res) => {
   const year = yearOf(req.params.year);
   await answer(res, () => {
-    const close = yearCloseOf(WS, year);
-    return { ...close, opening: close.closed ? openingFor(WS, year) : undefined };
+    const books = readBooks();
+    const close = yearCloseOf(WS, year, undefined, books);
+    return { ...close, opening: close.closed ? openingFor(WS, year) : undefined, ...payrollOf(year, books) };
   });
 });
 

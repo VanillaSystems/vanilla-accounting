@@ -4,31 +4,45 @@
  * print a PDF are asynchronous; they run one at a time in this process, so a number is never
  * given twice and nothing saves over another change.
  */
-import { existsSync, readFileSync, rmSync } from 'node:fs';
-import { parseUid } from '../workspace/uid.js';
-import { extname, join } from 'node:path';
+import { existsSync, readFileSync, renameSync, rmSync } from 'node:fs';
+import { basename, dirname, extname, join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import { receiptFile, type Books } from '../books/store.js';
-import { defaultTexts, issuedIntro, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
+import { defaultTexts, draftDays, issuedIntro, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
 import {
-  INVOICE_CURRENCIES, INVOICE_LANGUAGES, UNITS, DEFAULT_LAYOUT,
-  type Comment, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
-  type InvoiceLine, type Issued, type Reminder, type SentDocument, type SentKind,
+  INVOICE_CURRENCIES, INVOICE_LANGUAGES, DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, LINE_KINDS, PRICES, isItem, withGroups, type UnitDef,
+  type Article, type ArticleFields, type Comment, type Contact, type ContactFields, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
+  type AccountChange, type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type SentDocument, type SentKind,
 } from './model.js';
 import { renderHtml, renderPdf, type Rendered } from './pdf.js';
 import {
-  InvoiceRuleError, cancel, creditNoteDraft, deleteDraft, isOverdue, issue, liveCustomers, liveInvoices, missingForIssue,
-  openAmount, reminderDraft, status, totals, type CreditRequest, type InvoiceStatus, type Missing, type Totals,
+  InvoiceRuleError, KIND_WORD, asDraft, assertCreditWithinOpen, backToDraftRefusal, cancel, creditNoteDraft, deleteDraft, figures, isOverdue, issue, liveDocuments, liveInvoices, missingForIssue,
+  openAmount, reminderDraft, shortfallOf, skontoOffer, status, totals, warningsForIssue, writeOffAccounts,
+  type CreditRequest, type Figures, type InvoiceRefusal, type InvoiceStatus, type Missing, type Totals,
 } from './rules.js';
 import type { SheetData } from './sheet.js';
 import { loadInvoices, newEnvelope, readPdf, sha256, storePdf, updateInvoices, writeAtomic } from './store.js';
+import { yearPaths } from '../workspace/workspace.js';
+import { DEFAULT_NUMBERING } from './numbering.js';
+import { convertDraft, defaultValidUntil, type Ticked } from './chain.js';
+import { orderCancelBlock, ownSends } from './lists.js';
+import { isBooked } from './model.js';
+import { kindTitle } from './texts.js';
 import type { PaymentContext, PaymentOutcome } from './payments.js';
+import { notesWithAccounts, withAccounts, type AccountChangePlan, type AccountContext } from './revise.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
+import { creditNoteStatus, type CreditListStatus } from './lists.js';
+import {
+  applyContact, assertNumberFree, checkVatId, contactOfCustomer, documentsOf, draftTermsOf, goneRefs, lineDefaults, liveContacts, numberContact, parseContact, pickableContacts, recipientOf,
+} from './contacts.js';
+import { applyArticle, assertCodeFree, documentsNaming, liveArticles, parseArticle } from './articles.js';
 import { TEXTS } from './texts.js';
-import { invoiceRates, invoicing } from '../engines/index.js';
+import { baseCurrency, invoiceActivities, invoiceRates, invoicing } from '../engines/index.js';
 import { openItemAccounts } from '../accounting/tax-point.js';
 import { heldByReconciliation } from '../books/reconcile.js';
 import { accountsOf } from '../workspace/reads.js';
+import { accountName, setAccountName } from '../workspace/accounts-write.js';
+import { standardAccounts } from '../workspace/chart.js';
 
 export interface Printer {
   pdf(d: SheetData, at: string): Promise<Rendered & { pdf: Buffer }>;
@@ -37,7 +51,17 @@ export interface Printer {
 const chromium: Printer = { pdf: renderPdf, html: renderHtml };
 
 /** An invoice with what lists show: its status, totals and what is open. */
-export type InvoiceView = Invoice & { view: { status: InvoiceStatus; overdue: boolean; totals: Totals; open: number; customerName: string } };
+export type InvoiceView = Invoice & { view: {
+  status: InvoiceStatus; overdue: boolean; totals: Totals; open: number; customerName: string;
+  /** An issued invoice's four figures (spec 4.8). */
+  figures?: Figures;
+  /** A credit note's state: Offen, Teilweise, Abgerechnet. */
+  creditStatus?: CreditListStatus;
+  /** A rest of at most the shortfall limit after a payment: proposed to write off as fees. */
+  shortfall?: { amount: number; limit: number };
+  /** The Skonto the printed terms offer: its amount, the last day and what the customer pays then. */
+  skonto?: { amount: number; until: string; pays: number };
+} };
 
 let queue: Promise<unknown> = Promise.resolve();
 /**
@@ -52,6 +76,7 @@ function serial<T>(fn: () => Promise<T> | T): Promise<T> {
 }
 
 const notFound = (what: string): never => { throw new InvoiceRuleError('notFound', `${what} nicht gefunden.`); };
+const contactGone = (): never => { throw new InvoiceRuleError('contactGone', 'Diesen Kontakt gibt es nicht (mehr).'); };
 
 export function invoicingContext(ws: Workspace): InvoicingContext {
   return { company: ws.company, settings: ws.invoicing };
@@ -66,14 +91,24 @@ export function logoSrc(ws: Workspace, path: string | undefined): string | undef
   return type ? `data:${type};base64,${readFileSync(file).toString('base64')}` : undefined;
 }
 
-export function viewOf(book: InvoiceBook, inv: Invoice, today: string): InvoiceView {
+export function viewOf(book: InvoiceBook, inv: Invoice, today: string, shortfallLimit = DEFAULT_SHORTFALL_LIMIT): InvoiceView {
   const invoices = liveInvoices(book);
-  const customerName = inv.status === 'issued' ? inv.customer.name : book.customers.find((c) => c.id === inv.customerId)?.name ?? '';
-  return { ...inv, view: { status: status(inv, invoices), overdue: isOverdue(inv, invoices, today), totals: totals(inv.lines), open: openAmount(inv, invoices), customerName } };
+  const customerName = inv.status === 'issued' ? inv.customer.name : book.contacts.find((c) => c.id === inv.customerId)?.name ?? '';
+  const issued = inv.status === 'issued' ? inv : undefined;
+  const short = issued && shortfallOf(issued, invoices, shortfallLimit, baseCurrency());
+  const skonto = issued && !issued.cancelled && openAmount(issued, invoices) > 0 && !issued.payments.length ? skontoOffer(issued) : undefined;
+  return { ...inv, view: {
+    status: status(inv, invoices), overdue: isOverdue(inv, invoices, today), totals: totals(inv), open: openAmount(inv, invoices), customerName,
+    ...(issued ? { figures: figures(issued, invoices) } : {}),
+    ...(issued?.kind === 'credit-note' && !issued.cancelled ? { creditStatus: creditNoteStatus(issued, invoices) } : {}),
+    ...(short ? { shortfall: { amount: short, limit: shortfallLimit } } : {}),
+    ...(skonto ? { skonto } : {}),
+  } };
 }
 
+/** A document of any kind by its id or its number; a draft back from issue keeps its number, and its link with it. */
 export function findInvoice(book: InvoiceBook, idOrNumber: string): Invoice | undefined {
-  return liveInvoices(book).find((i) => i.id === idOrNumber || (i.status === 'issued' && i.number === idOrNumber));
+  return liveDocuments(book).find((i) => i.id === idOrNumber || (!!i.number && i.number === idOrNumber));
 }
 
 // ─── validation at the boundary ───────────────────────────────────────────────
@@ -82,37 +117,108 @@ const isText = (v: unknown): v is string => typeof v === 'string';
 const isDate = (v: unknown): v is string => isText(v) && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
 const bad = (msg: string, missing?: Missing[]): never => { throw new InvoiceRuleError('incomplete', msg, missing); };
 
-function parseLines(v: unknown): InvoiceLine[] {
+/**
+ * The positions of a request, each of its kind (absent: an item). `units`: the unit ids a position
+ * may name, the firm's list and those the draft already holds (a unit removed from the list since).
+ */
+function parseLines(v: unknown, units: readonly string[]): InvoiceLine[] {
   if (!Array.isArray(v)) return bad('lines muss eine Liste sein.');
-  return v.map((raw, i) => {
+  // A sub-position with no Gruppe above it is an ordinary position (model.ts withGroups).
+  return withGroups(v.map((raw, i): InvoiceLine => {
     const l = (raw ?? {}) as Record<string, unknown>;
-    if (!isText(l.text)) bad(`Position ${i + 1}: text fehlt.`, [{ field: 'line.text', line: i }]);
-    if (typeof l.quantity !== 'number' || typeof l.price !== 'number') bad(`Position ${i + 1}: quantity und price sind Zahlen.`, [{ field: 'line.quantity', line: i }]);
-    if (!invoiceRates().includes(l.vatRate as number)) bad(`Position ${i + 1}: vatRate ist einer von ${invoiceRates().join(', ')}.`, [{ field: 'line.vatRate', line: i }]);
-    if (l.unit !== undefined && !UNITS.includes(l.unit as never)) bad(`Position ${i + 1}: unit ist eine von ${UNITS.join(', ')}.`);
-    if (l.account !== undefined && !/^\d{4}$/.test(String(l.account))) bad(`Position ${i + 1}: account ist ein Konto mit 4 Ziffern.`);
-    if (l.vatIncluded !== undefined && typeof l.vatIncluded !== 'boolean') bad(`Position ${i + 1}: vatIncluded ist true oder false.`);
+    const at = `Position ${i + 1}`;
+    const known = (keys: string[]) => { const extra = Object.keys(l).filter((k) => !['kind', ...keys].includes(k)); if (extra.length) bad(`${at}: unbekannte Felder ${extra.join(', ')}.`); };
+    const text = () => { if (!isText(l.text)) bad(`${at}: text fehlt.`, [{ field: 'line.text', line: i }]); return l.text as string; };
+    const num = (k: string) => { if (l[k] !== undefined && (typeof l[k] !== 'number' || !Number.isFinite(l[k]))) bad(`${at}: ${k} ist eine Zahl.`); return l[k] as number | undefined; };
+    switch (l.kind) {
+      case 'text':
+        known(['text', 'style']);
+        if (l.style !== undefined && l.style !== 'title' && l.style !== 'plain') bad(`${at}: style ist title oder plain.`);
+        return { kind: 'text', text: text(), ...(l.style === 'title' ? { style: 'title' as const } : {}) };
+      case 'subtotal':
+        known(['text']);
+        return { kind: 'subtotal', text: text() };
+      case 'pagebreak':
+        known([]);
+        return { kind: 'pagebreak' };
+      case 'group':
+        known(['text']);
+        return { kind: 'group', text: text() };
+      case 'discount': {
+        known(['text', 'percent', 'amount']);
+        const percent = num('percent'), amount = num('amount');
+        if (percent !== undefined && amount !== undefined) bad(`${at}: ein Rabatt hat percent oder amount, nicht beides.`, [{ field: 'line.discount', line: i }]);
+        return { kind: 'discount', text: text(), ...(percent !== undefined ? { percent } : {}), ...(amount !== undefined ? { amount } : {}) };
+      }
+      case undefined: case 'item': case 'article': break;
+      default: return bad(`${at}: kind ist eine von ${LINE_KINDS.join(', ')}.`);
+    }
+    known(['text', 'quantity', 'unit', 'price', 'vatRate', 'discount', 'vatIncluded', 'account', 'activity', 'optional', 'ofLine', 'inGroup', ...(l.kind === 'article' ? ['articleId', 'code'] : [])]);
+    // An Artikel position names its Artikel; it stays one when the Artikel is archived or deleted since (its fields are its own).
+    if (l.kind === 'article' && !(isText(l.articleId) && l.articleId)) bad(`${at}: articleId fehlt.`);
+    if (l.code !== undefined && !isText(l.code)) bad(`${at}: code ist ein Text.`);
+    if (l.inGroup !== undefined && typeof l.inGroup !== 'boolean') bad(`${at}: inGroup ist true oder false.`);
+    if (l.optional !== undefined && typeof l.optional !== 'boolean') bad(`${at}: optional ist true oder false.`);
+    if (l.ofLine !== undefined && !(Number.isInteger(l.ofLine) && (l.ofLine as number) >= 0)) bad(`${at}: ofLine ist die Nummer einer Position.`);
+    if (typeof l.quantity !== 'number' || typeof l.price !== 'number') bad(`${at}: quantity und price sind Zahlen.`, [{ field: 'line.quantity', line: i }]);
+    if (!invoiceRates().includes(l.vatRate as number)) bad(`${at}: vatRate ist einer von ${invoiceRates().join(', ')}.`, [{ field: 'line.vatRate', line: i }]);
+    if (l.unit !== undefined && !units.includes(l.unit as string)) bad(`${at}: unit ist eine von ${units.join(', ')}.`);
+    if (l.account !== undefined && !/^\d{4}$/.test(String(l.account))) bad(`${at}: account ist ein Konto mit 4 Ziffern.`);
+    if (l.vatIncluded !== undefined && typeof l.vatIncluded !== 'boolean') bad(`${at}: vatIncluded ist true oder false.`);
+    // The activity of a firm with two approved net rates (#504): 2 books the second rate.
+    if (l.activity !== undefined && l.activity !== 1 && l.activity !== 2) bad(`${at}: activity ist 1 oder 2.`, [{ field: 'line.activity', line: i }]);
+    const discount = num('discount');
+    if (discount !== undefined && !(discount >= 0 && discount <= 100)) bad(`${at}: discount ist ein Prozentsatz von 0 bis 100.`, [{ field: 'line.discount', line: i }]);
     return {
-      text: l.text as string, quantity: l.quantity as number, price: l.price as number, vatRate: l.vatRate as InvoiceLine['vatRate'],
-      ...(l.unit !== undefined ? { unit: l.unit as InvoiceLine['unit'] } : {}), ...(l.account !== undefined ? { account: String(l.account) } : {}),
-      ...(l.vatIncluded === true && (l.vatRate as number) > 0 ? { vatIncluded: true as const } : {}),
+      ...(l.kind === 'article' ? { kind: 'article' as const, articleId: l.articleId as string, ...(isText(l.code) && l.code.trim() ? { code: l.code.trim() } : {}) } : {}),
+      text: text(), quantity: l.quantity as number, price: l.price as number, vatRate: l.vatRate as number,
+      ...(l.unit !== undefined ? { unit: l.unit as string } : {}), ...(l.account !== undefined ? { account: String(l.account) } : {}),
+      ...(discount ? { discount } : {}),
+      // Only a line of schema 2 that differs from its document keeps the flag (ItemLine.vatIncluded); at 0 % it changes nothing.
+      ...(typeof l.vatIncluded === 'boolean' && (l.vatRate as number) > 0 ? { vatIncluded: l.vatIncluded } : {}),
+      // A 2 on a firm with one net rate (a draft from before it went back to one) is dropped, not refused: the line books the first and stays editable.
+      ...(l.activity === 2 && invoiceActivities().length && (l.vatRate as number) > 0 ? { activity: 2 as const } : {}),
+      ...(l.optional === true ? { optional: true as const } : {}),
+      ...(typeof l.ofLine === 'number' ? { ofLine: l.ofLine } : {}),
+      ...(l.inGroup === true ? { inGroup: true as const } : {}),
     };
-  });
+  }));
 }
 
-const DRAFT_FIELDS = ['customerId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'intro', 'closing', 'exemption', 'settlement'] as const;
+const DRAFT_FIELDS = ['kind', 'customerId', 'personId', 'addressId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'prices', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs'] as const;
 export type DraftPatch = Partial<Pick<InvoiceContent, (typeof DRAFT_FIELDS)[number]>>;
 
-/** A draft patch from a request body; `null` clears an optional field. */
-export function parseDraftPatch(body: unknown, book: InvoiceBook): DraftPatch & { clear: string[] } {
+/**
+ * A draft patch from a request body; `null` clears an optional field. A position's unit is one of
+ * `units` (the firm's list), one the draft `id` holds already, or one an issued document names.
+ */
+export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonly UnitDef[] = DEFAULT_UNITS, id?: string, terms?: readonly PaymentTerms[]): DraftPatch & { clear: string[] } {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return bad('JSON-Objekt erwartet.');
   const b = body as Record<string, unknown>;
   const unknown = Object.keys(b).filter((k) => !DRAFT_FIELDS.includes(k as never));
   if (unknown.length) bad(`Unbekannte Felder: ${unknown.join(', ')}`);
   const out: DraftPatch & { clear: string[] } = { clear: [] };
   for (const [k, v] of Object.entries(b)) {
-    if (v === null && ['supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement'].includes(k)) { out.clear.push(k); continue; }
-    if (k === 'customerId') { if (!liveCustomers(book).some((c) => c.id === v)) bad('Kunde nicht gefunden.', [{ field: 'customer' }]); out.customerId = v as string; }
+    if (v === null && ['personId', 'addressId', 'supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs'].includes(k)) { out.clear.push(k); continue; }
+    // A draft is of one kind from its start (a conversion makes one of another); a credit note only from its invoice.
+    // A Lieferschein comes only from an Auftrag (decision 21), by «Lieferschein erstellen».
+    if (k === 'kind' && v === 'delivery-note') throw new InvoiceRuleError('deliveryFromOrder', 'Ein Lieferschein entsteht aus einem Auftrag: dort «Lieferschein erstellen».');
+    if (k === 'kind') { if (id !== undefined || !['quote', 'sales-order', 'invoice'].includes(v as string)) bad('kind ist quote, sales-order oder invoice, beim Anlegen.'); out.kind = v as InvoiceContent['kind']; continue; }
+    if (k === 'validUntil') { if (!isDate(v)) bad('validUntil ist ein Datum JJJJ-MM-TT.'); out.validUntil = v as string; continue; }
+    if (k === 'printAs') { if (v !== 'confirmation' && v !== 'proforma') bad('printAs ist confirmation oder proforma.'); out.printAs = v as 'confirmation' | 'proforma'; continue; }
+    if (k === 'customerId') {
+      const c = liveContacts(book).find((x) => x.id === v);
+      if (!c) bad('Kontakt nicht gefunden.', [{ field: 'customer' }]);
+      // An archived contact stays on the documents that name it; a document picks it again only once it is restored.
+      if (c!.archived && findInvoice(book, id ?? '')?.customerId !== v) throw new InvoiceRuleError('archived', `${c!.name} ist archiviert: zuerst wiederherstellen.`);
+      out.customerId = v as string;
+    }
+    else if (k === 'personId' || k === 'addressId') {
+      const c = book.contacts.find((x) => x.id === (b.customerId ?? findInvoice(book, id ?? '')?.customerId));
+      const list = k === 'personId' ? c?.persons : c?.addresses;
+      if (!list?.some((x) => x.id === v)) bad(`${k}: ${k === 'personId' ? 'diese Kontaktperson' : 'diese Adresse'} hat der Kontakt nicht.`);
+      out[k] = v as string;
+    }
     else if (k === 'date' || k === 'dueDate') { if (!isDate(v)) bad(`${k} ist ein Datum JJJJ-MM-TT.`); out[k] = v as string; }
     else if (k === 'supplied') {
       const p = (v ?? {}) as Record<string, unknown>;
@@ -121,8 +227,15 @@ export function parseDraftPatch(body: unknown, book: InvoiceBook): DraftPatch & 
     }
     else if (k === 'currency') { if (!INVOICE_CURRENCIES.includes(v as never)) bad('currency ist CHF oder EUR.'); out.currency = v as InvoiceContent['currency']; }
     else if (k === 'language') { if (!INVOICE_LANGUAGES.includes(v as never)) bad(`language ist eine von ${INVOICE_LANGUAGES.join(', ')}.`); out.language = v as InvoiceContent['language']; }
-    else if (k === 'lines') out.lines = parseLines(v);
+    else if (k === 'lines') {
+      // A unit removed from the list since stays where a document names it: the draft itself, or an issued document copied («Als Entwurf kopieren»).
+      const named = (ls: readonly InvoiceLine[]) => ls.flatMap((l) => (isItem(l) && l.unit ? [l.unit] : []));
+      const held = [...named(findInvoice(book, id ?? '')?.lines ?? []), ...liveDocuments(book).flatMap((i) => (i.status === 'issued' ? named(i.lines) : []))];
+      out.lines = parseLines(v, [...units.map((u) => u.id), ...held]);
+    }
+    else if (k === 'prices') { if (!PRICES.includes(v as never)) bad(`prices ist ${PRICES.join(' oder ')}.`); out.prices = v as InvoiceContent['prices']; }
     else if (k === 'exemption') { if (v !== 'abroad' && v !== 'export') bad('exemption ist abroad oder export.'); out.exemption = v as 'abroad' | 'export'; }
+    else if (k === 'termsId') { if (!isText(v) || (terms && !terms.some((x) => x.id === v))) bad(`termsId ist eine von ${(terms ?? []).map((x) => x.id).join(', ')}.`); out.termsId = v as string; }
     else if (k === 'settlement') { if (v !== 'refund' && v !== 'offset') bad('settlement ist refund oder offset.'); out.settlement = v as 'refund' | 'offset'; }
     else { if (!isText(v)) bad(`${k} ist ein Text.`); (out as Record<string, unknown>)[k] = v; }
   }
@@ -138,11 +251,7 @@ export function parseCustomer(body: unknown, partial: boolean): Partial<Customer
   const out: Partial<CustomerFields> = {};
   if (b.name !== undefined || !partial) { if (!isText(b.name) || !b.name.trim()) bad('name fehlt.', [{ field: 'customer.name' }]); out.name = (b.name as string).trim(); }
   for (const k of ['attn', 'vatId', 'email'] as const) if (b[k] !== undefined) { if (!isText(b[k])) bad(`${k} ist ein Text.`); out[k] = (b[k] as string).trim(); }
-  // A Swiss UID carries a check digit (r8c-18): a typo is caught here; a foreign VAT number is any text.
-  if (out.vatId && /^CHE/i.test(out.vatId)) {
-    const parsed = parseUid(out.vatId.replace(/\s*(MWST|TVA|IVA|VAT)$/i, ''));
-    if ('error' in parsed) throw new InvoiceRuleError('uid', parsed.error);
-  }
+  checkVatId(out.vatId);
   if (b.language !== undefined || !partial) { if (!INVOICE_LANGUAGES.includes(b.language as never)) bad(`language ist eine von ${INVOICE_LANGUAGES.join(', ')}.`); out.language = b.language as CustomerFields['language']; }
   if (b.paymentTermsDays !== undefined) { if (!Number.isInteger(b.paymentTermsDays) || (b.paymentTermsDays as number) < 0) bad('paymentTermsDays ist eine ganze Zahl von Tagen.'); out.paymentTermsDays = b.paymentTermsDays as number; }
   if (b.address !== undefined || !partial) {
@@ -155,24 +264,117 @@ export function parseCustomer(body: unknown, partial: boolean): Partial<Customer
   return out;
 }
 
-// ─── customers ─────────────────────────────────────────────────────────────────
+// ─── contacts ──────────────────────────────────────────────────────────────────
 
-export function createCustomer(ws: Workspace, fields: Partial<CustomerFields>, now = new Date().toISOString()): Customer {
+/** The ids of the firm's terms a contact may name. */
+const termIds = (ws: Workspace) => (ws.invoicing?.paymentTerms ?? []).map((x) => x.id);
+
+export function createContact(ws: Workspace, body: unknown, now = new Date().toISOString()): Contact {
+  const { clear: _, ...fields } = parseContact(body, undefined, termIds(ws));
   return updateInvoices(ws, (book) => {
-    const c: Customer = { ...newEnvelope('cu', now), ...(fields as CustomerFields), paymentTermsDays: fields.paymentTermsDays ?? ws.invoicing?.paymentTermsDays ?? 30 };
-    book.customers.push(c);
+    assertNumberFree(book, fields.number);
+    const c: Contact = { ...newEnvelope('cu', now), ...(fields as ContactFields) };
+    book.contacts.push(c);
     return c;
   });
 }
 
-export function updateCustomer(ws: Workspace, id: string, patch: Partial<CustomerFields>): Customer {
+/** A customer as phase 1 named one (the AI's «newCustomer», the demo's customers): a firm contact with its address as the billing address. */
+export function createCustomer(ws: Workspace, fields: Partial<CustomerFields>, now = new Date().toISOString()): Contact {
   return updateInvoices(ws, (book) => {
-    const i = book.customers.findIndex((c) => c.id === id && !c.deleted);
-    if (i < 0) notFound('Kunde');
-    book.customers[i] = { ...book.customers[i], ...patch };
-    return book.customers[i];
+    const c: Contact = { ...newEnvelope('cu', now), ...contactOfCustomer({ language: 'de', ...fields, name: fields.name ?? '' }) };
+    book.contacts.push(c);
+    return c;
   });
 }
+
+export function updateContact(ws: Workspace, id: string, body: unknown): Contact {
+  return updateInvoices(ws, (book) => {
+    const i = book.contacts.findIndex((c) => c.id === id && !c.deleted);
+    if (i < 0) contactGone();
+    const patch = parseContact(body, book.contacts[i], termIds(ws));
+    assertNumberFree(book, patch.number, id);
+    book.contacts[i] = applyContact(book.contacts[i], patch);
+    return book.contacts[i];
+  });
+}
+
+/**
+ * Takes a contact away: archived while any document names it (spec 4.4.5: its documents keep it),
+ * deleted when none does. An archived contact comes back with `archived: false`.
+ */
+export function removeContact(ws: Workspace, id: string): { contact: Contact; outcome: 'archived' | 'deleted' } {
+  return updateInvoices(ws, (book) => {
+    const i = book.contacts.findIndex((c) => c.id === id && !c.deleted);
+    if (i < 0) contactGone();
+    const outcome = documentsOf(book, id).length ? 'archived' : 'deleted';
+    book.contacts[i] = { ...book.contacts[i], ...(outcome === 'archived' ? { archived: true } : { deleted: true }) };
+    return { contact: book.contacts[i], outcome };
+  });
+}
+
+/** Adds contacts made elsewhere (the CSV import), each with its own envelope, in one save. */
+export function addContacts(ws: Workspace, list: readonly ContactFields[], now = new Date().toISOString()): Contact[] {
+  return updateInvoices(ws, (book) => {
+    for (const f of list) assertNumberFree(book, f.number);
+    const made = list.map((f): Contact => ({ ...newEnvelope('cu', now, 'import'), ...f }));
+    book.contacts.push(...made);
+    return made;
+  });
+}
+
+// ─── Artikel ───────────────────────────────────────────────────────────────────
+
+/** The unit ids an Artikel may name: the firm's list. */
+const unitIds = (ws: Workspace) => (ws.invoicing?.units ?? DEFAULT_UNITS).map((u) => u.id);
+const articleGone = (): never => { throw new InvoiceRuleError('articleGone', 'Diesen Artikel gibt es nicht (mehr).'); };
+
+export function createArticle(ws: Workspace, body: unknown, now = new Date().toISOString()): Article {
+  const { clear: _, ...fields } = parseArticle(body, unitIds(ws));
+  return updateInvoices(ws, (book) => {
+    assertCodeFree(book, fields.code);
+    const a: Article = { ...newEnvelope('ar', now), ...(fields as ArticleFields) };
+    book.articles.push(a);
+    return a;
+  });
+}
+
+export function updateArticle(ws: Workspace, id: string, body: unknown): Article {
+  return updateInvoices(ws, (book) => {
+    const i = book.articles.findIndex((a) => a.id === id && !a.deleted);
+    if (i < 0) articleGone();
+    const patch = parseArticle(body, unitIds(ws), book.articles[i]);
+    assertCodeFree(book, patch.code, id);
+    book.articles[i] = applyArticle(book.articles[i], patch);
+    return book.articles[i];
+  });
+}
+
+/**
+ * Takes an Artikel away: archived while any document (a draft too) has a position from it, deleted
+ * when none does (as a contact, spec 4.4.5). An archived Artikel comes back with `archived: false`.
+ */
+export function removeArticle(ws: Workspace, id: string): { article: Article; outcome: 'archived' | 'deleted' } {
+  return updateInvoices(ws, (book) => {
+    const i = book.articles.findIndex((a) => a.id === id && !a.deleted);
+    if (i < 0) articleGone();
+    const outcome = documentsNaming(book, id).length ? 'archived' : 'deleted';
+    book.articles[i] = { ...book.articles[i], ...(outcome === 'archived' ? { archived: true } : { deleted: true }) };
+    return { article: book.articles[i], outcome };
+  });
+}
+
+/** Adds Artikel made elsewhere (the CSV import), each with its own envelope, in one save. */
+export function addArticles(ws: Workspace, list: readonly ArticleFields[], now = new Date().toISOString()): Article[] {
+  return updateInvoices(ws, (book) => {
+    for (const f of list) assertCodeFree(book, f.code);
+    const made = list.map((f): Article => ({ ...newEnvelope('ar', now, 'import'), ...f }));
+    book.articles.push(...made);
+    return made;
+  });
+}
+
+export { liveArticles };
 
 /** Replaces the record `id` in the book as it is now, if it still is what `expected` was; else the change is refused. */
 function commit<T>(ws: Workspace, id: string, expected: Invoice, fn: (book: InvoiceBook, at: number) => T): T {
@@ -187,18 +389,36 @@ function commit<T>(ws: Workspace, id: string, expected: Invoice, fn: (book: Invo
 
 // ─── drafts ────────────────────────────────────────────────────────────────────
 
+/**
+ * A new draft for a contact: its language, currency and terms; its positions (the AI's) take the
+ * contact's revenue account and standing discount where they name none.
+ */
 export function createDraft(ws: Workspace, input: { customerId: string } & DraftPatch, now = new Date().toISOString()): Draft {
   return updateInvoices(ws, (book) => {
-    const customer = liveCustomers(book).find((c) => c.id === input.customerId) ?? notFound('Kunde');
+    const contact = liveContacts(book).find((c) => c.id === input.customerId) ?? contactGone();
+    // One refusal for an archived contact, wherever a document would pick it.
+    if (contact.archived) throw new InvoiceRuleError('archived', `${contact.name} ist archiviert: zuerst wiederherstellen.`);
+    const kind = input.kind ?? 'invoice';
+    // A Lieferschein comes only from an Auftrag, a Gutschrift only from its Rechnung (convertDocument, createCreditNote).
+    if (kind === 'delivery-note') throw new InvoiceRuleError('deliveryFromOrder', 'Ein Lieferschein entsteht aus einem Auftrag: dort «Lieferschein erstellen».');
+    if (kind === 'credit-note') throw new InvoiceRuleError('incomplete', 'Eine Gutschrift entsteht aus ihrer Rechnung.');
+    const terms = kind === 'invoice' ? draftTermsOf(ws.invoicing, contact) : undefined;
+    const defaults = lineDefaults(contact);
+    const date = input.date ?? now.slice(0, 10);
     const draft: Draft = {
       ...newEnvelope('in', now),
       status: 'draft',
-      kind: 'invoice',
-      date: now.slice(0, 10),
-      currency: 'CHF',
-      language: customer.language,
+      kind,
+      date,
+      currency: contact.currency ?? 'CHF',
+      language: contact.language,
       lines: [],
+      prices: ws.invoicing?.prices[kind] ?? 'net',
+      ...(terms ? { termsId: terms } : {}),
+      // An Angebot holds for 30 days unless the person sets another day.
+      ...(kind === 'quote' ? { validUntil: defaultValidUntil(date) } : {}),
       ...input,
+      ...(input.lines ? { lines: input.lines.map((l) => (isItem(l) ? { ...defaults, ...l } : l)) } : {}),
       comments: [],
     };
     book.invoices.push(draft);
@@ -212,6 +432,11 @@ export function updateDraft(ws: Workspace, id: string, patch: DraftPatch & { cle
     if (inv.status !== 'draft') throw new InvoiceRuleError('notDraft', `Rechnung ${inv.number} ist ausgestellt und bleibt, wie sie ist: eine Gutschrift oder ein Storno korrigiert sie.`);
     const { clear = [], ...fields } = patch;
     const next = { ...inv, ...fields } as Draft;
+    // Another contact: the person and the address of the one before are not its own.
+    if (fields.customerId && fields.customerId !== inv.customerId) {
+      if (!('personId' in fields)) delete next.personId;
+      if (!('addressId' in fields)) delete next.addressId;
+    }
     for (const k of clear) delete (next as unknown as Record<string, unknown>)[k];
     book.invoices[book.invoices.indexOf(inv)] = next;
     return next;
@@ -229,28 +454,48 @@ export function missingOf(ws: Workspace, id: string): Missing[] {
   const book = loadInvoices(ws);
   const inv = findInvoice(book, id) ?? notFound('Rechnung');
   if (inv.status !== 'draft') return [];
-  return missingForIssue(inv, { customer: book.customers.find((c) => c.id === inv.customerId), sender: senderFor(invoicingContext(ws), inv.currency), invoices: liveInvoices(book) });
+  return missingForIssue(inv, { customer: recipientOf(book.contacts.find((c) => c.id === inv.customerId), inv, ws.invoicing), sender: senderFor(invoicingContext(ws), inv.currency), invoices: liveDocuments(book) });
 }
 
 // ─── issuing and sending ───────────────────────────────────────────────────────
 
 /** Gives the draft its number, freezes it, prints its PDF once and stores it with its checksum. */
-export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; printer?: Printer } = {}): Promise<Issued> {
+/**
+ * `confirmed`: the person's «Trotzdem ausstellen» over the warnings of warningsForIssue (spec 4.11);
+ * `confirm`: the other warnings she overrode by their codes, `sourceCancelled` a draft made from a
+ * document cancelled since.
+ */
+export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; printer?: Printer; confirmed?: boolean; confirm?: readonly string[] } = {}): Promise<Issued> {
   return serial(async () => {
     const now = opts.now ?? new Date().toISOString();
     const book = loadInvoices(ws);
     const draft = findInvoice(book, id) ?? notFound('Rechnung');
     if (draft.status !== 'draft') throw new InvoiceRuleError('notDraft', `Rechnung ${draft.number} ist schon ausgestellt.`);
+    // A draft made from an Auftrag or Angebot cancelled since: a warning (the chain would hang on a Storno).
+    const source = draft.from ? findInvoice(book, draft.from.id) : undefined;
+    if (source?.status === 'issued' && source.cancelled && !opts.confirm?.includes('sourceCancelled')) {
+      throw new InvoiceRuleError('sourceCancelled', `${KIND_WORD[source.kind]} ${source.number} ist storniert: dieser Entwurf stammt daraus. Nur mit «Trotzdem ausstellen».`, undefined, { number: source.number });
+    }
     const ctx = invoicingContext(ws);
-    const customer = liveCustomers(book).find((c) => c.id === draft.customerId);
-    const texts = defaultTexts(ctx, draft.kind, draft.language, customer?.paymentTermsDays ?? 30);
-    const frozen: Draft = { ...draft, intro: issuedIntro(texts.salutation, draft.intro ?? texts.intro), closing: draft.closing ?? texts.closing };
-    const issued = issue(frozen, { customer, sender: senderFor(ctx, draft.currency), layout: ctx.settings?.layout ?? DEFAULT_LAYOUT, invoices: liveInvoices(book), now });
+    const contact = liveContacts(book).find((c) => c.id === draft.customerId);
+    // A person or address the contact no longer has: a warning; on «Trotzdem ausstellen» the document goes without them.
+    const gone = goneRefs(contact, draft);
+    if (gone.length && !opts.confirmed) throw new InvoiceRuleError('unconfirmed', 'Die gewählte Kontaktperson oder Adresse gibt es beim Kontakt nicht mehr; nur mit «Trotzdem ausstellen».', [...gone, ...warningsForIssue(draft)]);
+    const customer = recipientOf(contact, draft, ws.invoicing);
+    const texts = defaultTexts(ctx, draft.kind, draft.language, draftDays(ctx, draft, customer), draft.printAs);
+    const kept = { ...draft } as Draft;
+    for (const m of gone) delete kept[m.field === 'customer.person' ? 'personId' : 'addressId'];
+    const frozen: Draft = { ...kept, intro: issuedIntro(texts.salutation, draft.intro ?? texts.intro), closing: draft.closing ?? texts.closing };
+    // A credit note above what its invoice has open: a warning (spec 4.11), the rest is paid back.
+    assertCreditWithinOpen(draft, liveInvoices(book), opts.confirmed);
+    const issued = issue(frozen, { customer, sender: senderFor(ctx, draft.currency), layout: ctx.settings?.layout ?? DEFAULT_LAYOUT, units: ctx.settings?.units, invoices: liveDocuments(book), now, confirmed: opts.confirmed, paymentTerms: ctx.settings?.paymentTerms, numbering: ctx.settings?.numbering ?? DEFAULT_NUMBERING });
     const printed = await (opts.printer ?? chromium).pdf(issuedSheet(book, issued as Issued, logoSrc(ws, issued.layout.logo)), now);
     return commit(ws, draft.id, draft, (fresh, at) => {
-      if (nextNumberTaken(fresh, issued.number)) throw new InvoiceRuleError('changed', `Die Nummer ${issued.number} wurde inzwischen vergeben; bitte erneut ausstellen.`);
-      const done: Issued = { ...issued, pdf: storePdf(ws, now.slice(0, 4), `${issued.number}.pdf`, printed.pdf) };
+      if (nextNumberTaken(fresh, issued.number, draft.id)) throw new InvoiceRuleError('changed', `Die Nummer ${issued.number} wurde inzwischen vergeben; bitte erneut ausstellen.`);
+      const done: Issued = { ...issued, pdf: storePdf(ws, now.slice(0, 4), pdfName(ws, now.slice(0, 4), issued.number, printed.pdf), printed.pdf) };
       fresh.invoices[at] = done;
+      // The contact's first issued document gives it its customer number.
+      numberContact(fresh, done.customerId);
       return done;
     });
   });
@@ -260,7 +505,19 @@ function sentTitle(inv: Issued, kind: SentKind, level?: number): string {
   const L = TEXTS[inv.language];
   if (kind === 'reminder') return `${L.reminder(level ?? 1)} · ${L.invoice} ${inv.number}`;
   if (kind === 'cancellation') return `${L.stamp}: ${L.invoice} ${inv.number}`;
-  return `${inv.kind === 'credit-note' ? L.credit : L.invoice} ${inv.number}`;
+  return `${kindTitle(L, inv.kind, inv.printAs)} ${inv.number}`;
+}
+
+/**
+ * The file an issued PDF takes: `<number>.pdf`, or `<number>-2.pdf`, … when an Angebot or Auftrag
+ * back from draft is issued again under its number: the version that went out stays as it was sent.
+ */
+function pdfName(ws: Workspace, year: string, number: string, pdf: Buffer): string {
+  for (let k = 1; ; k++) {
+    const name = k === 1 ? `${number}.pdf` : `${number}-${k}.pdf`;
+    const path = join(yearPaths(ws.paths, year).invoices, name);
+    if (!existsSync(path) || readFileSync(path).equals(pdf)) return name;
+  }
 }
 
 /**
@@ -291,8 +548,9 @@ export function recordSend(ws: Workspace, id: string, opts: { to?: string; deliv
     const now = opts.now ?? new Date().toISOString();
     return updateInvoices(ws, (book) => {
       const fresh = sendable(book, id);
-      const first = !book.sent.some((d) => d.invoiceId === fresh.id && (d.kind === 'invoice' || d.kind === 'credit-note'));
-      const kind: SentKind = first ? (fresh.kind === 'credit-note' ? 'credit-note' : 'invoice') : 'resend';
+      // The first send of this version (an Angebot back from draft is issued again under its number) is the document; a later one a resend.
+      const first = !book.sent.some((d) => d.invoiceId === fresh.id && d.file === fresh.pdf.file && d.kind !== 'reminder' && d.kind !== 'cancellation');
+      const kind: SentKind = first ? fresh.kind : 'resend';
       const doc: SentDocument = { ...newEnvelope('sd', now), invoiceId: fresh.id, kind, title: sentTitle(fresh, kind), ...fresh.pdf, sentAt: now, ...recipient(fresh, opts.to, delivered) };
       book.sent.push(doc);
       return doc;
@@ -300,7 +558,8 @@ export function recordSend(ws: Workspace, id: string, opts: { to?: string; deliv
   });
 }
 
-const nextNumberTaken = (book: InvoiceBook, number: string) => book.invoices.some((i) => i.status === 'issued' && i.number === number);
+/** Whether another document holds `number` by now: issued, or a draft that keeps it (Draft.number). */
+const nextNumberTaken = (book: InvoiceBook, number: string, id?: string) => book.invoices.some((i) => !i.deleted && i.id !== id && i.number === number);
 
 /**
  * Prints a document of its own (reminder, cancellation notice), stores its PDF and hands it to
@@ -321,17 +580,130 @@ async function printOwnDocument(ws: Workspace, inv: Issued, kind: SentKind, shee
   return { ...env, invoiceId: inv.id, kind, title, ...pdf, sentAt: now, ...recipient(inv, to, delivered) };
 }
 
+// ─── back to draft (spec 4.4.2) ────────────────────────────────────────────────
+
+const BACK_REFUSED: Partial<Record<InvoiceRefusal, (n: string) => string>> = {
+  notIssued: () => 'Ein Entwurf ist schon ein Entwurf.',
+  sent: (n) => `${n} ist gesendet oder heruntergeladen: der Kunde hat sie, sie bleibt ausgestellt (MWSTG Art. 27 Abs. 2). Eine Gutschrift oder ein Storno korrigiert sie.`,
+  cancelled: (n) => `${n} ist storniert.`,
+  settled: (n) => `Auf ${n} ist etwas eingegangen, gutgeschrieben oder ausgebucht: sie bleibt ausgestellt.`,
+  applied: (n) => `${n} ist mit einer Zahlung ihrer Rechnung verrechnet: sie bleibt ausgestellt.`,
+};
+
+/**
+ * «Zurück zum Entwurf» (spec 4.4.2, P2.7): an issued document never sent, with nothing received,
+ * credited or written off, becomes a draft again and keeps its number (Draft.number). Its PDF stays,
+ * renamed to invoices/<number>.replaced-<k>.pdf and named in `replaced`; issuing it again prints a new
+ * one under the number. `books` takes its VAT event off the books first (the route, through the
+ * write door: src/invoices/revise.ts takeBackEvent) and returns the receipt files that went with it,
+ * removed here once the document is a draft. Refused with the rule's code (backToDraftRefusal).
+ */
+export function backToDraft(ws: Workspace, id: string, opts: { now?: string; books?: (inv: Issued) => string[] } = {}): Promise<Draft> {
+  return serial(() => {
+    const now = opts.now ?? new Date().toISOString();
+    const book = loadInvoices(ws);
+    const inv = findInvoice(book, id) ?? notFound('Rechnung');
+    const refusal = backToDraftRefusal(inv, liveInvoices(book), book.sent);
+    if (refusal || inv.status !== 'issued') throw new InvoiceRuleError(refusal ?? 'notIssued', (BACK_REFUSED[refusal ?? 'notIssued'] ?? (() => ''))(inv.status === 'issued' ? inv.number : ''));
+    const k = (inv.replaced?.length ?? 0) + 1;
+    const file = join(dirname(inv.pdf.file), `${basename(inv.pdf.file, '.pdf')}.replaced-${k}.pdf`);
+    if (existsSync(join(ws.paths.root, file))) throw new InvoiceRuleError('changed', `${file} gibt es schon; bitte neu laden.`);
+    const removed = opts.books?.(inv) ?? [];
+    renameSync(join(ws.paths.root, inv.pdf.file), join(ws.paths.root, file));
+    const ctx = invoicingContext(ws);
+    const customer = recipientOf(liveContacts(book).find((c) => c.id === inv.customerId), inv, ws.invoicing);
+    const { salutation } = defaultTexts(ctx, inv.kind, inv.language, draftDays(ctx, inv, customer));
+    let draft: Draft;
+    try {
+      draft = commit(ws, inv.id, inv, (fresh, at) => {
+        const d = asDraft(inv, { file, sha256: inv.pdf.sha256, issuedAt: inv.issuedAt, replacedAt: now }, salutation);
+        fresh.invoices[at] = d;
+        return d;
+      });
+    } catch (e) {
+      renameSync(join(ws.paths.root, file), join(ws.paths.root, inv.pdf.file));
+      throw e;
+    }
+    for (const f of removed) rmSync(f, { force: true });
+    return draft;
+  });
+}
+
+// ─── Konten ändern (spec 4.4.2) ────────────────────────────────────────────────
+
+/**
+ * «Konten ändern»: `books` books the change first (the route, through the write door:
+ * src/invoices/revise.ts planAccountChange, applyAccountChange) and returns its plan; then the
+ * invoice's positions, and its credit notes' that follow them, record the new accounts and the
+ * change (`accountChanges`), in this process's queue. Should the documents have changed meanwhile,
+ * `undo` books the change back and the request is refused (`changed`).
+ */
+export function changeAccounts(ws: Workspace, id: string, lines: ReadonlyArray<{ line: number; account: string }>, ctx: AccountContext, opts: {
+  now?: string;
+  books(inv: Issued, next: Issued, invoices: readonly Invoice[]): AccountChangePlan;
+  undo(plan: AccountChangePlan, now: Issued, before: Issued, invoices: readonly Invoice[]): void;
+}): Promise<AccountChangePlan> {
+  return serial(() => {
+    const at = opts.now ?? new Date().toISOString();
+    const book = loadInvoices(ws);
+    const inv = findInvoice(book, id);
+    if (!inv || inv.status !== 'issued') return notFound('Rechnung');
+    const next = withAccounts(inv, lines, ctx);
+    const plan = opts.books(inv, next, liveInvoices(book));
+    if (!plan.lines.length) return plan;
+    const notes = notesWithAccounts(inv, next, liveInvoices(book), ctx);
+    try {
+      updateInvoices(ws, (fresh) => {
+        const same = (x: Invoice) => JSON.stringify(fresh.invoices.find((i) => i.id === x.id)) === JSON.stringify(x);
+        if (!same(inv) || !notes.every((n) => same(n.old))) throw new InvoiceRuleError('changed', 'Die Rechnung oder eine ihrer Gutschriften wurde inzwischen geändert; bitte neu laden.');
+        const change = (d: Issued, ls: AccountChange['lines'], extra: Partial<AccountChange> = {}): Issued => ({ ...d, accountChanges: [...(d.accountChanges ?? []), { at, lines: ls, refs: plan.rebook.filter((r) => !r.filed && r.number === d.number).map((r) => r.ref), ...extra }] });
+        const reclass = (n: string) => plan.reclass.find((r) => r.number === n)?.ref;
+        fresh.invoices[fresh.invoices.findIndex((i) => i.id === inv.id)] = change(next, plan.lines, reclass(inv.number) ? { reclass: reclass(inv.number) } : {});
+        for (const n of notes) {
+          const ls = plan.notes.find((x) => x.id === n.old.id)?.lines ?? [];
+          if (ls.length) fresh.invoices[fresh.invoices.findIndex((i) => i.id === n.old.id)] = change(n.next, ls, reclass(n.old.number) ? { reclass: reclass(n.old.number) } : {});
+        }
+      });
+    } catch (e) {
+      opts.undo(plan, next, inv, liveInvoices(book).map((i) => notes.find((n) => n.old.id === i.id)?.next ?? i));
+      throw e;
+    }
+    return plan;
+  });
+}
+
+/** A PDF the document was issued with before it went back to draft, `k` from 1, checked against its checksum. */
+export function replacedPdf(ws: Workspace, id: string, k: number): Buffer {
+  const inv = findInvoice(loadInvoices(ws), id) ?? notFound('Rechnung');
+  const r = inv.replaced?.[k - 1] ?? notFound('PDF');
+  return readPdf(ws, r);
+}
+
 // ─── cancelling, crediting, reminding, commenting ─────────────────────────────
 
-export function cancelInvoice(ws: Workspace, id: string, req: { date: string; reason: string; notify?: boolean; to?: string }, opts: { now?: string; printer?: Printer; deliver?: Deliver } = {}): Promise<{ invoice: Issued; sent?: SentDocument }> {
+/**
+ * Storno. `confirm`: the warnings the person overrode, each by its own code: `paid` (a paid Rechnung),
+ * `orderDelivered` and `orderDrafts` (an Auftrag with a Lieferschein, or with drafts made from it); a
+ * code confirms only its own warning.
+ */
+export function cancelInvoice(ws: Workspace, id: string, req: { date: string; reason: string; notify?: boolean; to?: string; confirm?: readonly string[] }, opts: { now?: string; printer?: Printer; deliver?: Deliver } = {}): Promise<{ invoice: Issued; sent?: SentDocument }> {
   return serial(async () => {
     const now = opts.now ?? new Date().toISOString();
     const book = loadInvoices(ws);
     const inv = findInvoice(book, id) ?? notFound('Rechnung');
     if (!isDate(req.date)) bad('date ist ein Datum JJJJ-MM-TT.');
     if (typeof req.reason !== 'string') bad('reason ist ein Text.');
-    const cancelled = cancel(inv, req);
-    const sent = req.notify ? await printOwnDocument(ws, cancelled, 'cancellation', issuedSheet(book, cancelled, logoSrc(ws, cancelled.layout.logo)), req.to, now, opts.printer ?? chromium, opts.deliver) : undefined;
+    if (inv.kind === 'quote') throw new InvoiceRuleError('notQuote', 'Ein Angebot wird abgelehnt, nicht storniert.');
+    // An Auftrag with a Rechnung that stands keeps it: refused; with a Lieferschein, a warning (spec 4.4.2).
+    const block = inv.kind === 'sales-order' ? orderCancelBlock(inv, liveDocuments(book)) : undefined;
+    if (block?.code === 'orderInvoiced') throw new InvoiceRuleError('orderInvoiced', `Aus dem Auftrag ist ${block.numbers.join(', ')} ausgestellt: erst die Rechnung stornieren oder gutschreiben, dann den Auftrag.`, undefined, { numbers: block.numbers.join(', ') });
+    const confirm = req.confirm ?? [];
+    if (block?.code === 'orderDelivered' && !confirm.includes('orderDelivered')) throw new InvoiceRuleError('orderDelivered', `Zum Auftrag ist ${block.numbers.join(', ')} ausgeführt: die Lieferung bleibt, nur der Auftrag wird storniert. Nur mit «Trotzdem stornieren».`, undefined, { numbers: block.numbers.join(', ') });
+    // Drafts made from it would hang on a Storno: named first, and each warns again at its issue.
+    const drafts = inv.kind === 'sales-order' ? liveDocuments(book).filter((d) => d.status === 'draft' && d.from?.id === inv.id) : [];
+    if (drafts.length && !confirm.includes('orderDrafts')) throw new InvoiceRuleError('orderDrafts', `Aus ${inv.number} ${drafts.length === 1 ? 'ist ein Entwurf' : `sind ${drafts.length} Entwürfe`} angelegt: storniert, kann ${drafts.length === 1 ? 'er' : 'jeder'} nur mit «Trotzdem ausstellen» ausgestellt werden. Nur mit «Trotzdem stornieren».`, undefined, { number: inv.number ?? '', n: drafts.length });
+    const cancelled = cancel(inv, { ...req, confirmed: !isBooked(inv) || confirm.includes('paid') });
+    const sent = req.notify && isBooked(inv) ? await printOwnDocument(ws, cancelled, 'cancellation', issuedSheet(book, cancelled, logoSrc(ws, cancelled.layout.logo)), req.to, now, opts.printer ?? chromium, opts.deliver) : undefined;
     return commit(ws, inv.id, inv, (fresh, at) => {
       fresh.invoices[at] = cancelled;
       if (sent) fresh.sent.push(sent);
@@ -348,6 +720,69 @@ export function createCreditNote(ws: Workspace, id: string, req: CreditRequest, 
     const credit = { ...draft, closing: texts.closing };
     book.invoices.push(credit);
     return credit;
+  });
+}
+
+// ─── the chain of phase 2: conversions, the customer's answer, back to draft ───
+
+/**
+ * «Auftrag erstellen», «Lieferschein erstellen», «Rechnung erstellen» (spec 4.4.1): a draft of `to`
+ * with the ticked positions and quantities, `from` naming the source. `confirm`: the warnings the
+ * person overrode («Trotzdem erstellen», «Trotzdem übernehmen»), the codes of convertWarnings.
+ */
+export function convertDocument(ws: Workspace, id: string, req: { to: InvoiceContent['kind']; lines: Ticked[]; confirm?: string[] }, now = new Date().toISOString()): Draft {
+  return updateInvoices(ws, (book) => {
+    const source = findInvoice(book, id) ?? notFound('Dokument');
+    const docs = liveDocuments(book);
+    const draft = convertDraft(source, req.to, req.lines, docs, newEnvelope('in', now), now.slice(0, 10), now.slice(0, 10), req.confirm ?? []);
+    const contact = liveContacts(book).find((c) => c.id === draft.customerId);
+    const terms = req.to === 'invoice' && !draft.termsId && contact ? draftTermsOf(ws.invoicing, contact) : undefined;
+    const done: Draft = { ...draft, ...(terms ? { termsId: terms } : {}) };
+    book.invoices.push(done);
+    return done;
+  });
+}
+
+/**
+ * The customer's answer to an Angebot, a person's click (spec 4.4.2): `accepted` or `declined` on
+ * `date`, recorded with who clicked; `null` takes the answer back. Refused on a draft and on any other kind.
+ */
+export function answerQuote(ws: Workspace, id: string, answer: 'accepted' | 'declined' | null, by: string, date: string): Issued {
+  return updateInvoices(ws, (book) => {
+    const q = findInvoice(book, id) ?? notFound('Angebot');
+    if (q.kind !== 'quote') throw new InvoiceRuleError('notQuote', 'Nur ein Angebot wird angenommen oder abgelehnt.');
+    if (q.status !== 'issued') throw new InvoiceRuleError('notIssued', 'Ein Entwurf wird erst ausgestellt, dann angenommen oder abgelehnt.');
+    if (!isDate(date)) bad('date ist ein Datum JJJJ-MM-TT.');
+    const { accepted: _a, declined: _d, ...rest } = q;
+    const next: Issued = { ...rest, ...(answer ? { [answer]: { date, by } } : {}) };
+    book.invoices[book.invoices.indexOf(q)] = next;
+    return next;
+  });
+}
+
+/**
+ * An issued Angebot or Auftrag back to draft (spec 4.4.2), keeping its number; issued again it takes
+ * that number and a PDF of its own. Once sent it warns (`sentVersion`, «Trotzdem bearbeiten»): the
+ * customer may hold the version sent, which stays in the sent log. A Rechnung and a Gutschrift are not
+ * taken back here; a cancelled document, or one with documents made from it, neither.
+ */
+export function reopenDocument(ws: Workspace, id: string, confirmed: boolean): Draft {
+  return updateInvoices(ws, (book) => {
+    const inv = findInvoice(book, id) ?? notFound('Dokument');
+    if (inv.kind !== 'quote' && inv.kind !== 'sales-order') throw new InvoiceRuleError('notReopenable', 'Nur ein Angebot oder ein Auftrag geht hier zurück zum Entwurf.');
+    if (inv.status !== 'issued') throw new InvoiceRuleError('notIssued', 'Das ist schon ein Entwurf.');
+    if (inv.cancelled) throw new InvoiceRuleError('cancelled', `${inv.number} ist storniert.`, undefined, { number: inv.number });
+    const made = liveDocuments(book).filter((d) => d.from?.id === inv.id);
+    if (made.length) throw new InvoiceRuleError('notReopenable', `Aus ${inv.number} sind schon Dokumente entstanden: es bleibt, wie es ist.`, undefined, { number: inv.number });
+    const last = ownSends(book.sent, inv).at(-1);
+    if (last && !confirmed) {
+      const to = last.to;
+      throw new InvoiceRuleError('sentVersion', `Gesendet am ${last.sentAt.slice(0, 10)} an ${to}: diese Fassung bleibt im Versandprotokoll, der Kunde hat sie vielleicht. Nur mit «Trotzdem bearbeiten».`, undefined, { date: last.sentAt.slice(0, 10), to });
+    }
+    const { status: _s, issuedAt: _i, reference: _r, customer: _c, sender: _se, layout: _l, units: _u, pdf: _p, payments: _pa, writeOffs: _w, terms: _t, reminders: _re, cancelled: _cx, dueDate: _due, ...content } = inv;
+    const draft: Draft = { ...content, status: 'draft' };
+    book.invoices[book.invoices.indexOf(inv)] = draft;
+    return draft;
   });
 }
 
@@ -424,6 +859,12 @@ export function paymentContext(ws: Workspace): PaymentContext | undefined {
     bankAccounts: ws.bankAccounts,
     revenueAccount: s.revenueAccount,
     ...(s.feeAccount ? { feeAccount: s.feeAccount } : {}),
+    ...(writeOffAccounts(s) ? { writeOffAccount: writeOffAccounts(s) } : {}),
+    ensureAccount: (number) => {
+      if (accountName(ws, number) !== undefined) return;
+      const name = standardAccounts().find((a) => a.number === number)?.name;
+      if (name) setAccountName(ws, number, name);
+    },
     openItems: openItemAccounts((accountsOf(ws) as Array<{ number?: string }>).flatMap((a) => (a.number ? [String(a.number)] : []))),
     fx,
     pdfOf: (inv) => readPdf(ws, inv.pdf),

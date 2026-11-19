@@ -1,0 +1,446 @@
+# Swiss payroll as data (docs/specs/payroll.md §5.3, §8.2, §9.4): the Lohnart catalogue, the kinds of
+# social insurance with their liability accounts and the rates a firm's document states, the bases a
+# Lohnart counts for, and the contributions code computes. The payroll engine (src/payroll/) reads only
+# these keys and flags, never a Swiss name: a contribution's rate, ceiling and age rule are named here
+# and their figures come from payroll/<year>.yaml (the law) or the firm's Sozialversicherungen
+# (payroll.json, from the fund's or insurer's document). A workspace renames a Lohnart, changes its
+# accounts and its Lohnausweis field, or copies one (payroll.json `wageTypes`); it never edits this file.
+#
+# A Lohnart:
+#   key          the app's own key; never shown, never deleted once a closed payslip used it
+#   group        the group it prints in (groups below)
+#   label        de, fr, it, en: the payslip prints the person's language
+#   sign         + adds to the payslip, - deducts; an employer line (side: employer) adds to nothing
+#   side         employee (default) or employer: an employer contribution, not on the person's payout
+#   gross        part of the gross wage (Bruttolohn)
+#   cash         false: counts in the gross and the bases but is no money paid (a benefit in kind)
+#   bases        the bases it counts for (bases below)
+#   lohnausweis  the field of Form 11 it is summed into
+#   debit/credit the accounts it books on; { insurance: <kind> } is that insurance's liability account
+#   input        how a person enters it: amount, or quantity and rate (hours × hourly wage)
+#   hours        the Lohnart an hourly Anstellung is paid by: its hours entered for the month × the hourly wage
+#   inputs       what the form and the line «unvollständig» call its inputs (quantity, rate, amount), in each
+#                language: «Kaufpreis» rather than «Menge»; absent: the app's words
+#   units        the unit an input is entered and shown in: { rate: percent } (a car's 0.9 % a month); the line
+#                still computes with the fraction (0.9 % of the price is price × 0.009)
+#   defaults     what the forms prefill, in the unit they show: { rate: 0.9 }
+#   missing      the sentence a line «unvollständig» says when that input is missing, in each language;
+#                absent: «<the input's word> fehlt»
+#   computes     how code fills it: monthly (the Anstellung's amount), thirteenth (the 13th salary in its
+#                payout months), contribution (a row of contributions below); absent: entered by a person
+schema: 1
+
+# The clearing account (Lohndurchlaufkonto, §7.1): each payslip books its payout onto it, the bank's
+# payment of the wage takes it off again (src/payroll/payments.ts); 0 once every wage is paid.
+clearing: "1091"
+
+# The social security number (AHVN13, AHVG Art. 153b-153i): how code finds it in a text, so no prompt to
+# a model ever carries one (#508; src/llm/mask.ts). Separators may be dots, spaces or none. `checkDigit`:
+# the 13th digit is the EAN-13 check digit of the first twelve (ZAS, «Aufbau der AHV-Nummer»): a number
+# typed into Löhne › Mitarbeitende is checked by it (src/payroll/settings.ts).
+socialSecurityNumber:
+  pattern: "\\b756[.\\s-]?\\d{4}[.\\s-]?\\d{4}[.\\s-]?\\d{2}\\b"
+  masked: "756.****.****.**"
+  checkDigit: ean13
+
+# The groups, in the order a payslip prints them. `stage`: where a group's lines act on the payslip:
+# `gross` (they make the Bruttolohn), `deduction` (taken off it: the Nettolohn), `after` (added or taken
+# off after the net: the Auszahlung), `employer` (the employer's contributions, on no payout).
+groups:
+  - { key: lohn, stage: gross, label: { de: Lohn, fr: Salaire, it: Salario, en: Wage } }
+  - { key: zulagen, stage: gross, label: { de: Zulagen, fr: Allocations, it: Indennità, en: Allowances } }
+  - { key: einmalig, stage: gross, label: { de: Einmalige Zahlungen, fr: Versements uniques, it: Pagamenti unici, en: One-off payments } }
+  - { key: natural, stage: gross, label: { de: Naturalleistungen, fr: Prestations en nature, it: Prestazioni in natura, en: Benefits in kind } }
+  - { key: ersatz, stage: gross, label: { de: Ersatzleistungen, fr: Prestations de remplacement, it: Prestazioni sostitutive, en: Daily allowances } }
+  - { key: abzuege, stage: deduction, label: { de: Abzüge, fr: Déductions, it: Deduzioni, en: Deductions } }
+  - { key: quellensteuer, stage: deduction, label: { de: Quellensteuer, fr: Impôt à la source, it: Imposta alla fonte, en: Tax at source } }
+  - { key: familienzulagen, stage: after, label: { de: Familienzulagen, fr: Allocations familiales, it: Assegni familiari, en: Family allowances } }
+  - { key: spesen, stage: after, label: { de: Spesen, fr: Frais, it: Spese, en: Expenses } }
+  - { key: nettoabzuege, stage: after, label: { de: Nettoabzüge, fr: Déductions nettes, it: Deduzioni nette, en: Net deductions } }
+  - { key: arbeitgeber, stage: employer, label: { de: Arbeitgeberbeiträge, fr: Cotisations de l'employeur, it: Contributi del datore di lavoro, en: Employer contributions } }
+
+# The bases a Lohnart counts for. Each contribution below takes one of them. `thirteenth: true`: the base
+# the 13th salary is a share of.
+bases:
+  - { key: ahv, label: { de: AHV-Lohn, fr: Salaire AVS, it: Salario AVS, en: AHV wage } }
+  - { key: alv, label: { de: ALV-Lohn, fr: Salaire AC, it: Salario AD, en: ALV wage } }
+  - { key: uvg, label: { de: UVG-Lohn, fr: Salaire LAA, it: Salario LAINF, en: UVG wage } }
+  - { key: uvgz, label: { de: UVGZ-Lohn, fr: Salaire LAAC, it: Salario LAINFC, en: UVGZ wage } }
+  - { key: ktg, label: { de: KTG-Lohn, fr: Salaire IJM, it: Salario IGM, en: KTG wage } }
+  - { key: bvg, label: { de: BVG-Lohn, fr: Salaire LPP, it: Salario LPP, en: BVG wage } }
+  - { key: qst, label: { de: QST-Lohn, fr: Salaire IS, it: Salario IF, en: Tax-at-source wage } }
+  - { key: thirteenth, thirteenth: true, label: { de: Basis 13. Monatslohn, fr: Base 13e salaire, it: Base 13a mensilità, en: 13th salary base } }
+
+# The totals a payslip prints; code computes them from the lines.
+totals:
+  gross: { de: Bruttolohn, fr: Salaire brut, it: Salario lordo, en: Gross wage }
+  deductions: { de: Total Abzüge, fr: Total des déductions, it: Totale deduzioni, en: Total deductions }
+  net: { de: Nettolohn, fr: Salaire net, it: Salario netto, en: Net wage }
+  payout: { de: Auszahlung, fr: Versement, it: Versamento, en: Payout }
+  employer: { de: Total Arbeitgeber, fr: Total employeur, it: Totale datore di lavoro, en: Employer total }
+
+# The kinds of social insurance (Löhne › Einstellungen › Sozialversicherungen). `account`: the liability
+# account its lines are credited to until the fund or insurer is paid (§7.1, owner 2026-11-19 decision 4).
+# `rates`: what the firm's document states per solution, in %, each with its plausible range (a value
+# outside it is a warning, never a refusal). `perPerson`: the contribution is a figure of the person's
+# certificate (BVG), not a rate of the firm. `required`: every firm with wages has it, so a month without
+# it gets the line «unvollständig»; `requiredAbove`: required once the person's yearly wage on `base` passes
+# the federal `figure` (below it the line is left out, and the payslip says why). `computed: false`: the app
+# does not compute it yet; a person subject to it gets the line «unvollständig». `tariff`: the tax is looked up
+# in a tariff file per region and year (taxAtSource below), never a rate of the firm.
+insurances:
+  ahv:
+    label: { de: AHV/IV/EO/ALV, fr: AVS/AI/APG/AC, it: AVS/AI/IPG/AD, en: AHV/IV/EO/ALV }
+    role: authority
+    fund: { de: Ausgleichskasse, fr: Caisse de compensation, it: Cassa di compensazione, en: Compensation fund }
+    nameOf: { de: Name der Ausgleichskasse, fr: Nom de la caisse de compensation, it: Nome della cassa di compensazione, en: Name of the compensation fund }
+    account: "2271"
+    business: ausgleichskasse
+    required: true
+    rates:
+      adminCost: { label: { de: Verwaltungskosten, fr: Frais d'administration, it: Spese amministrative, en: Administration cost }, range: [0, 5], note: "AHVG Art. 69, AHVV Art. 157: at most 5 % of the contributions" }
+  fak:
+    label: { de: Familienausgleichskasse, fr: Caisse d'allocations familiales, it: Cassa di compensazione per assegni familiari, en: Family compensation fund }
+    role: authority
+    fund: { de: Familienausgleichskasse, fr: Caisse d'allocations familiales, it: Cassa assegni familiari, en: Family compensation fund }
+    nameOf: { de: Name der Familienausgleichskasse, fr: Nom de la caisse d’allocations familiales, it: Nome della cassa assegni familiari, en: Name of the family compensation fund }
+    account: "2272"
+    required: true
+    rates:
+      employer: { label: { de: FAK-Beitrag, fr: Cotisation CAF, it: Contributo CAF, en: FAK contribution }, range: [0, 4], note: "FamZG Art. 15-16: the canton's and the fund's rate" }
+  uvg:
+    label: { de: Unfallversicherung (UVG), fr: Assurance-accidents (LAA), it: Assicurazione infortuni (LAINF), en: Accident insurance (UVG) }
+    fund: { de: Unfallversicherer, fr: Assureur-accidents, it: Assicuratore infortuni, en: Accident insurer }
+    nameOf: { de: Name des Unfallversicherers, fr: Nom de l’assureur-accidents, it: Nome dell’assicuratore infortuni, en: Name of the accident insurer }
+    account: "2273"
+    required: true
+    rates:
+      bu: { label: { de: BU-Prämie, fr: Prime AP, it: Premio INP, en: Occupational accident premium }, range: [0, 10] }
+      nbu: { label: { de: NBU-Prämie, fr: Prime ANP, it: Premio INP non professionali, en: Non-occupational accident premium }, range: [0, 5] }
+      nbuEmployerShare: { label: { de: NBU-Anteil Arbeitgeber, fr: Part ANP employeur, it: Quota INP datore di lavoro, en: Employer's share of the NBU premium }, range: [0, 100], note: "UVG Art. 91 Abs. 2: 0, 50 or 100 % by agreement" }
+  uvgz:
+    label: { de: UVG-Zusatzversicherung, fr: Assurance complémentaire LAA, it: Assicurazione complementare LAINF, en: Supplementary accident insurance }
+    fund: { de: Versicherer, fr: Assureur, it: Assicuratore, en: Insurer }
+    nameOf: { de: Name des Versicherers, fr: Nom de l’assureur, it: Nome dell’assicuratore, en: Name of the insurer }
+    account: "2273"
+    rates:
+      employee: { label: { de: Anteil Arbeitnehmer, fr: Part employé, it: Quota dipendente, en: Employee share }, range: [0, 5] }
+      employer: { label: { de: Anteil Arbeitgeber, fr: Part employeur, it: Quota datore di lavoro, en: Employer share }, range: [0, 5] }
+  ktg:
+    label: { de: Krankentaggeldversicherung, fr: Assurance indemnités journalières maladie, it: Assicurazione indennità giornaliera malattia, en: Sick pay insurance }
+    fund: { de: Versicherer, fr: Assureur, it: Assicuratore, en: Insurer }
+    nameOf: { de: Name des Versicherers, fr: Nom de l’assureur, it: Nome dell’assicuratore, en: Name of the insurer }
+    account: "2274"
+    rates:
+      employee: { label: { de: Anteil Arbeitnehmer, fr: Part employé, it: Quota dipendente, en: Employee share }, range: [0, 5] }
+      employer: { label: { de: Anteil Arbeitgeber, fr: Part employeur, it: Quota datore di lavoro, en: Employer share }, range: [0, 5] }
+  bvg:
+    label: { de: Berufliche Vorsorge (BVG), fr: Prévoyance professionnelle (LPP), it: Previdenza professionale (LPP), en: Occupational pension (BVG) }
+    fund: { de: Vorsorgeeinrichtung, fr: Institution de prévoyance, it: Istituto di previdenza, en: Pension fund }
+    nameOf: { de: Name der Vorsorgeeinrichtung, fr: Nom de l’institution de prévoyance, it: Nome dell’istituto di previdenza, en: Name of the pension fund }
+    account: "2275"
+    perPerson: true
+    requiredAbove: { figure: bvgEntryThreshold, base: ahv }
+  qst:
+    label: { de: Quellensteuer, fr: Impôt à la source, it: Imposta alla fonte, en: Tax at source }
+    fund: { de: Kantonale Steuerverwaltung, fr: Administration cantonale des impôts, it: Amministrazione cantonale delle contribuzioni, en: Cantonal tax office }
+    nameOf: { de: Name der kantonalen Steuerverwaltung, fr: Nom de l’administration cantonale des impôts, it: Nome dell’amministrazione cantonale delle contribuzioni, en: Name of the cantonal tax office }
+    account: "2279"
+    # Computed from the canton's tariff file (taxAtSource below), not from a rate of the firm. A firm's
+    # insurance of this kind holds one solution per canton (its code: the canton, ZH), whose `provision`
+    # replaces the file's commission (a paper settlement, a canton's own rule); absent: the file's rate for
+    # an electronic settlement.
+    tariff: true
+    rates:
+      provision: { label: { de: Bezugsprovision, fr: Commission de perception, it: Provvigione di riscossione, en: Collection commission }, range: [0, 4], note: "DBG Art. 88 Abs. 4, StHG Art. 37 Abs. 3: the canton sets it, 1 to 2 % in the tariff files of 2026" }
+
+# What code computes on every payslip, in this order. `rate`: a figure of the law (`federal: <key>` of
+# payroll/<year>.yaml), a rate of the firm's solution (`insurance: <rate key>`), or the person's
+# certificate (`person: employee | employer`, a fixed amount per month). `base`: a base above, or
+# `lines: [...]` the sum of earlier contribution lines (the administration cost on the contributions).
+# `ceiling`: a yearly maximum of the base (federal key), cumulated month by month. `liable`: from
+# 1 January after the birthday of this age (federal key). `pensioner`: past the reference age the base
+# is reduced by an allowance per month (`allowance: <federal key>`), or the line ends (`ends`) from the
+# month after it. `share`: the rate is split between the sides by a firm rate (the employer's share in %).
+# `minHours`: owed only from these weekly hours (federal key). `smallWage`: not owed while the person's base of the
+# year stays at or below this yearly amount (federal key; AHVV Art. 34d), unless she asked to pay (Versicherungen
+# «auf Verlangen beitragspflichtig»); once the year passes it, owed on the whole year's base (the earlier months caught up).
+contributions:
+  - { wageType: ahv-an, insurance: ahv, base: ahv, rate: { federal: ahvEmployee }, liable: liableFromAge, pensioner: { allowance: pensionerAllowance }, smallWage: smallWageLimit }
+  - { wageType: alv-an, insurance: ahv, base: alv, rate: { federal: alvEmployee }, ceiling: alvCeiling, liable: liableFromAge, pensioner: ends, smallWage: smallWageLimit }
+  - { wageType: nbu-an, insurance: uvg, base: uvg, rate: { insurance: nbu }, share: { employer: nbuEmployerShare }, ceiling: uvgCeiling, minHours: nbuMinHours }
+  - { wageType: uvgz-an, insurance: uvgz, base: uvgz, rate: { insurance: employee } }
+  - { wageType: ktg-an, insurance: ktg, base: ktg, rate: { insurance: employee } }
+  - { wageType: bvg-an, insurance: bvg, base: bvg, rate: { person: employee } }
+  - { wageType: quellensteuer, insurance: qst, base: qst, rate: { insurance: tariff } }
+  - { wageType: ahv-ag, insurance: ahv, base: ahv, rate: { federal: ahvEmployer }, liable: liableFromAge, pensioner: { allowance: pensionerAllowance }, smallWage: smallWageLimit }
+  - { wageType: alv-ag, insurance: ahv, base: alv, rate: { federal: alvEmployer }, ceiling: alvCeiling, liable: liableFromAge, pensioner: ends, smallWage: smallWageLimit }
+  - { wageType: verwaltungskosten, insurance: ahv, base: { lines: [ahv-an, ahv-ag] }, rate: { insurance: adminCost } }
+  - { wageType: fak-ag, insurance: fak, base: ahv, rate: { insurance: employer }, liable: liableFromAge, pensioner: { allowance: pensionerAllowance }, smallWage: smallWageLimit }
+  - { wageType: bu-ag, insurance: uvg, base: uvg, rate: { insurance: bu }, ceiling: uvgCeiling }
+  - { wageType: nbu-ag, insurance: uvg, base: uvg, rate: { insurance: nbu }, share: { employer: nbuEmployerShare }, ceiling: uvgCeiling, minHours: nbuMinHours }
+  - { wageType: uvgz-ag, insurance: uvgz, base: uvgz, rate: { insurance: employer } }
+  - { wageType: ktg-ag, insurance: ktg, base: ktg, rate: { insurance: employer } }
+  - { wageType: bvg-ag, insurance: bvg, base: bvg, rate: { person: employer } }
+
+# Holidays (OR Art. 329a, BGE 129 III 493): holiday days to weeks by the working days of a week; an hourly wage paid
+# with the holidays in it carries the surcharge weeks / (weeksPerYear - weeks): 4/48, 5/47, 6/46, to two decimals.
+# Without holiday days in the Anstellung the legal minimum: 5 weeks up to the 20th birthday, then 4.
+holidays:
+  daysPerWeek: 5
+  weeksPerYear: 52
+  minimum: [{ untilAge: 20, weeks: 5 }, { weeks: 4 }]
+  source: "OR Art. 329a Abs. 1; BGE 129 III 493 (the surcharge shown apart in the contract and on every payslip)"
+
+# The kinds of absence (Mitarbeitende › Abwesenheiten; no diagnosis, docs/specs/payroll.md §11): the Lohnart that
+# takes the absent days' wage off (`loss`), the wage the employer continues beyond the insurer's daily allowance
+# (`wage`, the continued-pay percentage less the allowance), and the daily allowance itself (`allowance`: the
+# insurer's amount per calendar day, from its decision). The allowance of the accident and sick-pay insurers is no
+# AHV wage (AHVV Art. 6 Abs. 2 lit. b), the EO's is (AHVG Art. 19a): the Lohnarten's bases say so.
+absences:
+  illness: { label: { de: Krankheit, fr: Maladie, it: Malattia, en: Illness }, loss: lohnausfall, wage: lohn-krankheit, allowance: taggeld-ktg }
+  accident: { label: { de: Unfall, fr: Accident, it: Infortunio, en: Accident }, loss: lohnausfall, wage: lohn-unfall, allowance: taggeld-uvg }
+  maternity: { label: { de: Mutterschaft, fr: Maternité, it: Maternità, en: Maternity }, loss: lohnausfall, wage: lohnfortzahlung, allowance: taggeld-eo }
+  paternity: { label: { de: Vaterschaft / anderer Elternteil, fr: Paternité / autre parent, it: Paternità / altro genitore, en: Paternity / other parent }, loss: lohnausfall, wage: lohnfortzahlung, allowance: taggeld-eo }
+  military: { label: { de: "Militär, Zivildienst, Zivilschutz", fr: "Service militaire, civil, protection civile", it: "Servizio militare, civile, protezione civile", en: Military or civil service }, loss: lohnausfall, wage: lohnfortzahlung, allowance: taggeld-eo }
+  unpaid: { label: { de: Unbezahlter Urlaub, fr: Congé non payé, it: Congedo non pagato, en: Unpaid leave }, loss: unbezahlter-urlaub, unpaid: true }
+  holiday: { label: { de: Ferien, fr: Vacances, it: Vacanze, en: Holidays }, holiday: true }
+
+# The annual declarations: the first pillar's liable wage is the base of this contribution (a person exempt by age,
+# small wage or a pensioner's allowance shows the difference to her AHV wage, AHVV Art. 34d, 6quater).
+declarations:
+  liable: { contribution: ahv-an, base: ahv }
+
+# Rounding of a line (Stammdaten): 0.05 the default (owner 2026-11-14 decision 13), 0.01 a choice.
+rounding: [0.05, 0.01]
+
+wageTypes:
+  # Lohn
+  - { key: monatslohn, group: lohn, label: { de: Monatslohn, fr: Salaire mensuel, it: Salario mensile, en: Monthly salary }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091", computes: monthly }
+  - { key: stundenlohn, group: lohn, hours: true, label: { de: Stundenlohn, fr: Salaire horaire, it: Salario orario, en: Hourly wage }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091", input: quantity, inputs: { quantity: { de: Stunden, fr: Heures, it: Ore, en: Hours }, rate: { de: Stundenlohn, fr: Salaire horaire, it: Salario orario, en: Hourly wage } } }
+  - { key: taglohn, group: lohn, label: { de: Taglohn, fr: Salaire journalier, it: Salario giornaliero, en: Daily wage }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091", input: quantity, inputs: { quantity: { de: Tage, fr: Jours, it: Giorni, en: Days }, rate: { de: Taglohn, fr: Salaire journalier, it: Salario giornaliero, en: Daily wage } } }
+  - { key: lohn-krankheit, group: lohn, label: { de: Lohn bei Krankheit, fr: Salaire en cas de maladie, it: Salario in caso di malattia, en: Wage during illness }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
+  - { key: lohn-unfall, group: lohn, label: { de: Lohn bei Unfall, fr: Salaire en cas d'accident, it: Salario in caso d'infortunio, en: Wage after an accident }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
+  - { key: ueberstunden, group: lohn, label: { de: Überstunden 125 %, fr: Heures supplémentaires 125 %, it: Ore straordinarie 125 %, en: Overtime 125 % }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst], lohnausweis: "1", debit: "5000", credit: "1091", input: quantity, inputs: { quantity: { de: Stunden, fr: Heures, it: Ore, en: Hours }, rate: { de: Ansatz pro Stunde (mit Zuschlag), fr: Taux horaire (majoration comprise), it: Tariffa oraria (supplemento compreso), en: Rate per hour (with the supplement) } } }
+  - { key: ferienentschaedigung, group: lohn, label: { de: Ferienentschädigung, fr: Indemnité de vacances, it: Indennità per vacanze, en: Holiday pay }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
+  - { key: feiertagsentschaedigung, group: lohn, label: { de: Feiertagsentschädigung, fr: Indemnité de jours fériés, it: Indennità per giorni festivi, en: Public holiday pay }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
+  # Hourly wage (phase B1): the holiday surcharge on the hours of an hourly Anstellung, on its own line (BGE 129 III
+  # 493: 4/48, 5/47, 6/46 by the holiday weeks), and the public-holiday surcharge its contract or GAV names.
+  - { key: ferienzuschlag, group: lohn, computes: holiday, label: { de: Ferienentschädigung (Zuschlag), fr: Indemnité de vacances (supplément), it: Indennità per vacanze (supplemento), en: Holiday surcharge }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
+  - { key: feiertagszuschlag, group: lohn, computes: publicHoliday, label: { de: Feiertagsentschädigung (Zuschlag), fr: Indemnité de jours fériés (supplément), it: Indennità per giorni festivi (supplemento), en: Public holiday surcharge }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
+  # Abwesenheiten (phase B1): the absent days' wage taken off, the wage the employer continues beyond the daily allowance.
+  - { key: lohnausfall, group: lohn, computes: absence, label: { de: Lohnausfall Abwesenheit, fr: Perte de salaire absence, it: Perdita di salario assenza, en: Wage lost to an absence }, sign: "-", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "1091", credit: "5000" }
+  - { key: lohnfortzahlung, group: lohn, label: { de: Lohnfortzahlung, fr: Maintien du salaire, it: Continuazione del pagamento del salario, en: Continued pay }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
+  - { key: unbezahlter-urlaub, group: lohn, label: { de: Unbezahlter Urlaub, fr: Congé non payé, it: Congedo non pagato, en: Unpaid leave }, sign: "-", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "1091", credit: "5000" }
+  # Zulagen
+  - { key: funktionszulage, group: zulagen, label: { de: Funktionszulage, fr: Allocation de fonction, it: Indennità di funzione, en: Function allowance }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
+  - { key: schichtzulage, group: zulagen, label: { de: Schichtzulage, fr: Allocation de travail en équipe, it: Indennità per lavoro a turni, en: Shift allowance }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst], lohnausweis: "1", debit: "5000", credit: "1091" }
+  - { key: nachtzulage, group: zulagen, label: { de: Nachtzulage, fr: Allocation de nuit, it: Indennità notturna, en: Night allowance }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst], lohnausweis: "1", debit: "5000", credit: "1091" }
+  - { key: sonntagszulage, group: zulagen, label: { de: Sonntagszulage, fr: Allocation du dimanche, it: Indennità domenicale, en: Sunday allowance }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst], lohnausweis: "1", debit: "5000", credit: "1091" }
+  # Einmalige Zahlungen
+  - { key: dreizehnter, group: einmalig, label: { de: 13. Monatslohn, fr: 13e salaire, it: 13a mensilità, en: 13th salary }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst], lohnausweis: "1", debit: "5000", credit: "1091", computes: thirteenth }
+  - { key: bonus, group: einmalig, label: { de: Bonus, fr: Bonus, it: Bonus, en: Bonus }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "3", debit: "5000", credit: "1091" }
+  - { key: gratifikation, group: einmalig, label: { de: Gratifikation, fr: Gratification, it: Gratifica, en: Gratuity }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "3", debit: "5000", credit: "1091" }
+  - { key: provision, group: einmalig, label: { de: Provision, fr: Commission, it: Provvigione, en: Commission }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst], lohnausweis: "1", debit: "5000", credit: "1091" }
+  - { key: dienstaltersgeschenk, group: einmalig, label: { de: Dienstaltersgeschenk, fr: Cadeau d'ancienneté, it: Regalo per anzianità di servizio, en: Long-service award }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "3", debit: "5000", credit: "1091" }
+  # Naturalleistungen: in the gross and the bases, no money paid; booked as wage against the cost they relieve.
+  - { key: privatanteil-fahrzeug, group: natural, label: { de: Privatanteil Geschäftsfahrzeug, fr: Part privée du véhicule de service, it: Quota privata veicolo aziendale, en: Private use of the company car }, sign: "+", gross: true, cash: false, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "2.2", debit: "5000", credit: "6200", input: quantity, inputs: { quantity: { de: Kaufpreis ohne MWST, fr: Prix d’achat hors TVA, it: Prezzo d’acquisto senza IVA, en: Purchase price without VAT }, rate: { de: "Satz % pro Monat", fr: "Taux % par mois", it: "Aliquota % al mese", en: "Rate % per month" } }, units: { rate: percent }, defaults: { rate: 0.9 }, missing: { quantity: { de: Kaufpreis des Fahrzeugs (ohne MWST) fehlt, fr: Prix d’achat du véhicule (hors TVA) manquant, it: Manca il prezzo d’acquisto del veicolo (senza IVA), en: Purchase price of the vehicle (without VAT) missing } } }
+  - { key: verpflegung, group: natural, label: { de: Verpflegung, fr: Repas, it: Vitto, en: Meals }, sign: "+", gross: true, cash: false, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "2.1", debit: "5000", credit: "5880" }
+  - { key: wohnung, group: natural, label: { de: Unterkunft, fr: Logement, it: Alloggio, en: Housing }, sign: "+", gross: true, cash: false, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "2.3", debit: "5000", credit: "5880" }
+  # Ersatzleistungen (phase B1: with the Abwesenheiten)
+  # The EO's allowance is AHV wage (AHVG Art. 19a) but no premium wage of the accident insurance (UVV Art. 115 Abs. 1;
+  # the insurers' wage declarations list EO allowances for military, civil service and maternity as premium-free).
+  - { key: taggeld-eo, group: ersatz, label: { de: EO-Entschädigung, fr: Allocation APG, it: Indennità IPG, en: EO allowance }, sign: "+", gross: true, bases: [ahv, alv, ktg, bvg, qst], lohnausweis: "1", debit: "2271", credit: "1091" }
+  - { key: taggeld-uvg, group: ersatz, label: { de: UVG-Taggeld, fr: Indemnité journalière LAA, it: Indennità giornaliera LAINF, en: UVG daily allowance }, sign: "+", gross: true, bases: [qst], lohnausweis: "1", debit: "2273", credit: "1091" }
+  - { key: taggeld-ktg, group: ersatz, label: { de: KTG-Taggeld, fr: Indemnité journalière maladie, it: Indennità giornaliera malattia, en: Sick pay allowance }, sign: "+", gross: true, bases: [qst], lohnausweis: "1", debit: "2274", credit: "1091" }
+  # Abzüge (employee shares); their accounts are the insurance's liability account
+  - { key: ahv-an, group: abzuege, label: { de: AHV/IV/EO, fr: AVS/AI/APG, it: AVS/AI/IPG, en: AHV/IV/EO }, sign: "-", bases: [], lohnausweis: "9", debit: "1091", credit: { insurance: ahv }, computes: contribution }
+  - { key: alv-an, group: abzuege, label: { de: ALV, fr: AC, it: AD, en: ALV }, sign: "-", bases: [], lohnausweis: "9", debit: "1091", credit: { insurance: ahv }, computes: contribution }
+  - { key: nbu-an, group: abzuege, label: { de: NBU, fr: ANP, it: INP, en: NBU }, sign: "-", bases: [], lohnausweis: "9", debit: "1091", credit: { insurance: uvg }, computes: contribution }
+  - { key: uvgz-an, group: abzuege, label: { de: UVG-Zusatz, fr: LAA complémentaire, it: LAINF complementare, en: Supplementary accident }, sign: "-", bases: [], lohnausweis: "15", debit: "1091", credit: { insurance: uvgz }, computes: contribution }
+  - { key: ktg-an, group: abzuege, label: { de: Krankentaggeld, fr: Indemnités journalières maladie, it: Indennità giornaliera malattia, en: Sick pay insurance }, sign: "-", bases: [], lohnausweis: "15", debit: "1091", credit: { insurance: ktg }, computes: contribution }
+  - { key: bvg-an, group: abzuege, label: { de: BVG, fr: LPP, it: LPP, en: BVG }, sign: "-", bases: [], lohnausweis: "10.1", debit: "1091", credit: { insurance: bvg }, computes: contribution }
+  - { key: bvg-einkauf, group: abzuege, label: { de: BVG-Einkauf, fr: Rachat LPP, it: Riscatto LPP, en: BVG buy-in }, sign: "-", bases: [], lohnausweis: "10.2", debit: "1091", credit: { insurance: bvg } }
+  # Quellensteuer: computed from the canton's tariff file (taxAtSource below)
+  - { key: quellensteuer, group: quellensteuer, label: { de: Quellensteuer, fr: Impôt à la source, it: Imposta alla fonte, en: Tax at source }, sign: "-", bases: [], lohnausweis: "12", debit: "1091", credit: { insurance: qst }, computes: contribution }
+  # Familienzulagen: no gross for AHV, counted for the tax at source; paid with the wage, refunded by the FAK. A child's
+  # allowance is the FAK's decision (Mitarbeitende › Kinder); `allowance.minimum` the federal minimum it is checked
+  # against (FamZG Art. 5), `untilAge` the age after whose month the payslip says the allowance ends (a fact, the FAK
+  # decides); `once`: paid in the month its entry begins.
+  - { key: kinderzulage, group: familienzulagen, allowance: { minimum: childAllowanceMin, untilAge: 16 }, label: { de: Kinderzulage, fr: Allocation pour enfant, it: Assegno per i figli, en: Child allowance }, sign: "+", bases: [qst], lohnausweis: "1", debit: { insurance: fak }, credit: "1091" }
+  - { key: ausbildungszulage, group: familienzulagen, allowance: { minimum: educationAllowanceMin, untilAge: 25 }, label: { de: Ausbildungszulage, fr: Allocation de formation, it: Assegno di formazione, en: Education allowance }, sign: "+", bases: [qst], lohnausweis: "1", debit: { insurance: fak }, credit: "1091" }
+  - { key: geburtszulage, group: familienzulagen, once: true, label: { de: Geburtszulage, fr: Allocation de naissance, it: Assegno di nascita, en: Birth allowance }, sign: "+", bases: [qst], lohnausweis: "3", debit: { insurance: fak }, credit: "1091" }
+  # Spesen: outside the gross
+  - { key: spesen-reise, group: spesen, label: { de: "Reise-, Verpflegungs- und Übernachtungsspesen", fr: "Frais de voyage, de repas et de nuitée", it: "Spese di viaggio, vitto e alloggio", en: "Travel, meal and lodging expenses" }, sign: "+", bases: [], lohnausweis: "13.1.1", debit: "5820", credit: "1091" }
+  - { key: spesen-effektiv, group: spesen, label: { de: Übrige effektive Spesen, fr: Autres frais effectifs, it: Altre spese effettive, en: Other actual expenses }, sign: "+", bases: [], lohnausweis: "13.1.2", debit: "5820", credit: "1091" }
+  - { key: pauschalspesen-repraesentation, group: spesen, label: { de: Pauschalspesen Repräsentation, fr: Frais forfaitaires de représentation, it: Spese forfettarie di rappresentanza, en: Flat entertainment expenses }, sign: "+", bases: [], lohnausweis: "13.2.1", debit: "5830", credit: "1091" }
+  - { key: pauschalspesen-auto, group: spesen, label: { de: Pauschalspesen Auto, fr: Frais forfaitaires de voiture, it: Spese forfettarie auto, en: Flat car expenses }, sign: "+", bases: [], lohnausweis: "13.2.2", debit: "5830", credit: "1091" }
+  - { key: pauschalspesen, group: spesen, label: { de: Übrige Pauschalspesen, fr: Autres frais forfaitaires, it: Altre spese forfettarie, en: Other flat expenses }, sign: "+", bases: [], lohnausweis: "13.2.3", debit: "5830", credit: "1091" }
+  # Nettoabzüge: after the net, booked against what the person owes
+  - { key: vorschuss-rueckzahlung, group: nettoabzuege, label: { de: Rückzahlung Vorschuss, fr: Remboursement d'avance, it: Rimborso anticipo, en: Advance repaid }, sign: "-", bases: [], debit: "1091", credit: "1140" }
+  - { key: lohnpfaendung, group: nettoabzuege, label: { de: Lohnpfändung, fr: Saisie de salaire, it: Pignoramento del salario, en: Wage garnishment }, sign: "-", bases: [], debit: "1091", credit: "2000" }
+  - { key: nettoabzug, group: nettoabzuege, label: { de: Nettoabzug, fr: Déduction nette, it: Deduzione netta, en: Net deduction }, sign: "-", bases: [], debit: "1091", credit: "1140" }
+  # Arbeitgeberbeiträge: not on the person's payout
+  - { key: ahv-ag, group: arbeitgeber, side: employer, label: { de: AHV/IV/EO Arbeitgeber, fr: AVS/AI/APG employeur, it: AVS/AI/IPG datore di lavoro, en: AHV/IV/EO employer }, sign: "+", bases: [], debit: "5700", credit: { insurance: ahv }, computes: contribution }
+  - { key: alv-ag, group: arbeitgeber, side: employer, label: { de: ALV Arbeitgeber, fr: AC employeur, it: AD datore di lavoro, en: ALV employer }, sign: "+", bases: [], debit: "5700", credit: { insurance: ahv }, computes: contribution }
+  - { key: verwaltungskosten, group: arbeitgeber, side: employer, label: { de: Verwaltungskosten Ausgleichskasse, fr: Frais d'administration caisse de compensation, it: Spese amministrative cassa di compensazione, en: Compensation fund administration cost }, sign: "+", bases: [], debit: "5700", credit: { insurance: ahv }, computes: contribution }
+  - { key: fak-ag, group: arbeitgeber, side: employer, label: { de: FAK-Beitrag, fr: Cotisation CAF, it: Contributo CAF, en: FAK contribution }, sign: "+", bases: [], debit: "5710", credit: { insurance: fak }, computes: contribution }
+  - { key: bu-ag, group: arbeitgeber, side: employer, label: { de: BU-Prämie, fr: Prime AP, it: Premio INP professionali, en: Occupational accident premium }, sign: "+", bases: [], debit: "5730", credit: { insurance: uvg }, computes: contribution }
+  - { key: nbu-ag, group: arbeitgeber, side: employer, label: { de: NBU Arbeitgeber, fr: ANP employeur, it: INP datore di lavoro, en: NBU employer }, sign: "+", bases: [], debit: "5730", credit: { insurance: uvg }, computes: contribution }
+  - { key: uvgz-ag, group: arbeitgeber, side: employer, label: { de: UVG-Zusatz Arbeitgeber, fr: LAA complémentaire employeur, it: LAINF complementare datore di lavoro, en: Supplementary accident employer }, sign: "+", bases: [], debit: "5730", credit: { insurance: uvgz }, computes: contribution }
+  - { key: ktg-ag, group: arbeitgeber, side: employer, label: { de: Krankentaggeld Arbeitgeber, fr: Indemnités journalières maladie employeur, it: Indennità giornaliera malattia datore di lavoro, en: Sick pay insurance employer }, sign: "+", bases: [], debit: "5740", credit: { insurance: ktg }, computes: contribution }
+  # The commission the canton leaves the employer on the tax it withholds (Bezugsprovision): taken off what is
+  # owed on 2279 and credited to the personnel expense it compensates (§22 decision 92); not on the payout.
+  - { key: bezugsprovision, group: arbeitgeber, side: employer, label: { de: Bezugsprovision Quellensteuer, fr: Commission de perception IS, it: Provvigione di riscossione IF, en: Tax at source commission }, sign: "-", bases: [], debit: { insurance: qst }, credit: "5890", computes: commission }
+  - { key: bvg-ag, group: arbeitgeber, side: employer, label: { de: BVG Arbeitgeber, fr: LPP employeur, it: LPP datore di lavoro, en: BVG employer }, sign: "+", bases: [], debit: "5720", credit: { insurance: bvg }, computes: contribution }
+
+# The funds' and insurers' documents a firm sets its Sozialversicherungen up from (docs/specs/payroll.md §6.1 step 2,
+# §10.2 A-2, src/payroll/setup-documents.ts): a document whose first lines name one of `kinds` proposes that kind's
+# insurance on a card in Löhne › Einstellungen; code reads what the text states plainly (a number after its label,
+# a rate in % on the line of its words), the AI the rest, and nothing counts before the person keeps it. A
+# Beitragsverfügung of the compensation fund names the family allowances' rate too: it proposes that insurance
+# beside it. `notToModel`: a line with one of these words (a salary, a person's insured wage) is never sent to a model.
+setupDocuments:
+  kinds:
+    ahv: [Beitragsverfügung, Verfügung über die Akontobeiträge, Akontoverfügung, Décision de cotisations, Décision de cotisations d'acomptes, Decisione di contributi, Decisione sui contributi d'acconto]
+    bvg: [Vorsorgeausweis, Versicherungsausweis, Persönlicher Ausweis, Certificat de prévoyance, Certificat d'assurance, Certificato di previdenza, Certificato d'assicurazione, Pension certificate]
+    uvgz: [UVG-Zusatzversicherung, Zusatzversicherung zum UVG, UVG-Zusatz, Assurance complémentaire LAA, Assicurazione complementare LAINF]
+    uvg: [UVG-Police, Police Unfallversicherung, Unfallversicherungspolice, Unfallversicherung nach UVG, Police d'assurance-accidents, Assurance-accidents LAA, Polizza assicurazione infortuni, Assicurazione infortuni LAINF]
+    ktg: [Krankentaggeldversicherung, Krankentaggeld-Police, Police Krankentaggeld, Assurance d'indemnités journalières, Indemnités journalières maladie, Assicurazione d'indennità giornaliera, Indennità giornaliera di malattia]
+  numbers:
+    memberNumber: [Abrechnungsnummer, Abrechnungs-Nr., Abrechnungs-Nr, Mitgliednummer, Mitglied-Nr., Mitgliedernummer, Kassen-Nr., Kundennummer, N° d'affilié, Numéro d'affilié, No d'affilié, N. affiliato, Numero d'affiliazione]
+    contractNumber: [Vertragsnummer, Vertrags-Nr., Vertrag Nr., Policennummer, Policen-Nr., Police Nr., Police-Nr., Anschlussvertrag, N° de contrat, N° de police, Numéro de police, N. contratto, N. polizza, Numero di polizza]
+  rates:
+    ahv: { adminCost: [Verwaltungskosten, Verwaltungskostenbeitrag, Frais d'administration, Spese amministrative, Spese di amministrazione] }
+    fak: { employer: [FAK, Familienausgleichskasse, Familienzulagen, CAF, Allocations familiales, Assegni familiari] }
+    uvg: { bu: [BU, Berufsunfall, Berufsunfälle, Berufsunfallversicherung, AP, Accidents professionnels, INP, Infortuni professionali], nbu: [NBU, Nichtberufsunfall, Nichtberufsunfälle, Nichtberufsunfallversicherung, ANP, Accidents non professionnels, Infortuni non professionali] }
+  # What a model may read of such a document (src/payroll/setup-documents.ts linesForModel), an allow-list: the first two
+  # lines (the fund's letterhead), a line with a rate in %, a line naming one of the words above or of `toModel`. Never an
+  # amount alone, never a line with a date, never one that holds a word of `notToModel` anywhere (a salary, an insured or
+  # coordinated wage, retirement savings, a birth date, a civil status), in any case.
+  toModel: [Beitrag, Beiträge, Sparbeitrag, Risikobeitrag, Arbeitnehmer, Arbeitgeber, Versicherte Person, Prämie, Prämiensatz, Lösung, Kategorie, Cotisation, Cotisations, Employé, Employeur, Personne assurée, Prime, Solution, Contributo, Contributi, Dipendente, Datore di lavoro, Persona assicurata, Premio, Soluzione, Contribution, Contributions, Employee, Employer, Insured person, Premium]
+  notToModel: [lohn, löhne, gehalt, salär, salaire, salari, salary, wage, verdienst, revenu, reddito, einkommen, income, guthaben, avoir, avere, geb., geboren, geburt, naissance, nascita, birth, zivilstand, état civil, stato civile, civil status, AHV-Nr, No AVS, N. AVS]
+
+# The tax at source (Quellensteuer, docs/specs/payroll.md §3f, phase B2): the employer deducts it by the
+# tariff file of the canton, which the ESTV publishes per canton and year as fixed-width records (one per
+# tariff code, number of children, church tax and monthly income bracket). The app fetches a file on demand
+# into the workspace's data/qst/<year>/ (never git) and keeps every version by its checksum; a payslip
+# names the file's date. `file.url`: where the file of a canton and year lies ({year}, {yy}, {canton} in
+# lower case); `file.archive`: the zip of every canton for a past year. `rounding`: the tax is rounded
+# commercially to 5 Rappen (Arbeitsgruppe Quellensteuern, FAQ KS 45, Frage 5).
+# `aperiodic`: the Lohnausweis fields whose amounts are aperiodic (FAQ KS 45, Frage 14: fields 3, 4, 5):
+# added to the rate-determining income of the month as they are, never extrapolated; every other line of
+# the base is periodic. `partMonth`: a month the person enters or leaves extrapolates the periodic income to
+# this many days (KS 45 Ziff. 6.3, FAQ Frage 6 and 15). `provision`: the file's codes of the commission.
+# `regions`: each canton with the model it applies (ESTV KS 45 Ziff. 3; Kanton Aargau, «Info
+# Quellensteuerverfahren 2021», Ziff. 3): the monthly model in 21 cantons, the annual model in FR, GE, TI,
+# VD, VS. The app computes the monthly model; a person of a canton on the annual model gets the line
+# «unvollständig» (§22 decision 93).
+taxAtSource:
+  file:
+    url: "https://www.estv2.admin.ch/qst/{year}/loehne/tar{yy}{canton}.zip"
+    archive: "https://www.estv2.admin.ch/qst/archiv/tar{year}.zip"
+    page: "https://www.estv.admin.ch/de/quellensteuertarife-import-in-lohnbuchhaltungssysteme"
+    format: "ESTV, Aufbau und Recordformate der Quellensteuer-Tarife für den Import in Lohnbuchhaltungssysteme, gültig ab 1.1.2025 (unchanged for 2027)"
+  rounding: 0.05
+  aperiodic: ["3", "4", "5"]
+  partMonth: 30
+  provision: { electronic: PEL, paper: PPA }
+  source: "DBG Art. 83-88, QStV (SR 642.118.2), ESTV Kreisschreiben Nr. 45; FAQ KS 45 der Arbeitsgruppe Quellensteuern (2026)"
+  regions:
+    AG: { model: monthly }
+    AI: { model: monthly }
+    AR: { model: monthly }
+    BE: { model: monthly }
+    BL: { model: monthly }
+    BS: { model: monthly }
+    FR: { model: annual }
+    GE: { model: annual }
+    GL: { model: monthly }
+    GR: { model: monthly }
+    JU: { model: monthly }
+    LU: { model: monthly }
+    NE: { model: monthly }
+    NW: { model: monthly }
+    OW: { model: monthly }
+    SG: { model: monthly }
+    SH: { model: monthly }
+    SO: { model: monthly }
+    SZ: { model: monthly }
+    TG: { model: monthly }
+    TI: { model: annual }
+    UR: { model: monthly }
+    VD: { model: annual }
+    VS: { model: annual }
+    ZG: { model: monthly }
+    ZH: { model: monthly }
+
+# The words of the payroll's documents (payslip, Lohnkonto, Lohnausweis), in the person's language: a
+# document prints from here, never from the app's UI dictionaries (docs/specs/payroll.md §12.2).
+documents:
+  payslip: { de: Lohnabrechnung, fr: Décompte de salaire, it: Conteggio dello stipendio, en: Payslip }
+  base: { de: Basis, fr: Base, it: Base, en: Base }
+  rate: { de: Satz, fr: Taux, it: Aliquota, en: Rate }
+  amount: { de: Betrag, fr: Montant, it: Importo, en: Amount }
+  payTo: { de: Auszahlung auf, fr: Versement sur, it: Versamento su, en: Paid to }
+  payday: { de: Zahltag, fr: Jour de paie, it: Giorno di paga, en: Payday }
+  socialSecurityNumber: { de: AHV-Nr., fr: No AVS, it: N. AVS, en: AHV no. }
+  correction: { de: Korrektur, fr: Correction, it: Correzione, en: Correction }
+  missing: { de: unvollständig, fr: incomplet, it: incompleto, en: incomplete }
+  employer: { de: Arbeitgeberbeiträge (zur Information), fr: Cotisations de l'employeur (pour information), it: Contributi del datore di lavoro (per informazione), en: Employer contributions (for information) }
+  mailBody: { de: "Guten Tag\n\nIm Anhang die Lohnabrechnung {month}. Das PDF ist mit Ihrem Passwort geschützt.\n\nFreundliche Grüsse\n{firm}", fr: "Bonjour\n\nVous trouverez ci-joint le décompte de salaire {month}. Le PDF est protégé par votre mot de passe.\n\nMeilleures salutations\n{firm}", it: "Buongiorno\n\nIn allegato il conteggio dello stipendio {month}. Il PDF è protetto dalla sua password.\n\nCordiali saluti\n{firm}", en: "Hello\n\nAttached is your payslip for {month}. The PDF is protected with your password.\n\nKind regards\n{firm}" }
+  holidaysMinimum: { de: "ohne Ferientage im Vertrag: gesetzliches Minimum {weeks} Wochen (OR Art. 329a)", fr: "sans jours de vacances au contrat : minimum légal {weeks} semaines (CO art. 329a)", it: "senza giorni di vacanza nel contratto: minimo legale {weeks} settimane (CO art. 329a)", en: "no holiday days in the contract: the legal minimum of {weeks} weeks (OR Art. 329a)" }
+  holidays: { de: "Ferien: Saldo {balance} Tage (Anspruch bis Monatsende {earned}, bezogen {taken})", fr: "Vacances : solde {balance} jours (droit à la fin du mois {earned}, pris {taken})", it: "Vacanze: saldo {balance} giorni (diritto a fine mese {earned}, godute {taken})", en: "Holidays: balance {balance} days (earned by the month's end {earned}, taken {taken})" }
+  # What a payslip and a Lohnausweis are computed from, said neutrally: the owner who runs the payroll himself
+  # reads it as well as a fiduciary (docs/specs/payroll.md §22 decision 47). {year}: the year of the federal figures.
+  disclaimer: { de: "Berechnet aus den erfassten Sätzen und den Bundeswerten {year}.", fr: "Calculé à partir des taux saisis et des valeurs fédérales {year}.", it: "Calcolato dalle aliquote registrate e dai valori federali {year}.", en: "Computed from the rates entered and the federal figures {year}." }
+  # Where a line's rate comes from, printed under it: the law's figure (its source), the insurer's solution, the pension certificate.
+  sourceFederal: { de: "Bundeswert {year}", fr: "Valeur fédérale {year}", it: "Valore federale {year}", en: "Federal figure {year}" }
+  sourceSolution: { de: "Lösung {code}", fr: "solution {code}", it: "soluzione {code}", en: "solution {code}" }
+  sourceCertificate: { de: Vorsorgeausweis, fr: Certificat de prévoyance, it: Certificato di previdenza, en: Pension certificate }
+  sourceTariff: { de: "Tarif {region} {year} vom {date} · {code} · satzbestimmend {income}", fr: "Barème {region} {year} du {date} · {code} · revenu déterminant {income}", it: "Tariffa {region} {year} del {date} · {code} · reddito determinante {income}", en: "Tariff {region} {year} of {date} · {code} · rate-determining {income}" }
+
+# The Lohnausweis (Form 11, ESTV/SSK Wegleitung 2026): its numbered fields in print order, each with its
+# label in the person's language. `sum`: computed from other fields (8 = 1 to 7; 11 = 8 less 9 and 10);
+# `deduction`: summed from deduction lines (their amount as withheld). The firm's Lohnarten name the field
+# they are summed into (`lohnausweis`); a field no Lohnart names prints empty.
+lohnausweis:
+  title: { de: Lohnausweis, fr: Certificat de salaire, it: Certificato di salario, en: Wage statement }
+  replaces: { de: "Ersetzt den Lohnausweis vom {date}", fr: "Remplace le certificat de salaire du {date}", it: "Sostituisce il certificato di salario del {date}", en: "Replaces the wage statement of {date}" }
+  corrects: { de: "Korrigiert den Lohnausweis vom {date}", fr: "Corrige le certificat de salaire du {date}", it: "Corregge il certificato di salario del {date}", en: "Corrects the wage statement of {date}" }
+  expenseRules: { de: "Spesenreglement durch Kanton {canton} am {date} genehmigt", fr: "Règlement des frais approuvé par le canton {canton} le {date}", it: "Regolamento spese approvato dal Cantone {canton} il {date}", en: "Expense regulations approved by canton {canton} on {date}" }
+  letters:
+    B: { de: Rentenbescheinigung, fr: Attestation de rentes, it: Attestazione di rendite, en: Pension statement }
+    C: { de: AHV-Nr., fr: No AVS, it: N. AVS, en: AHV no. }
+    born: { de: Geburtsdatum, fr: Date de naissance, it: Data di nascita, en: Date of birth }
+    D: { de: Jahr, fr: Année, it: Anno, en: Year }
+    E: { de: von – bis, fr: du – au, it: dal – al, en: from – to }
+    F: { de: Unentgeltliche Beförderung zwischen Wohn- und Arbeitsort, fr: Transport gratuit entre le domicile et le lieu de travail, it: Trasporto gratuito tra domicilio e luogo di lavoro, en: Free transport between home and work }
+    G: { de: Kantinenverpflegung / Lunch-Checks, fr: Repas à la cantine / chèques-repas, it: Pasti alla mensa / buoni pasto, en: Canteen meals / lunch vouchers }
+    I: { de: Ort und Datum, fr: Lieu et date, it: Luogo e data, en: Place and date }
+  fields:
+    - { key: "1", label: { de: "Lohn soweit nicht unter Ziffer 2–7 aufzuführen", fr: "Salaire qui ne concerne pas les chiffres 2 à 7", it: "Salario che non concerne le cifre da 2 a 7", en: "Wage not shown under 2 to 7" } }
+    - { key: "2.1", label: { de: "Gehaltsnebenleistungen: Verpflegung, Unterkunft", fr: "Prestations salariales accessoires : pension, logement", it: "Prestazioni accessorie al salario: vitto, alloggio", en: "Fringe benefits: meals, housing" } }
+    - { key: "2.2", label: { de: "Privatanteil Geschäftsfahrzeug", fr: "Part privée voiture de service", it: "Quota privata automobile di servizio", en: "Private use of the company car" } }
+    - { key: "2.3", label: { de: "Andere Gehaltsnebenleistungen", fr: "Autres prestations salariales accessoires", it: "Altre prestazioni accessorie", en: "Other fringe benefits" } }
+    - { key: "3", label: { de: "Unregelmässige Leistungen", fr: "Prestations non périodiques", it: "Prestazioni non periodiche", en: "Irregular payments" } }
+    - { key: "4", label: { de: "Kapitalleistungen", fr: "Prestations en capital", it: "Prestazioni in capitale", en: "Capital payments" } }
+    - { key: "5", label: { de: "Beteiligungsrechte gemäss Beiblatt", fr: "Droits de participation selon annexe", it: "Diritti di partecipazione secondo allegato", en: "Participation rights (annex)" } }
+    - { key: "6", label: { de: "Verwaltungsratsentschädigungen", fr: "Indemnités des membres de l'administration", it: "Indennità dei membri dell'amministrazione", en: "Board fees" } }
+    - { key: "7", label: { de: "Andere Leistungen", fr: "Autres prestations", it: "Altre prestazioni", en: "Other benefits" } }
+    - { key: "8", sum: { plus: ["1", "2.1", "2.2", "2.3", "3", "4", "5", "6", "7"] }, label: { de: "Bruttolohn total / Rente", fr: "Salaire brut total / Rente", it: "Salario lordo totale / Rendita", en: "Gross wage, total / pension" } }
+    - { key: "9", deduction: true, label: { de: "Beiträge AHV/IV/EO/ALV/NBUV", fr: "Cotisations AVS/AI/APG/AC/AANP", it: "Contributi AVS/AI/IPG/AD/AINP", en: "AHV/IV/EO/ALV/NBUV contributions" } }
+    - { key: "10.1", deduction: true, label: { de: "Berufliche Vorsorge: ordentliche Beiträge", fr: "Prévoyance professionnelle : cotisations ordinaires", it: "Previdenza professionale: contributi ordinari", en: "Occupational pension: ordinary contributions" } }
+    - { key: "10.2", deduction: true, label: { de: "Berufliche Vorsorge: Beiträge für den Einkauf", fr: "Prévoyance professionnelle : cotisations pour le rachat", it: "Previdenza professionale: contributi per il riscatto", en: "Occupational pension: buy-in contributions" } }
+    - { key: "11", sum: { plus: ["8"], minus: ["9", "10.1", "10.2"] }, label: { de: "Nettolohn / Rente", fr: "Salaire net / Rente", it: "Salario netto / Rendita", en: "Net wage / pension" } }
+    - { key: "12", deduction: true, label: { de: "Quellensteuerabzug", fr: "Retenue de l'impôt à la source", it: "Ritenuta d'imposta alla fonte", en: "Tax withheld at source" } }
+    - { key: "13.1.1", label: { de: "Effektive Spesen: Reise, Verpflegung, Übernachtung", fr: "Frais effectifs : voyage, repas, nuitées", it: "Spese effettive: viaggio, vitto, alloggio", en: "Actual expenses: travel, meals, lodging" } }
+    - { key: "13.1.2", label: { de: "Effektive Spesen: übrige", fr: "Frais effectifs : autres", it: "Spese effettive: altre", en: "Actual expenses: other" } }
+    - { key: "13.2.1", label: { de: "Pauschalspesen: Repräsentation", fr: "Frais forfaitaires : représentation", it: "Spese forfettarie: rappresentanza", en: "Flat expenses: entertainment" } }
+    - { key: "13.2.2", label: { de: "Pauschalspesen: Auto", fr: "Frais forfaitaires : voiture", it: "Spese forfettarie: automobile", en: "Flat expenses: car" } }
+    - { key: "13.2.3", label: { de: "Pauschalspesen: übrige", fr: "Frais forfaitaires : autres", it: "Spese forfettarie: altre", en: "Flat expenses: other" } }
+    - { key: "13.3", label: { de: "Beiträge an die Weiterbildung", fr: "Contributions au perfectionnement", it: "Contributi per il perfezionamento", en: "Training contributions" } }
+    - { key: "14", label: { de: "Weitere Gehaltsnebenleistungen", fr: "Autres prestations salariales accessoires", it: "Altre prestazioni accessorie al salario", en: "Further fringe benefits" } }
+    - { key: "15", deduction: true, remark: true, label: { de: "Bemerkungen", fr: "Observations", it: "Osservazioni", en: "Remarks" } }
+  # Rz 74: the cantons whose tax office wants a copy from the employer (LU voluntary).
+  copyToTaxOffice: [BS, BE, FR, JU, NE, SO, VD, VS]

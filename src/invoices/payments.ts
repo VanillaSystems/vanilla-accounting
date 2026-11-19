@@ -16,19 +16,22 @@
 import { bookedInFiled } from '../books/twins.js';
 import type { BankTransaction, JournalEntry, Mapping, Receipt } from '../types/index.js';
 import { periodLock, release, type Books } from '../books/store.js';
-import { bankAccountFor } from '../workspace/money-accounts.js';
+import { bankAccountFor, byStatement } from '../workspace/money-accounts.js';
 import type { FxResolver } from '../accounting/fx-rates.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
-import type { InvoiceBook, Issued, PaymentAllocation } from './model.js';
+import type { Invoice, InvoiceBook, Issued, PaymentAllocation, WriteOff, WriteOffReason } from './model.js';
 import { parseReference } from '../providers/qr-bill/reference.js';
-import { allocate, liveInvoices, namesNumber, openAmount, openFees, refundDue, revenueSplit, totals, withPayment, withoutPayment } from './rules.js';
+import {
+  InvoiceRuleError, type PaymentRefusal, allocate, cashRevenue, liveInvoices, namesNumber, openAmount, openFees, refundDue, revenueSplit, skontoOf, withPayment, withWriteOff, withoutPayment, withoutWriteOff, writeOffAccounts,
+} from './rules.js';
 import { TEXTS } from './texts.js';
 import { idSource } from './store.js';
 import { agreedBasis, baseCurrency, vat } from '../engines/index.js';
 import { settlementLines, sideOf, type OpenItemAccounts } from '../accounting/tax-point.js';
 import { roundCHF } from '../accounting/rappen.js';
-import { bookInvoiceEvents, invoiceReceipt } from './events.js';
-import { eventRef, hasEvent, isPersonsLink } from '../books/refs.js';
+import { bookInvoiceEvents, bookWriteOff, invoiceReceipt } from './events.js';
+import { eventRef, hasEvent, isPersonsLink, writeOffRef } from '../books/refs.js';
+import { nextManualRef } from '../books/next-ref.js';
 
 export interface PaymentContext {
   bankAccounts: readonly LedgerBankAccount[];
@@ -44,6 +47,10 @@ export interface PaymentContext {
   indexedAt(at: Pick<BankTransaction, 'date'>): string;
   /** The movements of an account's reconciliation that waits (#254, src/books/reconcile.ts heldByReconciliation): they pay no invoice. */
   held(books: Books): ReadonlySet<string>;
+  /** Where a rest is written off on the agreed basis (invoicing.writeOffAccount); absent: the jurisdiction's. */
+  writeOffAccount?: { skonto: string; loss: string };
+  /** Puts an account a booking needs into the chart when it lacks it, under the jurisdiction chart's name (a write-off account). */
+  ensureAccount?(number: string): void;
 }
 
 /** A payment that names an invoice but cannot be booked by rule: a person decides. */
@@ -93,7 +100,8 @@ function hitsOf(tx: BankTransaction, byRef: Map<string, Issued>, book: InvoiceBo
     const ref = tx.direction === 'CRDT' && p.reference ? parseReference(p.reference) : undefined;
     const inv = ref ? byRef.get(ref.reference) : undefined;
     if (inv) return { inv, amount: p.amount, by: 'reference' };
-    const fits = named.filter((i) => namesNumber(p.text, i.number) && dueOf(current(book, i.id), book).some((due) => due > 0 && due === p.amount));
+    // The number and what is due, or what is due less the Skonto its printed terms offer (spec 4.4.6).
+    const fits = named.filter((i) => namesNumber(p.text, i.number) && (dueOf(current(book, i.id), book).some((due) => due > 0 && due === p.amount) || skontoOf(current(book, i.id), liveInvoices(book), p.amount, tx.date) !== undefined));
     return fits.length === 1 ? { inv: fits[0], amount: p.amount, by: 'number' } : undefined;
   });
 }
@@ -132,8 +140,11 @@ export function matchPayments(books: Books, book: InvoiceBook, ctx: PaymentConte
       if (known) { allocations.push({ inv, a: known, known: true }); continue; }
       const split = settle(inv, book, h.amount, tx.date);
       if (split.surplus > 0) { ask(h, 'surplus'); bookable = false; continue; }
+      const skonto = inv.kind === 'invoice' ? skontoOf(inv, liveInvoices(book), split.amount, tx.date) : undefined;
       const a: PaymentAllocation = { transactionRef: tx.ref, date: tx.date, amount: split.amount, ...(split.fee ? { fee: split.fee } : {}), by: h.by };
       replace(book, withPayment(inv, a));
+      // A Skonto within the printed days: the rest is written off by code, with the payment (spec 4.4.6).
+      if (skonto !== undefined) writeOffRest(books, book, inv.id, { date: tx.date, amount: skonto, reason: 'skonto', by: 'code', transactionRef: tx.ref }, ctx, out);
       allocations.push({ inv: current(book, inv.id), a });
     }
     if (hits.some((h) => !h) && allocations.length) for (const { inv, a } of allocations) out.questions.push({ transactionRef: tx.ref, number: inv.number, problem: 'batch', amount: a.amount });
@@ -148,7 +159,7 @@ export function matchPayments(books: Books, book: InvoiceBook, ctx: PaymentConte
     const toBook = bookable && !alreadyBooked && allocations.length > 0;
     if (toBook) {
       if (entries.length) books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== tx.ref);
-      for (const { inv, a } of allocations) bookPayment(books, tx, inv, a, ctx, out);
+      for (const { inv, a } of allocations) bookPayment(books, tx, inv, a, ctx, out, liveInvoices(book));
     }
     for (const { inv, a, known } of allocations) {
       if (!known || toBook) out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: a.fee ?? 0, booked: toBook });
@@ -180,7 +191,7 @@ function replace(book: InvoiceBook, inv: Issued): void {
  * event comes off to be booked again for the rest (prepaidEvent). A paid reminder fee is revenue
  * without VAT either way.
  */
-export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: PaymentAllocation, ctx: PaymentContext, out: Pick<PaymentOutcome, 'files'>): JournalEntry[] {
+export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: PaymentAllocation, ctx: PaymentContext, out: Pick<PaymentOutcome, 'files'>, invoices: readonly Invoice[] = [inv]): JournalEntry[] {
   dropEvent(books, prepaidEvent(books, tx, inv));
   const bank = bankAccountFor(tx, ctx.bankAccounts);
   const rate = tx.currency === baseCurrency() ? undefined : ctx.fx.daily(tx.currency, tx.date);
@@ -196,11 +207,12 @@ export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: P
       account: ctx.openItems.receivable, bank, amount: refund ? -a.amount : a.amount, currency: tx.currency, rate,
       booked: (refund ? -1 : 1) * heldFor(books, inv, a.amount), fxDifference: ctx.openItems.fxDifference,
     }).map(({ fx: diff, ...l }) => stamp({ ...l, description: diff ? `Kursdifferenz ${text}` : text })), ...fee]
-    : [...revenueSplit(inv, a.amount, ctx.revenueAccount).map((l) => stamp({
-      accountDebit: refund ? l.account : bank,
-      accountCredit: refund ? bank : l.account,
+    // An invoice's payment books its share of the invoice and, with the minus codes, of the credit notes applied to it (Verrechnung).
+    : [...(refund ? revenueSplit(inv, a.amount, ctx.revenueAccount).map((l) => ({ ...l, minus: true as const })) : cashRevenue(inv, invoices, a, ctx.revenueAccount)).map((l) => stamp({
+      accountDebit: l.minus ? l.account : bank,
+      accountCredit: l.minus ? bank : l.account,
       amount: l.amount,
-      ...(l.vatCode ? { vatCode: refund ? vat().codes.negativePrefix + l.vatCode : l.vatCode } : {}),
+      ...(l.vatCode ? { vatCode: l.minus ? vat().codes.negativePrefix + l.vatCode : l.vatCode } : {}),
       description: text,
       ...fx,
     })), ...fee];
@@ -283,6 +295,14 @@ export interface PaymentProposal {
 
 const words = (s: string) => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[^a-z0-9]+/).filter((w) => w.length > 2);
 
+/**
+ * A salutation a person's printed name starts with (src/invoices/contacts.ts printedName), in the four
+ * document languages: no bank row names it, and a refund that says «Frau» must not match every woman.
+ */
+const SALUTATIONS = new Set(['herr', 'herrn', 'frau', 'familie', 'fam', 'monsieur', 'madame', 'mme', 'mlle', 'mademoiselle', 'famille', 'signor', 'signore', 'signora', 'sig', 'famiglia', 'mrs', 'miss', 'family']);
+/** The words of a customer's name that identify it in a payment's text: without its salutation. */
+const nameWords = (name: string) => words(name).filter((w) => !SALUTATIONS.has(w));
+
 export function paymentProposals(books: Books, book: InvoiceBook): PaymentProposal[] {
   const lock = periodLock(books);
   const invoices = liveInvoices(book);
@@ -302,7 +322,7 @@ export function paymentProposals(books: Books, book: InvoiceBook): PaymentPropos
       const numberMatches = namesNumber(text, inv.number);
       // Before the document's date, or booked already: only a payment that names the document is offered.
       if (!numberMatches && (tx.date < inv.date || booked.has(tx.ref))) continue;
-      const name = words(inv.customer.name);
+      const name = nameWords(inv.customer.name);
       const nameMatches = name.length > 0 && name.some((w) => words(text).includes(w));
       const due = dueOf(inv, book);
       // On the agreed basis a part paid by the customer (every word of its name in the payment) is offered too: its revenue is booked with the invoice.
@@ -331,22 +351,22 @@ export function confirmPayment(books: Books, book: InvoiceBook, invoiceId: strin
   const out: PaymentOutcome = { paid: [], questions: [], files: [] };
   const tx = books.transactions.find((t) => t.ref === transactionRef);
   const inv = liveInvoices(book).find((i): i is Issued => i.id === invoiceId && i.status === 'issued');
-  if (!inv) throw new PaymentError('Keine ausgestellte Rechnung mit dieser Id.');
-  if (!tx || tx.direction !== directionOf(inv)) throw new PaymentError(inv.kind === 'credit-note' ? 'Keine ausgehende Zahlung mit dieser Referenz.' : 'Keine eingehende Zahlung mit dieser Referenz.');
+  if (!inv) throw new PaymentError('notFound', 'Keine ausgestellte Rechnung mit dieser Id.');
+  if (!tx || tx.direction !== directionOf(inv)) throw new PaymentError('noPayment', inv.kind === 'credit-note' ? 'Keine ausgehende Zahlung mit dieser Referenz.' : 'Keine eingehende Zahlung mit dieser Referenz.');
   const what = `${inv.kind === 'credit-note' ? 'Gutschrift' : 'Rechnung'} ${inv.number}`;
-  if (inv.cancelled) throw new PaymentError(`${what} ist storniert.`);
-  if (inv.currency !== tx.currency) throw new PaymentError(`${what} ist in ${inv.currency}, die Zahlung in ${tx.currency}.`);
-  if (inv.payments.some((p) => p.transactionRef === tx.ref)) throw new PaymentError(`Die Zahlung ist ${what} schon zugeordnet.`);
+  if (inv.cancelled) throw new PaymentError('cancelled', `${what} ist storniert.`);
+  if (inv.currency !== tx.currency) throw new PaymentError('currency', `${what} ist in ${inv.currency}, die Zahlung in ${tx.currency}.`);
+  if (inv.payments.some((p) => p.transactionRef === tx.ref)) throw new PaymentError('allocated', `Die Zahlung ist ${what} schon zugeordnet.`);
   const keep = books.journalEntries.some((e) => e.transactionRef === tx.ref && e.origin !== 'classify');
   // A document with its event carries its revenue on the receivable already: a kept booking of the payment with a sale code would count it twice.
   // Not so for a prepayment: its revenue is the payment's, the event is booked again for the rest.
   const prepaid = prepaidEvent(books, tx, inv);
   const event = prepaid.length ? undefined : books.journalEntries.find((e) => e.transactionRef === eventRef(inv, 'issue'));
   if (keep && event && books.journalEntries.some((e) => e.transactionRef === tx.ref && sideOf(e.vatCode) === 'sale')) {
-    throw new PaymentError(`${what} ist am ${event.date} mit Umsatz und MWST auf ${ctx.openItems.receivable} gebucht (${event.transactionRef}), die Zahlung ist mit Umsatz gebucht: zugeordnet zählte der Umsatz doppelt. Die Buchung der Zahlung auf ${ctx.openItems.receivable} ändern oder löschen, dann zuordnen.`);
+    throw new PaymentError('doubleRevenue', `${what} ist am ${event.date} mit Umsatz und MWST auf ${ctx.openItems.receivable} gebucht (${event.transactionRef}), die Zahlung ist mit Umsatz gebucht: zugeordnet zählte der Umsatz doppelt. Die Buchung der Zahlung auf ${ctx.openItems.receivable} ändern oder löschen, dann zuordnen.`);
   }
   const split = settle(inv, book, tx.amount, tx.date);
-  if (split.surplus > 0) throw new PaymentError(`Die Zahlung ist ${tx.currency} ${split.surplus.toFixed(2)} höher als offen.`);
+  if (split.surplus > 0) throw new PaymentError('surplus', `Die Zahlung ist ${tx.currency} ${split.surplus.toFixed(2)} höher als offen.`);
   const a: PaymentAllocation = { transactionRef: tx.ref, date: tx.date, amount: split.amount, ...(split.fee ? { fee: split.fee } : {}), by: 'confirmed' };
   replace(book, withPayment(inv, a));
   dropEvent(books, prepaid);
@@ -354,12 +374,21 @@ export function confirmPayment(books: Books, book: InvoiceBook, invoiceId: strin
   else {
     out.replaced = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
     books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== tx.ref);
-    bookPayment(books, tx, inv, a, ctx, out);
+    bookPayment(books, tx, inv, a, ctx, out, liveInvoices(book));
   }
   rebookEvents(books, book, ctx, out);
   out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: a.fee ?? 0, booked: !keep });
   return out;
 }
+
+/**
+ * Whether a payment's entry was booked for `doc`: every entry bookPayment writes names the
+ * document's number in its text (the revenue, the minus lines of a Verrechnung, the fee, the
+ * exchange difference), and invoices and credit notes share one series, so the number tells
+ * the parts of one payment over several documents apart.
+ */
+export const bookedFor = (e: Pick<JournalEntry, 'origin' | 'description'>, doc: Pick<Issued, 'number'>): boolean =>
+  e.origin === 'invoice' && namesNumber(e.description ?? '', doc.number);
 
 /** What «Lösen» did: the allocation that left the document, the entries the link had booked, and what is booked in their place. */
 export interface PaymentReleased {
@@ -377,9 +406,12 @@ export interface PaymentReleased {
 export function releasePayment(books: Books, book: InvoiceBook, invoiceId: string, transactionRef: string, ctx: PaymentContext, restore: readonly JournalEntry[] = []): PaymentReleased {
   const inv = liveInvoices(book).find((i): i is Issued => i.id === invoiceId && i.status === 'issued');
   const allocation = inv?.payments.find((p) => p.transactionRef === transactionRef);
-  if (!inv || !allocation) throw new PaymentError('Die Zahlung ist dieser Rechnung nicht zugeordnet.');
+  if (!inv || !allocation) throw new PaymentError('notAllocated', 'Die Zahlung ist dieser Rechnung nicht zugeordnet.');
   replace(book, withoutPayment(inv, transactionRef));
-  const removed = books.journalEntries.filter((e) => e.transactionRef === transactionRef && e.origin === 'invoice');
+  // The Skonto code wrote off with the payment goes with it; on a cancelled invoice it stays, reversed with the claim by its Storno.
+  if (!inv.cancelled) for (const w of (inv.writeOffs ?? []).filter((x) => x.by === 'code' && x.transactionRef === transactionRef)) removeWriteOff(books, book, inv.id, w.id);
+  // Only this document's part: a payment allocated over several (Ausziffern) keeps the others' entries.
+  const removed = books.journalEntries.filter((e) => e.transactionRef === transactionRef && bookedFor(e, inv));
   books.journalEntries = books.journalEntries.filter((e) => !removed.includes(e));
   // A prepayment's revenue leaves with it: the event, booked for the rest, is booked again for what is now the invoice's.
   if (removed.some((e) => sideOf(e.vatCode) === 'sale')) dropEvent(books, prepaidEvent(books, allocation, inv));
@@ -394,4 +426,191 @@ export function releasePayment(books: Books, book: InvoiceBook, invoiceId: strin
   return { allocation, removed, restored, files };
 }
 
-export class PaymentError extends Error {}
+export type { PaymentRefusal };
+export class PaymentError extends Error {
+  constructor(readonly code: PaymentRefusal, message: string) { super(message); }
+}
+
+// ─── write-offs (Ausbuchung) ────────────────────────────────────────────────────
+
+/**
+ * The rest of an invoice written off (spec 4.4.6, 4.5): recorded on the invoice; on the cash basis
+ * that is all (decision 3: what was never received was never taxed). A document whose event the
+ * books carry (the agreed basis) books `RE-<n>-wo-<k>` on its date: the write-off account (the Skonto
+ * one for Skonto, Rabatt, Spesen and Rundung, the loss one for a loss) against the receivable, split
+ * like the invoice over its rates with the minus sale codes (MWSTG Art. 41 Abs. 1: the tax goes down
+ * when the correction is booked), at the rate the receivable holds. Its date lies in an open period:
+ * a write-off of an invoice of a filed period is dated in the open one, the filed entry stays (golden
+ * rule 1). `confirmed`: the person's «Trotzdem ausbuchen» over more than is open.
+ */
+export function writeOffRest(books: Books, book: InvoiceBook, invoiceId: string, w: Omit<WriteOff, 'id'>, ctx: PaymentContext, out: Pick<PaymentOutcome, 'files'>, confirmed = false): { writeOff: WriteOff; entries: JournalEntry[] } {
+  if (periodLock(books).isClosed(w.date)) throw new PaymentError('closed', `Der ${w.date} liegt in einer abgeschlossenen Periode: eine Ausbuchung wird in der offenen Periode datiert.`);
+  const inv = liveInvoices(book).find((i) => i.id === invoiceId) ?? notFound();
+  const { invoice, writeOff } = withWriteOff(inv, liveInvoices(book), w, confirmed);
+  replace(book, invoice);
+  return { writeOff, entries: hasEvent(books, invoice) ? bookWriteOff(books, invoice, writeOff, ctx, out) : [] };
+}
+
+/** «Rückgängig» on a write-off: it leaves the invoice and its entries go; only in an open period (golden rule 1). */
+export function removeWriteOff(books: Books, book: InvoiceBook, invoiceId: string, id: string): WriteOff {
+  const inv = liveInvoices(book).find((i): i is Issued => i.id === invoiceId && i.status === 'issued') ?? notFound();
+  const w = (inv.writeOffs ?? []).find((x) => x.id === id);
+  if (!w) throw new PaymentError('noWriteOff', 'Diese Ausbuchung hat die Rechnung nicht.');
+  const ref = writeOffRef(inv, id);
+  const lock = periodLock(books);
+  if (lock.isClosed(w.date) || books.journalEntries.some((e) => e.transactionRef === ref && lock.isClosed(e.date))) throw new PaymentError('closed', `Die Ausbuchung vom ${w.date} liegt in einer abgeschlossenen Periode und bleibt.`);
+  // The invoice without it first: a cancelled one refuses, and nothing is taken off the books then.
+  const without = withoutWriteOff(inv, id);
+  books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== ref);
+  books.mappings = books.mappings.filter((m) => m.transactionRef !== ref);
+  replace(book, without);
+  return w;
+}
+
+const notFound = (): never => { throw new PaymentError('notFound', 'Keine ausgestellte Rechnung mit dieser Id.'); };
+
+// ─── Zahlungseingang by hand ──────────────────────────────────────────────────
+
+/**
+ * A Zahlungseingang a person enters on an invoice (spec 4.4.6, P1.7): cash at the door, or money
+ * on an account whose statement is not imported yet. It is a hand movement of the books on that
+ * money account (a bank or the cash box, in the invoice's currency), allocated to the invoice
+ * (`source: 'hand'`) and booked like a statement's payment (bookPayment). When a statement imported
+ * later carries the same movement, the import confirms the hand movement (src/books/bank-import.ts
+ * matchStatementRows: `statement` on it) and books nothing again; a cash payment stays a hand movement.
+ */
+export function recordHandPayment(books: Books, book: InvoiceBook, invoiceId: string, req: { date: string; account: string; amount: number }, ctx: PaymentContext): { transaction: BankTransaction; allocation: PaymentAllocation; files: PaymentOutcome['files'] } {
+  const inv = liveInvoices(book).find((i): i is Issued => i.id === invoiceId && i.status === 'issued' && i.kind === 'invoice');
+  if (!inv) throw new PaymentError('notFound', 'Keine ausgestellte Rechnung mit dieser Id.');
+  if (inv.cancelled) throw new PaymentError('cancelled', `Rechnung ${inv.number} ist storniert.`);
+  if (periodLock(books).isClosed(req.date)) throw new PaymentError('closed', `Der ${req.date} liegt in einer abgeschlossenen Periode.`);
+  const money = ctx.bankAccounts.find((a) => a.account === req.account && a.currency === inv.currency && (a.role === 'bank' || a.role === 'cash'));
+  if (!money) throw new PaymentError('moneyAccount', `Konto ${req.account} ist kein Bank- oder Kassenkonto in ${inv.currency} der Firma.`);
+  const split = settle(inv, book, req.amount, req.date);
+  if (!(req.amount > 0)) throw new PaymentError('amount', 'Der Betrag ist grösser als 0.');
+  if (split.surplus > 0) throw new InvoiceRuleError('surplus', `Die Zahlung ist ${inv.currency} ${split.surplus.toFixed(2)} höher als offen: der Überschuss bliebe unzugeordnet.`);
+  const ref = nextManualRef(books, req.date.slice(0, 4));
+  const transaction: BankTransaction = {
+    ref, bank: money.bank, source: 'manual', date: req.date, amount: req.amount, currency: inv.currency, direction: 'CRDT',
+    // No counterparty: whoever's statement row brings it (the customer's Treuhänder, a parent firm) confirms it all the same.
+    description: `${TEXTS.de.invoice} ${inv.number} ${inv.customer.name}`,
+  };
+  books.transactions.push(transaction);
+  const allocation: PaymentAllocation = { transactionRef: ref, date: req.date, amount: split.amount, ...(split.fee ? { fee: split.fee } : {}), by: 'confirmed', source: 'hand' };
+  replace(book, withPayment(inv, allocation));
+  const out: Pick<PaymentOutcome, 'files'> = { files: [] };
+  bookPayment(books, transaction, current(book, inv.id), allocation, ctx, out, liveInvoices(book));
+  rebookEvents(books, book, ctx, out);
+  return { transaction, allocation, files: out.files };
+}
+
+/**
+ * «Rückgängig» on a Zahlungseingang by hand: its movement, its bookings and its allocation go
+ * (open period only). One a statement confirmed is the bank's row now: it is released («Lösen»), not removed.
+ */
+export function removeHandPayment(books: Books, book: InvoiceBook, invoiceId: string, ref: string, ctx: PaymentContext): PaymentReleased {
+  const tx = books.transactions.find((t) => t.ref === ref);
+  const inv = liveInvoices(book).find((i): i is Issued => i.id === invoiceId && i.status === 'issued');
+  if (!tx || !inv?.payments.some((p) => p.transactionRef === ref && p.source === 'hand')) throw new PaymentError('noHandPayment', 'Kein Zahlungseingang von Hand auf dieser Rechnung.');
+  if (byStatement(tx)) throw new PaymentError('confirmed', 'Ein Kontoauszug bestätigt diese Zahlung: sie ist eine Bankzeile und wird gelöst, nicht entfernt.');
+  const released = releasePayment(books, book, invoiceId, ref, ctx);
+  books.transactions = books.transactions.filter((t) => t.ref !== ref);
+  books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== ref);
+  books.mappings = books.mappings.filter((m) => m.transactionRef !== ref);
+  return released;
+}
+
+// ─── Ausziffern ───────────────────────────────────────────────────────────────
+
+/** A part of an incoming payment for one invoice, and what becomes of that invoice's rest: it stays open (absent), or is written off. */
+export interface AllocationPart { invoiceId: string; amount: number; rest?: WriteOffReason }
+
+/** An invoice the Ausziffern dialog offers, with what code proposes to allocate to it. */
+export interface AllocationItem { invoiceId: string; number: string; customerId: string; customerName: string; date: string; dueDate: string; open: number; named: boolean; proposed: number }
+
+/**
+ * What the Ausziffern dialog shows for an incoming payment (spec 4.8): the open invoices of its
+ * customer in its currency (the customer given, else the one whose invoices the text names, else
+ * the one whose every name word it names; none found: every open invoice in the currency), and
+ * code's proposal: the invoices the text names first, then the oldest by due date, each up to what
+ * is open, until the payment is used up. `left`: what the proposal leaves of the payment.
+ */
+export function allocationProposal(books: Books, book: InvoiceBook, transactionRef: string, customerId?: string): { transaction: BankTransaction; items: AllocationItem[]; left: number } {
+  const tx = books.transactions.find((t) => t.ref === transactionRef && t.direction === 'CRDT');
+  if (!tx) throw new PaymentError('noPayment', 'Keine eingehende Zahlung mit dieser Referenz.');
+  const invoices = liveInvoices(book);
+  const text = [tx.description, tx.reference, tx.counterparty, ...(tx.parts ?? []).flatMap((p) => [p.counterparty, p.reference])].filter(Boolean).join(' ');
+  const open = invoices.filter((i): i is Issued => i.status === 'issued' && i.kind === 'invoice' && !i.cancelled && i.currency === tx.currency && openAmount(i, invoices) > 0);
+  const who = customerId
+    ?? open.find((i) => namesNumber(text, i.number))?.customerId
+    ?? open.find((i) => { const n = nameWords(i.customer.name); return n.length > 0 && n.every((w) => words(text).includes(w)); })?.customerId;
+  const mine = (who ? open.filter((i) => i.customerId === who) : open)
+    .sort((a, b) => Number(namesNumber(text, b.number)) - Number(namesNumber(text, a.number)) || a.dueDate.localeCompare(b.dueDate) || a.number.localeCompare(b.number));
+  let left = Math.round(tx.amount * 100);
+  const items = mine.map((i): AllocationItem => {
+    const due = Math.round(openAmount(i, invoices) * 100);
+    const named = namesNumber(text, i.number);
+    const proposed = who || named ? Math.min(due, left) : 0;
+    left -= proposed;
+    return { invoiceId: i.id, number: i.number, customerId: i.customerId, customerName: i.customer.name, date: i.date, dueDate: i.dueDate, open: due / 100, named, proposed: proposed / 100 };
+  });
+  return { transaction: tx, items, left: left / 100 };
+}
+
+/**
+ * «Buchen» of the Ausziffern dialog: one incoming payment over one or more invoices, each part its
+ * own allocation (the same transaction, its part) booked as that invoice's payment (4.5: cash basis
+ * revenue split like each invoice, agreed basis bank / receivable), and each rest the person chose
+ * written off on the payment's day. The parts add up to the payment: a surplus stays unallocated in
+ * phase 1 and is refused (`surplus`), so the payment remains a question; a part beyond what an
+ * invoice has open is refused the same way. A booking a person made of the payment stays (as
+ * confirmPayment keeps it); the classifier's gives way.
+ */
+export function allocatePayment(books: Books, book: InvoiceBook, transactionRef: string, parts: readonly AllocationPart[], ctx: PaymentContext): PaymentOutcome {
+  const out: PaymentOutcome = { paid: [], questions: [], files: [] };
+  const tx = books.transactions.find((t) => t.ref === transactionRef);
+  if (!tx || tx.direction !== 'CRDT') throw new PaymentError('noPayment', 'Keine eingehende Zahlung mit dieser Referenz.');
+  if (periodLock(books).isClosed(tx.date)) throw new PaymentError('closed', `Die Zahlung vom ${tx.date} liegt in einer abgeschlossenen Periode.`);
+  if (!parts.length) throw new PaymentError('noParts', 'Keine Rechnung gewählt.');
+  const invoices = liveInvoices(book);
+  if (invoices.some((i) => i.status === 'issued' && i.payments.some((p) => p.transactionRef === tx.ref))) throw new PaymentError('allocated', 'Die Zahlung ist schon zugeordnet: erst lösen.');
+  const sum = parts.reduce((s, p) => s + Math.round(p.amount * 100), 0);
+  const pay = Math.round(tx.amount * 100);
+  if (sum > pay) throw new PaymentError('overAllocated', `Die Teile ergeben ${tx.currency} ${(sum / 100).toFixed(2)}, die Zahlung ist ${tx.currency} ${tx.amount.toFixed(2)}.`);
+  if (sum < pay) throw new InvoiceRuleError('surplus', `${tx.currency} ${((pay - sum) / 100).toFixed(2)} der Zahlung bleiben ohne Rechnung: ein Guthaben des Kunden kommt erst später; so bleibt die Zahlung eine offene Frage.`);
+  const keep = books.journalEntries.some((e) => e.transactionRef === tx.ref && e.origin !== 'classify');
+  const seen = new Set<string>();
+  const allocations: Array<{ id: string; a: PaymentAllocation }> = [];
+  for (const part of parts) {
+    const inv = invoices.find((i): i is Issued => i.id === part.invoiceId && i.status === 'issued' && i.kind === 'invoice');
+    if (!inv) throw new PaymentError('notFound', 'Keine ausgestellte Rechnung mit dieser Id.');
+    if (seen.has(inv.id)) throw new PaymentError('twice', `Rechnung ${inv.number} ist zweimal gewählt.`);
+    seen.add(inv.id);
+    if (inv.cancelled) throw new PaymentError('cancelled', `Rechnung ${inv.number} ist storniert.`);
+    if (inv.currency !== tx.currency) throw new PaymentError('currency', `Rechnung ${inv.number} ist in ${inv.currency}, die Zahlung in ${tx.currency}.`);
+    if (!(part.amount > 0)) throw new PaymentError('amount', `Der Teil für Rechnung ${inv.number} ist grösser als 0.`);
+    const open = Math.round(openAmount(current(book, inv.id), liveInvoices(book)) * 100);
+    if (Math.round(part.amount * 100) > open) throw new InvoiceRuleError('surplus', `Rechnung ${inv.number} hat ${inv.currency} ${(open / 100).toFixed(2)} offen, nicht ${part.amount.toFixed(2)}: der Überschuss bliebe unzugeordnet.`);
+    const event = books.journalEntries.find((e) => e.transactionRef === eventRef(inv, 'issue'));
+    if (keep && event && !prepaidEvent(books, tx, inv).length && books.journalEntries.some((e) => e.transactionRef === tx.ref && sideOf(e.vatCode) === 'sale')) {
+      throw new PaymentError('doubleRevenue', `Rechnung ${inv.number} ist mit Umsatz auf ${ctx.openItems.receivable} gebucht (${event.transactionRef}), die Zahlung ist mit Umsatz gebucht: zugeordnet zählte der Umsatz doppelt.`);
+    }
+    const a: PaymentAllocation = { transactionRef: tx.ref, date: tx.date, amount: Math.round(part.amount * 100) / 100, by: 'confirmed' };
+    replace(book, withPayment(current(book, inv.id), a));
+    allocations.push({ id: inv.id, a });
+    const rest = Math.round(openAmount(current(book, inv.id), liveInvoices(book)) * 100);
+    if (part.rest && rest > 0) writeOffRest(books, book, inv.id, { date: tx.date, amount: rest / 100, reason: part.rest, by: 'person', transactionRef: tx.ref }, ctx, out);
+  }
+  if (!keep) {
+    out.replaced = books.journalEntries.filter((e) => e.transactionRef === tx.ref);
+    books.journalEntries = books.journalEntries.filter((e) => e.transactionRef !== tx.ref);
+  }
+  for (const { id, a } of allocations) {
+    const inv = current(book, id);
+    if (keep) { dropEvent(books, prepaidEvent(books, tx, inv)); attachInvoice(books, tx, inv, ctx, out); }
+    else bookPayment(books, tx, inv, a, ctx, out, liveInvoices(book));
+    out.paid.push({ transactionRef: tx.ref, number: inv.number, amount: a.amount, fee: 0, booked: !keep });
+  }
+  rebookEvents(books, book, ctx, out);
+  return out;
+}

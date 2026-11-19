@@ -11,15 +11,22 @@
  * Pure strings, no Node module: the UI imports it as it is.
  */
 import { SwissQRBill } from 'swissqrbill/svg';
-import { UNITS, type Address, type CustomerFields, type Exemption, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type InvoiceLine, type Sender } from './model.js';
+import { DEFAULT_UNITS, isItem, unitWord, type Address, type DocumentKind, type CustomerFields, type Exemption, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type InvoiceLine, type Prices, type Sender, type UnitDef } from './model.js';
 import { isQrBillIban, prettyReference } from '../providers/qr-bill/reference.js';
-import { lineAmount, totals } from './rules.js';
-import { TEXTS, formatAmount, formatDate, formatQuantity, type InvoiceTexts } from './texts.js';
-import { chargesVat, invoiceRates, invoicing } from '../engines/index.js';
+import { optionsOf, pricedGross, priced, revenueVatCode, totals } from './rules.js';
+import { TEXTS, formatAmount, formatDate, formatQuantity, kindTitle, type InvoiceTexts } from './texts.js';
+import { chargesVat, invoiceActivities, invoiceRates, invoicing } from '../engines/index.js';
 
 /** Everything a sheet shows, whatever document it is: a draft, an issued invoice, a credit note, a reminder, a cancellation notice. */
 export interface SheetData {
-  kind: 'invoice' | 'credit-note';
+  /** Every kind prints on the same sheet; an Angebot, Auftrag and Lieferschein carry no payment part, a Lieferschein no prices. */
+  kind: DocumentKind;
+  /** An Auftrag printed as Auftragsbestätigung (absent) or Proformarechnung. */
+  printAs?: 'confirmation' | 'proforma';
+  /** An Angebot's last day. */
+  validUntil?: string;
+  /** The customer's own order reference. */
+  ordered?: string;
   language: InvoiceLanguage;
   /** Absent on a draft: the title says "Entwurf" and no QR-bill is printed. */
   number?: string;
@@ -33,6 +40,10 @@ export interface SheetData {
   customer: CustomerFields;
   sender: Omit<Sender, 'payTo'> & { payTo?: Sender['payTo'] };
   lines: InvoiceLine[];
+  /** Net or gross prices; absent: net. */
+  prices?: Prices;
+  /** The firm's units with their words; absent: the app's defaults. A unit no list names prints as its id. */
+  units?: readonly UnitDef[];
   exemption?: Exemption;
   /** A draft's greeting line above the intro (Firma › Rechnungslayout); an issued invoice has it in its intro. */
   salutation?: string;
@@ -47,6 +58,8 @@ export interface SheetData {
   /** A credit note: the invoice it credits and what happens with the money. */
   credit?: { number: string; date: string; gross: number; paid: number; paidDate?: string; settlement?: 'refund' | 'offset' };
   cancelled?: { date: string; reason: string };
+  /** The payment terms printed below the totals, with their Skonto: only when they offer one (net terms: the closing says the days). */
+  terms?: { text: string; skonto?: { percent: number; until: string; amount: number; pays: number } };
   /** On screen only, never in a PDF: what the UI adds to the sheet. */
   screen?: ScreenSheet;
 }
@@ -66,11 +79,25 @@ export interface ScreenSheet {
     scope: 'draft' | 'texts';
     customers: Array<{ id: string; name: string }>;
     customerId?: string;
-    words: { newCustomer: string; chooseCustomer: string; addLine: string; removeLine: string; intro: string; closing: string; desc: string; noExemption: string; supplied: string };
+    words: {
+      newCustomer: string; chooseCustomer: string; addLine: string; removeLine: string; intro: string; closing: string; desc: string; noExemption: string; supplied: string;
+      /** `activity`: «Tätigkeit», for a net rate the firm gave no label (the picker of a firm with two net rates). */
+      activity?: string;
+      /** The other kinds of position (spec 4.4.3), a page break's marker on screen, and the handle that moves a position (drag, or Alt+↑/↓). */
+      addText: string; addSubtotal: string; addDiscount: string; addPageBreak: string; pageBreak: string; move: string;
+      title: string; plain: string; percent: string; amount: string; lineDiscount: string;
+      /** An Angebot's or Auftrag's position: an ordinary one, or an option (spec 4.4.1). */
+      position?: string; option?: string;
+      /** «＋ Artikel» (the picker), «＋ Gruppe», a group's title placeholder, the revenue account of a position on screen and an Artikel's code. */
+      addArticle?: string; addGroup?: string; group?: string; account?: string; code?: string;
+    };
+    /** The revenue account a position without its own books on (the contact's, else the settings'): the account field's placeholder. */
+    revenueAccount?: string;
   };
 }
 
-export interface Block { html: string; head?: boolean; row?: boolean }
+/** `pagebreak`: the next block starts a new sheet (a Seitenumbruch position); a row after it repeats the table header. */
+export interface Block { html: string; head?: boolean; row?: boolean; pagebreak?: boolean }
 
 /** In millimetres, as the mockup lays the sheet out. */
 export const PAGE = { firstTop: 88, nextTop: 30, bottom: 297 - 14, footer: 11, qrBill: 105, cutLine: 5 } as const;
@@ -112,7 +139,7 @@ const withAddress = (name: string, a: Address, sep: string) => [name, oneLine(a)
 /** Where the money goes, and whether the QR-bill can carry it (a Swiss or Liechtenstein IBAN). */
 function payment(d: SheetData): { iban: string; qr: boolean } | undefined {
   const payTo = d.sender.payTo;
-  if (!payTo || d.kind === 'credit-note' || d.cancelled) return undefined;
+  if (!payTo || d.kind !== 'invoice' || d.cancelled) return undefined;
   const iban = payTo.qrIban ?? payTo.iban;
   return { iban, qr: !!d.number && !!d.reference && d.layout.show.qrBill && isQrBillIban(iban) };
 }
@@ -126,8 +153,13 @@ export function hasQrBill(d: SheetData): boolean {
 const prettyIban = (iban: string) => iban.replace(/\s+/g, '').replace(/(.{4})(?!$)/g, '$1 ');
 
 export function sheetTitle(d: SheetData, L: InvoiceTexts = TEXTS[d.language]): string {
-  const base = d.kind === 'credit-note' ? L.credit : L.invoice;
+  const base = kindTitle(L, d.kind, d.printAs);
   return d.reminderLevel ? `${L.reminder(d.reminderLevel)} · ${base}` : base;
+}
+
+/** The code a position's revenue books with, shown on a draft's screen; none where the jurisdiction has none for it (a firm not registered). */
+function codeOf(rate: number, exemption: Exemption | undefined, activity: 1 | 2 | undefined): string | undefined {
+  try { return revenueVatCode(rate, exemption, activity ?? 1); } catch { return undefined; }
 }
 
 /** The blocks of the sheet's flowing part, in reading order; each table row is a block so a long table breaks between rows. */
@@ -137,11 +169,18 @@ export function sheetBlocks(d: SheetData): Block[] {
   const ed = d.screen?.edit;
   const draft = ed?.scope === 'draft';
   const n = (x: number) => formatAmount(x, d.language);
-  const t = totals(d.lines);
+  const t = totals(d);
+  const amounts = priced(d).amounts;
+  // A Lieferschein prints what was delivered, never a price (spec 4.4.1).
+  const priceless = d.kind === 'delivery-note';
+  // An option is marked on an Angebot or Auftrag; its draft offers the switch.
+  const options = d.kind === 'quote' || d.kind === 'sales-order';
+  const items = d.lines.filter(isItem);
   // A document without VAT (a firm not registered) prints no rate column, no VAT line and no net total: what an invoice shows, the firm owes. An issued document says so by its lines, a draft by the firm's setup.
-  const withVat = draft ? chargesVat() : d.lines.some((l) => l.vatRate > 0) || !!d.exemption;
-  const vatColumn = (show.vatColumn || draft) && withVat;
-  const cols: Array<[string, string]> = [['d', L.desc], ...(show.quantity ? [['q', L.qty], ['p', L.price]] as Array<[string, string]> : []), ...(vatColumn ? [['v', L.vat]] as Array<[string, string]> : []), ['a', `${L.amount} ${d.currency}`]];
+  const withVat = draft ? chargesVat() : items.some((l) => l.vatRate > 0) || !!d.exemption;
+  const vatColumn = (show.vatColumn || draft) && withVat && !priceless;
+  const cols: Array<[string, string]> = priceless ? [['d', L.desc], ['q', L.qty]]
+    : [['d', L.desc], ...(show.quantity ? [['q', L.qty], ['p', L.price]] as Array<[string, string]> : []), ...(vatColumn ? [['v', L.vat]] as Array<[string, string]> : []), ['a', `${L.amount} ${d.currency}`]];
   const colgroup = `<colgroup>${cols.map(([k]) => `<col class="c${k}">`).join('')}</colgroup>`;
   const B: Block[] = [];
   const paras = (text: string, cls: string) => text.split(/\n\s*\n/).filter((x) => x.trim()).map((x) => ({ html: `<p class="${cls}">${esc(x.trim())}</p>` }));
@@ -154,27 +193,93 @@ export function sheetBlocks(d: SheetData): Block[] {
     draft ? `<span>${L.supplied} ${editable('supplied', d.supplied ? esc(suppliedText(d.supplied, dmy)) : '', ed.words.supplied)}</span>`
       : d.supplied ? `<span>${L.supplied} ${esc(suppliedText(d.supplied, (iso) => formatDate(iso, d.language)))}</span>` : '',
     d.kind === 'credit-note' && d.credit ? `<span>${L.forInvoice} ${esc(d.credit.number)}</span>` : d.dueDate ? `<span>${L.due} ${date('dueDate', d.dueDate)}</span>` : '',
+    d.kind === 'quote' && d.validUntil ? `<span>${L.validUntil} ${date('validUntil', d.validUntil)}</span>` : '',
+    d.ordered ? `<span>${L.yourOrder} ${esc(d.ordered)}</span>` : '',
     show.customerVatId && d.customer.vatId && d.customer.address.country !== 'CH' ? `<span>${L.yourVat} ${esc(d.customer.vatId)}</span>` : '',
   ].join('');
   B.push({ html: `<h3>${esc(sheetTitle(d, L))} ${d.number ? esc(d.number) : `<span class="draftno">${L.draft}</span>`}</h3><div class="meta">${meta}</div>` });
   if (show.intro && d.salutation) B.push({ html: `<p class="intro salutation">${esc(d.salutation)}</p>` });
   if (show.intro) B.push(...texts('intro', d.intro));
   B.push({ html: `<table class="tb">${colgroup}<thead><tr>${cols.map(([k, x]) => `<th class="${k === 'd' ? '' : 'r'}">${esc(x)}</th>`).join('')}</tr></thead></table>`, head: true });
+  // Which of its two net rates a line's revenue is booked at: the screen's choice, never on paper (#504).
+  const activities = draft ? invoiceActivities().map((r, i): [string, string] => [String(i + 1), `${r.label ?? `${ed.words.activity ?? ''} ${i + 1}`.trim()} ${r.rate} %`]) : [];
+  const units = d.units ?? DEFAULT_UNITS;
+  const unit = (id: string | undefined) => (id ? unitWord(units, id, d.language) : '');
+  const row = (k: number, cls: string, cells: string) => `<table class="tb">${colgroup}<tbody><tr class="${cls}"${draft ? ` data-row="${k}"` : ''}>${cells}</tr></tbody></table>`;
+  // On screen, each position of a draft has a handle to move it (drag, or Alt+↑/↓) and a button to remove it.
+  const tools = (k: number) => (draft
+    ? `<button type="button" class="edmv scr" data-ia="move" data-k="${k}" draggable="true" title="${esc(ed.words.move)}" aria-label="${esc(ed.words.move)}">⠿</button>${d.lines.length > 1 || !isItem(d.lines[k]) ? `<button type="button" class="edx scr" data-ia="rmline" data-k="${k}" title="${esc(ed.words.removeLine)}" aria-label="${esc(ed.words.removeLine)}">×</button>` : ''}`
+    : '');
+  const span = cols.length;
+  const pct = (x: number) => `${formatQuantity(x)} %`;
   d.lines.forEach((l, k) => {
-    const unit = l.unit ? ` ${L.units[l.unit]}` : '';
-    const incl = !!l.vatIncluded && l.vatRate > 0;
+    if (l.kind === 'pagebreak') {
+      B.push({ pagebreak: true, html: draft ? row(k, 'pbreak scr', `<td colspan="${span}"><span>${esc(ed.words.pageBreak)}</span>${tools(k)}</td>`) : '' });
+      return;
+    }
+    if (l.kind === 'text') {
+      const style = draft ? ` ${pick(`l:${k}:style`, [['plain', ed.words.plain], ['title', ed.words.title]], l.style ?? 'plain')}` : '';
+      const text = draft ? editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked') : esc(l.text);
+      B.push({ row: true, html: row(k, `ltext${l.style === 'title' ? ' title' : ''}`, `<td colspan="${span}">${text}${style ? `<span class="edstyle scr">${style}</span>` : ''}${tools(k)}</td>`) });
+      return;
+    }
+    if (l.kind === 'group') {
+      // A Gruppe: its title and the sum of its sub-positions (a Lieferschein: the title alone).
+      const title = draft ? editable(`l:${k}:text`, esc(l.text), ed.words.group ?? ed.words.desc) : esc(l.text);
+      B.push({ row: true, html: row(k, 'lgroup', priceless ? `<td colspan="${span}">${title}${tools(k)}</td>` : `<td colspan="${span - 1}">${title}</td><td class="r">${n(amounts[k] ?? 0)}${tools(k)}</td>`) });
+      return;
+    }
+    if (l.kind === 'subtotal' && priceless) return;
+    if (l.kind === 'subtotal') {
+      const label = draft ? editable(`l:${k}:text`, esc(l.text), ed.words.desc) : esc(l.text);
+      B.push({ row: true, html: row(k, 'lsub', `<td colspan="${span - 1}">${label}</td><td class="r">${n(amounts[k] ?? 0)}${tools(k)}</td>`) });
+      return;
+    }
+    if (l.kind === 'discount' && priceless) return;
+    if (l.kind === 'discount') {
+      const label = draft ? editable(`l:${k}:text`, esc(l.text), ed.words.desc) : esc(l.text);
+      const value = draft
+        ? `${editable(`l:${k}:discount`, l.percent !== undefined ? esc(formatQuantity(l.percent)) : l.amount !== undefined ? n(l.amount) : '', '0')} ${pick(`l:${k}:dmode`, [['percent', '%'], ['amount', d.currency]], l.amount !== undefined ? 'amount' : 'percent')}`
+        : l.percent !== undefined ? pct(l.percent) : '';
+      B.push({ row: true, html: row(k, 'ldisc', `<td colspan="${span - 1}">${label}${value ? ` <span class="dval">${value}</span>` : ''}</td><td class="r">${n(amounts[k] ?? 0)}${tools(k)}</td>`) });
+      return;
+    }
+    const incl = l.vatRate > 0 && pricedGross(l, d.prices);
+    // An Artikel position prints its code before its text where the layout shows codes; a draft's is editable.
+    const code = draft ? (l.kind === 'article' ? `<span class="lcode">${editable(`l:${k}:code`, esc(l.code ?? ''), ed.words.code ?? '')}</span> ` : '')
+      : show.articleCode && l.code ? `<span class="lcode">${esc(l.code)}</span> ` : '';
+    const sub = l.inGroup ? ' lingrp' : '';
+    const off = l.discount ? `<span class="loff">${esc(L.lineDiscount(pct(l.discount)))}</span>` : '';
+    const opt = l.optional && options ? `<span class="lopt">${esc(L.option)}</span> ` : '';
+    const optPick = draft && options ? `<span class="edstyle scr">${pick(`l:${k}:optional`, [['no', ed.words.position ?? ''], ['yes', ed.words.option ?? L.option]], l.optional ? 'yes' : 'no')}</span>` : '';
+    if (priceless) {
+      const qty = draft ? `${editable(`l:${k}:quantity`, esc(formatQuantity(l.quantity)))} ${esc(unit(l.unit))}` : esc(`${formatQuantity(l.quantity)}${l.unit ? ` ${unit(l.unit)}` : ''}`);
+      B.push({ row: true, html: row(k, `litem${sub}`, `<td>${code}${draft ? editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked') : esc(l.text)}</td><td class="r">${qty}${tools(k)}</td>`) });
+      return;
+    }
     const cells = draft
       ? {
         text: editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked'),
-        qty: `${editable(`l:${k}:quantity`, esc(formatQuantity(l.quantity)))} ${pick(`l:${k}:unit`, [['', '–'], ...UNITS.map((u): [string, string] => [u, L.units[u]])], l.unit ?? '')}`,
-        price: editable(`l:${k}:price`, n(l.price)),
-        rate: pick(`l:${k}:vatRate`, invoiceRates().flatMap((r): Array<[string, string]> => [[String(r), `${r} %`], ...(r > 0 ? [[`incl:${r}`, `${r} % ${L.included}`] as [string, string]] : [])]), `${l.vatIncluded && l.vatRate > 0 ? 'incl:' : ''}${l.vatRate}`),
-        remove: d.lines.length > 1 ? `<button type="button" class="edx scr" data-ia="rmline" data-k="${k}" title="${esc(ed.words.removeLine)}" aria-label="${esc(ed.words.removeLine)}">×</button>` : '',
+        qty: `${editable(`l:${k}:quantity`, esc(formatQuantity(l.quantity)))} ${pick(`l:${k}:unit`, [['', '–'], ...[...units.map((u): [string, string] => [u.id, u[d.language]]), ...(l.unit && !units.some((u) => u.id === l.unit) ? [[l.unit, l.unit] as [string, string]] : [])]], l.unit ?? '')}`,
+        price: `${editable(`l:${k}:price`, n(l.price))}<span class="loff ed-off${l.discount ? ' on' : ''}">${esc(ed.words.lineDiscount)} ${editable(`l:${k}:discount`, l.discount ? esc(formatQuantity(l.discount)) : '', '0')} %</span>`,
+        rate: pick(`l:${k}:vatRate`, invoiceRates().map((r): [string, string] => [String(r), `${r} %${r > 0 && incl ? ` ${L.included}` : ''}`]), String(l.vatRate))
+          + (activities.length && l.vatRate > 0 ? `<span class="edact scr">${pick(`l:${k}:activity`, activities, String(l.activity ?? 1))}</span>` : ''),
       }
-      : { text: `${esc(l.text)}${incl && !vatColumn ? ` (${l.vatRate} % ${L.included})` : ''}`, qty: esc(`${formatQuantity(l.quantity)}${unit}`), price: n(l.price), rate: `${l.vatRate} %${incl ? ` ${L.included}` : ''}`, remove: '' };
-    B.push({ row: true, html: `<table class="tb">${colgroup}<tbody><tr><td>${cells.text}</td>${show.quantity ? `<td class="r">${cells.qty}</td><td class="r">${cells.price}</td>` : ''}${vatColumn ? `<td class="r">${cells.rate}</td>` : ''}<td class="r">${n(lineAmount(l))}${cells.remove}</td></tr></tbody></table>` });
+      : { text: `${opt}${esc(l.text)}${incl && !vatColumn ? ` (${l.vatRate} % ${L.included})` : ''}${off && !show.quantity ? off : ''}`, qty: esc(`${formatQuantity(l.quantity)}${l.unit ? ` ${unit(l.unit)}` : ''}`), price: `${n(l.price)}${off}`, rate: `${l.vatRate} %${incl ? ` ${L.included}` : ''}` };
+    // On screen, the revenue account it books on (editable, empty: the contact's or the settings') and the code that follows from its rate (spec 4.4.3).
+    const vatCode = draft ? codeOf(l.vatRate, d.exemption, l.activity) : undefined;
+    const account = draft ? `<span class="edacc scr">${esc(ed.words.account ?? '')} ${editable(`l:${k}:account`, esc(l.account ?? ''), ed.revenueAccount ?? '')}${vatCode ? ` · <span class="mono">${esc(vatCode)}</span>` : ''}</span>` : '';
+    if (draft) cells.text = `${opt}${code}${cells.text}${optPick}${account}`;
+    else cells.text = `${code}${cells.text}`;
+    B.push({ row: true, html: row(k, `litem${sub}${l.optional && options ? ' lopt-row' : ''}`, `<td>${cells.text}</td>${show.quantity ? `<td class="r">${cells.qty}</td><td class="r">${cells.price}</td>` : ''}${vatColumn ? `<td class="r">${cells.rate}</td>` : ''}<td class="r">${n(amounts[k] ?? 0)}${tools(k)}</td>`) });
   });
-  if (draft) B.push({ html: `<div class="edadd scr"><button type="button" data-ia="addline">＋ ${esc(ed.words.addLine)}</button></div>` });
+  if (draft) {
+    const article: Array<[string, string]> = ed.words.addArticle ? [['addarticle', ed.words.addArticle]] : [];
+    const group: Array<[string, string]> = ed.words.addGroup ? [['addgroup', ed.words.addGroup]] : [];
+    const add: Array<[string, string]> = priceless ? [['addline', ed.words.addLine], ...article, ['addtext', ed.words.addText], ...group, ['addpagebreak', ed.words.addPageBreak]]
+      : [['addline', ed.words.addLine], ...article, ['addtext', ed.words.addText], ...group, ['addsubtotal', ed.words.addSubtotal], ['adddiscount', ed.words.addDiscount], ['addpagebreak', ed.words.addPageBreak]];
+    B.push({ html: `<div class="edadd scr">${add.map(([a, w]) => `<button type="button" data-ia="${a}">＋ ${esc(w)}</button>`).join('')}</div>` });
+  }
   const rates = t.byRate.filter((r) => r.rate > 0).map((r) => `<div><span>${esc(L.vatOn(String(r.rate), n(r.net)))}</span><span>${n(r.vat)}</span></div>`).join('');
   const due = d.due && (d.due.paidSoFar || d.due.fee) ? [
     d.due.paidSoFar ? `<div><span>${L.paidSoFar}</span><span>${n(-d.due.paidSoFar)}</span></div>` : '',
@@ -182,15 +287,22 @@ export function sheetBlocks(d: SheetData): Block[] {
     `<div class="tot"><span>${L.openNow} ${d.currency}</span><span>${n(d.due.open)}</span></div>`,
   ].join('') : '';
   const net = withVat ? `<div><span>${L.net}</span><span>${n(t.net)}</span></div>` : '';
-  B.push({ html: `<div class="sum">${net}${rates}<div class="tot"><span>${L.total} ${d.currency}</span><span>${n(t.gross)}</span></div>${due}</div>` });
+  const opts = options ? optionsOf(d) : { n: 0, amount: 0 };
+  const left = opts.n ? `<div class="optleft"><span>${esc(L.optionsLeftOut(opts.n, `${d.currency} ${n(opts.amount)}`))}</span></div>` : '';
+  if (!priceless) B.push({ html: `<div class="sum">${net}${rates}<div class="tot"><span>${L.total} ${d.currency}</span><span>${n(t.gross)}</span></div>${left}${due}</div>` });
   if (d.kind === 'credit-note' && d.credit) {
     const c = d.credit, credit = -t.gross, open = Math.round((c.gross - c.paid) * 100) / 100;
     const back = Math.max(0, Math.round((credit - open) * 100) / 100), A = (x: number) => `${d.currency} ${n(x)}`;
     const settled = back > 0 ? (c.settlement === 'offset' ? L.offset(A(back)) : L.refund(A(back))) : L.stillOpen(c.number, A(Math.round((open - credit) * 100) / 100));
     B.push({ html: `<div class="settle"><div><span>${esc(L.ofInvoice(c.number, formatDate(c.date, d.language)))}</span><span>${n(c.gross)}</span></div>${c.paid ? `<div><span>${L.paidOn(formatDate(c.paidDate ?? c.date, d.language))}</span><span>${n(-c.paid)}</span></div>` : ''}<div><span>${L.creditLine}</span><span>${n(-credit)}</span></div></div><p class="settled">${esc(settled)}</p>` });
   }
+  if (d.terms?.skonto && !d.due) {
+    const sk = d.terms.skonto;
+    B.push({ html: `<p class="terms">${esc(d.terms.text)}<br>${esc(L.skontoLine(String(sk.percent), formatDate(sk.until, d.language), `${d.currency} ${n(sk.amount)}`, `${d.currency} ${n(sk.pays)}`))}</p>` });
+  }
   // The reason for 0 % is a registered firm's: one that charges no VAT has none to give.
-  if (draft && withVat && d.lines.some((l) => l.vatRate === 0)) {
+  if (priceless) { /* a Lieferschein names no VAT and no reason for 0 % */ }
+  else if (draft && withVat && items.some((l) => l.vatRate === 0)) {
     const options: Array<[string, string]> = [...(d.exemption ? [] : [['', ed.words.noExemption] as [string, string]]), ['abroad', L.exemption.abroad], ['export', L.exemption.export]];
     B.push({ html: `<p class="abroad">${pick('exemption', options, d.exemption ?? '')}</p>` });
   } else if (d.exemption) B.push({ html: `<p class="abroad">${esc(L.exemption[d.exemption])}</p>` });
@@ -200,24 +312,46 @@ export function sheetBlocks(d: SheetData): Block[] {
   return B;
 }
 
-/** Block heights in mm → the blocks of each sheet (indices; -1 is the repeated table header), and whether the QR-bill needs a sheet of its own. */
-export function paginate(blocks: ReadonlyArray<Pick<Block, 'head' | 'row'>>, mm: readonly number[], opts: { footer: boolean; qrBill: boolean }): { pages: number[][]; qrOwnPage: boolean } {
+/**
+ * Block heights in mm → the blocks of each sheet (indices; -1 is the repeated table header), and
+ * whether the QR-bill needs a sheet of its own. A page-break block ends its sheet; the next table
+ * row starts the next under the repeated header.
+ */
+export function paginate(blocks: ReadonlyArray<Pick<Block, 'head' | 'row' | 'pagebreak'>>, mm: readonly number[], opts: { footer: boolean; qrBill: boolean }): { pages: number[][]; qrOwnPage: boolean } {
   const foot = opts.footer ? PAGE.footer : 0;
   const limit = PAGE.bottom - foot;
   const headIndex = blocks.findIndex((b) => b.head);
   const headMm = headIndex >= 0 ? mm[headIndex] : 0;
   const pages: number[][] = [[]];
   let y: number = PAGE.firstTop;
+  let broken = false;
+  // A page break ends its sheet only after a table row on it: one as the first position, or a second in a row, leaves no blank sheet and no lonely header.
+  let rows = false;
   blocks.forEach((b, i) => {
     const keep = b.head ? mm[i + 1] ?? 0 : 0;
+    if (b.pagebreak) {
+      pages[pages.length - 1].push(i);
+      if (!rows) return;
+      pages.push([]);
+      y = PAGE.nextTop;
+      broken = true;
+      rows = false;
+      return;
+    }
     if (y + mm[i] + keep > limit && pages[pages.length - 1].length) {
       pages.push([]);
       y = PAGE.nextTop;
-      if (b.row) { pages[pages.length - 1].push(-1); y += headMm; }
+      broken = true;
+      rows = false;
     }
+    if (broken && b.row && headIndex >= 0 && i > headIndex) { pages[pages.length - 1].push(-1); y += headMm; }
+    broken = false;
+    if (b.row) rows = true;
     pages[pages.length - 1].push(i);
     y += mm[i];
   });
+  // A page break as the last position leaves no empty sheet behind.
+  if (pages.length > 1 && pages[pages.length - 1].length === 0) pages.pop();
   return { pages, qrOwnPage: opts.qrBill && y > 297 - PAGE.qrBill - PAGE.cutLine };
 }
 
@@ -232,7 +366,7 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
   const n = pages.length + (qrOwnPage ? 1 : 0);
   const title = `${esc(sheetTitle(d, L))} ${d.number ? esc(d.number) : `<span class="draftno">${L.draft}</span>`}`;
   const s = d.sender;
-  const withVat = d.screen?.edit?.scope === 'draft' || !d.number ? chargesVat() : d.lines.some((l) => l.vatRate > 0) || !!d.exemption;
+  const withVat = d.screen?.edit?.scope === 'draft' || !d.number ? chargesVat() : d.lines.some((l) => isItem(l) && l.vatRate > 0) || !!d.exemption;
   const uid = !s.uid ? '' : withVat ? `${esc(s.uid)} ${L.vatSuffix}` : esc(s.uid);
   const uidLabel = withVat ? L.vatNo : L.uidNo;
   const pageHead = (k: number) => `<div class="phead"><span>${esc(s.name)} · ${title}</span><span>${L.page(k, n)}</span></div>`;
@@ -264,20 +398,29 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
   return h;
 }
 
+/**
+ * What the QR-bill's payment part carries. Creditor and debtor go as structured addresses (street
+ * and building number apart, postcode and town apart): swissqrbill writes them with address type S,
+ * the only type the SIX guidelines allow since v2.3 (chapter 4.2.2); a second address line has no
+ * field there and stays off the QR code.
+ */
+export function qrBillData(d: SheetData, iban: string) {
+  const s = d.sender, c = d.customer;
+  const party = (name: string, a: Address) => ({ name, address: a.street ?? '', ...(a.number ? { buildingNumber: a.number } : {}), zip: a.postcode, city: a.town, country: a.country });
+  return {
+    currency: d.currency,
+    amount: d.due ? d.due.open : totals(d).gross,
+    reference: d.reference,
+    message: `${TEXTS[d.language].invoice} ${d.number}`,
+    creditor: { ...party(s.name, s.address), account: iban.replace(/\s+/g, '') },
+    ...(c.address.postcode && c.address.town ? { debtor: party(c.name, c.address) } : {}),
+  };
+}
+
 /** The QR-bill: swissqrbill's SVG payment part and receipt; the horizontal cut line with its scissors is the sheet's. */
 function qrBillHtml(d: SheetData, iban: string): string {
   const L = TEXTS[d.language];
-  const s = d.sender, c = d.customer;
-  const amount = d.due ? d.due.open : totals(d.lines).gross;
-  const party = (name: string, a: Address) => ({ name, address: a.street ?? '', ...(a.number ? { buildingNumber: a.number } : {}), zip: a.postcode, city: a.town, country: a.country });
-  const svg = new SwissQRBill({
-    currency: d.currency,
-    amount,
-    reference: d.reference,
-    message: `${L.invoice} ${d.number}`,
-    creditor: { ...party(s.name, s.address), account: iban.replace(/\s+/g, '') },
-    ...(c.address.postcode && c.address.town ? { debtor: party(c.name, c.address) } : {}),
-  }, { language: d.language.toUpperCase() as 'DE' | 'FR' | 'IT' | 'EN', fontName: 'Liberation Sans', scissors: true }).toString();
+  const svg = new SwissQRBill(qrBillData(d, iban), { language: d.language.toUpperCase() as 'DE' | 'FR' | 'IT' | 'EN', fontName: 'Liberation Sans', scissors: true }).toString();
   return `<div class="qrb"><div class="cut">${L.cut}</div><span class="hsc">✂</span>${svg}</div>`;
 }
 
@@ -341,12 +484,23 @@ html, body { margin: 0 }
 .a4 th { text-align: left; font-weight: 600; font-size: 7.5pt; color: #5b6270; border-bottom: .35mm solid var(--iva); padding: 1.2mm 1mm }
 .a4 td { padding: 1.8mm 1mm; border-bottom: .2mm solid #e3e6ec; vertical-align: top; overflow-wrap: anywhere }
 .a4 .r { text-align: right; white-space: nowrap }
+.a4 tr.ltext td { border-bottom: 0; padding-bottom: .6mm; white-space: pre-line }
+.a4 tr.ltext.title td { font-weight: 700; font-size: 10pt; padding-top: 3.5mm }
+.a4 tr.lsub td { font-weight: 600; border-top: .3mm solid #9aa1ad }
+.a4 tr.ldisc .dval { color: #5b6270 }
+.a4 tr.lgroup td { font-weight: 700; border-bottom: .3mm solid #9aa1ad; padding-top: 3mm }
+.a4 tr.lingrp td:first-child { padding-left: 4mm }
+.a4 .lcode { font-variant-numeric: tabular-nums; color: #5b6270; margin-right: .6mm }
+.a4 .loff { display: block; font-size: 7.5pt; color: #5b6270 }
+.a4 .lopt { font-size: 7pt; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #5b6270; border: .2mm solid #9aa1ad; border-radius: .8mm; padding: 0 .8mm; margin-right: 1mm }
+.a4 tr.lopt-row td { color: #5b6270 }
+.a4 .sum .optleft { font-size: 7.5pt; color: #5b6270; padding-top: 1.4mm }
 .a4 .sum, .a4 .settle { margin: 3mm 0 0 auto; width: 78mm }
 .a4 .sum > div, .a4 .settle > div { display: flex; justify-content: space-between; gap: 4mm; padding: .8mm 1mm }
 .a4 .sum .tot { border-top: .4mm solid var(--iva); margin-top: 1mm; padding-top: 1.6mm; font-weight: 700; font-size: 10.5pt }
 .a4 .settle { font-size: 8pt; color: #5b6270; margin-top: 5mm }
 .a4 .settled { font-weight: 600; margin: 4mm 0 0 }
-.a4 .abroad, .a4 .payinfo { color: #5b6270; font-size: 8pt; margin: 5mm 0 0 }
+.a4 .abroad, .a4 .payinfo, .a4 .terms { color: #5b6270; font-size: 8pt; margin: 5mm 0 0 }
 .a4 .cxnote { color: #9f1239; font-weight: 600; margin: 0 0 4mm }
 .a4 .cxstamp { position: absolute; top: 120mm; left: 50%; transform: translateX(-50%) rotate(-18deg); font-size: 44pt; font-weight: 700; letter-spacing: .08em; color: rgba(159, 18, 57, .18); border: 1.2mm solid rgba(159, 18, 57, .18); padding: 2mm 8mm; pointer-events: none }
 .a4 .phead { position: absolute; top: 15mm; left: 20mm; right: 20mm; display: flex; justify-content: space-between; font-size: 7.5pt; color: #5b6270; border-bottom: .2mm solid #e3e6ec; padding-bottom: 1.5mm }

@@ -333,7 +333,7 @@ for (const f of counterpartyFiles) {
 
 {
   const partnerRoles = new Map<string, Role>(counterparties.map((c) => [c.id, c.role]));
-  for (const c of loadInvoices(ws).customers) if (!c.deleted && !partnerRoles.has(c.id)) partnerRoles.set(c.id, 'customer');
+  for (const c of loadInvoices(ws).contacts) if (!c.deleted && !partnerRoles.has(c.business ?? c.id)) partnerRoles.set(c.business ?? c.id, 'customer');
   const known = (step: string) => { const [p, id] = step.split('#'); return stepRefs.has(`${p.endsWith('.guide.yaml') ? p : `${p}.guide.yaml`}#${id ?? ''}`); };
   for (const problem of notesProblems(ws, partnerRoles, known)) errors.push(problem);
 }

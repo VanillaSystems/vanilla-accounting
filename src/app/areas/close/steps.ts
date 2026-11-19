@@ -11,6 +11,7 @@ import { filingKeyOf } from '../../../accounting/periods.js';
 import { chargesVat, filing } from '../../../engines/index.js';
 import { correctionName } from '../../lib/vat-words.js';
 import { turnoverNeedsLook } from '../../../accounting/turnover.js';
+import { payrollStates } from './payroll-state.js';
 
 export { STEPS, DEFAULT_STEP, groupsFor, stepGone, stepOf, stepsFor, type Step } from './model.js';
 import { STEPS, type Step } from './model.js';
@@ -143,7 +144,15 @@ export function checkRows(d: YearCloseView, today: string): CheckRow[] {
   const balance: CheckRow = l.balanced
     ? { id: 'balance', label: t('close.check.balance'), state: 'ok', detail: t('yearClose.balanced') }
     : { id: 'balance', label: t('close.check.balance'), state: 'warn', detail: [...(l.residual === 0 ? [] : [t('yearClose.unbalanced', { amount: fmt(l.residual) })]), ...l.causes.map(causeText)].join(' · '), go: { area: 'balance' } };
-  return [...engine, fx, ...vat, ...turnover, entries, invoices, balance];
+  // The payroll's checks (docs/specs/payroll.md §6.7): facts shown in their section below, summed up here; never a blocker.
+  const ps = d.payroll ? payrollStates(d.payroll) : [];
+  const pw = ps.filter((x) => x === 'warn').length;
+  const po = ps.filter((x) => x === 'open').length;
+  const payroll: CheckRow[] = d.payroll ? [{
+    id: 'payroll', label: t('close.check.payroll'),
+    ...(pw ? { state: 'warn', detail: t('close.payroll.summaryWarn', { n: pw }) } : po ? { state: 'open', detail: t('close.payroll.summaryOpen', { n: po }) } : { state: 'ok', detail: t('close.payroll.summaryOk') }),
+  }] : [];
+  return [...engine, fx, ...vat, ...turnover, ...payroll, entries, invoices, balance];
 }
 
 /** What still keeps "Jahr abschliessen" shut, besides the Kursdifferenz the close books itself. */

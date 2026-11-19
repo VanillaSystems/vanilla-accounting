@@ -46,6 +46,15 @@ export function setOutlayWaits(refs: readonly string[] | undefined): void {
 
 export const outlayWaitsNow = (): ReadonlySet<string> => outlayWaits;
 
+let insurerPayments: ReadonlySet<string> = new Set();
+
+/** The open payments to the firm's payroll insurers while payroll runs here (GET /api/payroll/insurer-payments): the payslips prove them, so no «kein Beleg». */
+export function setInsurerPayments(refs: readonly string[] | undefined): void {
+  insurerPayments = new Set(refs ?? []);
+}
+
+export const insurerPaymentsNow = (): ReadonlySet<string> => insurerPayments;
+
 let refusals: ReadonlyMap<string, PaymentRefusal> = new Map();
 
 /** The open payments a run left unbooked, with why (GET /api/automation/refusals, #470), loaded with the books: the run log is the server's. */

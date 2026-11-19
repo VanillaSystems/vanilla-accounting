@@ -1,0 +1,700 @@
+{
+  "schema": 4,
+  "contacts": [
+    {
+      "id": "cu_5GQVervgd2rF",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "type": "firm",
+      "name": "Beispiel Treuhand AG",
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Seestrasse",
+          "number": "40",
+          "postcode": "8002",
+          "town": "Zürich",
+          "country": "CH",
+          "billing": true
+        }
+      ],
+      "language": "de",
+      "emails": [
+        "kreditoren@beispiel-treuhand.example"
+      ],
+      "vatId": "CHE-318.642.975 MWST",
+      "paymentDays": 30,
+      "number": "K-00001"
+    },
+    {
+      "id": "cu_2KIQYfUMHYIT",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "type": "firm",
+      "name": "Muster Maschinenbau GmbH",
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Beispielstrasse",
+          "number": "3",
+          "postcode": "80331",
+          "town": "München",
+          "country": "DE",
+          "attn": "Einkauf",
+          "billing": true
+        }
+      ],
+      "language": "de",
+      "emails": [
+        "einkauf@muster-maschinenbau.example"
+      ],
+      "vatId": "DE999999998",
+      "paymentDays": 30,
+      "number": "K-00002"
+    }
+  ],
+  "articles": [],
+  "invoices": [
+    {
+      "id": "in_MVknjIERgg_T",
+      "createdAt": "2026-07-02T08:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-07-02",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Beratungsmandat IT-Sicherheit, Juli 2026",
+          "quantity": 40,
+          "unit": "h",
+          "price": 150,
+          "vatRate": 8.1
+        }
+      ],
+      "prices": "net",
+      "termsId": "net30",
+      "customerId": "cu_5GQVervgd2rF",
+      "subject": "Beratungsmandat IT-Sicherheit, Juli 2026",
+      "supplied": {
+        "from": "2026-07-01",
+        "to": "2026-07-31"
+      },
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Lukas Beispiel",
+      "status": "issued",
+      "number": "2026-001",
+      "issuedAt": "2026-07-02T08:30:00.000Z",
+      "dueDate": "2026-08-01",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
+      "reference": "000000000000000000020260010",
+      "customer": {
+        "name": "Beispiel Treuhand AG",
+        "address": {
+          "street": "Seestrasse",
+          "number": "40",
+          "postcode": "8002",
+          "town": "Zürich",
+          "country": "CH"
+        },
+        "language": "de",
+        "vatId": "CHE-318.642.975 MWST",
+        "email": "kreditoren@beispiel-treuhand.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Consulting GmbH",
+        "address": {
+          "postcode": "3011",
+          "town": "Bern",
+          "country": "CH",
+          "street": "Beispielgasse",
+          "number": "8"
+        },
+        "uid": "CHE-246.813.579",
+        "payTo": {
+          "account": "1020",
+          "iban": "CH3880808000000000002",
+          "qrIban": "CH6630808000000000002",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#141a26",
+        "window": "right",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "h",
+          "de": "Std.",
+          "fr": "h",
+          "it": "h",
+          "en": "h"
+        }
+      ],
+      "payments": [
+        {
+          "transactionRef": "90000000055",
+          "date": "2026-07-20",
+          "amount": 6486,
+          "by": "reference"
+        }
+      ],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/2026-001.pdf",
+        "sha256": "2f145ffe98f46265c33486a7c70f6b0516da509445ca6751d1fb6fc7be1d32e5"
+      }
+    },
+    {
+      "id": "in_VWzEXhFm3hTa",
+      "createdAt": "2026-07-07T09:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-07-07",
+      "currency": "EUR",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Sicherheitsaudit Fernwartung, Analyse und Bericht",
+          "quantity": 19,
+          "unit": "h",
+          "price": 200,
+          "vatRate": 0
+        }
+      ],
+      "prices": "net",
+      "termsId": "net30",
+      "customerId": "cu_2KIQYfUMHYIT",
+      "subject": "Sicherheitsaudit Fernwartung, Juli",
+      "exemption": "abroad",
+      "supplied": {
+        "from": "2026-07-01",
+        "to": "2026-07-06"
+      },
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Lukas Beispiel",
+      "status": "issued",
+      "number": "2026-002",
+      "issuedAt": "2026-07-07T09:00:00.000Z",
+      "dueDate": "2026-08-06",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
+      "reference": "RF332026002",
+      "customer": {
+        "name": "Muster Maschinenbau GmbH",
+        "attn": "Einkauf",
+        "address": {
+          "street": "Beispielstrasse",
+          "number": "3",
+          "postcode": "80331",
+          "town": "München",
+          "country": "DE"
+        },
+        "language": "de",
+        "vatId": "DE999999998",
+        "email": "einkauf@muster-maschinenbau.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Consulting GmbH",
+        "address": {
+          "postcode": "3011",
+          "town": "Bern",
+          "country": "CH",
+          "street": "Beispielgasse",
+          "number": "8"
+        },
+        "uid": "CHE-246.813.579",
+        "payTo": {
+          "account": "1021",
+          "iban": "BE38967000000002",
+          "bank": "Wise"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#141a26",
+        "window": "right",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "h",
+          "de": "Std.",
+          "fr": "h",
+          "it": "h",
+          "en": "h"
+        }
+      ],
+      "payments": [
+        {
+          "transactionRef": "TRANSFER-8000003",
+          "date": "2026-07-28",
+          "amount": 3800,
+          "by": "reference"
+        }
+      ],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/2026-002.pdf",
+        "sha256": "8906daaf463aa4e3ad5187483ccb5eab09d8d038e044e552bd9020d5431711e9"
+      }
+    },
+    {
+      "id": "in_S9Jcs6yeSIZJ",
+      "createdAt": "2026-08-03T08:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-08-03",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Beratungsmandat IT-Sicherheit, August 2026",
+          "quantity": 40,
+          "unit": "h",
+          "price": 150,
+          "vatRate": 8.1
+        }
+      ],
+      "prices": "net",
+      "termsId": "net30",
+      "customerId": "cu_5GQVervgd2rF",
+      "subject": "Beratungsmandat IT-Sicherheit, August 2026",
+      "supplied": {
+        "from": "2026-08-01",
+        "to": "2026-08-31"
+      },
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Lukas Beispiel",
+      "status": "issued",
+      "number": "2026-003",
+      "issuedAt": "2026-08-03T08:30:00.000Z",
+      "dueDate": "2026-09-02",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
+      "reference": "000000000000000000020260036",
+      "customer": {
+        "name": "Beispiel Treuhand AG",
+        "address": {
+          "street": "Seestrasse",
+          "number": "40",
+          "postcode": "8002",
+          "town": "Zürich",
+          "country": "CH"
+        },
+        "language": "de",
+        "vatId": "CHE-318.642.975 MWST",
+        "email": "kreditoren@beispiel-treuhand.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Consulting GmbH",
+        "address": {
+          "postcode": "3011",
+          "town": "Bern",
+          "country": "CH",
+          "street": "Beispielgasse",
+          "number": "8"
+        },
+        "uid": "CHE-246.813.579",
+        "payTo": {
+          "account": "1020",
+          "iban": "CH3880808000000000002",
+          "qrIban": "CH6630808000000000002",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#141a26",
+        "window": "right",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "h",
+          "de": "Std.",
+          "fr": "h",
+          "it": "h",
+          "en": "h"
+        }
+      ],
+      "payments": [
+        {
+          "transactionRef": "90000000063",
+          "date": "2026-08-20",
+          "amount": 6486,
+          "by": "reference"
+        }
+      ],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/2026-003.pdf",
+        "sha256": "854b3018e1998ea86c6caf8c328572672dd596a237d029b2496e37d66fc07412"
+      }
+    },
+    {
+      "id": "in_glJAMD-ee_Jz",
+      "createdAt": "2026-09-02T08:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-09-02",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Beratungsmandat IT-Sicherheit, September 2026",
+          "quantity": 40,
+          "unit": "h",
+          "price": 150,
+          "vatRate": 8.1
+        }
+      ],
+      "prices": "net",
+      "termsId": "net30",
+      "customerId": "cu_5GQVervgd2rF",
+      "subject": "Beratungsmandat IT-Sicherheit, September 2026",
+      "supplied": {
+        "from": "2026-09-01",
+        "to": "2026-09-30"
+      },
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Lukas Beispiel",
+      "status": "issued",
+      "number": "2026-004",
+      "issuedAt": "2026-09-02T08:30:00.000Z",
+      "dueDate": "2026-10-02",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
+      "reference": "000000000000000000020260044",
+      "customer": {
+        "name": "Beispiel Treuhand AG",
+        "address": {
+          "street": "Seestrasse",
+          "number": "40",
+          "postcode": "8002",
+          "town": "Zürich",
+          "country": "CH"
+        },
+        "language": "de",
+        "vatId": "CHE-318.642.975 MWST",
+        "email": "kreditoren@beispiel-treuhand.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Consulting GmbH",
+        "address": {
+          "postcode": "3011",
+          "town": "Bern",
+          "country": "CH",
+          "street": "Beispielgasse",
+          "number": "8"
+        },
+        "uid": "CHE-246.813.579",
+        "payTo": {
+          "account": "1020",
+          "iban": "CH3880808000000000002",
+          "qrIban": "CH6630808000000000002",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#141a26",
+        "window": "right",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "h",
+          "de": "Std.",
+          "fr": "h",
+          "it": "h",
+          "en": "h"
+        }
+      ],
+      "payments": [
+        {
+          "transactionRef": "90000000070",
+          "date": "2026-09-21",
+          "amount": 6486,
+          "by": "reference"
+        }
+      ],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/2026-004.pdf",
+        "sha256": "300c75d6dcef29d2b0a8746c9d09f4be2668b7fdfcc67e6e6002b36e126c4a75"
+      }
+    },
+    {
+      "id": "in_bGsKxKfMFmsz",
+      "createdAt": "2026-10-01T09:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-10-01",
+      "currency": "EUR",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Sicherheitsaudit Fernwartung, Nachprüfung",
+          "quantity": 12,
+          "unit": "h",
+          "price": 200,
+          "vatRate": 0
+        }
+      ],
+      "prices": "net",
+      "termsId": "net30",
+      "customerId": "cu_2KIQYfUMHYIT",
+      "subject": "Sicherheitsaudit Fernwartung, September",
+      "exemption": "abroad",
+      "supplied": {
+        "from": "2026-09-14",
+        "to": "2026-09-25"
+      },
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Lukas Beispiel",
+      "status": "issued",
+      "number": "2026-005",
+      "issuedAt": "2026-10-01T09:00:00.000Z",
+      "dueDate": "2026-10-31",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
+      "reference": "RF492026005",
+      "customer": {
+        "name": "Muster Maschinenbau GmbH",
+        "attn": "Einkauf",
+        "address": {
+          "street": "Beispielstrasse",
+          "number": "3",
+          "postcode": "80331",
+          "town": "München",
+          "country": "DE"
+        },
+        "language": "de",
+        "vatId": "DE999999998",
+        "email": "einkauf@muster-maschinenbau.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Muster Consulting GmbH",
+        "address": {
+          "postcode": "3011",
+          "town": "Bern",
+          "country": "CH",
+          "street": "Beispielgasse",
+          "number": "8"
+        },
+        "uid": "CHE-246.813.579",
+        "payTo": {
+          "account": "1021",
+          "iban": "BE38967000000002",
+          "bank": "Wise"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#141a26",
+        "window": "right",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "h",
+          "de": "Std.",
+          "fr": "h",
+          "it": "h",
+          "en": "h"
+        }
+      ],
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/2026-005.pdf",
+        "sha256": "4b0ed68d13e9a2d7423686751fc48d4564c21d39859138b960245e7f9d191a0f"
+      }
+    }
+  ],
+  "sent": [
+    {
+      "id": "sd_xeA65pqbdX_h",
+      "createdAt": "2026-07-02T08:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_MVknjIERgg_T",
+      "kind": "invoice",
+      "title": "Rechnung 2026-001",
+      "file": "transactional-data/2026/invoices/2026-001.pdf",
+      "sha256": "2f145ffe98f46265c33486a7c70f6b0516da509445ca6751d1fb6fc7be1d32e5",
+      "sentAt": "2026-07-02T08:30:00.000Z",
+      "to": "kreditoren@beispiel-treuhand.example",
+      "channel": "email",
+      "messageId": "<2026-001.2026-07-02@mail.demo.example>"
+    },
+    {
+      "id": "sd_R-O8clcjxMXw",
+      "createdAt": "2026-07-07T09:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_VWzEXhFm3hTa",
+      "kind": "invoice",
+      "title": "Rechnung 2026-002",
+      "file": "transactional-data/2026/invoices/2026-002.pdf",
+      "sha256": "8906daaf463aa4e3ad5187483ccb5eab09d8d038e044e552bd9020d5431711e9",
+      "sentAt": "2026-07-07T09:00:00.000Z",
+      "to": "einkauf@muster-maschinenbau.example",
+      "channel": "email",
+      "messageId": "<2026-002.2026-07-07@mail.demo.example>"
+    },
+    {
+      "id": "sd_N7zXG9NsOQo6",
+      "createdAt": "2026-08-03T08:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_S9Jcs6yeSIZJ",
+      "kind": "invoice",
+      "title": "Rechnung 2026-003",
+      "file": "transactional-data/2026/invoices/2026-003.pdf",
+      "sha256": "854b3018e1998ea86c6caf8c328572672dd596a237d029b2496e37d66fc07412",
+      "sentAt": "2026-08-03T08:30:00.000Z",
+      "to": "kreditoren@beispiel-treuhand.example",
+      "channel": "email",
+      "messageId": "<2026-003.2026-08-03@mail.demo.example>"
+    },
+    {
+      "id": "sd_hakNjz3OdQ9D",
+      "createdAt": "2026-09-02T08:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_glJAMD-ee_Jz",
+      "kind": "invoice",
+      "title": "Rechnung 2026-004",
+      "file": "transactional-data/2026/invoices/2026-004.pdf",
+      "sha256": "300c75d6dcef29d2b0a8746c9d09f4be2668b7fdfcc67e6e6002b36e126c4a75",
+      "sentAt": "2026-09-02T08:30:00.000Z",
+      "to": "kreditoren@beispiel-treuhand.example",
+      "channel": "email",
+      "messageId": "<2026-004.2026-09-02@mail.demo.example>"
+    },
+    {
+      "id": "sd_R89wIzO9Auev",
+      "createdAt": "2026-10-01T09:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_bGsKxKfMFmsz",
+      "kind": "invoice",
+      "title": "Rechnung 2026-005",
+      "file": "transactional-data/2026/invoices/2026-005.pdf",
+      "sha256": "4b0ed68d13e9a2d7423686751fc48d4564c21d39859138b960245e7f9d191a0f",
+      "sentAt": "2026-10-01T09:00:00.000Z",
+      "to": "einkauf@muster-maschinenbau.example",
+      "channel": "email",
+      "messageId": "<2026-005.2026-10-01@mail.demo.example>"
+    }
+  ]
+}

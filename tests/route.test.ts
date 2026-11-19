@@ -48,8 +48,8 @@ const CANONICAL = [
   '/invoices?status=overdue',
   '/invoices/2026-006',
   '/invoices/draft-a1b2',
-  '/invoices/customers',
-  '/invoices/customers/c-17',
+  '/invoices/contacts',
+  '/invoices/contacts/c-17',
   '/invoices/sent',
   '/invoices/sent/d-42',
   '/invoices/credit-notes',
@@ -91,6 +91,14 @@ test('every path of urls.md parses and formats back to itself', () => {
     const p = parse(url);
     assert.ok(!isRedirect(p), `${url} redirected to ${isRedirect(p) && formatLocation(p.redirect)}`);
     assert.equal(formatLocation(p), url);
+  }
+});
+
+test('Kunden became Kontakte: an old /invoices/customers link leads to the same contact', () => {
+  for (const [old, now] of [['/invoices/customers', '/invoices/contacts'], ['/invoices/customers/c-17', '/invoices/contacts/c-17']]) {
+    const p = parse(old);
+    assert.ok(isRedirect(p), `${old} redirects`);
+    assert.equal(formatLocation(p.redirect), now);
   }
 });
 
@@ -194,4 +202,32 @@ test('old /<lang>/<period>/<tab> links redirect to what they named', () => {
     assert.equal(formatLocation(p.redirect), now, old);
     assert.ok(!isRedirect(parse(now)), `${now} is canonical`);
   }
+});
+
+test('Löhne: every tab of §12.1 by its path, and its spellings', () => {
+  const route = (url: string) => {
+    const p = parse(url);
+    assert.ok(!isRedirect(p), `${url} redirected to ${isRedirect(p) && formatLocation(p.redirect)}`);
+    assert.equal(formatLocation(p), url);
+    return p.route;
+  };
+  assert.deepEqual(route('/payroll'), { area: 'payroll', view: 'overview' });
+  assert.deepEqual(route('/payroll/2026-09/p1a2b3c'), { area: 'payroll', view: 'payslips', month: '2026-09', employee: 'p1a2b3c' });
+  assert.deepEqual(route('/payroll/payments'), { area: 'payroll', view: 'payments' });
+  assert.deepEqual(route('/payroll/payments/2026-09'), { area: 'payroll', view: 'payments', month: '2026-09' });
+  assert.deepEqual(route('/payroll/payments/2026-09/p1a2b3c'), { area: 'payroll', view: 'payments', month: '2026-09', employee: 'p1a2b3c' });
+  assert.deepEqual(route('/payroll/payments/2026-09/insurances/ak'), { area: 'payroll', view: 'payments', month: '2026-09', insurance: 'ak' });
+  assert.deepEqual(route('/payroll/employees/p1a2b3c'), { area: 'payroll', view: 'employees', id: 'p1a2b3c' });
+  assert.deepEqual(route('/payroll/documents'), { area: 'payroll', view: 'documents' });
+  assert.deepEqual(route('/payroll/documents/2026'), { area: 'payroll', view: 'documents', year: '2026' });
+  assert.deepEqual(route('/payroll/documents/2026/lohnkonto'), { area: 'payroll', view: 'documents', year: '2026', doc: 'lohnkonto' });
+  assert.deepEqual(route('/payroll/documents/2026/p1a2b3c'), { area: 'payroll', view: 'documents', year: '2026', doc: 'p1a2b3c' });
+  assert.deepEqual(route('/payroll/settings/insurances'), { area: 'payroll', view: 'settings', section: 'insurances' });
+  const to = (url: string) => { const p = parse(url); assert.ok(isRedirect(p), `${url} should redirect`); return formatLocation(p.redirect); };
+  assert.equal(to('/payroll/payments/september'), '/payroll/payments');
+  assert.equal(to('/payroll/documents/26/lohnkonto'), '/payroll/documents');
+  // A month under «payslips» opens that month (the walk's /payroll/payslips/2026-10 opened November).
+  assert.equal(to('/payroll/payslips/2026-10'), '/payroll/2026-10');
+  assert.equal(to('/payroll/payslips/2026-10/lukas'), '/payroll/2026-10/lukas');
+  assert.equal(to('/payroll/payslips/oktober'), '/payroll/payslips');
 });

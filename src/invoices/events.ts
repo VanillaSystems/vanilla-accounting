@@ -18,11 +18,11 @@ import { agreedBasis, baseCurrency, filing, vat } from '../engines/index.js';
 import { lockedTaxPoint, openDay, sideOf } from '../accounting/tax-point.js';
 import { reversalOf } from '../accounting/reversal.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
-import type { Invoice, InvoiceBook, Issued } from './model.js';
-import { creditNotesOf, liveInvoices, openOn, revenueSplit, totals } from './rules.js';
+import type { Invoice, InvoiceBook, Issued, WriteOff, WriteOffReason } from './model.js';
+import { creditNotesOf, liveInvoices, openOn, revenueSplit, totals, writeOffAccounts } from './rules.js';
 import { TEXTS } from './texts.js';
 import { idSource } from './store.js';
-import { eventRef, type EventKind } from '../books/refs.js';
+import { eventRef, writeOffRef, type EventKind } from '../books/refs.js';
 import type { PaymentContext, PaymentOutcome } from './payments.js';
 
 export { eventRef, hasEvent, type EventKind } from '../books/refs.js';
@@ -34,7 +34,7 @@ export interface EventOutcome {
   files: PaymentOutcome['files'];
 }
 
-const gross = (inv: Issued) => Math.abs(toRappen(totals(inv.lines).gross));
+const gross = (inv: Issued) => Math.abs(toRappen(totals(inv).gross));
 
 /** What a credit note still owed back at the end of `date`: its part beyond what its invoice owed then, less the refunds made by then. */
 function refundDueOn(cn: Issued, invoices: readonly Invoice[], date: string): number {
@@ -43,7 +43,8 @@ function refundDueOn(cn: Issued, invoices: readonly Invoice[], date: string): nu
   if (!target) return 0;
   const earlier = creditNotesOf(target, invoices, date).filter((c) => c.id !== cn.id && (c.date < cn.date || (c.date === cn.date && c.issuedAt < cn.issuedAt)));
   const paid = target.payments.filter((p) => p.date <= date).reduce((s, p) => s + toRappen(p.amount), 0);
-  const owed = gross(target) - paid - earlier.reduce((s, c) => s + gross(c), 0);
+  const written = (target.writeOffs ?? []).filter((w) => w.date <= date).reduce((s, w) => s + toRappen(w.amount), 0);
+  const owed = gross(target) - paid - written - earlier.reduce((s, c) => s + gross(c), 0);
   const back = Math.max(0, gross(cn) - Math.max(0, owed));
   const refunded = cn.payments.filter((p) => p.date <= date).reduce((s, p) => s + toRappen(p.amount), 0);
   return fromRappen(Math.max(0, back - refunded));
@@ -129,10 +130,20 @@ export function bookInvoiceEvents(books: Books, book: InvoiceBook, ctx: PaymentC
       refs.add(issueRef);
       out.booked.push({ number: inv.number, kind: 'issue', date: day });
     }
+    // Write-offs recorded while the event was missing (a foreign document without its day's rate yet): booked with it.
+    if (refs.has(issueRef)) {
+      for (const w of inv.writeOffs ?? []) {
+        if (refs.has(writeOffRef(inv, w.id))) continue;
+        bookWriteOff(books, inv, w, ctx, out);
+        refs.add(writeOffRef(inv, w.id));
+      }
+    }
     const stornoRef = eventRef(inv, 'storno');
     if (inv.cancelled && refs.has(issueRef) && !refs.has(stornoRef)) {
       const day = openDay(lock, inv.cancelled.date);
-      const issued = books.journalEntries.filter((e) => e.transactionRef === issueRef);
+      // The write-offs go with the claim: the storno reverses them too, so the receivable nets to zero; so do the
+      // reclassifications «Konten ändern» booked for it (`-kk-`), so no revenue account keeps a part of it.
+      const issued = books.journalEntries.filter((e) => e.transactionRef === issueRef || e.transactionRef.startsWith(`${issueRef}-kk-`) || (inv.writeOffs ?? []).some((w) => e.transactionRef === writeOffRef(inv, w.id)));
       const text = `Storno ${TEXTS.de.invoice} ${inv.number} ${inv.customer.name}`;
       books.journalEntries.push(...issued.map((e): JournalEntry => ({
         ...reversalOf(e, day, text),
@@ -149,19 +160,55 @@ export function bookInvoiceEvents(books: Books, book: InvoiceBook, ctx: PaymentC
   return out;
 }
 
+/**
+ * The entries of a write-off on a document whose event the books carry (the agreed basis):
+ * `RE-<n>-wo-<k>` on its date, the Skonto account (Skonto, Rabatt, Spesen, Rundung) or the loss
+ * account against the receivable, the invoice's mix of rates with the minus sale codes, one line
+ * per code, at the rate the receivable holds; the account joins the chart when it lacks it.
+ */
+const REASON_WORDS: Record<WriteOffReason, string> = { skonto: 'Skonto', discount: 'Rabatt', loss: 'Verlust', fee: 'Spesen', rounding: 'Rundung' };
+
+export function bookWriteOff(books: Books, inv: Issued, w: WriteOff, ctx: PaymentContext, out: Pick<PaymentOutcome, 'files'>): JournalEntry[] {
+  const accounts = ctx.writeOffAccount ?? writeOffAccounts(undefined);
+  if (!accounts) throw new Error('the jurisdiction names no write-off accounts (modules/<j>/invoicing.yaml writeOff)');
+  const account = w.reason === 'loss' ? accounts.loss : accounts.skonto;
+  ctx.ensureAccount?.(account);
+  const ref = writeOffRef(inv, w.id);
+  const rate = books.journalEntries.find((e) => e.transactionRef === eventRef(inv, 'issue'))?.exchangeRate;
+  // A write-off recorded while the event waited for its rate is booked with the event, on the first day the books take.
+  const day = openDay(periodLock(books), w.date);
+  const receipt = invoiceReceipt(books, inv, ctx, out, { date: day });
+  // One line per code: the invoice's accounts and rates, the revenue account no matter here.
+  const byCode = new Map<string, number>();
+  for (const l of revenueSplit(inv, w.amount, ctx.revenueAccount)) byCode.set(l.vatCode ?? '', (byCode.get(l.vatCode ?? '') ?? 0) + Math.round(l.amount * 100));
+  const text = `${REASON_WORDS[w.reason]} ${TEXTS.de.invoice} ${inv.number} ${inv.customer.name}`;
+  const entries = [...byCode].filter(([, rappen]) => rappen !== 0).map(([code, rappen]): JournalEntry => ({
+    id: idSource.bytes(8).toString('hex'), transactionRef: ref, date: day,
+    accountDebit: account, accountCredit: ctx.openItems.receivable, amount: rappen / 100,
+    ...(code ? { vatCode: vat().codes.negativePrefix + code } : {}),
+    description: text,
+    ...(rate !== undefined ? { exchangeCurrency: inv.currency, exchangeRate: rate } : {}),
+    origin: 'invoice', receipts: [receipt],
+  }));
+  books.journalEntries.push(...entries);
+  if (!books.mappings.some((m) => m.transactionRef === ref && m.receiptId === receipt)) books.mappings.push({ transactionRef: ref, receiptId: receipt, by: 'rule', rule: 'invoice-issue' });
+  return entries;
+}
+
 /** The document's PDF as a receipt of the books (a sales record), filed once; its id. */
 export function invoiceReceipt(books: Books, inv: Issued, ctx: Pick<PaymentContext, 'pdfOf' | 'receiptId' | 'indexedAt'>, out: Pick<PaymentOutcome, 'files'>, at: Pick<BankTransaction, 'date'>): string {
   const word = inv.kind === 'credit-note' ? TEXTS.de.credit : TEXTS.de.invoice;
   const pdf = ctx.pdfOf(inv);
   const id = ctx.receiptId(pdf);
   if (books.receipts.some((r) => r.id === id)) return id;
-  const filename = `${inv.date.replace(/-/g, '')}-${word.toLowerCase()}-${inv.number}.pdf`;
-  const t = totals(inv.lines);
+  // Issued again after «Zurück zum Entwurf»: a name of its own, so the file of the replaced PDF's receipt is never taken for it.
+  const filename = `${inv.date.replace(/-/g, '')}-${word.toLowerCase()}-${inv.number}${inv.replaced?.length ? `-${id.slice(0, 8)}` : ''}.pdf`;
+  const t = totals(inv);
   const receipt: Receipt = {
     id,
     filename,
     originalFilename: filename,
-    extractedText: [inv.sender.name, `${word} ${inv.number}`, inv.customer.name, ...inv.lines.map((l) => l.text), `Total ${inv.currency} ${t.gross.toFixed(2)}`].join('\n'),
+    extractedText: [inv.sender.name, `${word} ${inv.number}`, inv.customer.name, ...inv.lines.flatMap((l) => (l.kind === 'pagebreak' ? [] : [l.text])), `Total ${inv.currency} ${t.gross.toFixed(2)}`].join('\n'),
     extractionMethod: 'pdftotext',
     fileSize: pdf.length,
     indexedAt: ctx.indexedAt(at),

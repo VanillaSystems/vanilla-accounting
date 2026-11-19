@@ -48,6 +48,7 @@ test('with no setting every step asks its shipped default and ledgers the name i
     sidebar: ['sonnet', 'assistant'],
     'mail-triage': ['haiku', 'receipt-collection.guide.yaml#triage'],
     'setup-conversation': ['sonnet', 'setup.conversation'],
+    'payroll-setup': ['haiku', 'payroll.setup'],
   };
   const resolved = await Promise.all(STEP_IDS.map((s) => resolveStep(s)));
   assert.deepEqual(Object.fromEntries(STEP_IDS.map((s, i) => [s, [resolved[i].model, STEPS[s].ledger]])), before);

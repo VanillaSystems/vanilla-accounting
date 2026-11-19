@@ -227,7 +227,11 @@ export interface YearEndData {
 /** invoicing.yaml: the rates an invoice line offers, and a 0 % line's deduction box by exemption. */
 export interface InvoicingData {
   rates: number[];
+  /** The percent of an Artikel's VAT kind by the supply's day, newest first (`none` is 0 %). */
+  rateKinds: Record<'normal' | 'reduced' | 'accommodation', Array<{ rate: number; from: string }>>;
   exemptions: Record<'abroad' | 'export', BoxId>;
+  /** The accounts the rest of an invoice is written off on while the firm names none: Skonto and the like, and a loss. */
+  writeOff?: { skonto: string; loss: string };
   /** The country codes of the VAT territory, as an IBAN starts: a payer there is domestic. */
   territory: string[];
   /** Words with which an invoice without the jurisdiction's VAT says its service is supplied abroad. */
@@ -259,6 +263,14 @@ export interface SetupData {
     shared?: string[];
     /** The words a payslip names each deduction by, per kind (a key of `payees` is what that business collects): code reads the payslips' deductions per fund by them (src/booking/withheld.ts fundShare, #476). */
     withholds?: Record<string, string[]>;
+    /** The account a kind's deductions are owed on where it is not `deductions` (the withholding tax's): a payment to the business that collects the kind clears it (src/booking/withheld.ts fundShare, docs/specs/payroll.md §10.2 A4). */
+    withholdsTo?: Record<string, string>;
+    /** The employer's own contribution account of a kind: code books there what a payment to the kind's collector pays beyond the employees' share, without a model (src/booking/withheld.ts contributionLines). */
+    employer?: Record<string, string>;
+    /** What a kind's collector leaves the employer (the withholding tax's collection commission): a payment short of what is owed by at most `upTo` percent books the rest on `account`. */
+    commission?: Record<string, { account: string; from?: number; upTo: number }>;
+    /** The words a payslip of another program names its figures by (src/booking/payslip.ts readPayslip): the gross, the net, the allowances paid with the wage, the expenses by account. */
+    payslip?: { gross: string[]; net: string[]; allowances?: string[]; expenses?: Array<{ account: string; words: string[] }> };
   };
   /** The account each kind of private use (the setup's privateUse: car, phone) is booked on: a share named in the setup is offered as a rule on a payment booked there (#402). */
   privateUse?: Partial<Record<'car' | 'phone', string>>;
@@ -328,6 +340,8 @@ export interface DocumentsData {
   days?: string[];
   /** The months, January first, each by its names in the jurisdiction's languages. */
   months?: string[][];
+  /** The title of a payslip another program issued («Lohnabrechnung», «Payslip»): in its first lines, on a text the firm issued that reads as one, the receipt is of kind `payslip` (src/booking/payslip.ts). */
+  payslip?: string[];
   /** Legal forms and words of a firm's name that tell no one apart («GmbH», «Holding»). */
   legalForms?: string[];
   /** The words that label the customer's block of an invoice («Kunde», «Rechnungsadresse», «Ihre UID»): a VAT number beside one is the buyer's, never the sender's (src/intake/own-invoice.ts buyerUids). */
@@ -343,6 +357,208 @@ export type CustomsPosition = typeof CUSTOMS_POSITIONS[number];
 /** A document kept beside an invoice, and a document that is no receipt, by what its words say. */
 export type SupportingWhy = keyof DocumentsData['supporting'];
 export type OtherWhy = keyof DocumentsData['other'];
+
+/** A text in each of the app's languages: a payslip prints the person's. */
+export type Labels = Record<'de' | 'fr' | 'it' | 'en', string>;
+
+/** An account a Lohnart books on: a number, or the liability account of the insurance of that kind. */
+export type PayrollAccountRef = string | { insurance: string };
+
+/**
+ * How code fills a Lohnart: the Anstellung's monthly amount, the 13th in its payout months, a row of
+ * `contributions`; for an hourly Anstellung the holiday surcharge on its hours (`holiday`) and the public-holiday
+ * surcharge its contract names (`publicHoliday`); the wage an absence takes off (`absence`, `payroll.yaml absences`).
+ * A commission on the tax a tariff kind withholds (`commission`, src/payroll/tax-at-source.ts).
+ */
+export type WageTypeComputes = 'monthly' | 'thirteenth' | 'contribution' | 'holiday' | 'publicHoliday' | 'absence' | 'commission';
+
+/** One Lohnart of payroll.yaml (docs/specs/payroll.md §5.3): code reads only these flags, never the key. */
+export interface WageTypeDef {
+  key: string;
+  group: string;
+  label: Labels;
+  /** + adds to the payslip, - deducts; an employer line adds to nothing the person is paid. */
+  sign: '+' | '-';
+  side?: 'employee' | 'employer';
+  gross?: boolean;
+  /** false: in the gross and the bases, but no money paid (a benefit in kind). */
+  cash?: boolean;
+  bases: string[];
+  lohnausweis?: string;
+  debit?: PayrollAccountRef;
+  credit?: PayrollAccountRef;
+  /** The Lohnart an hourly Anstellung is paid by: the month's hours × the hourly wage. */
+  hours?: boolean;
+  /** `quantity`: a person enters quantity × rate (hours × hourly wage); else an amount. */
+  input?: 'amount' | 'quantity';
+  /** What its inputs are called in the form and in the line «unvollständig» («Kaufpreis» for a quantity); absent: the app's words. */
+  inputs?: Partial<Record<'quantity' | 'rate' | 'amount', Labels>>;
+  /** The unit an input is entered and shown in: `percent` (a car's 0.9 % a month); the line computes with the fraction (0.009). */
+  units?: { rate?: 'percent' };
+  /** What the forms prefill, in the unit they show (0.9 for 0.9 %). */
+  defaults?: { quantity?: number; rate?: number };
+  /** The sentence a line «unvollständig» says when that input is missing («Kaufpreis des Fahrzeugs (ohne MWST) fehlt»); absent: «<its word> fehlt». */
+  missing?: Partial<Record<'quantity' | 'rate' | 'amount', Labels>>;
+  computes?: WageTypeComputes;
+  /** Paid once, in the month its entry begins (a birth allowance), not for every month it holds. */
+  once?: boolean;
+  /** An allowance a fund pays per month for a child: the federal minimum it is checked against, and the age after whose month it ends. */
+  allowance?: { minimum?: string; untilAge?: number };
+}
+
+/** A kind of absence (Abwesenheit) and the Lohnarten its wage takes: what the absence takes off, the employer's continued wage, the insurer's daily allowance. */
+export interface AbsenceKindDef {
+  label: Labels;
+  /** The Lohnart that takes the absent days' wage off (a negative wage line). */
+  loss?: string;
+  /** The Lohnart of the wage the employer continues to pay beyond the daily allowance. */
+  wage?: string;
+  /** The Lohnart of the insurer's daily allowance. */
+  allowance?: string;
+  /** Unpaid: the wage is taken off, nothing continues. */
+  unpaid?: boolean;
+  /** Holidays taken: no line, counted against the holiday balance. */
+  holiday?: boolean;
+}
+
+/** A rate a firm's document states for an insurance's solution, with the range code warns outside of. */
+export interface InsuranceRateDef { label: Labels; range: [number, number]; note?: string }
+
+/** A kind of social insurance (Sozialversicherung): its liability account and the rates a firm's solution states. */
+export interface InsuranceKindDef {
+  label: Labels;
+  /** What the fund or insurer of this kind is called. */
+  fund: Labels;
+  /** The label of the field for its name, a whole phrase in each language (the article goes with the noun: «Name des Versicherers», «Nom de l’assureur»). */
+  nameOf: Labels;
+  account: string;
+  /** The jurisdiction's business file of the fund, where the app ships one. */
+  business?: string;
+  /** The folder a company's own file of such a fund goes in when the app writes one («Immer so», §22 decision 59); absent: supplier. */
+  role?: 'authority' | 'supplier';
+  rates?: Record<string, InsuranceRateDef>;
+  /** The contribution is the person's (a pension certificate's figures), not a rate of the firm. */
+  perPerson?: boolean;
+  /** false: not computed by the app yet; a person subject to it gets the line «unvollständig». */
+  computed?: boolean;
+  /** Looked up in a tariff file per region and year (`taxAtSource`), not a rate of the firm; a firm's solution of it is a region. */
+  tariff?: boolean;
+  /** Every firm with wages has it: a month without it gets the line «unvollständig». */
+  required?: boolean;
+  /** Required once the person's yearly wage on `base` passes the federal `figure`; below it the line is left out with the reason. */
+  requiredAbove?: { figure: string; base: string };
+}
+
+/** Where a contribution's rate comes from: the law's figure, the firm's solution, or the person's certificate. */
+export type ContributionRate = { federal: string } | { insurance: string } | { person: 'employee' | 'employer' };
+
+/** A contribution code computes on every payslip (payroll.yaml `contributions`). */
+export interface ContributionDef {
+  wageType: string;
+  insurance: string;
+  base: string | { lines: string[] };
+  rate: ContributionRate;
+  /** A yearly maximum of the base (a federal key), cumulated month by month. */
+  ceiling?: string;
+  /** Owed from 1 January after the birthday of this age (a federal key). */
+  liable?: string;
+  /** Past the reference age: the base less an allowance per month, or the contribution ends from the month after. */
+  pensioner?: 'ends' | { allowance: string };
+  /** The rate is split between the sides by the firm's rate of this key (the employer's share in %). */
+  share?: { employer: string };
+  /** Owed only from these weekly hours (a federal key). */
+  minHours?: string;
+  /**
+   * Not owed while the person's base of the year stays at or below this yearly amount (a federal key), unless she
+   * asked to pay (`PersonInsurances.smallWage`); once the year passes it, owed on the whole year's base.
+   */
+  smallWage?: string;
+}
+
+/** payroll.yaml: the Lohnart catalogue, its groups and bases, the kinds of insurance and the contributions. */
+export interface PayrollData {
+  schema: number;
+  /** In print order; `stage`: where the group's lines act (the gross, the deductions, after the net, the employer's). */
+  groups: Array<{ key: string; stage: 'gross' | 'deduction' | 'after' | 'employer'; label: Labels }>;
+  /** `thirteenth`: the base the 13th salary is a share of. */
+  bases: Array<{ key: string; label: Labels; thirteenth?: boolean }>;
+  totals: Record<'gross' | 'deductions' | 'net' | 'payout' | 'employer', Labels>;
+  insurances: Record<string, InsuranceKindDef>;
+  contributions: ContributionDef[];
+  rounding: number[];
+  wageTypes: WageTypeDef[];
+  /** The clearing account every payslip's payout passes (Lohndurchlaufkonto): credited by the close, cleared by the bank payment. */
+  clearing: string;
+  /**
+   * Holidays: the working days of a week (holiday days to weeks), the weeks of a year (the surcharge of an
+   * hourly wage is weeks / (weeksPerYear − weeks)), and the legal minimum by age where the Anstellung names none.
+   */
+  holidays?: { daysPerWeek: number; weeksPerYear: number; minimum: Array<{ untilAge?: number; weeks: number }>; source?: string };
+  /** The kinds of absence, by key, in the order the form offers them. */
+  absences?: Record<string, AbsenceKindDef>;
+  /** The annual declarations: the contribution whose base is the liable wage of the first-pillar declaration (persons exempt by age, small wage or allowance). */
+  declarations?: { liable: { contribution: string; base: string } };
+  /** The Lohnausweis (the jurisdiction's annual wage statement): its fields in print order and its words. */
+  lohnausweis?: {
+    title: Labels;
+    /** «Ersetzt / Korrigiert den Lohnausweis vom {date}»: printed on a later statement. */
+    replaces: Labels;
+    corrects: Labels;
+    /** The remark an approved expense regulation asks for: «… durch Kanton {canton} am {date} genehmigt». */
+    expenseRules?: Labels;
+    letters: Record<string, Labels>;
+    fields: Array<{ key: string; label: Labels; sum?: { plus: string[]; minus?: string[] }; deduction?: boolean; remark?: boolean }>;
+    copyToTaxOffice?: string[];
+  };
+  /** How a social security number looks (a regular expression), what stands for it in a text sent to a model, and how its last digit checks the others. */
+  socialSecurityNumber: { pattern: string; masked: string; checkDigit?: 'ean13' };
+  /**
+   * The funds' and insurers' documents the Sozialversicherungen are set up from (src/payroll/setup-documents.ts): the words
+   * that name each kind's document in its first lines, the labels of its numbers, each kind's rates by the words on their
+   * line, and the words of a line never sent to a model (a salary).
+   */
+  setupDocuments?: { kinds: Record<string, string[]>; numbers: Partial<Record<'memberNumber' | 'contractNumber', string[]>>; rates: Record<string, Record<string, string[]>>; toModel?: string[]; notToModel: string[] };
+  /** The words of the payroll's documents, in each language. */
+  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate' | 'holidays' | 'holidaysMinimum' | 'sourceTariff', Labels>;
+  /** The tax at source by tariff files (payroll.yaml `taxAtSource`); absent: the jurisdiction has none. */
+  taxAtSource?: TaxAtSourceData;
+}
+
+/** How the tax at source is computed, and where its tariff files lie (payroll.yaml `taxAtSource`). */
+export interface TaxAtSourceData {
+  /** `url`, `archive`: templates with {year}, {yy}, {canton} (lower case); `page`, `format`: where a person reads about them. */
+  file: { url: string; archive?: string; page?: string; format?: string };
+  /** The step the tax is rounded to. */
+  rounding: number;
+  /** The annual wage statement's fields whose lines are aperiodic: added to the rate-determining income as they are. */
+  aperiodic: string[];
+  /** The days a month a person enters or leaves extrapolates its periodic income to. */
+  partMonth: number;
+  /** The file's codes of the commission, for an electronic and a paper settlement. */
+  provision: { electronic: string; paper?: string };
+  source: string;
+  /** Each region with the model it applies; the app computes `monthly`. */
+  regions: Record<string, { model: 'monthly' | 'annual' }>;
+}
+
+/** One figure of the law: its value from a day, with its source. */
+export interface FederalFigure {
+  value: number; validFrom: string;
+  /** Where it comes from, with its explanation: the maintainers' note, one string. */
+  source: string;
+  /** The articles a payslip line names, per language («LAVS art. 5, 13» in French); absent: the head of `source` in every language. */
+  cite?: Partial<Labels>;
+}
+
+/** The reference age for those born from a year on. */
+export interface ReferenceAgeRow { bornFrom: number; years: number; months: number }
+
+/** payroll/<year>.yaml: the year's federal figures by key, one row or several (a later validFrom replaces). */
+export interface PayrollYearData {
+  year: number;
+  figures: Record<string, FederalFigure | FederalFigure[]>;
+  referenceAge: Record<'m' | 'f', ReferenceAgeRow[]>;
+}
 
 /** A jurisdiction module after its files are read and any workspace overlay is merged. */
 export interface Jurisdiction {
@@ -361,4 +577,8 @@ export interface Jurisdiction {
   invoicing: InvoicingData;
   setup: SetupData;
   documents: DocumentsData;
+  /** Absent in a jurisdiction without payroll: the Löhne area then does not show. */
+  payroll?: PayrollData;
+  /** The law's payroll figures by year (payroll/<year>.yaml); a year without its file has none. */
+  payrollYears?: Record<string, PayrollYearData>;
 }

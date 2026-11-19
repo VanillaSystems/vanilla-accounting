@@ -411,7 +411,7 @@ test('r10c-1: a booked Debitoren step whose figure changed since (an invoice can
   const receivables = { invoices: [{ number: '2026-002', customer: 'Kunde', date: '2026-10-16', currency: 'EUR', open: 1200, chf: 1147.93 }], total: 1147.93, revenueAccount: '3400' };
   const close = yearClose(input(b, { receivables, chart, state }));
   const step = close.templates.find((t) => t.id === RECEIVABLES_ID)!;
-  assert.deepEqual(step.booked, [{ id: 'yc-2026-receivables', transactionRef: 'yc-2026-receivables', chf: 2704.57 }]);
+  assert.deepEqual(step.booked, [{ id: 'yc-2026-receivables', transactionRef: 'yc-2026-receivables', date: '2026-12-31', chf: 2704.57 }]);
   assert.deepEqual(step.stale, { booked: 2704.57, now: 1147.93 });
   const blockers = (c: YearClose) => c.blockers.filter((p) => p.code !== 'fxToBook');
   assert.deepEqual(blockers(close), [{ code: 'entryStale', template: 'receivables', booked: 2704.57, now: 1147.93 }]);

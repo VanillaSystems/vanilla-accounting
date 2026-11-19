@@ -125,6 +125,11 @@ months:
   - [Oktober, octobre, ottobre, October]
   - [November, novembre]
   - [Dezember, décembre, dicembre, December]
+# The title of a payslip another program or a fiduciary issued (src/booking/payslip.ts, docs/specs/payroll.md
+# §10.2 A1): in the first lines of a text the firm issued, with rows that read as a payslip (the gross, the
+# deductions, the net adding up), the receipt is of kind payslip. Code books its wage gross from it and pairs it
+# with the wage's bank line; it is never an invoice, never the firm's own bill to a customer.
+payslip: [Lohnabrechnung, Lohnblatt, Salärabrechnung, Gehaltsabrechnung, Décompte de salaire, Bulletin de salaire, Fiche de salaire, Conteggio salario, Busta paga, Cedolino, Payslip, Pay slip, Salary statement]
 # Legal forms and words of a firm's name that say nothing of who it is: a payee is never told by them.
 legalForms: [GmbH, AG, SA, Sàrl, Sagl, KlG, KG, Ltd, Limited, Inc, Corp, LLC, Company, Holding, Gruppe, Group, Genossenschaft, Stiftung, Verein]
 # The label of an invoice's customer block: a UID beside it (on its line or the lines of the address

@@ -35,6 +35,7 @@ const BANKS: Record<'raiffeisen' | 'wise-eur', StatementBank> = {
 const OPENING_OTHER: Record<string, number> = { '1510': 12000, '1520': 2500, '2800': 20000 };
 
 const ACCOUNTS: ReadonlyArray<readonly [string, string]> = [
+  ['1000', 'Kasse'],
   ['1021', 'Bank Raiffeisen'],
   ['1023', 'Wise EUR'],
   ['1170', 'Vorsteuer Material und Dienstleistungen'],

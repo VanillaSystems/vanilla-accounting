@@ -1,0 +1,375 @@
+{
+  "schema": 4,
+  "contacts": [
+    {
+      "id": "cu_5GQVervgd2rF",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "type": "firm",
+      "name": "Familie Huber-Beispiel",
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Obere Gasse",
+          "number": "17",
+          "postcode": "9008",
+          "town": "St. Gallen",
+          "country": "CH",
+          "billing": true
+        }
+      ],
+      "language": "de",
+      "emails": [
+        "huber-beispiel@mail.example"
+      ],
+      "paymentDays": 30,
+      "number": "K-00001"
+    },
+    {
+      "id": "cu_2KIQYfUMHYIT",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "type": "firm",
+      "name": "Muster Wohnbau AG",
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Rorschacher Strasse",
+          "number": "150",
+          "postcode": "9006",
+          "town": "St. Gallen",
+          "country": "CH",
+          "attn": "Bauleitung, z. H. Frau Muster",
+          "billing": true
+        }
+      ],
+      "language": "de",
+      "emails": [
+        "rechnungen@muster-wohnbau.example"
+      ],
+      "vatId": "CHE-579.135.791 MWST",
+      "paymentDays": 30,
+      "number": "K-00002"
+    }
+  ],
+  "articles": [],
+  "invoices": [
+    {
+      "id": "in_MVknjIERgg_T",
+      "createdAt": "2026-08-14T16:20:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-08-14",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "kind": "text",
+          "text": "Küche",
+          "style": "title"
+        },
+        {
+          "text": "Küchenfronten Nussbaum massiv, Herstellung",
+          "quantity": 14,
+          "unit": "pcs",
+          "price": 420,
+          "vatRate": 8.1
+        },
+        {
+          "text": "Korpusse und Arbeitsplatte, Montage",
+          "quantity": 32,
+          "unit": "h",
+          "price": 98,
+          "vatRate": 8.1
+        },
+        {
+          "kind": "subtotal",
+          "text": "Total Küche"
+        },
+        {
+          "kind": "text",
+          "text": "Geräte",
+          "style": "title"
+        },
+        {
+          "text": "Einbaugeräte (Backofen, Kochfeld, Geschirrspüler), Lieferung",
+          "quantity": 1,
+          "unit": "flat",
+          "price": 4380,
+          "vatRate": 8.1,
+          "activity": 2
+        },
+        {
+          "kind": "subtotal",
+          "text": "Total Geräte"
+        },
+        {
+          "kind": "discount",
+          "text": "Rabatt 3 %",
+          "percent": 3
+        }
+      ],
+      "prices": "gross",
+      "termsId": "net30",
+      "customerId": "cu_5GQVervgd2rF",
+      "subject": "Küche in Nussbaum",
+      "supplied": {
+        "from": "2026-08-03",
+        "to": "2026-08-12"
+      },
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Reto Beispiel",
+      "status": "issued",
+      "number": "2026-001",
+      "issuedAt": "2026-08-14T16:20:00.000Z",
+      "dueDate": "2026-09-13",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
+      "reference": "000000000000000000020260010",
+      "customer": {
+        "name": "Familie Huber-Beispiel",
+        "address": {
+          "street": "Obere Gasse",
+          "number": "17",
+          "postcode": "9008",
+          "town": "St. Gallen",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "huber-beispiel@mail.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Schreinerei Beispiel GmbH",
+        "address": {
+          "postcode": "9000",
+          "town": "St. Gallen",
+          "country": "CH",
+          "street": "Werkstrasse",
+          "number": "12"
+        },
+        "uid": "CHE-135.246.357",
+        "payTo": {
+          "account": "1020",
+          "iban": "CH1180808000000000003",
+          "qrIban": "CH3930808000000000003",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#141a26",
+        "window": "right",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "h",
+          "de": "Std.",
+          "fr": "h",
+          "it": "h",
+          "en": "h"
+        },
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        },
+        {
+          "id": "flat",
+          "de": "pauschal",
+          "fr": "forfait",
+          "it": "forfait",
+          "en": "flat rate"
+        }
+      ],
+      "payments": [
+        {
+          "transactionRef": "90000000072",
+          "date": "2026-09-11",
+          "amount": 12994.12,
+          "by": "reference"
+        }
+      ],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/2026-001.pdf",
+        "sha256": "11b29a35523a68a98e862178d818e38b2e54d2c2a01082e7d0592361b8a356f4"
+      }
+    },
+    {
+      "id": "in_VWzEXhFm3hTa",
+      "createdAt": "2026-09-24T10:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "date": "2026-09-24",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Einbauschrank Eiche furniert, 2,4 m",
+          "quantity": 8,
+          "unit": "pcs",
+          "price": 1850,
+          "vatRate": 8.1
+        },
+        {
+          "text": "Montage",
+          "quantity": 24,
+          "unit": "h",
+          "price": 98,
+          "vatRate": 8.1
+        }
+      ],
+      "prices": "gross",
+      "termsId": "net30",
+      "customerId": "cu_2KIQYfUMHYIT",
+      "subject": "Einbauschränke Überbauung Rosenberg",
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Reto Beispiel",
+      "status": "issued",
+      "number": "2026-002",
+      "issuedAt": "2026-09-24T10:00:00.000Z",
+      "dueDate": "2026-10-24",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
+      "reference": "000000000000000000020260021",
+      "customer": {
+        "name": "Muster Wohnbau AG",
+        "attn": "Bauleitung, z. H. Frau Muster",
+        "address": {
+          "street": "Rorschacher Strasse",
+          "number": "150",
+          "postcode": "9006",
+          "town": "St. Gallen",
+          "country": "CH"
+        },
+        "language": "de",
+        "vatId": "CHE-579.135.791 MWST",
+        "email": "rechnungen@muster-wohnbau.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Schreinerei Beispiel GmbH",
+        "address": {
+          "postcode": "9000",
+          "town": "St. Gallen",
+          "country": "CH",
+          "street": "Werkstrasse",
+          "number": "12"
+        },
+        "uid": "CHE-135.246.357",
+        "payTo": {
+          "account": "1020",
+          "iban": "CH1180808000000000003",
+          "qrIban": "CH3930808000000000003",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#141a26",
+        "window": "right",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "h",
+          "de": "Std.",
+          "fr": "h",
+          "it": "h",
+          "en": "h"
+        },
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        }
+      ],
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/2026-002.pdf",
+        "sha256": "5f3cf6739da31607d4e565e2a230b7a6175b6bd00da0524fec75ef56d98d5305"
+      }
+    }
+  ],
+  "sent": [
+    {
+      "id": "sd_xeA65pqbdX_h",
+      "createdAt": "2026-08-14T16:20:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_MVknjIERgg_T",
+      "kind": "invoice",
+      "title": "Rechnung 2026-001",
+      "file": "transactional-data/2026/invoices/2026-001.pdf",
+      "sha256": "11b29a35523a68a98e862178d818e38b2e54d2c2a01082e7d0592361b8a356f4",
+      "sentAt": "2026-08-14T16:20:00.000Z",
+      "to": "huber-beispiel@mail.example",
+      "channel": "email",
+      "messageId": "<2026-001.2026-08-14@mail.demo.example>"
+    },
+    {
+      "id": "sd_R-O8clcjxMXw",
+      "createdAt": "2026-09-24T10:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_VWzEXhFm3hTa",
+      "kind": "invoice",
+      "title": "Rechnung 2026-002",
+      "file": "transactional-data/2026/invoices/2026-002.pdf",
+      "sha256": "5f3cf6739da31607d4e565e2a230b7a6175b6bd00da0524fec75ef56d98d5305",
+      "sentAt": "2026-09-24T10:00:00.000Z",
+      "to": "rechnungen@muster-wohnbau.example",
+      "channel": "email",
+      "messageId": "<2026-002.2026-09-24@mail.demo.example>"
+    }
+  ]
+}

@@ -5,6 +5,7 @@
  *   the books              `schema` of ledger.json (books.json before 2; absent: 1)  BOOKS_MIGRATIONS
  *   belege.workspace.yaml  `schema` (absent: 1)  MANIFEST_MIGRATIONS
  *   invoices.json          `schema`              INVOICES_MIGRATIONS (src/invoices/store.ts)
+ *   payroll.json           `schema`              PAYROLL_MIGRATIONS (src/payroll/store.ts)
  *
  * A step `n` turns a file of schema n into schema n + 1. Steps are pure, run forward only, and
  * run in memory on every load (src/books/store.ts loadBooks, src/workspace/manifest.ts), so the
@@ -12,8 +13,9 @@
  * A books step never changes a record dated on or before closedThrough: the seals of the filed
  * quarters (src/books/seal.ts) are checked after it and refuse books it changed.
  */
-import { isMap, isSeq, type Document } from 'yaml';
+import { isMap, isSeq, type Document, type YAMLMap } from 'yaml';
 import { roleBefore } from './banks.js';
+import { LEGACY_FORMAT } from './numbering.js';
 
 /**
  * 2: the books split by fiscal year (ADR 0013); the move itself is the layout migration (src/workspace/layout.ts).
@@ -58,8 +60,14 @@ import { roleBefore } from './banks.js';
  * code reads off its text (src/books/due-date.ts). Books of schema 9 hold none: the step adds nothing,
  * so no sealed record and no filed receipt changes. An app of schema 9 would show the text's due date
  * instead of hers and call a bill overdue or open by it, so it must refuse these books.
+ * 11: payroll (docs/specs/payroll.md §9.1, owner 2026-11-14 decision 5): `JournalEntry.by.check` may be
+ * `payroll` (the entries a payslip closed in the app books, ref `LR-<yyyy>-<mm>-<employee>`), `payslip`
+ * (a payslip of another program booked by code) or `payrollJournal` (a payroll program's journal); a
+ * receipt may be of kind `payslip`. Books of schema 10 hold none: the step adds nothing, so no sealed
+ * record changes. An app of schema 10 would drop the unknown check on its next save and lose who booked
+ * the wage, so it must refuse these books.
  */
-export const BOOKS_SCHEMA = 10;
+export const BOOKS_SCHEMA = 11;
 /**
  * 2: every money account names its `role` (#88).
  * 3: `company.vat.reportingSince`, the year the basis began (#143). An app of schema 2 would read
@@ -67,13 +75,50 @@ export const BOOKS_SCHEMA = 10;
  * 4: `company.uid` may be absent (#452): the setup does not ask it; the VAT XML and an invoice with
  * VAT ask for it when they need it. An app of schema 3 would refuse such a manifest with «company.uid
  * must be a non-empty text» instead of saying the app is too old, so it must refuse by the number.
+ * 5: the settings of invoicing phase 1 (docs/specs/invoicing.md 4.3): `invoicing.units` (the firm's
+ * units with their words in de, fr, it, en), `invoicing.prices` (net or gross per kind),
+ * `invoicing.paymentTerms` with `defaultTerms`, `invoicing.writeOffAccount` ({ skonto, loss }) and
+ * `invoicing.shortfallLimit`. Absent means the defaults (src/workspace/manifest.ts readInvoicing), so
+ * the step changes nothing; an app of schema 4 would refuse these keys as it should, by the number,
+ * instead of dropping them on its next save of Firma › Rechnungslayout. Further phase-1 settings
+ * ride on this step until it is released.
+ * 6: the number series per kind of invoicing phase 2 (docs/specs/invoicing.md 4.4.4): `invoicing.numbering`,
+ * `{ format, restartYearly }` per kind (quote, sales-order, delivery-note, invoice, credit-note). A manifest
+ * without it numbers by the new firm's defaults (AN-, AU-, LS-, RE-, GS-{JJJJ}-{NNNNN}), so the step writes
+ * today's shared series `{JJJJ}-{NNN}` for invoices and credit notes into every manifest that has an
+ * `invoicing:` section: no issued number changes, the next continues the old series, nothing gaps. An app
+ * of schema 5 would number by its fixed series and drop the formats on its next save, so it must refuse.
+ * `invoicing.prices` may name the new kinds too, and `invoicing.layout.show.articleCode` (slice G2) the
+ * Artikel code on paper. Further phase-2 settings ride on this step until it is released.
  */
-export const WORKSPACE_SCHEMA = 4;
+export const WORKSPACE_SCHEMA = 6;
 /**
  * 2: a line may be priced with the VAT in it (`InvoiceLine.vatIncluded`, a credit note of «500 VAT
  * included»). An app of schema 1 would read that price as net and add the VAT to it, so it must refuse.
+ * 3: positions of a kind (`InvoiceLine.kind`: item, text, subtotal, discount, pagebreak; an item's
+ * `discount` percent) and `prices: 'net' | 'gross'` per document, which replaces the line flag
+ * `vatIncluded` (step 2, `pricesOfDocument`). An app of schema 2 would read a Rabatt or a text as a
+ * line without price and a gross document's lines as net, so it must refuse.
+ *    Also in 3 (unreleased, phase 1 of invoicing, so no step of their own): `InvoiceLine.activity`
+ *    (the net tax rate of a position on a firm with two), `payments[].source`, `allocations`,
+ *    `writeOffs` and `Issued.terms`. A file of schema 2 holds none: the step adds nothing for them.
+ * 4: invoicing phase 2 (docs/specs/invoicing.md 4.3). The document kinds `quote`, `sales-order` and
+ *    `delivery-note` beside invoice and credit note, with `validUntil`, `accepted` / `declined`
+ *    (`{ date, by }`), `from` (`{ id, kind }`, the document a conversion made it from), `ordered`, `printAs`
+ *    (an Auftrag's print variant); a position's `optional` and `ofLine`; a draft's `number` (an Angebot or
+ *    Auftrag back to draft keeps it); sent-log kinds `quote`, `sales-order`, `delivery-note`. A file of
+ *    schema 3 holds none of them: the step adds nothing. An app of schema 3 would read an Angebot as a
+ *    Rechnung, list it, match payments to it and book it, so it must refuse. 
+ *    Also in 4 (slice F2): `Draft.number` (a document back to draft keeps its number: one field and
+ *    one rule for every kind), `replaced` and `Issued.accountChanges` (back to draft, Konten ändern).
+ *    Also in 4 (slice G2): `articles` (Artikel), the position kinds `article` (`articleId`, `code`) and
+ *    `group`, a position's `inGroup`. A file of schema 3 holds none: the step adds nothing for them,
+ *    and a book read without `articles` has an empty list (store.ts emptyInvoiceBook).
  */
-export const INVOICES_SCHEMA = 2;
+export const INVOICES_SCHEMA = 4;
+/** 1: payroll.json starts with dated histories (docs/specs/domain-model.md §5.7), so it needs no step yet. */
+export const PAYROLL_SCHEMA = 1;
+export const PAYROLL_MIGRATIONS: Ladder<Record<string, unknown>> = {};
 
 /** Step n: schema n → n + 1. */
 export type Ladder<T> = Readonly<Record<number, (doc: T) => T>>;
@@ -99,6 +144,8 @@ export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   8: (doc) => doc,
   // No receipt has a due date a person set before; absent means the text's. The number makes an older app refuse the books.
   9: (doc) => doc,
+  // No entry carries a payroll check before; the number makes an older app refuse the books.
+  10: (doc) => doc,
 };
 /** On the YAML document, so the comments of the manifest survive the step. */
 export const MANIFEST_MIGRATIONS: Ladder<Document> = {
@@ -113,6 +160,22 @@ export const MANIFEST_MIGRATIONS: Ladder<Document> = {
   2: (doc) => doc,
   // Every manifest before has its UID: nothing changes; the number makes an older app refuse one without it.
   3: (doc) => doc,
+  // No manifest has the phase-1 invoicing settings before; absent means the defaults. The number makes an older app refuse them.
+  4: (doc) => doc,
+  // An invoicing section keeps today's one series of invoices and credit notes (absent would mean the new prefixes).
+  5: (doc) => {
+    const inv = doc.get('invoicing');
+    if (!isMap(inv) || inv.has('numbering')) return doc;
+    // One line per kind, `invoice: { format: "{JJJJ}-{NNN}", restartYearly: true }`, as Firma › Rechnungslayout writes it.
+    const numbering = doc.createNode({}) as YAMLMap;
+    for (const kind of ['invoice', 'credit-note']) {
+      const line = doc.createNode({ format: LEGACY_FORMAT.format, restartYearly: LEGACY_FORMAT.restartYearly }) as YAMLMap;
+      line.flow = true;
+      numbering.set(kind, line);
+    }
+    inv.set('numbering', numbering);
+    return doc;
+  },
 };
 
 /** The manifest document named at the current schema: its `schema:` set where it stands (its comments with it), else added as the first key. */
@@ -128,7 +191,74 @@ export const manifestText = (doc: Document): string => doc.toString({ lineWidth:
 export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {
   // No line has `vatIncluded` before; the number makes an older app refuse the file.
   1: (doc) => doc,
+  // Every line is an item (no `kind`); each document names its prices, and a line keeps `vatIncluded` only where it
+  // differs from them; an issued document freezes the words its units printed with.
+  2: (doc) => ({ ...doc, invoices: Array.isArray(doc.invoices) ? doc.invoices.map((d) => unitsOfIssued(pricesOfDocument(d))) : doc.invoices }),
+  // No document is of a phase-2 kind before: nothing to add for them. Each customer becomes a firm contact; the documents stay byte for byte.
+  3: (doc) => contactsOfCustomers(doc),
 };
+
+/**
+ * Step 3 → 4: `customers` → `contacts`. A customer of schema 3 is a firm contact under the same id,
+ * so every document's `customerId` still names it: its address is the one address, marked billing,
+ * with its `attn` as that address's line (a free text, «Küche, z. H. Herr Beispiel», never parsed
+ * into a person); `email` the first of `emails`; `paymentTermsDays` its `paymentDays`, which read
+ * as N days net as before. Nothing else of the file changes.
+ */
+export function contactsOfCustomers(doc: Record<string, unknown>): Record<string, unknown> {
+  const { customers, ...rest } = doc;
+  const contacts = (Array.isArray(customers) ? customers : []).map((raw) => {
+    const { attn, address, email, paymentTermsDays, ...c } = raw as Record<string, unknown>;
+    const a = (address && typeof address === 'object' ? address : {}) as Record<string, unknown>;
+    return {
+      ...c,
+      type: 'firm',
+      persons: [],
+      addresses: [{ id: 'a-1', ...a, ...(typeof attn === 'string' && attn.trim() ? { attn } : {}), billing: true }],
+      emails: typeof email === 'string' && email.trim() ? [email] : [],
+      ...(Number.isInteger(paymentTermsDays) ? { paymentDays: paymentTermsDays as number } : {}),
+    };
+  });
+  return { contacts, ...rest };
+}
+
+/** The words the units of schema 2 printed with (src/invoices/texts.ts at 0.6.0). */
+const UNITS_OF_SCHEMA_2: Record<string, Record<'de' | 'fr' | 'it' | 'en', string>> = {
+  h: { de: 'h', fr: 'h', it: 'h', en: 'h' },
+  day: { de: 'Tag', fr: 'jour', it: 'giorno', en: 'day' },
+  pcs: { de: 'Stk.', fr: 'pce', it: 'pz.', en: 'pcs' },
+  flat: { de: 'pauschal', fr: 'forfait', it: 'forfait', en: 'flat rate' },
+  km: { de: 'km', fr: 'km', it: 'km', en: 'km' },
+};
+
+/**
+ * Step 2 → 3 on an issued document: `units`, the words its units printed with, so a reminder prints
+ * them as the invoice did (the app's defaults since name the hour «Std.»).
+ */
+export function unitsOfIssued(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || (raw as { status?: unknown }).status !== 'issued') return raw;
+  const doc = raw as { lines?: Array<{ unit?: unknown }> };
+  const named = [...new Set((doc.lines ?? []).flatMap((l) => (typeof l.unit === 'string' && UNITS_OF_SCHEMA_2[l.unit] ? [l.unit] : [])))];
+  return named.length ? { ...doc, units: named.map((id) => ({ id, ...UNITS_OF_SCHEMA_2[id] })) } : raw;
+}
+
+/**
+ * Step 2 → 3 on one document: `prices: 'gross'` when every line at a rate above 0 has
+ * `vatIncluded` (a credit note «by amount»), else `net`; a line whose flag equals its document's
+ * prices drops it, one that differs keeps it as `true` or `false`, so every figure stays as issued.
+ */
+export function pricesOfDocument(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || !Array.isArray((raw as { lines?: unknown }).lines)) return raw;
+  const doc = raw as { lines: Array<Record<string, unknown>> };
+  const taxed = doc.lines.filter((l) => typeof l.vatRate === 'number' && l.vatRate > 0);
+  const gross = taxed.length > 0 && taxed.every((l) => l.vatIncluded === true);
+  const lines = doc.lines.map((l) => {
+    const { vatIncluded, ...rest } = l;
+    const own = vatIncluded === true;
+    return own === gross || !(typeof l.vatRate === 'number' && l.vatRate > 0) ? rest : { ...rest, vatIncluded: own };
+  });
+  return { ...doc, prices: gross ? 'gross' : 'net', lines };
+}
 
 /** A file written by a newer version of the app than this one. */
 export class SchemaTooNewError extends Error {}

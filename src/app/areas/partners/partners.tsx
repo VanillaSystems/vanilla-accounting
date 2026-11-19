@@ -169,7 +169,7 @@ function Detail(props: Props) {
         </SelfBlock>
         <section className="kwsec">
           <header><h3>{t('partners.linked.title')}</h3><span className="m">{t('partners.linked.lead', { year })}</span>
-            {p.layers.customer ? <Go className="linkbtn" nav={nav} to={{ route: { area: 'invoices', view: 'customers', id: p.id }, query: {} }}>{t('partners.linked.customer')}</Go> : null}
+            {p.layers.customer ? <Go className="linkbtn" nav={nav} to={{ route: { area: 'invoices', view: 'contacts', id: p.contact ?? p.id }, query: {} }}>{t('partners.linked.customer')}</Go> : null}
           </header>
           <div className="kwlinked">
             <LinkGroup title={t('partners.linked.entries')} rows={linked.entries} empty={t('partners.linked.none', { year })} item={(e) => (
@@ -183,7 +183,7 @@ function Detail(props: Props) {
             )} />
             {p.layers.customer || invs.length ? (
               <LinkGroup title={t('partners.linked.invoices')} rows={invs} empty={t('partners.linked.none', { year })} item={(i) => (
-                <li key={i.id}><Go nav={nav} to={invoiceAt(i, period)}><span className="mono">{i.status === 'issued' ? i.number : t('invoices.draft')}</span> {i.subject ?? ''}</Go><span className="mono">{fmt(totals(i.lines).gross)}</span></li>
+                <li key={i.id}><Go nav={nav} to={invoiceAt(i, period)}><span className="mono">{i.status === 'issued' ? i.number : t('invoices.draft')}</span> {i.subject ?? ''}</Go><span className="mono">{fmt(totals(i).gross)}</span></li>
               )} />
             ) : null}
           </div>

@@ -90,7 +90,8 @@ export function journalOf(books: Index): Journal {
     const receipts = receiptsByRef.get(e.transactionRef) ?? [];
     const [title, sub] = splitText(e.description || e.transactionRef);
     const evidence = evidenceCheck(e, receipts, closedThrough, tx?.inputTaxProof, linesByRef.get(e.transactionRef), bills.get(e.transactionRef));
-    return { e, tx, receipts, missing: !!tx && needsReceipt(tx, receipts.length), locked: !!closedThrough && e.date <= closedThrough, ...(evidence && { evidence }), title, sub };
+    const payroll = (linesByRef.get(e.transactionRef) ?? []).some((x) => x.by?.kind === 'code' && x.by.check === 'payroll');
+    return { e, tx, receipts, missing: !!tx && !payroll && needsReceipt(tx, receipts.length), locked: !!closedThrough && e.date <= closedThrough, ...(evidence && { evidence }), title, sub };
   });
   const byRef = new Map<string, EntryView[]>();
   for (const v of views) (byRef.get(v.e.transactionRef) ?? byRef.set(v.e.transactionRef, []).get(v.e.transactionRef)!).push(v);

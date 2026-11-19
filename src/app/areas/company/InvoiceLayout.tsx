@@ -5,13 +5,14 @@
  * was issued with.
  */
 import { banksOf } from '../../../workspace/money-accounts.js';
-import { useMemo, useState } from 'react';
-import { INVOICE_CURRENCIES, INVOICE_FONTS, LAYOUT_ELEMENTS, type Draft, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type LayoutElement, type OWN_TEXTS } from '../../../invoices/model.js';
+import { Fragment, useMemo, useState } from 'react';
+import { DEFAULT_UNITS, INVOICE_CURRENCIES, INVOICE_FONTS, LAYOUT_ELEMENTS, PRICES, isItem, type Invoice, type Prices, type UnitDef, type Draft, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type LayoutElement, type OWN_TEXTS } from '../../../invoices/model.js';
 import { draftSheet } from '../../../invoices/documents.js';
 import { builtInTexts } from '../../../invoices/texts.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { InvoicingPatch } from '../../../workspace/manifest-write.js';
-import { api, errorText } from '../../lib/api.js';
+import { ApiError, api, errorText } from '../../lib/api.js';
+import { formatFits, qrIbanTakes } from '../../../providers/qr-bill/reference.js';
 import { reloadWorkspace } from '../../hooks/use-workspace.js';
 import { localToday } from '../../../accounting/periods.js';
 import { getAccountMap } from '../../lib/accounts.js';
@@ -19,12 +20,15 @@ import { usePersistedFlag } from '../../shell/prefs.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
 import { useInvoices } from '../invoices/data.js';
+import { recipientOf } from '../../../invoices/contacts.js';
 import { bookOf } from '../invoices/model.js';
 import { contextOf, screenOf } from '../invoices/sheets.js';
 import { Sheet } from '../invoices/Sheet.js';
 import '../invoices/invoices.css';
-import { invoiceRates } from '../../../engines/index.js';
+import { chargesVat, invoiceRates } from '../../../engines/index.js';
 import { AsyncButton } from '../../shell/AsyncButton.js';
+import { PaymentTermsSection } from './PaymentTerms.js';
+import { NumberingSection } from './Numbering.js';
 
 const LANGS: InvoiceLanguage[] = ['de', 'fr', 'it', 'en'];
 const ACCENTS: Array<[string, 'black' | 'blue' | 'green' | 'bordeaux' | 'ochre']> = [['#141a26', 'black'], ['#1d4ed8', 'blue'], ['#0f766e', 'green'], ['#9f1239', 'bordeaux'], ['#b45309', 'ochre']];
@@ -105,6 +109,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
           </div>
           <div className="lkr"><span>{t('invoiceLayout.place')}</span>{seg(layout.logoPosition, [['left', t('invoiceLayout.left')], ['center', t('invoiceLayout.center')], ['right', t('invoiceLayout.right')]], (v) => setLayout('logoPosition', v), t('invoiceLayout.place'))}</div>
           <div className="lkr"><span>{t('invoiceLayout.size')}</span>{seg(layout.logoSize, [['s', 'S'], ['m', 'M'], ['l', 'L']], (v) => setLayout('logoSize', v), t('invoiceLayout.size'))}</div>
+          {chargesVat() && <div className="lkr"><span>{t('invoiceLayout.prices')}</span>{seg(settings.prices.invoice, PRICES.map((p): [Prices, string] => [p, t(`invoices.prices.${p}`)]), (v) => void patch({ prices: { invoice: v === 'net' ? null : v } }), t('invoiceLayout.prices'))}</div>}
           <div className="lkr"><span>{t('invoiceLayout.envelope')}</span>{seg(layout.window, [['left', t('invoiceLayout.windowLeft')], ['right', t('invoiceLayout.windowRight')]], (v) => setLayout('window', v), t('invoiceLayout.envelope'))}</div>
           <div className="lkr top"><span>{t('invoiceLayout.elements')}</span>
             <span className="lkel">
@@ -116,6 +121,9 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
           </div>
         </div>
         <PayTo ws={ws} nav={nav} canEdit={canEdit} />
+        <Units ws={ws} nav={nav} canEdit={canEdit} drafts={load.state === 'ready' ? load.data.invoices.filter((i) => i.status === 'draft') : []} />
+        <PaymentTermsSection ws={ws} nav={nav} canEdit={canEdit} />
+        <NumberingSection ws={ws} nav={nav} canEdit={canEdit} docs={load.state === 'ready' ? load.data.invoices : []} fits={formatFits} />
         <div className="lkf" key={`greet-${lang}`}>
           <label className="lkr"><span>{t('invoiceLayout.salutation')}</span><input name="salutation" defaultValue={texts.salutation} placeholder={t('invoiceLayout.salutationHint')} disabled={!canEdit} onBlur={(e) => saveText('salutation', e.target.value.trim())} /></label>
         </div>
@@ -154,7 +162,7 @@ function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boole
   }
   return (
     <div className="lkf" data-testid="pay-to">
-      <div className="lkr"><span>{t('invoiceLayout.payToTitle')}</span><span className="m">{t('invoiceLayout.payToHint')}</span></div>
+      <div className="lkr lkstack"><span>{t('invoiceLayout.payToTitle')}</span><span className="m">{t('invoiceLayout.payToHint')}</span></div>
       {INVOICE_CURRENCIES.map((c) => {
         const own = banks.filter((a) => a.currency === c);
         const current = ws.invoicing?.payTo[c]?.account ?? '';
@@ -162,7 +170,8 @@ function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boole
         const bank = own.find((a) => a.account === picked);
         const needsIban = !!bank && !bank.iban;
         return (
-          <label className="lkr" key={c} data-currency={c}><span>{t('invoiceLayout.payToIn', { currency: c })}</span>
+          <Fragment key={c}>
+          <label className="lkr" data-currency={c}><span>{t('invoiceLayout.payToIn', { currency: c })}</span>
             {own.length === 0 ? <span className="m">{t('invoiceLayout.payToNoBank', { currency: c })}</span> : (
               <span className="lkpay">
                 <select value={picked} disabled={!canEdit} onChange={(e) => {
@@ -182,10 +191,111 @@ function PayTo({ ws, nav, canEdit }: { ws: CompanyInfo; nav: Nav; canEdit: boole
               </span>
             )}
           </label>
+          {current && <QrIban key={current} ws={ws} nav={nav} canEdit={canEdit} currency={c} account={current} />}
+          </Fragment>
         );
       })}
     </div>
   );
+}
+
+/**
+ * The QR-IBAN of a currency's account, optional: invoices paid to it carry a QR reference. Since
+ * SIX IG v2.4 only CHF may use one (#506): saving it under another currency warns with the rule and
+ * what follows, and «Trotzdem speichern» keeps it. One kept so, or written before the warning
+ * existed, shows the same warning as a fact beside the field.
+ */
+function QrIban({ ws, nav, canEdit, currency, account }: { ws: CompanyInfo; nav: Nav; canEdit: boolean; currency: InvoiceCurrency; account: string }) {
+  const stored = ws.invoicing?.payTo[currency]?.qrIban ?? '';
+  const [value, setValue] = useState(stored);
+  const [warned, setWarned] = useState(false);
+  const changed = value.replace(/\s+/g, '').toUpperCase() !== stored;
+  async function save(confirm: boolean) {
+    try {
+      await api.patchWorkspace({ invoicing: { payTo: { [currency]: { account, qrIban: value.trim() || null } }, ...(confirm ? { confirm: 'qrIbanNotChf' as const } : {}) } });
+      setWarned(false);
+      reloadWorkspace();
+      nav.toast(value.trim() ? t('invoiceLayout.qrIbanSet', { currency }) : t('invoiceLayout.qrIbanCleared', { currency }));
+    } catch (e) {
+      if (e instanceof ApiError && e.body.code === 'qrIbanNotChf') setWarned(true);
+      else nav.toast(errorText(e));
+    }
+  }
+  const fact = !!stored && !qrIbanTakes(currency) && !changed;
+  return (
+    <>
+      <label className="lkr lkqr" data-qr-iban={currency}>
+        <span>{t('invoiceLayout.qrIban')}</span>
+        <span className="lkpay">
+          <input className="mono wide" value={value} placeholder={t('invoiceLayout.qrIbanPlaceholder')} aria-label={t('invoiceLayout.qrIbanIn', { currency })} disabled={!canEdit}
+            onChange={(e) => { setValue(e.target.value); setWarned(false); }} />
+          {changed && <AsyncButton type="button" className="btn" disabled={!canEdit} onClick={() => save(false)}>{t('common.save')}</AsyncButton>}
+        </span>
+      </label>
+      {(warned || fact) && (
+        <div className="lkr" data-qr-warning={currency}>
+          <span />
+          <span className="warnline qrwarn" role={warned ? 'alert' : undefined}>
+            {t('invoiceLayout.qrIbanNotChf', { currency })}
+            {warned && <AsyncButton type="button" className="btn" disabled={!canEdit} onClick={() => save(true)}>{t('invoiceLayout.saveAnyway')}</AsyncButton>}
+          </span>
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * Firma › Rechnungslayout › Einheiten: the units a position may be counted in, each with its word
+ * in the four document languages. A unit is added with its four words (its id made from the German
+ * one) and removed while no draft uses it; an issued document keeps the words it was issued with.
+ */
+function Units({ ws, nav, canEdit, drafts }: { ws: CompanyInfo; nav: Nav; canEdit: boolean; drafts: readonly Invoice[] }) {
+  const units = ws.invoicing?.units ?? DEFAULT_UNITS;
+  const empty = { de: '', fr: '', it: '', en: '' };
+  const [words, setWords] = useState<Record<InvoiceLanguage, string>>(empty);
+  const used = new Set(drafts.flatMap((i) => i.lines.flatMap((l) => (isItem(l) && l.unit ? [l.unit] : []))));
+  async function save(next: UnitDef[], done: string) {
+    try { await api.patchWorkspace({ invoicing: { units: next } }); reloadWorkspace(); nav.toast(done); return true; } catch (e) { nav.toast(errorText(e)); return false; }
+  }
+  const ready = LANGS.every((l) => words[l].trim());
+  async function add() {
+    const id = unitId(words.de, units);
+    if (await save([...units, { id, ...Object.fromEntries(LANGS.map((l) => [l, words[l].trim()])) as Record<InvoiceLanguage, string> }], t('invoiceLayout.unitAdded', { unit: words.de.trim() }))) setWords(empty);
+  }
+  return (
+    <div className="lkf lkunits" data-testid="units">
+      <div className="lkr"><span>{t('invoiceLayout.unitsTitle')}</span><span className="m">{t('invoiceLayout.unitsHint')}</span></div>
+      <table className="lkut">
+        <thead><tr>{LANGS.map((l) => <th key={l}>{l.toUpperCase()}</th>)}<th /></tr></thead>
+        <tbody>
+          {units.map((u) => (
+            <tr key={u.id} data-unit={u.id}>
+              {LANGS.map((l) => <td key={l}>{u[l]}</td>)}
+              <td>{canEdit && (
+                <AsyncButton type="button" className="quiet2" disabled={used.has(u.id) || units.length === 1} data-tip={used.has(u.id) ? t('invoiceLayout.unitUsed') : undefined}
+                  aria-label={t('invoiceLayout.unitRemove', { unit: u.de })} onClick={() => save(units.filter((x) => x.id !== u.id), t('invoiceLayout.unitRemoved', { unit: u.de }))}>×</AsyncButton>
+              )}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {canEdit && (
+        <div className="lkuadd">
+          {LANGS.map((l) => <input key={l} value={words[l]} aria-label={t('invoiceLayout.unitWord', { language: l.toUpperCase() })} placeholder={l === 'de' ? t('invoiceLayout.unitExample') : t('invoiceLayout.unitWord', { language: l.toUpperCase() })} onChange={(e) => setWords({ ...words, [l]: e.target.value })} />)}
+          <AsyncButton type="button" className="btn" disabled={!ready} onClick={add}>{t('invoiceLayout.unitAdd')}</AsyncButton>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A unit's id from its German word: letters and digits only (m² → m2), unique in the list. */
+export function unitId(word: string, units: readonly UnitDef[]): string {
+  const base = word.normalize('NFKD').replace(/²/g, '2').replace(/³/g, '3').replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 12) || 'unit';
+  let id = base;
+  for (let n = 2; units.some((u) => u.id === id); n++) id = `${base}${n}`;
+  return id;
 }
 
 /** The newest invoice laid out as a draft with this layout (or a sample when there is none), its texts editable. */
@@ -197,15 +307,15 @@ function Preview({ ws, layout, lang, texts, guide, canEdit, onText }: {
   const data = useMemo(() => {
     if (!d) return undefined;
     const latest = [...d.invoices].filter((i) => i.kind === 'invoice' && i.lines.length).sort((a, b) => Number(b.status === 'issued') - Number(a.status === 'issued') || b.date.localeCompare(a.date))[0];
-    const customer = latest ? d.customers.find((c) => c.id === latest.customerId) : undefined;
+    const customer = latest ? d.contacts.find((c) => c.id === latest.customerId) : undefined;
     const sample: Draft = {
       id: 'sample', createdAt: '', origin: 'manual', deleted: false, status: 'draft', comments: [], kind: 'invoice',
-      customerId: customer?.id ?? '', date: localToday(), currency: 'CHF', language: lang,
+      customerId: customer?.id ?? '', date: localToday(), currency: 'CHF', language: lang, ...(latest?.prices ? { prices: latest.prices } : {}),
       lines: latest?.lines.length ? latest.lines : [{ text: t('invoiceLayout.sampleLine'), quantity: 4, unit: 'h', price: 120, vatRate: invoiceRates()[0] }],
       intro: texts.intro, closing: texts.closing,
     };
     const ctx = contextOf(ws);
-    const sheet = draftSheet({ ...ctx, settings: { ...ctx.settings!, layout } }, bookOf(d), sample, customer, layout.logo ? api.logoUrl(layout.logo) : undefined);
+    const sheet = draftSheet({ ...ctx, settings: { ...ctx.settings!, layout } }, bookOf(d), sample, recipientOf(customer, sample, ctx.settings), layout.logo ? api.logoUrl(layout.logo) : undefined);
     const fallback = customer ? {} : { customer: { ...sheet.customer, name: t('invoiceLayout.sampleCustomer'), address: { street: t('invoiceLayout.sampleStreet'), number: '1', postcode: '8000', town: t('invoiceLayout.sampleTown'), country: 'CH' } } };
     const windowGuide = guide ? t(layout.window === 'left' ? 'invoiceLayout.windowFrameLeft' : 'invoiceLayout.windowFrameRight') : undefined;
     return { ...sheet, ...fallback, screen: screenOf(d, canEdit ? 'texts' : undefined, undefined, windowGuide) };

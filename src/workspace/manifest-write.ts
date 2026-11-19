@@ -9,7 +9,8 @@ import type { StatementKind } from './banks.js';
 import { readFileSync } from 'node:fs';
 import { isMap, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
 import { writeAtomic } from '../invoices/store.js';
-import type { Address, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail } from '../invoices/model.js';
+import type { Address, DocumentKind, InvoiceContent, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail, PayToPatch, PaymentTerms, Prices, UnitDef } from '../invoices/model.js';
+import type { NumberFormat } from './numbering.js';
 import { parseIban, roleBefore, type MoneyRole } from './banks.js';
 import { parseManifest, type Manifest } from './manifest.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
@@ -58,9 +59,19 @@ export interface InvoicingPatch {
   /** The payment term a new customer starts with; each customer keeps their own. */
   paymentTermsDays?: number;
   /** The bank account customers pay to, per currency (its IBAN may come in the same change, as `banks`); null drops the currency. */
-  payTo?: Partial<Record<InvoiceCurrency, { account: string } | null>>;
+  payTo?: Partial<Record<InvoiceCurrency, PayToPatch | null>>;
   layout?: Partial<Omit<InvoiceLayout, 'logo' | 'show'>> & { logo?: string | null; show?: Partial<Record<LayoutElement, boolean>> };
   texts?: Partial<Record<InvoiceLanguage, Partial<Record<(typeof OWN_TEXTS)[number], string | null>>>>;
+  /** The firm's units, the whole list written as one block; null removes it (the app's defaults again). */
+  units?: UnitDef[] | null;
+  /** Net or gross prices for a new document of a kind; null: net again. */
+  prices?: Partial<Record<InvoiceContent['kind'], Prices | null>>;
+  /** The firm's payment terms, the whole list written as one block; null removes it (net terms of `paymentTermsDays` again). */
+  paymentTerms?: PaymentTerms[] | null;
+  /** The id of the terms a new invoice takes; null: the first. */
+  defaultTerms?: string | null;
+  /** The number series of a kind (spec 4.4.4), each written as one line; applies from the next number. */
+  numbering?: Partial<Record<DocumentKind, NumberFormat>>;
 }
 
 /** Firma › E-Mail: the outgoing mailbox, field by field; null removes a field, `outgoingMail: null` the block. */
@@ -169,7 +180,12 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     for (const [currency, to] of Object.entries(inv.payTo ?? {})) {
       if (to === null) doc.deleteIn(['invoicing', 'payTo', currency]);
       else if (to) {
-        const node = doc.createNode({ account: to.account }) as YAMLMap;
+        // What else the currency's entry holds stays while its account does; a field set to null leaves.
+        const before = doc.getIn(['invoicing', 'payTo', currency]);
+        const kept = isMap(before) && String(before.get('account')) === to.account ? (before.toJSON() as Record<string, unknown>) : {};
+        const { account, ...fields } = to;
+        const value = Object.fromEntries(Object.entries({ ...kept, ...fields }).filter(([k, v]) => k !== 'account' && v !== null && v !== undefined));
+        const node = doc.createNode({ account, ...value }) as YAMLMap;
         // Like its neighbours: one-line `{ account: "1021" }` when the other currencies are.
         const sibling = (doc.getIn(['invoicing', 'payTo']) as YAMLMap | undefined)?.items.map((i) => i.value).find(isMap);
         node.flow = !sibling || !!sibling.flow;
@@ -182,6 +198,17 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     for (const [lang, texts] of Object.entries(inv.texts ?? {})) {
       for (const [key, value] of Object.entries(texts)) set(doc, ['invoicing', 'texts', lang, key], value);
     }
+    // One line per unit, `{ id: m2, de: m², … }`.
+    if (inv.units === null) doc.deleteIn(['invoicing', 'units']);
+    else if (inv.units) doc.setIn(['invoicing', 'units'], doc.createNode(inv.units.map((u) => { const n = doc.createNode(u) as YAMLMap; n.flow = true; return n; })));
+    // One line per term, `{ id: sk2, name: …, days: 30, skonto: { percent: 2, days: 10 } }`.
+    if (inv.paymentTerms === null) doc.deleteIn(['invoicing', 'paymentTerms']);
+    else if (inv.paymentTerms) doc.setIn(['invoicing', 'paymentTerms'], doc.createNode(inv.paymentTerms.map((x) => { const n = doc.createNode(x) as YAMLMap; n.flow = true; return n; })));
+    if (inv.defaultTerms !== undefined) set(doc, ['invoicing', 'defaultTerms'], inv.defaultTerms);
+    for (const [kind, value] of Object.entries(inv.prices ?? {})) set(doc, ['invoicing', 'prices', kind], value);
+    // One line per kind, `invoice: { format: "RE-{JJJJ}-{NNNNN}", restartYearly: true }`.
+    for (const [kind, value] of Object.entries(inv.numbering ?? {})) { const n = doc.createNode(value) as YAMLMap; n.flow = true; doc.setIn(['invoicing', 'numbering', kind], n); }
+    if (isMap(doc.getIn(['invoicing', 'prices'])) && (doc.getIn(['invoicing', 'prices']) as YAMLMap).items.length === 0) doc.deleteIn(['invoicing', 'prices']);
   }
   if (patch.sells) {
     if (!isMap(doc.get('profile'))) throw new WorkspaceError(`${path} has no profile: what the firm sells is kept in it (npm run init writes one)`);

@@ -59,5 +59,5 @@ test('the drop\'s closing line counts the tasks as the dock does, all of them, a
 });
 
 test('an invoice of a firm not in the VAT register has no VAT line in its head', () => {
-  assert.match(readFileSync('src/app/areas/invoices/Detail.tsx', 'utf8'), /\{chargesVat\(\) \|\| t0\.vat \? <span data-testid="invoice-head-vat">/);
+  assert.match(readFileSync('src/app/areas/invoices/Detail.tsx', 'utf8'), /\(chargesVat\(\) \|\| t0\.vat\) \? <span data-testid="invoice-head-vat">/);
 });

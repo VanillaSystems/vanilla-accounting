@@ -77,10 +77,11 @@ export function mergeSection(app: Section | undefined, workspace: Section | unde
  * Pure. Same id in both layers = one counterparty.
  * - name: the vendor's (a binding of a vendor may not redeclare it).
  * - grouped: the vendor's when its file says it; else the binding's (a company learns that a business pays several receipts at once, #190).
- * - accounts, learnedTx: the binding's only (the app layer cannot know a chart of accounts, nor learn from the company's links).
+ * - accounts, learnedTx, payroll: the binding's only (the app layer cannot know a chart of accounts, nor learn from the company's links).
  * - provider: its reports and payout days the vendor's (a binding may add what the vendor does not say), its accounts the binding's only (src/booking/providers.ts mergeProvider).
  * - match, documents: union, vendor first; one signal or document id has one owner. sharedUid: union.
  * - steps: per address, vendor rules first, then the binding's.
+ * - collects: union, vendor first (the company's file says which kinds its fund collects, docs/specs/payroll.md §10.2 A5).
  * A binding with no vendor is a private counterparty and carries name and match itself.
  */
 export function mergeCounterparty(
@@ -92,6 +93,7 @@ export function mergeCounterparty(
     if (raw && raw.id !== basename(file!, '.yaml')) fail(file, `id must be "${basename(file!, '.yaml')}" (the file name)`);
   }
   if (vendor?.accounts) fail(files.vendor, `accounts are one company's chart — move them to ${homeOf('workspace', role, vendor.id!)}`);
+  if (vendor?.payroll !== undefined) fail(files.vendor, `payroll is one company's choice — move it to ${homeOf('workspace', role, vendor.id!)}`);
   const merged = mergeProvider(vendor?.provider, binding?.provider, !!vendor);
   if (merged && 'problem' in merged) return fail(merged.layer === 'vendor' ? files.vendor : files.binding, merged.problem.replace('<binding>', homeOf('workspace', role, (vendor ?? binding)!.id!)));
   const provider = merged?.raw;
@@ -119,10 +121,15 @@ export function mergeCounterparty(
   }
   return compileCounterparty({
     id: vendor.id, name: vendor.name, grouped: vendor.grouped ?? binding.grouped, accounts: binding.accounts, learnedTx: binding.learnedTx, ...(provider !== undefined ? { provider } : {}),
+    ...(binding.payroll !== undefined ? { payroll: binding.payroll } : {}),
+    ...(vendor.collects !== undefined || binding.collects !== undefined ? { collects: [...asList(vendor.collects), ...asList(binding.collects)] } : {}),
     sharedUid: [...new Set([...(vendor.sharedUid ?? []), ...(binding.sharedUid ?? [])])],
     roles: [...new Set([...(vendor.roles ?? []), ...(binding.roles ?? [])])], match, documents, facts, steps,
   }, files, role);
 }
+
+/** A raw list as it stands, for the merge: compileCounterparty checks it. */
+const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : v === undefined ? [] : [v]);
 
 function yamlFiles<T>(layer: Layer, root: string, dir: string, suffix: string): KnowledgeFile<T>[] {
   const full = join(root, dir);

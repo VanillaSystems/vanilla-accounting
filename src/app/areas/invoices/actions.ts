@@ -2,9 +2,11 @@
  * What the buttons of Rechnungen do: each call goes to the invoicing API, its refusal is shown
  * in the user's language (Art. 26 MWSTG gaps named one by one), and the records are read again.
  */
-import { issuedPdfUrl, sentPdfUrl, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
+import { isItem, issuedPdfUrl, sentPdfUrl, type Contact, type DocumentKind, type Draft, type Invoice, type InvoiceLine, type Issued, type WriteOff, type WriteOffReason } from '../../../invoices/model.js';
+import type { AllocationPart } from '../../../invoices/payments.js';
 import type { MailMessage } from '../../../invoices/mail.js';
-import { api, errorText, type CreditInput, type DraftChange } from '../../lib/api.js';
+import { api, errorText, type AccountsInput, type ContactInput, type CreditInput, type DraftChange } from '../../lib/api.js';
+import { lineDefaults } from '../../../invoices/contacts.js';
 import { t } from '../../i18n/index.js';
 import type { Nav } from '../index.js';
 import { localToday, parsePeriod, periodContaining, type Period } from '../../../accounting/periods.js';
@@ -13,18 +15,23 @@ import { setUi } from './state.js';
 import { edits, put, reloadInvoices } from './data.js';
 import { inOrder } from '../../lib/in-order.js';
 import { customerChange, routeId } from './model.js';
+import { viewOfKind } from './table.js';
 import { filing, invoiceRates, invoicing } from '../../../engines/index.js';
 import { desktop } from '../../desktop/bridge.js';
 
-/** A document's place: a Rechnung in Rechnungen, a Gutschrift in Gutschriften (/invoices/<number> opens either). */
-export const invoicePath = (inv: Invoice) => ({ area: 'invoices' as const, view: inv.kind === 'credit-note' ? 'credit-notes' as const : 'list' as const, id: routeId(inv) });
+/** A document's place: the table of its kind (/invoices/<number> opens any). */
+export const invoicePath = (inv: Invoice) => ({ area: 'invoices' as const, view: viewOfKind(inv.kind), id: routeId(inv) });
 
 /** An invoice's link in a period that holds its date (a draft shows in every period). */
 export const invoiceAt = (inv: Invoice, current?: Period): Location =>
   ({ route: invoicePath(inv), query: inv.status === 'draft' && current ? { period: current } : { period: parsePeriod(periodContaining(inv.date, current, filing().length), localToday()) ?? undefined } });
 
-/** The line a new draft starts with, its text ready to be typed over; no unit until one is picked (a discount has none). */
-export const firstLine = (zero: boolean): InvoiceLine => ({ text: t('invoices.newLine'), quantity: 1, price: 0, vatRate: zero ? 0 : invoiceRates()[0] });
+/**
+ * The line a new draft starts with, its text ready to be typed over; no unit until one is picked.
+ * `contact`: its revenue account and standing discount fill the new position (the person may remove them).
+ */
+export const firstLine = (zero: boolean, contact?: Pick<Contact, 'revenueAccount' | 'discount'>): InvoiceLine =>
+  ({ text: t('invoices.newLine'), quantity: 1, price: 0, vatRate: zero ? 0 : invoiceRates()[0], ...lineDefaults(contact) });
 
 async function run<T>(nav: Nav, call: Promise<T>): Promise<T | undefined> {
   try {
@@ -35,7 +42,7 @@ async function run<T>(nav: Nav, call: Promise<T>): Promise<T | undefined> {
   }
 }
 
-export async function newDraft(nav: Nav, customer: Pick<Customer, 'id' | 'name'>, input: DraftChange = {}): Promise<Draft | undefined> {
+export async function newDraft(nav: Nav, customer: Pick<Contact, 'id' | 'name'>, input: DraftChange = {}): Promise<Draft | undefined> {
   const draft = await run(nav, api.createDraft({ ...input, customerId: customer.id }));
   if (!draft) return undefined;
   put({ invoice: draft });
@@ -45,9 +52,9 @@ export async function newDraft(nav: Nav, customer: Pick<Customer, 'id' | 'name'>
   return draft;
 }
 
-/** A new draft for `c`: one line to type over, the customer's language, 0 % for a customer abroad. */
-export const newDraftFor = (nav: Nav, c: Pick<Customer, 'id' | 'name' | 'language' | 'address'>) =>
-  newDraft(nav, c, { lines: [firstLine(false)], ...customerChange({ lines: [firstLine(false)], currency: 'CHF' }, c) });
+/** A new draft of `kind` for `c`: one line to type over, the contact's language, 0 % for a contact abroad. */
+export const newDraftFor = (nav: Nav, c: Pick<Contact, 'id' | 'name' | 'language' | 'addresses' | 'currency'>, kind: DocumentKind = 'invoice') =>
+  newDraft(nav, c, { ...(kind !== 'invoice' ? { kind } : {}), lines: [firstLine(false)], ...customerChange({ lines: [firstLine(false)], currency: 'CHF' }, c) });
 
 const draftSaves = inOrder();
 
@@ -76,13 +83,13 @@ export async function deleteDraft(nav: Nav, draft: Draft): Promise<void> {
  * Issues the draft, shows it in a period that holds its date (F10): the period on screen, `current`,
  * when it does, and opens the send window with its PDF.
  */
-export async function issue(nav: Nav, draft: Draft, current: Period): Promise<Issued | undefined> {
-  const issued = await run(nav, api.issue(draft.id));
-  if (!issued) return undefined;
-  await reloadInvoices();
-  nav.go(invoiceAt(issued, current));
-  setUi({ dialog: { kind: 'send', issued: true }, preview: false });
-  return issued;
+export function issue(nav: Nav, draft: Draft, current: Period, anyway = false): Promise<Issued | undefined> {
+  // A draft whose Auftrag or Angebot was cancelled since asks first («Trotzdem ausstellen»).
+  return withWarnings(nav, t('invoices.issue'), (confirm) => api.issue(draft.id, anyway, confirm), async (issued) => {
+    await reloadInvoices();
+    nav.go(invoiceAt(issued, current));
+    setUi({ dialog: { kind: 'send', issued: true }, preview: false });
+  });
 }
 
 /**
@@ -123,14 +130,107 @@ export async function send(nav: Nav, inv: Issued, email?: MailMessage): Promise<
   return true;
 }
 
+/** «Zurück zum Entwurf»: the document is a draft again under its number, shown as such. */
+export async function backToDraft(nav: Nav, inv: Issued): Promise<boolean> {
+  const draft = await run(nav, api.backToDraft(inv.id));
+  if (!draft) return false;
+  put({ invoice: draft });
+  await booked(nav);
+  nav.select(invoicePath(draft));
+  nav.toast(t('invoices.backDone', { number: inv.number }));
+  return true;
+}
+
+/** «Konten ändern»: the positions' accounts, and the bookings with them. */
+export async function changeAccounts(nav: Nav, inv: Issued, input: AccountsInput): Promise<boolean> {
+  if (!(await run(nav, api.changeAccounts(inv.id, input)))) return false;
+  await booked(nav);
+  nav.toast(t('invoices.accountsDone'));
+  return true;
+}
+
+/**
+ * «Als Entwurf kopieren» (spec 4.4.1): a draft of the same kind with every position, no `from`; a
+ * Gutschrift's copy is a Rechnung with the prices turned round, since a Gutschrift comes only from its Rechnung.
+ */
 export async function copyAsDraft(nav: Nav, inv: Issued): Promise<void> {
-  const { customerId, currency, language, subject, lines, intro, closing, exemption } = inv;
-  const lines2 = inv.kind === 'credit-note' ? lines.map((l) => ({ ...l, price: -l.price })) : lines;
-  const draft = await newDraft(nav, { id: customerId, name: inv.customer.name }, { currency, language, lines: lines2, ...(subject ? { subject } : {}), ...(intro ? { intro } : {}), ...(closing ? { closing } : {}), ...(exemption ? { exemption } : {}) });
+  const { customerId, currency, language, subject, lines, prices, intro, closing, exemption, ordered, printAs } = inv;
+  // A copy stands alone: its positions name no position of a source.
+  const lines2 = lines.map((l) => { if (!isItem(l)) return l; const { ofLine: _f, ...rest } = l; return inv.kind === 'credit-note' ? { ...rest, price: -l.price } : rest; });
+  const kind = inv.kind === 'credit-note' ? undefined : inv.kind;
+  const draft = await newDraft(nav, { id: customerId, name: inv.customer.name }, {
+    ...(kind && kind !== 'invoice' ? { kind } : {}), currency, language, lines: lines2, ...(prices ? { prices } : {}), ...(subject ? { subject } : {}), ...(intro ? { intro } : {}), ...(closing ? { closing } : {}), ...(exemption ? { exemption } : {}),
+    ...(ordered ? { ordered } : {}), ...(kind === 'sales-order' && printAs ? { printAs } : {}),
+  });
   if (draft) nav.toast(t('invoices.copied', { number: inv.number }));
 }
 
-export async function cancel(nav: Nav, inv: Issued, input: { date: string; reason: string; notify: boolean }, email?: MailMessage): Promise<boolean> {
+/** The warnings of spec 4.11 a phase-2 action may meet: each opens «Trotzdem …» instead of a toast. */
+const WARNINGS = ['expired', 'declined', 'overOpen', 'sentVersion', 'orderDelivered', 'orderDrafts', 'sourceCancelled'] as const;
+type Warning = (typeof WARNINGS)[number];
+
+/**
+ * Runs `call(confirmed)`; a warning of the API opens the warning dialog, whose «Trotzdem …» runs it
+ * again with that warning confirmed too (several may come one after the other).
+ */
+async function withWarnings<T>(nav: Nav, title: string, call: (confirmed: Warning[]) => Promise<T>, done: (r: T) => void | Promise<void>, confirmed: Warning[] = []): Promise<T | undefined> {
+  try {
+    const r = await call(confirmed);
+    await done(r);
+    return r;
+  } catch (e) {
+    const body = (e as { body?: { invoiceRefusal?: string } }).body;
+    const code = body?.invoiceRefusal as Warning | undefined;
+    if (code && WARNINGS.includes(code) && !confirmed.includes(code)) {
+      setUi({ dialog: { kind: 'warn', title, text: errorText(e), anyway: t(`sales.anyway.${code}`), run: () => withWarnings(nav, title, call, done, [...confirmed, code]) } });
+      return undefined;
+    }
+    nav.toast(errorText(e));
+    return undefined;
+  }
+}
+
+/** «Auftrag erstellen», «Lieferschein erstellen», «Rechnung erstellen»: the new draft opens; nothing ticked is said by the API. */
+export function convert(nav: Nav, inv: Issued, to: DocumentKind, lines: Array<{ line: number; quantity: number }>): Promise<Draft | undefined> {
+  return withWarnings(nav, t(`sales.convert.${to}` as 'sales.convert.invoice'), (confirm) => api.convert(inv.id, { to, lines, ...(confirm.length ? { confirm } : {}) }), async (draft) => {
+    setUi({ dialog: null });
+    put({ invoice: draft });
+    await reloadInvoices();
+    nav.select(invoicePath(draft));
+    nav.toast(t('sales.converted', { number: inv.number }));
+  });
+}
+
+/** «Angenommen» or «Abgelehnt» on an Angebot, the person's click; null takes it back. */
+export async function answer(nav: Nav, inv: Issued, a: 'accepted' | 'declined' | null): Promise<boolean> {
+  const done = await run(nav, api.answer(inv.id, a));
+  if (!done) return false;
+  put({ invoice: done });
+  await reloadInvoices();
+  nav.toast(t(a ? `sales.answered.${a}` : 'sales.answered.none', { number: inv.number }));
+  return true;
+}
+
+/** An Angebot or Auftrag back to draft; once sent, «Trotzdem bearbeiten» first. */
+export function reopen(nav: Nav, inv: Issued): Promise<Draft | undefined> {
+  return withWarnings(nav, t('sales.reopen'), (confirm) => api.reopen(inv.id, confirm.includes('sentVersion')), async (draft) => {
+    setUi({ dialog: null });
+    await reloadInvoices();
+    nav.select(invoicePath(draft));
+    nav.toast(t('sales.reopened', { number: inv.number }));
+  });
+}
+
+/** Storno of an Auftrag or Lieferschein: no notice, nothing booked; an Auftrag with a Lieferschein asks «Trotzdem stornieren». */
+export function cancelDocument(nav: Nav, inv: Issued, input: { date: string; reason: string }): Promise<unknown> {
+  return withWarnings(nav, t('sales.cancelTitle', { number: inv.number }), (confirm) => api.cancelInvoice(inv.id, { ...input, notify: false, ...(confirm.length ? { confirm } : {}) }), async () => {
+    setUi({ dialog: null });
+    await reloadInvoices();
+    nav.toast(t('sales.cancelledDoc', { number: inv.number }));
+  });
+}
+
+export async function cancel(nav: Nav, inv: Issued, input: { date: string; reason: string; notify: boolean; confirm?: 'paid' }, email?: MailMessage): Promise<boolean> {
   const done = await run(nav, api.cancelInvoice(inv.id, { ...input, ...(input.notify ? (email ? { email } : { to: 'download' }) : {}) }));
   if (!done) return false;
   if (done.sent && !email) download(sentPdfUrl(done.sent.id), `${done.sent.title}.pdf`);
@@ -183,10 +283,79 @@ export async function releasePayment(nav: Nav, inv: Pick<Issued, 'id' | 'number'
   return true;
 }
 
-export async function saveCustomer(nav: Nav, id: string | undefined, fields: CustomerFields): Promise<Customer | undefined> {
-  const c = await run(nav, id ? api.patchCustomer(id, fields) : api.createCustomer(fields));
+export async function saveContact(nav: Nav, id: string | undefined, fields: ContactInput): Promise<Contact | undefined> {
+  const c = await run(nav, id ? api.patchContact(id, fields) : api.createContact(fields));
   if (!c) return undefined;
-  put({ customer: c });
+  put({ contact: c });
   await reloadInvoices();
   return c;
+}
+
+/** «Archivieren» or «Löschen»: a contact a document names is archived, one without documents deleted; the toast says which, its undo restores an archived one. */
+export async function removeContact(nav: Nav, c: Contact): Promise<boolean> {
+  const out = await run(nav, api.removeContact(c.id));
+  if (!out) return false;
+  await reloadInvoices();
+  if (out.outcome === 'archived') nav.toast(t('contacts.archived', { name: c.name }), () => { void restoreContact(nav, c); });
+  else nav.toast(t('contacts.deleted', { name: c.name }));
+  return true;
+}
+
+export async function restoreContact(nav: Nav, c: Contact): Promise<boolean> {
+  if (!(await run(nav, api.patchContact(c.id, { archived: false })))) return false;
+  await reloadInvoices();
+  nav.toast(t('contacts.restored', { name: c.name }));
+  return true;
+}
+
+/** After a change that booked: the records and the books are read again. */
+async function booked(nav: Nav): Promise<void> {
+  await reloadInvoices();
+  nav.refresh();
+}
+
+/** «Zahlungseingang erfassen»: a hand movement on a bank or the cash box; the toast's undo takes it back. */
+export async function handPayment(nav: Nav, inv: Pick<Issued, 'id' | 'number'>, input: { date: string; account: string; amount: number }): Promise<boolean> {
+  const out = await run(nav, api.handPayment(inv.id, input));
+  if (!out) return false;
+  await booked(nav);
+  nav.toast(t('invoices.handPaid', { number: inv.number }), () => { void removeHandPayment(nav, inv, out.transaction.ref); });
+  return true;
+}
+
+export async function removeHandPayment(nav: Nav, inv: Pick<Issued, 'id' | 'number'>, ref: string): Promise<boolean> {
+  if (!(await run(nav, api.removeHandPayment(inv.id, ref)))) return false;
+  await booked(nav);
+  nav.toast(t('invoices.handRemoved', { number: inv.number }));
+  return true;
+}
+
+/** «Rest ausbuchen»; `anyway`: «Trotzdem ausbuchen» over more than is open. Refused for more than open: the caller offers «Trotzdem». */
+export async function writeOff(nav: Nav, inv: Pick<Issued, 'id' | 'number'>, input: { reason: WriteOffReason; date?: string; amount?: number; note?: string }, anyway = false): Promise<WriteOff | 'aboveOpen' | undefined> {
+  try {
+    const out = await api.writeOff(inv.id, { ...input, ...(anyway ? { confirm: 'aboveOpen' as const } : {}) });
+    await booked(nav);
+    nav.toast(t('invoices.writtenOff', { number: inv.number, reason: t(`invoices.reason.${input.reason}`) }), () => { void removeWriteOff(nav, inv, out.writeOff.id); });
+    return out.writeOff;
+  } catch (e) {
+    if ((e as { body?: { invoiceRefusal?: string } }).body?.invoiceRefusal === 'aboveOpen') return 'aboveOpen';
+    nav.toast(errorText(e));
+    return undefined;
+  }
+}
+
+export async function removeWriteOff(nav: Nav, inv: Pick<Issued, 'id' | 'number'>, id: string): Promise<boolean> {
+  if (!(await run(nav, api.removeWriteOff(inv.id, id)))) return false;
+  await booked(nav);
+  nav.toast(t('invoices.writeOffRemoved', { number: inv.number }));
+  return true;
+}
+
+/** «Buchen» of the Ausziffern dialog. */
+export async function allocate(nav: Nav, ref: string, parts: AllocationPart[]): Promise<boolean> {
+  const out = await run(nav, api.allocate(ref, parts));
+  if (!out) return false;
+  await booked(nav);
+  nav.toast(t('invoices.allocated', { n: out.paid.length }));
+  return true;
 }

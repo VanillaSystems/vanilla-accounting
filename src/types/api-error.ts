@@ -1,7 +1,7 @@
 import type { AuditSnapshot } from '../audit/sources.js';
 import type { Iban } from '../workspace/banks.js';
 import type { MailRefusal } from '../invoices/mail.js';
-import type { InvoiceRefusal, Missing } from '../invoices/rules.js';
+import type { InvoiceRefusal, Missing, PaymentRefusal } from '../invoices/rules.js';
 import type { SetupRefusal } from '../workspace/create.js';
 import type { SaleGone } from '../questions/model.js';
 import type { RuleRefusal } from './rule-refusal.js';
@@ -21,7 +21,7 @@ import type { NoAccess } from './desktop.js';
 export const CLOSED_REASONS = [
   'editTransaction', 'deleteTransaction', 'newTransaction', 'mapping',
   'editReceipt', 'deleteReceipt', 'editEntry', 'deleteEntry', 'newStatement', 'newEntry',
-  'openingBalance', 'discardFile', 'vatAdjustment',
+  'openingBalance', 'discardFile', 'vatAdjustment', 'payroll',
 ] as const;
 export type ClosedReason = (typeof CLOSED_REASONS)[number];
 
@@ -42,6 +42,9 @@ export type ApiRefusal =
   | { code: 'shareNotPackage' }
   /** A hand-over file past a limit (its size, a file's size, its number of files): the limit is named. */
   | { code: 'shareTooLarge'; params: { limit: string } }
+  /** A request body over its limit: a contacts table over the import's (`importTooLarge`), any other (`bodyTooLarge`). */
+  | { code: 'importTooLarge'; params: { limit: string; rows: number } }
+  | { code: 'bodyTooLarge'; params: { limit: string } }
   /** A return based on a version never handed to its sender. */
   | { code: 'shareUnknownBase'; params: { version: string; name: string } }
   /** An update that could not be written: the copy and his changes stay as they were. */
@@ -107,6 +110,12 @@ export type ApiRefusal =
   | { code: 'notByReceipt' }
   /** «Arbeitnehmeranteil abziehen» on a payment that has no employees' share open (#476). */
   | { code: 'withheldNone' }
+  /** A payroll action that does not apply (src/payroll/close.ts PayrollRefusal): the payslip is gone, closed already, not closed, not the latest closed month, the Lohnart unknown, the amount missing; a setting malformed, an entry a closed payslip used, a social security number or IBAN that is none, a solution that exists (src/payroll/settings.ts). */
+  | { code: 'payroll'; params: { why: 'notFound' | 'alreadyClosed' | 'notClosed' | 'notLatest' | 'unknownWageType' | 'badAmount' | 'badInput' | 'unknownInsurance' | 'noExpenseAccount' | 'nothingAccrued' | 'noEmail' | 'noPassword' | 'noOutbox' | 'badPassword' | 'used' | 'socialSecurityNumber' | 'iban' | 'exists' | 'gone' | 'closedPeriod' | 'opening' | 'tariff'; field?: string;
+    /** With `why: 'tariff'`: a tax at source tariff file that could not be loaded (src/payroll/tariffs.ts TariffError). */
+    tariff?: 'notFound' | 'network' | 'badFile' | 'otherRegion' | 'otherYear' | 'noSource' | 'tooLarge' | 'notAFile';
+    /** With `tariff: 'tooLarge'`: the limit, as words («20 MB»). */
+    limit?: string } }
   | { code: 'decidedByHand' }
   | { code: 'changedSince' }
   | { code: 'undoGone' }
@@ -302,10 +311,23 @@ export type ApiRefusal =
   | { code: 'invoicingNotSetUp' }
   /** Firma › Rechnungslayout › Zahlungskonten: the account named is no bank account of that currency. */
   | { code: 'payToAccount'; params: { currency: string } }
+  /** Firma › Rechnungslayout › Zahlungskonten: the text given as the account's QR-IBAN is none. */
+  | { code: 'notQrIban'; params: { iban: string } }
+  /** A warning, not a refusal (#506): a QR-IBAN under another currency than CHF, kept with `confirm: 'qrIbanNotChf'` («Trotzdem speichern»). */
+  | { code: 'qrIbanNotChf'; params: { currency: string } }
+  /** Firma › Rechnungslayout › Einheiten: an id that is no short code, a word missing in a language, an id twice, a unit a draft still uses. */
+  | { code: 'unitId'; params: { id: string } }
+  | { code: 'unitWord'; params: { id: string; language: string } }
+  | { code: 'unitTwice'; params: { id: string } }
+  /** Firma › Rechnungslayout › Nummern: a kind's number format no number or payment reference can hold (src/invoices/numbering.ts FormatRefusal). */
+  | { code: 'numberFormat'; params: { kind: string; refusal: string; format: string } }
+  | { code: 'unitInUse'; params: { id: string } }
   /** Firma › Bankkonten: a text that is no IBAN (length or check digits). */
   /** Firma › Bankkonten: the IBAN cleared is printed on invoices (invoicing.payTo); pick another account under Rechnungslayout first. */
   | { code: 'ibanOnInvoices'; params: { currency: string; account: string } }
   | { code: 'unknownCustomer' }
+  /** The AI's draft names an Artikel by a code or name no live Artikel has (or two share). */
+  | { code: 'unknownArticle' }
   | { code: 'amountZero' }
   | { code: 'noAccount' }
   | { code: 'unknownVatCode'; params: { code: string } }
@@ -416,12 +438,16 @@ export interface StatementParams {
 }
 
 /** An invoicing refusal: which rule of src/invoices/rules.ts refused, and for an incomplete invoice what Art. 26 MWSTG still asks for. */
-export type InvoiceErrorBody = { error: string; code?: undefined; invoiceRefusal: InvoiceRefusal | 'noBrowser' | 'printFailed'; missing?: Missing[] };
+/** `params`: the facts a phase-2 refusal names (a date, a number, a quantity), filled into its words. */
+export type InvoiceErrorBody = { error: string; code?: undefined; invoiceRefusal: InvoiceRefusal | 'noBrowser' | 'printFailed'; missing?: Missing[]; params?: Record<string, string | number> };
 
 /** An e-mail the company's mailbox did not send (src/invoices/mail.ts); nothing was recorded. */
 export type MailErrorBody = { error: string; code?: undefined; mailRefusal: MailRefusal; detail?: string };
 
-export type ApiErrorBody = ({ error: string } & (ApiRefusal | { code?: undefined })) | InvoiceErrorBody | MailErrorBody;
+/** A payment, an allocation or a write-off of a document refused (src/invoices/payments.ts PaymentError). */
+export type PaymentErrorBody = { error: string; code?: undefined; paymentRefusal: PaymentRefusal };
+
+export type ApiErrorBody = ({ error: string } & (ApiRefusal | { code?: undefined })) | InvoiceErrorBody | MailErrorBody | PaymentErrorBody;
 
 /**
  * GET /api/status: the API runs, and whether it refuses every write (READONLY=1, `npm run start:audit`).

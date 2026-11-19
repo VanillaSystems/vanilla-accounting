@@ -13,6 +13,8 @@ import {
   YEAR, bankDay, invoicesFor, isoDate, lastDay, MONTHS, mulberry32, pad, qrReference,
   type Company, type Demo, type Payment, type Scenario, type StatementBank, type Vendor,
 } from './kit.js';
+import { COIFFEUR_INVOICING } from './coiffeur-invoices.js';
+import { invoicePayments } from './invoices.js';
 
 const COMPANY: Company = {
   name: 'Salon Beispiel',
@@ -144,6 +146,9 @@ function scenario(seed: number): Scenario {
     parts: [{ counterparty: VENDORS.druck.bankName, reference: qrReference('66002026047'), text: 'Rechnung BD-2026-0312', legs: [{ account: '6600', amount: -240, text: 'Beispiel Druck, Flyer Frühlingsaktion' }], doc: invoice({ file: '20260331-beispiel-druck-flyer', vendor: VENDORS.druck, date: '2026-03-31', title: 'Rechnung', number: 'BD-2026-0312', description: 'Beispiel Druck, Flyer', currency: 'CHF', items: [{ text: 'Flyer A5, 500 Stück', gross: 240, rate: 8.1 }] }) }],
   });
 
+  // The wedding is invoiced in the app and paid by its QR reference (coiffeur-invoices.ts).
+  payments.push(...invoicePayments(COIFFEUR_INVOICING));
+
   return { payments, manual: [], correctionCases: [] };
 }
 
@@ -180,4 +185,5 @@ export const coiffeur: Demo = {
   vendors: VENDORS,
   knowledge: KNOWLEDGE,
   scenario,
+  invoicing: COIFFEUR_INVOICING,
 };

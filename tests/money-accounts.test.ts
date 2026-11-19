@@ -19,7 +19,7 @@ import { APP_FOLDER, workspaceAt } from '../src/workspace/workspace.js';
 import { upgradeWorkspace } from '../src/workspace/upgrade.js';
 import { loadBooks, saveBooks, sealsOf } from '../src/books/store.js';
 import { MATCH_DAYS, matchStatementRows, mergeIndex, type Scan } from '../src/books/bank-import.js';
-import { DEMO_ROOTS } from './support/workspace.js';
+import { DEMO_ROOT, DEMO_ROOTS } from './support/workspace.js';
 import { parsePeriod } from '../src/accounting/periods.js';
 import { reportView } from '../src/app/areas/reports/model.js';
 import { testIban } from './support/iban.js';
@@ -154,7 +154,9 @@ for (const root of DEMO_ROOTS) {
     cpSync(root, ws, { recursive: true });
     // The workspace as the app before #88 wrote it: manifest 1 without roles, books 2.
     const manifest = join(ws, 'belege.workspace.yaml');
-    writeFileSync(manifest, readFileSync(manifest, 'utf8').replace(/^schema: \d+$/m, 'schema: 1').replace(/, role: \w+/g, ''));
+    // A cash box (role cash) came with #88: the manifest from before names none.
+    const noCash = (yaml: string) => yaml.replace(/^ {2}- \{ bank: Kasse, .*role: cash \}\n/m, '');
+    writeFileSync(manifest, noCash(readFileSync(manifest, 'utf8')).replace(/^schema: \d+$/m, 'schema: 1').replace(/, role: \w+/g, ''));
     const ledger = join(ws, 'ledger.json');
     writeFileSync(ledger, readFileSync(ledger, 'utf8').replace(/"schema": \d+/, '"schema": 2'));
     const before = filesOf(ws);
@@ -164,7 +166,7 @@ for (const root of DEMO_ROOTS) {
     const after = filesOf(ws);
     const changed = [...after.keys()].filter((f) => after.get(f) !== before.get(f)).sort();
     assert.deepEqual(changed, ['belege.workspace.yaml', 'ledger.json'], 'no book record, seal, filing or receipt changed');
-    assert.equal(readFileSync(manifest, 'utf8'), readFileSync(join(root, 'belege.workspace.yaml'), 'utf8'), 'the migrated manifest is the one the app ships');
+    assert.equal(readFileSync(manifest, 'utf8'), noCash(readFileSync(join(root, 'belege.workspace.yaml'), 'utf8')), 'the migrated manifest is the one the app ships');
     const books = loadBooks(workspaceAt(ws));
     const seals = sealsOf(books).checks;
     assert.ok(seals.every((c) => c.status === 'intact'), seals.map((c) => `${c.quarter} ${c.status}`).join(', '));
@@ -211,7 +213,12 @@ test('mergeIndex: the matched row is no new movement, a re-import adds nothing, 
 });
 
 let api: ApiServer;
-before(async () => { api = await startApi('tests/fixtures/period-lock-index.json'); });
+before(async () => {
+  // The demo's manifest without its cash box: the box is added here by its first movement.
+  const dir = mkdtempSync(join(tmpdir(), 'money-no-cash-'));
+  writeFileSync(join(dir, 'belege.workspace.yaml'), readFileSync(join(DEMO_ROOT, 'belege.workspace.yaml'), 'utf8').replace(/^ {2}- \{ bank: Kasse, .*role: cash \}\n/m, ''));
+  api = await startApi('tests/fixtures/period-lock-index.json', {}, { manifestOf: dir });
+});
 after(() => api?.stop());
 
 const camt = (date: string, amount: string) => `<?xml version="1.0"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt>

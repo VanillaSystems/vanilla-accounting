@@ -56,6 +56,8 @@ test('«Öffnen…» of the hand-over: a Durchsicht copy, where the sharer\'s st
     ['POST', '/api/handover/share', { to: { name: 'Jemand' } }],
     ['POST', '/api/automation', { kind: 'start', workflow: 'vat-filing', item: { kind: 'period', id: '2026-Q3' } }],
     ['POST', '/api/year-close/2026/close', {}],
+    ['POST', '/api/payroll/payslips/2026-09-e1/send', {}],
+    ['POST', '/api/payroll/employees/e1/mail-password', {}],
   ] as const) {
     const r = await rcpt.send(method, path, body);
     assert.equal(r.status, 403, `${method} ${path}`);
