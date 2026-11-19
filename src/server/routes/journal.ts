@@ -11,10 +11,11 @@ import { patchBody, refDates, stringField, tagsField, updateBooks, withBooks, Re
 import { isManualRef } from '../../books/refs.js';
 import { learnFromCorrection, undoAnswer } from '../questions.js';
 import type { EntrySet } from '../../types/assistant.js';
-import { addEntry, bookByReceipt, clearWithheld, undoByReceipt, undoClearWithheld, deleteEntry, link, restoreSaved, setEntry } from '../edits.js';
+import { addEntries, addEntry, bookByReceipt, clearWithheld, undoByReceipt, undoClearWithheld, deleteEntry, link, restoreSaved, setEntry } from '../edits.js';
 import { deletedEntry, handEdits, recordDeletion } from '../../saving/changes.js';
 import { parseBookedBy } from '../../books/booked-by.js';
 import { bookPaymentAgain } from './automation.js';
+import { bookingLine } from './transactions.js';
 import { bookingWarnings } from '../../accounting/booking-warnings.js';
 import { bookedState } from '../../accounting/payment-entries.js';
 import type { Books } from '../../books/store.js';
@@ -55,6 +56,18 @@ router.patch('/api/journal-entries/:id', (req, res) => {
   res.json({ ok: true, warnings });
 });
 
+/** A Sammelbuchung by hand (#567, src/server/edits.ts addEntries): its lines under one new ref, each with the saved booking's warnings. */
+router.post('/api/journal-entries/lines', (req, res) => {
+  const b = patchBody(req.body, ['date', 'lines']);
+  const date = stringField(b, 'date');
+  if (!isIsoDate(date)) throw new RequestError(400, 'date: YYYY-MM-DD.');
+  if (!Array.isArray(b.lines)) throw new RequestError(400, 'lines: eine Liste von Zeilen.');
+  const lines = b.lines.map(bookingLine);
+  return withBooks(res, (books) => {
+    const entries = addEntries(books, date, lines);
+    return { entries, warnings: entries.flatMap((e) => bookingWarnings(books, e)) };
+  });
+});
 
 /**
  * A new entry booked by hand (src/server/edits.ts addEntry). `id`, the exchange fields, `origin`

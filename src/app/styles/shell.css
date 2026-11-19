@@ -313,6 +313,16 @@ h1:has(.addbtn) { position: relative; padding-right: 130px; }
 .who { font: 700 22px/1.2 var(--font-display); letter-spacing: -.01em; margin: 0; }
 .who small { display: block; font: 400 14px var(--font-sans); color: var(--muted); margin-top: 2px; letter-spacing: 0; }
 
+/* Layout A (docs/specs/invoicing.md 4.8, Area.table): the table across the width, the object open as a panel over its right
+   part; «×» or Esc closes it. The panel leaves the table's first columns in view, so the row it shows stays readable. */
+main.tabled { grid-template-columns: minmax(0, 1fr); position: relative; }
+main.tabled > .list { border-right: 0; }
+main.tabled > .detail.panel { position: absolute; top: 0; right: 0; bottom: 0; width: min(max(var(--detail-min), 66%), 100% - 220px); z-index: 5;
+  background: var(--bg); border-left: 1px solid var(--line); box-shadow: var(--shadow); animation: panelin .18s ease; }
+@keyframes panelin { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.panelx { position: sticky; top: 0; float: right; margin: -22px -36px 0 0; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center;
+  font-size: 20px; line-height: 1; color: var(--muted); z-index: 2; }
+.panelx:hover { color: var(--ink); background: var(--hover); }
 /* a page without a detail column: its heading, then the content filling the rest */
 main.full { display: flex; flex-direction: column; }
 .page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -510,6 +520,8 @@ html.phone .list { padding: 72px 16px 84px; border-right: 0; }
 html.phone .detail { padding: 60px 16px 84px; }
 html.phone main.full { padding-top: 60px; padding-bottom: 84px; }
 html.phone .lhead { padding-left: 16px; padding-right: 16px; }
+html.phone main.tabled > .detail.panel { position: fixed; inset: 0; width: auto; z-index: 30; border-left: 0; box-shadow: none; }
+html.phone .panelx { margin: -6px -6px 0 0; }
 html.phone .phoneback { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 14px -6px; padding: 4px 8px; border-radius: 8px; color: var(--muted); font: 500 13px var(--font-sans); cursor: pointer; }
 html.phone .phoneback:hover { color: var(--ink); background: var(--hover); }
 html.phone .detail-in > .head .amount { font-size: 26px; }

@@ -39,6 +39,7 @@ import { router as batch } from './routes/batch.js';
 import { router as vatAdjustments } from './routes/vat-adjustments.js';
 import { router as handover } from './routes/handover.js';
 import { router as share } from './routes/share.js';
+import { router as entryTemplates } from './routes/entry-templates.js';
 import { markerOf } from '../handover/durchsicht.js';
 import { aiSetup } from './ai-setup.js';
 import { NoClaudeError } from '../llm/providers/claude-cli.js';
@@ -113,7 +114,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY, ...(aiOff() ? { aiOff: true } : {}) } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, payouts, questions, reports, batch, vatAdjustments, handover, share);
+app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, payouts, questions, reports, batch, vatAdjustments, handover, share, entryTemplates);
 app.use(knowledge);
 app.use(onboarding);
 

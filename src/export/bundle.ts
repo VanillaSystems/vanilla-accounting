@@ -21,6 +21,7 @@ import type { Workspace } from '../workspace/workspace.js';
 import { bananaTsv } from '../providers/banana/banana.js';
 import { ITEMS, quartersIn, receiptsIn, statementsIn, type ExportRequest, type Format, type ItemId } from './model.js';
 import { tableOf, type Table, type Words } from './tables.js';
+import { csvOf } from './csv.js';
 import { wordsIn } from './texts.js';
 
 const EXPORT_MANIFEST_FORMAT = 'vanilla-accounting-export/1';
@@ -54,15 +55,7 @@ export const fileStem = (label: string) => label.replace(/\s*\(.*\)/, '').trim()
 
 const label = (w: Words, id: ItemId) => w.t(`export.item.${id}` as Key);
 
-/** A table as CSV: UTF-8 with its BOM, semicolons, CRLF, amounts with two decimals. */
-export function csvOf(tb: Table): string {
-  const cell = (v: string | number, money: boolean) => {
-    const s = typeof v === 'number' ? (money ? v.toFixed(2) : String(v)) : v;
-    return /[;"\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  const lines = [tb.head.map((h) => cell(h, false)), ...tb.rows.map((r) => r.map((v, i) => cell(v, tb.money.includes(i))))];
-  return '﻿' + lines.map((l) => l.join(';')).join('\r\n') + '\r\n';
-}
+export { csvOf } from './csv.js';
 
 function jsonOf(tb: Table, title: string, company: string, range: Period): string {
   return JSON.stringify({

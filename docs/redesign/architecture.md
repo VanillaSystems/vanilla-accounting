@@ -33,8 +33,8 @@ shape of the code that ports it. Port the mockup's behaviour and CSS, not its co
     | { area: 'reports'; report: 'income' | 'balance' | 'trial'; account?: string }
     | { area: 'close'; step?: string }
     | { area: 'company'; section: CompanySection }
-    | { area: 'invoices'; view: 'list' | 'customers' | 'sent'; id?: string };
-  interface Location { route: Route; query: { period?: string; q?: string; filter?: string; status?: string; vat?: string } }
+    | { area: 'invoices'; view: 'list' | 'credit-notes' | 'open-items' | 'customers' | 'sent'; id?: string };
+  interface Location { route: Route; query: { period?: string; q?: string; filter?: string; status?: string; date?: string; vat?: string } }
   parseLocation(path: string, search: string): Location | Redirect
   formatLocation(loc: Location): string
   ```
@@ -79,10 +79,20 @@ interface Area<R extends Route = Route> {
   title: (route: R, books: Books) => string;
   /** Wider list column (journal, reports). */
   wide?: boolean;
+  /**
+   * Layout A, the one exception to list + detail: on these routes the list is a table across the
+   * whole width and the detail a panel over its right part while `open`; Esc or «×» goes to `close`.
+   */
+  table?: (route: R) => { open: boolean; close: R } | undefined;
 }
 interface AreaProps<R> { route: R; query: Location['query']; period: Period; books: Books; nav: Nav; }
 interface Nav { go(loc: Location): void; select(route: Route): void; toast(msg: string, undo?: () => void): void; }
 ```
+
+Verkauf (the area `invoices`, docs/specs/invoicing.md 4.8) declares `table` for Rechnungen, Gutschriften,
+Offene Posten and Versendet: the shell renders `main.tabled` with the list full width and, while the route
+names an object, the detail as `.detail.panel` over the table's right part (on a phone the whole screen).
+No row is selected on its own there; ↑ ↓ move through the rows while the panel is open.
 
 The shell owns: the grid with the resizable divider (width per area in localStorage, double-click
 resets), the top bar and dock (shown on approach to the edge, `G` + letter, labels), zoom

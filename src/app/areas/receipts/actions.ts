@@ -132,7 +132,7 @@ export function setKind(nav: Nav, v: ReceiptView, kind: ReceiptKind) {
   return run(nav, () => api.patchReceipt(v.r.id, { kind }), message, () => api.patchReceipt(v.r.id, { kind: before }));
 }
 
-export type Field = 'filename' | 'date' | 'amount' | 'currency' | 'description' | 'remarks';
+export type Field = 'filename' | 'date' | 'dueDate' | 'amount' | 'currency' | 'description' | 'remarks';
 
 /** The fields saved on one receipt in a row (each field left saves on its own): one toast names them all, its undo takes them all back. */
 let saving: Saves<Field> | undefined;
@@ -143,6 +143,7 @@ export function saveFields(nav: Nav, v: ReceiptView, patch: ReceiptPatch, change
   const back: ReceiptPatch = {};
   if ('filename' in patch) back.filename = r.filename;
   if ('date' in patch) back.date = r.date ?? null;
+  if ('dueDate' in patch) back.dueDate = r.dueDate ?? null;
   if ('amount' in patch) {
     if (r.amount == null) back.amount = null;
     else { back.amount = r.amount; back.currency = r.currency || baseCurrency(); }

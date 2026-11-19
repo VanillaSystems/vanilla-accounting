@@ -1,64 +1,35 @@
 /**
- * Rechnungen: the invoices of a period by state (overdue first), the customers, and every
- * document sent; on the right the invoice on its A4 sheet, the customer, or the sent PDF
- * (the mockup's Rechnungen, ADR 0010).
+ * Verkauf (docs/specs/invoicing.md 4.8): Rechnungen, Gutschriften, Offene Posten and Versendet, each a
+ * table across the width with the document open as a panel over its right part (layout A), and the
+ * customers as a list with the customer beside it. The document is shown on its A4 sheet.
  */
-import { Fragment, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import './invoices.css';
-import { INVOICE_STATUSES, type InvoiceStatus, type RouteOf } from '../../shell/route.js';
+import type { RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
 import { moveKey } from '../../shell/keyboard.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { language, t } from '../../i18n/index.js';
-import { monthName } from '../../lib/period-label.js';
 import type { InvoiceList as Records } from '../../lib/api.js';
 import { ICONS } from '../icons.js';
-import { I } from '../receipts/icons.js';
 import type { Area, AreaProps, LegendItem } from '../index.js';
 import { followBooks, invoicesNow, newestIssued, reloadInvoices, useInvoices } from './data.js';
-import { byRouteId, counts, customerOpen, customerRows, customerOf, groupsOf, openSums, routeId, rowsOf, sentRows, type InvoiceRow } from './model.js';
-import { listed, setUi, toggleGroup, ui, useUi } from './state.js';
-import { invoiceAt, invoicePath, newDraftFor } from './actions.js';
+import { byRouteId, customerOpen, customerRows, customerOf } from './model.js';
+import { listed, setUi, ui } from './state.js';
+import { invoiceAt, newDraftFor } from './actions.js';
 import { Detail } from './Detail.js';
 import { Dialogs } from './dialogs.js';
 import { countryName } from './address.js';
-import { localToday } from '../../../accounting/periods.js';
-import { baseCurrency } from '../../../engines/index.js';
+import { DocTable } from './DocTable.js';
+import { OpenItems } from './OpenItems.js';
+import { SentLog } from './SentLog.js';
+import { Search, Views } from './views.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
-
-const STATUS_LABEL = { open: 'invoices.filterOpen', overdue: 'invoices.filterOverdue', draft: 'invoices.filterDraft', paid: 'invoices.filterPaid' } as const;
-
-function Views({ on, props }: { on: Props['route']['view']; props: Props }) {
-  return (
-    <span className="seg gb" role="tablist" aria-label={t('invoices.views')}>
-      {(['list', 'customers', 'sent'] as const).map((v) => (
-        <button key={v} type="button" role="tab" aria-selected={on === v} className={on === v ? 'on' : ''} data-view={v}
-          onClick={() => props.nav.go({ route: { area: 'invoices', view: v }, query: v === 'list' ? { ...(props.query.period ? { period: props.query.period } : {}) } : {} })}>
-          {t(`invoices.view.${v}`)}
-        </button>
-      ))}
-    </span>
-  );
-}
-
-function Search({ props }: { props: Props }) {
-  const { query, nav } = props;
-  return (
-    <label className="search">
-      {ICONS.search}
-      <span className="sr">{t('invoices.searchLabel')}</span>
-      <input type="search" placeholder={t('shell.search')} value={query.q ?? ''} className={query.q ? 'has' : ''} autoComplete="off"
-        onChange={(e) => nav.setQuery({ q: e.target.value || undefined })}
-        onKeyDown={(e) => { if (e.key === 'Escape') nav.setQuery({ q: undefined }); }} />
-    </label>
-  );
-}
 
 function List(props: Props) {
   const { route, nav } = props;
   const load = useInvoices();
-  useUi();
 
   useEffect(() => followBooks(props.books), [props.books]);
 
@@ -78,84 +49,17 @@ function List(props: Props) {
   if (load.state !== 'ready') {
     return (
       <div className="page">
-        <ListHead {...props} noPeriod={route.view !== 'list'} />
+        <ListHead {...props} noPeriod={route.view !== 'list' && route.view !== 'credit-notes'} />
         <div className="empty"><p>{load.state === 'loading' ? t('app.loading') : t('invoices.unavailable')}</p></div>
       </div>
     );
   }
-  if (route.view === 'customers') return <CustomerList {...props} d={load.data} />;
-  if (route.view === 'sent') return <SentList {...props} d={load.data} />;
-  return <InvoiceList {...props} d={load.data} />;
-}
-
-function InvoiceList(props: Props & { d: Records }) {
-  const { route, query, period, nav, d } = props;
-  const s = useUi();
-  const today = localToday();
-  const rows = rowsOf(d, period, query.q, today);
-  const n = counts(rows);
-  const groups = groupsOf(rows, query.status);
-  const sums = openSums(rows, d.invoices);
-  listed.ids = groups.filter((g) => !s.collapsed.has(g.state)).flatMap((g) => g.rows.map((r) => routeId(r.inv)));
-
-  const selected = route.id && route.id !== 'new' ? route.id : undefined;
-  useFirstRow(props, selected);
-  // A link to an invoice of another period opens that period (urls.md rule 1).
-  useEffect(() => {
-    const inv = byRouteId(d.invoices, selected);
-    if (inv?.status === 'issued' && !query.period && !rows.some((r) => r.inv.id === inv.id)) nav.go(invoiceAt(inv));
-  }, [selected]);
-
-  return (
-    <div className="page">
-      <ListHead {...props}>
-        <div className="counts" role="tablist" aria-label={t('invoices.filters')}>
-          <button type="button" role="tab" aria-selected={!query.status} className={query.status ? '' : 'on'} onClick={() => nav.setQuery({ status: undefined })}>
-            <span className="n">{n.all}</span>{t('invoices.filterAll')}
-          </button>
-          {INVOICE_STATUSES.filter((st) => n[st] > 0 || query.status === st).map((st: InvoiceStatus) => (
-            <button key={st} type="button" role="tab" aria-selected={query.status === st} className={query.status === st ? 'on' : ''} data-status={st} onClick={() => nav.setQuery({ status: st })}>
-              <span className="n">{n[st]}</span>{t(STATUS_LABEL[st])}
-            </button>
-          ))}
-          <Views on="list" props={props} />
-        </div>
-      </ListHead>
-      <div className="vresult static"><span>{t('invoices.open')}</span><b className="mono" data-testid="open-sum"><small>CHF</small>{fmt(sums.open)}{sums.foreign.map((f) => <span key={f.currency} className="also"> + <small>{f.currency}</small>{fmt(f.open)}</span>)}</b></div>
-      {(sums.overdue > 0 || sums.foreign.some((f) => f.overdue > 0)) && <div className="notice warn rgap">{I.dot}<span>{t('invoices.overdueSum', { amount: [sums.overdue > 0 ? `CHF ${fmt(sums.overdue)}` : '', ...sums.foreign.filter((f) => f.overdue > 0).map((f) => `${f.currency} ${fmt(f.overdue)}`)].filter(Boolean).join(' + ') })}</span></div>}
-      {groups.length === 0 ? (
-        <div className="empty">
-          <h2>{query.q ? t('invoices.nothingFound') : t('invoices.none')}</h2>
-          <p>{query.q ? t('invoices.nothingFoundText', { q: query.q }) : t('invoices.noneText')}</p>
-        </div>
-      ) : (
-        <div className="rows" role="listbox" aria-label={t('area.invoices')}>
-          {groups.map((g) => {
-            const shut = s.collapsed.has(g.state);
-            return (
-              <Fragment key={g.state}>
-                <button type="button" className={`group${shut ? ' shut' : ''}`} aria-expanded={!shut} onClick={() => toggleGroup(g.state)}>
-                  <span>{I.gch}{t(`invoices.state.${g.state}`)}</span><span className="mono">{g.rows.length}</span>
-                </button>
-                {!shut && g.rows.map((r) => <Row key={r.inv.id} r={r} sel={routeId(r.inv) === selected} onSelect={() => nav.select(invoicePath(r.inv))} />)}
-              </Fragment>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function Row({ r, sel, onSelect }: { r: InvoiceRow; sel: boolean; onSelect(): void }) {
-  const { inv } = r;
-  return (
-    <div className={`row inv st-${r.state}${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={routeId(inv)} onClick={onSelect}>
-      <span className="d mono">{inv.status === 'issued' ? inv.number : <span className="draftno">{t('invoices.draft')}</span>}</span>
-      <span className="t">{r.state === 'overdue' && I.dot}{r.customer} {inv.subject && <small>{inv.subject}</small>}</span>
-      <span className="a mono">{inv.currency !== baseCurrency() && <span className="c">{inv.currency}</span>}{(r.state === 'open' || r.state === 'overdue') && r.open !== r.gross ? <>{fmt(r.open)}<small className="m"> {t('invoices.ofGross', { gross: fmt(r.gross) })}</small></> : fmt(r.gross)}</span>
-    </div>
-  );
+  switch (route.view) {
+    case 'customers': return <CustomerList {...props} d={load.data} />;
+    case 'sent': return <SentLog {...props} d={load.data} />;
+    case 'open-items': return <OpenItems {...props} d={load.data} />;
+    default: return <DocTable {...props} d={load.data} view={route.view} />;
+  }
 }
 
 /** With nothing selected, the first row is (a link to something else wins). */
@@ -199,49 +103,12 @@ function CustomerList(props: Props & { d: Records }) {
   );
 }
 
-function SentList(props: Props & { d: Records }) {
-  const { route, query, nav, d } = props;
-  const rows = sentRows(d, query.q);
-  listed.ids = rows.map((x) => x.id);
-  useFirstRow(props, route.id);
-  let month = '';
-  return (
-    <div className="page">
-      <ListHead {...props} noPeriod>
-        <div className="counts">
-          <span>{t('invoices.nSent', { n: rows.length })}</span>
-          <Views on="sent" props={props} />
-          <Search props={props} />
-        </div>
-      </ListHead>
-      {rows.length === 0 ? <div className="empty"><h2>{t('invoices.nothingSent')}</h2><p>{t('invoices.nothingSentText')}</p></div> : (
-        <div className="rows" role="listbox" aria-label={t('invoices.view.sent')}>
-          {rows.map((doc) => {
-            const sel = doc.id === route.id;
-            const inv = d.invoices.find((i) => i.id === doc.invoiceId);
-            const m = doc.sentAt.slice(0, 7);
-            const head = m !== month;
-            month = m;
-            return (
-              <Fragment key={doc.id}>
-                {head && <div className="group"><span>{monthName(`${m}-01`)}</span></div>}
-                <div className={`row sentrow${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={doc.id}
-                  onClick={() => nav.select({ area: 'invoices', view: 'sent', id: doc.id })}>
-                  <span className="d mono">{formatDate(doc.sentAt.slice(0, 10)).slice(0, 6)}</span>
-                  <span className="t">{doc.title} <small>{inv ? customerOf(d, inv)?.name : ''} · {t(`invoices.docKind.${doc.kind}`)}</small></span>
-                  <span className="a mono">{new Date(doc.sentAt).toTimeString().slice(0, 5)}</span>
-                </div>
-              </Fragment>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+/** Layout A: every view but Kunden is a table; its document opens as a panel while the route names one. */
+const tableOf = (r: RouteOf<'invoices'>) => (r.view === 'customers' ? undefined : { open: !!r.id && r.id !== 'new', close: { area: 'invoices' as const, view: r.view } });
 
 const legend = (): LegendItem[] => [
   [['↑', '↓'], t('keys.select'), t('invoices.keySelectTip')],
+  [['Esc'], t('sales.keyClose'), t('sales.keyCloseTip')],
   [['D'], t('invoices.keyDownload'), t('invoices.keyDownloadTip')],
   [['V'], t('invoices.keyPreview'), t('invoices.keyPreviewTip')],
   [['/'], t('keys.search'), t('invoices.searchLabel')],
@@ -261,6 +128,7 @@ export const invoices: Area<RouteOf<'invoices'>> = {
     run: (p) => setUi({ dialog: p.route.area === 'invoices' && p.route.view === 'customers' ? { kind: 'customer' } : { kind: 'new' } }),
   },
   legend,
+  table: tableOf,
   title: (r) => {
     const d = invoicesNow();
     if (!r.id || !d) return r.id;
@@ -290,7 +158,9 @@ export const invoices: Area<RouteOf<'invoices'>> = {
       if (e.key === 'Escape') setUi({ dialog: null });
       return true;
     }
-    const d = moveKey(e);
+    const table = tableOf(p.route);
+    // A table moves through its rows while a document is open; closed, ↑ ↓ leave the page to scroll.
+    const d = table && !table.open ? 0 : moveKey(e);
     if (d) {
       const i = p.route.id ? listed.ids.indexOf(p.route.id) : -1;
       const next = listed.ids[Math.min(listed.ids.length - 1, Math.max(0, i + d))];
@@ -309,7 +179,8 @@ export const invoices: Area<RouteOf<'invoices'>> = {
         b?.click();
         return !!b;
       }
-      case 'Escape': if (!p.query.q) return false; p.nav.setQuery({ q: undefined }); return true;
+      // An open panel closes first (the shell does it), then the search clears.
+      case 'Escape': if (table?.open || !p.query.q) return false; p.nav.setQuery({ q: undefined }); return true;
     }
     return false;
   },

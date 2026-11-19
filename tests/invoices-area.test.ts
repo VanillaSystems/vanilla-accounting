@@ -1,7 +1,9 @@
 /**
- * Rechnungen as the UI lists them (src/app/areas/invoices/model.ts, address.ts): each invoice's
- * state and group, the status filters, the link ids, a draft following its customer, and the
- * customer form's rules per country. On the demo's invoices, on 11.10.2026.
+ * Verkauf as the UI lists it (src/app/areas/invoices/model.ts, table.ts, address.ts): each document's
+ * status and sent state, the status tabs with count and total, the facts line, sorting and pages,
+ * «Nicht gesendet» (P1.11), Offene Posten equal to the year end's receivables (P1.10), the link ids, a
+ * draft following its customer, and the customer form's rules per country. On the demo's invoices,
+ * on 11.10.2026, and on fixtures where the demo has too few states.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -9,34 +11,136 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parsePeriod } from '../src/accounting/periods.js';
 import type { InvoiceBook } from '../src/invoices/model.js';
-import { byRouteId, counts, customerChange, groupsOf, openSums, routeId, rowsOf } from '../src/app/areas/invoices/model.js';
+import { openItemGroups, openItems } from '../src/invoices/lists.js';
+import { byRouteId, customerChange, routeId, sentRows } from '../src/app/areas/invoices/model.js';
+import { PAGE_SIZE, docRows, factsOf, inTab, sortRows, tabCounts, tabOf } from '../src/app/areas/invoices/table.js';
+import { SEND_LIMIT, bulkPdfPlan, bulkSendPlan } from '../src/app/areas/invoices/bulk-plan.js';
 import { addressRule, countryOf, languageFor, numberFirst, vatRule } from '../src/app/areas/invoices/address.js';
+import { receivablesOf, ratesOf } from '../src/books/year-close.js';
+import { loadBooks } from '../src/books/store.js';
+import { workspaceAt } from '../src/workspace/workspace.js';
 import { DEMO_ROOT } from './support/workspace.js';
+import { issued, sentDoc } from './support/invoice-fixtures.js';
+import { saveInvoices } from '../src/invoices/store.js';
+import { tempWorkspace, writeIndex } from './support/workspace.js';
 import './support/jurisdiction.js';
 
 const TODAY = '2026-10-11';
 const book = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as InvoiceBook;
 const d = { today: TODAY, invoices: book.invoices, customers: book.customers, sent: book.sent };
 const year = parsePeriod('2026', TODAY)!;
+const no = (r: { id: string }) => r.id.startsWith('draft-') ? 'draft' : r.id;
 
-test('each invoice\'s state: paid, overdue past its due date, open, a credit note, cancelled, a draft', () => {
-  const rows = rowsOf(d, year, undefined, TODAY);
-  assert.deepEqual(rows.map((r) => `${r.inv.status === 'issued' ? r.inv.number : 'draft'} ${r.state}`), [
-    '2026-001 paid', '2026-002 paid', '2026-003 overdue', '2026-004 credit', '2026-005 open', '2026-006 open', '2026-007 cancelled', 'draft draft', 'draft draft',
-  ]);
-  assert.deepEqual(counts(rows), { all: 9, open: 3, overdue: 1, draft: 2, paid: 2 }, '"offen" counts the overdue ones too');
-  assert.deepEqual(groupsOf(rows, 'open').map((g) => g.state), ['overdue', 'open']);
-  assert.deepEqual(groupsOf(rows, undefined).map((g) => g.state), ['overdue', 'open', 'draft', 'paid', 'credit', 'cancelled']);
-  assert.deepEqual(openSums(rows, d.invoices).overdue, 861.84, 'what 2026-003 still owes');
-  assert.deepEqual(openSums(rows, d.invoices), { open: 1827.03, overdue: 861.84, foreign: [{ currency: 'EUR', open: 865, overdue: 0 }] }, 'the EUR invoice counts in its own currency (r8c-9)');
-  assert.deepEqual(rows.filter((r) => r.state === 'open' || r.state === 'overdue').map((r) => [r.inv.status === 'issued' ? r.inv.number : '', r.open]), [['2026-003', 861.84], ['2026-005', 865], ['2026-006', 965.19]], 'each row knows what is still open');
+test('Rechnungen: each status from facts, Überfällig with its days beside Offen, the tabs with count and total, the facts line per currency', () => {
+  const rows = docRows(d, 'invoice', year, undefined, TODAY);
+  assert.deepEqual(rows.map((r) => `${no(r)} ${r.status}${r.overdue ? ` +${r.overdue}` : ''}`), [
+    '2026-001 paid', '2026-002 paid', '2026-003 open +25', '2026-005 open', '2026-006 open', '2026-007 cancelled', 'draft draft', 'draft draft',
+  ], 'the credit note 2026-004 is in Gutschriften, not here');
+  const tabs = Object.fromEntries(tabCounts(rows, 'invoice').map((c) => [c.tab, c.n]));
+  assert.deepEqual(tabs, { all: 8, draft: 2, open: 3, overdue: 1, 'partly-paid': 0, paid: 2, cancelled: 1, unsent: 0 }, 'Überfällig overlaps Offen; every issued demo invoice went out');
+  const open = tabCounts(rows, 'invoice').find((c) => c.tab === 'open')!;
+  assert.deepEqual(open.sums, [{ currency: 'CHF', gross: 1827.03, open: 1827.03 }, { currency: 'EUR', gross: 865, open: 865 }], 'the total of a tab per currency, the EUR invoice in its own');
+  assert.deepEqual(tabCounts(rows, 'invoice').find((c) => c.tab === 'cancelled')!.sums, [{ currency: 'CHF', gross: 406.3, open: 0 }], 'Storniert sums what it holds');
+  assert.equal(tabCounts(rows, 'invoice').find((c) => c.tab === 'all')!.sums[0].gross, 4770.44, 'a cancelled invoice is left out of Alle\'s total');
+  assert.deepEqual(factsOf(rows), [{ currency: 'CHF', open: 1827.03, overdue: 861.84 }, { currency: 'EUR', open: 865, overdue: 0 }]);
+  const r3 = rows.find((r) => r.id === '2026-003')!;
+  assert.deepEqual([r3.level, r3.sent.reminder?.level, r3.sent.last?.kind], [1, 1, 'invoice'], 'its Mahnstufe and the last Mahnung sent');
+  assert.equal(tabOf('invoice', 'settled'), 'all', 'a Gutschriften tab in Rechnungen shows Alle');
 });
 
-test('a period shows the invoices dated in it and every draft; the search finds number, customer and subject', () => {
-  const q2 = rowsOf(d, parsePeriod('2026-Q2', TODAY)!, undefined, TODAY);
-  assert.deepEqual(q2.map((r) => r.state), ['draft', 'draft']);
-  assert.deepEqual(rowsOf(d, year, '2026-003', TODAY).map((r) => routeId(r.inv)), ['2026-003']);
-  assert.ok(rowsOf(d, year, 'bistro', TODAY).every((r) => r.customer.includes('Bistro')));
+test('Gutschriften: their own table, the Rechnung each credits, Offen while money is still to go back', () => {
+  const rows = docRows(d, 'credit-note', year, undefined, TODAY);
+  assert.deepEqual(rows.map((r) => [r.id, r.status, r.target?.number, r.open]), [['2026-004', 'open', '2026-002', 33.86]], '2026-002 was paid: the credit goes back');
+  assert.deepEqual(factsOf(rows), [{ currency: 'CHF', open: 33.86, overdue: 0 }]);
+  assert.ok(rows.every((r) => inTab(r, 'open') && !inTab(r, 'settled')));
+});
+
+test('a period shows the documents dated in it, every draft and the earlier ones still open; the search finds number, contact and subject', () => {
+  const q2 = docRows(d, 'invoice', parsePeriod('2026-Q2', TODAY)!, undefined, TODAY);
+  assert.deepEqual(q2.map((r) => r.status), ['draft', 'draft']);
+  assert.deepEqual(docRows(d, 'invoice', year, '2026-003', TODAY).map((r) => r.id), ['2026-003']);
+  assert.ok(docRows(d, 'invoice', year, 'bistro', TODAY).every((r) => r.customer.includes('Bistro')));
+  assert.deepEqual(docRows(d, 'credit-note', year, '2026-002', TODAY).map((r) => r.id), ['2026-004'], 'a Gutschrift is found by its Rechnung\'s number');
+});
+
+test('every column sorts, both ways, the same order every time', () => {
+  const rows = docRows(d, 'invoice', year, undefined, TODAY).filter((r) => r.inv.status === 'issued');
+  assert.deepEqual(sortRows(rows, { key: 'gross', dir: 1 }).map((r) => r.gross), [...rows.map((r) => r.gross)].sort((a, b) => a - b));
+  assert.deepEqual(sortRows(rows, { key: 'number', dir: -1 }).map((r) => r.id), ['2026-007', '2026-006', '2026-005', '2026-003', '2026-002', '2026-001']);
+  assert.equal(sortRows(rows, { key: 'open', dir: -1 })[0].id, '2026-006');
+  assert.equal(sortRows(rows, { key: 'level', dir: -1 })[0].id, '2026-003');
+  assert.equal(sortRows(rows, { key: 'sent', dir: -1 })[0].id, '2026-007', 'the newest send first');
+  assert.equal(PAGE_SIZE, 50);
+});
+
+test('P1.11: eight issued Rechnungen, five sent by mail, one downloaded, two not sent: «Nicht gesendet» shows the two with count and total, «Versand» date and channel for the six', () => {
+  const invs = Array.from({ length: 8 }, (_, i) => issued(`i${i + 1}`, `2026-10${i + 1}`, { date: `2026-10-0${i + 1}`, lines: [{ text: 'x', quantity: 1, price: 100 * (i + 1), vatRate: 0 }] }));
+  const sent = [
+    ...invs.slice(0, 5).map((inv, i) => sentDoc(`m${i}`, inv, { sentAt: `2026-10-1${i}T09:0${i}:00Z`, to: `k${i}@kunde.example` })),
+    sentDoc('dl', invs[5], { sentAt: '2026-10-16T14:00:00Z', to: 'download', channel: 'download', messageId: undefined }),
+  ];
+  const fx = { today: '2026-10-20', invoices: invs, customers: [], sent };
+  const rows = docRows(fx, 'invoice', parsePeriod('2026-Q4', '2026-10-20')!, undefined, '2026-10-20');
+  const unsent = tabCounts(rows, 'invoice').find((c) => c.tab === 'unsent')!;
+  assert.deepEqual([unsent.n, unsent.sums], [2, [{ currency: 'CHF', gross: 1500, open: 1500 }]], '700 + 800');
+  assert.deepEqual(rows.filter((r) => inTab(r, 'unsent')).map((r) => r.id), ['2026-107', '2026-108']);
+  const versand = rows.filter((r) => r.sent.last).map((r) => [r.id, r.sent.last!.sentAt.slice(0, 10), r.sent.last!.channel]);
+  assert.deepEqual(versand, [
+    ['2026-101', '2026-10-10', 'email'], ['2026-102', '2026-10-11', 'email'], ['2026-103', '2026-10-12', 'email'], ['2026-104', '2026-10-13', 'email'], ['2026-105', '2026-10-14', 'email'],
+    ['2026-106', '2026-10-16', 'download'],
+  ]);
+  // The detail lists each send with recipient and checksum: the entries of the log it reads, nothing set by hand.
+  const one = rows.find((r) => r.id === '2026-101')!;
+  assert.deepEqual(one.sent.all.map((x) => [x.to, x.sha256.slice(0, 2), x.messageId]), [['k0@kunde.example', 'm0', '<m0@mail>']]);
+  assert.equal(rows.every((r) => r.sent.sent === !r.unsent), true);
+  // «Senden» on the tab: both go out by e-mail; a document without an address is named and left out, as is one over the limit.
+  const noMail = { ...invs[7], customer: { ...invs[7].customer, email: undefined } };
+  const plan = bulkSendPlan([invs[6], noMail]);
+  assert.deepEqual([plan.take.map((x) => x.number), plan.left.map((x) => [x.inv.id, x.why])], [['2026-107'], [['i8', 'noEmail']]]);
+  const many = Array.from({ length: SEND_LIMIT + 2 }, (_, i) => issued(`b${i}`, `2026-2${String(i).padStart(2, '0')}`));
+  assert.deepEqual(bulkSendPlan(many).left.map((x) => x.why), ['limit', 'limit'], 'the limit per run is named for what it leaves out');
+  const draft = { ...invs[0], status: 'draft' } as unknown as typeof invs[0];
+  assert.deepEqual(bulkPdfPlan([draft, invs[1]]).left.map((x) => x.why), ['draft'], 'a draft has no PDF to save');
+});
+
+test('Versendet: the log newest first, filtered by contact, kind and channel', () => {
+  const all = sentRows(d, undefined);
+  assert.equal(all.length, book.sent.length);
+  assert.ok(all.every((x, i) => i === 0 || all[i - 1].sentAt >= x.sentAt));
+  assert.deepEqual(sentRows(d, undefined, { kind: 'reminder' }).map((x) => x.title), ['1. Mahnung · Rechnung 2026-003']);
+  const bistro = book.customers.find((c) => c.name.includes('Bistro'))!;
+  assert.ok(sentRows(d, undefined, { customer: bistro.id }).every((x) => book.invoices.find((i) => i.id === x.invoiceId)?.customerId === bistro.id));
+  assert.equal(sentRows(d, undefined, { channel: 'email' }).length, 0, 'the demo recorded every send as a download');
+});
+
+test('P1.10: Offene Posten on 31.12. equals the year end\'s receivables proposal to the Rappen, invoice by invoice and in total', () => {
+  const ws = workspaceAt(DEMO_ROOT);
+  const proposal = receivablesOf(ws, '2026', ratesOf(), loadBooks(ws));
+  const items = openItems(book.invoices.filter((i) => !i.deleted), '2026-12-31');
+  assert.ok(items.length > 0, 'the demo has invoices open at the year end');
+  assert.deepEqual(items.map((x) => [x.inv.number, x.inv.currency, x.open]).sort(), proposal.invoices.map((x) => [x.number, x.currency, x.open]).sort());
+  const { totals } = openItemGroups(items);
+  for (const t of totals) {
+    const sum = Math.round(proposal.invoices.filter((x) => x.currency === t.currency).reduce((s, x) => s + x.open * 100, 0)) / 100;
+    assert.equal(t.total, sum, `the ${t.currency} total`);
+  }
+});
+
+test('P1.10 on harder cases: a part paid before and the rest after 31.12., a Gutschrift, one cancelled only in the new year, one issued in the new year', () => {
+  const ws = tempWorkspace('op-yearend-');
+  writeIndex(ws, {});
+  const a = issued('a', '2026-001', { date: '2026-11-02', dueDate: '2026-12-02', lines: [{ text: 'x', quantity: 1, price: 1234.55, vatRate: 8.1 }],
+    payments: [{ transactionRef: 'T1', date: '2026-12-10', amount: 500, by: 'reference' }, { transactionRef: 'T2', date: '2027-01-08', amount: 834.55, by: 'reference' }] });
+  const b = issued('b', '2026-002', { date: '2026-12-01', dueDate: '2026-12-31', customerId: 'c2', customer: { ...a.customer, name: 'Beta AG' } });
+  const cn = issued('n', '2026-003', { kind: 'credit-note', creditFor: 'b', date: '2026-12-15', lines: [{ text: 'Gutschrift', quantity: 1, price: -200, vatRate: 0 }] });
+  const late = issued('c', '2026-004', { date: '2026-12-20', cancelled: { date: '2027-01-03', reason: 'x' } });
+  const next = issued('e', '2027-001', { date: '2027-01-02' });
+  saveInvoices(ws, { schema: 2, customers: [], invoices: [a, b, cn, late, next], sent: [] });
+  const proposal = receivablesOf(ws, '2026', ratesOf(), loadBooks(ws));
+  const items = openItems([a, b, cn, late, next], '2026-12-31');
+  assert.deepEqual(items.map((x) => [x.inv.number, x.open]), [['2026-001', 834.55], ['2026-002', 800], ['2026-004', 1000]]);
+  assert.deepEqual(items.map((x) => [x.inv.number, x.open]), proposal.invoices.map((x) => [x.number, x.open]));
+  assert.equal(openItemGroups(items).totals[0].total, proposal.total, 'CHF: the list\'s total is the proposal\'s, to the Rappen');
 });
 
 test('links: an issued invoice by its number, a draft by draft-<id>; another id finds nothing', () => {

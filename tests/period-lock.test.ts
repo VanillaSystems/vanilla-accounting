@@ -137,6 +137,8 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/journal-entries', body: { date: '2026-06-30', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'rückdatiert' }, status: 403 },
   { method: 'POST', path: '/api/journal-entries', body: { date: '2026-08-01', accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'zur geschlossenen Zahlung', transactionRef: 'C1' }, status: 403 },
   { method: 'POST', path: '/api/journal-entries/classify/C1', status: 403 },
+  // A Sammelbuchung (#567) dated on a closed day: refused whole.
+  { method: 'POST', path: '/api/journal-entries/lines', body: { date: '2026-06-30', lines: [{ accountDebit: '6800', accountCredit: '1020', amount: 6, description: 'Sammel' }, { accountDebit: '6570', accountCredit: '1020', amount: 4, description: 'Sammel' }] }, status: 403 },
   { method: 'POST', path: '/api/transactions/C1/entries', body: { lines: [{ accountDebit: '6800', accountCredit: '1020', amount: 10, description: 'von Hand' }] }, status: 403 },
   // The hand form's booking that links her own invoice, and its sale question answered on the form (#382): never in a closed period.
   { method: 'POST', path: '/api/transactions/C1/entries', body: { lines: [{ accountDebit: '1020', accountCredit: '3400', amount: 10, description: 'von Hand' }], links: ['ro'] }, status: 403 },
@@ -304,6 +306,9 @@ const allowed: Array<Call & { check: (index: Index) => boolean }> = [
     check: (i) => { const j = i.journalEntries!.find((x) => x.id === 'jr'); return j?.transactionRef === 'O1' && j.corrects === '2026-Q2' && j.exchangeRate === 0.93 && j.origin === 'classify'; } },
   { method: 'POST', path: '/api/journal-entries', body: { id: 'jn', transactionRef: 'O1', date: '2026-08-02', accountDebit: '6800', accountCredit: '1020', amount: 5, description: 'ohne Herkunft' },
     check: (i) => { const j = i.journalEntries!.find((x) => x.id === 'jn'); return !!j && !('origin' in j); } },
+  // A Sammelbuchung (#567): its lines under one new ref of the person's.
+  { method: 'POST', path: '/api/journal-entries/lines', body: { date: '2026-08-31', lines: [{ accountDebit: '6800', accountCredit: '1020', amount: 6, description: 'Sammel offen' }, { accountDebit: '6570', accountCredit: '1020', amount: 4, description: 'Sammel offen' }] },
+    check: (i) => { const js = i.journalEntries!.filter((j) => j.description === 'Sammel offen'); return js.length === 2 && js[0].transactionRef === js[1].transactionRef && js.every((j) => j.origin === 'manual'); } },
   // The manifest and the chart hold no dated record: no period is closed to them.
   { method: 'PATCH', path: '/api/workspace', body: { company: { business: 'Kaffeerösterei' } },
     check: () => readFileSync(join(api.root, 'belege.workspace.yaml'), 'utf8').includes('business: Kaffeerösterei') },

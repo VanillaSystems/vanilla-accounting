@@ -132,3 +132,24 @@ of its own.
   payments without it.
 - **Numbers for drafts:** gaps and collisions across clones; the number belongs to the moment of
   issue.
+
+## Amendment (owner, 2026-11-19)
+
+The owner decided that invoicing follows the Swiss market leader's concept closely
+([docs/specs/invoicing.md](../specs/invoicing.md), section 8). Three points of this ADR change; the
+rest stands, including the core (a paid invoice found by its reference), numbers given at issue, the
+cash basis booking at payment, and everything sent kept as sent.
+
+- **Issued means frozen, with one way back.** An issued invoice that was never sent or downloaded,
+  with nothing received, credited or written off, and (agreed basis) whose `RE-` entry lies in an open
+  period, may go back to draft. It keeps its number; the PDF it printed stays in the log as replaced;
+  on the agreed basis the module takes its `RE-` entry back. Once sent or downloaded, an invoice stays
+  as issued: credit note and cancellation remain the only ways on (MWSTG Art. 27 Abs. 2). An issued
+  invoice's revenue accounts may be changed («Konten ändern»), never its amounts, rates or codes; for
+  a filed period the change is a reclassification booked in the open period.
+- **The document chain.** Beside invoices and credit notes there are quotes (Angebot), sales orders
+  (Auftrag) and delivery notes (Lieferschein), each with its own number series; the sales order is the
+  hub of delivery notes, partial invoices and recurring invoices. Credit notes get their own series;
+  an existing workspace keeps its format.
+- **Contacts instead of customers.** Customers become contacts (firms and persons, contact persons,
+  extra addresses), still records of their own in `invoices.json`.
