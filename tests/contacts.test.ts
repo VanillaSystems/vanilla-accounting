@@ -26,7 +26,7 @@ import {
 import { InvoiceRuleError } from '../src/invoices/rules.js';
 import { compileCounterparty } from '../src/knowledge/counterparties.js';
 import { partnersOf } from '../src/knowledge/partners.js';
-import { workspaceAt } from '../src/workspace/workspace.js';
+import { APP_ROOT, workspaceAt } from '../src/workspace/workspace.js';
 
 // Built from pieces: the leak guard reads a whole UID in a test as a company's; this one has its right check digit.
 const UID = `${'CHE'}-111.222.338`;
@@ -39,7 +39,7 @@ const strip = ({ id: _i, createdAt: _c, origin: _o, deleted: _d, ...rest }: Cust
 /** A file of schema 3 with every kind of customer: an attn line, an e-mail, a UID, days of its own, a minimal one, a deleted one. */
 function mixed(): Record<string, unknown> {
   const env = (id: string, deleted = false) => ({ id, createdAt: '2026-07-01T08:00:00.000Z', origin: 'manual', deleted });
-  const demo = raw(join(DEMO_ROOT, 'invoices.json'));
+  const demo = raw('tests/fixtures/invoices-schema3-demo.json');
   const issued = (demo.invoices as Issued[]).find((i) => i.status === 'issued')!;
   return {
     schema: 3,
@@ -58,9 +58,14 @@ function mixed(): Record<string, unknown> {
 }
 
 test('P2.6: the step 3 → 4 keeps every document byte for byte, and each draft prints as it did with its customer', () => {
-  const ws = workspaceAt(DEMO_ROOT);
-  const ctx = invoicingContext(ws);
-  for (const [name, doc, from] of [['demo', raw(join(DEMO_ROOT, 'invoices.json')), 3], ['schema 2 demo', raw('tests/fixtures/invoices-schema2-demo.json'), 2], ['mixed', mixed(), 3]] as const) {
+  // Each demo's invoices.json as it was before the step (schema 3), the demo of 0.6.0 (schema 2) and a mixed file.
+  const fixtures = [
+    ...['demo', 'demo-consulting', 'demo-coiffeur', 'demo-schreinerei'].map((d) => [d, raw(`tests/fixtures/invoices-schema3-${d}.json`), 3, d] as const),
+    ['schema 2 demo', raw('tests/fixtures/invoices-schema2-demo.json'), 2, 'demo'] as const, ['mixed', mixed(), 3, 'demo'] as const,
+  ];
+  for (const [name, doc, from, dir] of fixtures) {
+    const ws = workspaceAt(join(APP_ROOT, dir, 'vanilla-accounting'));
+    const ctx = invoicingContext(ws);
     const before = at(doc as Record<string, unknown>, from, 3) as unknown as InvoiceBook & { customers: Array<CustomerFields & { id: string; deleted: boolean }> };
     const after = at(doc as Record<string, unknown>, from, INVOICES_SCHEMA) as unknown as InvoiceBook;
     assert.equal(JSON.stringify(after.invoices), JSON.stringify(before.invoices), `${name}: the documents are untouched`);

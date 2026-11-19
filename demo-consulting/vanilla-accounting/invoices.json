@@ -1,42 +1,60 @@
 {
   "schema": 4,
-  "customers": [
+  "contacts": [
     {
       "id": "cu_5GQVervgd2rF",
       "createdAt": "2026-07-01T08:00:00.000Z",
       "origin": "manual",
       "deleted": false,
+      "type": "firm",
       "name": "Beispiel Treuhand AG",
-      "address": {
-        "street": "Seestrasse",
-        "number": "40",
-        "postcode": "8002",
-        "town": "Zürich",
-        "country": "CH"
-      },
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Seestrasse",
+          "number": "40",
+          "postcode": "8002",
+          "town": "Zürich",
+          "country": "CH",
+          "billing": true
+        }
+      ],
       "language": "de",
+      "emails": [
+        "kreditoren@beispiel-treuhand.example"
+      ],
       "vatId": "CHE-318.642.975 MWST",
-      "email": "kreditoren@beispiel-treuhand.example",
-      "paymentTermsDays": 30
+      "paymentDays": 30,
+      "number": "K-00001"
     },
     {
       "id": "cu_2KIQYfUMHYIT",
       "createdAt": "2026-07-01T08:00:00.000Z",
       "origin": "manual",
       "deleted": false,
+      "type": "firm",
       "name": "Muster Maschinenbau GmbH",
-      "attn": "Einkauf",
-      "address": {
-        "street": "Beispielstrasse",
-        "number": "3",
-        "postcode": "80331",
-        "town": "München",
-        "country": "DE"
-      },
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Beispielstrasse",
+          "number": "3",
+          "postcode": "80331",
+          "town": "München",
+          "country": "DE",
+          "attn": "Einkauf",
+          "billing": true
+        }
+      ],
       "language": "de",
+      "emails": [
+        "einkauf@muster-maschinenbau.example"
+      ],
       "vatId": "DE999999998",
-      "email": "einkauf@muster-maschinenbau.example",
-      "paymentTermsDays": 30
+      "paymentDays": 30,
+      "number": "K-00002"
     }
   ],
   "invoices": [

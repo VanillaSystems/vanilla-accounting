@@ -1,144 +1,215 @@
 {
   "schema": 4,
-  "customers": [
+  "contacts": [
     {
       "id": "cu_5GQVervgd2rF",
       "createdAt": "2026-07-01T08:00:00.000Z",
       "origin": "manual",
       "deleted": false,
+      "type": "firm",
       "name": "Beispiel Bistro AG",
-      "address": {
-        "street": "Seeweg",
-        "number": "12",
-        "postcode": "3000",
-        "town": "Bern",
-        "country": "CH"
-      },
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Seeweg",
+          "number": "12",
+          "postcode": "3000",
+          "town": "Bern",
+          "country": "CH",
+          "billing": true
+        }
+      ],
       "language": "de",
+      "emails": [
+        "buchhaltung@bistro.example"
+      ],
       "vatId": "CHE-987.654.320 MWST",
-      "email": "buchhaltung@bistro.example",
-      "paymentTermsDays": 30
+      "paymentDays": 30,
+      "number": "K-00001"
     },
     {
       "id": "cu_2KIQYfUMHYIT",
       "createdAt": "2026-07-01T08:00:00.000Z",
       "origin": "manual",
       "deleted": false,
+      "type": "firm",
       "name": "Muster Hotel GmbH",
-      "attn": "Küche, z. H. Herr Beispiel",
-      "address": {
-        "street": "Pilatusstrasse",
-        "number": "9",
-        "postcode": "6003",
-        "town": "Luzern",
-        "country": "CH"
-      },
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Pilatusstrasse",
+          "number": "9",
+          "postcode": "6003",
+          "town": "Luzern",
+          "country": "CH",
+          "attn": "Küche, z. H. Herr Beispiel",
+          "billing": true
+        }
+      ],
       "language": "de",
-      "email": "kueche@musterhotel.example",
-      "paymentTermsDays": 20
+      "emails": [
+        "kueche@musterhotel.example"
+      ],
+      "paymentDays": 20,
+      "number": "K-00002"
     },
     {
       "id": "cu_MVknjIERgg_T",
       "createdAt": "2026-07-01T08:00:00.000Z",
       "origin": "manual",
       "deleted": false,
+      "type": "firm",
       "name": "Café Exemple Sàrl",
-      "address": {
-        "street": "Rue du Marché",
-        "number": "12",
-        "postcode": "1204",
-        "town": "Genève",
-        "country": "CH"
-      },
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Rue du Marché",
+          "number": "12",
+          "postcode": "1204",
+          "town": "Genève",
+          "country": "CH",
+          "billing": true
+        }
+      ],
       "language": "fr",
+      "emails": [
+        "compta@cafe-exemple.example"
+      ],
       "vatId": "CHE-111.222.334 TVA",
-      "email": "compta@cafe-exemple.example",
-      "paymentTermsDays": 30
+      "paymentDays": 30,
+      "number": "K-00005"
     },
     {
       "id": "cu_xeA65pqbdX_h",
       "createdAt": "2026-07-01T08:00:00.000Z",
       "origin": "manual",
       "deleted": false,
+      "type": "firm",
       "name": "Kaffeehaus Beispiel GmbH",
-      "address": {
-        "street": "Lindenstrasse",
-        "number": "7",
-        "postcode": "80331",
-        "town": "München",
-        "country": "DE"
-      },
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Lindenstrasse",
+          "number": "7",
+          "postcode": "80331",
+          "town": "München",
+          "country": "DE",
+          "billing": true
+        }
+      ],
       "language": "de",
+      "emails": [
+        "einkauf@kaffeehaus-beispiel.example"
+      ],
       "vatId": "DE999999999",
-      "email": "einkauf@kaffeehaus-beispiel.example",
-      "paymentTermsDays": 30
+      "paymentDays": 30,
+      "number": "K-00007"
     },
     {
       "id": "cu_VWzEXhFm3hTa",
       "createdAt": "2026-07-01T08:00:00.000Z",
       "origin": "manual",
       "deleted": false,
+      "type": "firm",
       "name": "Muster Catering AG",
-      "address": {
-        "street": "Industriestrasse",
-        "number": "40",
-        "postcode": "8400",
-        "town": "Winterthur",
-        "country": "CH"
-      },
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Industriestrasse",
+          "number": "40",
+          "postcode": "8400",
+          "town": "Winterthur",
+          "country": "CH",
+          "billing": true
+        }
+      ],
       "language": "de",
-      "email": "kreditoren@muster-catering.example",
-      "paymentTermsDays": 30
+      "emails": [
+        "kreditoren@muster-catering.example"
+      ],
+      "paymentDays": 30,
+      "number": "K-00003"
     },
     {
       "id": "cu_R-O8clcjxMXw",
       "createdAt": "2026-07-01T08:00:00.000Z",
       "origin": "manual",
       "deleted": false,
+      "type": "firm",
       "name": "Kaffeebar Beispiel GmbH",
-      "address": {
-        "street": "Bahnhofplatz",
-        "number": "3",
-        "postcode": "9000",
-        "town": "St. Gallen",
-        "country": "CH"
-      },
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Bahnhofplatz",
+          "number": "3",
+          "postcode": "9000",
+          "town": "St. Gallen",
+          "country": "CH",
+          "billing": true
+        }
+      ],
       "language": "de",
-      "email": "hallo@kaffeebar-beispiel.example",
-      "paymentTermsDays": 30
+      "emails": [
+        "hallo@kaffeebar-beispiel.example"
+      ],
+      "paymentDays": 30,
+      "number": "K-00004"
     },
     {
       "id": "cu_S9Jcs6yeSIZJ",
       "createdAt": "2026-07-01T08:00:00.000Z",
       "origin": "manual",
       "deleted": false,
+      "type": "firm",
       "name": "Beispiel Kantine AG",
-      "address": {
-        "street": "Werkstrasse",
-        "number": "8",
-        "postcode": "5000",
-        "town": "Aarau",
-        "country": "CH"
-      },
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Werkstrasse",
+          "number": "8",
+          "postcode": "5000",
+          "town": "Aarau",
+          "country": "CH",
+          "billing": true
+        }
+      ],
       "language": "de",
-      "email": "einkauf@beispiel-kantine.example",
-      "paymentTermsDays": 30
+      "emails": [
+        "einkauf@beispiel-kantine.example"
+      ],
+      "paymentDays": 30,
+      "number": "K-00006"
     },
     {
       "id": "cu_N7zXG9NsOQo6",
       "createdAt": "2026-07-01T08:00:00.000Z",
       "origin": "manual",
       "deleted": false,
+      "type": "firm",
       "name": "Bäckerei Muster",
-      "address": {
-        "street": "Dorfstrasse",
-        "number": "21",
-        "postcode": "8610",
-        "town": "Uster",
-        "country": "CH"
-      },
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Dorfstrasse",
+          "number": "21",
+          "postcode": "8610",
+          "town": "Uster",
+          "country": "CH",
+          "billing": true
+        }
+      ],
       "language": "de",
-      "paymentTermsDays": 30
+      "emails": [],
+      "paymentDays": 30,
+      "number": "K-00008"
     }
   ],
   "invoices": [
