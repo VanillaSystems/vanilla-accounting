@@ -1,0 +1,136 @@
+/**
+ * Closing, reopening and correcting a payslip (docs/specs/payroll.md §6.2 step 6, §6.5, §18): what the
+ * person is told before («unvollständig», an earlier month still open, an account the chart lacks), the
+ * entries a close books inside the write door, and the events that go to payslips.jsonl. A close warns,
+ * never blocks; a closed period stays as it is (the caller's assertOpen and the write door). Pure: the
+ * files are written by src/payroll/service.ts.
+ */
+import type { JournalEntry, Receipt } from '../types/index.js';
+import type { Books } from '../books/store.js';
+import type { PayrollData } from '../core/modules/schema.js';
+import { computePayslip, type PayrollContext, type PayslipDraft } from './compute.js';
+import { bookingOf, type PayslipBooking } from './booking.js';
+import { latestClosed } from './history.js';
+import { firmWageTypes } from './catalogue.js';
+import type { PayslipClose, PayslipCorrection, PayslipEvent } from './model.js';
+import { payslipRef } from './model.js';
+
+/** What closing would do that the person should know first; each a fact, none a block. */
+export type CloseWarning =
+  | { key: 'missing'; wageType: string; label: string; missing: string }
+  | { key: 'earlierOpen'; month: string }
+  | { key: 'accountMissing'; account: string }
+  | { key: 'withoutAccount'; wageType: string };
+
+export interface ClosePlan {
+  draft: PayslipDraft;
+  booking: PayslipBooking;
+  warnings: CloseWarning[];
+}
+
+export class PayrollRefusal extends Error {
+  constructor(readonly code: 'notFound' | 'alreadyClosed' | 'notClosed' | 'notLatest' | 'unknownWageType' | 'badAmount', message: string) { super(message); }
+}
+
+/** The plan of closing `employee`'s `month`: the draft, the entries it books, what to say first. */
+export function planClose(ctx: PayrollContext, employee: string, month: string, chart: ReadonlySet<string>): ClosePlan {
+  if (ctx.history.closed.has(`${month}-${employee}`)) throw new PayrollRefusal('alreadyClosed', `Die Lohnabrechnung ${month} ist schon abgeschlossen.`);
+  const draft = computePayslip(ctx, employee, month);
+  if (!draft) throw new PayrollRefusal('notFound', `Keine Lohnabrechnung ${month} für ${employee}.`);
+  const booking = bookingOf(draft, ctx.data, ctx.store);
+  const warnings: CloseWarning[] = [
+    ...draft.missing.map((m) => ({ key: 'missing' as const, wageType: m.wageType, label: m.label, missing: m.missing })),
+    ...draft.facts.filter((f) => f.key === 'earlierOpen').map((f) => ({ key: 'earlierOpen' as const, month: String(f.vars?.month) })),
+    ...booking.withoutAccount.map((w) => ({ key: 'withoutAccount' as const, wageType: w })),
+    ...[...new Set(booking.postings.flatMap((p) => [p.debit, p.credit]))].filter((a) => !chart.has(a)).sort().map((account) => ({ key: 'accountMissing' as const, account })),
+  ];
+  return { draft, booking, warnings };
+}
+
+/** The journal entries of a plan, with ids from `id`: one per posting, on the posting date, by payroll's check, no VAT code. */
+export function entriesOf(plan: Pick<ClosePlan, 'booking'>, id: () => string, receiptId?: string): JournalEntry[] {
+  return plan.booking.postings.map((p) => ({
+    id: id(), transactionRef: plan.booking.ref, date: plan.booking.date,
+    accountDebit: p.debit, accountCredit: p.credit, amount: p.amount, description: p.text,
+    by: { kind: 'code', check: 'payroll' }, ...(receiptId ? { receipts: [receiptId] } : {}),
+  }));
+}
+
+/** The receipt record of a payslip's PDF: a document of the firm, its facts known, so no step reads it again or sends it to a model. */
+export function payslipReceipt(plan: Pick<ClosePlan, 'draft'>, id: string, filename: string, size: number, now: string): Receipt {
+  const d = plan.draft;
+  return {
+    id, filename, originalFilename: filename, extractedText: `Lohnabrechnung ${d.month}`, extractionMethod: 'pdftotext',
+    fileSize: size, indexedAt: now, location: 'archived', date: d.postingDate, description: `Lohnabrechnung ${d.month}`,
+    kind: 'payslip', kindBy: 'rule', kindRule: 'payroll', hasSwissVat: false, vatExtractedAt: now,
+  };
+}
+
+/** Books a plan into `books` (inside the caller's write door): its entries, its receipt and the receipt's link to the ref. */
+export function applyClose(books: Books, plan: ClosePlan, entries: readonly JournalEntry[], receipt: Receipt): void {
+  if (books.journalEntries.some((e) => e.transactionRef === plan.booking.ref && e.by?.kind === 'code' && e.by.check === 'payroll')) {
+    throw new PayrollRefusal('alreadyClosed', `${plan.booking.ref} ist schon gebucht.`);
+  }
+  books.journalEntries.push(...entries);
+  books.receipts.push(receipt);
+  books.mappings.push({ transactionRef: plan.booking.ref, receiptId: receipt.id });
+}
+
+/** The close event of a plan (§9.3): the payslip as it stands from now, with what it used and booked. */
+export function closeEventOf(plan: ClosePlan, now: string, receiptId: string, entries: readonly JournalEntry[]): PayslipClose {
+  const d = plan.draft;
+  return {
+    event: 'close', id: d.id, employee: d.employee, month: d.month, postingDate: d.postingDate, payday: d.payday, closedAt: now, closedBy: 'person',
+    lines: d.lines, bases: d.bases, gross: d.gross, net: d.net, payout: d.payout, employer: d.employer, ...(d.text ? { text: d.text } : {}),
+    left: d.missing, receiptId, entries: entries.map((e) => e.id), used: d.used, person: d.person,
+  };
+}
+
+/** Whether `close` may be reopened: the person's latest closed month (the period lock is the caller's). */
+export function assertReopenable(ctx: PayrollContext, id: string): PayslipClose {
+  const close = ctx.history.closed.get(id);
+  if (!close) throw new PayrollRefusal('notClosed', `Die Lohnabrechnung ${id} ist nicht abgeschlossen.`);
+  if (latestClosed(ctx.history, close.employee)?.id !== id) {
+    throw new PayrollRefusal('notLatest', 'Nur der letzte abgeschlossene Monat lässt sich wieder öffnen; einen früheren korrigiert die Rückwirkende Korrektur im nächsten offenen Monat.');
+  }
+  return close;
+}
+
+/**
+ * Takes back what a close booked (inside the caller's write door, as the person): its entries the app
+ * booked under the ref, its receipt and link. An entry a person changed since stays hers (`kept`).
+ */
+export function applyReopen(books: Books, close: PayslipClose): { removed: string[]; kept: string[]; receipt?: Receipt } {
+  const ref = payslipRef(close.month, close.employee);
+  const own = (e: JournalEntry) => e.transactionRef === ref && e.by?.kind === 'code' && e.by.check === 'payroll';
+  const removed = books.journalEntries.filter(own).map((e) => e.id);
+  const kept = books.journalEntries.filter((e) => e.transactionRef === ref && !own(e)).map((e) => e.id);
+  books.journalEntries = books.journalEntries.filter((e) => !own(e));
+  const receipt = books.receipts.find((r) => r.id === close.receiptId);
+  if (receipt) {
+    books.receipts = books.receipts.filter((r) => r.id !== receipt.id);
+    books.mappings = books.mappings.filter((m) => m.receiptId !== receipt.id);
+  }
+  return { removed, kept, ...(receipt ? { receipt } : {}) };
+}
+
+export const reopenEventOf = (close: PayslipClose, now: string): PayslipEvent => ({ event: 'reopen', id: close.id, at: now, by: 'person' });
+
+/**
+ * A Rückwirkende Korrektur on a closed payslip (§6.5 step 1): a Lohnart and an amount, or a base and a
+ * rate difference, on one side. It changes nothing closed; the person's next open month carries it.
+ */
+export function correctionOf(ctx: PayrollContext, data: PayrollData, of: string, input: { wageType: string; amount?: number; base?: number; rateDiff?: number; text?: string }, id: string, now: string): PayslipCorrection {
+  const close = ctx.history.closed.get(of);
+  if (!close) throw new PayrollRefusal('notClosed', `Die Lohnabrechnung ${of} ist nicht abgeschlossen: eine Änderung gehört in den offenen Monat.`);
+  const w = firmWageTypes(data, ctx.store).get(input.wageType);
+  if (!w) throw new PayrollRefusal('unknownWageType', `Lohnart ${input.wageType} gibt es nicht.`);
+  const side = w.side ?? 'employee';
+  const amount = input.amount ?? (input.base !== undefined && input.rateDiff !== undefined ? Math.round(input.base * input.rateDiff) / 100 : undefined);
+  if (amount === undefined || !Number.isFinite(amount) || amount === 0) throw new PayrollRefusal('badAmount', 'Ein Betrag, oder eine Basis und eine Satzdifferenz.');
+  return {
+    event: 'correction', id, of, wageType: input.wageType, side, amount,
+    ...(input.base !== undefined ? { base: input.base } : {}), ...(input.rateDiff !== undefined ? { rateDiff: input.rateDiff } : {}),
+    ...(input.text ? { text: input.text } : {}), at: now, by: 'person',
+  };
+}

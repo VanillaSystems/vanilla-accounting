@@ -27,7 +27,7 @@ export interface ReceiptLine {
  * a supporting document (a Post Aufgabebestätigung billed on the monthly invoice, a delivery
  * note) is kept as proof but never matched. See processes/receipt-intake.flow.yaml.
  */
-export const RECEIPT_KINDS = ['invoice', 'sales-record', 'supporting', 'statement', 'noise', 'duplicate'] as const;
+export const RECEIPT_KINDS = ['invoice', 'sales-record', 'supporting', 'statement', 'noise', 'duplicate', 'payslip'] as const;
 export type ReceiptKind = typeof RECEIPT_KINDS[number];
 
 export interface Receipt {
