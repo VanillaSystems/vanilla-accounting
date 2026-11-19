@@ -148,7 +148,7 @@ test('books schema 8 (#409): books of schema 7 load with their seals whole and n
 });
 
 test('books schema 9 (#450): books of schema 8 load with their seals whole and no receipt given a count, the step adds nothing and a second run changes nothing, a save writes 9 with no record changed; a count survives a save; an app of schema 8 refuses books of 9', () => {
-  assert.equal(BOOKS_SCHEMA, 9);
+  assert.ok(BOOKS_SCHEMA >= 9);
   const dir = mkdtempSync(join(tmpdir(), 'schema-9-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const ws = workspaceAt(dir);
@@ -157,7 +157,7 @@ test('books schema 9 (#450): books of schema 8 load with their seals whole and n
   const before = booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]);
 
   const loaded = loadBooks(ws);
-  assert.equal(loaded.schema, 9);
+  assert.equal(loaded.schema, BOOKS_SCHEMA);
   assert.ok(sealsOf(loaded).checks.every((c) => c.status !== 'broken'), 'every seal still verifies');
   assert.ok(loaded.receipts.every((r) => !('vatReadFailures' in r)), 'the step adds no count, not even 0');
 
@@ -167,7 +167,7 @@ test('books schema 9 (#450): books of schema 8 load with their seals whole and n
   assert.deepEqual(once, raw, 'old in, the same records out');
   assert.deepEqual(climb<Record<string, unknown>>(once, 8, 9, BOOKS_MIGRATIONS, 'ledger.json', clone), once, 'a second run changes nothing');
   saveBooks(ws, loaded);
-  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, 9);
+  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, BOOKS_SCHEMA);
   assert.deepEqual(booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]), before, 'no record of the books changed');
 
   const again = loadBooks(ws);
@@ -177,6 +177,38 @@ test('books schema 9 (#450): books of schema 8 load with their seals whole and n
   assert.equal(loadBooks(ws).receipts.find((r) => r.id === open.id)?.vatReadFailures, 2);
 
   assert.throws(() => climb<Record<string, unknown>>({}, 9, 8, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
+});
+
+test('books schema 10 (#571): books of schema 9 load with their seals whole and no receipt given a due date, the step adds nothing and a second run changes nothing, a save writes 10 with no record changed; a due date a person set survives a save; an app of schema 9 refuses books of 10', () => {
+  assert.equal(BOOKS_SCHEMA, 10);
+  const dir = mkdtempSync(join(tmpdir(), 'schema-10-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const ws = workspaceAt(dir);
+  const ledger = JSON.parse(readFileSync(ws.paths.ledger, 'utf8'));
+  writeFileSync(ws.paths.ledger, JSON.stringify({ ...ledger, schema: 9 }, null, 2) + '\n');
+  const before = booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]);
+
+  const loaded = loadBooks(ws);
+  assert.equal(loaded.schema, 10);
+  assert.ok(sealsOf(loaded).checks.every((c) => c.status !== 'broken'), 'every seal still verifies');
+  assert.ok(loaded.receipts.every((r) => !('dueDate' in r)), 'the step adds no due date: the text\'s is read on every load');
+
+  const clone = (d: Record<string, unknown>) => structuredClone(d);
+  const raw = { schema: 9, receipts: [{ id: 'r', extractedText: 'zahlbar bis 30.11.2026' }] };
+  const once = climb<Record<string, unknown>>(raw, 9, 10, BOOKS_MIGRATIONS, 'ledger.json', clone);
+  assert.deepEqual(once, raw, 'old in, the same records out');
+  assert.deepEqual(climb<Record<string, unknown>>(once, 9, 10, BOOKS_MIGRATIONS, 'ledger.json', clone), once, 'a second run changes nothing');
+  saveBooks(ws, loaded);
+  assert.equal(JSON.parse(readFileSync(ws.paths.ledger, 'utf8')).schema, 10);
+  assert.deepEqual(booksFiles(ws.paths.transactional).map((f) => [f, readFileSync(f, 'utf8')]), before, 'no record of the books changed');
+
+  const again = loadBooks(ws);
+  const open = again.receipts.find((r) => !!r.date && r.date > (again.config.closedThrough ?? ''))!;
+  open.dueDate = '2026-12-31';
+  saveBooks(ws, again);
+  assert.equal(loadBooks(ws).receipts.find((r) => r.id === open.id)?.dueDate, '2026-12-31');
+
+  assert.throws(() => climb<Record<string, unknown>>({}, 10, 9, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
 });
 
 test('manifest schema 4 (#452): a manifest of schema 3 loads with its UID, npm run update writes 4 and changes nothing else; one of 4 without a UID loads; an app of schema 3 refuses a manifest of 4', async () => {

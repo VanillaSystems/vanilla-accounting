@@ -33,6 +33,16 @@ Two markers flag an entry you must read before you update:
   date is always the new entry's. They live in the workspace, `master-data/entry-templates.json`.
 - Booking by hand onto Debitoren or Kreditoren (a collective account whose balance is the open
   invoices or bills) warns and books on «Trotzdem buchen».
+- **Zu bezahlen** in Belege (`/receipts/bills`, #571): the supplier bills of the period with the day
+  each is due, overdue first, then open, then paid, each a fact of the books: a bill is paid once
+  it is linked to its payment (on that payment's day), overdue once its day has passed without one.
+  Filtered by state and by Belege's filters, with the sum still to pay (and how much of it is
+  overdue) per currency, printed as a list and downloaded as CSV. The due date is read by code off
+  the bill's text («zahlbar bis 30.11.2026», «innert 30 Tagen», «10 Tage 2 % Skonto, 30 Tage
+  netto»), without a model and for every receipt already in the books; a receipt's Angaben take a
+  due date by hand («Fällig am»), which wins. No payment files and no bank connection.
+- Books schema 10: a receipt keeps the due date a person set (`dueDate`). `npm run update` writes
+  it by itself; no record changes, and an older app refuses the books.
 
 ### Fixed
 

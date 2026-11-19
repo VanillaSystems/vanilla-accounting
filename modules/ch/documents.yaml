@@ -11,6 +11,15 @@ receipt:
   slip: [Zahlteil, Empfangsschein, Section paiement, Récépissé, Sezione pagamento, Payment part]
   number: [Rechnungsnummer, Rechnungs-Nr., Rechnung Nr., Rechnungsnr., Rechnung, Belegnummer, Beleg-Nr., Quittungsnummer, Invoice number, Invoice No., "Invoice #", Invoice, Receipt number, "Receipt #", Bill number, Numéro de facture, Facture n°, Facture no, Facture, Numero fattura, Fattura n., Fattura nr., Fattura]
 
+# The due date a bill states (src/books/due-date.ts): a date after a word of receipt.due or of `labels`
+# (more words that name a bill's terms; they do not count toward a document being a receipt, as
+# receipt.due does), or its terms in days («zahlbar innert 30 Tagen», «10 Tage 2 % Skonto, 30 Tage
+# netto»): `days` the word for days, `net` the word of the term without a cash discount, which wins.
+dueTerms:
+  labels: [zahlbar innerhalb, fällig bis, Fälligkeitsdatum, Zahlungsziel, Zahlungsbedingungen, Zahlungskonditionen, Due on, Payable within, Payment terms, Échéance, payable dans, payable sous, Conditions de paiement, da pagare entro, Condizioni di pagamento]
+  days: [Tage, Tagen, days, day, jours, jour, giorni, giorno]
+  net: [netto, net, nets, netti]
+
 # A title or number word of six letters or more also closes a compound that starts a line, as German
 # writes a bill's kind into its title («Akontorechnung AK-26-Q3-30871», «Prämienrechnung PR-2026-2210»):
 # such a line is the title, and the word after it the bill's number (src/core/modules/words.ts

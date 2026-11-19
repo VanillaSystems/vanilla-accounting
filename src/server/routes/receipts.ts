@@ -27,9 +27,9 @@ export const router = Router();
 
 const refuse = (what: string): never => { throw new RequestError(400, `${what}.`); };
 
-/** An empty description or remark clears it; null clears a date, an amount, a kind or the VAT facts. */
+/** An empty description or remark clears it; null clears a date, a due date (back to the one its text states), an amount, a kind or the VAT facts. */
 function parseReceiptPatch(body: unknown): ReceiptPatch {
-  const b = patchBody(body, ['filename', 'date', 'amount', 'currency', 'description', 'remarks', 'kind', 'vat', 'vatBy']);
+  const b = patchBody(body, ['filename', 'date', 'dueDate', 'amount', 'currency', 'description', 'remarks', 'kind', 'vat', 'vatBy']);
   const patch: ReceiptPatch = {};
   if ('filename' in b) {
     const filename = stringField(b, 'filename').trim();
@@ -44,6 +44,14 @@ function parseReceiptPatch(body: unknown): ReceiptPatch {
       const date = stringField(b, 'date');
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new RequestError(400, 'date muss JJJJ-MM-TT sein.');
       patch.date = date;
+    }
+  }
+  if ('dueDate' in b) {
+    if (b.dueDate === null) patch.dueDate = null;
+    else {
+      const due = stringField(b, 'dueDate');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(due) || Number.isNaN(Date.parse(`${due}T00:00:00Z`)) || new Date(`${due}T00:00:00Z`).toISOString().slice(0, 10) !== due) throw new RequestError(400, 'dueDate muss JJJJ-MM-TT sein.');
+      patch.dueDate = due;
     }
   }
   if (b.amount === null) {
@@ -74,9 +82,11 @@ function parseReceiptPatch(body: unknown): ReceiptPatch {
 }
 
 /** The receipt with the patch applied: null removes a field, a kind (or none) is a person's. The VAT facts go through setReceipt. */
-function patched(receipt: Receipt, { date, amount, kind, vat: _vat, vatBy: _vatBy, ...rest }: ReceiptPatch): Receipt {
+function patched(receipt: Receipt, { date, dueDate, amount, kind, vat: _vat, vatBy: _vatBy, ...rest }: ReceiptPatch): Receipt {
   const out: Receipt = { ...receipt, ...rest };
   if (date !== undefined) out.date = date ?? undefined;
+  if (dueDate === null) delete out.dueDate;
+  else if (dueDate !== undefined) out.dueDate = dueDate;
   if (amount !== undefined) out.amount = amount ?? undefined;
   if (kind !== undefined) {
     out.kind = kind ?? undefined;

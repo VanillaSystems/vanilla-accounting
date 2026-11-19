@@ -32,6 +32,7 @@ import { processingText } from '../../automation/processing.js';
 import { inProcess, type Processing } from '../../../workflows/processing.js';
 import type { AutomationView } from '../../../workflows/model.js';
 import { Detail } from './Detail.js';
+import { BillList, ReceiptViews } from './Bills.js';
 import { I } from './icons.js';
 import { EmptyTable, FirstRun, Strip } from './InflowStrip.js';
 import { ReadingWaits } from './ReadingWaits.js';
@@ -58,7 +59,12 @@ const noReceiptsYet = (books: AreaProps['books'], inbox: readonly InboxFile[]) =
 const groupLabel = (key: GroupKey) =>
   key === 'working' ? t('receipts.groupWorking') : key === 'need' ? t('receipts.groupNeed') : key === 'noDate' ? t('receipts.noDate') : monthName(`${key.slice(6)}-01`);
 
+/** Belege, or its bills to pay (/receipts/bills, #571). */
 function List(props: Props) {
+  return props.route.view === 'bills' ? <BillList {...props} /> : <ReceiptList {...props} />;
+}
+
+function ReceiptList(props: Props) {
   const { route, query, period, books, nav, canEdit } = props;
   const s = useUi();
   const { view } = useAutomation();
@@ -150,6 +156,7 @@ function List(props: Props) {
             </>
           ) : <span>{filed ? t('receipts.filedReadOnly') : t('receipts.stillEmpty')}</span>}
           {canEdit && <RunInbox go={(route) => nav.go({ route, query: {} })} />}
+          <ReceiptViews on="all" props={props} />
         </div>
         <ChipFilter fields={fields} rows={pool} chips={chips} onChips={setChips} q={query.q} onQ={(q) => nav.setQuery({ q })}
           searchLabel={t('receipts.searchLabel')} searchKey={<Kbd keys={['/']} tip={t('receipts.searchTip')} />} />
@@ -357,7 +364,7 @@ export const receipts: Area<RouteOf<'receipts'>> = {
     if (d) {
       const i = p.route.id ? listed.ids.indexOf(p.route.id) : -1;
       const next = listed.ids[Math.min(listed.ids.length - 1, Math.max(0, i + d))];
-      if (next) p.nav.select({ area: 'receipts', id: next });
+      if (next) p.nav.select({ ...p.route, id: next });
       return true;
     }
     // Deleting takes ⌘⌫ or the Delete key, as in Buchungen: a bare Backspace never deletes a receipt (r7f-31).

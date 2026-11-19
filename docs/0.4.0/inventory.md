@@ -8,13 +8,13 @@ and the providers.
 
 | Layer | Files | With Swiss specifics |
 |---|---:|---:|
-| core | 82 | 23 |
+| core | 83 | 23 |
 | engine | 4 | 1 |
-| provider | 14 | 11 |
+| provider | 15 | 11 |
 | split | 134 | 26 |
 | infrastructure | 84 | 4 |
 | workflow | 31 | 0 |
-| view | 396 | 55 |
+| view | 398 | 55 |
 
 Layers are assigned by path prefix, most specific first:
 

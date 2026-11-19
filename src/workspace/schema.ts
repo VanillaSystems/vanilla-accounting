@@ -54,8 +54,12 @@ import { roleBefore } from './banks.js';
  *    payslips withheld carries `JournalEntry.by: { kind: 'code', check: 'withheldShare' }` (#489,
  *    src/booking/classify.ts bookWithheldShares). Books of schema 8 hold none, so the step adds nothing; an app of
  *    schema 8 would read the unknown check as no `by` and drop who decided the booking on its next save.
+ * 10: a receipt keeps the due date a person set (#571): `Receipt.dueDate`, which wins over the one
+ * code reads off its text (src/books/due-date.ts). Books of schema 9 hold none: the step adds nothing,
+ * so no sealed record and no filed receipt changes. An app of schema 9 would show the text's due date
+ * instead of hers and call a bill overdue or open by it, so it must refuse these books.
  */
-export const BOOKS_SCHEMA = 9;
+export const BOOKS_SCHEMA = 10;
 /**
  * 2: every money account names its `role` (#88).
  * 3: `company.vat.reportingSince`, the year the basis began (#143). An app of schema 2 would read
@@ -93,6 +97,8 @@ export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   7: (doc) => doc,
   // No receipt counts its failed VAT reads before; absent means none. The number makes an older app refuse the books.
   8: (doc) => doc,
+  // No receipt has a due date a person set before; absent means the text's. The number makes an older app refuse the books.
+  9: (doc) => doc,
 };
 /** On the YAML document, so the comments of the manifest survive the step. */
 export const MANIFEST_MIGRATIONS: Ladder<Document> = {
