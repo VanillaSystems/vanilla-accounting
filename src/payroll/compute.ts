@@ -420,7 +420,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
   if (!e.sex) facts.push({ key: 'sexMissing' });
   const computed = new Map<string, number>();
   const commissionLines: PayslipLine[] = [];
-  const cumulated: Record<string, { base: number; capped: number; ceiling: number }> = {};
+  const cumulated: Record<string, ReturnType<typeof cumulative>> = {};
   /** The capped base of each base and ceiling this month: kept on the close, so the next month caps against what was used. */
   const capped: Record<string, number> = {};
   for (const c of data.contributions) {
@@ -523,6 +523,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       const raw = typeof c.base === 'string' ? c.base : '';
       const key = `${raw}|${c.ceiling}`;
       const cum = cumulated[key] ??= cumulative(ctx, e, month, raw, key, settings.proration, ceiling.value);
+      if (cum.unknown) fact('wagesNotInApp', { year: cum.unknown });
       const own = round2(Math.min(cum.base + base, cum.ceiling) - cum.capped);
       if (own < base && !facts.some((f) => f.key === 'ceiling')) facts.push({ key: 'ceiling', vars: { amount: ceiling.value } });
       capped[key] = own;
@@ -781,7 +782,7 @@ function solutionOf(firm: PayrollInsurance, person: PersonInsurances, kind: stri
  * month): the base of the closed months, the capped base their lines used, and the ceiling to date with
  * this month's share.
  */
-function cumulative(ctx: PayrollContext, e: PayrollEmployee, month: string, base: string, key: string, proration: string, yearly: number): { base: number; capped: number; ceiling: number } {
+function cumulative(ctx: PayrollContext, e: PayrollEmployee, month: string, base: string, key: string, proration: string, yearly: number): { base: number; capped: number; ceiling: number; unknown?: string } {
   const year = month.slice(0, 4);
   // A payment after the exit in a later year («Nachzahlung») counts against the ceiling of the employment's last year.
   const ref = referenceYear(e, month);
@@ -789,7 +790,12 @@ function cumulative(ctx: PayrollContext, e: PayrollEmployee, month: string, base
   const earlier = closedOf(ctx.history, e.id).filter((c) => ((ref !== year && c.month.startsWith(ref)) || (c.month < month && referenceYear(e, c.month) === ref)) && !inOpening(e, c.month));
   const opening = openingOf(e, ref);
   const share = (m: string) => employedFraction(e, m, proration);
-  const months = (opening?.months ?? 0) + earlier.reduce((a, c) => a + share(c.month), 0) + share(month);
+  // A payment after the exit: the ceiling of the months she was employed in that year, whatever the app holds of them;
+  // its room is that less the wages the app knows (none known: said, never a ceiling of zero).
+  const months = ref !== year
+    ? monthsBetween(`${ref}-01`, `${ref}-12`).reduce((a, m) => a + share(m), 0)
+    : (opening?.months ?? 0) + earlier.reduce((a, c) => a + share(c.month), 0) + share(month);
+  const unknown = ref !== year && !opening && !earlier.some((c) => c.month.startsWith(ref)) ? ref : undefined;
   const openingBase = opening?.bases[base] ?? 0;
   // A month whose close kept no capped base (none of this ceiling's contributions was owed then) used at most its share of the ceiling.
   const cappedOf = (c: PayslipClose) => c.bases[key]?.month ?? Math.min(c.bases[base]?.month ?? 0, yearly / 12 * share(c.month));
@@ -797,6 +803,7 @@ function cumulative(ctx: PayrollContext, e: PayrollEmployee, month: string, base
     base: round2(openingBase + sum(earlier.map((c) => c.bases[base]?.month ?? 0))),
     capped: round2(Math.min(openingBase, yearly / 12 * (opening?.months ?? 0)) + sum(earlier.map(cappedOf))),
     ceiling: round2(yearly / 12 * months),
+    ...(unknown ? { unknown } : {}),
   };
 }
 

@@ -379,3 +379,12 @@ test('liable by age in the year earned: born 2009, paid in 2027 for 2026, owes n
   assert.deepEqual(ahvAlv(d), []);
   assert.ok(facts(d).includes('notLiable'));
 });
+
+test('a Nachzahlung for a year the app holds no wages of: the ceiling by the months employed, and said', () => {
+  const store = firm([staff('p1', { employment: [dated('2025-01-01', monthly(6000), undefined, '2025-12-31')] })]);
+  store.monthLines = [{ id: 'm1', employee: 'p1', month: '2026-03', wageType: 'bonus', amount: 2000, enteredAt: '2026-03-10T08:00:00Z' }];
+  const d = computePayslip({ data: ch.payroll!, years: ch.payrollYears, store, history: historyOf([]) }, 'p1', '2026-03')!;
+  assert.deepEqual(ahvAlv(d), [['ahv-an', 2000, 5.3, 106], ['alv-an', 2000, 1.1, 22]], '12 months of 2025: the whole ceiling of 148,200, none of it known used');
+  assert.ok(d.facts.some((f) => f.key === 'wagesNotInApp' && f.vars?.year === '2025'));
+  assert.ok(!facts(d).includes('ceiling'));
+});

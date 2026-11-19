@@ -7696,6 +7696,7 @@ export default {
     "payroll.docs.exempt.pensioner": "franchise des rentiers {amount} ; soumis {liable}",
     "payroll.docs.exempt.smallWage": "salaire minime : {amount} sans cotisation AVS",
     "payroll.fact.afterExit": "Paiement après le départ le {date} : seulement les genres de salaire saisis, pas de prévoyance professionnelle.",
+    "payroll.fact.wagesNotInApp": "Salaires {year} absents de l’app : plafond calculé selon les mois d’emploi.",
     "payroll.fact.figuresOfYear": "Payé après le départ, gagné en {earned} : les taux et plafonds fédéraux de {year}, l’app n’a pas encore ceux de {earned}.",
     "payroll.fact.smallWage": "Salaire minime : jusqu’à {amount} par an sans AVS/AI/APG, AC et CAF, sauf demande de la personne.",
     "payroll.fact.smallWageCaught": "Le salaire annuel dépasse {amount} : les cotisations des mois précédents ({caught}) sont calculées ce mois.",

@@ -676,7 +676,16 @@ export function affectedByTariff(ctx: PayrollContext, next: PayrollContext, isCl
         return { wageType: x.wageType, label: types.get(x.wageType)?.label.de ?? x.wageType, amount: x.amount, side: x.side, source: 'correction', ...(region ? { tariff: { region, code: '', income: 0 } } : {}) };
       })],
     };
-    const differences = differencesOf({ data: ctx.data, store: ctx.store }, withheld, after);
+    // The month as the file before computes it. Where that is what the month withheld (it was closed with that file), only
+    // the file's own effect is carried and a person's corrections since stay hers: the same file again offers nothing.
+    // Where the month could not compute the tax then (no file), or withheld otherwise («So lassen»), what it withheld and
+    // its corrections are compared with the new tax, so nothing is carried twice (decision 96).
+    const beforeDraft = computePayslip({ ...ctx, history: withoutClose(ctx.history, c.id) }, c.employee, c.month);
+    const before = keep(beforeDraft);
+    const couldNot = (beforeDraft?.missing ?? []).some((m) => taxed.has(m.wageType));
+    const taxOnly = (d: Pick<PayslipDraft, 'lines'>) => JSON.stringify([...byWageType(d)].filter(([k]) => types.get(k.split('|')[0])?.computes !== 'commission').sort());
+    const closedWithIt = !couldNot && taxOnly(keep(c)) === taxOnly(before);
+    const differences = differencesOf({ data: ctx.data, store: ctx.store }, closedWithIt ? before : withheld, after);
     // Only what a correction carries is offered: a commission's rounding alone leaves nothing to do.
     if (differences.some((d) => d.carry)) out.push({ payslip: c.id, employee: c.employee, name: c.person.name, month: c.month, postingDate: c.postingDate, closedPeriod: isClosed(c.postingDate), differences });
   }

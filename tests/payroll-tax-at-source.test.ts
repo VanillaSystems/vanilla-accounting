@@ -567,3 +567,14 @@ test('a hand correction of a month closed without its tax line books in the pers
   assert.deepEqual(lists.map((s) => [s.region, s.rows.map((r) => [r.corrects ?? 'own', r.tax])]), [['BE', [['own', 812.5], ['2026-10', 800]]]]);
   assert.equal(owed['2278'], lists[0].totals.payable);
 });
+
+test('a person\'s own correction stays hers: the same file again offers nothing, a corrected file carries only its own effect', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const ev: PayslipEvent[] = [];
+  const oct = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-10')!); ev.push(oct, correction(oct.id, 100, '2026-11-02T00:00:00.000Z'));
+  const ctx = { ...ctxOf(store, ev), tariffs };
+  assert.deepEqual(affectedByTariff(ctx, ctx), [], 'the same file: no card');
+  const fixed = corrected();
+  const aff = affectedByTariff(ctx, { ...ctx, tariffs: (r, y) => (r === 'ZH' && y === '2026' ? fixed : tariffs(r, y)) });
+  assert.deepEqual(aff.flatMap((a) => a.differences.filter((d) => d.carry).map((d) => [d.wageType, d.diff])), [['quellensteuer', 14.3]], '6,500 × (7.50 − 7.28) %, the 100 left as entered');
+});

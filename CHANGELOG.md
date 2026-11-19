@@ -365,6 +365,10 @@ Two markers flag an entry you must read before you update:
   («berechnet mit den Werten von damals») and stays as it was closed.
 - Löhne: a hand correction of a month closed without its tax at source books in that month's
   canton, on its tax office's account.
+- Löhne: loading a tariff file again no longer proposes to undo a person's own correction of the
+  tax at source; a corrected file carries only its own effect. A Nachzahlung for a year whose wages
+  are not in the app reckons the ALV/UVG ceiling by the months employed and says so (it had none).
+- Löhne: the federal figures of 2026 date the family-allowance minimums from 1.1.2025, as in force.
 - Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
   davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund
   (`payroll: { payments: liability }`), names the open payments it books first, and code then books
