@@ -33,6 +33,32 @@
       "origin": "manual",
       "deleted": false,
       "type": "firm",
+      "name": "Familie Keller-Muster",
+      "persons": [],
+      "addresses": [
+        {
+          "id": "a-1",
+          "street": "Rosenbergstrasse",
+          "number": "41",
+          "postcode": "9000",
+          "town": "St. Gallen",
+          "country": "CH",
+          "billing": true
+        }
+      ],
+      "language": "de",
+      "emails": [
+        "keller-muster@mail.example"
+      ],
+      "paymentDays": 30,
+      "number": "K-00003"
+    },
+    {
+      "id": "cu_MVknjIERgg_T",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "type": "firm",
       "name": "Muster Wohnbau AG",
       "persons": [],
       "addresses": [
@@ -79,13 +105,13 @@
           "billing": true
         }
       ],
-      "number": "K-00003"
+      "number": "K-00004"
     }
   ],
   "articles": [],
   "invoices": [
     {
-      "id": "in_MVknjIERgg_T",
+      "id": "in_xeA65pqbdX_h",
       "createdAt": "2026-08-14T16:20:00.000Z",
       "origin": "manual",
       "deleted": false,
@@ -249,7 +275,7 @@
       }
     },
     {
-      "id": "in_VWzEXhFm3hTa",
+      "id": "in_R-O8clcjxMXw",
       "createdAt": "2026-09-24T10:00:00.000Z",
       "origin": "manual",
       "deleted": false,
@@ -275,7 +301,7 @@
       ],
       "prices": "gross",
       "termsId": "net30",
-      "customerId": "cu_2KIQYfUMHYIT",
+      "customerId": "cu_MVknjIERgg_T",
       "subject": "Einbauschränke Überbauung Rosenberg",
       "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
       "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Reto Beispiel",
@@ -363,6 +389,503 @@
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-002.pdf",
         "sha256": "5f3cf6739da31607d4e565e2a230b7a6175b6bd00da0524fec75ef56d98d5305"
+      }
+    },
+    {
+      "id": "in_N7zXG9NsOQo6",
+      "createdAt": "2026-09-25T09:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "sales-order",
+      "date": "2026-09-25",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Wangentreppe Eiche massiv, 15 Stufen, Herstellung",
+          "quantity": 1,
+          "unit": "flat",
+          "price": 18500,
+          "vatRate": 8.1
+        },
+        {
+          "text": "Geländer Eiche mit Stahlstäben",
+          "quantity": 6.5,
+          "unit": "m",
+          "price": 340,
+          "vatRate": 8.1
+        },
+        {
+          "text": "Montage",
+          "quantity": 40,
+          "unit": "h",
+          "price": 98,
+          "vatRate": 8.1
+        }
+      ],
+      "prices": "gross",
+      "customerId": "cu_2KIQYfUMHYIT",
+      "subject": "Treppe Eiche, Einfamilienhaus Rosenberg",
+      "stages": [
+        {
+          "label": "30 % bei Auftrag",
+          "percent": 30,
+          "date": "2026-09-25"
+        },
+        {
+          "label": "40 % nach Rohbau",
+          "percent": 40,
+          "date": "2026-10-20"
+        },
+        {
+          "label": "Rest bei Abnahme"
+        }
+      ],
+      "intro": "Vielen Dank für Ihren Auftrag. Wir bestätigen Ihnen:",
+      "closing": "Freundliche Grüsse",
+      "status": "issued",
+      "number": "AU-2026-00001",
+      "issuedAt": "2026-09-25T09:00:00.000Z",
+      "dueDate": "2026-10-25",
+      "reference": "",
+      "customer": {
+        "name": "Familie Keller-Muster",
+        "address": {
+          "street": "Rosenbergstrasse",
+          "number": "41",
+          "postcode": "9000",
+          "town": "St. Gallen",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "keller-muster@mail.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Schreinerei Beispiel GmbH",
+        "address": {
+          "postcode": "9000",
+          "town": "St. Gallen",
+          "country": "CH",
+          "street": "Werkstrasse",
+          "number": "12"
+        },
+        "uid": "CHE-135.246.357",
+        "payTo": {
+          "account": "1020",
+          "iban": "CH1180808000000000003",
+          "qrIban": "CH3930808000000000003",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#141a26",
+        "window": "right",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "h",
+          "de": "Std.",
+          "fr": "h",
+          "it": "h",
+          "en": "h"
+        },
+        {
+          "id": "flat",
+          "de": "pauschal",
+          "fr": "forfait",
+          "it": "forfait",
+          "en": "flat rate"
+        },
+        {
+          "id": "m",
+          "de": "m",
+          "fr": "m",
+          "it": "m",
+          "en": "m"
+        }
+      ],
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/AU-2026-00001.pdf",
+        "sha256": "254912a8a7bceaf9135532c7f851f5e578433d5fefa4a1064bccee4eebfd22b2"
+      }
+    },
+    {
+      "id": "in_hakNjz3OdQ9D",
+      "createdAt": "2026-09-25T09:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "customerId": "cu_2KIQYfUMHYIT",
+      "date": "2026-09-25",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Akonto 1 gemäss Auftrag AU-2026-00001: 30 % bei Auftrag",
+          "quantity": 1,
+          "price": 7389,
+          "vatRate": 8.1
+        }
+      ],
+      "prices": "gross",
+      "from": {
+        "id": "in_N7zXG9NsOQo6",
+        "kind": "sales-order"
+      },
+      "subject": "Teilrechnung 1 · Treppe Eiche, Einfamilienhaus Rosenberg",
+      "role": "partial",
+      "stage": 0,
+      "termsId": "net30",
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Reto Beispiel",
+      "status": "issued",
+      "number": "2026-003",
+      "issuedAt": "2026-09-25T09:30:00.000Z",
+      "dueDate": "2026-10-25",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
+      "reference": "000000000000000000020260036",
+      "customer": {
+        "name": "Familie Keller-Muster",
+        "address": {
+          "street": "Rosenbergstrasse",
+          "number": "41",
+          "postcode": "9000",
+          "town": "St. Gallen",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "keller-muster@mail.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Schreinerei Beispiel GmbH",
+        "address": {
+          "postcode": "9000",
+          "town": "St. Gallen",
+          "country": "CH",
+          "street": "Werkstrasse",
+          "number": "12"
+        },
+        "uid": "CHE-135.246.357",
+        "payTo": {
+          "account": "1020",
+          "iban": "CH1180808000000000003",
+          "qrIban": "CH3930808000000000003",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#141a26",
+        "window": "right",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "payments": [
+        {
+          "transactionRef": "90000000080",
+          "date": "2026-09-30",
+          "amount": 7389,
+          "by": "reference"
+        }
+      ],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/2026-003.pdf",
+        "sha256": "189df2b674392fc073343dc61f0c8e3f38dc12583d8e267f3dcbcb7f230414ff"
+      }
+    },
+    {
+      "id": "in_R89wIzO9Auev",
+      "createdAt": "2026-10-20T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "customerId": "cu_2KIQYfUMHYIT",
+      "date": "2026-10-20",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Akonto 2 gemäss Auftrag AU-2026-00001: 40 % nach Rohbau",
+          "quantity": 1,
+          "price": 9852,
+          "vatRate": 8.1
+        }
+      ],
+      "prices": "gross",
+      "from": {
+        "id": "in_N7zXG9NsOQo6",
+        "kind": "sales-order"
+      },
+      "subject": "Teilrechnung 2 · Treppe Eiche, Einfamilienhaus Rosenberg",
+      "role": "partial",
+      "stage": 1,
+      "termsId": "net30",
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Reto Beispiel",
+      "status": "issued",
+      "number": "2026-004",
+      "issuedAt": "2026-10-20T08:00:00.000Z",
+      "dueDate": "2026-11-19",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
+      "reference": "000000000000000000020260044",
+      "customer": {
+        "name": "Familie Keller-Muster",
+        "address": {
+          "street": "Rosenbergstrasse",
+          "number": "41",
+          "postcode": "9000",
+          "town": "St. Gallen",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "keller-muster@mail.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Schreinerei Beispiel GmbH",
+        "address": {
+          "postcode": "9000",
+          "town": "St. Gallen",
+          "country": "CH",
+          "street": "Werkstrasse",
+          "number": "12"
+        },
+        "uid": "CHE-135.246.357",
+        "payTo": {
+          "account": "1020",
+          "iban": "CH1180808000000000003",
+          "qrIban": "CH3930808000000000003",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#141a26",
+        "window": "right",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/2026-004.pdf",
+        "sha256": "fbee731d0ef5c55afed2a9889124844f36a8dcb0ce0edef75fb15e65df227cef"
+      }
+    },
+    {
+      "id": "in_B5T2ulLAXEwN",
+      "createdAt": "2026-11-12T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "kind": "invoice",
+      "customerId": "cu_2KIQYfUMHYIT",
+      "date": "2026-11-12",
+      "currency": "CHF",
+      "language": "de",
+      "lines": [
+        {
+          "text": "Wangentreppe Eiche massiv, 15 Stufen, Herstellung",
+          "quantity": 1,
+          "unit": "flat",
+          "price": 18500,
+          "vatRate": 8.1,
+          "ofLine": 0
+        },
+        {
+          "text": "Geländer Eiche mit Stahlstäben",
+          "quantity": 6.5,
+          "unit": "m",
+          "price": 340,
+          "vatRate": 8.1,
+          "ofLine": 1
+        },
+        {
+          "text": "Montage",
+          "quantity": 40,
+          "unit": "h",
+          "price": 98,
+          "vatRate": 8.1,
+          "ofLine": 2
+        },
+        {
+          "text": "abzüglich Teilrechnung 2026-003 vom 25.09.2026",
+          "quantity": 1,
+          "price": -7389,
+          "vatRate": 8.1,
+          "deducts": "in_hakNjz3OdQ9D",
+          "deductedVat": 553.66
+        },
+        {
+          "text": "abzüglich Teilrechnung 2026-004 vom 20.10.2026",
+          "quantity": 1,
+          "price": -9852,
+          "vatRate": 8.1,
+          "deducts": "in_R89wIzO9Auev",
+          "deductedVat": 738.22
+        }
+      ],
+      "prices": "gross",
+      "from": {
+        "id": "in_N7zXG9NsOQo6",
+        "kind": "sales-order"
+      },
+      "subject": "Schlussrechnung · Treppe Eiche, Einfamilienhaus Rosenberg",
+      "role": "final",
+      "termsId": "net30",
+      "schedule": {
+        "retention": {
+          "percent": 5,
+          "until": "2027-06-30"
+        }
+      },
+      "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
+      "closing": "Zahlbar innert 30 Tagen.\nFreundliche Grüsse, Reto Beispiel",
+      "status": "issued",
+      "number": "2026-005",
+      "issuedAt": "2026-11-12T08:00:00.000Z",
+      "dueDate": "2026-12-12",
+      "terms": {
+        "id": "net30",
+        "name": "30 Tage netto",
+        "days": 30,
+        "text": "30 Tage netto"
+      },
+      "reference": "000000000000000000020260052",
+      "customer": {
+        "name": "Familie Keller-Muster",
+        "address": {
+          "street": "Rosenbergstrasse",
+          "number": "41",
+          "postcode": "9000",
+          "town": "St. Gallen",
+          "country": "CH"
+        },
+        "language": "de",
+        "email": "keller-muster@mail.example",
+        "paymentTermsDays": 30
+      },
+      "sender": {
+        "name": "Schreinerei Beispiel GmbH",
+        "address": {
+          "postcode": "9000",
+          "town": "St. Gallen",
+          "country": "CH",
+          "street": "Werkstrasse",
+          "number": "12"
+        },
+        "uid": "CHE-135.246.357",
+        "payTo": {
+          "account": "1020",
+          "iban": "CH1180808000000000003",
+          "qrIban": "CH3930808000000000003",
+          "bank": "Raiffeisen"
+        }
+      },
+      "layout": {
+        "font": "Inter",
+        "accent": "#141a26",
+        "window": "right",
+        "logoPosition": "left",
+        "logoSize": "m",
+        "show": {
+          "logo": true,
+          "senderLine": true,
+          "customerVatId": true,
+          "intro": true,
+          "quantity": true,
+          "vatColumn": true,
+          "articleCode": true,
+          "closing": true,
+          "footer": true,
+          "qrBill": true
+        }
+      },
+      "units": [
+        {
+          "id": "h",
+          "de": "Std.",
+          "fr": "h",
+          "it": "h",
+          "en": "h"
+        },
+        {
+          "id": "flat",
+          "de": "pauschal",
+          "fr": "forfait",
+          "it": "forfait",
+          "en": "flat rate"
+        },
+        {
+          "id": "m",
+          "de": "m",
+          "fr": "m",
+          "it": "m",
+          "en": "m"
+        }
+      ],
+      "payments": [],
+      "reminders": [],
+      "comments": [],
+      "pdf": {
+        "file": "transactional-data/2026/invoices/2026-005.pdf",
+        "sha256": "72433fc262e003bf321393e472908dc343f69d6de92dfb7f608489aad227c4dd"
       }
     },
     {
@@ -549,7 +1072,7 @@
       "intro": "Vielen Dank für Ihren Auftrag. Wir bestätigen Ihnen:",
       "closing": "Freundliche Grüsse",
       "status": "issued",
-      "number": "AU-2026-00001",
+      "number": "AU-2026-00002",
       "issuedAt": "2026-10-13T08:00:00.000Z",
       "dueDate": "2026-11-12",
       "reference": "",
@@ -629,18 +1152,18 @@
       "reminders": [],
       "comments": [],
       "pdf": {
-        "file": "transactional-data/2026/invoices/AU-2026-00001.pdf",
-        "sha256": "df603c1be532dd55841fda82134e50d65ce1c1e74149a15ba5ad9c0826628a29"
+        "file": "transactional-data/2026/invoices/AU-2026-00002.pdf",
+        "sha256": "a506bdc1a65576b9281014d1a0e379a84d565ecc90ace517cb546ce4e9e67c9a"
       }
     }
   ],
   "sent": [
     {
-      "id": "sd_xeA65pqbdX_h",
+      "id": "sd_VWzEXhFm3hTa",
       "createdAt": "2026-08-14T16:20:00.000Z",
       "origin": "manual",
       "deleted": false,
-      "invoiceId": "in_MVknjIERgg_T",
+      "invoiceId": "in_xeA65pqbdX_h",
       "kind": "invoice",
       "title": "Rechnung 2026-001",
       "file": "transactional-data/2026/invoices/2026-001.pdf",
@@ -651,11 +1174,11 @@
       "messageId": "<2026-001.2026-08-14@mail.demo.example>"
     },
     {
-      "id": "sd_R-O8clcjxMXw",
+      "id": "sd_S9Jcs6yeSIZJ",
       "createdAt": "2026-09-24T10:00:00.000Z",
       "origin": "manual",
       "deleted": false,
-      "invoiceId": "in_VWzEXhFm3hTa",
+      "invoiceId": "in_R-O8clcjxMXw",
       "kind": "invoice",
       "title": "Rechnung 2026-002",
       "file": "transactional-data/2026/invoices/2026-002.pdf",
@@ -664,6 +1187,66 @@
       "to": "rechnungen@muster-wohnbau.example",
       "channel": "email",
       "messageId": "<2026-002.2026-09-24@mail.demo.example>"
+    },
+    {
+      "id": "sd_glJAMD-ee_Jz",
+      "createdAt": "2026-09-25T09:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_N7zXG9NsOQo6",
+      "kind": "sales-order",
+      "title": "Auftragsbestätigung AU-2026-00001",
+      "file": "transactional-data/2026/invoices/AU-2026-00001.pdf",
+      "sha256": "254912a8a7bceaf9135532c7f851f5e578433d5fefa4a1064bccee4eebfd22b2",
+      "sentAt": "2026-09-25T09:00:00.000Z",
+      "to": "keller-muster@mail.example",
+      "channel": "email",
+      "messageId": "<AU-2026-00001.2026-09-25@mail.demo.example>"
+    },
+    {
+      "id": "sd_bGsKxKfMFmsz",
+      "createdAt": "2026-09-25T09:30:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_hakNjz3OdQ9D",
+      "kind": "invoice",
+      "title": "Teilrechnung 2026-003",
+      "file": "transactional-data/2026/invoices/2026-003.pdf",
+      "sha256": "189df2b674392fc073343dc61f0c8e3f38dc12583d8e267f3dcbcb7f230414ff",
+      "sentAt": "2026-09-25T09:30:00.000Z",
+      "to": "keller-muster@mail.example",
+      "channel": "email",
+      "messageId": "<2026-003.2026-09-25@mail.demo.example>"
+    },
+    {
+      "id": "sd_CK97dEv4JYjS",
+      "createdAt": "2026-10-20T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_R89wIzO9Auev",
+      "kind": "invoice",
+      "title": "Teilrechnung 2026-004",
+      "file": "transactional-data/2026/invoices/2026-004.pdf",
+      "sha256": "fbee731d0ef5c55afed2a9889124844f36a8dcb0ce0edef75fb15e65df227cef",
+      "sentAt": "2026-10-20T08:00:00.000Z",
+      "to": "keller-muster@mail.example",
+      "channel": "email",
+      "messageId": "<2026-004.2026-10-20@mail.demo.example>"
+    },
+    {
+      "id": "sd_XL9s3VHctVsb",
+      "createdAt": "2026-11-12T08:00:00.000Z",
+      "origin": "manual",
+      "deleted": false,
+      "invoiceId": "in_B5T2ulLAXEwN",
+      "kind": "invoice",
+      "title": "Schlussrechnung 2026-005",
+      "file": "transactional-data/2026/invoices/2026-005.pdf",
+      "sha256": "72433fc262e003bf321393e472908dc343f69d6de92dfb7f608489aad227c4dd",
+      "sentAt": "2026-11-12T08:00:00.000Z",
+      "to": "keller-muster@mail.example",
+      "channel": "email",
+      "messageId": "<2026-005.2026-11-12@mail.demo.example>"
     },
     {
       "id": "sd_cN6mCCvPpPcD",
@@ -687,13 +1270,13 @@
       "deleted": false,
       "invoiceId": "in_3PwBNv9AAcSJ",
       "kind": "sales-order",
-      "title": "Auftragsbestätigung AU-2026-00001",
-      "file": "transactional-data/2026/invoices/AU-2026-00001.pdf",
-      "sha256": "df603c1be532dd55841fda82134e50d65ce1c1e74149a15ba5ad9c0826628a29",
+      "title": "Auftragsbestätigung AU-2026-00002",
+      "file": "transactional-data/2026/invoices/AU-2026-00002.pdf",
+      "sha256": "a506bdc1a65576b9281014d1a0e379a84d565ecc90ace517cb546ce4e9e67c9a",
       "sentAt": "2026-10-13T08:00:00.000Z",
       "to": "beispiel-rossi@mail.example",
       "channel": "email",
-      "messageId": "<AU-2026-00001.2026-10-13@mail.demo.example>"
+      "messageId": "<AU-2026-00002.2026-10-13@mail.demo.example>"
     }
   ]
 }
