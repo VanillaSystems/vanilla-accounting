@@ -7,7 +7,7 @@
  */
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadJurisdiction } from '../src/core/modules/load.js';
 import { setJurisdiction } from '../src/engines/index.js';
@@ -298,11 +298,12 @@ function oldSplit(lines: readonly OldLine[], exemption: Draft['exemption'], amou
   }).filter((p) => p.amount !== 0);
 }
 
-/** Every invoices.json of a demo at schema 2 (as shipped), and a file that mixes every kind of document schema 2 could hold. */
+/**
+ * The demo's invoices.json as it shipped at schema 2 (0.6.0, kept in tests/fixtures), and a file that
+ * mixes every kind of document schema 2 could hold. The other demos have no invoices.
+ */
 function schema2Files(): Array<[string, { schema: number; invoices: Array<Record<string, unknown>> }]> {
-  const demos = readdirSync(APP_ROOT).filter((d) => d.startsWith('demo') && existsSync(join(APP_ROOT, d, 'vanilla-accounting', 'invoices.json')));
-  const files = demos.map((d) => [d, JSON.parse(readFileSync(join(APP_ROOT, d, 'vanilla-accounting', 'invoices.json'), 'utf8'))] as [string, { schema: number; invoices: Array<Record<string, unknown>> }]);
-  assert.ok(files.some(([d]) => d === 'demo'), 'the demo with invoices is read');
+  const files: Array<[string, { schema: number; invoices: Array<Record<string, unknown>> }]> = [['demo', JSON.parse(readFileSync(join(APP_ROOT, 'tests/fixtures/invoices-schema2-demo.json'), 'utf8'))]];
   const doc = (id: string, lines: OldLine[], over: Record<string, unknown> = {}) => ({ ...draft([], { id }), status: 'issued', number: id, reference: `RF00${id}`, lines: lines.map((l) => ({ text: 'x', ...l })), ...over });
   files.push(['mixed', { schema: 2, invoices: [
     doc('net', [{ quantity: 3, price: 33.35, vatRate: 8.1 }, { quantity: 2, price: 17.5, vatRate: 2.6, account: '3400' }]),
@@ -315,6 +316,10 @@ function schema2Files(): Array<[string, { schema: number; invoices: Array<Record
 }
 
 test('invoices.json 2 → 3: every document of every demo and of a mixed file keeps its totals, VAT per rate, revenue split and reference', () => {
+  // The demo as generated today names the same figures as the one of schema 2.
+  const today = JSON.parse(readFileSync(join(APP_ROOT, 'demo/vanilla-accounting/invoices.json'), 'utf8')) as InvoiceBook;
+  const shipped = schema2Files()[0][1];
+  assert.deepEqual(today.invoices.map((i) => [i.status === 'issued' ? i.number : i.id, totals(i)]), shipped.invoices.map((i) => [i.number ?? i.id, oldTotals(i.lines as OldLine[])]));
   for (const [name, file] of schema2Files()) {
     assert.equal(file.schema, 2, `${name} ships at schema 2`);
     const now = climb<Record<string, unknown>>(file, 2, INVOICES_SCHEMA, INVOICES_MIGRATIONS, name, (x) => structuredClone(x)) as unknown as InvoiceBook;

@@ -1,5 +1,5 @@
 {
-  "schema": 2,
+  "schema": 3,
   "customers": [
     {
       "id": "cu_5GQVervgd2rF",
@@ -101,6 +101,7 @@
           "account": "3600"
         }
       ],
+      "prices": "net",
       "customerId": "cu_5GQVervgd2rF",
       "subject": "Hausmischung und Barista-Schulung",
       "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
@@ -160,6 +161,22 @@
           "qrBill": true
         }
       },
+      "units": [
+        {
+          "id": "h",
+          "de": "Std.",
+          "fr": "h",
+          "it": "h",
+          "en": "h"
+        },
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        }
+      ],
       "payments": [
         {
           "transactionRef": "90000000049",
@@ -172,7 +189,7 @@
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-001.pdf",
-        "sha256": "38490a97818d71a99550404eb8307ef2146a53794240b0a772dbfbdc45532ea0"
+        "sha256": "4351eb7c51619b0dbbe9fc5bf3d277fdc6212bea9ccca406343ed932ba46e592"
       }
     },
     {
@@ -201,6 +218,7 @@
           "account": "3600"
         }
       ],
+      "prices": "net",
       "customerId": "cu_2KIQYfUMHYIT",
       "subject": "Filterkaffee und Wartung",
       "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
@@ -260,6 +278,22 @@
           "qrBill": true
         }
       },
+      "units": [
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        },
+        {
+          "id": "flat",
+          "de": "pauschal",
+          "fr": "forfait",
+          "it": "forfait",
+          "en": "flat rate"
+        }
+      ],
       "payments": [
         {
           "transactionRef": "90000000052",
@@ -272,7 +306,7 @@
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-002.pdf",
-        "sha256": "01ef1c8392683ed29be84c9b522fd0c8a9f6497e1d9932fb0c524ca6a6b83578"
+        "sha256": "573e7b29479432d84c64b1f2d92d474eb8f92eb43463873cee650191affa36f4"
       }
     },
     {
@@ -293,6 +327,7 @@
           "vatRate": 2.6
         }
       ],
+      "prices": "net",
       "customerId": "cu_5GQVervgd2rF",
       "subject": "Hausmischung August",
       "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
@@ -352,6 +387,15 @@
           "qrBill": true
         }
       },
+      "units": [
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        }
+      ],
       "payments": [],
       "reminders": [
         {
@@ -375,7 +419,7 @@
       ],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-003.pdf",
-        "sha256": "2a35e0a73d2f5b3e931e34369c71db1c6f570b62daaa2edd65a14fe6edbbdc8e"
+        "sha256": "a78185b51941d52eb0a0a7ba22bef4c34f2e6e8f15609ce5828ae4ba1f7aa3c2"
       }
     },
     {
@@ -394,10 +438,10 @@
           "text": "2 Pakete Filterkaffee beschädigt geliefert",
           "quantity": 1,
           "price": -33.86,
-          "vatRate": 2.6,
-          "vatIncluded": true
+          "vatRate": 2.6
         }
       ],
+      "prices": "gross",
       "creditFor": "in_S9Jcs6yeSIZJ",
       "settlement": "offset",
       "closing": "Freundliche Grüsse",
@@ -462,7 +506,7 @@
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-004.pdf",
-        "sha256": "7724d2b51efabfc9b1a58a177aadd8848f1b42687acf59edb4fd690ff9870410"
+        "sha256": "5570570693a6e59007ecb70675c6d96a9900dcea4c1eecebce2cc7e8f88064b6"
       }
     },
     {
@@ -490,6 +534,7 @@
           "vatRate": 0
         }
       ],
+      "prices": "net",
       "customerId": "cu_xeA65pqbdX_h",
       "subject": "Espresso-Mischung, Export",
       "exemption": "export",
@@ -549,12 +594,28 @@
           "qrBill": true
         }
       },
+      "units": [
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        },
+        {
+          "id": "flat",
+          "de": "pauschal",
+          "fr": "forfait",
+          "it": "forfait",
+          "en": "flat rate"
+        }
+      ],
       "payments": [],
       "reminders": [],
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-005.pdf",
-        "sha256": "fbfdae555ac5add32c30f9ae646b7436f75c5a0f4836d6b9f50dc48871ae295f"
+        "sha256": "4ffba5199a079a79fb078f18ec0e9f6fc9cfba427eae41ba304d43290aa1e319"
       }
     },
     {
@@ -583,6 +644,7 @@
           "account": "3600"
         }
       ],
+      "prices": "net",
       "customerId": "cu_MVknjIERgg_T",
       "subject": "Mélange maison et formation",
       "intro": "Nous vous remercions de votre mandat et vous facturons les prestations suivantes :",
@@ -642,12 +704,28 @@
           "qrBill": true
         }
       },
+      "units": [
+        {
+          "id": "h",
+          "de": "Std.",
+          "fr": "h",
+          "it": "h",
+          "en": "h"
+        },
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        }
+      ],
       "payments": [],
       "reminders": [],
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-006.pdf",
-        "sha256": "64ea008e03eb3cb9c0714b8b2ea4a2e680ebd0ab7ebd1d94f0c7802523c347d5"
+        "sha256": "d44553c51284520efcf6fafda797e81effa26e3cde2417a4631a44e55b2dcffd"
       }
     },
     {
@@ -668,6 +746,7 @@
           "vatRate": 2.6
         }
       ],
+      "prices": "net",
       "customerId": "cu_2KIQYfUMHYIT",
       "subject": "Filterkaffee Oktober",
       "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
@@ -727,12 +806,21 @@
           "qrBill": true
         }
       },
+      "units": [
+        {
+          "id": "pcs",
+          "de": "Stk.",
+          "fr": "pce",
+          "it": "pz.",
+          "en": "pcs"
+        }
+      ],
       "payments": [],
       "reminders": [],
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-007.pdf",
-        "sha256": "e3f5d2f6a817e73d5399114b8bdb6fe32cd46f9d61960b9d92d7633d32defb13"
+        "sha256": "c3eac66b3696b92b6bf9a646882da098138f09a7a09596caa818d159347d5403"
       },
       "cancelled": {
         "date": "2026-10-02",
@@ -767,6 +855,7 @@
           "account": "3600"
         }
       ],
+      "prices": "net",
       "customerId": "cu_2KIQYfUMHYIT",
       "subject": "Barista-Schulung Oktober",
       "comments": []
@@ -790,6 +879,7 @@
           "vatRate": 2.6
         }
       ],
+      "prices": "net",
       "customerId": "cu_MVknjIERgg_T",
       "subject": "Mélange maison octobre",
       "comments": []
@@ -805,7 +895,7 @@
       "kind": "invoice",
       "title": "Rechnung 2026-001",
       "file": "transactional-data/2026/invoices/2026-001.pdf",
-      "sha256": "38490a97818d71a99550404eb8307ef2146a53794240b0a772dbfbdc45532ea0",
+      "sha256": "4351eb7c51619b0dbbe9fc5bf3d277fdc6212bea9ccca406343ed932ba46e592",
       "sentAt": "2026-07-06T09:12:00.000Z",
       "to": "buchhaltung@bistro.example",
       "channel": "download"
@@ -819,7 +909,7 @@
       "kind": "invoice",
       "title": "Rechnung 2026-002",
       "file": "transactional-data/2026/invoices/2026-002.pdf",
-      "sha256": "01ef1c8392683ed29be84c9b522fd0c8a9f6497e1d9932fb0c524ca6a6b83578",
+      "sha256": "573e7b29479432d84c64b1f2d92d474eb8f92eb43463873cee650191affa36f4",
       "sentAt": "2026-07-20T14:30:00.000Z",
       "to": "kueche@musterhotel.example",
       "channel": "download"
@@ -833,7 +923,7 @@
       "kind": "invoice",
       "title": "Rechnung 2026-003",
       "file": "transactional-data/2026/invoices/2026-003.pdf",
-      "sha256": "2a35e0a73d2f5b3e931e34369c71db1c6f570b62daaa2edd65a14fe6edbbdc8e",
+      "sha256": "a78185b51941d52eb0a0a7ba22bef4c34f2e6e8f15609ce5828ae4ba1f7aa3c2",
       "sentAt": "2026-08-17T08:05:00.000Z",
       "to": "buchhaltung@bistro.example",
       "channel": "download"
@@ -847,7 +937,7 @@
       "kind": "credit-note",
       "title": "Gutschrift 2026-004",
       "file": "transactional-data/2026/invoices/2026-004.pdf",
-      "sha256": "7724d2b51efabfc9b1a58a177aadd8848f1b42687acf59edb4fd690ff9870410",
+      "sha256": "5570570693a6e59007ecb70675c6d96a9900dcea4c1eecebce2cc7e8f88064b6",
       "sentAt": "2026-09-02T10:40:00.000Z",
       "to": "kueche@musterhotel.example",
       "channel": "download"
@@ -861,7 +951,7 @@
       "kind": "invoice",
       "title": "Rechnung 2026-005",
       "file": "transactional-data/2026/invoices/2026-005.pdf",
-      "sha256": "fbfdae555ac5add32c30f9ae646b7436f75c5a0f4836d6b9f50dc48871ae295f",
+      "sha256": "4ffba5199a079a79fb078f18ec0e9f6fc9cfba427eae41ba304d43290aa1e319",
       "sentAt": "2026-09-21T13:00:00.000Z",
       "to": "einkauf@kaffeehaus-beispiel.example",
       "channel": "download"
@@ -875,7 +965,7 @@
       "kind": "reminder",
       "title": "1. Mahnung · Rechnung 2026-003",
       "file": "transactional-data/2026/invoices/sent/sd_XL9s3VHctVsb.pdf",
-      "sha256": "1bc6225e8f7ab95abf4900bee30922de32c8590af630fd64ccfe744657460811",
+      "sha256": "de65b417973829c7dcd9184c7f44c39596a21eac45372e726423bf938334702b",
       "sentAt": "2026-09-28T09:00:00.000Z",
       "to": "buchhaltung@bistro.example",
       "channel": "download"
@@ -889,7 +979,7 @@
       "kind": "invoice",
       "title": "Facture 2026-006",
       "file": "transactional-data/2026/invoices/2026-006.pdf",
-      "sha256": "64ea008e03eb3cb9c0714b8b2ea4a2e680ebd0ab7ebd1d94f0c7802523c347d5",
+      "sha256": "d44553c51284520efcf6fafda797e81effa26e3cde2417a4631a44e55b2dcffd",
       "sentAt": "2026-09-29T15:20:00.000Z",
       "to": "compta@cafe-exemple.example",
       "channel": "download"
@@ -903,7 +993,7 @@
       "kind": "invoice",
       "title": "Rechnung 2026-007",
       "file": "transactional-data/2026/invoices/2026-007.pdf",
-      "sha256": "e3f5d2f6a817e73d5399114b8bdb6fe32cd46f9d61960b9d92d7633d32defb13",
+      "sha256": "c3eac66b3696b92b6bf9a646882da098138f09a7a09596caa818d159347d5403",
       "sentAt": "2026-10-01T07:45:00.000Z",
       "to": "kueche@musterhotel.example",
       "channel": "download"
@@ -917,7 +1007,7 @@
       "kind": "cancellation",
       "title": "STORNIERT: Rechnung 2026-007",
       "file": "transactional-data/2026/invoices/sent/sd_oK6z1b13K2C6.pdf",
-      "sha256": "76bea41189c3a02ab67a7fce86905934bd4cae2c32f6f916f161784188451482",
+      "sha256": "20c495d2e7b5ecb5d2eeaf10db8ed6d1f57854b5015a6c9fbf3cdb3b7b262a90",
       "sentAt": "2026-10-02T08:10:00.000Z",
       "to": "kueche@musterhotel.example",
       "channel": "download"
