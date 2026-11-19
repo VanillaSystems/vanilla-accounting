@@ -15,7 +15,8 @@ import { journalOf, type Journal } from './model.js';
 import { listed, setUi, ui } from './state.js';
 import { deleteEntry } from './actions.js';
 import type { DeletedEntry } from '../../../books/entry-input.js';
-import { filing } from '../../../engines/index.js';
+import { filing, yearEnd } from '../../../engines/index.js';
+import { getAccountMap } from '../../lib/accounts.js';
 import { isAccrual, newYearAfter, reversalOf } from '../../../accounting/reversal.js';
 
 type Props = AreaProps<RouteOf<'journal'>>;
@@ -46,6 +47,16 @@ export const splitReceipt = (r: Receipt) => splitTitle(r.description || r.filena
 /** The accounts at a bank: a correction or an entry typed by hand should not move them. */
 export const isBankAccount = (account: string): boolean =>
   banksOf(workspaceNow()?.bankAccounts ?? []).some((b) => b.account === account);
+
+/**
+ * Debitoren or Kreditoren (year-end.yaml `receivables`, `payables`) the chart has (#567): collective
+ * accounts whose balance is the open invoices and bills, so an entry typed onto one by hand is warned of.
+ */
+export function collectiveOf(account: string): 'receivables' | 'payables' | undefined {
+  if (!account || !getAccountMap()[account]) return undefined;
+  const roles = yearEnd().accounts;
+  return roles.receivables.includes(account) ? 'receivables' : roles.payables.includes(account) ? 'payables' : undefined;
+}
 
 /** The owner's private account (its number): a purchase moved there claims no input tax. */
 export const isPrivateAccount = (account: string): boolean => {

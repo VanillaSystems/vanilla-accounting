@@ -172,7 +172,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/invoices/invoices.tsx` | CHF 2 |
 | `src/app/areas/invoices/model.ts` | CHF 3 |
 | `src/app/areas/journal/Detail.tsx` | CHF 1 |
-| `src/app/areas/journal/NewEntry.tsx` | CHF 1, form 0535 1 |
+| `src/app/areas/journal/NewEntry.tsx` | CHF 1, form 0535 1, Rappen 1 |
 | `src/app/areas/journal/journal.tsx` | MWST 1 |
 | `src/app/areas/journal/model.ts` | CHF 1 |
 | `src/app/areas/receipts/Detail.tsx` | CHF 1 |

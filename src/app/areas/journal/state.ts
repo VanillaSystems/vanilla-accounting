@@ -11,11 +11,20 @@ import type { CorrectionKind } from '../../../accounting/correction.js';
 
 export type Section = 'teile' | 'buchung' | 'herkunft';
 
+/** A side of an entry: where the account of a Sammelbuchung's lines stands opposite the one they share. */
+export type Side = 'accountDebit' | 'accountCredit';
+
+/** A line of a Sammelbuchung (#567): the account on the side opposite the shared one; `auto`: its amount is the rest until typed. */
+export interface SplitLine { account: string; amount?: number; vatCode?: string; description?: string; auto?: true }
+
+/** A Sammelbuchung: the shared account stands on `side` of the draft, the total in its amount (empty: the lines' sum). */
+export interface Split { side: Side; lines: SplitLine[] }
+
 interface State {
   collapsed: ReadonlySet<string>;
   open: Record<Section, boolean>;
   /** The new-entry dialog with what it starts from. */
-  overlay: { kind: 'new'; draft: Partial<JournalEntryInput>; correcting?: { entry: string; as: CorrectionKind; from?: string } } | null;
+  overlay: { kind: 'new'; draft: Partial<JournalEntryInput>; split?: Split; correcting?: { entry: string; as: CorrectionKind; from?: string } } | null;
   /** A field of the entry form to focus once it shows. */
   focus?: string;
   /** The entry just deleted: the detail keeps its place with «Rückgängig», so no row moves under the pointer (r6h-28). */
