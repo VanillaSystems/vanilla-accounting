@@ -15,6 +15,12 @@ import { accountOfKind, CORRECTION, deductionKind, namesWord, payslipDeductions,
 /** The kindRule of a payslip code recognised (A1): told apart from the app's own (`payroll`). */
 export const PAYSLIP_RULE = 'document:payslip';
 
+/**
+ * The kindRule of a text the firm issued and titles a payslip that code cannot read (or one the app's own payroll closed
+ * for that month, dropped again): a payslip all the same, never sent to a model (§11), paired and booked by the person.
+ */
+export const PAYSLIP_UNREAD_RULE = 'document:payslip-unread';
+
 /** A payslip of another program, as code recognised it: never one the app closed. */
 export const externalPayslip = (r: Pick<Receipt, 'kind' | 'kindRule'>): boolean => r.kind === 'payslip' && r.kindRule === PAYSLIP_RULE;
 
@@ -23,6 +29,8 @@ export interface PayslipRead {
   employee?: string;
   /** `YYYY-MM`. */
   period?: string;
+  /** The currency its amounts are in: one a code beside its amounts names, else the books'. */
+  currency: string;
   gross: number;
   net: number;
   deductions: Map<string, number>;
@@ -91,16 +99,6 @@ export function readPayslip(text: string): PayslipRead | undefined {
   const gross = oneOf(of('gross').map((p) => p.amount));
   const net = oneOf(of('net').map((p) => p.amount));
   if (gross === undefined || net === undefined || gross <= 0 || net <= 0) return undefined;
-  // The deductions as payslipDeductions reads them: a row of a kind with a minus, a correction row taken off.
-  const deductions = new Map<string, number>();
-  for (const p of of('deduction')) {
-    const kind = (p.role as { kind: string }).kind;
-    const taken = p.amount < 0 ? -p.amount : CORRECTION.test(p.label) ? -p.amount : 0;
-    if (taken) deductions.set(kind, fromRappen(toRappen(deductions.get(kind) ?? 0) + toRappen(taken)));
-  }
-  const kinds = setup().wages?.withholds ?? {};
-  const read = deductions.size ? payslipDeductions(text, undefined, kinds) : undefined;
-  if (deductions.size && (!read || read.size !== deductions.size || [...read].some(([k, v]) => toRappen(deductions.get(k) ?? NaN) !== toRappen(v)))) return undefined;
   if (of('allowance').some((p) => p.amount < 0) || of('expense').some((p) => p.amount < 0)) return undefined;
   const allowances = fromRappen(of('allowance').reduce((s, p) => s + toRappen(p.amount), 0));
   const expenses = new Map<string, number>();
@@ -108,13 +106,37 @@ export function readPayslip(text: string): PayslipRead | undefined {
     const account = (p.role as { account: string }).account;
     expenses.set(account, fromRappen(toRappen(expenses.get(account) ?? 0) + toRappen(p.amount)));
   }
-  const withheld = [...deductions.values()].reduce((s, v) => s + toRappen(v), 0);
-  const paid = toRappen(gross) - withheld + toRappen(allowances) + [...expenses.values()].reduce((s, v) => s + toRappen(v), 0);
-  if (paid !== toRappen(net)) return undefined;
+  const add = (m: Map<string, number>, kind: string, v: number) => m.set(kind, fromRappen(toRappen(m.get(kind) ?? 0) + toRappen(v)));
+  // The deductions as payslipDeductions reads them: a row of a kind with a minus, a correction row taken off.
+  const signed = new Map<string, number>();
+  for (const p of of('deduction')) {
+    const taken = p.amount < 0 ? -p.amount : CORRECTION.test(p.label) ? -p.amount : 0;
+    if (taken) add(signed, (p.role as { kind: string }).kind, taken);
+  }
+  const kinds = setup().wages?.withholds ?? {};
+  const read = signed.size ? payslipDeductions(text, undefined, kinds) : undefined;
+  const agrees = !signed.size || (!!read && read.size === signed.size && [...read].every(([k, v]) => toRappen(signed.get(k) ?? NaN) === toRappen(v)));
+  // A program that prints its deductions without a minus (a column of positive amounts): each row of a kind is a deduction,
+  // taken only when no row carries a minus or says it corrects, and the net proves it below.
+  const plain = new Map<string, number>();
+  const unsigned = of('deduction').every((p) => p.amount > 0 && !CORRECTION.test(p.label));
+  if (unsigned) for (const p of of('deduction')) add(plain, (p.role as { kind: string }).kind, p.amount);
+  const sums = (m: Map<string, number>) => toRappen(gross) - [...m.values()].reduce((s, v) => s + toRappen(v), 0) + toRappen(allowances) + [...expenses.values()].reduce((s, v) => s + toRappen(v), 0);
+  const deductions = agrees && sums(signed) === toRappen(net) ? signed : unsigned && plain.size && sums(plain) === toRappen(net) ? plain : undefined;
+  if (!deductions) return undefined;
   const employee = employeeOf(text);
   const period = periodOf(text);
-  return { ...(employee ? { employee } : {}), ...(period ? { period } : {}), gross, net, deductions, allowances, expenses };
+  const currency = currencyOf(text);
+  return { ...(employee ? { employee } : {}), ...(period ? { period } : {}), currency, gross, net, deductions, allowances, expenses };
 }
+
+/** The currency a payslip names beside its amounts («EUR 4'200.00»); the books' when it names none, or two. */
+function currencyOf(text: string): string {
+  const named = new Set([...text.matchAll(/(?<![\p{L}])([A-Z]{3})\s*-?\s*\d{1,3}(?:['’ ]?\d{3})*[.,]\d{2}(?![\d])/gu)].map((m) => m[1]).filter((c) => KNOWN_CURRENCIES.has(c) || c === baseCurrency()));
+  return named.size === 1 ? [...named][0] : baseCurrency();
+}
+/** Codes a payslip may name its amounts in (never a deduction's abbreviation: «AHV 5.3» is none). */
+const KNOWN_CURRENCIES = new Set(['EUR', 'USD', 'GBP', 'JPY', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'HUF', 'CAD', 'AUD']);
 
 /** The line of the head that titles the payslip («Lohnabrechnung Juli 2026»), by documents.yaml `payslip`. */
 function titleLine(text: string): number {
@@ -173,9 +195,11 @@ export function issuedByTheFirm(text: string, firm: { name?: string; uid?: strin
  * a receipt like any other, and the model may read it, masked (§11).
  */
 export function payslipOf(text: string, firm: { name?: string; uid?: string } | undefined): PayslipRead | undefined {
-  if (titleLine(text) < 0 || !issuedByTheFirm(text, firm)) return undefined;
-  return readPayslip(text);
+  return payslipTitled(text, firm) ? readPayslip(text) : undefined;
 }
+
+/** Whether a text is the firm's payslip by its head (its letterhead and title), read or not: it never goes to a model (§10.2 A8). */
+export const payslipTitled = (text: string, firm: { name?: string; uid?: string } | undefined): boolean => titleLine(text) >= 0 && issuedByTheFirm(text, firm);
 
 // ─── Booking (A3) ───────────────────────────────────────────────────────────
 
@@ -202,6 +226,8 @@ export function wageLines(slips: ReadonlyArray<{ receipt: string; read: PayslipR
       byAccount.set(account, (byAccount.get(account) ?? 0) + toRappen(amount));
     }
     const withheld = [...byAccount.values()].reduce((s, v) => s + v, 0);
+    // A wage less its deductions at or below nothing is no wage code books (a payslip of allowances only, a correction).
+    if (toRappen(read.gross) - withheld <= 0) return undefined;
     out.push({ debit: w.account, credit: '', amount: fromRappen(toRappen(read.gross) - withheld), what: 'net', ...who });
     for (const [account, rappen] of byAccount) if (rappen) out.push({ debit: w.account, credit: account, amount: fromRappen(rappen), what: 'deductions', ...who });
     if (toRappen(read.allowances)) out.push({ debit: w.deductions, credit: '', amount: read.allowances, what: 'allowances', ...who });
@@ -225,7 +251,7 @@ export function payslipsOf(books: Pick<PairBooks, 'receipts' | 'mappings'>, tx: 
 export function paidBySlips(books: Pick<PairBooks, 'receipts' | 'mappings'>, tx: BankTransaction): Array<{ receipt: string; read: PayslipRead }> | undefined {
   if (tx.direction !== 'DBIT' || tx.currency !== baseCurrency()) return undefined;
   const slips = payslipsOf(books, tx);
-  return slips && slips.reduce((s, x) => s + toRappen(x.read.net), 0) === toRappen(Math.abs(tx.amount)) ? slips : undefined;
+  return slips && slips.every((x) => x.read.currency === tx.currency) && slips.reduce((s, x) => s + toRappen(x.read.net), 0) === toRappen(Math.abs(tx.amount)) ? slips : undefined;
 }
 
 // ─── Pairing (A1) ───────────────────────────────────────────────────────────
@@ -242,7 +268,10 @@ const wordsOf = (s: string) => fold(s).split(' ').filter((w) => w.length >= 2);
 
 /** Whether the payment names the payslip's person: every word of the bank's counterparty (two at least) in the payslip's text, or the person's name in the payment's. */
 function namesPerson(tx: BankTransaction, r: Receipt, read: PayslipRead): boolean {
-  const text = ` ${fold(r.extractedText ?? '')} `;
+  // Below its title: the letterhead above it names the firm, which pays rent and transfers too.
+  const all = r.extractedText ?? '';
+  const at = titleLine(all);
+  const text = ` ${fold(at < 0 ? all : all.split('\n').slice(at + 1).join('\n'))} `;
   const payee = wordsOf(tx.counterparty ?? '');
   if (payee.length >= 2 && payee.every((w) => text.includes(` ${w} `))) return true;
   const said = ` ${fold(`${tx.counterparty ?? ''} ${tx.description}`)} `;
@@ -264,8 +293,9 @@ export interface PairOptions {
  * The links code makes between the payslips of another program nothing is linked to and the wages' bank
  * lines (A1): a payment out of the open period in the books' currency, no receipt linked to it, of the
  * payslip's net to the cent, from 20 days before its month ends to a month after, that names its person
- * (by name, both ways). Of several, the nearest to the month's end; each payslip and payment once, the
- * nearest pairs first. One line that pays all of a month's payslips (two or more, their nets adding up to
+ * (by name, both ways, below the payslip's letterhead). Of several, the nearest to the month's end, among every
+ * payment that fits: one filed, linked or nearer to another payslip leaves the payslip without a link, never paired a
+ * month off. Each payslip and payment once, the nearest pairs first. One line that pays all of a month's payslips (two or more, their nets adding up to
  * it, worded as a wage or naming nobody else) pays each. A payslip without a month is paired only when one
  * payment alone fits it. The model is never asked: a payslip that reads carries a salary and a person.
  */
@@ -275,29 +305,38 @@ export function payslipLinks(books: PairBooks, opts: PairOptions): PayslipLink[]
   const slips = books.receipts.filter((r) => externalPayslip(r) && r.location === 'archived' && !linkedReceipts.has(r.id))
     .flatMap((r) => { const read = readPayslip(r.extractedText ?? ''); return read ? [{ r, read }] : []; });
   if (!slips.length) return [];
-  const payments = books.transactions.filter((t) => t.direction === 'DBIT' && t.currency === baseCurrency() && t.amount !== 0 && !linkedPayments.has(t.ref)
-    && !opts.isClosed(t.date) && !opts.noReceipt?.(t));
+  // Every payment a payslip could be paid by, those it may not take too (a closed one, one linked): its own month's wage
+  // that is filed or taken is still its nearest, and a payslip never reaches past it to the next month's (review of A-2).
+  const all = books.transactions.filter((t) => t.direction === 'DBIT' && t.amount !== 0 && !opts.noReceipt?.(t));
+  const free = (t: BankTransaction) => t.currency === baseCurrency() && !linkedPayments.has(t.ref) && !opts.isClosed(t.date);
+  const payments = all.filter(free);
   const windowOf = (s: { read: PayslipRead }) => (s.read.period ? { from: shift(monthEnd(s.read.period), -BEFORE), to: shift(monthEnd(s.read.period), AFTER), end: monthEnd(s.read.period) } : undefined);
   const fits = (s: (typeof slips)[number], t: BankTransaction) => {
-    if (toRappen(Math.abs(t.amount)) !== toRappen(s.read.net) || s.r.notPaidBy?.includes(t.ref) || !namesPerson(t, s.r, s.read)) return false;
+    if (t.currency !== s.read.currency || toRappen(Math.abs(t.amount)) !== toRappen(s.read.net) || s.r.notPaidBy?.includes(t.ref) || !namesPerson(t, s.r, s.read)) return false;
     const w = windowOf(s);
     return !w || (t.date >= w.from && t.date <= w.to);
   };
+  const offOf = (s: (typeof slips)[number], t: BankTransaction) => (windowOf(s) ? Math.abs(at(t.date) - at(windowOf(s)!.end)) : 0);
   const out: PayslipLink[] = [];
   const doneSlips = new Set<string>();
   const donePayments = new Set<string>();
-  const candidates = slips.flatMap((s) => payments.filter((t) => fits(s, t)).map((t) => ({ s, t, off: windowOf(s) ? Math.abs(at(t.date) - at(windowOf(s)!.end)) : 0 })));
-  // A payslip without its month is paired only with a payment no other fits.
-  const sure = candidates.filter((c) => c.s.read.period || candidates.filter((x) => x.s === c.s).length === 1);
-  for (const c of sure.sort((a, b) => a.off - b.off || a.t.date.localeCompare(b.t.date) || a.s.r.id.localeCompare(b.s.r.id))) {
-    if (doneSlips.has(c.s.r.id) || donePayments.has(c.t.ref)) continue;
+  // Each payslip's nearest payment, among all that fit; a payslip without its month only when one alone fits.
+  const nearest = slips.flatMap((s) => {
+    const fit = all.filter((t) => fits(s, t)).sort((a, b) => offOf(s, a) - offOf(s, b) || a.date.localeCompare(b.date));
+    if (!fit.length || (!s.read.period && fit.length > 1)) return [];
+    if (fit.length > 1 && offOf(s, fit[0]) === offOf(s, fit[1])) return [];
+    return [{ s, t: fit[0], off: offOf(s, fit[0]) }];
+  });
+  for (const c of nearest.sort((a, b) => a.off - b.off || a.s.r.id.localeCompare(b.s.r.id))) {
+    // Its nearest is filed, linked, or nearer to another payslip: no link, and no reach for the next one.
     doneSlips.add(c.s.r.id);
+    if (!free(c.t) || donePayments.has(c.t.ref)) continue;
     donePayments.add(c.t.ref);
     out.push({ receipt: c.s.r.id, payment: c.t.ref });
   }
   // One line for a whole month: every payslip of the month left, two or more, whose nets add up to it.
   const byMonth = new Map<string, typeof slips>();
-  for (const s of slips) if (s.read.period && !doneSlips.has(s.r.id)) byMonth.set(s.read.period, [...(byMonth.get(s.read.period) ?? []), s]);
+  for (const s of slips) if (s.read.period && !doneSlips.has(s.r.id) && s.read.currency === baseCurrency()) byMonth.set(s.read.period, [...(byMonth.get(s.read.period) ?? []), s]);
   for (const [month, list] of byMonth) {
     if (list.length < 2) continue;
     const total = list.reduce((s, x) => s + toRappen(x.read.net), 0);

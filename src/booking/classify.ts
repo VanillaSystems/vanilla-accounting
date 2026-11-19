@@ -756,7 +756,8 @@ export function contributionEntries(books: Books, tx: BankTransaction, context: 
   const de = wordsIn('de');
   const cur = baseCurrency();
   const reason = [
-    booking.share ? de.t('rules.say.withheldShare', { currency: cur, share: booking.share.toFixed(2) }) : de.t('withheld.code.none', { account: booking.account }),
+    booking.account !== context.wageDeductions ? de.t('withheld.code.tax', { currency: cur, share: booking.share.toFixed(2), paid: Math.abs(tx.amount).toFixed(2), account: booking.account })
+      : booking.share ? de.t('rules.say.withheldShare', { currency: cur, share: booking.share.toFixed(2) }) : de.t('withheld.code.none', { account: booking.account }),
     booking.employer ? de.t('withheld.code.employer', { account: booking.employer }) : '',
     booking.commission ? de.t('withheld.code.commission', { currency: cur, amount: booking.commission.amount.toFixed(2), account: booking.commission.account }) : '',
   ].filter(Boolean).join(' ');
@@ -1161,6 +1162,13 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     // A wage its payslips of another program pay (§10.2 A3): booked gross by code, the model never asked. A company rule
     // that books elsewhere stays the rule's; the rule for the wages books the same net, which the payslip completes.
     const slipped = !placed || wageRule(placed) ? payslipWageEntries(books, tx, context, fx) : undefined;
+    // A payment with a payslip linked that code does not book (one it cannot read, nets that do not pay the line): the
+    // person's, never the model's, which would read the payslip's salary and person (§10.2 A8).
+    if (!slipped && !placed && mappedReceipts(books, tx).some((r) => r.kind === 'payslip')) {
+      log(`  ${tx.ref}  a payslip is linked that code does not book: waits for the person`);
+      outcome.failed.push({ ref: tx.ref, reason: wordsIn('de').t('payslip.byHand') });
+      continue;
+    }
     if (slipped) {
       if ('refusal' in slipped) { log(`  ${tx.ref}  wage from its payslip: refused: ${slipped.reason}`); outcome.failed.push({ ref: tx.ref, ...slipped }); continue; }
       books.journalEntries.push(...slipped);
@@ -1262,11 +1270,14 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     if (!context.wageDeductions || !contributions.has(tx.ref)) return undefined;
     // Nothing held is said too (#470), where the books carry wages: the whole contribution is the employer's, not the bill's split.
     // Without a wage in the year it is no employer's contribution (an owner's own AHV, a fund's fee): no line, as before.
-    const open = withheldFor(own, tx, context.wageDeductions);
+    // The account the payee's kinds are owed on: the withholding tax's collector is told what 2279 holds, never 2270 (review of A-2).
+    const kinds = kindsOf(businessOf(tx), collectors);
+    const account = (kinds.length && accountOfKinds(kinds)) || context.wageDeductions;
+    const open = withheldFor(own, tx, account);
     if (open === undefined && !wagesBooked(own, tx)) return undefined;
     // What of it the payslips withheld for this payee, where code can tell (#476): booked so, whatever the bill or the model says.
-    const share = open && accountOfKinds(kindsOf(businessOf(tx), collectors)) === context.wageDeductions ? fundShare(own, tx, businessOf(tx), businessOf, kindsOf(businessOf(tx), collectors)) : undefined;
-    return { account: context.wageDeductions, open: open ?? 0, ...(share !== undefined && { share }) };
+    const share = open && kinds.length ? fundShare(own, tx, businessOf(tx), businessOf, kinds) : undefined;
+    return { account, open: open ?? 0, ...(share !== undefined && { share }) };
   };
   // The contribution payments go last, in waves of their own: what the wages of this run withhold is booked before they are asked.
   const batches: BankTransaction[][] = [];

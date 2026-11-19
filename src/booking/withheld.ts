@@ -15,6 +15,7 @@ import type { BankTransaction, JournalEntry, Mapping, Receipt } from '../types/i
 import { computeAccountBalance } from '../accounting/ledger.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import { baseCurrency, chart, setup } from '../engines/index.js';
+import { readPayslip } from './payslip.js';
 
 type Books = { journalEntries: readonly JournalEntry[]; config?: { openingBalances?: Record<string, Record<string, number>> } };
 
@@ -325,6 +326,23 @@ type ShareBooks = Books & { transactions: readonly BankTransaction[]; receipts: 
  * together with another's. Undefined otherwise: the model is told the account's credit and the bill decides.
  */
 export function fundShare(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined, collected: readonly string[] = kindsOf(business)): number | undefined {
+  const open = withheldMonths(books, tx, business, businessOf, collected);
+  if (!open) return undefined;
+  const held = toRappen(withheldFor(books, tx, open.account) ?? 0);
+  return fromRappen(Math.max(0, Math.min(open.months.reduce((s, m) => s + m.rappen, 0), held)));
+}
+
+/** A payslip's deductions per kind: as payslipDeductions reads them, else as readPayslip does (a program that prints them without a minus). */
+const deductionsOf = (text: string, kinds: Readonly<Record<string, readonly string[]>>): Map<string, number> | undefined =>
+  payslipDeductions(text, undefined, kinds) ?? readPayslip(text)?.deductions;
+
+/**
+ * What the payslips withheld for a business's kinds and earlier payments to it have not paid yet, month by month, the
+ * oldest first (by the day the wage put it on the account); earlier payments pay the oldest months first. The same
+ * gates as fundShare: the kinds on one account, no opening of the year on it, every wage that put something there with
+ * its payslips read and adding up, no row mixing this business's kind with another's. Undefined otherwise.
+ */
+export function withheldMonths(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined, collected: readonly string[] = kindsOf(business)): { account: string; months: Array<{ month: string; rappen: number }> } | undefined {
   const w = setup().wages;
   const kinds = w?.withholds;
   const account = accountOfKinds(collected);
@@ -335,12 +353,12 @@ export function fundShare(books: ShareBooks, tx: BankTransaction, business: stri
   const year = tx.date.slice(0, 4);
   if (books.config?.openingBalances?.[year]?.[account]) return undefined;
   const lines = books.journalEntries.filter((e) => e.transactionRef !== tx.ref && e.date.startsWith(year) && e.date <= tx.date);
-  const put = new Map<string, number>();
-  for (const e of lines) if (e.accountCredit === account) put.set(e.transactionRef, (put.get(e.transactionRef) ?? 0) + toRappen(e.amount));
-  let withheld = 0;
-  for (const [ref, rappen] of put) {
+  const put = new Map<string, { rappen: number; date: string }>();
+  for (const e of lines) if (e.accountCredit === account) { const had = put.get(e.transactionRef); put.set(e.transactionRef, { rappen: (had?.rappen ?? 0) + toRappen(e.amount), date: had && had.date < e.date ? had.date : e.date }); }
+  const byMonth = new Map<string, number>();
+  for (const [ref, { rappen, date }] of put) {
     const ids = new Set([...books.mappings.filter((m) => m.transactionRef === ref).map((m) => m.receiptId), ...lines.filter((e) => e.transactionRef === ref).flatMap((e) => e.receipts ?? [])]);
-    const reads = books.receipts.filter((r) => ids.has(r.id)).flatMap((r) => payslipDeductions(r.extractedText ?? '', undefined, kinds) ?? []);
+    const reads = books.receipts.filter((r) => ids.has(r.id)).flatMap((r) => deductionsOf(r.extractedText ?? '', kinds) ?? []);
     const sum = reads.reduce((s, m) => s + onAccount(m), 0);
     if (!reads.length || sum !== rappen) return undefined;
     for (const m of reads) for (const [kind, v] of m) {
@@ -348,13 +366,18 @@ export function fundShare(books: ShareBooks, tx: BankTransaction, business: stri
       const ours = parts.filter((k) => mine.has(k)).length;
       // A row that names this business's kind together with another's: whose part is whose, nothing says.
       if (ours && ours < parts.length) return undefined;
-      if (ours) withheld += toRappen(v);
+      if (ours) byMonth.set(date.slice(0, 7), (byMonth.get(date.slice(0, 7)) ?? 0) + toRappen(v));
     }
   }
   const theirs = new Set(books.transactions.filter((t) => t.ref !== tx.ref && t.date <= tx.date && businessOf(t) === business).map((t) => t.ref));
-  const paid = lines.filter((e) => theirs.has(e.transactionRef)).reduce((s, e) => s + (e.accountDebit === account ? toRappen(e.amount) : 0) - (e.accountCredit === account ? toRappen(e.amount) : 0), 0);
-  const held = toRappen(withheldFor(books, tx, account) ?? 0);
-  return fromRappen(Math.max(0, Math.min(withheld - paid, held)));
+  let paid = lines.filter((e) => theirs.has(e.transactionRef)).reduce((s, e) => s + (e.accountDebit === account ? toRappen(e.amount) : 0) - (e.accountCredit === account ? toRappen(e.amount) : 0), 0);
+  const months: Array<{ month: string; rappen: number }> = [];
+  for (const [month, rappen] of [...byMonth].sort(([a], [b]) => a.localeCompare(b))) {
+    const taken = Math.min(Math.max(paid, 0), rappen);
+    paid -= taken;
+    if (rappen - taken > 0) months.push({ month, rappen: rappen - taken });
+  }
+  return { account, months };
 }
 
 /**
@@ -457,35 +480,42 @@ export interface ContributionBooking {
 }
 
 /**
- * A payment to a business that collects deductions (§10.2 A4, A5), booked by code where it can tell: what the payslips
- * withheld for its kinds and is not paid yet (fundShare) on their account, and
- * - the rest, the employer's contributions, on the account the payee's earlier contributions went to, else the kind's
- *   (setup.yaml `wages.employer`); without one code books nothing;
- * - a payment short of the share by at most the kind's commission (setup.yaml `wages.commission`, the withholding tax's
- *   collection commission) clears the share, the rest on the commission's account; short by more, it clears what it pays.
- * Wages booked net (the account holds nothing while the year has wages): the whole payment is the employer's. Undefined
- * when code cannot tell the share, the payment pays a kind without an employer's account beyond it, or it is no payment out.
+ * A payment to a business that collects deductions (§10.2 A4, A5), booked by code only where the payslips account for it
+ * (review of A-2: never on what a later month withheld). The months the payslips withheld for its kinds that no payment
+ * has cleared, oldest first (withheldMonths), are what it may clear, a whole number of them from the oldest:
+ * - the withholding tax (a kind with a commission, setup.yaml `wages.commission`): the payment is those months' tax,
+ *   or that less the collection commission (between `from` and `upTo` percent of it), which goes on the commission's
+ *   account; a payment that fits no such run of months clears only what it pays;
+ * - a fund's contributions: the payment is the employees' share of those months and the employer's beside it, so at
+ *   least twice that share (the employer pays at least half by law) and at most three times it (with the family
+ *   allowances and the administration cost); the rest goes on the payee's earlier contribution account, else the
+ *   kind's (setup.yaml `wages.employer`). A payment that fits no run of months is the person's (or the model's).
+ * Never at the year's start while the year before has books and no opening says what the account carried over.
+ * Undefined when code cannot tell.
  */
 export function contributionLines(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined, collectors?: Collectors): ContributionBooking | undefined {
   const w = setup().wages;
   const kinds = kindsOf(business, collectors);
   const account = accountOfKinds(kinds);
   if (!w || !business || !account || tx.direction !== 'DBIT') return undefined;
-  const open = withheldFor(books, tx, account);
-  if (open === undefined && !wagesBooked(books, tx)) return undefined;
-  const share = open ? fundShare(books, tx, business, businessOf, kinds) : 0;
-  if (share === undefined) return undefined;
+  const year = tx.date.slice(0, 4);
+  const prev = String(Number(year) - 1);
+  if (!books.config?.openingBalances?.[year] && books.journalEntries.some((e) => e.date.startsWith(prev))) return undefined;
+  const open = withheldMonths(books, tx, business, businessOf, kinds);
+  if (!open?.months.length) return undefined;
+  const held = toRappen(withheldFor(books, tx, account) ?? 0);
   const paid = toRappen(Math.abs(tx.amount));
-  const owed = toRappen(share);
+  const runs = open.months.map((_, k) => open.months.slice(0, k + 1).reduce((s, m) => s + m.rappen, 0)).filter((p) => p <= held);
   const commission = kinds.map((k) => w.commission?.[k]).find(Boolean);
-  if (paid <= owed) {
-    const short = owed - paid;
-    if (commission && short > 0 && short * 100 <= owed * commission.upTo) {
-      return { account, share, commission: { amount: fromRappen(short), account: commission.account }, lines: [{ debit: account, credit: '', amount: fromRappen(paid) }, { debit: account, credit: commission.account, amount: fromRappen(short) }] };
-    }
-    return { account, share, lines: [{ debit: account, credit: '', amount: fromRappen(paid) }] };
+  if (commission) {
+    const fit = runs.find((p) => paid === p || (paid < p && (p - paid) * 100 >= p * (commission.from ?? 0) && (p - paid) * 100 <= p * commission.upTo));
+    if (fit !== undefined && fit > paid) return { account, share: fromRappen(fit), commission: { amount: fromRappen(fit - paid), account: commission.account }, lines: [{ debit: account, credit: '', amount: fromRappen(paid) }, { debit: account, credit: commission.account, amount: fromRappen(fit - paid) }] };
+    if (fit !== undefined || paid <= runs.at(-1)!) return { account, share: fromRappen(Math.min(paid, fit ?? paid)), lines: [{ debit: account, credit: '', amount: fromRappen(paid) }] };
+    return undefined;
   }
+  const fit = runs.find((p) => paid >= 2 * p - 1 && paid <= 3 * p);
+  if (fit === undefined) return undefined;
   const employer = payeeContributionAccount(books, tx, businessOf) ?? kinds.map((k) => w.employer?.[k]).find(Boolean);
   if (!employer) return undefined;
-  return { account, share, employer, lines: [...(owed ? [{ debit: account, credit: '', amount: fromRappen(owed) }] : []), { debit: employer, credit: '', amount: fromRappen(paid - owed) }] };
+  return { account, share: fromRappen(fit), employer, lines: [{ debit: account, credit: '', amount: fromRappen(fit) }, { debit: employer, credit: '', amount: fromRappen(paid - fit) }] };
 }

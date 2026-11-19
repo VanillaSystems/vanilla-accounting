@@ -62,9 +62,9 @@ wages:
   employer: { ausgleichskasse: "5700", pension: "5720" }
   # What the collector of a kind leaves the employer of what was withheld: the withholding tax's collection
   # commission (Bezugsprovision, DBG Art. 88 Abs. 4: 1 to 2 %, a canton at its own rate). A payment that
-  # clears the tax owed less at most `upTo` percent of it books the rest here, as a lower administration
-  # cost; a payment short by more is no commission, and code books only what it pays.
-  commission: { tax: { account: "6500", upTo: 5 } }
+  # clears whole months of the tax owed, the oldest first, less `from` to `upTo` percent of them, books the
+  # rest here, as a lower administration cost; one that fits no such months clears only what it pays.
+  commission: { tax: { account: "6500", from: 0.5, upTo: 5 } }
   # How a payslip another program or a fiduciary issued names its figures (src/booking/payslip.ts, docs/specs/
   # payroll.md §10.2 A2), in de/fr/it/en; the deductions by `withholds` above. The gross, the net paid out,
   # the family allowances paid with the wage (the fund pays them back on its bill: booked onto `deductions`,

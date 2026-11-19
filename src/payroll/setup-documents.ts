@@ -102,11 +102,29 @@ export function missingOf(p: InsuranceProposal, data: Pick<PayrollData, 'insuran
   ];
 }
 
-/** The document's lines a model may read: none with a salary, a person's insured wage or a birth date (`notToModel`). */
+/** Lowercase without accents: a word of `notToModel` is looked for anywhere in a line. */
+const folded = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+/** A day in a line («12.03.1985», «2026-01-01»): a birth date, an entry: never sent. */
+const DAY_IN = /\b\d{1,2}[./]\d{1,2}[./]\d{2,4}\b|\b\d{4}-\d{2}-\d{2}\b/;
+/** The fund's letterhead: the lines a model may read for its name. */
+const LETTERHEAD_LINES = 2;
+
+/**
+ * The document's lines a model may read (an allow-list, review of A-2): the letterhead's first lines, a line with a rate
+ * in %, a line naming a rate's, a number's, a kind's or `toModel`'s words; never an amount alone, never a line with a
+ * day, never one that holds a word of `notToModel` anywhere (a salary, a coordinated wage, retirement savings, a birth date).
+ */
 export function linesForModel(text: string, data: Pick<PayrollData, 'setupDocuments'>): string {
-  const not = data.setupDocuments?.notToModel ?? [];
-  const re = not.length ? wordRe(not) : undefined;
-  return lines(text).filter((l) => !re?.test(l)).join('\n');
+  const sd = data.setupDocuments;
+  if (!sd) return '';
+  const deny = sd.notToModel.map(folded);
+  const words = [...(sd.toModel ?? []), ...Object.values(sd.rates).flatMap((r) => Object.values(r).flat()), ...Object.values(sd.numbers).flatMap((n) => n ?? []), ...Object.values(sd.kinds).flat()];
+  const allow = words.length ? wordRe(words) : undefined;
+  return lines(text).filter((l, i) => {
+    const f = folded(l);
+    if (deny.some((d) => f.includes(d)) || DAY_IN.test(l) || !/\p{L}{2,}/u.test(l)) return false;
+    return i < LETTERHEAD_LINES || l.includes('%') || !!allow?.test(l);
+  }).join('\n');
 }
 
 /** The question to the AI (step `payroll-setup`): the fields of the kinds the document is for, its lines for a model, JSON back. */
@@ -134,9 +152,10 @@ const num = (v: unknown, lo: number, hi: number) => (typeof v === 'number' && Nu
 export function parseSetupAnswer(raw: string, kinds: readonly string[], data: Pick<PayrollData, 'insurances'>): InsuranceProposal[] {
   let v: unknown;
   try { v = JSON.parse(raw.replace(/```(?:json)?/g, '').trim().match(/\{[\s\S]*\}/)?.[0] ?? ''); } catch { return []; }
-  const items = (v as { items?: unknown }).items;
+  const items = v && typeof v === 'object' ? (v as { items?: unknown }).items : undefined;
   if (!Array.isArray(items)) return [];
   return items.flatMap((x): InsuranceProposal[] => {
+    if (!x || typeof x !== 'object' || Array.isArray(x)) return [];
     const o = x as Record<string, unknown>;
     const kind = typeof o.kind === 'string' && kinds.includes(o.kind) ? o.kind : undefined;
     if (!kind) return [];

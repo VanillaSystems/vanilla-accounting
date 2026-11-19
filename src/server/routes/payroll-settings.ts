@@ -250,7 +250,8 @@ router.post('/api/payroll/setup-cards/:receipt/keep', run((req, res) => {
   // `save` may run the change twice (compared, then saved): the ids are made once, in order.
   const idOf = () => ids[n++] ?? newId();
   save(req, res, { path: 'insurances' }, (s) => { n = 0; return keepSetupCard(s, data, r.id, items, idOf, now); }, (kept) => {
-    updateSetupState(WS, (st) => { st[r.id] = { ...st[r.id], kept: now }; });
+    // A card whose person's part could not be taken stays: the person adds her under Mitarbeitende and keeps it again.
+    if (!kept.persons.length) updateSetupState(WS, (st) => { st[r.id] = { ...st[r.id], kept: now }; });
     return { insurances: kept.insurances, persons: kept.persons };
   }, (kept) => kept.warnings);
 }));

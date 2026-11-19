@@ -431,11 +431,13 @@ What follows from it (src/booking/withheld.ts, src/booking/classify.ts):
 - A payment to it needs no receipt (as the compensation fund's); its bill still pairs.
 - Where every wage that put something on the kind's account has its payslips linked and they read,
   code knows the part a payment clears (`fundShare`): the model is told it and code books exactly
-  that; without a model code books the payment itself, the share on the account and the rest on the
-  payee's earlier contribution account or `wages.employer`.
+  that; without a model code books the payment itself when it pays whole months, the oldest first
+  (between twice and three times their employees' share): the share on the account and the rest on
+  the payee's earlier contribution account or `wages.employer`. Otherwise, and at the year's start
+  while no opening says what the account carried over, the payment is the person's.
 - The withholding tax is owed on its own account (`wages.withholdsTo`, 2279): its collector's
-  payment is booked by code with or without a model, a shortfall of at most `wages.commission`'s
-  percent as the collection commission.
+  payment is booked by code with or without a model: it clears whole months' tax, the oldest first,
+  a shortfall within `wages.commission`'s percent of them booked as the collection commission.
 - A file that names no kind of the jurisdiction is refused when the knowledge loads. Name the tax
   office's file for the withholding tax only by what tells its payments apart (`tx`): the same office
   is paid the firm's own direct taxes too.

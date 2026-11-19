@@ -164,7 +164,7 @@ function DocumentCards({ nav, canEdit }: { nav: Nav; canEdit: boolean }) {
     <div className="psetup" data-testid="setup-cards">
       <h4>{t('payroll.setup.title')}</h4>
       <p className="m">{t('payroll.setup.lead')}</p>
-      {load.data.cards.map((c) => <DocumentCard key={c.receipt} c={c} ai={load.data.ai} nav={nav} canEdit={canEdit} />)}
+      {load.data.cards.map((c) => <DocumentCard key={`${c.receipt}:${c.asked}`} c={c} ai={load.data.ai} nav={nav} canEdit={canEdit} />)}
     </div>
   );
 }

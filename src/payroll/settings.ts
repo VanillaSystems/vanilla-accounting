@@ -6,7 +6,7 @@
  * the person chose a way on (a Rückwirkende Korrektur per differing Lohnart, or «So lassen»). A rate outside
  * its kind's range is a warning, never a refusal (§18). Pure: the files are written by the API route.
  */
-import { addEntry, isDay, withdrawEntry, DatedEntryError, type Dated, type DatedEntry } from '../core/dated.js';
+import { addEntry, entryOn, isDay, withdrawEntry, DatedEntryError, type Dated, type DatedEntry } from '../core/dated.js';
 import type { Labels, PayrollData } from '../core/modules/schema.js';
 import { parseIban } from '../workspace/banks.js';
 import { firmWageTypes, resolveAccount } from './catalogue.js';
@@ -677,18 +677,24 @@ export function keepSetupCard(store: PayrollStore, data: PayrollData, receiptId:
       if (Object.keys(rates).length && !data.insurances[item.kind].perPerson) {
         const code = optStr(item.code) ?? ins.solutions[0]?.code ?? 'A';
         if (!ins.solutions.some((s) => s.code === code)) out.warnings.push(...addSolution(store, data, ins.id, { code, validFrom: item.validFrom, rates: {} }, now));
-        // A rate the document does not name (the NBU's employer share on a policy) holds on as it was.
-        const current = ins.solutions.find((s) => s.code === code)?.rates.at(-1)?.value ?? {};
+        // A rate the document does not name (the NBU's employer share on a policy) holds on as it was on that day.
+        const current = entryOn(ins.solutions.find((s) => s.code === code)?.rates, item.validFrom)?.value ?? {};
         out.warnings.push(...addDatedEntry(store, data, { path: `insurances/${ins.id}/solutions/${code}/rates`, validFrom: item.validFrom, value: { ...current, ...rates }, receiptId }, now).warnings);
       }
     }
     out.insurances.push(ins.id);
-    if (item.person && data.insurances[item.kind].perPerson) {
+    if (item.person !== undefined && data.insurances[item.kind].perPerson) {
+      if (!isObj(item.person) || typeof item.person.name !== 'string' || !item.person.name.trim()) bad('Die versicherte Person: ihr Name.', 'person');
       const want = foldName(item.person.name);
       const e = store.employees.find((x) => { const n = x.name.at(-1)?.value; return !!n && foldName(`${n.first} ${n.last}`) === want || (!!n && foldName(`${n.last} ${n.first}`) === want); });
       if (!e) { out.persons.push(item.person.name); continue; }
-      const current = e.insurances.at(-1)?.value ?? {};
-      const value = { ...current, [item.kind]: { insurance: ins.id, employee: item.person.employee ?? 0, employer: item.person.employer ?? 0 } };
+      const current = entryOn(e.insurances, item.validFrom)?.value ?? {};
+      // A contribution left blank is not nothing: it stays as her entry says, or her part is not taken.
+      const had = (current as Record<string, { employee?: number; employer?: number } | undefined>)[item.kind];
+      const employee = item.person.employee ?? had?.employee;
+      const employer = item.person.employer ?? had?.employer;
+      if (employee === undefined || employer === undefined) { out.persons.push(item.person.name); continue; }
+      const value = { ...current, [item.kind]: { insurance: ins.id, employee: num(employee, 'Beitrag Arbeitnehmer', 0), employer: num(employer, 'Beitrag Arbeitgeber', 0) } };
       addDatedEntry(store, data, { path: `employees/${e.id}/insurances`, validFrom: item.validFrom, value, receiptId }, now);
     }
   }

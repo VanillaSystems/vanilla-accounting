@@ -9,29 +9,20 @@
 import './support/jurisdiction.js';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { runIntake, storePort, type Ask } from '../src/intake/pipeline.js';
-import { PIPELINE } from '../src/intake/run.js';
-import { loadBooks, moduleActor } from '../src/books/store.js';
-import { loadChart } from '../src/workspace/chart.js';
-import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
-import type { BankTransaction, JournalEntry } from '../src/types/index.js';
-import { tempWorkspace, writeIndex } from './support/workspace.js';
+import { loadBooks } from '../src/books/store.js';
+import type { Ask } from '../src/intake/pipeline.js';
+import { cleanUp, drop, firm, linesOf, pay, run, sum } from './support/payslip-firm.js';
 import { textPdf } from './support/text-pdf.js';
 import { wageOffer } from '../src/saving/wage-rule.js';
 import { externalPayslip } from '../src/booking/payslip.js';
 
-const roots: string[] = [];
-after(() => { for (const r of roots) rmSync(r, { recursive: true, force: true }); });
+after(cleanUp);
 
 const MONTHS = [['07', 'Juli'], ['08', 'August'], ['09', 'September']] as const;
 const PEOPLE = [
   { key: 'W', name: 'Corinne Wyss', role: 'Geschäftsführerin', gross: '4\'700.00', ahv: '249.10', alv: '51.70', bvg: '199.20', net: 4200, deductions: 500 },
   { key: 'B', name: 'Lea Brunner', role: 'Mitarbeiterin Versand (40 %)', gross: '1\'550.00', ahv: '82.15', alv: '17.05', net: 1450.8, deductions: 99.2 },
 ];
-const pay = (ref: string, date: string, amount: number, counterparty: string, description: string): BankTransaction =>
-  ({ ref, bank: 'Raiffeisen', date, amount, currency: 'CHF', direction: 'DBIT', counterparty, description, reference: description });
 const WAGES = MONTHS.flatMap(([m, month]) => PEOPLE.map((p) => pay(`L${p.key}-${m}`, `2026-${m}-25`, p.net, p.name, `Lohn ${month} 2026`)));
 const AKONTO = pay('AK', '2026-09-28', 2683.5, 'Ausgleichskasse Luzern', 'Akonto AHV/IV/EO/ALV Q3 2026 AK-26-Q3-30871');
 const PENSION = pay('PK', '2026-09-30', 1195.2, 'Pensionskasse Zentral', 'Beiträge Q3 2026 PK-26-3-1180');
@@ -42,40 +33,6 @@ const payslip = (p: (typeof PEOPLE)[number], month: string) => textPdf([
   `Nettolohn, Auszahlung am 25. ${month} ${p.net.toFixed(2).replace(/^(\d)(\d{3})/, "$1'$2")}`,
 ]);
 
-function camt(txs: BankTransaction[]): string {
-  const row = (t: BankTransaction) => `<Ntry><Amt Ccy="CHF">${t.amount.toFixed(2)}</Amt><CdtDbtInd>DBIT</CdtDbtInd><Sts><Cd>BOOK</Cd></Sts><BookgDt><Dt>${t.date}</Dt></BookgDt><ValDt><Dt>${t.date}</Dt></ValDt><AcctSvcrRef>${t.ref}</AcctSvcrRef>`
-    + `<BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>${/^L/.test(t.ref) ? 'SALA' : 'DMCT'}</SubFmlyCd></Fmly></Domn></BkTxCd>`
-    + `<NtryDtls><TxDtls><Amt Ccy="CHF">${t.amount.toFixed(2)}</Amt><RltdPties><Cdtr><Pty><Nm>${t.counterparty}</Nm></Pty></Cdtr></RltdPties><RmtInf><Ustrd>${t.description}</Ustrd></RmtInf></TxDtls></NtryDtls><AddtlNtryInf>${t.description}</AddtlNtryInf></Ntry>`;
-  return `<?xml version="1.0" encoding="UTF-8"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt><GrpHdr><MsgId>Q3</MsgId><CreDtTm>2026-10-01T05:30:00</CreDtTm></GrpHdr>`
-    + `<Stmt><Id>Q3</Id><CreDtTm>2026-10-01T05:30:00</CreDtTm><FrToDt><FrDtTm>2026-07-01T00:00:00</FrDtTm><ToDtTm>2026-09-30T23:59:59</ToDtTm></FrToDt><Acct><Id><IBAN>CH3880808000000000002</IBAN></Id><Ccy>CHF</Ccy></Acct>${txs.map(row).join('')}</Stmt></BkToCstmrStmt></Document>`;
-}
-
-/** A firm with staff, named as its payslips' letterhead, its statement of `txs` read in; `files` are its company's business files. */
-function firm(name: string, txs: BankTransaction[], files: Record<string, string> = {}): Workspace {
-  const made = tempWorkspace('payslip-a2-', join(APP_ROOT, 'demo-consulting', 'vanilla-accounting'));
-  roots.push(made.paths.root);
-  const manifest = join(made.paths.root, 'belege.workspace.yaml');
-  writeFileSync(manifest, readFileSync(manifest, 'utf8').replace('Muster Consulting GmbH', name));
-  appendFileSync(manifest, 'profile:\n  preset: consultant\n  fiscalYear: calendar\n  start: new\n  sells: services\n  foreignCustomers: no\n  imports: no\n  employees: staff\n  ownerPaysPrivately: no\n  privateUse: []\n  payouts: no\n');
-  for (const [path, body] of Object.entries(files)) { mkdirSync(dirname(join(made.paths.root, path)), { recursive: true }); writeFileSync(join(made.paths.root, path), body); }
-  const ws = workspaceAt(made.paths.root);
-  mkdirSync(dirname(ws.paths.accounts), { recursive: true });
-  writeFileSync(ws.paths.accounts, JSON.stringify(loadChart().accounts.map((a) => ({ number: a.number, name: a.name, type: a.type }))));
-  writeIndex(ws, { transactions: [], journalEntries: [], config: { closedThrough: '2026-06-30' } });
-  const folder = join(ws.paths.root, 'transactional-data', '2026', 'bank-statements', 'Raiffeisen');
-  mkdirSync(folder, { recursive: true });
-  writeFileSync(join(folder, 'camt053_Q3-2026.xml'), camt(txs));
-  return ws;
-}
-
-async function drop(ws: Workspace, files: Array<[string, Buffer | Promise<Buffer>]>) {
-  mkdirSync(ws.paths.inbox, { recursive: true });
-  for (const [name, bytes] of files) writeFileSync(join(ws.paths.inbox, name), await bytes);
-}
-/** The AI off; `asked` records every prompt a model would have been sent (none, it is off). */
-const run = (ws: Workspace, ask?: Ask) => runIntake({ ws, books: storePort(ws, moduleActor('intake')), ask, steps: PIPELINE, ...(process.env.LOG && { log: (l: string) => console.log(l) }) });
-const sum = (lines: JournalEntry[], account: string, side: 'accountDebit' | 'accountCredit' = 'accountDebit') => Math.round(lines.filter((e) => e[side] === account).reduce((s, e) => s + e.amount, 0) * 100) / 100;
-const linesOf = (ws: Workspace, ref: string) => loadBooks(ws).journalEntries.filter((e) => e.transactionRef === ref);
 const SLIPS = () => MONTHS.flatMap(([m, month]) => PEOPLE.map((p) => [`Lohnabrechnung_2026-${m}_${p.name.split(' ')[1]}.pdf`, payslip(p, month)] as [string, Promise<Buffer>]));
 const PENSION_FILE = 'id: pensionskasse-zentral\nname: Pensionskasse Zentral\nmatch:\n  payee: ["Pensionskasse Zentral"]\ncollects: [pension]\n';
 
@@ -96,7 +53,7 @@ test('§15.2 1–2 AI off: six payslips and the statement; every wage gross by c
   const pk = linesOf(ws, 'PK');
   assert.deepEqual([sum(pk, '2270'), sum(pk, '5720')], [597.6, 597.6], 'the BVG share, the rest the employer\'s');
   const on2270 = books.journalEntries.reduce((s, e) => s + (e.accountCredit === '2270' ? e.amount : 0) - (e.accountDebit === '2270' ? e.amount : 0), 0);
-  assert.equal(Math.round(on2270 * 100) / 100, 0, '2270 is cleared');
+  assert.equal(Math.abs(Math.round(on2270 * 100)), 0, '2270 is cleared');
   await run(ws);
   assert.deepEqual(linesOf(ws, 'AK').map((e) => [e.accountDebit, e.amount]), ak.map((e) => [e.accountDebit, e.amount]), 'a further run changes nothing');
 });

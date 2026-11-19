@@ -241,8 +241,9 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   // A file the reading found no receipt at all (a holiday photo, #361) is set aside under the name it came with: no payment, no name the model makes up.
   const aside = staged.filter((r) => !r.needsVisionReview && r.kind === 'noise');
   // A payslip of another program is filed and paired by code (§10.2 A1, A8): no model names it or looks for its payment.
-  const slips = staged.filter((r) => !r.needsVisionReview && externalPayslip(r));
-  const toRead = staged.filter((r) => !r.needsVisionReview && r.kind !== 'noise' && !externalPayslip(r));
+  // One code cannot read is filed too, unlinked: the person pairs it, no model sees it.
+  const slips = staged.filter((r) => !r.needsVisionReview && r.kind === 'payslip');
+  const toRead = staged.filter((r) => !r.needsVisionReview && r.kind !== 'noise' && r.kind !== 'payslip');
   // Code first (#187): the staged receipts take part in the chain with the facts code reads off them.
   const early = toRead.flatMap((r) => provisional(r) ?? []);
   // The batch payers with the firm's own UIDs as the books show them now (buyerUids): read again on every run of the code.
@@ -317,7 +318,7 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   for (const receipt of slips) {
     const target = archive(receipt, receipt.date ? codeName(receipt.date, undefined, receipt.originalFilename ?? receipt.filename) : receipt.filename, () => undefined);
     progress(++completed, total);
-    log(target ? `  ${receipt.filename} → ${target}  a payslip: filed by code, paired with its wage by its net and person  (no model match)` : `  warn: ${receipt.filename} is not staged in beleg-import/ any more, skipping`);
+    log(target ? `  ${receipt.filename} → ${target}  a payslip: filed by code, ${externalPayslip(receipt) ? 'paired with its wage by its net and person' : 'not read: the person pairs it'}  (no model match)` : `  warn: ${receipt.filename} is not staged in beleg-import/ any more, skipping`);
   }
   if (slips.length) payslips(noReceiptFor(ws));
 

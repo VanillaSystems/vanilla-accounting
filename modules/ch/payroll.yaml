@@ -262,7 +262,12 @@ setupDocuments:
     ahv: { adminCost: [Verwaltungskosten, Verwaltungskostenbeitrag, Frais d'administration, Spese amministrative, Spese di amministrazione] }
     fak: { employer: [FAK, Familienausgleichskasse, Familienzulagen, CAF, Allocations familiales, Assegni familiari] }
     uvg: { bu: [BU, Berufsunfall, Berufsunfälle, Berufsunfallversicherung, AP, Accidents professionnels, INP, Infortuni professionali], nbu: [NBU, Nichtberufsunfall, Nichtberufsunfälle, Nichtberufsunfallversicherung, ANP, Accidents non professionnels, Infortuni non professionali] }
-  notToModel: [Lohn, Löhne, Lohnsumme, Jahreslohn, versicherter Lohn, versicherte Lohn, AHV-Lohn, Salär, Gehalt, Salaire, Salaires, Masse salariale, Salario, Salari, Massa salariale, Salary, Salaries, Wage, Wages, Geburtsdatum, Date de naissance, Data di nascita]
+  # What a model may read of such a document (src/payroll/setup-documents.ts linesForModel), an allow-list: the first two
+  # lines (the fund's letterhead), a line with a rate in %, a line naming one of the words above or of `toModel`. Never an
+  # amount alone, never a line with a date, never one that holds a word of `notToModel` anywhere (a salary, an insured or
+  # coordinated wage, retirement savings, a birth date, a civil status), in any case.
+  toModel: [Beitrag, Beiträge, Sparbeitrag, Risikobeitrag, Arbeitnehmer, Arbeitgeber, Versicherte Person, Prämie, Prämiensatz, Lösung, Kategorie, Cotisation, Cotisations, Employé, Employeur, Personne assurée, Prime, Solution, Contributo, Contributi, Dipendente, Datore di lavoro, Persona assicurata, Premio, Soluzione, Contribution, Contributions, Employee, Employer, Insured person, Premium]
+  notToModel: [lohn, löhne, gehalt, salär, salaire, salari, salary, wage, verdienst, revenu, reddito, einkommen, income, guthaben, avoir, avere, geb., geboren, geburt, naissance, nascita, birth, zivilstand, état civil, stato civile, civil status, AHV-Nr, No AVS, N. AVS]
 
 # The words of the payroll's documents (payslip, Lohnkonto, Lohnausweis), in the person's language: a
 # document prints from here, never from the app's UI dictionaries (docs/specs/payroll.md §12.2).

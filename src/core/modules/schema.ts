@@ -266,7 +266,7 @@ export interface SetupData {
     /** The employer's own contribution account of a kind: code books there what a payment to the kind's collector pays beyond the employees' share, without a model (src/booking/withheld.ts contributionLines). */
     employer?: Record<string, string>;
     /** What a kind's collector leaves the employer (the withholding tax's collection commission): a payment short of what is owed by at most `upTo` percent books the rest on `account`. */
-    commission?: Record<string, { account: string; upTo: number }>;
+    commission?: Record<string, { account: string; from?: number; upTo: number }>;
     /** The words a payslip of another program names its figures by (src/booking/payslip.ts readPayslip): the gross, the net, the allowances paid with the wage, the expenses by account. */
     payslip?: { gross: string[]; net: string[]; allowances?: string[]; expenses?: Array<{ account: string; words: string[] }> };
   };
@@ -475,7 +475,7 @@ export interface PayrollData {
    * that name each kind's document in its first lines, the labels of its numbers, each kind's rates by the words on their
    * line, and the words of a line never sent to a model (a salary).
    */
-  setupDocuments?: { kinds: Record<string, string[]>; numbers: Partial<Record<'memberNumber' | 'contractNumber', string[]>>; rates: Record<string, Record<string, string[]>>; notToModel: string[] };
+  setupDocuments?: { kinds: Record<string, string[]>; numbers: Partial<Record<'memberNumber' | 'contractNumber', string[]>>; rates: Record<string, Record<string, string[]>>; toModel?: string[]; notToModel: string[] };
   /** The words of the payroll's documents, in each language. */
   documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate', Labels>;
 }

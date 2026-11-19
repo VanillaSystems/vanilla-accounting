@@ -1861,7 +1861,7 @@ Taken while building A-2 (2026-11-19):
 59. **Without a model, code books a collector's payment where it knows the share**: the share on its account, the
     rest the employer's on the payee's earlier contribution account, else the kind's (`wages.employer`: 5700, 5720).
     The family allowances billed with the compensation fund's contributions land on 5700 then; with a model the bill
-    splits them. Wages booked net (the account holds nothing): the whole payment is the employer's. A pension fund
+    splits them. (Which months a payment clears, and when code books nothing: decision 65.) A pension fund
     without `collects` stays the person's without a model. Payments to collectors are booked after the run's other
     payments, so the wages booked now are on the books first.
 60. **The withholding tax's payment is booked by code with or without a model** (it is fully decided by the
@@ -1887,6 +1887,34 @@ Taken while building A-2 (2026-11-19):
     solution (with the rates the document does not name carried over) and the numbers it lacks; a pension
     certificate's person her contributions as a dated entry of her insurances, matched by her name; a name payroll.json
     lacks is said and not written. Nothing of a card counts before.
+
+After the independent review of A-2 (2026-11-19):
+
+65. **A collector's payment clears whole months, the oldest first** (src/booking/withheld.ts `withheldMonths`,
+    `contributionLines`), never what a later month withheld: the withholding tax's payment is a run of the oldest open
+    months' tax, or that less the collection commission between `from` and `upTo` percent (setup.yaml, 0.5 to 5), else
+    it clears only what it pays; a fund's payment is a run of the oldest open months' employees' share and the employer's
+    beside it, so between twice and three times that share, else it is the person's (or the model's). Decision 59's
+    «whole payment the employer's» without a model is gone: on thin evidence code books nothing.
+66. **Never at the year's start without the year before's balance**: while the year before has books and no opening of
+    the year says what the account carried over, code books no collector's payment (a January payment of Q4's).
+67. **A payslip's nearest payment is its only one**: chosen among every payment that fits, filed or linked ones too; when
+    that one is filed, linked or nearer to another payslip, the payslip gets no link (it never reaches a month off). Its
+    person is read below its title, never from the firm's letterhead.
+68. **Nothing of a payslip reaches a model**: a text the firm issued and titles a payslip is of kind `payslip` whether it
+    reads or not (`document:payslip-unread`, filed for the person), and so is one of a month the app's own payroll closed
+    (its PDF dropped again); neither goes to the kind, title or match calls, and a payment with a payslip linked that code
+    does not book is the person's, never the model's. A program that prints its deductions without a minus reads when the
+    net proves them.
+69. **A setup document's lines for a model are an allow-list** (`linesForModel`): the letterhead's first two lines, a line
+    with a %, a line with a word of the rates, numbers, kinds or `toModel`; never an amount alone, a line with a day, or one
+    that holds a word of `notToModel` anywhere (substrings, any case). The card is keyed by whether the AI was asked, so
+    its reading shows.
+70. **A kept card writes only what it says**: a blank contribution stays as the person's entry valid on that day says, or
+    her part is not taken (and the card stays); the rates and her insurances carried over are the entry valid on the
+    card's day, not the last entered.
+71. **A payslip's currency is the one its amounts name** (else the books'); a wage less its deductions at or below
+    nothing books nothing; the withholding tax's collector is told what 2279 holds, with a reason of its own.
 
 ---
 

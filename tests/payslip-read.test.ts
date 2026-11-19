@@ -17,7 +17,7 @@ const SSN = ['756', '1234', '5678', '97'].join('.');
 const PROGRAM = `Muster Malerei GmbH\nLohnabrechnung März 2026\nSandra Muster\nAHV-Nr. ${SSN}\nAHV-pflichtiger Lohn 8'000.00\nBruttolohn 8'000.00\nAHV/IV/EO 5.30% 8'000.00 -424.00\nALV 1.10% 8'000.00 -88.00\nNBU/KTG -136.00\nBVG -350.00\nQuellensteuer A0N 10.5% -840.00\nNettolohn 6'162.00`;
 
 test('A2 the consultancy\'s payslip as pdftotext reads it: all labels, then all amounts in their order', () => {
-  assert.deepEqual(flat(readPayslip(CONSULTING('Juli'))), { employee: 'Matthias Kälin', period: '2026-07', gross: 9500, net: 8602, deductions: { ausgleichskasse: 608, pension: 290 }, allowances: 0, expenses: {} });
+  assert.deepEqual(flat(readPayslip(CONSULTING('Juli'))), { employee: 'Matthias Kälin', period: '2026-07', currency: 'CHF', gross: 9500, net: 8602, deductions: { ausgleichskasse: 608, pension: 290 }, allowances: 0, expenses: {} });
 });
 
 test('A2 each label with its amount on its line, or on the line below it', () => {
@@ -30,12 +30,12 @@ test('A2 each label with its amount on its line, or on the line below it', () =>
 });
 
 test('A2 a payroll program\'s payslip: bases and the social security number are no rows, the withholding tax a kind of its own', () => {
-  assert.deepEqual(flat(readPayslip(PROGRAM)), { employee: 'Sandra Muster', period: '2026-03', gross: 8000, net: 6162, deductions: { ausgleichskasse: 512, 'accident+sickness': 136, pension: 350, tax: 840 }, allowances: 0, expenses: {} });
+  assert.deepEqual(flat(readPayslip(PROGRAM)), { employee: 'Sandra Muster', period: '2026-03', currency: 'CHF', gross: 8000, net: 6162, deductions: { ausgleichskasse: 512, 'accident+sickness': 136, pension: 350, tax: 840 }, allowances: 0, expenses: {} });
 });
 
 test('A2 family allowances and expenses paid with the wage count towards the net; the flat expenses on their own account', () => {
   const text = "Conteggio salario 09/2026\nSalario lordo 6'000.00\nAVS/AI/IPG 5.30% -318.00\nAD 1.10% -66.00\nLPP -250.00\nAINF 1.00% -60.00\nIGM -20.00\nAssegni familiari 215.00\nSpese forfettarie 100.00\nRimborso spese 42.50\nSalario netto 5'643.50";
-  assert.deepEqual(flat(readPayslip(text)), { period: '2026-09', gross: 6000, net: 5643.5, deductions: { ausgleichskasse: 384, pension: 250, accident: 60, sickness: 20 }, allowances: 215, expenses: { 5830: 100, 5820: 42.5 } });
+  assert.deepEqual(flat(readPayslip(text)), { period: '2026-09', currency: 'CHF', gross: 6000, net: 5643.5, deductions: { ausgleichskasse: 384, pension: 250, accident: 60, sickness: 20 }, allowances: 215, expenses: { 5830: 100, 5820: 42.5 } });
 });
 
 test('A2 sure only to the cent: a net off by a cent, a deduction of no kind, two gross figures read nothing', () => {
