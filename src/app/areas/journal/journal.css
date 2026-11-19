@@ -79,6 +79,27 @@
 .jnew .form { padding: 8px 20px 18px; }
 .jnew .dacts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .jnew .form .two { grid-template-columns: 1fr 1fr; }
+/* Soll ⇄ Haben (#567): the swap between the two account fields, level with their inputs. */
+.jnew .form .jsides { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; align-items: start; }
+.jnew .form .jsides.one { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.4fr); }
+.jnew .jswap { margin-top: 22px; padding: 4px 6px; border-radius: 6px; color: var(--muted); font-size: 15px; line-height: 1; }
+.jnew .jswap:hover { color: var(--ink); background: var(--hover); }
+.jnew .jaddl { display: flex; align-items: flex-start; padding-top: 24px; }
+/* A Sammelbuchung (#567): per line the account opposite the shared one, its code and amount, the text below. */
+.jnew.split { --w: min(660px, 100vw - 32px); width: var(--w); top: 4vh; }
+.jnew .jlines { display: grid; gap: 10px; }
+.jnew .jline { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 0.7fr) minmax(0, 0.8fr) 18px; gap: 8px; align-items: start; }
+.jnew .jlines { padding-top: 4px; border-top: 1px solid var(--line); }
+.jnew .jline .rm { grid-column: 5; grid-row: 1; color: var(--muted); font-size: 15px; line-height: 1; margin-top: 24px; }
+.jnew .jline .rm:hover { color: var(--ink); }
+.jnew .jline input[data-rest] { color: var(--muted); }
+.jnew .jsplitf { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.jnew .jsplitf .wn { color: var(--warn); font-size: 12px; }
+.jnew .jsplitf .ok { color: var(--muted); font-size: 12px; }
+@media (max-width: 680px) {
+  .jnew .jline { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .jnew .jline .rm { grid-column: 1 / -1; grid-row: auto; justify-self: end; margin-top: 0; }
+}
 
 /* A payment booked by hand where it shows (PaymentBooking.tsx): per line Soll, Haben, MWST, Betrag, and the text below. */
 .form.pbook { max-width: 640px; padding: 12px 14px; margin: 8px 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); container-type: inline-size; }

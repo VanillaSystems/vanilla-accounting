@@ -560,6 +560,30 @@ export function addEntry(books: Books, input: NewEntry): JournalEntry {
 }
 
 /**
+ * A Sammelbuchung typed by hand (#567): several lines under one new M<year>-NNN, all on `date`, each
+ * a balanced pair (the side the lines share stands on every one), booked together or not at all.
+ */
+export function addEntries(books: Books, date: string, lines: readonly BookingLine[]): JournalEntry[] {
+  if (!lines.length) throw new RequestError(400, 'lines: mindestens eine Zeile.');
+  const at = new Date().toISOString();
+  const entries: JournalEntry[] = [];
+  for (const l of lines) {
+    if (!Number.isFinite(l.amount) || l.amount === 0) throw new RequestError(400, 'amount muss eine Zahl ungleich 0 sein.', { code: 'amountZero' });
+    if (!l.description.trim()) throw new RequestError(400, 'description darf nicht leer sein.', { code: 'noDescription' });
+    // Each line is a pair with the shared account, so the lines balance as they stand.
+    if (!l.accountDebit || !l.accountCredit) throw new RequestError(400, 'Soll- oder Habenkonto fehlt.', { code: 'noAccount' });
+    if (l.vatCode && !lookupVatCode(l.vatCode)) throw new RequestError(400, `Den Steuercode ${l.vatCode} gibt es nicht.`, { code: 'unknownVatCode', params: { code: l.vatCode } });
+    entries.push(addEntry(books, {
+      ...(entries[0] && { transactionRef: entries[0].transactionRef }),
+      date, accountDebit: l.accountDebit, accountCredit: l.accountCredit, amount: l.amount,
+      ...(l.vatCode && { vatCode: l.vatCode }), description: l.description.trim(), ...(l.tags && { tags: l.tags }),
+      origin: 'manual', by: { kind: 'person', at },
+    }));
+  }
+  return entries;
+}
+
+/**
  * A booking without a payment made or put back: a person's (M2026-004) is linked again to the receipts
  * it carries (`receipts`); a module's under a ref of its own (#524) only to `taken`, the person's links
  * its deletion took along (DeletedEntry.takenLinks). A module's `receipts` are what it saw, its own

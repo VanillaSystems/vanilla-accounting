@@ -14,6 +14,17 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Added
+
+- Buchungen › Neue Buchung von Hand: «+ Zeile» makes it a Sammelbuchung, one account against
+  several lines (for example Haben 1020 against Soll 6500 and 6570). The last line holds the rest of
+  the total until you type there, and ↵ books only once the lines add up. The lines are booked
+  together under one number, each as a pair with the shared account (#567).
+- The same form: ⇄ swaps Soll and Haben, and a date typed short («6.12.» or «6.12.26») is the
+  form's year, shown whole once you leave the field.
+- Booking by hand onto Debitoren or Kreditoren (a collective account whose balance is the open
+  invoices or bills) warns and books on «Trotzdem buchen».
+
 ### Fixed
 
 - Mac: a downloaded `.vanillashare` file showed as coloured pixel noise in Chrome's download list.

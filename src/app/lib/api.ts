@@ -504,6 +504,9 @@ export const api = {
     request<Ok>('PATCH', `/api/journal-entries/${encodeURIComponent(id)}`, patch),
   createJournalEntry: (input: JournalEntryInput) =>
     request<{ entry: JournalEntry }>('POST', '/api/journal-entries', input).then((r) => r.entry),
+  /** A Sammelbuchung (#567): its lines under one new ref, booked together. */
+  createJournalEntries: (date: string, lines: BookingLine[]) =>
+    request<{ entries: JournalEntry[] }>('POST', '/api/journal-entries/lines', { date, lines }).then((r) => r.entries),
   deleteJournalEntry: (id: string) => request<Ok & { takenLinks?: string[] }>('DELETE', `/api/journal-entries/${encodeURIComponent(id)}`),
   /** «Nach Beleg buchen» on a receipt of several VAT groups (#406): the payment's lines as they were, and their ids now. */
   bookByReceipt: (id: string) => request<{ undo: string; before: JournalEntry[]; after: JournalEntry[] }>('POST', `/api/journal-entries/${encodeURIComponent(id)}/by-receipt`),

@@ -70,6 +70,12 @@ export const bookingLine = (e: Pick<JournalEntry, 'accountDebit' | 'accountCredi
 export const createEntry = (nav: Nav, input: JournalEntryInput) =>
   run(nav, () => api.createJournalEntry(input), (entry) => t('journal.created', { line: bookingLine(entry) }), (entry) => api.deleteJournalEntry(entry.id));
 
+/** A Sammelbuchung (#567): its lines booked in one write under one ref; undo removes them all. */
+export const createEntries = (nav: Nav, date: string, lines: BookingLine[]) =>
+  run(nav, () => api.createJournalEntries(date, lines), (entries) => t('journal.byHand.booked', { n: entries.length, ref: entries[0]?.transactionRef ?? '' }), async (entries) => {
+    for (const e of entries) await api.deleteJournalEntry(e.id);
+  });
+
 /** An accrual and its reversal on the next 1.1., booked in one step; undo removes both. */
 export const createWithReversal = (nav: Nav, input: JournalEntryInput, reversal: JournalEntryInput) =>
   run(nav, async () => {

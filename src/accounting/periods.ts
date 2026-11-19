@@ -158,12 +158,16 @@ export function filingKeyOf(date: IsoDate, length: FilingLength): string {
 /** Whether `key` names one filing period of `length` (a return that is filed), not a sum of them. */
 export const isFilingKey = (key: string, length: FilingLength): boolean => derivePeriod(key)?.kind === length;
 
-/** A date typed the Swiss way, "9.10.2026", "09.10.2026" or "9.10.26" (a two-digit year is 20yy); null when it is no real day. */
-export function parseSwissDate(text: string): IsoDate | null {
-  const m = text.trim().match(/^(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})$/);
+/**
+ * A date typed the Swiss way, "9.10.2026", "09.10.2026" or "9.10.26" (a two-digit year is 20yy); null
+ * when it is no real day. With `year`, the short "9.10." and "9.10" are that year's (#567).
+ */
+export function parseSwissDate(text: string, year?: string): IsoDate | null {
+  const m = text.trim().match(year ? /^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}|\d{2})?)?$/ : /^(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})$/);
   if (!m) return null;
-  const year = m[3].length === 2 ? `20${m[3]}` : m[3];
-  const day = `${year}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+  const y = m[3] ?? year!;
+  const yyyy = y.length === 2 ? `20${y}` : y;
+  const day = `${yyyy}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
   return isIsoDate(day) ? day : null;
 }
 
