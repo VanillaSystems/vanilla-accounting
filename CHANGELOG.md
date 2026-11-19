@@ -25,6 +25,16 @@ Two markers flag an entry you must read before you update:
   filed quarter a reclassification without a VAT code is booked in the open period
   (`RE-<number>-kk-<k>`, `GS-<number>-kk-<k>`, a new ref pattern, no books format change). The
   invoice's credit notes follow it. The dialog shows what will be booked before it is.
+- The demos show every state of a sales invoice. The coffee roaster (`demo/`) has invoices paid
+  with Skonto, partly paid, short by the customer's bank fee and written off as fees, paid in cash
+  at the door, entered by hand and confirmed by the bank statement, one payment for two invoices, a
+  credit note applied to its invoice, an overdue one with its first reminder, a cancelled one, two
+  not sent yet and a draft with titles, subtotals and a discount; named payment terms, one with
+  Skonto, and a cash box. The consultant invoices from July by the hour, one client in EUR abroad;
+  the joinery invoices with prices including VAT, a discount and a position of its second net rate;
+  the hair salon writes one invoice without VAT for a wedding. **⚠ figures** (the demos only): the
+  coffee roaster's Q3 and Q4, the joinery's H2 and the hair salon's Q2 gain these sales; no filed
+  period changes.
 - Buchungen › Neue Buchung von Hand: «+ Zeile» makes it a Sammelbuchung, one account against
   several lines (for example Haben 1020 against Soll 6500 and 6570). The last line holds the rest of
   the total until you type there, and ↵ books only once the lines add up. The lines are booked

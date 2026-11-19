@@ -4,8 +4,20 @@ company:
   name: Muster Consulting GmbH
   uid: CHE-246.813.579
   owner: Lukas Beispiel
+  address: { street: Beispielgasse, number: "8", postcode: "3011", town: Bern, country: CH }
   vat: { method: effective, reporting: received }
 bankAccounts:
-  - { bank: Raiffeisen, currency: CHF, account: "1020", label: Bank Raiffeisen, statements: camt053, role: bank }
-  - { bank: Wise, currency: EUR, account: "1021", label: Wise EUR, statements: wise, role: bank }
+  - { bank: Raiffeisen, currency: CHF, account: "1020", label: Bank Raiffeisen, statements: camt053, iban: CH3880808000000000002, role: bank }
+  - { bank: Wise, currency: EUR, account: "1021", label: Wise EUR, statements: wise, iban: BE38967000000002, role: bank }
   - { bank: manual, currency: CHF, account: "2451", label: Kontokorrent Lukas Beispiel, role: owner }
+invoicing:
+  payTo:
+    CHF: { account: "1020", qrIban: CH66 3080 8000 0000 0000 2 }
+    EUR: { account: "1021" }
+  revenueAccount: "3400"
+  paymentTermsDays: 30
+  paymentTerms:
+    - { id: net30, name: "30 Tage netto", days: 30 }
+  texts:
+    de: { closing: "Zahlbar innert {days} Tagen.\nFreundliche Grüsse, Lukas Beispiel" }
+    en: { closing: "Payable within {days} days.\nKind regards, Lukas Beispiel" }

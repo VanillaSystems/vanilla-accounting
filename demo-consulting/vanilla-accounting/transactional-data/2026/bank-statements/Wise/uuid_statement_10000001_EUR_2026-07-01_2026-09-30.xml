@@ -58,11 +58,11 @@
           <TxDtls>
             <Amt Ccy="EUR">3800.00</Amt>
             <RltdPties><Dbtr><Pty><Nm>MUSTER MASCHINENBAU GMBH</Nm></Pty></Dbtr></RltdPties>
-            <RmtInf><Ustrd>Rechnung 2026-073</Ustrd></RmtInf>
-            <AddtlTxInf>Rechnung 2026-073</AddtlTxInf>
+            <RmtInf><Ustrd>RF332026002</Ustrd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-002</AddtlTxInf>
           </TxDtls>
         </NtryDtls>
-        <AddtlNtryInf>Received money from MUSTER MASCHINENBAU GMBH</AddtlNtryInf>
+        <AddtlNtryInf>Gutschrift Muster Maschinenbau GmbH</AddtlNtryInf>
       </Ntry>
       <Ntry>
         <Amt Ccy="EUR">32.43</Amt>

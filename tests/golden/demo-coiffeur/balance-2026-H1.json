@@ -2,11 +2,11 @@
   "assets": [
     [
       "Umlaufvermögen",
-      7253.85,
+      7938.85,
       [
         [
           "1020",
-          7253.85
+          7938.85
         ]
       ]
     ],
@@ -34,7 +34,7 @@
     ],
     [
       "Eigenkapital",
-      16253.85,
+      16938.85,
       [
         [
           "2800",
@@ -50,12 +50,12 @@
         ],
         [
           "",
-          15753.85
+          16438.85
         ]
       ]
     ]
   ],
-  "totalAssets": 16253.85,
-  "totalLiabilities": 16253.85,
+  "totalAssets": 16938.85,
+  "totalLiabilities": 16938.85,
   "isBalanced": true
 }

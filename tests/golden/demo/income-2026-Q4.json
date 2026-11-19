@@ -2,8 +2,13 @@
   "sections": [
     [
       "Erlöse",
-      0,
-      []
+      336,
+      [
+        [
+          "3300",
+          336
+        ]
+      ]
     ],
     [
       "Aufwand für Material und Waren",
@@ -31,7 +36,7 @@
       []
     ]
   ],
-  "grossProfit": 0,
-  "operatingResult": 0,
-  "netResult": 0
+  "grossProfit": 336,
+  "operatingResult": 336,
+  "netResult": 336
 }

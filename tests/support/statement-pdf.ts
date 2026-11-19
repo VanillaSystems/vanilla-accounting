@@ -73,7 +73,7 @@ export async function inventedStatement(s: Invented): Promise<{ pdf: Buffer; tru
 /** An October statement of an invented bank for the demo's Raiffeisen account (its IBAN), opening where September closed. */
 export const DEMO_OCTOBER: Invented = {
   bank: 'Musterbank Beispiel AG', owner: 'Muster Rösterei GmbH', iban: 'CH6580808000000000001', currency: 'CHF',
-  from: '2026-10-01', to: '2026-10-31', opening: 88252.44, perPage: 4,
+  from: '2026-10-01', to: '2026-10-31', opening: 94514.43, perPage: 4,
   movements: [
     { date: '2026-10-02', amount: -1204, counterparty: 'Gruenkaffee Muster AG', text: 'Zahlung Rechnung 2026-1187', reference: '210000000003139471430009017' },
     { date: '2026-10-05', amount: 2380.5, counterparty: 'Café Beispiel Zürich', text: 'Gutschrift Rechnung RE-2026-041' },

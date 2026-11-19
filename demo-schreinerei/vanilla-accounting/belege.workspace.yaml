@@ -4,7 +4,18 @@ company:
   name: Schreinerei Beispiel GmbH
   uid: CHE-135.246.357
   owner: Reto Beispiel
-  vat: { registered: true, method: "net-rate", reporting: "received", period: "half-yearly", rates: [ { rate: 4.5, label: "Schreinerei", activityId: "99901" } ] }
+  address: { street: Werkstrasse, number: "12", postcode: "9000", town: St. Gallen, country: CH }
+  vat: { registered: true, method: "net-rate", reporting: "received", period: "half-yearly", rates: [ { rate: 4.5, label: "Schreinerei", activityId: "99901" }, { rate: 2.1, label: "Handel Einbaugeräte", activityId: "99902" } ] }
 bankAccounts:
-  - { bank: Raiffeisen, currency: CHF, account: "1020", label: Bank Raiffeisen, statements: camt053, role: bank }
+  - { bank: Raiffeisen, currency: CHF, account: "1020", label: Bank Raiffeisen, statements: camt053, iban: CH1180808000000000003, role: bank }
   - { bank: manual, currency: CHF, account: "2451", label: Kontokorrent Reto Beispiel, role: owner }
+invoicing:
+  payTo:
+    CHF: { account: "1020", qrIban: CH39 3080 8000 0000 0000 3 }
+  revenueAccount: "3400"
+  paymentTermsDays: 30
+  prices: { invoice: gross, credit-note: gross }
+  paymentTerms:
+    - { id: net30, name: "30 Tage netto", days: 30 }
+  texts:
+    de: { closing: "Zahlbar innert {days} Tagen.\nFreundliche Grüsse, Reto Beispiel" }

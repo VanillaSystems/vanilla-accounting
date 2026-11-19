@@ -131,7 +131,7 @@ async function straddling(over: Partial<Invented> = {}) {
   const before = (await import('../src/books/store.js')).loadBooks((await import('../src/workspace/workspace.js')).workspaceAt(DEMO_ROOT)).transactions
     .filter((t) => t.bank === 'Raiffeisen' && t.date >= '2026-09-21' && t.date <= '2026-09-30');
   assert.ok(before.length >= 3, 'the demo has late-September payments');
-  const opening = Math.round((88252.44 - before.reduce((n, t) => n + signed(t), 0)) * 100) / 100;
+  const opening = Math.round((94514.43 - before.reduce((n, t) => n + signed(t), 0)) * 100) / 100;
   return inventedStatement({
     ...DEMO_OCTOBER, from: '2026-09-21', to: '2026-10-15', opening, perPage: 20,
     movements: [...before.map((t) => ({ date: t.date, amount: signed(t), text: t.description })), ...DEMO_OCTOBER.movements.filter((m) => m.date <= '2026-10-15')],

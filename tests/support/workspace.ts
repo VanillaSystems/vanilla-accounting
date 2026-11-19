@@ -1,5 +1,5 @@
 /** Workspaces for tests: the demos, a temp copy of a manifest, and the company's own when this checkout has one. */
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { parse as parseEnv } from 'dotenv';
@@ -24,6 +24,19 @@ export function tempWorkspace(prefix = 'belege-ws-', manifestOf: string = DEMO_R
   mkdirSync(dir, { recursive: true });
   copyFileSync(join(appFolderIn(manifestOf) ?? manifestOf, MANIFEST_FILE), join(dir, MANIFEST_FILE));
   return workspaceAt(dir);
+}
+
+/**
+ * A folder holding the hair salon's manifest without what invoicing brought to it (its IBANs and the
+ * `invoicing:` block): one CHF account and no IBAN in the books, the firm the statement tests start
+ * from. The demo invoices since slice E of invoicing phase 1, and an invoice prints its account's IBAN.
+ */
+export function salonWithoutIban(): string {
+  const src = readFileSync(join(APP_ROOT, 'demo-coiffeur', APP_FOLDER, MANIFEST_FILE), 'utf8');
+  const bare = src.replace(/, iban: [A-Z0-9]+/g, '').replace(/^invoicing:\n(?:[ \t]+.*\n?)*/m, '');
+  const dir = mkdtempSync(join(tmpdir(), 'salon-no-iban-'));
+  writeFileSync(join(dir, MANIFEST_FILE), bare);
+  return dir;
 }
 
 /** Writes `index` (books.json's content before ADR 0013) as the workspace's books, by year. */

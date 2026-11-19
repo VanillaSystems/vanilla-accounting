@@ -5,7 +5,15 @@ company:
   uid: CHE-975.310.864
   owner: Bella Beispiel
   legalForm: Einzelfirma
+  address: { street: Marktgasse, number: "3", postcode: "8400", town: Winterthur, country: CH }
   vat: { registered: false }
 bankAccounts:
-  - { bank: Raiffeisen, currency: CHF, account: "1020", label: Bank Raiffeisen, statements: camt053, role: bank }
+  - { bank: Raiffeisen, currency: CHF, account: "1020", label: Bank Raiffeisen, statements: camt053, iban: CH8180808000000000004, role: bank }
   - { bank: manual, currency: CHF, account: "2850", label: Privat Bella Beispiel, role: owner }
+invoicing:
+  payTo:
+    CHF: { account: "1020", qrIban: CH12 3080 8000 0000 0000 4 }
+  revenueAccount: "3400"
+  paymentTermsDays: 20
+  texts:
+    de: { closing: "Zahlbar innert {days} Tagen. Herzlichen Dank und alles Gute!\nBella Beispiel" }

@@ -386,7 +386,9 @@ test('the four figures on every Rechnung of the demos: Betrag − erhalten − g
     for (const inv of invoices) {
       if (inv.status !== 'issued' || inv.kind !== 'invoice' || inv.cancelled) continue;
       const f = figures(inv, invoices);
-      assert.equal(Math.round((f.amount - f.received - f.credited) * 100) / 100, f.open, `${demo} ${inv.number}`);
+      // In Rappen: a sum that is zero in floating point may come out as -0.
+      const rp = (n: number) => Math.round(n * 100);
+      assert.equal((rp(f.amount) - rp(f.received) - rp(f.credited)) / 100, f.open, `${demo} ${inv.number}`);
       assert.equal(Math.max(0, f.open), openAmount(inv, invoices), `${demo} ${inv.number}: the same «offen» as the lists`);
       seen++;
     }

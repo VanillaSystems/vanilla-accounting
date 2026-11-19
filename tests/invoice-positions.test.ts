@@ -345,10 +345,18 @@ function schema2Files(): Array<[string, { schema: number; invoices: Array<Record
 }
 
 test('invoices.json 2 → 3: every document of every demo and of a mixed file keeps its totals, VAT per rate, revenue split and reference', () => {
-  // The demo as generated today names the same figures as the one of schema 2.
+  // Each document the demo issued at schema 2 is in the demo as generated today (found by its kind, date and customer:
+  // the demo gained documents since, so the numbers moved), with the same figures.
   const today = JSON.parse(readFileSync(join(APP_ROOT, 'demo/vanilla-accounting/invoices.json'), 'utf8')) as InvoiceBook;
   const shipped = schema2Files()[0][1];
-  assert.deepEqual(today.invoices.map((i) => [i.status === 'issued' ? i.number : i.id, totals(i)]), shipped.invoices.map((i) => [i.number ?? i.id, oldTotals(i.lines as OldLine[])]));
+  const issuedThen = shipped.invoices.filter((i) => i.status === 'issued');
+  assert.ok(issuedThen.length > 0);
+  for (const was of issuedThen) {
+    const who = (was.customer as { name: string }).name;
+    const now = today.invoices.filter((i): i is Issued => i.status === 'issued' && i.kind === was.kind && i.date === was.date && i.customer.name === who);
+    assert.equal(now.length, 1, `${String(was.number)}: one ${String(was.kind)} of ${String(was.date)} to ${who} today`);
+    assert.deepEqual(totals(now[0]), oldTotals(was.lines as OldLine[]), `${String(was.number)} (today ${now[0].number}): its figures`);
+  }
   for (const [name, file] of schema2Files()) {
     assert.equal(file.schema, 2, `${name} ships at schema 2`);
     const now = climb<Record<string, unknown>>(file, 2, INVOICES_SCHEMA, INVOICES_MIGRATIONS, name, (x) => structuredClone(x)) as unknown as InvoiceBook;

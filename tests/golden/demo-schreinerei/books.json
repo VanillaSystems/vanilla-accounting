@@ -1,5 +1,5 @@
 {
- "note": "The books of Schreinerei Beispiel GmbH frozen on 2026-10-16, the golden master's input.",
+ "note": "The books of Schreinerei Beispiel GmbH frozen on 2026-11-19, the golden master's input.",
  "journalEntries": [
   {
    "id": "004d56ee45c7b36c",
@@ -206,24 +206,6 @@
    "description": "Lohn August 2026 netto, Marco Beispiel"
   },
   {
-   "id": "46a79516892745b1",
-   "transactionRef": "90000000073",
-   "date": "2026-09-15",
-   "accountDebit": "2201",
-   "accountCredit": "1020",
-   "amount": 156.6,
-   "description": "ESTV, Korrekturabrechnung (0535) H1 2026"
-  },
-  {
-   "id": "483cfe5551ce220c",
-   "transactionRef": "90000000077",
-   "date": "2026-09-28",
-   "accountDebit": "5700",
-   "accountCredit": "1020",
-   "amount": 1413.6,
-   "description": "Ausgleichskasse, Beiträge Arbeitgeber Q3 2026"
-  },
-  {
    "id": "4be8575d9926d3db",
    "transactionRef": "90000000057",
    "date": "2026-07-20",
@@ -374,15 +356,6 @@
    "description": "Lohn Februar 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV), Marco Beispiel"
   },
   {
-   "id": "7d7f179e367ed078",
-   "transactionRef": "90000000074",
-   "date": "2026-09-18",
-   "accountDebit": "6510",
-   "accountCredit": "1020",
-   "amount": 83.8,
-   "description": "Muster Telecom, Telefon und Internet September 2026"
-  },
-  {
    "id": "8194a068c1be023e",
    "transactionRef": "90000000069",
    "date": "2026-09-01",
@@ -390,15 +363,6 @@
    "accountCredit": "1020",
    "amount": 2300,
    "description": "Beispiel Liegenschaften, Miete Werkstatt September 2026"
-  },
-  {
-   "id": "82132cf4492e0b89",
-   "transactionRef": "90000000072",
-   "date": "2026-09-14",
-   "accountDebit": "6200",
-   "accountCredit": "1020",
-   "amount": 287.85,
-   "description": "Garage Beispiel, Diesel Lieferwagen September 2026"
   },
   {
    "id": "83557dd9ede17684",
@@ -431,15 +395,6 @@
    "corrects": "2026-H1"
   },
   {
-   "id": "8cd8ae3fd0fb065c",
-   "transactionRef": "90000000076",
-   "date": "2026-09-25",
-   "accountDebit": "5000",
-   "accountCredit": "1020",
-   "amount": 5803.2,
-   "description": "Lohn September 2026 netto, Marco Beispiel"
-  },
-  {
    "id": "8dccbf09bdbac2cb",
    "transactionRef": "90000000051",
    "date": "2026-06-26",
@@ -456,15 +411,6 @@
    "accountCredit": "1020",
    "amount": 5803.2,
    "description": "Lohn Januar 2026 netto, Marco Beispiel"
-  },
-  {
-   "id": "911ec57169079c09",
-   "transactionRef": "90000000077",
-   "date": "2026-09-28",
-   "accountDebit": "2270",
-   "accountCredit": "1020",
-   "amount": 1190.4,
-   "description": "Ausgleichskasse, Beiträge Arbeitnehmer Q3 2026"
   },
   {
    "id": "936052b8cd6eb9fa",
@@ -817,15 +763,6 @@
    "description": "Beispiel Immobilien, Unterhalt Februar 2026"
   },
   {
-   "id": "f46cf757412e4f99",
-   "transactionRef": "90000000078",
-   "date": "2026-09-30",
-   "accountDebit": "6940",
-   "accountCredit": "1020",
-   "amount": 15,
-   "description": "Raiffeisen, Kontoführung Q3"
-  },
-  {
    "id": "fa97142ba4558bb4",
    "transactionRef": "90000000043",
    "date": "2026-05-29",
@@ -845,8 +782,66 @@
    "description": "Lohn Juni 2026 netto, Marco Beispiel"
   },
   {
-   "id": "fda91b688a056819",
-   "transactionRef": "90000000075",
+   "id": "fe35aade6ffcb9c4",
+   "transactionRef": "90000000051",
+   "date": "2026-06-26",
+   "accountDebit": "2270",
+   "accountCredit": "1020",
+   "amount": 1190.4,
+   "description": "Ausgleichskasse, Beiträge Arbeitnehmer Q2 2026"
+  },
+  {
+   "id": "0844c4317d2d6690",
+   "transactionRef": "90000000079",
+   "date": "2026-09-30",
+   "accountDebit": "6940",
+   "accountCredit": "1020",
+   "amount": 15,
+   "description": "Raiffeisen, Kontoführung Q3"
+  },
+  {
+   "id": "46a79516892745b1",
+   "transactionRef": "90000000073",
+   "date": "2026-09-14",
+   "accountDebit": "6200",
+   "accountCredit": "1020",
+   "amount": 287.85,
+   "description": "Garage Beispiel, Diesel Lieferwagen September 2026"
+  },
+  {
+   "id": "4937bcd71bd36c39",
+   "transactionRef": "90000000072",
+   "date": "2026-09-11",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 4248.6,
+   "vatCode": "F2",
+   "description": "Rechnung 2026-001 Familie Huber-Beispiel",
+   "origin": "invoice"
+  },
+  {
+   "id": "4bd25cb3ac9e4886",
+   "transactionRef": "90000000072",
+   "date": "2026-09-11",
+   "accountDebit": "1020",
+   "accountCredit": "3400",
+   "amount": 8745.52,
+   "vatCode": "F1",
+   "description": "Rechnung 2026-001 Familie Huber-Beispiel",
+   "origin": "invoice"
+  },
+  {
+   "id": "7d7f179e367ed078",
+   "transactionRef": "90000000074",
+   "date": "2026-09-15",
+   "accountDebit": "2201",
+   "accountCredit": "1020",
+   "amount": 156.6,
+   "description": "ESTV, Korrekturabrechnung (0535) H1 2026"
+  },
+  {
+   "id": "8cd8ae3fd0fb065c",
+   "transactionRef": "90000000076",
    "date": "2026-09-22",
    "accountDebit": "1020",
    "accountCredit": "3400",
@@ -855,13 +850,40 @@
    "description": "Beispiel Immobilien, Unterhalt September 2026"
   },
   {
-   "id": "fe35aade6ffcb9c4",
-   "transactionRef": "90000000051",
-   "date": "2026-06-26",
+   "id": "911ec57169079c09",
+   "transactionRef": "90000000077",
+   "date": "2026-09-25",
+   "accountDebit": "5000",
+   "accountCredit": "1020",
+   "amount": 5803.2,
+   "description": "Lohn September 2026 netto, Marco Beispiel"
+  },
+  {
+   "id": "d3972d8b14d848db",
+   "transactionRef": "90000000078",
+   "date": "2026-09-28",
+   "accountDebit": "5700",
+   "accountCredit": "1020",
+   "amount": 1413.6,
+   "description": "Ausgleichskasse, Beiträge Arbeitgeber Q3 2026"
+  },
+  {
+   "id": "f46cf757412e4f99",
+   "transactionRef": "90000000078",
+   "date": "2026-09-28",
    "accountDebit": "2270",
    "accountCredit": "1020",
    "amount": 1190.4,
-   "description": "Ausgleichskasse, Beiträge Arbeitnehmer Q2 2026"
+   "description": "Ausgleichskasse, Beiträge Arbeitnehmer Q3 2026"
+  },
+  {
+   "id": "fda91b688a056819",
+   "transactionRef": "90000000075",
+   "date": "2026-09-18",
+   "accountDebit": "6510",
+   "accountCredit": "1020",
+   "amount": 83.8,
+   "description": "Muster Telecom, Telefon und Internet September 2026"
   }
  ],
  "config": {

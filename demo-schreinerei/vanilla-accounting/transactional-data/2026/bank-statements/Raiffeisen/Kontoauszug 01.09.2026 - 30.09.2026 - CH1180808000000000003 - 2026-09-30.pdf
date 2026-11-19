@@ -12,7 +12,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
 endobj
 5 0 obj
-<< /Length 1125 >>
+<< /Length 1210 >>
 stream
 BT
 /F1 10 Tf
@@ -27,14 +27,15 @@ T* (Anfangssaldo 01.09.2026: -10’053.69) Tj
 T* (01.09.2026 | Dauerauftrag Miete Werkstatt | -2’300.00 | Ref. 90000000069) Tj
 T* (08.09.2026 | Zahlung Beispiel Holzhandel AG | -2’125.60 | Ref. 90000000070) Tj
 T* (11.09.2026 | Debitkarte EXAMPLE TOOLS INC PORTLAND | -29.00 | Ref. 90000000071) Tj
-T* (14.09.2026 | Debitkarte GARAGE BEISPIEL AG | -287.85 | Ref. 90000000072) Tj
-T* (15.09.2026 | Zahlung Eidg. Steuerverwaltung ESTV | -156.60 | Ref. 90000000073) Tj
-T* (18.09.2026 | eBill Muster Telecom AG | -83.80 | Ref. 90000000074) Tj
-T* (22.09.2026 | Gutschrift Beispiel Immobilien AG | 2’482.05 | Ref. 90000000075) Tj
-T* (25.09.2026 | Lohnzahlung Marco Beispiel | -5’803.20 | Ref. 90000000076) Tj
-T* (28.09.2026 | Zahlung Ausgleichskasse Muster | -2’604.00 | Ref. 90000000077) Tj
-T* (30.09.2026 | Kontoführungsgebühren | -15.00 | Ref. 90000000078) Tj
-T* (Schlusssaldo 30.09.2026: -20’976.69) Tj
+T* (11.09.2026 | Gutschrift Familie Huber-Beispiel | 12’994.12 | Ref. 90000000072) Tj
+T* (14.09.2026 | Debitkarte GARAGE BEISPIEL AG | -287.85 | Ref. 90000000073) Tj
+T* (15.09.2026 | Zahlung Eidg. Steuerverwaltung ESTV | -156.60 | Ref. 90000000074) Tj
+T* (18.09.2026 | eBill Muster Telecom AG | -83.80 | Ref. 90000000075) Tj
+T* (22.09.2026 | Gutschrift Beispiel Immobilien AG | 2’482.05 | Ref. 90000000076) Tj
+T* (25.09.2026 | Lohnzahlung Marco Beispiel | -5’803.20 | Ref. 90000000077) Tj
+T* (28.09.2026 | Zahlung Ausgleichskasse Muster | -2’604.00 | Ref. 90000000078) Tj
+T* (30.09.2026 | Kontoführungsgebühren | -15.00 | Ref. 90000000079) Tj
+T* (Schlusssaldo 30.09.2026: -7’982.57) Tj
 ET
 endstream
 endobj
@@ -49,5 +50,5 @@ xref
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-1514
+1599
 %%EOF

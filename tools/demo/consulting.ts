@@ -1,6 +1,7 @@
 /**
  * The story of Muster Consulting GmbH, a fictional one-person IT consultancy in Bern, for
- * January to September 2026 (the shape every demo shares is in tools/demo/kit.ts). The owner
+ * January to September 2026 (the shape every demo shares is in tools/demo/kit.ts); from July it
+ * writes its invoices in the app (consulting-invoices.ts). The owner
  * is its only employee: he pays himself a salary, bills Swiss and foreign clients, and pays
  * some expenses privately and gets them back once a month.
  *
@@ -13,6 +14,8 @@ import {
   type Company, type Demo, type ManualEntry, type Payment, type Scenario, type StatementBank, type Vendor,
 } from './kit.js';
 import type { PayrollStore } from '../../src/payroll/model.js';
+import { CONSULTING_INVOICING } from './consulting-invoices.js';
+import { invoicePayments } from './invoices.js';
 
 const COMPANY: Company = {
   name: 'Muster Consulting GmbH',
@@ -159,7 +162,8 @@ function scenario(seed: number): Scenario {
 
     // The retainer of the main Swiss client, billed at the start of each month. In March its payment
     // was booked V0-E by mistake, the code of the foreign clients; the correction is booked in April.
-    sale({
+    // From July it is invoiced in the app (consulting-invoices.ts).
+    if (m <= 6) sale({
       bank: 'raiffeisen', paid: bankDay(isoDate(2026, m, 20)), client: VENDORS.treuhand, date: bankDay(isoDate(2026, m, 2)),
       number: `${YEAR}-${mm}1`, title: `Beratungsmandat IT-Sicherheit, ${month}`, currency: 'CHF', net: 6000,
       vatCode: 'V81', text: `Beispiel Treuhand, Beratungsmandat ${month}`, ...(m === 3 ? { key: 'treuhand-march', bookedAs: 'V0-E' as const } : {}),
@@ -355,8 +359,9 @@ function scenario(seed: number): Scenario {
   }
 
   // Foreign clients: services to a recipient abroad are taxed where the recipient is (Art. 8 Abs. 1
-  // MWSTG), so no Swiss MWST; they are declared as Leistungen im Ausland (Ziffer 221).
-  for (const [date, paid, number] of [['2026-01-09', '2026-02-02', '2026-013'], ['2026-04-08', '2026-04-29', '2026-043'], ['2026-07-07', '2026-07-28', '2026-073']] as const) {
+  // MWSTG), so no Swiss MWST; they are declared as Leistungen im Ausland (Ziffer 221). From July the
+  // Munich audit is invoiced in the app (consulting-invoices.ts).
+  for (const [date, paid, number] of [['2026-01-09', '2026-02-02', '2026-013'], ['2026-04-08', '2026-04-29', '2026-043']] as const) {
     sale({
       bank: 'wise-eur', paid, client: VENDORS.maschinenbau, date, number, title: 'Sicherheitsaudit Fernwartung, Quartalspauschale',
       currency: 'EUR', net: 3800, vatCode: 'V0-E', text: 'Muster Maschinenbau, Sicherheitsaudit (Leistung im Ausland)',
@@ -461,6 +466,9 @@ function scenario(seed: number): Scenario {
     correctionEntryIds: ['treuhand-storno', 'treuhand-rebook'],
     source: 'receipts/20260302-muster-consulting-rechnung-2026-031.pdf',
   }];
+
+  // From July the invoices are written in the app, paid by their reference (consulting-invoices.ts).
+  payments.push(...invoicePayments(CONSULTING_INVOICING));
 
   return {
     payments,
@@ -577,4 +585,5 @@ export const consulting: Demo = {
   vendors: VENDORS,
   knowledge: KNOWLEDGE,
   scenario,
+  invoicing: CONSULTING_INVOICING,
 };
