@@ -370,6 +370,8 @@ export interface WageTypeDef {
   lohnausweis?: string;
   debit?: PayrollAccountRef;
   credit?: PayrollAccountRef;
+  /** The Lohnart an hourly Anstellung is paid by: the month's hours × the hourly wage. */
+  hours?: boolean;
   /** `quantity`: a person enters quantity × rate (hours × hourly wage); else an amount. */
   input?: 'amount' | 'quantity';
   computes?: WageTypeComputes;
@@ -393,8 +395,8 @@ export interface InsuranceKindDef {
   computed?: boolean;
   /** Every firm with wages has it: a month without it gets the line «unvollständig». */
   required?: boolean;
-  /** Required once the person's yearly wage passes this federal figure; below it the line is left out with the reason. */
-  requiredAbove?: string;
+  /** Required once the person's yearly wage on `base` passes the federal `figure`; below it the line is left out with the reason. */
+  requiredAbove?: { figure: string; base: string };
 }
 
 /** Where a contribution's rate comes from: the law's figure, the firm's solution, or the person's certificate. */
@@ -423,7 +425,8 @@ export interface PayrollData {
   schema: number;
   /** In print order; `stage`: where the group's lines act (the gross, the deductions, after the net, the employer's). */
   groups: Array<{ key: string; stage: 'gross' | 'deduction' | 'after' | 'employer'; label: Labels }>;
-  bases: Array<{ key: string; label: Labels }>;
+  /** `thirteenth`: the base the 13th salary is a share of. */
+  bases: Array<{ key: string; label: Labels; thirteenth?: boolean }>;
   totals: Record<'gross' | 'deductions' | 'net' | 'payout' | 'employer', Labels>;
   insurances: Record<string, InsuranceKindDef>;
   contributions: ContributionDef[];

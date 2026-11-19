@@ -76,10 +76,15 @@ function spanDays(from: string, to: string, month: string, method: string): { da
 
 /** The share of `month` the person is employed (0 when not at all). */
 export function employedFraction(e: PayrollEmployee, month: string, method: string): number {
-  return sum(entriesWithin(e.employment, firstDay(month), lastDay(month)).filter((s) => s.entry).map((s) => {
+  return employedDays(e, firstDay(month), lastDay(month), month, method);
+}
+
+/** The share of `month` within `from`..`to` the person is employed, unrounded. */
+function employedDays(e: PayrollEmployee, from: string, to: string, month: string, method: string): number {
+  return entriesWithin(e.employment, from, to).filter((s) => s.entry).reduce((acc, s) => {
     const { days, of } = spanDays(s.from, s.to, month, method);
-    return days / of;
-  }));
+    return acc + days / of;
+  }, 0);
 }
 
 const isEmployed = (e: PayrollEmployee, month: string): boolean =>
@@ -108,7 +113,8 @@ function federalOn(years: PayrollContext['years'], key: string, day: string): Fe
 /** The day the person reaches the reference age, from the year's table; undefined without a birth date or the table. */
 export function referenceAgeReached(e: PayrollEmployee, year: PayrollYearData | undefined): string | undefined {
   if (!year || !/^\d{4}-\d{2}-\d{2}$/.test(e.birthDate ?? '')) return undefined;
-  const rows = [...(year.referenceAge[e.sex ?? 'm'] ?? [])].sort((a, b) => a.bornFrom - b.bornFrom);
+  if (!e.sex) return undefined;
+  const rows = [...(year.referenceAge[e.sex] ?? [])].sort((a, b) => a.bornFrom - b.bornFrom);
   const born = Number(e.birthDate.slice(0, 4));
   const row = rows.filter((r) => r.bornFrom <= born).at(-1);
   if (!row) return undefined;
@@ -182,9 +188,9 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       const amount = whole ? base : round(base * days / of);
       add({ wageType: w.key, label: label(w), base, ...(whole ? {} : { rate: round2(days / of * 100), quantity: days }), amount, side: 'employee', source: 'employment', ...daysOf });
     } else {
-      const hourly = monthLines.filter((l) => types.get(l.wageType)?.input === 'quantity' && types.get(l.wageType)?.stage === 'gross' && types.get(l.wageType)?.bases.includes('ahv'));
+      const hourly = monthLines.filter((l) => types.get(l.wageType)?.hours);
       if (!hourly.length) {
-        const w = [...types.values()].find((t) => t.input === 'quantity' && t.group === 'lohn');
+        const w = [...types.values()].find((t) => t.hours);
         if (w) miss(w.key, 'hours', split ? { from: s.from, to: s.to } : undefined);
       }
     }
@@ -197,8 +203,9 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     for (const s of entriesWithin(r.value, from, to)) {
       if (!s.entry || !employed) continue;
       note(`employees/${e.id}/recurring/${r.wageType}`, s.entry);
-      const { days, of } = spanDays(s.from, s.to, month, settings.proration);
-      const share = days / of;
+      // Its days within the employment: a person who starts on the 16th gets half a month's flat expenses.
+      const share = employedDays(e, s.from, s.to, month, settings.proration);
+      if (share <= 0) continue;
       const v = s.entry.value;
       const line = valued(w, v, label(w), 'recurring');
       if (!line) { miss(w.key, w.input === 'quantity' ? 'quantity' : 'amount'); continue; }
@@ -208,10 +215,11 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
   }
 
   // 3. The Lohnarten added for the month.
+  const hourlyRate = spans.map((x) => x.entry?.value).find((j) => j?.kind === 'hourly')?.amount;
   for (const l of monthLines) {
     const w = types.get(l.wageType);
     if (!w) continue;
-    const line = valued(w, l, label(w), 'entered');
+    const line = valued(w, w.hours && l.rate === undefined && hourlyRate !== undefined ? { ...l, rate: hourlyRate } : l, label(w), w.hours ? 'employment' : 'entered');
     if (!line) { miss(w.key, w.input === 'quantity' ? 'quantity' : 'amount'); continue; }
     add({ ...line, ...(l.text ? { text: l.text } : {}) });
   }
@@ -232,11 +240,13 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
   const job = entryOn(e.employment, to)?.value ?? lastEntry?.value;
   const thirteenthType = [...types.values()].find((t) => t.computes === 'thirteenth');
   const leaves = !!lastEntry?.validUntil && lastEntry.validUntil >= from && lastEntry.validUntil <= to;
-  if (thirteenthType && job?.thirteenth && (job.thirteenth.months.includes(Number(month.slice(5))) || leaves)) {
+  const tb = data.bases.find((b) => b.thirteenth)?.key;
+  // December always pays out what the year owes (model.ts Employment.thirteenth).
+  if (thirteenthType && tb && job?.thirteenth && (job.thirteenth.months.includes(Number(month.slice(5))) || month.endsWith('-12') || leaves)) {
     const paidIn = earlier.filter((c) => c.lines.some((l) => l.wageType === thirteenthType.key && !l.corrects)).map((c) => c.month).at(-1);
     const since = earlier.filter((c) => !paidIn || c.month > paidIn);
-    const opening = paidIn ? 0 : e.opening?.[year]?.bases?.thirteenth ?? 0;
-    const base = round2(opening + sum(since.map((c) => c.bases.thirteenth?.month ?? 0)) + basesOf(lines, types).thirteenth);
+    const opening = paidIn ? 0 : e.opening?.[year]?.bases?.[tb] ?? 0;
+    const base = round2(opening + sum(since.map((c) => c.bases[tb]?.month ?? 0)) + (basesOf(lines, types)[tb] ?? 0));
     const rate = settings.thirteenth === 'percent' ? 8.33 : 100 / 12;
     add({ wageType: thirteenthType.key, label: label(thirteenthType), base, rate: round2(rate), amount: round(base * rate / 100), side: 'employee', source: settings.thirteenth === 'percent' ? 'thirteenth-percent' : 'thirteenth-twelfth' });
   }
@@ -244,18 +254,20 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
   // 6. The contributions, in the data's order.
   const bases = basesOf(lines, types);
   const insurancesOn = read(`employees/${e.id}/insurances`, e.insurances, to) ?? {};
-  const federalUsed = new Set<string>();
   const fig = (key: string) => {
     const f = federalOn(ctx.years, key, to);
-    if (f) federalUsed.add(key);
+    if (f) used.set(`federal/${key}|${f.validFrom}`, { path: `federal/${key}`, validFrom: f.validFrom, enteredAt: f.validFrom });
     return f;
   };
   const yearData = ctx.years?.[year];
   const reachDay = referenceAgeReached(e, yearData);
   const pensioner = !!reachDay && from > lastDay(reachDay.slice(0, 7));
   if (pensioner) facts.push({ key: 'pensioner', vars: { date: reachDay! } });
+  if (!e.sex) facts.push({ key: 'sexMissing' });
   const computed = new Map<string, number>();
   const cumulated: Record<string, { base: number; capped: number; ceiling: number }> = {};
+  /** The capped base of each base and ceiling this month: kept on the close, so the next month caps against what was used. */
+  const capped: Record<string, number> = {};
   for (const c of data.contributions) {
     const w = types.get(c.wageType);
     if (!w) continue;
@@ -296,19 +308,23 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     if (c.ceiling) {
       const ceiling = fig(c.ceiling);
       if (!ceiling) { miss(w.key, 'federal'); continue; }
-      const key = `${String(c.base)}|${c.ceiling}`;
-      const cum = cumulated[key] ??= cumulative(ctx, e, month, typeof c.base === 'string' ? c.base : '', c.wageType, settings.proration, ceiling.value);
-      const capped = Math.min(cum.base + base, cum.ceiling);
-      const own = round2(capped - cum.capped);
+      const raw = typeof c.base === 'string' ? c.base : '';
+      const key = `${raw}|${c.ceiling}`;
+      const cum = cumulated[key] ??= cumulative(ctx, e, month, raw, key, settings.proration, ceiling.value);
+      const own = round2(Math.min(cum.base + base, cum.ceiling) - cum.capped);
       if (own < base && !facts.some((f) => f.key === 'ceiling')) facts.push({ key: 'ceiling', vars: { amount: ceiling.value } });
+      capped[key] = own;
       base = own;
     }
     // The person's own figures (a pension certificate), or a rate.
     if ('person' in c.rate) {
       const cert = insurancesOn[c.insurance] as PersonInsurances['bvg'];
       if (kind?.requiredAbove) {
-        const threshold = fig(kind.requiredAbove);
-        const yearly = round2((bases.ahv ?? 0) / Math.max(fraction, 1 / 31) * 12);
+        const threshold = fig(kind.requiredAbove.figure);
+        // The yearly wage the Anstellung promises; an hourly one by this month's wage, as the fund does it.
+        const yearly = job?.kind === 'monthly'
+          ? round2(job.amount * (job.pensum ?? 100) / 100 * (12 + (job.thirteenth ? 1 : 0)))
+          : round2((bases[kind.requiredAbove.base] ?? 0) / Math.max(fraction, 1 / 31) * 12);
         if (threshold && yearly <= threshold.value && !cert) {
           if (!facts.some((f) => f.key === 'belowThreshold')) facts.push({ key: 'belowThreshold', vars: { amount: threshold.value } });
           continue;
@@ -363,7 +379,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     id: payslipId(month, e.id), employee: e.id, month,
     postingDate: settings.postingDate === 'payday' ? payday : to, payday, language: lang,
     lines, missing,
-    bases: Object.fromEntries(Object.entries(bases).map(([k, v]) => [k, { month: v, year: round2(sum(earlier.map((c) => c.bases[k]?.month ?? 0)) + (e.opening?.[year]?.bases?.[k] ?? 0) + v) }])),
+    bases: Object.fromEntries(Object.entries({ ...bases, ...capped }).map(([k, v]) => [k, { month: v, year: round2(sum(earlier.map((c) => c.bases[k]?.month ?? 0)) + (e.opening?.[year]?.bases?.[k] ?? 0) + v) }])),
     ...totals, facts, used: [...used.values()].sort((a, b) => a.path.localeCompare(b.path)),
     person: {
       name: name ? `${name.first} ${name.last}` : e.id, language: lang,
@@ -428,15 +444,18 @@ function solutionOf(firm: PayrollInsurance, person: PersonInsurances, kind: stri
  * month): the base of the closed months, the capped base their lines used, and the ceiling to date with
  * this month's share.
  */
-function cumulative(ctx: PayrollContext, e: PayrollEmployee, month: string, base: string, wageType: string, proration: string, yearly: number): { base: number; capped: number; ceiling: number } {
+function cumulative(ctx: PayrollContext, e: PayrollEmployee, month: string, base: string, key: string, proration: string, yearly: number): { base: number; capped: number; ceiling: number } {
   const year = month.slice(0, 4);
   const earlier = closedOf(ctx.history, e.id).filter((c) => c.month < month && c.month.startsWith(year));
   const opening = e.opening?.[year];
-  const months = (opening?.months ?? 0) + sum(earlier.map((c) => employedFraction(e, c.month, proration))) + employedFraction(e, month, proration);
+  const share = (m: string) => employedFraction(e, m, proration);
+  const months = (opening?.months ?? 0) + earlier.reduce((a, c) => a + share(c.month), 0) + share(month);
   const openingBase = opening?.bases?.[base] ?? 0;
+  // A month whose close kept no capped base (none of this ceiling's contributions was owed then) used at most its share of the ceiling.
+  const cappedOf = (c: PayslipClose) => c.bases[key]?.month ?? Math.min(c.bases[base]?.month ?? 0, yearly / 12 * share(c.month));
   return {
     base: round2(openingBase + sum(earlier.map((c) => c.bases[base]?.month ?? 0))),
-    capped: round2(openingBase + sum(earlier.flatMap((c) => c.lines.filter((l) => l.wageType === wageType && !l.corrects).map((l) => l.base ?? 0)))),
+    capped: round2(Math.min(openingBase, yearly / 12 * (opening?.months ?? 0)) + sum(earlier.map(cappedOf))),
     ceiling: round2(yearly / 12 * months),
   };
 }
@@ -449,7 +468,8 @@ function correctionsFor(ctx: PayrollContext, e: PayrollEmployee, month: string) 
   return ctx.history.corrections.filter((c) => {
     if (ctx.history.carriedBy.has(c.id)) return false;
     const of = ctx.history.closed.get(c.of);
-    if (!of || of.employee !== e.id || of.month >= month) return false;
+    // A correction entered before the payslip's standing close belonged to a close that was reopened since: it is void.
+    if (!of || of.employee !== e.id || of.month >= month || c.at < of.closedAt) return false;
     for (let m = nextMonth(of.month); m <= month; m = nextMonth(m)) {
       if (ctx.history.closed.has(payslipId(m, e.id))) continue;
       return m === month;

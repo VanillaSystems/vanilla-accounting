@@ -18,6 +18,7 @@
 #   lohnausweis  the field of Form 11 it is summed into
 #   debit/credit the accounts it books on; { insurance: <kind> } is that insurance's liability account
 #   input        how a person enters it: amount, or quantity and rate (hours × hourly wage)
+#   hours        the Lohnart an hourly Anstellung is paid by: its hours entered for the month × the hourly wage
 #   computes     how code fills it: monthly (the Anstellung's amount), thirteenth (the 13th salary in its
 #                payout months), contribution (a row of contributions below); absent: entered by a person
 schema: 1
@@ -38,7 +39,8 @@ groups:
   - { key: nettoabzuege, stage: after, label: { de: Nettoabzüge, fr: Déductions nettes, it: Deduzioni nette, en: Net deductions } }
   - { key: arbeitgeber, stage: employer, label: { de: Arbeitgeberbeiträge, fr: Cotisations de l'employeur, it: Contributi del datore di lavoro, en: Employer contributions } }
 
-# The bases a Lohnart counts for. Each contribution below takes one of them.
+# The bases a Lohnart counts for. Each contribution below takes one of them. `thirteenth: true`: the base
+# the 13th salary is a share of.
 bases:
   - { key: ahv, label: { de: AHV-Lohn, fr: Salaire AVS, it: Salario AVS, en: AHV wage } }
   - { key: alv, label: { de: ALV-Lohn, fr: Salaire AC, it: Salario AD, en: ALV wage } }
@@ -47,7 +49,7 @@ bases:
   - { key: ktg, label: { de: KTG-Lohn, fr: Salaire IJM, it: Salario IGM, en: KTG wage } }
   - { key: bvg, label: { de: BVG-Lohn, fr: Salaire LPP, it: Salario LPP, en: BVG wage } }
   - { key: qst, label: { de: QST-Lohn, fr: Salaire IS, it: Salario IF, en: Tax-at-source wage } }
-  - { key: thirteenth, label: { de: Basis 13. Monatslohn, fr: Base 13e salaire, it: Base 13a mensilità, en: 13th salary base } }
+  - { key: thirteenth, thirteenth: true, label: { de: Basis 13. Monatslohn, fr: Base 13e salaire, it: Base 13a mensilità, en: 13th salary base } }
 
 # The totals a payslip prints; code computes them from the lines.
 totals:
@@ -62,8 +64,8 @@ totals:
 # `rates`: what the firm's document states per solution, in %, each with its plausible range (a value
 # outside it is a warning, never a refusal). `perPerson`: the contribution is a figure of the person's
 # certificate (BVG), not a rate of the firm. `required`: every firm with wages has it, so a month without
-# it gets the line «unvollständig»; `requiredAbove`: required once the person's yearly wage passes this
-# federal figure (below it the line is left out, and the payslip says why). `computed: false`: the app
+# it gets the line «unvollständig»; `requiredAbove`: required once the person's yearly wage on `base` passes
+# the federal `figure` (below it the line is left out, and the payslip says why). `computed: false`: the app
 # does not compute it yet; a person subject to it gets the line «unvollständig» (Quellensteuer until B2).
 insurances:
   ahv:
@@ -109,7 +111,7 @@ insurances:
     fund: { de: Vorsorgeeinrichtung, fr: Institution de prévoyance, it: Istituto di previdenza, en: Pension fund }
     account: "2275"
     perPerson: true
-    requiredAbove: bvgEntryThreshold
+    requiredAbove: { figure: bvgEntryThreshold, base: ahv }
   qst:
     label: { de: Quellensteuer, fr: Impôt à la source, it: Imposta alla fonte, en: Tax at source }
     fund: { de: Kantonale Steuerverwaltung, fr: Administration cantonale des impôts, it: Amministrazione cantonale delle contribuzioni, en: Cantonal tax office }
@@ -136,7 +138,7 @@ contributions:
   - { wageType: ahv-ag, insurance: ahv, base: ahv, rate: { federal: ahvEmployer }, liable: liableFromAge, pensioner: { allowance: pensionerAllowance } }
   - { wageType: alv-ag, insurance: ahv, base: alv, rate: { federal: alvEmployer }, ceiling: alvCeiling, liable: liableFromAge, pensioner: ends }
   - { wageType: verwaltungskosten, insurance: ahv, base: { lines: [ahv-an, ahv-ag] }, rate: { insurance: adminCost } }
-  - { wageType: fak-ag, insurance: fak, base: ahv, rate: { insurance: employer } }
+  - { wageType: fak-ag, insurance: fak, base: ahv, rate: { insurance: employer }, liable: liableFromAge, pensioner: { allowance: pensionerAllowance } }
   - { wageType: bu-ag, insurance: uvg, base: uvg, rate: { insurance: bu }, ceiling: uvgCeiling }
   - { wageType: nbu-ag, insurance: uvg, base: uvg, rate: { insurance: nbu }, share: { employer: nbuEmployerShare }, ceiling: uvgCeiling, minHours: nbuMinHours }
   - { wageType: uvgz-ag, insurance: uvgz, base: uvgz, rate: { insurance: employer } }
@@ -149,14 +151,14 @@ rounding: [0.05, 0.01]
 wageTypes:
   # Lohn
   - { key: monatslohn, group: lohn, label: { de: Monatslohn, fr: Salaire mensuel, it: Salario mensile, en: Monthly salary }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091", computes: monthly }
-  - { key: stundenlohn, group: lohn, label: { de: Stundenlohn, fr: Salaire horaire, it: Salario orario, en: Hourly wage }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091", input: quantity }
+  - { key: stundenlohn, group: lohn, hours: true, label: { de: Stundenlohn, fr: Salaire horaire, it: Salario orario, en: Hourly wage }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091", input: quantity }
   - { key: taglohn, group: lohn, label: { de: Taglohn, fr: Salaire journalier, it: Salario giornaliero, en: Daily wage }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091", input: quantity }
   - { key: lohn-krankheit, group: lohn, label: { de: Lohn bei Krankheit, fr: Salaire en cas de maladie, it: Salario in caso di malattia, en: Wage during illness }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
   - { key: lohn-unfall, group: lohn, label: { de: Lohn bei Unfall, fr: Salaire en cas d'accident, it: Salario in caso d'infortunio, en: Wage after an accident }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
   - { key: ueberstunden, group: lohn, label: { de: Überstunden 125 %, fr: Heures supplémentaires 125 %, it: Ore straordinarie 125 %, en: Overtime 125 % }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst], lohnausweis: "1", debit: "5000", credit: "1091", input: quantity }
   - { key: ferienentschaedigung, group: lohn, label: { de: Ferienentschädigung, fr: Indemnité de vacances, it: Indennità per vacanze, en: Holiday pay }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
   - { key: feiertagsentschaedigung, group: lohn, label: { de: Feiertagsentschädigung, fr: Indemnité de jours fériés, it: Indennità per giorni festivi, en: Public holiday pay }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
-  - { key: unbezahlter-urlaub, group: lohn, label: { de: Unbezahlter Urlaub, fr: Congé non payé, it: Congedo non pagato, en: Unpaid leave }, sign: "-", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
+  - { key: unbezahlter-urlaub, group: lohn, label: { de: Unbezahlter Urlaub, fr: Congé non payé, it: Congedo non pagato, en: Unpaid leave }, sign: "-", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "1091", credit: "5000" }
   # Zulagen
   - { key: funktionszulage, group: zulagen, label: { de: Funktionszulage, fr: Allocation de fonction, it: Indennità di funzione, en: Function allowance }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst, thirteenth], lohnausweis: "1", debit: "5000", credit: "1091" }
   - { key: schichtzulage, group: zulagen, label: { de: Schichtzulage, fr: Allocation de travail en équipe, it: Indennità per lavoro a turni, en: Shift allowance }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst], lohnausweis: "1", debit: "5000", credit: "1091" }

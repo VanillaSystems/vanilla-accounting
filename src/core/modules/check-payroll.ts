@@ -78,10 +78,15 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
   for (const w of p.wageTypes) if (w.computes === 'contribution' && !computed.has(w.key)) add(F, `wageTypes.${w.key}`, 'marked computes: contribution, but no contribution computes it');
   for (const r of p.rounding) if (!(r > 0)) add(F, 'rounding', `${r} is no step`);
 
+  for (const [k, ins] of Object.entries(p.insurances)) {
+    if (ins.requiredAbove && !bases.has(ins.requiredAbove.base)) add(F, `insurances.${k}.requiredAbove.base`, `base "${ins.requiredAbove.base}" does not exist`);
+  }
+  if (p.bases.filter((b) => b.thirteenth).length > 1) add(F, 'bases', 'at most one base is the 13th salary\'s');
   const federal = new Set(p.contributions.flatMap((c) => [
     ...('federal' in c.rate ? [c.rate.federal] : []), c.ceiling, c.liable, c.minHours,
     ...(typeof c.pensioner === 'object' ? [c.pensioner.allowance] : []),
   ]).filter((k): k is string => !!k));
+  for (const ins of Object.values(p.insurances)) if (ins.requiredAbove) federal.add(ins.requiredAbove.figure);
   for (const [year, y] of Object.entries(j.payrollYears ?? {})) {
     const file = `payroll/${year}.yaml`;
     if (String(y.year) !== year) add(file, 'year', `says ${y.year}`);
