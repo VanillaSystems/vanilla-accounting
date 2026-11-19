@@ -86,7 +86,8 @@ totals:
 # certificate (BVG), not a rate of the firm. `required`: every firm with wages has it, so a month without
 # it gets the line «unvollständig»; `requiredAbove`: required once the person's yearly wage on `base` passes
 # the federal `figure` (below it the line is left out, and the payslip says why). `computed: false`: the app
-# does not compute it yet; a person subject to it gets the line «unvollständig» (Quellensteuer until B2).
+# does not compute it yet; a person subject to it gets the line «unvollständig». `tariff`: the tax is looked up
+# in a tariff file per region and year (taxAtSource below), never a rate of the firm.
 insurances:
   ahv:
     label: { de: AHV/IV/EO/ALV, fr: AVS/AI/APG/AC, it: AVS/AI/IPG/AD, en: AHV/IV/EO/ALV }
@@ -145,7 +146,13 @@ insurances:
     fund: { de: Kantonale Steuerverwaltung, fr: Administration cantonale des impôts, it: Amministrazione cantonale delle contribuzioni, en: Cantonal tax office }
     nameOf: { de: Name der kantonalen Steuerverwaltung, fr: Nom de l’administration cantonale des impôts, it: Nome dell’amministrazione cantonale delle contribuzioni, en: Name of the cantonal tax office }
     account: "2279"
-    computed: false
+    # Computed from the canton's tariff file (taxAtSource below), not from a rate of the firm. A firm's
+    # insurance of this kind holds one solution per canton (its code: the canton, ZH), whose `provision`
+    # replaces the file's commission (a paper settlement, a canton's own rule); absent: the file's rate for
+    # an electronic settlement.
+    tariff: true
+    rates:
+      provision: { label: { de: Bezugsprovision, fr: Commission de perception, it: Provvigione di riscossione, en: Collection commission }, range: [0, 4], note: "DBG Art. 88 Abs. 4, StHG Art. 37 Abs. 3: the canton sets it, 1 to 2 % in the tariff files of 2026" }
 
 # What code computes on every payslip, in this order. `rate`: a figure of the law (`federal: <key>` of
 # payroll/<year>.yaml), a rate of the firm's solution (`insurance: <rate key>`), or the person's
@@ -254,7 +261,7 @@ wageTypes:
   - { key: ktg-an, group: abzuege, label: { de: Krankentaggeld, fr: Indemnités journalières maladie, it: Indennità giornaliera malattia, en: Sick pay insurance }, sign: "-", bases: [], lohnausweis: "15", debit: "1091", credit: { insurance: ktg }, computes: contribution }
   - { key: bvg-an, group: abzuege, label: { de: BVG, fr: LPP, it: LPP, en: BVG }, sign: "-", bases: [], lohnausweis: "10.1", debit: "1091", credit: { insurance: bvg }, computes: contribution }
   - { key: bvg-einkauf, group: abzuege, label: { de: BVG-Einkauf, fr: Rachat LPP, it: Riscatto LPP, en: BVG buy-in }, sign: "-", bases: [], lohnausweis: "10.2", debit: "1091", credit: { insurance: bvg } }
-  # Quellensteuer (computed from phase B2; until then «unvollständig» for a person subject to it)
+  # Quellensteuer: computed from the canton's tariff file (taxAtSource below)
   - { key: quellensteuer, group: quellensteuer, label: { de: Quellensteuer, fr: Impôt à la source, it: Imposta alla fonte, en: Tax at source }, sign: "-", bases: [], lohnausweis: "12", debit: "1091", credit: { insurance: qst }, computes: contribution }
   # Familienzulagen: no gross for AHV, counted for the tax at source; paid with the wage, refunded by the FAK. A child's
   # allowance is the FAK's decision (Mitarbeitende › Kinder); `allowance.minimum` the federal minimum it is checked
@@ -282,6 +289,9 @@ wageTypes:
   - { key: nbu-ag, group: arbeitgeber, side: employer, label: { de: NBU Arbeitgeber, fr: ANP employeur, it: INP datore di lavoro, en: NBU employer }, sign: "+", bases: [], debit: "5730", credit: { insurance: uvg }, computes: contribution }
   - { key: uvgz-ag, group: arbeitgeber, side: employer, label: { de: UVG-Zusatz Arbeitgeber, fr: LAA complémentaire employeur, it: LAINF complementare datore di lavoro, en: Supplementary accident employer }, sign: "+", bases: [], debit: "5730", credit: { insurance: uvgz }, computes: contribution }
   - { key: ktg-ag, group: arbeitgeber, side: employer, label: { de: Krankentaggeld Arbeitgeber, fr: Indemnités journalières maladie employeur, it: Indennità giornaliera malattia datore di lavoro, en: Sick pay insurance employer }, sign: "+", bases: [], debit: "5740", credit: { insurance: ktg }, computes: contribution }
+  # The commission the canton leaves the employer on the tax it withholds (Bezugsprovision): taken off what is
+  # owed on 2279 and credited to the personnel expense it compensates (§22 decision 101); not on the payout.
+  - { key: bezugsprovision, group: arbeitgeber, side: employer, label: { de: Bezugsprovision Quellensteuer, fr: Commission de perception IS, it: Provvigione di riscossione IF, en: Tax at source commission }, sign: "-", bases: [], debit: { insurance: qst }, credit: "5890", computes: commission }
   - { key: bvg-ag, group: arbeitgeber, side: employer, label: { de: BVG Arbeitgeber, fr: LPP employeur, it: LPP datore di lavoro, en: BVG employer }, sign: "+", bases: [], debit: "5720", credit: { insurance: bvg }, computes: contribution }
 
 # The funds' and insurers' documents a firm sets its Sozialversicherungen up from (docs/specs/payroll.md §6.1 step 2,
@@ -311,6 +321,60 @@ setupDocuments:
   toModel: [Beitrag, Beiträge, Sparbeitrag, Risikobeitrag, Arbeitnehmer, Arbeitgeber, Versicherte Person, Prämie, Prämiensatz, Lösung, Kategorie, Cotisation, Cotisations, Employé, Employeur, Personne assurée, Prime, Solution, Contributo, Contributi, Dipendente, Datore di lavoro, Persona assicurata, Premio, Soluzione, Contribution, Contributions, Employee, Employer, Insured person, Premium]
   notToModel: [lohn, löhne, gehalt, salär, salaire, salari, salary, wage, verdienst, revenu, reddito, einkommen, income, guthaben, avoir, avere, geb., geboren, geburt, naissance, nascita, birth, zivilstand, état civil, stato civile, civil status, AHV-Nr, No AVS, N. AVS]
 
+# The tax at source (Quellensteuer, docs/specs/payroll.md §3f, phase B2): the employer deducts it by the
+# tariff file of the canton, which the ESTV publishes per canton and year as fixed-width records (one per
+# tariff code, number of children, church tax and monthly income bracket). The app fetches a file on demand
+# into the workspace's data/qst/<year>/ (never git) and keeps every version by its checksum; a payslip
+# names the file's date. `file.url`: where the file of a canton and year lies ({year}, {yy}, {canton} in
+# lower case); `file.archive`: the zip of every canton for a past year. `rounding`: the tax is rounded
+# commercially to 5 Rappen (Arbeitsgruppe Quellensteuern, FAQ KS 45, Frage 5).
+# `aperiodic`: the Lohnausweis fields whose amounts are aperiodic (FAQ KS 45, Frage 14: fields 3, 4, 5):
+# added to the rate-determining income of the month as they are, never extrapolated; every other line of
+# the base is periodic. `partMonth`: a month the person enters or leaves extrapolates the periodic income to
+# this many days (KS 45 Ziff. 6.3, FAQ Frage 6 and 15). `provision`: the file's codes of the commission.
+# `regions`: each canton with the model it applies (ESTV KS 45 Ziff. 3; Kanton Aargau, «Info
+# Quellensteuerverfahren 2021», Ziff. 3): the monthly model in 21 cantons, the annual model in FR, GE, TI,
+# VD, VS. The app computes the monthly model; a person of a canton on the annual model gets the line
+# «unvollständig» (§22 decision 102).
+taxAtSource:
+  file:
+    url: "https://www.estv2.admin.ch/qst/{year}/loehne/tar{yy}{canton}.zip"
+    archive: "https://www.estv2.admin.ch/qst/archiv/tar{year}.zip"
+    page: "https://www.estv.admin.ch/de/quellensteuertarife-import-in-lohnbuchhaltungssysteme"
+    format: "ESTV, Aufbau und Recordformate der Quellensteuer-Tarife für den Import in Lohnbuchhaltungssysteme, gültig ab 1.1.2025 (unchanged for 2027)"
+  rounding: 0.05
+  aperiodic: ["3", "4", "5"]
+  partMonth: 30
+  provision: { electronic: PEL, paper: PPA }
+  source: "DBG Art. 83-88, QStV (SR 642.118.2), ESTV Kreisschreiben Nr. 45; FAQ KS 45 der Arbeitsgruppe Quellensteuern (2026)"
+  regions:
+    AG: { model: monthly }
+    AI: { model: monthly }
+    AR: { model: monthly }
+    BE: { model: monthly }
+    BL: { model: monthly }
+    BS: { model: monthly }
+    FR: { model: annual }
+    GE: { model: annual }
+    GL: { model: monthly }
+    GR: { model: monthly }
+    JU: { model: monthly }
+    LU: { model: monthly }
+    NE: { model: monthly }
+    NW: { model: monthly }
+    OW: { model: monthly }
+    SG: { model: monthly }
+    SH: { model: monthly }
+    SO: { model: monthly }
+    SZ: { model: monthly }
+    TG: { model: monthly }
+    TI: { model: annual }
+    UR: { model: monthly }
+    VD: { model: annual }
+    VS: { model: annual }
+    ZG: { model: monthly }
+    ZH: { model: monthly }
+
 # The words of the payroll's documents (payslip, Lohnkonto, Lohnausweis), in the person's language: a
 # document prints from here, never from the app's UI dictionaries (docs/specs/payroll.md §12.2).
 documents:
@@ -334,6 +398,7 @@ documents:
   sourceFederal: { de: "Bundeswert {year}", fr: "Valeur fédérale {year}", it: "Valore federale {year}", en: "Federal figure {year}" }
   sourceSolution: { de: "Lösung {code}", fr: "solution {code}", it: "soluzione {code}", en: "solution {code}" }
   sourceCertificate: { de: Vorsorgeausweis, fr: Certificat de prévoyance, it: Certificato di previdenza, en: Pension certificate }
+  sourceTariff: { de: "Tarif {region} {year} vom {date} · {code} · satzbestimmend {income}", fr: "Barème {region} {year} du {date} · {code} · revenu déterminant {income}", it: "Tariffa {region} {year} del {date} · {code} · reddito determinante {income}", en: "Tariff {region} {year} of {date} · {code} · rate-determining {income}" }
 
 # The Lohnausweis (Form 11, ESTV/SSK Wegleitung 2026): its numbered fields in print order, each with its
 # label in the person's language. `sum`: computed from other fields (8 = 1 to 7; 11 = 8 less 9 and 10);

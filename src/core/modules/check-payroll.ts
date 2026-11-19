@@ -94,7 +94,7 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
     if (!kind) add(F, `${at}.insurance`, `insurance "${c.insurance}" does not exist`);
     if (typeof c.base === 'string') { if (!bases.has(c.base)) add(F, `${at}.base`, `base "${c.base}" does not exist`); }
     else for (const l of c.base.lines) if (!p.contributions.slice(0, i).some((x) => x.wageType === l)) add(F, `${at}.base`, `"${l}" is no earlier contribution`);
-    if ('insurance' in c.rate && kind && kind.computed !== false && !kind.rates?.[c.rate.insurance]) add(F, `${at}.rate`, `insurance "${c.insurance}" states no rate "${c.rate.insurance}"`);
+    if ('insurance' in c.rate && kind && kind.computed !== false && !kind.tariff && !kind.rates?.[c.rate.insurance]) add(F, `${at}.rate`, `insurance "${c.insurance}" states no rate "${c.rate.insurance}"`);
     if ('person' in c.rate && kind && !kind.perPerson) add(F, `${at}.rate`, `insurance "${c.insurance}" is not per person`);
     if (c.share && kind && !kind.rates?.[c.share.employer]) add(F, `${at}.share`, `insurance "${c.insurance}" states no rate "${c.share.employer}"`);
   });
@@ -116,6 +116,24 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
   if (liable && !p.contributions.some((c) => c.wageType === liable.contribution)) add(F, 'declarations.liable.contribution', `"${liable.contribution}" is no contribution`);
   if (liable && !bases.has(liable.base)) add(F, 'declarations.liable.base', `base "${liable.base}" does not exist`);
   for (const r of p.rounding) if (!(r > 0)) add(F, 'rounding', `${r} is no step`);
+  // A commission is taken on the tax of a tariff kind: the tax at source must say how, and the kind must be one.
+  const tariffKinds = Object.entries(p.insurances).filter(([, k]) => k.tariff).map(([k]) => k);
+  if (tariffKinds.length && !p.taxAtSource) add(F, 'taxAtSource', 'missing: an insurance kind is tariff: true');
+  p.wageTypes.forEach((w, i) => {
+    if (w.computes !== 'commission') return;
+    const ref = [w.debit, w.credit].find((a) => a && typeof a === 'object') as { insurance: string } | undefined;
+    if (!ref || !p.insurances[ref.insurance]?.tariff) add(F, `wageTypes.${i}`, 'a commission books against a tariff kind\'s account');
+  });
+  if (p.taxAtSource) {
+    const t = p.taxAtSource;
+    for (const k of ['{year}', '{canton}']) if (!t.file?.url?.includes(k)) add(F, 'taxAtSource.file.url', `names no ${k}`);
+    if (!(t.rounding > 0)) add(F, 'taxAtSource.rounding', 'a step');
+    if (!(t.partMonth > 0)) add(F, 'taxAtSource.partMonth', 'a number of days');
+    if (!t.provision?.electronic) add(F, 'taxAtSource.provision.electronic', 'missing');
+    if (!t.source?.trim()) add(F, 'taxAtSource.source', 'missing');
+    for (const [r, x] of Object.entries(t.regions ?? {})) if (x.model !== 'monthly' && x.model !== 'annual') add(F, `taxAtSource.regions.${r}.model`, 'monthly or annual');
+    for (const f of t.aperiodic ?? []) if (p.lohnausweis && !p.lohnausweis.fields.some((x) => x.key === f)) add(F, 'taxAtSource.aperiodic', `field "${f}" does not exist`);
+  }
 
   for (const [k, ins] of Object.entries(p.insurances)) {
     if (ins.requiredAbove && !bases.has(ins.requiredAbove.base)) add(F, `insurances.${k}.requiredAbove.base`, `base "${ins.requiredAbove.base}" does not exist`);

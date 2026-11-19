@@ -250,7 +250,16 @@ function insurancesValue(v: unknown, store: PayrollStore, data: PayrollData): Pe
 
 function taxValue(v: unknown): TaxAtSource {
   if (!isObj(v) || typeof v.subject !== 'boolean') return bad('Quellensteuer: pflichtig oder nicht.');
-  return clean({ subject: v.subject, canton: optStr(v.canton)?.toUpperCase(), municipality: optStr(v.municipality), code: optStr(v.code), church: typeof v.church === 'boolean' ? v.church : undefined });
+  const code = optStr(v.code)?.toUpperCase().replace(/\s+/g, '');
+  // A tariff code is a letter, the children (or a second letter) and, optionally, the church tax: A0, A0N, B2Y, G9N.
+  if (code !== undefined && !/^[A-Z][0-9A-Z][NY]?$/.test(code)) bad(`Quellensteuer: «${code}» ist kein Tarifcode (etwa A0N, B2Y).`, 'code');
+  const o = v.otherEmployment;
+  const other = o === undefined || o === null || o === '' || o === 'none' ? undefined
+    : o === 'unknown' ? 'unknown' as const
+    : isObj(o) && o.pensum !== undefined && o.pensum !== '' ? { pensum: num(o.pensum, 'Pensum der anderen Stellen', 0) }
+    : isObj(o) && o.income !== undefined && o.income !== '' ? { income: num(o.income, 'Einkommen der anderen Stellen', 0) }
+    : bad('Quellensteuer: andere Stellen: keine, unbekannt, ein Pensum oder ein Einkommen.');
+  return clean({ subject: v.subject, canton: optStr(v.canton)?.toUpperCase(), municipality: optStr(v.municipality), code, church: typeof v.church === 'boolean' ? v.church : undefined, otherEmployment: other });
 }
 
 function recurringValue(v: unknown, quantity: boolean) {
@@ -597,7 +606,9 @@ function differencesOf(ctx: Pick<PayrollContext, 'data' | 'store'>, before: Pick
   }
   const contribution = (d: { wageType: string }) => types.get(d.wageType)?.computes === 'contribution';
   const wage = out.some((d) => !contribution(d) && (types.get(d.wageType)?.bases.length ?? 0) > 0);
-  return out.map((d) => ({ ...d, carry: !(wage && contribution(d)) }));
+  // A commission follows the tax it is taken on: the month that carries the tax's correction takes it again (§22 decision 101).
+  const commission = (d: { wageType: string }) => types.get(d.wageType)?.computes === 'commission';
+  return out.map((d) => ({ ...d, carry: !(wage && contribution(d)) && !commission(d) }));
 }
 
 /**
@@ -605,12 +616,17 @@ function differencesOf(ctx: Pick<PayrollContext, 'data' | 'store'>, before: Pick
  * with the values before the change and once with them after, so only the change's own difference shows.
  */
 export function affectedBy(ctx: PayrollContext, next: PayrollStore, isClosed: (day: string) => boolean = () => false): Affected[] {
+  return affectedBetween(ctx, { ...ctx, store: next }, isClosed);
+}
+
+/** The closed payslips `after` computes otherwise than `before` (another store, another tariff file), each computed as if open. */
+export function affectedBetween(ctx: PayrollContext, next: PayrollContext, isClosed: (day: string) => boolean = () => false): Affected[] {
   const out: Affected[] = [];
   for (const c of ctx.history.closed.values()) {
     const history = withoutClose(ctx.history, c.id);
     const before = computePayslip({ ...ctx, history }, c.employee, c.month);
-    const after = computePayslip({ ...ctx, store: next, history }, c.employee, c.month);
-    const differences = differencesOf({ data: ctx.data, store: next }, before, after);
+    const after = computePayslip({ ...next, history }, c.employee, c.month);
+    const differences = differencesOf({ data: ctx.data, store: next.store }, before, after);
     if (differences.length) out.push({ payslip: c.id, employee: c.employee, name: c.person.name, month: c.month, postingDate: c.postingDate, closedPeriod: isClosed(c.postingDate), differences });
   }
   return out.sort((a, b) => a.month.localeCompare(b.month) || a.name.localeCompare(b.name));

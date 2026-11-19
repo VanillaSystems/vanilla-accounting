@@ -366,8 +366,9 @@ export type PayrollAccountRef = string | { insurance: string };
  * How code fills a Lohnart: the Anstellung's monthly amount, the 13th in its payout months, a row of
  * `contributions`; for an hourly Anstellung the holiday surcharge on its hours (`holiday`) and the public-holiday
  * surcharge its contract names (`publicHoliday`); the wage an absence takes off (`absence`, `payroll.yaml absences`).
+ * A commission on the tax a tariff kind withholds (`commission`, src/payroll/tax-at-source.ts).
  */
-export type WageTypeComputes = 'monthly' | 'thirteenth' | 'contribution' | 'holiday' | 'publicHoliday' | 'absence';
+export type WageTypeComputes = 'monthly' | 'thirteenth' | 'contribution' | 'holiday' | 'publicHoliday' | 'absence' | 'commission';
 
 /** One Lohnart of payroll.yaml (docs/specs/payroll.md §5.3): code reads only these flags, never the key. */
 export interface WageTypeDef {
@@ -438,6 +439,8 @@ export interface InsuranceKindDef {
   perPerson?: boolean;
   /** false: not computed by the app yet; a person subject to it gets the line «unvollständig». */
   computed?: boolean;
+  /** Looked up in a tariff file per region and year (`taxAtSource`), not a rate of the firm; a firm's solution of it is a region. */
+  tariff?: boolean;
   /** Every firm with wages has it: a month without it gets the line «unvollständig». */
   required?: boolean;
   /** Required once the person's yearly wage on `base` passes the federal `figure`; below it the line is left out with the reason. */
@@ -514,7 +517,26 @@ export interface PayrollData {
    */
   setupDocuments?: { kinds: Record<string, string[]>; numbers: Partial<Record<'memberNumber' | 'contractNumber', string[]>>; rates: Record<string, Record<string, string[]>>; toModel?: string[]; notToModel: string[] };
   /** The words of the payroll's documents, in each language. */
-  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate' | 'holidays' | 'holidaysMinimum', Labels>;
+  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate' | 'holidays' | 'holidaysMinimum' | 'sourceTariff', Labels>;
+  /** The tax at source by tariff files (payroll.yaml `taxAtSource`); absent: the jurisdiction has none. */
+  taxAtSource?: TaxAtSourceData;
+}
+
+/** How the tax at source is computed, and where its tariff files lie (payroll.yaml `taxAtSource`). */
+export interface TaxAtSourceData {
+  /** `url`, `archive`: templates with {year}, {yy}, {canton} (lower case); `page`, `format`: where a person reads about them. */
+  file: { url: string; archive?: string; page?: string; format?: string };
+  /** The step the tax is rounded to. */
+  rounding: number;
+  /** The annual wage statement's fields whose lines are aperiodic: added to the rate-determining income as they are. */
+  aperiodic: string[];
+  /** The days a month a person enters or leaves extrapolates its periodic income to. */
+  partMonth: number;
+  /** The file's codes of the commission, for an electronic and a paper settlement. */
+  provision: { electronic: string; paper?: string };
+  source: string;
+  /** Each region with the model it applies; the app computes `monthly`. */
+  regions: Record<string, { model: 'monthly' | 'annual' }>;
 }
 
 /** One figure of the law: its value from a day, with its source. */

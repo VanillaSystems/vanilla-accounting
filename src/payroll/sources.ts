@@ -11,7 +11,8 @@ import type { PayrollInsurance, PayslipLine, UsedEntry } from './model.js';
 export type LineSource =
   | { kind: 'federal'; year: string; cite: Labels }
   | { kind: 'solution'; insurer: string; code?: string }
-  | { kind: 'certificate'; insurer: string };
+  | { kind: 'certificate'; insurer: string }
+  | { kind: 'tariff'; region: string; year: string; created: string; code: string; income: number; fileOnly?: boolean };
 
 /** The head of a figure's source: its articles, before the first explanation or the publication in brackets. */
 export const citeOf = (source: string): string => source.split(/[:(]/)[0].trim();
@@ -30,7 +31,7 @@ export function citesOf(row: Pick<FederalFigure, 'source' | 'cite'>): Labels {
  * wage, a correction or the 13th (their own words say where they come from).
  */
 export function lineSource(
-  line: Pick<PayslipLine, 'wageType' | 'source'>, slip: { month: string; used: readonly UsedEntry[] },
+  line: Pick<PayslipLine, 'wageType' | 'source' | 'tariff'>, slip: { month: string; used: readonly UsedEntry[] },
   data: Pick<PayrollData, 'contributions'>, years: Readonly<Record<string, PayrollYearData>> | undefined,
   insurances: ReadonlyArray<Pick<PayrollInsurance, 'id' | 'name'>>,
 ): LineSource | undefined {
@@ -38,6 +39,13 @@ export function lineSource(
   if (at < 0) return undefined;
   const kind = line.source.slice(0, at);
   const key = line.source.slice(at + 1);
+  // The tax at source: the region's file, its date, the code and the rate-determining income it was looked up with.
+  if (kind === 'tariff' && line.tariff) {
+    const t = line.tariff;
+    // The commission names only the file its rate comes from; the tax names the code and the income it was looked up with.
+    const tax = data.contributions.some((c) => c.wageType === line.wageType);
+    return { kind: 'tariff', region: t.region, year: key.split(':')[1] ?? slip.month.slice(0, 4), created: t.created, code: t.code, income: t.income, ...(tax ? {} : { fileOnly: true }) };
+  }
   if (kind === 'federal') {
     const year = slip.month.slice(0, 4);
     const rows = years?.[year]?.figures[key];
@@ -60,11 +68,17 @@ export function lineSource(
 }
 
 /** The source in words of `lang`, from the jurisdiction's document words. */
-export function sourceText(s: LineSource, documents: Pick<PayrollData['documents'], 'sourceFederal' | 'sourceSolution' | 'sourceCertificate'>, lang: keyof Labels): string {
+const day = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`;
+const amount = (x: number) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(x);
+
+export function sourceText(s: LineSource, documents: Pick<PayrollData['documents'], 'sourceFederal' | 'sourceSolution' | 'sourceCertificate'> & Partial<Pick<PayrollData['documents'], 'sourceTariff'>>, lang: keyof Labels): string {
   const w = (l: Labels) => l[lang] ?? l.de;
   switch (s.kind) {
     case 'federal': return `${w(documents.sourceFederal).replace('{year}', s.year)} · ${w(s.cite)}`;
     case 'solution': return s.code ? `${s.insurer}, ${w(documents.sourceSolution).replace('{code}', s.code)}` : s.insurer;
     case 'certificate': return `${w(documents.sourceCertificate)} ${s.insurer}`;
+    case 'tariff': return documents.sourceTariff
+      ? (s.fileOnly ? w(documents.sourceTariff).split(' · ')[0] : w(documents.sourceTariff)).replace('{region}', s.region).replace('{year}', s.year).replace('{date}', day(s.created)).replace('{code}', s.code).replace('{income}', amount(s.income))
+      : `${s.region} ${s.year} ${s.code}`;
   }
 }
