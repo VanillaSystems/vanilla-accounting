@@ -50,6 +50,7 @@ export function PayrollChecks({ d, nav }: { d: YearCloseView; nav: Nav }) {
           return (
             <Fact key={i.id} id={`insurer-${i.id}`} state={state} title={<>{acc(i.account)} · {i.name}</>}>
               <span>{t('close.payroll.insurer', { accrued: fmt(i.accrued), paid: fmt(i.paid), open: fmt(i.open) })}</span>
+              {i.compare?.before ? <span>{t('close.payroll.insurerBefore', { amount: fmt(i.compare.before), until: formatDate(i.compare.beforeUntil ?? `${year}-12-31`) })}</span> : null}
               {i.settlement.length
                 ? <span>{t('close.payroll.settled', { refs: i.settlement.map((s) => s.ref).join(', ') })}</span>
                 : state === 'open' && <span>{t('close.payroll.noSettlement')}</span>}
@@ -105,6 +106,7 @@ function Wages({ p, acc, link, ledger }: Parts) {
     <>
       <Fact id="wages" state={wagesState(p)!} title={<>{acc(w.account)} {t('close.payroll.ofYear')}</>}>
         <span>{t('close.payroll.wages', { booked: fmt(w.booked), payslips: fmt(expected) })}</span>
+        {w.opening && <span>{t(w.opening.difference ? 'close.payroll.openingDiffers' : 'close.payroll.openingAgrees', { month: monthText(w.opening.through), booked: fmt(w.opening.booked), expected: fmt(w.opening.expected), difference: signed(w.opening.difference) })}</span>}
         {w.other !== 0 && <span>{t('close.payroll.wagesOther', { amount: fmt(w.other) })}</span>}
         {w.other !== 0 && <span className="chklinks">{link(ledger(w.account), t('close.payroll.ledger', { account: w.account }))}</span>}
       </Fact>

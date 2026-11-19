@@ -7770,6 +7770,9 @@ export default {
     "close.payroll.withheld": "Opening {opening} · withheld {withheld} · paid to the funds {paid} · at 31.12. {balance}",
     "close.payroll.withheldOther": "other entries {amount}",
     "close.payroll.uncleared": { one: "{n} contribution payment does not take the employees’ share off {account}: it is still there, and the expense that much too high", other: "{n} contribution payments do not take the employees’ share off {account}: it is still there, and the expense that much too high" },
+    "close.payroll.insurerBefore": "paid for the months before payroll, up to {until} (not on the account): {amount}",
+    "close.payroll.openingAgrees": "Opening through {month}: booked {booked}, as the opening’s gross",
+    "close.payroll.openingDiffers": "Opening through {month}: booked {booked}, the opening’s gross {expected}: difference {difference}",
     // payroll-yearend:end
   },
 } satisfies Locale;

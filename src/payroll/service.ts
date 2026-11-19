@@ -9,7 +9,8 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { ClosedPeriodError, loadBooks, periodLock, receiptFile, type Books } from '../books/store.js';
-import { chart, payroll, payrollYears, setup } from '../engines/index.js';
+import { baseCurrency, chart, payroll, payrollYears, setup } from '../engines/index.js';
+import type { BankTransaction } from '../types/index.js';
 import { writeAtomic, idSource, sha256 } from '../invoices/store.js';
 import { accountsOf } from '../workspace/reads.js';
 import { setAccountName } from '../workspace/accounts-write.js';
@@ -336,7 +337,7 @@ export function keepPaymentFile(ws: Pick<Workspace, 'paths'>, record: PaymentFil
  * The payroll's checks of the year's close (§6.7, A7) from the workspace as it is now: undefined where the
  * jurisdiction has no payroll, and where the year has neither a payslip nor a wage booked (nothing to check).
  */
-export function payrollYearEndOf(ws: Workspace, year: string, books: Books = loadBooks(ws)): PayrollYearEnd | undefined {
+export function payrollYearEndOf(ws: Workspace, year: string, books: Books = loadBooks(ws), businessOf?: (tx: BankTransaction) => string | undefined): PayrollYearEnd | undefined {
   if (!payroll()) return undefined;
   const ctx = payrollContext(ws);
   const wages = setup().wages;
@@ -346,6 +347,7 @@ export function payrollYearEndOf(ws: Workspace, year: string, books: Books = loa
     issued: lohnausweisSnapshots(ws, year), isDebitNormal: (a) => chart().isDebitNormal(a),
     ...(wages?.account ? { wageAccount: wages.account } : {}), ...(wages?.deductions ? { deductionsAccount: wages.deductions } : {}),
     withheldPayees: new Set(issues?.withheldPayees ?? []), withheldShares: issues?.withheldShares ?? {},
+    ...(businessOf ? { businessOf } : {}), currency: baseCurrency(),
   });
   const something = out.clearing || out.insurers.length || out.wages || out.statements.length || out.withheld;
   return something ? out : undefined;

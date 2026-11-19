@@ -7768,6 +7768,9 @@ export const messages = {
   "close.payroll.withheld": "Eröffnung {opening} · einbehalten {withheld} · an die Kassen bezahlt {paid} · am 31.12. {balance}",
   "close.payroll.withheldOther": "übrige Buchungen {amount}",
   "close.payroll.uncleared": { one: "{n} Beitragszahlung zieht den Arbeitnehmeranteil nicht von {account} ab: er steht noch dort, der Aufwand ist um so viel zu hoch", other: "{n} Beitragszahlungen ziehen den Arbeitnehmeranteil nicht von {account} ab: er steht noch dort, der Aufwand ist um so viel zu hoch" },
+  "close.payroll.insurerBefore": "für die Monate vor der Lohnbuchhaltung bis {until} bezahlt (nicht auf dem Konto): {amount}",
+  "close.payroll.openingAgrees": "Eröffnung bis {month}: gebucht {booked}, wie der Bruttolohn der Eröffnung",
+  "close.payroll.openingDiffers": "Eröffnung bis {month}: gebucht {booked}, der Bruttolohn der Eröffnung {expected}: Differenz {difference}",
   // payroll-yearend:end
 } as const;
 

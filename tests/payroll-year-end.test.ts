@@ -107,6 +107,7 @@ test('an insurer whose year is open without a final statement is a fact to book;
   const { input } = year({ unpaidInsurer: 'pk' });
   const pk = payrollYearEnd(input).insurers.find((i) => i.id === 'pk')!;
   assert.deepEqual([pk.open > 0, pk.settlement, insurerState(pk)], [true, [], 'open']);
+  assert.deepEqual([pk.compare?.before, pk.compare?.books], [0, pk.accrued], 'the final statement\'s comparison: without an opening, the payslips\' accrual alone');
   (input.books.journalEntries as JournalEntry[]).push({ id: 'ls', transactionRef: 'LS-2026-pk', date: '2027-01-20', accountDebit: '5720', accountCredit: '2275', amount: 12, by: { kind: 'code', check: 'payroll' } });
   const settled = payrollYearEnd(input).insurers.find((i) => i.id === 'pk')!;
   assert.deepEqual([settled.open, settled.settlement.map((s) => s.ref), insurerState(settled)], [pk.open + 12, ['LS-2026-pk'], 'ok']);
@@ -161,4 +162,19 @@ test('level A: a contribution payment booked whole on the expense leaves the emp
   ] as JournalEntry[];
   const w = payrollYearEnd({ ...input, closes: [], employees: [], issued: [], books: { journalEntries, transactions, mappings: [] }, withheldPayees: new Set(['AK-1']) }).withheld!;
   assert.deepEqual([w.withheld, w.paid, w.balance, w.uncleared], [500, 0, 500, [{ ref: 'AK-1', date: '2026-04-10', open: 500 }]]);
+});
+
+test('the opening\'s months: wages booked by hand before payroll ran here are the opening, not a difference; booked otherwise, the difference is named', async () => {
+  const { owner, firm: firmOf } = await import('./support/payroll.js');
+  const store = firmOf([owner({ opening: { '2026': { through: '2026-06', months: 6, fields: { '1': 60000 } } } })]);
+  const closes = (closedThrough(store, '2026-13') as PayslipClose[]).filter((c) => c.month > '2026-06');
+  const journalEntries: JournalEntry[] = closes.flatMap((c) => entriesOf({ booking: bookingOf(c, ch.payroll!, store) }, id));
+  for (const m of ['01', '02', '03', '04', '05', '06']) journalEntries.push({ id: id(), transactionRef: `H-${m}`, date: `2026-${m}-25`, accountDebit: '5000', accountCredit: '1020', amount: 10000 });
+  const input = { year: '2026', books: { journalEntries, transactions: [], mappings: [] }, closes, employees: store.employees, data: ch.payroll!, store, issued: [], isDebitNormal: (a: string) => chart().isDebitNormal(a), wageAccount: '5000' };
+  const w = payrollYearEnd(input).wages!;
+  assert.deepEqual([w.opening, w.other, w.difference], [{ through: '2026-06', expected: 60000, booked: 60000, difference: 0 }, 0, 0]);
+  journalEntries.push({ id: id(), transactionRef: 'H-07', date: '2026-07-25', accountDebit: '5000', accountCredit: '1020', amount: 500 });
+  journalEntries.push({ id: id(), transactionRef: 'H-06b', date: '2026-06-30', accountDebit: '5000', accountCredit: '1020', amount: 10 });
+  const w2 = payrollYearEnd(input).wages!;
+  assert.deepEqual([w2.opening!.difference, w2.other], [10, 500], 'a hand booking in the opening\'s months differs from it; one after them is booked otherwise');
 });

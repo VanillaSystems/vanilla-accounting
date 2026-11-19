@@ -7770,6 +7770,9 @@ export default {
     "close.payroll.withheld": "Ouverture {opening} · retenu {withheld} · payé aux caisses {paid} · au 31.12. {balance}",
     "close.payroll.withheldOther": "autres écritures {amount}",
     "close.payroll.uncleared": { one: "{n} paiement de cotisations ne déduit pas la part de l’employé de {account} : elle y figure encore, la charge est trop élevée d’autant", other: "{n} paiements de cotisations ne déduisent pas la part des employés de {account} : elle y figure encore, la charge est trop élevée d’autant" },
+    "close.payroll.insurerBefore": "payé pour les mois avant la comptabilité salariale jusqu’au {until} (pas sur le compte) : {amount}",
+    "close.payroll.openingAgrees": "Ouverture jusqu’à {month} : comptabilisé {booked}, comme le salaire brut de l’ouverture",
+    "close.payroll.openingDiffers": "Ouverture jusqu’à {month} : comptabilisé {booked}, salaire brut de l’ouverture {expected} : différence {difference}",
     // payroll-yearend:end
   },
 } satisfies Locale;

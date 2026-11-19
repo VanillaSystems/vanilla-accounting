@@ -7770,6 +7770,9 @@ export default {
     "close.payroll.withheld": "Apertura {opening} · trattenuto {withheld} · pagato alle casse {paid} · al 31.12. {balance}",
     "close.payroll.withheldOther": "altre registrazioni {amount}",
     "close.payroll.uncleared": { one: "{n} pagamento di contributi non detrae la quota del dipendente da {account}: è ancora lì, il costo è troppo alto di tanto", other: "{n} pagamenti di contributi non detraggono la quota dei dipendenti da {account}: è ancora lì, il costo è troppo alto di tanto" },
+    "close.payroll.insurerBefore": "pagato per i mesi prima della contabilità salariale fino al {until} (non sul conto): {amount}",
+    "close.payroll.openingAgrees": "Apertura fino a {month}: registrato {booked}, come il salario lordo dell’apertura",
+    "close.payroll.openingDiffers": "Apertura fino a {month}: registrato {booked}, salario lordo dell’apertura {expected}: differenza {difference}",
     // payroll-yearend:end
   },
 } satisfies Locale;

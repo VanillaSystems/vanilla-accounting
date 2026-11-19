@@ -13,6 +13,8 @@ import {
 } from '../../books/year-close.js';
 import { RequestError, WS, assertOpen, patchBody, readBooks, stringField } from '../books.js';
 import { payrollYearEndOf } from '../../payroll/service.js';
+import { loadClassifyContext, mappedReceipts } from '../../booking/classify.js';
+import { businessOfPayment } from '../../intake/batch-payers.js';
 
 export const router = Router();
 
@@ -37,8 +39,9 @@ router.get('/api/year-close/:year', async (req, res) => {
   await answer(res, () => {
     const books = readBooks();
     const close = yearCloseOf(WS, year, undefined, books);
+    const counterparties = loadClassifyContext(WS).counterparties ?? [];
     // The payroll's checks are facts beside the checklist (docs/specs/payroll.md §6.7): never a blocker of the close.
-    return { ...close, opening: close.closed ? openingFor(WS, year) : undefined, payroll: payrollYearEndOf(WS, year, books) };
+    return { ...close, opening: close.closed ? openingFor(WS, year) : undefined, payroll: payrollYearEndOf(WS, year, books, (tx) => businessOfPayment(tx, mappedReceipts(books, tx), counterparties)) };
   });
 });
 

@@ -15,7 +15,8 @@ import { unclearedContributions } from '../booking/withheld.js';
 import { bookingOf } from './booking.js';
 import { firmWageTypes } from './catalogue.js';
 import { lohnausweisOf, type LohnausweisData } from './documents.js';
-import { insurerRows, type InsurerRow } from './insurers.js';
+import { insurerRows, settlementOf, type InsurerRow } from './insurers.js';
+import { openingOf } from './opening.js';
 import { paidFor, paymentOf } from './payments.js';
 import { payslipRef, settlementRefPrefix, type PayrollEmployee, type PayrollStore, type PayslipClose } from './model.js';
 import { round2 } from './money.js';
@@ -43,7 +44,15 @@ export interface ClearingCheck {
 }
 
 /** An insurer at 31.12.: the payslips' accrual, what was paid, what is open, and its final statement's entries (LS-). */
-export interface InsurerCheck extends InsurerRow { settlement: Array<{ id: string; ref: string; date: string; amount: number }> }
+export interface InsurerCheck extends InsurerRow {
+  settlement: Array<{ id: string; ref: string; date: string; amount: number }>;
+  /**
+   * What the year's contributions in the books are made of, as the final statement compares them (settlementOf): the
+   * payslips' accrual and, for the opening's months, the payments to the insurer level A booked elsewhere (`before`,
+   * through `beforeUntil`). Absent where the final statement cannot be compared (no payslip of the year booked on it).
+   */
+  compare?: { before: number; beforeUntil?: string; books: number; openingThrough?: string; sharedPayees?: string[] };
+}
 
 /**
  * One payslip's (or, for level A, one external payslip's) share of the wage account: its gross, what its gross lines
@@ -66,6 +75,11 @@ export interface PersonWages {
 
 export interface WageCheck {
   account: string;
+  /**
+   * The opening's months (January to `through`, booked before payroll ran here, by hand or from another program): the
+   * persons' gross of the opening against what the wage account holds under no payslip's ref up to that month's end.
+   */
+  opening?: { through: string; expected: number; booked: number; difference: number };
   /** The wage account's debit of the year. */
   booked: number;
   persons: PersonWages[];
@@ -122,7 +136,10 @@ export interface PayrollYearEndInput {
   closes: readonly PayslipClose[];
   employees: readonly PayrollEmployee[];
   data: PayrollData;
-  store: Pick<PayrollStore, 'insurances' | 'wageTypes'>;
+  store: Pick<PayrollStore, 'insurances' | 'wageTypes' | 'employees'>;
+  /** The business a payment goes to (the business files), and the books' currency: what the final statement's comparison reads. */
+  businessOf?: (tx: BankTransaction) => string | undefined;
+  currency?: string;
   issued: readonly IssuedStatement[];
   isDebitNormal: (account: string) => boolean;
   /** The jurisdiction's wage account and deductions account (setup `wages`). */
@@ -156,9 +173,10 @@ const debitOf = (e: JournalEntry, account: string) => (e.accountDebit === accoun
 export function clearingCheck(input: Pick<PayrollYearEndInput, 'year' | 'books' | 'closes' | 'data' | 'isDebitNormal'>): ClearingCheck {
   const { year, books, data } = input;
   const end = yearEnd(year);
+  const atEnd = { transactions: books.transactions.filter((t) => t.date <= end), journalEntries: books.journalEntries.filter((e) => e.date <= end), mappings: books.mappings };
   const unpaid = input.closes.filter((c) => c.postingDate <= end && c.payout !== 0).flatMap((c): UnpaidPayout[] => {
-    const tx = paymentOf(books, c);
-    const paid = tx && tx.date <= end ? paidFor(books, tx, c) : 0;
+    // What was paid by 31.12.: the books as they stood that day.
+    const paid = paidFor(atEnd, c, data.clearing, input.closes) ?? (paymentOf(atEnd, c) ? c.payout : 0);
     const open = round2(c.payout - paid);
     return open ? [{ id: c.id, employee: c.employee, name: c.person.name, month: c.month, payout: c.payout, open }] : [];
   }).sort((a, b) => a.month.localeCompare(b.month) || a.name.localeCompare(b.name));
@@ -167,12 +185,23 @@ export function clearingCheck(input: Pick<PayrollYearEndInput, 'year' | 'books' 
   return { account: data.clearing, balance, unpaid, expected, difference: round2(balance - expected) };
 }
 
-export function insurerChecks(input: Pick<PayrollYearEndInput, 'year' | 'books' | 'data' | 'store'>): InsurerCheck[] {
+export function insurerChecks(input: Pick<PayrollYearEndInput, 'year' | 'books' | 'data' | 'store' | 'businessOf' | 'currency'>): InsurerCheck[] {
   const { year, books } = input;
   return insurerRows(books, input.data, input.store, year).map((r) => ({
     ...r,
     settlement: books.journalEntries.filter((e) => e.transactionRef === `${settlementRefPrefix(year)}${r.id}`).map((e) => ({ id: e.id, ref: e.transactionRef, date: e.date, amount: round2(e.accountCredit === r.account ? e.amount : -e.amount) })),
+    ...compareOf(input, r.id),
   }));
+}
+
+/** The final statement's comparison for an insurer, without a total (it is the statement's): refused (nothing of the year accrued on it) gives none. */
+function compareOf(input: Pick<PayrollYearEndInput, 'year' | 'books' | 'data' | 'store' | 'businessOf' | 'currency'>, id: string): Pick<InsurerCheck, 'compare'> {
+  try {
+    const { compare: c } = settlementOf(input.books, input.data, input.store, id, input.year, 0, yearEnd(input.year), () => '', input.businessOf, input.currency);
+    return { compare: { before: c.before, books: c.books, ...(c.beforeUntil ? { beforeUntil: c.beforeUntil } : {}), ...(c.openingThrough ? { openingThrough: c.openingThrough } : {}), ...(c.sharedPayees ? { sharedPayees: c.sharedPayees } : {}) } };
+  } catch {
+    return {};
+  }
 }
 
 /** The app's closed payslips of the year as rows of the wage check: what each one's gross lines book onto the wage account. */
@@ -186,7 +215,7 @@ export function payslipWageRows(closes: readonly PayslipClose[], data: PayrollDa
 }
 
 /** The wage account of the year against its rows, per person; what no row books is `other`. Rows of any source (the app's payslips, A-2's). */
-export function wageCheck(books: Pick<Books, 'journalEntries'>, account: string, year: string, rows: readonly WageRow[]): WageCheck {
+export function wageCheck(books: Pick<Books, 'journalEntries'>, account: string, year: string, rows: readonly WageRow[], opening?: { through: string; gross: number }): WageCheck {
   const ofYear = books.journalEntries.filter((e) => e.date.startsWith(year) && (e.accountDebit === account || e.accountCredit === account));
   const byRef = new Map<string, number>();
   for (const e of ofYear) byRef.set(e.transactionRef, (byRef.get(e.transactionRef) ?? 0) + debitOf(e, account));
@@ -207,7 +236,14 @@ export function wageCheck(books: Pick<Books, 'journalEntries'>, account: string,
   const total = round2(ofYear.reduce((s, e) => s + debitOf(e, account), 0));
   const inRows = round2([...claimed].reduce((s, ref) => s + (byRef.get(ref) ?? 0), 0));
   const list = [...persons.values()].sort((a, b) => a.name.localeCompare(b.name));
-  return { account, booked: total, persons: list, other: round2(total - inRows), difference: round2(list.reduce((s, p) => s + p.difference, 0)) };
+  // What no row claims, up to the opening's last month, is the opening's wages (booked before payroll ran here).
+  const openEnd = opening ? `${opening.through}-31` : '';
+  const openingBooked = opening ? round2(ofYear.filter((e) => !claimed.has(e.transactionRef) && e.date <= openEnd).reduce((s, e) => s + debitOf(e, account), 0)) : 0;
+  return {
+    account, booked: total,
+    ...(opening ? { opening: { through: opening.through, expected: opening.gross, booked: openingBooked, difference: round2(openingBooked - opening.gross) } } : {}),
+    persons: list, other: round2(total - inRows - openingBooked), difference: round2(list.reduce((s, p) => s + p.difference, 0)),
+  };
 }
 
 /** Each person of the year with closed payslips (or an opening): her statement's gross field against her gross, and the one issued. */
@@ -265,10 +301,19 @@ export function withheldCheck(input: Pick<PayrollYearEndInput, 'year' | 'books' 
   return { account, opening, withheld: round2(withheld), paid: round2(paid), other: round2(other), balance: round2(opening + withheld - paid + other), uncleared };
 }
 
+/** The opening of the year over every person: its last month and the gross it holds (the form's gross fields), else none. */
+function openingWages(input: Pick<PayrollYearEndInput, 'year' | 'employees' | 'data'>): { through: string; gross: number } | undefined {
+  const parts = (input.data.lohnausweis?.fields ?? []).find((f) => f.sum && !f.sum.minus?.length)?.sum?.plus ?? [];
+  const os = input.employees.flatMap((e) => { const o = openingOf(e, input.year); return o?.through ? [o] : []; });
+  if (!os.length) return undefined;
+  return { through: os.map((o) => o.through!).sort().at(-1)!, gross: round2(os.reduce((s, o) => s + parts.reduce((a, k) => a + (o.fields[k] ?? 0), 0), 0)) };
+}
+
 /** Every payroll check of the year's close. */
 export function payrollYearEnd(input: PayrollYearEndInput): PayrollYearEnd {
   const { year } = input;
   const hasPayslips = input.closes.some((c) => c.postingDate.startsWith(year)) || input.employees.some((e) => !!e.opening?.[year]);
+  const opening = openingWages(input);
   const rows = input.wageAccount ? [...payslipWageRows(input.closes, input.data, input.store, year, input.wageAccount), ...(input.external ?? [])] : [];
   const clearing = hasPayslips || input.closes.some((c) => c.postingDate <= yearEnd(year)) ? clearingCheck(input) : undefined;
   const insurers = insurerChecks(input).filter((i) => i.accrued !== 0 || i.paid !== 0 || i.settlement.length);
@@ -276,7 +321,7 @@ export function payrollYearEnd(input: PayrollYearEndInput): PayrollYearEnd {
     year,
     ...(clearing && (hasPayslips || clearing.balance !== 0 || clearing.unpaid.length) ? { clearing } : {}),
     insurers,
-    ...(input.wageAccount && rows.length ? { wages: wageCheck(input.books, input.wageAccount, year, rows) } : {}),
+    ...(input.wageAccount && (rows.length || opening) ? { wages: wageCheck(input.books, input.wageAccount, year, rows, opening) } : {}),
     statements: statementChecks(input),
     ...(() => { const w = withheldCheck(input); return w ? { withheld: w } : {}; })(),
   };
