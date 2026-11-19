@@ -92,14 +92,22 @@ test('«Immer so»: kept in a new file of the fund, the classifier then books ba
   assert.ok(existsSync(join(ws.paths.root, path)) && !readFileSync(join(ws.paths.root, path), 'utf8').includes('payroll'));
   assert.equal(loadClassifyContext(ws).payrollInsurer!(tx, 'pensionskasse-beispiel', [])?.books, false);
   assert.equal(handStart(ws, 'BVG-OCT')?.nature?.kind, 'payrollInsurer');
+  // The compensation fund's app file gets a binding of the company's: the knowledge still loads, with the way on it.
+  const ak = firm().insurances.find((i) => i.kind === 'ahv')!;
+  const akTarget = wayTarget({ ...ak, business: 'ausgleichskasse' }, undefined, loadClassifyContext(ws).counterparties ?? [], 'authority');
+  assert.deepEqual([akTarget.path, akTarget.created], ['knowledge/authorities/ausgleichskasse.yaml', false]);
+  keepPayrollWay(ws, akTarget, 'contributions', pay('AK', '2026-10-28', 3300, 'Ausgleichskasse Beispiel'), '2026-11-19');
+  assert.deepEqual(loadClassifyContext(ws).counterparties!.find((c) => c.id === 'ausgleichskasse')?.payroll, { payments: 'contributions', source: 'hand 2026-11-19' });
 });
 
 test('the way goes into an existing file without touching the rest; taking it out leaves the file as it was', () => {
   const text = 'id: ausgleichskasse\naccounts: ["2271"]\n';
-  const withIt = withPayrollWay(text, 'liability', 'hand 2026-11-19');
+  const withIt = withPayrollWay(text, 'liability', 'hand 2026-11-19', 'ausgleichskasse');
   assert.deepEqual(parse(withIt), { id: 'ausgleichskasse', accounts: ['2271'], payroll: { payments: 'liability', source: 'hand 2026-11-19' } });
   assert.deepEqual(parse(withoutPayrollWay(withIt)!), { id: 'ausgleichskasse', accounts: ['2271'] });
   assert.equal(withoutPayrollWay(text), undefined);
+  // A binding of an app file the company had none of yet: its id first, else the knowledge would not load.
+  assert.deepEqual(parse(withPayrollWay('', 'contributions', 'hand 2026-11-19', 'ausgleichskasse')), { id: 'ausgleichskasse', payroll: { payments: 'contributions', source: 'hand 2026-11-19' } });
   const known = wayTarget({ business: 'ausgleichskasse', name: 'AK' }, undefined, [{ id: 'ausgleichskasse', role: 'authority', name: 'Ausgleichskasse' }], 'authority');
   assert.deepEqual([known.path, known.created], ['knowledge/authorities/ausgleichskasse.yaml', false]);
   const taken = wayTarget({ name: 'Pensionskasse Beispiel' }, undefined, [{ id: 'pensionskasse-beispiel', role: 'supplier', name: 'other' }], 'supplier');

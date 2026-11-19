@@ -15,9 +15,13 @@ import type { Counterparty, Role } from '../knowledge/counterparties.js';
 import type { PayrollWay } from '../knowledge/payroll-way.js';
 import type { PayrollInsurance } from './model.js';
 
-/** The file's text with `payroll: { payments, source }` set; a new file of the company's own when `text` is empty and `create` names it. */
-export function withPayrollWay(text: string, way: PayrollWay, source: string, create?: { id: string; name: string; payee: string }): string {
-  const doc = parseDocument(text.trim() ? text : create ? `id: ${JSON.stringify(create.id)}\nname: ${JSON.stringify(create.name)}\nmatch:\n  payee: [${JSON.stringify(create.payee)}]\n` : '');
+/**
+ * The file's text with `payroll: { payments, source }` set. An empty file starts with its `id` (a binding of an app
+ * file: the id alone), or as a whole business of the company's own when `create` names it.
+ */
+export function withPayrollWay(text: string, way: PayrollWay, source: string, id: string, create?: { name: string; payee: string }): string {
+  const head = create ? `id: ${JSON.stringify(id)}\nname: ${JSON.stringify(create.name)}\nmatch:\n  payee: [${JSON.stringify(create.payee)}]\n` : `id: ${JSON.stringify(id)}\n`;
+  const doc = parseDocument(text.trim() ? text : head);
   doc.setIn(['payroll'], doc.createNode({ payments: way, source }));
   return doc.toString({ lineWidth: 0 });
 }
@@ -54,7 +58,7 @@ export function keepPayrollWay(ws: Pick<Workspace, 'paths'>, target: WayTarget, 
   mkdirSync(dirname(file), { recursive: true });
   const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
   const payee = tx.counterparty?.trim() || target.name;
-  writeFileSync(file, withPayrollWay(text, way, `hand ${today}`, target.created ? { id: target.id, name: target.name, payee } : undefined));
+  writeFileSync(file, withPayrollWay(text, way, `hand ${today}`, target.id, target.created && !text.trim() ? { name: target.name, payee } : undefined));
   return target.path;
 }
 
