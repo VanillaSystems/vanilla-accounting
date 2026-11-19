@@ -1603,6 +1603,15 @@ non-obvious decision is recorded here when it is taken.
     payroll ran here stays level A's booking, 2270/57xx), only a payment out (what an insurer pays in is
     mostly a benefit), only in the books' currency, and never one a company rule decides. The same holds for
     the wage match; `classify --force` leaves payroll's code bookings in place.
+23. **The Lohnausweis PDF prints Form 11's letters and fields in the module's order and words**
+    (`payroll.yaml lohnausweis`), drawn with pdf-lib on white paper; each issue is a snapshot in
+    `transactional-data/<year>/payroll/lohnausweise.jsonl` with its PDF beside it, and a replacement or a
+    correction is a new snapshot that names the earlier one. KTG and UVGZ employee shares go into field 15 as
+    remarks, as the market does.
+24. **The CSV fallback is one row per person with every field of the form** (and the social security
+    number): the free federal tool's import format was not verified, so the table is what a person or a
+    fiduciary types in or maps. The declarations' CSV holds every base of the year as the payslips kept it,
+    the ALV and UVG wages as capped.
 22. **The final statement's (Schlussabrechnung) total is entered by the person** off the statement; code
     books its difference to what the payslips accrued (D 57xx / C 227x, or back), ref `LS-<year>-<insurance>`,
     once. Reading the total off the statement's PDF is for the AI on her drop, later.

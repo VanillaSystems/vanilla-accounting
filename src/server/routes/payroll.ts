@@ -14,8 +14,13 @@ import { addCorrection, chartNumbers, closePayslip, payrollContext, reopenPaysli
 import { monthView, payslipView, employeeRows, yearStrip } from '../../payroll/views.js';
 import { paymentRows } from '../../payroll/payments.js';
 import { insurerRows, settlementEntry } from '../../payroll/insurers.js';
-import { closedPayslips } from '../../payroll/service.js';
-import { idSource } from '../../invoices/store.js';
+import { closedPayslips, issueLohnausweis, lohnausweisSnapshots } from '../../payroll/service.js';
+import { csv, declarationRows, journalOf, lohnausweisOf, lohnkonto } from '../../payroll/documents.js';
+import { firmWageTypes } from '../../payroll/catalogue.js';
+import { nameOf } from '../../payroll/views.js';
+import { valueOn } from '../../core/dated.js';
+import { join } from 'node:path';
+import { idSource, sha256 } from '../../invoices/store.js';
 import { loadPayroll, updatePayroll } from '../../payroll/store.js';
 import { employs } from '../../workspace/setup.js';
 import type { ApiErrorBody } from '../../types/api-error.js';
@@ -226,4 +231,94 @@ router.post('/api/payroll/insurances/:id/settle', run((req, res) => {
     return entry ? { booked: entry.id, amount: entry.amount, debit: entry.accountDebit, credit: entry.accountCredit } : { booked: null };
   });
   res.json(out);
+}));
+
+// ─── Dokumente ─────────────────────────────────────────────────────────────────
+
+const yearParam = (req: Request): string => {
+  const y = String(req.params.year);
+  if (!/^\d{4}$/.test(y)) throw new PayrollRefusal('badInput', `${y} ist kein Jahr.`);
+  return y;
+};
+
+/** The year's documents: per person the Lohnausweis figures (and whether a month is still open), the issued statements, the declarations' figures. */
+router.get('/api/payroll/documents/:year', run((req, res) => {
+  const year = yearParam(req);
+  const ctx = payrollContext(WS);
+  const types = firmWageTypes(ctx.data, ctx.store);
+  const closes = [...ctx.history.closed.values()];
+  const canton = valueOn(ctx.store.company.canton, `${year}-12-31`);
+  res.json({
+    year,
+    people: ctx.store.employees.map((e) => ({ employee: e.id, name: nameOf(e, `${year}-12-31`), lohnausweis: lohnausweisOf(e, closes, types, ctx.data, year, e.language) }))
+      .filter((p) => Object.keys(p.lohnausweis.fields).length || p.lohnausweis.openMonths.length),
+    issued: lohnausweisSnapshots(WS, year).map(({ data: _, ...s }) => s),
+    declarations: declarationRows(ctx.store.employees, closes, year),
+    lohnkonto: lohnkonto(closes, types, year),
+    copyToTaxOffice: !!canton && (ctx.data.lohnausweis?.copyToTaxOffice ?? []).includes(canton),
+  });
+}));
+
+/** Issues a person's Lohnausweis (a later one replaces or corrects the first; both stay). */
+router.post('/api/payroll/documents/:year/lohnausweis', run(async (req, res) => {
+  const year = yearParam(req);
+  const b = body(req);
+  const kind = b.kind === 'replacement' || b.kind === 'correction' ? b.kind : 'original';
+  const { data: _, ...snap } = await issueLohnausweis(WS, String(b.employee ?? ''), year, kind);
+  res.json(snap);
+}));
+
+/** An issued Lohnausweis's PDF, checked against its checksum. */
+router.get('/payroll/documents/:year/lohnausweis/:file', run((req, res) => {
+  const m = /^(la_[A-Za-z0-9_-]+)\.pdf$/.exec(String(req.params.file));
+  const snap = m && lohnausweisSnapshots(WS, yearParam(req)).find((s) => s.id === m[1]);
+  if (!snap) throw new PayrollRefusal('notFound', 'Kein solcher Lohnausweis.');
+  const bytes = readFileSync(join(WS.paths.root, snap.file));
+  if (sha256(bytes) !== snap.sha256) throw new RequestError(409, `${snap.file}: die Datei passt nicht mehr zu ihrer Prüfsumme.`);
+  res.type('application/pdf').send(bytes);
+}));
+
+const sendCsv = (res: Response, name: string, text: string) => res.type('text/csv; charset=utf-8').attachment(name).send(`﻿${text}`);
+
+/** The Lohnausweis figures of every person as a table (the fallback for the free federal tool and the fiduciary). */
+router.get('/payroll/documents/:year/lohnausweis.csv', run((req, res) => {
+  const year = yearParam(req);
+  const ctx = payrollContext(WS);
+  const types = firmWageTypes(ctx.data, ctx.store);
+  const closes = [...ctx.history.closed.values()];
+  const fields = (ctx.data.lohnausweis?.fields ?? []).filter((f) => !f.remark).map((f) => f.key);
+  const rows = ctx.store.employees.map((e) => {
+    const l = lohnausweisOf(e, closes, types, ctx.data, year, e.language);
+    return [e.id, nameOf(e, `${year}-12-31`), e.socialSecurityNumber, year, l.from, l.to, ...fields.map((k) => l.fields[k] ?? 0), l.remarks.map((r) => `${r.label} ${r.amount.toFixed(2)}`).join(', ')];
+  });
+  sendCsv(res, `lohnausweis-${year}.csv`, csv([['id', 'name', 'ssn', 'year', 'from', 'to', ...fields, '15'], ...rows]));
+}));
+
+/** The Lohnkonto: every Lohnart per month, of one person (?employee=) or the firm. */
+router.get('/payroll/documents/:year/lohnkonto.csv', run((req, res) => {
+  const year = yearParam(req);
+  const ctx = payrollContext(WS);
+  const who = typeof req.query.employee === 'string' ? req.query.employee : undefined;
+  const closes = [...ctx.history.closed.values()].filter((c) => !who || c.employee === who);
+  const k = lohnkonto(closes, firmWageTypes(ctx.data, ctx.store), year);
+  const head = ['wageType', 'label', ...Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0')), 'total'];
+  const totals = (['gross', 'net', 'payout', 'employer'] as const).map((t) => [t, ctx.data.totals[t].de, ...k.totals[t].months, k.totals[t].total]);
+  sendCsv(res, `lohnkonto-${year}${who ? `-${who}` : ''}.csv`, csv([head, ...k.rows.map((r) => [r.wageType, r.label, ...r.months, r.total]), ...totals]));
+}));
+
+/** The declarations' figures: per person each base of the year (AHV, ALV to the ceiling, UVG, …), for the funds' portals. */
+router.get('/payroll/documents/:year/declarations.csv', run((req, res) => {
+  const year = yearParam(req);
+  const ctx = payrollContext(WS);
+  const rows = declarationRows(ctx.store.employees, [...ctx.history.closed.values()], year);
+  const keys = [...new Set(rows.flatMap((r) => Object.keys(r.bases)))].sort();
+  sendCsv(res, `meldungen-${year}.csv`, csv([['id', 'name', 'ssn', 'from', 'to', ...keys], ...rows.map((r) => [r.employee, r.name, ctx.store.employees.find((e) => e.id === r.employee)?.socialSecurityNumber, r.from, r.to, ...keys.map((k) => r.bases[k] ?? 0)])]));
+}));
+
+/** The month's Lohnbuchungen as a table, for a fiduciary who keeps the ledger elsewhere. */
+router.get('/payroll/documents/journal/:month', run((req, res) => {
+  const m = /^(\d{4}-\d{2})\.csv$/.exec(String(req.params.month));
+  if (!m) throw new PayrollRefusal('badInput', 'JJJJ-MM.csv');
+  const entries = journalOf(readBooks().journalEntries, m[1]);
+  sendCsv(res, `lohnbuchungen-${m[1]}.csv`, csv([['date', 'ref', 'debit', 'credit', 'amount', 'text'], ...entries.map((e) => [e.date, e.transactionRef, e.accountDebit, e.accountCredit, e.amount, e.description])]));
 }));
