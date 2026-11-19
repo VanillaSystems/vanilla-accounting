@@ -579,7 +579,7 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean; working: boolea
         <label>{t('receipts.field.date')}<input className="mono" name="date" defaultValue={r.date ? formatDate(r.date) : ''} placeholder={reading ?? t('receipts.datePlaceholder')} readOnly={!canEdit} /></label>
         {r.dateSource === 'captured' && <div className="fhint">{t('receipts.dateCaptured')}</div>}
         <label>{t('receipts.field.dueDate')}<input className="mono" name="dueDate" defaultValue={r.dueDate ? formatDate(r.dueDate) : ''} placeholder={read ? formatDate(read) : t('receipts.datePlaceholder')} readOnly={!canEdit} data-testid="due-date" /></label>
-        {read && read !== r.dueDate && <div className="fhint" data-testid="due-read">{t('bills.dueRead', { date: formatDate(read) })}</div>}
+        {r.dueDate && read && read !== r.dueDate && <div className="fhint" data-testid="due-read">{t('bills.dueRead', { date: formatDate(read) })}</div>}
         <div className="two">
           <label>{t('receipts.field.currency')}<select name="currency" defaultValue={r.currency || baseCurrency()} disabled={!edit} data-tip={frozen}>{currencies.map((c) => <option key={c}>{c}</option>)}</select></label>
           <label>{t('receipts.field.amount')}<input className="mono" name="amount" defaultValue={r.amount == null ? '' : fmt(r.amount)} readOnly={!edit} data-tip={frozen} placeholder={reading} style={{ textAlign: 'right' }} /></label>
@@ -657,7 +657,7 @@ function Quick({ src, file, size }: { src: string; file: string; size?: number }
   );
 }
 
-function ConfirmDelete({ v, l, nav }: Props & { v: ReceiptView; l: Ledger }) {
+function ConfirmDelete({ v, l, nav, route }: Props & { v: ReceiptView; l: Ledger }) {
   const close = () => setUi({ overlay: null });
   // What happens to its payment: booked again without it, or a person's booking kept as it is (r4c-32).
   const entries = v.links.flatMap((ref) => l.entriesByRef.get(ref) ?? []);
@@ -666,7 +666,7 @@ function ConfirmDelete({ v, l, nav }: Props & { v: ReceiptView; l: Ledger }) {
     close();
     const i = listed.ids.indexOf(v.r.id);
     const next = listed.ids[i + 1] ?? listed.ids[i - 1];
-    if (await deleteReceipt(nav, v)) nav.select({ area: 'receipts', ...(next && { id: next }) });
+    if (await deleteReceipt(nav, v)) nav.select({ ...route, id: next });
   }
   return (
     <>

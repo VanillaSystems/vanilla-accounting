@@ -64,6 +64,9 @@ export function dueDateIn(text: string, issued: string | undefined, words: Docum
   for (let i = 0; i < lines.length; i++) {
     for (const m of lines[i].matchAll(allWords(labels))) {
       const after = lines[i].slice(m.index + m[0].length);
+      // Terms on the label's line win over a date beside them («30 Tage netto, Rechnungsdatum 12.10.2026»).
+      const own = words.dueTerms && after.trim() ? termOf(after, words.dueTerms) : undefined;
+      if (own !== undefined) { term ??= own; continue; }
       const same = datesOf(after).find((d) => fits(d.day));
       if (same) return same.day;
       const below = datesOf(lines[i + 1] ?? '').filter((d) => fits(d.day)).sort((a, b) => Math.abs(a.at - m.index) - Math.abs(b.at - m.index))[0];
@@ -78,11 +81,12 @@ export function dueDateIn(text: string, issued: string | undefined, words: Docum
   return fits(day) ? day : undefined;
 }
 
-/** The text names a term net («30 Tage netto», «net 30 days») outside a due word's line. */
+/** The text names a term net («30 Tage netto») outside a due word's line. */
 function hasNetTerm(text: string, terms: NonNullable<DocumentsData['dueTerms']>): boolean {
   const days = terms.days.map(escape).join('|');
   const net = terms.net.map(escape).join('|');
-  return new RegExp(`\\d{1,3}\\s*(?:${days})\\s*(?:${net})(?![\\p{L}])|(?<![\\p{L}])(?:${net})\\s*\\d{1,3}\\s*(?:${days})(?![\\p{L}])`, 'iu').test(text);
+  // Only «30 Tage netto» closing its phrase: «5 days net weight» or a Skonto table's «Netto 14 Tage» is no bill's term.
+  return new RegExp(`\\d{1,3}\\s*(?:${days})\\s*(?:${net})(?=\\s*(?:[.,;)]|$))`, 'imu').test(text);
 }
 
 /** Where a receipt's due date comes from: a person's, or its text's. */

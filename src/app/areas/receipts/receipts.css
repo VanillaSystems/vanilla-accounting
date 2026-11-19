@@ -205,11 +205,11 @@
 .bills-print { display: none; }
 @media print {
   /* A printed list keeps paper colours in both themes. */
-  /* Only while Zu bezahlen is shown: another page's print (form 0535) stays its own. */
-  body:has(> .bills-print) > *:not(.bills-print) { display: none !important; }
+  /* Only when its «Drucken» asked (printBills): another print stays its own. */
+  body.print-bills > *:not(.bills-print) { display: none !important; }
   /* vat.css hides every element in print but its form: this list is shown instead. */
-  .bills-print, .bills-print * { visibility: visible; }
-  .bills-print { display: block; color: #000; background: #fff; font: 10pt var(--font-sans); }
+  body.print-bills .bills-print, body.print-bills .bills-print * { visibility: visible; }
+  body.print-bills .bills-print { display: block; color: #000; background: #fff; font: 10pt var(--font-sans); }
   .bills-print h1 { font-size: 14pt; margin: 0 0 4pt; }
   .bills-print h1 small { font-weight: 400; }
   .bills-print p { margin: 0 0 10pt; }

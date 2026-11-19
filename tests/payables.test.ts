@@ -28,6 +28,9 @@ test('the due date a bill states: a date after a due word, a column head above i
   assert.equal(dueDateIn('Fällig am 01.09.2026', '2026-10-01', W), undefined, 'a day before the bill\'s own is none of it');
   assert.equal(dueDateIn('Kassenbon Coop\nTotal 12.50\n12.10.2026', '2026-10-12', W), undefined, 'a till receipt states none');
   assert.equal(dueDateIn('Zahlbar bis 31.02.2026', undefined, W), undefined, 'no such day');
+  assert.equal(dueDateIn('Zahlungsbedingungen: 30 Tage netto, Rechnungsdatum 12.10.2026', '2026-10-12', W), '2026-11-11', 'terms on the label\'s line win over a date beside them');
+  assert.equal(dueDateIn('Lieferfrist 5 days net weight 2 kg', '2026-10-12', W), undefined, 'a «net» that closes no term');
+  assert.equal(dueDateIn('Rabattstaffel\nNetto 14 Tage', '2026-10-12', W), undefined, 'a «Netto 14 Tage» without a due word');
 });
 
 test('a person\'s due date wins over the text\'s; without hers, the text\'s', () => {
@@ -53,6 +56,8 @@ const books: Index = {
     receipt('hand', { date: '2026-11-01', amount: 40, dueDate: '2026-11-15' }),
     receipt('till', { date: '2026-11-02', amount: 12.5, extractedText: 'Kassenbon\nTotal 12.50' }),
     receipt('credit', { date: '2026-11-03', amount: -20, extractedText: 'Gutschrift\nzahlbar bis 30.11.2026' }),
+    receipt('contract', { date: '2026-10-02', amount: 500, kind: 'supporting', extractedText: 'Vertrag\nZahlungsbedingungen 30 Tage netto' }),
+    receipt('filedq', { date: '2026-09-25', amount: 70, extractedText: 'Rechnung\nzahlbar bis 25.10.2026' }),
     receipt('accrual', { date: '2026-10-20', amount: 90, extractedText: 'Rechnung\nzahlbar bis 01.11.2026' }),
   ],
   transactions: [tx('T-paid', '2026-11-03', 50)],
@@ -65,7 +70,8 @@ const Q4 = { from: '2026-10-01', to: '2026-12-31' };
 
 test('each bill\'s state is a fact: overdue once its day has passed unpaid, open until then (its day included), paid by a linked payment on that payment\'s day; a booking without a payment pays nothing', () => {
   const by = Object.fromEntries(billsOf(l, Q4, TODAY, W).map((b) => [b.v.r.id, b]));
-  assert.deepEqual(Object.keys(by).sort(), ['accrual', 'eur', 'hand', 'late', 'paid', 'soon'], 'no till receipt, no credit note');
+  assert.deepEqual(Object.keys(by).sort(), ['accrual', 'eur', 'filedq', 'hand', 'late', 'paid', 'soon'], 'no till receipt, no credit note, no document beside an invoice; an unpaid bill of a filed quarter stands in the working one');
+  assert.equal(billsOf(l, { from: '2026-07-01', to: '2026-09-30' }, TODAY, W).length, 0, 'a filed quarter shows no unpaid bill, nor one paid later');
   assert.equal(by.late.state, 'overdue');
   assert.equal(by.soon.state, 'open');
   assert.equal(by.soon.due, '2026-12-10', '30 days from its date');
@@ -79,10 +85,10 @@ test('each bill\'s state is a fact: overdue once its day has passed unpaid, open
 
 test('overdue first by due day, then open, then paid; «offen» holds the overdue ones; sums per currency, the books\' first', () => {
   const bills = billsOf(l, Q4, TODAY, W);
-  assert.deepEqual(bills.map((b) => b.v.r.id), ['late', 'accrual', 'hand', 'eur', 'soon', 'paid']);
-  assert.deepEqual(billCounts(bills), { all: 6, overdue: 3, open: 5, paid: 1 });
-  assert.deepEqual(bills.filter((b) => passes(b, 'open')).map((b) => b.v.r.id), ['late', 'accrual', 'hand', 'eur', 'soon']);
-  assert.deepEqual(unpaidSums(bills, 'CHF'), [{ currency: 'CHF', open: 550, overdue: 430 }, { currency: 'EUR', open: 80, overdue: 0 }]);
+  assert.deepEqual(bills.map((b) => b.v.r.id), ['filedq', 'late', 'accrual', 'hand', 'eur', 'soon', 'paid']);
+  assert.deepEqual(billCounts(bills), { all: 7, overdue: 4, open: 6, paid: 1 });
+  assert.deepEqual(bills.filter((b) => passes(b, 'open')).map((b) => b.v.r.id), ['filedq', 'late', 'accrual', 'hand', 'eur', 'soon']);
+  assert.deepEqual(unpaidSums(bills, 'CHF'), [{ currency: 'CHF', open: 620, overdue: 500 }, { currency: 'EUR', open: 80, overdue: 0 }]);
 });
 
 test('the CSV holds what the list shows: dates as written, the state in words, the amount as a number', () => {

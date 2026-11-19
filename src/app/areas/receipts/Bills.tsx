@@ -107,7 +107,7 @@ export function BillList(props: Props) {
         <b className="mono">{sums.length ? sums.map((s, i) => <span key={s.currency} className={i ? 'also' : ''}>{i ? ' + ' : ''}<small>{s.currency}</small>{fmt(s.open)}</span>) : <><small>{base}</small>{fmt(0)}</>}</b>
       </div>
       <div className="bills-acts">
-        <button type="button" className="linkbtn" data-testid="bills-print" disabled={!shown.length} onClick={() => window.print()}>{t('bills.print')}</button>
+        <button type="button" className="linkbtn" data-testid="bills-print" disabled={!shown.length} onClick={printBills}>{t('bills.print')}</button>
         {shown.length ? <a className="linkbtn" data-testid="bills-csv" href={csv} download={file} data-tip={t('bills.csvTip')}>{t('bills.csv')}</a> : null}
       </div>
       {groups.length === 0 ? (
@@ -140,6 +140,12 @@ export function BillList(props: Props) {
       )}
     </div>
   );
+}
+
+/** Prints the list, and only while its own button asked: another print of this screen stays its own. */
+function printBills() {
+  document.body.classList.add('print-bills');
+  try { window.print(); } finally { document.body.classList.remove('print-bills'); }
 }
 
 function BillRow({ b, base, sel, onSelect }: { b: Bill; base: string; sel: boolean; onSelect(): void }) {

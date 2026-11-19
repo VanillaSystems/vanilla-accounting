@@ -39,13 +39,13 @@ export function paidOn(v: ReceiptView, l: Pick<Ledger, 'txByRef'>): string | und
 
 /**
  * The receipt as a bill to pay, or undefined: a receipt (not set aside) of money owed, with an amount
- * above zero (a credit note is money back), not a sale, a payout or a provider's report, not the
+ * above zero (a credit note is money back), an invoice or untyped (no sale, no document beside one, no statement), a payout or a provider's report, not the
  * firm's own invoice, not an order page or a VAT-only correction (no payment pays those), and with a
  * due date. A receipt without one is no bill here: a till receipt was paid on the spot.
  */
 export function billOf(v: ReceiptView, l: Pick<Ledger, 'txByRef' | 'firm'>, today: string, words: DocumentsData): Bill | undefined {
   const { r } = v;
-  if (v.none || r.amount == null || r.amount <= 0 || r.kind === 'sales-record' || r.payout || r.report || v.orderPage || v.vatCorrection) return undefined;
+  if (v.none || (r.kind !== undefined && r.kind !== 'invoice') || r.amount == null || r.amount <= 0 || r.payout || r.report || v.orderPage || v.vatCorrection) return undefined;
   if (issuedByFirm(r, l.firm)) return undefined;
   const due = dueOf({ dueDate: r.dueDate, extractedText: r.extractedText, date: v.date }, words);
   if (!due) return undefined;
@@ -55,22 +55,22 @@ export function billOf(v: ReceiptView, l: Pick<Ledger, 'txByRef' | 'firm'>, toda
 }
 
 /**
- * The bills of a period, by Belege's rule (placeDay): an unpaid one from before, or undated, stands in
- * the working period, a paid one in its payment's. Overdue first, then open, each by due day, then
- * paid, the latest payment first.
+ * The bills of a period: a paid one in the period of its payment; an unpaid one, whatever its date (a
+ * filed quarter's too), in every period that reaches the working one (`l.openFrom`), since it is still
+ * to pay. Overdue first, then open, each by due day, then paid, the latest payment first.
  */
 export function billsOf(l: Ledger, period: Pick<Period, 'from' | 'to'>, today: string, words: DocumentsData): Bill[] {
   const out: Bill[] = [];
   for (const v of l.views) {
-    if (!v.day || v.day < period.from || v.day > period.to) continue;
     const b = billOf(v, l, today, words);
-    if (b) out.push(b);
+    if (!b) continue;
+    const shown = b.paidOn ? b.paidOn >= period.from && b.paidOn <= period.to : period.to >= l.openFrom && (!v.date || v.date <= period.to);
+    if (shown) out.push(b);
   }
   const rank = (b: Bill) => BILL_STATES.indexOf(b.state);
   return out.sort((a, b) => rank(a) - rank(b) || (a.state === 'paid' ? (b.paidOn ?? '').localeCompare(a.paidOn ?? '') : a.due.localeCompare(b.due)) || a.v.r.filename.localeCompare(b.v.r.filename));
 }
 
-/** `open` counts the overdue ones too (passes). */
 export type BillCounts = Record<'all' | BillState, number>;
 
 export const billCounts = (bills: readonly Bill[]): BillCounts => ({
