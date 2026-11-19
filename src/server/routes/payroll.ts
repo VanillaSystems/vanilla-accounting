@@ -23,6 +23,7 @@ import { APP_ROOT } from '../../workspace/workspace.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
 import { bankAccountFor } from '../../workspace/money-accounts.js';
 import { loadClassifyContext, mappedReceipts, payrollInsurerOfPayment, ruleOfPayment } from '../../booking/classify.js';
+import { paymentFileOf, paymentFilePlan } from '../../payroll/payment-file.js';
 import { businessOfPayment } from '../../intake/batch-payers.js';
 import { closedPayslips, issueLohnausweis, lohnausweisSnapshots, payslipMail, payslipsSent, sendPayslip, setMailPassword } from '../../payroll/service.js';
 import { sendMail } from '../../invoices/mail.js';
@@ -226,7 +227,21 @@ router.put('/api/payroll/months/:month/text', run((req, res) => {
 /** The month's Lohnzahlungen: person, IBAN, payout, purpose, value date, and the bank line that paid it. */
 router.get('/api/payroll/payments/:month', run((req, res) => {
   const month = monthParam(req);
-  res.json({ month, rows: paymentRows(readBooks(), closedPayslips(WS), month, payrollClearing() ?? '1091') });
+  const rows = paymentRows(readBooks(), closedPayslips(WS), month, payrollClearing() ?? '1091');
+  res.json({ month, rows, file: paymentFilePlan(rows, WS.bankAccounts, baseCurrency(), today()) });
+}));
+
+/** The payment file of the month's payouts not paid yet, debiting the firm's `account` (default: its first bank account with an IBAN). */
+router.get('/payroll/payments/:month/payment-file.xml', run((req, res) => {
+  const month = monthParam(req);
+  const closes = closedPayslips(WS);
+  const rows = paymentRows(readBooks(), closes, month, payrollClearing() ?? '1091');
+  const plan = paymentFilePlan(rows, WS.bankAccounts, baseCurrency(), today());
+  if (!plan.accounts.length) throw new PayrollRefusal('badInput', 'Kein Bankkonto der Firma mit IBAN in der Buchwährung: unter Firma › Konten eine IBAN eintragen.', 'noAccount');
+  if (!plan.included.length) throw new PayrollRefusal('notFound', 'Keine offene Lohnzahlung mit IBAN in diesem Monat.');
+  const account = typeof req.query.account === 'string' ? req.query.account : plan.accounts[0].account;
+  const xml = paymentFileOf(plan, rows, closes, { name: WS.company.name, ...(WS.company.address ? { address: WS.company.address } : {}) }, account, baseCurrency(), new Date().toISOString());
+  res.set('Cache-Control', 'no-store').type('application/xml; charset=utf-8').attachment(`lohnzahlungen-${month}.xml`).send(xml);
 }));
 
 /** Per insurance: what the payslips accrued, what was paid, what is open, from the books. */
