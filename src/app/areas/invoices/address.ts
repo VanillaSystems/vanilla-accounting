@@ -52,9 +52,9 @@ const EU = ['AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'G
 
 /** Which VAT number a customer of `country` has, its example and its shape (none: anything goes). */
 export function vatRule(country: string): { kind: 'uid' | 'euVat' | 'gbVat' | 'taxNo'; example: string; pattern?: RegExp } {
-  if (country === 'CH' || country === 'LI') return { kind: 'uid', example: 'CHE-123.456.789 MWST', pattern: /^CHE-\d{3}\.\d{3}\.\d{3}( MWST| TVA| IVA)?$/ };
-  if (EU.includes(country)) { const p = country === 'GR' ? 'EL' : country; return { kind: 'euVat', example: `${p}123456789`, pattern: new RegExp(`^${p}[0-9A-Z+*]{2,13}$`, 'i') }; }
-  if (country === 'GB') return { kind: 'gbVat', example: 'GB123456789', pattern: /^GB(\d{9}|\d{12}|GD\d{3}|HA\d{3})$/i };
+  if (country === 'CH' || country === 'LI') return { kind: 'uid', example: 'CHE-xxx.xxx.xxx MWST', pattern: /^CHE-\d{3}\.\d{3}\.\d{3}( MWST| TVA| IVA)?$/ };
+  if (EU.includes(country)) { const p = country === 'GR' ? 'EL' : country; return { kind: 'euVat', example: `${p}000000000`, pattern: new RegExp(`^${p}[0-9A-Z+*]{2,13}$`, 'i') }; }
+  if (country === 'GB') return { kind: 'gbVat', example: 'GB000000000', pattern: /^GB(\d{9}|\d{12}|GD\d{3}|HA\d{3})$/i };
   return { kind: 'taxNo', example: '' };
 }
 
