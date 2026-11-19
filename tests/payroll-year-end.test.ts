@@ -295,3 +295,56 @@ test('the statement check counts the payslips the Lohnausweis counts: a month re
   assert.equal(s.today, Math.round(s.gross), 'the form and the check sum the same payslips');
   assert.ok(closes.some((c) => c.month === '2026-02') && s.gross < closes.filter((c) => c.month >= '2026-04').reduce((a, c) => a + c.gross, 0) + 30000 + 1, 'the opening month\'s stray close is in neither');
 });
+
+test('B1 and B2 on the year-end: a child allowance and a person taxed at source leave every check at 0, and 2279 is open by the settlement lists\' amount', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { parseTariffFile } = await import('../src/providers/tax-at-source/tariff-file.js');
+  const { computePayslip } = await import('../src/payroll/compute.js');
+  const { settlementsOf: settlementLists } = await import('../src/payroll/settlement.js');
+  const { closeOf, ctxOf } = await import('./support/payroll.js');
+  const { APP_ROOT } = await import('../src/workspace/workspace.js');
+  const zh = { region: 'ZH', year: '2026', file: parseTariffFile(readFileSync(join(APP_ROOT, 'tests/fixtures/qst/tar26zh-excerpt.txt'), 'latin1')), sha256: 'sha-zh-0123456789abcdef', fetchedAt: '2026-11-19T10:00:00.000Z' };
+  const tariffs = (region: string, year: string) => (region === 'ZH' && year === '2026' ? zh : undefined);
+  const parent = owner({ children: [{ id: 'c1', name: 'Lia', birthDate: '2020-04-01', allowance: [dated('2026-01-01', { wageType: 'kinderzulage', amount: 215 })] }] });
+  const taxed = owner({
+    id: 'q1', isOwner: false, name: [dated('2026-01-01', { first: 'Jonas', last: 'Grenzgänger' })],
+    employment: [dated('2026-01-01', { kind: 'monthly' as const, amount: 6500, pensum: 100, hoursPerWeek: 42, holidayDays: 25 })],
+    insurances: [dated('2026-01-01', { uvg: { insurance: 'uvg', code: 'A1' } })],
+    taxAtSource: [dated('2026-01-01', { subject: true, canton: 'ZH', code: 'A0' })],
+  });
+  const store = firm([parent, taxed]);
+  store.insurances.push({ id: 'qZH', kind: 'qst', name: 'Steuerverwaltung ZH', solutions: [{ code: 'ZH', rates: [dated('2026-01-01', { provision: 2 })] }], validFrom: '2026-01-01' });
+  const events: PayslipClose[] = [];
+  for (let m = 1; m <= 12; m++) for (const who of ['e1', 'q1']) {
+    const d = computePayslip({ ...ctxOf(store, events), tariffs }, who, `2026-${String(m).padStart(2, '0')}`)!;
+    events.push({ ...closeOf(d), receiptId: `r-${d.id}` });
+  }
+  assert.ok(events.some((c) => c.lines.some((l) => l.wageType === 'kinderzulage')) && events.some((c) => c.lines.some((l) => l.wageType === 'quellensteuer')));
+  const journalEntries: JournalEntry[] = []; const transactions: BankTransaction[] = []; const mappings: Mapping[] = [];
+  for (const c of events) {
+    const es = entriesOf({ booking: bookingOf(c, ch.payroll!, store) }, id, c.receiptId);
+    c.entries = es.map((e) => e.id);
+    journalEntries.push(...es);
+    const ref = `PAY-${c.id}`;
+    transactions.push({ ref, bank: 'Bank', date: c.payday, amount: -c.payout, currency: 'CHF', direction: 'DBIT', description: 'Lohn', counterparty: c.person.name });
+    journalEntries.push({ id: id(), transactionRef: ref, date: c.payday, accountDebit: '1091', accountCredit: '1020', amount: c.payout, by: { kind: 'code', check: 'payroll' }, receipts: [c.receiptId!] });
+    mappings.push({ transactionRef: ref, receiptId: c.receiptId! });
+  }
+  // Every insurer paid what it accrued, but the tax at source not at all.
+  for (const r of insurerRows({ journalEntries }, ch.payroll!, store, '2026')) {
+    if (r.kind === 'qst' || !r.open) continue;
+    journalEntries.push({ id: id(), transactionRef: `INS-${r.id}`, date: '2026-12-20', accountDebit: r.account, accountCredit: '1020', amount: r.open, by: { kind: 'code', check: 'payroll' } });
+  }
+  const p = payrollYearEnd({ year: '2026', books: { journalEntries, transactions, mappings }, closes: events, employees: store.employees, data: ch.payroll!, store, issued: [], isDebitNormal: (a) => chart().isDebitNormal(a), wageAccount: '5000' });
+  assert.deepEqual([p.clearing!.difference, p.clearing!.unpaid], [0, []]);
+  assert.deepEqual(p.wages!.persons.map((x) => [x.employee, x.difference]).sort(), [['e1', 0], ['q1', 0]]);
+  assert.deepEqual(p.statements.map((s) => [s.employee, s.difference, s.unmapped]).sort(), [['e1', 0, []], ['q1', 0, []]]);
+  const lists = settlementLists(events, '2026', ch.payroll!, firmWageTypes(ch.payroll!, store), store);
+  const payable = Math.round(lists.reduce((s, l) => s + l.totals.payable, 0) * 100) / 100;
+  const qst = p.insurers.find((i) => i.insurances.some((x) => x.kind === 'qst'))!;
+  assert.equal(qst.account, '2279');
+  assert.equal(qst.open, payable, '2279 holds what the settlement lists say is to pay the canton');
+  assert.equal(insurerState(qst), 'ok', 'no final statement is asked of the tax at source');
+  for (const i of p.insurers.filter((x) => x !== qst)) assert.equal(i.open, 0, i.account);
+});
