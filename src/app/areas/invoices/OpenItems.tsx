@@ -37,7 +37,7 @@ export function OpenItems(props: Props & { d: InvoiceList }) {
 
   const head = [t('sales.col.contact'), t('sales.col.currency'), t('sales.col.number'), t('sales.col.date'), t('sales.col.due'), t('sales.col.daysOverdue'), t('sales.col.open'), ...AGE_BANDS.map(bandLabel)];
   const exportCsv = () => saveText(csvOf(head, groups.flatMap((g) => g.items.map((x) => [
-    g.name, g.currency, x.inv.number, formatDate(x.inv.date), formatDate(x.inv.dueDate), String(x.overdue), x.open, ...AGE_BANDS.map((b) => (x.band === b ? x.open : '')),
+    g.name, g.currency, x.inv.number, formatDate(x.inv.date), formatDate(x.due), String(x.overdue), x.open, ...AGE_BANDS.map((b) => (x.band === b ? x.open : '')),
   ]))), `${t('sales.debtorList')}-${date}.csv`);
 
   const bandCells = (bands: BandSums) => AGE_BANDS.map((b) => <td key={b} className="num mono">{amount(bands[b])}</td>);
@@ -81,7 +81,7 @@ export function OpenItems(props: Props & { d: InvoiceList }) {
                         onClick={() => nav.select({ area: 'invoices', view: 'open-items', id: x.inv.number })} onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) nav.select({ area: 'invoices', view: 'open-items', id: x.inv.number }); }}>
                         <td className="mono">{x.inv.number}</td>
                         <td className="mono">{formatDate(x.inv.date)}</td>
-                        <td className="mono">{formatDate(x.inv.dueDate)}</td>
+                        <td className="mono">{formatDate(x.due)}</td>
                         <td className={`num mono${x.overdue ? ' late' : ''}`}>{x.overdue || ''}</td>
                         <td className="num mono">{fmt(x.open)}</td>
                         {AGE_BANDS.map((b) => <td key={b} className="num mono">{x.band === b ? fmt(x.open) : ''}</td>)}

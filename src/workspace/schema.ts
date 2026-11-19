@@ -130,6 +130,13 @@ export const WORKSPACE_SCHEMA = 7;
  *    (default interest `{ rate, from, to, days, amount }`) and `by` (`auto`, `run`); `payments[].interest`
  *    (the part of a payment that paid default interest). An app of schema 4 would count a draft's fee
  *    as charged and print every Mahnung as «n. Mahnung», so it must refuse.
+ *    Also in 5 (slice J, Teilrechnungen, docs/specs/invoicing.md 4.4.9): a Rechnung's `role` (`partial`, a
+ *    Teilrechnung, or `final`, the Schlussrechnung) and `stage` (the stage of its Auftrag's plan it
+ *    invoices); a position's `deducts` and `deductedVat` (a Schlussrechnung's deduction of a
+ *    Teilrechnung, at the VAT that one charged); an Auftrag's `stages`; a Rechnung's `schedule`
+ *    (`retention`); sent-log kinds `instalment` and `statement`. A file of schema 4 holds none: the
+ *    step adds nothing. An app of schema 4 would read a deduction as a position with its own VAT and
+ *    ask the whole of a Rechnung with a retention, so it must refuse.
  */
 export const INVOICES_SCHEMA = 5;
 /** 1: payroll.json starts with dated histories (docs/specs/domain-model.md §5.7), so it needs no step yet. */
@@ -221,7 +228,8 @@ export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {
   2: (doc) => ({ ...doc, invoices: Array.isArray(doc.invoices) ? doc.invoices.map((d) => unitsOfIssued(pricesOfDocument(d))) : doc.invoices }),
   // No document is of a phase-2 kind before: nothing to add for them. Each customer becomes a firm contact; the documents stay byte for byte.
   3: (doc) => contactsOfCustomers(doc),
-  // No Mahnung is a draft and none names a title, interest or how it went before; the number makes an older app refuse the file.
+  // No Mahnung is a draft and none names a title, interest or how it went before; no document has a role, a deduction, a plan
+  // or a retention: nothing to add. The number makes an older app refuse the file.
   4: (doc) => doc,
 };
 

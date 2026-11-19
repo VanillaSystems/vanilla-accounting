@@ -1622,6 +1622,67 @@ listed here and updated with phase 2's build:
     task say to check the sent log.
 ---
 
+110. **Formats of phase 3 (slice J).** `invoices.json` step 4 → 5 (`INVOICES_SCHEMA` 5, shared with slice I's Mahnwesen) holds a Rechnung's
+    `role` (`partial`, `final`) and `stage`, a position's `deducts` and `deductedVat`, an Auftrag's `stages`,
+    a Rechnung's `schedule.retention`, and the sent-log kinds `instalment` and `statement`. A file of schema 4
+    holds none of them: the step adds nothing. `stage` (the index of the plan's stage a Teilrechnung invoices)
+    is added beside the spec's fields, so the plan shows what each stage invoiced without guessing.
+111. **«verrechnet» and «Erledigt» with a plan.** A Teilrechnung invoices a share of the value, never a
+    quantity: its positions carry no `ofLine`. The Auftrag reads Teilweise once one is issued; the column
+    «verrechnet» counts the Teilrechnungen by value (their gross over the Auftrag's) until the
+    Schlussrechnung is issued; the Schlussrechnung takes every position with its whole quantity
+    (`ofLine`), so the Auftrag reads Erledigt by its quantities, as without a plan. «Rechnung erstellen»
+    stays as it was (positions and open quantities); the plan's way is «Schlussrechnung erstellen».
+112. **A deduction is a position with `deducts`,** not a kind of its own: it prints, moves and is removed
+    like a position, and on the draft its amount cannot be changed. It carries the VAT its Teilrechnung
+    charged (`deductedVat`), and the totals take that VAT off the rate's, so the Schlussrechnung's VAT per
+    rate is the whole's less the Teilrechnungen's (the usual Swiss «MWST auf dem Total, abzüglich MWST
+    der Akontos»). Each document keeps its own VAT, and the three gross amounts and the three VAT amounts
+    per rate add up to the whole's to the Rappen, net or gross pricing alike. Each document is booked
+    on its own, each to the Rappen: with two accounts or two activities at one rate the three documents'
+    bookings per code may differ by a Rappen from one booking of the whole, inherent to booking each
+    document apart (tests/invoice-stages.test.ts keeps a reduced fuzz of this). A part below zero (a
+    rate the Akontos invoiced more of than the work measured) books the other way round with the minus
+    code, never a negative amount, in the event, the payment and a write-off.
+    A deduction is one position per group of the Teilrechnung (rate, account, activity), so a firm with
+    two net tax rates deducts F2 from F2.
+113. **A Teilrechnung's positions:** one per rate, account and activity of the Auftrag (one per rate in the
+    common case), the stage's amount split in proportion to the Rappen, net or gross as the Auftrag; the
+    text «Akonto n gemäss Auftrag AU-…: <stage>», each group's share by its signed amount over the net
+    total, so a take-back position stays a take-back. A stage's percent or amount is of the Auftrag's total in
+    its own prices (net on a net Auftrag), as a Rabatt's amount is. A Rabatt never takes off a deduction.
+114. **The plan must add up** (spec 4.4.9): «Speichern» waits and the dialog names what is missing or too
+    much; the API refuses with `stagesSum`. Only the last stage may be the Rest. Percents that add up to
+    100 add up to the total: the last percent stage takes what is left, to the Rappen. A stage with its
+    Teilrechnung stays as it is (`stageInvoiced`); the plan is changed on an issued Auftrag too, as it
+    prints nothing of it. An Auftrag goes back to draft while only Teilrechnungen hang on it; its total then
+    changes only with «Trotzdem ändern» (`stagesInvoiced`, 4.11).
+115. **One Schlussrechnung per Auftrag** (`finalExists`); a Teilrechnung still a draft warns (`partialDrafts`,
+    «Trotzdem erstellen»): the Schlussrechnung deducts only issued ones. «Akontos abziehen» on a Rechnung
+    draft marked Schlussrechnung offers the contact's Teilrechnungen, issued, not cancelled, in its
+    currency, not credited in full, that no Schlussrechnung that stands deducts yet; a Teilrechnung
+    credited in part is deducted at what is left (invoiced less credited, per rate). A deducted
+    Teilrechnung stands as deducted: its Storno and «Zurück zum Entwurf» are refused (`deducted`), the way
+    on is a Gutschrift of the Schlussrechnung. A Schlussrechnung credited in full frees its Teilrechnungen.
+    At issue every deduction is checked (`deduction`): an issued Teilrechnung that stands, of the same
+    contact and currency, deducted by no other, at what is left of it. «Als Entwurf kopieren» leaves the
+    deductions and the role out. A Schlussrechnung the Teilrechnungen exceed (its total zero or less) is
+    refused with its own words, «die Teilrechnungen übersteigen die Schlussrechnung: eine Gutschrift
+    erstellen»: the market leader lets a final invoice go negative as a credit, but a Rechnung here asks
+    money on a payment slip, which carries no amount below zero, so the Gutschrift is that credit.
+116. **Rückbehalt** is `schedule.retention { percent, until }` on the draft (entered with its other fields;
+    printed below the total with «Zu zahlen»). The QR amount is the total less the retention, to the
+    Rappen. What is open is due on the due date while more than the retention is open, else on the
+    retention's day (`dueFor`), which lies after the invoice date and has no default: before it nothing is overdue, from it the list says «Rückbehalt fällig seit
+    …» and the age bands of Offene Posten count from it. A payment of the total less the retention by the
+    number (no reference) is matched as the Rechnung's. A Skonto is of what is due now (the slip's
+    amount), never of the retention: its «pays» is the slip less the Skonto, and the slip paid is the
+    retention case. A reminder before the retention's day asks for what is due and names the retention.
+    «Zahlungsaufforderung» is offered and sent from the retention's day only (`retentionNotDue`): a sheet
+    of its own (`instalment` in the sent log) asking the retention, or what is open when less, with the
+    Rechnung's reference, naming what else is open; nothing is booked.
+    Instalments beyond the retention (`schedule.instalments`) are not built.
+
 ## 8. Changes from the concept of 2026-11-15 (owner, 2026-11-19)
 
 | # | Old (2026-11-14/15) | New (2026-11-19) | Why |

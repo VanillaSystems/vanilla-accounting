@@ -91,7 +91,7 @@ test('P2.6: the step 3 → 4 keeps every document byte for byte, and each draft 
   assert.equal('customers' in contactsOfCustomers(mixed()), false);
 });
 
-test('P2.6: a workspace of schema 3 opens with its contacts, saves schema 4, and its next invoice continues', async () => {
+test('P2.6: a workspace of schema 3 opens with its contacts, saves the current schema, and its next invoice continues', async () => {
   const ws = tempWorkspace();
   writeFileSync(ws.paths.invoices, JSON.stringify(mixed()));
   const book = loadInvoices(ws);

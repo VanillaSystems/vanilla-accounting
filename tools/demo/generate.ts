@@ -405,7 +405,7 @@ async function invoicing(demo: Demo, books: Index, tree: Tree, payments: DemoPay
     const confirming = new Set(demo.invoicing!.steps.flatMap((s) => (s.do === 'hand' && s.statement ? [rows.get(s.key)!.ref] : [])));
     full.transactions = full.transactions.filter((t) => !confirming.has(t.ref));
     const paid = matchPayments(full, book, ctx);
-    const expected = demo.invoicing!.steps.filter((s) => s.do === 'issue' && s.paid).length;
+    const expected = demo.invoicing!.steps.filter((s) => (s.do === 'issue' || s.do === 'stage') && s.paid).length;
     if (paid.paid.filter((p) => p.booked).length !== expected || paid.questions.length) {
       throw new Error(`${demo.dir}: ${expected} invoice payments should book by their reference: ${JSON.stringify(paid)}`);
     }

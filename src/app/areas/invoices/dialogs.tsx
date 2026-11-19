@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
 import { isBooked, issuedPdfUrl, type Contact, type DocumentKind, type Invoice, type Issued } from '../../../invoices/model.js';
 import { Paper } from '../receipts/Paper.js';
-import { openAmount, paidAmount, totals, creditable } from '../../../invoices/rules.js';
+import { instalmentDue, openAmount, paidAmount, totals, creditable } from '../../../invoices/rules.js';
 import type { RouteOf } from '../../shell/route.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { language, t } from '../../i18n/index.js';
@@ -22,7 +22,8 @@ import { useWorkspace } from '../../hooks/use-workspace.js';
 import { mailText, type MailDocument } from '../../../invoices/documents.js';
 import type { MailMessage } from '../../../invoices/mail.js';
 import type { MailStatus } from '../../../types/api-error.js';
-import { cancel, cancelDocument, creditNote, newDraftFor, savePdf, send, sendReminder } from './actions.js';
+import { cancel, cancelDocument, creditNote, newDraftFor, savePdf, send, sendInstalment, sendReminder } from './actions.js';
+import { PlanDialog } from './plan.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 import { ContactDialog, ImportDialog } from './contacts.js';
 import { ArticleDialog, ArticleImportDialog, ArticlePicker } from './articles.js';
@@ -57,7 +58,8 @@ export function Dialogs(props: Props) {
     case 'cancel': return inv?.status === 'issued' ? (isBooked(inv) ? <CancelDialog {...props} inv={inv} /> : <CancelPlainDialog {...props} inv={inv} />) : null;
     case 'credit': return inv?.status === 'issued' ? <CreditDialog {...props} inv={inv} invoices={d.invoices} /> : null;
     case 'download': return inv?.status === 'issued' ? <DownloadDialog {...props} inv={inv} /> : null;
-    case 'send': return inv?.status === 'issued' ? <SendDialog {...props} inv={inv} reminder={s.dialog.reminder} issued={s.dialog.issued} /> : null;
+    case 'send': return inv?.status === 'issued' ? <SendDialog {...props} inv={inv} reminder={s.dialog.reminder} issued={s.dialog.issued} instalment={s.dialog.instalment} /> : null;
+    case 'plan': return inv ? <PlanDialog {...props} inv={inv} invoices={d.invoices} /> : null;
     case 'handPayment': return inv?.status === 'issued' ? <HandPaymentDialog {...props} inv={inv} invoices={d.invoices} /> : null;
     case 'writeOff': return inv?.status === 'issued' ? <WriteOffDialog {...props} inv={inv} invoices={d.invoices} reason={s.dialog.reason} amount={s.dialog.amount} /> : null;
     case 'allocate': return <AllocateDialog {...props} transactionRef={s.dialog.transactionRef} customerId={s.dialog.customerId} />;
@@ -148,14 +150,14 @@ function MailFields({ mail, value, onChange, nav }: { mail: ReturnType<typeof us
  * Senden: the issued invoice with its stored PDF in view, or a reminder, by e-mail with the PDF attached, or saved as
  * a download. Right after «Ausstellen» (`issued`) it says so and «Später» closes it.
  */
-function SendDialog({ inv, nav, reminder, issued }: Props & { inv: Issued; reminder?: { level: number; title: string }; issued?: true }) {
-  const mail = useMail(inv, reminder ? { kind: 'reminder', level: reminder.level, title: reminder.title } : { kind: 'invoice' });
+function SendDialog({ inv, nav, reminder, issued, instalment }: Props & { inv: Issued; reminder?: { level: number; title: string }; issued?: true; instalment?: true }) {
+  const mail = useMail(inv, reminder ? { kind: 'reminder', level: reminder.level, title: reminder.title } : instalment ? { kind: 'instalment' } : { kind: 'invoice' });
   const [m, setM] = useState<MailMessage>();
   const [busy, setBusy] = useState(false);
   const value = m ?? mail.defaults;
   const go = async (email?: MailMessage) => {
     setBusy(true);
-    const ok = reminder ? await sendReminder(nav, inv, email) : await send(nav, inv, email);
+    const ok = reminder ? await sendReminder(nav, inv, email) : instalment ? await sendInstalment(nav, inv, email) : await send(nav, inv, email);
     setBusy(false);
     if (!ok) return;
     close();
@@ -165,6 +167,7 @@ function SendDialog({ inv, nav, reminder, issued }: Props & { inv: Issued; remin
   // An Angebot, Auftrag or Lieferschein names its own kind.
   const other = inv.kind !== 'invoice' && !credit ? t(`invoices.docKind.${inv.kind}`) : undefined;
   const label = reminder ? t('invoices.sendReminder', { title: reminder.title })
+    : instalment ? t('sales.instalment.title', { number: inv.number })
     : other ? t(issued ? 'invoices.docIssued' : 'invoices.sendTitleDoc', { kind: other, number: inv.number })
     : issued ? t(credit ? 'invoices.creditIssued' : 'invoices.issued', { number: inv.number })
     : t(credit ? 'invoices.sendTitleCredit' : 'invoices.sendTitle', { number: inv.number });
@@ -176,12 +179,13 @@ function SendDialog({ inv, nav, reminder, issued }: Props & { inv: Issued; remin
     </>
   );
   return (
-    <Frame label={label} title={`${inv.customer.name} · ${inv.currency} ${fmt(totals(inv).gross)}`} foot={foot} className={`isend${reminder ? '' : ' withpdf'}`}>
+    <Frame label={label} title={`${inv.customer.name} · ${inv.currency} ${fmt(instalment ? instalmentDue(inv, invoicesNow()?.invoices ?? [], localToday())?.amount ?? 0 : totals(inv).gross)}`} foot={foot} className={`isend${reminder || instalment ? '' : ' withpdf'}`}>
       <div className="ibody lkf">
-        {!reminder && <div className="isendpdf paper real"><Paper src={issuedPdfUrl(inv.number)} maxWidth={560} whole /></div>}
+        {!reminder && !instalment && <div className="isendpdf paper real"><Paper src={issuedPdfUrl(inv.number)} maxWidth={560} whole /></div>}
+        {instalment && <p className="m ivhint" data-testid="instalment-hint">{t('sales.instalment.hint', { amount: `${inv.currency} ${fmt(instalmentDue(inv, invoicesNow()?.invoices ?? [], localToday())?.amount ?? 0)}` })}</p>}
         {issued && <p className="m ivhint">{t('invoices.issuedNext')}</p>}
         <MailFields mail={mail} value={value} onChange={setM} nav={nav} />
-        <p className="m ivhint">{t('invoices.mailAttached', { file: reminder ? t('invoices.reminderFile', { title: reminder.title }) : `${inv.number}.pdf` })}</p>
+        <p className="m ivhint">{t('invoices.mailAttached', { file: reminder ? t('invoices.reminderFile', { title: reminder.title }) : instalment ? t('sales.instalment.file') : `${inv.number}.pdf` })}</p>
       </div>
     </Frame>
   );

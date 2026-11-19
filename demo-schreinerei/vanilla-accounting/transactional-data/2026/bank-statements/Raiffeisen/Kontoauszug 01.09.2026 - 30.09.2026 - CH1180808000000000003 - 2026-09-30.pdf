@@ -12,7 +12,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
 endobj
 5 0 obj
-<< /Length 1210 >>
+<< /Length 1292 >>
 stream
 BT
 /F1 10 Tf
@@ -35,7 +35,8 @@ T* (22.09.2026 | Gutschrift Beispiel Immobilien AG | 2’482.05 | Ref. 90000000076
 T* (25.09.2026 | Lohnzahlung Marco Beispiel | -5’803.20 | Ref. 90000000077) Tj
 T* (28.09.2026 | Zahlung Ausgleichskasse Muster | -2’604.00 | Ref. 90000000078) Tj
 T* (30.09.2026 | Kontoführungsgebühren | -15.00 | Ref. 90000000079) Tj
-T* (Schlusssaldo 30.09.2026: -7’982.57) Tj
+T* (30.09.2026 | Gutschrift Familie Keller-Muster | 7’389.00 | Ref. 90000000080) Tj
+T* (Schlusssaldo 30.09.2026: -593.57) Tj
 ET
 endstream
 endobj
@@ -50,5 +51,5 @@ xref
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-1599
+1681
 %%EOF

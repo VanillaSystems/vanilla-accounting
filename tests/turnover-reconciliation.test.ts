@@ -69,7 +69,8 @@ test('demo-schreinerei (net tax rate, half-yearly): H1 is the filed Ziffer 200; 
   const plain = turnoverReconciliation(books, HALVES, filedReturnsOf(ws, '2026'));
   assert.deepEqual(plain.periods.map((p) => [p.period, p.booked, p.declared, p.filed, p.differences.length]), [
     ['2026-H1', 41103.35, 41103.35, 41103.35, 0],
-    ['2026-H2', 27858.27, 27858.27, undefined, 0],
+    // H2 holds the staircase's first Akonto, paid 30.09. (CHF 7 389, tools/demo/schreinerei-invoices.ts).
+    ['2026-H2', 35247.27, 35247.27, undefined, 0],
   ]);
   const r = turnoverReconciliation([...books, je('t-f1', '2026-09-01', '3400', '1020', 500, { vatCode: '-F1', corrects: '2026-H1' })], HALVES, filedReturnsOf(ws, '2026'));
   assert.deepEqual(row(r, '2026-H1').correction, -500);

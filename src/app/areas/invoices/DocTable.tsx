@@ -39,8 +39,9 @@ const money = (r: DocRow, n: number) => (r.inv.currency !== baseCurrency() ? <><
 
 /** The status with the sent mark: «Offen · gesendet», «Überfällig · 12 Tage · nicht gesendet», «Entwurf». */
 export function statusText(r: DocRow, kind: DocKind): string {
-  // Überfällig with its days and, once reminded, its Mahnstufe beside it (spec 4.8).
-  const base = r.overdue > 0 ? [t('sales.status.overdueDays', { n: r.overdue }), r.levelTitle].filter(Boolean).join(' · ') : t(`sales.status.${groupOf(kind)}.${r.status}` as 'sales.status.invoice.open');
+  // A retention due is a fact of its own («Rückbehalt fällig seit 30.06.2027», spec 4.4.9), never a nudge; Überfällig carries its Mahnstufe (spec 4.8).
+  const base = r.retention ? t('sales.status.retentionDue', { date: formatDate(r.retention) })
+    : r.overdue > 0 ? [t('sales.status.overdueDays', { n: r.overdue }), r.levelTitle].filter(Boolean).join(' · ') : t(`sales.status.${groupOf(kind)}.${r.status}` as 'sales.status.invoice.open');
   if (r.inv.status !== 'issued') return base;
   // A cancelled document waits for nothing: it reads «gesendet» when it went out, never «nicht gesendet».
   if (r.status === 'cancelled' && !r.sent.sent) return base;
@@ -89,7 +90,7 @@ function columns(kind: DocKind, go: (loc: ReturnType<typeof invoiceAt>) => void)
   }
   return [
     date, number, contact, status, sent,
-    { key: 'due', label: t('sales.col.due'), cell: (r) => (r.inv.status === 'issued' ? <span className={`mono${r.overdue ? ' late' : ''}`}>{formatDate(r.inv.dueDate)}</span> : '–'), csv: (r) => (r.inv.status === 'issued' ? formatDate(r.inv.dueDate) : '') },
+    { key: 'due', label: t('sales.col.due'), cell: (r) => (r.inv.status === 'issued' ? <span className={`mono${r.overdue ? ' late' : ''}`}>{formatDate(r.due ?? r.inv.dueDate)}</span> : '–'), csv: (r) => (r.inv.status === 'issued' ? formatDate(r.due ?? r.inv.dueDate) : '') },
     { key: 'currency', label: t('sales.col.currency'), cell: (r) => <span className="mono">{r.inv.currency}</span>, csv: (r) => r.inv.currency },
     gross,
     { key: 'open', label: t('sales.col.open'), num: true, cell: (r) => (r.open ? money(r, r.open) : '–'), csv: (r) => r.open },

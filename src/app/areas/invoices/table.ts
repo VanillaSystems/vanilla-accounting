@@ -7,7 +7,7 @@
 import type { Period } from '../../../accounting/periods.js';
 import { fromRappen, toRappen } from '../../../accounting/rappen.js';
 import type { Invoice, Issued } from '../../../invoices/model.js';
-import { isOverdue, openAmount, totals } from '../../../invoices/rules.js';
+import { dueFor, isOverdue, openAmount, retentionDue, totals } from '../../../invoices/rules.js';
 import {
   CREDIT_TABS, DELIVERY_TABS, INVOICE_TABS, ORDER_TABS, QUOTE_TABS, creditNoteStatus, creditRest, daysBetween, deliveryStatus, invoiceStatus, orderStatus, quoteStatus, sentFacts, unsent,
   type CreditListStatus, type CreditTab, type DeliveryListStatus, type InvoiceListStatus, type InvoiceTab, type OrderListStatus, type QuoteListStatus, type SentFacts,
@@ -41,6 +41,10 @@ export interface DocRow {
   status: InvoiceListStatus | CreditListStatus | QuoteListStatus | OrderListStatus | DeliveryListStatus;
   /** Days past the due date while something is open; 0 otherwise. */
   overdue: number;
+  /** The day what is open is due: the due date, or the retention's once no more than it is open (spec 4.4.9). */
+  due?: string;
+  /** A retention whose day has come and that is open: its day («Rückbehalt fällig seit …»). */
+  retention?: string;
   /** Issued, not cancelled, never sent itself. */
   unsent: boolean;
   sent: SentFacts;
@@ -95,9 +99,12 @@ export function docRows(d: InvoiceList, kind: DocKind, period: Period, q: string
       const targetId = inv.creditFor ?? (kind === 'delivery-note' ? inv.from?.id : undefined);
       const target = targetId ? d.invoices.find((i): i is Issued => i.id === targetId && i.status === 'issued') : undefined;
       const status = statusOfKind(inv, d.invoices, today);
-      const due = inv.status === 'issued' && kind === 'invoice' && isOverdue(inv, d.invoices, today) ? daysBetween(inv.dueDate, today) : 0;
+      const dueOn = inv.status === 'issued' && kind === 'invoice' ? dueFor(inv, open) : undefined;
+      const due = dueOn && isOverdue(inv, d.invoices, today) ? daysBetween(dueOn, today) : 0;
+      const held = retentionDue(inv, d.invoices, today);
       return {
         inv, id: routeId(inv), customer: customerOf(d, inv)?.name ?? '', status, overdue: due, unsent: unsent(inv, d.sent),
+        ...(dueOn ? { due: dueOn } : {}), ...(held ? { retention: held.until } : {}),
         sent: sentFacts(d.sent, inv), gross: totals(inv).gross, open,
         ...levelOf(inv, d.invoices),
         ...(target ? { target } : {}),
@@ -179,7 +186,7 @@ function compare(a: DocRow, b: DocRow, key: SortKey): number {
     case 'invoice': return text(a.target?.number ?? '', b.target?.number ?? '');
     case 'status': return (STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status)) || (a.overdue - b.overdue);
     case 'sent': return (a.sent.last?.sentAt ?? '').localeCompare(b.sent.last?.sentAt ?? '');
-    case 'due': return (a.inv.dueDate ?? '').localeCompare(b.inv.dueDate ?? '');
+    case 'due': return (a.due ?? a.inv.dueDate ?? '').localeCompare(b.due ?? b.inv.dueDate ?? '');
     case 'currency': return a.inv.currency.localeCompare(b.inv.currency);
     case 'gross': return a.gross - b.gross;
     case 'open': return a.open - b.open;

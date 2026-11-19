@@ -5,7 +5,7 @@
  * tools/demo/generate.ts, so they cannot disagree.
  */
 import type { CorrectionCase, QuarterKey, ReceiptKind, VatRateGroup } from '../../src/types/index.js';
-import type { Address, ArticleFields, ContactFields, CustomerFields, DocumentKind, Exemption, InvoiceCurrency, InvoiceLine, Prices, VatRate, WriteOffReason } from '../../src/invoices/model.js';
+import type { Address, ArticleFields, ContactFields, CustomerFields, DocumentKind, Exemption, InvoiceCurrency, InvoiceLine, Prices, Schedule, Stage, VatRate, WriteOffReason } from '../../src/invoices/model.js';
 import type { VatSetup } from '../../src/workspace/vat-setup.js';
 import { LEGACY_DUNNING } from '../../src/workspace/dunning.js';
 
@@ -149,6 +149,14 @@ export type InvoiceStep =
   /** `paid`: the customer pays by the invoice's reference, `amount` (absent: all of it) arrives on `date`. */
   | ({ do: 'issue'; send?: DemoSend; paid?: { date: string; bank: string; amount?: number } } & Drafted)
   | ({ do: 'draft' } & Drafted)
+  /** An Auftrag with its Teilrechnungsplan (spec 4.4.9), issued and sent; numbered in its own series. */
+  | ({ do: 'order'; send?: DemoSend; stages: Stage[] } & Drafted)
+  /**
+   * The Rechnung of stage `stage` of the Auftrag `of` (a Teilrechnung; the last stage or `final` the
+   * Schlussrechnung, which deducts every Teilrechnung issued before it), issued and sent on `at`;
+   * `schedule` a retention entered at issue; `paid` as an invoice's.
+   */
+  | { do: 'stage'; key: string; of: string; stage: number | 'final'; at: string; send?: DemoSend; schedule?: Schedule; paid?: { date: string; bank: string; amount?: number } }
   | { do: 'credit'; key: string; of: string; at: string; amount?: number; vatRate?: VatRate; reason: string; settlement?: 'refund' | 'offset'; send?: DemoSend }
   | { do: 'remind'; of: string; at: string; fee?: number }
   | { do: 'cancel'; of: string; at: string; reason: string }

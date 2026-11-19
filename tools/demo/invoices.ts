@@ -9,11 +9,13 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, wr
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { partDirs, workspaceAt, type Workspace } from '../../src/workspace/workspace.js';
-import { addArticles, addComment, addContacts, answerQuote, cancelInvoice, convertDocument, createCreditNote, createCustomer, createDraft, issueInvoice, recordSend, sendReminder, updateDraft } from '../../src/invoices/service.js';
+import { addArticles, addComment, addContacts, answerQuote, cancelInvoice, convertDocument, createCreditNote, createCustomer, createDraft, createStageInvoice, issueInvoice, recordSend, sendReminder, setStages, updateDraft } from '../../src/invoices/service.js';
 import { articleLine } from '../../src/invoices/articles.js';
 import { closeBrowser } from '../../src/invoices/pdf.js';
 import { idSource, loadInvoices, updateInvoices } from '../../src/invoices/store.js';
 import type { Article, CustomerFields, InvoiceBook, InvoiceLine, Issued, Prices } from '../../src/invoices/model.js';
+import { stageDraft } from '../../src/invoices/stages.js';
+import type { InvoiceStep } from './kit.js';
 import { qrReference, scorReference } from '../../src/providers/qr-bill/reference.js';
 import { liveInvoices, openAmount, skontoOf, totals, withPayment, withWriteOff } from '../../src/invoices/rules.js';
 import { TEXTS } from '../../src/invoices/texts.js';
@@ -26,8 +28,32 @@ import { mulberry32, r2, YEAR, type DemoInvoicing, type DemoSend, type Part, typ
 /** The number each issued document gets: issued in step order, numbered per year from 001. */
 export function numbersOf(inv: DemoInvoicing): Map<string, string> {
   const out = new Map<string, string>();
-  for (const s of inv.steps) if (s.do === 'issue' || s.do === 'credit') out.set(s.key, `${YEAR}-${String(out.size + 1).padStart(3, '0')}`);
+  for (const s of inv.steps) if (s.do === 'issue' || s.do === 'credit' || s.do === 'stage') out.set(s.key, `${YEAR}-${String(out.size + 1).padStart(3, '0')}`);
   return out;
+}
+
+type OrderStep = Extract<InvoiceStep, { do: 'order' }>;
+type StageStep = Extract<InvoiceStep, { do: 'stage' }>;
+
+/**
+ * What the Rechnung of a stage step asks for, worked out as the app makes it (src/invoices/stages.ts):
+ * a Teilrechnung its stage's share of the Auftrag; the Schlussrechnung the Auftrag less every
+ * Teilrechnung of it before, less its retention.
+ */
+export function stageGross(inv: DemoInvoicing, s: StageStep): number {
+  const order = inv.steps.find((x): x is OrderStep => x.do === 'order' && x.key === s.of)!;
+  const doc = {
+    id: order.key, createdAt: order.at, origin: 'manual' as const, deleted: false, status: 'issued' as const, kind: 'sales-order' as const, number: 'AU',
+    customerId: order.customer, date: order.date, currency: order.currency ?? 'CHF', language: inv.customers[order.customer].language,
+    lines: order.lines, ...(order.prices ? { prices: order.prices } : {}), stages: order.stages,
+  } as unknown as Issued;
+  const partial = (x: StageStep) => totals(stageDraft(doc, x.stage as number, [], { id: x.key, createdAt: x.at, origin: 'manual', deleted: false }, x.at.slice(0, 10))).gross;
+  const final = s.stage === 'final' || s.stage === order.stages.length - 1;
+  if (!final) return partial(s);
+  const before = inv.steps.slice(0, inv.steps.indexOf(s)).filter((x): x is StageStep => x.do === 'stage' && x.of === s.of);
+  const gross = r2(totals(doc).gross - before.reduce((t, x) => t + partial(x), 0));
+  const held = s.schedule?.retention ? Math.round(gross * s.schedule.retention.percent) / 100 : 0;
+  return r2(gross - held);
 }
 
 /** The reference an invoice carries (src/providers/qr-bill/reference.ts referenceFor): QRR to a CHF QR-IBAN, else SCOR. */
@@ -51,6 +77,15 @@ export function invoicePayments(inv: DemoInvoicing): Payment[] {
       return [row(s.paid.bank, s.paid.date, customer, {
         reference: referenceOf(inv, number, s.currency), text: `${TEXTS[customer.language].invoice} ${number}`,
         legs: [{ account: '', amount: s.paid.amount ?? totals(s).gross, text: '' }], invoice: number,
+      })];
+    }
+    if (s.do === 'stage' && s.paid) {
+      const number = numbers.get(s.key)!;
+      const order = inv.steps.find((x): x is OrderStep => x.do === 'order' && x.key === s.of)!;
+      const customer = inv.customers[order.customer];
+      return [row(s.paid.bank, s.paid.date, customer, {
+        reference: referenceOf(inv, number, order.currency), text: `${TEXTS[customer.language].invoice} ${number}`,
+        legs: [{ account: '', amount: s.paid.amount ?? stageGross(inv, s), text: '' }], invoice: number,
       })];
     }
     if (s.do === 'hand' && s.statement) {
@@ -118,6 +153,20 @@ export async function playInvoicing(inv: DemoInvoicing, manifest: string, owner:
         }, s.at);
         ids.set(s.key, draft.id);
         if (s.do === 'issue') await issueAndSend(ws, s.key, draft.id, s.at, expected, false, s.send);
+      } else if (s.do === 'order') {
+        const customer = inv.customers[s.customer];
+        const draft = createDraft(ws, {
+          customerId: customerIds.get(s.customer)!, kind: 'sales-order', date: s.date, subject: s.subject, lines: s.lines, language: customer.language,
+          ...(s.currency ? { currency: s.currency } : {}), ...(s.prices ? { prices: s.prices } : {}), ...(s.supplied ? { supplied: s.supplied } : {}),
+        }, s.at);
+        ids.set(s.key, draft.id);
+        setStages(ws, draft.id, s.stages);
+        await issueAndSend(ws, s.key, draft.id, s.at, expected, false, s.send);
+      } else if (s.do === 'stage') {
+        const draft = createStageInvoice(ws, ids.get(s.of)!, s.stage, [], s.at);
+        if (s.schedule) updateDraft(ws, draft.id, { schedule: s.schedule });
+        ids.set(s.key, draft.id);
+        await issueAndSend(ws, s.key, draft.id, s.at, expected, false, s.send);
       } else if (s.do === 'credit') {
         const credit = createCreditNote(ws, ids.get(s.of)!, { reason: s.reason, ...(s.amount !== undefined ? { amount: s.amount } : {}), ...(s.vatRate !== undefined ? { vatRate: s.vatRate } : {}), ...(s.settlement ? { settlement: s.settlement } : {}) }, s.at);
         ids.set(s.key, credit.id);
@@ -210,7 +259,8 @@ export async function withSeededIds<T>(seed: number, fn: () => Promise<T>): Prom
  */
 async function issueAndSend(ws: Workspace, key: string, id: string, at: string, expected: Map<string, string>, confirmed = false, send: DemoSend = 'email'): Promise<void> {
   const issued = await issueInvoice(ws, id, { now: at, confirmed });
-  if (issued.number !== expected.get(key)) throw new Error(`demo invoice ${key} was issued as ${issued.number}, expected ${expected.get(key)}`);
+  // An Auftrag takes a number of its own series, which no payment names.
+  if (expected.has(key) && issued.number !== expected.get(key)) throw new Error(`demo invoice ${key} was issued as ${issued.number}, expected ${expected.get(key)}`);
   if (send === 'none') return;
   const to = issued.customer.email;
   if (send === 'email' && !to) throw new Error(`demo invoice ${key} goes by e-mail: its customer needs an address`);

@@ -220,6 +220,16 @@ export interface ItemLine {
    * conversion copied, so the Auftrag counts what of each position was delivered and invoiced (src/invoices/chain.ts).
    */
   ofLine?: number;
+  /**
+   * A deduction of a Schlussrechnung (spec 4.4.9): the id of the Teilrechnung whose part at this
+   * line's rate, account and activity it takes off, at what that one invoiced, not what was paid.
+   * `price` is that part's amount, negative, net or gross as the Teilrechnung was (`vatIncluded`
+   * where it differs from this document), and `deductedVat` the VAT the part carried: the
+   * Schlussrechnung's VAT per rate is the whole's less what the Teilrechnungen charged (rules.ts
+   * totalsOf), so the documents' VAT adds up to the whole's to the Rappen (MWSTG Art. 40 Abs. 1 lit. b).
+   */
+  deducts?: string;
+  deductedVat?: number;
 }
 
 /** A text between positions: a title (bold) or plain; no amount. */
@@ -336,6 +346,22 @@ export const isBooked = (d: { kind: DocumentKind }): d is { kind: BookedKind } =
 /** A person's click on an Angebot: the customer accepted or declined it, on `date`, as `by` recorded. */
 export interface Answer { date: string; by: string }
 
+/**
+ * A stage of an Auftrag's Teilrechnungsplan (spec 4.4.9): «30 % bei Auftrag», «40 % nach Rohbau»,
+ * «Rest». A percent or an amount of the Auftrag's total in its prices (net or gross as its
+ * positions); neither on the last stage: the rest. `date` is when it is planned, a fact for the list.
+ */
+export interface Stage { label: string; percent?: number; amount?: number; date?: string }
+
+/** Rückbehalt (spec 4.4.9): a share of a Rechnung held back until a day; its QR-bill asks for the rest. */
+export interface Retention { percent: number; until: string }
+
+/** How a Rechnung is paid beyond its due date: its retention (phase 3); instalments may join it. */
+export interface Schedule { retention?: Retention }
+
+/** A Rechnung's place in a plan: a Teilrechnung (Akonto) or the Schlussrechnung that deducts them. */
+export type InvoiceRole = 'partial' | 'final';
+
 /** What a draft holds and an issued invoice keeps, frozen. */
 export interface InvoiceContent {
   kind: DocumentKind;
@@ -384,6 +410,14 @@ export interface InvoiceContent {
   ordered?: string;
   /** An Auftrag prints as Auftragsbestätigung (absent) or Proformarechnung: a print variant, no number of the invoice series, no booking. */
   printAs?: 'confirmation' | 'proforma';
+  /** A Rechnung that is a Teilrechnung or a Schlussrechnung (spec 4.4.9); absent: an ordinary one. */
+  role?: InvoiceRole;
+  /** A Teilrechnung made from a stage of its Auftrag's plan: the stage's index (`stages`). */
+  stage?: number;
+  /** An Auftrag's Teilrechnungsplan; changed on an issued Auftrag too (it prints nothing of it). */
+  stages?: Stage[];
+  /** A Rechnung's retention. */
+  schedule?: Schedule;
 }
 
 export interface Draft extends Envelope, InvoiceContent {
@@ -531,8 +565,12 @@ export interface Issued extends Envelope, InvoiceContent {
 
 export type Invoice = Draft | Issued;
 
-/** `quote`, `sales-order`, `delivery-note`: the document itself going out, as `invoice` and `credit-note` are. */
-export const SENT_KINDS = ['invoice', 'resend', 'reminder', 'credit-note', 'cancellation', 'quote', 'sales-order', 'delivery-note'] as const;
+/**
+ * `quote`, `sales-order`, `delivery-note`: the document itself going out, as `invoice` and
+ * `credit-note` are; `instalment` a Zahlungsaufforderung of a retention due (spec 4.4.9), `statement`
+ * a contact's Kontoauszug (4.4.5).
+ */
+export const SENT_KINDS = ['invoice', 'resend', 'reminder', 'credit-note', 'cancellation', 'quote', 'sales-order', 'delivery-note', 'instalment', 'statement'] as const;
 export type SentKind = (typeof SENT_KINDS)[number];
 
 /** A document as it went out: its PDF, byte-exact, with checksum, time and recipient. */

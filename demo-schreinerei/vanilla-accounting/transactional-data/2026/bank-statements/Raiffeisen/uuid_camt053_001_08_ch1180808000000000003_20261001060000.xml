@@ -23,7 +23,7 @@
       </Bal>
       <Bal>
         <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
-        <Amt Ccy="CHF">7982.57</Amt>
+        <Amt Ccy="CHF">593.57</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <Dt><Dt>2026-09-30</Dt></Dt>
       </Bal>
@@ -529,6 +529,25 @@
           </TxDtls>
         </NtryDtls>
         <AddtlNtryInf>Kontoführungsgebühren</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">7389.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-09-30</Dt></BookgDt>
+        <ValDt><Dt>2026-09-30</Dt></ValDt>
+        <AcctSvcrRef>90000000080</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">7389.00</Amt>
+            <RltdPties><Dbtr><Pty><Nm>FAMILIE KELLER-MUSTER</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000020260036</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-003</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Familie Keller-Muster</AddtlNtryInf>
       </Ntry>
     </Stmt>
   </BkToCstmrStmt>

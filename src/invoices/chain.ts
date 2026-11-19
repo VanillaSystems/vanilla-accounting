@@ -216,7 +216,14 @@ export function doneShare(order: Invoice, docs: readonly Invoice[], pick: 'deliv
   const weight = (p: PositionState) => Math.abs(p.item.quantity * p.item.price) || 1;
   const whole = ps.reduce((s, p) => s + weight(p), 0);
   if (!whole) return 0;
-  return ps.reduce((s, p) => s + weight(p) * Math.min(1, Math.max(0, p[pick] / p.item.quantity)), 0) / whole;
+  const share = ps.reduce((s, p) => s + weight(p) * Math.min(1, Math.max(0, p[pick] / p.item.quantity)), 0) / whole;
+  if (pick === 'delivered') return share;
+  // A Teilrechnung of the plan invoices a share of the value, no quantity (decision 111); its Schlussrechnung takes every position.
+  const made = madeFrom(order, docs).filter((d): d is Issued => stands(d) && d.kind === 'invoice');
+  if (made.some((d) => d.role === 'final')) return share;
+  const gross = totals(order).gross;
+  const akonto = made.filter((d) => d.role === 'partial').reduce((s, d) => s + totals(d).gross, 0);
+  return gross > 0 ? Math.min(1, share + akonto / gross) : share;
 }
 
 /** The total of the ticked positions of a conversion, in the source's prices: what the dialog shows. */

@@ -11,7 +11,7 @@
  * Pure strings, no Node module: the UI imports it as it is.
  */
 import { SwissQRBill } from 'swissqrbill/svg';
-import { DEFAULT_UNITS, isItem, unitWord, type Address, type DocumentKind, type CustomerFields, type Exemption, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type InvoiceLine, type Prices, type Sender, type UnitDef } from './model.js';
+import { DEFAULT_UNITS, isItem, unitWord, type Address, type DocumentKind, type CustomerFields, type Exemption, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type InvoiceLine, type InvoiceRole, type Prices, type Sender, type UnitDef } from './model.js';
 import { isQrBillIban, prettyReference } from '../providers/qr-bill/reference.js';
 import { optionsOf, pricedGross, priced, revenueVatCode, totals } from './rules.js';
 import { TEXTS, formatAmount, formatDate, formatQuantity, kindTitle, type InvoiceTexts } from './texts.js';
@@ -32,6 +32,12 @@ export interface SheetData {
   number?: string;
   /** A reminder's title (its level's): the sheet's title becomes "1. Mahnung · Rechnung …". */
   reminderTitle?: string;
+  /** A Zahlungsaufforderung of a retention: the title becomes «Zahlungsaufforderung · Rechnung …». */
+  instalment?: boolean;
+  /** A Teil- or Schlussrechnung: its title. */
+  role?: InvoiceRole;
+  /** A Rechnung's retention: printed below the total with what is paid now, which its QR-bill asks for. */
+  retention?: { percent: number; until: string; amount: number };
   date: string;
   /** The day or period of the supply when it is not the invoice date. */
   supplied?: { from: string; to?: string };
@@ -54,7 +60,7 @@ export interface SheetData {
   logoSrc?: string;
   reference?: string;
   /** What the QR-bill asks for when it is not the total: an open rest, a reminder with its fee. */
-  due?: { paidSoFar: number; fee: number; open: number; interest?: { amount: number; rate: number; from: string; days: number } };
+  due?: { paidSoFar: number; fee: number; open: number; interest?: { amount: number; rate: number; from: string; days: number }; held?: { amount: number; until: string; percent: number }; notAsked?: number };
   /** A credit note: the invoice it credits and what happens with the money. */
   credit?: { number: string; date: string; gross: number; paid: number; paidDate?: string; settlement?: 'refund' | 'offset' };
   cancelled?: { date: string; reason: string };
@@ -153,8 +159,8 @@ export function hasQrBill(d: SheetData): boolean {
 const prettyIban = (iban: string) => iban.replace(/\s+/g, '').replace(/(.{4})(?!$)/g, '$1 ');
 
 export function sheetTitle(d: SheetData, L: InvoiceTexts = TEXTS[d.language]): string {
-  const base = kindTitle(L, d.kind, d.printAs);
-  return d.reminderTitle ? `${d.reminderTitle} · ${base}` : base;
+  const base = kindTitle(L, d.kind, d.printAs, d.role);
+  return d.reminderTitle ? `${d.reminderTitle} · ${base}` : d.instalment ? `${L.instalment} · ${base}` : base;
 }
 
 /** The code a position's revenue books with, shown on a draft's screen; none where the jurisdiction has none for it (a firm not registered). */
@@ -257,7 +263,8 @@ export function sheetBlocks(d: SheetData): Block[] {
       B.push({ row: true, html: row(k, `litem${sub}`, `<td>${code}${draft ? editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked') : esc(l.text)}</td><td class="r">${qty}${tools(k)}</td>`) });
       return;
     }
-    const cells = draft
+    // A deduction of a Teilrechnung stays at what that one invoiced: shown, moved or removed, never changed (stages.ts).
+    const cells = draft && !l.deducts
       ? {
         text: editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked'),
         qty: `${editable(`l:${k}:quantity`, esc(formatQuantity(l.quantity)))} ${pick(`l:${k}:unit`, [['', '–'], ...[...units.map((u): [string, string] => [u.id, u[d.language]]), ...(l.unit && !units.some((u) => u.id === l.unit) ? [[l.unit, l.unit] as [string, string]] : [])]], l.unit ?? '')}`,
@@ -281,18 +288,23 @@ export function sheetBlocks(d: SheetData): Block[] {
     B.push({ html: `<div class="edadd scr">${add.map(([a, w]) => `<button type="button" data-ia="${a}">＋ ${esc(w)}</button>`).join('')}</div>` });
   }
   const rates = t.byRate.filter((r) => r.rate > 0).map((r) => `<div><span>${esc(L.vatOn(String(r.rate), n(r.net)))}</span><span>${n(r.vat)}</span></div>`).join('');
-  const due = d.due && (d.due.paidSoFar || d.due.fee || d.due.interest) ? [
+  const due = d.due && (d.due.paidSoFar || d.due.fee || d.due.interest || d.due.held || d.due.notAsked) ? [
     d.due.paidSoFar ? `<div><span>${L.paidSoFar}</span><span>${n(-d.due.paidSoFar)}</span></div>` : '',
     d.due.fee ? `<div><span>${L.fee}</span><span>${n(d.due.fee)}</span></div>` : '',
     // Default interest, a position without VAT: what is owed for paying late, not for a supply.
     // An amount typed by hand without a rate names no percent.
     d.due.interest ? `<div><span>${esc(d.due.interest.rate ? L.interest(String(d.due.interest.rate), formatDate(d.due.interest.from, d.language), d.due.interest.days) : L.interestWord)}</span><span>${n(d.due.interest.amount)}</span></div>` : '',
+    // A retention not yet due stays out of what a reminder asks; what a Zahlungsaufforderung does not ask is named.
+    d.due.held ? `<div><span>${esc(L.retention(formatQuantity(d.due.held.percent), formatDate(d.due.held.until, d.language)))}</span><span>${n(-d.due.held.amount)}</span></div>` : '',
+    d.due.notAsked ? `<div><span>${esc(L.notAsked)}</span><span>${n(-d.due.notAsked)}</span></div>` : '',
     `<div class="tot"><span>${L.openNow} ${d.currency}</span><span>${n(d.due.open)}</span></div>`,
   ].join('') : '';
   const net = withVat ? `<div><span>${L.net}</span><span>${n(t.net)}</span></div>` : '';
   const opts = options ? optionsOf(d) : { n: 0, amount: 0 };
   const left = opts.n ? `<div class="optleft"><span>${esc(L.optionsLeftOut(opts.n, `${d.currency} ${n(opts.amount)}`))}</span></div>` : '';
-  if (!priceless) B.push({ html: `<div class="sum">${net}${rates}<div class="tot"><span>${L.total} ${d.currency}</span><span>${n(t.gross)}</span></div>${left}${due}</div>` });
+  // A retention (spec 4.4.9): what is held back until its day, and what is paid now, which the QR-bill asks for.
+  const held = d.retention && !d.due ? `<div><span>${esc(L.retention(formatQuantity(d.retention.percent), formatDate(d.retention.until, d.language)))}</span><span>${n(-d.retention.amount)}</span></div><div class="tot"><span>${L.payNow} ${d.currency}</span><span>${n(Math.round((t.gross - d.retention.amount) * 100) / 100)}</span></div>` : '';
+  if (!priceless) B.push({ html: `<div class="sum">${net}${rates}<div class="tot"><span>${L.total} ${d.currency}</span><span>${n(t.gross)}</span></div>${held}${left}${due}</div>` });
   if (d.kind === 'credit-note' && d.credit) {
     const c = d.credit, credit = -t.gross, open = Math.round((c.gross - c.paid) * 100) / 100;
     const back = Math.max(0, Math.round((credit - open) * 100) / 100), A = (x: number) => `${d.currency} ${n(x)}`;
@@ -412,7 +424,7 @@ export function qrBillData(d: SheetData, iban: string) {
   const party = (name: string, a: Address) => ({ name, address: a.street ?? '', ...(a.number ? { buildingNumber: a.number } : {}), zip: a.postcode, city: a.town, country: a.country });
   return {
     currency: d.currency,
-    amount: d.due ? d.due.open : totals(d).gross,
+    amount: d.due ? d.due.open : d.retention ? Math.round((totals(d).gross - d.retention.amount) * 100) / 100 : totals(d).gross,
     reference: d.reference,
     message: `${TEXTS[d.language].invoice} ${d.number}`,
     creditor: { ...party(s.name, s.address), account: iban.replace(/\s+/g, '') },

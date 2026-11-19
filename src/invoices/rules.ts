@@ -12,6 +12,7 @@ import type {
 import { groupMembers, isBooked, isItem, type DocumentKind } from './model.js';
 import { LEGACY_NUMBERING, nextNumberFor, type Numbering } from './numbering.js';
 import { docRef } from '../books/refs.js';
+import { checkDeductions } from './stages.js';
 import { chargesVat, invoiceActivities, invoiceRates, invoicing, vat, vatSetup } from '../engines/index.js';
 import { parseReference, referenceFor } from '../providers/qr-bill/reference.js';
 import type { BankTransaction } from '../types/index.js';
@@ -37,7 +38,11 @@ export const pricedGross = (l: ItemLine, prices: Prices | undefined): boolean =>
  * A priced part of a document, in Rappen: an item position, or a Rabatt's share of one group of the
  * positions above it. `line` is the item position whose rate, account and pricing the part carries.
  */
-export interface Part { line: ItemLine; gross: boolean; rappen: number }
+export interface Part {
+  line: ItemLine; gross: boolean; rappen: number;
+  /** A deduction of a Teilrechnung (ItemLine.deducts): the VAT it takes off, in Rappen (negative), as that one charged it. */
+  vat?: number;
+}
 
 /**
  * The attributes a Rabatt is split by and the revenue is grouped by: rate, pricing, account and the
@@ -83,14 +88,15 @@ export function priced(doc: Priced): { parts: Part[]; amounts: Array<number | un
       const rappen = toRappen(lineAmount(l));
       // An option prints its amount, never in a total, a Rabatt's base or a Zwischentotal (spec 4.4.1).
       if (l.optional) return fromRappen(rappen);
-      parts.push({ line: l, gross: l.vatRate > 0 && pricedGross(l, doc.prices), rappen });
+      parts.push({ line: l, gross: l.vatRate > 0 && pricedGross(l, doc.prices), rappen, ...(l.deducts !== undefined ? { vat: -toRappen(l.deductedVat ?? 0) } : {}) });
       since += rappen;
       return fromRappen(rappen);
     }
     if (l.kind === 'subtotal') { const sum = since; since = 0; return fromRappen(sum); }
     if (l.kind !== 'discount') return undefined;
     const groups = new Map<string, Part>();
-    for (const p of parts) {
+    // A Rabatt takes off the work, never a deduction of what a Teilrechnung invoiced.
+    for (const p of parts.filter((x) => x.vat === undefined)) {
       const g = groups.get(splitKey(p));
       groups.set(splitKey(p), { ...(g ?? p), rappen: (g?.rappen ?? 0) + p.rappen });
     }
@@ -127,16 +133,19 @@ export const lineAmounts = (doc: Priced): Array<number | undefined> => priced(do
  * rounding: a QR-bill is paid by transfer to the Rappen, and the books carry no rounding line.
  */
 function totalsOf(parts: readonly Part[]): Totals {
-  const by = new Map<VatRate, { net: number; incl: number }>();
+  const by = new Map<VatRate, { net: number; incl: number; deducted: number; dVat: number }>();
   for (const p of parts) {
-    const g = by.get(p.line.vatRate) ?? { net: 0, incl: 0 };
-    g[p.gross ? 'incl' : 'net'] += p.rappen;
+    const g = by.get(p.line.vatRate) ?? { net: 0, incl: 0, deducted: 0, dVat: 0 };
+    // A deduction keeps the VAT its Teilrechnung charged: its gross is its amount (gross) or its amount and that VAT (net).
+    if (p.vat !== undefined) { g.deducted += p.gross ? p.rappen : p.rappen + p.vat; g.dVat += p.vat; }
+    else g[p.gross ? 'incl' : 'net'] += p.rappen;
     by.set(p.line.vatRate, g);
   }
-  const byRate = [...by].sort(([a], [b]) => b - a).map(([rate, { net, incl }]) => {
+  const byRate = [...by].sort(([a], [b]) => b - a).map(([rate, { net, incl, deducted, dVat }]) => {
     const onNet = toRappen(fromRappen(net) * rate / 100);
     const inIncl = toRappen(fromRappen(incl) * rate / (100 + rate));
-    return { rate, net: fromRappen(net + incl - inIncl), vat: fromRappen(onNet + inIncl), gross: fromRappen(net + onNet + incl) };
+    const vat = onNet + inIncl + dVat, gross = net + onNet + incl + deducted;
+    return { rate, net: fromRappen(gross - vat), vat: fromRappen(vat), gross: fromRappen(gross) };
   });
   const sum = (k: 'net' | 'vat' | 'gross') => fromRappen(byRate.reduce((s, r) => s + toRappen(r[k]), 0));
   return { byRate, net: sum('net'), vat: sum('vat'), gross: sum('gross') };
@@ -317,7 +326,50 @@ export function creditBeyond(cn: Issued, invoices: readonly Invoice[]): number {
 }
 
 export function isOverdue(inv: Invoice, invoices: readonly Invoice[], today: string): boolean {
-  return inv.status === 'issued' && inv.kind === 'invoice' && openAmount(inv, invoices) > 0 && inv.dueDate < today;
+  if (inv.status !== 'issued' || inv.kind !== 'invoice') return false;
+  const open = openAmount(inv, invoices);
+  return open > 0 && dueFor(inv, open) < today;
+}
+
+// ─── Rückbehalt (spec 4.4.9) ─────────────────────────────────────────────────
+
+/** What a Rechnung holds back (Rückbehalt): its percent of the total, to the Rappen; 0 without one. */
+export function retentionOf(inv: Pick<InvoiceContent, 'schedule' | 'lines' | 'prices' | 'kind'>): number {
+  const r = inv.kind === 'invoice' ? inv.schedule?.retention : undefined;
+  return r ? fromRappen(toRappen(totals(inv).gross * r.percent / 100)) : 0;
+}
+
+/** What the QR-bill of an issued Rechnung asks for: its total less the retention. */
+export const payableAtIssue = (inv: Pick<InvoiceContent, 'schedule' | 'lines' | 'prices' | 'kind'>): number => fromRappen(toRappen(totals(inv).gross) - toRappen(retentionOf(inv)));
+
+/**
+ * The day what is open of a Rechnung is due: its due date, or the retention's day once no more than
+ * the retention is open (the rest is paid), so a retention held back is never overdue before its day.
+ */
+export function dueFor(inv: Pick<Issued, 'dueDate' | 'schedule' | 'lines' | 'prices' | 'kind'>, open: number): string {
+  const r = inv.schedule?.retention;
+  return r && toRappen(open) <= toRappen(retentionOf(inv)) ? r.until : inv.dueDate;
+}
+
+/**
+ * What a Zahlungsaufforderung asks for from the retention's day (spec 4.4.9): the retention, or what
+ * is open when less; `more` what else of the Rechnung is open beside it. Undefined before the day,
+ * without a retention or with nothing open.
+ */
+export function instalmentDue(inv: Invoice, invoices: readonly Invoice[], date: string): { amount: number; until: string; more: number } | undefined {
+  if (inv.status !== 'issued' || inv.kind !== 'invoice' || inv.cancelled || !inv.schedule?.retention || inv.schedule.retention.until > date) return undefined;
+  const open = toRappen(openAmount(inv, invoices));
+  const held = toRappen(retentionOf(inv));
+  if (open <= 0 || held <= 0) return undefined;
+  return { amount: fromRappen(Math.min(open, held)), until: inv.schedule.retention.until, more: fromRappen(Math.max(0, open - held)) };
+}
+
+/** A retention whose day has come and that is still open (spec 4.4.9 «Rückbehalt fällig seit …»): its day and what is open; undefined otherwise. */
+export function retentionDue(inv: Invoice, invoices: readonly Invoice[], today: string): { until: string; open: number } | undefined {
+  if (inv.status !== 'issued' || inv.kind !== 'invoice' || inv.cancelled || !inv.schedule?.retention) return undefined;
+  const open = openAmount(inv, invoices);
+  const r = inv.schedule.retention;
+  return open > 0 && toRappen(open) <= toRappen(retentionOf(inv)) && r.until <= today ? { until: r.until, open } : undefined;
 }
 
 // ─── numbering ───────────────────────────────────────────────────────────────
@@ -341,7 +393,7 @@ export type MissingField =
   | 'sender.name' | 'sender.address' | 'sender.uid' | 'payTo'
   | 'customer' | 'customer.name' | 'customer.address' | 'customer.person' | 'customer.addressGone'
   | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.price' | 'line.vatRate' | 'line.activity' | 'line.discount' | 'line.discountBase' | 'line.groupTitle' | 'line.groupEmpty' | 'exemption' | 'total'
-  | 'credit.invoice' | 'credit.sign' | 'credit.exceeds' | 'credit.aboveOpen' | 'numberYear' | 'line.optional';
+  | 'credit.invoice' | 'credit.sign' | 'credit.exceeds' | 'credit.aboveOpen' | 'numberYear' | 'line.optional' | 'final.total' | 'retention.until';
 
 const hasAddress = (a: { postcode?: string; town?: string; country?: string } | undefined) => !!(a?.postcode?.trim() && a.town?.trim() && a.country?.trim());
 
@@ -384,7 +436,11 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
     if (!invoiceRates().includes(l.vatRate)) out.push({ field: 'line.vatRate', line });
   });
   // An invoice asks for money: a QR-bill carries no amount below zero (SIX IG), so a Rabatt over the total is refused, not warned of.
-  if (draft.kind === 'invoice' && items.length && totals(draft).gross <= 0) out.push({ field: 'total' });
+  // A Schlussrechnung the Teilrechnungen exceed asks no money: the way on is a Gutschrift of the difference (decision 115).
+  if (draft.kind === 'invoice' && items.length && totals(draft).gross <= 0) out.push({ field: draft.role === 'final' ? 'final.total' : 'total' });
+  // A retention is held until a day after the Rechnung (spec 4.4.9).
+  const held = draft.kind === 'invoice' ? draft.schedule?.retention : undefined;
+  if (held && !(/^\d{4}-\d{2}-\d{2}$/.test(held.until) && held.until > draft.date)) out.push({ field: 'retention.until' });
   // A firm not registered charges no VAT: a line at 0 % needs no reason.
   if (chargesVat() && items.some((l) => l.vatRate === 0) && !draft.exemption) out.push({ field: 'exemption' });
   if (draft.kind === 'credit-note') {
@@ -448,12 +504,19 @@ export class InvoiceRuleError extends Error {
  * reference can hold; `convert` a conversion its kinds do not take; `nothingTicked`; `deliveryFromOrder` a
  * Lieferschein not made from an Auftrag; the warnings `expired`, `declined`, `overOpen`, `sentVersion`,
  * `orderDelivered`, `orderDrafts` and `sourceCancelled` (spec 4.11, «Trotzdem …»); the hard rule `orderInvoiced`.
+ * Phase 3 (src/invoices/stages.ts): `stages` a plan its Auftrag cannot hold (no Auftrag, a stage without its
+ * value), `stagesSum` stages that do not add up to the total, `stageInvoiced` a stage invoiced already (or a
+ * stage changed that is), `finalExists` a second Schlussrechnung, `notFinal` deductions on a draft that is no
+ * Schlussrechnung, `noRetention` a Zahlungsaufforderung of a Rechnung with no retention open; the warnings
+ * `stagesInvoiced` (an Auftrag's total changed while Teilrechnungen stand) and `partialDrafts`.
  */
 export type InvoiceRefusal = 'numberTaken' | 'archived' | 'contactGone' | 'incomplete' | 'unconfirmed' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid' | 'aboveOpen' | 'surplus' | 'beforeInvoice'
   | 'sent' | 'settled' | 'applied' | 'closed' | 'numbered' | 'account' | 'credited'
   | 'refTaken' | 'numberFormat' | 'convert' | 'nothingTicked' | 'expired' | 'declined' | 'overOpen' | 'sentVersion' | 'orderDelivered' | 'orderInvoiced' | 'notReopenable' | 'notQuote'
   | 'referenceTaken' | 'deliveryFromOrder' | 'orderDrafts' | 'sourceCancelled'
-  | 'codeTaken' | 'articleGone' | 'noReminderDraft' | 'levelChanged' | 'recordFailed';
+  | 'codeTaken' | 'articleGone' | 'noReminderDraft' | 'levelChanged' | 'recordFailed'
+  | 'stages' | 'stagesSum' | 'stageInvoiced' | 'stagesInvoiced' | 'finalExists' | 'partialDrafts' | 'notFinal' | 'noRetention'
+  | 'notOrder' | 'deducted' | 'deduction' | 'retentionNotDue';
 
 /** A kind's name in the German messages of a refusal (the UI words its own, src/app/i18n). */
 export const KIND_WORD: Record<DocumentKind, string> = { quote: 'Angebot', 'sales-order': 'Auftrag', 'delivery-note': 'Lieferschein', invoice: 'Rechnung', 'credit-note': 'Gutschrift' };
@@ -482,6 +545,8 @@ export function issue(draft: Draft, ctx: {
   if (missing.length || !ctx.customer || (booked && !('payTo' in ctx.sender))) {
     throw new InvoiceRuleError('incomplete', `Für eine MWST-konforme Rechnung fehlt: ${where(missing)}.`, missing);
   }
+  // Each deduction names a Teilrechnung that stands, at what is left of it (spec 4.4.9): refused otherwise (`deduction`).
+  checkDeductions(draft, ctx.invoices);
   const warnings = warningsForIssue(draft);
   if (warnings.length && !ctx.confirmed) {
     if (warnings.some((w) => w.field === 'numberYear')) throw new InvoiceRuleError('unconfirmed', `Nummer ${draft.number} im Jahr ${draft.date.slice(0, 4)}: der Entwurf behält die Nummer, mit der er ausgestellt war. Nur mit «Trotzdem ausstellen».`, warnings);
@@ -580,11 +645,22 @@ export function deleteDraft(inv: Invoice): Invoice {
  * its invoice took it (on the cash basis that payment's booking carries the credit's minus lines).
  * Whether its VAT event lies in a filed period is the books' to say (src/invoices/revise.ts).
  */
+/**
+ * The issued Schlussrechnung that deducts `partial` and still stands (not cancelled, not credited in
+ * full, decision 115): what keeps a deducted Teilrechnung as it was.
+ */
+export function deductedByFinal(partial: Pick<Invoice, 'id'>, invoices: readonly Invoice[]): Issued | undefined {
+  return live(invoices).find((d): d is Issued => d.status === 'issued' && d.kind === 'invoice' && !d.cancelled && d.id !== partial.id
+    && d.lines.some((l) => isItem(l) && l.deducts === partial.id) && creditable(d, invoices) > 0);
+}
+
 export function backToDraftRefusal(inv: Invoice, invoices: readonly Invoice[], sent: readonly SentDocument[]): InvoiceRefusal | undefined {
   if (inv.status !== 'issued') return 'notIssued';
   if (sent.some((d) => d.invoiceId === inv.id && !d.deleted)) return 'sent';
   if (inv.cancelled) return 'cancelled';
   if (inv.payments.length || inv.writeOffs?.length || (inv.kind === 'invoice' && creditNotesOf(inv, invoices).length)) return 'settled';
+  // A Teilrechnung a Schlussrechnung deducts stands as it was deducted (spec 4.4.9).
+  if (inv.kind === 'invoice' && deductedByFinal(inv, invoices)) return 'deducted';
   if (inv.kind === 'credit-note') {
     const target = live(invoices).find((i): i is Issued => i.id === inv.creditFor && i.status === 'issued');
     if (target?.payments.some((p) => p.date >= inv.date)) return 'applied';
@@ -618,9 +694,12 @@ export function asDraft(inv: Issued, replaced: ReplacedPdf, salutation = ''): Dr
  * takes it off the open invoices. A paid invoice is not cancelled: the money goes back through a
  * credit note for the full amount.
  */
-export function cancel(inv: Invoice, c: { date: string; reason: string; confirmed?: boolean }): Issued {
+export function cancel(inv: Invoice, c: { date: string; reason: string; confirmed?: boolean; invoices?: readonly Invoice[] }): Issued {
   if (inv.status !== 'issued') throw new InvoiceRuleError('notIssued', 'Ein Entwurf wird gelöscht, nicht storniert.');
   if (inv.cancelled) throw new InvoiceRuleError('cancelled', `${KIND_WORD[inv.kind]} ${inv.number} ist schon storniert.`, undefined, { number: inv.number });
+  // A Teilrechnung a Schlussrechnung deducts stands: the way on is a Gutschrift of the Schlussrechnung (spec 4.4.9).
+  const by = c.invoices && inv.kind === 'invoice' ? deductedByFinal(inv, c.invoices) : undefined;
+  if (by) throw new InvoiceRuleError('deducted', `Die Schlussrechnung ${by.number} zieht ${inv.number} ab: die Teilrechnung bleibt, wie sie abgezogen ist. Eine Gutschrift der Schlussrechnung korrigiert.`, undefined, { number: inv.number, final: by.number });
   // A warning (spec 4.11): the Storno undoes the claim, the money stays received; «Trotzdem stornieren» releases the payments (the caller).
   if (inv.payments.length && !c.confirmed) {
     const named = inv.payments.map((p) => `${inv.currency} ${p.amount.toFixed(2)} vom ${p.date}`).join(', ');
@@ -650,7 +729,7 @@ export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Enve
   // The whole invoice: every position as it stood, the items' prices negated; a Rabatt then reduces the credit as it reduced the invoice.
   let prices = inv.prices;
   if (req.amount === undefined) {
-    lines = inv.lines.map((l) => (isItem(l) ? { ...l, text: reason ? `${l.text} (${reason})` : l.text, price: -l.price } : { ...l }));
+    lines = inv.lines.map((l) => (isItem(l) ? { ...l, text: reason ? `${l.text} (${reason})` : l.text, price: -l.price, ...(l.deductedVat !== undefined ? { deductedVat: -l.deductedVat } : {}) } : { ...l }));
   } else {
     // A part of the total: gross amounts per rate, so the document is priced gross.
     prices = 'gross';
@@ -780,18 +859,22 @@ export function skontoOf(inv: Issued, invoices: readonly Invoice[], amount: numb
   const sk = inv.terms?.skonto;
   if (!sk || inv.kind !== 'invoice' || inv.cancelled || inv.payments.length || inv.writeOffs?.length) return undefined;
   if (date < inv.date || date > addDays(inv.date, sk.days)) return undefined;
+  // A retention is held back, not discounted: the Skonto is of what is due now (the open amount less the retention).
   const open = toRappen(openAmount(inv, invoices, date));
-  const skonto = toRappen(fromRappen(open) * sk.percent / 100);
-  const rest = open - toRappen(amount);
+  const held = toRappen(retentionOf(inv));
+  const due = open > held ? open - held : open;
+  const skonto = toRappen(fromRappen(due) * sk.percent / 100);
+  const rest = due - toRappen(amount);
   if (rest <= 0 || skonto <= 0 || Math.abs(rest - skonto) > toRappen(SKONTO_TOLERANCE)) return undefined;
   return fromRappen(rest);
 }
 
 /** The Skonto an invoice's printed terms offer if paid on time: its amount and the last day, for the paper and the detail. */
-export function skontoOffer(inv: Pick<Issued, 'date' | 'terms' | 'lines' | 'prices' | 'kind'>): { amount: number; until: string; pays: number } | undefined {
+export function skontoOffer(inv: Pick<Issued, 'date' | 'terms' | 'lines' | 'prices' | 'kind'> & Partial<Pick<Issued, 'schedule'>>): { amount: number; until: string; pays: number } | undefined {
   const sk = inv.terms?.skonto;
   if (!sk || inv.kind !== 'invoice') return undefined;
-  const gross = toRappen(totals(inv).gross);
+  // With a retention the Skonto is of what the payment slip asks (the total less the retention), and «pays» is that less the Skonto.
+  const gross = toRappen(totals(inv).gross) - toRappen(retentionOf(inv as Pick<InvoiceContent, 'schedule' | 'lines' | 'prices' | 'kind'>));
   const amount = toRappen(fromRappen(gross) * sk.percent / 100);
   return { amount: fromRappen(amount), until: addDays(inv.date, sk.days), pays: fromRappen(gross - amount) };
 }
@@ -847,6 +930,20 @@ export function withoutWriteOff(inv: Issued, id: string): Issued {
 export interface RevenueLine { account: string; vatCode: string | undefined; amount: number; minus?: true }
 
 /**
+ * Lines as the books take them: never a negative amount. A part below zero (a Schlussrechnung whose
+ * rate the Teilrechnungen invoiced more of than it has, a take-back position) books the other way
+ * round with the minus code and its amount positive, as a Verrechnung does.
+ */
+export const signedLines = (lines: readonly RevenueLine[]): RevenueLine[] => lines.filter((l) => l.amount !== 0).map((l) => {
+  if (l.amount > 0) return l;
+  const { minus, ...rest } = l;
+  return { ...rest, amount: fromRappen(-toRappen(l.amount)), ...(minus ? {} : { minus: true as const }) };
+});
+
+/** The revenue a document books for `amount`: revenueSplit as the books take it (signedLines). */
+export const revenueLines = (inv: Pick<InvoiceContent, 'lines' | 'exemption' | 'prices'>, amount: number, revenueAccount: string): RevenueLine[] => signedLines(revenueSplit(inv, amount, revenueAccount));
+
+/**
  * The revenue a payment `a` of an invoice books on the cash basis. Without credit notes: split like
  * the invoice (revenueSplit). With credit notes applied to it by the payment's date (Verrechnung,
  * spec 4.4.6, P1.8), the payment pays what is left of the invoice less the credits, so it books its
@@ -869,14 +966,14 @@ export function cashRevenue(inv: Issued, invoices: readonly Invoice[], a: Pick<P
     bookedInv += share; bookedCredit += share - pay;
   }
   const lines: RevenueLine[] = revenueSplit(inv, fromRappen(last.inv), revenueAccount);
-  if (last.credit <= 0) return lines;
+  if (last.credit <= 0) return signedLines(lines);
   const credits = appliedCredits(inv, invoices, a.date);
   const parts = apportion(last.credit, credits.map((c) => c.applied));
   credits.forEach((c, k) => {
     // A credit note's lines are negative: its split of a positive amount is that amount's mix of its positions.
     for (const l of revenueSplit(c.note, fromRappen(parts[k]), revenueAccount)) lines.push({ ...l, minus: true });
   });
-  return lines;
+  return signedLines(lines);
 }
 
 /** The credit notes of an invoice issued by `date`, each with the part of it applied to the invoice (its whole less what goes back), in Rappen. */

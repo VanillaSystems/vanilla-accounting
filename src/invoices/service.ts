@@ -8,11 +8,11 @@ import { existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs
 import { basename, dirname, extname, join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import { receiptFile, type Books } from '../books/store.js';
-import { defaultTexts, draftDays, issuedIntro, issuedSheet, mailText, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
+import { defaultTexts, draftDays, instalmentSheet, issuedIntro, issuedSheet, mailText, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
 import {
   INVOICE_CURRENCIES, INVOICE_LANGUAGES, DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, LINE_KINDS, PRICES, isItem, withGroups, type UnitDef,
   type Article, type ArticleFields, type Comment, type Contact, type ContactFields, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
-  type AccountChange, type DunningSettings, type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type SentDocument, type SentKind,
+  type AccountChange, type DunningSettings, type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type Schedule, type SentDocument, type SentKind, type Stage,
 } from './model.js';
 import { renderHtml, renderPdf, type Rendered } from './pdf.js';
 import {
@@ -27,7 +27,7 @@ import { DEFAULT_NUMBERING } from './numbering.js';
 import { convertDraft, defaultValidUntil, type Ticked } from './chain.js';
 import { orderCancelBlock, ownSends } from './lists.js';
 import { isBooked } from './model.js';
-import { kindTitle } from './texts.js';
+import { formatAmount, kindTitle } from './texts.js';
 import type { PaymentContext, PaymentOutcome } from './payments.js';
 import { notesWithAccounts, withAccounts, type AccountChangePlan, type AccountContext } from './revise.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
@@ -47,6 +47,8 @@ import { heldByReconciliation } from '../books/reconcile.js';
 import { accountsOf } from '../workspace/reads.js';
 import { accountName, setAccountName } from '../workspace/accounts-write.js';
 import { standardAccounts } from '../workspace/chart.js';
+import { checkPlan, finalDraft, invoicedStages, stageDraft, stageStates, withDeductions } from './stages.js';
+import { instalmentDue } from './rules.js';
 
 export interface Printer {
   pdf(d: SheetData, at: string): Promise<Rendered & { pdf: Buffer }>;
@@ -157,11 +159,14 @@ function parseLines(v: unknown, units: readonly string[]): InvoiceLine[] {
       case undefined: case 'item': case 'article': break;
       default: return bad(`${at}: kind ist eine von ${LINE_KINDS.join(', ')}.`);
     }
-    known(['text', 'quantity', 'unit', 'price', 'vatRate', 'discount', 'vatIncluded', 'account', 'activity', 'optional', 'ofLine', 'inGroup', ...(l.kind === 'article' ? ['articleId', 'code'] : [])]);
+    known(['text', 'quantity', 'unit', 'price', 'vatRate', 'discount', 'vatIncluded', 'account', 'activity', 'optional', 'ofLine', 'inGroup', 'deducts', 'deductedVat', ...(l.kind === 'article' ? ['articleId', 'code'] : [])]);
     // An Artikel position names its Artikel; it stays one when the Artikel is archived or deleted since (its fields are its own).
     if (l.kind === 'article' && !(isText(l.articleId) && l.articleId)) bad(`${at}: articleId fehlt.`);
     if (l.code !== undefined && !isText(l.code)) bad(`${at}: code ist ein Text.`);
     if (l.inGroup !== undefined && typeof l.inGroup !== 'boolean') bad(`${at}: inGroup ist true oder false.`);
+    // A Schlussrechnung's deduction keeps the Teilrechnung it names and the VAT that one charged (stages.ts deductionLines).
+    if (l.deducts !== undefined && (!isText(l.deducts) || typeof l.deductedVat !== 'number' || !Number.isFinite(l.deductedVat))) bad(`${at}: deducts ist die id einer Teilrechnung, mit deductedVat als Zahl.`);
+    if (l.deducts === undefined && l.deductedVat !== undefined) bad(`${at}: deductedVat nur mit deducts.`);
     if (l.optional !== undefined && typeof l.optional !== 'boolean') bad(`${at}: optional ist true oder false.`);
     if (l.ofLine !== undefined && !(Number.isInteger(l.ofLine) && (l.ofLine as number) >= 0)) bad(`${at}: ofLine ist die Nummer einer Position.`);
     if (typeof l.quantity !== 'number' || typeof l.price !== 'number') bad(`${at}: quantity und price sind Zahlen.`, [{ field: 'line.quantity', line: i }]);
@@ -185,11 +190,24 @@ function parseLines(v: unknown, units: readonly string[]): InvoiceLine[] {
       ...(l.optional === true ? { optional: true as const } : {}),
       ...(typeof l.ofLine === 'number' ? { ofLine: l.ofLine } : {}),
       ...(l.inGroup === true ? { inGroup: true as const } : {}),
+      ...(isText(l.deducts) ? { deducts: l.deducts, deductedVat: l.deductedVat as number } : {}),
     };
   }));
 }
 
-const DRAFT_FIELDS = ['kind', 'customerId', 'personId', 'addressId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'prices', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs'] as const;
+/** `schedule: { retention: { percent, until } }` (spec 4.4.9): a percent above 0 and below 100, and a day. */
+function parseSchedule(v: unknown): Schedule {
+  const s = (v ?? {}) as Record<string, unknown>;
+  if (typeof v !== 'object' || Object.keys(s).some((k) => k !== 'retention')) return bad('schedule ist { retention: { percent, until } }.');
+  if (s.retention === undefined) return {};
+  const r = (s.retention ?? {}) as Record<string, unknown>;
+  if (typeof r.percent !== 'number' || !(r.percent > 0 && r.percent < 100) || !isDate(r.until) || Object.keys(r).some((k) => k !== 'percent' && k !== 'until')) {
+    return bad('retention ist { percent, until }: ein Prozentsatz über 0 und unter 100 und ein Datum JJJJ-MM-TT.');
+  }
+  return { retention: { percent: r.percent, until: r.until as string } };
+}
+
+const DRAFT_FIELDS = ['kind', 'customerId', 'personId', 'addressId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'prices', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs', 'role', 'schedule'] as const;
 export type DraftPatch = Partial<Pick<InvoiceContent, (typeof DRAFT_FIELDS)[number]>>;
 
 /**
@@ -203,13 +221,16 @@ export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonl
   if (unknown.length) bad(`Unbekannte Felder: ${unknown.join(', ')}`);
   const out: DraftPatch & { clear: string[] } = { clear: [] };
   for (const [k, v] of Object.entries(b)) {
-    if (v === null && ['personId', 'addressId', 'supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs'].includes(k)) { out.clear.push(k); continue; }
+    if (v === null && ['personId', 'addressId', 'supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs', 'role', 'schedule'].includes(k)) { out.clear.push(k); continue; }
     // A draft is of one kind from its start (a conversion makes one of another); a credit note only from its invoice.
     // A Lieferschein comes only from an Auftrag (decision 21), by «Lieferschein erstellen».
     if (k === 'kind' && v === 'delivery-note') throw new InvoiceRuleError('deliveryFromOrder', 'Ein Lieferschein entsteht aus einem Auftrag: dort «Lieferschein erstellen».');
     if (k === 'kind') { if (id !== undefined || !['quote', 'sales-order', 'invoice'].includes(v as string)) bad('kind ist quote, sales-order oder invoice, beim Anlegen.'); out.kind = v as InvoiceContent['kind']; continue; }
     if (k === 'validUntil') { if (!isDate(v)) bad('validUntil ist ein Datum JJJJ-MM-TT.'); out.validUntil = v as string; continue; }
     if (k === 'printAs') { if (v !== 'confirmation' && v !== 'proforma') bad('printAs ist confirmation oder proforma.'); out.printAs = v as 'confirmation' | 'proforma'; continue; }
+    // A Teil- or Schlussrechnung (spec 4.4.9): a Rechnung's mark; its plan's stage comes only from the Auftrag.
+    if (k === 'role') { if (v !== 'partial' && v !== 'final') bad('role ist partial oder final.'); out.role = v as 'partial' | 'final'; continue; }
+    if (k === 'schedule') { out.schedule = parseSchedule(v); continue; }
     if (k === 'customerId') {
       const c = liveContacts(book).find((x) => x.id === v);
       if (!c) bad('Kontakt nicht gefunden.', [{ field: 'customer' }]);
@@ -430,12 +451,23 @@ export function createDraft(ws: Workspace, input: { customerId: string } & Draft
   });
 }
 
-export function updateDraft(ws: Workspace, id: string, patch: DraftPatch & { clear?: string[] }): Draft {
+/**
+ * `confirm`: the warnings the person overrode, `stagesInvoiced` («Trotzdem ändern», spec 4.11): the
+ * total of an Auftrag whose Teilrechnungen are issued changes.
+ */
+export function updateDraft(ws: Workspace, id: string, patch: DraftPatch & { clear?: string[] }, confirm: readonly string[] = []): Draft {
   return updateInvoices(ws, (book) => {
     const inv = findInvoice(book, id) ?? notFound('Rechnung');
     if (inv.status !== 'draft') throw new InvoiceRuleError('notDraft', `Rechnung ${inv.number} ist ausgestellt und bleibt, wie sie ist: eine Gutschrift oder ein Storno korrigiert sie.`);
     const { clear = [], ...fields } = patch;
     const next = { ...inv, ...fields } as Draft;
+    if (inv.kind === 'sales-order' && !confirm.includes('stagesInvoiced') && totals(next).gross !== totals(inv).gross) {
+      const made = invoicedStages(inv, liveDocuments(book));
+      if (made.numbers.length) {
+        const amount = `${inv.currency} ${formatAmount(made.gross, 'de')}`;
+        throw new InvoiceRuleError('stagesInvoiced', `${made.numbers.length === 1 ? 'Eine Teilrechnung' : `${made.numbers.length} Teilrechnungen`} über ${amount} ausgestellt (${made.numbers.join(', ')}): die Stufen ergeben das alte Total, die Schlussrechnung zieht ab, was in Rechnung gestellt ist. Nur mit «Trotzdem ändern».`, undefined, { n: made.numbers.length, amount, numbers: made.numbers.join(', ') });
+      }
+    }
     // Another contact: the person and the address of the one before are not its own.
     if (fields.customerId && fields.customerId !== inv.customerId) {
       if (!('personId' in fields)) delete next.personId;
@@ -509,7 +541,8 @@ function sentTitle(inv: Issued, kind: SentKind, reminder?: Pick<Reminder, 'level
   const L = TEXTS[inv.language];
   if (kind === 'reminder') return `${reminderTitle(reminder ?? { level: 1 }, inv.language)} · ${L.invoice} ${inv.number}`;
   if (kind === 'cancellation') return `${L.stamp}: ${L.invoice} ${inv.number}`;
-  return `${kindTitle(L, inv.kind, inv.printAs)} ${inv.number}`;
+  if (kind === 'instalment') return `${L.instalment} · ${kindTitle(L, inv.kind, inv.printAs, inv.role)} ${inv.number}`;
+  return `${kindTitle(L, inv.kind, inv.printAs, inv.role)} ${inv.number}`;
 }
 
 /**
@@ -706,7 +739,7 @@ export function cancelInvoice(ws: Workspace, id: string, req: { date: string; re
     // Drafts made from it would hang on a Storno: named first, and each warns again at its issue.
     const drafts = inv.kind === 'sales-order' ? liveDocuments(book).filter((d) => d.status === 'draft' && d.from?.id === inv.id) : [];
     if (drafts.length && !confirm.includes('orderDrafts')) throw new InvoiceRuleError('orderDrafts', `Aus ${inv.number} ${drafts.length === 1 ? 'ist ein Entwurf' : `sind ${drafts.length} Entwürfe`} angelegt: storniert, kann ${drafts.length === 1 ? 'er' : 'jeder'} nur mit «Trotzdem ausstellen» ausgestellt werden. Nur mit «Trotzdem stornieren».`, undefined, { number: inv.number ?? '', n: drafts.length });
-    const cancelled = cancel(inv, { ...req, confirmed: !isBooked(inv) || confirm.includes('paid') });
+    const cancelled = cancel(inv, { ...req, confirmed: !isBooked(inv) || confirm.includes('paid'), invoices: liveDocuments(book) });
     const sent = req.notify && isBooked(inv) ? await printOwnDocument(ws, cancelled, 'cancellation', issuedSheet(book, cancelled, logoSrc(ws, cancelled.layout.logo)), req.to, now, opts.printer ?? chromium, opts.deliver) : undefined;
     return commit(ws, inv.id, inv, (fresh, at) => {
       fresh.invoices[at] = cancelled;
@@ -776,7 +809,8 @@ export function reopenDocument(ws: Workspace, id: string, confirmed: boolean): D
     if (inv.kind !== 'quote' && inv.kind !== 'sales-order') throw new InvoiceRuleError('notReopenable', 'Nur ein Angebot oder ein Auftrag geht hier zurück zum Entwurf.');
     if (inv.status !== 'issued') throw new InvoiceRuleError('notIssued', 'Das ist schon ein Entwurf.');
     if (inv.cancelled) throw new InvoiceRuleError('cancelled', `${inv.number} ist storniert.`, undefined, { number: inv.number });
-    const made = liveDocuments(book).filter((d) => d.from?.id === inv.id);
+    // Its Teilrechnungen hold it no more than its plan: its total changes only with the warning of updateDraft (spec 4.11).
+    const made = liveDocuments(book).filter((d) => d.from?.id === inv.id && !(d.kind === 'invoice' && d.role === 'partial'));
     if (made.length) throw new InvoiceRuleError('notReopenable', `Aus ${inv.number} sind schon Dokumente entstanden: es bleibt, wie es ist.`, undefined, { number: inv.number });
     const last = ownSends(book.sent, inv).at(-1);
     if (last && !confirmed) {
@@ -1049,6 +1083,105 @@ export async function autoReminders(ws: Workspace, opts: { today?: string; now?:
 
 /** The device that holds the books: not a Durchsicht copy of someone else's, not a read-only start (decision 7.4). */
 export const holdsTheBooks = (ws: Pick<Workspace, 'paths'>): boolean => !isDurchsicht(ws.paths.root) && process.env.READONLY !== '1';
+
+// ─── Teilrechnungen, Schlussrechnung, Rückbehalt (spec 4.4.9) ─────────────────
+
+/** A plan from a request: `[{ label, percent? | amount?, date? }]`. */
+export function parseStages(v: unknown): Stage[] {
+  if (!Array.isArray(v)) return bad('stages ist eine Liste { label, percent? | amount?, date? }.');
+  return v.map((raw, k) => {
+    const x = (raw ?? {}) as Record<string, unknown>;
+    if (Object.keys(x).some((f) => !['label', 'percent', 'amount', 'date'].includes(f))) bad(`Stufe ${k + 1}: unbekannte Felder.`);
+    if (!isText(x.label)) bad(`Stufe ${k + 1}: label ist ein Text.`);
+    for (const f of ['percent', 'amount'] as const) if (x[f] !== undefined && (typeof x[f] !== 'number' || !Number.isFinite(x[f]))) bad(`Stufe ${k + 1}: ${f} ist eine Zahl.`);
+    if (x.date !== undefined && !isDate(x.date)) bad(`Stufe ${k + 1}: date ist ein Datum JJJJ-MM-TT.`);
+    return { label: (x.label as string).trim(), ...(x.percent !== undefined ? { percent: x.percent as number } : {}), ...(x.amount !== undefined ? { amount: x.amount as number } : {}), ...(x.date !== undefined ? { date: x.date as string } : {}) };
+  });
+}
+
+/**
+ * The Teilrechnungsplan of an Auftrag, a draft or issued (it prints nothing of it): the stages must
+ * add up to its total (`stagesSum`). A stage invoiced already stays as it is, and stays in the plan
+ * (`stageInvoiced`): what was invoiced is the Schlussrechnung's to deduct. An empty list removes the plan.
+ */
+export function setStages(ws: Workspace, id: string, stages: readonly Stage[]): Invoice {
+  return updateInvoices(ws, (book) => {
+    const order = findInvoice(book, id) ?? notFound('Auftrag');
+    if (order.status === 'issued' && order.cancelled) throw new InvoiceRuleError('cancelled', `${order.number} ist storniert.`, undefined, { number: order.number });
+    if (stages.length) checkPlan(order, stages);
+    else if (order.kind !== 'sales-order') checkPlan(order, stages);
+    const docs = liveDocuments(book);
+    for (const s of stageStates(order, docs)) {
+      if (!s.doc || s.last) continue;
+      const now = stages[s.k];
+      if (!now || JSON.stringify(now) !== JSON.stringify(s.stage)) throw new InvoiceRuleError('stageInvoiced', `Stufe ${s.k + 1} «${s.stage.label}» ist in Rechnung gestellt: sie bleibt, wie sie ist.`, undefined, { stage: s.k + 1, label: s.stage.label });
+    }
+    const { stages: _old, ...rest } = order;
+    const next = (stages.length ? { ...rest, stages: [...stages] } : rest) as Invoice;
+    book.invoices[book.invoices.indexOf(order)] = next;
+    return next;
+  });
+}
+
+/**
+ * The Rechnung of stage `stage` of an Auftrag's plan: a Teilrechnung draft, or for the last stage the
+ * Schlussrechnung (finalDraft). `confirm`: `partialDrafts`, the person's «Trotzdem erstellen».
+ */
+export function createStageInvoice(ws: Workspace, id: string, stage: number | 'final', confirm: readonly string[] = [], now = new Date().toISOString()): Draft {
+  return updateInvoices(ws, (book) => {
+    const order = findInvoice(book, id) ?? notFound('Auftrag');
+    const docs = liveDocuments(book);
+    const last = (order.stages?.length ?? 0) - 1;
+    const envelope = newEnvelope('in', now);
+    const draft = stage === 'final' || stage === last
+      ? finalDraft(order, docs, envelope, now.slice(0, 10), confirm)
+      : stageDraft(order, stage, docs, envelope, now.slice(0, 10));
+    const contact = liveContacts(book).find((c) => c.id === draft.customerId);
+    const terms = !draft.termsId && contact ? draftTermsOf(ws.invoicing, contact) : undefined;
+    const done: Draft = { ...draft, ...(terms ? { termsId: terms } : {}) };
+    book.invoices.push(done);
+    return done;
+  });
+}
+
+/** «Akontos abziehen» on a Schlussrechnung draft: the deductions of the contact's Teilrechnungen `ids` added at its end. */
+export function addDeductions(ws: Workspace, id: string, ids: readonly string[]): Draft {
+  return updateInvoices(ws, (book) => {
+    const draft = findInvoice(book, id) ?? notFound('Rechnung');
+    const next = withDeductions(draft, ids, liveDocuments(book));
+    book.invoices[book.invoices.indexOf(draft)] = next;
+    return next;
+  });
+}
+
+/**
+ * «Zahlungsaufforderung» (spec 4.4.9): the retention of an issued Rechnung asked for, with its own
+ * QR-bill for what is open and the Rechnung's reference, so its payment is matched as the Rechnung's.
+ * Recorded in the sent log as `instalment`; nothing is booked. Refused without a retention or with nothing open.
+ */
+export function sendInstalment(ws: Workspace, id: string, req: { date?: string; intro?: string; closing?: string; to?: string }, opts: { now?: string; printer?: Printer; deliver?: Deliver } = {}): Promise<SentDocument> {
+  return serial(async () => {
+    const now = opts.now ?? new Date().toISOString();
+    const book = loadInvoices(ws);
+    const inv = sendable(book, id);
+    const date = req.date ?? now.slice(0, 10);
+    if (!isDate(date)) bad('date ist ein Datum JJJJ-MM-TT.');
+    if (inv.kind !== 'invoice' || !inv.schedule?.retention || openAmount(inv, liveInvoices(book)) === 0) {
+      throw new InvoiceRuleError('noRetention', `Rechnung ${inv.number} hat keinen offenen Rückbehalt.`, undefined, { number: inv.number });
+    }
+    // Offered and sent from the retention's day only (spec 4.4.9); before it a reminder asks for what is due.
+    if (!instalmentDue(inv, liveInvoices(book), date)) {
+      throw new InvoiceRuleError('retentionNotDue', `Der Rückbehalt von ${inv.number} ist erst am ${inv.schedule.retention.until} fällig.`, undefined, { number: inv.number, date: inv.schedule.retention.until });
+    }
+    const sheet = instalmentSheet(book, inv, { date, ...(req.intro !== undefined ? { intro: req.intro } : {}), ...(req.closing !== undefined ? { closing: req.closing } : {}) }, logoSrc(ws, inv.layout.logo));
+    const sent = await printOwnDocument(ws, inv, 'instalment', sheet, req.to, now, opts.printer ?? chromium, opts.deliver);
+    return updateInvoices(ws, (fresh) => {
+      sendable(fresh, id);
+      fresh.sent.push(sent);
+      return sent;
+    });
+  });
+}
 
 export function addComment(ws: Workspace, id: string, text: string, author: string, now = new Date().toISOString()): Comment {
   if (!text.trim()) bad('Der Kommentar ist leer.');

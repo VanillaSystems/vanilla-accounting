@@ -4,7 +4,9 @@
  * VAT, so its invoices are priced gross; the paper shows the statutory rate (Art. 26 MWSTG), the
  * books the approved net tax rate. The kitchen's appliances are bought in and resold: that is the
  * firm's second approved activity (trade), whose position books F2 at its own rate (#504). The
- * kitchen is paid by QR reference; the wardrobes are open.
+ * kitchen is paid by QR reference; the wardrobes are open. A staircase for a family is an Auftrag
+ * with a Teilrechnungsplan (spec 4.4.9): 30 % at the order, paid; 40 % after the carcass, still
+ * open; the Schlussrechnung deducts both, with 5 % held back until the acceptance next summer.
  */
 import type { DemoInvoicing } from './kit.js';
 import { LEGACY_DUNNING_YAML } from './kit.js';
@@ -32,6 +34,10 @@ ${LEGACY_DUNNING_YAML}
       name: 'Familie Huber-Beispiel', address: { street: 'Obere Gasse', number: '17', postcode: '9008', town: 'St. Gallen', country: 'CH' },
       language: 'de', email: 'huber-beispiel@mail.example', paymentTermsDays: 30,
     },
+    treppe: {
+      name: 'Familie Keller-Muster', address: { street: 'Rosenbergstrasse', number: '41', postcode: '9000', town: 'St. Gallen', country: 'CH' },
+      language: 'de', email: 'keller-muster@mail.example', paymentTermsDays: 30,
+    },
     wohnbau: {
       name: 'Muster Wohnbau AG', attn: 'Bauleitung, z. H. Frau Muster', address: { street: 'Rorschacher Strasse', number: '150', postcode: '9006', town: 'St. Gallen', country: 'CH' },
       language: 'de', vatId: 'CHE-579.135.791 MWST', email: 'rechnungen@muster-wohnbau.example', paymentTermsDays: 30,
@@ -55,6 +61,20 @@ ${LEGACY_DUNNING_YAML}
         { text: 'Einbauschrank Eiche furniert, 2,4 m', quantity: 8, unit: 'pcs', price: 1850, vatRate: 8.1 },
         { text: 'Montage', quantity: 24, unit: 'h', price: 98, vatRate: 8.1 },
       ] },
+    { do: 'order', key: 'treppe', customer: 'treppe', at: '2026-09-25T09:00:00.000Z', date: '2026-09-25', subject: 'Treppe Eiche, Einfamilienhaus Rosenberg', prices: 'gross',
+      lines: [
+        { text: 'Wangentreppe Eiche massiv, 15 Stufen, Herstellung', quantity: 1, unit: 'flat', price: 18500, vatRate: 8.1 },
+        { text: 'Geländer Eiche mit Stahlstäben', quantity: 6.5, unit: 'm', price: 340, vatRate: 8.1 },
+        { text: 'Montage', quantity: 40, unit: 'h', price: 98, vatRate: 8.1 },
+      ],
+      stages: [
+        { label: '30 % bei Auftrag', percent: 30, date: '2026-09-25' },
+        { label: '40 % nach Rohbau', percent: 40, date: '2026-10-20' },
+        { label: 'Rest bei Abnahme' },
+      ] },
+    { do: 'stage', key: 'treppe-1', of: 'treppe', stage: 0, at: '2026-09-25T09:30:00.000Z', paid: { date: '2026-09-30', bank: 'raiffeisen' } },
+    { do: 'stage', key: 'treppe-2', of: 'treppe', stage: 1, at: '2026-10-20T08:00:00.000Z' },
+    { do: 'stage', key: 'treppe-3', of: 'treppe', stage: 'final', at: '2026-11-12T08:00:00.000Z', schedule: { retention: { percent: 5, until: '2027-06-30' } } },
   ],
   // Phase 2 (spec 5 «Phase 2»): a kitchen quoted to another family, accepted, and its Auftrag (printed as Auftragsbestätigung).
   sales: {

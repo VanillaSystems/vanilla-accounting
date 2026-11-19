@@ -9,7 +9,7 @@ import { store, stored } from '../../shell/storage.js';
 import { DEFAULT_SORT, DOC_VIEWS, type DocView, type Sort } from './table.js';
 import type { DocumentKind, WriteOffReason } from '../../../invoices/model.js';
 
-export type Section = 'draft' | 'look' | 'chain' | 'customer' | 'money' | 'sent' | 'comments' | 'log';
+export type Section = 'draft' | 'look' | 'chain' | 'plan' | 'customer' | 'money' | 'sent' | 'comments' | 'log';
 
 export type Dialog =
   /** Whom a new document is for; `doc`: its kind (absent: a Rechnung). */
@@ -47,9 +47,11 @@ export type Dialog =
    */
   /** «PDF herunterladen» of a Rechnung or Gutschrift never sent: «Ja, festhalten» records the download as its sending, «Nur ansehen» saves it only. */
   | { kind: 'download' }
-  | { kind: 'send'; reminder?: { level: number; title: string }; issued?: true }
+  | { kind: 'send'; reminder?: { level: number; title: string }; issued?: true; instalment?: true }
   /** The Mahnlauf (spec 4.4.7): every overdue Rechnung on a reference date, or the ticked ones (`ids`). */
   | { kind: 'dunning'; ids?: string[] }
+  /** The Teilrechnungsplan of the open Auftrag (spec 4.4.9). */
+  | { kind: 'plan' }
   /** The ticked documents (their ids), sent by e-mail one by one, or their PDFs downloaded. */
   | { kind: 'bulk-send'; ids: string[] }
   | { kind: 'bulk-pdf'; ids: string[] };
@@ -82,7 +84,7 @@ let state: State = {
   dialog: null,
   preview: false,
   sheet: 'reminder',
-  open: { draft: true, look: false, chain: true, customer: false, money: true, sent: true, comments: true, log: false, ...read<Partial<Record<Section, boolean>>>('invoices.open', {}) },
+  open: { draft: true, look: false, chain: true, plan: true, customer: false, money: true, sent: true, comments: true, log: false, ...read<Partial<Record<Section, boolean>>>('invoices.open', {}) },
   sort: { ...(Object.fromEntries(DOC_VIEWS.map((v) => [v, DEFAULT_SORT])) as Record<Sorted, Sort>), ...read<Partial<Record<Sorted, Sort>>>('invoices.sort', {}) },
   ticked: new Set(),
   sentFilter: {},

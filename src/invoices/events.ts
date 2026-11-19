@@ -19,7 +19,7 @@ import { lockedTaxPoint, openDay, sideOf } from '../accounting/tax-point.js';
 import { reversalOf } from '../accounting/reversal.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import type { Invoice, InvoiceBook, Issued, WriteOff, WriteOffReason } from './model.js';
-import { creditNotesOf, liveInvoices, openOn, revenueSplit, totals, writeOffAccounts } from './rules.js';
+import { creditNotesOf, liveInvoices, openOn, revenueLines, revenueSplit, totals, writeOffAccounts } from './rules.js';
 import { TEXTS } from './texts.js';
 import { idSource } from './store.js';
 import { eventRef, writeOffRef, type EventKind } from '../books/refs.js';
@@ -111,20 +111,21 @@ export function bookInvoiceEvents(books: Books, book: InvoiceBook, ctx: PaymentC
       const receipt = invoiceReceipt(books, inv, ctx, out, { date: day });
       const credit = inv.kind === 'credit-note';
       const text = `${credit ? TEXTS.de.credit : TEXTS.de.invoice} ${inv.number} ${inv.customer.name}`;
-      const entries = revenueSplit(inv, amount, ctx.revenueAccount).map((l): JournalEntry => ({
+      // A part below zero (revenueLines `minus`) books the other way with the minus code, as a credit note does.
+      const entries = revenueLines(inv, amount, ctx.revenueAccount).map((l): JournalEntry => { const back = credit !== !!l.minus; return {
         id: idSource.bytes(8).toString('hex'),
         transactionRef: issueRef,
         date: day,
-        accountDebit: credit ? l.account : ctx.openItems.receivable,
-        accountCredit: credit ? ctx.openItems.receivable : l.account,
+        accountDebit: back ? l.account : ctx.openItems.receivable,
+        accountCredit: back ? ctx.openItems.receivable : l.account,
         amount: l.amount,
-        ...(l.vatCode ? { vatCode: credit ? vat().codes.negativePrefix + l.vatCode : l.vatCode } : {}),
+        ...(l.vatCode ? { vatCode: back ? vat().codes.negativePrefix + l.vatCode : l.vatCode } : {}),
         description: text,
         ...(rate !== undefined ? { exchangeCurrency: inv.currency, exchangeRate: rate } : {}),
         ...(corrects ? { corrects } : {}),
         origin: 'invoice',
         receipts: [receipt],
-      }));
+      }; });
       books.journalEntries.push(...entries);
       link(books, issueRef, receipt);
       refs.add(issueRef);
@@ -182,10 +183,11 @@ export function bookWriteOff(books: Books, inv: Issued, w: WriteOff, ctx: Paymen
   const byCode = new Map<string, number>();
   for (const l of revenueSplit(inv, w.amount, ctx.revenueAccount)) byCode.set(l.vatCode ?? '', (byCode.get(l.vatCode ?? '') ?? 0) + Math.round(l.amount * 100));
   const text = `${REASON_WORDS[w.reason]} ${TEXTS.de.invoice} ${inv.number} ${inv.customer.name}`;
+  // A code below zero (a deduction's rate) takes the write-off the other way, with the plain code, never a negative amount.
   const entries = [...byCode].filter(([, rappen]) => rappen !== 0).map(([code, rappen]): JournalEntry => ({
     id: idSource.bytes(8).toString('hex'), transactionRef: ref, date: day,
-    accountDebit: account, accountCredit: ctx.openItems.receivable, amount: rappen / 100,
-    ...(code ? { vatCode: vat().codes.negativePrefix + code } : {}),
+    accountDebit: rappen > 0 ? account : ctx.openItems.receivable, accountCredit: rappen > 0 ? ctx.openItems.receivable : account, amount: Math.abs(rappen) / 100,
+    ...(code ? { vatCode: rappen > 0 ? vat().codes.negativePrefix + code : code } : {}),
     description: text,
     ...(rate !== undefined ? { exchangeCurrency: inv.currency, exchangeRate: rate } : {}),
     origin: 'invoice', receipts: [receipt],

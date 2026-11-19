@@ -10,8 +10,10 @@ import { eventRef } from '../../../books/refs.js';
 import { lockedThrough } from '../../../books/lock-line.js';
 import { TEXTS } from '../../../invoices/texts.js';
 import { defaultTexts, draftDays, senderFor } from '../../../invoices/documents.js';
-import { backToDraftRefusal, missingForIssue, openAmount, openFees, paidAmount, refundDue, shortfallOf, skontoOffer, totals, warningsForIssue, type Missing } from '../../../invoices/rules.js';
+import { backToDraftRefusal, dueFor, instalmentDue, missingForIssue, openAmount, openFees, paidAmount, refundDue, retentionDue, retentionOf, shortfallOf, skontoOffer, totals, warningsForIssue, type Missing } from '../../../invoices/rules.js';
 import { DEFAULT_DUNNING, levelTitle, nextLevel, reminderDraftOf, reminderTitle, sentReminders } from '../../../invoices/dunning.js';
+import { DraftPlanRows, PlanRows } from './plan.js';
+import { stageStates } from '../../../invoices/stages.js';
 import { prettyReference } from '../../../providers/qr-bill/reference.js';
 import { closedByLoss } from '../../../invoices/lists.js';
 import type { PaymentProposal } from '../../../invoices/payments.js';
@@ -136,6 +138,7 @@ function InvoiceDetail(props: DetailProps) {
       </div>
       <div className="facts">
         <span>{inv.status === 'issued' ? (inv.kind === 'credit-note' ? t('invoices.creditNo', { number: inv.number }) : inv.kind === 'invoice' ? t('invoices.no', { number: inv.number }) : `${t(`invoices.docKind.${inv.kind}`)} ${inv.number}`) : inv.number ? t('invoices.draftKeeps', { number: inv.number }) : t('invoices.draftNoNumber')}</span>
+        {inv.kind === 'invoice' && inv.role && <span data-testid="invoice-role">{t(`sales.role.${inv.role}`)}</span>}
         <span data-tip={t('invoices.dateTip')}>{formatDate(inv.date)}</span>
         {inv.status === 'issued' && inv.kind === 'invoice' && <span data-tip={t('invoices.dueTip')}>{t('invoices.due', { date: formatDate(inv.dueDate) })}</span>}
         {inv.status === 'issued' && inv.kind === 'invoice' && <span data-tip={t('invoices.referenceTip')}>{prettyReference(inv.reference)}</span>}
@@ -166,6 +169,11 @@ function InvoiceDetail(props: DetailProps) {
           {inv.status === 'draft' ? <DraftSec {...props} inv={inv} /> : <Sec k="look" label={t('invoices.sec.look')} val={`${t(`invoices.lang.${inv.language}`)} · ${inv.layout.font}`}><p className="m">{t(inv.kind === 'quote' || inv.kind === 'sales-order' ? 'invoices.lookFrozenDoc' : inv.kind === 'delivery-note' ? 'invoices.lookFrozenDelivery' : 'invoices.lookFrozen')}</p></Sec>}
           {reminder && inv.status === 'issued' && <ReminderSec {...props} inv={inv} />}
           <ChainSec {...props} />
+          {inv.kind === 'sales-order' && (
+            <Sec k="plan" label={t('sales.sec.plan')} val={inv.stages?.length ? `${stageStates(inv, d.invoices).filter((x) => x.doc).length}/${inv.stages.length}` : '–'}>
+              <PlanRows inv={inv} invoices={d.invoices} nav={nav} period={props.period} canEdit={canEdit} today={localToday()} />
+            </Sec>
+          )}
           <CustomerSec {...props} />
           {inv.status === 'issued' && isBooked(inv) && (
             <Sec k="money" label={t('invoices.sec.money')} val={String(inv.payments.length + (inv.writeOffs?.length ?? 0) || '–')}>
@@ -264,12 +272,18 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
       : inv.writeOffs?.length && !d.invoices.some((c) => c.status === 'issued' && c.kind === 'credit-note' && c.creditFor === inv.id && !c.cancelled) ? t('invoices.settledByWriteOff', { what: inv.writeOffs.map((w) => `${t(`invoices.reason.${w.reason}`)} ${inv.currency} ${fmt(w.amount)}`).join(', ') })
       : t('invoices.settledByCredit')}{fee > 0 ? ` · ${t('invoices.feeOpen', { amount: `${inv.currency} ${fmt(fee)}` })}` : ''}</span>;
   } else {
-    const due = inv.dueDate;
+    const open = openAmount(inv, d.invoices);
+    const due = dueFor(inv, open);
     const last = inv.status === 'issued' ? sentReminders(inv).at(-1) : undefined;
     const paid = paidAmount(inv);
     const sk = !inv.payments.length ? skontoOffer(inv) : undefined;
+    const held = inv.kind === 'invoice' && inv.schedule?.retention ? inv.schedule.retention : undefined;
+    const heldDue = retentionDue(inv, d.invoices, today);
     const parts = [
-      state === 'overdue' ? t('invoices.overdueSince', { n: days(due, today) }) : t('invoices.openDue', { when: due === today ? t('invoices.today') : t('invoices.inDays', { n: days(today, due) }) }),
+      // A retention due is a fact of its own (spec 4.4.9), the rest of the Rechnung paid.
+      heldDue ? t('sales.retention.dueSince', { date: formatDate(heldDue.until) })
+        : state === 'overdue' ? t('invoices.overdueSince', { n: days(due, today) }) : t('invoices.openDue', { when: due === today ? t('invoices.today') : t('invoices.inDays', { n: days(today, due) }) }),
+      ...(held && !heldDue && open > 0 ? [t('sales.retention.held', { percent: held.percent, date: formatDate(held.until), amount: `${inv.currency} ${fmt(retentionOf(inv))}` })] : []),
       ...(sk && sk.until >= today ? [t('invoices.skontoUntil', { date: formatDate(sk.until), amount: `${inv.currency} ${fmt(sk.pays)}` })] : []),
       ...(last ? [t('invoices.lastReminder', { title: reminderTitle(last, inv.language), date: formatDate(last.date) })] : []),
       ...(paid ? [t('invoices.partlyPaid', { paid: fmt(paid), open: fmt(openAmount(inv, d.invoices)) })] : []),
@@ -399,6 +413,8 @@ function Actions(props: DetailProps & { state: RowState }) {
   const unpaid = inv.kind === 'invoice' && open;
   const dunning = ws.invoicing?.dunning ?? DEFAULT_DUNNING;
   const next = open && inv.kind === 'invoice' ? levelTitle(nextLevel(inv, dunning).def, inv.language) : '';
+  // The retention's day has come: «Zahlungsaufforderung» with its own payment slip (spec 4.4.9), before the Mahnung.
+  const heldDue = !!instalmentDue(inv, d.invoices, localToday());
   // One row of the main actions of the state; the rest in «Weitere» (owner's review of slice C).
   const main: ReactNode[] = [];
   if (unpaid) main.push(<button key="hand" type="button" className={`btn ${state === 'overdue' ? 'ghost' : 'primary'}`} data-act="hand-payment" onClick={() => setUi({ dialog: { kind: 'handPayment' } })}>{t('invoices.handPayment')}</button>);
@@ -408,7 +424,8 @@ function Actions(props: DetailProps & { state: RowState }) {
     if (s.sheet !== 'invoice') main.push(<span key="preview">{preview}</span>);
     main.push(<button key="remsend" type="button" className="btn primary" data-act="remsend" onClick={() => setUi({ dialog: { kind: 'send', reminder: { level: draftR.level, title } } })}>{t('invoices.sendReminder', { title })}</button>);
     main.push(<AsyncButton key="remdelete" type="button" className="btn ghost danger" data-act="remdelete" onClick={() => deleteReminder(nav, inv)}>{t('invoices.reminderDelete')}</AsyncButton>);
-  } else if (state === 'overdue') main.push(<AsyncButton key="remind" type="button" className="btn primary" data-act="remind" onClick={() => remind(nav, inv)}>{t('invoices.remind', { title: next })}</AsyncButton>);
+  } else if (state === 'overdue') main.push(<AsyncButton key="remind" type="button" className={`btn ${heldDue ? 'ghost' : 'primary'}`} data-act="remind" onClick={() => remind(nav, inv)}>{t('invoices.remind', { title: next })}</AsyncButton>);
+  if (heldDue) main.unshift(<button key="instalment" type="button" className="btn primary" data-act="instalment" onClick={() => setUi({ dialog: { kind: 'send', instalment: true } })}>{t('sales.instalment.action')}</button>);
   if (open || state === 'credit') main.push(<button key="send" type="button" className={`btn ${sentOnce || unpaid ? 'ghost' : 'primary'}`} data-act="send" data-tip={t('invoices.sendTip')} onClick={() => setUi({ dialog: { kind: 'send' } })}>{sentOnce ? t('invoices.resend') : t('invoices.send')}</button>);
   const more: MenuItem[] = [
     ...(unpaid ? [{ act: 'write-off', label: t('invoices.writeOff'), run: () => setUi({ dialog: { kind: 'writeOff' } }) }] : []),
@@ -552,6 +569,7 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
             </span>
           </div>
         )}
+        {inv.kind === 'invoice' && <DraftPlanRows inv={inv} invoices={d.invoices} nav={nav} canEdit={canEdit} />}
         {inv.kind !== 'credit-note' && (
           <label className="lkr"><span>{t('sales.ordered')}</span>
             <input data-testid="draft-ordered" defaultValue={inv.ordered ?? ''} placeholder={t('sales.orderedPh')} disabled={!canEdit} onBlur={(e) => { const v = e.target.value.trim(); if (v !== (inv.ordered ?? '')) void saveDraft(nav, inv, { ordered: v || null }); }} />
