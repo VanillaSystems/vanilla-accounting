@@ -28,12 +28,15 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
   p.bases.forEach((b, i) => labels(F, `bases.${i}`, b.label));
   for (const [k, l] of Object.entries(p.totals)) labels(F, `totals.${k}`, l);
   for (const [k, l] of Object.entries(p.documents ?? {})) labels(F, `documents.${k}`, l);
+  // The note under every payslip names the year of the federal figures it computed with.
+  for (const lang of LANGUAGES) if (p.documents && !p.documents.disclaimer?.[lang]?.includes('{year}')) add(F, 'documents.disclaimer', `${lang} names no {year}`);
   if (!p.documents) add(F, 'documents', 'missing');
   try { new RegExp(p.socialSecurityNumber?.pattern ?? ''); if (!p.socialSecurityNumber?.pattern) add(F, 'socialSecurityNumber.pattern', 'missing'); } catch { add(F, 'socialSecurityNumber.pattern', 'not a regular expression'); }
   if (p.socialSecurityNumber?.checkDigit !== undefined && p.socialSecurityNumber.checkDigit !== 'ean13') add(F, 'socialSecurityNumber.checkDigit', `"${String(p.socialSecurityNumber.checkDigit)}" is not ean13`);
   for (const [k, ins] of Object.entries(p.insurances)) {
     labels(F, `insurances.${k}.label`, ins.label);
     labels(F, `insurances.${k}.fund`, ins.fund);
+    labels(F, `insurances.${k}.nameOf`, ins.nameOf);
     if (!/^\d{4}$/.test(ins.account)) add(F, `insurances.${k}.account`, 'an account number of four digits');
     for (const [r, def] of Object.entries(ins.rates ?? {})) {
       labels(F, `insurances.${k}.rates.${r}`, def.label);
@@ -53,6 +56,10 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
     keys.add(w.key);
     if (!groups.has(w.group)) add(F, `${at}.group`, `group "${w.group}" does not exist`);
     labels(F, `${at}.label`, w.label);
+    for (const [k, l] of Object.entries(w.inputs ?? {})) {
+      if (!['quantity', 'rate', 'amount'].includes(k)) add(F, `${at}.inputs.${k}`, 'an input is quantity, rate or amount');
+      labels(F, `${at}.inputs.${k}`, l);
+    }
     if (w.sign !== '+' && w.sign !== '-') add(F, `${at}.sign`, 'is + or -');
     for (const b of w.bases ?? []) if (!bases.has(b)) add(F, `${at}.bases`, `base "${b}" does not exist`);
     if (w.side === 'employer' && (w.gross || w.bases.length)) add(F, at, 'an employer line counts for no gross and no base');

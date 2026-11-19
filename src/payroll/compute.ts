@@ -15,6 +15,7 @@ import type {
   Employment, MissingLine, PayrollEmployee, PayrollInsurance, PayrollLanguage, PayrollStore, PayslipClose, PayslipLine, PersonInsurances, UsedEntry,
 } from './model.js';
 import { payslipId } from './model.js';
+import { inOpening, openingOf } from './opening.js';
 import { addMonths, daysIn, firstDay, lastDay, monthsBetween, nextMonth, round2, roundStep, sum } from './money.js';
 
 /** A fact beside the payslip: said once, never a reminder, never a block (§6.2 step 3). */
@@ -131,6 +132,8 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
   const { data, store, history } = ctx;
   const e = store.employees.find((x) => x.id === employeeId);
   if (!e) return undefined;
+  // A month of the person's opening was paid and booked before payroll ran here: it has no payslip of the app.
+  if (inOpening(e, month)) return undefined;
   const from = firstDay(month);
   const to = lastDay(month);
   const year = month.slice(0, 4);
@@ -159,7 +162,9 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
 
   const employed = isEmployed(e, month);
   const monthLines = store.monthLines.filter((l) => l.employee === e.id && l.month === month && !l.removed);
-  const earlier = closedOf(history, e.id).filter((c) => c.month < month && c.month.startsWith(year));
+  // A close of an opening month (made before the opening said so) counts no more: the opening holds that month.
+  const earlier = closedOf(history, e.id).filter((c) => c.month < month && c.month.startsWith(year) && !inOpening(e, c.month));
+  const opening = openingOf(e, year);
   const pendingCorrections = correctionsFor(ctx, e, month);
   if (!employed && !monthLines.length && !pendingCorrections.length) return undefined;
 
@@ -169,7 +174,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
   const lastEntry = [...e.employment].sort((a, b) => a.validFrom.localeCompare(b.validFrom)).at(-1);
   if (firstEntry && firstEntry.validFrom >= from && firstEntry.validFrom <= to) facts.push({ key: 'entry', vars: { date: firstEntry.validFrom } });
   if (lastEntry?.validUntil && lastEntry.validUntil >= from && lastEntry.validUntil <= to) facts.push({ key: 'exit', vars: { date: lastEntry.validUntil } });
-  const openBefore = monthsBetween(`${year}-01`, month).filter((m) => m < month && isEmployed(e, m) && !history.closed.has(payslipId(m, e.id)));
+  const openBefore = monthsBetween(`${year}-01`, month).filter((m) => m < month && isEmployed(e, m) && !inOpening(e, m) && !history.closed.has(payslipId(m, e.id)));
   if (openBefore.length) facts.push({ key: 'earlierOpen', vars: { month: openBefore[0] } });
 
   // 1. The wage of the Anstellung, split where it changes inside the month.
@@ -208,7 +213,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       if (share <= 0) continue;
       const v = s.entry.value;
       const line = valued(w, v, label(w), 'recurring');
-      if (!line) { miss(w.key, w.input === 'quantity' ? 'quantity' : 'amount'); continue; }
+      if (!line) { miss(w.key, lacking(w, v)); continue; }
       const amount = share === 1 ? line.amount : round(line.amount * share);
       add({ ...line, amount, ...(share === 1 ? {} : { days: { from: s.from, to: s.to } }) });
     }
@@ -220,7 +225,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     const w = types.get(l.wageType);
     if (!w) continue;
     const line = valued(w, w.hours && l.rate === undefined && hourlyRate !== undefined ? { ...l, rate: hourlyRate } : l, label(w), w.hours ? 'employment' : 'entered');
-    if (!line) { miss(w.key, w.input === 'quantity' ? 'quantity' : 'amount'); continue; }
+    if (!line) { miss(w.key, lacking(w, l)); continue; }
     add({ ...line, ...(l.text ? { text: l.text } : {}) });
   }
 
@@ -245,8 +250,8 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
   if (thirteenthType && tb && job?.thirteenth && (job.thirteenth.months.includes(Number(month.slice(5))) || month.endsWith('-12') || leaves)) {
     const paidIn = earlier.filter((c) => c.lines.some((l) => l.wageType === thirteenthType.key && !l.corrects)).map((c) => c.month).at(-1);
     const since = earlier.filter((c) => !paidIn || c.month > paidIn);
-    const opening = paidIn ? 0 : e.opening?.[year]?.bases?.[tb] ?? 0;
-    const base = round2(opening + sum(since.map((c) => c.bases[tb]?.month ?? 0)) + (basesOf(lines, types)[tb] ?? 0));
+    const fromOpening = paidIn ? 0 : opening?.bases[tb] ?? 0;
+    const base = round2(fromOpening + sum(since.map((c) => c.bases[tb]?.month ?? 0)) + (basesOf(lines, types)[tb] ?? 0));
     const rate = settings.thirteenth === 'percent' ? 8.33 : 100 / 12;
     add({ wageType: thirteenthType.key, label: label(thirteenthType), base, rate: round2(rate), amount: round(base * rate / 100), side: 'employee', source: settings.thirteenth === 'percent' ? 'thirteenth-percent' : 'thirteenth-twelfth' });
   }
@@ -283,6 +288,9 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       if (kind?.required) miss(w.key, 'insurance');
       continue;
     }
+    // An insurance the law does not require of everyone (a daily sickness allowance, a supplementary accident
+    // cover) holds only for the persons the firm put in it: their own solution of the kind (§22 decision 46).
+    if (kind && !kind.required && !kind.perPerson && !kind.requiredAbove && !insurancesOn[c.insurance]) continue;
     // Liability by age, and past the reference age.
     if (c.liable) {
       const age = fig(c.liable);
@@ -379,7 +387,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     id: payslipId(month, e.id), employee: e.id, month,
     postingDate: settings.postingDate === 'payday' ? payday : to, payday, language: lang,
     lines, missing,
-    bases: Object.fromEntries(Object.entries({ ...bases, ...capped }).map(([k, v]) => [k, { month: v, year: round2(sum(earlier.map((c) => c.bases[k]?.month ?? 0)) + (e.opening?.[year]?.bases?.[k] ?? 0) + v) }])),
+    bases: Object.fromEntries(Object.entries({ ...bases, ...capped }).map(([k, v]) => [k, { month: v, year: round2(sum(earlier.map((c) => c.bases[k]?.month ?? 0)) + (opening?.bases[k] ?? 0) + v) }])),
     ...totals, facts, used: [...used.values()].sort((a, b) => a.path.localeCompare(b.path)),
     person: {
       name: name ? `${name.first} ${name.last}` : e.id, language: lang,
@@ -390,6 +398,10 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     fraction: round2(fraction * 1e4) / 1e4,
   };
 }
+
+/** Which input of a line is missing: its quantity (a car's price, the hours), its rate per unit, or its amount. */
+const lacking = (w: WageType, v: { quantity?: number; rate?: number }): string =>
+  w.input !== 'quantity' ? 'amount' : typeof v.quantity !== 'number' ? 'quantity' : 'unitRate';
 
 /** A line from an amount, quantity × rate, or base × rate %; undefined when its input is missing. */
 function valued(w: WageType, v: { amount?: number; quantity?: number; rate?: number; base?: number }, label: string, source: string): PayslipLine | undefined {
@@ -446,11 +458,11 @@ function solutionOf(firm: PayrollInsurance, person: PersonInsurances, kind: stri
  */
 function cumulative(ctx: PayrollContext, e: PayrollEmployee, month: string, base: string, key: string, proration: string, yearly: number): { base: number; capped: number; ceiling: number } {
   const year = month.slice(0, 4);
-  const earlier = closedOf(ctx.history, e.id).filter((c) => c.month < month && c.month.startsWith(year));
-  const opening = e.opening?.[year];
+  const earlier = closedOf(ctx.history, e.id).filter((c) => c.month < month && c.month.startsWith(year) && !inOpening(e, c.month));
+  const opening = openingOf(e, year);
   const share = (m: string) => employedFraction(e, m, proration);
   const months = (opening?.months ?? 0) + earlier.reduce((a, c) => a + share(c.month), 0) + share(month);
-  const openingBase = opening?.bases?.[base] ?? 0;
+  const openingBase = opening?.bases[base] ?? 0;
   // A month whose close kept no capped base (none of this ceiling's contributions was owed then) used at most its share of the ceiling.
   const cappedOf = (c: PayslipClose) => c.bases[key]?.month ?? Math.min(c.bases[base]?.month ?? 0, yearly / 12 * share(c.month));
   return {

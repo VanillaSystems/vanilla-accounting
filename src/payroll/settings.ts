@@ -18,6 +18,7 @@ import type {
 } from './model.js';
 import { payslipId } from './model.js';
 import { firstDay, monthsBetween, nextMonth, round2 } from './money.js';
+import { inOpening, openingOf } from './opening.js';
 
 const LANGUAGES: readonly PayrollLanguage[] = ['de', 'fr', 'it', 'en'];
 /** The input a German label names, as the UI's `payroll.field.*` key: a refusal says which field it is about. */
@@ -284,8 +285,54 @@ export function createEmployee(store: PayrollStore, data: PayrollData, input: Re
     recurring: [],
     insurances: isObj(input.insurances) && Object.keys(input.insurances).length ? at(insurancesValue(input.insurances, store, data)) : [],
   });
+  // A person who starts here mid-year after months paid elsewhere (or by hand): her opening at once.
+  if (isObj(input.opening)) {
+    const through = typeof input.opening.through === 'string' ? input.opening.through : '';
+    e.opening = { [through.slice(0, 4)]: openingValue(e, data, through.slice(0, 4), input.opening) };
+  }
   store.employees.push(e);
   return e;
+}
+
+/**
+ * A person's opening of `year` (§22 decision 43): January to `through` paid and booked before payroll ran
+ * here, with the bases and the Lohnausweis fields of those months (her employment here may start later:
+ * months paid before it was recorded). Each base and field is one the jurisdiction names, none negative;
+ * `months` (part months by their days) is counted from her employment when absent. A month the app closed
+ * for her is no opening month: it is booked already.
+ */
+function openingValue(e: PayrollEmployee, data: PayrollData, year: string, v: Record<string, unknown>): NonNullable<PayrollEmployee['opening']>[string] {
+  const through = typeof v.through === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(v.through) && v.through.startsWith(`${year}-`) ? v.through : bad('Eröffnung bis: ein Monat JJJJ-MM des Jahres.', 'openingThrough');
+  const bases: Record<string, number> = {};
+  for (const [k, x] of Object.entries(isObj(v.bases) ? v.bases : {})) {
+    if (x === undefined || x === null || x === '') continue;
+    const def = data.bases.find((b) => b.key === k) ?? bad(`${k} ist keine Basis.`, 'openingBase');
+    bases[k] = round2(num(x, def.label.de, 0));
+  }
+  const fields: Record<string, number> = {};
+  const form = data.lohnausweis?.fields ?? [];
+  for (const [k, x] of Object.entries(isObj(v.fields) ? v.fields : {})) {
+    if (x === undefined || x === null || x === '') continue;
+    const def = form.find((f) => f.key === k && !f.sum && !f.remark) ?? bad(`${k} ist kein Feld des Lohnausweises, das sich eintragen lässt.`, 'openingField');
+    fields[k] = round2(num(x, `${def.key} ${def.label.de}`, 0));
+  }
+  const months = optNum(v.months, 'Monate', 0, 12);
+  return clean({ through, ...(months !== undefined ? { months } : {}), bases, fields });
+}
+
+/** Sets or removes (`value` null) a person's opening of `year`; refused over a month the app closed for her. */
+export function setOpening(store: PayrollStore, data: PayrollData, history: PayslipHistory, id: string, year: string, value: unknown): void {
+  const e = employeeOf(store, id);
+  if (!/^\d{4}$/.test(year)) bad(`${year} ist kein Jahr.`);
+  if (value === null || value === undefined) {
+    if (e.opening) { const { [year]: _, ...rest } = e.opening; if (Object.keys(rest).length) e.opening = rest; else delete e.opening; }
+    return;
+  }
+  if (!isObj(value)) bad('Die Eröffnung: bis wann, die Basen und die Felder.');
+  const next = openingValue(e, data, year, value as Record<string, unknown>);
+  const closed = closedOf(history, id).filter((c) => c.month.startsWith(`${year}-`) && c.month <= next.through!).map((c) => c.month);
+  if (closed.length) throw new PayrollRefusal('used', `${closed.join(', ')} ist hier abgeschlossen und gebucht: ein Monat der Eröffnung würde den Lohn ein zweites Mal zählen. Zuerst wieder öffnen, oder die Eröffnung früher enden lassen.`, 'openingThrough');
+  e.opening = { ...(e.opening ?? {}), [year]: next };
 }
 
 const PERSON_FIELDS = ['socialSecurityNumber', 'birthDate', 'sex', 'nationality', 'language', 'isOwner'] as const;
@@ -504,13 +551,16 @@ export function driftOf(ctx: PayrollContext, close: PayslipClose): Difference[] 
 
 // ─── what the pages read ───────────────────────────────────────────────────────
 
-/** The first day of the person's first month without a closed payslip: the default «gilt ab» (domain-model.md §5.6). */
+/** The first day of the person's first month without a closed payslip, after her opening: the default «gilt ab» (domain-model.md §5.6). */
 export function defaultFrom(ctx: PayrollContext, e: PayrollEmployee, today: string): string {
   const entry = [...e.employment].sort((a, b) => a.validFrom.localeCompare(b.validFrom))[0]?.validFrom;
   if (!entry) return today;
   const last = closedOf(ctx.history, e.id).at(-1)?.month;
-  if (!last) return entry;
-  return firstDay(nextMonth(last));
+  const opening = openingOf(e, today.slice(0, 4))?.through;
+  const after = [last, opening].filter((m): m is string => !!m).sort().at(-1);
+  if (!after) return entry;
+  const next = firstDay(nextMonth(after));
+  return next > entry ? next : entry;
 }
 
 export interface EmployeeDetail {
@@ -518,9 +568,11 @@ export interface EmployeeDetail {
   employee: Omit<PayrollEmployee, 'socialSecurityNumber' | 'mailPassword'> & { socialSecurityNumber?: string; hasSocialSecurityNumber: boolean; hasMailPassword: boolean };
   /** The entries closed payslips read, as `path|validFrom|enteredAt`: they stay, a new entry corrects them. */
   used: string[];
-  /** The person's months of the year, closed or open (the Zeitachse). */
-  months: Array<{ month: string; status: 'closed' | 'draft'; payslip: string }>;
+  /** The person's months of the year, closed, open, or the opening's (the Zeitachse). */
+  months: Array<{ month: string; status: 'closed' | 'draft' | 'opening'; payslip: string }>;
   defaultFrom: string;
+  /** Her opening of the year with its months made explicit (src/payroll/opening.ts), when she has one. */
+  opening?: { year: string; through: string; months: number; bases: Record<string, number>; fields: Record<string, number> };
 }
 
 export function employeeDetail(ctx: PayrollContext, id: string, year: string, today: string, mask: (n: string) => string): EmployeeDetail {
@@ -530,12 +582,14 @@ export function employeeDetail(ctx: PayrollContext, id: string, year: string, to
   const months = monthsBetween(`${year}-01`, `${year}-12`).flatMap((m): EmployeeDetail['months'] => {
     const pid = payslipId(m, id);
     if (ctx.history.closed.has(pid)) return [{ month: m, status: 'closed', payslip: pid }];
+    if (inOpening(e, m)) return [{ month: m, status: 'opening', payslip: pid }];
     return employedFraction(e, m, 'calendar-days') > 0 ? [{ month: m, status: 'draft', payslip: pid }] : [];
   });
   const { socialSecurityNumber, mailPassword, ...rest } = e;
+  const opening = openingOf(e, year);
   return {
     employee: { ...rest, ...(socialSecurityNumber ? { socialSecurityNumber: mask(socialSecurityNumber) } : {}), hasSocialSecurityNumber: !!socialSecurityNumber, hasMailPassword: !!mailPassword },
-    used, months, defaultFrom: defaultFrom(ctx, e, today),
+    used, months, defaultFrom: defaultFrom(ctx, e, today), ...(opening ? { opening: { year, ...opening } } : {}),
   };
 }
 

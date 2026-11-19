@@ -37,7 +37,7 @@ export interface BookingLine { accountDebit: string; accountCredit: string; amou
  * account, the app's proposal for a sale without an invoice (saleProposal), a supplier's refund.
  */
 export interface DraftSource {
-  account?: { from: 'rule'; rule: string } | { from: 'precedent'; date: string; yours?: true; name?: string } | { from: 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' | 'wage' | 'ownerOutlays' } | { from: 'invoice' | 'receivable'; number: string } | { from: 'clearing'; provider: string };
+  account?: { from: 'rule'; rule: string } | { from: 'precedent'; date: string; yours?: true; name?: string } | { from: 'refund'; date: string } | { from: 'sales' | 'owner' | 'business' | 'bankFee' | 'wage' | 'ownerOutlays' | 'payrollInsurer' } | { from: 'invoice' | 'receivable'; number: string } | { from: 'clearing'; provider: string };
   /** `abroad`: the firm's own invoice says its service is supplied abroad (invoicing placeAbroad). `noReceipt`: the last booking's code claimed input tax, which a payment without a receipt does not (#397). */
   vat?: { from: 'rule' | 'precedent' | 'receipt' | 'invoice' | 'netRate' | 'refund' | 'abroad' | 'noReceipt' } | { from: 'sale'; choice: SaleChoice }
     /** A supplier's refund without a credit note: the code of the purchase it refunds, with the minus (#357, refundedPurchase). `refund` above: no purchase was found unambiguously. */
@@ -76,7 +76,11 @@ export type PaymentNature =
   /** Money out to the owner in the books' currency that her outlays booked do not cover (#428): the form says what ends its wait. */
   | { kind: 'ownerWaits'; account: string; open: number; owner: string }
   /** Social insurance contributions (#470), a proposal: `takes` (of `open`, what the deductions account holds on the day) on it, the rest on the employer's contribution account `account`, without a code. */
-  | ContributionsNature;
+  | ContributionsNature
+  /** A payment to one of the firm's payroll insurers while payroll runs here (§22 decision 45): its liability account `account`, which the payslips credit, without a code; never an expense again. */
+  | PayrollInsurerNature;
+
+export interface PayrollInsurerNature { kind: 'payrollInsurer'; account: string; name: string }
 
 export interface ContributionsNature { kind: 'contributions'; account: string; deductions: string; open: number; takes: number }
 
@@ -133,6 +137,7 @@ export type DraftNote =
   | { kind: 'ownerForeign'; currency: string }
   | { kind: 'ownerWaits'; account: string; open: number; owner: string }
   | ContributionsNature
+  | PayrollInsurerNature
   | { kind: 'invoicePaid'; number: string; surplus: number }
   | { kind: 'prepayment'; number: string }
   | { kind: 'unloaded' }
@@ -552,6 +557,11 @@ export function bookingDraft(books: Books, ref: string, accounts: readonly Ledge
   }
   // A payment to the owner her outlays do not cover yet: the form says what it waits for and proposes as for any payment (#428).
   if (proposes && !moneyIn && nature?.kind === 'ownerWaits') notes.push(nature);
+  // A payroll insurer's payment while payroll runs here: its liability account, before any precedent (level A's booked an expense; the payslips book that now).
+  if (proposes && !moneyIn && nature?.kind === 'payrollInsurer') {
+    notes.push(nature);
+    return result([place(nature.account, paid, '', { account: { from: 'payrollInsurer' } })]);
+  }
   // Contributions (#470): proposed by the books, before any precedent (an earlier booking may have put it all on the deductions account); its account is the payee's own earlier one.
   if (proposes && !moneyIn && nature?.kind === 'contributions') {
     notes.push(nature);

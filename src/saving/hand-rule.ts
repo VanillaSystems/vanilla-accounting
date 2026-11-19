@@ -273,6 +273,9 @@ function natureOf(books: ReturnType<typeof loadBooks>, tx: BankTransaction, cont
     if (f && outlaysOpen(books, f, tx.date) > 0) return { kind: 'ownerForeign', currency: tx.currency };
     // In the books' currency, not covered while outlays are open (or none booked yet, receipts of hers filed: open 0, #457), no rule deciding it: it waits for them, and the form says so (#428).
     if (toOwner && awaitsOutlays(books, tx, context, wages(), loadFxResolver())) return { kind: 'ownerWaits', account: context.ownerAccount!, open: outlaysOpen(books, ownerFactsOf(context)!, tx.date), owner: context.ownerName ?? '' };
+    // A payroll insurer of the firm while payroll runs here: the liability the payslips credit (§22 decision 45), never an expense again.
+    const insurer = context.payrollInsurer?.(tx, file?.id);
+    if (insurer) return { kind: 'payrollInsurer', account: insurer.account, name: insurer.name };
     if (!context.wageAccount || !wages().some((w) => w.test(tx.description))) return contributionsOf(books, tx, context, file);
     // Books that carry wages with their deductions (cls-salary): the payslip's lines are hers, no account is proposed.
     const deductions = context.wageDeductions;

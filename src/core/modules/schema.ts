@@ -374,6 +374,8 @@ export interface WageTypeDef {
   hours?: boolean;
   /** `quantity`: a person enters quantity × rate (hours × hourly wage); else an amount. */
   input?: 'amount' | 'quantity';
+  /** What its inputs are called in the form and in the line «unvollständig» («Kaufpreis» for a quantity); absent: the app's words. */
+  inputs?: Partial<Record<'quantity' | 'rate' | 'amount', Labels>>;
   computes?: WageTypeComputes;
 }
 
@@ -385,6 +387,8 @@ export interface InsuranceKindDef {
   label: Labels;
   /** What the fund or insurer of this kind is called. */
   fund: Labels;
+  /** The label of the field for its name, a whole phrase in each language (the article goes with the noun: «Name des Versicherers», «Nom de l’assureur»). */
+  nameOf: Labels;
   account: string;
   /** The jurisdiction's business file of the fund, where the app ships one. */
   business?: string;
@@ -449,7 +453,7 @@ export interface PayrollData {
   /** How a social security number looks (a regular expression), what stands for it in a text sent to a model, and how its last digit checks the others. */
   socialSecurityNumber: { pattern: string; masked: string; checkDigit?: 'ean13' };
   /** The words of the payroll's documents, in each language. */
-  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody', Labels>;
+  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate', Labels>;
 }
 
 /** One figure of the law: its value from a day, with its source. */

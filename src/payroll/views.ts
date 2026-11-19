@@ -12,6 +12,7 @@ import { closedOf, latestClosed } from './history.js';
 import type { PayrollEmployee, PayslipClose, PayslipCorrection, PayslipEvent } from './model.js';
 import { payslipId } from './model.js';
 import { monthsBetween, round2, sum } from './money.js';
+import { inOpening, openingOf } from './opening.js';
 
 /** The number as lists show it: only its last two digits. */
 export const maskedNumber = (n: string | undefined): string | undefined => (n ? `${n.slice(0, 3)}.****.****.${n.slice(-2)}` : undefined);
@@ -52,6 +53,8 @@ export interface MonthRow {
 
 export interface MonthView {
   month: string; rows: MonthRow[]; closed: number; of: number;
+  /** The persons whose opening holds this month: paid and booked before payroll ran here, no payslip (§22 decision 43). */
+  opening: Array<{ employee: string; name: string; through: string }>;
   totals: { gross: number; deductions: number; net: number; payout: number; employer: number };
   text?: string;
 }
@@ -66,7 +69,13 @@ export function slipOf(ctx: PayrollContext, employee: string, month: string): { 
 
 export function monthView(ctx: PayrollContext, month: string): MonthView {
   const rows: MonthRow[] = [];
+  const opening: MonthView['opening'] = [];
   for (const e of ctx.store.employees) {
+    // A close made before the opening said so still shows: it stands until reopened.
+    if (inOpening(e, month) && !ctx.history.closed.has(payslipId(month, e.id))) {
+      opening.push({ employee: e.id, name: nameOf(e, `${month}-28`), through: openingOf(e, month.slice(0, 4))!.through });
+      continue;
+    }
     const s = slipOf(ctx, e.id, month);
     if (!s) continue;
     const deductions = 'deductions' in s.slip ? s.slip.deductions : round2(s.slip.gross - s.slip.net);
@@ -79,21 +88,26 @@ export function monthView(ctx: PayrollContext, month: string): MonthView {
   }
   const t = (k: 'gross' | 'deductions' | 'net' | 'payout' | 'employer') => sum(rows.map((r) => r[k]));
   return {
-    month, rows, closed: rows.filter((r) => r.status === 'closed').length, of: rows.length,
+    month, rows, opening, closed: rows.filter((r) => r.status === 'closed').length, of: rows.length,
     totals: { gross: t('gross'), deductions: t('deductions'), net: t('net'), payout: t('payout'), employer: t('employer') },
     ...(ctx.store.monthTexts?.[month] ? { text: ctx.store.monthTexts[month] } : {}),
   };
 }
 
-export interface YearMonth { month: string; state: 'closed' | 'open' | 'partial' | 'future' | 'none'; closed: number; of: number; gross: number }
+export interface YearMonth { month: string; state: 'closed' | 'open' | 'partial' | 'future' | 'none' | 'opening'; closed: number; of: number; gross: number }
 
-/** The year strip: twelve months, each closed, partly closed, open, to come, or without anyone employed. */
+/**
+ * The year strip: twelve months, each closed, partly closed, open, to come, without anyone employed, or the
+ * opening's (every person employed in it paid it before payroll ran here). A person's opening month counts in
+ * no other state: it is not open, and never «noch offen».
+ */
 export function yearStrip(ctx: PayrollContext, year: string, today: string): YearMonth[] {
   return monthsBetween(`${year}-01`, `${year}-12`).map((month) => {
-    const employed = ctx.store.employees.filter((e) => employedFraction(e, month, 'calendar-days') > 0);
+    const all = ctx.store.employees.filter((e) => employedFraction(e, month, 'calendar-days') > 0);
+    const employed = all.filter((e) => !inOpening(e, month) || ctx.history.closed.has(payslipId(month, e.id)));
     const closed = employed.filter((e) => ctx.history.closed.has(payslipId(month, e.id)));
     const gross = sum(closed.map((e) => ctx.history.closed.get(payslipId(month, e.id))!.gross));
-    const state = !employed.length ? 'none' : closed.length === employed.length ? 'closed' : closed.length ? 'partial' : `${month}-01` > today ? 'future' : 'open';
+    const state = !all.length ? 'none' : !employed.length ? 'opening' : closed.length === employed.length ? 'closed' : closed.length ? 'partial' : `${month}-01` > today ? 'future' : 'open';
     return { month, state, closed: closed.length, of: employed.length, gross };
   });
 }
@@ -107,8 +121,8 @@ export interface PayslipView {
   corrections: Array<PayslipCorrection & { carriedBy?: string }>;
   /** «Wieder öffnen»: offered for the person's latest closed month in an open period; else why not. */
   reopen: { offered: true } | { offered: false; why: 'notClosed' | 'notLatest' | 'closedPeriod' };
-  /** The person's months of the year, for the Zeitachse. */
-  months: Array<{ month: string; status: SlipStatus }>;
+  /** The person's months of the year, for the Zeitachse; the opening's months as `opening`. */
+  months: Array<{ month: string; status: SlipStatus | 'opening' }>;
 }
 
 export function payslipView(ctx: PayrollContext, employee: string, month: string, lock: Pick<PeriodLock, 'isClosed'>): PayslipView | undefined {
@@ -122,8 +136,9 @@ export function payslipView(ctx: PayrollContext, employee: string, month: string
     : lock.isClosed(s.slip.postingDate) ? { offered: false, why: 'closedPeriod' } : { offered: true };
   const year = month.slice(0, 4);
   const e = ctx.store.employees.find((x) => x.id === employee);
-  const months = monthsBetween(`${year}-01`, `${year}-12`).flatMap((m): Array<{ month: string; status: SlipStatus }> => {
+  const months = monthsBetween(`${year}-01`, `${year}-12`).flatMap((m): Array<{ month: string; status: SlipStatus | 'opening' }> => {
     if (ctx.history.closed.has(payslipId(m, employee))) return [{ month: m, status: 'closed' }];
+    if (e && inOpening(e, m)) return [{ month: m, status: 'opening' }];
     return e && employedFraction(e, m, 'calendar-days') > 0 ? [{ month: m, status: 'draft' }] : [];
   });
   return {

@@ -525,8 +525,9 @@ steps:
 
 /**
  * The owner's payroll in the app from October (docs/specs/payroll.md B0): January to September were paid
- * and booked by hand (above), so they enter as the year's opening, which books nothing and feeds the
- * ceilings and the Lohnausweis. October to December are drafts for a person to close. Invented rates.
+ * and booked by hand (above), so they enter as the year's opening (through September: those months have no
+ * payslip here and never close), which books nothing and feeds the ceilings and the Lohnausweis. October to
+ * December are drafts for a person to close. Invented rates.
  */
 const AT = '2026-10-01T08:00:00.000Z';
 const from = <T>(validFrom: string, value: T) => [{ validFrom, enteredAt: AT, value }];
@@ -554,6 +555,7 @@ const PAYROLL: PayrollStore = {
     recurring: [],
     insurances: from('2026-01-01', { bvg: { insurance: 'pk', solution: 'K', employee: BVG_EMPLOYEE, employer: BVG_EMPLOYEE }, uvg: { insurance: 'uvg', code: 'A1' } }),
     opening: { 2026: {
+      through: '2026-09',
       months: 9,
       bases: { ahv: 9 * GROSS_SALARY, alv: 9 * GROSS_SALARY, uvg: 9 * GROSS_SALARY, uvgz: 9 * GROSS_SALARY, ktg: 9 * GROSS_SALARY, bvg: 9 * GROSS_SALARY, qst: 9 * GROSS_SALARY, thirteenth: 9 * GROSS_SALARY },
       fields: { 1: 9 * GROSS_SALARY, 9: r2(9 * AHV_EMPLOYEE), '10.1': r2(9 * BVG_EMPLOYEE) },

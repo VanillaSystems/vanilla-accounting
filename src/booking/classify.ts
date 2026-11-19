@@ -35,6 +35,7 @@ import { codeOfFacts, formTakes, lookupVatCode } from '../accounting/vat-codes.j
 import { zeroCodeOff } from './rule-vat.js';
 import { receiptWordings, repaymentsOf } from './receipt-wait.js';
 import { employs } from '../workspace/setup.js';
+import { payrollInsurerContext } from '../payroll/insurers-context.js';
 import { bookVatCorrections, type CorrectionsDone } from './vat-corrections.js';
 import { creditNoteCodeOf } from '../accounting/credit-note-code.js';
 import { acquisitionCodeOf, acquisitionReason, readSupplier, type AcquisitionDocument } from '../accounting/acquisition-tax.js';
@@ -215,6 +216,12 @@ export interface ClassifyContext extends ClassifyPromptContext {
   wageDeductions?: string;
   /** The wordings of a wage on a firm that pays wages (evidence.guide.yaml, receipt-wait.ts receiptWordings): a payment to the owner so worded repays no outlays (#402). */
   wageWordings?: ReadonlyArray<{ test(s: string): boolean }>;
+  /**
+   * The firm's payroll insurance a payment goes to (src/payroll/insurers.ts payrollInsurerOf), with its liability
+   * account, once payroll runs here in the payment's year: it pays contributions the payslips accrue, so it needs no
+   * receipt and the hand form proposes that account (§22 decision 45). `business`: the business the payment routes to.
+   */
+  payrollInsurer?: (tx: BankTransaction, business: string | undefined) => { name: string; account: string } | undefined;
 }
 
 /** At most this many casebook examples in one call: the best of each transaction first. */
@@ -316,6 +323,7 @@ export function loadClassifyContext(ws: Workspace): ClassifyContext {
     companyUid: ws.company.uid,
     ...bankFeeContext(ws, chartOfAccounts),
     wageWordings: employs(ws.profile) ? receiptWordings(knowledge, 'employer') : [],
+    ...payrollInsurerContext(ws),
   };
 }
 

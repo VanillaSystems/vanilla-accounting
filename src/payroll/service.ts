@@ -24,6 +24,7 @@ import type { PayrollContext } from './compute.js';
 import { historyOf } from './history.js';
 import { PayrollRefusal, applyClose, applyReopen, assertReopenable, closeEventOf, correctionOf, entriesOf, payslipReceipt, planClose, reopenEventOf, type ClosePlan, type CloseWarning } from './close.js';
 import { payslipPdf } from './pdf.js';
+import { lineSource, sourceText } from './sources.js';
 import { allPayslipEvents, appendPayslipEvents, loadPayroll, updatePayroll } from './store.js';
 import { encryptPdf, generatedPassword } from './pdf-encrypt.js';
 import { sendingAddress, type MailMessage } from '../invoices/mail.js';
@@ -84,6 +85,7 @@ export async function closePayslip(ws: Workspace, write: BooksWriter, employee: 
     person: plan.draft.person, firm: { name: ws.company.name, ...(ws.company.address ? { address: ws.company.address } : {}) },
     ...(employeeRecord?.socialSecurityNumber ? { socialSecurityNumber: employeeRecord.socialSecurityNumber } : {}),
     ...(plan.draft.text ? { text: plan.draft.text } : {}), at: now,
+    sources: plan.draft.lines.map((l) => { const s = lineSource(l, plan.draft, ctx.data, ctx.years, ctx.store.insurances); return s && sourceText(s, ctx.data.documents, plan.draft.language); }),
   }, ctx.data, firmWageTypes(ctx.data, ctx.store));
   const id = () => idSource.bytes(8).toString('hex');
   // Keyed by its content, as the read step keys every file of receipts/: the next run finds this record, never a new one.
@@ -159,7 +161,7 @@ export function lohnausweisSnapshots(ws: Pick<Workspace, 'paths'>, year: string)
  * Issues the Lohnausweis of `employee` for `year` from her closed payslips: the PDF in the year's payroll
  * folder and its snapshot appended. A second one is a replacement (all figures again) or a correction.
  */
-export async function issueLohnausweis(ws: Workspace, employee: string, year: string, kind: LohnausweisSnapshot['kind'] = 'original', now = new Date().toISOString(), confirm = false): Promise<LohnausweisSnapshot | { issued: false; openMonths: string[] }> {
+export async function issueLohnausweis(ws: Workspace, employee: string, year: string, kind: LohnausweisSnapshot['kind'] = 'original', now = new Date().toISOString(), confirm = false): Promise<LohnausweisSnapshot | { issued: false; openMonths: string[]; noSocialSecurityNumber?: true }> {
   const ctx = payrollContext(ws);
   const e = ctx.store.employees.find((x) => x.id === employee);
   if (!e) throw new PayrollRefusal('notFound', `Keine Person ${employee}.`);
@@ -167,7 +169,8 @@ export async function issueLohnausweis(ws: Workspace, employee: string, year: st
   const closes = [...ctx.history.closed.values()];
   const data = lohnausweisOf(e, closes, types, ctx.data, year, e.language);
   // Ready once every payslip of the person's year is closed (§6.7); before, only after the warning, and the snapshot names the open months.
-  if (data.openMonths.length && !confirm) return { issued: false, openMonths: data.openMonths };
+  // Without the person's social security number the form lacks its field C: said first, then the person decides (§18).
+  if ((data.openMonths.length || !e.socialSecurityNumber) && !confirm) return { issued: false, openMonths: data.openMonths, ...(!e.socialSecurityNumber ? { noSocialSecurityNumber: true as const } : {}) };
   const day = now.slice(0, 10);
   const settings = valueOn(ctx.store.company.lohnausweis, `${year}-12-31`);
   const name = valueOn(e.name, `${year}-12-31`) ?? e.name.at(-1)?.value;
@@ -234,11 +237,14 @@ export function passwordCheck(e: PayrollEmployee, password: string): { refused?:
 
 /** Her address as it is now (a resend goes where she reads her mail today), else the payday's. */
 const recipientOf = (e: PayrollEmployee | undefined, close: PayslipClose, now: string): string | undefined => e && (valueOn(e.email, now.slice(0, 10)) ?? valueOn(e.email, close.payday));
-/** The copy goes to the firm's sender, else to the mailbox it sends from: there is always one (§6.2 step 8). */
-const copyOf = (ws: Workspace, store: PayrollStore): string | undefined => store.company.sender?.copyTo || sendingAddress(ws);
+/**
+ * The copy goes to the firm's sender, else to the mailbox it sends from (§6.2 step 8); without a mailbox
+ * set up nothing is sent at all, so no copy goes either (§22 decision 39), whatever the sender names.
+ */
+const copyOf = (ws: Workspace, store: PayrollStore): string | undefined => (sendingAddress(ws) ? store.company.sender?.copyTo || sendingAddress(ws) : undefined);
 
-/** What a send would do, shown before it: the recipient, the copy, whether a password is set, the mails sent so far. */
-export interface PayslipMail { to?: string; copyTo?: string; password: boolean; sent: PayslipSent[] }
+/** What a send would do, shown before it: the recipient, the copy, whether a password is set, whether a mailbox sends at all, the mails sent so far. */
+export interface PayslipMail { to?: string; copyTo?: string; password: boolean; outbox: boolean; sent: PayslipSent[] }
 
 export function payslipMail(ws: Workspace, id: string, now = new Date().toISOString()): PayslipMail {
   const ctx = payrollContext(ws);
@@ -247,7 +253,7 @@ export function payslipMail(ws: Workspace, id: string, now = new Date().toISOStr
   const e = ctx.store.employees.find((x) => x.id === close.employee);
   const to = recipientOf(e, close, now);
   const copyTo = copyOf(ws, ctx.store);
-  return { ...(to ? { to } : {}), ...(copyTo ? { copyTo } : {}), password: !!e?.mailPassword, sent: payslipsSent(ws, close.month.slice(0, 4)).filter((s) => s.payslip === id) };
+  return { ...(to ? { to } : {}), ...(copyTo ? { copyTo } : {}), password: !!e?.mailPassword, outbox: !!sendingAddress(ws), sent: payslipsSent(ws, close.month.slice(0, 4)).filter((s) => s.payslip === id) };
 }
 
 /**
@@ -262,6 +268,7 @@ export async function sendPayslip(ws: Workspace, id: string, send: (message: Mai
   const to = recipientOf(e, close, now);
   if (!e || !to) throw new PayrollRefusal('noEmail', 'Für diese Person ist keine eigene E-Mail-Adresse erfasst.');
   if (!e.mailPassword) throw new PayrollRefusal('noPassword', 'Für diese Person ist kein Passwort für die Lohnabrechnungen gesetzt.');
+  if (!sendingAddress(ws)) throw new PayrollRefusal('noOutbox', 'Kein Postausgang eingerichtet (Firma › E-Mail-Versand): ohne ihn geht keine Lohnabrechnung per Mail.');
   if (passwordCheck(e, e.mailPassword).refused) throw new PayrollRefusal('badPassword', 'Das Passwort dieser Person geht nicht mehr (etwa die AHV-Nummer, seit sie erfasst ist): ein neues setzen.', 'stale');
   const books = loadBooks(ws);
   const receipt = books.receipts.find((r) => r.id === close.receiptId);

@@ -23,6 +23,8 @@ export interface PayslipSheet {
   /** Printed on the payslip only (AHVG Art. 153c: its use for social insurance); never in a file name or password. */
   socialSecurityNumber?: string;
   text?: string;
+  /** Per line (same order as `lines`), where its rate comes from in the person's language (src/payroll/sources.ts); undefined: nothing printed. */
+  sources?: ReadonlyArray<string | undefined>;
   /** The time the PDF names as made: the close's, so the same payslip prints the same bytes. */
   at: string;
 }
@@ -86,6 +88,15 @@ export async function payslipPdf(sheet: PayslipSheet, data: PayrollData, types: 
     next(12);
   };
   header();
+  /** A line's source in small print under it, where it has one. */
+  const sourceOf = (l: PayslipLine) => sheet.sources?.[sheet.lines.indexOf(l)];
+  const sourceRow = (l: PayslipLine) => {
+    const s = sourceOf(l);
+    if (!s) return;
+    y += 3;
+    text(s, left + 8, 7, regular, MUTED);
+    next(10);
+  };
   const row = (l: PayslipLine) => {
     const w = types.get(l.wageType);
     const minus = w?.sign === '-' && w.stage !== 'employer';
@@ -99,6 +110,7 @@ export async function payslipPdf(sheet: PayslipSheet, data: PayrollData, types: 
     }
     rightText(money(lang, minus ? -l.amount : l.amount), colAmount, 9.5);
     next();
+    sourceRow(l);
   };
   const total = (label: string, amount: number, strong = false) => {
     page.drawLine({ start: { x: colBase - 60, y: y + 9 }, end: { x: right, y: y + 9 }, thickness: 0.4, color: MUTED });
@@ -133,9 +145,10 @@ export async function payslipPdf(sheet: PayslipSheet, data: PayrollData, types: 
       if (l.rate !== undefined) rightText(`${num(lang, l.rate)} %`, colRate, 8.5, regular, MUTED);
       rightText(money(lang, l.amount), colAmount, 8.5, regular, MUTED);
       next(12);
+      sourceRow(l);
     }
     total(data.totals.employer[lang], sheet.employer);
   }
-  for (const p of doc.getPages()) p.drawText(safe(regular, words('disclaimer')), { x: left, y: 36, size: 7, font: regular, color: MUTED });
+  for (const p of doc.getPages()) p.drawText(safe(regular, words('disclaimer').replace('{year}', sheet.month.slice(0, 4))), { x: left, y: 36, size: 7, font: regular, color: MUTED });
   return Buffer.from(await doc.save({ useObjectStreams: false }));
 }
