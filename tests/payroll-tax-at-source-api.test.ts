@@ -116,3 +116,20 @@ test('the settlement list per canton and month equals the movements of 2279 in t
   assert.equal(csv.headers.get('cache-control'), 'no-store');
   assert.match(await csv.text(), /2026-10;ZH;q1;Lena Grenzfall/);
 });
+
+test('an upload: the canton\'s file by its name in a zip, a broken zip, a file over the limit, a body sent as JSON, each with its reason', async () => {
+  const { zipSync } = await import('fflate');
+  const zipped = zipSync({ 'a-readme.txt': new Uint8Array([65, 66]), '__MACOSX/._tar26zh.txt': new Uint8Array([0, 5]), 'tar26zh.txt': new Uint8Array(ZH_CORRECTED) });
+  const named = await upload('ZH', '2026', Buffer.from(zipped));
+  assert.equal(named.status, 200, 'the readme first in the zip is not taken');
+  assert.equal((named.json.version as { created: string }).created, '2026-03-04');
+  const broken = await upload('ZH', '2026', Buffer.from([0x50, 0x4b, 3, 4, 1, 2, 3, 4, 5, 6]));
+  assert.equal(broken.status, 400);
+  assert.deepEqual(broken.json.params, { why: 'tariff', tariff: 'badFile' });
+  const big = await upload('ZH', '2026', Buffer.alloc(21 * 1024 * 1024));
+  assert.equal(big.status, 413);
+  assert.deepEqual(big.json.params, { why: 'tariff', tariff: 'tooLarge', limit: '20 MB' });
+  const json = await api.fetch('/api/payroll/tariffs/ZH/2026/file', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: new Uint8Array(ZH) });
+  assert.equal(json.status, 415);
+  assert.deepEqual(((await json.json()) as { params: unknown }).params, { why: 'tariff', tariff: 'notAFile' });
+});

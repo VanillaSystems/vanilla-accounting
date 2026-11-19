@@ -1991,7 +1991,10 @@ Taken while building B2, the Quellensteuer (2026-11-19; numbered from 100, the c
      file downloaded by hand too) into `data/qst/<year>/<kt>-<sha256:12>.txt` beside `<kt>.json` (current
      version, every version with its checksum, the canton's date from the header, when and where it was
      fetched). Public data, so never in git and not in a hand-over or a share: the receiver loads it again.
-     A file whose trailer count, canton or year does not fit, or that holds a mutation record, is refused.
+     A file whose trailer count, canton or year does not fit, or that holds a mutation record, is refused (the
+     trailer's amount checksum is empty by the format, so the count is its check); a byte-order mark is read
+     past. An upload (at most 20 MB) or a zip is read by the file's name (`tarJJkt.txt`), never its first
+     entry; a zip entry or a download over 50 MB is not unpacked or read; each refusal has its code.
      The reader is a provider (src/providers/tax-at-source/); payroll reads it through a generic
      `TariffSource` and names no canton. All 26 cantons share the format; ZH, BE, LU and AG of 2026 were
      fetched and read whole (24'978 to 98'923 records each).
@@ -2002,7 +2005,9 @@ Taken while building B2, the Quellensteuer (2026-11-19; numbered from 100, the c
      for the payroll work; a firm re-accounts the Lohnart if its fiduciary wants 3xxx or 7xxx. The rate is the
      firm's solution for the canton (a Quellensteuer insurance whose solution code is the canton, rate
      `provision`: a paper settlement, a canton's own rule), else the file's electronic rate (`PEL`); rounded to
-     the Rappen. It lowers «Total Arbeitgeber». A correction never carries it: the month that carries the tax's
+     the Rappen. It lowers «Total Arbeitgeber». The line always names its canton (also with the firm's rate, and on a month
+     that only carries a correction, also after the person left or is no longer subject), so the settlement
+     list reads it. A correction never carries it: the month that carries the tax's
      correction takes it again, so it is charged once. The canton grants it only for a timely settlement; the
      app does not know the payment's date and books it with the payslip.
 102. **The monthly model only.** FR, GE, TI, VD and VS apply the annual model (KS 45 Ziff. 3); a person whose
@@ -2011,10 +2016,15 @@ Taken while building B2, the Quellensteuer (2026-11-19; numbered from 100, the c
 103. **The rate-determining income** (KS 45 Ziff. 6, FAQ KS 45 of the cantons' working group, 2026): the
      month's lines that count for the QST base, split by their Lohnausweis field into periodic and aperiodic
      (fields 3, 4, 5 aperiodic, FAQ Frage 14; data `aperiodic`); a carried correction counts as aperiodic (a
-     back payment, FAQ). The 13th is periodic (FAQ Frage 6). An entry or exit month extrapolates the periodic
-     part to 30 days (FAQ Frage 6 and 15; family allowances with it): by the share of the month employed as
-     the firm prorates (calendar days or 30 a month), so the extrapolation takes back exactly what the
-     proration cut and a whole month's wage is the rate-determining income (an entry on 15 October: 17/31). Other employments: none, the wage as it is (FAQ Frage 13); unknown, extrapolated to 100 % when
+     back payment, FAQ). The 13th is periodic (FAQ Frage 6). An entry or exit month extrapolates to 30 days
+     only what the firm prorated to the days employed (the monthly wage, a recurring Lohnart: the lines with
+     their days), by the share of the month employed as the firm prorates (calendar days or 30 a month), so
+     the extrapolation takes back exactly what the proration cut and a whole month's wage is the
+     rate-determining income (an entry on 15 October: 17/31). What is paid as worked or entered for the month
+     (an hourly wage's hours, an allowance entered in full) counts as paid: extrapolating it would tax a
+     part-month's hours as a whole month's (review, 2026-11-19). Sources: FAQ Frage 6 and 15 (read); KS 45
+     Ziff. 6.3 and 6.5 themselves could not be read (the circular's PDF was not reachable), so the rule for
+     hourly wages in a part month is the app's reading of the FAQ, to be checked against the circular. Other employments: none, the wage as it is (FAQ Frage 13); unknown, extrapolated to 100 % when
      her Pensum here is lower; their Pensum known, to her whole Pensum (it may pass 100 %, FAQ Frage 8); their
      income known, added. An hourly wage without a Pensum and with other employments takes the file's median
      (`MED`) at least (FAQ Frage 11–12). Then the aperiodic part is added as it is. The 180-hours rule for
@@ -2024,16 +2034,21 @@ Taken while building B2, the Quellensteuer (2026-11-19; numbered from 100, the c
      applies when the wage is above zero. A two-character tariff code (A0) takes the person's church flag; a
      canton whose file lists only one variant is read in that one (format Ziff. 4.2).
 105. **A new file is compared with every closed payslip before it counts** (also the first one, so a month
-     closed without it offers its missing tax): each computed as if open, with the old and the new file (§22
-     decision 27). The card of §19.3 comes first; until the click the file is kept but not current. The tax line
+     closed without it offers its missing tax): for the tax and the commission only, what the payslip withheld
+     (its own lines, plus the corrections entered on it since its close, as `driftOf` reads it) against what it
+     computes as if open with the new file. Not against the old file (review, 2026-11-19): a month closed without
+     a file and corrected by hand since carries nothing twice, and a month kept as it was («So lassen») shows
+     0 → the new tax when a corrected file comes. The corrections are appended before the file becomes current. The card of §19.3 comes first; until the click the file is kept but not current. The tax line
      names the file (canton, year, the canton's date), the code and the rate-determining income, on the page and
      in the PDF; the close's `used` keeps `tariffs/<kt>/<year>` with the date and the checksum.
 106. **The settlement list is read from the closed payslips** per month of the payslip and canton: each person
      with the QST wage, the code, the rate-determining income, the rate, the tax and the commission; a carried
      correction in the month that carried it, naming the month it corrects; what is to pay is the tax less the
      commission, which is exactly what the payslips moved on 2279. Its CSV carries the social security number in
-     full and is not cached. The firm's customer number shows when its Quellensteuer insurance has a solution
-     for the canton.
+     full and is not cached. **One Quellensteuer insurance per canton** (its solution's code is the canton): it
+     holds the canton's customer number for the list, its own liability account if the firm keeps one per
+     canton (a tax line and its commission book on the insurance of their canton), and the firm's commission
+     rate where it differs from the file's.
 107. **Left out of B2 for now**, each a line «unvollständig» or not offered: the annual model; tariff codes D
      (GE), E (simplified procedure), G/Q (replacement income not paid by the employer) as payroll cases; the
      French cross-border special agreement (`SF`); days worked abroad (`daysInCountry`); the report of a new

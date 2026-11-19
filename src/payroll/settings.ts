@@ -256,7 +256,7 @@ function taxValue(v: unknown): TaxAtSource {
   const o = v.otherEmployment;
   const other = o === undefined || o === null || o === '' || o === 'none' ? undefined
     : o === 'unknown' ? 'unknown' as const
-    : isObj(o) && o.pensum !== undefined && o.pensum !== '' ? { pensum: num(o.pensum, 'Pensum der anderen Stellen', 0) }
+    : isObj(o) && o.pensum !== undefined && o.pensum !== '' ? { pensum: num(o.pensum, 'Pensum der anderen Stellen (1 bis 100 %)', 1, 100) }
     : isObj(o) && o.income !== undefined && o.income !== '' ? { income: num(o.income, 'Einkommen der anderen Stellen', 0) }
     : bad('Quellensteuer: andere Stellen: keine, unbekannt, ein Pensum oder ein Einkommen.');
   return clean({ subject: v.subject, canton: optStr(v.canton)?.toUpperCase(), municipality: optStr(v.municipality), code, church: typeof v.church === 'boolean' ? v.church : undefined, otherEmployment: other });
@@ -627,6 +627,32 @@ export function affectedBetween(ctx: PayrollContext, next: PayrollContext, isClo
     const before = computePayslip({ ...ctx, history }, c.employee, c.month);
     const after = computePayslip({ ...next, history }, c.employee, c.month);
     const differences = differencesOf({ data: ctx.data, store: next.store }, before, after);
+    if (differences.length) out.push({ payslip: c.id, employee: c.employee, name: c.person.name, month: c.month, postingDate: c.postingDate, closedPeriod: isClosed(c.postingDate), differences });
+  }
+  return out.sort((a, b) => a.month.localeCompare(b.month) || a.name.localeCompare(b.name));
+}
+
+/**
+ * The closed payslips another tariff file computes otherwise (§22 decision 105): for the Lohnarten of a tariff
+ * kind and the commission only, what the payslip withheld (its own lines, less the corrections a carried line of
+ * another month brought, plus the corrections entered on it since its close, as `driftOf` reads it) against
+ * what it computes as if open with `next`'s file. So a month closed without a file, corrected by hand since,
+ * or kept as it was («So lassen»), shows what it really lacks, and nothing is carried twice.
+ */
+export function affectedByTariff(ctx: PayrollContext, next: PayrollContext, isClosed: (day: string) => boolean = () => false): Affected[] {
+  const types = firmWageTypes(ctx.data, ctx.store);
+  const tariffKinds = new Set(Object.entries(ctx.data.insurances).filter(([, k]) => k.tariff).map(([k]) => k));
+  const taxed = new Set(ctx.data.contributions.filter((c) => tariffKinds.has(c.insurance)).map((c) => c.wageType));
+  for (const w of types.values()) if (w.computes === 'commission') taxed.add(w.key);
+  const keep = (d: Pick<PayslipDraft, 'lines'> | undefined) => ({ lines: (d?.lines ?? []).filter((l) => taxed.has(l.wageType)) });
+  const out: Affected[] = [];
+  for (const c of ctx.history.closed.values()) {
+    const corrected = ctx.history.corrections.filter((x) => x.of === c.id && x.at >= c.closedAt && taxed.has(x.wageType));
+    const withheld: Pick<PayslipDraft, 'lines'> = {
+      lines: [...keep(c).lines, ...corrected.map((x) => ({ wageType: x.wageType, label: types.get(x.wageType)?.label.de ?? x.wageType, amount: x.amount, side: x.side, source: 'correction' }))],
+    };
+    const after = keep(computePayslip({ ...next, history: withoutClose(ctx.history, c.id) }, c.employee, c.month));
+    const differences = differencesOf({ data: ctx.data, store: ctx.store }, withheld, after);
     if (differences.length) out.push({ payslip: c.id, employee: c.employee, name: c.person.name, month: c.month, postingDate: c.postingDate, closedPeriod: isClosed(c.postingDate), differences });
   }
   return out.sort((a, b) => a.month.localeCompare(b.month) || a.name.localeCompare(b.name));

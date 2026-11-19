@@ -42,7 +42,7 @@ import { router as share } from './routes/share.js';
 import { router as entryTemplates } from './routes/entry-templates.js';
 import { router as payroll } from './routes/payroll.js';
 import { router as payrollSettings } from './routes/payroll-settings.js';
-import { router as payrollTariffs } from './routes/payroll-tariffs.js';
+import { router as payrollTariffs, tariffUploadRefusal } from './routes/payroll-tariffs.js';
 import { markerOf } from '../handover/durchsicht.js';
 import { aiSetup } from './ai-setup.js';
 import { NoClaudeError } from '../llm/providers/claude-cli.js';
@@ -134,6 +134,8 @@ app.use(onboarding);
 app.use((err: unknown, req: express.Request, res: express.Response, _next: express.NextFunction) => {
   // A hand-over file over the upload's limit: the limit is told (body-parser's 413).
   if ((err as { type?: string }).type === 'entity.too.large' && req.path.startsWith('/api/handover')) { res.status(413).json({ error: 'Die Datei ist grösser als 1 GB: höchstens 1 GB pro Übergabe.', code: 'shareTooLarge', params: { limit: '1 GB' } } satisfies ApiErrorBody); return; }
+  // A tariff file over its limit or sent as JSON: the reason with its code.
+  if (tariffUploadRefusal(err, req, res)) return;
   // Any other body over its limit: the limit is told, never a bare 413.
   if ((err as { type?: string }).type === 'entity.too.large') {
     if (req.path.startsWith('/api/contacts/import')) { res.status(413).json({ error: `Die Tabelle ist grösser als 8 MB: höchstens 8 MB und ${IMPORT_LIMIT} Zeilen pro Import.`, code: 'importTooLarge', params: { limit: '8 MB', rows: IMPORT_LIMIT } } satisfies ApiErrorBody); return; }

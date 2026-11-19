@@ -50,7 +50,8 @@ const digits = (s: string, what: string, line: number): number => {
  * adds), so a cut or mixed download never computes a tax.
  */
 export function parseTariffFile(text: string): TariffFile {
-  const lines = text.replace(/\x1a/g, '').split(/\r?\n/).filter((l) => l.trim() !== '');
+  // A byte-order mark (as an editor may add it) and an end-of-file character are no part of a record.
+  const lines = text.replace(/^(\uFEFF|\u00EF\u00BB\u00BF)/, '').replace(/\x1a/g, '').split(/\r?\n/).filter((l) => l.trim() !== '');
   if (!lines.length || !lines[0].startsWith('00')) throw new TariffFileError('Kein Vorlaufrecord (00): keine Tarifdatei.');
   const head = lines[0];
   const canton = head.slice(2, 4);
@@ -60,6 +61,7 @@ export function parseTariffFile(text: string): TariffFile {
   const tail = lines.at(-1)!;
   if (!tail.startsWith('99')) throw new TariffFileError('Kein Endrecord (99): die Datei ist unvollständig.');
   const count = digits(tail.slice(19, 27), 'Anzahl Records', lines.length);
+  // The trailer's «Checksumme Betrag» is empty by the format (Ziff. 3.7): the count is the check it defines.
   if (count !== lines.length) throw new TariffFileError(`Der Endrecord zählt ${count} Records, die Datei hat ${lines.length}: sie ist unvollständig.`);
   if (tail.slice(17, 19) !== canton) throw new TariffFileError(`Der Endrecord nennt den Kanton ${tail.slice(17, 19)}, der Vorlauf ${canton}.`);
 

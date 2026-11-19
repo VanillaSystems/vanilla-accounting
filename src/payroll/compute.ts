@@ -404,12 +404,14 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     const side: 'employee' | 'employer' = w.side === 'employer' ? 'employer' : 'employee';
     if (kind?.computed === false || kind?.tariff) {
       const tax = read(`employees/${e.id}/taxAtSource`, e.taxAtSource, to);
-      if (!tax?.subject) continue;
+      // A tax correction carried into a month she is no longer subject in still takes its commission.
+      const carried = lines.some((l) => l.wageType === w.key && l.corrects);
+      if (!tax?.subject && !(kind.tariff && carried)) continue;
       if (!kind.tariff) { miss(w.key, 'notComputed'); continue; }
       // The tax at source by the region's tariff file, and the commission on it (src/payroll/tax-at-source.ts).
       const commission = [...types.values()].find((x) => x.computes === 'commission');
       const out = taxAtSourceLines({
-        data, types, wageType: w, label: label(w), person: tax, month, lines,
+        data, types, wageType: w, label: label(w), person: tax ?? { subject: false }, month, lines,
         // The days employed in the firm's own proration, so the extrapolation takes back exactly what the proration cut (§22 decision 103).
         days: employedFraction(e, month, settings.proration) * (data.taxAtSource?.partMonth ?? 30), pensum: job?.pensum ?? (job?.kind === 'monthly' ? 100 : undefined),
         tariffs: ctx.tariffs, insurances: store.insurances,

@@ -10,7 +10,7 @@
  * A file corrected during the year is a new version; making it current goes through the comparison with
  * the closed payslips (src/server/routes/payroll-tariffs.ts), so a closed payslip never changes.
  */
-import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { unzipSync } from 'fflate';
 import { createHash } from 'node:crypto';
@@ -26,7 +26,7 @@ export interface TariffVersion { sha256: string; created: string; fetchedAt: str
 export interface TariffIndex { region: string; year: string; current: string; versions: TariffVersion[] }
 
 export class TariffError extends Error {
-  constructor(message: string, readonly why: 'notFound' | 'network' | 'badFile' | 'otherRegion' | 'otherYear' | 'noSource') { super(message); }
+  constructor(message: string, readonly why: 'notFound' | 'network' | 'badFile' | 'otherRegion' | 'otherYear' | 'noSource' | 'tooLarge') { super(message); }
 }
 
 const dirOf = (ws: Paths, year: string) => join(ws.paths.data, 'qst', year);
@@ -35,9 +35,25 @@ const versionFile = (ws: Paths, region: string, year: string, sha: string) => jo
 
 export const sha256 = (b: Uint8Array | string): string => createHash('sha256').update(b).digest('hex');
 
+const indexes = new Map<string, { mtime: number; index: TariffIndex | undefined }>();
+
+/**
+ * The index of a region's files of a year, read once per change of the file. A broken index reads as none: the
+ * payslip says «Tarif … nicht geladen» and loading the file again writes a whole one.
+ */
 export function tariffIndex(ws: Paths, region: string, year: string): TariffIndex | undefined {
   const f = indexFile(ws, region, year);
-  return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) as TariffIndex : undefined;
+  if (!existsSync(f)) return undefined;
+  const mtime = statSync(f).mtimeMs;
+  const hit = indexes.get(f);
+  if (hit && hit.mtime === mtime) return hit.index;
+  let index: TariffIndex | undefined;
+  try {
+    const raw = JSON.parse(readFileSync(f, 'utf8')) as TariffIndex;
+    index = raw && typeof raw.current === 'string' && Array.isArray(raw.versions) ? raw : undefined;
+  } catch { index = undefined; }
+  indexes.set(f, { mtime, index });
+  return index;
 }
 
 /** Every region and year the workspace has a tariff file of, the current version first in each. */
@@ -45,7 +61,7 @@ export function tariffIndexes(ws: Paths): TariffIndex[] {
   const root = join(ws.paths.data, 'qst');
   if (!existsSync(root)) return [];
   return readdirSync(root).filter((y) => /^\d{4}$/.test(y)).sort().flatMap((y) =>
-    readdirSync(join(root, y)).filter((f) => /^[a-z]{2}\.json$/.test(f)).sort().map((f) => JSON.parse(readFileSync(join(root, y, f), 'utf8')) as TariffIndex));
+    readdirSync(join(root, y)).filter((f) => /^[a-z]{2}\.json$/.test(f)).sort().flatMap((f) => tariffIndex(ws, f.slice(0, 2).toUpperCase(), y) ?? []));
 }
 
 const parsed = new Map<string, LoadedTariff>();
@@ -59,7 +75,9 @@ export function tariffVersion(ws: Paths, region: string, year: string, sha: stri
   const bytes = readFileSync(f);
   if (sha256(bytes) !== sha) return undefined;
   const v = tariffIndex(ws, region, year)?.versions.find((x) => x.sha256 === sha);
-  const loaded: LoadedTariff = { region, year, file: parseTariffFile(bytes.toString('latin1')), sha256: sha, fetchedAt: v?.fetchedAt ?? '', ...(v?.url ? { url: v.url } : {}) };
+  let file;
+  try { file = parseTariffFile(bytes.toString('latin1')); } catch { return undefined; }
+  const loaded: LoadedTariff = { region, year, file, sha256: sha, fetchedAt: v?.fetchedAt ?? '', ...(v?.url ? { url: v.url } : {}) };
   parsed.set(sha, loaded);
   return loaded;
 }
@@ -111,10 +129,17 @@ export function makeCurrent(ws: Paths, region: string, year: string, sha: string
 const fill = (template: string, region: string, year: string) =>
   template.replace(/\{year\}/g, year).replace(/\{yy\}/g, year.slice(2)).replace(/\{canton\}/g, region.toLowerCase());
 
-/** The text file of a region and year inside a zip, also inside a zip of every region (an archived year). */
-function fromZip(zip: Uint8Array, region: string, year: string): Uint8Array | undefined {
+/** The most a tariff file, a zip of one or the archive of every canton may hold: the largest canton's text is about 7 MB, the archive 6 MB. */
+export const TARIFF_LIMIT = 50 * 1024 * 1024;
+
+/** The text file of a region and year inside a zip, also inside a zip of every region (an archived year); by its name, never the first entry. */
+export function fromZip(zip: Uint8Array, region: string, year: string): Uint8Array | undefined {
   const name = new RegExp(`(^|/)tar${year.slice(2)}${region.toLowerCase()}\\.(txt|zip)$`, 'i');
-  const files = unzipSync(zip);
+  let files: Record<string, Uint8Array>;
+  try {
+    // An entry that would unpack to more than the limit is not unpacked (a zip bomb, or not a tariff).
+    files = unzipSync(zip, { filter: (f) => f.originalSize <= TARIFF_LIMIT && !/(^|\/)__MACOSX\//.test(f.name) });
+  } catch (e) { throw new TariffError(`Die Zip-Datei lässt sich nicht öffnen: ${(e as Error).message}.`, 'badFile'); }
   const entries = Object.entries(files);
   const txt = entries.find(([n]) => name.test(n) && /\.txt$/i.test(n)) ?? (entries.length === 1 && /\.txt$/i.test(entries[0][0]) ? entries[0] : undefined);
   if (txt) return txt[1];
@@ -122,11 +147,24 @@ function fromZip(zip: Uint8Array, region: string, year: string): Uint8Array | un
   return inner ? fromZip(inner[1], region, year) : undefined;
 }
 
+/** The text of a file a person gave (the text file, or its zip): the region's file of the year in a zip, by its name. */
+export function tariffBytesOf(raw: Uint8Array, region: string, year: string): Uint8Array {
+  if (raw.length > TARIFF_LIMIT) throw new TariffError(`Die Datei ist grösser als ${TARIFF_LIMIT / 1024 / 1024} MB.`, 'tooLarge');
+  if (!(raw[0] === 0x50 && raw[1] === 0x4b)) return raw;
+  const bytes = fromZip(raw, region, year);
+  if (!bytes) throw new TariffError(`Die Zip-Datei enthält keine Datei tar${year.slice(2)}${region.toLowerCase()}.txt.`, 'badFile');
+  return bytes;
+}
+
 export type Fetcher = (url: string) => Promise<{ ok: boolean; status: number; bytes: Uint8Array }>;
 
 export const httpFetcher: Fetcher = async (url) => {
   const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
-  return { ok: res.ok, status: res.status, bytes: new Uint8Array(res.ok ? await res.arrayBuffer() : new ArrayBuffer(0)) };
+  const told = Number(res.headers.get('content-length') ?? 0);
+  if (told > TARIFF_LIMIT) throw new TariffError(`${url} ist grösser als ${TARIFF_LIMIT / 1024 / 1024} MB.`, 'tooLarge');
+  const bytes = new Uint8Array(res.ok ? await res.arrayBuffer() : new ArrayBuffer(0));
+  if (bytes.length > TARIFF_LIMIT) throw new TariffError(`${url} ist grösser als ${TARIFF_LIMIT / 1024 / 1024} MB.`, 'tooLarge');
+  return { ok: res.ok, status: res.status, bytes };
 };
 
 /** Fetches the file of `region` and `year` from where the data says: the year's own file, else the archive of every region. */
@@ -138,7 +176,7 @@ export async function fetchTariff(data: PayrollData, region: string, year: strin
   let last = '';
   for (const url of urls) {
     let res;
-    try { res = await fetcher(url); } catch (e) { throw new TariffError(`${url} ist nicht erreichbar: ${(e as Error).message}`, 'network'); }
+    try { res = await fetcher(url); } catch (e) { if (e instanceof TariffError) throw e; throw new TariffError(`${url} ist nicht erreichbar: ${(e as Error).message}`, 'network'); }
     if (!res.ok) { last = `${url}: HTTP ${res.status}`; continue; }
     const bytes = /\.zip$/i.test(url) ? fromZip(res.bytes, region, year) : res.bytes;
     if (!bytes) { last = `${url}: keine Datei von ${region} ${year} darin`; continue; }

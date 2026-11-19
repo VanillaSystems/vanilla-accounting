@@ -40,11 +40,11 @@ export function lineSource(
   const kind = line.source.slice(0, at);
   const key = line.source.slice(at + 1);
   // The tax at source: the region's file, its date, the code and the rate-determining income it was looked up with.
-  if (kind === 'tariff' && line.tariff) {
+  if (kind === 'tariff' && line.tariff?.created) {
     const t = line.tariff;
     // The commission names only the file its rate comes from; the tax names the code and the income it was looked up with.
     const tax = data.contributions.some((c) => c.wageType === line.wageType);
-    return { kind: 'tariff', region: t.region, year: key.split(':')[1] ?? slip.month.slice(0, 4), created: t.created, code: t.code, income: t.income, ...(tax ? {} : { fileOnly: true }) };
+    return { kind: 'tariff', region: t.region, year: key.split(':')[1] ?? slip.month.slice(0, 4), created: t.created!, code: t.code, income: t.income, ...(tax ? {} : { fileOnly: true }) };
   }
   if (kind === 'federal') {
     const year = slip.month.slice(0, 4);

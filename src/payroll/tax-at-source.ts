@@ -23,7 +23,7 @@ export interface LoadedTariff { region: string; year: string; file: TariffFile; 
 export type TariffSource = (region: string, year: string) => LoadedTariff | undefined;
 
 /** Where a tax line comes from: the file, the code and the rate-determining income it was looked up with. */
-export interface TariffUse { region: string; code: string; income: number; created: string; version: string }
+export interface TariffUse { region: string; code: string; income: number; created?: string; version?: string }
 
 export interface TaxAtSourceInput {
   data: PayrollData;
@@ -60,7 +60,7 @@ export function tariffCode(code: string | undefined, church: boolean | undefined
 }
 
 /** The firm's insurance of a tariff kind with a solution for `region` that holds in the month, and that solution. */
-export function regionSolutionOf(insurances: readonly PayrollInsurance[], data: PayrollData, region: string, from: string, to: string) {
+export function regionSolutionOf(insurances: readonly PayrollInsurance[], data: Pick<PayrollData, 'insurances'>, region: string, from: string, to: string) {
   for (const i of insurances) {
     if (!data.insurances[i.kind]?.tariff || i.validFrom > to || (i.validUntil && i.validUntil < from)) continue;
     const s = i.solutions.find((x) => x.code.toUpperCase() === region);
@@ -84,6 +84,8 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
   const region = person.canton?.trim().toUpperCase();
 
   const tax = (() => {
+    // No longer subject (she left the tax at source, or left): no tax of this month, only the commission on a carried correction.
+    if (!person.subject) return undefined;
     if (!t) return miss('notComputed');
     if (!region) return miss('taxRegion');
     const model = t.regions[region]?.model;
@@ -95,20 +97,23 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
     if (!loaded) return miss(`tariff:${region}:${year}`);
     out.used.push({ path: `tariffs/${region}/${year}`, validFrom: loaded.file.created, enteredAt: loaded.sha256.slice(0, 12) });
 
-    // The month's taxable wage, its periodic and its aperiodic part (a correction carried from an earlier month is aperiodic).
-    let periodic = 0; let aperiodic = 0;
+    // The month's taxable wage: its periodic part, of which what the firm prorated to the days employed (a line with
+    // its days: the monthly wage, a recurring Lohnart), and its aperiodic part (a carried correction is aperiodic).
+    let prorated = 0; let periodic = 0; let aperiodic = 0;
     for (const l of lines) {
       const w = types.get(l.wageType);
       if (!w || w.side === 'employer' || !w.bases.includes(baseKey(data, input.wageType.key))) continue;
       const signed = w.sign === '-' ? -l.amount : l.amount;
-      if (l.corrects || t.aperiodic.includes(w.lohnausweis ?? '')) aperiodic += signed; else periodic += signed;
+      if (l.corrects || t.aperiodic.includes(w.lohnausweis ?? '')) aperiodic += signed;
+      else if (l.days) prorated += signed;
+      else periodic += signed;
     }
-    const base = round2(periodic + aperiodic);
+    const base = round2(prorated + periodic + aperiodic);
     if (base <= 0) return undefined;
 
-    // The rate-determining income (KS 45 Ziff. 6): a part month to whole days, other employments to their whole.
-    let income = periodic;
-    if (input.days > 0 && input.days < t.partMonth) income = income * t.partMonth / input.days;
+    // The rate-determining income (KS 45 Ziff. 6): what the firm prorated in a part month back to a whole month;
+    // what is paid as worked (hours, a month's line) counts as paid (§22 decision 103); other employments to their whole.
+    let income = periodic + (input.days > 0 && input.days < t.partMonth ? prorated * t.partMonth / input.days : prorated);
     const median = loaded.file.median;
     const other = person.otherEmployment;
     if (other !== undefined) {
@@ -159,10 +164,11 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
     if (rate === undefined) { miss(`tariff:${r}:${year}`, c.wageType.key); continue; }
     const amount = round2(taxed * rate / 100);
     if (amount === 0) continue;
+    // The region always on the line, whatever the rate's source: the settlement list reads it.
     out.lines.push({
       wageType: c.wageType.key, label: c.label, base: taxed, rate, amount, side: 'employer',
       source: own && firm !== undefined ? `insurance:${own.insurance.id}` : `tariff:${r}:${year}`,
-      ...(loaded ? { tariff: { region: r, code: t.provision.electronic, income: taxed, created: loaded.file.created, version: loaded.sha256.slice(0, 12) } } : {}),
+      tariff: { region: r, code: loaded ? t.provision.electronic : '', income: taxed, ...(loaded ? { created: loaded.file.created, version: loaded.sha256.slice(0, 12) } : {}) },
     });
   }
   return out;

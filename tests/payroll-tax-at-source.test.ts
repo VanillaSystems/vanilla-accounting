@@ -241,3 +241,133 @@ test('the settlement list per canton and month equals what the payslips booked o
   assert.equal(Math.round(debit * 100), Math.round(all.commission * 100));
   assert.equal(Math.round((credit - debit) * 100), Math.round(all.payable * 100));
 });
+
+// ─── review fixes (2026-11-19) ─────────────────────────────────────────────────
+
+import { affectedByTariff } from '../src/payroll/settings.js';
+import type { PayslipEvent } from '../src/payroll/model.js';
+
+const withQst = (store: ReturnType<typeof firm>, rates: Record<string, number>, account?: string) => {
+  store.insurances.push(...Object.entries(rates).map(([region, provision]) => ({
+    id: `q${region}`, kind: 'qst', name: `Steuerverwaltung ${region}`, customerNumber: `K-${region}`, ...(account ? { account } : {}),
+    solutions: [{ code: region, rates: [dated('2026-01-01', { provision })] }], validFrom: '2026-01-01',
+  })));
+  return store;
+};
+const correction = (of: string, amount: number, at = '2026-04-02T00:00:00.000Z'): PayslipEvent =>
+  ({ event: 'correction', id: `co-${of}-${amount}`, of, wageType: 'quellensteuer', side: 'employee', amount, at, by: 'person' });
+
+/** What the closes book on 2279: the tax credited, the commission debited. */
+function byRegionAndBooked(closes: ReturnType<typeof closeOf>[], store: ReturnType<typeof firm>) {
+  const data = ctxOf(store).data;
+  let credit = 0; let debit = 0;
+  for (const c of closes) for (const p of bookingOf(c, data, store).postings) { if (p.credit === '2279') credit += p.amount; if (p.debit === '2279') debit += p.amount; }
+  return { credit: Math.round(credit * 100) / 100, debit: Math.round(debit * 100) / 100 };
+}
+
+test('a canton move ZH → BE with a carried correction and the firm\'s rates: each canton\'s list has its tax and its commission', () => {
+  const p = subject(6500, { subject: true, canton: 'ZH', code: 'A0' });
+  p.taxAtSource = [...p.taxAtSource!, dated('2026-04-01', { subject: true, canton: 'BE', code: 'A0' })];
+  const store = withQst(firm([p]), { ZH: 2, BE: 1 });
+  const ev: PayslipEvent[] = [];
+  const mar = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-03')!); ev.push(mar, correction(mar.id, 100));
+  const apr = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-04')!);
+  // April: BE's own tax at BE's 1 %, the ZH correction of 100 at ZH's 2 %, each line naming its canton.
+  assert.deepEqual(line(apr as never, 'bezugsprovision').map((l) => [l.tariff?.region, l.base, l.rate, l.amount]), [['ZH', 100, 2, 2], ['BE', 812.5, 1, 8.13]]);
+  const lists = settlementsOf([mar, apr], '2026', ctxOf(store).data, firmWageTypes(ctxOf(store).data, store), store);
+  const april = lists.filter((s) => s.month === '2026-04');
+  assert.deepEqual(april.map((s) => [s.region, s.totals.tax, s.totals.commission, s.insurer?.customerNumber]), [['BE', 812.5, 8.13, 'K-BE'], ['ZH', 100, 2, 'K-ZH']]);
+  const all = lists.reduce((s, x) => ({ tax: s.tax + x.totals.tax, commission: s.commission + x.totals.commission }), { tax: 0, commission: 0 });
+  const b = byRegionAndBooked([mar, apr], store);
+  assert.equal(Math.round(all.tax * 100), Math.round(b.credit * 100), 'the lists\' tax = 2279\'s credits');
+  assert.equal(Math.round(all.commission * 100), Math.round(b.debit * 100), 'the lists\' commission = 2279\'s debits');
+});
+
+test('a month that only carries a correction after the exit: its commission is listed and booked, with the firm\'s rate or the file\'s', () => {
+  for (const firmRate of [true, false]) {
+    const p = subject(6500, { subject: true, canton: 'ZH', code: 'A0' }, { employment: [dated('2026-01-01', { kind: 'monthly' as const, amount: 6500, pensum: 100, hoursPerWeek: 42, holidayDays: 25 }, undefined, '2026-03-31')] });
+    const store = firmRate ? withQst(firm([p]), { ZH: 2 }) : firm([p]);
+    const ev: PayslipEvent[] = [];
+    const mar = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-03')!); ev.push(mar, correction(mar.id, 100));
+    const aprD = computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-04')!;
+    assert.deepEqual(line(aprD, 'bezugsprovision').map((l) => [l.tariff?.region, l.amount]), [['ZH', 2]]);
+    const apr = closeOf(aprD);
+    const april = settlementsOf([mar, apr], '2026', ctxOf(store).data, firmWageTypes(ctxOf(store).data, store), store).find((s) => s.month === '2026-04')!;
+    const b = byRegionAndBooked([apr], store);
+    assert.deepEqual([april.region, april.totals.tax, april.totals.commission, april.totals.payable], ['ZH', 100, 2, 98]);
+    assert.deepEqual([b.credit, b.debit], [100, 2]);
+  }
+});
+
+test('no longer subject: a carried tax correction still takes its commission', () => {
+  const p = subject(6500, { subject: true, canton: 'ZH', code: 'A0' });
+  p.taxAtSource = [...p.taxAtSource!, dated('2026-04-01', { subject: false })];
+  const store = firm([p]);
+  const ev: PayslipEvent[] = [];
+  const mar = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-03')!); ev.push(mar, correction(mar.id, -50));
+  const apr = computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', '2026-04')!;
+  assert.deepEqual(line(apr, 'quellensteuer').map((l) => [l.amount, l.corrects]), [[-50, mar.id]]);
+  assert.deepEqual(line(apr, 'bezugsprovision').map((l) => [l.tariff?.region, l.amount]), [['ZH', -1]]);
+});
+
+const noFile = () => undefined;
+/** The ZH file with A0N 6'451–6'500 at 7.50 % instead of 7.28 %: an invented correction, not the canton's. */
+const corrected = (): LoadedTariff => {
+  const t = text('zh').replace(/^00ZH {15}20251208/m, `00ZH${' '.repeat(15)}20260304`).replace(/^(0601ZHA0N {7}20260101000645100000005000 00000000000)00728/m, '$100750');
+  return { region: 'ZH', year: '2026', file: parseTariffFile(t), sha256: 'sha-zh-corrected-0123', fetchedAt: '2026-11-19T10:00:00.000Z' };
+};
+
+test('the first file after a hand correction of the missing tax: compared with what the payslip withheld and its corrections, nothing twice', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const ev: PayslipEvent[] = [];
+  const sep = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs: noFile }, 'q1', '2026-09')!);
+  assert.equal(line(sep as never, 'quellensteuer').length, 0, 'closed without the file');
+  ev.push(sep, correction(sep.id, 473.2, '2026-10-02T00:00:00.000Z'));
+  const ctx = { ...ctxOf(store, ev), tariffs: noFile };
+  const aff = affectedByTariff(ctx, { ...ctx, tariffs });
+  assert.deepEqual(aff.flatMap((a) => a.differences.filter((d) => d.carry)), [], 'the hand correction already carries the tax');
+});
+
+test('«So lassen» on the first file, then a corrected file: the card shows what the month withheld (0) against the new tax', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const ev: PayslipEvent[] = [];
+  const sep = closeOf(computePayslip({ ...ctxOf(store, ev), tariffs: noFile }, 'q1', '2026-09')!);
+  ev.push(sep, { event: 'keep', id: sep.id, at: '2026-10-02T00:00:00.000Z', by: 'person', path: 'tariffs/ZH/2026', validFrom: '2025-12-08' });
+  const ctx = { ...ctxOf(store, ev), tariffs };
+  const fixed = corrected();
+  const aff = affectedByTariff(ctx, { ...ctx, tariffs: (r, y) => (r === 'ZH' && y === '2026' ? fixed : tariffs(r, y)) });
+  const tax = aff[0].differences.find((d) => d.wageType === 'quellensteuer')!;
+  assert.deepEqual([tax.before, tax.after, tax.diff, tax.carry], [0, 487.5, 487.5, true], '0 → 6500 × 7.50 %, never the files\' 14.30');
+  assert.equal(aff[0].differences.find((d) => d.wageType === 'bezugsprovision')?.carry, false);
+});
+
+test('an hourly wage from the 16th: what is paid as worked counts as paid, never extrapolated (§22 decision 103)', () => {
+  const p = subject(0, { subject: true, canton: 'ZH', code: 'A0' }, { employment: [dated('2026-11-16', { kind: 'hourly' as const, amount: 40, hoursPerWeek: 42, holidayDays: 25 })] });
+  const store = firm([p]);
+  store.monthLines = [{ id: 'm1', employee: 'q1', month: '2026-11', wageType: 'stundenlohn', quantity: 80, enteredAt: '2026-11-01T00:00:00Z' }];
+  const [l] = line(computePayslip({ ...ctxOf(store), tariffs }, 'q1', '2026-11')!, 'quellensteuer');
+  assert.equal(l.base, 3200);
+  assert.equal(l.tariff?.income, 3200);
+});
+
+test('a monthly wage from the 16th with a child allowance entered in full: only the prorated wage is extrapolated', () => {
+  const store = firm([subject(6000, { subject: true, canton: 'ZH', code: 'A0' }, { employment: [dated('2026-11-16', { kind: 'monthly' as const, amount: 6000, pensum: 100, hoursPerWeek: 42, holidayDays: 25 })] })]);
+  store.monthLines = [{ id: 'm1', employee: 'q1', month: '2026-11', wageType: 'kinderzulage', amount: 215, enteredAt: '2026-11-01T00:00:00Z' }];
+  const [l] = line(computePayslip({ ...ctxOf(store), tariffs }, 'q1', '2026-11')!, 'quellensteuer');
+  // 6000 × 15/30 = 3000 paid, back to 6000; the allowance of 215 as paid.
+  assert.equal(l.base, 3215);
+  assert.equal(l.tariff?.income, 6215);
+});
+
+test('the commission books on the canton\'s own insurance (one per canton, each its account)', () => {
+  const store = withQst(firm([subject(6500, { subject: true, canton: 'BE', code: 'A0' })]), { ZH: 2 });
+  withQst(store, { BE: 1 }, '2278');
+  const d = computePayslip({ ...ctxOf(store), tariffs }, 'q1', '2026-03')!;
+  const b = bookingOf(d, ctxOf(store).data, store);
+  assert.deepEqual(b.postings.filter((p) => /quellensteuer|bezugsprovision/.test(p.wageType)).map((p) => [p.debit, p.credit]), [['1091', '2278'], ['2278', '5890']]);
+});
+
+test('a byte-order mark before the header is read past', () => {
+  assert.equal(parseTariffFile(`﻿${text('zh')}`).canton, 'ZH');
+  assert.equal(parseTariffFile(`ï»¿${text('zh')}`).canton, 'ZH');
+});

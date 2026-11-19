@@ -15,11 +15,10 @@
  * Without either it lists them and changes nothing. A closed period offers only `--correct`.
  */
 import { readFileSync } from 'node:fs';
-import { unzipSync } from 'fflate';
 import { loadBooks, periodLock } from '../books/store.js';
 import { PayrollRefusal } from '../payroll/close.js';
 import { loadTariff } from '../payroll/tariff-load.js';
-import { TariffError } from '../payroll/tariffs.js';
+import { TariffError, tariffBytesOf } from '../payroll/tariffs.js';
 import { openWorkspace } from '../workspace/workspace.js';
 
 const args = process.argv.slice(2);
@@ -30,9 +29,11 @@ if (!region || !/^[A-Z]{2}$/.test(region) || !year || !/^\d{4}$/.test(year)) {
   process.exit(2);
 }
 const at = args.indexOf('--file');
-const raw = at >= 0 ? new Uint8Array(readFileSync(args[at + 1])) : undefined;
-const bytes = raw && raw[0] === 0x50 && raw[1] === 0x4b ? Object.values(unzipSync(raw)).find((x) => x.length) : raw;
+if (at >= 0 && (!args[at + 1] || args[at + 1].startsWith('--'))) { console.error('--file braucht einen Pfad: npm run fetch-qst -- ZH 2026 --file ~/Downloads/tar26zh.zip'); process.exit(2); }
 const backdated = args.includes('--correct') ? 'correct' as const : args.includes('--keep') ? 'keep' as const : undefined;
+
+let bytes: Uint8Array | undefined;
+try { bytes = at >= 0 ? tariffBytesOf(new Uint8Array(readFileSync(args[at + 1])), region, year) : undefined; } catch (e) { console.error((e as Error).message); process.exit(1); }
 
 const ws = openWorkspace();
 const lock = periodLock(loadBooks(ws));

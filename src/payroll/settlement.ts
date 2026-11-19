@@ -10,7 +10,7 @@ import type { PayrollData } from '../core/modules/schema.js';
 import type { WageType } from './catalogue.js';
 import type { PayrollStore, PayslipClose } from './model.js';
 import { regionSolutionOf } from './tax-at-source.js';
-import { round2, sum } from './money.js';
+import { firstDay, lastDay, round2, sum } from './money.js';
 
 export interface SettlementRow {
   payslip: string; employee: string; name: string;
@@ -74,7 +74,7 @@ export function settlementsOf(closes: readonly PayslipClose[], year: string, dat
   return [...lists.values()].map((s) => {
     const tax = sum(s.rows.map((r) => r.tax));
     const commission = sum(s.rows.map((r) => r.commission));
-    const firm = regionSolutionOf(store.insurances, data, s.region, `${s.month}-01`, `${s.month}-28`)?.insurance;
+    const firm = regionSolutionOf(store.insurances, data, s.region, firstDay(s.month), lastDay(s.month))?.insurance;
     return {
       ...s, totals: { wage: sum(s.rows.map((r) => r.wage)), tax, commission, payable: round2(tax - commission) },
       ...(firm ? { insurer: { id: firm.id, name: firm.name, ...(firm.customerNumber ? { customerNumber: firm.customerNumber } : {}) } } : {}),

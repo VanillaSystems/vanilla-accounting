@@ -7,17 +7,16 @@
  * a correction is an event of payslips.jsonl, booked when the next open month closes.
  */
 import express, { Router, type Request, type Response, type NextFunction } from 'express';
-import { unzipSync } from 'fflate';
 import { WS, readBooks } from '../books.js';
 import { periodLock } from '../../books/store.js';
-import { valueOn } from '../../core/dated.js';
+import { entriesWithin, valueOn } from '../../core/dated.js';
 import { PayrollRefusal } from '../../payroll/close.js';
 import { csv } from '../../payroll/documents.js';
 import { firmWageTypes } from '../../payroll/catalogue.js';
 import { payrollContext } from '../../payroll/service.js';
 import { settlementsOf } from '../../payroll/settlement.js';
 import { loadTariff } from '../../payroll/tariff-load.js';
-import { TariffError, tariffIndexes } from '../../payroll/tariffs.js';
+import { TariffError, tariffBytesOf, tariffIndexes } from '../../payroll/tariffs.js';
 import type { ApiErrorBody } from '../../types/api-error.js';
 
 export const router = Router();
@@ -25,8 +24,13 @@ export const router = Router();
 const today = () => new Date().toISOString().slice(0, 10);
 const body = (req: Request): Record<string, unknown> => (req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body as Record<string, unknown> : {});
 
+/** The most an uploaded tariff file (its text or its zip) may be: the largest canton's text is about 7 MB. */
+const UPLOAD_LIMIT_MB = 20;
+const tooLarge = (res: Response, mb: number) => res.status(413).json({ error: `Die Datei ist grösser als ${mb} MB: höchstens ${mb} MB pro Tarifdatei.`, code: 'payroll', params: { why: 'tariff', tariff: 'tooLarge', limit: `${mb} MB` } } satisfies ApiErrorBody);
+
 const run = (fn: (req: Request, res: Response) => Promise<void> | void) => (req: Request, res: Response, next: NextFunction) => {
   Promise.resolve().then(() => fn(req, res)).catch((e) => {
+    if (e instanceof TariffError && e.why === 'tooLarge') return void tooLarge(res, UPLOAD_LIMIT_MB);
     if (e instanceof TariffError) return void res.status(e.why === 'network' ? 502 : e.why === 'notFound' ? 404 : 400).json({ error: e.message, code: 'payroll', params: { why: 'tariff', tariff: e.why } } satisfies ApiErrorBody);
     if (e instanceof PayrollRefusal) return void res.status(e.code === 'closedPeriod' ? 403 : 400).json({ error: e.message, code: 'payroll', params: { why: e.code } } satisfies ApiErrorBody);
     next(e);
@@ -53,7 +57,8 @@ const backdatedOf = (v: unknown): 'correct' | 'keep' | undefined => {
 router.get('/api/payroll/tariffs', run((req, res) => {
   const ctx = payrollContext(WS);
   const year = /^\d{4}$/.test(String(req.query.year ?? '')) ? String(req.query.year) : today().slice(0, 4);
-  const needed = [...new Set(ctx.store.employees.flatMap((e) => (e.taxAtSource ?? []).filter((x) => x.value.subject && x.value.canton).map((x) => x.value.canton!.toUpperCase())))].sort();
+  // The cantons a person is subject in on a day of the year.
+  const needed = [...new Set(ctx.store.employees.flatMap((e) => entriesWithin(e.taxAtSource, `${year}-01-01`, `${year}-12-31`).flatMap((s) => (s.entry?.value.subject && s.entry.value.canton ? [s.entry.value.canton.toUpperCase()] : []))))].sort();
   res.json({
     year,
     files: tariffIndexes(WS),
@@ -72,14 +77,28 @@ router.post('/api/payroll/tariffs', run(async (req, res) => {
 }));
 
 /** The same with a file the person downloaded herself (the text file or its zip): for a computer without the network. */
-router.post('/api/payroll/tariffs/:region/:year/file', express.raw({ type: () => true, limit: '20mb' }), run(async (req, res) => {
+router.post('/api/payroll/tariffs/:region/:year/file', express.raw({ type: () => true, limit: `${UPLOAD_LIMIT_MB}mb` }), run(async (req, res) => {
   const region = regionParam(req.params.region); const year = yearParam(req.params.year);
-  const raw = Buffer.isBuffer(req.body) ? new Uint8Array(req.body) : new Uint8Array();
+  // A body sent as JSON was read by the app's JSON parser already: it is no file.
+  if (!Buffer.isBuffer(req.body)) return void res.status(415).json({ error: 'Eine Tarifdatei kommt als Datei (application/octet-stream), nicht als JSON.', code: 'payroll', params: { why: 'tariff', tariff: 'notAFile' } } satisfies ApiErrorBody);
+  const raw = new Uint8Array(req.body);
   if (!raw.length) throw new PayrollRefusal('badInput', 'Keine Datei.');
-  // A zip (PK…) holds the text file: the one inside it.
-  const bytes = raw[0] === 0x50 && raw[1] === 0x4b ? Object.values(unzipSync(raw)).find((x) => x.length) ?? raw : raw;
+  // A zip holds the region's text file, found by its name (tarJJkt.txt), never the first entry.
+  const bytes = tariffBytesOf(raw, region, year);
   res.json(await loadTariff(WS, region, year, { bytes, backdated: backdatedOf(req.query.backdated), isClosed: isClosed() }));
 }));
+
+/**
+ * The upload's refusals before the route reads it (the API's error handler asks): a body over the limit, a body
+ * sent as JSON that is none. True when it answered.
+ */
+export function tariffUploadRefusal(err: unknown, req: Request, res: Response): boolean {
+  if (!/^\/api\/payroll\/tariffs\/[^/]+\/[^/]+\/file$/.test(req.path)) return false;
+  const type = (err as { type?: string } | undefined)?.type;
+  if (type === 'entity.too.large') { tooLarge(res, UPLOAD_LIMIT_MB); return true; }
+  if (type === 'entity.parse.failed') { res.status(415).json({ error: 'Eine Tarifdatei kommt als Datei (application/octet-stream), nicht als JSON.', code: 'payroll', params: { why: 'tariff', tariff: 'notAFile' } } satisfies ApiErrorBody); return true; }
+  return false;
+}
 
 /** The settlement lists of a year: per month and region, from the closed payslips. */
 router.get('/api/payroll/documents/:year/tax-at-source', run((req, res) => {

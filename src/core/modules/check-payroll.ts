@@ -126,7 +126,8 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
   });
   if (p.taxAtSource) {
     const t = p.taxAtSource;
-    for (const k of ['{year}', '{canton}']) if (!t.file?.url?.includes(k)) add(F, 'taxAtSource.file.url', `names no ${k}`);
+    if (!t.file?.url?.includes('{canton}')) add(F, 'taxAtSource.file.url', 'names no {canton}');
+    if (!/\{year\}|\{yy\}/.test(t.file?.url ?? '')) add(F, 'taxAtSource.file.url', 'names no {year} or {yy}');
     if (!(t.rounding > 0)) add(F, 'taxAtSource.rounding', 'a step');
     if (!(t.partMonth > 0)) add(F, 'taxAtSource.partMonth', 'a number of days');
     if (!t.provision?.electronic) add(F, 'taxAtSource.provision.electronic', 'missing');

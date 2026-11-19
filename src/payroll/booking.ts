@@ -9,6 +9,7 @@
 import type { PayrollData } from '../core/modules/schema.js';
 import { firmWageTypes, resolveAccount } from './catalogue.js';
 import { insuranceOf } from './compute.js';
+import { regionSolutionOf } from './tax-at-source.js';
 import type { PayslipDraft } from './compute.js';
 import type { PayrollStore } from './model.js';
 import { payslipRef } from './model.js';
@@ -45,7 +46,9 @@ export function bookingOf(slip: Slip, data: PayrollData, store: Pick<PayrollStor
     if (!w) { withoutAccount.add(l.wageType); continue; }
     const kindOf = (ref: typeof w.debit) => (ref && typeof ref === 'object' ? ref.insurance : undefined);
     const kind = kindOf(w.debit) ?? kindOf(w.credit);
-    const insurance = kind ? insuranceOf(store, kind, from, to) : undefined;
+    // A tariff kind's line books on the firm's insurance of its region (one per canton, each its own customer number), else the kind's first.
+    const own = kind && l.tariff?.region && data.insurances[kind]?.tariff ? regionSolutionOf(store.insurances, data, l.tariff.region, from, to)?.insurance : undefined;
+    const insurance = own ?? (kind ? insuranceOf(store, kind, from, to) : undefined);
     const debit = resolveAccount(w.debit, data, insurance);
     const credit = resolveAccount(w.credit, data, insurance);
     if (!debit || !credit) { withoutAccount.add(w.key); continue; }
