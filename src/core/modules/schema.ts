@@ -346,6 +346,109 @@ export type CustomsPosition = typeof CUSTOMS_POSITIONS[number];
 export type SupportingWhy = keyof DocumentsData['supporting'];
 export type OtherWhy = keyof DocumentsData['other'];
 
+/** A text in each of the app's languages: a payslip prints the person's. */
+export type Labels = Record<'de' | 'fr' | 'it' | 'en', string>;
+
+/** An account a Lohnart books on: a number, or the liability account of the insurance of that kind. */
+export type PayrollAccountRef = string | { insurance: string };
+
+/** How code fills a Lohnart: the Anstellung's monthly amount, the 13th in its payout months, a row of `contributions`. */
+export type WageTypeComputes = 'monthly' | 'thirteenth' | 'contribution';
+
+/** One Lohnart of payroll.yaml (docs/specs/payroll.md §5.3): code reads only these flags, never the key. */
+export interface WageTypeDef {
+  key: string;
+  group: string;
+  label: Labels;
+  /** + adds to the payslip, - deducts; an employer line adds to nothing the person is paid. */
+  sign: '+' | '-';
+  side?: 'employee' | 'employer';
+  gross?: boolean;
+  /** false: in the gross and the bases, but no money paid (a benefit in kind). */
+  cash?: boolean;
+  bases: string[];
+  lohnausweis?: string;
+  debit?: PayrollAccountRef;
+  credit?: PayrollAccountRef;
+  /** The Lohnart an hourly Anstellung is paid by: the month's hours × the hourly wage. */
+  hours?: boolean;
+  /** `quantity`: a person enters quantity × rate (hours × hourly wage); else an amount. */
+  input?: 'amount' | 'quantity';
+  computes?: WageTypeComputes;
+}
+
+/** A rate a firm's document states for an insurance's solution, with the range code warns outside of. */
+export interface InsuranceRateDef { label: Labels; range: [number, number]; note?: string }
+
+/** A kind of social insurance (Sozialversicherung): its liability account and the rates a firm's solution states. */
+export interface InsuranceKindDef {
+  label: Labels;
+  /** What the fund or insurer of this kind is called. */
+  fund: Labels;
+  account: string;
+  /** The jurisdiction's business file of the fund, where the app ships one. */
+  business?: string;
+  rates?: Record<string, InsuranceRateDef>;
+  /** The contribution is the person's (a pension certificate's figures), not a rate of the firm. */
+  perPerson?: boolean;
+  /** false: not computed by the app yet; a person subject to it gets the line «unvollständig». */
+  computed?: boolean;
+  /** Every firm with wages has it: a month without it gets the line «unvollständig». */
+  required?: boolean;
+  /** Required once the person's yearly wage on `base` passes the federal `figure`; below it the line is left out with the reason. */
+  requiredAbove?: { figure: string; base: string };
+}
+
+/** Where a contribution's rate comes from: the law's figure, the firm's solution, or the person's certificate. */
+export type ContributionRate = { federal: string } | { insurance: string } | { person: 'employee' | 'employer' };
+
+/** A contribution code computes on every payslip (payroll.yaml `contributions`). */
+export interface ContributionDef {
+  wageType: string;
+  insurance: string;
+  base: string | { lines: string[] };
+  rate: ContributionRate;
+  /** A yearly maximum of the base (a federal key), cumulated month by month. */
+  ceiling?: string;
+  /** Owed from 1 January after the birthday of this age (a federal key). */
+  liable?: string;
+  /** Past the reference age: the base less an allowance per month, or the contribution ends from the month after. */
+  pensioner?: 'ends' | { allowance: string };
+  /** The rate is split between the sides by the firm's rate of this key (the employer's share in %). */
+  share?: { employer: string };
+  /** Owed only from these weekly hours (a federal key). */
+  minHours?: string;
+}
+
+/** payroll.yaml: the Lohnart catalogue, its groups and bases, the kinds of insurance and the contributions. */
+export interface PayrollData {
+  schema: number;
+  /** In print order; `stage`: where the group's lines act (the gross, the deductions, after the net, the employer's). */
+  groups: Array<{ key: string; stage: 'gross' | 'deduction' | 'after' | 'employer'; label: Labels }>;
+  /** `thirteenth`: the base the 13th salary is a share of. */
+  bases: Array<{ key: string; label: Labels; thirteenth?: boolean }>;
+  totals: Record<'gross' | 'deductions' | 'net' | 'payout' | 'employer', Labels>;
+  insurances: Record<string, InsuranceKindDef>;
+  contributions: ContributionDef[];
+  rounding: number[];
+  wageTypes: WageTypeDef[];
+  /** The words of the payroll's documents, in each language. */
+  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer', Labels>;
+}
+
+/** One figure of the law: its value from a day, with its source. */
+export interface FederalFigure { value: number; validFrom: string; source: string }
+
+/** The reference age for those born from a year on. */
+export interface ReferenceAgeRow { bornFrom: number; years: number; months: number }
+
+/** payroll/<year>.yaml: the year's federal figures by key, one row or several (a later validFrom replaces). */
+export interface PayrollYearData {
+  year: number;
+  figures: Record<string, FederalFigure | FederalFigure[]>;
+  referenceAge: Record<'m' | 'f', ReferenceAgeRow[]>;
+}
+
 /** A jurisdiction module after its files are read and any workspace overlay is merged. */
 export interface Jurisdiction {
   manifest: ModuleManifest;
@@ -363,4 +466,8 @@ export interface Jurisdiction {
   invoicing: InvoicingData;
   setup: SetupData;
   documents: DocumentsData;
+  /** Absent in a jurisdiction without payroll: the Löhne area then does not show. */
+  payroll?: PayrollData;
+  /** The law's payroll figures by year (payroll/<year>.yaml); a year without its file has none. */
+  payrollYears?: Record<string, PayrollYearData>;
 }

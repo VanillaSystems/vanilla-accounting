@@ -21,7 +21,8 @@ import { apiKeysIn } from '../core/api-keys.js';
 export type SecretKind =
   | 'company' | 'owner' | 'uid' | 'company-domain' | 'mailbox' | 'iban' | 'bank-account-id'
   | 'private-counterparty' | 'binding-signal' | 'secret-term'
-  | 'tx-ref' | 'receipt-id' | 'receipt-filename' | 'journal-id' | 'amount' | 'personal-email';
+  | 'tx-ref' | 'receipt-id' | 'receipt-filename' | 'journal-id' | 'amount' | 'personal-email'
+  | 'employee' | 'social-security-number';
 export type StructuralKind = 'not-allowlisted' | 'binary-not-listed' | 'iban-pattern' | 'foreign-uid' | 'amount-in-prose' | 'long-number' | 'api-key';
 
 /**
@@ -80,6 +81,8 @@ export interface SecretSources {
   bindings: readonly RawCounterparty[];
   /** Bank statement files: names carry the IBAN and account ids, camt053 texts the IBANs. */
   statements: readonly { name: string; text: string | null }[];
+  /** The payroll's people (payroll.json): their names, social security numbers and IBANs are the company's, like a receipt. */
+  payroll?: { names: readonly string[]; numbers: readonly string[]; ibans: readonly string[] };
   /** Extra terms the workspace declares secret (secret-terms.txt), for what no data names. A trailing `*` also matches the word's compounds (Speiche* finds Speichenmaterial). */
   terms: readonly string[];
 }
@@ -140,6 +143,15 @@ export function secretsOf(src: SecretSources): Secret[] {
     }
   }
   for (const t of src.terms) add('secret-term', 'phrase', t);
+  for (const n of src.payroll?.names ?? []) add('employee', 'phrase', n);
+  for (const n of src.payroll?.numbers ?? []) {
+    add('social-security-number', 'token', n);
+    add('social-security-number', 'token', n.replace(/\D/g, ''));
+  }
+  for (const i of src.payroll?.ibans ?? []) {
+    add('iban', 'token', compact(i));
+    add('iban', 'phrase', compact(i).replace(/(.{4})(?!$)/g, '$1 '));
+  }
 
   for (const s of src.statements) {
     for (const m of [...s.name.toUpperCase().matchAll(IBAN), ...(s.text ?? '').matchAll(IBAN)]) {

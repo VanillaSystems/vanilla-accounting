@@ -5,6 +5,7 @@
  *   the books              `schema` of ledger.json (books.json before 2; absent: 1)  BOOKS_MIGRATIONS
  *   belege.workspace.yaml  `schema` (absent: 1)  MANIFEST_MIGRATIONS
  *   invoices.json          `schema`              INVOICES_MIGRATIONS (src/invoices/store.ts)
+ *   payroll.json           `schema`              PAYROLL_MIGRATIONS (src/payroll/store.ts)
  *
  * A step `n` turns a file of schema n into schema n + 1. Steps are pure, run forward only, and
  * run in memory on every load (src/books/store.ts loadBooks, src/workspace/manifest.ts), so the
@@ -58,8 +59,14 @@ import { roleBefore } from './banks.js';
  * code reads off its text (src/books/due-date.ts). Books of schema 9 hold none: the step adds nothing,
  * so no sealed record and no filed receipt changes. An app of schema 9 would show the text's due date
  * instead of hers and call a bill overdue or open by it, so it must refuse these books.
+ * 11: payroll (docs/specs/payroll.md §9.1, owner 2026-11-14 decision 5): `JournalEntry.by.check` may be
+ * `payroll` (the entries a payslip closed in the app books, ref `LR-<yyyy>-<mm>-<employee>`), `payslip`
+ * (a payslip of another program booked by code) or `payrollJournal` (a payroll program's journal); a
+ * receipt may be of kind `payslip`. Books of schema 10 hold none: the step adds nothing, so no sealed
+ * record changes. An app of schema 10 would drop the unknown check on its next save and lose who booked
+ * the wage, so it must refuse these books.
  */
-export const BOOKS_SCHEMA = 10;
+export const BOOKS_SCHEMA = 11;
 /**
  * 2: every money account names its `role` (#88).
  * 3: `company.vat.reportingSince`, the year the basis began (#143). An app of schema 2 would read
@@ -88,6 +95,9 @@ export const WORKSPACE_SCHEMA = 5;
  *    `writeOffs` and `Issued.terms`. A file of schema 2 holds none: the step adds nothing for them.
  */
 export const INVOICES_SCHEMA = 3;
+/** 1: payroll.json starts with dated histories (docs/specs/domain-model.md §5.7), so it needs no step yet. */
+export const PAYROLL_SCHEMA = 1;
+export const PAYROLL_MIGRATIONS: Ladder<Record<string, unknown>> = {};
 
 /** Step n: schema n → n + 1. */
 export type Ladder<T> = Readonly<Record<number, (doc: T) => T>>;
@@ -113,6 +123,8 @@ export const BOOKS_MIGRATIONS: Ladder<Record<string, unknown>> = {
   8: (doc) => doc,
   // No receipt has a due date a person set before; absent means the text's. The number makes an older app refuse the books.
   9: (doc) => doc,
+  // No entry carries a payroll check before; the number makes an older app refuse the books.
+  10: (doc) => doc,
 };
 /** On the YAML document, so the comments of the manifest survive the step. */
 export const MANIFEST_MIGRATIONS: Ladder<Document> = {

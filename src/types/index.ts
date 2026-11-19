@@ -383,10 +383,11 @@ export type Supply = 'goods' | 'service' | 'exempt';
  * there to the bank, src/booking/classify.ts providerPayout, #203; before, a payout split by its report), a payout's lines per order
  * (`payoutOrders`, before #203: books keep them), a credit note's from the invoice it names (src/accounting/credit-note-code.ts), Bezugsteuer
  * on a service from abroad (src/accounting/acquisition-tax.ts), a purchase's input tax from its receipt and the app's business files
- * (src/booking/purchase-vat.ts). A sealed quarter hashes `by`, and an older build drops a check it does not know, so a new check is a
+ * (src/booking/purchase-vat.ts), a payslip closed in the app (`payroll`, src/payroll/close.ts, books schema 10), a payslip of
+ * another program (`payslip`) and a payroll program's journal (`payrollJournal`). A sealed quarter hashes `by`, and an older build drops a check it does not know, so a new check is a
  * change of the books' format: the list only grows with a new schema.
  */
-export const CODE_CHECKS = ['saleCode', 'payoutReport', 'payoutOrders', 'creditNote', 'acquisitionTax', 'purchaseVat', 'withheldShare'] as const;
+export const CODE_CHECKS = ['saleCode', 'payoutReport', 'payoutOrders', 'creditNote', 'acquisitionTax', 'purchaseVat', 'withheldShare', 'payroll', 'payslip', 'payrollJournal'] as const;
 export type CodeCheck = typeof CODE_CHECKS[number];
 
 /** The booking fields a person's change keeps the old values of. */

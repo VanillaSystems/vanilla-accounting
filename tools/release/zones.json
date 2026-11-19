@@ -166,7 +166,8 @@
         "src/server/open-work.ts", "src/server/waiting-reports.ts", "src/server/refusals.ts", "src/server/link-history.ts", "src/server/reconcile.ts",
         "src/app/areas/journal/**", "src/app/areas/partners/**", "src/app/areas/knowledge/**", "src/app/areas/automation/**",
         "src/app/automation/**", "src/app/selection/**", "src/app/questions/**", "src/app/history/**", "processes/**", "workflows/**", "examples/**",
-        "modules/ch/decisions.yaml", "modules/ch/accounts.yaml", "modules/ch/chart.yaml", "src/engines/chart.ts"
+        "modules/ch/decisions.yaml", "modules/ch/accounts.yaml", "modules/ch/chart.yaml", "src/engines/chart.ts",
+        "modules/ch/payroll.yaml", "modules/ch/payroll/**"
       ],
       "vm": [],
       "personas": ["wishes.md", "sidebar-wishes.md", "misreads.md", "treuhaender.md", "first-run-consulting.md"],

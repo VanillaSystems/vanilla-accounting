@@ -4,14 +4,14 @@
  * browser receives its result as data, never workspace code (docs/0.4.0/modules.md).
  */
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
-import type { ChartData, DocumentsData, InvoicingData, Jurisdiction, SetupData, PeriodsData, StatementsData, YearEndData, ModuleManifest, RatesData, ReturnData, TaxCodesData, NetRateReturnData, RegistrationData } from './schema.js';
+import type { ChartData, DocumentsData, InvoicingData, Jurisdiction, SetupData, PeriodsData, StatementsData, YearEndData, ModuleManifest, RatesData, ReturnData, TaxCodesData, NetRateReturnData, RegistrationData, PayrollData, PayrollYearData } from './schema.js';
 import { checkJurisdiction, type ModuleProblem } from './check.js';
 import type { VatSetup } from '../../workspace/vat-setup.js';
 
-const FILES = { rates: 'rates.yaml', taxCodes: 'tax-codes.yaml', vatReturn: 'return.yaml', vatReturnNetRate: 'return-net-rate.yaml', registration: 'registration.yaml', chart: 'chart.yaml', periods: 'periods.yaml', statements: 'statements.yaml', yearEnd: 'year-end.yaml', invoicing: 'invoicing.yaml', setup: 'setup.yaml', documents: 'documents.yaml' } as const;
+const FILES = { rates: 'rates.yaml', taxCodes: 'tax-codes.yaml', vatReturn: 'return.yaml', vatReturnNetRate: 'return-net-rate.yaml', registration: 'registration.yaml', chart: 'chart.yaml', periods: 'periods.yaml', statements: 'statements.yaml', yearEnd: 'year-end.yaml', invoicing: 'invoicing.yaml', setup: 'setup.yaml', documents: 'documents.yaml', payroll: 'payroll.yaml' } as const;
 
 /** Merges an overlay onto a shipped value: maps key by key, `null` (YAML `~`) removes a key, anything else replaces. */
 export function mergeOverlay<T>(shipped: T, overlay: unknown): T {
@@ -72,6 +72,8 @@ export function loadJurisdiction(appRoot: string, id: string, workspaceRoot?: st
     invoicing: part<InvoicingData>(FILES.invoicing, 'invoicing'),
     setup: part<SetupData>(FILES.setup, 'setup'),
     documents: part<DocumentsData>(FILES.documents, 'documents'),
+    ...optional('payroll', part<PayrollData | undefined>(FILES.payroll, 'payroll')),
+    ...optional('payrollYears', payrollYears(shippedDir, overlayManifest ? overlayDir : undefined)),
   };
   if (overlayManifest) overlaid.push('manifest');
   return {
@@ -80,6 +82,24 @@ export function loadJurisdiction(appRoot: string, id: string, workspaceRoot?: st
     problems: checkJurisdiction(jurisdiction),
     hash: createHash('sha256').update(JSON.stringify(jurisdiction)).digest('hex'),
   };
+}
+
+/**
+ * The law's payroll figures per year: payroll/<year>.yaml of the app, each merged with the workspace
+ * overlay's file of the same year (a figure the law changed before the app's next release). Undefined
+ * when neither has one.
+ */
+function payrollYears(shippedDir: string, overlayDir: string | undefined): Record<string, PayrollYearData> | undefined {
+  const years = (dir: string | undefined) => (dir && existsSync(join(dir, 'payroll'))
+    ? readdirSync(join(dir, 'payroll')).flatMap((f) => (/^\d{4}\.yaml$/.test(f) ? [f.slice(0, 4)] : []))
+    : []);
+  const all = [...new Set([...years(shippedDir), ...years(overlayDir)])].sort();
+  if (!all.length) return undefined;
+  return Object.fromEntries(all.map((y) => {
+    const shipped = readYaml(join(shippedDir, 'payroll', `${y}.yaml`)) as PayrollYearData | undefined;
+    const overlay = overlayDir ? readYaml(join(overlayDir, 'payroll', `${y}.yaml`)) : undefined;
+    return [y, mergeOverlay(shipped, overlay) as PayrollYearData];
+  }));
 }
 
 /** A part a jurisdiction may lack (no file shipped or overlaid): left out rather than set to undefined. */
