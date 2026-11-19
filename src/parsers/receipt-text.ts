@@ -21,12 +21,12 @@ export function hasSwissUid(text: string): boolean {
   return SWISS_UID_RE.test(text);
 }
 
-/** Every Swiss UID a text shows, with or without «MWST» after it, as «CHE123456789»: whom a document names (src/intake/own-invoice.ts). */
+/** Every Swiss UID a text shows, with or without «MWST» after it, as «CHE000000000»: whom a document names (src/intake/own-invoice.ts). */
 export function uidsIn(text: string): Set<string> {
   return new Set([...text.matchAll(new RegExp(SWISS_UID_RE, 'g'))].map((m) => normUid(m[0])));
 }
 
-/** A VAT number to compare whole: upper case, without spaces, dots and dashes («CHE-123.456.789» → «CHE123456789», «DE123456789» stays). */
+/** A VAT number to compare whole: upper case, without spaces, dots and dashes («CHE-000.000.000» → «CHE000000000», «DE000000000» stays). */
 export const normUid = (s: string): string => s.toUpperCase().replace(/[\s.\-]/g, '');
 
 /**
@@ -89,7 +89,7 @@ const VAT_INCLUDED = /inkl|incl|inclus|compris|enthalten|darin|davon|TTC/i;
 /** «auf 28'500.00», «on 1000.00»: a line that names a base the document computes on. */
 const ON_BASE = /(?:^|\s)(?:auf|on|sur|su)\s+(?:[\p{L} ]{0,30}\s)?(?:CHF\s*)?\d/iu;
 
-/** The Swiss VAT number a text names with its «MWST» (CHE-123.456.789): textFacts' vatId without the rest. */
+/** The Swiss VAT number a text names with its «MWST» (CHE-000.000.000): textFacts' vatId without the rest. */
 export function vatIdIn(text: string): string | undefined {
   const uid = UID_VAT.exec(text);
   return uid ? `CHE-${uid[1]}.${uid[2]}.${uid[3]}` : undefined;
