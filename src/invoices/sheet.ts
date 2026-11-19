@@ -55,7 +55,11 @@ export interface SheetData {
   salutation?: string;
   intro: string;
   closing: string;
+  /** The title above the positions in place of the kind's word (a Vorlage's, a draft's own). */
+  title?: string;
   layout: InvoiceLayout;
+  /** The letterhead PDF (a path under the workspace) the PDF is printed on: each sheet leaves its background to it. */
+  letterhead?: string;
   /** The logo as a URL the page can load (a data: URI for the PDF). */
   logoSrc?: string;
   reference?: string;
@@ -159,7 +163,7 @@ export function hasQrBill(d: SheetData): boolean {
 const prettyIban = (iban: string) => iban.replace(/\s+/g, '').replace(/(.{4})(?!$)/g, '$1 ');
 
 export function sheetTitle(d: SheetData, L: InvoiceTexts = TEXTS[d.language]): string {
-  const base = kindTitle(L, d.kind, d.printAs, d.role);
+  const base = d.title?.trim() || kindTitle(L, d.kind, d.printAs, d.role);
   return d.reminderTitle ? `${d.reminderTitle} · ${base}` : d.instalment ? `${L.instalment} · ${base}` : base;
 }
 
@@ -389,7 +393,7 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
     ? `<div class="foot"><span>${[s.name, oneLine(s.address)].filter(Boolean).map(esc).join('<br>')}</span>${s.payTo ? `<span>${L.bank}${s.payTo.bank ? `: ${esc(s.payTo.bank)}` : ''}<br>${L.iban} ${esc(prettyIban(s.payTo.iban))}</span>` : ''}${s.uid ? `<span>${uidLabel}<br>${uid}</span>` : ''}${n > 1 ? `<span class="pno">${L.page(k, n)}</span>` : ''}</div>`
     : n > 1 ? `<div class="foot bare"><span class="pno">${L.page(k, n)}</span></div>` : '';
   const style = `--ivf:${FONT_STACK[layout.font]};--iva:${layout.accent};--lh:${LOGO_MM[layout.logoSize]}mm`;
-  const sheet = (cls: string, inner: string) => `<div class="a4 ${cls}" style="${style}" lang="${d.language}">${inner}</div>`;
+  const sheet = (cls: string, inner: string) => `<div class="a4 ${cls}${d.letterhead ? ' lh' : ''}" style="${style}" lang="${d.language}">${inner}</div>`;
   const cust = d.customer;
   const addr = addressLines(cust.address, d.language);
   const ed = d.screen?.edit;
@@ -472,6 +476,8 @@ export const SHEET_CSS = `
 html, body { margin: 0 }
 @media print { .a4 { box-shadow: none !important; margin: 0 !important } }
 .a4 { --ivf: 'Inter', Arial, sans-serif; --iva: #141a26; width: 210mm; height: 297mm; position: relative; background: #fff; color: #141a26; font-family: var(--ivf); font-size: 9.5pt; line-height: 1.4; overflow: hidden; font-variant-numeric: tabular-nums; text-align: left; break-after: page; box-sizing: border-box }
+/* On a letterhead the PDF's sheet is see-through: the letterhead is laid under it (src/invoices/letterhead.ts); the QR-bill stays white. */
+@media print { .a4.lh { background: transparent } .a4.lh .qrb { background: #fff } }
 .a4:last-child { break-after: auto }
 .a4 .logo { position: absolute; top: 15mm; display: block; height: var(--lh, 15mm) }
 .a4 .logo.pos-left { left: 20mm } .a4 .logo.pos-center { left: 50%; transform: translateX(-50%) } .a4 .logo.pos-right { right: 20mm }

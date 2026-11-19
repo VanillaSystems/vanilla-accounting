@@ -516,7 +516,8 @@ export type InvoiceRefusal = 'numberTaken' | 'archived' | 'contactGone' | 'incom
   | 'referenceTaken' | 'deliveryFromOrder' | 'orderDrafts' | 'sourceCancelled'
   | 'codeTaken' | 'articleGone' | 'noReminderDraft' | 'levelChanged' | 'recordFailed'
   | 'stages' | 'stagesSum' | 'stageInvoiced' | 'stagesInvoiced' | 'finalExists' | 'partialDrafts' | 'notFinal' | 'noRetention'
-  | 'notOrder' | 'deducted' | 'deduction' | 'retentionNotDue';
+  | 'notOrder' | 'deducted' | 'deduction' | 'retentionNotDue'
+  | 'attachmentTooLarge' | 'attachmentNotPdf' | 'attachmentGone' | 'attachmentLimit' | 'templateGone';
 
 /** A kind's name in the German messages of a refusal (the UI words its own, src/app/i18n). */
 export const KIND_WORD: Record<DocumentKind, string> = { quote: 'Angebot', 'sales-order': 'Auftrag', 'delivery-note': 'Lieferschein', invoice: 'Rechnung', 'credit-note': 'Gutschrift' };

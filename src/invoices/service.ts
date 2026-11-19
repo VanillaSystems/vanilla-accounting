@@ -12,9 +12,12 @@ import { defaultTexts, draftDays, instalmentSheet, issuedIntro, issuedSheet, mai
 import {
   INVOICE_CURRENCIES, INVOICE_LANGUAGES, DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, LINE_KINDS, PRICES, isItem, withGroups, type UnitDef,
   type Article, type ArticleFields, type Comment, type Contact, type ContactFields, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
-  type AccountChange, type DunningSettings, type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type Schedule, type SentDocument, type SentKind, type Stage,
+  type AccountChange, type DunningSettings, type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type Schedule, type SentDocument, type SentKind, type Stage, type Attachment, type InvoiceTemplate,
 } from './model.js';
-import { renderHtml, renderPdf, type Rendered } from './pdf.js';
+import { printPdf, renderHtml, renderPdf, type Rendered } from './pdf.js';
+import { statementHtml, statementOf, type Statement } from './statement.js';
+import { invoiceFontCss } from './fonts.js';
+import { addressLines } from './sheet.js';
 import {
   InvoiceRuleError, KIND_WORD, asDraft, assertCreditWithinOpen, backToDraftRefusal, cancel, creditNoteDraft, deleteDraft, figures, isOverdue, issue, liveDocuments, liveInvoices, missingForIssue,
   addDays, openAmount, shortfallOf, skontoOffer, status, totals, warningsForIssue, writeOffAccounts,
@@ -28,6 +31,9 @@ import { convertDraft, defaultValidUntil, type Ticked } from './chain.js';
 import { orderCancelBlock, ownSends } from './lists.js';
 import { isBooked } from './model.js';
 import { formatAmount, kindTitle } from './texts.js';
+import { ATTACHMENT_LIMIT, attachmentBytes, frozen, isAttachment, onLetterhead } from './attachments.js';
+import { fillPlaceholders, fixedAttachment, templateOf } from './templates.js';
+import { placeholderValues } from './documents.js';
 import type { PaymentContext, PaymentOutcome } from './payments.js';
 import { notesWithAccounts, withAccounts, type AccountChangePlan, type AccountContext } from './revise.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
@@ -40,7 +46,7 @@ import {
   applyContact, assertNumberFree, checkVatId, contactOfCustomer, documentsOf, draftTermsOf, goneRefs, lineDefaults, liveContacts, numberContact, parseContact, pickableContacts, recipientOf,
 } from './contacts.js';
 import { applyArticle, assertCodeFree, documentsNaming, liveArticles, parseArticle } from './articles.js';
-import { TEXTS } from './texts.js';
+import { TEXTS, formatDate } from './texts.js';
 import { baseCurrency, invoiceActivities, invoiceRates, invoicing } from '../engines/index.js';
 import { openItemAccounts } from '../accounting/tax-point.js';
 import { heldByReconciliation } from '../books/reconcile.js';
@@ -53,8 +59,10 @@ import { instalmentDue } from './rules.js';
 export interface Printer {
   pdf(d: SheetData, at: string): Promise<Rendered & { pdf: Buffer }>;
   html(d: SheetData): Promise<Rendered>;
+  /** A page of its own as PDF (the Kontoauszug); absent: the browser's (printPdf). */
+  page?(html: string, at: string): Promise<Buffer>;
 }
-const chromium: Printer = { pdf: renderPdf, html: renderHtml };
+const chromium: Printer = { pdf: renderPdf, html: renderHtml, page: printPdf };
 
 /** An invoice with what lists show: its status, totals and what is open. */
 export type InvoiceView = Invoice & { view: {
@@ -207,21 +215,30 @@ function parseSchedule(v: unknown): Schedule {
   return { retention: { percent: r.percent, until: r.until as string } };
 }
 
-const DRAFT_FIELDS = ['kind', 'customerId', 'personId', 'addressId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'prices', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs', 'role', 'schedule'] as const;
+const DRAFT_FIELDS = ['kind', 'customerId', 'personId', 'addressId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'prices', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs', 'role', 'schedule', 'templateId', 'title', 'attachments'] as const;
 export type DraftPatch = Partial<Pick<InvoiceContent, (typeof DRAFT_FIELDS)[number]>>;
 
 /**
  * A draft patch from a request body; `null` clears an optional field. A position's unit is one of
  * `units` (the firm's list), one the draft `id` holds already, or one an issued document names.
  */
-export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonly UnitDef[] = DEFAULT_UNITS, id?: string, terms?: readonly PaymentTerms[]): DraftPatch & { clear: string[] } {
+export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonly UnitDef[] = DEFAULT_UNITS, id?: string, terms?: readonly PaymentTerms[], templates?: readonly InvoiceTemplate[]): DraftPatch & { clear: string[] } {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return bad('JSON-Objekt erwartet.');
   const b = body as Record<string, unknown>;
   const unknown = Object.keys(b).filter((k) => !DRAFT_FIELDS.includes(k as never));
   if (unknown.length) bad(`Unbekannte Felder: ${unknown.join(', ')}`);
   const out: DraftPatch & { clear: string[] } = { clear: [] };
   for (const [k, v] of Object.entries(b)) {
-    if (v === null && ['personId', 'addressId', 'supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs', 'role', 'schedule'].includes(k)) { out.clear.push(k); continue; }
+    if (v === null && ['personId', 'addressId', 'supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement', 'termsId', 'validUntil', 'ordered', 'printAs', 'role', 'schedule', 'templateId', 'title', 'attachments'].includes(k)) { out.clear.push(k); continue; }
+    if (k === 'templateId') { if (!isText(v) || (templates && !templates.some((x) => x.id === v))) throw new InvoiceRuleError('templateGone', `Vorlage ${String(v)} gibt es nicht (mehr).`, undefined, { id: String(v) }); out.templateId = v as string; continue; }
+    if (k === 'attachments') {
+      // What storeAttachment gave (POST /api/invoices/files), at most ATTACHMENT_LIMIT.count: the limit named with what is left out.
+      if (!Array.isArray(v) || !v.every(isAttachment)) bad('attachments ist eine Liste { name, file, sha256 } aus invoices/files/.');
+      const list = v as Attachment[];
+      if (list.length > ATTACHMENT_LIMIT.count) throw new InvoiceRuleError('attachmentLimit', `${list.length} Anhänge, höchstens ${ATTACHMENT_LIMIT.count} pro Dokument: ${list.slice(ATTACHMENT_LIMIT.count).map((a) => a.name).join(', ')} nicht angehängt.`, undefined, { n: list.length, limit: ATTACHMENT_LIMIT.count, left: list.slice(ATTACHMENT_LIMIT.count).map((a) => a.name).join(', ') });
+      out.attachments = list.map((a) => ({ name: a.name.trim(), file: a.file, sha256: a.sha256 }));
+      continue;
+    }
     // A draft is of one kind from its start (a conversion makes one of another); a credit note only from its invoice.
     // A Lieferschein comes only from an Auftrag (decision 21), by «Lieferschein erstellen».
     if (k === 'kind' && v === 'delivery-note') throw new InvoiceRuleError('deliveryFromOrder', 'Ein Lieferschein entsteht aus einem Auftrag: dort «Lieferschein erstellen».');
@@ -518,14 +535,30 @@ export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; pr
     const gone = goneRefs(contact, draft);
     if (gone.length && !opts.confirmed) throw new InvoiceRuleError('unconfirmed', 'Die gewählte Kontaktperson oder Adresse gibt es beim Kontakt nicht mehr; nur mit «Trotzdem ausstellen».', [...gone, ...warningsForIssue(draft)]);
     const customer = recipientOf(contact, draft, ws.invoicing);
-    const texts = defaultTexts(ctx, draft.kind, draft.language, draftDays(ctx, draft, customer), draft.printAs);
+    const texts = defaultTexts(ctx, draft.kind, draft.language, draftDays(ctx, draft, customer), draft.printAs, draft.templateId);
     const kept = { ...draft } as Draft;
     for (const m of gone) delete kept[m.field === 'customer.person' ? 'personId' : 'addressId'];
-    const frozen: Draft = { ...kept, intro: issuedIntro(texts.salutation, draft.intro ?? texts.intro), closing: draft.closing ?? texts.closing };
+    // The Vorlage it is laid out with: its layout, letterhead and fixed attachment are frozen with it (spec 4.4.11).
+    const tpl = templateOf(ctx.settings, draft);
+    const fixed = fixedAttachment(tpl, draft.kind);
+    const attachments = [...(fixed ? [frozen(ws, fixed.name, fixed.file)] : []), ...(draft.attachments ?? [])];
+    for (const a of draft.attachments ?? []) readPdf(ws, a);
+    const title = draft.title ?? texts.title;
+    const frozenDraft: Draft = {
+      ...kept, intro: issuedIntro(texts.salutation, draft.intro ?? texts.intro), closing: draft.closing ?? texts.closing,
+      ...(title ? { title } : {}), ...(ctx.settings ? { templateId: tpl.id } : {}), ...(attachments.length ? { attachments } : {}),
+    };
     // A credit note above what its invoice has open: a warning (spec 4.11), the rest is paid back.
     assertCreditWithinOpen(draft, liveInvoices(book), opts.confirmed);
-    const issued = issue(frozen, { customer, sender: senderFor(ctx, draft.currency), layout: ctx.settings?.layout ?? DEFAULT_LAYOUT, units: ctx.settings?.units, invoices: liveDocuments(book), now, confirmed: opts.confirmed, paymentTerms: ctx.settings?.paymentTerms, numbering: ctx.settings?.numbering ?? DEFAULT_NUMBERING });
-    const printed = await (opts.printer ?? chromium).pdf(issuedSheet(book, issued as Issued, logoSrc(ws, issued.layout.logo)), now);
+    const plain = issue(frozenDraft, { customer, sender: senderFor(ctx, draft.currency), layout: ctx.settings ? tpl.layout : DEFAULT_LAYOUT, units: ctx.settings?.units, invoices: liveDocuments(book), now, confirmed: opts.confirmed, paymentTerms: ctx.settings?.paymentTerms, numbering: ctx.settings?.numbering ?? DEFAULT_NUMBERING });
+    // The Vorlage's placeholders, filled now that the number and due date are known.
+    const values = placeholderValues(plain, ws.company.name);
+    const fill = (x: string | undefined) => (x === undefined ? undefined : fillPlaceholders(x, values, plain.language));
+    const issued = {
+      ...plain, intro: fill(plain.intro), closing: fill(plain.closing), ...(plain.title ? { title: fill(plain.title) } : {}),
+      ...(tpl.letterhead && ctx.settings ? { letterhead: (({ file, sha256: sum }) => ({ file, sha256: sum }))(frozen(ws, 'letterhead', tpl.letterhead)) } : {}),
+    } as Omit<Issued, 'pdf'>;
+    const printed = await print(ws, opts.printer ?? chromium, issuedSheet(book, issued as Issued, logoSrc(ws, issued.layout.logo)), now, issued.letterhead);
     return commit(ws, draft.id, draft, (fresh, at) => {
       if (nextNumberTaken(fresh, issued.number, draft.id)) throw new InvoiceRuleError('changed', `Die Nummer ${issued.number} wurde inzwischen vergeben; bitte erneut ausstellen.`);
       const done: Issued = { ...issued, pdf: storePdf(ws, now.slice(0, 4), pdfName(ws, now.slice(0, 4), issued.number, printed.pdf), printed.pdf) };
@@ -537,12 +570,18 @@ export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; pr
   });
 }
 
+/** Prints a sheet, on its letterhead when it has one (checked against the checksum it froze). */
+async function print(ws: Workspace, printer: Printer, sheet: SheetData, at: string, letterhead?: { file: string; sha256: string }): Promise<Rendered & { pdf: Buffer }> {
+  const printed = await printer.pdf(letterhead ? sheet : { ...sheet, letterhead: undefined }, at);
+  return letterhead ? { ...printed, pdf: await onLetterhead(printed.pdf, readPdf(ws, letterhead), at) } : printed;
+}
+
 function sentTitle(inv: Issued, kind: SentKind, reminder?: Pick<Reminder, 'level' | 'title'>): string {
   const L = TEXTS[inv.language];
   if (kind === 'reminder') return `${reminderTitle(reminder ?? { level: 1 }, inv.language)} · ${L.invoice} ${inv.number}`;
   if (kind === 'cancellation') return `${L.stamp}: ${L.invoice} ${inv.number}`;
-  if (kind === 'instalment') return `${L.instalment} · ${kindTitle(L, inv.kind, inv.printAs, inv.role)} ${inv.number}`;
-  return `${kindTitle(L, inv.kind, inv.printAs, inv.role)} ${inv.number}`;
+  if (kind === 'instalment') return `${L.instalment} · ${inv.title ?? kindTitle(L, inv.kind, inv.printAs, inv.role)} ${inv.number}`;
+  return `${inv.title ?? kindTitle(L, inv.kind, inv.printAs, inv.role)} ${inv.number}`;
 }
 
 /**
@@ -561,11 +600,14 @@ function pdfName(ws: Workspace, year: string, number: string, pdf: Buffer): stri
  * Hands a stored PDF to its recipient by e-mail (src/invoices/mail.ts) and says to whom, with the
  * Message-ID. Without one the PDF is downloaded, to be sent by other means.
  */
-export type Deliver = (doc: { filename: string; pdf: Buffer }) => Promise<{ to: string; messageId: string }>;
+export type Deliver = (doc: { filename: string; pdf: Buffer; attachments: Array<{ filename: string; content: Buffer }> }) => Promise<Delivered>;
+/** Whom the mail server took the message for: `to` every recipient, comma-separated; the copies and blind copies. */
+export interface Delivered { to: string; messageId: string; cc?: string[]; bcc?: string[] }
 
 /** Who a document went to, and how: what `deliver` reports, else `to` (or the customer's address) as a download. */
-const recipient = (inv: Issued, to: string | undefined, delivered?: { to: string; messageId: string }): Pick<SentDocument, 'to' | 'channel' | 'messageId'> =>
-  delivered ? { to: delivered.to, channel: 'email', messageId: delivered.messageId } : { to: to?.trim() || inv.customer.email || 'download', channel: 'download' };
+const recipient = (inv: Pick<Issued, 'customer'>, to: string | undefined, delivered?: Delivered): Pick<SentDocument, 'to' | 'channel' | 'messageId' | 'cc' | 'bcc'> =>
+  delivered ? { to: delivered.to, channel: 'email', messageId: delivered.messageId, ...(delivered.cc?.length ? { cc: delivered.cc } : {}), ...(delivered.bcc?.length ? { bcc: delivered.bcc } : {}) }
+    : { to: to?.trim() || inv.customer.email || 'download', channel: 'download' };
 
 function sendable(book: InvoiceBook, id: string): Issued {
   const inv = findInvoice(book, id) ?? notFound('Rechnung');
@@ -581,14 +623,18 @@ function sendable(book: InvoiceBook, id: string): Issued {
 export function recordSend(ws: Workspace, id: string, opts: { to?: string; deliver?: Deliver; now?: string } = {}): Promise<SentDocument> {
   return serial(async () => {
     const inv = sendable(loadInvoices(ws), id);
-    const delivered = opts.deliver && await opts.deliver({ filename: `${inv.number}.pdf`, pdf: readPdf(ws, inv.pdf) });
+    // The PDF byte for byte, with every attachment it was issued with, each checked against its checksum.
+    const attachments = attachmentBytes(ws, inv.attachments);
+    const delivered = opts.deliver && await opts.deliver({ filename: `${inv.number}.pdf`, pdf: readPdf(ws, inv.pdf), attachments });
     const now = opts.now ?? new Date().toISOString();
     return updateInvoices(ws, (book) => {
       const fresh = sendable(book, id);
       // The first send of this version (an Angebot back from draft is issued again under its number) is the document; a later one a resend.
       const first = !book.sent.some((d) => d.invoiceId === fresh.id && d.file === fresh.pdf.file && d.kind !== 'reminder' && d.kind !== 'cancellation');
       const kind: SentKind = first ? fresh.kind : 'resend';
-      const doc: SentDocument = { ...newEnvelope('sd', now), invoiceId: fresh.id, kind, title: sentTitle(fresh, kind), ...fresh.pdf, sentAt: now, ...recipient(fresh, opts.to, delivered) };
+      // A download is the document alone; an e-mail carries the attachments, each with its checksum as sent.
+      const went = delivered && fresh.attachments?.length ? { attachments: fresh.attachments.map((a) => ({ ...a })) } : {};
+      const doc: SentDocument = { ...newEnvelope('sd', now), invoiceId: fresh.id, kind, title: sentTitle(fresh, kind), ...fresh.pdf, sentAt: now, ...recipient(fresh, opts.to, delivered), ...went };
       book.sent.push(doc);
       return doc;
     });
@@ -604,12 +650,12 @@ const nextNumberTaken = (book: InvoiceBook, number: string, id?: string) => book
  */
 async function printOwnDocument(ws: Workspace, inv: Issued, kind: SentKind, sheet: SheetData, to: string | undefined, now: string, printer: Printer, deliver?: Deliver, reminder?: Pick<Reminder, 'level' | 'title'>): Promise<SentDocument> {
   const env = newEnvelope('sd', now);
-  const printed = await printer.pdf(sheet, now);
+  const printed = await print(ws, printer, sheet, now, inv.letterhead);
   const title = sentTitle(inv, kind, reminder);
   const pdf = storePdf(ws, now.slice(0, 4), `sent/${env.id}.pdf`, printed.pdf);
   let delivered: Awaited<ReturnType<Deliver>> | undefined;
   try {
-    delivered = deliver && await deliver({ filename: `${title.replace(/[/\\:*?"<>|]/g, '-')}.pdf`, pdf: printed.pdf });
+    delivered = deliver && await deliver({ filename: `${title.replace(/[/\\:*?"<>|]/g, '-')}.pdf`, pdf: printed.pdf, attachments: [] });
   } catch (e) {
     rmSync(join(ws.paths.root, pdf.file), { force: true });
     throw e;
@@ -1253,4 +1299,62 @@ export function fileReceipts(ws: Workspace, books: Books, files: PaymentOutcome[
     const path = receiptFile(ws, books, receipt);
     if (!existsSync(path)) writeAtomic(path, f.pdf);
   }
+}
+
+// ─── Kontoauszug (spec 4.4.5, P3.7) ────────────────────────────────────────────
+
+const isoDay = /^\d{4}-\d{2}-\d{2}$/;
+
+/** The Kontoauszug of a contact for a period (both days included); refused for a contact that is not there or a period backwards. */
+export function contactStatement(ws: Workspace, contactId: string, from: string, to: string): Statement {
+  const book = loadInvoices(ws);
+  if (!book.contacts.some((c) => c.id === contactId && !c.deleted)) contactGone();
+  if (!isoDay.test(from) || !isoDay.test(to) || to < from) bad('from und to sind Daten JJJJ-MM-TT, to nicht vor from.');
+  return statementOf(liveDocuments(book), contactId, from, to);
+}
+
+/** The Kontoauszug as PDF, in the contact's language, on the first Vorlage's look and letterhead. */
+export async function statementPdf(ws: Workspace, contactId: string, from: string, to: string, at: string, printer: Printer = chromium): Promise<{ pdf: Buffer; statement: Statement; title: string; language: Contact['language']; email?: string }> {
+  const statement = contactStatement(ws, contactId, from, to);
+  const book = loadInvoices(ws);
+  const c = book.contacts.find((x) => x.id === contactId)!;
+  const recipient = recipientOf(c, { language: c.language }, ws.invoicing)!;
+  const tpl = templateOf(ws.invoicing, { kind: 'invoice' });
+  const sender = ws.company.address;
+  const html = statementHtml(statement, {
+    language: c.language,
+    sender: { name: ws.company.name, lines: sender ? addressLines(sender, c.language) : [] },
+    to: { name: recipient.name, lines: [...(recipient.attn ? [recipient.attn] : []), ...addressLines(recipient.address, c.language)] },
+    font: tpl.layout.font, accent: tpl.layout.accent, ...(tpl.letterhead ? { letterhead: true } : {}), ...(logoSrc(ws, tpl.layout.logo) ? { logoSrc: logoSrc(ws, tpl.layout.logo) } : {}),
+  }, invoiceFontCss());
+  const printed = await (printer.page ?? printPdf)(html, at);
+  const pdf = tpl.letterhead ? await onLetterhead(printed, readFileSync(join(ws.paths.root, tpl.letterhead)), at) : printed;
+  const title = `${TEXTS[c.language].statement.title} ${formatDate(from, c.language)}–${formatDate(to, c.language)}`;
+  return { pdf, statement, title, language: c.language, ...(recipient.email ? { email: recipient.email } : {}) };
+}
+
+/**
+ * Sends a Kontoauszug (by e-mail with `deliver`, else downloaded) and records it in the sent log
+ * as kind `statement`, its PDF under invoices/sent/<id>.pdf. A failed e-mail records nothing.
+ */
+export function sendStatement(ws: Workspace, contactId: string, req: { from: string; to: string; recipient?: string }, opts: { now?: string; printer?: Printer; deliver?: Deliver } = {}): Promise<SentDocument> {
+  return serial(async () => {
+    const now = opts.now ?? new Date().toISOString();
+    const made = await statementPdf(ws, contactId, req.from, req.to, now, opts.printer);
+    const env = newEnvelope('sd', now);
+    const pdf = storePdf(ws, now.slice(0, 4), `sent/${env.id}.pdf`, made.pdf);
+    let delivered: Delivered | undefined;
+    try {
+      delivered = opts.deliver && await opts.deliver({ filename: `${made.title.replace(/[/\\:*?"<>|]/g, '-')}.pdf`, pdf: made.pdf, attachments: [] });
+    } catch (e) {
+      rmSync(join(ws.paths.root, pdf.file), { force: true });
+      throw e;
+    }
+    const doc: SentDocument = {
+      ...env, invoiceId: '', contactId, period: { from: req.from, to: req.to }, kind: 'statement', title: made.title, ...pdf, sentAt: now,
+      ...recipient({ customer: { email: made.email } as Issued['customer'] }, req.recipient, delivered),
+    };
+    updateInvoices(ws, (book) => { book.sent.push(doc); });
+    return doc;
+  });
 }

@@ -11,7 +11,7 @@ and the providers.
 | core | 88 | 23 |
 | engine | 4 | 1 |
 | provider | 17 | 13 |
-| split | 180 | 26 |
+| split | 183 | 26 |
 | infrastructure | 85 | 4 |
 | workflow | 32 | 0 |
 | view | 441 | 54 |
@@ -142,7 +142,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/invoices/pdf.ts` | QR-bill 1 |
 | `src/invoices/rules.ts` | MWST 1, Ziffer 1, QR-bill 7, Rappen 16 |
 | `src/invoices/service.ts` | CHF 2, Ziffer 1, QR-bill 1 |
-| `src/invoices/sheet.ts` | QR-bill 23 |
+| `src/invoices/sheet.ts` | QR-bill 24 |
 | `src/invoices/texts.ts` | MWST 5 |
 | `src/knowledge/cases.ts` | MWST 5, ESTV 4, Ziffer 4, camt.053 1 |
 | `src/knowledge/layers.ts` | CHF 1 |

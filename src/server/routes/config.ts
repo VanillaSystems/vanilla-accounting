@@ -14,7 +14,8 @@ import { payoutSales, salesDefaults } from '../../workspace/sells.js';
 import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { SALES_KINDS, salesKinds, type SalesKind } from '../../workspace/setup.js';
-import { DOCUMENT_KINDS, INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS, PRICES, isBooked, isItem, type DocumentKind, type Issued, type InvoiceLanguage, type PaymentTerms, type UnitDef } from '../../invoices/model.js';
+import { isStoredFile } from '../../invoices/attachments.js';
+import { DOCUMENT_KINDS, INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS, PRICES, TEMPLATE_TEXTS, isBooked, isItem, type DocumentKind, type Issued, type InvoiceLanguage, type PaymentTerms, type UnitDef } from '../../invoices/model.js';
 import { DEFAULT_NUMBERING, nextNumberFor, type Numbering } from '../../invoices/numbering.js';
 import { MAX_LEVELS, readDunning, type DunningSettings } from '../../workspace/dunning.js';
 import { thisDevice } from '../../workspace/device.js';
@@ -285,10 +286,63 @@ function dunningPatch(raw: unknown): DunningSettings {
   return { ...plain, device };
 }
 
+/**
+ * Firma › Vorlagen (spec 4.4.11): which Vorlage a layout or text change is for, a Vorlage added,
+ * renamed, removed, its letterhead or fixed attachment (a file POST /api/invoices/files stored), its
+ * texts per kind and language, the Vorlage per kind. The values are checked by the manifest's reader.
+ */
+function templatesPatch(b: Record<string, unknown>): Pick<InvoicingPatch, 'template' | 'templates' | 'templateTexts' | 'templateFor'> {
+  const out: Pick<InvoicingPatch, 'template' | 'templates' | 'templateTexts' | 'templateFor'> = {};
+  const id = (v: unknown, where: string): string => {
+    if (typeof v !== 'string' || !/^[a-z0-9][a-z0-9_-]{0,31}$/i.test(v)) throw new RequestError(400, `${where}: die Id einer Vorlage.`);
+    return v;
+  };
+  const file = (v: unknown, where: string): string => {
+    if (typeof v !== 'string' || !isStoredFile(WS, v)) throw new RequestError(400, `${where}: eine Datei, die POST /api/invoices/files gespeichert hat.`);
+    return v;
+  };
+  if (b.template !== undefined) out.template = id(b.template, 'template');
+  if (b.templates !== undefined) {
+    const t = patchBody(b.templates, ['add', 'rename', 'remove', 'letterhead', 'attachment']);
+    const templates: NonNullable<InvoicingPatch['templates']> = {};
+    if (t.add !== undefined) {
+      const a = patchBody(t.add, ['id', 'name', 'from']);
+      templates.add = { id: id(a.id, 'templates.add.id'), name: stringField(a, 'name').trim(), ...(a.from !== undefined ? { from: id(a.from, 'templates.add.from') } : {}) };
+    }
+    if (t.rename !== undefined) { const r = patchBody(t.rename, ['id', 'name']); templates.rename = { id: id(r.id, 'templates.rename.id'), name: stringField(r, 'name').trim() }; }
+    if (t.remove !== undefined) templates.remove = id(t.remove, 'templates.remove');
+    if (t.letterhead !== undefined) { const l = patchBody(t.letterhead, ['id', 'file']); templates.letterhead = { id: id(l.id, 'templates.letterhead.id'), file: l.file === null ? null : file(l.file, 'templates.letterhead.file') }; }
+    if (t.attachment !== undefined) {
+      const a = patchBody(t.attachment, ['id', 'value']);
+      if (a.value === null) templates.attachment = { id: id(a.id, 'templates.attachment.id'), value: null };
+      else {
+        const v = patchBody(a.value, ['name', 'file', 'kinds']);
+        if (v.kinds !== undefined && (!Array.isArray(v.kinds) || !v.kinds.every((k) => DOCUMENT_KINDS.includes(k as DocumentKind)))) throw new RequestError(400, 'templates.attachment.value.kinds: eine Liste von Belegarten.');
+        templates.attachment = { id: id(a.id, 'templates.attachment.id'), value: { name: stringField(v, 'name').trim(), file: file(v.file, 'templates.attachment.value.file'), ...(v.kinds ? { kinds: v.kinds as DocumentKind[] } : {}) } };
+      }
+    }
+    out.templates = templates;
+  }
+  if (b.templateTexts !== undefined) {
+    const byKind = patchBody(b.templateTexts, DOCUMENT_KINDS);
+    out.templateTexts = Object.fromEntries(Object.entries(byKind).map(([kind, v]) => [kind, Object.fromEntries(Object.entries(patchBody(v, INVOICE_LANGUAGES)).map(([lang, x]) => {
+      const texts = patchBody(x, TEMPLATE_TEXTS);
+      for (const [k, value] of Object.entries(texts)) if (value !== null && typeof value !== 'string') throw new RequestError(400, `templateTexts.${kind}.${lang}.${k}: ein Text oder null.`);
+      return [lang, texts];
+    }))])) as NonNullable<InvoicingPatch['templateTexts']>;
+  }
+  if (b.templateFor !== undefined) {
+    const map = patchBody(b.templateFor, DOCUMENT_KINDS);
+    out.templateFor = Object.fromEntries(Object.entries(map).map(([kind, v]) => [kind, v === null ? null : id(v, `templateFor.${kind}`)]));
+  }
+  return out;
+}
+
 /** The layout's values are checked by the manifest's reader; here only their kinds. */
 function invoicingPatch(raw: unknown): InvoicingPatch {
   const out: InvoicingPatch = {};
-  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo', 'confirm', 'units', 'prices', 'paymentTerms', 'defaultTerms', 'numbering', 'dunning']);
+  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo', 'confirm', 'units', 'prices', 'paymentTerms', 'defaultTerms', 'numbering', 'dunning', 'template', 'templates', 'templateTexts', 'templateFor']);
+  Object.assign(out, templatesPatch(b));
   if (b.numbering !== undefined) out.numbering = numberingPatch(b.numbering);
   // Firma › Rechnungslayout › Mahnwesen: the whole list, checked as the manifest reads it.
   if (b.dunning !== undefined) out.dunning = b.dunning === null ? null : dunningPatch(b.dunning);
@@ -471,7 +525,9 @@ router.post('/api/workspace/logo', express.raw({ type: Object.keys(LOGO_TYPES), 
   const file = `logos/logo-${createHash('sha256').update(req.body).digest('hex').slice(0, 12)}.${ext}`;
   mkdirSync(WS.paths.logos, { recursive: true });
   writeAtomic(join(WS.paths.root, file), req.body);
-  checked(() => patchManifest(WS.paths.manifest, { invoicing: { layout: { logo: file } } }));
+  // `?template=`: the Vorlage whose logo it is; absent: the first.
+  const template = typeof req.query.template === 'string' && req.query.template ? req.query.template : undefined;
+  checked(() => patchManifest(WS.paths.manifest, { invoicing: { layout: { logo: file }, ...(template ? { template } : {}) } }));
   reopenWorkspace();
   res.json(workspaceInfo());
 });

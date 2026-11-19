@@ -9,7 +9,7 @@ import type { StatementKind } from './banks.js';
 import { readFileSync } from 'node:fs';
 import { isMap, isSeq, parseDocument, type Document, type YAMLMap, type YAMLSeq } from 'yaml';
 import { writeAtomic } from '../invoices/store.js';
-import type { Address, DocumentKind, DunningSettings, InvoiceContent, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail, PayToPatch, PaymentTerms, Prices, UnitDef } from '../invoices/model.js';
+import { STANDARD_TEMPLATE, type Address, type DocumentKind, type DunningSettings, type InvoiceContent, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type LayoutElement, type OWN_TEXTS, type OutgoingMail, type PayToPatch, type PaymentTerms, type Prices, type TemplateTextKey, type UnitDef } from '../invoices/model.js';
 import type { NumberFormat } from './numbering.js';
 import { parseIban, roleBefore, type MoneyRole } from './banks.js';
 import { parseManifest, type Manifest } from './manifest.js';
@@ -74,6 +74,24 @@ export interface InvoicingPatch {
   numbering?: Partial<Record<DocumentKind, NumberFormat>>;
   /** The Mahnwesen (spec 4.4.7): its levels and default interest, written as one block; null removes it (a new firm's levels again). */
   dunning?: DunningSettings | null;
+  /** The Vorlage `layout` and `templateTexts` change; absent: the first («Standard»). */
+  template?: string;
+  /**
+   * Firma › Vorlagen (spec 4.4.11): a Vorlage added (its layout a copy of `from`'s, else of the
+   * first), renamed, removed, its letterhead or fixed attachment set (null takes it off). The first
+   * of these turns a manifest's one `invoicing.layout` into the list `invoicing.templates`, «Standard» first.
+   */
+  templates?: {
+    add?: { id: string; name: string; from?: string };
+    rename?: { id: string; name: string };
+    remove?: string;
+    letterhead?: { id: string; file: string | null };
+    attachment?: { id: string; value: { name: string; file: string; kinds?: DocumentKind[] } | null };
+  };
+  /** The texts of `template` per kind and language; null removes a text (its fallback again). */
+  templateTexts?: Partial<Record<DocumentKind, Partial<Record<InvoiceLanguage, Partial<Record<TemplateTextKey, string | null>>>>>>;
+  /** The Vorlage a new document of a kind takes; null: the first again. */
+  templateFor?: Partial<Record<DocumentKind, string | null>>;
 }
 
 /** Firma › E-Mail: the outgoing mailbox, field by field; null removes a field, `outgoingMail: null` the block. */
@@ -194,9 +212,48 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
         doc.setIn(['invoicing', 'payTo', currency], node);
       }
     }
+    if (inv.templates || inv.templateTexts) templateList(doc);
+    const t = inv.templates;
+    if (t?.add) {
+      const seq = templateList(doc);
+      if (indexOfTemplate(doc, t.add.id) >= 0) throw new WorkspaceError(`invoicing.templates: "${t.add.id}" exists`);
+      const from = t.add.from === undefined ? 0 : indexOfTemplate(doc, t.add.from);
+      if (from < 0) throw new WorkspaceError(`invoicing.templates: no Vorlage "${t.add.from}"`);
+      const layout = (seq.items[from] as YAMLMap).get('layout');
+      seq.items.push(doc.createNode({ id: t.add.id, name: t.add.name, layout: isMap(layout) ? layout.toJSON() : {} }));
+    }
+    if (t?.rename) doc.setIn(['invoicing', 'templates', existing(doc, t.rename.id), 'name'], t.rename.name);
+    if (t?.letterhead) set(doc, ['invoicing', 'templates', existing(doc, t.letterhead.id), 'letterhead'], t.letterhead.file);
+    if (t?.attachment) {
+      const at = existing(doc, t.attachment.id);
+      if (t.attachment.value === null) doc.deleteIn(['invoicing', 'templates', at, 'attachment']);
+      else { const n = doc.createNode(t.attachment.value) as YAMLMap; n.flow = true; doc.setIn(['invoicing', 'templates', at, 'attachment'], n); }
+    }
+    if (t?.remove !== undefined) {
+      const at = existing(doc, t.remove);
+      const seq = templateList(doc);
+      if (seq.items.length === 1) throw new WorkspaceError('invoicing.templates: the last Vorlage stays');
+      seq.items.splice(at, 1);
+      // A kind that took it takes the first again.
+      const map = doc.getIn(['invoicing', 'templateFor']);
+      if (isMap(map)) for (const [kind, id] of Object.entries(map.toJSON() as Record<string, unknown>)) if (String(id) === t.remove) map.delete(kind);
+    }
+    for (const [kind, id] of Object.entries(inv.templateFor ?? {})) set(doc, ['invoicing', 'templateFor', kind], id);
+    if (isMap(doc.getIn(['invoicing', 'templateFor'])) && (doc.getIn(['invoicing', 'templateFor']) as YAMLMap).items.length === 0) doc.deleteIn(['invoicing', 'templateFor']);
+    const base = layoutPath(doc, inv.template);
     const { show, ...layout } = inv.layout ?? {};
-    for (const [key, value] of Object.entries(layout)) set(doc, ['invoicing', 'layout', key], value);
-    for (const [key, value] of Object.entries(show ?? {})) doc.setIn(['invoicing', 'layout', 'show', key], value);
+    for (const [key, value] of Object.entries(layout)) set(doc, [...base, key], value);
+    for (const [key, value] of Object.entries(show ?? {})) doc.setIn([...base, 'show', key], value);
+    for (const [kind, byLang] of Object.entries(inv.templateTexts ?? {})) {
+      const at = inv.template === undefined ? 0 : existing(doc, inv.template);
+      for (const [lang, texts] of Object.entries(byLang ?? {})) {
+        for (const [key, value] of Object.entries(texts ?? {})) set(doc, ['invoicing', 'templates', at, 'texts', kind, lang, key], value);
+        const node = doc.getIn(['invoicing', 'templates', at, 'texts', kind, lang]);
+        if (isMap(node) && node.items.length === 0) doc.deleteIn(['invoicing', 'templates', at, 'texts', kind, lang]);
+      }
+      const k = doc.getIn(['invoicing', 'templates', at, 'texts', kind]);
+      if (isMap(k) && k.items.length === 0) doc.deleteIn(['invoicing', 'templates', at, 'texts', kind]);
+    }
     for (const [lang, texts] of Object.entries(inv.texts ?? {})) {
       for (const [key, value] of Object.entries(texts)) set(doc, ['invoicing', 'texts', lang, key], value);
     }
@@ -246,6 +303,39 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
   // A one-line `{ … }` stays one line however long it grows, a quoted text with \n in it too.
   const out = manifestText(doc);
   return { text: out, manifest: parseManifest(out, path) };
+}
+
+/**
+ * The list `invoicing.templates`: made from the one `invoicing.layout` when the manifest has none
+ * yet («Standard», id `standard`, its layout as it was), which then goes.
+ */
+function templateList(doc: Document): YAMLSeq {
+  const seq = doc.getIn(['invoicing', 'templates']);
+  if (isSeq(seq)) return seq;
+  const layout = doc.getIn(['invoicing', 'layout']);
+  doc.setIn(['invoicing', 'templates'], doc.createNode([{ id: STANDARD_TEMPLATE, name: 'Standard', layout: isMap(layout) ? layout.toJSON() : {} }]));
+  doc.deleteIn(['invoicing', 'layout']);
+  return doc.getIn(['invoicing', 'templates']) as YAMLSeq;
+}
+
+const indexOfTemplate = (doc: Document, id: string): number => {
+  const seq = doc.getIn(['invoicing', 'templates']);
+  return isSeq(seq) ? seq.items.findIndex((x) => isMap(x) && String(x.get('id')) === id) : -1;
+};
+
+function existing(doc: Document, id: string): number {
+  const at = indexOfTemplate(doc, id);
+  if (at < 0) throw new WorkspaceError(`invoicing.templates: no Vorlage "${id}"`);
+  return at;
+}
+
+/** Where a Vorlage's layout lies: `invoicing.layout` while the manifest has one layout, else that Vorlage's in the list. */
+function layoutPath(doc: Document, id: string | undefined): Array<string | number> {
+  if (!isSeq(doc.getIn(['invoicing', 'templates']))) {
+    if (id !== undefined && id !== STANDARD_TEMPLATE) throw new WorkspaceError(`invoicing.templates: no Vorlage "${id}"`);
+    return ['invoicing', 'layout'];
+  }
+  return ['invoicing', 'templates', id === undefined ? 0 : existing(doc, id), 'layout'];
 }
 
 /** Applies `patch` to the manifest file; nothing is written when the result would not open. */
