@@ -57,10 +57,17 @@ export function sentFacts(sent: readonly SentDocument[], inv: Invoice): SentFact
 
 // ─── statuses ────────────────────────────────────────────────────────────────
 
-/** A Rechnung's status (4.4.2): Überfällig is derived beside it, see `isOverdue`. */
-export type InvoiceListStatus = 'draft' | 'open' | 'partly-paid' | 'paid' | 'cancelled';
+/**
+ * A Rechnung's status (4.4.2): Überfällig is derived beside it, see `isOverdue`. One closed with a
+ * loss written off (Verlust) reads «Ausgebucht», whatever was paid before: the customer did not pay
+ * it all. A Skonto, Rabatt, Spesen or Rundung rest keeps «Bezahlt» (decision 49). Ausgebucht counts
+ * in the tab «Bezahlt», the closed ones, as the market leader keeps no tab of its own for it.
+ */
+export type InvoiceListStatus = 'draft' | 'open' | 'partly-paid' | 'paid' | 'written-off' | 'cancelled';
+export const closedByLoss = (inv: Invoice): boolean => inv.status === 'issued' && (inv.writeOffs ?? []).some((w) => w.reason === 'loss');
 export const invoiceStatus = (inv: Invoice, invoices: readonly Invoice[]): InvoiceListStatus => {
   const s = status(inv, invoices);
+  if (s === 'paid' && closedByLoss(inv)) return 'written-off';
   return s === 'issued' ? 'open' : s;
 };
 
@@ -110,13 +117,13 @@ export const unsent = (inv: Invoice, sent: readonly SentDocument[]): boolean => 
 export const daysBetween = (from: string, to: string): number => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / 864e5);
 
 /**
- * The age bands of the Debitorenliste. The age counts from the invoice date: the four bands then
- * hold every open item, the not yet due ones too, and the days overdue (from the due date) stand
- * in a column of their own (docs/specs/invoicing.md section 7, decisions in the build).
+ * The age bands of the Debitorenliste, by the days past the due date (the column «Tage überfällig»
+ * beside them): not yet due, then 1–30, 31–60, 61–90 and more than 90 days overdue
+ * (docs/specs/invoicing.md section 7, decision 23 as changed on 2026-11-19).
  */
-export const AGE_BANDS = ['0-30', '31-60', '61-90', '90+'] as const;
+export const AGE_BANDS = ['not-due', '1-30', '31-60', '61-90', '90+'] as const;
 export type AgeBand = (typeof AGE_BANDS)[number];
-export const ageBand = (days: number): AgeBand => (days <= 30 ? '0-30' : days <= 60 ? '31-60' : days <= 90 ? '61-90' : '90+');
+export const ageBand = (overdue: number): AgeBand => (overdue <= 0 ? 'not-due' : overdue <= 30 ? '1-30' : overdue <= 60 ? '31-60' : overdue <= 90 ? '61-90' : '90+');
 
 export interface OpenItem {
   inv: Issued;
@@ -135,14 +142,15 @@ export function openItems(invoices: readonly Invoice[], date: string): OpenItem[
     .filter((i): i is Issued => i.status === 'issued' && i.kind === 'invoice' && !i.deleted)
     .map((inv) => {
       const age = Math.max(0, daysBetween(inv.date, date));
-      return { inv, open: openOn(inv, invoices, date), age, band: ageBand(age), overdue: Math.max(0, daysBetween(inv.dueDate, date)) };
+      const overdue = Math.max(0, daysBetween(inv.dueDate, date));
+      return { inv, open: openOn(inv, invoices, date), age, band: ageBand(overdue), overdue };
     })
     .filter((x) => x.open > 0)
     .sort((a, b) => a.inv.date.localeCompare(b.inv.date) || a.inv.number.localeCompare(b.inv.number));
 }
 
 export type BandSums = Record<AgeBand, number>;
-const noBands = (): BandSums => ({ '0-30': 0, '31-60': 0, '61-90': 0, '90+': 0 });
+const noBands = (): BandSums => ({ 'not-due': 0, '1-30': 0, '31-60': 0, '61-90': 0, '90+': 0 });
 
 export interface OpenGroup { customerId: string; name: string; currency: string; items: OpenItem[]; total: number; bands: BandSums }
 export interface OpenTotal { currency: string; total: number; bands: BandSums; count: number }

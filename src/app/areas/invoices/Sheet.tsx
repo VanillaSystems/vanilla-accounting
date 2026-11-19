@@ -59,6 +59,7 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
   const [html, setHtml] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   const refocus = useRef<string>();
+  const selectAll = useRef(false);
   // A select the person has open (its list, or its keys) is never replaced under them: a re-layout
   // waits until it is left, unless its own change set it off (r5h-22, corner-44: the unit, then the
   // VAT rate 0.6 s later, and the open VAT list was swapped for a new one, so its choice was lost).
@@ -91,13 +92,16 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
     ro.observe(box);
     // After a re-layout the caret goes to the field the person moved to.
     const key = refocus.current ?? focus;
+    // A position just added: its text is selected, so what she types replaces «Neue Position».
+    const fresh = selectAll.current && key === refocus.current;
     refocus.current = undefined;
+    selectAll.current = false;
     if (focus && html) onFocused?.();
     const handle = key ? /^mv:(\d+)$/.exec(key) : null;
     const next = !key ? null : handle ? box.querySelector<HTMLElement>(`[data-ia="move"][data-k="${handle[1]}"]`) : box.querySelector<HTMLElement>(`[data-ed="${CSS.escape(key)}"]`);
     if (next) {
       next.focus();
-      if (next.isContentEditable) { const sel = getSelection(); sel?.selectAllChildren(next); if (!focus && !numeric(next)) sel?.collapseToEnd(); }
+      if (next.isContentEditable) { const sel = getSelection(); sel?.selectAllChildren(next); if (!focus && !fresh && !numeric(next)) sel?.collapseToEnd(); }
     }
     return () => ro.disconnect();
   }, [html, focus]);
@@ -209,8 +213,13 @@ export function Sheet({ data, editing, className, onEdit, onAction, focus, onFoc
         if (!b || b.dataset.ia === 'move') return;
         const active = document.activeElement as HTMLElement | null;
         if (active?.isContentEditable && active.dataset.ed) onEdit?.(active.dataset.ed, text(active), true);
-        const focus = onAction?.(b.dataset.ia!, Number(b.dataset.k ?? -1));
-        if (focus) refocus.current = focus;
+        // An add button names no position: the one the person is in (the field that keeps the focus) is where it goes;
+        // the caret in the first position's text, unchanged since it got there (a new draft puts it there), names none,
+        // so an untouched first item gives way (insertLine).
+        const untouched = active?.dataset.ed === 'l:0:text' && text(active) === (active.dataset.was ?? '');
+        const inLine = untouched ? undefined : /^l:(\d+):/.exec(active?.dataset.ed ?? '')?.[1];
+        const focus = onAction?.(b.dataset.ia!, Number(b.dataset.k ?? inLine ?? -1));
+        if (focus) { refocus.current = focus; selectAll.current = b.dataset.ia!.startsWith('add'); }
       }}
     />
   );

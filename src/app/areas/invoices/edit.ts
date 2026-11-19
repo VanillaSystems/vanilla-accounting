@@ -138,6 +138,21 @@ export function moveLine(lines: readonly InvoiceLine[], from: number, to: number
   return out;
 }
 
+/**
+ * The positions with `added` put in after the position `after` (the one the person is in; -1: none,
+ * at the end). A draft that holds only its first item, still empty, starts with what is added
+ * instead when no position is named (`newLine`: the text a new item starts with). P1.2: a painter
+ * writes a room's title first; the sheet names
+ * none while the caret sits in that item's empty text). `at`: the index the added position got.
+ */
+export function insertLine(lines: readonly InvoiceLine[], added: InvoiceLine, after: number, newLine = ''): { lines: InvoiceLine[]; at: number } {
+  const first = lines[0];
+  const untouched = lines.length === 1 && isItem(first) && !first.price && (!first.text.trim() || first.text === newLine);
+  if (after < 0 && untouched) return { lines: [added], at: 0 };
+  const at = after >= 0 && after < lines.length ? after + 1 : lines.length;
+  return { lines: [...lines.slice(0, at), added, ...lines.slice(at)], at };
+}
+
 /** The positions priced `prices` for the whole document: the legacy flag of a line goes (spec 4.4.3, prices per document). */
 export const repriced = (lines: readonly InvoiceLine[]): InvoiceLine[] =>
   lines.map((l) => { if (!isItem(l) || l.vatIncluded === undefined) return l; const { vatIncluded: _, ...rest } = l; return rest; });

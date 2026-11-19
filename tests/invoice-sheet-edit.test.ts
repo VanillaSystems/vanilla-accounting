@@ -9,7 +9,7 @@ import { DEFAULT_LAYOUT, DEFAULT_UNITS, type Customer, type Draft, type ItemLine
 import { browserPath } from './support/browser.js';
 import { POSITION_WORDS } from './support/sheet-words.js';
 import { assembleSheets, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
-import { sheetEdit } from '../src/app/areas/invoices/edit.js';
+import { insertLine, sheetEdit } from '../src/app/areas/invoices/edit.js';
 import { startApi, type ApiServer } from './support/api-server.js';
 import './support/jurisdiction.js';
 
@@ -94,4 +94,20 @@ test('Firma › Rechnungslayout › Einheiten: a unit is added with its four wor
   assert.deepEqual([word.status, word.json.code], [400, 'unitWord']);
   assert.equal((await api.send('DELETE', `/api/invoices/${d.id}`)).status, 200);
   assert.equal((await api.send('PATCH', '/api/workspace', { invoicing: { units: DEFAULT_UNITS } })).status, 200, 'with no draft naming it, it goes');
+});
+
+test('P1.2: an added position goes after the one the person is in; a new draft\'s untouched first item gives way to a title', () => {
+  const empty: ItemLine = { text: '', quantity: 1, price: 0, vatRate: 8.1 };
+  const title = { kind: 'text' as const, text: '', style: 'title' as const };
+  assert.deepEqual(insertLine([empty], title, -1), { lines: [title], at: 0 }, 'a painter starts with the room\'s title');
+  assert.deepEqual(insertLine([empty], title, 0), { lines: [empty, title], at: 1 }, 'not while she types into the first item');
+  const a: ItemLine = { text: 'Wände', quantity: 42, unit: 'm2', price: 18.5, vatRate: 8.1 };
+  const b: ItemLine = { text: 'Decke', quantity: 20, unit: 'm2', price: 21, vatRate: 8.1 };
+  const sub = { kind: 'subtotal' as const, text: 'Zwischentotal' };
+  assert.deepEqual(insertLine([a, b], sub, 0), { lines: [a, sub, b], at: 1 }, 'after the focused position, not at the end');
+  assert.deepEqual(insertLine([a, b], sub, -1), { lines: [a, b, sub], at: 2 }, 'no position focused: at the end');
+  assert.deepEqual(insertLine([a], title, -1), { lines: [a, title], at: 1 }, 'a first item with text stays');
+  const fresh: ItemLine = { text: 'Neue Position', quantity: 1, price: 0, vatRate: 8.1 };
+  assert.deepEqual(insertLine([fresh], title, -1, 'Neue Position'), { lines: [title], at: 0 }, 'the new draft\'s own first item, untouched, gives way');
+  assert.deepEqual(insertLine([{ ...fresh, price: 120 }], title, -1, 'Neue Position'), { lines: [{ ...fresh, price: 120 }, title], at: 1 }, 'not once it has a price');
 });

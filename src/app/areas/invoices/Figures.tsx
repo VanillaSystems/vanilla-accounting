@@ -26,23 +26,23 @@ export function FourFigures({ inv, invoices }: { inv: Issued; invoices: readonly
   const f = figures(inv, invoices);
   const money = (n: number) => `${inv.currency} ${fmt(n)}`;
   const received = f.payments.map((p) => t('invoices.fig.payment', { date: formatDate(p.date), amount: money(p.amount), how: t(p.source === 'hand' ? 'invoices.fig.byHand' : 'invoices.fig.byStatement') }));
-  const credited = [
-    ...f.creditNotes.map((c) => t('invoices.fig.creditNote', { number: c.number, date: formatDate(c.date), amount: money(c.amount) })),
-    ...f.writeOffs.map((w) => t('invoices.fig.writeOff', { reason: t(`invoices.reason.${w.reason}`), date: formatDate(w.date), amount: money(w.amount) })),
-  ];
+  const credited = f.creditNotes.map((c) => t('invoices.fig.creditNote', { number: c.number, date: formatDate(c.date), amount: money(c.amount) }));
+  const writtenOff = f.writeOffs.map((w) => t('invoices.fig.writeOff', { reason: t(`invoices.reason.${w.reason}`), date: formatDate(w.date), amount: money(w.amount) }));
   const none = { received: t('invoices.fig.receivedNone'), credited: t('invoices.fig.creditedNone') } as Record<string, string>;
-  const cell = (k: 'amount' | 'received' | 'credited' | 'open', n: number, sources: string[], className = '') => (
+  const cell = (k: 'amount' | 'received' | 'credited' | 'writtenOff' | 'open', n: number, sources: string[], className = '') => (
     <div className={`fig${className}`} data-fig={k} data-tip={sources.length ? sources.join(' · ') : none[k]}>
       <span className="lbl">{t(`invoices.fig.${k}`)}</span>
       <span className="n mono">{money(n)}</span>
     </div>
   );
   return (
-    <div className="ivfigs" data-testid="four-figures">
+    <div className={`ivfigs${f.writeOffs.length ? ' five' : ''}`} data-testid="four-figures">
       {cell('amount', f.amount, [t('invoices.fig.amountTip', { date: formatDate(inv.date) })])}
       {cell('received', f.received, received)}
       {cell('credited', f.credited, credited)}
-      {cell('open', f.open, f.open < 0 ? [t('invoices.fig.credit')] : [t('invoices.fig.openTip')], f.open > 0 ? ' open' : f.open < 0 ? ' minus' : ' done')}
+      {/* Ausbuchungen are a figure of their own, shown only when there is one (decision 49). */}
+      {f.writeOffs.length ? cell('writtenOff', f.writtenOff, writtenOff) : null}
+      {cell('open', f.open, f.open < 0 ? [t('invoices.fig.credit')] : [t(f.writeOffs.length ? 'invoices.fig.openTipOff' : 'invoices.fig.openTip')], f.open > 0 ? ' open' : f.open < 0 ? ' minus' : ' done')}
     </div>
   );
 }

@@ -100,7 +100,7 @@ for (const [name, setup, k] of KINDS) {
     assert.deepEqual(rows(b, 'RE-2026-001-wo-1'), k.agreed ? [['3800', '1100', minus(k.code), g - 500]] : []);
     assert.equal(status(now(book, 'a'), book.invoices), 'paid');
     const f = figures(now(book, 'a'), book.invoices);
-    assert.deepEqual([f.amount, f.received, f.credited, f.open], [g, 500, g - 500, 0]);
+    assert.deepEqual([f.amount, f.received, f.credited, f.writtenOff, f.open], [g, 500, 0, g - 500, 0], 'the Spesen are written off, not credited');
     if (k.agreed) assert.equal(balance(b.journalEntries, '1100'), 0, 'the receivable is settled by the payment and the write-off');
 
     // A loss of a whole Rechnung, taken back («Rückgängig»), then a Storno.
@@ -291,7 +291,7 @@ test('more than is open is a warning («Trotzdem ausbuchen»), never a silent cr
   assert.throws(() => writeOffRest(b, book, 'a', { date: '2026-08-01', amount: 200, reason: 'rounding', by: 'person' }, ctx, { files: [] }), (e: unknown) => e instanceof InvoiceRuleError && e.code === 'aboveOpen');
   writeOffRest(b, book, 'a', { date: '2026-08-01', amount: 200, reason: 'rounding', by: 'person' }, ctx, { files: [] }, true);
   const f = figures(now(book, 'a'), book.invoices);
-  assert.deepEqual([f.amount, f.credited, f.open], [108.1, 200, -91.9], 'the figures show the credit; Betrag − erhalten − gutgeschrieben = offen');
+  assert.deepEqual([f.amount, f.credited, f.writtenOff, f.open], [108.1, 0, 200, -91.9], 'the figures show the credit; Betrag − erhalten − gutgeschrieben − ausgebucht = offen');
   assert.equal(openAmount(now(book, 'a'), book.invoices), 0);
 });
 
@@ -376,7 +376,7 @@ test('a Skonto written off by code goes with its payment when the payment is rel
   assert.deepEqual([rows(b, 'RE-2026-001-wo-1'), now(book, 'a').writeOffs, status(now(book, 'a'), book.invoices)], [[], [], 'issued']);
 });
 
-test('the four figures on every Rechnung of the demos: Betrag − erhalten − gutgeschrieben = offen, and offen is what openAmount says', () => {
+test('the figures on every Rechnung of the demos: Betrag − erhalten − gutgeschrieben − ausgebucht = offen, and offen is what openAmount says', () => {
   setJurisdiction(ch, EFFECTIVE_QUARTERLY);
   let seen = 0;
   for (const demo of ['demo', 'demo-consulting', 'demo-coiffeur', 'demo-schreinerei']) {
@@ -388,7 +388,7 @@ test('the four figures on every Rechnung of the demos: Betrag − erhalten − g
       const f = figures(inv, invoices);
       // In Rappen: a sum that is zero in floating point may come out as -0.
       const rp = (n: number) => Math.round(n * 100);
-      assert.equal((rp(f.amount) - rp(f.received) - rp(f.credited)) / 100, f.open, `${demo} ${inv.number}`);
+      assert.equal((rp(f.amount) - rp(f.received) - rp(f.credited) - rp(f.writtenOff)) / 100, f.open, `${demo} ${inv.number}`);
       assert.equal(Math.max(0, f.open), openAmount(inv, invoices), `${demo} ${inv.number}: the same «offen» as the lists`);
       seen++;
     }

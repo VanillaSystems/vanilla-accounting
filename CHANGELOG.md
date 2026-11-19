@@ -234,6 +234,13 @@ Two markers flag an entry you must read before you update:
   period's status.
 - Löhne: a payslip paid, reopened and closed again with another payout now says what stays open on the
   Lohndurchlaufkonto (on the payslip and in Lohnzahlungen) instead of leaving the difference unnamed.
+- Verkauf: a Rechnung closed with a loss written off reads «Ausgebucht» (in the tab «Bezahlt»), not
+  «Bezahlt»; its write-offs show as their own figure «ausgebucht» beside «gutgeschrieben».
+- Verkauf › Offene Posten: the age bands count the days past due (nicht fällig, 1–30, 31–60, 61–90,
+  > 90 days), as the column «Tage überfällig» beside them does.
+- A draft's «＋ Text», «＋ Position» and the other add buttons put the new position after the one you
+  are in; a new draft starts with a title instead of its empty first item.
+- A cancelled invoice's PDF is no longer paired to its payment again after «Trotzdem stornieren».
 - A receipt's total of 1’000 or more printed by the app (a paid invoice filed as its payment's receipt)
   was read without its thousands. The Skonto line of an invoice now reads «Sie überweisen CHF …», so
   it is no longer taken for the invoice's total.

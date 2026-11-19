@@ -518,8 +518,8 @@ Every status but the two of a quote's customer is a fact. The list tabs and chip
 
 #### 4.4.12 Lists and exports
 
-- **Offene Posten:** every Rechnung with something open, by contact, with age bands (0–30, 31–60,
-  61–90, > 90 days), printable as the Debitorenliste and exported to CSV. On 31.12. it equals the year
+- **Offene Posten:** every Rechnung with something open, by contact, with age bands by the days
+  past due (nicht fällig, 1–30, 31–60, 61–90, > 90 days; decision 23), printable as the Debitorenliste and exported to CSV. On 31.12. it equals the year
   end's receivables proposal to the Rappen.
 - **Fakturajournal:** every position of the issued Rechnungen and Gutschriften of a period, to CSV.
 - **Export** of every list (current tab, filter and search) to CSV.
@@ -1016,10 +1016,11 @@ listed here and updated with phase 2's build:
 
 ### Decisions in the build (2026-11-19)
 
-23. **The age of an open item counts from the invoice date.** The market leader's notes capture its
-    open-items list only as a download at a key date, with no age basis. Counted from the invoice date,
-    the four bands (0–30, 31–60, 61–90, > 90 days) hold every open item, the not yet due ones too; the
-    days past the due date stand in a column of their own. Offene Posten takes its reference date as
+23. **The age of an open item counts from the due date** (changed by the lead on 2026-11-19, after the
+    phase-1 walk; first built from the invoice date). The market leader's notes capture its open-items
+    list only as a download at a key date, with no age basis. Counted from the invoice date, an item 63
+    days overdue stood under «> 90 Tage» beside its «Tage überfällig»; now the five bands are the
+    days overdue themselves: «nicht fällig», 1–30, 31–60, 61–90 and > 90 days. Offene Posten takes its reference date as
     `?date=` (default today) and sums `openOn`, the year end's own figure. On 31.12. it equals, on the
     cash basis, the year end's receivables proposal (which leaves out only invoices whose event the
     books carry); on the agreed basis, where every app invoice has its event, what the app's invoices
@@ -1271,6 +1272,20 @@ listed here and updated with phase 2's build:
     receipt reader (modules/ch/documents.yaml), so a paid invoice filed as its payment's receipt read
     as the Skonto amount, not its total. The reader also takes ʼ (U+02BC, how the PDF reader gives the
     printed ’) as a thousands mark: before, an amount with it lost its thousands.
+49. **«Ausgebucht», and the write-offs as a figure of their own** (lead, after the phase-1 walk). A
+    Rechnung closed with a loss written off (`reason: loss`, any amount) reads «Ausgebucht», paid in
+    part or not: the customer did not pay it. A rest closed as Skonto, Rabatt, Spesen or Rundung keeps
+    «Bezahlt». The market leader clears a bad debt with a credit note and keeps no tab for it, so
+    «Ausgebucht» counts in the tab «Bezahlt», the closed ones. The figures show the write-offs as
+    «ausgebucht» beside «gutgeschrieben», only when there is one: Betrag − erhalten − gutgeschrieben −
+    ausgebucht = offen; «gutgeschrieben» holds the Gutschriften alone (4.8 named both under it).
+50. **Where a new position goes; a cancelled invoice pairs with nothing** (lead, after the walk).
+    «＋ Position», «＋ Text», «＋ Zwischentotal», «＋ Rabatt» and «＋ Seitenumbruch» put the new
+    position after the one the person is in, else at the end; a draft whose only position is its
+    first item, untouched, starts with the new one instead, so a painter starts with a room's title.
+    The PDF of a cancelled invoice, filed as its payment's receipt, is a receipt without a payment
+    of its own (`noPaymentFor`): no pairing path (chain, near pairs, proposals, the intake's match)
+    ties it to the payment again after «Trotzdem stornieren».
 
 ---
 
