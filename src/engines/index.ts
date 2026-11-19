@@ -5,7 +5,7 @@
  * figures from the same data for the same kind of firm.
  */
 import type { Jurisdiction } from '../core/modules/schema.js';
-import { EFFECTIVE_QUARTERLY, basisSinceOf, filingLengthOf, methodOf, onAgreedBasis, type VatBasis, type VatMethod, type VatSetup } from '../workspace/vat-setup.js';
+import { EFFECTIVE_QUARTERLY, basisSinceOf, filingLengthOf, methodOf, netRatesOf, onAgreedBasis, type NetRate, type VatBasis, type VatMethod, type VatSetup } from '../workspace/vat-setup.js';
 import { chartEngine, type ChartEngine } from './chart.js';
 import { useDocumentWords } from '../books/statement-facts.js';
 import { returnEngine, type ReturnEngine } from './return.js';
@@ -81,6 +81,16 @@ export const ratesWithoutActivityId = (figures: Record<string, number>): string[
 
 /** The rates an invoice line may take: the jurisdiction's for a registered firm, 0 alone for one not registered. */
 export const invoiceRates = (): readonly number[] => (chargesVat() ? invoicing().rates : [0]);
+
+/**
+ * The activities an invoice line is assigned to (#504): the firm's two approved net tax rates, the
+ * first and the second; none on a firm with one rate or another method, where every line is the
+ * first. The screen offers the choice; paper never shows it (an invoice names the statutory rate).
+ */
+export const invoiceActivities = (): readonly NetRate[] => {
+  const rates = netRatesOf(vatSetup());
+  return rates.length === 2 ? rates : [];
+};
 
 /** The jurisdiction's year close: its accounts, entry forms and withholding tax. */
 export const yearEnd = (): Jurisdiction['yearEnd'] => loaded().source.yearEnd;

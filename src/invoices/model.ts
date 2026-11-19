@@ -72,6 +72,11 @@ export interface InvoiceLine {
   vatIncluded?: true;
   /** The revenue account; absent: invoicing.revenueAccount of the workspace. */
   account?: string;
+  /**
+   * On a firm approved for two net tax rates, the activity the line's revenue belongs to: 2 books
+   * it at the second rate (#504). Absent: the first. Shown on screen only, never printed.
+   */
+  activity?: 1 | 2;
 }
 
 export interface Comment extends Envelope {
@@ -86,7 +91,7 @@ export interface InvoiceContent {
   /** The invoice date. */
   date: string;
   /**
-   * When the supply was made, a day or a period (Art. 26 Abs. 2 lit. d MWSTG), printed when it
+   * When the supply was made, a day or a period (Art. 26 Abs. 2 lit. c MWSTG), printed when it
    * differs from the invoice date; absent: the invoice date.
    */
   supplied?: { from: string; to?: string };
@@ -234,6 +239,13 @@ export const DEFAULT_LAYOUT: InvoiceLayout = {
   logoSize: 'm',
   show: Object.fromEntries(LAYOUT_ELEMENTS.map((k) => [k, true])) as Record<LayoutElement, boolean>,
 };
+
+/**
+ * A change to where customers pay in one currency (Firma › Rechnungslayout › Zahlungskonten): the
+ * ledger account, and the QR-IBAN its bank gave for it (null takes it out; absent: kept while the
+ * account stays the same).
+ */
+export interface PayToPatch { account: string; qrIban?: string | null }
 
 /** The company's invoicing settings, read from belege.workspace.yaml (src/workspace/manifest.ts). */
 export interface InvoicingSettings {

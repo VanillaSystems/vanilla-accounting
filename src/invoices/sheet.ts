@@ -15,7 +15,7 @@ import { UNITS, type Address, type CustomerFields, type Exemption, type InvoiceC
 import { isQrBillIban, prettyReference } from '../providers/qr-bill/reference.js';
 import { lineAmount, totals } from './rules.js';
 import { TEXTS, formatAmount, formatDate, formatQuantity, type InvoiceTexts } from './texts.js';
-import { chargesVat, invoiceRates, invoicing } from '../engines/index.js';
+import { chargesVat, invoiceActivities, invoiceRates, invoicing } from '../engines/index.js';
 
 /** Everything a sheet shows, whatever document it is: a draft, an issued invoice, a credit note, a reminder, a cancellation notice. */
 export interface SheetData {
@@ -66,7 +66,8 @@ export interface ScreenSheet {
     scope: 'draft' | 'texts';
     customers: Array<{ id: string; name: string }>;
     customerId?: string;
-    words: { newCustomer: string; chooseCustomer: string; addLine: string; removeLine: string; intro: string; closing: string; desc: string; noExemption: string; supplied: string };
+    /** `activity`: «Tätigkeit», for a net rate the firm gave no label (the picker of a firm with two net rates). */
+    words: { newCustomer: string; chooseCustomer: string; addLine: string; removeLine: string; intro: string; closing: string; desc: string; noExemption: string; supplied: string; activity?: string };
   };
 }
 
@@ -160,6 +161,8 @@ export function sheetBlocks(d: SheetData): Block[] {
   if (show.intro && d.salutation) B.push({ html: `<p class="intro salutation">${esc(d.salutation)}</p>` });
   if (show.intro) B.push(...texts('intro', d.intro));
   B.push({ html: `<table class="tb">${colgroup}<thead><tr>${cols.map(([k, x]) => `<th class="${k === 'd' ? '' : 'r'}">${esc(x)}</th>`).join('')}</tr></thead></table>`, head: true });
+  // Which of its two net rates a line's revenue is booked at: the screen's choice, never on paper (#504).
+  const activities = draft ? invoiceActivities().map((r, i): [string, string] => [String(i + 1), `${r.label ?? `${ed.words.activity ?? ''} ${i + 1}`.trim()} ${r.rate} %`]) : [];
   d.lines.forEach((l, k) => {
     const unit = l.unit ? ` ${L.units[l.unit]}` : '';
     const incl = !!l.vatIncluded && l.vatRate > 0;
@@ -168,7 +171,8 @@ export function sheetBlocks(d: SheetData): Block[] {
         text: editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked'),
         qty: `${editable(`l:${k}:quantity`, esc(formatQuantity(l.quantity)))} ${pick(`l:${k}:unit`, [['', '–'], ...UNITS.map((u): [string, string] => [u, L.units[u]])], l.unit ?? '')}`,
         price: editable(`l:${k}:price`, n(l.price)),
-        rate: pick(`l:${k}:vatRate`, invoiceRates().flatMap((r): Array<[string, string]> => [[String(r), `${r} %`], ...(r > 0 ? [[`incl:${r}`, `${r} % ${L.included}`] as [string, string]] : [])]), `${l.vatIncluded && l.vatRate > 0 ? 'incl:' : ''}${l.vatRate}`),
+        rate: pick(`l:${k}:vatRate`, invoiceRates().flatMap((r): Array<[string, string]> => [[String(r), `${r} %`], ...(r > 0 ? [[`incl:${r}`, `${r} % ${L.included}`] as [string, string]] : [])]), `${l.vatIncluded && l.vatRate > 0 ? 'incl:' : ''}${l.vatRate}`)
+          + (activities.length && l.vatRate > 0 ? `<span class="edact scr">${pick(`l:${k}:activity`, activities, String(l.activity ?? 1))}</span>` : ''),
         remove: d.lines.length > 1 ? `<button type="button" class="edx scr" data-ia="rmline" data-k="${k}" title="${esc(ed.words.removeLine)}" aria-label="${esc(ed.words.removeLine)}">×</button>` : '',
       }
       : { text: `${esc(l.text)}${incl && !vatColumn ? ` (${l.vatRate} % ${L.included})` : ''}`, qty: esc(`${formatQuantity(l.quantity)}${unit}`), price: n(l.price), rate: `${l.vatRate} %${incl ? ` ${L.included}` : ''}`, remove: '' };
@@ -264,20 +268,29 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
   return h;
 }
 
+/**
+ * What the QR-bill's payment part carries. Creditor and debtor go as structured addresses (street
+ * and building number apart, postcode and town apart): swissqrbill writes them with address type S,
+ * the only type the SIX guidelines allow since v2.3 (chapter 4.2.2); a second address line has no
+ * field there and stays off the QR code.
+ */
+export function qrBillData(d: SheetData, iban: string) {
+  const s = d.sender, c = d.customer;
+  const party = (name: string, a: Address) => ({ name, address: a.street ?? '', ...(a.number ? { buildingNumber: a.number } : {}), zip: a.postcode, city: a.town, country: a.country });
+  return {
+    currency: d.currency,
+    amount: d.due ? d.due.open : totals(d.lines).gross,
+    reference: d.reference,
+    message: `${TEXTS[d.language].invoice} ${d.number}`,
+    creditor: { ...party(s.name, s.address), account: iban.replace(/\s+/g, '') },
+    ...(c.address.postcode && c.address.town ? { debtor: party(c.name, c.address) } : {}),
+  };
+}
+
 /** The QR-bill: swissqrbill's SVG payment part and receipt; the horizontal cut line with its scissors is the sheet's. */
 function qrBillHtml(d: SheetData, iban: string): string {
   const L = TEXTS[d.language];
-  const s = d.sender, c = d.customer;
-  const amount = d.due ? d.due.open : totals(d.lines).gross;
-  const party = (name: string, a: Address) => ({ name, address: a.street ?? '', ...(a.number ? { buildingNumber: a.number } : {}), zip: a.postcode, city: a.town, country: a.country });
-  const svg = new SwissQRBill({
-    currency: d.currency,
-    amount,
-    reference: d.reference,
-    message: `${L.invoice} ${d.number}`,
-    creditor: { ...party(s.name, s.address), account: iban.replace(/\s+/g, '') },
-    ...(c.address.postcode && c.address.town ? { debtor: party(c.name, c.address) } : {}),
-  }, { language: d.language.toUpperCase() as 'DE' | 'FR' | 'IT' | 'EN', fontName: 'Liberation Sans', scissors: true }).toString();
+  const svg = new SwissQRBill(qrBillData(d, iban), { language: d.language.toUpperCase() as 'DE' | 'FR' | 'IT' | 'EN', fontName: 'Liberation Sans', scissors: true }).toString();
   return `<div class="qrb"><div class="cut">${L.cut}</div><span class="hsc">✂</span>${svg}</div>`;
 }
 

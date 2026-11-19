@@ -9,7 +9,7 @@ import type {
   Comment, Customer, CustomerFields, Draft, Envelope, Exemption, Invoice, InvoiceBook, InvoiceContent, InvoiceLayout,
   InvoiceLine, Issued, PaymentAllocation, Reminder, Sender, VatRate,
 } from './model.js';
-import { chargesVat, invoiceRates, invoicing, vat, vatSetup } from '../engines/index.js';
+import { chargesVat, invoiceActivities, invoiceRates, invoicing, vat, vatSetup } from '../engines/index.js';
 import { parseReference, referenceFor } from '../providers/qr-bill/reference.js';
 import type { BankTransaction } from '../types/index.js';
 
@@ -180,7 +180,7 @@ export interface Missing { field: MissingField; line?: number }
 export type MissingField =
   | 'sender.name' | 'sender.address' | 'sender.uid' | 'payTo'
   | 'customer' | 'customer.name' | 'customer.address'
-  | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.vatRate' | 'exemption'
+  | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.vatRate' | 'line.activity' | 'exemption'
   | 'credit.invoice' | 'credit.sign' | 'credit.exceeds';
 
 const hasAddress = (a: { postcode?: string; town?: string; country?: string } | undefined) => !!(a?.postcode?.trim() && a.town?.trim() && a.country?.trim());
@@ -212,6 +212,8 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
     if (!l.text.trim()) out.push({ field: 'line.text', line });
     if (!Number.isFinite(l.quantity) || l.quantity === 0 || !Number.isFinite(l.price)) out.push({ field: 'line.quantity', line });
     if (!invoiceRates().includes(l.vatRate)) out.push({ field: 'line.vatRate', line });
+    // The second activity only on a firm approved for two net rates (a draft kept from before a change of the setup).
+    if (l.activity === 2 && !invoiceActivities().length) out.push({ field: 'line.activity', line });
   });
   // A firm not registered charges no VAT: a line at 0 % needs no reason.
   if (chargesVat() && draft.lines.some((l) => l.vatRate === 0) && !draft.exemption) out.push({ field: 'exemption' });
@@ -309,13 +311,14 @@ export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Enve
     const text = reason || `${TEXTS[inv.language].credit} ${inv.number}`;
     const rates = req.vatRate === undefined ? t.byRate : t.byRate.filter((r) => r.rate === req.vatRate);
     if (rates.length === 0) throw new InvoiceRuleError('incomplete', `Rechnung ${inv.number} hat keine Position mit ${req.vatRate} %.`);
-    const base = rates.reduce((s, r) => s + toRappen(r.gross), 0);
+    // A rate whose lines belong to both activities of a firm with two net rates is credited in both, by their share (#504).
+    const parts = rates.flatMap((r) => [...groupBy(inv.lines.filter((l) => l.vatRate === r.rate), (l) => l.activity ?? 1)].map(([activity, ls]) => ({ rate: r.rate, activity, account: ls[0].account, gross: totals(ls).gross })));
+    const base = parts.reduce((s, r) => s + toRappen(r.gross), 0);
     let left = gross;
-    lines = rates.map((r, k) => {
-      const share = k === rates.length - 1 ? left : Math.round(gross * toRappen(r.gross) / base);
+    lines = parts.map((r, k) => {
+      const share = k === parts.length - 1 ? left : Math.round(gross * toRappen(r.gross) / base);
       left -= share;
-      const account = inv.lines.find((l) => l.vatRate === r.rate)?.account;
-      return { text: rates.length > 1 ? `${text} (${r.rate} %)` : text, quantity: 1, price: -fromRappen(share), vatRate: r.rate, ...(r.rate > 0 ? { vatIncluded: true as const } : {}), ...(account ? { account } : {}) };
+      return { text: rates.length > 1 ? `${text} (${r.rate} %)` : text, quantity: 1, price: -fromRappen(share), vatRate: r.rate, ...(r.rate > 0 ? { vatIncluded: true as const } : {}), ...(r.account ? { account: r.account } : {}), ...(r.activity === 2 ? { activity: 2 as const } : {}) };
     }).filter((l) => l.price !== 0);
   }
   return {
@@ -375,13 +378,14 @@ export function allocate(inv: Issued, invoices: readonly Invoice[], amount: numb
 }
 
 /**
- * The VAT code a rate books revenue with (cash basis: when the money arrives): the rate's sale
- * code, the firm's first net rate on the net tax rate method, none for a firm not registered.
+ * The VAT code a rate books revenue with (on either basis): the rate's sale code; on the net tax
+ * rate method the code of the line's activity, its first or second approved rate (#504); none for
+ * a firm not registered.
  */
-export function revenueVatCode(rate: VatRate, exemption: Exemption | undefined): string | undefined {
+export function revenueVatCode(rate: VatRate, exemption: Exemption | undefined, activity: 1 | 2 = 1): string | undefined {
   if (!vatSetup().registered) return undefined;
-  const code = rate === 0 ? vat().codes.deductedIn(invoicing().exemptions[exemption ?? 'export']) : vat().codes.saleAt(rate) ?? vat().codes.netRateCode(1);
-  if (!code) throw new Error(`the jurisdiction has no code for a sale at ${rate} %${exemption ? ` (${exemption})` : ''}`);
+  const code = rate === 0 ? vat().codes.deductedIn(invoicing().exemptions[exemption ?? 'export']) : vat().codes.saleAt(rate) ?? vat().codes.netRateCode(activity);
+  if (!code) throw new Error(`the jurisdiction has no code for a sale at ${rate} %${exemption ? ` (${exemption})` : ''}${activity === 2 ? ' of the second activity' : ''}`);
   return code;
 }
 
@@ -390,14 +394,14 @@ export function revenueVatCode(rate: VatRate, exemption: Exemption | undefined):
  * rates, so a part payment books the same mix as the whole. The parts add up to `amount` exactly.
  */
 export function revenueSplit(inv: Pick<InvoiceContent, 'lines' | 'exemption'>, amount: number, revenueAccount: string): Array<{ account: string; vatCode: string | undefined; amount: number }> {
-  const groups = new Map<string, { account: string; rate: VatRate; gross: number }>();
+  const groups = new Map<string, { account: string; rate: VatRate; activity: 1 | 2; gross: number }>();
   for (const [rate, lines] of groupBy(inv.lines, (l) => l.vatRate)) {
     const rt = totals(lines);
-    for (const [account, ls] of groupBy(lines, (l) => l.account ?? revenueAccount)) {
-      // the rate's VAT goes to its accounts by their share of its net
+    for (const [key, ls] of groupBy(lines, (l) => `${l.account ?? revenueAccount} ${l.activity ?? 1}`)) {
+      // the rate's VAT goes to its accounts and activities by their share of its net
       const net = toRappen(totals(ls).net);
       const share = toRappen(rt.net) === 0 ? 0 : Math.round(toRappen(rt.vat) * net / toRappen(rt.net));
-      groups.set(`${account} ${rate}`, { account, rate, gross: net + share });
+      groups.set(`${key} ${rate}`, { account: ls[0].account ?? revenueAccount, rate, activity: ls[0].activity ?? 1, gross: net + share });
     }
   }
   const all = [...groups.values()];
@@ -407,7 +411,7 @@ export function revenueSplit(inv: Pick<InvoiceContent, 'lines' | 'exemption'>, a
   return all.map((g, k) => {
     const part = k === all.length - 1 ? left : whole === 0 ? 0 : Math.round(pay * g.gross / whole);
     left -= part;
-    return { account: g.account, vatCode: revenueVatCode(g.rate, inv.exemption), amount: fromRappen(part) };
+    return { account: g.account, vatCode: revenueVatCode(g.rate, inv.exemption, g.activity), amount: fromRappen(part) };
   }).filter((p) => p.amount !== 0);
 }
 

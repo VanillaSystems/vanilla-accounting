@@ -9,7 +9,7 @@ import type { StatementKind } from './banks.js';
 import { readFileSync } from 'node:fs';
 import { isMap, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
 import { writeAtomic } from '../invoices/store.js';
-import type { Address, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail } from '../invoices/model.js';
+import type { Address, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail, PayToPatch } from '../invoices/model.js';
 import { parseIban, roleBefore, type MoneyRole } from './banks.js';
 import { parseManifest, type Manifest } from './manifest.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
@@ -58,7 +58,7 @@ export interface InvoicingPatch {
   /** The payment term a new customer starts with; each customer keeps their own. */
   paymentTermsDays?: number;
   /** The bank account customers pay to, per currency (its IBAN may come in the same change, as `banks`); null drops the currency. */
-  payTo?: Partial<Record<InvoiceCurrency, { account: string } | null>>;
+  payTo?: Partial<Record<InvoiceCurrency, PayToPatch | null>>;
   layout?: Partial<Omit<InvoiceLayout, 'logo' | 'show'>> & { logo?: string | null; show?: Partial<Record<LayoutElement, boolean>> };
   texts?: Partial<Record<InvoiceLanguage, Partial<Record<(typeof OWN_TEXTS)[number], string | null>>>>;
 }
@@ -169,7 +169,12 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     for (const [currency, to] of Object.entries(inv.payTo ?? {})) {
       if (to === null) doc.deleteIn(['invoicing', 'payTo', currency]);
       else if (to) {
-        const node = doc.createNode({ account: to.account }) as YAMLMap;
+        // What else the currency's entry holds stays while its account does; a field set to null leaves.
+        const before = doc.getIn(['invoicing', 'payTo', currency]);
+        const kept = isMap(before) && String(before.get('account')) === to.account ? (before.toJSON() as Record<string, unknown>) : {};
+        const { account, ...fields } = to;
+        const value = Object.fromEntries(Object.entries({ ...kept, ...fields }).filter(([k, v]) => k !== 'account' && v !== null && v !== undefined));
+        const node = doc.createNode({ account, ...value }) as YAMLMap;
         // Like its neighbours: one-line `{ account: "1021" }` when the other currencies are.
         const sibling = (doc.getIn(['invoicing', 'payTo']) as YAMLMap | undefined)?.items.map((i) => i.value).find(isMap);
         node.flow = !sibling || !!sibling.flow;

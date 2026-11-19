@@ -92,6 +92,20 @@ Two markers flag an entry you must read before you update:
 - The top bar (company, search, period, zoom, export, theme, language) stays open: it no longer
   folds away by itself after three uses, which left most people not knowing it is there. Its pin
   still lets it fold, and that choice is kept. Everyone starts with it open once after this update.
+- Rechnungen in EUR follow the new QR-bill guidelines (v2.4, in force since 13 November 2026): a
+  QR-IBAN with a QR reference is for CHF only. Firma › Rechnungslayout › Zahlungskonten now takes the
+  QR-IBAN of each account; one entered for EUR warns with the rule and what follows (banks refuse it
+  after November 2027) and is kept only with «Trotzdem speichern». A QR-IBAN for EUR saved before
+  shows the same warning beside the field. Without one, a EUR invoice prints the IBAN with a
+  creditor reference (SCOR). An invoice already issued keeps the reference it printed.
+
+### Added
+
+- A firm approved for two net tax rates chooses, on each position of a draft, the activity it
+  belongs to («Schreinerei 4.5 %» or «Handel 6.2 %»), on screen only: the invoice still shows the
+  statutory rate. The second activity is booked at the second rate (F2) on the cash basis and on
+  the agreed basis, and the half year's return shows it in the second rate's row. Before, every
+  position was booked at the first rate.
 
 ## [0.6.2] - 2026-11-16
 
