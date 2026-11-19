@@ -67,7 +67,9 @@ export async function sendMail(ws: Workspace, message: MailMessage, pdf: { filen
       text: m.body,
       attachments: [{ filename: pdf.filename, content: pdf.content, contentType: 'application/pdf' }],
     });
-    if (!info.accepted.length) throw new Error(`abgelehnt: ${info.rejected.join(', ')}`);
+    // The recipient herself must be accepted: a copy alone accepted is no delivery.
+    const took = (info.accepted as Array<string | { address: string }>).map((a) => (typeof a === 'string' ? a : a.address).toLowerCase());
+    if (!took.includes(m.to.toLowerCase())) throw new Error(`abgelehnt: ${info.rejected.join(', ') || m.to}`);
     return { to: m.to, messageId: info.messageId };
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);
