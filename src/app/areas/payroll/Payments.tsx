@@ -68,7 +68,7 @@ export function PaymentList(props: Props) {
                   {rows.map((r) => {
                     const sel = r.employee === selected;
                     return (
-                      <div key={r.id} className={`row slip${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={r.id} onClick={() => pick(r.employee)}>
+                      <div key={r.id} className={`row slip ppay${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={r.id} onClick={() => pick(r.employee)}>
                         <span className={`d pstate ${r.paid ? 'closed' : 'draft'}`}>{t(r.paid ? 'payroll.payments.paid' : 'payroll.payments.unpaid')}</span>
                         <span className="t">{r.name}<small className="mono">{iban(r.iban) || t('payroll.payments.noIban')}</small></span>
                         <span className="a mono">{fmt(r.payout)}</span>
@@ -88,7 +88,7 @@ export function PaymentList(props: Props) {
                     return (
                       <div key={i.id} className={`row ins${sel ? ' sel' : ''}`} role="option" aria-selected={sel} tabIndex={sel ? 0 : -1} data-id={id} onClick={() => pick(id)}>
                         <span className="t">{i.name}<small>{kindLabel(i.kind)} · {i.account}</small></span>
-                        <span className={`a mono${i.open < 0 ? ' neg' : ''}`} title={t('payroll.insurers.open')}>{fmt(i.open)}</span>
+                        <span className={`a mono${i.open < 0 ? ' neg' : ''}`} data-tip={t('payroll.insurers.open')}>{fmt(i.open)}</span>
                       </div>
                     );
                   })}
@@ -130,7 +130,7 @@ function Entries({ entries, nav }: { entries: JournalEntry[]; nav: Nav }) {
       <div className="fh"><span>{t('payroll.booking.debit')}</span><span>{t('payroll.booking.credit')}</span><span>{t('payroll.booking.text')}</span><span className="r">{t('payroll.booking.amount')}</span></div>
       {entries.map((e) => (
         <div key={e.id} className="fr">
-          <span className="mono" title={names[e.accountDebit]}>{e.accountDebit || '—'}</span><span className="mono" title={names[e.accountCredit]}>{e.accountCredit || '—'}</span>
+          <span className="mono" data-tip={names[e.accountDebit]}>{e.accountDebit || '—'}</span><span className="mono" data-tip={names[e.accountCredit]}>{e.accountCredit || '—'}</span>
           <span className="pt"><Go nav={nav} loc={inPeriodOf({ area: 'journal', id: e.id }, e.date)}>{e.description}</Go></span><span className="r mono">{fmt(e.amount)}</span>
         </div>
       ))}

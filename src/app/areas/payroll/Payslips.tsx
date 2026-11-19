@@ -429,7 +429,7 @@ function Booking({ v }: { v: Payslip }) {
         <div className="fh"><span>{t('payroll.booking.debit')}</span><span>{t('payroll.booking.credit')}</span><span>{t('payroll.booking.text')}</span><span className="r">{t('payroll.booking.amount')}</span></div>
         {b.postings.map((p, i) => (
           <div key={i} className="fr">
-            <span className="mono" title={names[p.debit]}>{p.debit}</span><span className="mono" title={names[p.credit]}>{p.credit}</span>
+            <span className="mono" data-tip={names[p.debit]}>{p.debit}</span><span className="mono" data-tip={names[p.credit]}>{p.credit}</span>
             <span className="pt">{p.text}</span><span className="r mono">{fmt(p.amount)}</span>
           </div>
         ))}
