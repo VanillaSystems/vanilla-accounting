@@ -205,8 +205,8 @@ function ArticleForm({ article, nav, canEdit, onSaved }: { article?: Article; na
         </label>
       )}
       {input('group', t('articles.group'), t('articles.groupPh'), 's2')}
-      <p className="m w2 anote">{t('articles.vatNote')}</p>
-      {canEdit && <p className="w2 aacts"><AsyncButton type="submit" className="btn primary" data-act="save-article">{article ? t('common.save') : t('articles.create')}</AsyncButton></p>}
+      <p className="m anote">{t('articles.vatNote')}</p>
+      {canEdit && <p className="aacts"><AsyncButton type="submit" className="btn primary" data-act="save-article">{article ? t('common.save') : t('articles.create')}</AsyncButton></p>}
     </AsyncForm>
   );
 }
@@ -244,7 +244,7 @@ export function ArticlePanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
         </div>
       )}
       <div className="csecs">
-        <section className="csec">
+        <section className="csec aedit">
           <ArticleForm key={a.id} article={a} nav={nav} canEdit={canEdit && !a.archived} onSaved={(x) => nav.toast(t('articles.saved', { name: x.name }))} />
         </section>
         <section className="csec">

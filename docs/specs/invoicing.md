@@ -1449,6 +1449,57 @@ listed here and updated with phase 2's build:
     panel over its right part. The table's tabs (Alle, Firmen, Personen, Archiviert) are a view's state,
     not in the link.
 
+88. **Artikel (slice G2, invoices.json schema 4).** `articles` join the step 3 → 4 as «Also in 4»: a file
+    of schema 3 has none, so no transform; a book read without them has an empty list. An Artikel is
+    an envelope with `code?` (unique among live Artikel, at most 30 characters, like the market
+    leader's «Produktcode bereits in Gebrauch»), `type` goods or service, `name`, `text?` (the printed
+    text, absent: the name), `unit?`, `price`, `prices?`, `vatKind`, `account?`, `activity?`, `group?`
+    (a free text of the list, never printed) and `archived?`.
+89. **The VAT kind's percent** comes from modules/ch/invoicing.yaml `rateKinds`, a dated list per kind
+    read for the document's supply day (its `supplied.to`, else `from`, else its date); `none` is 0 %
+    and so is every kind on a firm not registered. The list holds only rates an invoice may charge:
+    the app books no superseded rate on a new invoice, so a supply before 2024 takes today's rate and
+    the person changes it on the position. Phase 3 dates the Artikel's price; the kind stays undated.
+90. **Net or gross per Artikel.** `prices` on the Artikel (absent: net), the same word as a document's.
+    A position on a document of the other pricing converts the price at the position's rate to the
+    cent (net × (100 + rate) / 100, or back), once, when the position is made; the position keeps it,
+    so the person may correct a cent. At 0 % nothing converts. The price is taken in the document's
+    currency as it is: an EUR document gets the CHF figure, and the person changes it.
+91. **Artikel position** (`kind: 'article'`, `articleId`, `code`): code, text, unit, price, rate,
+    account and activity are copied when the position is added, and the contact's standing discount
+    as on any position; each stays editable on the position, the code too. A later change to the
+    Artikel changes no position. The account chain is the Artikel's, else the contact's
+    `revenueAccount`, else none on the position (the settings' account books it); the code follows
+    from the rate, the document's exemption and the VAT setup (`revenueVatCode`) and is shown on
+    screen beside the editable account, never asked.
+92. **Gruppen are flat.** A group is a position `{ kind: 'group', text }`; its sub-positions are the
+    priced positions right below it marked `inGroup: true` (as the market leader's sub-positions name a
+    parent). Totals, Rabatte, the revenue split, the bookings and «Konten ändern» stay as they were,
+    because a sub-position is an ordinary position by index; the group prints the sum of its
+    sub-positions (options left out). A mark with no group above it is dropped on every save
+    (`withGroups`). A position added after a group's title or sub-position joins the group; a moved
+    one joins the group it lands in and leaves the one it left; a group moves with its sub-positions.
+    A conversion copies a group with the sub-positions ticked of it and leaves a group with none
+    ticked behind; open quantities are per sub-position, as for any position.
+93. **Archive or delete an Artikel** as a contact (decision 80): archived while any document, a draft
+    too, has a position from it, else deleted. An archived Artikel is in no picker and found by no AI
+    draft; positions made from it keep it named.
+94. **The Artikel import** shares the contact import's reader (src/invoices/table-import.ts: mapping
+    proposed from header words, UTF-8 else Windows-1252, 2000 rows with the rest named, 8 MB per
+    request with `importTooLarge`). A row without a name or with a price that cannot be read is not
+    imported. A unit not in the firm's list, an account not of four digits, a code over 30
+    characters and a VAT cell not recognised (a word, a rate or a code ending in the rate's digits,
+    UN81) are named; the field is left out, and VAT is read as the normal rate. Prices are read as
+    net. Duplicates are by code only (an Artikel or an earlier row), proposed as the same Artikel;
+    taken as new, the row comes without its code.
+95. **«＋ Artikel»** is a search by code, name and group: code matches first, at most 50 shown, with
+    the rest named. The layout element `articleCode` (Firma › Rechnungslayout, on by default) prints
+    the code before the position's text. It rides on the manifest step 5 → 6, unreleased, as a further
+    phase-2 setting; an issued document froze its layout and prints as it was. The AI's
+    `invoiceDraft` takes `{ "article": "<code or name>", … }`, the Artikel position with the line's own
+    fields over it; an Artikel no code or name finds, or one whose name two share, is refused
+    (`unknownArticle`).
+
 ---
 
 ## 8. Changes from the concept of 2026-11-15 (owner, 2026-11-19)

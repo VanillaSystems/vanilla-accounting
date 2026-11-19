@@ -372,8 +372,10 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .a4 .edacc .ed { min-width: 8mm; display: inline-block; }
 .a4 .lcode .ed { min-width: 6mm; display: inline-block; }
 .atab td small { display: block; color: var(--muted); font-size: 11px; }
-.aform .anote { font-size: 12px; }
-.aform .aacts { display: flex; justify-content: flex-end; }
+.cpanel .csec.aedit { grid-column: 1 / -1; max-width: 640px; }
+.aform .anote { grid-column: span 4; margin: 0; font-size: 12px; }
+.aform .aacts { grid-column: span 4; margin: 0; display: flex; justify-content: flex-end; }
+.idlg .aform { padding-bottom: 4px; }
 .apick { width: min(620px, calc(100vw - 32px)); }
 .apick .apq { width: 100%; margin-bottom: 10px; }
 .apick .apl { max-height: min(55vh, 420px); overflow-y: auto; }
