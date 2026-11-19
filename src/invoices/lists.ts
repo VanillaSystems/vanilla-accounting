@@ -60,7 +60,7 @@ export function sentFacts(sent: readonly SentDocument[], inv: Invoice): SentFact
 /**
  * A Rechnung's status (4.4.2): Überfällig is derived beside it, see `isOverdue`. One closed with a
  * loss written off (Verlust) reads «Ausgebucht», whatever was paid before: the customer did not pay
- * it all. A Skonto, Rabatt, Spesen or Rundung rest keeps «Bezahlt» (decision 49). Ausgebucht counts
+ * it all. A Skonto, Rabatt, Spesen or Rundung rest keeps «Bezahlt» (decision 56). Ausgebucht counts
  * in the tab «Bezahlt», the closed ones, as the market leader keeps no tab of its own for it.
  */
 export type InvoiceListStatus = 'draft' | 'open' | 'partly-paid' | 'paid' | 'written-off' | 'cancelled';

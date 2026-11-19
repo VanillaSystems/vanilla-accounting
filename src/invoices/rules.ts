@@ -157,7 +157,7 @@ const writtenOff = (inv: Issued, asOf?: string): number => (inv.writeOffs ?? [])
 
 /**
  * The four figures of an issued invoice (spec 4.8): its amount, what was received, what was
- * credited (its credit notes), written off (Ausbuchungen: Skonto, Rabatt, Verlust, Spesen, Rundung; decision 49) and what is open, each with its sources. `open` is
+ * credited (its credit notes), written off (Ausbuchungen: Skonto, Rabatt, Verlust, Spesen, Rundung; decision 56) and what is open, each with its sources. `open` is
  * `amount − received − credited − writtenOff` exactly and may be below zero: money beyond the invoice (a
  * Kundenguthaben, phase 4); openAmount is never below zero. Payments count without their reminder
  * fees. A cancelled invoice is no claim: every figure but its amount is what its records say, and

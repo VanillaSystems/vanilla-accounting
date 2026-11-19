@@ -1249,37 +1249,37 @@ listed here and updated with phase 2's build:
     that keeps its number, dated into another year, warns («Nummer 2026-005 im Jahr 2027») and is
     issued on «Trotzdem ausstellen».
 
-44. **The demos' sales (slice E).** The generator plays every document step through the invoicing
+51. **The demos' sales (slice E).** The generator plays every document step through the invoicing
     service and every step a person takes after the import (Zahlungseingang by hand, the statement
     row that confirms it, Ausziffern, Rest ausbuchen) through the same functions the API calls
     (`recordHandPayment`, `matchStatementRows`, `allocatePayment`, `writeOffRest`), so a demo can
     hold no state the app could not reach. Payments still lie in Q1 to Q3 only: the demos' bank
     statements end on 30.09., so a payment in Q4 is a cash one entered by hand.
-45. **The consultant's invoices replace his old ones from July.** `demo-consulting/` invoices in the
+52. **The consultant's invoices replace his old ones from July.** `demo-consulting/` invoices in the
     app from July (the monthly mandate by the hour, the Munich audit in EUR with the place-of-supply
     note); the Q3 sales the generator booked before as sales records of the old tool are these
     invoices now, with the same amounts, so no figure of the consultant moves. Its numbers start at
     2026-001 beside the old tool's 2026-011 … 2026-084, as at a switch in the middle of a year.
-46. **A second net rate for the joinery from January.** `demo-schreinerei/` holds a second approved
+53. **A second net rate for the joinery from January.** `demo-schreinerei/` holds a second approved
     rate (2.1 %, trade in appliances) for the whole year, as the method holds for whole years
     (Firma › MWST refuses a change while the year has entries). H1 had no trade turnover: its filed
     return and seal stay byte for byte; its figures gain the row 333 at 0. The appliances of the
     August kitchen book F2.
-47. **Golden master re-frozen.** The four demos' frozen books (`tests/golden/<demo>/books.json`) are
+54. **Golden master re-frozen.** The four demos' frozen books (`tests/golden/<demo>/books.json`) are
     frozen again from today's demos, the entries of the old freeze in their old order, so that every
     file of a filed period stays byte for byte except the 333 row above.
-48. **The Skonto line says «Sie überweisen», not «zu zahlen».** «zu zahlen» is a total word of the
+55. **The Skonto line says «Sie überweisen», not «zu zahlen».** «zu zahlen» is a total word of the
     receipt reader (modules/ch/documents.yaml), so a paid invoice filed as its payment's receipt read
     as the Skonto amount, not its total. The reader also takes ʼ (U+02BC, how the PDF reader gives the
     printed ’) as a thousands mark: before, an amount with it lost its thousands.
-49. **«Ausgebucht», and the write-offs as a figure of their own** (lead, after the phase-1 walk). A
+56. **«Ausgebucht», and the write-offs as a figure of their own** (lead, after the phase-1 walk). A
     Rechnung closed with a loss written off (`reason: loss`, any amount) reads «Ausgebucht», paid in
     part or not: the customer did not pay it. A rest closed as Skonto, Rabatt, Spesen or Rundung keeps
     «Bezahlt». The market leader clears a bad debt with a credit note and keeps no tab for it, so
     «Ausgebucht» counts in the tab «Bezahlt», the closed ones. The figures show the write-offs as
     «ausgebucht» beside «gutgeschrieben», only when there is one: Betrag − erhalten − gutgeschrieben −
     ausgebucht = offen; «gutgeschrieben» holds the Gutschriften alone (4.8 named both under it).
-50. **Where a new position goes; a cancelled invoice pairs with nothing** (lead, after the walk).
+57. **Where a new position goes; a cancelled invoice pairs with nothing** (lead, after the walk).
     «＋ Position», «＋ Text», «＋ Zwischentotal», «＋ Rabatt» and «＋ Seitenumbruch» put the new
     position after the one the person is in, else at the end; a draft whose only position is its
     first item, untouched, starts with the new one instead, so a painter starts with a room's title.

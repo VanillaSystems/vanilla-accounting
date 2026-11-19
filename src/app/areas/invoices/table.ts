@@ -81,7 +81,7 @@ export function inTab(r: DocRow, tab: Tab | undefined): boolean {
   if (!tab || tab === 'all') return true;
   if (tab === 'unsent') return r.unsent;
   if (tab === 'overdue') return r.overdue > 0;
-  // Ausgebucht is closed: it stands with Bezahlt (decision 49).
+  // Ausgebucht is closed: it stands with Bezahlt (decision 56).
   if (tab === 'paid') return r.status === 'paid' || r.status === 'written-off';
   return r.status === tab;
 }

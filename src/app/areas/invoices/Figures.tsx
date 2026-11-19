@@ -40,7 +40,7 @@ export function FourFigures({ inv, invoices }: { inv: Issued; invoices: readonly
       {cell('amount', f.amount, [t('invoices.fig.amountTip', { date: formatDate(inv.date) })])}
       {cell('received', f.received, received)}
       {cell('credited', f.credited, credited)}
-      {/* Ausbuchungen are a figure of their own, shown only when there is one (decision 49). */}
+      {/* Ausbuchungen are a figure of their own, shown only when there is one (decision 56). */}
       {f.writeOffs.length ? cell('writtenOff', f.writtenOff, writtenOff) : null}
       {cell('open', f.open, f.open < 0 ? [t('invoices.fig.credit')] : [t(f.writeOffs.length ? 'invoices.fig.openTipOff' : 'invoices.fig.openTip')], f.open > 0 ? ' open' : f.open < 0 ? ' minus' : ' done')}
     </div>

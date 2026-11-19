@@ -79,7 +79,7 @@ test('CSV as the app exports it: BOM, semicolons, CRLF, two decimals, a field wi
   assert.equal(csvOf(['Nr.', 'Kontakt', 'Offen'], [['2026-001', 'Muster; Söhne "AG"', 1234.5]]), '﻿Nr.;Kontakt;Offen\r\n2026-001;"Muster; Söhne ""AG""";1234.50\r\n');
 });
 
-test('a Rechnung closed by a loss reads «Ausgebucht» and stands in «Bezahlt»; one closed by a small Spesen rest stays «Bezahlt» (decision 49)', () => {
+test('a Rechnung closed by a loss reads «Ausgebucht» and stands in «Bezahlt»; one closed by a small Spesen rest stays «Bezahlt» (decision 56)', () => {
   const pay = { transactionRef: 'T', date: '2026-09-21', amount: 400, by: 'reference' as const };
   const loss = issued('a', '2026-001', { lines: [{ text: 'x', quantity: 1, price: 500, vatRate: 0 }], payments: [pay], writeOffs: [{ id: 'wo-1', date: '2026-11-19', amount: 100, reason: 'loss', by: 'person' }] });
   const fee = issued('b', '2026-002', { lines: [{ text: 'x', quantity: 1, price: 403.5, vatRate: 0 }], payments: [pay], writeOffs: [{ id: 'wo-1', date: '2026-09-22', amount: 3.5, reason: 'fee', by: 'person' }] });
