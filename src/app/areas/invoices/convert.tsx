@@ -6,7 +6,7 @@
 import { useState } from 'react';
 import { localToday } from '../../../accounting/periods.js';
 import { unitWord, type DocumentKind, type Invoice, type Issued } from '../../../invoices/model.js';
-import { convertWarnings, offered, tickedTotal } from '../../../invoices/chain.js';
+import { convertWarnings, offered, tickedTotal, groupsLeftBehind } from '../../../invoices/chain.js';
 import { formatQuantity } from '../../../invoices/texts.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { language, t } from '../../i18n/index.js';
@@ -28,6 +28,7 @@ export function ConvertDialog({ inv, to, invoices, nav }: Props & { inv: Issued;
   const [qty, setQty] = useState<Record<number, string>>(() => Object.fromEntries(rows.map((r) => [r.line, formatQuantity(r.open > 0 ? r.open : r.item.quantity)])));
   const picks = rows.filter((r) => ticked[r.line]).map((r) => ({ line: r.line, quantity: parseNumber(qty[r.line] ?? '') ?? 0 }));
   const warnings = convertWarnings(inv, to, picks, invoices, localToday());
+  const behind = groupsLeftBehind(inv, picks);
   const unit = (id: string | undefined) => (id ? unitWord(ws?.invoicing?.units, id, language() as 'de') : '');
   const priced = to !== 'delivery-note';
   const total = tickedTotal(inv, picks);
@@ -73,6 +74,7 @@ export function ConvertDialog({ inv, to, invoices, nav }: Props & { inv: Issued;
         {warnings.filter((w) => w.code === 'overOpen').map((w) => w.code === 'overOpen' && (
           <p key={w.line} className="warnline" role="note" data-testid="convert-overOpen">{I.dot}{t('sales.convertWarn.overOpen', { quantity: formatQuantity(w.quantity), open: formatQuantity(w.open), unit: unit(w.unit), text: w.text })}</p>
         ))}
+        {behind.map((g) => <p key={g.line} className="warnline" role="note" data-testid="convert-group-left">{I.dot}{t('sales.convertGroupLeft', { title: g.text || t('invoices.groupPlaceholder') })}</p>)}
         {picks.length === 0
           ? <p className="warnline" data-testid="convert-nothing">{I.dot}{t('sales.convertNothing')}</p>
           : priced && <div className="isum"><div className="tot"><span>{t('sales.convertTotal', { n: picks.length })}</span><span className="mono" data-testid="convert-total">{inv.currency} {fmt(total)}</span></div></div>}

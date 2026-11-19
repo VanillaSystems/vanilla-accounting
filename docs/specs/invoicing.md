@@ -1477,27 +1477,39 @@ listed here and updated with phase 2's build:
     parent). Totals, Rabatte, the revenue split, the bookings and «Konten ändern» stay as they were,
     because a sub-position is an ordinary position by index; the group prints the sum of its
     sub-positions (options left out). A mark with no group above it is dropped on every save
-    (`withGroups`). A position added after a group's title or sub-position joins the group; a moved
-    one joins the group it lands in and leaves the one it left; a group moves with its sub-positions.
-    A conversion copies a group with the sub-positions ticked of it and leaves a group with none
-    ticked behind; open quantities are per sub-position, as for any position.
+    (`withGroups`), but no move or insert leaves one: a position changes its group only when the person
+    moves a priced position into or out of one (`moveLine`, `insertLine` in src/app/areas/invoices/edit.ts).
+    A group moves whole, its title with its sub-positions: Alt+↑/↓ passes the whole block or line beside
+    it, a drop lands before (up) or after (down) the block it falls on. A priced position steps into a
+    group (down onto its title: the first sub-position; up from just below it: the last, in place) and
+    out of it (down from the last sub-position, in place; up from the first: above the title); dropped
+    on a group's sub-position, or down on its title, it joins that group. A text, Zwischentotal, Rabatt,
+    page break or a new group never goes inside a group: moved or inserted there, it lands before or
+    after the block. Issuing warns of a group without a title or without sub-positions («Trotzdem
+    ausstellen»). A conversion copies a group with the sub-positions ticked of it; a group with none
+    ticked stays behind, and the dialog names it. Open quantities are per sub-position, as for any
+    position.
 93. **Archive or delete an Artikel** as a contact (decision 80): archived while any document, a draft
     too, has a position from it, else deleted. An archived Artikel is in no picker and found by no AI
     draft; positions made from it keep it named.
 94. **The Artikel import** shares the contact import's reader (src/invoices/table-import.ts: mapping
     proposed from header words, UTF-8 else Windows-1252, 2000 rows with the rest named, 8 MB per
     request with `importTooLarge`). A row without a name or with a price that cannot be read is not
-    imported. A unit not in the firm's list, an account not of four digits, a code over 30
-    characters and a VAT cell not recognised (a word, a rate or a code ending in the rate's digits,
-    UN81) are named; the field is left out, and VAT is read as the normal rate. Prices are read as
-    net. Duplicates are by code only (an Artikel or an earlier row), proposed as the same Artikel;
+    imported, and neither is a price that reads two ways («1,200», «1.200»: a thousand or one and a
+    fifth), named instead of guessed. A price may carry thousands marks, a decimal comma and a
+    currency before or after it. A VAT cell is read before any number, as a word, a rate with or
+    without its point («8.1», «2,6 %», «81», «26») or a code ending in one («UN81», «UN26», «V81»).
+    A unit not in the firm's list, an account not of four digits, a code over 30 characters and a
+    VAT cell not recognised are named; the field is left out, and VAT is read as the normal rate.
+    Prices are read as net. Duplicates are by code only (an Artikel or an earlier row), proposed as the same Artikel;
     taken as new, the row comes without its code.
 95. **«＋ Artikel»** is a search by code, name and group: code matches first, at most 50 shown, with
     the rest named. The layout element `articleCode` (Firma › Rechnungslayout, on by default) prints
     the code before the position's text. It rides on the manifest step 5 → 6, unreleased, as a further
     phase-2 setting; an issued document froze its layout and prints as it was. The AI's
     `invoiceDraft` takes `{ "article": "<code or name>", … }`, the Artikel position with the line's own
-    fields over it; an Artikel no code or name finds, or one whose name two share, is refused
+    fields over it, priced as createDraft prices the draft (the prices it names, else the firm's default
+    for its kind); an Artikel no code or name finds, or one whose name two share, is refused
     (`unknownArticle`).
 
 ---

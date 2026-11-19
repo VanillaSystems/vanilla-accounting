@@ -336,7 +336,7 @@ export function ArticleImportDialog({ nav }: Props) {
       {r.problems.map((p) => t(`articles.problem.${p}`)).join(' · ')}
       {r.same && <span data-testid="import-same">{r.problems.length ? ' · ' : ''}{t('articles.same', { name: r.same.name, where: 'line' in r.same ? t('contacts.sameRow', { line: r.same.line }) : t('contacts.sameContact') })}</span>}
     </>,
-    blocked: (r) => !r.article || r.problems.some((p) => p === 'name' || p === 'price'),
+    blocked: (r) => !r.article || r.problems.some((p) => p === 'name' || p === 'price' || p === 'priceUnclear'),
     hasSame: (r) => !!r.same,
     newWord: t('articles.choice.new'),
   };

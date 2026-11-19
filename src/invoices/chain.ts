@@ -158,6 +158,19 @@ export function convertDraft(source: Invoice, to: DocumentKind, picks: readonly 
   };
 }
 
+/**
+ * The Gruppen of `source` a conversion with `picks` leaves behind: those with sub-positions, none of
+ * them taken (ticked with a quantity). The dialog names them; the draft does not carry them.
+ */
+export function groupsLeftBehind(source: Pick<Invoice, 'lines'>, picks: readonly Ticked[]): Array<{ line: number; text: string }> {
+  const taken = new Set(picks.filter((p) => p.quantity !== 0).map((p) => p.line));
+  return source.lines.flatMap((l, k) => {
+    if (l.kind !== 'group') return [];
+    const members = groupMembers(source.lines, k);
+    return members.length && !members.some((m) => taken.has(m)) ? [{ line: k, text: l.text }] : [];
+  });
+}
+
 /** The days an Angebot holds by default from its date: a new one's `validUntil`. */
 export const QUOTE_DAYS = 30;
 export const defaultValidUntil = (date: string): string => addDays(date, QUOTE_DAYS);

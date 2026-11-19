@@ -10,20 +10,20 @@
  */
 import { kindOfRate } from '../engines/index.js';
 import { DEFAULT_UNITS, type Article, type ArticleFields, type UnitDef, type VatKind } from './model.js';
-import { normWord, proposeColumns, readTable, tableNumber, type ImportChoice, type Mapping } from './table-import.js';
+import { ambiguousNumber, normWord, proposeColumns, readTable, tableNumber, type ImportChoice, type Mapping } from './table-import.js';
 
 export const ARTICLE_FIELDS = ['code', 'name', 'type', 'text', 'unit', 'price', 'vat', 'account', 'group'] as const;
 export type ArticleField = (typeof ARTICLE_FIELDS)[number];
 export type ArticleMapping = Mapping<ArticleField>;
 
 /**
- * What is wrong with a row. `name`, `price`: not imported. The others are imported all the same:
+ * What is wrong with a row. `name`, `price` (not read), `priceUnclear` (it reads two ways, «1,200»): not imported. The others are imported all the same:
  * `unit` left out, `vat` read as the normal rate, `account` left out, `code` over 30 characters
  * left out, `type` read as a service.
  */
-export const ARTICLE_PROBLEMS = ['name', 'price', 'unit', 'vat', 'account', 'code', 'type'] as const;
+export const ARTICLE_PROBLEMS = ['name', 'price', 'priceUnclear', 'unit', 'vat', 'account', 'code', 'type'] as const;
 export type ArticleProblem = (typeof ARTICLE_PROBLEMS)[number];
-const BLOCKING: readonly ArticleProblem[] = ['name', 'price'];
+const BLOCKING: readonly ArticleProblem[] = ['name', 'price', 'priceUnclear'];
 
 export interface ArticleImportRow {
   line: number;
@@ -59,14 +59,19 @@ const KIND_WORDS: Record<string, VatKind> = {
   keine: 'none', ohne: 'none', befreit: 'none', exempt: 'none', none: 'none', exonéré: 'none', exonere: 'none', esente: 'none', '0': 'none',
 };
 
-/** A VAT cell as a kind: a word, a rate (8.1, «8.1 %») or a code that carries the rate's digits (UN81, V81); undefined when none fits. */
-function vatKindOf(cell: string, today: string): VatKind | undefined {
+/**
+ * A VAT cell as a kind, read before any number reading (a code is no currency): a word («reduziert»),
+ * a rate with or without its point and percent («8.1», «2,6 %», «81», «26»), or a code that ends in
+ * one («UN81», «UN26», «V81», «V0»). Undefined when none fits.
+ */
+export function vatKindOf(cell: string, today: string): VatKind | undefined {
   const w = normWord(cell);
   if (KIND_WORDS[w]) return KIND_WORDS[w];
-  const rate = tableNumber(cell.replace(/%\s*$/, ''));
-  if (rate !== undefined) return kindOfRate(rate, today);
-  const digits = /(\d)(\d)$/.exec(cell.trim());
-  return digits ? kindOfRate(Number(`${digits[1]}.${digits[2]}`), today) : undefined;
+  const m = /^[A-Za-z]{0,4}[\s-]*(\d{1,3})(?:[.,](\d{1,2}))?\s*%?$/.exec(cell.trim());
+  if (!m) return undefined;
+  // «81», «UN26»: the digits of a rate without its point (one decimal); «0», «8.1», «2,6 %» as written.
+  const rate = m[2] !== undefined ? Number(`${m[1]}.${m[2]}`) : m[1].length >= 2 ? Number(`${m[1].slice(0, -1)}.${m[1].slice(-1)}`) : Number(m[1]);
+  return kindOfRate(rate, today);
 }
 
 /** A unit cell as one of the firm's units: its id or its word in any language. */
@@ -82,7 +87,8 @@ function rowArticle(cell: (f: ArticleField) => string, units: readonly UnitDef[]
   const problems: ArticleProblem[] = [];
   const priceText = cell('price');
   const price = priceText ? tableNumber(priceText) : 0;
-  if (price === undefined) problems.push('price');
+  if (priceText && ambiguousNumber(priceText)) problems.push('priceUnclear');
+  else if (price === undefined) problems.push('price');
   const typeText = normWord(cell('type'));
   const type = GOODS.includes(typeText) ? 'goods' : 'service';
   if (typeText && !GOODS.includes(typeText) && !SERVICE.includes(typeText)) problems.push('type');

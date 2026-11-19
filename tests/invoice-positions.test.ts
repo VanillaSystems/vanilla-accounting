@@ -267,7 +267,7 @@ test('the sheet edits each kind: a title or plain text, a Rabatt\'s value and mo
   assert.deepEqual(sheetEdit(d, 'l:1:discount', '-5', ctx), { refused: 'number' });
   assert.deepEqual(sheetEdit(d, 'l:1:unit', 'sack', ctx), { refused: 'value' });
   assert.deepEqual(sheetEdit(d, 'l:1:unit', 'pal', { ...ctx, units: [...DEFAULT_UNITS, { id: 'pal', de: 'Palette', fr: 'palette', it: 'paletta', en: 'pallet' }] }), { change: { lines: d.lines.map((l, i) => (i === 1 ? { ...l, unit: 'pal' } : l)) } });
-  assert.deepEqual(moveLine(d.lines, 8, 0)?.map((l) => l.kind ?? 'item').slice(0, 2), ['discount', 'text']);
+  assert.deepEqual(moveLine(d.lines, 8, 0, 'drop')?.lines.map((l) => l.kind ?? 'item').slice(0, 2), ['discount', 'text']);
   assert.equal(moveLine(d.lines, 0, -1), undefined, 'nothing moves above the first');
   assert.deepEqual(repriced([item('A', 1, 'pcs', 1, 8.1, { vatIncluded: true }), { kind: 'pagebreak' }]), [item('A', 1, 'pcs', 1, 8.1), { kind: 'pagebreak' }]);
   // On screen: a handle to move each position, a button to add each kind, a page break's marker.

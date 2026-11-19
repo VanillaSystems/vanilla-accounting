@@ -7,8 +7,8 @@
  */
 import { invoiceActivities, rateOfKind } from '../engines/index.js';
 import {
-  ARTICLE_TYPES, PRICES, VAT_KINDS,
-  type Article, type ArticleFields, type Contact, type Invoice, type InvoiceBook, type InvoiceContent, type ItemLine, type Prices, type UnitDef,
+  ARTICLE_TYPES, DOCUMENT_KINDS, PRICES, VAT_KINDS,
+  type Article, type DocumentKind, type InvoicingSettings, type ArticleFields, type Contact, type Invoice, type InvoiceBook, type InvoiceContent, type ItemLine, type Prices, type UnitDef,
 } from './model.js';
 import { lineDefaults } from './contacts.js';
 import { InvoiceRuleError } from './rules.js';
@@ -141,4 +141,27 @@ export function articleLine(a: Article, doc: Pick<InvoiceContent, 'date' | 'supp
     ...(a.account ?? defaults.account ? { account: a.account ?? defaults.account } : {}),
     ...(a.activity === 2 && invoiceActivities().length && rate > 0 ? { activity: 2 as const } : {}),
   };
+}
+
+/**
+ * The AI's draft lines with each `{ "article": "<code or name>", … }` made the Artikel position
+ * «＋ Artikel» makes, the line's own fields over it (a quantity, another price). The draft is priced
+ * as createDraft prices it: the prices it names, else the firm's default for its kind. The contact's
+ * revenue account and discount come in createDraft, as on any position. `missing`: an Artikel no
+ * code or name finds (or two share the name).
+ */
+export function draftArticleLines(book: Pick<InvoiceBook, 'articles'>, draft: Record<string, unknown>, settings: Pick<InvoicingSettings, 'prices' | 'units'> | undefined, missing: (name: string) => never): unknown {
+  if (!Array.isArray(draft.lines)) return draft.lines;
+  const kind = DOCUMENT_KINDS.includes(draft.kind as DocumentKind) ? draft.kind as DocumentKind : 'invoice';
+  const doc = {
+    date: typeof draft.date === 'string' ? draft.date : new Date().toISOString().slice(0, 10),
+    ...(draft.supplied && typeof draft.supplied === 'object' ? { supplied: draft.supplied as { from: string; to?: string } } : {}),
+    prices: draft.prices === 'gross' || draft.prices === 'net' ? draft.prices : settings?.prices[kind] ?? 'net',
+  };
+  return draft.lines.map((raw) => {
+    if (!raw || typeof raw !== 'object' || !('article' in raw)) return raw;
+    const { article, ...own } = raw as Record<string, unknown>;
+    const a = typeof article === 'string' ? findArticle(book, article) : undefined;
+    return { ...articleLine(a ?? missing(String(article)), doc, undefined, settings?.units), ...own };
+  });
 }

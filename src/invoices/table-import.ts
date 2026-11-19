@@ -53,12 +53,27 @@ export function readTable<F extends string>(csv: string, mapping: Mapping<F> | u
   return { header: cols, mapping: map, rows, leftOut: Math.max(0, all.length - IMPORT_LIMIT) };
 }
 
-/** A number as tables write it: 1'200.50, 1’200,50, 1 200.50, a currency before it, 12.–. Undefined when it is none. */
+/** A cell without a currency before or after it and without its thousands marks (’ ' and spaces), «12.–» as 12. */
+const bare = (s: string): string => s.trim()
+  .replace(/^[A-Za-z]{2,3}\.?\s*(?=[-\d])/, '').replace(/(?<=[\d.,–-])\s*[A-Za-z]{2,3}\.?$/, '')
+  .replace(/[.,][–-]$/, '').replace(/[’'\s]/g, '');
+
+/**
+ * A number that reads two ways: one comma or one point followed by exactly three digits after a
+ * whole part without a leading zero («1,200», «1.200»), a thousand or one and a fifth. A table import
+ * names it instead of guessing.
+ */
+export const ambiguousNumber = (s: string): boolean => /^-?[1-9]\d{0,2}[.,]\d{3}$/.test(bare(s));
+
+/**
+ * A number as tables write it: «1'200.50», «1’200,50», «1 200.50», «1.200,50», a currency before or
+ * after it («EUR 12», «12.50 EUR»), «12.–». Undefined when it is none or reads two ways (ambiguousNumber).
+ */
 export function tableNumber(s: string): number | undefined {
-  const t = s.replace(/^[A-Za-z]{2,3}\.?\s*(?=[-\d])/, '').replace(/[.,]–$|[.,]-$/, '').replace(/[’'\s]/g, '');
-  if (!t) return undefined;
+  const t = bare(s);
+  if (!t || ambiguousNumber(s)) return undefined;
   // «1.200,50»: the last separator is the decimal one when both appear; a lone comma is a decimal comma.
-  const both = /[.,]/.test(t) && t.includes('.') && t.includes(',');
+  const both = t.includes('.') && t.includes(',');
   const normal = both ? (t.lastIndexOf(',') > t.lastIndexOf('.') ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '')) : t.replace(',', '.');
   if (!/^-?\d+(\.\d+)?$/.test(normal)) return undefined;
   return Number(normal);

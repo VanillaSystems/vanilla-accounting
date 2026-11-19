@@ -321,7 +321,7 @@ export interface Missing { field: MissingField; line?: number }
 export type MissingField =
   | 'sender.name' | 'sender.address' | 'sender.uid' | 'payTo'
   | 'customer' | 'customer.name' | 'customer.address' | 'customer.person' | 'customer.addressGone'
-  | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.price' | 'line.vatRate' | 'line.activity' | 'line.discount' | 'line.discountBase' | 'exemption' | 'total'
+  | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.price' | 'line.vatRate' | 'line.activity' | 'line.discount' | 'line.discountBase' | 'line.groupTitle' | 'line.groupEmpty' | 'exemption' | 'total'
   | 'credit.invoice' | 'credit.sign' | 'credit.exceeds' | 'credit.aboveOpen' | 'numberYear' | 'line.optional';
 
 const hasAddress = (a: { postcode?: string; town?: string; country?: string } | undefined) => !!(a?.postcode?.trim() && a.town?.trim() && a.country?.trim());
@@ -384,7 +384,8 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
 /**
  * What issuing warns of and the person may issue with all the same («Trotzdem ausstellen», spec
  * 4.11): an item position without a text (Art. 26 Abs. 2 lit. d MWSTG), or without an amount (lit.
- * e: it prints as 0.00), a Rabatt with nothing above it to take off, and a kept number of another
+ * e: it prints as 0.00), a Rabatt with nothing above it to take off, a Gruppe without a title or
+ * without sub-positions, and a kept number of another
  * year than the date («Nummer 2026-005 im Jahr 2027»).
  */
 export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'> & { number?: string; date?: string; kind?: InvoiceContent['kind'] }): Missing[] {
@@ -394,6 +395,8 @@ export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'>
   return [...numberYear, ...draft.lines.flatMap((l, line): Missing[] => {
     // A Rabatt with no item above it takes nothing.
     if (l.kind === 'discount') return draft.lines.slice(0, line).some(isItem) ? [] : [{ field: 'line.discountBase', line }];
+    // A Gruppe prints a title over its sub-positions and their sum: without either it says nothing.
+    if (l.kind === 'group') return [...(!l.text.trim() ? [{ field: 'line.groupTitle' as const, line }] : []), ...(!groupMembers(draft.lines, line).length ? [{ field: 'line.groupEmpty' as const, line }] : [])];
     if (!isItem(l)) return [];
     return [
       ...(!l.text.trim() ? [{ field: 'line.text' as const, line }] : []),

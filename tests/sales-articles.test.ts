@@ -9,15 +9,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import './support/jurisdiction.js';
 import { tempWorkspace } from './support/workspace.js';
-import type { Workspace } from '../src/workspace/workspace.js';
+import { APP_ROOT, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { loadJurisdiction } from '../src/core/modules/load.js';
+import { checkJurisdiction } from '../src/core/modules/check.js';
 import {
   convertDocument, createArticle, createCustomer, createDraft, issueInvoice, parseDraftPatch, removeArticle, removeDraft, updateArticle, updateContact, updateDraft, type Printer,
 } from '../src/invoices/service.js';
 import { loadInvoices } from '../src/invoices/store.js';
-import { InvoiceRuleError, lineAmounts, revenueSplit, totals } from '../src/invoices/rules.js';
-import { articleLine, findArticle, priceOn, searchArticles } from '../src/invoices/articles.js';
-import { importArticles, previewArticleImport } from '../src/invoices/article-import.js';
-import { offered } from '../src/invoices/chain.js';
+import { InvoiceRuleError, lineAmounts, revenueSplit, totals, warningsForIssue } from '../src/invoices/rules.js';
+import { articleLine, draftArticleLines, findArticle, priceOn, searchArticles } from '../src/invoices/articles.js';
+import { importArticles, previewArticleImport, vatKindOf } from '../src/invoices/article-import.js';
+import { ambiguousNumber, tableNumber } from '../src/invoices/table-import.js';
+import { groupsLeftBehind, offered } from '../src/invoices/chain.js';
 import { issuedSheet } from '../src/invoices/documents.js';
 import { sheetBlocks } from '../src/invoices/sheet.js';
 import { withGroups, type Draft, type InvoiceLine, type Issued } from '../src/invoices/model.js';
@@ -150,22 +154,68 @@ test('a Gruppe in a conversion: open quantities per sub-position, the group come
   assert.equal(totals(re).net, totals(find(ws, au.id)).net, 'the Rechnung of every position: the Auftrag\'s total, the groups counted once');
 });
 
-test('positions join and leave a Gruppe where they are put; a sub-position with no group above it is an ordinary one', () => {
-  const g: InvoiceLine = { kind: 'group', text: 'G' };
-  const a: InvoiceLine = { text: 'a', quantity: 1, price: 1, vatRate: 8.1, inGroup: true };
-  const b: InvoiceLine = { text: 'b', quantity: 1, price: 1, vatRate: 8.1 };
-  const added: InvoiceLine = { text: 'new', quantity: 1, price: 0, vatRate: 8.1 };
-  assert.equal((insertLine([g, a, b], added, 1).lines[2] as { inGroup?: true }).inGroup, true, 'added after a sub-position: in the group');
-  assert.equal((insertLine([g, a, b], added, 2).lines[3] as { inGroup?: true }).inGroup, undefined, 'after an ordinary one: not');
-  const moved = moveLine([g, a, b], 2, 1)!;
-  assert.deepEqual(moved.map((l) => (l as { text: string }).text), ['G', 'b', 'a']);
-  assert.equal((moved[1] as { inGroup?: true }).inGroup, true, 'moved right below the title: in the group');
-  const out = moveLine([g, a, b], 1, 2)!;
-  assert.deepEqual(out.map((l) => [(l as { text: string }).text, (l as { inGroup?: true }).inGroup ?? false]), [['G', false], ['b', false], ['a', false]], 'moved out below an ordinary one: out of it');
-  const groupMoved = moveLine([b, g, a], 1, 0)!;
-  assert.deepEqual(groupMoved.map((l) => (l as { text: string }).text), ['G', 'a', 'b'], 'a group moves with its sub-positions');
-  assert.equal((withGroups([b, a])[1] as { inGroup?: true }).inGroup, undefined);
-  assert.equal((parseDraftPatch({ lines: [b, a] }, loadInvoices(tempWorkspace())).lines![1] as { inGroup?: true }).inGroup, undefined, 'the API drops a mark without a group');
+const G = (text: string): InvoiceLine => ({ kind: 'group', text });
+const P = (text: string, inGroup = false): InvoiceLine => ({ text, quantity: 1, price: 10, vatRate: 8.1, ...(inGroup ? { inGroup: true as const } : {}) });
+const T = (text: string): InvoiceLine => ({ kind: 'text', text });
+const R = (text: string): InvoiceLine => ({ kind: 'discount', text, percent: 10 });
+/** «[G] a* b X»: a group's title in brackets, a sub-position starred. */
+const show = (ls: readonly InvoiceLine[] | undefined) => ls?.map((l) => (l.kind === 'group' ? `[${l.text}]` : `${(l as { text: string }).text}${(l as { inGroup?: true }).inGroup ? '*' : ''}`)).join(' ');
+const mv = (ls: InvoiceLine[], from: number, to: number, how: 'step' | 'drop' = Math.abs(to - from) === 1 ? 'step' : 'drop') => { const m = moveLine(ls, from, to, how); return m && `${show(m.lines)} @${m.at}`; };
+
+test('a Gruppe moves whole: by a step it passes the whole block or line beside it, dropped it lands before or after the block it is dropped on', () => {
+  assert.equal(mv([G('G'), P('a', true), P('b', true), P('X'), P('Y')], 0, 1), 'X [G] a* b* Y @1', 'Alt+↓ on a title of two: past the next line, its sub-positions with it');
+  assert.equal(mv([G('G'), P('a', true), P('X'), P('Y')], 0, 1), 'X [G] a* Y @1', 'a group of one moves too');
+  assert.equal(mv([P('P'), G('G'), P('a', true), P('b', true), P('c', true), P('X')], 1, 2), 'P X [G] a* b* c* @2');
+  assert.equal(mv([P('P'), G('G'), P('a', true)], 1, 0), '[G] a* P @0', 'Alt+↑ past the line above');
+  const two = [G('G1'), P('a', true), G('G2'), P('b', true)];
+  assert.equal(mv(two, 2, 1), '[G2] b* [G1] a* @0', 'Alt+↑ on G2 passes the whole of G1');
+  assert.equal(mv(two, 0, 1), '[G2] b* [G1] a* @2', 'Alt+↓ on G1 passes the whole of G2');
+  assert.equal(mv(two, 0, 3), '[G2] b* [G1] a* @2', 'dropped on a sub-position of G2: after the whole of G2');
+  assert.equal(mv(two, 0, 2), '[G2] b* [G1] a* @2', 'dropped on G2\'s title: after the whole of G2');
+  assert.equal(mv(two, 2, 0), '[G2] b* [G1] a* @0', 'dropped up on G1: before it');
+  assert.equal(mv(two, 0, 1), mv(two, 0, 1), 'stable');
+  assert.equal(moveLine([G('G'), P('a', true)], 0, 1), undefined, 'onto its own sub-position: nothing moves');
+  assert.equal(moveLine([P('X'), G('G'), P('a', true)], 1, 2), undefined, 'the last block: nothing below to pass');
+});
+
+test('a priced position changes its Gruppe only when moved into or out of one; a last sub-position leaves in place', () => {
+  const g = [G('G'), P('a', true), P('b', true), P('X')];
+  assert.equal(mv(g, 1, 2), '[G] b* a* X @2', 'within the group: a sub-position still');
+  assert.equal(mv(g, 2, 3), '[G] a* b X @2', 'Alt+↓ on the last sub-position: out of the group, where it stands');
+  assert.equal(mv(g, 1, 0), 'a [G] b* X @0', 'Alt+↑ on the first: above the title, out of the group');
+  assert.equal(mv(g, 3, 2), '[G] a* b* X* @3', 'Alt+↑ just below a group: its last sub-position, where it stands');
+  assert.equal(mv([P('X'), G('G'), P('a', true)], 0, 1), '[G] X* a* @1', 'Alt+↓ onto a title: its first sub-position');
+  assert.equal(mv([P('X'), P('Y'), G('G'), P('a', true)], 0, 3), 'Y [G] a* X* @3', 'dropped down on a sub-position: in the group, after it');
+  assert.equal(mv([P('X'), G('G'), P('a', true)], 0, 1), '[G] X* a* @1', 'dropped down on a title: its first sub-position');
+  assert.equal(mv([G('G'), P('a', true), P('X')], 2, 0), 'X [G] a* @0', 'dropped up on a title: above it, outside');
+  assert.equal(mv([G('G'), P('a', true), P('b', true), P('X')], 3, 1), '[G] X* a* b* @1', 'dropped up on a sub-position: in the group, before it');
+  assert.equal(mv([G('G'), P('a', true), P('b', true), P('X'), P('Y')], 1, 4), '[G] b* X Y a @4', 'dropped out of the group onto an ordinary line: ordinary');
+});
+
+test('a text, Rabatt or Zwischentotal never goes inside a Gruppe: moved or inserted there, it lands before or after the block', () => {
+  const g = [G('G'), P('a', true), P('b', true), T('T')];
+  assert.equal(mv(g, 3, 2), 'T [G] a* b* @0', 'Alt+↑ below a group: past the whole block');
+  assert.equal(mv([T('T'), G('G'), P('a', true)], 0, 1), '[G] a* T @2', 'Alt+↓ above a group: past the whole block');
+  assert.equal(mv([T('T'), G('G'), P('a', true), P('b', true), P('X')], 0, 2), '[G] a* b* T X @3', 'dropped on a sub-position: after the block');
+  assert.equal(mv([G('G'), P('a', true), P('b', true), T('T')], 3, 1), 'T [G] a* b* @0', 'dropped up into a block: before it');
+  assert.equal(show(insertLine(g, T('N'), 1).lines), '[G] a* b* N T', 'a text added in the group: after it');
+  assert.equal(show(insertLine(g, R('R'), 1).lines), '[G] a* b* R T', 'a Rabatt too');
+  assert.equal(show(insertLine(g, { kind: 'subtotal', text: 'S' }, 0).lines), '[G] a* b* S T', 'a Zwischentotal after the title too');
+  assert.equal(show(insertLine(g, G('H'), 1).lines), '[G] a* b* [H] T', 'a new group after the block');
+  assert.equal(show(insertLine(g, P('n'), 1).lines), '[G] a* n* b* T', 'a priced position in the group: one of its sub-positions');
+  assert.equal(show(insertLine(g, P('n'), 0).lines), '[G] n* a* b* T', 'after the title: its first sub-position');
+  assert.equal(show(insertLine(g, P('n'), 3).lines), '[G] a* b* T n', 'after an ordinary line: ordinary');
+  assert.equal(show(insertLine(g.slice(0, 3), P('n'), -1).lines), '[G] a* b* n', 'at the end, with no position named: ordinary');
+  assert.equal((withGroups([P('b'), P('a', true)])[1] as { inGroup?: true }).inGroup, undefined);
+  assert.equal((parseDraftPatch({ lines: [P('b'), P('a', true)] }, loadInvoices(tempWorkspace())).lines![1] as { inGroup?: true }).inGroup, undefined, 'the API drops a mark without a group');
+});
+
+test('issuing warns of a Gruppe without a title or without sub-positions; a conversion names the group it leaves behind', () => {
+  const w = warningsForIssue({ lines: [G(''), P('a', true), G('Leer'), P('b')] });
+  assert.deepEqual(w.map((m) => [m.field, m.line]), [['line.groupTitle', 0], ['line.groupEmpty', 2]]);
+  const source = { lines: [G('Bern'), P('a', true), P('b', true), G('Thun'), P('c', true), P('d')] };
+  assert.deepEqual(groupsLeftBehind(source, [{ line: 1, quantity: 1 }, { line: 5, quantity: 1 }]), [{ line: 3, text: 'Thun' }]);
+  assert.deepEqual(groupsLeftBehind(source, [{ line: 4, quantity: 0 }, { line: 2, quantity: 1 }]), [{ line: 3, text: 'Thun' }], 'a quantity of 0 takes nothing');
 });
 
 test('an Artikel a document names is archived, one no document names is deleted; a code names one Artikel', () => {
@@ -220,4 +270,49 @@ test('the CSV import of Artikel: the mapping proposed from the header, the rows 
   assert.deepEqual(plan.articles.map((a) => [a.name, a.code ?? null]), [['Espresso-Tasse', 'EX-2'], ['Beherbergung', 'BE-1'], ['Espresso-Tasse doppelt', null]], 'taken as new, the doubled code is left out');
   assert.equal(plan.skipped, 2, 'the code already there and the row without a price');
   assert.throws(() => previewArticleImport(csv, { name: 'Name' }, []), /Name/, 'a mapping to a column the table lacks is refused');
+});
+
+test('a VAT cell is read before any number: a code, a rate with or without its point, a word', () => {
+  const kinds = Object.fromEntries(['UN81', 'UN26', 'UN38', 'V81', 'V0', '81', '26', '8.1 %', '2,6 %', '3.8', '0', 'reduziert', 'Beherbergung', 'befreit', '7.7', 'X'].map((c) => [c, vatKindOf(c, '2026-11-19') ?? null]));
+  assert.deepEqual(kinds, {
+    UN81: 'normal', UN26: 'reduced', UN38: 'accommodation', V81: 'normal', V0: 'none', 81: 'normal', 26: 'reduced', '8.1 %': 'normal', '2,6 %': 'reduced', '3.8': 'accommodation',
+    0: 'none', reduziert: 'reduced', Beherbergung: 'accommodation', befreit: 'none', '7.7': null, X: null,
+  });
+});
+
+test('a number of a table: thousands marks, a decimal comma, a currency before or after; one that reads two ways is named, not guessed', () => {
+  const read = Object.fromEntries(["1'200", '1 200', '1’200.50', '1.200,50', '1,200.50', '12.50 CHF', 'CHF 12.50', '12.–', '-12.50', '0.125', '1,5', '1,200', '1.200', 'zwölf'].map((x) => [x, tableNumber(x) ?? null]));
+  assert.deepEqual(read, {
+    "1'200": 1200, '1 200': 1200, '1’200.50': 1200.5, '1.200,50': 1200.5, '1,200.50': 1200.5, '12.50 CHF': 12.5, 'CHF 12.50': 12.5, '12.–': 12, '-12.50': -12.5, '0.125': 0.125, '1,5': 1.5,
+    '1,200': null, '1.200': null, zwölf: null,
+  });
+  assert.deepEqual([ambiguousNumber('1,200'), ambiguousNumber('1.200'), ambiguousNumber('0.125'), ambiguousNumber('1.20')], [true, true, false, false]);
+  const p = previewArticleImport('Code;Name;Preis;MWST\nA;Alpha;1,200;UN26\nB;Beta;12.50 CHF;V81', undefined, [], undefined, '2026-11-19');
+  assert.deepEqual(p.rows.map((r) => [r.problems, r.choice, r.article?.vatKind, r.article?.price]), [[['priceUnclear'], 'skip', 'reduced', 0], [[], 'new', 'normal', 12.5]]);
+});
+
+test('the AI\'s Artikel draft is priced as createDraft prices it: the prices it names, else the firm\'s default for its kind', () => {
+  const ws = tempWorkspace('sales-articles-gross-');
+  writeFileSync(ws.paths.manifest, readFileSync(ws.paths.manifest, 'utf8').replace(/^invoicing:\n/m, 'invoicing:\n  prices: { invoice: gross }\n'));
+  const gross = workspaceAt(ws.paths.root);
+  assert.equal(gross.invoicing?.prices.invoice, 'gross');
+  createArticle(gross, { code: 'K1', name: 'Kurs', price: 100, vatKind: 'normal' });
+  const c = createCustomer(gross, CUSTOMER);
+  const made = (draft: Record<string, unknown>) => {
+    const lines = draftArticleLines(loadInvoices(gross), { ...draft, lines: [{ article: 'K1', quantity: 1 }] }, gross.invoicing, (n) => { throw new Error(n); });
+    const d = createDraft(gross, { customerId: c.id, ...parseDraftPatch({ ...draft, lines }, loadInvoices(gross), gross.invoicing?.units) });
+    return [d.kind, d.prices, (d.lines[0] as { price: number }).price, totals(d).gross];
+  };
+  assert.deepEqual(made({}), ['invoice', 'gross', 108.1, 108.1], 'the firm\'s Rechnungen are gross: the net Artikel price with its VAT');
+  assert.deepEqual(made({ prices: 'net' }), ['invoice', 'net', 100, 108.1], 'net named: as named');
+  assert.deepEqual(made({ kind: 'quote' }), ['quote', 'net', 100, 108.1], 'an Angebot takes the firm\'s default for Angebote (net)');
+  assert.throws(() => draftArticleLines(loadInvoices(gross), { lines: [{ article: 'Gibt es nicht' }] }, gross.invoicing, (n) => { throw new Error(`missing ${n}`); }), /missing Gibt es nicht/);
+});
+
+test('the module check wants each VAT kind\'s rates newest first', () => {
+  const j = structuredClone(loadJurisdiction(APP_ROOT, 'ch').jurisdiction);
+  assert.deepEqual(checkJurisdiction(j).filter((x) => x.file === 'invoicing.yaml'), []);
+  j.invoicing.rateKinds.normal = [{ rate: 7.7, from: '2018-01-01' }, { rate: 8.1, from: '2024-01-01' }];
+  j.invoicing.rates.push(7.7);
+  assert.match(JSON.stringify(checkJurisdiction(j)), /rateKinds\.normal.*newest first/);
 });

@@ -15,7 +15,7 @@ import { loadInvoices, updateInvoices } from '../invoices/store.js';
 import { InvoiceRuleError, liveDocuments } from '../invoices/rules.js';
 import type { CustomerFields } from '../invoices/model.js';
 import { liveContacts, pickableContacts } from '../invoices/contacts.js';
-import { articleLine, findArticle } from '../invoices/articles.js';
+import { draftArticleLines } from '../invoices/articles.js';
 import type { InvoiceBook } from '../invoices/model.js';
 import type { Change, ChangeNote, InvoicingSet, WorkspaceChange } from '../types/assistant.js';
 import { RequestError } from './books.js';
@@ -113,27 +113,12 @@ function invoiceDraft(ws: Workspace, c: Extract<WorkspaceChange, { kind: 'invoic
   });
 }
 
-/**
- * The AI's lines with each `{ "article": "<code or name>", … }` made the Artikel position «＋ Artikel»
- * makes (code, text, unit, price, rate, account, activity from the Artikel), the line's own fields
- * over it (a quantity, another price); the contact's revenue account and discount come in createDraft,
- * as on any position. An Artikel no code or name finds (or two share the name) is refused.
- */
-function withArticles(book: InvoiceBook, draft: Record<string, unknown>, ws: Workspace): unknown {
-  if (!Array.isArray(draft.lines)) return draft.lines;
-  const doc = {
-    date: typeof draft.date === 'string' ? draft.date : new Date().toISOString().slice(0, 10),
-    ...(draft.supplied && typeof draft.supplied === 'object' ? { supplied: draft.supplied as { from: string; to?: string } } : {}),
-    prices: draft.prices === 'gross' ? 'gross' as const : ws.invoicing?.prices.invoice ?? 'net',
-  };
-  return draft.lines.map((raw) => {
-    if (!raw || typeof raw !== 'object' || !('article' in raw)) return raw;
-    const { article, ...own } = raw as Record<string, unknown>;
-    const a = typeof article === 'string' ? findArticle(book, article) : undefined;
-    if (!a) throw new RequestError(400, `Keinen Artikel «${String(article)}» gefunden: Code oder Name eines Artikels aus invoices.json articles (nicht archiviert, der Name eindeutig).`, { code: 'unknownArticle' });
-    return { ...articleLine(a, doc, undefined, ws.invoicing?.units), ...own };
-  });
-}
+/** An Artikel the AI's draft names that no code or name finds: refused in the person's words. */
+const unknownArticle = (name: string): never => {
+  throw new RequestError(400, `Keinen Artikel «${name}» gefunden: Code oder Name eines Artikels aus invoices.json articles (nicht archiviert, der Name eindeutig).`, { code: 'unknownArticle' });
+};
+
+const withArticles = (book: InvoiceBook, draft: Record<string, unknown>, ws: Workspace): unknown => draftArticleLines(book, draft, ws.invoicing, unknownArticle);
 
 /** The draft goes as a person deletes one; a customer added with it goes too, while no other invoice names them. */
 function dropInvoiceDraft(ws: Workspace, id: string, customer: string | undefined): Applied {

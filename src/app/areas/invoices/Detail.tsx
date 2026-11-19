@@ -107,10 +107,10 @@ function InvoiceDetail(props: DetailProps) {
   function action(a: string, k: number, to?: number): string | void {
     if (inv.status !== 'draft') return;
     if (a === 'rmline') void saveDraft(nav, inv, { lines: inv.lines.filter((_, i) => i !== k) });
-    if (a === 'move' && to !== undefined) {
-      const lines = moveLine(inv.lines, k, to);
-      if (lines) void saveDraft(nav, inv, { lines });
-      return lines ? `mv:${to}` : undefined;
+    if ((a === 'move' || a === 'drop') && to !== undefined) {
+      const moved = moveLine(inv.lines, k, to, a === 'drop' ? 'drop' : 'step');
+      if (moved) void saveDraft(nav, inv, { lines: moved.lines });
+      return moved ? `mv:${moved.at}` : undefined;
     }
     // «＋ Artikel»: the picker puts the Artikel position after the position the person is in.
     if (a === 'addarticle') { setUi({ dialog: { kind: 'articlePick', draft: inv.id, after: k } }); return; }
