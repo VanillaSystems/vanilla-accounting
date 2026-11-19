@@ -234,6 +234,8 @@ Two markers flag an entry you must read before you update:
   period's status.
 - Löhne: a payslip paid, reopened and closed again with another payout now says what stays open on the
   Lohndurchlaufkonto (on the payslip and in Lohnzahlungen) instead of leaving the difference unnamed.
+- Verkauf: a payment entered by hand into the cash box no longer reads «noch von keinem Kontoauszug
+  bestätigt» on its invoice (no statement ever shows the cash box); it says the money is in the cash box.
 - Buchungen: an entry that books only the tax (a code such as `M81-2` or `-I81-2`, one side
   empty) said «keine Gegenbuchung» on its empty side, which read as an error. The detail now
   shows the VAT account the Bilanz and the reports fill in there, marked «aus dem MWST-Code», and

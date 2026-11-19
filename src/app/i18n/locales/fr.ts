@@ -2706,6 +2706,7 @@ export default {
     'invoices.money.part': 'partie d’un paiement de {amount}',
     'invoices.money.confirmed': 'confirmé par la ligne bancaire {ref}',
     'invoices.money.unconfirmed': 'pas encore confirmé par un relevé',
+    'invoices.money.cash': 'dans la caisse, aucun relevé ne l’affiche',
     'invoices.money.writeOff': '{reason} {amount} passé',
     'invoices.money.byCode': 'selon les conditions imprimées',
     'invoices.money.byPerson': 'à la main',

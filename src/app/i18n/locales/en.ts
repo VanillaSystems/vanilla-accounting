@@ -2706,6 +2706,7 @@ export default {
     'invoices.money.part': 'part of a payment of {amount}',
     'invoices.money.confirmed': 'confirmed by the bank line {ref}',
     'invoices.money.unconfirmed': 'not yet confirmed by a statement',
+    'invoices.money.cash': 'in the cash box, no statement shows it',
     'invoices.money.writeOff': '{reason} {amount} written off',
     'invoices.money.byCode': 'by the printed terms',
     'invoices.money.byPerson': 'by hand',

@@ -18,6 +18,7 @@ import { hrefOf } from '../../shell/history.js';
 import { entryAt } from '../vat/links.js';
 import { at } from '../receipts/view.js';
 import { AsyncButton } from '../../shell/AsyncButton.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
 import { releasePayment, removeHandPayment, removeWriteOff } from './actions.js';
 
 /** The four figures of an issued invoice; a figure's sources on hover. */
@@ -57,6 +58,9 @@ export function eventEntries(books: Pick<Index, 'journalEntries'>, inv: Issued):
 /** The margin's payments, write-offs and bookings of an issued invoice. */
 export function MoneyRows({ inv, books, nav, period, canEdit }: { inv: Issued; books: Index; nav: Nav; period: Period; canEdit: boolean }) {
   const money = (n: number) => `${inv.currency} ${fmt(n)}`;
+  const ws = useWorkspace();
+  // Cash in the cash box: no statement ever confirms it, so the line says where the money is instead.
+  const cashBox = (bank: string | undefined) => (ws?.bankAccounts ?? []).some((a) => a.role === 'cash' && a.bank === bank);
   const lock = books.config?.closedThrough ?? '';
   const rows: ReactNode[] = [];
   for (const p of inv.payments) {
@@ -70,7 +74,7 @@ export function MoneyRows({ inv, books, nav, period, canEdit }: { inv: Issued; b
           {t(p.source === 'hand' || tx?.source === 'manual' ? 'invoices.money.hand' : 'invoices.money.statement', { amount: money(p.amount) })}
           {parts && tx ? <small>{t('invoices.money.part', { amount: `${tx.currency} ${fmt(tx.amount)}` })}</small> : null}
           {tx?.source === 'manual' && tx.statement ? <small data-testid="hand-confirmed">{t('invoices.money.confirmed', { ref: tx.statement })}</small> : null}
-          {tx?.source === 'manual' && !tx.statement ? <small>{t('invoices.money.unconfirmed')}</small> : null}
+          {tx?.source === 'manual' && !tx.statement ? <small>{t(cashBox(tx.bank) ? 'invoices.money.cash' : 'invoices.money.unconfirmed')}</small> : null}
         </span>
         <span className="acts">
           <a className="golink" href={hrefOf(at({ area: 'bank', payment: p.transactionRef }, p.date))} onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); nav.go(at({ area: 'bank', payment: p.transactionRef }, p.date)); }}>{tx?.source === 'manual' ? t('invoices.money.handLink', { date: formatDate(tx.date) }) : <span className="mono">{p.transactionRef}</span>}</a>

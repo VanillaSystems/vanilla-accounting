@@ -2706,6 +2706,7 @@ export default {
     'invoices.money.part': 'parte di un pagamento di {amount}',
     'invoices.money.confirmed': 'confermato dalla riga bancaria {ref}',
     'invoices.money.unconfirmed': 'non ancora confermato da un estratto',
+    'invoices.money.cash': 'in cassa, nessun estratto la mostra',
     'invoices.money.writeOff': '{reason} {amount} stralciato',
     'invoices.money.byCode': 'secondo le condizioni stampate',
     'invoices.money.byPerson': 'a mano',

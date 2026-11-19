@@ -2703,6 +2703,7 @@ export const messages = {
   'invoices.money.part': 'Teil einer Zahlung von {amount}',
   'invoices.money.confirmed': 'bestätigt durch die Bankzeile {ref}',
   'invoices.money.unconfirmed': 'noch von keinem Kontoauszug bestätigt',
+  'invoices.money.cash': 'in der Kasse, kein Kontoauszug zeigt sie',
   'invoices.money.writeOff': '{reason} {amount} ausgebucht',
   'invoices.money.byCode': 'nach den gedruckten Zahlungskonditionen',
   'invoices.money.byPerson': 'von Hand',
