@@ -18,6 +18,8 @@ import { paymentRows } from '../../payroll/payments.js';
 import { bookInsurerPayments, insurancesOfPayment, insurerRows, settlementOf } from '../../payroll/insurers.js';
 import { payrollInsurerContext } from '../../payroll/insurers-context.js';
 import { forgetPayrollWay, keptText, keptWayOf, wayTarget, writeKept } from '../../payroll/insurer-way.js';
+import { collectsOffer, forgetCollects, keptCollects, keptCollectsOf, keptCollectsText, namedKinds, writeCollects } from '../../payroll/collects-way.js';
+import { collectorsOf } from '../../booking/withheld.js';
 import { loadKnowledge } from '../../knowledge/layers.js';
 import { APP_ROOT } from '../../workspace/workspace.js';
 import { loadFxResolver } from '../../accounting/fx-rates.js';
@@ -272,8 +274,11 @@ router.get('/api/payroll/insurances', run((req, res) => {
   const counterparties = loadKnowledge(APP_ROOT, WS.paths.root).counterparties;
   // Each insurance's kept way («Immer so», §22 decision 59), with the file that keeps it: undone from here too.
   res.json({ year, rows: insurerRows(readBooks(), ctx.data, ctx.store, year).map((r) => {
-    const kept = keptWayOf(ctx.store.insurances.find((i) => i.id === r.id)!, counterparties);
-    return kept ? { ...r, kept } : r;
+    const ins = ctx.store.insurances.find((i) => i.id === r.id)!;
+    const kept = keptWayOf(ins, counterparties);
+    // What the fund's company file collects («Zieht Lohnabzüge ein», §22 decision 110): undone from here too.
+    const collects = keptCollectsOf(WS, ins, counterparties);
+    return { ...r, ...(kept ? { kept } : {}), ...(collects ? { collects } : {}) };
   }) });
 }));
 
@@ -328,17 +333,25 @@ router.post('/api/payroll/insurances/:id/settle', run((req, res) => {
 
 // ─── the insurers' payments: which need no receipt, «Immer so» (§22 decisions 45, 126) ──────
 
-/** The open payments that pay one of the firm's payroll insurers while payroll runs here: their proof is the payslips, never «kein Beleg». */
+/**
+ * The open payments whose proof is not a receipt of their own, never «kein Beleg»: to one of the firm's payroll insurers
+ * while payroll runs here (the payslips prove them), or to a business whose file says it collects wage deductions
+ * (`collects`, §22 decision 110: the payslips prove what it clears, as src/booking/receipt-wait.ts receiptFree says).
+ * Read with every load of the books: the payments are routed only when some business collects, each open payment out once.
+ */
 router.get('/api/payroll/insurer-payments', run((_req, res) => {
-  // The knowledge and payroll.json only, not the classifier's whole context: this list is read with every load of the books.
+  // The knowledge and payroll.json only, not the classifier's whole context.
   const counterparties = loadKnowledge(APP_ROOT, WS.paths.root).counterparties;
   const insurerOf = payrollInsurerContext(WS, counterparties).payrollInsurer;
-  if (!insurerOf) return void res.json({ refs: [] });
+  const collectors = new Set(counterparties.filter((c) => c.collects?.length).map((c) => c.id));
+  if (!insurerOf && !collectors.size) return void res.json({ refs: [] });
   const books = readBooks();
   const lock = periodLock(books);
   const currency = baseCurrency();
+  const open = books.transactions.filter((tx) => tx.direction === 'DBIT' && !lock.isClosed(tx.date));
+  const toCollector = new Set(collectors.size ? open.filter((tx) => collectors.has(businessOfPayment(tx, mappedReceipts(books, tx), counterparties) ?? '')).map((tx) => tx.ref) : []);
   const context = { payrollInsurer: insurerOf, counterparties };
-  res.json({ refs: books.transactions.filter((tx) => tx.direction === 'DBIT' && tx.currency === currency && !lock.isClosed(tx.date) && !!payrollInsurerOfPayment(books, tx, context)).map((tx) => tx.ref) });
+  res.json({ refs: open.filter((tx) => toCollector.has(tx.ref) || (!!insurerOf && tx.currency === currency && !!payrollInsurerOfPayment(books, tx, context))).map((tx) => tx.ref) });
 }));
 
 /**
@@ -399,6 +412,65 @@ router.delete('/api/payroll/insurer-way', run((req, res) => {
   const cp = loadKnowledge(APP_ROOT, WS.paths.root).counterparties.find((c) => c.id === id);
   const path = cp && forgetPayrollWay(WS, cp);
   if (!path) throw new PayrollRefusal('gone', `${id} hält keinen Weg für Zahlungen.`);
+  res.json({ business: id, path });
+}));
+
+// ─── «Zieht Lohnabzüge ein» (§22 decision 110) ─────────────────────────────────
+
+/**
+ * What «Zieht Lohnabzüge ein» offers on payment `ref`, and what its business's company file collects already (with the
+ * kinds the payment names, which its «Rückgängig» takes back): none for a payroll insurer's payment, which stays payroll's
+ * (decision 68). The knowledge and payroll.json only, not the classifier's whole context: the page asks on every selection.
+ */
+function collectsPlan(ref: string) {
+  const counterparties = loadKnowledge(APP_ROOT, WS.paths.root).counterparties;
+  const books = readBooks();
+  const tx = books.transactions.find((t) => t.ref === ref);
+  if (!tx) throw new PayrollRefusal('notFound', `Keine Zahlung ${ref}.`);
+  const insurerOf = payrollInsurerContext(WS, counterparties).payrollInsurer;
+  if (insurerOf && payrollInsurerOfPayment(books, tx, { payrollInsurer: insurerOf, counterparties })) return { tx, offer: undefined, kept: undefined };
+  const linked = mappedReceipts(books, tx);
+  const business = businessOfPayment(tx, linked, counterparties);
+  const cp = counterparties.find((c) => c.id === business);
+  const kept = cp && keptCollects(WS, cp);
+  const named = new Set(namedKinds(tx, linked));
+  const offer = collectsOffer({ books, tx, linked, business, collectors: collectorsOf(counterparties), counterparties });
+  // `created`: the company has no file of it yet (a business of the app's own gets a binding, made by the click as a new file is).
+  if (offer) offer.target.created ||= !existsSync(join(WS.paths.root, offer.target.path));
+  return { tx, offer, kept: kept && { ...kept, named: kept.kinds.filter((k) => named.has(k)) } };
+}
+
+/** The offer on a payment (`offer: null` when there is none), and `kept`: what its business's company file collects, with the file, to undo. */
+router.get('/api/payroll/collects', run((req, res) => {
+  const { offer, kept } = collectsPlan(String(req.query.ref ?? ''));
+  res.json({ offer: offer ? { business: offer.target.id, name: offer.target.name, path: offer.target.path, created: offer.target.created, kinds: offer.kinds, collects: offer.collects } : null, kept: kept ?? null });
+}));
+
+/**
+ * «Zieht Lohnabzüge ein: BVG»: `kinds` (of the offer, never others) join the business file's `collects:`; the rest of the
+ * file stays as it was. The books are not written: the payment's hand form proposes the split from now on, and a payment
+ * booked whole is named under «Arbeitnehmeranteil abziehen».
+ */
+router.post('/api/payroll/collects', run((req, res) => {
+  const b = body(req);
+  const { tx, offer } = collectsPlan(String(b.ref ?? ''));
+  const kinds = Array.isArray(b.kinds) ? b.kinds.filter((k): k is string => typeof k === 'string') : [];
+  if (!offer || !kinds.length || kinds.some((k) => !offer.kinds.includes(k))) throw new PayrollRefusal('badInput', 'Diese Zahlung bietet das nicht an: nur die Lohnabzüge, die sie nennt und die noch niemand einzieht.');
+  const { text, before } = keptCollectsText(WS, offer.target, kinds, tx);
+  const path = writeCollects(WS, offer.target.path, text);
+  res.json({ business: offer.target.id, name: offer.target.name, path, created: before === undefined && offer.target.created, kinds });
+}));
+
+/**
+ * «Rückgängig» (`?business=&kinds=pension,tax`, no kinds: all): from the company's file alone, after a restart too, the
+ * kinds leave its `collects:`; a file the click made goes once it holds nothing else. What was booked stays booked.
+ */
+router.delete('/api/payroll/collects', run((req, res) => {
+  const id = String(req.query.business ?? '');
+  const kinds = typeof req.query.kinds === 'string' && req.query.kinds ? req.query.kinds.split(',') : undefined;
+  const cp = loadKnowledge(APP_ROOT, WS.paths.root).counterparties.find((c) => c.id === id);
+  const path = cp && forgetCollects(WS, cp, kinds);
+  if (!path) throw new PayrollRefusal('gone', `${id} zieht keine solchen Lohnabzüge ein.`);
   res.json({ business: id, path });
 }));
 

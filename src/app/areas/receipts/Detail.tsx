@@ -2,6 +2,9 @@
  * One receipt: who and what, the amount, one line of facts, its payment (or the suggestion, or
  * what is missing), the paper, and in the margin Zahlung, Angaben and Datei.
  */
+import { keptFromModels } from '../../../booking/kept-from-models.js';
+import { isSetupSuggested } from '../../../booking/payslip.js';
+import { hrefOf } from '../../shell/history.js';
 import type { OrderPage } from '../../../booking/order-pages.js';
 import type { VatCorrection } from '../../../booking/vat-corrections.js';
 import { byStatement } from '../../../workspace/money-accounts.js';
@@ -32,7 +35,7 @@ import { amountOf, at, balanceSheetLine, bankOf, cardLineText, cardStatementLine
 import { Kbd, accept, runAct } from './commands.js';
 import { correctionPeriodName } from '../journal/commands.js';
 import { QuestionsOn } from '../../questions/Questions.js';
-import { bookVatCorrection, correctFiled, deleteReceipt, linkCardLine, linkPayment, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
+import { bookVatCorrection, correctFiled, fileSetupDocument, deleteReceipt, linkCardLine, linkPayment, unpointFiled, readAgain, saveFields, undoPrivate, unlinkPayment, type Field } from './actions.js';
 import { LinkDialog } from './LinkDialog.js';
 import { FindPair, NearList, madeBy } from './FindPair.js';
 import { offersInBooks } from '../../../intake/near-pairs.js';
@@ -227,11 +230,20 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
           <AsyncButton type="button" className="linkbtn" onClick={() => linkCardLine(nav, v, o.payment, o.index, o.line.merchant)}>{t('receipts.cardLine.link')}</AsyncButton>
         </div>
       ))}
+      {keptFromModels(r) ? <div className="notice" data-testid="kept-from-models">{t('receipts.keptFromModels')}</div> : null}
       {r.report?.held?.length ? <ReportHeld receipt={r.id} report={r.report} canEdit={canEdit} closedThrough={props.books.config?.closedThrough} said={(message, ok) => { if (ok) nav.refresh(); nav.toast(message); }} /> : null}
       <ReportCorrections receipt={r.id} books={props.books} canEdit={canEdit} said={(message) => { nav.refresh(); nav.toast(message); }} />
       {sheet
         ? <div className="notice" data-testid="balance-sheet-notice">{balanceSheetLine(sheet)}{' '}
           {sheet.opens && <a href="#" data-testid="balance-sheet-to-opening" onClick={(e) => { e.preventDefault(); nav.go({ route: { area: 'company', section: 'opening' }, query: {} }); }}>{t('reports.openingSet')}</a>}</div>
+        : isSetupSuggested(r)
+        ? <div className="notice" data-testid="setup-suggested">{t('receipts.setupSuggested')}{' '}
+          {canEdit && <><AsyncButton type="button" className="linkbtn" data-testid="setup-file" onClick={() => fileSetupDocument(nav, v)}>{t('receipts.setupFile')}</AsyncButton>{' '}
+          <AsyncButton type="button" className="linkbtn" data-testid="setup-is-receipt" onClick={() => runAct(props, 'mark')}>{t('receipts.isReceipt')}</AsyncButton></>}</div>
+        : v.none && v.r.kind === 'supporting' && v.noneWhy === 'payroll-setup'
+        ? <div className="notice" data-testid="payroll-setup-notice">{t('receipts.payrollSetupNotice', { what: t('receipts.why.payroll-setup') })}{' '}
+          <a href={hrefOf({ route: { area: 'payroll', view: 'settings', section: 'insurances' }, query: {} })} data-testid="payroll-setup-card" onClick={(e) => { if (e.metaKey || e.ctrlKey) return; e.preventDefault(); nav.go({ route: { area: 'payroll', view: 'settings', section: 'insurances' }, query: {} }); }}>{t('receipts.payrollSetupOpen')}</a>{' '}
+          {canEdit && <AsyncButton type="button" className="linkbtn" onClick={() => runAct(props, 'mark')}>{t(markLabel(r))}</AsyncButton>}</div>
         : v.none && v.r.kind === 'supporting'
         ? <div className="notice" data-testid="supporting-notice">{t('receipts.supportingNotice', { what: v.noneWhy ? t(`receipts.why.${v.noneWhy}`) : t('receipts.why.supporting') })} {canEdit && <AsyncButton type="button" className="linkbtn" onClick={() => runAct(props, 'mark')}>{t(markLabel(r))}</AsyncButton>}</div>
         : v.none

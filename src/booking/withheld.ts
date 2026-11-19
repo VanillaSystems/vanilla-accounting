@@ -333,7 +333,7 @@ export function fundShare(books: ShareBooks, tx: BankTransaction, business: stri
 }
 
 /** A payslip's deductions per kind: as payslipDeductions reads them, else as readPayslip does (a program that prints them without a minus). */
-const deductionsOf = (text: string, kinds: Readonly<Record<string, readonly string[]>>): Map<string, number> | undefined =>
+export const deductionsOf = (text: string, kinds: Readonly<Record<string, readonly string[]>>): Map<string, number> | undefined =>
   payslipDeductions(text, undefined, kinds) ?? readPayslip(text)?.deductions;
 
 /**
@@ -341,8 +341,10 @@ const deductionsOf = (text: string, kinds: Readonly<Record<string, readonly stri
  * oldest first (by the day the wage put it on the account); earlier payments pay the oldest months first. The same
  * gates as fundShare: the kinds on one account, no opening of the year on it, every wage that put something there with
  * its payslips read and adding up, no row mixing this business's kind with another's. Undefined otherwise.
+ * `upTo`: the last day whose wages count (the payment's day; the year's end for a bill paid in advance, collectorProposal);
+ * the payments that paid months before are always those up to the payment's day.
  */
-export function withheldMonths(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined, collected: readonly string[] = kindsOf(business)): { account: string; months: Array<{ month: string; rappen: number }> } | undefined {
+export function withheldMonths(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined, collected: readonly string[] = kindsOf(business), upTo: string = tx.date): { account: string; months: Array<{ month: string; rappen: number }> } | undefined {
   const w = setup().wages;
   const kinds = w?.withholds;
   const account = accountOfKinds(collected);
@@ -352,7 +354,7 @@ export function withheldMonths(books: ShareBooks, tx: BankTransaction, business:
   const onAccount = (m: Map<string, number>) => [...m].reduce((s, [k, v]) => s + (accountOfKind(k) === account ? toRappen(v) : 0), 0);
   const year = tx.date.slice(0, 4);
   if (books.config?.openingBalances?.[year]?.[account]) return undefined;
-  const lines = books.journalEntries.filter((e) => e.transactionRef !== tx.ref && e.date.startsWith(year) && e.date <= tx.date);
+  const lines = books.journalEntries.filter((e) => e.transactionRef !== tx.ref && e.date.startsWith(year) && e.date <= upTo);
   const put = new Map<string, { rappen: number; date: string }>();
   for (const e of lines) if (e.accountCredit === account) { const had = put.get(e.transactionRef); put.set(e.transactionRef, { rappen: (had?.rappen ?? 0) + toRappen(e.amount), date: had && had.date < e.date ? had.date : e.date }); }
   const byMonth = new Map<string, number>();
@@ -394,7 +396,9 @@ export function withheldSharesOf(books: ShareBooks, businessOf: (t: BankTransact
     // The task and its click are the deductions account's: a kind owed elsewhere (the withholding tax) has none.
     if (!b || !kinds.length || accountOfKinds(kinds) !== w.deductions) continue;
     const share = fundShare(books, t, b, businessOf, kinds);
-    if (share !== undefined) out[t.ref] = share;
+    // Nothing open on its day: a bill paid in advance clears the months withheld after it (collectorProposal, §22 decision 109).
+    const ahead = share === 0 ? sureProposal(collectorProposal(books, t, b, businessOf, collectors))?.share : undefined;
+    if (share !== undefined) out[t.ref] = ahead ?? share;
   }
   return out;
 }
@@ -518,4 +522,72 @@ export function contributionLines(books: ShareBooks, tx: BankTransaction, busine
   const employer = payeeContributionAccount(books, tx, businessOf) ?? kinds.map((k) => w.employer?.[k]).find(Boolean);
   if (!employer) return undefined;
   return { account, share: fromRappen(fit), employer, lines: [{ debit: account, credit: '', amount: fromRappen(fit) }, { debit: employer, credit: '', amount: fromRappen(paid - fit) }] };
+}
+
+/** What a collector's payment clears as the person's proposal (collectorProposal): the code booking's lines, and the months whose employees' share it is. */
+export interface CollectorProposal extends ContributionBooking { employer: string; months: string[] }
+/** A payment whose months the payslips do not tell for sure: the months it may pay, said so on the form; nothing proposed. */
+export interface CollectorUnsure { unsure: string[] }
+
+const quarterOf = (month: string) => `${month.slice(0, 4)}-${Math.floor((Number(month.slice(5, 7)) - 1) / 3)}`;
+const quarterEnd = (month: string) => Number(month.slice(5, 7)) % 3 === 0;
+
+/**
+ * The person's proposal for a payment to a business that collects deductions owed on one account other than the
+ * withholding tax's (a pension fund's `collects: [pension]`, docs/specs/payroll.md §22 decision 109): the employees' share
+ * of a whole run of the oldest months the payslips withheld for its kinds that no earlier payment cleared, counting the
+ * wages of the whole year, so a bill paid ahead of its quarter (on the 10th of its first month) clears the months it pays;
+ * the rest the employer's, on the payee's earlier contribution account, else the kind's (setup.yaml `wages.employer`).
+ * A run fits when the payment is twice to three times its share (as contributionLines). Of the runs that fit (review of
+ * walk 3), a whole quarter is taken; else the one run that is sure: it ends with a quarter, or the month after it is
+ * withheld already (a bill paid before the quarter's last payslip is not taken for two months). Several runs, or one the
+ * later payslips may still lengthen: `unsure`, with the months it may pay. Never booked by code. Undefined when the
+ * payslips do not tell (withheldMonths), or no run fits.
+ */
+export function collectorProposal(books: ShareBooks, tx: BankTransaction, business: string | undefined, businessOf: (t: BankTransaction) => string | undefined, collectors?: Collectors): CollectorProposal | CollectorUnsure | undefined {
+  const w = setup().wages;
+  const kinds = kindsOf(business, collectors);
+  const account = accountOfKinds(kinds);
+  if (!w || !business || !account || tx.direction !== 'DBIT' || kinds.some((k) => w.commission?.[k])) return undefined;
+  const open = withheldMonths(books, tx, business, businessOf, kinds, `${tx.date.slice(0, 4)}-12-31`);
+  if (!open?.months.length) return undefined;
+  const paid = toRappen(Math.abs(tx.amount));
+  const fits: Array<{ k: number; share: number }> = [];
+  let run = 0;
+  open.months.forEach((m, i) => { run += m.rappen; if (paid >= 2 * run - 1 && paid <= 3 * run) fits.push({ k: i + 1, share: run }); });
+  if (!fits.length) return undefined;
+  const monthsOf = (k: number) => open.months.slice(0, k).map((m) => m.month);
+  const quarter = fits.filter((f) => { const ms = monthsOf(f.k); return ms.length === 3 && quarterOf(ms[0]) === quarterOf(ms[2]) && quarterEnd(ms[2]); });
+  const sure = fits.filter((f) => quarterEnd(monthsOf(f.k).at(-1)!) || f.k < open.months.length);
+  const best = quarter.length === 1 ? quarter[0] : sure.length === 1 && fits.length === 1 ? sure[0] : undefined;
+  if (!best) return { unsure: monthsOf(Math.max(...fits.map((f) => f.k))) };
+  const employer = employerAccountOf(books, tx, businessOf, kinds);
+  if (!employer) return undefined;
+  return {
+    account, share: fromRappen(best.share), employer, months: monthsOf(best.k),
+    lines: [{ debit: account, credit: '', amount: fromRappen(best.share) }, ...(paid > best.share ? [{ debit: employer, credit: '', amount: fromRappen(paid - best.share) }] : [])],
+  };
+}
+
+/** The employer's contribution account of a payment to a collector of `kinds`: the payee's earlier one, else the kind's (setup.yaml `wages.employer`). */
+export const employerAccountOf = (books: Pick<Books, 'journalEntries'> & { transactions: readonly BankTransaction[] }, tx: BankTransaction, businessOf: (t: BankTransaction) => string | undefined, kinds: readonly string[]): string | undefined =>
+  payeeContributionAccount(books, tx, businessOf) ?? kinds.map((k) => setup().wages?.employer?.[k]).find(Boolean);
+
+/** A proposal code can stand behind (not `unsure`). */
+export const sureProposal = (p: CollectorProposal | CollectorUnsure | undefined): CollectorProposal | undefined => (p && !('unsure' in p) ? p : undefined);
+
+/**
+ * The deduction kinds the year's payslips withheld (setup.yaml `wages.withholds`): read off the payslips linked to the
+ * wages that put something on a deductions account in `year`. What a «Zieht Lohnabzüge ein» offer may name.
+ */
+export function withheldKinds(books: Pick<ShareBooks, 'journalEntries' | 'receipts' | 'mappings'>, year: string): Set<string> {
+  const w = setup().wages;
+  const kinds = w?.withholds;
+  const out = new Set<string>();
+  if (!w?.deductions || !kinds) return out;
+  const accounts = new Set([w.deductions, ...Object.values(w.withholdsTo ?? {})]);
+  const refs = new Set(books.journalEntries.filter((e) => e.date.startsWith(year) && accounts.has(e.accountCredit)).map((e) => e.transactionRef));
+  const ids = new Set(books.mappings.filter((m) => refs.has(m.transactionRef)).map((m) => m.receiptId));
+  for (const r of books.receipts) if (ids.has(r.id)) for (const k of deductionsOf(r.extractedText ?? '', kinds)?.keys() ?? []) for (const part of k.split('+')) out.add(part);
+  return out;
 }

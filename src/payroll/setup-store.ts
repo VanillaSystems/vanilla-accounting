@@ -25,3 +25,14 @@ export function updateSetupState(ws: Pick<Workspace, 'paths'>, fn: (s: SetupStat
   writeAtomic(fileOf(ws), JSON.stringify(s, null, 2) + '\n');
   return s;
 }
+
+/** The receipts the read step looked at once for being a fund's document read before (src/intake/read.ts), in data/setup-documents-looked.json. */
+const LOOKED_FILE = 'setup-documents-looked.json';
+export function lookedAtForSetup(ws: Pick<Workspace, 'paths'>): Set<string> {
+  const f = join(ws.paths.data, LOOKED_FILE);
+  try { const v = JSON.parse(readFileSync(f, 'utf8')); return new Set(Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []); } catch { return new Set(); }
+}
+export function keepLookedAtForSetup(ws: Pick<Workspace, 'paths'>, ids: ReadonlySet<string>): void {
+  mkdirSync(ws.paths.data, { recursive: true });
+  writeAtomic(join(ws.paths.data, LOOKED_FILE), JSON.stringify([...ids].sort(), null, 0) + '\n');
+}

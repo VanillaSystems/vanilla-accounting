@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { SETUP_DOCUMENT_RULE } from '../../booking/payslip.js';
 import { renameSync, existsSync, createReadStream, mkdirSync, rmSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { RECEIPT_KINDS, type Receipt, type ReceiptKind, type ReceiptPatch } from '../../types/index.js';
@@ -29,7 +30,7 @@ const refuse = (what: string): never => { throw new RequestError(400, `${what}.`
 
 /** An empty description or remark clears it; null clears a date, a due date (back to the one its text states), an amount, a kind or the VAT facts. */
 function parseReceiptPatch(body: unknown): ReceiptPatch {
-  const b = patchBody(body, ['filename', 'date', 'dueDate', 'amount', 'currency', 'description', 'remarks', 'kind', 'vat', 'vatBy']);
+  const b = patchBody(body, ['filename', 'date', 'dueDate', 'amount', 'currency', 'description', 'remarks', 'kind', 'vat', 'vatBy', 'setupDocument']);
   const patch: ReceiptPatch = {};
   if ('filename' in b) {
     const filename = stringField(b, 'filename').trim();
@@ -73,6 +74,10 @@ function parseReceiptPatch(body: unknown): ReceiptPatch {
     if (b.kind !== null && !RECEIPT_KINDS.includes(b.kind as ReceiptKind)) throw new RequestError(400, `kind muss eines von ${RECEIPT_KINDS.join(', ')} sein.`);
     patch.kind = b.kind as ReceiptKind | null;
   }
+  if ('setupDocument' in b) {
+    if (b.setupDocument !== true || patch.kind !== 'supporting') throw new RequestError(400, 'setupDocument nur als true, mit kind supporting.');
+    patch.setupDocument = true;
+  }
   if ('vat' in b) patch.vat = b.vat === null ? null : parseVatFacts(b.vat, refuse);
   if ('vatBy' in b) {
     if (b.vatBy !== null || !patch.vat) throw new RequestError(400, 'vatBy nur als null, mit vat.');
@@ -82,7 +87,7 @@ function parseReceiptPatch(body: unknown): ReceiptPatch {
 }
 
 /** The receipt with the patch applied: null removes a field, a kind (or none) is a person's. The VAT facts go through setReceipt. */
-function patched(receipt: Receipt, { date, dueDate, amount, kind, vat: _vat, vatBy: _vatBy, ...rest }: ReceiptPatch): Receipt {
+function patched(receipt: Receipt, { date, dueDate, amount, kind, vat: _vat, vatBy: _vatBy, setupDocument, ...rest }: ReceiptPatch): Receipt {
   const out: Receipt = { ...receipt, ...rest };
   if (date !== undefined) out.date = date ?? undefined;
   if (dueDate === null) delete out.dueDate;
@@ -91,7 +96,8 @@ function patched(receipt: Receipt, { date, dueDate, amount, kind, vat: _vat, vat
   if (kind !== undefined) {
     out.kind = kind ?? undefined;
     out.kindBy = 'human';
-    out.kindRule = undefined;
+    // Her answer «Als Dokument ablegen»: a fund's document, its card in Löhne takes it; any other kind ends the suggestion.
+    out.kindRule = setupDocument ? SETUP_DOCUMENT_RULE : undefined;
     out.kindWhy = undefined;
   }
   return out;

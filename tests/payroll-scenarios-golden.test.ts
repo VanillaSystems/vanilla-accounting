@@ -22,6 +22,8 @@
  * - NZ small wage year lifted (12 × 200 + 300): 2,700 over 2,500, 2026's 2,400 caught up. NZ small wage stays under
  *   (12 × 150 + 300 = 2,100), then +500: 2,600, the 1,800 and the 300 caught up.
  * - NZ out of order, NZ earlier open: a later Nachzahlung computed while an earlier one is open says so (earlierOpen).
+ * - 11 scenarios below the BVG entry threshold or without a pension line (small wages, pensioners): the entry fact is
+ *   entryNoPension instead of entry (walk 3, §22 decision 107); no line, base or total changes.
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

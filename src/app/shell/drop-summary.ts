@@ -4,6 +4,7 @@
  * a payment or not), and the period most of it landed in. Read from the books the page holds, never
  * stored; pure, so tests run it as it is.
  */
+import { isSetupSuggested } from '../../booking/payslip.js';
 import type { BankTransaction, Index } from '../../types/index.js';
 import type { DropRow } from '../../types/drop.js';
 import type { Question } from '../../questions/model.js';
@@ -49,7 +50,8 @@ export type ReceiptState = 'matched' | 'supporting' | 'none' | 'copy' | 'unread'
 
 export function receiptStateOf(r: Receipt, links: number, copy: boolean): ReceiptState {
   if (links > 0) return 'matched';
-  if (r.kind === 'supporting') return 'supporting';
+  // A text suggested as a fund's document waits for her answer, not for its date or amount (§22 decision 108).
+  if (r.kind === 'supporting' || isSetupSuggested(r)) return 'supporting';
   if (isNoReceipt(r, links)) return 'none';
   if (copy) return 'copy';
   if (waitsForReading(r)) return 'unread';
@@ -71,7 +73,9 @@ export const linkedAs = (links: readonly Pick<Mapping, 'rule'>[]): 'feeBill' | '
 export type FileState = { kind: 'working'; step?: string; doing?: Doing } | { kind: 'read' } | { kind: 'unread' } | { kind: 'matched' } | { kind: 'waits' } | { kind: 'orderPage'; provider: string } | { kind: 'feeBill'; provider: string } | { kind: 'stuck'; run: string } | { kind: 'statement' } | { kind: 'report' } | { kind: 'refused'; reason: string }
   | { kind: 'none'; why: string } | { kind: 'twin'; of: string; name: string; why: TwinWhy } | { kind: 'supporting'; why?: string; of?: { id: string; name: string } }
   /** A balance sheet (#427): no payment belongs to it; the one of the year before's last day is offered for the opening. */
-  | { kind: 'balanceSheet'; sheet?: BalanceSheet };
+  | { kind: 'balanceSheet'; sheet?: BalanceSheet }
+  /** A fund's or insurer's document for the payroll's setup (a decision, a policy, a pension certificate): no payment belongs to it, its card in Löhne takes it; `suggested`: code only thinks so, the row asks her. */
+  | { kind: 'payrollSetup'; suggested?: true };
 
 /**
  * The row of a taken receipt whose own run stopped (#483): what the books made of it stands when
@@ -91,7 +95,7 @@ export function overStoppedRun(books: FileState, run: string): FileState {
  * that waits for an answer in its row (columns, a password, «was ist das?», «schon da?»), one set
  * aside or not saved, one taken back, and one still worked on.
  */
-export const CLOSING_GROUPS = ['statement', 'report', 'matched', 'feeBill', 'read', 'supporting', 'beside', 'balanceSheet', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
+export const CLOSING_GROUPS = ['statement', 'report', 'matched', 'feeBill', 'read', 'supporting', 'beside', 'balanceSheet', 'payrollSetup', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
 export type ClosingGroup = typeof CLOSING_GROUPS[number];
 export type ClosingCounts = Record<ClosingGroup, number>;
 
@@ -123,6 +127,7 @@ export function closingGroupOf(r: DropRow, x: FileState | undefined): ClosingGro
     case 'twin': return 'copy';
     case 'supporting': return x!.kind === 'supporting' && x.of ? 'supporting' : 'beside';
     case 'balanceSheet': return 'balanceSheet';
+    case 'payrollSetup': return x!.kind === 'payrollSetup' && x.suggested ? 'asks' : 'payrollSetup';
   }
 }
 
@@ -148,12 +153,12 @@ export const readOf = (f: ClosingCounts) => ({ read: f.matched + f.read + f.copy
  * groups, so a new group without its sentence does not compile (tests/drop-landed.test.ts).
  */
 export const CLOSING_SENTENCE = {
-  supporting: 'drop.sum.supporting', beside: 'drop.sum.beside', balanceSheet: 'drop.sum.balanceSheets', copy: 'drop.sum.copies', incomplete: 'drop.sum.incomplete', unread: 'drop.sum.unread',
+  supporting: 'drop.sum.supporting', beside: 'drop.sum.beside', balanceSheet: 'drop.sum.balanceSheets', payrollSetup: 'drop.sum.payrollSetup', copy: 'drop.sum.copies', incomplete: 'drop.sum.incomplete', unread: 'drop.sum.unread',
   orderPage: 'drop.sum.orderPages', feeBill: 'drop.sum.feeBills', stuck: 'drop.sum.stuck', report: 'drop.sum.reports',
   none: 'drop.sum.none', known: 'drop.sum.known', asks: 'drop.sum.asks', aside: 'drop.sum.aside', refused: 'drop.sum.refused', undone: 'drop.sum.undone', working: 'drop.sum.working',
 } as const satisfies Record<Exclude<ClosingGroup, 'statement' | 'matched' | 'read'>, string>;
 /** The receipts' sentences after the read line, and the line of the files that are no receipt or brought nothing new. */
-export const RECEIPT_SENTENCES = ['feeBill', 'supporting', 'beside', 'balanceSheet', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'report'] as const;
+export const RECEIPT_SENTENCES = ['feeBill', 'supporting', 'beside', 'balanceSheet', 'payrollSetup', 'copy', 'incomplete', 'unread', 'orderPage', 'stuck', 'report'] as const;
 export const OTHER_SENTENCES = ['none', 'known', 'asks', 'aside', 'refused', 'undone', 'working'] as const;
 
 /** How many rows are in each group: their sum is the number of rows. */

@@ -103,7 +103,7 @@ export type TariffLoaded = Saved<{ region: string; year: string; version: Tariff
 
 export interface Payments { month: string; rows: PaymentRow[]; file: PaymentFilePlan }
 /** An insurer's figures, and the way its uncovered payments are booked when the company keeps one («Immer so», §22 decision 59). */
-export type InsurerRow = InsurerFigures & { kept?: { business: string; path: string; source?: string } };
+export type InsurerRow = InsurerFigures & { kept?: { business: string; path: string; source?: string }; collects?: { business: string; name: string; path: string; kinds: string[] } };
 export interface Insurers { year: string; rows: InsurerRow[] }
 /** An issued Lohnausweis as the list names it: its figures stay on the server, in its PDF. */
 export type Issued = Omit<LohnausweisSnapshot, 'data'>;

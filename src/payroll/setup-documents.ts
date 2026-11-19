@@ -7,6 +7,7 @@
  * and only what a figure needs. Nothing is used before the person keeps the card: keeping writes the same insurances and
  * dated entries the forms write, each naming the document (`source.receiptId`). Pure and browser-safe.
  */
+import type { DocumentsData } from '../core/modules/schema.js';
 import type { PayrollData } from '../core/modules/schema.js';
 import type { Receipt } from '../types/index.js';
 import type { PayrollStore } from './model.js';
@@ -36,6 +37,48 @@ export function setupKindOf(text: string, data: Pick<PayrollData, 'setupDocument
   const head = lines(text).slice(0, HEAD_LINES).join('\n');
   return Object.entries(kinds).find(([, words]) => words.length && wordRe(words).test(head))?.[0];
 }
+
+/** What tells a bill (documents.yaml `receipt`): its titles and its payment slip. */
+export type BillWords = { receipt: Pick<DocumentsData['receipt'], 'title' | 'slip'> };
+
+const TITLE_LINES = 15;
+/** A title followed by its number («Police Nr. 15.123.456», «Police n° …», «Polizza n. …»). */
+const NUMBERED = /^\s*(?:nr|no|n°|n|nummer|numéro|numero)\.?\s*[:#]?\s*\d|^\s*:\s*\d/iu;
+const DATED = /\b\d{1,2}\.\d{1,2}\.\d{2,4}\b/g;
+/** An amount («1'770.00», «212.40»), never a day («31.01.», «10.04.2026»). */
+const AMOUNT = /(?<![\d.])\d[\d'’]*[.,]\d{2}(?![.\d])/;
+const IBAN = /\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){3,7}/;
+
+/**
+ * Whether a text looks like a fund's or insurer's document (a decision, a policy, a pension certificate) and not its bill
+ * (§22 decision 108): a suggestion the person answers in Belege, never a kind code sets. A line of its first fifteen starts
+ * with a word of payroll.yaml `setupDocuments.titles` (behind a letterhead and an address block too), one followed by its
+ * number only where the next line names a kind, and the text names a kind (setupKindOf); and nothing says bill: no title
+ * of `bills` or of documents.yaml `receipt.title` as a whole word («Altersgutschrift» is none), no payment slip word, no
+ * IBAN, no word of `billSigns`, no line with a word of `payable` and one dated day or an amount (a schedule of several
+ * days is a decision's).
+ */
+export function isSetupText(text: string, data: Pick<PayrollData, 'setupDocuments'>, bill?: BillWords): boolean {
+  const sd = data.setupDocuments;
+  if (!sd?.titles?.length || !setupKindOf(text, data)) return false;
+  const all = lines(text);
+  const titleAt = new RegExp(`^(?:${[...sd.titles].sort((a, b) => b.length - a.length).map(escape).join('|')})(?![\\p{L}\\d])`, 'iu');
+  const kinds = wordRe(Object.values(sd.kinds).flat());
+  const titled = all.slice(0, TITLE_LINES).some((l, i) => {
+    const m = titleAt.exec(l);
+    if (!m) return false;
+    return !NUMBERED.test(l.slice(m[0].length)) || (!!all[i + 1] && kinds.test(all[i + 1]));
+  });
+  if (!titled) return false;
+  const billTitles = [...(sd.bills ?? []), ...(bill?.receipt.title ?? [])];
+  if (billTitles.length && wordRe(billTitles).test(text)) return false;
+  if (bill?.receipt.slip.length && wordRe(bill.receipt.slip).test(text)) return false;
+  if (IBAN.test(text) || (sd.billSigns?.length && wordRe(sd.billSigns).test(text))) return false;
+  const payable = sd.payable?.length ? wordRe(sd.payable) : undefined;
+  return !payable || !all.some((l) => payable.test(l) && ((l.match(DATED)?.length ?? 0) === 1 || AMOUNT.test(l)));
+}
+
+export { SETUP_DOCUMENT_RULE, isSetupDocument } from '../booking/payslip.js';
 
 /** A number the text prints after one of its labels, on the same line («Abrechnungsnummer: 100.2345»). */
 function numberAfter(text: string, labels: readonly string[] | undefined): string | undefined {
@@ -209,9 +252,11 @@ export function usedDocuments(store: Pick<PayrollStore, 'insurances' | 'employee
  * it) and not set aside, with what code read and what the AI added; `exists`: the firm's insurance of that kind it
  * would add rates to. Derived on every read: a better reader reads old documents again.
  */
-export function setupCards(receipts: readonly Pick<Receipt, 'id' | 'filename' | 'date' | 'extractedText' | 'kind'>[], store: Pick<PayrollStore, 'insurances' | 'employees'>, data: Pick<PayrollData, 'setupDocuments' | 'insurances'>, state: SetupState): SetupCard[] {
+export function setupCards(receipts: readonly Pick<Receipt, 'id' | 'filename' | 'date' | 'extractedText' | 'kind' | 'kindBy'>[], store: Pick<PayrollStore, 'insurances' | 'employees'>, data: Pick<PayrollData, 'setupDocuments' | 'insurances'>, state: SetupState, bill?: BillWords): SetupCard[] {
   const used = usedDocuments(store);
-  return receipts.filter((r) => r.kind !== 'payslip' && !used.has(r.id) && !state[r.id]?.dismissed && !state[r.id]?.kept && setupKindOf(r.extractedText ?? '', data))
+  // `bill` (documents.yaml): a fund's bill that names a document is no card (isSetupText).
+  // A text she said is a receipt («Ist ein Beleg», any kind of hers but a fund's document) is no card.
+  return receipts.filter((r) => r.kind !== 'payslip' && !(r.kindBy === 'human' && r.kind !== 'supporting') && !used.has(r.id) && !state[r.id]?.dismissed && !state[r.id]?.kept && isSetupText(r.extractedText ?? '', data, bill))
     .map((r) => {
       const items = withModel(readSetupDocument(r.extractedText ?? '', data), state[r.id]?.ai ?? []).map((p) => {
         const exists = store.insurances.find((i) => i.kind === p.kind && !i.validUntil)?.id;

@@ -2111,6 +2111,68 @@ Taken while building the year-end checks (2026-11-19):
     named as «ohne Lohnabrechnung der App». An insurer shows, beside accrued, paid and open, what the final
     statement's comparison counts for those months (`settlementOf`'s `before`).
 
+After the third persona walk (2026-11-19):
+
+107. **The entry fact names the pension fund only for a person it insures** (src/payroll/compute.ts): «Anmeldung bei
+     der Ausgleichskasse und dem Unfallversicherer» (`entryNoPension`) when the month has no line of a kind required
+     above a threshold (the pension's, payroll.yaml `requiredAbove`), neither computed nor «unvollständig»: below the
+     entry threshold, or a firm without a pension fund. A person above it without her certificate yet is still named
+     with the pension fund: she is to be registered.
+108. **A fund's or insurer's document is proposed, never decided by code; what reaches no model is decided per document**
+     (src/payroll/setup-documents.ts `isSetupText`, src/booking/kept-from-models.ts `keptFromModels`, src/intake/read.ts). Code
+     never files a receipt as `supporting` by itself: a text that looks like a fund's document (`isSetupText`, a corpus
+     of 87 realistic texts in German, French and Italian, tests/payroll-setup-corpus.test.ts) gets kindRule
+     `suggest:payroll-setup`, no kind. Its title: a line of its first fifteen starts with a word of payroll.yaml
+     `setupDocuments.titles`, behind a letterhead and an address block too, one followed by its number only where the next
+     line names a kind; and nothing says bill: no title of `bills` or of documents.yaml `receipt.title` as a whole word, no
+     payment slip word, no IBAN, no word of `billSigns` (a reminder, a premium notice, a balance, a direct debit), no line of
+     `payable` with one dated day or an amount (a schedule of several days is a decision's). Belege and the drop ask «Als
+     Dokument ablegen» (her kind `supporting`, kindRule `document:payroll-setup`, beside its card) or «Ist ein Beleg» (her
+     `invoice`, never asked again, no card); meanwhile it waits for no date or amount and is paired with no payment. A
+     receipt read before is suggested so once (the ids looked at in data/setup-documents-looked.json), unless a person gave
+     it a kind, the model took it for an invoice whose date and amount were read, or its day is closed. No model reads a
+     receipt by `keptFromModels` (src/booking/kept-from-models.ts), decided per document on every path (the kind question,
+     the VAT reading, the titles, the match, the pair chain, the booking's prompt, a vision read again): a payslip, one
+     suggested or filed as a fund's document, or one whose own text carries a social security number, a person's label
+     with its colon, or a person of payroll.json beside a birth date's or an insured wage's word. Such a receipt is still
+     paired by code and by the person. Prompts are not masked beyond the social security number (src/llm/mask.ts as
+     before). The sidebar is denied such receipts' files; receipts.jsonl stays readable to it. A vision read a person asks
+     for in Belege is hers. Contributions typed on a pension certificate's card without the person they are hers are
+     refused (`badInput`, field `person`: «Person wählen …»), never dropped.
+109. **A collector's payment is proposed for the months it pays, also ahead of them** (src/booking/withheld.ts
+     `collectorProposal`): for a business whose file collects kinds owed on 2270 (not the withholding tax), the hand form
+     proposes the employees' share of a whole run of the oldest months its payslips withheld that no earlier payment
+     cleared, counting the wages of the whole year, not only those up to the payment's day: the webshop's pension fund
+     bill paid on 10.07. for Q3 clears July to September, the BVG share of three months. Of the runs the payment can be (twice to three times
+     their share), the one whose share is nearest half of it; the rest on the payee's earlier contribution account, else
+     the kind's (5720). It stays a proposal booked by her click: code does not book a payment ahead of its months
+     (decision 72). The same share is what «Arbeitnehmeranteil abziehen» asks of a payment booked whole on 5720 where
+     nothing was withheld on its day (`withheldSharesOf`), so 2270 clears. After the review: of several runs that fit,
+     a whole quarter; else the one run that is sure (it ends with a quarter, or the next month is withheld already). Two
+     runs without a quarter, or one that later payslips may still lengthen (a bill paid before the quarter's last
+     payslip), are `unsure`: the form proposes nothing off 2270 and names the months; `withheldSharesOf` takes no share.
+110. **«Zieht Lohnabzüge ein» marks a collector without editing YAML** (src/payroll/collects-way.ts, `GET|POST|DELETE
+     /api/payroll/collects`): offered on a payment out, unbooked on its hand form and
+     booked on its page, whose payee, text or documents' first lines name a kind the year's payslips withheld and no
+     business collects yet, never for a wage (a payslip is linked) nor a payroll insurer's payment (decision 68). The
+     click writes `collects:` into the company's file of the business the payment routes to (a binding of an app file
+     starts with its id; without one, a new file matched by the payee and its IBAN, in the folder of the kind's collector:
+     setup.yaml `wages.roles`, authorities for the compensation fund and the tax office, suppliers for a pension fund or
+     an insurer, as decision 59 files an insurer), only that key changing, through a file beside it and a rename. Nothing
+     is booked. «Rückgängig» works from the file alone, after a restart too, as decision 59's: on the payment and on the
+     fund's page in Lohnzahlungen (beside the kept way) it takes the kinds out of `collects:` again, and removes a file
+     the click made (its first line says so) once it holds nothing else. A collector's payment is on the list of payments
+     proven elsewhere (`GET /api/payroll/insurer-payments`), so the bank page never says «kein Beleg · Beleg suchen».
+     After the review: a payment without the payee's name gets no offer (its whole text would name and match a file).
+     The marker line names the hash of what the click wrote besides `collects:` (a binding too): «Rückgängig» deletes the
+     file only while it holds exactly that, else takes out the key. The writer's output is read again before it is
+     written (as decision 59's): a file shaped otherwise is refused (`badInput`). Without a click in this view, the
+     payment's «Rückgängig» takes back only the kinds the payment names. The offer says its payments then wait for no
+     receipt; the routes read the knowledge, not the classifier's context, and the list of payments to collectors is
+     read on every load of the books (no cache).
+
+---
+
 Taken on the third persona walk's fixes, part b (2026-11-19):
 
 111. **A carried correction of the tax at source is a row of its own in the settlement list**, in the list of the
@@ -2231,8 +2293,6 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     source read here (it is treated as no turnover, no code on the line); a firm that learns otherwise changes the
     Lohnart. The Lohnausweis's field 12 (Quellensteuerabzug) sums the tax lines as withheld, before the commission
     the employer keeps (the commission is an employer line of its own and enters no field; test).
-
----
 
 ## Sources
 

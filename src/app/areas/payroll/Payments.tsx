@@ -5,6 +5,7 @@
  * payslips accrued, what was paid, what is open, with the final statement (Schlussabrechnung) the person
  * enters off the insurer's statement. The person pays in e-banking, from the payment file of the month (pain.001, B1).
  */
+import { collectsKindLabel } from '../journal/CollectsOffer.js';
 import { useEffect, useState, type FormEvent } from 'react';
 import { localToday } from '../../../accounting/periods.js';
 import { baseCurrency } from '../../../engines/index.js';
@@ -256,6 +257,7 @@ function Insurer({ row, year, books, nav, canEdit }: Props & { row: InsurerRow; 
         </dl>
         <p className="m">{t('payroll.insurers.how', { account: row.account })}</p>
         {row.kept ? <KeptWay row={row} kept={row.kept} nav={nav} canEdit={canEdit} /> : null}
+        {row.collects ? <KeptCollects row={row} kept={row.collects} nav={nav} canEdit={canEdit} /> : null}
         {settled.length ? (
           <div className="psec" data-testid="settled">
             <h3>{t('payroll.insurers.settled')}</h3>
@@ -283,6 +285,23 @@ function KeptWay({ row, kept, nav, canEdit }: { row: InsurerRow; kept: NonNullab
       <h3>{t('payroll.insurers.keptTitle')}</h3>
       <p>{t('payroll.insurers.kept', { path: kept.path })}</p>
       {canEdit ? <p><AsyncButton type="button" className="btn ghost" data-testid="insurer-kept-undo" onClick={undo}>{t('journal.byHand.insurerWay.undo')}</AsyncButton> <span className="m">{t('payroll.insurers.keptUndo')}</span></p> : null}
+      {refusal.node}
+    </div>
+  );
+}
+
+/** What the fund's company file says it collects («Zieht Lohnabzüge ein», §22 decision 110), and «Rückgängig», which takes it out of the file. */
+function KeptCollects({ row, kept, nav, canEdit }: { row: InsurerRow; kept: NonNullable<InsurerRow['collects']>; nav: Nav; canEdit: boolean }) {
+  const refusal = useRefusal();
+  const undo = async () => {
+    try { await api.forgetCollects(kept.business, kept.kinds); refusal.clear(); nav.toast(t('journal.byHand.collects.undone', { name: row.name })); await reloadPayroll(); } catch (e) { refusal.refuse(e); }
+    nav.refresh();
+  };
+  return (
+    <div className="psec" data-testid="insurer-collects">
+      <h3>{t('payroll.insurers.collectsTitle')}</h3>
+      <p>{t('payroll.insurers.collects', { kinds: kept.kinds.map(collectsKindLabel).join(', '), path: kept.path })}</p>
+      {canEdit ? <p><AsyncButton type="button" className="btn ghost" data-testid="insurer-collects-undo" onClick={undo}>{t('journal.byHand.collects.undo')}</AsyncButton> <span className="m">{t('payroll.insurers.keptUndo')}</span></p> : null}
       {refusal.node}
     </div>
   );

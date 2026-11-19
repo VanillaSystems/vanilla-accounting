@@ -12,6 +12,8 @@
  * two people, AHV/IV/EO 5.3 % and ALV 1.1 % a month, the owner's pension fund contribution, the pension fund's bill
  * paid on 10.07., the Akonto bill AK-26-Q3-30871 paid on 28.09.
  */
+// src/server/edits.ts opens the process's workspace when it loads: without VANILLA_WORKSPACE it is the bundled demo, so the file runs on its own.
+import './support/demo-workspace.js';
 import './support/jurisdiction.js';
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';

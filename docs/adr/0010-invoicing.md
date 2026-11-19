@@ -4,8 +4,8 @@ Status: accepted (2026-10-10). Data, documents and payment matching built 2026-1
 
 ## Problem
 
-A company that leaves an all-in-one tool such as bexio needs to write invoices, not only book
-them. bexio's invoicing, as its own pages describe it: a QR-bill on every invoice, incoming
+A company that leaves an all-in-one tool needs to write invoices, not only book
+them. The invoicing of such a tool, as the market leader's pages describe it: a QR-bill on every invoice, incoming
 payments recognized through the e-banking link, reminders (automatic if wanted), quotes,
 invoices and delivery notes from stored customers, articles and services, invoices from a quote
 or from recorded hours, and an own layout with logo and letterhead.
@@ -104,7 +104,7 @@ The registry gains tools such as `create_invoice`, `issue_invoice`, `list_open_i
 an invoice for 12 hours in October". Owner and bookkeeper issue invoices; the Treuhänder may in
 full service; employees do not ([personas](../personas/README.md)).
 
-### Prerequisite for many who leave bexio
+### Prerequisite for many who leave an all-in-one tool
 
 Today the app supports only companies registered for VAT on the effective method; a freelancer
 without VAT is refused by the setup, and a sole proprietorship (Einzelfirma) is covered only in

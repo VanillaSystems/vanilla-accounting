@@ -603,6 +603,12 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
   const holidays = employed && data.holidays ? holidayBalanceOf(e, month, settings.proration, data) : undefined;
   if (holidays && leaves) fact('holidayBalance', { days: holidays.balance });
 
+  // The entry fact names the pension fund only for a person it insures: none below the entry threshold, none without a
+  // pension fund or her line of it (docs/specs/payroll.md §22 decision 107).
+  const pensionTypes = new Set(data.contributions.filter((c) => data.insurances[c.insurance]?.requiredAbove).map((c) => c.wageType));
+  const entryAt = facts.findIndex((f) => f.key === 'entry');
+  if (entryAt >= 0 && pensionTypes.size && ![...lines, ...missing].some((l) => pensionTypes.has(l.wageType))) facts[entryAt] = { ...facts[entryAt], key: 'entryNoPension' };
+
   const totals = totalsOf(lines, types);
   const bank = read(`employees/${e.id}/bank`, e.bank, paydayOf(month, settings.payday));
   if (!bank?.iban && totals.payout > 0) facts.push({ key: 'noIban' });

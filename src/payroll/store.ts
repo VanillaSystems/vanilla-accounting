@@ -7,7 +7,7 @@
  *   transactional-data/<year>/payroll/payslips.jsonl  close, reopen and correction events
  *   transactional-data/<year>/receipts/            the payslip PDFs, receipts of the books like any other
  */
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { yearPaths, yearsOf, type Workspace } from '../workspace/workspace.js';
 import { PAYROLL_MIGRATIONS, PAYROLL_SCHEMA, climb, schemaOf } from '../workspace/schema.js';
@@ -23,6 +23,24 @@ export const emptyPayroll = (): PayrollStore => ({
 type Paths = Pick<Workspace, 'paths'>;
 
 export const hasPayroll = (ws: Paths): boolean => existsSync(ws.paths.payroll);
+
+/**
+ * The full names of the people of payroll.json, each name it ever held: what src/llm/mask.ts masks before a model. Read again
+ * only when the file changed; none without one, or when it cannot be read.
+ */
+let peopleCache: { path: string; mtime: number; names: string[] } | undefined;
+export function payrollPeople(ws: Paths): string[] {
+  const path = ws.paths.payroll;
+  try {
+    if (!existsSync(path)) return [];
+    const mtime = statSync(path).mtimeMs;
+    if (peopleCache?.path !== path || peopleCache.mtime !== mtime) {
+      const names = loadPayroll(ws).employees.flatMap((e) => e.name.map((n) => `${n.value.first} ${n.value.last}`));
+      peopleCache = { path, mtime, names: [...new Set(names)] };
+    }
+    return peopleCache.names;
+  } catch { return []; }
+}
 
 export function loadPayroll(ws: Paths): PayrollStore {
   const path = ws.paths.payroll;

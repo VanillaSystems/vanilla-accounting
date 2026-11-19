@@ -13,6 +13,8 @@
  * a payout has no receipt of its own, #203) and several receipts that add up to one payment (receipt-sets.ts).
  * A link to a payment of a filed quarter is never made (golden rule 1).
  */
+import { isSetupDocument, isSetupSuggested } from '../booking/payslip.js';
+import { keptFromModels } from '../booking/kept-from-models.js';
 import { existsSync } from 'node:fs';
 import { join, basename } from 'node:path';
 import { buildMatchPrompt, parseMatchResult, type MatchResult } from '../llm/prompts.js';
@@ -243,7 +245,10 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
   // A payslip of another program is filed and paired by code (§10.2 A1, A8): no model names it or looks for its payment.
   // One code cannot read is filed too, unlinked: the person pairs it, no model sees it.
   const slips = staged.filter((r) => !r.needsVisionReview && r.kind === 'payslip');
-  const toRead = staged.filter((r) => !r.needsVisionReview && r.kind !== 'noise' && r.kind !== 'payslip');
+  // A fund's or insurer's document (a decision, a policy, a pension certificate), filed as one or suggested as one, has no payment
+  // and no model reads it: filed as it is, the person answers its suggestion in Belege (§22 decision 108).
+  const setup = staged.filter((r) => !r.needsVisionReview && (isSetupDocument(r) || isSetupSuggested(r)));
+  const toRead = staged.filter((r) => !r.needsVisionReview && r.kind !== 'noise' && r.kind !== 'payslip' && !isSetupDocument(r) && !isSetupSuggested(r));
   // Code first (#187): the staged receipts take part in the chain with the facts code reads off them.
   const early = toRead.flatMap((r) => provisional(r) ?? []);
   // The batch payers with the firm's own UIDs as the books show them now (buyerUids): read again on every run of the code.
@@ -315,6 +320,13 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
     log(target ? `  set aside, no receipt${receipt.kindWhy ? ` (${receipt.kindWhy})` : ''}: ${receipt.filename} → ${target}` : `  warn: ${receipt.filename} is not staged in beleg-import/ any more, skipping`);
   }
 
+  for (const receipt of setup) {
+    // Dated and summed by what code reads off its text: once she says «Ist ein Beleg», the chain pairs it like any receipt.
+    const p = provisional(receipt);
+    const target = archive(receipt, receipt.filename, (r) => { if (p) Object.assign(r, keepHand(r, { date: p.date, amount: p.amount, currency: p.currency })); });
+    progress(++completed, total);
+    log(target ? `  ${receipt.filename} → ${target}  looks like a fund's or insurer's document: Belege asks the person, no model reads it (no model match)` : `  warn: ${receipt.filename} is not staged in beleg-import/ any more, skipping`);
+  }
   for (const receipt of slips) {
     const target = archive(receipt, receipt.date ? codeName(receipt.date, undefined, receipt.originalFilename ?? receipt.filename) : receipt.filename, () => undefined);
     progress(++completed, total);
@@ -375,6 +387,16 @@ export const matchStep: StepRun = async ({ ws, books, ask, progress, log }) => {
       progress(++completed, total);
       log(`  ${receipt.filename} → ${target}  a bill of a VAT-only correction: dated and named by code, no payment${twin ? `; possibly a copy of ${twin}, Belege asks` : ''}  (no model match)`);
     }
+  }
+  // A receipt whose own text carries a social security number, a person's label or a payroll person beside her birth date or
+  // insured wage (src/booking/kept-from-models.ts): dated and named by code, its payment the chain's or the person's, no model match.
+  for (const receipt of toRead.filter((r) => !pairedByCode.has(r.id) && keptFromModels(r))) {
+    const p = provisional(receipt);
+    const target = archive(receipt, p?.date ? codeName(p.date, undefined, receipt.originalFilename ?? receipt.filename) : receipt.filename, (r) => { if (p) Object.assign(r, keepHand(r, { date: p.date, amount: p.amount, currency: p.currency })); });
+    if (!target) continue;
+    pairedByCode.add(receipt.id);
+    progress(++completed, total);
+    log(`  ${receipt.filename} → ${target}  holds a person's data: no model reads it, its payment is code's or the person's  (no model match)`);
   }
   const toProcess = toRead.filter((r) => !pairedByCode.has(r.id));
   if (toProcess.length === 0) {

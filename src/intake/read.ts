@@ -34,10 +34,13 @@ import { fileReceipts, paymentContext } from '../invoices/service.js';
 import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
 import { putInQuarantine } from './quarantine.js';
 import { documentKind } from './document-kind.js';
+import { isSetupText } from '../payroll/setup-documents.js';
+import { keptFromModels, textKeptFromModels } from '../booking/kept-from-models.js';
+import { keepLookedAtForSetup, lookedAtForSetup } from '../payroll/setup-store.js';
 import { askKind, asksModel, kindOfModel, MODEL_RULE, MODEL_TEXT, NOT_A_RECEIPT, visionVerdict, type ModelKind } from './unclear.js';
 import { statementFacts } from '../books/statement-facts.js';
-import { documents } from '../engines/index.js';
-import { monthEnd, PAYSLIP_RULE, PAYSLIP_UNREAD_RULE, payslipTitled, readPayslip } from '../booking/payslip.js';
+import { documents, payroll } from '../engines/index.js';
+import { isSetupDocument, monthEnd, PAYSLIP_RULE, PAYSLIP_UNREAD_RULE, payslipTitled, readPayslip, SETUP_SUGGESTED_RULE } from '../booking/payslip.js';
 import { closedPayslips } from '../payroll/service.js';
 import { periodLock, release, type Books } from '../books/store.js';
 import { entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
@@ -193,6 +196,15 @@ function unmatchedOf(bank: BankFiles): string[] {
 interface Extracted { text: string; method: Receipt['extractionMethod']; fileSize: number; verdict?: ModelKind }
 
 /**
+ * Whether a text is a fund's or insurer's document for the payroll's setup: its first lines name one before any receipt
+ * title, a compound one too («Beitragsrechnung Q3», «Prämienrechnung»): the fund's bill is a receipt to pay.
+ */
+function setupDocument(text: string): boolean {
+  const data = payroll();
+  return !!data?.setupDocuments && isSetupText(text, data, documents());
+}
+
+/**
  * What a fresh receipt's text says it is (src/intake/document-kind.ts): an order confirmation or a
  * delivery note is kept beside its invoice, never paid on its own. That a text is no receipt at all
  * decides only for what the model read (a photo): a PDF's own text was judged at the drop already,
@@ -210,6 +222,9 @@ function kindOfText(fresh: Extracted, filename: string, originalFilename: string
     if (!slip || closedHere(slip.period, slip.employee)) return { kind: 'payslip', kindBy: 'rule', kindRule: PAYSLIP_UNREAD_RULE };
     return { kind: 'payslip', kindBy: 'rule', kindRule: PAYSLIP_RULE, amount: slip.net, currency: slip.currency, ...(slip.period ? { date: monthEnd(slip.period) } : {}) };
   }
+  // A text that looks like a fund's or insurer's document (a decision, a policy, a pension certificate) is a suggestion, never a
+  // kind: Belege asks «Als Dokument ablegen» or «Ist ein Beleg»; meanwhile no model reads it (docs/specs/payroll.md §22 decision 108).
+  if (setupDocument(fresh.text)) return { kindRule: SETUP_SUGGESTED_RULE };
   const v = documentKind(fresh.text, documents());
   // A customs assessment keeps its tax and day: a payment to the customs office is paired with it by them (#197).
   if (v.is === 'supporting') return { kind: 'supporting', kindBy: 'rule', kindRule: `document:${v.why}`, ...(v.why === 'customs-assessment' ? assessmentFacts(fresh.text, documents().customs) : {}) };
@@ -289,7 +304,9 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   let waitingForModel = 0;
   await Promise.all(toExtract.map((f) => pool(async () => {
     // Only a file new to the books may be set aside by its reading: one a person declared a receipt is only read again.
-    const out = await extractTextFast(f.filepath, ask, log, !known.has(f.id));
+    // A receipt no model reads (a payslip, a fund's document, a text with a person's data) is not read again by a model's vision either.
+    const was = known.get(f.id);
+    const out = await extractTextFast(f.filepath, was && keptFromModels(was) ? undefined : ask, log, !known.has(f.id));
     if (out.vision === 'none') waitingForModel++;
     extracted.set(f.id, { text: out.text, method: out.method, fileSize: statSync(f.filepath).size, ...(out.verdict ? { verdict: out.verdict } : {}) });
     progress(extracted.size, toExtract.length);
@@ -307,8 +324,9 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   const unclear = ask ? toExtract.filter((f) => {
     const read = extracted.get(f.id);
     return !again.has(f.id) && !known.get(f.id)?.kind && !known.get(f.id)?.kindBy && !!read && !read.verdict && textProves({ extractedText: read.text, extractionMethod: read.method }) && asksModel(read.text, documents())
-      // A payslip code reads is never shown to the model: it carries a salary and a person (§10.2 A8).
-      && !payslipTitled(read.text, ws.company);
+      // A payslip code reads is never shown to the model: it carries a salary and a person (§10.2 A8); nor a fund's document
+      // (a pension certificate names an insured wage): only its card's allow-list reaches a model, on the person's click.
+      && !payslipTitled(read.text, ws.company) && !setupDocument(read.text) && !textKeptFromModels(read.text);
   }) : [];
   await Promise.all(unclear.map((f) => pool(async () => {
     try {
@@ -333,11 +351,26 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
 
   // Everything read from disk is read again here, in the one synchronous change: a file deleted
   // or a statement uploaded while the texts were read is not undone.
+  const looked = lookedAtForSetup(ws);
+  // The receipts this run looked at, kept once the books took the change (the change may be made twice: decided by `looked` alone).
+  const lookedNow = new Set<string>();
   const outcome = books.update((index) => {
     const now = readTransactions(ws);
     const stillUnmatched = unmatchedOf(now);
     if (stillUnmatched.length) throw new Error(`Kontoauszug ohne Bankkonto: ${stillUnmatched.join('; ')}`);
     const byId = new Map(index.receipts.map((r) => [r.id, r]));
+    // A fund's or insurer's document read before code told them apart (walk 3): suggested as one once per receipt (the ids looked
+    // at are kept in data/, so a person's answer is never asked again), unless a person gave it a kind, the model took it for an
+    // invoice whose date and amount were read, or it lies in a closed period. A link stays as it is (§22 decision 108).
+    const lock = periodLock(index);
+    const setupKindAgain = (r: Receipt): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule'> | Record<string, never> => {
+      if (looked.has(r.id)) return {};
+      lookedNow.add(r.id);
+      if (isSetupDocument(r) || r.kindRule === SETUP_SUGGESTED_RULE || r.kindBy === 'human' || (r.kind && r.kind !== 'invoice') || (r.kind === 'invoice' && r.date && r.amount != null) || (r.date && lock.isClosed(r.date))) return {};
+      if (!setupDocument(r.extractedText ?? '')) return {};
+      log(`  ${r.filename}: looks like a fund's or insurer's document: Belege asks the person, no model reads it meanwhile`);
+      return { kind: undefined, kindBy: undefined, kindRule: SETUP_SUGGESTED_RULE };
+    };
     const receipts = files.filter((f) => existsSync(f.filepath)).flatMap(({ id, filename, location }): Receipt[] => {
       const existing = byId.get(id);
       const read = extracted.get(id);
@@ -355,7 +388,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
         return [r];
       }
       const fresh = existing?.extractedText ? undefined : read;
-      if (!fresh) return existing ? [{ ...existing, filename, location, remarks: existing.remarks ?? detectVatProofIssue(existing.extractedText) }] : [];
+      if (!fresh) return existing ? [{ ...existing, filename, location, remarks: existing.remarks ?? detectVatProofIssue(existing.extractedText), ...setupKindAgain(existing) }] : [];
       // Without a model nothing else reads the date and the total; what the text states plainly is taken.
       const plain = ask ? {} : textFacts(fresh.text);
       const originalFilename = existing?.originalFilename ?? filename;
@@ -507,6 +540,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   if (readFailed.length) notes.push({ code: 'failed', count: readFailed.length, detail: `${readFailed[0].file}: ${readFailed[0].error}` });
   if (sameBytes.length) notes.push({ code: 'sameBytes', files: sameBytes });
   if (rewritten.length) notes.push({ code: 'rewritten', files: rewritten });
+  if (lookedNow.size) keepLookedAtForSetup(ws, new Set([...looked, ...lookedNow]));
   return { notes };
 };
 

@@ -411,6 +411,31 @@ Two markers flag an entry you must read before you update:
   card, and «So lassen» holds for the file it was said for.
 - Löhne: after a small-wage year's catch-up, the following months owe ALV on their own wage again
   (a negative ALV base was charged). **⚠ figures** for such a payslip closed from now on.
+- Löhne, payslips from another program: a payment to a pension fund (or another business that
+  collects a deduction the payslips withheld) offers «Zieht Lohnabzüge ein: BVG» on its hand form
+  and on a booked payment; the click keeps `collects:` in the company's file of the fund without
+  editing YAML, with «Rückgängig» there and on the fund's page in Lohnzahlungen, which also works after
+  a restart. Such a payment no longer shows «kein Beleg · Beleg suchen». The hand form then proposes the employees' share of the months
+  the payment pays on 2270 and the rest on the firm's contribution account, also for a bill paid
+  ahead of its quarter, so 2270 clears; a payment already booked whole on 5720 is named under
+  «Arbeitnehmeranteil abziehen» for that share.
+- Belege: a fund's or insurer's document dropped with the receipts (a Beitragsverfügung, a policy,
+  a pension certificate) no longer waits as a receipt «Datum, Betrag fehlt». Where its title says
+  it is one (Police, Verfügung, Vorsorgeausweis, Certificat, …) and nothing says to pay, Belege
+  and the drop ask «Sieht aus wie ein Dokument der Sozialversicherung»: «Als Dokument ablegen»
+  files it beside its card in Löhne › Einstellungen › Sozialversicherungen, «Ist ein Beleg» keeps
+  it a receipt and it is not asked again. Until she answers it is matched with no payment. On a
+  pension certificate's card, contributions typed without the person are refused with «Person
+  wählen» instead of being left out.
+- AI: a receipt suggested or filed as such a document, or whose own text carries a social
+  security number, «Versicherte Person:» or a person of the payroll beside her birth date or
+  insured wage, is sent to no AI: not to read its kind, its VAT or its title, not to match it
+  with a payment and not in a booking's question. Other receipts are sent as before. The AI
+  sidebar may not open such a receipt's file; it can still read the books' receipts list
+  (receipts.jsonl), which holds every receipt's text, as before.
+- Löhne: the entry fact of a new person («Eintritt am …: Anmeldung bei …») no longer names the
+  pension fund for a person without occupational pension (below the entry threshold, or a firm
+  without a pension fund).
 - Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
   davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund
   (`payroll: { payments: liability }`), names the open payments it books first, and code then books

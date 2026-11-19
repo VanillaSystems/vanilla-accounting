@@ -12,6 +12,7 @@
  * A pair the model was shown and did not take is not asked about again (Receipt.pairDoubted), unless
  * a person asks with the button; a pair a person took apart is never a candidate (Receipt.notPaidBy).
  */
+import { keptFromModels } from '../booking/kept-from-models.js';
 import type { Receipt, BankTransaction } from '../types/index.js';
 import { periodLock, release, type Books } from '../books/store.js';
 import type { Ask, BooksPort } from './pipeline.js';
@@ -287,7 +288,10 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
 
   // Stage 2: the model checks the clear pairs; without one (or when it fails) code links those it may link alone.
   const choose: Array<{ receipt: string; candidates: PairCandidate[] }> = [];
-  for (const batch of chunks(clear, CHECK_BATCH)) {
+  // A receipt with a person's data reaches no model (src/booking/kept-from-models.ts): code alone links its clear pair, a short list is the person's.
+  const kept = (id: string) => { const r = receipt.get(id); return !!r && keptFromModels(r); };
+  for (const c of clear.filter((x) => kept(x.receipt))) byCodeAlone(c);
+  for (const batch of chunks(clear.filter((x) => !kept(x.receipt)), CHECK_BATCH)) {
     const verdict = await call(checkPrompt(batch.map((c) => ({ r: receipt.get(c.receipt)!, t: payment.get(c)!, own: !!c.against }))), 'check', parseCheck);
     if (verdict === undefined) { for (const c of batch) byCodeAlone(c); continue; }
     result.checked += batch.length;
@@ -307,7 +311,7 @@ export async function runPairChain(port: BooksPort, opts: ChainOptions): Promise
   // Stage 3: the model chooses from each short list; without one, the short lists are the person's.
   for (const s of shortLists) {
     const open = s.candidates.filter((c) => !doubted(c));
-    if (open.length && ask && !result.modelFailed && !stagedIds.has(s.receipt)) choose.push({ receipt: s.receipt, candidates: open });
+    if (open.length && ask && !result.modelFailed && !stagedIds.has(s.receipt) && !kept(s.receipt)) choose.push({ receipt: s.receipt, candidates: open });
     else toPerson(s);
   }
   for (const batch of chunks(choose, CHOOSE_BATCH)) {

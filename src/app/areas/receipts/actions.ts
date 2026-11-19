@@ -126,6 +126,11 @@ export function undoPrivate(nav: Nav, v: ReceiptView, tx: BankTransaction, what:
   return run(nav, () => api.deleteTransaction(tx.ref), t('receipts.privateUndone', { what }), () => api.privatePayment(v.r.id, part));
 }
 
+/** Her answer «Als Dokument ablegen» to a text that looks like a fund's document (§22 decision 108): its card in Löhne takes it. */
+export function fileSetupDocument(nav: Nav, v: ReceiptView) {
+  return run(nav, () => api.patchReceipt(v.r.id, { kind: 'supporting', setupDocument: true }), t('receipts.setupFiled', { file: v.r.filename }), () => api.patchReceipt(v.r.id, { kind: null }));
+}
+
 export function setKind(nav: Nav, v: ReceiptView, kind: ReceiptKind) {
   const before = v.r.kind ?? null;
   const message = kind === 'invoice' ? t('receipts.isReceiptDone', { name: v.vendor }) : t('receipts.notReceiptDone', { file: v.r.filename });

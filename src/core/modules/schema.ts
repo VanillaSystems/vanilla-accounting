@@ -282,6 +282,8 @@ export interface SetupData {
     withholdsTo?: Record<string, string>;
     /** The employer's own contribution account of a kind: code books there what a payment to the kind's collector pays beyond the employees' share, without a model (src/booking/withheld.ts contributionLines). */
     employer?: Record<string, string>;
+    /** The folder a new business file of a kind's collector goes into (src/payroll/collects-way.ts): `authority` or `supplier`; absent, `supplier` (an insurer). */
+    roles?: Record<string, 'authority' | 'supplier'>;
     /** What a kind's collector leaves the employer (the withholding tax's collection commission): a payment short of what is owed by at most `upTo` percent books the rest on `account`. */
     commission?: Record<string, { account: string; from?: number; upTo: number }>;
     /** The words a payslip of another program names its figures by (src/booking/payslip.ts readPayslip): the gross, the net, the allowances paid with the wage, the expenses by account. */
@@ -532,7 +534,23 @@ export interface PayrollData {
    * that name each kind's document in its first lines, the labels of its numbers, each kind's rates by the words on their
    * line, and the words of a line never sent to a model (a salary).
    */
-  setupDocuments?: { kinds: Record<string, string[]>; numbers: Partial<Record<'memberNumber' | 'contractNumber', string[]>>; rates: Record<string, Record<string, string[]>>; toModel?: string[]; notToModel: string[] };
+  setupDocuments?: {
+    kinds: Record<string, string[]>;
+    /** A document is a fund's or insurer's only when one of its first lines is a title naming one of these (src/payroll/setup-documents.ts isSetupText). */
+    titles?: string[];
+    /** Titles of a fund's or insurer's bill (beside documents.yaml receipt.title): such a text is a receipt, never a setup document. */
+    bills?: string[];
+    /** Words of an amount to pay: on a line with one dated day or an amount, the text is a bill. */
+    payable?: string[];
+    /** Words that say bill wherever they stand: a reminder, a premium notice, a balance in the fund's favour, a direct debit. */
+    billSigns?: string[];
+    /** Labels a person's name follows («Versicherte Person:»): a text with one reaches no model (src/booking/kept-from-models.ts). */
+    personLabels?: string[];
+    /** Words of a birth date: a text naming a person of payroll.json beside one reaches no model (src/booking/kept-from-models.ts). */
+    birth?: string[];
+    /** Words of an insured wage or retirement savings: a text naming a person of payroll.json beside one reaches no model (src/booking/kept-from-models.ts). */
+    insuredWage?: string[];
+    numbers: Partial<Record<'memberNumber' | 'contractNumber', string[]>>; rates: Record<string, Record<string, string[]>>; toModel?: string[]; notToModel: string[] };
   /** The words of the payroll's documents, in each language. */
   documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate' | 'holidays' | 'holidaysMinimum' | 'sourceTariff', Labels>;
   /** The tax at source by tariff files (payroll.yaml `taxAtSource`); absent: the jurisdiction has none. */

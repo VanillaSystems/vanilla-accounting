@@ -21,6 +21,21 @@ export const PAYSLIP_RULE = 'document:payslip';
  */
 export const PAYSLIP_UNREAD_RULE = 'document:payslip-unread';
 
+/**
+ * The kindRule of a fund's or insurer's document code recognised (a decision, a policy, a pension certificate,
+ * src/payroll/setup-documents.ts): no payment belongs to it, its card in Löhne › Einstellungen takes it (§22 decision 108).
+ */
+export const SETUP_DOCUMENT_RULE = 'document:payroll-setup';
+/** Whether a receipt is such a document: it never reaches a model (a pension certificate names an insured wage), as a payslip never does. */
+export const isSetupDocument = (r: Pick<Receipt, 'kindRule'>): boolean => r.kindRule === SETUP_DOCUMENT_RULE;
+/**
+ * The kindRule of a text that looks like a fund's or insurer's document (src/payroll/setup-documents.ts isSetupText): a
+ * suggestion, never a kind (second review of walk 3: suggest, then approve). Belege and the drop ask «Als Dokument
+ * ablegen» or «Ist ein Beleg»; meanwhile it waits for no date or amount, is paired with no payment and no model reads it.
+ */
+export const SETUP_SUGGESTED_RULE = 'suggest:payroll-setup';
+export const isSetupSuggested = (r: Pick<Receipt, 'kind' | 'kindBy' | 'kindRule'>): boolean => r.kindRule === SETUP_SUGGESTED_RULE && !r.kind && r.kindBy !== 'human';
+
 /** A payslip of another program, as code recognised it: never one the app closed. */
 export const externalPayslip = (r: Pick<Receipt, 'kind' | 'kindRule'>): boolean => r.kind === 'payslip' && r.kindRule === PAYSLIP_RULE;
 

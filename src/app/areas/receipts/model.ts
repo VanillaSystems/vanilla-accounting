@@ -30,7 +30,7 @@ import { namedNumbers } from '../../../intake/pairing.js';
 import { paidDays, placeDay, receiptDate } from '../../automation/home.js';
 
 /** Why a file in Belege is no receipt: what its words say it is, or its kind, or that it holds no amount. */
-export type NoneWhy = SupportingWhy | OtherWhy | 'supporting' | 'duplicate' | 'statement' | 'empty';
+export type NoneWhy = SupportingWhy | OtherWhy | 'supporting' | 'duplicate' | 'statement' | 'empty' | 'payroll-setup';
 
 /** Why `r` is no receipt: the word rule that typed it, its kind, else what its text says, else its missing amount. */
 export function noneWhyOf(r: Partial<Pick<Receipt, 'kind' | 'kindRule' | 'extractedText'>>): NoneWhy {

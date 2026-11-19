@@ -4,6 +4,7 @@
  * facts (match.ts); this step gives it to receipts read before, 100 to one model call. A title is
  * shown, never booked, so a receipt of a filed quarter gets one too.
  */
+import { keptFromModels } from '../booking/kept-from-models.js';
 import { parseTitle, TITLE_RULES } from '../llm/prompts.js';
 import type { Receipt, ReceiptTitle } from '../types/index.js';
 import type { Ask, IntakeNote, StepRun } from './pipeline.js';
@@ -23,7 +24,7 @@ ${JSON.stringify(receipts.map(item))}`;
 /** The titles of `receipts` from the fast model, 100 to a call; a receipt the answer leaves out has none. A failed call is logged, not thrown: a title is shown, never booked. */
 export async function titlesFor(ask: Ask, all: readonly Receipt[], log: (line: string) => void = () => {}): Promise<Map<string, ReceiptTitle>> {
   const out = new Map<string, ReceiptTitle>();
-  const receipts = all.filter((r) => r.kind !== 'payslip');
+  const receipts = all.filter((r) => !keptFromModels(r));
   for (let i = 0; i < receipts.length; i += BATCH) {
     const batch = receipts.slice(i, i + BATCH);
     try {
@@ -39,8 +40,8 @@ export async function titlesFor(ask: Ask, all: readonly Receipt[], log: (line: s
 
 export function titlesStep({ force = false } = {}): StepRun {
   return async ({ books, ask, progress, log }) => {
-    // A payslip is never named by a model: it carries a salary and a person (docs/specs/payroll.md §10.2 A8).
-    const todo = books.read().receipts.filter((r) => r.kind !== 'payslip' && (force || !r.title));
+    // A payslip, a fund's document and a text with a person's data are never named by a model (src/booking/kept-from-models.ts, §10.2 A8).
+    const todo = books.read().receipts.filter((r) => !keptFromModels(r) && (force || !r.title));
     if (!todo.length) { log('Every receipt has its title.'); return { notes: [] }; }
     if (!ask) return { notes: [{ code: 'noModel', waiting: todo.length }] };
     const notes: IntakeNote[] = [];

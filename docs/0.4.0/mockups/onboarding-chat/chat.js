@@ -30,7 +30,7 @@ const hash = new URLSearchParams(location.hash.slice(1));
 const S = {
   path: hash.get('p') === 'mitte' ? 'mitte' : 'jan',
   at: hash.get('at'),
-  prog: 'bexio', entry: 'double', vat: 'eff', who: 'me', filed: 2, h1: 'journal',
+  prog: 'altbuch', entry: 'double', vat: 'eff', who: 'me', filed: 2, h1: 'journal',
   ruleAnswers: 0, notes: 0, skipped: [], kept: 0, keptList: [], answers: [],
   learned: false, priv: 'yes', disputed: [], later: hash.get('later') === '1',
 };
@@ -38,9 +38,9 @@ const CHAPTERS = ['talk', 'list', 'fetch', 'half', 'know', 'done'];
 let chapter = null;
 const ff = () => S.at && CHAPTERS.indexOf(chapter) < CHAPTERS.indexOf(S.at);
 const wait = (ms) => (ff() ? Promise.resolve() : sleep(ms));
-const PROG = { bexio: 'Bexio', abacus: 'Abacus', banana: 'Banana', excel: 'Excel', treuhand: 'deinem Treuhänder' };
+const PROG = { altbuch: 'Altbuch', abacus: 'Abacus', banana: 'Banana', excel: 'Excel', treuhand: 'deinem Treuhänder' };
 const P = () => PROG[S.prog];
-const hasApi = () => S.prog === 'bexio' || S.prog === 'abacus';
+const hasApi = () => S.prog === 'altbuch' || S.prog === 'abacus';
 const mid = () => S.path === 'mitte';
 
 const theme = (t) => {
@@ -324,14 +324,14 @@ async function talk() {
 
   await say('Womit hast du bisher gebucht?');
   S.prog = await ask([
-    { l: 'Bexio', v: 'bexio', k: /bexio/i },
+    { l: 'Altbuch', v: 'altbuch', k: /altbuch/i },
     { l: 'Abacus', v: 'abacus', k: /abacus|abaninja/i },
     { l: 'Banana', v: 'banana', k: /banana/i },
     { l: 'Excel oder eine Tabelle', v: 'excel', k: /excel|tabelle|numbers|sheet/i },
     { l: 'Mein Treuhänder macht es', v: 'treuhand', k: /treuh|buchhalter|berater/i },
-  ], 'bexio');
+  ], 'altbuch');
   await say({
-    bexio: 'Gut, Bexio kenne ich. Über die Schnittstelle komme ich an fast alles, was ich brauche.',
+    altbuch: 'Gut, Altbuch kenne ich. Über die Schnittstelle komme ich an fast alles, was ich brauche.',
     abacus: 'Abacus hat eine Schnittstelle. Oft liegt der Zugang beim Treuhänder; das klären wir gleich.',
     banana: 'Banana speichert alles in einer Datei. Die nehme ich direkt, eine Schnittstelle brauchen wir nicht.',
     excel: 'Dann lese ich deine Tabellen so, wie sie sind. Umbauen musst du nichts.',

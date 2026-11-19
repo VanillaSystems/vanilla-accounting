@@ -49,6 +49,7 @@ import { partPayment, partReceipts, partsOf, partText } from '../accounting/batc
 import { cardLinesOf, cardPart, cardParts, lineReceiptsOf } from '../books/card-lines.js';
 import { wordsIn } from '../export/texts.js';
 import { paidBySlips, wageLines, type WageLine } from './payslip.js';
+import { keptFromModels } from './kept-from-models.js';
 import { ruleFor, ruleWords, stampRule, type PaymentFacts, type PlacedRule, type RuleBooking, type RuleNames } from './rules.js';
 import { chartNames, companyRules, factsOf, placedRules } from './rule-book.js';
 import { businessVat, capAtBills, capAtReceipts, settlesVat, withPurchaseVat, type BusinessVat } from './purchase-vat.js';
@@ -904,7 +905,9 @@ export function classifyInput(books: Books, tx: BankTransaction, legs: readonly 
   const cp = routing.kind === 'known' ? counterparties.find((c) => c.id === routing.counterparty) : undefined;
   const guidance = cp ? businessGuidance(cp) : [];
   const receipts = linked
-    // A photo nothing could read counts by what a person entered on it (#438).
+    // A photo nothing could read counts by what a person entered on it (#438). A payslip, a fund's document and a text with a
+    // person's data never reach a model, even linked to the payment (src/booking/kept-from-models.ts, §22 decisions 75, 108).
+    .filter((r) => !keptFromModels(r))
     .filter((r) => (r.extractedText && r.extractedText.length > 10) || r.vatBy === 'human')
     .map((r) => ({
       text: r.extractedText,

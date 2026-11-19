@@ -27,7 +27,7 @@ import { offersInBooks } from '../../../intake/near-pairs.js';
 import { nearWhy } from '../receipts/FindPair.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { localToday, parsePeriod } from '../../../accounting/periods.js';
-import { periodName } from '../../lib/period-label.js';
+import { monthName, periodName } from '../../lib/period-label.js';
 import { correctionName } from '../../lib/vat-words.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { t } from '../../i18n/index.js';
@@ -40,6 +40,7 @@ import { Go } from '../vat/links.js';
 import { at } from '../receipts/view.js';
 import { TagFields, tagsOfForm } from './TagFields.js';
 import { RuleWay } from './RuleWay.js';
+import { CollectsOffer } from './CollectsOffer.js';
 import type { Dimension } from '../../../books/tags.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 
@@ -108,6 +109,8 @@ export function PaymentBooking(props: Props) {
           {props.canRule !== false && !start.nature.shared && way === 'after' ? <KeepWay nav={props.nav} payment={props.payment} name={start.nature.name} /> : null}
         </div>
       ) : null}
+      {/* A payee whose name says it collects a deduction the payslips withheld (a pension fund): one click keeps it so (§22 decision 110). */}
+      {props.canRule !== false && start?.nature?.kind !== 'payrollInsurer' ? <CollectsOffer payment={props.payment} nav={props.nav} /> : null}
       <BookingForm key={way} {...props} onForm={(el) => { formEl.current = el; props.onForm?.(el); }} accounts={ws.bankAccounts} draft={draft} dimensions={ws.dimensions ?? []} defaults={defaults} pending={known!.books !== props.books} onNotOwn={setNotOwn} />
       {props.canRule !== false && start ? <RuleWay nav={props.nav} payment={props.payment} start={start} form={() => formEl.current} lines={draft.lines} other={draft.bank && (draft.bank.side === 'accountDebit' ? 'accountCredit' : 'accountDebit')} /> : null}
     </>
@@ -194,6 +197,9 @@ function sourceText(s: DraftSource, account: string | undefined, vat: string | u
   ].filter(Boolean).join(' · ');
 }
 
+/** Months as a span of names («Juli 2026 – September 2026»), or the one month's name. */
+const monthsText = (months: readonly string[]): string => (months.length > 1 ? `${monthName(`${months[0]}-01`)} – ${monthName(`${months.at(-1)}-01`)}` : months.length ? monthName(`${months[0]}-01`) : '');
+
 /** A filed period by its name («Q3 2026»). */
 const filedName = (key: string) => { const p = parsePeriod(key, localToday()); return p ? periodName(p) : key; };
 
@@ -223,7 +229,9 @@ function noteText(n: DraftNote): string {
       if (n.way === 'before') return t(n.before ? 'journal.byHand.note.payrollInsurerBefore' : 'journal.byHand.note.payrollInsurerBeforeNone', vars);
       return t(n.shared ? 'journal.byHand.note.payrollInsurerShared' : n.covered ? 'journal.byHand.note.payrollInsurer' : 'journal.byHand.note.payrollInsurerUncovered', vars);
     }
-    case 'contributions': return t(n.open <= 0 ? 'journal.byHand.note.contributionsNone' : n.takes > 0 ? 'journal.byHand.note.contributions' : 'journal.byHand.note.contributionsUnsure', { deductions: n.deductions, account: n.account, open: `${baseCurrency()} ${fmt(n.open)}`, takes: `${baseCurrency()} ${fmt(n.takes)}` });
+    case 'contributions': if (n.collector?.unsure) return t('journal.byHand.note.contributionsCollectorUnsure', { name: n.collector.name, months: monthsText(n.collector.months), deductions: n.deductions, account: n.account });
+      if (n.collector) return t('journal.byHand.note.contributionsCollector', { name: n.collector.name, months: monthsText(n.collector.months), deductions: n.deductions, account: n.account, takes: `${baseCurrency()} ${fmt(n.takes)}` });
+      return t(n.open <= 0 ? 'journal.byHand.note.contributionsNone' : n.takes > 0 ? 'journal.byHand.note.contributions' : 'journal.byHand.note.contributionsUnsure', { deductions: n.deductions, account: n.account, open: `${baseCurrency()} ${fmt(n.open)}`, takes: `${baseCurrency()} ${fmt(n.takes)}` });
     default: return t(`journal.byHand.note.${n.kind}`);
   }
 }
