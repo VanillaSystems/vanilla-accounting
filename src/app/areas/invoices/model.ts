@@ -3,18 +3,16 @@
  * status filters, what is open, and the link of each record. Computed with src/invoices/rules.ts,
  * the rules the API and the PDF use.
  */
-import type { Period } from '../../../accounting/periods.js';
 import type { Customer, Draft, Invoice, InvoiceBook, Issued, SentDocument } from '../../../invoices/model.js';
 import type { DraftChange } from '../../lib/api.js';
-import { isOverdue, namesNumber, openAmount, totals } from '../../../invoices/rules.js';
+import { isOverdue, namesNumber, openAmount } from '../../../invoices/rules.js';
+import { channelOf } from '../../../invoices/lists.js';
 import type { BankTransaction, Index } from '../../../types/index.js';
 import type { InvoiceList } from '../../lib/api.js';
-import type { InvoiceStatus } from '../../shell/route.js';
 import { baseCurrency, chargesVat, invoiceRates, invoicing } from '../../../engines/index.js';
 
-/** What a row and its group say: an issued invoice is open or overdue until paid; a credit note and a cancelled invoice are their own groups. */
+/** What the detail's status line and actions go by: an issued invoice is open or overdue until paid; a credit note and a cancelled invoice are their own. */
 export type RowState = 'overdue' | 'open' | 'draft' | 'paid' | 'credit' | 'cancelled';
-export const GROUPS: RowState[] = ['overdue', 'open', 'draft', 'paid', 'credit', 'cancelled'];
 
 export function rowState(inv: Invoice, invoices: readonly Invoice[], today: string): RowState {
   if (inv.status === 'draft') return 'draft';
@@ -25,7 +23,7 @@ export function rowState(inv: Invoice, invoices: readonly Invoice[], today: stri
 }
 
 /** The invoice or credit note itself went to the customer (by e-mail or as a saved PDF), not only a reminder or notice. */
-export const wasSent = (sent: readonly SentDocument[], inv: Invoice): boolean => sent.some((x) => x.invoiceId === inv.id && (x.kind === 'invoice' || x.kind === 'credit-note' || x.kind === 'resend'));
+export { wasSent } from '../../../invoices/lists.js';
 
 /**
  * The last document issued in the draft's year with a later date: the draft would take the next
@@ -51,57 +49,21 @@ export function customerOf(d: InvoiceList, inv: Invoice): Pick<Customer, 'name' 
   return inv.status === 'issued' ? inv.customer : d.customers.find((c) => c.id === inv.customerId);
 }
 
-/** `open`: what the customer still owes on it (0 for a draft, a credit note, a paid or cancelled one). */
-export interface InvoiceRow { inv: Invoice; state: RowState; gross: number; open: number; customer: string }
-
-/**
- * The invoices of a period (by invoice date), every draft, and every invoice of an earlier period
- * still open (an overdue invoice from last quarter is still owed), searched by number, subject,
- * customer and amount.
- */
-export function rowsOf(d: InvoiceList, period: Period, q: string | undefined, today: string): InvoiceRow[] {
-  const needle = q?.trim().toLowerCase();
-  return d.invoices
-    .filter((inv) => inv.status === 'draft' || (inv.date >= period.from && inv.date <= period.to) || (inv.date < period.from && openAmount(inv, d.invoices) > 0))
-    .map((inv) => ({ inv, state: rowState(inv, d.invoices, today), gross: totals(inv.lines).gross, open: openAmount(inv, d.invoices), customer: customerOf(d, inv)?.name ?? '' }))
-    .filter((r) => !needle || [r.inv.status === 'issued' ? r.inv.number : '', r.inv.subject ?? '', r.customer, r.gross.toFixed(2)].join(' ').toLowerCase().includes(needle));
-}
-
-/** `?status=open` takes the overdue ones too, as the mockup counts them. */
-export const passes = (state: RowState, status: InvoiceStatus | undefined) => !status || state === status || (status === 'open' && state === 'overdue');
-
-export function counts(rows: readonly InvoiceRow[]): Record<InvoiceStatus | 'all', number> {
-  const n = (s: RowState) => rows.filter((r) => r.state === s).length;
-  return { all: rows.length, open: n('open') + n('overdue'), overdue: n('overdue'), draft: n('draft'), paid: n('paid') };
-}
-
-export function groupsOf(rows: readonly InvoiceRow[], status: InvoiceStatus | undefined): Array<{ state: RowState; rows: InvoiceRow[] }> {
-  return GROUPS.map((state) => ({
-    state,
-    rows: rows.filter((r) => r.state === state && passes(r.state, status)).sort((a, b) => b.inv.date.localeCompare(a.inv.date) || b.inv.createdAt.localeCompare(a.inv.createdAt)),
-  })).filter((g) => g.rows.length);
-}
-
-export interface OpenSums { open: number; overdue: number; foreign: Array<{ currency: string; open: number; overdue: number }> }
-
-/** What customers still owe in CHF and how much of it is overdue; an invoice in another currency counts in its own, beside it (r8c-9). */
-export function openSums(rows: readonly InvoiceRow[], invoices: readonly Invoice[]): OpenSums {
-  const sum = (currency: string, states: RowState[]) => Math.round(rows.filter((r) => states.includes(r.state) && r.inv.currency === currency).reduce((s, r) => s + openAmount(r.inv, invoices), 0) * 100) / 100;
-  const of = (currency: string) => ({ open: sum(currency, ['open', 'overdue']), overdue: sum(currency, ['overdue']) });
-  const currencies = [...new Set(rows.filter((r) => (r.state === 'open' || r.state === 'overdue') && r.inv.currency !== baseCurrency()).map((r) => r.inv.currency))].sort();
-  return { ...of(baseCurrency()), foreign: currencies.map((currency) => ({ currency, ...of(currency) })) };
-}
-
 /** A customer's open invoices in CHF, for the customer list. */
 export function customerOpen(d: InvoiceList, id: string): number {
   return Math.round(d.invoices.filter((i) => i.status === 'issued' && i.customerId === id && i.currency === baseCurrency()).reduce((s, i) => s + openAmount(i, d.invoices), 0) * 100) / 100;
 }
 
-/** The sent documents, newest first, searched by title, customer and recipient. */
-export function sentRows(d: InvoiceList, q: string | undefined): SentDocument[] {
+/** The sent documents, newest first, searched by title, contact and recipient, and filtered by contact, kind and channel. */
+export function sentRows(d: InvoiceList, q: string | undefined, filter: { customer?: string; kind?: string; channel?: string } = {}): SentDocument[] {
   const needle = q?.trim().toLowerCase();
-  const name = (doc: SentDocument) => { const inv = d.invoices.find((i) => i.id === doc.invoiceId); return inv ? customerOf(d, inv)?.name ?? '' : ''; };
-  return [...d.sent].sort((a, b) => b.sentAt.localeCompare(a.sentAt)).filter((doc) => !needle || [doc.title, name(doc), doc.to].join(' ').toLowerCase().includes(needle));
+  const invOf = (doc: SentDocument) => d.invoices.find((i) => i.id === doc.invoiceId);
+  const name = (doc: SentDocument) => { const inv = invOf(doc); return inv ? customerOf(d, inv)?.name ?? '' : ''; };
+  return [...d.sent]
+    .filter((doc) => !doc.deleted)
+    .filter((doc) => (!filter.customer || invOf(doc)?.customerId === filter.customer) && (!filter.kind || doc.kind === filter.kind) && (!filter.channel || channelOf(doc) === filter.channel))
+    .sort((a, b) => b.sentAt.localeCompare(a.sentAt))
+    .filter((doc) => !needle || [doc.title, name(doc), doc.to].join(' ').toLowerCase().includes(needle));
 }
 
 /** The customers by name, searched by name and town. */

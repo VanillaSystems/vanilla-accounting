@@ -10,6 +10,8 @@
   --dim: rgba(11,18,32,.16);
   /* The product colour, the same in both themes (the public demo's bar, src/app/shell/Demo.tsx). */
   --brand: #005b8c; --on-brand: #fff;
+  /* Paper as printed (a list printed from the app, the Debitorenliste): the same in both themes, the paper exception. */
+  --paper: #ffffff; --paper-ink: #000000; --paper-ink-2: #555555; --paper-line: #cccccc; --paper-line-2: #999999;
 }
 [data-theme="dark"] {
   --bg: #0a0a0a; --ink: #ededed; --ink-2: #b0b0b0; --muted: #8f8f8f; --faint: #5a5a5a; --date: #6b6b6b; --line: #1f1f1f; --line-2: #2e2e2e;

@@ -54,7 +54,8 @@ test('a draft is issued with its stored PDF and sent; a part is credited; a prop
     await page.type('.icredit input.mono', '50');
     await page.type('.icredit input:not(.mono)', 'Rabatt');
     await click(page, '[data-act=credit-ok]');
-    await page.waitForFunction(() => /^\/invoices\/draft-/.test(location.pathname));
+    // A credit note opens in Gutschriften (docs/urls.md).
+    await page.waitForFunction(() => /^\/invoices\/credit-notes\/draft-/.test(location.pathname));
     const creditDraft = async () => (await (await api.send('GET', '/api/invoices')).json.invoices as InvoiceView[]).find((i) => i.kind === 'credit-note' && i.status === 'draft')!;
     assert.equal((await creditDraft()).view.totals.gross, -50, 'the part credited is the amount asked, VAT included (F04)');
     // Typed at once after the click: the select-all the click schedules must not eat the minus.

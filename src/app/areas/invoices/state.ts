@@ -1,11 +1,12 @@
 /**
- * What Rechnungen keeps beside the URL: the open dialog (a dialog is an action, not a place:
- * docs/urls.md), the draft shown as Vorschau, a reminder being written, and which margin
- * sections and list groups are open (per viewer, kept in this browser).
+ * What Verkauf keeps beside the URL: the open dialog (a dialog is an action, not a place:
+ * docs/urls.md), the draft shown as Vorschau, a reminder being written, the rows ticked in a
+ * table, the filters of Versendet, and per viewer in this browser the margin sections open and
+ * each table's sort.
  */
 import { useSyncExternalStore } from 'react';
 import { store, stored } from '../../shell/storage.js';
-import type { RowState } from './model.js';
+import { DEFAULT_SORT, type Sort } from './table.js';
 
 export type Section = 'draft' | 'look' | 'customer' | 'sent' | 'comments' | 'log';
 
@@ -20,7 +21,16 @@ export type Dialog =
    * Sending the invoice with its PDF shown, or the reminder written on the sheet, by e-mail or as a download.
    * `issued`: opened by «Ausstellen» itself, so the document to take away is in front of the person at once.
    */
-  | { kind: 'send'; reminder?: Omit<ReminderEdit, 'invoiceId'> & { level: number }; issued?: true };
+  | { kind: 'send'; reminder?: Omit<ReminderEdit, 'invoiceId'> & { level: number }; issued?: true }
+  /** The ticked documents (their ids), sent by e-mail one by one, or their PDFs downloaded. */
+  | { kind: 'bulk-send'; ids: string[] }
+  | { kind: 'bulk-pdf'; ids: string[] };
+
+/** The tables that sort: Rechnungen, Gutschriften. */
+export type Sorted = 'list' | 'credit-notes';
+
+/** Versendet's filters: a contact (its id), a kind of document, a channel; absent: all. */
+export interface SentFilter { customer?: string; kind?: string; channel?: string }
 
 /** A reminder written on the sheet before it is sent: for this invoice, with these texts and fee. */
 export interface ReminderEdit { invoiceId: string; fee?: number; intro?: string; closing?: string }
@@ -30,7 +40,10 @@ interface State {
   preview: boolean;
   reminder: ReminderEdit | null;
   open: Record<Section, boolean>;
-  collapsed: ReadonlySet<RowState>;
+  sort: Record<Sorted, Sort>;
+  /** The documents ticked in the table shown (their ids); another view or tab starts with none. */
+  ticked: ReadonlySet<string>;
+  sentFilter: SentFilter;
   /** A field of the sheet to put the caret in once it shows (a new draft's first line). */
   focus?: string;
 }
@@ -44,14 +57,16 @@ let state: State = {
   preview: false,
   reminder: null,
   open: { draft: true, look: false, customer: false, sent: true, comments: true, log: false, ...read<Partial<Record<Section, boolean>>>('invoices.open', {}) },
-  collapsed: new Set(read<RowState[]>('invoices.collapsed', [])),
+  sort: { list: DEFAULT_SORT, 'credit-notes': DEFAULT_SORT, ...read<Partial<Record<Sorted, Sort>>>('invoices.sort', {}) },
+  ticked: new Set(),
+  sentFilter: {},
 };
 const listeners = new Set<() => void>();
 
 export function setUi(patch: Partial<State>): void {
   state = { ...state, ...patch };
   if (patch.open) store('invoices.open', JSON.stringify(state.open));
-  if (patch.collapsed) store('invoices.collapsed', JSON.stringify([...state.collapsed]));
+  if (patch.sort) store('invoices.sort', JSON.stringify(state.sort));
   listeners.forEach((l) => l());
 }
 
@@ -61,10 +76,10 @@ export function useUi(): State {
   return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, () => state);
 }
 
-export function toggleGroup(key: RowState): void {
-  const next = new Set(state.collapsed);
-  if (next.has(key)) next.delete(key); else next.add(key);
-  setUi({ collapsed: next });
+export function toggleTick(id: string): void {
+  const next = new Set(state.ticked);
+  if (next.has(id)) next.delete(id); else next.add(id);
+  setUi({ ticked: next });
 }
 
 /** The rows of the list as shown, in order, for ↑/↓ (the list writes it, the keys read it). */

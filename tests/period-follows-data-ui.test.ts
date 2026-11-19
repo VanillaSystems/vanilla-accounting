@@ -35,7 +35,7 @@ test('pages open on the newest data, the picker applies a quarter in one click, 
 
     await app.open('/invoices');
     await page.waitForFunction(() => /Q4 2026/.test(document.querySelector<HTMLElement>('[data-testid=period-picker]')?.innerText ?? ''));
-    assert.ok(await page.$('.rows .row.inv[data-id="2026-007"]'), 'Rechnungen opens where its newest invoice is, 01.10.2026');
+    assert.ok(await page.$('.ivt tr.trow[data-id="2026-007"]'), 'Rechnungen opens where its newest invoice is, 01.10.2026');
 
     await app.open('/journal');
     await click(page, '[data-testid=period-picker]');
@@ -64,7 +64,7 @@ test('pages open on the newest data, the picker applies a quarter in one click, 
     await app.open(`/invoices/draft-${DRAFT}?period=2026-Q2`);
     await click(page, '[data-act=issue]');
     await page.waitForFunction(() => location.pathname === '/invoices/2026-008');
-    await page.waitForFunction(() => !!document.querySelector('.rows .row.inv[data-id="2026-008"]'));
+    await page.waitForFunction(() => !!document.querySelector('.ivt tr.trow[data-id="2026-008"]'));
     assert.match(await periodButton(), new RegExp(filingKeyOf(localToday(), 'quarter').replace(/(\d+)-(Q\d)/, '$2 $1')), 'the list shows the invoice in its own period');
 
     await app.open('/journal?period=2026-Q2');

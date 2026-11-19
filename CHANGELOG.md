@@ -52,6 +52,23 @@ Two markers flag an entry you must read before you update:
   corrected in the open period with `corrects`, never in a filed one. `npm run year:close --
   <year> --dry-run` prints it too. A firm not
   registered for VAT has nothing to reconcile (#569).
+- Verkauf: Rechnungen and the new Gutschriften are each one table across the page, with status tabs
+  that count and sum what is in them (Alle, Entwürfe, Offen, Überfällig, Teilbezahlt, Bezahlt,
+  Storniert; for Gutschriften Offen, Teilweise, Abgerechnet, Storniert) and a tab «Nicht gesendet». Every
+  column sorts; a line above says what is open and overdue per currency; a totals row sums what
+  is shown. A row opens the document over the table's right part; Esc or «×» closes it, ↑ ↓ go
+  to the next. Ticked rows can be sent by e-mail together, their PDFs saved, and the table exported
+  as CSV; «⋯» on a row opens, saves, sends, reminds or copies it.
+- Verkauf: what has been sent shows at a glance. The status reads «gesendet» or «nicht gesendet»,
+  a column «Versand» names the last send's day and channel (and the last Mahnung), and the
+  document says above its sheet when and to whom it went, or that it has not gone yet. Its
+  section «Versand» lists every send with time, recipient, channel, Message-ID and checksum, each
+  PDF as it went out.
+- Verkauf › Offene Posten: every invoice with something open on a chosen day, by customer, with
+  the days overdue and the age (0–30, 31–60, 61–90, over 90 days), printable as the Debitorenliste
+  and exported as CSV. On 31.12. it matches the receivables to the cent: on the cash basis the
+  year end's proposal, on the agreed basis what the invoices hold on the receivable account.
+- Verkauf › Versendet: every document sent, filtered by customer, kind and channel.
 
 ### Fixed
 
@@ -71,6 +88,7 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- The area Rechnungen is now called Verkauf. Old links keep working.
 - The top bar (company, search, period, zoom, export, theme, language) stays open: it no longer
   folds away by itself after three uses, which left most people not knowing it is there. Its pin
   still lets it fold, and that choice is kept. Everyone starts with it open once after this update.

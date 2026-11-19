@@ -11,10 +11,10 @@ and the providers.
 | core | 83 | 23 |
 | engine | 4 | 1 |
 | provider | 15 | 11 |
-| split | 135 | 26 |
+| split | 136 | 26 |
 | infrastructure | 84 | 4 |
 | workflow | 31 | 0 |
-| view | 398 | 55 |
+| view | 407 | 54 |
 
 Layers are assigned by path prefix, most specific first:
 
@@ -169,8 +169,7 @@ Layers are assigned by path prefix, most specific first:
 | `src/app/areas/invoices/Sheet.tsx` | QR-bill 2 |
 | `src/app/areas/invoices/actions.ts` | CHF 1 |
 | `src/app/areas/invoices/address.ts` | MWST 1, UID 1, QR-bill 1 |
-| `src/app/areas/invoices/invoices.tsx` | CHF 2 |
-| `src/app/areas/invoices/model.ts` | CHF 3 |
+| `src/app/areas/invoices/model.ts` | CHF 2 |
 | `src/app/areas/journal/Detail.tsx` | CHF 1 |
 | `src/app/areas/journal/NewEntry.tsx` | CHF 1, form 0535 1, Rappen 1 |
 | `src/app/areas/journal/journal.tsx` | MWST 1 |
