@@ -8,6 +8,7 @@
 import { Router, type Request, type Response, type NextFunction } from 'express';
 import { existsSync, readFileSync } from 'node:fs';
 import { WS, readBooks, updateBooksWithEffects, RequestError } from '../books.js';
+import { payrollClearing } from '../../engines/index.js';
 import { ClosedPeriodError, periodLock, receiptFile, type Books } from '../../books/store.js';
 import { CatalogueError } from '../../payroll/catalogue.js';
 import { PayrollRefusal, planClose } from '../../payroll/close.js';
@@ -96,7 +97,9 @@ router.get('/api/payroll/payslips/:id', run((req, res) => {
   const close = ctx.history.closed.get(view.id);
   // The Lohnarten added to an open month, with their ids: the draft's «entfernen».
   const monthLines = close ? [] : ctx.store.monthLines.filter((l) => l.employee === employee && l.month === month && !l.removed);
-  res.json({ ...view, drift: close ? driftOf(ctx, close) : [], monthLines });
+  // A payslip paid before it was reopened and closed again with another payout: the difference on 1091, as a fact.
+  const paidRow = close ? paymentRows(readBooks(), [...ctx.history.closed.values()], close.month, payrollClearing() ?? '1091').find((r) => r.id === close.id) : undefined;
+  res.json({ ...view, drift: close ? driftOf(ctx, close) : [], monthLines, ...(paidRow?.difference && paidRow.paid?.forThis !== undefined ? { paidDifference: { difference: paidRow.difference, paid: paidRow.paid.forThis, account: paidRow.account!, ref: paidRow.paid.ref, date: paidRow.paid.date } } : {}) });
 }));
 
 /** The PDF of a closed payslip, exactly as it lies in Belege. */
@@ -212,7 +215,7 @@ router.put('/api/payroll/months/:month/text', run((req, res) => {
 /** The month's Lohnzahlungen: person, IBAN, payout, purpose, value date, and the bank line that paid it. */
 router.get('/api/payroll/payments/:month', run((req, res) => {
   const month = monthParam(req);
-  res.json({ month, rows: paymentRows(readBooks(), closedPayslips(WS), month) });
+  res.json({ month, rows: paymentRows(readBooks(), closedPayslips(WS), month, payrollClearing() ?? '1091') });
 }));
 
 /** Per insurance: what the payslips accrued, what was paid, what is open, from the books. */

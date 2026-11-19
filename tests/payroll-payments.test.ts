@@ -9,8 +9,9 @@ import assert from 'node:assert/strict';
 import type { BankTransaction, JournalEntry, Mapping } from '../src/types/index.js';
 import { bookWagePayments, paymentRows, wageMatches, type MatchOptions } from '../src/payroll/payments.js';
 import { computePayslip } from '../src/payroll/compute.js';
-import { closePayslip, type BooksWriter } from '../src/payroll/service.js';
-import { savePayroll } from '../src/payroll/store.js';
+import { closePayslip, reopenPayslip, type BooksWriter } from '../src/payroll/service.js';
+import { historyOf } from '../src/payroll/history.js';
+import { allPayslipEvents, savePayroll } from '../src/payroll/store.js';
 import { loadBooks, moduleActor, PERSON, saveBooks, updateSaved, type Books } from '../src/books/store.js';
 import { runIntake, storePort } from '../src/intake/pipeline.js';
 import { classifyStep } from '../src/intake/classify.js';
@@ -82,4 +83,48 @@ test('classify --force keeps a wage payroll\'s code booked, so it is never hande
   const { entriesForceMayRemove } = await import('../src/accounting/classify-force.js');
   const e = { id: 'w', transactionRef: 'T1', date: '2026-09-25', accountDebit: '1091', accountCredit: '1020', amount: 8910, by: { kind: 'code' as const, check: 'payroll' as const } };
   assert.deepEqual(entriesForceMayRemove([e], new Set(['T1']), undefined), []);
+});
+
+test('a payslip paid, reopened and closed again with another payout names the difference left on 1091', async () => {
+  const ws = tempWorkspace('payroll-pay-diff-');
+  writeIndex(ws, { journalEntries: [], config: {} });
+  savePayroll(ws, firm());
+  const write: BooksWriter = <T>(fn: (b: Books) => T) => updateSaved(ws, PERSON, fn);
+  await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
+  const b = loadBooks(ws);
+  b.transactions.push(tx('BANK-2', '2026-09-25', -8910, { counterpartyIban: IBAN, bank: ws.bankAccounts[0]?.bank ?? 'Bank' }));
+  saveBooks(ws, b);
+  await runIntake({ ws, books: storePort(ws, moduleActor('intake')), steps: [['classify', classifyStep()]] });
+  reopenPayslip(ws, write, '2026-09-e1');
+  const store = firm();
+  store.monthLines = [{ id: 'l1', employee: 'e1', month: '2026-09', wageType: 'pauschalspesen', amount: 100, enteredAt: '2026-10-02T00:00:00Z' }];
+  savePayroll(ws, store);
+  await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
+  const closes = [...historyOf(allPayslipEvents(ws)).closed.values()];
+  const [row] = paymentRows(loadBooks(ws), closes, '2026-09');
+  assert.deepEqual([row.payout, row.paid?.forThis, row.difference], [9010, 8910, 100]);
+});
+
+test('what was paid for a payslip: signed off the clearing account, over every linked line, and only where it can be told', () => {
+  const c = (id: string, payout: number, receiptId: string) => ({ ...closeOf(computePayslip(ctxOf(firm()), 'e1', '2026-09')!), id, payout, receiptId });
+  const e = (id: string, ref: string, debit: string, credit: string, amount: number, receipts?: string[]): JournalEntry => ({ id, transactionRef: ref, date: '2026-09-25', accountDebit: debit, accountCredit: credit, amount, ...(receipts ? { receipts } : {}) });
+  const t = (ref: string, amount: number) => tx(ref, '2026-09-25', amount);
+  // A repayment in of a negative payout: no false difference.
+  const neg = c('2026-09-e1', -500, 'rn');
+  assert.equal(paymentRows({ transactions: [{ ...t('IN', 500), direction: 'CRDT' }], journalEntries: [e('j', 'IN', '1020', '1091', 500)], mappings: [{ transactionRef: 'IN', receiptId: 'rn' }] }, [neg], '2026-09')[0].difference, undefined);
+  // A line booked by hand for two payslips, naming none, that pays exactly both: no difference; with a fee on the line: still none (only the clearing account counts).
+  const a = c('2026-09-a', 1000, 'ra'); const b = c('2026-09-b', 2000, 'rb');
+  const both = { transactions: [t('T', -3005)], journalEntries: [e('j1', 'T', '1091', '1020', 3000), e('j2', 'T', '6940', '1020', 5)], mappings: [{ transactionRef: 'T', receiptId: 'ra' }, { transactionRef: 'T', receiptId: 'rb' }] };
+  assert.deepEqual(paymentRows(both, [a, b], '2026-09').map((r) => [r.id, r.difference, r.paid?.together]), [['2026-09-a', undefined, true], ['2026-09-b', undefined, true]]);
+  // The same line paying another amount: what it paid for each cannot be told, so nothing is said.
+  const off = { ...both, journalEntries: [e('j1', 'T', '1091', '1020', 2900)] };
+  assert.deepEqual(paymentRows(off, [a, b], '2026-09').map((r) => r.difference), [undefined, undefined]);
+  // A second line that pays the difference settles it.
+  const one = c('2026-09-e1', 9010, 'r1');
+  const twice = { transactions: [t('P1', -8910), t('P2', -100)], journalEntries: [e('p1', 'P1', '1091', '1020', 8910, ['r1']), e('p2', 'P2', '1091', '1020', 100)], mappings: [{ transactionRef: 'P1', receiptId: 'r1' }, { transactionRef: 'P2', receiptId: 'r1' }] };
+  assert.equal(paymentRows(twice, [one], '2026-09')[0].difference, undefined);
+  // A payout closed again at 0 after it was paid: the whole payment is named.
+  const zero = c('2026-09-e1', 0, 'r1');
+  const paid = { transactions: [t('P1', -8910)], journalEntries: [e('p1', 'P1', '1091', '1020', 8910, ['r1'])], mappings: [{ transactionRef: 'P1', receiptId: 'r1' }] };
+  assert.deepEqual(paymentRows(paid, [zero], '2026-09').map((r) => [r.difference, r.account]), [[-8910, '1091']]);
 });

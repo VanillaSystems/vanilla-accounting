@@ -21,7 +21,7 @@ import type { WageType } from '../../../payroll/catalogue.js';
 import type { AreaProps, Nav } from '../index.js';
 import { payrollApi, reloadPayroll, urls, usePayroll, type Payslip, type PayslipMail, type PayslipSent, type SettingsView } from './data.js';
 import type { MonthView } from '../../../payroll/views.js';
-import { at, Disclaimer, employeeAt, Go, MonthSwitch, payslipAt, settingsAt, Tabs, type PayrollRoute } from './common.js';
+import { at, Disclaimer, employeeAt, Go, inPeriodOf, MonthSwitch, payslipAt, settingsAt, Tabs, type PayrollRoute } from './common.js';
 import { data, factText, labelOf, localWhen, missingText, monthText, pct, warningText } from './words.js';
 import { useHandover } from '../../handover/store.js';
 import { Fields, numberOf, type FieldDef, type Form } from './Dated.js';
@@ -274,12 +274,15 @@ function SlipView({ v, types, nav, canEdit }: Props & { v: Payslip; types: Map<s
 
 function SlipFacts({ v, nav }: { v: Payslip; nav: Nav }) {
   const facts = factsOf(v.slip);
-  if (!facts.length && !v.drift.length) return null;
+  if (!facts.length && !v.drift.length && !v.paidDifference) return null;
   return (
     <div className="pfacts">
       {facts.map((f, i) => (
         <div key={i} className="notice">{factText(f)}{f.key === 'earlierOpen' && f.vars?.month ? <> · <Go nav={nav} loc={payslipAt(`${f.vars.month}-${v.employee}`)}>{monthText(String(f.vars.month))}</Go></> : null}</div>
       ))}
+      {v.paidDifference ? (
+        <div className="notice warn" data-testid="paid-difference">{t('payroll.slip.paidDifference', { paid: fmt(v.paidDifference.paid), payout: fmt(v.slip.payout), difference: fmt(v.paidDifference.difference), account: v.paidDifference.account })} · <Go nav={nav} loc={inPeriodOf({ area: 'bank', payment: v.paidDifference.ref }, v.paidDifference.date)}>{t('payroll.slip.paidLine')}</Go></div>
+      ) : null}
       {v.drift.length ? (
         <div className="notice warn" data-testid="drift">{t('payroll.slip.drift', { lines: v.drift.map((d) => `${d.label} ${fmt(d.before)} → ${fmt(d.after)}`).join(', ') })}</div>
       ) : null}

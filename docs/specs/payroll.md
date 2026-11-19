@@ -1696,6 +1696,9 @@ non-obvious decision is recorded here when it is taken.
 41. **demo-consulting runs the owner's payroll in the app from October**: January to September stay as they
     were booked by hand (their opening is in payroll.json and books nothing), so no demo figure and no golden
     file changes; a persona walk closes October to December.
+42. **A payslip paid before it was reopened and closed again with another payout names the difference**
+    (its payout less what the bank line paid for it) on the payslip and in Lohnzahlungen, as a fact: that much
+    stays on 1091 until a payment or a booking settles it. The app books nothing for it by itself.
 
 ---
 
