@@ -187,3 +187,36 @@
 .heldsplit { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 6px 0 2px; }
 .heldpart { display: inline-flex; gap: 4px; }
 .heldpart input { width: 7em; }
+
+/* Zu bezahlen (#571): the switch beside Belege's counts, the sum still to pay, the list's actions, a bill's fact; its print is a list of its own. */
+.counts .rviews { margin-left: auto; }
+.counts .rviews button.on { font-weight: 500; }
+.bills-sum { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 14px 16px; margin: 0 -16px 10px; border-radius: 12px; background: var(--hover); }
+.bills-sum > span { color: var(--muted); font-size: 13px; }
+.bills-sum b { font: 500 22px var(--font-mono); letter-spacing: -.03em; color: var(--ink); white-space: nowrap; }
+.bills-sum b small { font-size: 12px; color: var(--muted); margin-right: 6px; letter-spacing: 0; }
+.bills-sum b .also { font-size: 16px; color: var(--muted); }
+.bills-acts { display: flex; gap: 16px; margin: 0 0 18px; font-size: 13px; }
+.bills-acts a.linkbtn { text-decoration: none; }
+.bills-acts button:disabled { color: var(--muted); cursor: default; }
+.row.bill .bfact { color: var(--muted); }
+.row.bill.st-overdue .bfact { color: var(--warn); }
+.facts .billfact.st-overdue { color: var(--warn); }
+.bills-print { display: none; }
+@media print {
+  /* A printed list keeps paper colours in both themes. */
+  /* Only while Zu bezahlen is shown: another page's print (form 0535) stays its own. */
+  body:has(> .bills-print) > *:not(.bills-print) { display: none !important; }
+  /* vat.css hides every element in print but its form: this list is shown instead. */
+  .bills-print, .bills-print * { visibility: visible; }
+  .bills-print { display: block; color: #000; background: #fff; font: 10pt var(--font-sans); }
+  .bills-print h1 { font-size: 14pt; margin: 0 0 4pt; }
+  .bills-print h1 small { font-weight: 400; }
+  .bills-print p { margin: 0 0 10pt; }
+  .bills-print table { width: 100%; border-collapse: collapse; }
+  .bills-print th, .bills-print td { text-align: left; padding: 3pt 4pt; border-bottom: .5pt solid #999; vertical-align: top; }
+  .bills-print th.r { font-family: var(--font-sans); }
+  .bills-print th { font-weight: 600; border-bottom: 1pt solid #000; }
+  .bills-print .r { text-align: right; font-family: var(--font-mono); white-space: nowrap; }
+  .bills-print .tot { margin-top: 10pt; font-weight: 600; }
+}

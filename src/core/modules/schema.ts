@@ -278,6 +278,8 @@ export interface SetupData {
 export interface DocumentsData {
   /** Words of a receipt: its title, its total, its due date, a payment slip, the label of its number. */
   receipt: Record<'title' | 'total' | 'due' | 'slip' | 'number', string[]>;
+  /** A bill's due date and terms (src/books/due-date.ts): more words that label them, the word for days, the word of the term without a cash discount («netto»). */
+  dueTerms?: { labels?: string[]; days: string[]; net: string[] };
   /** A title word also closes a compound at the start of a line («Akontorechnung»), unless the compound ends in one of these («Lohnabrechnung», «Berechnung»): src/core/modules/words.ts compoundLines. */
   notCompound?: string[];
   /** Words on a line with a total's word that make it no total of the document: a payroll, a sum insured, a limit, hours. */

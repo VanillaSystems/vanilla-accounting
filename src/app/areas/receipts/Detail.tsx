@@ -49,7 +49,10 @@ import { ActionsMenu } from '../../selection/ActionsMenu.js';
 import { ownerPays, readsPaidPrivately, receiptActions } from './actions-menu.js';
 import { useAiOff } from '../../ai/ai-off.js';
 import { useAiState, useNoAi } from '../../ai/no-ai.js';
-import { baseCurrency, chargesVat, filing, withoutInputTax } from '../../../engines/index.js';
+import { baseCurrency, chargesVat, documents, filing, withoutInputTax } from '../../../engines/index.js';
+import { billOf } from './payables.js';
+import { billFact } from './Bills.js';
+import { dueOf } from '../../../books/due-date.js';
 import { processingText } from '../../automation/processing.js';
 import { INTAKE_WORKFLOW, inProcess, type Processing } from '../../../workflows/processing.js';
 import { refusalText } from '../../automation/refusal.js';
@@ -151,6 +154,8 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
   const sheet = balanceSheetOf(r, props.books, localToday());
   const busy = inProcess(proc) && !v.none;
   const unread = !v.date || r.amount == null || vatChipOf(r.hasSwissVat, withoutInputTax()) === 'unread';
+  // A bill to pay (#571): when it is due and where it stands, as a fact.
+  const bill = billOf(v, l, localToday(), documents());
 
   return (
     <div className="detail-in" data-for={r.id} data-processing={busy ? proc.kind : proc?.kind === 'stuck' ? 'stuck' : undefined}>
@@ -184,6 +189,7 @@ function ReceiptDetail(props: Props & { v: ReceiptView; l: Ledger }) {
             : vatChipOf(r.hasSwissVat, withoutInputTax()) === 'none' ? <span className="nov" data-tip={t('receipts.noVatTip')}>{t('receipts.noVat')}</span>
             : null}
           {r.vatBy === 'human' && <ByHand />}
+          {bill && <span className={`billfact st-${bill.state}`} data-testid="bill-fact" data-state={bill.state} data-tip={t(bill.dueBy === 'hand' ? 'bills.dueHandTip' : 'bills.dueReadTip')}>{billFact(bill)}</span>}
           {misfit !== undefined && <span className="misfit" data-testid="vat-misfit" data-tip={t('receipts.vatMisfitTip', { gross: `${cur} ${fmt(misfit)}`, amount: `${cur} ${fmt(r.amount!)}` })}>{t('receipts.vatMisfit')}</span>}
           {vat.length > 0 && (r.vatId
             ? <span data-tip={t('receipts.uidTip', { uid: r.vatId })}><span className="ok">✓</span> {t('receipts.uid')} <span className="mono">{r.vatId}</span></span>
@@ -508,6 +514,8 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean; working: boolea
   const form = useRef<HTMLFormElement>(null);
   const [err, setErr] = useState('');
   const currencies = useMemo(() => [...new Set([...CURRENCIES, r.currency || baseCurrency()])], [r.currency]);
+  // The due date its text states (#571): the field's placeholder while she set none, named below it while hers differs.
+  const read = dueOf({ extractedText: r.extractedText, date: v.date }, documents())?.day;
 
   useEffect(() => {
     if (!s.open.angaben || !s.focus) return;
@@ -520,7 +528,7 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean; working: boolea
   }
 
   useBookedFields(form, {
-    filename: r.filename, date: r.date ? formatDate(r.date) : '', amount: r.amount == null ? '' : fmt(r.amount),
+    filename: r.filename, date: r.date ? formatDate(r.date) : '', dueDate: r.dueDate ? formatDate(r.dueDate) : '', amount: r.amount == null ? '' : fmt(r.amount),
     description: r.description ?? '', remarks: r.remarks ?? '', currency: r.currency || baseCurrency(),
   });
 
@@ -530,15 +538,18 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean; working: boolea
     const f = Object.fromEntries(new FormData(form.current)) as Record<string, string>;
     const date = f.date.trim() ? parseSwissDate(f.date) : null;
     const dateWrong = !!f.date.trim() && !date;
+    const due = f.dueDate.trim() ? parseSwissDate(f.dueDate) : null;
+    const dueWrong = !!f.dueDate.trim() && !due;
     const amount = f.amount.trim() ? parseAmount(f.amount) : null;
     const amountWrong = !!f.amount.trim() && amount == null;
-    setErr(dateWrong ? t('receipts.errDate') : amountWrong ? t('receipts.errAmount') : '');
-    if (dateWrong || amountWrong) nav.dismissToast();
+    setErr(dateWrong ? t('receipts.errDate') : dueWrong ? t('receipts.errDueDate') : amountWrong ? t('receipts.errAmount') : '');
+    if (dateWrong || dueWrong || amountWrong) nav.dismissToast();
     const changed: Field[] = [];
     const patch: Parameters<typeof saveFields>[2] = {};
     const filename = f.filename.trim() || r.filename;
     if (filename !== r.filename) { patch.filename = filename; changed.push('filename'); }
     if (!dateWrong && (date ?? undefined) !== r.date) { patch.date = date; changed.push('date'); }
+    if (!dueWrong && (due ?? undefined) !== r.dueDate) { patch.dueDate = due; changed.push('dueDate'); }
     const cur = f.currency || r.currency || baseCurrency();
     if (!amountWrong && ((amount ?? undefined) !== r.amount || (amount != null && cur !== (r.currency || baseCurrency())))) {
       if (amount == null) patch.amount = null;
@@ -549,6 +560,7 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean; working: boolea
     if (f.description !== (r.description ?? '')) { patch.description = f.description; changed.push('description'); }
     if (f.remarks !== (r.remarks ?? '')) { patch.remarks = f.remarks; changed.push('remarks'); }
     if (date) { const el = field('date'); if (el) el.value = formatDate(date); }
+    if (due) { const el = field('dueDate'); if (el) el.value = formatDate(due); }
     if (amount != null) { const el = field('amount'); if (el) el.value = fmt(amount); }
     if (changed.length) return saveFields(nav, v, patch, changed);
   }
@@ -566,6 +578,8 @@ function Angaben(props: Props & { v: ReceiptView; edit: boolean; working: boolea
         <label>{t('receipts.field.filename')}<input className="mono" name="filename" defaultValue={r.filename} readOnly={!edit} data-tip={frozen} style={{ fontSize: 12 }} /></label>
         <label>{t('receipts.field.date')}<input className="mono" name="date" defaultValue={r.date ? formatDate(r.date) : ''} placeholder={reading ?? t('receipts.datePlaceholder')} readOnly={!canEdit} /></label>
         {r.dateSource === 'captured' && <div className="fhint">{t('receipts.dateCaptured')}</div>}
+        <label>{t('receipts.field.dueDate')}<input className="mono" name="dueDate" defaultValue={r.dueDate ? formatDate(r.dueDate) : ''} placeholder={read ? formatDate(read) : t('receipts.datePlaceholder')} readOnly={!canEdit} data-testid="due-date" /></label>
+        {read && read !== r.dueDate && <div className="fhint" data-testid="due-read">{t('bills.dueRead', { date: formatDate(read) })}</div>}
         <div className="two">
           <label>{t('receipts.field.currency')}<select name="currency" defaultValue={r.currency || baseCurrency()} disabled={!edit} data-tip={frozen}>{currencies.map((c) => <option key={c}>{c}</option>)}</select></label>
           <label>{t('receipts.field.amount')}<input className="mono" name="amount" defaultValue={r.amount == null ? '' : fmt(r.amount)} readOnly={!edit} data-tip={frozen} placeholder={reading} style={{ textAlign: 'right' }} /></label>

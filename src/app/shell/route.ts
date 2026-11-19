@@ -24,7 +24,8 @@ export const INVOICE_STATUSES = ['open', 'overdue', 'draft', 'paid'] as const;
 export type InvoiceStatus = typeof INVOICE_STATUSES[number];
 
 export type Route =
-  | { area: 'receipts'; id?: string }
+  /** `view: 'bills'`: Zu bezahlen, the bills among the receipts with their due dates (#571), /receipts/bills/<id>. */
+  | { area: 'receipts'; id?: string; view?: 'bills' }
   /** A payment without its statement is /payments/<ref>: the bank area finds the statement. */
   /** `file`: one statement file read in, whole (Kontoauszüge › Dateien, #208): `<account>/<file name>`, /bank/files/<account>/<file name>. */
   | { area: 'bank'; statement?: string; payment?: string; file?: string }
@@ -126,7 +127,7 @@ export const isRedirect = (p: Location | Redirect): p is Redirect => 'redirect' 
 
 function segmentsOf(r: Route): Array<string | undefined> {
   switch (r.area) {
-    case 'receipts': return ['receipts', r.id];
+    case 'receipts': return r.view ? ['receipts', r.view, r.id] : ['receipts', r.id];
     case 'bank': return r.file ? ['bank', 'files', ...r.file.split(/\/(.*)/s, 2)] : r.statement ? ['bank', r.statement, r.payment] : r.payment ? ['payments', r.payment] : ['bank'];
     case 'journal': return ['journal', r.id];
     case 'vat': return ['vat', r.ziffer];
@@ -144,7 +145,7 @@ function segmentsOf(r: Route): Array<string | undefined> {
 
 function routeOf([a, b, c, d]: string[]): Route {
   switch (a) {
-    case 'receipts': return defined({ area: 'receipts', id: b });
+    case 'receipts': return b === 'bills' ? defined({ area: 'receipts', view: 'bills', id: c }) : defined({ area: 'receipts', id: b });
     case 'bank': return b === 'files' && c && d ? { area: 'bank', file: `${c}/${d}` } : defined({ area: 'bank', statement: b, payment: b && c });
     case 'payments': return defined({ area: 'bank', payment: b });
     case 'journal': return defined({ area: 'journal', id: b });

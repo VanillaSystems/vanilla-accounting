@@ -164,7 +164,7 @@ function paymentProblem(before: Rec | undefined, after: Rec | undefined, account
 }
 
 /** What a person changes on a receipt in the app (PATCH /api/receipts/:id, setReceipt, setVatFacts, setReceiptKind). */
-const RECEIPT_EDITS: ReadonlySet<string> = new Set(['date', 'amount', 'currency', 'description', 'remarks', 'handSet', 'kind', 'kindBy', 'kindRule', 'kindWhy', 'hasSwissVat', 'vatSummary', 'vatId', 'lineItems', 'vatBy']);
+const RECEIPT_EDITS: ReadonlySet<string> = new Set(['date', 'dueDate', 'amount', 'currency', 'description', 'remarks', 'handSet', 'kind', 'kindBy', 'kindRule', 'kindWhy', 'hasSwissVat', 'vatSummary', 'vatId', 'lineItems', 'vatBy']);
 /** What such a change may only take away. */
 const RECEIPT_CLEARS: ReadonlySet<string> = new Set(['dateSource', 'vatReadFailures', 'vatExtractedAt']);
 const VAT_FACTS = ['hasSwissVat', 'vatSummary', 'vatId', 'lineItems'] as const;
