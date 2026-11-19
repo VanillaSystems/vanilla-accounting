@@ -1804,7 +1804,7 @@ merge:
 125. **The final statement says its difference before it is booked, and a December still open first**: the page
      reads the year's contributions in the books when it opens (`GET /api/payroll/insurances/<id>/compare`,
      decision 44's sum, with no total), shows «In den Büchern …» and, as the total is typed, «Differenz +…»;
-     the button names the amount and the direction («Differenz 1'063.80 buchen: Nachzahlung an …», «…: Guthaben
+     the button names the amount and the direction («Differenz <Betrag> buchen: Nachzahlung an …», «…: Guthaben
      bei …», or «Stimmt mit den Büchern überein»). Booking while any person's December payslip of that year is
      still a draft is said first in the page («Dezember 2026 ist noch nicht abgeschlossen», the people named),
      whatever the difference's size, and booked only on «Trotzdem buchen» (§18): the books do not hold the year
