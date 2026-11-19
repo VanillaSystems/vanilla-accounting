@@ -7,7 +7,7 @@ import { fromRappen, roundCHF, toRappen } from '../accounting/rappen.js';
 import { TEXTS, formatDate } from './texts.js';
 import type {
   Comment, Customer, CustomerFields, Draft, Envelope, Exemption, Invoice, InvoiceBook, InvoiceContent, InvoiceLayout,
-  InvoiceLine, InvoicingSettings, Issued, ItemLine, PaymentAllocation, Prices, Reminder, Sender, UnitDef, VatRate,
+  InvoiceLine, InvoicingSettings, Issued, IssuedTerms, ItemLine, PaymentAllocation, PaymentTerms, Prices, Reminder, Sender, UnitDef, VatRate, WriteOff,
 } from './model.js';
 import { isItem } from './model.js';
 import { chargesVat, invoiceActivities, invoiceRates, invoicing, vat, vatSetup } from '../engines/index.js';
@@ -149,7 +149,35 @@ export const paidAmount = (inv: Issued): number => fromRappen(inv.payments.reduc
 export function openAmount(inv: Invoice, invoices: readonly Invoice[], asOf?: string): number {
   if (inv.status !== 'issued' || inv.kind === 'credit-note' || inv.cancelled) return 0;
   const credited = creditNotesOf(inv, invoices, asOf).reduce((s, c) => s - toRappen(totals(c).gross), 0);
-  return fromRappen(Math.max(0, toRappen(totals(inv).gross) - toRappen(paidAmount(inv)) - credited));
+  return fromRappen(Math.max(0, toRappen(totals(inv).gross) - toRappen(paidAmount(inv)) - credited - writtenOff(inv)));
+}
+
+/** What the write-offs of an invoice closed (by `asOf`, when given), in Rappen. */
+const writtenOff = (inv: Issued, asOf?: string): number => (inv.writeOffs ?? []).filter((w) => !asOf || w.date <= asOf).reduce((s, w) => s + toRappen(w.amount), 0);
+
+/**
+ * The four figures of an issued invoice (spec 4.8): its amount, what was received, what was
+ * credited (its credit notes and write-offs) and what is open, each with its sources. `open` is
+ * `amount − received − credited` exactly and may be below zero: money beyond the invoice (a
+ * Kundenguthaben, phase 4); openAmount is never below zero. Payments count without their reminder
+ * fees. A cancelled invoice is no claim: every figure but its amount is what its records say, and
+ * `open` is what openAmount says, 0.
+ */
+export interface Figures {
+  amount: number; received: number; credited: number; open: number;
+  payments: PaymentAllocation[];
+  creditNotes: Array<{ id: string; number: string; date: string; amount: number }>;
+  writeOffs: WriteOff[];
+}
+export function figures(inv: Issued, invoices: readonly Invoice[]): Figures {
+  const amount = toRappen(totals(inv).gross);
+  const received = toRappen(paidAmount(inv));
+  const notes = inv.kind === 'invoice' ? creditNotesOf(inv, invoices).map((c) => ({ id: c.id, number: c.number, date: c.date, amount: -totals(c).gross })) : [];
+  const credited = notes.reduce((s, c) => s + toRappen(c.amount), 0) + writtenOff(inv);
+  return {
+    amount: fromRappen(amount), received: fromRappen(received), credited: fromRappen(credited), open: fromRappen(amount - received - credited),
+    payments: inv.payments, creditNotes: notes, writeOffs: inv.writeOffs ?? [],
+  };
 }
 
 /**
@@ -167,7 +195,7 @@ export function openOn(inv: Invoice, invoices: readonly Invoice[], date: string)
   if (inv.status !== 'issued' || inv.kind === 'credit-note' || inv.date > date || (inv.cancelled && inv.cancelled.date <= date)) return 0;
   const credited = creditNotesOf(inv, invoices, date).reduce((s, c) => s - toRappen(totals(c).gross), 0);
   const paid = inv.payments.filter((p) => p.date <= date).reduce((s, p) => s + toRappen(p.amount), 0);
-  return fromRappen(Math.max(0, toRappen(totals(inv).gross) - paid - credited));
+  return fromRappen(Math.max(0, toRappen(totals(inv).gross) - paid - credited - writtenOff(inv, date)));
 }
 
 /**
@@ -177,12 +205,7 @@ export function openOn(inv: Invoice, invoices: readonly Invoice[], date: string)
  */
 export function refundDue(cn: Invoice, invoices: readonly Invoice[]): number {
   if (cn.status !== 'issued' || cn.kind !== 'credit-note' || cn.cancelled || cn.settlement === 'offset') return 0;
-  const target = live(invoices).find((i) => i.id === cn.creditFor);
-  if (!target || target.status !== 'issued') return 0;
-  const earlier = creditNotesOf(target, invoices).filter((c) => c.id !== cn.id && (c.date < cn.date || (c.date === cn.date && c.issuedAt < cn.issuedAt)));
-  const owed = toRappen(totals(target).gross) - toRappen(paidAmount(target)) + earlier.reduce((s, c) => s + toRappen(totals(c).gross), 0);
-  const back = Math.max(0, -toRappen(totals(cn).gross) - Math.max(0, owed));
-  return fromRappen(Math.max(0, back - toRappen(paidAmount(cn))));
+  return fromRappen(Math.max(0, toRappen(creditBeyond(cn, invoices)) - toRappen(paidAmount(cn))));
 }
 
 /** The text names the document's number, not as part of a longer number ("Rechnung 2026-005", "RE2026-005/Garage"). */
@@ -237,7 +260,21 @@ export function status(inv: Invoice, invoices: readonly Invoice[]): InvoiceStatu
   if (inv.cancelled) return 'cancelled';
   if (inv.kind === 'credit-note') return 'issued';
   if (openAmount(inv, invoices) === 0) return 'paid';
-  return inv.payments.length ? 'partly-paid' : 'issued';
+  // Teilbezahlt: something received, credited or written off, and something open (spec 4.4.2).
+  return inv.payments.length || inv.writeOffs?.length || creditNotesOf(inv, invoices).length ? 'partly-paid' : 'issued';
+}
+
+/**
+ * The part of a credit note beyond what its invoice still owed when it was issued (after the
+ * payments, the write-offs and the credit notes before it): what is paid back, never applied. The
+ * rest of it is applied to its invoice at once (Verrechnung, spec 4.4.6).
+ */
+export function creditBeyond(cn: Issued, invoices: readonly Invoice[]): number {
+  const target = live(invoices).find((i) => i.id === cn.creditFor);
+  if (!target || target.status !== 'issued') return 0;
+  const earlier = creditNotesOf(target, invoices).filter((c) => c.id !== cn.id && (c.date < cn.date || (c.date === cn.date && c.issuedAt < cn.issuedAt)));
+  const owed = toRappen(totals(target).gross) - toRappen(paidAmount(target)) - writtenOff(target) + earlier.reduce((s, c) => s + toRappen(totals(c).gross), 0);
+  return fromRappen(Math.max(0, -toRappen(totals(cn).gross) - Math.max(0, owed)));
 }
 
 export function isOverdue(inv: Invoice, invoices: readonly Invoice[], today: string): boolean {
@@ -268,7 +305,7 @@ export type MissingField =
   | 'sender.name' | 'sender.address' | 'sender.uid' | 'payTo'
   | 'customer' | 'customer.name' | 'customer.address'
   | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.price' | 'line.vatRate' | 'line.activity' | 'line.discount' | 'line.discountBase' | 'exemption' | 'total'
-  | 'credit.invoice' | 'credit.sign' | 'credit.exceeds';
+  | 'credit.invoice' | 'credit.sign' | 'credit.exceeds' | 'credit.aboveOpen';
 
 const hasAddress = (a: { postcode?: string; town?: string; country?: string } | undefined) => !!(a?.postcode?.trim() && a.town?.trim() && a.country?.trim());
 
@@ -341,11 +378,15 @@ export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'>
   });
 }
 
+/** Why the money of a document cannot move as asked; `code` is what the UI says it in (src/invoices/payments.ts PaymentError, src/types/api-error.ts PaymentErrorBody). */
+export type PaymentRefusal = 'notFound' | 'noPayment' | 'cancelled' | 'currency' | 'allocated' | 'doubleRevenue' | 'surplus' | 'notAllocated' | 'closed'
+  | 'noWriteOff' | 'moneyAccount' | 'amount' | 'noHandPayment' | 'confirmed' | 'noParts' | 'overAllocated' | 'twice';
+
 export class InvoiceRuleError extends Error {
   constructor(readonly code: InvoiceRefusal, message: string, readonly missing?: Missing[]) { super(message); }
 }
 /** `unconfirmed`: issuing warns (warningsForIssue) and the request did not carry the person's «Trotzdem ausstellen». */
-export type InvoiceRefusal = 'incomplete' | 'unconfirmed' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid';
+export type InvoiceRefusal = 'incomplete' | 'unconfirmed' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid' | 'aboveOpen' | 'surplus' | 'beforeInvoice';
 
 /**
  * The draft as an issued invoice: its number (the next of the year), its due date, its payment
@@ -358,6 +399,8 @@ export function issue(draft: Draft, ctx: {
   units?: readonly UnitDef[];
   /** The person's «Trotzdem ausstellen» over what warningsForIssue names. */
   confirmed?: boolean;
+  /** The firm's payment terms: the draft's `termsId` picks one, frozen as printed; without, the customer's days net. */
+  paymentTerms?: readonly PaymentTerms[];
 }): Omit<Issued, 'pdf'> {
   if (draft.status !== 'draft' || draft.deleted) throw new InvoiceRuleError('notDraft', 'Nur ein Entwurf kann ausgestellt werden.');
   const missing = missingForIssue(draft, { ...ctx, sender: ctx.sender });
@@ -367,6 +410,7 @@ export function issue(draft: Draft, ctx: {
   }
   const warnings = warningsForIssue(draft);
   if (warnings.length && !ctx.confirmed) throw new InvoiceRuleError('unconfirmed', `Eine Position ohne Text oder Betrag: ${where(warnings)}. Sie wird so gedruckt; nur mit «Trotzdem ausstellen».`, warnings);
+  const terms = termsFor(draft, ctx.paymentTerms, ctx.customer.paymentTermsDays);
   const { comments, status: _, ...content } = draft;
   const number = nextNumber(ctx.invoices, draft.date);
   const { id: _id, createdAt: _c, origin: _o, deleted: _d, ...customer } = ctx.customer;
@@ -377,7 +421,8 @@ export function issue(draft: Draft, ctx: {
     status: 'issued',
     number,
     issuedAt: ctx.now,
-    dueDate: draft.dueDate ?? addDays(draft.date, ctx.customer.paymentTermsDays),
+    dueDate: draft.dueDate ?? addDays(draft.date, terms?.days ?? ctx.customer.paymentTermsDays),
+    ...(terms ? { terms } : {}),
     reference: referenceFor(number, ctx.sender.payTo),
     customer,
     sender: ctx.sender,
@@ -387,6 +432,39 @@ export function issue(draft: Draft, ctx: {
     reminders: [],
     comments,
   };
+}
+
+/**
+ * The terms an invoice prints: the firm's terms its draft picks (`termsId`), frozen; a draft that
+ * picks none pays in the customer's days net (its own terms), frozen as such once the firm names
+ * any terms. A credit note prints none.
+ */
+export function termsFor(draft: Pick<InvoiceContent, 'kind' | 'termsId' | 'language'>, terms: readonly PaymentTerms[] | undefined, customerDays: number): IssuedTerms | undefined {
+  if (draft.kind !== 'invoice' || !terms) return undefined;
+  const picked = draft.termsId === undefined ? undefined : terms.find((x) => x.id === draft.termsId);
+  if (draft.termsId !== undefined && !picked) throw new InvoiceRuleError('incomplete', `Zahlungskondition ${draft.termsId} gibt es nicht (mehr); eine andere wählen.`);
+  if (picked) return { id: picked.id, name: picked.name, days: picked.days, ...(picked.skonto ? { skonto: { ...picked.skonto } } : {}), text: picked.text?.trim() || picked.name };
+  const name = TEXTS[draft.language].netTerms(customerDays);
+  return { id: `net${customerDays}`, name, days: customerDays, text: name };
+}
+
+/**
+ * The warning of a credit note above what its invoice has open (spec 4.11): `unconfirmed` with the
+ * gap `credit.aboveOpen`, unless the person confirmed («Trotzdem ausstellen»). The rest is paid back.
+ */
+export function assertCreditWithinOpen(draft: InvoiceContent, invoices: readonly Invoice[], confirmed: boolean | undefined): void {
+  const above = creditAboveOpen(draft, invoices);
+  if (above > 0 && !confirmed) {
+    throw new InvoiceRuleError('unconfirmed', `Gutschrift über dem offenen Betrag der Rechnung (${draft.currency} ${above.toFixed(2)} mehr): ${draft.settlement === 'offset' ? 'der Rest wartet auf die Verrechnung mit einer nächsten Rechnung' : 'der Rest wird zurückbezahlt'}. Nur mit «Trotzdem ausstellen».`, [{ field: 'credit.aboveOpen' }]);
+  }
+}
+
+/** How much a credit note draft takes off its invoice beyond what is open (spec 4.11 «Gutschrift über dem offenen Betrag»); 0 for any other document. */
+export function creditAboveOpen(draft: InvoiceContent, invoices: readonly Invoice[]): number {
+  if (draft.kind !== 'credit-note') return 0;
+  const target = live(invoices).find((i) => i.id === draft.creditFor);
+  if (!target || target.status !== 'issued') return 0;
+  return fromRappen(Math.max(0, -toRappen(totals(draft).gross) - toRappen(openAmount(target, invoices))));
 }
 
 /** A draft can be deleted (a flag, ADR 0004); an issued invoice never is. */
@@ -400,10 +478,14 @@ export function deleteDraft(inv: Invoice): Invoice {
  * takes it off the open invoices. A paid invoice is not cancelled: the money goes back through a
  * credit note for the full amount.
  */
-export function cancel(inv: Invoice, c: { date: string; reason: string }): Issued {
+export function cancel(inv: Invoice, c: { date: string; reason: string; confirmed?: boolean }): Issued {
   if (inv.status !== 'issued') throw new InvoiceRuleError('notIssued', 'Ein Entwurf wird gelöscht, nicht storniert.');
   if (inv.cancelled) throw new InvoiceRuleError('cancelled', `Rechnung ${inv.number} ist schon storniert.`);
-  if (inv.payments.length) throw new InvoiceRuleError('paid', `Rechnung ${inv.number} ist bezahlt: eine Gutschrift über den ganzen Betrag schreiben, nicht stornieren.`);
+  // A warning (spec 4.11): the Storno undoes the claim, the money stays received; «Trotzdem stornieren» releases the payments (the caller).
+  if (inv.payments.length && !c.confirmed) {
+    const named = inv.payments.map((p) => `${inv.currency} ${p.amount.toFixed(2)} vom ${p.date}`).join(', ');
+    throw new InvoiceRuleError('paid', `Rechnung ${inv.number} ist bezahlt (${named}): ein Storno hebt die Forderung auf, das Geld bleibt erhalten, die Zahlung wartet wieder unzugeordnet. Eine Gutschrift statt Storno, oder «Trotzdem stornieren».`);
+  }
   return { ...inv, cancelled: { date: c.date, reason: c.reason.trim() } };
 }
 
@@ -559,6 +641,132 @@ function groupBy<T, K>(xs: readonly T[], key: (x: T) => K): Map<K, T[]> {
 /** Where the rest of an invoice is written off: the firm's accounts, else the jurisdiction's (modules/<j>/invoicing.yaml writeOff). */
 export function writeOffAccounts(settings: Pick<InvoicingSettings, 'writeOffAccount'> | undefined): { skonto: string; loss: string } | undefined {
   return settings?.writeOffAccount ?? invoicing().writeOff;
+}
+
+// ─── Skonto, shortfall, write-offs ───────────────────────────────────────────
+
+/**
+ * How far a payment may be off the Skonto the printed terms offer and still be taken for it: the
+ * customer's bank may round its amount to 5 Rappen, so at most 5 Rappen either way. Narrow on
+ * purpose: anything further off is a short payment for a person (Ausziffern).
+ */
+export const SKONTO_TOLERANCE = 0.05;
+
+/**
+ * The Skonto a payment of `amount` on `date` takes, by the terms the invoice printed (spec 4.12:
+ * Skonto is recognised by the printed Skonto): the percent of what was open before any payment (its
+ * total less its credit notes), to the Rappen, when the payment is the first and comes within the
+ * Skonto days of the invoice's date, and pays that open amount less the Skonto within
+ * SKONTO_TOLERANCE. Returns the rest to write off (what is open less the payment), else undefined.
+ */
+export function skontoOf(inv: Issued, invoices: readonly Invoice[], amount: number, date: string): number | undefined {
+  const sk = inv.terms?.skonto;
+  if (!sk || inv.kind !== 'invoice' || inv.cancelled || inv.payments.length || inv.writeOffs?.length) return undefined;
+  if (date < inv.date || date > addDays(inv.date, sk.days)) return undefined;
+  const open = toRappen(openAmount(inv, invoices, date));
+  const skonto = toRappen(fromRappen(open) * sk.percent / 100);
+  const rest = open - toRappen(amount);
+  if (rest <= 0 || skonto <= 0 || Math.abs(rest - skonto) > toRappen(SKONTO_TOLERANCE)) return undefined;
+  return fromRappen(rest);
+}
+
+/** The Skonto an invoice's printed terms offer if paid on time: its amount and the last day, for the paper and the detail. */
+export function skontoOffer(inv: Pick<Issued, 'date' | 'terms' | 'lines' | 'prices' | 'kind'>): { amount: number; until: string; pays: number } | undefined {
+  const sk = inv.terms?.skonto;
+  if (!sk || inv.kind !== 'invoice') return undefined;
+  const gross = toRappen(totals(inv).gross);
+  const amount = toRappen(fromRappen(gross) * sk.percent / 100);
+  return { amount: fromRappen(amount), until: addDays(inv.date, sk.days), pays: fromRappen(gross - amount) };
+}
+
+/**
+ * A rest a payment left that is at most `limit` (the books' currency, `shortfallLimit`): the detail
+ * proposes to write it off as fees, never code (spec 4.4.6). Only after a payment, on an invoice in
+ * the books' currency (`base`).
+ */
+export function shortfallOf(inv: Issued, invoices: readonly Invoice[], limit: number, base: string): number | undefined {
+  if (inv.kind !== 'invoice' || inv.cancelled || !inv.payments.length || inv.currency !== base) return undefined;
+  const open = openAmount(inv, invoices);
+  return open > 0 && toRappen(open) <= toRappen(limit) ? open : undefined;
+}
+
+/** The id the next write-off of an invoice takes: wo-1, wo-2, … one more than the highest it has. */
+export function nextWriteOffId(inv: Pick<Issued, 'writeOffs'>): string {
+  const ks = (inv.writeOffs ?? []).map((w) => Number(/^wo-(\d+)$/.exec(w.id)?.[1] ?? 0));
+  return `wo-${Math.max(0, ...ks) + 1}`;
+}
+
+/**
+ * The invoice with a write-off of its rest (Ausbuchung). Refused on a draft, a credit note, a
+ * cancelled invoice and an amount of zero or less; more than is open is a warning (spec 4.11
+ * «Mehr als offen»): `aboveOpen` unless `confirmed`.
+ */
+export function withWriteOff(inv: Invoice, invoices: readonly Invoice[], w: Omit<WriteOff, 'id'>, confirmed = false): { invoice: Issued; writeOff: WriteOff } {
+  if (inv.status !== 'issued' || inv.kind !== 'invoice') throw new InvoiceRuleError('notIssued', 'Nur der Rest einer ausgestellten Rechnung wird ausgebucht.');
+  if (inv.cancelled) throw new InvoiceRuleError('cancelled', `Rechnung ${inv.number} ist storniert.`);
+  if (!(toRappen(w.amount) > 0)) throw new InvoiceRuleError('incomplete', 'Der Betrag einer Ausbuchung ist grösser als 0.');
+  // What was never claimed is never written off: a rest exists from the invoice's date on.
+  if (w.date < inv.date) throw new InvoiceRuleError('beforeInvoice', `Die Ausbuchung vom ${w.date} liegt vor der Rechnung vom ${inv.date}.`);
+  const open = openAmount(inv, invoices);
+  if (toRappen(w.amount) > toRappen(open) && !confirmed) {
+    throw new InvoiceRuleError('aboveOpen', `Mehr als offen: ${inv.currency} ${w.amount.toFixed(2)} auszubuchen, offen sind ${inv.currency} ${open.toFixed(2)}. Die Rechnung zeigte dann ein Guthaben des Kunden; nur mit «Trotzdem ausbuchen».`);
+  }
+  const writeOff: WriteOff = { id: nextWriteOffId(inv), ...w, amount: fromRappen(toRappen(w.amount)) };
+  return { invoice: { ...inv, writeOffs: [...(inv.writeOffs ?? []), writeOff] }, writeOff };
+}
+
+/**
+ * The invoice without write-off `id` («Rückgängig»). Refused on a cancelled invoice: its Storno
+ * reversed the write-off with the claim, so taking the write-off back would leave the reversal alone.
+ */
+export function withoutWriteOff(inv: Issued, id: string): Issued {
+  if (inv.cancelled) throw new InvoiceRuleError('cancelled', `Rechnung ${inv.number} ist storniert: ihre Ausbuchungen bleiben, wie sie mit dem Storno stehen.`);
+  return { ...inv, writeOffs: (inv.writeOffs ?? []).filter((w) => w.id !== id) };
+}
+
+// ─── Verrechnung on the cash basis ───────────────────────────────────────────
+
+/** One line of the revenue a payment books: `minus` takes revenue and its VAT back (a credit note's applied part). */
+export interface RevenueLine { account: string; vatCode: string | undefined; amount: number; minus?: true }
+
+/**
+ * The revenue a payment `a` of an invoice books on the cash basis. Without credit notes: split like
+ * the invoice (revenueSplit). With credit notes applied to it by the payment's date (Verrechnung,
+ * spec 4.4.6, P1.8), the payment pays what is left of the invoice less the credits, so it books its
+ * share of the invoice's positions with the sale codes and its share of the credit notes' applied
+ * parts with the minus codes, in proportion to what each still has unbooked (the earlier payments
+ * replayed in date order); revenue and VAT come out right per rate, and the lines add up to the
+ * payment exactly.
+ */
+export function cashRevenue(inv: Issued, invoices: readonly Invoice[], a: Pick<PaymentAllocation, 'transactionRef' | 'date' | 'amount'>, revenueAccount: string): RevenueLine[] {
+  const gross = toRappen(totals(inv).gross);
+  const earlier = [...inv.payments.filter((p) => p.transactionRef !== a.transactionRef)].sort((x, y) => x.date.localeCompare(y.date));
+  const order = [...earlier.filter((p) => p.date <= a.date), a];
+  let bookedInv = 0, bookedCredit = 0, last = { inv: toRappen(a.amount), credit: 0 };
+  for (const p of order) {
+    const credit = appliedCredits(inv, invoices, p.date).reduce((s, c) => s + c.applied, 0);
+    const unInv = gross - bookedInv, unCredit = credit - bookedCredit, left = unInv - unCredit;
+    const pay = toRappen(p.amount);
+    const share = unCredit > 0 && left > 0 ? Math.min(Math.round(pay * unInv / left), pay + unCredit) : pay;
+    last = { inv: share, credit: share - pay };
+    bookedInv += share; bookedCredit += share - pay;
+  }
+  const lines: RevenueLine[] = revenueSplit(inv, fromRappen(last.inv), revenueAccount);
+  if (last.credit <= 0) return lines;
+  const credits = appliedCredits(inv, invoices, a.date);
+  const parts = apportion(last.credit, credits.map((c) => c.applied));
+  credits.forEach((c, k) => {
+    // A credit note's lines are negative: its split of a positive amount is that amount's mix of its positions.
+    for (const l of revenueSplit(c.note, fromRappen(parts[k]), revenueAccount)) lines.push({ ...l, minus: true });
+  });
+  return lines;
+}
+
+/** The credit notes of an invoice issued by `date`, each with the part of it applied to the invoice (its whole less what goes back), in Rappen. */
+function appliedCredits(inv: Issued, invoices: readonly Invoice[], date: string): Array<{ note: Issued; applied: number }> {
+  return creditNotesOf(inv, invoices, date)
+    .map((note) => ({ note, applied: -toRappen(totals(note).gross) - toRappen(creditBeyond(note, invoices)) }))
+    .filter((c) => c.applied > 0);
 }
 
 /** Records a payment on an invoice once: the same transaction is never counted twice. */

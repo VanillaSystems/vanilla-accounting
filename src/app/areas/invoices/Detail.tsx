@@ -7,8 +7,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
 import { PRICES, isItem, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
 import { TEXTS } from '../../../invoices/texts.js';
-import { defaultTexts, senderFor } from '../../../invoices/documents.js';
-import { missingForIssue, openAmount, openFees, paidAmount, refundDue, reminderDraft, totals, warningsForIssue, type Missing } from '../../../invoices/rules.js';
+import { defaultTexts, draftDays, senderFor } from '../../../invoices/documents.js';
+import { missingForIssue, openAmount, openFees, paidAmount, refundDue, reminderDraft, shortfallOf, skontoOffer, totals, warningsForIssue, type Missing } from '../../../invoices/rules.js';
 import { prettyReference } from '../../../providers/qr-bill/reference.js';
 import type { PaymentProposal } from '../../../invoices/payments.js';
 import { at } from '../receipts/view.js';
@@ -18,7 +18,9 @@ import { useWorkspace } from '../../hooks/use-workspace.js';
 import { api, missingText, sources, type DraftChange, type InvoiceList } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { language, t } from '../../i18n/index.js';
-import { chargesVat } from '../../../engines/index.js';
+import { baseCurrency, chargesVat } from '../../../engines/index.js';
+import { DEFAULT_SHORTFALL_LIMIT } from '../../../invoices/model.js';
+import { FourFigures, MoneyRows } from './Figures.js';
 import { I } from '../receipts/icons.js';
 import { Paper } from '../receipts/Paper.js';
 import type { AreaProps } from '../index.js';
@@ -26,13 +28,14 @@ import { useInvoices } from './data.js';
 import { byRouteId, customerOf, issuedLater, linkablePayments, routeId, rowState, wasSent, type RowState } from './model.js';
 import { fixFor, moveLine, parseNumber, repriced, sheetEdit, type Fix } from './edit.js';
 import { setUi, useUi, type Section } from './state.js';
-import { comment, confirmPayment, copyAsDraft, deleteDraft, firstLine, invoiceAt, issue, releasePayment, saveDraft, send, sendReminder } from './actions.js';
+import { comment, confirmPayment, copyAsDraft, deleteDraft, firstLine, invoiceAt, issue, saveDraft, send, sendReminder, writeOff } from './actions.js';
 import { contextOf, draftData, issuedData, reminderData } from './sheets.js';
 import { Sheet } from './Sheet.js';
 import { hrefOf } from '../../shell/history.js';
 import { countryName } from './address.js';
 import { AsyncButton } from '../../shell/AsyncButton.js';
 import { SentLine, SentList } from './Sent.js';
+import { Menu, type MenuItem } from '../../shell/Menu.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
 
@@ -121,9 +124,16 @@ function InvoiceDetail(props: DetailProps) {
         {/* A firm not in the register charges no VAT: its invoice's head has no VAT line at all (#398). */}
         {chargesVat() || t0.vat ? <span data-testid="invoice-head-vat">{t0.vat || inv.lines.some((l) => isItem(l) && l.vatRate > 0) ? t('invoices.vatAmount', { amount: fmt(t0.vat) }) : t('invoices.vatZero')}</span> : null}
       </div>
+      {/* The money first (spec 4.8); slice D's sent fact sits beside the figures in this row. */}
+      {/* The facts of an issued document first (spec 4.8): its money, and whether and how it went out. */}
+      {inv.status === 'issued' && !reminder && (
+        <div className="ivtop">
+          {inv.kind === 'invoice' && !inv.cancelled && <FourFigures inv={inv} invoices={d.invoices} />}
+          <SentLine sent={d.sent} inv={inv} onSend={canEdit ? () => setUi({ dialog: { kind: 'send' } }) : undefined} />
+        </div>
+      )}
       <Status {...props} state={state} reminder={!!reminder} />
       <Actions {...props} state={state} reminderLevel={reminder ? reminderDraft(inv, d.invoices, today).level : undefined} />
-      {!reminder && <SentLine sent={d.sent} inv={inv} onSend={canEdit ? () => setUi({ dialog: { kind: 'send' } }) : undefined} />}
       <div className="body">
         <div className="desk">
           <Sheet data={data} editing={editing} onEdit={edit} onAction={action} focus={editing ? s.focus : undefined} onFocused={() => setUi({ focus: undefined })} />
@@ -132,6 +142,12 @@ function InvoiceDetail(props: DetailProps) {
           {inv.status === 'draft' ? <DraftSec {...props} inv={inv} /> : <Sec k="look" label={t('invoices.sec.look')} val={`${t(`invoices.lang.${inv.language}`)} · ${inv.layout.font}`}><p className="m">{t('invoices.lookFrozen')}</p></Sec>}
           {reminder && inv.status === 'issued' && <ReminderSec {...props} inv={inv} />}
           <CustomerSec {...props} />
+          {inv.status === 'issued' && (
+            <Sec k="money" label={t('invoices.sec.money')} val={String(inv.payments.length + (inv.writeOffs?.length ?? 0) || '–')}>
+              <MoneyRows inv={inv} books={props.books} nav={nav} period={props.period} canEdit={canEdit} />
+              {canEdit && <OtherPayment {...props} inv={inv} state={state} />}
+            </Sec>
+          )}
           {inv.status === 'issued' && <SentSec {...props} inv={inv} />}
           <Comments {...props} />
           <Log {...props} />
@@ -156,7 +172,7 @@ function newPosition(a: string, inv: Draft): InvoiceLine | undefined {
 
 /** An edit on the draft's sheet, saved; false: refused, the field goes back. */
 function draftChange({ d, ws, nav }: DetailProps, inv: Draft, key: string, value: string): DraftChange | false | undefined {
-  const terms = d.customers.find((x) => x.id === inv.customerId)?.paymentTermsDays ?? ws.invoicing?.paymentTermsDays ?? 30;
+  const terms = draftDays(contextOf(ws), inv, d.customers.find((x) => x.id === inv.customerId));
   const r = sheetEdit(inv, key, value, { customers: d.customers, defaultTexts: defaultTexts(contextOf(ws), inv.kind, inv.language, terms), units: ws.invoicing?.units });
   if (!r) return undefined;
   if ('change' in r) return r.change;
@@ -169,7 +185,6 @@ function draftChange({ d, ws, nav }: DetailProps, inv: Draft, key: string, value
 function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProps & { state: RowState; reminder: boolean }) {
   const today = localToday();
   const [proposals, setProposals] = useState<PaymentProposal[]>([]);
-  const [pick, setPick] = useState('');
   // An open invoice may be paid, a credit note may be paid back: what the bank shows that could be it.
   const awaits = inv.status === 'issued' && (state === 'open' || state === 'overdue' || (state === 'credit' && refundDue(inv, d.invoices) > 0));
   useEffect(() => {
@@ -219,50 +234,65 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
     const last = inv.payments.at(-1);
     // A reminder fee not paid with the invoice stays named: open until it comes or is waived (r8c-15).
     const fee = openFees(inv);
-    line = <span className="linked">{I.check}{last ? t('invoices.paidOn', { date: formatDate(last.date), amount: `${inv.currency} ${fmt(paidAmount(inv))}` }) : t('invoices.settledByCredit')}{fee > 0 ? ` · ${t('invoices.feeOpen', { amount: `${inv.currency} ${fmt(fee)}` })}` : ''}</span>;
+    line = <span className="linked">{I.check}{last ? t('invoices.paidOn', { date: formatDate(last.date), amount: `${inv.currency} ${fmt(paidAmount(inv))}` })
+      : inv.writeOffs?.length && !d.invoices.some((c) => c.status === 'issued' && c.kind === 'credit-note' && c.creditFor === inv.id && !c.cancelled) ? t('invoices.settledByWriteOff', { what: inv.writeOffs.map((w) => `${t(`invoices.reason.${w.reason}`)} ${inv.currency} ${fmt(w.amount)}`).join(', ') })
+      : t('invoices.settledByCredit')}{fee > 0 ? ` · ${t('invoices.feeOpen', { amount: `${inv.currency} ${fmt(fee)}` })}` : ''}</span>;
   } else {
     const due = inv.dueDate;
     const r = inv.reminders.at(-1);
     const paid = paidAmount(inv);
+    const sk = !inv.payments.length ? skontoOffer(inv) : undefined;
     const parts = [
       state === 'overdue' ? t('invoices.overdueSince', { n: days(due, today) }) : t('invoices.openDue', { when: due === today ? t('invoices.today') : t('invoices.inDays', { n: days(today, due) }) }),
+      ...(sk && sk.until >= today ? [t('invoices.skontoUntil', { date: formatDate(sk.until), amount: `${inv.currency} ${fmt(sk.pays)}` })] : []),
       ...(r ? [t('invoices.lastReminder', { level: r.level, date: formatDate(r.date) })] : []),
       ...(paid ? [t('invoices.partlyPaid', { paid: fmt(paid), open: fmt(openAmount(inv, d.invoices)) })] : []),
       ...(openFees(inv) > 0 ? [t('invoices.feeOpen', { amount: `${inv.currency} ${fmt(openFees(inv))}` })] : []),
     ];
     line = <span className={`notice${state === 'overdue' ? ' warn' : ''}`}>{state === 'overdue' && I.dot}{parts.join(' · ')}</span>;
   }
+  // A rest of at most the shortfall limit after a payment: proposed as Spesen, one click, never by code (spec 4.4.6).
+  const short = inv.kind === 'invoice' ? shortfallOf(inv, d.invoices, ws.invoicing?.shortfallLimit ?? DEFAULT_SHORTFALL_LIMIT, baseCurrency()) : undefined;
   return (
     <div className="status">
       {line}
-      {canEdit && !inv.cancelled && inv.payments.map((p) => (
-        <div key={p.transactionRef} className="notice ivpay" data-testid="linked-payment">
-          <span>{t(inv.kind === 'credit-note' ? 'invoices.linkedRefund' : 'invoices.linkedPayment', { date: formatDate(p.date), amount: `${inv.currency} ${fmt(p.amount)}` })}</span>
-          <button type="button" className="golink" onClick={() => nav.go(at({ area: 'bank', payment: p.transactionRef }, p.date))}>{p.transactionRef}</button>
-          <AsyncButton type="button" className="btn ghost" data-tip={t('invoices.releasePaymentTip')} onClick={() => releasePayment(nav, inv, p.transactionRef)}>{t('invoices.releasePayment')}</AsyncButton>
+      {short !== undefined && (
+        <div className="notice ivpay ivshort" data-testid="shortfall">
+          <span>{t('invoices.shortfall', { amount: `${inv.currency} ${fmt(short)}`, limit: `${inv.currency} ${fmt(ws.invoicing?.shortfallLimit ?? DEFAULT_SHORTFALL_LIMIT)}` })}</span>
+          {canEdit && <AsyncButton type="button" className="quiet2" data-act="shortfall-fee" onClick={() => writeOff(nav, inv, { reason: 'fee', amount: short })}>{t('invoices.shortfallBook')}</AsyncButton>}
         </div>
-      ))}
+      )}
       {proposals.map((p) => (
         <div key={p.transactionRef} className="notice ivpay">
           <span>{t(p.direction === 'DBIT' ? 'invoices.refundProposal' : 'invoices.proposal', { date: formatDate(p.date), amount: `${p.currency} ${fmt(p.amount)}`, payer: p.payer })}{p.booked && <> {t('invoices.proposalBooked')}</>}</span>
-          {canEdit && <AsyncButton type="button" className="btn ghost" onClick={() => confirmPayment(nav, inv, p.transactionRef)}>{t(p.booked ? 'invoices.linkPayment' : 'invoices.confirmPayment')}</AsyncButton>}
+          {canEdit && <span className="acts">
+            {p.direction === 'CRDT' && p.amount !== openAmount(inv, d.invoices) && <button type="button" className="btn ghost" data-act="allocate" onClick={() => setUi({ dialog: { kind: 'allocate', transactionRef: p.transactionRef, customerId: inv.customerId } })}>{t('invoices.allocate')}</button>}
+            <AsyncButton type="button" className="btn ghost" onClick={() => confirmPayment(nav, inv, p.transactionRef)}>{t(p.booked ? 'invoices.linkPayment' : 'invoices.confirmPayment')}</AsyncButton>
+          </span>}
         </div>
       ))}
-      {canEdit && awaits && inv.kind === 'invoice' && (() => {
-        // Any other incoming payment of the invoice's currency, a prepayment before its date included (r9c-3).
-        const others = linkablePayments(books, d.invoices, inv).filter((x) => !proposals.some((p) => p.transactionRef === x.ref));
-        return others.length ? (
-          <div className="notice ivpay" data-testid="link-other-payment">
-            <label>{t('invoices.linkOther')}{' '}
-              <select value={pick} onChange={(e) => setPick(e.target.value)}>
-                <option value="">…</option>
-                {others.map((x) => <option key={x.ref} value={x.ref}>{formatDate(x.date)} · {x.currency} {fmt(x.amount)} · {x.counterparty || x.description}</option>)}
-              </select>
-            </label>
-            <AsyncButton type="button" className="btn ghost" disabled={!pick} onClick={() => confirmPayment(nav, inv, pick).then((ok) => { if (ok) setPick(''); })}>{t('invoices.linkPayment')}</AsyncButton>
-          </div>
-        ) : null;
-      })()}
+    </div>
+  );
+}
+
+/** «Andere Zahlung zuordnen» in the margin: any other incoming payment of the invoice's currency (a prepayment before its date included, r9c-3), linked or allocated. */
+function OtherPayment({ d, inv, nav, books, state }: DetailProps & { inv: Issued; state: RowState }) {
+  const [pick, setPick] = useState('');
+  if (inv.kind !== 'invoice' || (state !== 'open' && state !== 'overdue')) return null;
+  const others = linkablePayments(books, d.invoices, inv);
+  if (!others.length) return null;
+  return (
+    <div className="ivother" data-testid="link-other-payment">
+      <label><span className="m">{t('invoices.linkOther')}</span>
+        <select value={pick} onChange={(e) => setPick(e.target.value)}>
+          <option value="">…</option>
+          {others.map((x) => <option key={x.ref} value={x.ref}>{formatDate(x.date)} · {x.currency} {fmt(x.amount)} · {x.counterparty || x.description}</option>)}
+        </select>
+      </label>
+      <span className="acts">
+        <AsyncButton type="button" className="quiet2" disabled={!pick} onClick={() => confirmPayment(nav, inv, pick).then((ok) => { if (ok) setPick(''); })}>{t('invoices.linkPayment')}</AsyncButton>
+        <button type="button" className="quiet2" data-act="allocate-other" disabled={!pick} onClick={() => setUi({ dialog: { kind: 'allocate', transactionRef: pick, customerId: inv.customerId } })}>{t('invoices.allocate')}</button>
+      </span>
     </div>
   );
 }
@@ -338,27 +368,45 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
     );
   }
   const sentOnce = d.sent.some((x) => x.invoiceId === inv.id && (x.kind === 'invoice' || x.kind === 'credit-note'));
-  const sendBtn = <button type="button" className={`btn ${sentOnce || state === 'overdue' ? 'ghost' : 'primary'}`} data-act="send" data-tip={t('invoices.sendTip')} onClick={() => setUi({ dialog: { kind: 'send' } })}>{sentOnce ? t('invoices.resend') : t('invoices.send')}</button>;
-  const copy = <AsyncButton type="button" className="btn ghost" data-act="copy" data-tip={t('invoices.copyTip')} onClick={() => copyAsDraft(nav, inv)}>{t('invoices.copy')}</AsyncButton>;
-  const credit = <button type="button" className="btn ghost" data-act="credit" onClick={() => setUi({ dialog: { kind: 'credit' } })}>{t('invoices.credit')}</button>;
-  const cancel = <button type="button" className="btn ghost danger" data-act="cancel" onClick={() => setUi({ dialog: { kind: 'cancel' } })}>{t('invoices.cancel')}</button>;
-  const next = state === 'open' || state === 'overdue' ? reminderDraft(inv, d.invoices, localToday()).level : 0;
-  const remind = <button type="button" className={`btn ${state === 'overdue' ? 'primary' : 'ghost'}`} data-act="remind" onClick={() => setUi({ reminder: { invoiceId: inv.id }, preview: false })}>{t('invoices.remind', { level: next })}</button>;
+  const open = state === 'open' || state === 'overdue';
+  const unpaid = inv.kind === 'invoice' && open;
+  const next = open ? reminderDraft(inv, d.invoices, localToday()).level : 0;
+  // One row of the main actions of the state; the rest in «Weitere» (owner's review of slice C).
+  const main: ReactNode[] = [];
+  if (unpaid) main.push(<button key="hand" type="button" className={`btn ${state === 'overdue' ? 'ghost' : 'primary'}`} data-act="hand-payment" onClick={() => setUi({ dialog: { kind: 'handPayment' } })}>{t('invoices.handPayment')}</button>);
+  if (state === 'overdue') main.push(<button key="remind" type="button" className="btn primary" data-act="remind" onClick={() => setUi({ reminder: { invoiceId: inv.id }, preview: false })}>{t('invoices.remind', { level: next })}</button>);
+  if (open || state === 'credit') main.push(<button key="send" type="button" className={`btn ${sentOnce || unpaid ? 'ghost' : 'primary'}`} data-act="send" data-tip={t('invoices.sendTip')} onClick={() => setUi({ dialog: { kind: 'send' } })}>{sentOnce ? t('invoices.resend') : t('invoices.send')}</button>);
+  const more: MenuItem[] = [
+    ...(unpaid ? [{ act: 'write-off', label: t('invoices.writeOff'), run: () => setUi({ dialog: { kind: 'writeOff' } }) }] : []),
+    ...(unpaid ? [{ act: 'allocate', label: t('invoices.allocate'), run: () => setUi({ dialog: { kind: 'allocate', transactionRef: '', customerId: inv.customerId } }) }] : []),
+    ...(open || state === 'paid' ? [{ act: 'credit', label: t('invoices.credit'), run: () => setUi({ dialog: { kind: 'credit' } }) }] : []),
+    ...(open || state === 'paid' ? [{ act: 'cancel', label: t('invoices.cancel'), run: () => setUi({ dialog: { kind: 'cancel' } }) }] : []),
+    ...(state !== 'credit' ? [{ act: 'copy', label: t('invoices.copy'), run: () => { void copyAsDraft(nav, inv); } }] : []),
+  ];
   return (
     <div className="ivacts">
-      {state === 'overdue' && remind}
-      {(state === 'open' || state === 'overdue' || state === 'credit') && sendBtn}
-      {state !== 'credit' && copy}
-      {(state === 'open' || state === 'overdue' || state === 'paid') && credit}
-      {(state === 'open' || state === 'overdue' || state === 'paid') && cancel}
+      {main}
+      {more.length > 0 && <MoreMenu items={more} />}
       {dl}
     </div>
   );
 }
 
+/** «Weitere ▾»: the actions of the state beside the main row. */
+function MoreMenu({ items }: { items: MenuItem[] }) {
+  const [at, setAt] = useState<DOMRect | null>(null);
+  return (
+    <>
+      <button type="button" className="btn ghost" data-act="more" aria-haspopup="menu" aria-expanded={!!at} onClick={(e) => setAt(e.currentTarget.getBoundingClientRect())}>{t('invoices.more')} ▾</button>
+      {at && <Menu anchor={at} items={items} onClose={() => setAt(null)} />}
+    </>
+  );
+}
+
 function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
-  const terms = d.customers.find((c) => c.id === inv.customerId)?.paymentTermsDays ?? ws.invoicing?.paymentTermsDays ?? 30;
-  const def = defaultTexts(contextOf(ws), inv.kind, inv.language, terms);
+  const customer = d.customers.find((c) => c.id === inv.customerId);
+  const terms = customer?.paymentTermsDays ?? ws.invoicing?.paymentTermsDays ?? 30;
+  const def = defaultTexts(contextOf(ws), inv.kind, inv.language, draftDays(contextOf(ws), inv, customer));
   const own = (inv.intro !== undefined && inv.intro !== def.intro) || (inv.closing !== undefined && inv.closing !== def.closing);
   return (
     <Sec k="draft" label={t(inv.kind === 'credit-note' ? 'invoices.sec.credit' : 'invoices.sec.draft')} val={`${t(`invoices.lang.${inv.language}`)} · ${inv.currency}`}>
@@ -373,6 +421,14 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
             {(['CHF', 'EUR'] as const).map((c) => <AsyncButton key={c} type="button" role="radio" aria-checked={inv.currency === c} className={inv.currency === c ? 'on' : ''} disabled={!canEdit || !ws.invoicing?.payTo[c]} data-tip={ws.invoicing?.payTo[c] ? undefined : t('invoices.currencyNeedsPayTo', { currency: c })} onClick={() => saveDraft(nav, inv, { currency: c })}>{c}</AsyncButton>)}
           </span>
         </div>
+        {inv.kind === 'invoice' && (ws.invoicing?.paymentTerms.length ?? 0) > 0 && (
+          <label className="lkr"><span>{t('invoices.terms')}</span>
+            <select data-testid="draft-terms" value={inv.termsId ?? ''} disabled={!canEdit} onChange={(e) => saveDraft(nav, inv, { termsId: e.target.value || null, dueDate: null })}>
+              <option value="">{t('invoices.termsCustomer', { n: terms })}</option>
+              {ws.invoicing!.paymentTerms.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select>
+          </label>
+        )}
         {chargesVat() && (
           <div className="lkr"><span>{t('invoices.prices')}</span>
             <span className="seg2" role="radiogroup" aria-label={t('invoices.prices')}>
@@ -464,7 +520,8 @@ function Log({ d, inv }: DetailProps) {
     rows.push([inv.issuedAt.slice(0, 10), t('invoices.log.issued', { number: inv.number })]);
     for (const x of d.sent.filter((y) => y.invoiceId === inv.id)) rows.push([x.sentAt.slice(0, 10), t('invoices.log.sent', { title: x.title })]);
     const how = { reference: 'invoices.log.paidRef', number: 'invoices.log.paidNumber', confirmed: 'invoices.log.paidConfirmed' } as const;
-    for (const p of inv.payments) rows.push([p.date, t(inv.kind === 'credit-note' ? 'invoices.log.refunded' : how[p.by], { amount: `${inv.currency} ${fmt(p.amount)}` })]);
+    for (const p of inv.payments) rows.push([p.date, t(inv.kind === 'credit-note' ? 'invoices.log.refunded' : p.source === 'hand' ? 'invoices.log.paidHand' : how[p.by], { amount: `${inv.currency} ${fmt(p.amount)}` })]);
+    for (const w of inv.writeOffs ?? []) rows.push([w.date, t('invoices.log.writtenOff', { reason: t(`invoices.reason.${w.reason}`), amount: `${inv.currency} ${fmt(w.amount)}` })]);
     if (inv.cancelled) rows.push([inv.cancelled.date, t('invoices.log.cancelled')]);
   }
   rows.sort((a, b) => a[0].localeCompare(b[0]));

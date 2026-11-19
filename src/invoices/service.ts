@@ -9,26 +9,30 @@ import { parseUid } from '../workspace/uid.js';
 import { extname, join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import { receiptFile, type Books } from '../books/store.js';
-import { defaultTexts, issuedIntro, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
+import { defaultTexts, draftDays, issuedIntro, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
 import {
-  INVOICE_CURRENCIES, INVOICE_LANGUAGES, DEFAULT_LAYOUT, DEFAULT_UNITS, LINE_KINDS, PRICES, isItem, type UnitDef,
+  INVOICE_CURRENCIES, INVOICE_LANGUAGES, DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, LINE_KINDS, PRICES, isItem, type UnitDef,
   type Comment, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
-  type InvoiceLine, type Issued, type Reminder, type SentDocument, type SentKind,
+  type InvoiceLine, type Issued, type PaymentTerms, type Reminder, type SentDocument, type SentKind,
 } from './model.js';
 import { renderHtml, renderPdf, type Rendered } from './pdf.js';
 import {
-  InvoiceRuleError, cancel, creditNoteDraft, deleteDraft, isOverdue, issue, liveCustomers, liveInvoices, missingForIssue,
-  openAmount, reminderDraft, status, totals, type CreditRequest, type InvoiceStatus, type Missing, type Totals,
+  InvoiceRuleError, assertCreditWithinOpen, cancel, creditNoteDraft, deleteDraft, figures, isOverdue, issue, liveCustomers, liveInvoices, missingForIssue,
+  openAmount, reminderDraft, shortfallOf, skontoOffer, status, totals, writeOffAccounts,
+  type CreditRequest, type Figures, type InvoiceStatus, type Missing, type Totals,
 } from './rules.js';
 import type { SheetData } from './sheet.js';
 import { loadInvoices, newEnvelope, readPdf, sha256, storePdf, updateInvoices, writeAtomic } from './store.js';
 import type { PaymentContext, PaymentOutcome } from './payments.js';
 import { loadFxResolver } from '../accounting/fx-rates.js';
+import { creditNoteStatus, type CreditListStatus } from './lists.js';
 import { TEXTS } from './texts.js';
-import { invoiceActivities, invoiceRates, invoicing } from '../engines/index.js';
+import { baseCurrency, invoiceActivities, invoiceRates, invoicing } from '../engines/index.js';
 import { openItemAccounts } from '../accounting/tax-point.js';
 import { heldByReconciliation } from '../books/reconcile.js';
 import { accountsOf } from '../workspace/reads.js';
+import { accountName, setAccountName } from '../workspace/accounts-write.js';
+import { standardAccounts } from '../workspace/chart.js';
 
 export interface Printer {
   pdf(d: SheetData, at: string): Promise<Rendered & { pdf: Buffer }>;
@@ -37,7 +41,17 @@ export interface Printer {
 const chromium: Printer = { pdf: renderPdf, html: renderHtml };
 
 /** An invoice with what lists show: its status, totals and what is open. */
-export type InvoiceView = Invoice & { view: { status: InvoiceStatus; overdue: boolean; totals: Totals; open: number; customerName: string } };
+export type InvoiceView = Invoice & { view: {
+  status: InvoiceStatus; overdue: boolean; totals: Totals; open: number; customerName: string;
+  /** An issued invoice's four figures (spec 4.8). */
+  figures?: Figures;
+  /** A credit note's state: Offen, Teilweise, Abgerechnet. */
+  creditStatus?: CreditListStatus;
+  /** A rest of at most the shortfall limit after a payment: proposed to write off as fees. */
+  shortfall?: { amount: number; limit: number };
+  /** The Skonto the printed terms offer: its amount, the last day and what the customer pays then. */
+  skonto?: { amount: number; until: string; pays: number };
+} };
 
 let queue: Promise<unknown> = Promise.resolve();
 /**
@@ -66,10 +80,19 @@ export function logoSrc(ws: Workspace, path: string | undefined): string | undef
   return type ? `data:${type};base64,${readFileSync(file).toString('base64')}` : undefined;
 }
 
-export function viewOf(book: InvoiceBook, inv: Invoice, today: string): InvoiceView {
+export function viewOf(book: InvoiceBook, inv: Invoice, today: string, shortfallLimit = DEFAULT_SHORTFALL_LIMIT): InvoiceView {
   const invoices = liveInvoices(book);
   const customerName = inv.status === 'issued' ? inv.customer.name : book.customers.find((c) => c.id === inv.customerId)?.name ?? '';
-  return { ...inv, view: { status: status(inv, invoices), overdue: isOverdue(inv, invoices, today), totals: totals(inv), open: openAmount(inv, invoices), customerName } };
+  const issued = inv.status === 'issued' ? inv : undefined;
+  const short = issued && shortfallOf(issued, invoices, shortfallLimit, baseCurrency());
+  const skonto = issued && !issued.cancelled && openAmount(issued, invoices) > 0 && !issued.payments.length ? skontoOffer(issued) : undefined;
+  return { ...inv, view: {
+    status: status(inv, invoices), overdue: isOverdue(inv, invoices, today), totals: totals(inv), open: openAmount(inv, invoices), customerName,
+    ...(issued ? { figures: figures(issued, invoices) } : {}),
+    ...(issued?.kind === 'credit-note' && !issued.cancelled ? { creditStatus: creditNoteStatus(issued, invoices) } : {}),
+    ...(short ? { shortfall: { amount: short, limit: shortfallLimit } } : {}),
+    ...(skonto ? { skonto } : {}),
+  } };
 }
 
 export function findInvoice(book: InvoiceBook, idOrNumber: string): Invoice | undefined {
@@ -136,21 +159,21 @@ function parseLines(v: unknown, units: readonly string[]): InvoiceLine[] {
   });
 }
 
-const DRAFT_FIELDS = ['customerId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'prices', 'intro', 'closing', 'exemption', 'settlement'] as const;
+const DRAFT_FIELDS = ['customerId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'prices', 'intro', 'closing', 'exemption', 'settlement', 'termsId'] as const;
 export type DraftPatch = Partial<Pick<InvoiceContent, (typeof DRAFT_FIELDS)[number]>>;
 
 /**
  * A draft patch from a request body; `null` clears an optional field. A position's unit is one of
  * `units` (the firm's list), one the draft `id` holds already, or one an issued document names.
  */
-export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonly UnitDef[] = DEFAULT_UNITS, id?: string): DraftPatch & { clear: string[] } {
+export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonly UnitDef[] = DEFAULT_UNITS, id?: string, terms?: readonly PaymentTerms[]): DraftPatch & { clear: string[] } {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return bad('JSON-Objekt erwartet.');
   const b = body as Record<string, unknown>;
   const unknown = Object.keys(b).filter((k) => !DRAFT_FIELDS.includes(k as never));
   if (unknown.length) bad(`Unbekannte Felder: ${unknown.join(', ')}`);
   const out: DraftPatch & { clear: string[] } = { clear: [] };
   for (const [k, v] of Object.entries(b)) {
-    if (v === null && ['supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement'].includes(k)) { out.clear.push(k); continue; }
+    if (v === null && ['supplied', 'dueDate', 'subject', 'intro', 'closing', 'exemption', 'settlement', 'termsId'].includes(k)) { out.clear.push(k); continue; }
     if (k === 'customerId') { if (!liveCustomers(book).some((c) => c.id === v)) bad('Kunde nicht gefunden.', [{ field: 'customer' }]); out.customerId = v as string; }
     else if (k === 'date' || k === 'dueDate') { if (!isDate(v)) bad(`${k} ist ein Datum JJJJ-MM-TT.`); out[k] = v as string; }
     else if (k === 'supplied') {
@@ -168,6 +191,7 @@ export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonl
     }
     else if (k === 'prices') { if (!PRICES.includes(v as never)) bad(`prices ist ${PRICES.join(' oder ')}.`); out.prices = v as InvoiceContent['prices']; }
     else if (k === 'exemption') { if (v !== 'abroad' && v !== 'export') bad('exemption ist abroad oder export.'); out.exemption = v as 'abroad' | 'export'; }
+    else if (k === 'termsId') { if (!isText(v) || (terms && !terms.some((x) => x.id === v))) bad(`termsId ist eine von ${(terms ?? []).map((x) => x.id).join(', ')}.`); out.termsId = v as string; }
     else if (k === 'settlement') { if (v !== 'refund' && v !== 'offset') bad('settlement ist refund oder offset.'); out.settlement = v as 'refund' | 'offset'; }
     else { if (!isText(v)) bad(`${k} ist ein Text.`); (out as Record<string, unknown>)[k] = v; }
   }
@@ -235,6 +259,7 @@ function commit<T>(ws: Workspace, id: string, expected: Invoice, fn: (book: Invo
 export function createDraft(ws: Workspace, input: { customerId: string } & DraftPatch, now = new Date().toISOString()): Draft {
   return updateInvoices(ws, (book) => {
     const customer = liveCustomers(book).find((c) => c.id === input.customerId) ?? notFound('Kunde');
+    const terms = draftTerms(ws.invoicing, customer.paymentTermsDays);
     const draft: Draft = {
       ...newEnvelope('in', now),
       status: 'draft',
@@ -244,12 +269,23 @@ export function createDraft(ws: Workspace, input: { customerId: string } & Draft
       language: customer.language,
       lines: [],
       prices: ws.invoicing?.prices.invoice ?? 'net',
+      ...(terms ? { termsId: terms } : {}),
       ...input,
       comments: [],
     };
     book.invoices.push(draft);
     return draft;
   });
+}
+
+/**
+ * The terms a new invoice picks: the firm's default, unless the customer pays in days of its own
+ * (a `paymentTermsDays` other than the default's days): then none, and it prints the customer's days net.
+ */
+function draftTerms(s: Workspace['invoicing'], customerDays: number): string | undefined {
+  const all = s?.paymentTerms ?? [];
+  const def = all.find((x) => x.id === s?.defaultTerms) ?? all[0];
+  return def && def.days === customerDays ? def.id : undefined;
 }
 
 export function updateDraft(ws: Workspace, id: string, patch: DraftPatch & { clear?: string[] }): Draft {
@@ -290,9 +326,11 @@ export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; pr
     if (draft.status !== 'draft') throw new InvoiceRuleError('notDraft', `Rechnung ${draft.number} ist schon ausgestellt.`);
     const ctx = invoicingContext(ws);
     const customer = liveCustomers(book).find((c) => c.id === draft.customerId);
-    const texts = defaultTexts(ctx, draft.kind, draft.language, customer?.paymentTermsDays ?? 30);
+    const texts = defaultTexts(ctx, draft.kind, draft.language, draftDays(ctx, draft, customer));
     const frozen: Draft = { ...draft, intro: issuedIntro(texts.salutation, draft.intro ?? texts.intro), closing: draft.closing ?? texts.closing };
-    const issued = issue(frozen, { customer, sender: senderFor(ctx, draft.currency), layout: ctx.settings?.layout ?? DEFAULT_LAYOUT, units: ctx.settings?.units, invoices: liveInvoices(book), now, confirmed: opts.confirmed });
+    // A credit note above what its invoice has open: a warning (spec 4.11), the rest is paid back.
+    assertCreditWithinOpen(draft, liveInvoices(book), opts.confirmed);
+    const issued = issue(frozen, { customer, sender: senderFor(ctx, draft.currency), layout: ctx.settings?.layout ?? DEFAULT_LAYOUT, units: ctx.settings?.units, invoices: liveInvoices(book), now, confirmed: opts.confirmed, paymentTerms: ctx.settings?.paymentTerms });
     const printed = await (opts.printer ?? chromium).pdf(issuedSheet(book, issued as Issued, logoSrc(ws, issued.layout.logo)), now);
     return commit(ws, draft.id, draft, (fresh, at) => {
       if (nextNumberTaken(fresh, issued.number)) throw new InvoiceRuleError('changed', `Die Nummer ${issued.number} wurde inzwischen vergeben; bitte erneut ausstellen.`);
@@ -370,7 +408,7 @@ async function printOwnDocument(ws: Workspace, inv: Issued, kind: SentKind, shee
 
 // ─── cancelling, crediting, reminding, commenting ─────────────────────────────
 
-export function cancelInvoice(ws: Workspace, id: string, req: { date: string; reason: string; notify?: boolean; to?: string }, opts: { now?: string; printer?: Printer; deliver?: Deliver } = {}): Promise<{ invoice: Issued; sent?: SentDocument }> {
+export function cancelInvoice(ws: Workspace, id: string, req: { date: string; reason: string; notify?: boolean; to?: string; confirmed?: boolean }, opts: { now?: string; printer?: Printer; deliver?: Deliver } = {}): Promise<{ invoice: Issued; sent?: SentDocument }> {
   return serial(async () => {
     const now = opts.now ?? new Date().toISOString();
     const book = loadInvoices(ws);
@@ -471,6 +509,12 @@ export function paymentContext(ws: Workspace): PaymentContext | undefined {
     bankAccounts: ws.bankAccounts,
     revenueAccount: s.revenueAccount,
     ...(s.feeAccount ? { feeAccount: s.feeAccount } : {}),
+    ...(writeOffAccounts(s) ? { writeOffAccount: writeOffAccounts(s) } : {}),
+    ensureAccount: (number) => {
+      if (accountName(ws, number) !== undefined) return;
+      const name = standardAccounts().find((a) => a.number === number)?.name;
+      if (name) setAccountName(ws, number, name);
+    },
     openItems: openItemAccounts((accountsOf(ws) as Array<{ number?: string }>).flatMap((a) => (a.number ? [String(a.number)] : []))),
     fx,
     pdfOf: (inv) => readPdf(ws, inv.pdf),

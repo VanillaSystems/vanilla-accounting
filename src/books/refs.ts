@@ -8,6 +8,13 @@ export type EventKind = 'issue' | 'storno';
 export const eventRef = (doc: { number: string; kind: 'invoice' | 'credit-note' }, kind: EventKind): string =>
   `${doc.kind === 'credit-note' ? 'GS' : 'RE'}-${doc.number}${kind === 'storno' ? '-storno' : ''}`;
 
+/**
+ * The ref of an invoice's write-off on the agreed basis (src/invoices/payments.ts bookWriteOff):
+ * RE-2026-001-wo-1, k from 1 per invoice. No books format change (docs/specs/invoicing.md decision 2):
+ * an entry of the shape every entry has.
+ */
+export const writeOffRef = (doc: { number: string }, id: string): string => `RE-${doc.number}-${id}`;
+
 /** Whether the books carry the document's issue: then its payments settle the receivable, whatever the basis is by then. */
 export const hasEvent = (books: { journalEntries: ReadonlyArray<{ transactionRef: string }> }, doc: { number: string; kind: 'invoice' | 'credit-note' }): boolean => {
   const ref = eventRef(doc, 'issue');

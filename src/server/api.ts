@@ -54,7 +54,7 @@ export const app = express();
 const MAIL_STATUS: Record<MailRefusal, number> = { notConfigured: 409, noPassword: 409, recipient: 400, failed: 502 };
 
 const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
-  incomplete: 400, unconfirmed: 409, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409, uid: 400,
+  incomplete: 400, unconfirmed: 409, notFound: 404, notDraft: 409, notIssued: 409, cancelled: 409, paid: 409, creditNote: 409, nothingOpen: 409, changed: 409, uid: 400, aboveOpen: 409, surplus: 409, beforeInvoice: 400,
 };
 
 // From the network only the phone's paths answer (src/server/phone.ts), the API ones only with the
@@ -132,7 +132,7 @@ app.use((err: unknown, req: express.Request, res: express.Response, _next: expre
   else if (err instanceof RequestError) res.status(err.status).json({ error: err.message, ...err.refusal } satisfies ApiErrorBody);
   else if (err instanceof InvoiceRuleError) {
     res.status(INVOICE_STATUS[err.code]).json({ error: err.message, invoiceRefusal: err.code, ...(err.missing ? { missing: err.missing } : {}) } satisfies InvoiceErrorBody);
-  } else if (err instanceof PaymentError) res.status(409).json({ error: err.message });
+  } else if (err instanceof PaymentError) res.status(err.code === 'notFound' ? 404 : 409).json({ error: err.message, paymentRefusal: err.code } satisfies ApiErrorBody);
   else if (err instanceof MailError) res.status(MAIL_STATUS[err.code]).json({ error: err.message, mailRefusal: err.code, ...(err.detail ? { detail: err.detail } : {}) } satisfies ApiErrorBody);
   else if (err instanceof NoClaudeError) res.status(503).json({ error: err.message, code: 'noClaude', params: err.step ? { step: err.step } : {} } satisfies ApiErrorBody);
   else if (err instanceof AiRefused) res.status(503).json({ error: err.message, code: 'aiRefused', params: err.refusal } satisfies ApiErrorBody);

@@ -1116,6 +1116,83 @@ listed here and updated with phase 2's build:
     read through `writeOffAccounts`; `shortfallLimit` defaults to 5.
 43. **Positions at the API.** Each kind takes only its own fields (an unknown field is refused), so
     a field a later slice adds (`activity`) is added to the item's list in `parseLines`.
+30. **A Zahlungseingang by hand is a hand movement (slice C).** «Zahlungseingang erfassen» (date, a
+    bank or cash account of the manifest in the invoice's currency, the amount prefilled with what is
+    open) adds a movement `source: 'manual'` on that account, allocated to the Rechnung with
+    `PaymentAllocation.source: 'hand'` and booked as a statement's payment is (`recordHandPayment`). A
+    statement imported later confirms it through `matchStatementRows` (`statement` on the movement):
+    nothing is booked twice and the margin names the confirmation. The spec's `account` and
+    `linkedTransaction` on the allocation are not needed: the movement carries its account and its
+    statement row. A cash payment stays a hand movement. Its «Rückgängig» (open period only) takes the
+    movement, its bookings and the allocation; one a statement confirmed is a bank row and is only
+    released («Lösen»). The owner's, an employee's or a card account is refused: an invoice is paid
+    to the firm.
+31. **One payment over several Rechnungen** is one allocation per Rechnung on the same
+    `transactionRef`, each booked as that Rechnung's payment; no `allocations[]` array in phase 1
+    (payment → invoice lives in `payments[]`, a Gutschrift → its Rechnung in `creditFor`). A surplus is
+    refused with the code `surplus` and stays unallocated, so the payment remains a question: the
+    Kundenguthaben on 2030 is phase 4. A part above what a Rechnung has open is refused the same way.
+32. **Write-offs** (`Issued.writeOffs`, ids `wo-1`, `wo-2`, … per invoice): `openAmount`, `openOn`,
+    `refundDue` and the statuses subtract them. Cash basis: nothing in the books (decision 3). A
+    document whose `RE-` event the books carry books `RE-<n>-wo-<k>` on the write-off's date: the
+    Skonto account (Skonto, Rabatt, Spesen, Rundung) or the loss account (Verlust) against the
+    receivable, the invoice's mix of rates with the minus sale codes, one line per code, at the rate
+    the receivable holds, the invoice PDF as its receipt. The date lies in an open period (golden rule
+    1); no `corrects` (MWSTG Art. 41 Abs. 1: the tax is adjusted when the correction is booked). A
+    write-off account the chart lacks joins it under the jurisdiction chart's name when a write-off
+    books on it. A Storno reverses the write-offs' entries with the event (`RE-<n>-storno`), so the
+    receivable nets to zero.
+33. **Skonto by code.** `Issued.terms` freezes the terms printed. A payment found by reference or by
+    number is taken for the Skonto when it is the invoice's first, comes on or after the invoice date
+    and within the Skonto days, and pays what is open less the Skonto (percent of what is open, to the
+    Rappen) within 5 Rappen either way (`SKONTO_TOLERANCE`: a customer's bank may round to 5 Rappen);
+    the rest is written off as `skonto` by `code` with the payment's ref, and goes with the payment
+    when it is released. Further off it is a short payment for the person (Ausziffern). The paper
+    prints the terms' text and «Bei Zahlung bis … 2 % Skonto (CHF …): zu zahlen CHF …» only for terms
+    with a Skonto; net terms leave the paper as it was (the closing names the days).
+34. **Which terms a draft takes.** A new draft takes the firm's default terms when their days are the
+    customer's; a customer with days of its own (`paymentTermsDays`) gets no `termsId` and prints its
+    days net, frozen as `net<N>`. A draft may pick any of the firm's terms (`termsId`).
+35. **Shortfall below the limit** (`shortfallLimit`, the books' currency): a rest of at most the limit
+    after a payment, on an invoice in the books' currency, is a fact on the detail with «als Spesen
+    ausbuchen»; code never books it.
+36. **Statuses.** Teilbezahlt once something was received, credited or written off and something is
+    open; Bezahlt when nothing is. A Gutschrift is Abgerechnet once nothing of it waits (applied to its
+    Rechnung at once, the rest paid back), Teilweise while part of a refund waits and something is
+    applied or back, Offen while all of it waits; a rest set off against a next invoice waits for
+    phase 4 (`creditNoteStatus`).
+37. **A Gutschrift above what is open** warns at issue (`unconfirmed` with `credit.aboveOpen`,
+    «Trotzdem ausstellen»); above the invoice's total it stays refused.
+38. **Verrechnung on the cash basis.** A payment of a Rechnung with Gutschriften applied by its date
+    books its share of the Rechnung's positions with the sale codes and its share of the Gutschriften's
+    applied parts with the minus codes, in proportion to what each still has unbooked (the earlier
+    payments replayed in date order, `cashRevenue`); the lines add up to the payment to the Rappen and,
+    once paid in full, each rate is right within a Rappen.
+39. **Storno of a paid Rechnung** is a warning (`paid`, the payments named); «Trotzdem stornieren»
+    (`confirm: 'paid'`) cancels it and releases its payments, which wait unmatched again and go to the
+    booking run. A payment of a filed period is never released, so such a Storno is refused.
+40. **The four figures** are one pure function (`figures` in `src/invoices/rules.ts`): Betrag, erhalten
+    (the payments without their reminder fees), gutgeschrieben (Gutschriften and write-offs) and offen
+    = Betrag − erhalten − gutgeschrieben, which may be below zero (a credit of the customer, phase 4);
+    `openAmount` is the same figure, never below zero.
+41. **Where the money shows (slice C UI).** The four figures sit between the actions and the sheet
+    of every issued, uncancelled Rechnung, in a component of their own (`Figures.tsx`), each figure's
+    sources on hover. The margin's «Zahlungen» lists the payments (statement or by hand, a hand one
+    with the statement row that confirmed it), the write-offs with «Rückgängig» and the entries each
+    event made, each a link to `/journal/<id>`. A shortfall under the limit is a fact on the status
+    with one button «Rest … als Spesen ausbuchen». «Ausziffern» opens from a payment proposed for the
+    Rechnung and from «Andere Zahlung zuordnen»; Firma › Rechnungslayout › Konditionen lists the terms
+    with one default; a draft picks its terms in its margin.
+42. **One payment, several documents, one «Lösen» each (review of slice C).** Every entry a payment
+    books for a document names the document's number in its text (invoices and credit notes share
+    one series), so «Lösen» or «Trotzdem stornieren» takes off only that document's part (`bookedFor`).
+    What an Ausziffern replaced is kept beside the books for the payment, not for one invoice, and
+    comes back, with the booking run, only when the last allocation leaves the payment. A write-off
+    of a cancelled invoice stays (its Storno reversed it); one dated before the invoice is refused
+    (`beforeInvoice`). A write-off recorded while the agreed basis's event waited for its rate is
+    booked with the event. A hand movement names no counterparty, so a statement row of whoever paid
+    confirms it. The write-off account joins the chart in the booking itself (`ensureAccount`),
+    whoever books it, code's Skonto included. A refusal of the money carries `paymentRefusal`.
 
 ---
 

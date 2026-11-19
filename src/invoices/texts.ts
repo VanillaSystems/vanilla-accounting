@@ -24,6 +24,8 @@ export interface InvoiceTexts {
   lineDiscount: (pct: string) => string; subtotal: string; discount: string;
   /** The payment terms of a firm that names none: `paymentTermsDays` days net. */
   netTerms: (days: number) => string;
+  /** The Skonto the printed terms offer: its percent, the last day, its amount, and what is paid then. */
+  skontoLine: (pct: string, until: string, amount: string, pays: string) => string;
 }
 
 export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
@@ -50,6 +52,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     },
     page: (k, n) => `Seite ${k} von ${n}`, cut: 'Vor der Einzahlung abzutrennen', bank: 'Bank', vatNo: 'MWST-Nr.', uidNo: 'UID', payment: 'Zahlung', iban: 'IBAN', reference: 'Referenz',
     lineDiscount: (p) => `Rabatt ${p}`, subtotal: 'Zwischentotal', discount: 'Rabatt', netTerms: NET_TERMS.de,
+    skontoLine: (p, d, a, x) => `Bei Zahlung bis ${d} ${p} % Skonto (${a}): zu zahlen ${x}.`,
   },
   fr: {
     invoice: 'Facture', credit: 'Note de crédit', draft: 'Projet', reminder: (n) => (n === 1 ? '1er rappel' : `${n}e rappel`),
@@ -74,6 +77,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     },
     page: (k, n) => `Page ${k} sur ${n}`, cut: 'A détacher avant le versement', bank: 'Banque', vatNo: 'N° TVA', uidNo: 'IDE', payment: 'Paiement', iban: 'IBAN', reference: 'Référence',
     lineDiscount: (p) => `Rabais ${p}`, subtotal: 'Sous-total', discount: 'Rabais', netTerms: NET_TERMS.fr,
+    skontoLine: (p, d, a, x) => `En cas de paiement jusqu’au ${d}, escompte de ${p} % (${a}) : à payer ${x}.`,
   },
   it: {
     invoice: 'Fattura', credit: 'Nota di credito', draft: 'Bozza', reminder: (n) => `${n}° sollecito`,
@@ -98,6 +102,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     },
     page: (k, n) => `Pagina ${k} di ${n}`, cut: 'Da staccare prima del versamento', bank: 'Banca', vatNo: 'N. IVA', uidNo: 'IDI', payment: 'Pagamento', iban: 'IBAN', reference: 'Riferimento',
     lineDiscount: (p) => `Sconto ${p}`, subtotal: 'Subtotale', discount: 'Sconto', netTerms: NET_TERMS.it,
+    skontoLine: (p, d, a, x) => `Con pagamento entro il ${d} sconto del ${p} % (${a}): da pagare ${x}.`,
   },
   en: {
     invoice: 'Invoice', credit: 'Credit note', draft: 'Draft',
@@ -123,6 +128,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     },
     page: (k, n) => `Page ${k} of ${n}`, cut: 'Separate before paying in', bank: 'Bank', vatNo: 'VAT no.', uidNo: 'UID', payment: 'Payment', iban: 'IBAN', reference: 'Reference',
     lineDiscount: (p) => `Discount ${p}`, subtotal: 'Subtotal', discount: 'Discount', netTerms: NET_TERMS.en,
+    skontoLine: (p, d, a, x) => `If paid by ${d}, ${p} % cash discount (${a}): pay ${x}.`,
   },
 };
 

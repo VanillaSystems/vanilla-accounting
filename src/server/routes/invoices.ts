@@ -15,7 +15,14 @@ import {
   addComment, cancelInvoice, createCreditNote, createCustomer, createDraft, draftReminder, fileReceipts, findInvoice, issueInvoice, issuedPdf,
   missingOf, parseCustomer, parseDraftPatch, paymentContext, previewHtml, recordSend, removeDraft, sendReminder, sentPdf, updateCustomer, updateDraft, viewOf,
 } from '../../invoices/service.js';
-import { confirmPayment, paymentProposals, releasePayment, type PaymentReleased } from '../../invoices/payments.js';
+import {
+  allocatePayment, allocationProposal, confirmPayment, paymentProposals, recordHandPayment, releasePayment, removeHandPayment, removeWriteOff, writeOffRest,
+  type AllocationPart, type PaymentContext, type PaymentReleased,
+} from '../../invoices/payments.js';
+import type { InvoiceBook } from '../../invoices/model.js';
+import { WRITE_OFF_REASONS, type Issued, type WriteOffReason } from '../../invoices/model.js';
+import { openAmount } from '../../invoices/rules.js';
+import { isIsoDate } from '../../accounting/periods.js';
 import { bookInvoiceEvents, type EventOutcome } from '../../invoices/events.js';
 import { agreedBasis } from '../../engines/index.js';
 import type { Books } from '../../books/store.js';
@@ -47,7 +54,7 @@ const optNumber = (b: Record<string, unknown>, k: string): number | undefined =>
 router.get('/api/invoices', (_req, res) => {
   const book = loadInvoices(WS);
   const day = today();
-  res.json({ today: day, invoices: liveInvoices(book).map((i) => viewOf(book, i, day)), customers: liveCustomers(book), sent: book.sent.filter((d) => !d.deleted) });
+  res.json({ today: day, invoices: liveInvoices(book).map((i) => viewOf(book, i, day, WS.invoicing?.shortfallLimit)), customers: liveCustomers(book), sent: book.sent.filter((d) => !d.deleted) });
 });
 
 router.get('/api/invoices/sent', (_req, res) => {
@@ -59,11 +66,18 @@ router.get('/api/invoices/payments', (_req, res) => {
   res.json({ proposals: paymentProposals(readBooks(), loadInvoices(WS)) });
 });
 
+/** The Ausziffern dialog of an incoming payment: its customer's open invoices and code's proposal (`?transactionRef=…&customerId=…`). */
+router.get('/api/invoices/allocation', (req, res) => {
+  const ref = String(req.query.transactionRef ?? '');
+  const customerId = req.query.customerId === undefined ? undefined : String(req.query.customerId);
+  res.json(allocationProposal(readBooks(), loadInvoices(WS), ref, customerId));
+});
+
 router.get('/api/invoices/:id', (req, res) => {
   const book = loadInvoices(WS);
   const inv = findInvoice(book, req.params.id);
   if (!inv) throw new RequestError(404, 'Rechnung nicht gefunden.');
-  res.json({ ...viewOf(book, inv, today()), sent: book.sent.filter((d) => d.invoiceId === inv.id && !d.deleted), missing: missingOf(WS, inv.id) });
+  res.json({ ...viewOf(book, inv, today(), WS.invoicing?.shortfallLimit), sent: book.sent.filter((d) => d.invoiceId === inv.id && !d.deleted), missing: missingOf(WS, inv.id) });
 });
 
 router.get('/api/invoices/:id/preview', async (req, res) => {
@@ -123,13 +137,13 @@ router.patch('/api/customers/:id', (req, res) => {
 });
 
 router.post('/api/invoices', (req, res) => {
-  const { clear: _, ...patch } = parseDraftPatch(req.body, loadInvoices(WS), WS.invoicing?.units);
+  const { clear: _, ...patch } = parseDraftPatch(req.body, loadInvoices(WS), WS.invoicing?.units, undefined, WS.invoicing?.paymentTerms);
   if (!patch.customerId) throw new RequestError(400, 'customerId fehlt.');
   res.json(createDraft(WS, { ...patch, customerId: patch.customerId }));
 });
 
 router.patch('/api/invoices/:id', (req, res) => {
-  res.json(updateDraft(WS, req.params.id, parseDraftPatch(req.body, loadInvoices(WS), WS.invoicing?.units, req.params.id)));
+  res.json(updateDraft(WS, req.params.id, parseDraftPatch(req.body, loadInvoices(WS), WS.invoicing?.units, req.params.id, WS.invoicing?.paymentTerms)));
 });
 
 router.delete('/api/invoices/:id', (req, res) => {
@@ -170,12 +184,33 @@ router.post('/api/invoices/:id/send', async (req, res) => {
   res.json(await recordSend(WS, req.params.id, { to: optText(b, 'to'), deliver: delivery(b) }));
 });
 
+/**
+ * Storno. A paid invoice is a warning (spec 4.11, code `paid`): `confirm: 'paid'` («Trotzdem
+ * stornieren») cancels it and releases its payments, which wait unmatched again; a payment of a
+ * filed period stays as filed, so such a Storno is refused.
+ */
 router.post('/api/invoices/:id/cancel', async (req, res) => {
   const b = body(req);
+  const confirmed = b.confirm === 'paid';
+  const before = liveInvoices(loadInvoices(WS)).find((i): i is Issued => i.id === req.params.id && i.status === 'issued');
+  const paid = confirmed ? before?.payments ?? [] : [];
+  if (paid.length) assertOpen(readBooks(), paid.map((p) => p.date), 'mapping');
   const cancelled = await cancelInvoice(WS, req.params.id, {
-    date: optText(b, 'date') ?? today(), reason: optText(b, 'reason') ?? '', notify: b.notify === true, to: optText(b, 'to'),
+    date: optText(b, 'date') ?? today(), reason: optText(b, 'reason') ?? '', notify: b.notify === true, to: optText(b, 'to'), confirmed,
   }, { deliver: delivery(b) });
-  if (agreedBasis()) updateBooksWithEffects(bookEvents);
+  const unbooked: string[] = [];
+  if (paid.length) {
+    const ctx = paymentContext(WS);
+    if (!ctx) throw new RequestError(400, 'belege.workspace.yaml hat keinen invoicing-Block.');
+    updateBooksWithEffects((books) => {
+      assertOpen(books, paid.map((p) => p.date), 'mapping');
+      const invoices = loadInvoices(WS);
+      for (const p of paid) if (releaseOne(books, invoices, req.params.id, p.transactionRef, ctx).unbooked) unbooked.push(p.transactionRef);
+      bookEvents(books);
+      saveInvoices(WS, invoices);
+    });
+  } else if (agreedBasis()) updateBooksWithEffects(bookEvents);
+  for (const ref of unbooked) await bookAgain(ref);
   res.json(cancelled);
 });
 
@@ -231,14 +266,140 @@ router.delete('/api/invoices/:id/payments/:ref', async (req, res) => {
   const out = updateBooksWithEffects((books): Omit<PaymentReleased, 'files'> => {
     assertOpen(books, books.transactions.filter((t) => t.ref === ref).map((t) => t.date), 'mapping');
     const invoices = loadInvoices(WS);
-    const inv = liveInvoices(invoices).find((i) => i.id === req.params.id);
-    const restore = inv?.status === 'issued' ? takeReplaced(WS, ref, ctx.receiptId(ctx.pdfOf(inv))) : undefined;
-    const { files, ...result } = releasePayment(books, invoices, req.params.id, ref, ctx, restore);
-    fileReceipts(WS, books, files);
+    const released = releaseOne(books, invoices, req.params.id, ref, ctx);
     saveInvoices(WS, invoices);
-    unbooked = !books.journalEntries.some((e) => e.transactionRef === ref);
-    return result;
+    unbooked = released.unbooked;
+    return released.result;
   });
   if (unbooked) await bookAgain(ref);
+  res.json(out);
+});
+
+/** Where the bookings an Ausziffern replaced wait beside the books: they belong to the payment, not to one of its invoices. */
+const ALLOCATION = 'allocation';
+
+/**
+ * One document's part of a payment released (`releasePayment`), its receipts filed. What the link
+ * or the Ausziffern replaced comes back only when the last allocation leaves the payment, and only
+ * then is the payment without a booking (`unbooked`: the caller hands it to the booking run).
+ */
+function releaseOne(books: Books, invoices: InvoiceBook, invoiceId: string, ref: string, ctx: PaymentContext): { result: Omit<PaymentReleased, 'files'>; unbooked: boolean } {
+  const inv = liveInvoices(invoices).find((i) => i.id === invoiceId);
+  const last = !liveInvoices(invoices).some((i) => i.id !== invoiceId && i.status === 'issued' && i.payments.some((p) => p.transactionRef === ref));
+  const restore = last && inv?.status === 'issued' ? takeReplaced(WS, ref, ctx.receiptId(ctx.pdfOf(inv))) ?? takeReplaced(WS, ref, ALLOCATION) : undefined;
+  const { files, ...result } = releasePayment(books, invoices, invoiceId, ref, ctx, restore);
+  fileReceipts(WS, books, files);
+  return { result, unbooked: last && !books.journalEntries.some((e) => e.transactionRef === ref) };
+}
+
+// ─── Zahlungseingang by hand, write-offs, Ausziffern (spec 4.4.6) ──────────────
+
+const needContext = () => {
+  const ctx = paymentContext(WS);
+  if (!ctx) throw new RequestError(400, 'belege.workspace.yaml hat keinen invoicing-Block.');
+  return ctx;
+};
+const isoField = (b: Record<string, unknown>, k: string): string | undefined => {
+  const v = optText(b, k);
+  if (v !== undefined && !isIsoDate(v)) throw new RequestError(400, `${k} ist ein Datum JJJJ-MM-TT.`);
+  return v;
+};
+
+/** «Zahlungseingang erfassen»: `{ date, account, amount }`, a hand movement on that money account, allocated and booked (P1.7). */
+router.post('/api/invoices/:id/hand-payments', (req, res) => {
+  const b = body(req);
+  const date = isoField(b, 'date') ?? today();
+  const account = optText(b, 'account');
+  const amount = optNumber(b, 'amount');
+  if (!account || amount === undefined) throw new RequestError(400, 'account und amount sind nötig.');
+  const ctx = needContext();
+  res.json(updateBooksWithEffects((books) => {
+    assertOpen(books, [date], 'newTransaction');
+    bookEvents(books);
+    const invoices = loadInvoices(WS);
+    const { transaction, allocation, files } = recordHandPayment(books, invoices, req.params.id, { date, account, amount }, ctx);
+    fileReceipts(WS, books, files);
+    saveInvoices(WS, invoices);
+    return { transaction, allocation };
+  }));
+});
+
+/** «Rückgängig» on a Zahlungseingang by hand: its movement, bookings and allocation go (open period only). */
+router.delete('/api/invoices/:id/hand-payments/:ref', (req, res) => {
+  const ctx = needContext();
+  const ref = req.params.ref;
+  res.json(updateBooksWithEffects((books) => {
+    assertOpen(books, books.transactions.filter((t) => t.ref === ref).map((t) => t.date), 'deleteTransaction');
+    const invoices = loadInvoices(WS);
+    const { files, allocation } = removeHandPayment(books, invoices, req.params.id, ref, ctx);
+    fileReceipts(WS, books, files);
+    saveInvoices(WS, invoices);
+    return { allocation };
+  }));
+});
+
+/**
+ * «Rest ausbuchen»: `{ reason, date?, amount?, note?, confirm? }`, today and what is open by
+ * default; more than is open is a warning (`aboveOpen`) unless `confirm: 'aboveOpen'`.
+ */
+router.post('/api/invoices/:id/write-offs', (req, res) => {
+  const b = body(req);
+  const reason = optText(b, 'reason') as WriteOffReason | undefined;
+  if (!reason || !WRITE_OFF_REASONS.includes(reason)) throw new RequestError(400, `reason ist eines von ${WRITE_OFF_REASONS.join(', ')}.`);
+  const date = isoField(b, 'date') ?? today();
+  const note = optText(b, 'note')?.trim();
+  const ctx = needContext();
+  const out = updateBooksWithEffects((books) => {
+    assertOpen(books, [date], 'newEntry');
+    bookEvents(books);
+    const invoices = loadInvoices(WS);
+    const inv = liveInvoices(invoices).find((i) => i.id === req.params.id);
+    const amount = optNumber(b, 'amount') ?? (inv ? openAmount(inv, liveInvoices(invoices)) : 0);
+    const files: Array<{ filename: string; pdf: Buffer }> = [];
+    const result = writeOffRest(books, invoices, req.params.id, { date, amount, reason, ...(note ? { note } : {}), by: 'person' }, ctx, { files }, b.confirm === 'aboveOpen');
+    fileReceipts(WS, books, files);
+    saveInvoices(WS, invoices);
+    return result;
+  });
+  res.json(out);
+});
+
+/** «Rückgängig» on a write-off: it leaves the invoice, its entries go (open period only). */
+router.delete('/api/invoices/:id/write-offs/:wo', (req, res) => {
+  res.json(updateBooksWithEffects((books) => {
+    const invoices = loadInvoices(WS);
+    const inv = liveInvoices(invoices).find((i): i is Issued => i.id === req.params.id && i.status === 'issued');
+    const w = inv?.writeOffs?.find((x) => x.id === req.params.wo);
+    if (w) assertOpen(books, [w.date, ...books.journalEntries.filter((e) => e.transactionRef === `RE-${inv!.number}-${w.id}`).map((e) => e.date)], 'deleteEntry');
+    const writeOff = removeWriteOff(books, invoices, req.params.id, req.params.wo);
+    saveInvoices(WS, invoices);
+    return { writeOff };
+  }));
+});
+
+
+/** «Buchen» of the Ausziffern dialog: `{ transactionRef, parts: [{ invoiceId, amount, rest? }] }`, every allocation and write-off at once. */
+router.post('/api/invoices/allocation', (req, res) => {
+  const b = body(req);
+  const ref = optText(b, 'transactionRef');
+  if (!ref || !Array.isArray(b.parts)) throw new RequestError(400, 'transactionRef und parts sind nötig.');
+  const parts = (b.parts as unknown[]).map((raw): AllocationPart => {
+    const p = (raw ?? {}) as Record<string, unknown>;
+    if (typeof p.invoiceId !== 'string' || typeof p.amount !== 'number' || !Number.isFinite(p.amount)) throw new RequestError(400, 'Ein Teil ist { invoiceId, amount, rest? }.');
+    if (p.rest !== undefined && !WRITE_OFF_REASONS.includes(p.rest as WriteOffReason)) throw new RequestError(400, `rest ist eines von ${WRITE_OFF_REASONS.join(', ')}.`);
+    return { invoiceId: p.invoiceId, amount: p.amount, ...(p.rest !== undefined ? { rest: p.rest as WriteOffReason } : {}) };
+  });
+  const ctx = needContext();
+  const out = updateBooksWithEffects((books) => {
+    assertOpen(books, books.transactions.filter((t) => t.ref === ref).map((t) => t.date), 'mapping');
+    bookEvents(books);
+    const invoices = loadInvoices(WS);
+    const result = allocatePayment(books, invoices, ref, parts, ctx);
+    fileReceipts(WS, books, result.files);
+    saveInvoices(WS, invoices);
+    // What the allocation replaced waits beside the books for the last «Lösen» (r10c-3): it belongs to the payment.
+    if (result.replaced?.length) recordReplaced(WS, ref, ALLOCATION, result.replaced);
+    return { paid: result.paid };
+  });
   res.json(out);
 });

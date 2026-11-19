@@ -175,6 +175,8 @@ export interface InvoiceContent {
   creditFor?: string;
   /** A credit note larger than what is still open: the rest is paid back or set off against the next invoice. */
   settlement?: 'refund' | 'offset';
+  /** The id of the firm's payment terms (invoicing.paymentTerms) an invoice prints; absent: the customer's own days net. */
+  termsId?: string;
 }
 
 export interface Draft extends Envelope, InvoiceContent {
@@ -204,7 +206,39 @@ export interface PaymentAllocation {
   /** The part of the payment that paid reminder fees. */
   fee?: number;
   by: 'reference' | 'number' | 'confirmed';
+  /**
+   * `hand`: a Zahlungseingang a person entered on the invoice (cash at the door, another account):
+   * its movement is a hand movement of the books (BankTransaction `source: 'manual'`), which a
+   * statement imported later confirms (`statement` on it). Absent: a payment of a statement.
+   */
+  source?: 'hand';
 }
+
+export const WRITE_OFF_REASONS = ['skonto', 'discount', 'loss', 'fee', 'rounding'] as const;
+export type WriteOffReason = (typeof WRITE_OFF_REASONS)[number];
+
+/**
+ * Ausbuchung: the rest of an invoice closed as Skonto, Rabatt, Verlust, Spesen or Rundung (spec
+ * 4.4.6). On the cash basis it books nothing (what was never received was never taxed); on the
+ * agreed basis its ref is `RE-<number>-<id>` on the write-off account against the receivable, with
+ * the minus sale codes (MWSTG Art. 41 Abs. 1).
+ */
+export interface WriteOff {
+  /** `wo-<k>`, k from 1 per invoice: the last part of its ref. */
+  id: string;
+  date: string;
+  /** In the invoice's currency. */
+  amount: number;
+  reason: WriteOffReason;
+  note?: string;
+  /** `code`: a Skonto the printed terms offered, recognised on the payment; `person`: Rest ausbuchen or Ausziffern. */
+  by: 'code' | 'person';
+  /** The payment whose rest it closes, when it came with one. */
+  transactionRef?: string;
+}
+
+/** The payment terms an issued document printed (spec 4.12): its due date and its Skonto are read from them. */
+export interface IssuedTerms { id: string; name: string; days: number; skonto?: { percent: number; days: number }; text: string }
 
 export interface Reminder {
   level: number;
@@ -234,6 +268,10 @@ export interface Issued extends Envelope, InvoiceContent {
   pdf: { file: string; sha256: string };
   cancelled?: { date: string; reason: string };
   payments: PaymentAllocation[];
+  /** The rests closed (Ausbuchung); absent: none. */
+  writeOffs?: WriteOff[];
+  /** The terms printed (Zahlungskondition); absent on a document issued before them: no Skonto. */
+  terms?: IssuedTerms;
   reminders: Reminder[];
   comments: Comment[];
 }

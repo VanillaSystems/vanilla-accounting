@@ -14,7 +14,7 @@ import { payoutSales, salesDefaults } from '../../workspace/sells.js';
 import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { SALES_KINDS, salesKinds, type SalesKind } from '../../workspace/setup.js';
-import { INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS, PRICES, isItem, type InvoiceLanguage, type UnitDef } from '../../invoices/model.js';
+import { INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS, PRICES, isItem, type InvoiceLanguage, type PaymentTerms, type UnitDef } from '../../invoices/model.js';
 import { loadInvoices, writeAtomic } from '../../invoices/store.js';
 import { liveInvoices } from '../../invoices/rules.js';
 import { accountName, removeAccount, setAccountName } from '../../workspace/accounts-write.js';
@@ -229,8 +229,13 @@ function qrIbanOf(to: Record<string, unknown>, currency: string, confirm: unknow
 
 /** The layout's values are checked by the manifest's reader; here only their kinds. */
 function invoicingPatch(raw: unknown): InvoicingPatch {
-  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo', 'confirm', 'units', 'prices']);
+  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo', 'confirm', 'units', 'prices', 'paymentTerms', 'defaultTerms']);
   const out: InvoicingPatch = {};
+  if (b.paymentTerms !== undefined) out.paymentTerms = b.paymentTerms === null ? null : termsPatch(b.paymentTerms);
+  if (b.defaultTerms !== undefined) {
+    if (b.defaultTerms !== null && typeof b.defaultTerms !== 'string') throw new RequestError(400, 'defaultTerms: die Id einer Zahlungskondition.');
+    out.defaultTerms = b.defaultTerms as string | null;
+  }
   if (b.units !== undefined) out.units = b.units === null ? null : unitsPatch(b.units);
   if (b.prices !== undefined) {
     const p = patchBody(b.prices, ['invoice', 'credit-note']);
@@ -284,6 +289,29 @@ function invoicingPatch(raw: unknown): InvoicingPatch {
     }));
   }
   return out;
+}
+
+/**
+ * The firm's payment terms as Firma › Rechnungslayout sends them: the whole list, each term's id
+ * made from its name when it has none; the manifest's reader checks the values (days, Skonto).
+ * An issued invoice keeps the terms it printed, so a term may go any time.
+ */
+function termsPatch(raw: unknown): PaymentTerms[] {
+  if (!Array.isArray(raw) || raw.length === 0) throw new RequestError(400, 'paymentTerms: eine Liste mit mindestens einer Zahlungskondition.');
+  const taken = new Set<string>();
+  return raw.map((x, i) => {
+    const f = patchBody(x, ['id', 'name', 'days', 'skonto', 'text']);
+    const name = stringField(f, 'name').trim();
+    if (!name) throw new RequestError(400, `paymentTerms[${i}].name fehlt.`);
+    if (typeof f.days !== 'number') throw new RequestError(400, `paymentTerms[${i}].days: eine Zahl von Tagen.`);
+    const base = (typeof f.id === 'string' && f.id.trim()) || name.toLowerCase().normalize('NFD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'terms';
+    let id = base;
+    for (let k = 2; taken.has(id); k++) id = `${base}-${k}`;
+    taken.add(id);
+    const sk = f.skonto === undefined || f.skonto === null ? undefined : patchBody(f.skonto, ['percent', 'days']);
+    const text = typeof f.text === 'string' && f.text.trim() ? f.text.trim() : undefined;
+    return { id, name, days: f.days, ...(sk ? { skonto: { percent: sk.percent as number, days: sk.days as number } } : {}), ...(text ? { text } : {}) };
+  });
 }
 
 /**

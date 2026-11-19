@@ -32,8 +32,8 @@ import { bookingWaitsText } from './booking-waits.js';
 import { agreedBasis, baseCurrency, vatSetup } from '../../engines/index.js';
 import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
-import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminder, SentDocument } from '../../invoices/model.js';
-import type { PaymentProposal } from '../../invoices/payments.js';
+import type { Comment, Customer, CustomerFields, Draft, Invoice, Issued, Reminder, SentDocument, WriteOff, WriteOffReason } from '../../invoices/model.js';
+import type { AllocationItem, AllocationPart, PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
 import type { AiAvailability, DesktopInfo, FolderLook, HomeFolders, KnownBooks, PhoneInfo } from '../../types/desktop.js';
@@ -184,6 +184,7 @@ export function errorText(e: unknown): string {
   if (!(e instanceof ApiError)) return e instanceof Error ? e.message : String(e);
   const b = e.body;
   if ('invoiceRefusal' in b) return invoiceRefusalText(b.invoiceRefusal, b.missing);
+  if ('paymentRefusal' in b) return t(`invoice.payment.${b.paymentRefusal}`);
   if ('mailRefusal' in b) return t(`mail.refusal.${b.mailRefusal}`, { detail: b.detail ?? '' });
   switch (b.code) {
     case 'readonly': return t(DEMO ? 'error.demo' : 'error.readonly');
@@ -813,7 +814,16 @@ export const api = {
   /** An empty `text`: the CLI starts with no prompt (issue #210). */
   openTerminal: (text: string, choice: { cli?: TerminalCli; app?: TerminalApp } = {}) =>
     request<{ cli: TerminalCli; app: TerminalApp }>('POST', '/api/terminal/open', { ...(text.trim() ? { request: text } : {}), ...choice }),
-  cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage }) =>
+  /** «Zahlungseingang erfassen» (spec 4.4.6): a hand movement on a bank or the cash box, allocated and booked. */
+  handPayment: (id: string, input: { date: string; account: string; amount: number }) => request<{ transaction: BankTransaction }>('POST', `/api/invoices/${id}/hand-payments`, input),
+  removeHandPayment: (id: string, ref: string) => request<{ ok?: true }>('DELETE', `/api/invoices/${id}/hand-payments/${encodeURIComponent(ref)}`),
+  /** «Rest ausbuchen»; `confirm: 'aboveOpen'` is «Trotzdem ausbuchen». */
+  writeOff: (id: string, input: { reason: WriteOffReason; date?: string; amount?: number; note?: string; confirm?: 'aboveOpen' }) => request<{ writeOff: WriteOff }>('POST', `/api/invoices/${id}/write-offs`, input),
+  removeWriteOff: (id: string, wo: string) => request<{ writeOff: WriteOff }>('DELETE', `/api/invoices/${id}/write-offs/${encodeURIComponent(wo)}`),
+  /** The Ausziffern dialog of an incoming payment, and its «Buchen». */
+  allocation: (transactionRef: string, customerId?: string) => request<{ transaction: BankTransaction; items: AllocationItem[]; left: number }>('GET', `/api/invoices/allocation?transactionRef=${encodeURIComponent(transactionRef)}${customerId ? `&customerId=${encodeURIComponent(customerId)}` : ''}`),
+  allocate: (transactionRef: string, parts: AllocationPart[]) => request<{ paid: Array<{ number: string; amount: number }> }>('POST', '/api/invoices/allocation', { transactionRef, parts }),
+  cancelInvoice: (id: string, input: { date: string; reason: string; notify: boolean; to?: string; email?: MailMessage; confirm?: 'paid' }) =>
     request<{ invoice: Issued; sent?: SentDocument }>('POST', `/api/invoices/${id}/cancel`, input),
   creditNote: (id: string, input: CreditInput) => request<Draft>('POST', `/api/invoices/${id}/credit-note`, input),
   sendReminder: (id: string, input: ReminderInput) => request<{ reminder: Reminder; sent: SentDocument }>('POST', `/api/invoices/${id}/reminders`, input),

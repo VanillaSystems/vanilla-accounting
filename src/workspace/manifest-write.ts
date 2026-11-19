@@ -9,7 +9,7 @@ import type { StatementKind } from './banks.js';
 import { readFileSync } from 'node:fs';
 import { isMap, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
 import { writeAtomic } from '../invoices/store.js';
-import type { Address, InvoiceContent, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail, PayToPatch, Prices, UnitDef } from '../invoices/model.js';
+import type { Address, InvoiceContent, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail, PayToPatch, PaymentTerms, Prices, UnitDef } from '../invoices/model.js';
 import { parseIban, roleBefore, type MoneyRole } from './banks.js';
 import { parseManifest, type Manifest } from './manifest.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
@@ -65,6 +65,10 @@ export interface InvoicingPatch {
   units?: UnitDef[] | null;
   /** Net or gross prices for a new document of a kind; null: net again. */
   prices?: Partial<Record<InvoiceContent['kind'], Prices | null>>;
+  /** The firm's payment terms, the whole list written as one block; null removes it (net terms of `paymentTermsDays` again). */
+  paymentTerms?: PaymentTerms[] | null;
+  /** The id of the terms a new invoice takes; null: the first. */
+  defaultTerms?: string | null;
 }
 
 /** Firma › E-Mail: the outgoing mailbox, field by field; null removes a field, `outgoingMail: null` the block. */
@@ -194,6 +198,10 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     // One line per unit, `{ id: m2, de: m², … }`.
     if (inv.units === null) doc.deleteIn(['invoicing', 'units']);
     else if (inv.units) doc.setIn(['invoicing', 'units'], doc.createNode(inv.units.map((u) => { const n = doc.createNode(u) as YAMLMap; n.flow = true; return n; })));
+    // One line per term, `{ id: sk2, name: …, days: 30, skonto: { percent: 2, days: 10 } }`.
+    if (inv.paymentTerms === null) doc.deleteIn(['invoicing', 'paymentTerms']);
+    else if (inv.paymentTerms) doc.setIn(['invoicing', 'paymentTerms'], doc.createNode(inv.paymentTerms.map((x) => { const n = doc.createNode(x) as YAMLMap; n.flow = true; return n; })));
+    if (inv.defaultTerms !== undefined) set(doc, ['invoicing', 'defaultTerms'], inv.defaultTerms);
     for (const [kind, value] of Object.entries(inv.prices ?? {})) set(doc, ['invoicing', 'prices', kind], value);
     if (isMap(doc.getIn(['invoicing', 'prices'])) && (doc.getIn(['invoicing', 'prices']) as YAMLMap).items.length === 0) doc.deleteIn(['invoicing', 'prices']);
   }
