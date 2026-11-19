@@ -731,7 +731,7 @@ function Taken({ r, session, books, go, onGo, refresh }: { r: DropRow; session: 
             : x.kind === 'none' ? <small className="dwhy" data-testid="drop-none">{x.why}</small>
             : x.kind === 'supporting' ? <small className="dwhy" data-testid="drop-supporting">{x.of ? t('drop.p.supportingOf', { what: x.why || t('receipts.why.supporting'), name: x.of.name }) : t('drop.p.supportingAlone', { what: x.why || t('receipts.why.supporting') })}</small>
             : x.kind === 'balanceSheet' && x.sheet ? <small className="dwhy" data-testid="drop-balance-sheet">{balanceSheetLine(x.sheet)}</small>
-            : x.kind === 'payrollSetup' ? <small className="dwhy" data-testid="drop-payroll-setup">{t('drop.p.payrollSetup')}</small>
+            : x.kind === 'payrollSetup' ? <small className="dwhy" data-testid="drop-payroll-setup">{t('drop.p.payrollSetupWhy')}</small>
             : x.kind === 'twin' ? <small className="dwhy" data-testid="drop-twin">{t('drop.twin.duplicate', { name: x.name })} · {t(`drop.twin.why.${x.why}`)}</small> : null}
           {card ? <small className="dwhy" data-testid="drop-card-statement">{cardStatementLine(card)}</small> : null}
           {cardLine ? <small className="dwhy" data-testid="drop-card-line">{t('receipts.cardLine.bill', { line: cardLineText(cardLine, currencyOf(cardLine.payment)) })}</small> : null}

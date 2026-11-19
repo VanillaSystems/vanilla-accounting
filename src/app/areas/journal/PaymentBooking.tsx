@@ -110,7 +110,7 @@ export function PaymentBooking(props: Props) {
         </div>
       ) : null}
       {/* A payee whose name says it collects a deduction the payslips withheld (a pension fund): one click keeps it so (§22 decision 110). */}
-      {props.canRule !== false && start?.nature?.kind !== 'payrollInsurer' && !(start?.nature?.kind === 'contributions' && start.nature.collector) ? <CollectsOffer payment={props.payment} nav={props.nav} /> : null}
+      {props.canRule !== false && start?.nature?.kind !== 'payrollInsurer' ? <CollectsOffer payment={props.payment} nav={props.nav} /> : null}
       <BookingForm key={way} {...props} onForm={(el) => { formEl.current = el; props.onForm?.(el); }} accounts={ws.bankAccounts} draft={draft} dimensions={ws.dimensions ?? []} defaults={defaults} pending={known!.books !== props.books} onNotOwn={setNotOwn} />
       {props.canRule !== false && start ? <RuleWay nav={props.nav} payment={props.payment} start={start} form={() => formEl.current} lines={draft.lines} other={draft.bank && (draft.bank.side === 'accountDebit' ? 'accountCredit' : 'accountDebit')} /> : null}
     </>
