@@ -7,8 +7,19 @@
 import type { CorrectionCase, QuarterKey, ReceiptKind, VatRateGroup } from '../../src/types/index.js';
 import type { Address, ArticleFields, ContactFields, CustomerFields, DocumentKind, Exemption, InvoiceCurrency, InvoiceLine, Prices, VatRate, WriteOffReason } from '../../src/invoices/model.js';
 import type { VatSetup } from '../../src/workspace/vat-setup.js';
+import { LEGACY_DUNNING } from '../../src/workspace/dunning.js';
 
 export const YEAR = '2026';
+
+/**
+ * The Mahnwesen block a demo of a firm of before carries: what the manifest step 6 → 7 writes
+ * (src/workspace/schema.ts, LEGACY_DUNNING), so a copy of the books that migrates gets the manifest
+ * the app ships. Appended at the end of a demo's `invoicing:` section, where the step puts it.
+ */
+export const LEGACY_DUNNING_YAML = ['  dunning:', '    levels:', ...LEGACY_DUNNING.levels.flatMap((l) => [
+  `      - name: ${l.name}`, `        days: ${l.days}`,
+  ...(l.texts ? ['        texts:', ...Object.entries(l.texts).map(([lang, t]) => `          ${lang}: { title: ${t!.title} }`)] : []),
+])].join('\n');
 
 export interface Company { name: string; uid: string; owner: string; address: string[] }
 

@@ -7,6 +7,7 @@
  * kitchen is paid by QR reference; the wardrobes are open.
  */
 import type { DemoInvoicing } from './kit.js';
+import { LEGACY_DUNNING_YAML } from './kit.js';
 
 export const SCHREINEREI_INVOICING: DemoInvoicing = {
   address: { street: 'Werkstrasse', number: '12', postcode: '9000', town: 'St. Gallen', country: 'CH' },
@@ -24,6 +25,7 @@ export const SCHREINEREI_INVOICING: DemoInvoicing = {
     - { id: net30, name: "30 Tage netto", days: 30 }
   texts:
     de: { closing: "Zahlbar innert {days} Tagen.\\nFreundliche Grüsse, Reto Beispiel" }
+${LEGACY_DUNNING_YAML}
 `,
   customers: {
     familie: {

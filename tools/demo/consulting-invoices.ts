@@ -6,7 +6,7 @@
  * Swiss client pays by QR reference, the German one by creditor reference to the Wise EUR account;
  * the September audit is open. The amounts are those the old invoices had, so the figures stay.
  */
-import { bankDay, isoDate, type DemoInvoicing, type InvoiceStep } from './kit.js';
+import { LEGACY_DUNNING_YAML, bankDay, isoDate, type DemoInvoicing, type InvoiceStep } from './kit.js';
 
 const TREUHAND_HOURS = 40;
 const RATE_CHF = 150;
@@ -41,6 +41,7 @@ export const CONSULTING_INVOICING: DemoInvoicing = {
   texts:
     de: { closing: "Zahlbar innert {days} Tagen.\\nFreundliche Grüsse, Lukas Beispiel" }
     en: { closing: "Payable within {days} days.\\nKind regards, Lukas Beispiel" }
+${LEGACY_DUNNING_YAML}
 `,
   customers: {
     treuhand: {

@@ -4,6 +4,7 @@
  * «MWST» after the UID. The bride pays it by QR reference.
  */
 import type { DemoInvoicing } from './kit.js';
+import { LEGACY_DUNNING_YAML } from './kit.js';
 
 export const COIFFEUR_INVOICING: DemoInvoicing = {
   address: { street: 'Marktgasse', number: '3', postcode: '8400', town: 'Winterthur', country: 'CH' },
@@ -18,6 +19,7 @@ export const COIFFEUR_INVOICING: DemoInvoicing = {
     credit-note: { format: "{JJJJ}-{NNN}", restartYearly: true }
   texts:
     de: { closing: "Zahlbar innert {days} Tagen. Herzlichen Dank und alles Gute!\\nBella Beispiel" }
+${LEGACY_DUNNING_YAML}
 `,
   customers: {
     braut: {
