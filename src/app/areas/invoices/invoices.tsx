@@ -24,6 +24,7 @@ import type { DocumentKind } from '../../../invoices/model.js';
 import { OpenItems } from './OpenItems.js';
 import { SentLog } from './SentLog.js';
 import { ContactTable } from './contacts.js';
+import { ArticleTable } from './articles.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
 
@@ -56,6 +57,7 @@ function List(props: Props) {
   }
   switch (route.view) {
     case 'contacts': return <ContactTable {...props} d={load.data} />;
+    case 'articles': return <ArticleTable {...props} d={load.data} />;
     case 'sent': return <SentLog {...props} d={load.data} />;
     case 'open-items': return <OpenItems {...props} d={load.data} />;
     default: return <DocTable {...props} d={load.data} view={route.view} />;
@@ -90,9 +92,9 @@ export const invoices: Area<RouteOf<'invoices'>> = {
   Detail,
   // The «+» of each table makes a document of its kind (spec 4.8); elsewhere a Rechnung.
   add: {
-    label: (r) => (r.view === 'contacts' ? t('contacts.one') : t(`invoices.docKind.${newKind(r.view)}`)),
-    title: (r) => (r.view === 'contacts' ? t('contacts.new') : t(`sales.newTitle.${newKind(r.view)}` as 'sales.newTitle.invoice')),
-    run: (p) => setUi({ dialog: p.route.area === 'invoices' && p.route.view === 'contacts' ? { kind: 'contact' } : { kind: 'new', doc: p.route.area === 'invoices' ? newKind(p.route.view) : 'invoice' } }),
+    label: (r) => (r.view === 'contacts' ? t('contacts.one') : r.view === 'articles' ? t('articles.one') : t(`invoices.docKind.${newKind(r.view)}`)),
+    title: (r) => (r.view === 'contacts' ? t('contacts.new') : r.view === 'articles' ? t('articles.new') : t(`sales.newTitle.${newKind(r.view)}` as 'sales.newTitle.invoice')),
+    run: (p) => setUi({ dialog: p.route.area === 'invoices' && p.route.view === 'contacts' ? { kind: 'contact' } : p.route.area === 'invoices' && p.route.view === 'articles' ? { kind: 'article' } : { kind: 'new', doc: p.route.area === 'invoices' ? newKind(p.route.view) : 'invoice' } }),
   },
   legend,
   table: tableOf,
@@ -100,6 +102,7 @@ export const invoices: Area<RouteOf<'invoices'>> = {
     const d = invoicesNow();
     if (!r.id || !d) return r.id;
     if (r.view === 'contacts') return d.contacts.find((c) => c.id === r.id)?.name;
+    if (r.view === 'articles') return d.articles.find((a) => a.id === r.id)?.name;
     if (r.view === 'sent') return d.sent.find((x) => x.id === r.id)?.title;
     const inv = byRouteId(d.invoices, r.id);
     return inv ? (inv.status === 'issued' ? inv.number : `${t('invoices.draft')} · ${customerOf(d, inv)?.name ?? ''}`) : r.id;
@@ -117,6 +120,11 @@ export const invoices: Area<RouteOf<'invoices'>> = {
         label: [c.number, c.name].filter(Boolean).join(' · '),
         side: townOf(c),
         run: () => nav.go({ route: { area: 'invoices', view: 'contacts', id: c.id }, query: {} }),
+      })),
+      ...d.articles.filter((a) => !a.archived).map((a) => ({
+        label: [a.code, a.name].filter(Boolean).join(' · '),
+        side: t('articles.one'),
+        run: () => nav.go({ route: { area: 'invoices', view: 'articles', id: a.id }, query: {} }),
       })),
     ];
   },

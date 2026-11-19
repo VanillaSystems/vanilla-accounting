@@ -488,6 +488,9 @@ html, body { margin: 0 }
 .a4 tr.ltext.title td { font-weight: 700; font-size: 10pt; padding-top: 3.5mm }
 .a4 tr.lsub td { font-weight: 600; border-top: .3mm solid #9aa1ad }
 .a4 tr.ldisc .dval { color: #5b6270 }
+.a4 tr.lgroup td { font-weight: 700; border-bottom: .3mm solid #9aa1ad; padding-top: 3mm }
+.a4 tr.lingrp td:first-child { padding-left: 4mm }
+.a4 .lcode { font-variant-numeric: tabular-nums; color: #5b6270; margin-right: .6mm }
 .a4 .loff { display: block; font-size: 7.5pt; color: #5b6270 }
 .a4 .lopt { font-size: 7pt; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #5b6270; border: .2mm solid #9aa1ad; border-radius: .8mm; padding: 0 .8mm; margin-right: 1mm }
 .a4 tr.lopt-row td { color: #5b6270 }

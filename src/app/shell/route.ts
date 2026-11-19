@@ -25,7 +25,7 @@ export const AUTOMATION_PAGES = ['runs', 'workflows', 'map', 'queue', 'tasks'] a
  * Aufträge, Lieferscheine, Gutschriften, Offene Posten, Kontakte and Versendet. A document opens under the
  * view it is listed in; /invoices/<number> stays its link whatever its kind.
  */
-export const INVOICE_VIEWS = ['list', 'quotes', 'orders', 'deliveries', 'credit-notes', 'open-items', 'contacts', 'sent'] as const;
+export const INVOICE_VIEWS = ['list', 'quotes', 'orders', 'deliveries', 'credit-notes', 'open-items', 'contacts', 'articles', 'sent'] as const;
 export type InvoiceView = typeof INVOICE_VIEWS[number];
 
 /**

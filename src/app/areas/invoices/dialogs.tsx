@@ -24,6 +24,7 @@ import type { MailStatus } from '../../../types/api-error.js';
 import { cancel, cancelDocument, creditNote, newDraftFor, send, sendReminder } from './actions.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 import { ContactDialog, ImportDialog } from './contacts.js';
+import { ArticleDialog, ArticleImportDialog, ArticlePicker } from './articles.js';
 import { BulkDialogs } from './bulk.js';
 import { ConvertDialog, WarnDialog } from './convert.js';
 import { Frame, close } from './frame.js';
@@ -48,6 +49,9 @@ export function Dialogs(props: Props) {
     case 'warn': return <WarnDialog title={s.dialog.title} text={s.dialog.text} anyway={s.dialog.anyway} run={s.dialog.run} />;
     case 'contact': return <ContactDialog {...props} contact={d.contacts.find((c) => c.id === (s.dialog as { id?: string }).id)} />;
     case 'contactImport': return <ImportDialog {...props} />;
+    case 'article': return <ArticleDialog {...props} />;
+    case 'articleImport': return <ArticleImportDialog {...props} />;
+    case 'articlePick': { const draft = d.invoices.find((i) => i.id === (s.dialog as { draft: string }).draft); return draft?.status === 'draft' ? <ArticlePicker {...props} d={d} draft={draft} after={s.dialog.after} /> : null; }
     case 'cancel': return inv?.status === 'issued' ? (isBooked(inv) ? <CancelDialog {...props} inv={inv} /> : <CancelPlainDialog {...props} inv={inv} />) : null;
     case 'credit': return inv?.status === 'issued' ? <CreditDialog {...props} inv={inv} invoices={d.invoices} /> : null;
     case 'send': return inv?.status === 'issued' ? <SendDialog {...props} inv={inv} reminder={s.dialog.reminder} issued={s.dialog.issued} /> : null;

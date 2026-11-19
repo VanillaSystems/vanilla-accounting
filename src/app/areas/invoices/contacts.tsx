@@ -8,7 +8,8 @@ import { useEffect, useRef, useState } from 'react';
 import { localToday } from '../../../accounting/periods.js';
 import { INVOICE_CURRENCIES, type Contact, type ContactAddress, type ContactPerson, type InvoiceCurrency, type InvoiceLanguage } from '../../../invoices/model.js';
 import { billingAddress, contactDays, documentsOf } from '../../../invoices/contacts.js';
-import { IMPORT_FIELDS, IMPORT_LIMIT, type ImportChoice, type ImportField, type ImportMapping, type ImportPreview } from '../../../invoices/contact-import.js';
+import { IMPORT_FIELDS, type ImportField, type ImportMapping, type ImportRow } from '../../../invoices/contact-import.js';
+import { TableImport, type ImportKind } from './import-dialog.js';
 import { openAmount, totals } from '../../../invoices/rules.js';
 import type { RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
@@ -25,7 +26,6 @@ import { invoiceAt, newDraftFor, removeContact, restoreContact, saveContact, sav
 import { invoicesNow, reloadInvoices } from './data.js';
 import { COUNTRIES, addressRule, countryName, countryOf, languageFor, numberFirst, vatRule } from './address.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
-import { decodeText } from '../../../core/files.js';
 import { Frame, close } from './frame.js';
 import { rowTab } from './Sent.js';
 import { Search, Views } from './views.js';
@@ -490,95 +490,22 @@ export function ContactDialog({ contact, nav }: Props & { contact?: Contact }) {
 
 /** «Importieren»: a CSV, its columns mapped (code proposes the mapping), the rows as they would come in, then the import. */
 export function ImportDialog({ nav }: Props) {
-  const [csv, setCsv] = useState<string>();
-  const [file, setFile] = useState('');
-  const [preview, setPreview] = useState<ImportPreview>();
-  const [mapping, setMapping] = useState<ImportMapping>();
-  const [choices, setChoices] = useState<Record<string, ImportChoice>>({});
-  const [error, setError] = useState<string>();
-
-  async function read(text: string, map?: ImportMapping) {
-    try {
-      const p = await api.previewContactImport(text, map);
-      setPreview(p); setMapping(p.mapping); setError(undefined);
-    } catch (e) { setError(errorText(e)); }
-  }
-  async function pickFile(f: File | undefined) {
-    if (!f) return;
-    // UTF-8, else Windows-1252 (an export of an older program often is): the umlauts come in as written.
-    const text = decodeText(new Uint8Array(await f.arrayBuffer()));
-    setFile(f.name); setCsv(text); setChoices({});
-    await read(text);
-  }
-  async function run() {
-    if (!csv || !mapping) return;
-    try {
-      const out = await api.importContacts(csv, mapping, choices);
-      close();
-      await reloadInvoices();
-      nav.toast(t('contacts.imported', { n: out.created, skipped: out.skipped }));
-    } catch (e) { setError(errorText(e)); }
-  }
-  const rows = preview?.rows ?? [];
-  const choiceOf = (line: number, proposed: ImportChoice) => choices[String(line)] ?? proposed;
-  const coming = rows.filter((r) => choiceOf(r.line, r.choice) === 'new' && r.contact && !r.problems.some((p) => p === 'name' || p === 'uid')).length;
-  return (
-    <Frame className="wide cimport" label={t('contacts.import')} title={file || t('contacts.importTitle')}
-      foot={<>
-        {preview && <span className="allocleft" data-testid="import-count">{t('contacts.importCount', { n: coming, of: rows.length })}</span>}
-        <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button>
-        <AsyncButton type="button" className="btn primary" data-act="run-import" disabled={!preview || coming === 0} onClick={run}>{t('contacts.importRun', { n: coming })}</AsyncButton>
-      </>}>
-      <div className="ibody">
-        <p>{t('contacts.importText')}</p>
-        <input type="file" accept=".csv,text/csv,text/plain" data-testid="import-file" onChange={(e) => { void pickFile(e.target.files?.[0]); }} />
-        {error && <p className="warn">{error}</p>}
-        {preview && (
-          <>
-            {preview.leftOut > 0 && <p className="warn" data-testid="import-left-out">{t('contacts.importLeftOut', { n: preview.leftOut, limit: IMPORT_LIMIT })}</p>}
-            <h4 className="cfh">{t('contacts.mapping')}</h4>
-            <div className="cmap">
-              {IMPORT_FIELDS.map((k: ImportField) => (
-                <label key={k} className="lkr"><span>{t(`contacts.field.${k}`)}</span>
-                  <select value={mapping?.[k] ?? ''} data-map={k} onChange={(e) => { const next = { ...mapping }; if (e.target.value) next[k] = e.target.value; else delete next[k]; setMapping(next); void read(csv!, next); }}>
-                    <option value="">–</option>
-                    {preview.header.map((h) => <option key={h} value={h}>{h}</option>)}
-                  </select>
-                </label>
-              ))}
-            </div>
-            <h4 className="cfh">{t('contacts.importRows')}</h4>
-            <table className="alloc cimp">
-              <thead><tr><th>{t('contacts.importLine')}</th><th>{t('contacts.col.name')}</th><th>{t('contacts.col.town')}</th><th>{t('contacts.importProblems')}</th><th>{t('contacts.importChoice')}</th></tr></thead>
-              <tbody>
-                {rows.map((r) => {
-                  const blocked = !r.contact || r.problems.some((p) => p === 'name' || p === 'uid');
-                  return (
-                    <tr key={r.line} data-line={r.line}>
-                      <td className="mono">{r.line}</td>
-                      <td>{r.contact?.name ?? '–'}</td>
-                      <td>{r.contact ? (billingAddress(r.contact)?.town ?? '') : ''}</td>
-                      <td className="m">
-                        {r.problems.map((p) => t(`contacts.problem.${p}`)).join(' · ')}
-                        {r.same && <span data-testid="import-same">{r.problems.length ? ' · ' : ''}{t(`contacts.same.${r.same.by}`, { name: r.same.name, where: 'line' in r.same ? t('contacts.sameRow', { line: r.same.line }) : t('contacts.sameContact') })}</span>}
-                      </td>
-                      <td>
-                        {blocked ? <span className="m">{t('contacts.choice.skip')}</span> : (
-                          <select value={choiceOf(r.line, r.choice)} data-choice={r.line} onChange={(e) => setChoices({ ...choices, [String(r.line)]: e.target.value as ImportChoice })}>
-                            <option value="new">{t('contacts.choice.new')}</option>
-                            {r.same && <option value="same">{t('contacts.choice.same')}</option>}
-                            <option value="skip">{t('contacts.choice.skip')}</option>
-                          </select>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </>
-        )}
-      </div>
-    </Frame>
-  );
+  const kind: ImportKind<ImportRow> = {
+    label: t('contacts.import'), title: t('contacts.importTitle'), text: t('contacts.importText'),
+    fields: IMPORT_FIELDS, fieldLabel: (k) => t(`contacts.field.${k as ImportField}`),
+    preview: (csv, map) => api.previewContactImport(csv, map as ImportMapping | undefined),
+    run: (csv, map, choices) => api.importContacts(csv, map as ImportMapping, choices),
+    done: (n, skipped) => t('contacts.imported', { n, skipped }),
+    count: (n, of) => t('contacts.importCount', { n, of }),
+    runLabel: (n) => t('contacts.importRun', { n }),
+    columns: [[t('contacts.col.name'), (r) => r.contact?.name ?? '–'], [t('contacts.col.town'), (r) => (r.contact ? (billingAddress(r.contact)?.town ?? '') : '')]],
+    notes: (r) => <>
+      {r.problems.map((p) => t(`contacts.problem.${p}`)).join(' · ')}
+      {r.same && <span data-testid="import-same">{r.problems.length ? ' · ' : ''}{t(`contacts.same.${r.same.by}`, { name: r.same.name, where: 'line' in r.same ? t('contacts.sameRow', { line: r.same.line }) : t('contacts.sameContact') })}</span>}
+    </>,
+    blocked: (r) => !r.contact || r.problems.some((p) => p === 'name' || p === 'uid'),
+    hasSame: (r) => !!r.same,
+    newWord: t('contacts.choice.new'),
+  };
+  return <TableImport kind={kind} nav={nav} />;
 }

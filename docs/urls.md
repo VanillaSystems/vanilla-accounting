@@ -58,6 +58,7 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/invoices/<number>.pdf` | the invoice as PDF, exactly as issued (app only) |
 | `/invoices/new?customer=<id>` | a new draft for that customer (app only) |
 | `/invoices/contacts` and `/invoices/contacts/<id>` | the contacts and one contact (`/invoices/customers[/<id>]`, the old links, lead there) |
+| `/invoices/articles` and `/invoices/articles/<id>` | the Artikel and one Artikel, its form in the panel over the table |
 | `/invoices/sent` and `/invoices/sent/<document-id>` | the log of sent documents and one of them, exactly as sent |
 | `/partners` and `/partners/<id>` | Geschäftspartner and one partner's page; the id is its knowledge file's (`gruenkaffee-muster`) or, for a customer of Rechnungen without one, the customer's (`cu_…`) |
 | `/knowledge` | Wissen, opening on its first page (Lücken) |

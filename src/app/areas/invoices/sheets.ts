@@ -23,20 +23,23 @@ export const editWords = (): NonNullable<ScreenSheet['edit']>['words'] => ({
   addText: t('invoices.addText'), addSubtotal: t('invoices.addSubtotal'), addDiscount: t('invoices.addDiscount'), addPageBreak: t('invoices.addPageBreak'), pageBreak: t('invoices.pageBreak'),
   move: t('invoices.moveLine'), title: t('invoices.textTitle'), plain: t('invoices.textPlain'), percent: t('invoices.discountPercent'), amount: t('invoices.discountAmount'), lineDiscount: t('invoices.lineDiscount'),
   position: t('invoices.position'), option: t('invoices.option'),
+  addArticle: t('invoices.addArticle'), addGroup: t('invoices.addGroup'), group: t('invoices.groupPlaceholder'), account: t('invoices.lineAccount'), code: t('invoices.lineCode'),
 });
 
-export function screenOf(d: InvoiceList, scope: 'draft' | 'texts' | undefined, customerId?: string, windowGuide?: string): ScreenSheet {
+export function screenOf(d: InvoiceList, scope: 'draft' | 'texts' | undefined, customerId?: string, windowGuide?: string, revenueAccount?: string): ScreenSheet {
   return {
     qrPlaceholder: t('invoices.qrPlaceholder'),
     ...(windowGuide ? { windowGuide } : {}),
     // An archived contact is picked no more; the draft that names one keeps it.
-    ...(scope ? { edit: { scope, customers: d.contacts.filter((c) => !c.archived || c.id === customerId).sort((a, b) => a.name.localeCompare(b.name)).map((c) => ({ id: c.id, name: c.name })), ...(customerId ? { customerId } : {}), words: editWords() } } : {}),
+    ...(scope ? { edit: { scope, customers: d.contacts.filter((c) => !c.archived || c.id === customerId).sort((a, b) => a.name.localeCompare(b.name)).map((c) => ({ id: c.id, name: c.name })), ...(customerId ? { customerId } : {}), ...(revenueAccount ? { revenueAccount } : {}), words: editWords() } } : {}),
   };
 }
 
 export function draftData(d: InvoiceList, ws: CompanyInfo, draft: Draft, editing: boolean): SheetData {
   const sheet = draftSheet(contextOf(ws), bookOf(d), draft, customerOf(d, draft, ws.invoicing), logo(ws.invoicing?.layout.logo));
-  return { ...sheet, screen: screenOf(d, editing ? 'draft' : undefined, draft.customerId) };
+  // A position without an account of its own books on the contact's revenue account, else the settings'.
+  const revenue = d.contacts.find((c) => c.id === draft.customerId)?.revenueAccount ?? ws.invoicing?.revenueAccount;
+  return { ...sheet, screen: screenOf(d, editing ? 'draft' : undefined, draft.customerId, undefined, revenue) };
 }
 
 export function issuedData(d: InvoiceList, inv: Issued): SheetData {
