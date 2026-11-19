@@ -1783,7 +1783,8 @@ Taken after the scored persona walk of B0 (2026-11-19, AI on 73, AI off 83, bar 
     `external`) with the refs of the payments its read payslips book.
 92. **The clearing account is checked against every closed payslip not paid by 31.12.**, by the bank line linked
     to its PDF and dated on or before 31.12. (a December wage paid in January is unpaid at 31.12.), less what
-    that line paid for it (decision 42).
+    that line paid for it (decision 42), with `paidFor` signed off the clearing account; where a line's share cannot be
+    told, a payment linked to the payslip counts as its payout.
 93. **An insurer's account is settled when a final statement's difference is booked (`LS-<year>-<insurance>`) or
     nothing is open**; open without one is a fact with «Schlussabrechnung erfassen» (Löhne › Lohnzahlungen,
     decision 35). A statement whose total agreed with the payslips books nothing and so is not seen: while
