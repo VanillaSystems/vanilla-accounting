@@ -212,6 +212,89 @@
       "number": "K-00008"
     }
   ],
+  "articles": [
+    {
+      "id": "ar_NuJ4rr5701Xz",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "import",
+      "deleted": false,
+      "code": "HM-1",
+      "type": "goods",
+      "name": "Hausmischung 1 kg",
+      "unit": "kg",
+      "price": 28,
+      "vatKind": "reduced",
+      "group": "Kaffee"
+    },
+    {
+      "id": "ar_cYtU_kNE1Kr_",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "import",
+      "deleted": false,
+      "code": "ES-1",
+      "type": "goods",
+      "name": "Espresso Bohnen 1 kg",
+      "unit": "kg",
+      "price": 32,
+      "vatKind": "reduced",
+      "group": "Kaffee"
+    },
+    {
+      "id": "ar_-9b0YbPYk3Xt",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "import",
+      "deleted": false,
+      "code": "DC-1",
+      "type": "goods",
+      "name": "Entkoffeiniert 500 g",
+      "unit": "pcs",
+      "price": 16.5,
+      "vatKind": "reduced",
+      "group": "Kaffee"
+    },
+    {
+      "id": "ar_WVGMGw-CDpbp",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "import",
+      "deleted": false,
+      "code": "MU-7",
+      "type": "goods",
+      "name": "Kaffeemühle Modell 7",
+      "unit": "pcs",
+      "price": 349,
+      "prices": "gross",
+      "vatKind": "normal",
+      "group": "Zubehör"
+    },
+    {
+      "id": "ar_8gD15o1ZN4JQ",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "import",
+      "deleted": false,
+      "code": "KU-1",
+      "type": "service",
+      "name": "Barista-Kurs",
+      "text": "Barista-Kurs, halber Tag",
+      "unit": "flat",
+      "price": 180,
+      "vatKind": "normal",
+      "group": "Kurse"
+    },
+    {
+      "id": "ar_UgTbcdPCsWCx",
+      "createdAt": "2026-07-01T08:00:00.000Z",
+      "origin": "import",
+      "deleted": false,
+      "code": "SV-1",
+      "type": "service",
+      "name": "Maschinenservice",
+      "unit": "h",
+      "price": 95,
+      "vatKind": "normal",
+      "account": "3400",
+      "group": "Service"
+    }
+  ],
   "invoices": [
     {
       "id": "in_glJAMD-ee_Jz",
@@ -301,6 +384,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -424,6 +508,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -539,6 +624,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -664,6 +750,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -789,6 +876,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -908,6 +996,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -1027,6 +1116,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -1136,6 +1226,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -1249,6 +1340,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -1342,6 +1434,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -1451,6 +1544,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -1552,6 +1646,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -1652,6 +1747,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -1769,6 +1865,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -1877,6 +1974,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -1981,6 +2079,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -2179,6 +2278,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -2284,6 +2384,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true

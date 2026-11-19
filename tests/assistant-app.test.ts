@@ -297,6 +297,19 @@ test('an invoice draft for a customer, or for a new one; the undo drops it (and 
   assert.equal(s.invoices().contacts.some((c) => c.name === 'Familie Huber'), false);
 });
 
+test('an invoice draft by Artikel: code or name, the Artikel\'s code, text, unit, price, rate and account, the line\'s own fields over them; an unknown one refused', async (t) => {
+  const s = await sidebar(t);
+  const customer = s.invoices().contacts.find((c) => c.name === 'Beispiel Bistro AG')!;
+  const made = await s.answer([{ kind: 'invoiceDraft', customer: customer.id, draft: { lines: [{ article: 'HM-1', quantity: 12 }, { article: 'Maschinenservice', quantity: 2, price: 90 }] } }]);
+  assert.equal(made.refused, undefined, made.refused?.message);
+  const draft = s.invoices().invoices.find((i) => i.id === made.made[0].note?.draft?.id)!;
+  const [beans, service] = draft.lines as Array<Record<string, unknown>>;
+  assert.deepEqual([beans.kind, beans.code, beans.text, beans.unit, beans.price, beans.vatRate, beans.quantity], ['article', 'HM-1', 'Hausmischung 1 kg', 'kg', 28, 2.6, 12]);
+  assert.deepEqual([service.code, service.price, service.vatRate, service.account], ['SV-1', 90, 8.1, '3400']);
+  const none = await s.answer([{ kind: 'invoiceDraft', customer: customer.id, draft: { lines: [{ article: 'Gibt es nicht', quantity: 1 }] } }]);
+  assert.equal(none.refusal?.code, 'unknownArticle');
+});
+
 test('an account the chart cannot take is refused in plain words: four digits, a name', async (t) => {
   const s = await sidebar(t);
   assert.deepEqual((await s.answer([{ kind: 'account', number: '65', name: 'Porto' }])).refusal, { code: 'accountNumber', params: { account: '65' } });

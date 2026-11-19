@@ -57,6 +57,7 @@
       "number": "K-00002"
     }
   ],
+  "articles": [],
   "invoices": [
     {
       "id": "in_MVknjIERgg_T",
@@ -141,6 +142,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -254,6 +256,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -366,6 +369,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -478,6 +482,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true
@@ -591,6 +596,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true

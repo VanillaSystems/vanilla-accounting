@@ -28,6 +28,7 @@
       "number": "K-00001"
     }
   ],
+  "articles": [],
   "invoices": [
     {
       "id": "in_2KIQYfUMHYIT",
@@ -136,6 +137,7 @@
           "intro": true,
           "quantity": true,
           "vatColumn": true,
+          "articleCode": true,
           "closing": true,
           "footer": true,
           "qrBill": true

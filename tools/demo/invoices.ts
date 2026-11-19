@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, wr
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { partDirs, workspaceAt, type Workspace } from '../../src/workspace/workspace.js';
-import { addComment, cancelInvoice, createCreditNote, createCustomer, createDraft, issueInvoice, recordSend, sendReminder } from '../../src/invoices/service.js';
+import { addArticles, addComment, cancelInvoice, createCreditNote, createCustomer, createDraft, issueInvoice, recordSend, sendReminder } from '../../src/invoices/service.js';
 import { closeBrowser } from '../../src/invoices/pdf.js';
 import { idSource, updateInvoices } from '../../src/invoices/store.js';
 import type { CustomerFields, InvoiceBook, Issued } from '../../src/invoices/model.js';
@@ -131,6 +131,13 @@ export async function playInvoicing(inv: DemoInvoicing, manifest: string, owner:
       // hand, allocate and write-off are the person's, on the books after the import (settle).
     }
     arrived('9999-12-31');
+    // From a seed of their own, so the seeded ids of every other record (and of the entries booked after) stay as they were.
+    if (inv.articles?.length) {
+      const rnd = mulberry32(0xa271c1e5);
+      const before = idSource.bytes;
+      idSource.bytes = (n) => Buffer.from(Array.from({ length: n }, () => Math.floor(rnd() * 256)));
+      try { addArticles(ws, inv.articles, `${YEAR}-07-01T08:00:00.000Z`); } finally { idSource.bytes = before; }
+    }
   } finally {
     await closeBrowser();
   }
