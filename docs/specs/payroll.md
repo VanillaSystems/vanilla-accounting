@@ -1917,7 +1917,7 @@ After the independent review of A-2 (2026-11-19):
     nothing books nothing; the withholding tax's collector is told what 2279 holds, with a reason of its own.
 
 60. **The holiday surcharge of an hourly wage is computed, on its own line** (Lohnart `ferienzuschlag`, `computes:
-    holiday`): weeks / (weeksPerYear − weeks) to two decimals (4/48 = 8.33 %, 5/47 = 10.64 %, 6/46 = 13.04 %), the
+    holiday`): weeks / (weeksPerYear − weeks) to two decimals (4/48, 5/47, 6/46), the
     weeks from the Anstellung's holiday days by `payroll.yaml holidays.daysPerWeek`, else the legal minimum by age
     (5 weeks before the 20th birthday, then 4), said as the line's source. Its base is the wage of the hours lines
     (`hours: true`); the firm's `holidayBasis` «wage-with-surcharge» adds the public-holiday surcharge, which an
