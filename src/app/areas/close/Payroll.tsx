@@ -48,13 +48,17 @@ export function PayrollChecks({ d, nav }: { d: YearCloseView; nav: Nav }) {
         {p.insurers.map((i) => {
           const state = insurerState(i);
           return (
-            <Fact key={i.id} id={`insurer-${i.id}`} state={state} title={<>{acc(i.account)} · {i.name}</>}>
-              <span>{t('close.payroll.insurer', { accrued: fmt(i.accrued), paid: fmt(i.paid), open: fmt(i.open) })}</span>
+            <Fact key={i.account} id={`insurer-${i.account}`} state={state} title={<>{acc(i.account)} · {i.insurances.map((x) => x.name).join(', ')}</>}>
+              <span>{i.carried ? `${t('close.payroll.carried', { amount: fmt(i.carried) })} · ` : ''}{t('close.payroll.insurer', { accrued: fmt(i.accrued), paid: fmt(i.paid), open: fmt(i.open) })}</span>
               {i.compare?.before ? <span>{t('close.payroll.insurerBefore', { amount: fmt(i.compare.before), until: formatDate(i.compare.beforeUntil ?? `${year}-12-31`) })}</span> : null}
               {i.settlement.length
                 ? <span>{t('close.payroll.settled', { refs: i.settlement.map((s) => s.ref).join(', ') })}</span>
                 : state === 'open' && <span>{t('close.payroll.noSettlement')}</span>}
-              {state === 'open' && <span className="chklinks">{link({ route: { area: 'payroll', view: 'payments', month: `${year}-12`, insurance: i.id }, query: {} }, t('close.payroll.settle'))}</span>}
+              {state === 'open' && (
+                <span className="chklinks">
+                  {i.insurances.filter((x) => x.settleable).map((x) => link({ route: { area: 'payroll', view: 'payments', month: `${year}-12`, insurance: x.id }, query: {} }, i.insurances.length > 1 ? t('close.payroll.settleOne', { name: x.name }) : t('close.payroll.settle'), x.id))}
+                </span>
+              )}
             </Fact>
           );
         })}
@@ -106,7 +110,7 @@ function Wages({ p, acc, link, ledger }: Parts) {
     <>
       <Fact id="wages" state={wagesState(p)!} title={<>{acc(w.account)} {t('close.payroll.ofYear')}</>}>
         <span>{t('close.payroll.wages', { booked: fmt(w.booked), payslips: fmt(expected) })}</span>
-        {w.opening && <span>{t(w.opening.difference ? 'close.payroll.openingDiffers' : 'close.payroll.openingAgrees', { month: monthText(w.opening.through), booked: fmt(w.opening.booked), expected: fmt(w.opening.expected), difference: signed(w.opening.difference) })}</span>}
+        {w.opening && <span>{t('close.payroll.opening', { month: monthText(w.opening.through), account: w.account, booked: fmt(w.opening.booked), expected: fmt(w.opening.expected) })}</span>}
         {w.other !== 0 && <span>{t('close.payroll.wagesOther', { amount: fmt(w.other) })}</span>}
         {w.other !== 0 && <span className="chklinks">{link(ledger(w.account), t('close.payroll.ledger', { account: w.account }))}</span>}
       </Fact>
@@ -115,7 +119,7 @@ function Wages({ p, acc, link, ledger }: Parts) {
           <span>{x.difference
             ? t('close.payroll.personDiffers', { booked: fmt(x.booked), expected: fmt(x.expected), difference: signed(x.difference) })
             : t('close.payroll.personAgrees', { gross: fmt(x.gross), booked: fmt(x.booked) })}</span>
-          {x.months.length > 0 && <span className="chklinks">{x.months.map((m) => link(payslipAt(m.id), t('close.payroll.month', { month: monthText(m.month), difference: signed(m.difference) }), m.id))}</span>}
+          {x.months.length > 0 && <span className="chklinks">{x.months.map((m) => link(payslipAt(m.id), m.cause ? t('close.payroll.monthNotCompared', { month: monthText(m.month) }) : t('close.payroll.month', { month: monthText(m.month), difference: signed(m.difference) }), m.id))}</span>}
         </Fact>
       ))}
     </>

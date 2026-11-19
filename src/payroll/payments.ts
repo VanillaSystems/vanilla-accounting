@@ -10,6 +10,7 @@ import type { BankTransaction, JournalEntry, Mapping } from '../types/index.js';
 import type { PeriodLock } from '../books/store.js';
 import type { PayslipClose } from './model.js';
 import { round2, sum } from './money.js';
+import { chfAmount } from '../accounting/ledger.js';
 
 type BooksLike = { transactions: readonly BankTransaction[]; journalEntries: readonly JournalEntry[]; mappings: readonly Mapping[] };
 
@@ -118,7 +119,8 @@ export function bookWagePayments(
 export function paidFor(books: BooksLike, c: Pick<PayslipClose, 'receiptId' | 'payout' | 'id'>, clearing: string, all: readonly Pick<PayslipClose, 'receiptId' | 'payout'>[] = []): number | undefined {
   if (!c.receiptId) return undefined;
   const rid = c.receiptId;
-  const signed = (e: JournalEntry) => (e.accountDebit === clearing ? e.amount : 0) - (e.accountCredit === clearing ? e.amount : 0);
+  // In the books' currency: a wage paid from a foreign-currency account is its amount at the entry's rate.
+  const signed = (e: JournalEntry) => (e.accountDebit === clearing ? chfAmount(e) : 0) - (e.accountCredit === clearing ? chfAmount(e) : 0);
   const txRefs = new Set(books.transactions.map((t) => t.ref));
   const refs = new Set(books.mappings.filter((m) => m.receiptId === rid && txRefs.has(m.transactionRef)).map((m) => m.transactionRef));
   let paid = 0;

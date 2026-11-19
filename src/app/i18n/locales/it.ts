@@ -7771,8 +7771,12 @@ export default {
     "close.payroll.withheldOther": "altre registrazioni {amount}",
     "close.payroll.uncleared": { one: "{n} pagamento di contributi non detrae la quota del dipendente da {account}: è ancora lì, il costo è troppo alto di tanto", other: "{n} pagamenti di contributi non detraggono la quota dei dipendenti da {account}: è ancora lì, il costo è troppo alto di tanto" },
     "close.payroll.insurerBefore": "pagato per i mesi prima della contabilità salariale fino al {until} (non sul conto): {amount}",
-    "close.payroll.openingAgrees": "Apertura fino a {month}: registrato {booked}, come il salario lordo dell’apertura",
-    "close.payroll.openingDiffers": "Apertura fino a {month}: registrato {booked}, salario lordo dell’apertura {expected}: differenza {difference}",
+    "payroll.insurers.carried": "Riporto dall’anno precedente",
+    "close.payroll.carried": "Riporto {amount}",
+    "close.payroll.settleOne": "Registrare il conteggio finale {name}",
+    "close.payroll.opening": "Apertura fino a {month}: registrato su {account} {booked}; salario lordo dell’apertura secondo i campi del certificato di salario {expected}",
+    "close.payroll.monthNotCompared": "{month}: conti del tipo di salario cambiati dalla chiusura, non confrontato",
+    "close.payroll.failed": "I controlli dei salari non si sono potuti calcolare: {error}. La chiusura procede senza.",
     // payroll-yearend:end
   },
 } satisfies Locale;

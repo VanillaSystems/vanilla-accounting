@@ -341,7 +341,10 @@ export function payrollYearEndOf(ws: Workspace, year: string, books: Books = loa
   if (!payroll()) return undefined;
   const ctx = payrollContext(ws);
   const wages = setup().wages;
-  const issues = wages?.deductions ? providerIssuesIn(ws, books) : undefined;
+  // The business files are read only when level A's collective account has something to explain this year.
+  const d = wages?.deductions;
+  const moved = !!d && (books.journalEntries.some((e) => e.date.startsWith(year) && (e.accountDebit === d || e.accountCredit === d)) || !!books.config?.openingBalances?.[year]?.[d]);
+  const issues = moved ? providerIssuesIn(ws, books) : undefined;
   const out = payrollYearEnd({
     year, books, closes: [...ctx.history.closed.values()], employees: ctx.store.employees, data: ctx.data, store: ctx.store,
     issued: lohnausweisSnapshots(ws, year), isDebitNormal: (a) => chart().isDebitNormal(a),

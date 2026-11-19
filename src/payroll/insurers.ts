@@ -133,13 +133,21 @@ export interface InsurerRow {
   accrued: number;
   /** Paid to the insurer (or settled) in the year. */
   paid: number;
-  /** The account's balance at the year's end (or today): what the insurer is still owed; negative: paid ahead. */
+  /**
+   * What the account carried into the year: the year's opening where the books have one, else its entries before the year;
+   * a final statement of an earlier year counts there whenever it is dated. A January payment of last year's pays it.
+   */
+  carried: number;
+  /** carried + accrued − paid: what the insurer is still owed at the year's end (or today); negative: paid ahead. */
   open: number;
 }
 
-
 /** Per insurance of the firm: accrued by payslips (and final statements), paid, open, as facts from the books. */
-export function insurerRows(books: { journalEntries: readonly JournalEntry[] }, data: PayrollData, store: Pick<PayrollStore, 'insurances'>, year: string): InsurerRow[] {
+export function insurerRows(
+  books: { journalEntries: readonly JournalEntry[]; config?: { openingBalances?: Record<string, Record<string, number>> } },
+  data: PayrollData, store: Pick<PayrollStore, 'insurances'>, year: string,
+): InsurerRow[] {
+  const lsYear = (e: JournalEntry) => (e.transactionRef.startsWith('LS-') ? e.transactionRef.slice(3, 7) : undefined);
   return store.insurances.flatMap((i) => {
     const account = accountOfInsurance(data, i);
     if (!account) return [];
@@ -149,7 +157,13 @@ export function insurerRows(books: { journalEntries: readonly JournalEntry[] }, 
     const net = (es: JournalEntry[]) => round2(es.reduce((s, e) => s + (e.accountCredit === account ? e.amount : 0) - (e.accountDebit === account ? e.amount : 0), 0));
     const accrued = net(on.filter(accrues));
     const paid = round2(-net(on.filter((e) => !accrues(e))));
-    return [{ id: i.id, kind: i.kind, name: i.name, account, accrued, paid, open: round2(accrued - paid) }];
+    const touches = (e: JournalEntry) => e.accountCredit === account || e.accountDebit === account;
+    // An earlier year's final statement dated in this year or later: last year's, though the opening was written before it came.
+    const lateStatements = books.journalEntries.filter((e) => touches(e) && !!lsYear(e) && lsYear(e)! < year && e.date >= `${year}-01-01`);
+    const opening = books.config?.openingBalances?.[year]?.[account];
+    const before = books.journalEntries.filter((e) => touches(e) && (lsYear(e) ? lsYear(e)! < year : e.date < `${year}-01-01`));
+    const carried = opening !== undefined ? round2(opening + net(lateStatements)) : net(before);
+    return [{ id: i.id, kind: i.kind, name: i.name, account, accrued, paid, carried, open: round2(carried + accrued - paid) }];
   });
 }
 

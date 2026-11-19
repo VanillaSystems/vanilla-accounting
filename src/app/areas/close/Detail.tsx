@@ -145,6 +145,7 @@ function Checks(p: StepProps) {
       {chargesVat() && <VatReconciliation d={d} />}
       {d.turnover && <TurnoverReconciliation d={d} books={books} nav={nav} />}
       {d.payroll && <PayrollChecks d={d} nav={nav} />}
+      {d.payrollError && <><h3>{t('close.payroll.title')}</h3><p className="warnline" data-testid="payroll-error">{I.dot}{t('close.payroll.failed', { error: d.payrollError })}</p></>}
     </>
   );
 }
@@ -343,7 +344,8 @@ function Entries({ d, nav, canEdit }: StepProps) {
     if (state) return act(nav, () => api.markYearEndEntry(d.year, id, state), state === 'na' ? t('close.markedNa', { label }) : t('close.markedDone', { label }), () => api.markYearEndEntry(d.year, id, before ?? null));
     // Open again: the booking the step made is removed with it (r9c-16); the undo books it back as it was and marks the step as before.
     let removed: JournalEntry[] = [];
-    const booked = d.templates.find((tp) => tp.id === id)?.booked ?? [];
+    // The payroll's final statements stay: they are no booking of the step's (accounting/year-close.ts settlementsOf).
+    const booked = (d.templates.find((tp) => tp.id === id)?.booked ?? []).filter((b) => !b.payroll);
     return act(nav, async () => { removed = (await api.markYearEndEntry(d.year, id, null)).removed ?? []; },
       booked.length ? t('close.reopenedUnbooked', { label, refs: booked.map((b) => b.transactionRef).join(', ') }) : t('close.markedOpen', { label }),
       async () => {
@@ -357,7 +359,7 @@ function Entries({ d, nav, canEdit }: StepProps) {
     const description = tp.id === 'receivables' ? t('close.receivablesText', { year: d.year, numbers: d.receivables.invoices.map((i) => i.number).join(', ') }) : label;
     let result: { removed: JournalEntry[]; entry?: JournalEntry } = { removed: [] };
     return act(nav, async () => { result = await api.rebookYearEndEntry(d.year, tp.id, description); },
-      tp.stale!.now > 0 ? t('close.rebooked', { label, now: fmt(tp.stale!.now), booked: fmt(tp.stale!.booked) }) : t('close.rebookedGone', { label, refs: (tp.booked ?? []).map((b) => b.transactionRef).join(', ') }),
+      tp.stale!.now > 0 ? t('close.rebooked', { label, now: fmt(tp.stale!.now), booked: fmt(tp.stale!.booked) }) : t('close.rebookedGone', { label, refs: (tp.booked ?? []).filter((b) => !b.payroll).map((b) => b.transactionRef).join(', ') }),
       async () => {
         if (result.entry) await api.deleteJournalEntry(result.entry.id);
         for (const e of result.removed) await api.createJournalEntry({ id: e.id, transactionRef: e.transactionRef, date: e.date, accountDebit: e.accountDebit, accountCredit: e.accountCredit, amount: e.amount, description: e.description ?? '', ...(e.vatCode && { vatCode: e.vatCode }), origin: e.origin });
@@ -382,7 +384,7 @@ function Entries({ d, nav, canEdit }: StepProps) {
                 <>
                   <span className={`st${tp.state === 'na' ? ' na' : ''}`}>{tp.state === 'na' ? t('yearClose.stateNa') : <>{I.check}{t('close.booked')}</>}</span>
                   {tp.booked && !d.state.templates[tp.id]
-                    ? <span className="m" data-testid="booked-by">{t('close.bookedAs')} {tp.booked.map((b, i) => <Fragment key={b.id}>{i > 0 && ', '}<button type="button" className="golink" onClick={() => nav.go({ route: { area: 'journal', id: b.id }, query: { period: parsePeriod(d.year, localToday())! } })}>{b.transactionRef}</button></Fragment>)}</span>
+                    ? <span className="m" data-testid="booked-by">{t('close.bookedAs')} {tp.booked.map((b, i) => <Fragment key={b.id}>{i > 0 && ', '}<button type="button" className="golink" onClick={() => nav.go(at({ area: 'journal', id: b.id }, b.date))}>{b.transactionRef}</button></Fragment>)}</span>
                     : editable && <AsyncButton type="button" className="quiet2" onClick={() => mark(tp.id, null, tp.state)}>{t('close.undoMark')}</AsyncButton>}
                 </>
               ) : editable && (

@@ -90,10 +90,11 @@ same list. Every item is computed from the books:
 - **Löhne (payroll), when the year has payslips or wages.** Facts in their own section, never a
   blocker (docs/specs/payroll.md §6.7): 1091 at 31.12. against the payouts not paid by then (each
   unpaid payslip named); each insurer's account with what the payslips accrued, what was paid and
-  what is open, and «Schlussabrechnung erfassen» while no final statement is booked; 5000 per
-  person against the gross lines of her payslips, each month that differs linked to its payslip,
-  and what was booked on 5000 without one of the app's payslips; each person's Lohnausweis, its
-  field 8 against her gross, and whether one is issued and still agrees; for wages from another
+  what is open (with what the account carried from last year), and «Schlussabrechnung erfassen»
+  while no final statement is booked; 5000 per person against what each payslip booked on it when
+  it closed, each month that differs linked to its payslip, the opening's months beside the
+  opening's gross, and what was booked on 5000 without one of the app's payslips; each person's
+  Lohnausweis, its field 8 against her gross, and whether one is issued and still agrees; for wages from another
   program's payslips, 2270 explained by what the wages withheld and what the funds were paid.
 - **The year-end entries** (step 3).
 - **The closing balance sheet.** Aktiven must equal Passiven plus the result. If not, the

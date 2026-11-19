@@ -479,7 +479,7 @@ export type { JournalEntryInput };
 /** A movement made by hand (#88): on the owner's account without `account`; `role` and `label` add an account the firm lacks. */
 export type ManualTransactionInput = { date: string; description: string; amount: number; currency?: string; direction?: 'DBIT' | 'CRDT'; account?: string; role?: MoneyRole; label?: string };
 export type YearEndEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string; template?: string };
-export type YearCloseView = YearClose & { opening?: Opening; payroll?: PayrollYearEnd };
+export type YearCloseView = YearClose & { opening?: Opening; payroll?: PayrollYearEnd; payrollError?: string };
 export interface InvoiceList { today: string; invoices: Invoice[]; contacts: Contact[]; sent: SentDocument[] }
 /** A contact with its business file (named, or proposed by code) and the customers' business files a person may pick. */
 export interface ContactDetail {

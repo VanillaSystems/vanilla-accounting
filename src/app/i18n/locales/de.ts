@@ -7769,8 +7769,12 @@ export const messages = {
   "close.payroll.withheldOther": "übrige Buchungen {amount}",
   "close.payroll.uncleared": { one: "{n} Beitragszahlung zieht den Arbeitnehmeranteil nicht von {account} ab: er steht noch dort, der Aufwand ist um so viel zu hoch", other: "{n} Beitragszahlungen ziehen den Arbeitnehmeranteil nicht von {account} ab: er steht noch dort, der Aufwand ist um so viel zu hoch" },
   "close.payroll.insurerBefore": "für die Monate vor der Lohnbuchhaltung bis {until} bezahlt (nicht auf dem Konto): {amount}",
-  "close.payroll.openingAgrees": "Eröffnung bis {month}: gebucht {booked}, wie der Bruttolohn der Eröffnung",
-  "close.payroll.openingDiffers": "Eröffnung bis {month}: gebucht {booked}, der Bruttolohn der Eröffnung {expected}: Differenz {difference}",
+  "payroll.insurers.carried": "Übertrag aus dem Vorjahr",
+  "close.payroll.carried": "Übertrag {amount}",
+  "close.payroll.settleOne": "Schlussabrechnung {name} erfassen",
+  "close.payroll.opening": "Eröffnung bis {month}: auf {account} gebucht {booked}; Bruttolohn der Eröffnung laut Lohnausweis-Feldern {expected}",
+  "close.payroll.monthNotCompared": "{month}: Konten der Lohnart seit dem Abschluss geändert, nicht verglichen",
+  "close.payroll.failed": "Die Prüfungen der Löhne liessen sich nicht rechnen: {error}. Der Abschluss geht ohne sie.",
   // payroll-yearend:end
 } as const;
 

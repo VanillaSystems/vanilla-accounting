@@ -8,9 +8,9 @@ import type { InsurerCheck, PayrollYearEnd, StatementCheck } from '../../../payr
 export type PayrollState = 'ok' | 'warn' | 'open';
 
 export const clearingState = (p: PayrollYearEnd): PayrollState | undefined => (p.clearing ? (p.clearing.difference ? 'warn' : 'ok') : undefined);
-/** Open with nothing that says what the insurer bills: no final statement booked. */
-export const insurerState = (i: InsurerCheck): PayrollState => (i.open === 0 || i.settlement.length ? 'ok' : 'open');
-export const wagesState = (p: PayrollYearEnd): PayrollState | undefined => (p.wages ? (p.wages.persons.some((x) => x.difference) || p.wages.opening?.difference ? 'warn' : 'ok') : undefined);
+/** Open with nothing that says what the insurer bills: no final statement booked, where one can be. */
+export const insurerState = (i: InsurerCheck): PayrollState => (i.open === 0 || i.settlement.length || !i.insurances.some((x) => x.settleable) ? 'ok' : 'open');
+export const wagesState = (p: PayrollYearEnd): PayrollState | undefined => (p.wages ? (p.wages.persons.some((x) => x.difference) ? 'warn' : 'ok') : undefined);
 export function statementState(s: StatementCheck): PayrollState {
   if (s.difference || s.unmapped.length || (s.issued && s.issued.value !== s.today)) return 'warn';
   return !s.issued || s.openMonths.length ? 'open' : 'ok';

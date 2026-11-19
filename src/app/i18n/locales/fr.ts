@@ -7771,8 +7771,12 @@ export default {
     "close.payroll.withheldOther": "autres écritures {amount}",
     "close.payroll.uncleared": { one: "{n} paiement de cotisations ne déduit pas la part de l’employé de {account} : elle y figure encore, la charge est trop élevée d’autant", other: "{n} paiements de cotisations ne déduisent pas la part des employés de {account} : elle y figure encore, la charge est trop élevée d’autant" },
     "close.payroll.insurerBefore": "payé pour les mois avant la comptabilité salariale jusqu’au {until} (pas sur le compte) : {amount}",
-    "close.payroll.openingAgrees": "Ouverture jusqu’à {month} : comptabilisé {booked}, comme le salaire brut de l’ouverture",
-    "close.payroll.openingDiffers": "Ouverture jusqu’à {month} : comptabilisé {booked}, salaire brut de l’ouverture {expected} : différence {difference}",
+    "payroll.insurers.carried": "Report de l’année précédente",
+    "close.payroll.carried": "Report {amount}",
+    "close.payroll.settleOne": "Saisir le décompte final {name}",
+    "close.payroll.opening": "Ouverture jusqu’à {month} : comptabilisé sur {account} {booked} ; salaire brut de l’ouverture selon les champs du certificat de salaire {expected}",
+    "close.payroll.monthNotCompared": "{month} : comptes du genre de salaire modifiés depuis la clôture, non comparé",
+    "close.payroll.failed": "Les contrôles des salaires n’ont pas pu être calculés : {error}. La clôture se fait sans eux.",
     // payroll-yearend:end
   },
 } satisfies Locale;
