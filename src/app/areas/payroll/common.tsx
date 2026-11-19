@@ -2,7 +2,9 @@
 import type { MouseEvent, ReactNode } from 'react';
 import { t } from '../../i18n/index.js';
 import { hrefOf } from '../../shell/history.js';
-import type { Location, RouteOf } from '../../shell/route.js';
+import type { Location, Route, RouteOf } from '../../shell/route.js';
+import { localToday, parsePeriod, periodContaining } from '../../../accounting/periods.js';
+import { filing } from '../../../engines/index.js';
 import type { Nav } from '../index.js';
 import { nextMonth } from '../../../payroll/money.js';
 import { monthText } from './words.js';
@@ -19,16 +21,30 @@ export const at = (route: PayrollRoute): Location => ({ route, query: {} });
 export const payslipAt = (id: string): Location => at({ area: 'payroll', view: 'payslips', month: id.slice(0, 7), employee: id.slice(8) });
 export const employeeAt = (id: string): Location => at({ area: 'payroll', view: 'employees', id });
 export const settingsAt = (section: string): Location => at({ area: 'payroll', view: 'settings', section });
+export const paymentAt = (id: string): Location => at({ area: 'payroll', view: 'payments', month: id.slice(0, 7), employee: id.slice(8) });
+export const documentAt = (year: string, doc?: string): Location => at({ area: 'payroll', view: 'documents', year, ...(doc ? { doc } : {}) });
 
-const TABS = ['overview', 'payslips', 'employees', 'settings'] as const;
+/** A place outside Löhne (a bank payment, a journal entry) in the period that holds its date (urls.md rule 1). */
+export const inPeriodOf = (route: Route, date: string): Location =>
+  ({ route, query: { period: parsePeriod(periodContaining(date, undefined, filing().length), localToday()) ?? undefined } });
 
-/** Übersicht, Lohnabrechnungen, Mitarbeitende, Einstellungen (§12.1; Lohnzahlungen and Dokumente come later). */
+/** Each tab's own page: its route without a selection. */
+const TABS: { [V in PayrollRoute['view']]: PayrollRoute } = {
+  overview: { area: 'payroll', view: 'overview' },
+  payslips: { area: 'payroll', view: 'payslips' },
+  payments: { area: 'payroll', view: 'payments' },
+  employees: { area: 'payroll', view: 'employees' },
+  documents: { area: 'payroll', view: 'documents' },
+  settings: { area: 'payroll', view: 'settings' },
+};
+
+/** Übersicht, Lohnabrechnungen, Lohnzahlungen, Mitarbeitende, Dokumente, Einstellungen (§12.1). */
 export function Tabs({ on, nav }: { on: PayrollRoute['view']; nav: Nav }) {
   return (
     <span className="seg ptabs" role="tablist" aria-label={t('payroll.tabs')}>
-      {TABS.map((v) => (
+      {(Object.keys(TABS) as Array<PayrollRoute['view']>).map((v) => (
         <button key={v} type="button" role="tab" aria-selected={on === v} className={on === v ? 'on' : ''} data-view={v}
-          onClick={() => nav.go(at(v === 'overview' ? { area: 'payroll', view: 'overview' } : v === 'payslips' ? { area: 'payroll', view: 'payslips' } : v === 'employees' ? { area: 'payroll', view: 'employees' } : { area: 'payroll', view: 'settings' }))}>
+          onClick={() => nav.go(at(TABS[v]))}>
           {t(`payroll.tab.${v}`)}
         </button>
       ))}

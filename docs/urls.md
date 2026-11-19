@@ -65,7 +65,10 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/payroll` | Löhne › Übersicht: the year strip and the Lohnlauf of this month; `?period=2026-09` another month, `?period=2026` another year |
 | `/payroll/<yyyy-mm>` and `/payroll/<yyyy-mm>/<employeeId>` | Lohnabrechnungen: a month's Lohnlauf, and one payslip, e.g. `/payroll/2026-09/p1a2b3c`; `/payroll/payslips` is this month's |
 | `/payroll/payslips/<yyyy-mm>-<employeeId>.pdf` | a closed payslip's PDF, exactly as filed in Belege (app only) |
+| `/payroll/payments/<yyyy-mm>`, `/payroll/payments/<yyyy-mm>/<employeeId>` and `/payroll/payments/<yyyy-mm>/insurances/<insuranceId>` | Lohnzahlungen: a month's payouts with the bank line that paid each, one of them, and one insurer's balance of that month's year with its final statement; `/payroll/payments` is this month's |
 | `/payroll/employees` and `/payroll/employees/<id>` | Mitarbeitende and one person; `/payroll/employees/new` the form of a new one (app only) |
+| `/payroll/documents/<year>` and `/payroll/documents/<year>/<doc>` | Dokumente: a year's documents; `<doc>` a person's Lohnausweis by her id, `lohnkonto`, `declarations` (the figures of the annual declarations) or `journal` (the Lohnbuchungen per month); `/payroll/documents` is this year's |
+| `/payroll/documents/<year>/lohnausweis/<id>.pdf`, `/payroll/documents/<year>/lohnausweis.csv`, `/payroll/documents/<year>/lohnkonto.csv[?employee=<id>]`, `/payroll/documents/<year>/declarations.csv`, `/payroll/documents/journal/<yyyy-mm>.csv` | an issued Lohnausweis's PDF and the year's tables as CSV (app only) |
 | `/payroll/settings/<section>` | Einstellungen: `company` (Stammdaten), `insurances`, `wage-types`, `accounts` |
 
 ## Query parameters

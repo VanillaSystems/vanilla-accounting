@@ -1661,6 +1661,21 @@ non-obvious decision is recorded here when it is taken.
     «Wieder öffnen», and the API refuses `backdated: 'keep'` for it (403, `closedPeriod`).
 34. **«Wieder öffnen» from the card reopens first, then saves**: the change then touches no closed payslip and
     is saved alone; a refused reopening saves nothing.
+35. **The insurers' balances live in Lohnzahlungen**, below the month's payouts, as rows of the same list
+    (`/payroll/payments/<yyyy-mm>/insurances/<id>`, the year of the month shown): both are what the firm
+    pays out of the payslips, and §12.1 names no other tab for §6.4's page. The final statement's form sits
+    on the insurer's detail; a second total books only its difference to the first (the ref stays
+    `LS-<year>-<insurance>`), the same total books nothing.
+36. **Dokumente lists each person's Lohnausweis by her id and the firm's documents by a slug**
+    (`lohnkonto`, `declarations`, `journal`; `/payroll/documents/<year>/<doc>`). The Lohnkonto shows only
+    the months with a figure; the CSVs keep all twelve. The declarations' table has one column per person
+    and one row per base, so a capped base («bis Höchstbetrag») reads beside its uncapped one.
+37. **A person's payslip password never leaves the server once it is set**: the person page reads only
+    whether one is set (`hasMailPassword`); a generated one is shown once in the answer that set it. Before a
+    send the payslip reads its recipient, the copy and the mails sent so far from `GET
+    /api/payroll/payslips/<id>/mail`; without a sender and a mailbox the page says that no copy goes.
+    «Alle per Mail senden» shows every recipient first and then sends one mail per closed payslip, each
+    refusal named beside its person.
 
 ---
 

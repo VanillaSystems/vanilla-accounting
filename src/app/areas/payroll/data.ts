@@ -9,6 +9,10 @@ import type { EmployeeRow, MonthView, PayslipView, YearMonth } from '../../../pa
 import type { Affected, Difference, EmployeeDetail, RateWarning, SettingsView } from '../../../payroll/settings.js';
 import type { CloseWarning } from '../../../payroll/close.js';
 import type { MonthLine, PayslipCorrection } from '../../../payroll/model.js';
+import type { PaymentRow } from '../../../payroll/payments.js';
+import type { InsurerRow } from '../../../payroll/insurers.js';
+import type { DeclarationRow, Lohnkonto, LohnausweisData } from '../../../payroll/documents.js';
+import type { LohnausweisSnapshot, PayslipMail, PayslipSent } from '../../../payroll/service.js';
 
 export interface Overview {
   shown: boolean; year: string; today: string;
@@ -52,7 +56,33 @@ export const urls = {
   payslip: (id: string) => `/api/payroll/payslips/${id}`,
   settings: '/api/payroll/settings',
   employee: (id: string, year: string) => `/api/payroll/employees/${encodeURIComponent(id)}?year=${year}`,
+  payments: (month: string) => `/api/payroll/payments/${month}`,
+  insurers: (year: string) => `/api/payroll/insurances?year=${year}`,
+  documents: (year: string) => `/api/payroll/documents/${year}`,
+  mail: (id: string) => `/api/payroll/payslips/${id}/mail`,
 };
+
+/** The files the server hands out as they are: an issued Lohnausweis, the year's tables as CSV. */
+export const files = {
+  lohnausweisPdf: (year: string, id: string) => `/payroll/documents/${year}/lohnausweis/${id}.pdf`,
+  lohnausweisCsv: (year: string) => `/payroll/documents/${year}/lohnausweis.csv`,
+  lohnkontoCsv: (year: string, employee?: string) => `/payroll/documents/${year}/lohnkonto.csv${employee ? `?employee=${encodeURIComponent(employee)}` : ''}`,
+  declarationsCsv: (year: string) => `/payroll/documents/${year}/declarations.csv`,
+  journalCsv: (month: string) => `/payroll/documents/journal/${month}.csv`,
+};
+
+export interface Payments { month: string; rows: PaymentRow[] }
+export interface Insurers { year: string; rows: InsurerRow[] }
+/** An issued Lohnausweis as the list names it: its figures stay on the server, in its PDF. */
+export type Issued = Omit<LohnausweisSnapshot, 'data'>;
+export interface Documents {
+  year: string;
+  people: Array<{ employee: string; name: string; lohnausweis: LohnausweisData }>;
+  issued: Issued[];
+  declarations: DeclarationRow[];
+  lohnkonto: Lohnkonto;
+  copyToTaxOffice: boolean;
+}
 
 /** A change's answer: saved, or the card of §19.3 first. */
 export type Saved<T = object> = ({ saved: true; corrections: PayslipCorrection[]; warnings: RateWarning[] } & T) | { saved: false; affected: Affected[]; reopen?: string; warnings: RateWarning[] };
@@ -78,6 +108,13 @@ export const payrollApi = {
   copyWageType: (body: Record<string, unknown>, backdated?: Backdated) => request<Saved<{ key: string }>>('POST', '/api/payroll/wage-types', { ...body, ...(backdated ? { backdated } : {}) }),
   removeWageType: (key: string, backdated?: Backdated) => request<Saved>('DELETE', `/api/payroll/wage-types/${encodeURIComponent(key)}`, backdated ? { backdated } : undefined),
   addAccount: (number: string) => request<{ number: string; name: string }>('POST', '/api/payroll/accounts', { number }),
+  settle: (id: string, body: { year: string; total: number; date: string }) => request<{ booked: string; amount: number; debit: string; credit: string } | { booked: null }>('POST', `/api/payroll/insurances/${encodeURIComponent(id)}/settle`, body),
+  issueLohnausweis: (year: string, body: { employee: string; kind?: 'replacement' | 'correction'; confirm?: boolean }) => request<Issued | { issued: false; openMonths: string[] }>('POST', `/api/payroll/documents/${year}/lohnausweis`, body),
+  mailOf: (id: string) => request<PayslipMail>('GET', `/api/payroll/payslips/${id}/mail`),
+  send: (id: string) => request<PayslipSent>('POST', `/api/payroll/payslips/${id}/send`),
+  mailPassword: (employee: string, body: { password?: string; confirm?: boolean }) => request<{ password?: string; warn?: 'birthDate' }>('POST', `/api/payroll/employees/${encodeURIComponent(employee)}/mail-password`, body),
 };
+
+export type { PaymentRow, InsurerRow, PayslipMail, PayslipSent, LohnausweisData };
 
 export type { EmployeeDetail, SettingsView, MonthView, YearMonth, EmployeeRow, Affected, Difference };

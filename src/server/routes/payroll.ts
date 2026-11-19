@@ -15,7 +15,7 @@ import { addCorrection, chartNumbers, closePayslip, payrollContext, reopenPaysli
 import { monthView, payslipView, employeeRows, yearStrip } from '../../payroll/views.js';
 import { paymentRows } from '../../payroll/payments.js';
 import { insurerRows, settlementEntry } from '../../payroll/insurers.js';
-import { closedPayslips, issueLohnausweis, lohnausweisSnapshots, payslipsSent, sendPayslip, setMailPassword } from '../../payroll/service.js';
+import { closedPayslips, issueLohnausweis, lohnausweisSnapshots, payslipMail, payslipsSent, sendPayslip, setMailPassword } from '../../payroll/service.js';
 import { sendMail } from '../../invoices/mail.js';
 import { csv, declarationRows, journalOf, lohnausweisOf, lohnkonto } from '../../payroll/documents.js';
 import { firmWageTypes } from '../../payroll/catalogue.js';
@@ -342,6 +342,12 @@ router.get('/payroll/documents/journal/:month', run((req, res) => {
 }));
 
 // ─── payslips by mail ──────────────────────────────────────────────────────────
+
+/** Before a send: where it would go (her address, the copy), whether her password is set, the mails of this payslip so far. */
+router.get('/api/payroll/payslips/:id/mail', run((req, res) => {
+  idParts(String(req.params.id));
+  res.json(payslipMail(WS, String(req.params.id)));
+}));
 
 /** Sends a closed payslip to the person's own address, locked with her password; the copy to the sender. */
 router.post('/api/payroll/payslips/:id/send', run(async (req, res) => {

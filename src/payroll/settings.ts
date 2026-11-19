@@ -514,7 +514,8 @@ export function defaultFrom(ctx: PayrollContext, e: PayrollEmployee, today: stri
 }
 
 export interface EmployeeDetail {
-  employee: Omit<PayrollEmployee, 'socialSecurityNumber'> & { socialSecurityNumber?: string; hasSocialSecurityNumber: boolean };
+  /** The password of her payslips by mail never leaves the server after it is set: only whether one is (a generated one is shown once). */
+  employee: Omit<PayrollEmployee, 'socialSecurityNumber' | 'mailPassword'> & { socialSecurityNumber?: string; hasSocialSecurityNumber: boolean; hasMailPassword: boolean };
   /** The entries closed payslips read, as `path|validFrom|enteredAt`: they stay, a new entry corrects them. */
   used: string[];
   /** The person's months of the year, closed or open (the Zeitachse). */
@@ -531,9 +532,9 @@ export function employeeDetail(ctx: PayrollContext, id: string, year: string, to
     if (ctx.history.closed.has(pid)) return [{ month: m, status: 'closed', payslip: pid }];
     return employedFraction(e, m, 'calendar-days') > 0 ? [{ month: m, status: 'draft', payslip: pid }] : [];
   });
-  const { socialSecurityNumber, ...rest } = e;
+  const { socialSecurityNumber, mailPassword, ...rest } = e;
   return {
-    employee: { ...rest, ...(socialSecurityNumber ? { socialSecurityNumber: mask(socialSecurityNumber) } : {}), hasSocialSecurityNumber: !!socialSecurityNumber },
+    employee: { ...rest, ...(socialSecurityNumber ? { socialSecurityNumber: mask(socialSecurityNumber) } : {}), hasSocialSecurityNumber: !!socialSecurityNumber, hasMailPassword: !!mailPassword },
     used, months, defaultFrom: defaultFrom(ctx, e, today),
   };
 }

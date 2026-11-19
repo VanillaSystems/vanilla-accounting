@@ -104,7 +104,7 @@ export async function lohnausweisPdf(sheet: LohnausweisSheet, payroll: PayrollDa
   }
   // I: place and date, the employer's exact address, the person responsible and a phone number.
   y -= 10;
-  text(`I  ${L(form.letters.I)}: ${sheet.place}, ${day(sheet.day)}`, left, y, 8.5);
+  text(`I  ${L(form.letters.I)}: ${[sheet.place, day(sheet.day)].filter(Boolean).join(", ")}`, left, y, 8.5);
   y -= 13;
   const fa = sheet.firm.address;
   text([sheet.firm.name, fa ? [[fa.street, fa.number].filter(Boolean).join(' '), [fa.postcode, fa.town].join(' ')].filter((l) => l.trim()).join(', ') : ''].filter(Boolean).join(', '), left, y, 8.5);

@@ -141,3 +141,33 @@ ul.plain { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; fon
 .ftab.pacc .fr.missing { color: var(--warn); }
 .ftab.pacc .fr .m { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ftab.prun { margin-bottom: 14px; }
+
+/* Lohnzahlungen and Dokumente: a group's label in a list, the insurers' and documents' rows, a person's payment, the tables. */
+.plabel { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); font-weight: 600; margin: 8px 0 -6px; }
+.row.ins { grid-template-columns: minmax(0, 1fr) auto; }
+.row.ins .t small, .row.slip .t small, .row.pdoc .t small { display: block; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row.pdoc { grid-template-columns: 104px minmax(0, 1fr) auto; }
+.row.pdoc.firm { grid-template-columns: minmax(0, 1fr) auto; }
+.pkv { display: grid; grid-template-columns: 180px minmax(0, 1fr); gap: 6px 16px; margin: 0 0 12px; font-size: 13.5px; max-width: 760px; }
+.pkv dt { color: var(--muted); }
+.pkv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.pkv dd small { font-size: 12px; }
+.plinks { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; margin: 14px 0 0; }
+.pwshown { font-size: 18px; letter-spacing: .06em; margin: 0; user-select: all; color: var(--ink); }
+.pmail .acts { display: flex; gap: 8px; margin: 6px 0; }
+.ftab.pla .fh, .ftab.pla .fr { grid-template-columns: 56px minmax(0, 1fr) 110px; }
+.ftab.pla .fr.tot { font-weight: 600; border-top: 1px solid var(--line-2); }
+.docbody.wide { max-width: none; }
+.pscroll { overflow-x: auto; width: fit-content; max-width: 100%; border: 1px solid var(--line); border-radius: 10px; }
+.ptable { border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.ptable th, .ptable td { padding: 5px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; text-align: left; }
+.ptable th { color: var(--muted); font-weight: 600; font-size: 11px; background: var(--bg); position: sticky; top: 0; }
+.ptable th:first-child, .ptable td:first-child { position: sticky; left: 0; background: var(--bg); }
+.ptable .r { text-align: right; }
+.ptable tr.tot td { font-weight: 600; border-top: 1px solid var(--line-2); }
+.ptable tr:last-child td { border-bottom: 0; }
+@container (max-width: 560px) {
+  .pkv { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .pkv dd { margin-bottom: 6px; }
+}
+.pcard p { margin: 0; font-size: 13px; }

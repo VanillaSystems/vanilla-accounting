@@ -19,7 +19,7 @@ import type { PayslipClose, PayslipLine } from '../../../payroll/model.js';
 import type { PayslipDraft } from '../../../payroll/compute.js';
 import type { WageType } from '../../../payroll/catalogue.js';
 import type { AreaProps, Nav } from '../index.js';
-import { payrollApi, reloadPayroll, urls, usePayroll, type Payslip, type SettingsView } from './data.js';
+import { payrollApi, reloadPayroll, urls, usePayroll, type Payslip, type PayslipMail, type PayslipSent, type SettingsView } from './data.js';
 import type { MonthView } from '../../../payroll/views.js';
 import { at, Disclaimer, employeeAt, Go, MonthSwitch, payslipAt, settingsAt, Tabs, type PayrollRoute } from './common.js';
 import { data, factText, labelOf, missingText, monthText, pct, warningText } from './words.js';
@@ -78,6 +78,7 @@ function MonthRows({ view, selected, nav, canEdit }: Props & { view: MonthView; 
         })}
       </div>
       {canEdit && view.closed < view.of ? <CloseAll view={view} nav={nav} /> : null}
+      {canEdit && view.closed > 0 ? <SendAll view={view} nav={nav} /> : null}
       {canEdit ? <MonthText view={view} nav={nav} /> : null}
     </>
   );
@@ -108,6 +109,51 @@ function CloseAll({ view, nav }: { view: MonthView; nav: Nav }) {
           </div>
         </div>
       ) : <AsyncButton type="button" className="btn" onClick={() => run(false)}>{t('payroll.closeAll')}</AsyncButton>}
+    </div>
+  );
+}
+
+/** «An …» and the blind copy, or that there is none: no sender and no mailbox set up. */
+const toText = (to: string, copy: string | undefined): string => (copy ? t('payroll.mail.toCopy', { to, copy }) : t('payroll.mail.toNoCopy', { to }));
+
+/** «Alle per Mail senden»: each closed payslip's recipient shown first, then one mail each; what was refused says why. */
+function SendAll({ view, nav }: { view: MonthView; nav: Nav }) {
+  const closed = view.rows.filter((r) => r.status === 'closed');
+  const [plan, setPlan] = useState<Array<{ id: string; name: string; mail?: PayslipMail; refused?: string }> | null>(null);
+  const [done, setDone] = useState<Array<{ id: string; name: string; sent?: PayslipSent; refused?: string }> | null>(null);
+  const prepare = async () => {
+    setDone(null);
+    setPlan(await Promise.all(closed.map((r) => payrollApi.mailOf(r.id).then((mail) => ({ id: r.id, name: r.name, mail }), (e: unknown) => ({ id: r.id, name: r.name, refused: errorText(e) })))));
+  };
+  const send = async () => {
+    const out: NonNullable<typeof done> = [];
+    for (const p of plan ?? []) {
+      try { out.push({ id: p.id, name: p.name, sent: await payrollApi.send(p.id) }); } catch (e) { out.push({ id: p.id, name: p.name, refused: errorText(e) }); }
+    }
+    setPlan(null);
+    setDone(out);
+    nav.toast(t('payroll.mail.sentN', { n: out.filter((o) => o.sent).length }));
+    await reloadPayroll();
+  };
+  return (
+    <div className="closeall">
+      {plan ? (
+        <div className="pcard" data-testid="send-all">
+          <h4>{t('payroll.mail.allTitle', { month: monthText(view.month) })}</h4>
+          <ul>{plan.map((p) => <li key={p.id}><b>{p.name}</b> · {p.refused ?? (p.mail?.to ? toText(p.mail.to, p.mail.copyTo) : <span className="neg">{t('error.payroll.noEmail')}</span>)}{p.mail && !p.mail.password ? <span className="neg"> · {t('payroll.mail.noPassword')}</span> : null}</li>)}</ul>
+          <p className="m">{t('payroll.mail.lockedText')}</p>
+          <div className="acts">
+            <AsyncButton type="button" className="btn primary" onClick={send}>{t('payroll.mail.sendN', { n: plan.length })}</AsyncButton>
+            <button type="button" className="btn ghost" onClick={() => setPlan(null)}>{t('common.cancel')}</button>
+          </div>
+        </div>
+      ) : <AsyncButton type="button" className="btn ghost" onClick={prepare}>{t('payroll.mail.all')}</AsyncButton>}
+      {done ? (
+        <div className={`pcard${done.some((d) => d.refused) ? ' warnpanel' : ''}`} role="status" data-testid="send-all-done">
+          <ul>{done.map((d) => <li key={d.id}><b>{d.name}</b> · {d.sent ? t('payroll.mail.sentTo', { to: d.sent.to }) : d.refused}</li>)}</ul>
+          <button type="button" className="quiet2" onClick={() => setDone(null)}>{t('payroll.mail.dismiss')}</button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -198,6 +244,7 @@ function SlipView({ v, types, nav, canEdit }: Props & { v: Payslip; types: Map<s
       {!closed && canEdit ? <><MonthLines v={v} types={types} nav={nav} /><AddLine v={v} types={types} nav={nav} /></> : null}
       <Booking v={v} />
       {canEdit ? (closed ? <ClosedActions v={v} types={types} nav={nav} /> : <CloseAction v={v} nav={nav} />) : null}
+      {closed ? <Mail v={v} nav={nav} canEdit={canEdit} /> : null}
       <Corrections v={v} nav={nav} types={types} />
       <History v={v} types={types} />
     </div>
@@ -457,6 +504,37 @@ function ClosedActions({ v, types, nav }: { v: Payslip; types: Map<string, WageT
             <button type="button" className="btn ghost" onClick={() => setMode('none')}>{t('common.cancel')}</button>
           </div>
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** «Per Mail senden»: where it goes and the copy, shown before; a refusal in the page; every mail sent, from the log. */
+function Mail({ v, nav, canEdit }: { v: Payslip; nav: Nav; canEdit: boolean }) {
+  const load = usePayroll<PayslipMail>(urls.mail(v.id));
+  const [refused, setRefused] = useState<string | null>(null);
+  if (load.state !== 'ready') return null;
+  const m = load.data;
+  const person = <Go nav={nav} loc={employeeAt(v.employee)}>{t('payroll.mail.toPerson')}</Go>;
+  const send = async () => {
+    try {
+      const r = await payrollApi.send(v.id);
+      setRefused(null);
+      nav.toast(t('payroll.mail.sentTo', { to: r.to }));
+      await reloadPayroll();
+    } catch (e) { setRefused(errorText(e)); }
+  };
+  return (
+    <div className="psec pmail" data-testid="payslip-mail">
+      <h3>{t('payroll.mail.title')}</h3>
+      {m.to ? <p className="m" data-testid="mail-to">{toText(m.to, m.copyTo)}</p> : <p className="warnline">{t('error.payroll.noEmail')} · {person}</p>}
+      {!m.password ? <p className="warnline">{t('payroll.mail.noPassword')} · {person}</p> : <p className="m">{t('payroll.mail.lockedText')}</p>}
+      {canEdit ? <div className="acts"><AsyncButton type="button" className="btn" onClick={send}>{t(m.sent.length ? 'payroll.mail.again' : 'payroll.mail.send')}</AsyncButton></div> : null}
+      {refused ? <div className="pcard warnpanel" role="alert" data-testid="mail-refused"><h4>{t('payroll.mail.refused')}</h4><p>{refused}</p><button type="button" className="quiet2" onClick={() => setRefused(null)}>{t('payroll.mail.dismiss')}</button></div> : null}
+      {m.sent.length ? (
+        <ul className="plain" data-testid="mail-log">
+          {m.sent.map((s) => <li key={s.messageId + s.at} className="m">{t('payroll.mail.logLine', { ...when(s.at), to: toText(s.to, s.copyTo) })}</li>)}
+        </ul>
       ) : null}
     </div>
   );

@@ -241,6 +241,9 @@ function Person({ d, settings, nav, canEdit }: Props & { d: EmployeeDetail; sett
         <DatedField label={t('payroll.field.email')} path={`${base}/email`} history={e.email} spec={textSpec(t('payroll.field.email'))} {...common} />
         <DatedField label={t('payroll.field.permit')} path={`${base}/permit`} history={e.permit} spec={textSpec(t('payroll.field.permit'))} {...common} />
       </Section>
+      <Section title={t('payroll.sec.mail')}>
+        <MailPassword e={e} nav={nav} canEdit={canEdit} />
+      </Section>
       <Section title={t('payroll.sec.employment')}>
         <DatedField label={t('payroll.sec.employment')} path={`${base}/employment`} history={e.employment} spec={employmentSpec()} {...common} />
         {canEdit ? <Exit e={e} nav={nav} /> : null}
@@ -265,6 +268,67 @@ function Person({ d, settings, nav, canEdit }: Props & { d: EmployeeDetail; sett
       <Section title={t('payroll.sec.tax')}>
         <DatedField label={t('payroll.sec.tax')} path={`${base}/taxAtSource`} history={e.taxAtSource} spec={taxSpec()} {...common} note={t('payroll.employee.taxNote')} />
       </Section>
+    </div>
+  );
+}
+
+/**
+ * The password her payslips by mail are locked with (§11): set hers, or have one made and shown once, here
+ * only; a date of birth in it warns in the page first (others know it), then «Trotzdem verwenden».
+ */
+function MailPassword({ e, nav, canEdit }: { e: EmployeeDetail['employee']; nav: Nav; canEdit: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState('');
+  const [warn, setWarn] = useState(false);
+  const [shown, setShown] = useState<string | null>(null);
+  const run = async (password: string | undefined, confirm = false) => {
+    try {
+      const r = await payrollApi.mailPassword(e.id, { ...(password ? { password } : {}), ...(confirm ? { confirm } : {}) });
+      if (r.warn) { setWarn(true); return; }
+      setWarn(false); setOpen(false); setValue('');
+      if (r.password) setShown(r.password); else { setShown(null); nav.toast(t('payroll.password.set')); }
+      await reloadPayroll();
+    } catch (x) { nav.toast(errorText(x)); }
+  };
+  const save = async (ev: FormEvent) => { ev.preventDefault(); await run(value.trim() || undefined); };
+  return (
+    <div className="dated" data-testid="mail-password">
+      <span className="dlabel">{t('payroll.password.label')}</span>
+      <div className="dbody">
+        <div className="dnow">
+          <span className={e.hasMailPassword ? 'pstate closed' : 'pstate draft'}>{t(e.hasMailPassword ? 'payroll.password.isSet' : 'payroll.password.notSet')}</span>
+          {canEdit && !open ? <button type="button" className="quiet2" onClick={() => { setOpen(true); setShown(null); }}>{t(e.hasMailPassword ? 'payroll.password.change' : 'payroll.password.setOne')}</button> : null}
+        </div>
+        <span className="m">{t('payroll.password.lead')}</span>
+        {shown ? (
+          <div className="pcard" role="status" data-testid="password-shown">
+            <h4>{t('payroll.password.generated')}</h4>
+            <p className="pwshown mono">{shown}</p>
+            <p className="m">{t('payroll.password.once')}</p>
+            <button type="button" className="quiet2" onClick={() => setShown(null)}>{t('payroll.password.noted')}</button>
+          </div>
+        ) : null}
+        {warn ? (
+          <div className="pcard warnpanel" role="alert" data-testid="password-birthdate">
+            <h4>{t('payroll.password.birthDateTitle')}</h4>
+            <p className="m">{t('payroll.password.birthDate')}</p>
+            <div className="acts">
+              <AsyncButton type="button" className="btn primary" onClick={() => run(value.trim(), true)}>{t('payroll.password.anyway')}</AsyncButton>
+              <button type="button" className="btn ghost" onClick={() => setWarn(false)}>{t('payroll.close.back')}</button>
+            </div>
+          </div>
+        ) : null}
+        {open && !warn ? (
+          <AsyncForm className="form inline pform" onSubmit={save}>
+            <label className="wide">{t('payroll.password.own')}<input name="password" type="text" autoComplete="off" spellCheck={false} className="mono" value={value} onChange={(x) => setValue(x.target.value)} /><span className="fhint">{t('payroll.password.rules')}</span></label>
+            <div className="acts">
+              <AsyncButton type="submit" className="btn primary" disabled={!value.trim()}>{t('payroll.password.save')}</AsyncButton>
+              <AsyncButton type="button" className="btn" onClick={() => run(undefined)}>{t('payroll.password.generate')}</AsyncButton>
+              <button type="button" className="btn ghost" onClick={() => { setOpen(false); setValue(''); }}>{t('common.cancel')}</button>
+            </div>
+          </AsyncForm>
+        ) : null}
+      </div>
     </div>
   );
 }

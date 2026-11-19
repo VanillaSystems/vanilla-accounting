@@ -130,6 +130,18 @@ Two markers flag an entry you must read before you update:
   payslips it would change and by how much; «Rückwirkende Korrektur» carries each difference into the next
   open month, «So lassen» keeps the closed payslip, which then says what differs. A rate outside its usual
   range is said, never refused. An AHV number is checked by its check digit. Works without the AI.
+- Payroll, the Löhne area's Lohnzahlungen and Dokumente tabs (phase B0): Lohnzahlungen lists a month's
+  payouts (person, IBAN, amount, purpose «Lohn MM/YYYY», value date), each «bezahlt» with its bank line and
+  entries once the statement brought it, and per insurer of the year what the payslips accrued, what was
+  paid, what is open, with the final statement (Schlussabrechnung) whose total the person enters and whose
+  difference the app books. Dokumente shows per year each person's Lohnausweis by the form's fields, the
+  months still open (a warning, then «Trotzdem erstellen»), «Lohnausweis erstellen», later «ersetzen» or
+  «korrigieren», every issue with its PDF, the canton's wish for a copy to the tax office as a fact; the
+  Lohnkonto, the annual declarations' figures and the Lohnbuchungen, each with its CSV. A closed payslip
+  has «Per Mail senden» (the recipient and the copy shown first, a refusal said in the page, every mail
+  sent listed), a month «Alle per Mail senden»; a person's page sets or generates her payslip password,
+  shown once, and warns before one that holds her date of birth. The password never leaves the server
+  once set. Works without the AI.
 
 ### Fixed
 
