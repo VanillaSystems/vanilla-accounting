@@ -62,6 +62,9 @@ test('§6.1 a card until it is kept: keeping writes the insurance and the person
   keepSetupCard(store, data, 'dec', [{ kind: 'ahv', name: 'Ausgleichskasse Beispiel', memberNumber: '100.2345', code: 'A', rates: { adminCost: 2.5 }, validFrom: '2026-01-01' }, { kind: 'fak', code: 'A', rates: { employer: 1.6 }, validFrom: '2026-01-01' }], () => `in${n++}`, '2026-01-11T00:00:00.000Z');
   const fak = store.insurances.find((i) => i.kind === 'fak')!;
   assert.deepEqual(fak.solutions[0].rates.at(-1)!.value, { employer: 1.6 }, 'the firm\'s FAK gets the rate as a dated entry');
+  const uvg = store.insurances.find((i) => i.kind === 'uvg')!;
+  keepSetupCard(store, data, 'pol', [{ kind: 'uvg', code: uvg.solutions[0].code, rates: { bu: 0.12, nbu: 1.35 }, validFrom: '2026-01-01' }], () => `in${n++}`, '2026-01-12T00:00:00.000Z');
+  assert.deepEqual(uvg.solutions[0].rates.at(-1)!.value, { ...uvg.solutions[0].rates[0].value, bu: 0.12, nbu: 1.35 }, 'a rate the policy does not name holds on');
   assert.equal(fak.solutions[0].rates.at(-1)!.source?.receiptId, 'dec');
   assert.deepEqual(setupCards(receipts, store, data, {}), []);
 });

@@ -677,7 +677,9 @@ export function keepSetupCard(store: PayrollStore, data: PayrollData, receiptId:
       if (Object.keys(rates).length && !data.insurances[item.kind].perPerson) {
         const code = optStr(item.code) ?? ins.solutions[0]?.code ?? 'A';
         if (!ins.solutions.some((s) => s.code === code)) out.warnings.push(...addSolution(store, data, ins.id, { code, validFrom: item.validFrom, rates: {} }, now));
-        out.warnings.push(...addDatedEntry(store, data, { path: `insurances/${ins.id}/solutions/${code}/rates`, validFrom: item.validFrom, value: rates, receiptId }, now).warnings);
+        // A rate the document does not name (the NBU's employer share on a policy) holds on as it was.
+        const current = ins.solutions.find((s) => s.code === code)?.rates.at(-1)?.value ?? {};
+        out.warnings.push(...addDatedEntry(store, data, { path: `insurances/${ins.id}/solutions/${code}/rates`, validFrom: item.validFrom, value: { ...current, ...rates }, receiptId }, now).warnings);
       }
     }
     out.insurances.push(ins.id);

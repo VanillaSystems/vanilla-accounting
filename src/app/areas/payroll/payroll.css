@@ -181,3 +181,4 @@
 [data-area="payroll"] .setupcard { border-style: dashed; border-color: var(--accent); }
 [data-area="payroll"] .setupcard .setupitem { display: contents; }
 [data-area="payroll"] .setupcard .setupitem > b { grid-column: 1 / -1; font-size: 13px; }
+[data-area="payroll"] .setupcard .inshead { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
