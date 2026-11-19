@@ -201,7 +201,9 @@ export type PayslipEvent =
   | {
     event: 'correction'; id: string; of: string; wageType: string; side: 'employee' | 'employer';
     amount: number; base?: number; rateDiff?: number; text?: string; at: string; by: 'person';
-  };
+  }
+  /** «So lassen» (§19.3): a change dated back over this closed payslip was kept without a correction; history only. */
+  | { event: 'keep'; id: string; at: string; by: 'person'; path: string; validFrom?: string };
 
 export type PayslipClose = Extract<PayslipEvent, { event: 'close' }>;
 export type PayslipCorrection = Extract<PayslipEvent, { event: 'correction' }>;

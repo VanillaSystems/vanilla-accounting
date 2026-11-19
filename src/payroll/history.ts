@@ -26,7 +26,7 @@ export function historyOf(events: readonly PayslipEvent[]): PayslipHistory {
     byId.set(id, [...(byId.get(id) ?? []), e]);
     if (e.event === 'close') closed.set(e.id, e);
     else if (e.event === 'reopen') closed.delete(e.id);
-    else corrections.push(e);
+    else if (e.event === 'correction') corrections.push(e);
   }
   const carriedBy = new Map<string, string>();
   for (const c of closed.values()) for (const l of c.lines) if (l.correction) carriedBy.set(l.correction, c.id);

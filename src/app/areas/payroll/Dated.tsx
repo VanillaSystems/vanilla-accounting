@@ -93,8 +93,10 @@ export function useBackdated(nav: Nav, kind?: string) {
   const choose = async (how: Backdated, reopen?: string) => {
     if (!card) return;
     try {
-      const r = await card.retry(how);
+      // «Wieder öffnen»: the month opens first; the change then touches no closed payslip and saves alone. A refused reopening saves nothing.
       if (reopen) await payrollApi.reopen(reopen);
+      const r = await card.retry(how);
+      if (!r.saved) { setCard({ ...card, res: r }); return; }
       await finish(r, card.done);
     } catch (e) { nav.toast(errorText(e)); }
   };
@@ -102,19 +104,25 @@ export function useBackdated(nav: Nav, kind?: string) {
   return { send, node, open: !!card };
 }
 
+const signed = (x: number): string => `${x > 0 ? '+' : ''}${fmt(x)}`;
+
 function BackdatedCard({ res, onChoose, onCancel }: { res: Extract<Saved, { saved: false }>; onChoose(how: Backdated, reopen?: string): Promise<void>; onCancel(): void }) {
+  const closedPeriod = res.affected.some((a) => a.closedPeriod);
   return (
     <div className="pcard warnpanel" role="alert" data-testid="backdated-card">
       <h4>{t('payroll.backdated.title', { n: res.affected.length })}</h4>
       {res.affected.map((a) => (
         <div key={a.payslip} className="affected">
-          <b>{t('payroll.backdated.payslip', { month: monthText(a.month), name: a.name })}</b>
+          <b>{t('payroll.backdated.payslip', { month: monthText(a.month), name: a.name })}</b>{a.closedPeriod ? <span className="m"> · {t('payroll.backdated.closedPeriod')}</span> : null}
           <ul>
-            {a.differences.map((d) => (
+            {a.differences.filter((d) => d.carry).map((d) => (
               <li key={`${d.wageType}|${d.side}`}>
-                {t('payroll.backdated.line', { label: d.label, before: fmt(d.before), after: fmt(d.after), diff: `${d.diff > 0 ? '+' : ''}${fmt(d.diff)}` })}
+                {t('payroll.backdated.line', { label: d.label, before: fmt(d.before), after: fmt(d.after), diff: signed(d.diff) })}
               </li>
             ))}
+            {a.differences.some((d) => !d.carry) ? (
+              <li className="m">{t('payroll.backdated.follows', { list: a.differences.filter((d) => !d.carry).map((d) => `${d.label} ${signed(d.diff)}`).join(', ') })}</li>
+            ) : null}
           </ul>
         </div>
       ))}
@@ -122,10 +130,10 @@ function BackdatedCard({ res, onChoose, onCancel }: { res: Extract<Saved, { save
       <div className="acts">
         <AsyncButton type="button" className="btn primary" onClick={() => onChoose('correct')}>{t('payroll.backdated.correct')}</AsyncButton>
         {res.reopen ? <AsyncButton type="button" className="btn" onClick={() => onChoose('keep', res.reopen)}>{t('payroll.backdated.reopen')}</AsyncButton> : null}
-        <AsyncButton type="button" className="btn" onClick={() => onChoose('keep')}>{t('payroll.backdated.keep')}</AsyncButton>
+        {closedPeriod ? null : <AsyncButton type="button" className="btn" onClick={() => onChoose('keep')}>{t('payroll.backdated.keep')}</AsyncButton>}
         <button type="button" className="btn ghost" onClick={onCancel}>{t('common.cancel')}</button>
       </div>
-      <p className="m">{t('payroll.backdated.ways')}</p>
+      <p className="m">{t(closedPeriod ? 'payroll.backdated.waysClosed' : 'payroll.backdated.ways')}</p>
     </div>
   );
 }

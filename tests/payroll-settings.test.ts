@@ -102,6 +102,34 @@ test('the Lohnart layer: a rename, a copy, and a copy a closed payslip used stay
   assert.throws(() => removeWageType(store, historyOf(events), 'copy-1'), refused('used'));
   assert.throws(() => removeWageType(store, historyOf(events), 'bonus'), refused('badInput'), 'a catalogue Lohnart is never removed');
   assert.throws(() => copyWageType(store, data, { copyOf: 'ahv-an', label: 'X' }, 'copy-2'), refused('badInput'));
+  // A copy of a copy: the first stays while the second names it (else every read would fail).
+  copyWageType(store, data, { copyOf: 'gratifikation', label: 'A' }, 'copy-a');
+  copyWageType(store, data, { copyOf: 'copy-a', label: 'B' }, 'copy-b');
+  assert.throws(() => removeWageType(store, historyOf([]), 'copy-a'), refused('used'));
+  removeWageType(store, historyOf([]), 'copy-b');
+  removeWageType(store, historyOf([]), 'copy-a');
+});
+
+test('§19.3 a backdated raise: the wage difference is carried and its contributions are charged once, to the cent', () => {
+  const store = firm();
+  const events = closedThrough(store, '2026-09');
+  const next = structuredClone(store);
+  addDatedEntry(next, data, { path: 'employees/e1/employment', validFrom: '2026-08-01', value: { kind: 'monthly', amount: 11000, pensum: 100, hoursPerWeek: 42, holidayDays: 25 } }, NOW);
+  const ctx = ctxOf(store, events);
+  const affected = affectedBy(ctx, next);
+  const aug = affected[0].differences;
+  assert.equal(aug.find((d) => d.wageType === 'ahv-an')?.diff, 53, 'the card names the contribution difference');
+  assert.equal(aug.find((d) => d.wageType === 'ahv-an')?.carry, false, 'but it follows from the wage');
+  let n = 0;
+  const corrections = backdatedCorrections(ctx, affected, () => `co_${++n}`, NOW);
+  assert.deepEqual(corrections.map((c) => [c.wageType, c.amount]), [['monatslohn', 1000]]);
+  const sep = computePayslip(ctxOf(next, [...events, ...corrections]), 'e1', '2026-09')!;
+  // September at 11'000 plus August's 1'000: AHV 5.3 % of 12'000, once.
+  assert.equal(amountOf(sep, 'ahv-an'), 636);
+  assert.equal(sep.lines.filter((l) => l.wageType === 'ahv-an').length, 1);
+  assert.equal(amountOf(sep, 'ahv-ag'), 636);
+  const after = ctxOf(next, [...events, ...corrections]);
+  assert.deepEqual(driftOf(after, after.history.closed.get('2026-08-e1')!), [], 'August shows nothing left to correct');
 });
 
 test('the accounts the payroll books on, and which the chart lacks', () => {
@@ -210,6 +238,36 @@ test('routes: «So lassen» saves the entry alone; the closed month says what di
   assert.deepEqual(r.json.corrections, []);
   const aug = await api.send('GET', '/api/payroll/payslips/2026-08-e1');
   assert.deepEqual((aug.json.drift as Array<{ wageType: string }>).map((d) => d.wageType).sort(), ['ktg-ag', 'ktg-an']);
+  const kept = (aug.json.history as PayslipEvent[]).filter((e) => e.event === 'keep');
+  assert.deepEqual(kept.map((e) => e.event === 'keep' && [e.id, e.path, e.validFrom]), [['2026-08-e1', 'insurances/ktg/solutions/A/rates', '2026-08-01']], '«So lassen» is in the payslip\'s history');
+  assert.equal((aug.json.slip as { lines: unknown[] }).lines.length > 0 && aug.json.status, 'closed', 'and changes nothing closed');
+});
+
+test('routes: a payslip of a closed period is only corrected: «So lassen» refused, the card says it', async () => {
+  const body = { path: 'insurances/ak/solutions/A/rates', validFrom: '2026-05-01', value: { adminCost: 3.5 } };
+  const card = await api.send('POST', '/api/payroll/entries', body);
+  assert.equal(card.json.saved, false);
+  const affected = card.json.affected as Array<{ month: string; closedPeriod: boolean }>;
+  assert.deepEqual(affected.map((a) => [a.month, a.closedPeriod]), [['2026-05', true], ['2026-06', true], ['2026-07', false], ['2026-08', false]]);
+  const keep = await api.send('POST', '/api/payroll/entries', { ...body, backdated: 'keep' });
+  assert.equal(keep.status, 403);
+  assert.equal((keep.json.params as { why: string }).why, 'closedPeriod');
+  assert.equal(loadPayroll(api.ws).insurances[0].solutions[0].rates.length, 1, 'nothing saved');
+});
+
+test('routes: a refusal names its field and never the number; something gone has its own reason', async () => {
+  const bad = await api.send('POST', '/api/payroll/entries', { path: 'employees/e1/employment', validFrom: '2026-13-01', value: { kind: 'monthly', amount: 1 } });
+  assert.deepEqual(bad.json.params, { why: 'badInput', field: 'validFrom' });
+  const ssn = ['756', '9217', '0769', '86'].join('-');
+  const wrong = await api.send('PATCH', '/api/payroll/employees/e1', { socialSecurityNumber: ssn });
+  assert.equal((wrong.json.params as { why: string }).why, 'socialSecurityNumber');
+  assert.ok(!JSON.stringify(wrong.json).includes(ssn.replace(/-/g, '')) && !JSON.stringify(wrong.json).includes(ssn), 'the number is not echoed');
+  const gone = await api.send('POST', '/api/payroll/entries', { path: 'employees/nobody/name', validFrom: '2026-01-01', value: { first: 'A', last: 'B' } });
+  assert.deepEqual([gone.status, (gone.json.params as { why: string }).why], [404, 'gone']);
+  const proto = await api.send('POST', '/api/payroll/insurances', { kind: 'constructor', name: 'X', validFrom: '2026-01-01' });
+  assert.equal(proto.status, 400, 'a key of Object is no kind');
+  const protoRate = await api.send('POST', '/api/payroll/entries', { path: 'insurances/ak/solutions/A/rates', validFrom: '2027-01-01', value: { toString: 1 } });
+  assert.equal(protoRate.status, 400);
 });
 
 test('routes: an insurance with a rate outside its range is saved with the warning; «Konto anlegen»', async () => {

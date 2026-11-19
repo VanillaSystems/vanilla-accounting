@@ -14,33 +14,45 @@ import { computePayslip, employedFraction, type PayrollContext, type PayslipDraf
 import { closedOf, latestClosed, type PayslipHistory } from './history.js';
 import { correctionOf, PayrollRefusal } from './close.js';
 import type {
-  Employment, PayrollEmployee, PayrollInsurance, PayrollLanguage, PayrollStore, PayslipClose, PayslipCorrection, PersonInsurances, TaxAtSource, WageTypeLayer,
+  Employment, PayrollEmployee, PayrollInsurance, PayrollLanguage, PayrollStore, PayslipClose, PayslipCorrection, PayslipEvent, PersonInsurances, TaxAtSource, WageTypeLayer,
 } from './model.js';
 import { payslipId } from './model.js';
 import { firstDay, monthsBetween, nextMonth, round2 } from './money.js';
 
 const LANGUAGES: readonly PayrollLanguage[] = ['de', 'fr', 'it', 'en'];
-const bad = (what: string): never => { throw new PayrollRefusal('badInput', what); };
+/** The input a German label names, as the UI's `payroll.field.*` key: a refusal says which field it is about. */
+const FIELD_OF: Record<string, string> = {
+  Vorname: 'first', Nachname: 'last', Name: 'name', PLZ: 'postcode', Ort: 'town', IBAN: 'iban', Lohn: 'salary', Pensum: 'pensum',
+  'Stunden pro Woche': 'hoursPerWeek', Ferientage: 'holidayDays', '13. Monatslohn: Monat': 'thirteenth', 'Anteil Arbeitnehmer': 'certEmployee',
+  'Beitrag Arbeitnehmer': 'certEmployee', 'Anteil Arbeitgeber': 'certEmployer', 'Beitrag Arbeitgeber': 'certEmployer', Menge: 'quantity', Ansatz: 'unitRate',
+  Betrag: 'amount', 'Gilt ab': 'validFrom', 'Gilt bis': 'validUntil', Geburtsdatum: 'birthDate', Eintritt: 'entry', Code: 'code', Kanton: 'canton',
+  Zahltag: 'payday', Bewilligung: 'permit', 'E-Mail': 'email', Lohnart: 'wageType', Bezeichnung: 'label',
+};
+const bad = (what: string, field?: string): never => { throw new PayrollRefusal('badInput', what, field); };
+/** Something the request names that is not there (a person, an insurance, a solution, an entry). */
+const gone = (what: string): never => { throw new PayrollRefusal('gone', what); };
+/** An own key of a record from data or a request: never one of Object's («constructor», «toString»). */
+const own = <T>(r: Readonly<Record<string, T>> | undefined, k: string): T | undefined => (r && Object.hasOwn(r, k) ? r[k] : undefined);
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
-const str = (v: unknown, what: string): string => (typeof v === 'string' && v.trim() ? v.trim() : bad(`${what} fehlt.`));
+const str = (v: unknown, what: string): string => (typeof v === 'string' && v.trim() ? v.trim() : bad(`${what} fehlt.`, FIELD_OF[what]));
 const optStr = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
 const num = (v: unknown, what: string, min = -Infinity, max = Infinity): number =>
-  (typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : bad(`${what}: eine Zahl${min > -Infinity ? ` ab ${min}` : ''}${max < Infinity ? ` bis ${max}` : ''}.`));
+  (typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max ? v : bad(`${what}: eine Zahl${min > -Infinity ? ` ab ${min}` : ''}${max < Infinity ? ` bis ${max}` : ''}.`, FIELD_OF[what] ?? 'rate'));
 const optNum = (v: unknown, what: string, min?: number, max?: number): number | undefined => (v === undefined || v === null || v === '' ? undefined : num(v, what, min, max));
-const day = (v: unknown, what: string): string => (isDay(v) ? v : bad(`${what}: ein Tag JJJJ-MM-TT.`));
+const day = (v: unknown, what: string): string => (isDay(v) ? v : bad(`${what}: ein Tag JJJJ-MM-TT.`, FIELD_OF[what]));
 const clean = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
 
 // ─── the social security number ────────────────────────────────────────────────
 
 /**
  * The number as the jurisdiction writes it (payroll.yaml `socialSecurityNumber`): its pattern, and its
- * check digit where the data names the method. Separators may be dots, spaces or none; it is kept with dots.
+ * check digit where the data names the method. Separators may be dots, spaces, hyphens or none; it is kept with dots. A refusal never repeats the number.
  */
 export function socialSecurityNumberOf(raw: string, data: PayrollData): string {
-  const digits = raw.replace(/[.\s]/g, '');
+  const digits = raw.replace(/[.\s-]/g, '');
   const spec = data.socialSecurityNumber;
-  if (!/^\d+$/.test(digits) || !new RegExp(`^(?:${spec.pattern})$`).test(digits)) throw new PayrollRefusal('socialSecurityNumber', `${raw} ist keine gültige Nummer.`);
-  if (spec.checkDigit === 'ean13' && !ean13(digits)) throw new PayrollRefusal('socialSecurityNumber', `${raw}: die Prüfziffer stimmt nicht.`);
+  if (!/^\d+$/.test(digits) || !new RegExp(`^(?:${spec.pattern})$`).test(digits)) throw new PayrollRefusal('socialSecurityNumber', 'Keine gültige Nummer.', 'ssn');
+  if (spec.checkDigit === 'ean13' && !ean13(digits)) throw new PayrollRefusal('socialSecurityNumber', 'Die Prüfziffer stimmt nicht.', 'ssn');
   return digits.length === 13 ? `${digits.slice(0, 3)}.${digits.slice(3, 7)}.${digits.slice(7, 11)}.${digits.slice(11)}` : digits;
 }
 
@@ -111,7 +123,7 @@ function targetOf(store: PayrollStore, data: PayrollData, path: string): Target 
   if (parts[0] === 'insurances' && parts.length === 5 && parts[2] === 'solutions' && parts[4] === 'rates') {
     const ins = insuranceById(store, parts[1]);
     const s = ins.solutions.find((x) => x.code === parts[3]);
-    if (!s) throw new PayrollRefusal('notFound', `Lösung ${parts[3]} gibt es nicht.`);
+    if (!s) return gone(`Lösung ${parts[3]} gibt es nicht.`);
     return {
       history: () => s.rates,
       write: (h) => { s.rates = h as typeof s.rates; },
@@ -176,8 +188,8 @@ function insurancesValue(v: unknown, store: PayrollStore, data: PayrollData): Pe
   for (const [kind, x] of Object.entries(v)) {
     if (x === undefined || x === null) continue;
     if (kind === 'pensioner') { out.pensioner = x === 'allowance' || x === 'waiver' ? x : bad('Rentner: Freibetrag oder Verzicht.'); continue; }
-    const def = data.insurances[kind];
-    if (!def) bad(`Versicherung ${kind} gibt es nicht.`);
+    const def = own(data.insurances, kind);
+    if (!def) return bad(`Versicherung ${kind} gibt es nicht.`);
     if (!isObj(x)) return bad(`${kind}: die Versicherung und die Lösung.`);
     const ins = store.insurances.find((i) => i.id === x.insurance && i.kind === kind) ?? bad(`${kind}: diese Versicherung hat die Firma nicht.`);
     if (def.perPerson) {
@@ -209,12 +221,12 @@ function recurringValue(v: unknown, quantity: boolean) {
 /** The rates of a solution, by the kind's rate keys; a value outside its range is a warning. */
 function ratesValue(kind: string, v: unknown, data: PayrollData): { value: Record<string, number>; warnings: RateWarning[] } {
   if (!isObj(v)) return bad('Die Sätze.');
-  const defs = data.insurances[kind]?.rates ?? {};
+  const defs = own(data.insurances, kind)?.rates ?? {};
   const value: Record<string, number> = {};
   const warnings: RateWarning[] = [];
   for (const [k, x] of Object.entries(v)) {
     if (x === undefined || x === null || x === '') continue;
-    const def = defs[k] ?? bad(`${k} ist kein Satz dieser Versicherung.`);
+    const def = own(defs, k) ?? bad(`${k} ist kein Satz dieser Versicherung.`, 'rate');
     value[k] = num(x, def.label.de);
     if (value[k] < def.range[0] || value[k] > def.range[1]) warnings.push({ key: k, value: value[k], range: def.range });
   }
@@ -245,15 +257,15 @@ export const usedByCloses = (history: PayslipHistory, path: string, key: { valid
 export function withdrawDatedEntry(store: PayrollStore, data: PayrollData, history: PayslipHistory, path: string, key: { validFrom: string; enteredAt: string }): void {
   const target = targetOf(store, data, path);
   const h = target.history() ?? [];
-  if (!h.some((e) => e.validFrom === key.validFrom && e.enteredAt === key.enteredAt)) throw new PayrollRefusal('notFound', 'Diesen Eintrag gibt es nicht.');
+  if (!h.some((e) => e.validFrom === key.validFrom && e.enteredAt === key.enteredAt)) gone('Diesen Eintrag gibt es nicht.');
   if (usedByCloses(history, path, key)) throw new PayrollRefusal('used', 'Eine abgeschlossene Lohnabrechnung hat diesen Eintrag gelesen: er bleibt, ein neuer Eintrag korrigiert ihn.');
   target.write(withdrawEntry(h, key, () => false));
 }
 
 // ─── the people ────────────────────────────────────────────────────────────────
 
-const employeeOf = (store: PayrollStore, id: string): PayrollEmployee => store.employees.find((e) => e.id === id) ?? (() => { throw new PayrollRefusal('notFound', `Keine Person ${id}.`); })();
-const insuranceById = (store: PayrollStore, id: string): PayrollInsurance => store.insurances.find((i) => i.id === id) ?? (() => { throw new PayrollRefusal('notFound', `Keine Versicherung ${id}.`); })();
+const employeeOf = (store: PayrollStore, id: string): PayrollEmployee => store.employees.find((e) => e.id === id) ?? gone(`Keine Person ${id}.`);
+const insuranceById = (store: PayrollStore, id: string): PayrollInsurance => store.insurances.find((i) => i.id === id) ?? gone(`Keine Versicherung ${id}.`);
 
 /** A new person with her sections at once (Person, Anstellung, Adresse, Bank, Versicherungen), each dated from the entry day. */
 export function createEmployee(store: PayrollStore, data: PayrollData, input: Record<string, unknown>, id: string, now: string): PayrollEmployee {
@@ -297,7 +309,7 @@ export function patchEmployee(store: PayrollStore, data: PayrollData, id: string
 
 /** A Sozialversicherung of a kind of payroll.yaml, with its first solution and rates (dated from its start). */
 export function createInsurance(store: PayrollStore, data: PayrollData, input: Record<string, unknown>, id: string, now: string): { insurance: PayrollInsurance; warnings: RateWarning[] } {
-  const kind = typeof input.kind === 'string' && data.insurances[input.kind] ? input.kind : bad('Eine Art der Versicherung.');
+  const kind = typeof input.kind === 'string' && own(data.insurances, input.kind) ? input.kind : bad('Eine Art der Versicherung.', 'kind');
   const validFrom = day(input.validFrom, 'Gilt ab');
   const code = optStr(input.code) ?? 'A';
   const { value, warnings } = ratesValue(kind, input.rates ?? {}, data);
@@ -326,7 +338,8 @@ export function patchInsurance(store: PayrollStore, id: string, patch: Record<st
   for (const k of INSURANCE_FIELDS) {
     if (!(k in patch)) continue;
     const v = k === 'account' ? accountValue(patch[k]) : k === 'validUntil' ? (optStr(patch[k]) ? day(patch[k], 'Gilt bis') : undefined) : optStr(patch[k]);
-    if (k === 'name' && !v) bad('Name fehlt.');
+    if (k === 'name' && !v) bad('Name fehlt.', 'name');
+    if (k === 'validUntil' && v !== undefined && v < ins.validFrom) bad('Das Ende liegt vor dem Beginn.', 'validUntil');
     if (v === undefined) delete rec[k]; else rec[k] = v;
   }
 }
@@ -381,17 +394,24 @@ export function removeWageType(store: PayrollStore, history: PayslipHistory, key
   const layer = store.wageTypes.find((l) => l.key === key);
   if (!layer || !('copyOf' in layer)) bad('Nur eine Kopie lässt sich entfernen; eine Lohnart des Katalogs bleibt.');
   if (wageTypeUsed(history, key)) throw new PayrollRefusal('used', 'Eine abgeschlossene Lohnabrechnung hat diese Lohnart: sie bleibt.');
+  if (store.wageTypes.some((l) => 'copyOf' in l && l.copyOf === key)) throw new PayrollRefusal('used', 'Eine andere Kopie ist von dieser Lohnart gemacht: sie bleibt.');
+  if (history.corrections.some((c) => c.wageType === key && !history.carriedBy.has(c.id))) throw new PayrollRefusal('used', 'Eine Rückwirkende Korrektur wartet mit dieser Lohnart auf den nächsten offenen Monat: sie bleibt.');
   if (store.employees.some((e) => e.recurring.some((r) => r.wageType === key)) || store.monthLines.some((l) => l.wageType === key && !l.removed)) throw new PayrollRefusal('used', 'Eine Person hat diese Lohnart noch: sie bleibt.');
   store.wageTypes = store.wageTypes.filter((l) => l.key !== key);
 }
 
 // ─── a change dated before a closed month (§19.3) ──────────────────────────────
 
-/** One Lohnart of a closed payslip that a change computes otherwise. */
-export interface Difference { wageType: string; label: string; side: 'employee' | 'employer'; before: number; after: number; diff: number }
+/**
+ * One Lohnart of a closed payslip that a change computes otherwise. `carry`: the Rückwirkende Korrektur
+ * carries it as a line of its own; false: it follows from a wage difference carried with it (§22 decision 32).
+ */
+export interface Difference { wageType: string; label: string; side: 'employee' | 'employer'; before: number; after: number; diff: number; carry: boolean }
 
 export interface Affected {
   payslip: string; employee: string; name: string; month: string; postingDate: string;
+  /** Its posting date lies in a closed period: only the correction, never «So lassen» or «Wieder öffnen». */
+  closedPeriod: boolean;
   differences: Difference[];
 }
 
@@ -415,29 +435,39 @@ function byWageType(d: Pick<PayslipDraft, 'lines'> | undefined): Map<string, { l
   return out;
 }
 
-function differencesOf(before: Pick<PayslipDraft, 'lines'> | undefined, after: Pick<PayslipDraft, 'lines'> | undefined): Difference[] {
+/**
+ * The differences of two computations, each marked whether a correction carries it. A wage line that counts
+ * for a base (Monatslohn, an allowance) is carried, and the month that carries it computes the contributions
+ * on it, as on any line of its own: so when one differs, the contributions' differences are not carried
+ * again (they would be charged twice). Without such a line (a rate, a certificate, a new insurance) the
+ * contributions' differences are carried themselves.
+ */
+function differencesOf(ctx: Pick<PayrollContext, 'data' | 'store'>, before: Pick<PayslipDraft, 'lines'> | undefined, after: Pick<PayslipDraft, 'lines'> | undefined): Difference[] {
+  const types = firmWageTypes(ctx.data, ctx.store);
   const b = byWageType(before); const a = byWageType(after);
-  const out: Difference[] = [];
+  const out: Array<Omit<Difference, 'carry'>> = [];
   for (const k of new Set([...b.keys(), ...a.keys()])) {
     const x = b.get(k); const y = a.get(k);
     const diff = round2((y?.amount ?? 0) - (x?.amount ?? 0));
     if (diff !== 0) out.push({ wageType: k.split('|')[0], label: (y ?? x)!.label, side: (y ?? x)!.side, before: x?.amount ?? 0, after: y?.amount ?? 0, diff });
   }
-  return out;
+  const contribution = (d: { wageType: string }) => types.get(d.wageType)?.computes === 'contribution';
+  const wage = out.some((d) => !contribution(d) && (types.get(d.wageType)?.bases.length ?? 0) > 0);
+  return out.map((d) => ({ ...d, carry: !(wage && contribution(d)) }));
 }
 
 /**
  * The closed payslips `next` computes otherwise than the store of `ctx`: each computed as if open, once
  * with the values before the change and once with them after, so only the change's own difference shows.
  */
-export function affectedBy(ctx: PayrollContext, next: PayrollStore): Affected[] {
+export function affectedBy(ctx: PayrollContext, next: PayrollStore, isClosed: (day: string) => boolean = () => false): Affected[] {
   const out: Affected[] = [];
   for (const c of ctx.history.closed.values()) {
     const history = withoutClose(ctx.history, c.id);
     const before = computePayslip({ ...ctx, history }, c.employee, c.month);
     const after = computePayslip({ ...ctx, store: next, history }, c.employee, c.month);
-    const differences = differencesOf(before, after);
-    if (differences.length) out.push({ payslip: c.id, employee: c.employee, name: c.person.name, month: c.month, postingDate: c.postingDate, differences });
+    const differences = differencesOf({ data: ctx.data, store: next }, before, after);
+    if (differences.length) out.push({ payslip: c.id, employee: c.employee, name: c.person.name, month: c.month, postingDate: c.postingDate, closedPeriod: isClosed(c.postingDate), differences });
   }
   return out.sort((a, b) => a.month.localeCompare(b.month) || a.name.localeCompare(b.name));
 }
@@ -449,10 +479,14 @@ export function reopenOffer(ctx: PayrollContext, affected: readonly Affected[], 
   return latestClosed(ctx.history, a.employee)?.id === a.payslip && !isClosed(a.postingDate) ? a.payslip : undefined;
 }
 
-/** «Rückwirkende Korrektur»: one correction per differing Lohnart of each affected payslip, carried to the person's next open month. */
+/** «Rückwirkende Korrektur»: one correction per carried difference of each affected payslip, carried to the person's next open month. */
 export function backdatedCorrections(ctx: PayrollContext, affected: readonly Affected[], id: () => string, now: string): PayslipCorrection[] {
-  return affected.flatMap((a) => a.differences.map((d) => correctionOf(ctx, ctx.data, a.payslip, { wageType: d.wageType, amount: d.diff }, id(), now)));
+  return affected.flatMap((a) => a.differences.filter((d) => d.carry).map((d) => correctionOf(ctx, ctx.data, a.payslip, { wageType: d.wageType, amount: d.diff }, id(), now)));
 }
+
+/** «So lassen» on each affected payslip, for its history; it changes nothing closed. */
+export const keepEvents = (affected: readonly Affected[], what: { path: string; validFrom?: string }, now: string): PayslipEvent[] =>
+  affected.map((a) => ({ event: 'keep', id: a.payslip, at: now, by: 'person', path: what.path, ...(what.validFrom ? { validFrom: what.validFrom } : {}) }));
 
 /**
  * What a closed payslip would compute today, less the corrections entered on it since: shown on it as a
@@ -461,11 +495,11 @@ export function backdatedCorrections(ctx: PayrollContext, affected: readonly Aff
 export function driftOf(ctx: PayrollContext, close: PayslipClose): Difference[] {
   const now = computePayslip({ ...ctx, history: withoutClose(ctx.history, close.id) }, close.employee, close.month);
   const corrected = ctx.history.corrections.filter((c) => c.of === close.id && c.at >= close.closedAt);
-  const own = differencesOf(close, now).map((d) => {
+  const left = differencesOf(ctx, close, now).filter((d) => d.carry).map((d) => {
     const done = round2(corrected.filter((c) => c.wageType === d.wageType && c.side === d.side).reduce((s, c) => s + c.amount, 0));
     return { ...d, diff: round2(d.diff - done) };
   });
-  return own.filter((d) => d.diff !== 0);
+  return left.filter((d) => d.diff !== 0);
 }
 
 // ─── what the pages read ───────────────────────────────────────────────────────

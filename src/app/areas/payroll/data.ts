@@ -72,11 +72,11 @@ export const payrollApi = {
   addEntry: (body: { path: string; validFrom: string; validUntil?: string; value: unknown }, backdated?: Backdated) => request<Saved>('POST', '/api/payroll/entries', { ...body, ...(backdated ? { backdated } : {}) }),
   withdraw: (body: { path: string; validFrom: string; enteredAt: string }, backdated?: Backdated) => request<Saved>('POST', '/api/payroll/entries/withdraw', { ...body, ...(backdated ? { backdated } : {}) }),
   createInsurance: (body: Record<string, unknown>, backdated?: Backdated) => request<Saved<{ id: string }>>('POST', '/api/payroll/insurances', { ...body, ...(backdated ? { backdated } : {}) }),
-  patchInsurance: (id: string, body: Record<string, unknown>) => request<Saved>('PATCH', `/api/payroll/insurances/${id}`, body),
+  patchInsurance: (id: string, body: Record<string, unknown>, backdated?: Backdated) => request<Saved>('PATCH', `/api/payroll/insurances/${id}`, { ...body, ...(backdated ? { backdated } : {}) }),
   addSolution: (id: string, body: Record<string, unknown>, backdated?: Backdated) => request<Saved>('POST', `/api/payroll/insurances/${id}/solutions`, { ...body, ...(backdated ? { backdated } : {}) }),
-  setWageType: (key: string, body: Record<string, unknown>) => request<Saved>('PUT', `/api/payroll/wage-types/${encodeURIComponent(key)}`, body),
-  copyWageType: (body: Record<string, unknown>) => request<Saved<{ key: string }>>('POST', '/api/payroll/wage-types', body),
-  removeWageType: (key: string) => request<Saved>('DELETE', `/api/payroll/wage-types/${encodeURIComponent(key)}`),
+  setWageType: (key: string, body: Record<string, unknown>, backdated?: Backdated) => request<Saved>('PUT', `/api/payroll/wage-types/${encodeURIComponent(key)}`, { ...body, ...(backdated ? { backdated } : {}) }),
+  copyWageType: (body: Record<string, unknown>, backdated?: Backdated) => request<Saved<{ key: string }>>('POST', '/api/payroll/wage-types', { ...body, ...(backdated ? { backdated } : {}) }),
+  removeWageType: (key: string, backdated?: Backdated) => request<Saved>('DELETE', `/api/payroll/wage-types/${encodeURIComponent(key)}`, backdated ? { backdated } : undefined),
   addAccount: (number: string) => request<{ number: string; name: string }>('POST', '/api/payroll/accounts', { number }),
 };
 
