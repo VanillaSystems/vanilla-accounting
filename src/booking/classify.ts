@@ -1100,6 +1100,7 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     const routing = identify(signalsOfTransaction(t, mappedReceipts(books, t)), context.counterparties ?? []);
     return routing.kind === 'known' ? routing.counterparty : undefined;
   };
+  const collected: Array<{ tx: BankTransaction; collector: string }> = [];
   for (const tx of txs) {
     // A payment provider's payout settles its clearing account, in code, whatever a rule or the model would say (#203).
     // Until the company's file names the clearing account and the cut-over day (the first sales report asks for both), the payout waits
@@ -1209,16 +1210,8 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     // bill's split of the employer's part (the family allowances apart). A payroll insurer's payment is payroll's (§22 decision 45).
     const collector = !placed && !insurer ? payeeOf(tx) : undefined;
     const kinds = kindsOf(collector, collectors);
-    if (collector && kinds.length && (!ask || accountOfKinds(kinds) !== context.wageDeductions)) {
-      const paidTo = contributionEntries(books, tx, context, fx, collector, payeeOf);
-      if (paidTo && 'refusal' in paidTo) { log(`  ${tx.ref}  payment to ${collector}: refused: ${paidTo.reason}`); outcome.failed.push({ ref: tx.ref, ...paidTo }); continue; }
-      if (paidTo) {
-        books.journalEntries.push(...paidTo.entries);
-        log(`  ${tx.ref}  → payment to ${collector}: ${paidTo.booking.share} of what the payslips withheld off ${paidTo.booking.account}${paidTo.booking.employer ? `, the rest on ${paidTo.booking.employer}` : ''}${paidTo.booking.commission ? `, ${paidTo.booking.commission.amount} commission on ${paidTo.booking.commission.account}` : ''}`);
-        outcome.classified.push(tx.ref);
-        continue;
-      }
-    }
+    // They go after the other payments of the run: what the wages booked now withheld is on the books before.
+    if (collector && kinds.length && (!ask || accountOfKinds(kinds) !== context.wageDeductions)) { collected.push({ tx, collector }); continue; }
     if (!placed || !then) { toModel.push(tx); continue; }
     if (then.kind === 'book') {
       books.journalEntries.push(...atPoint(tx, ruleEntries(books, tx, placed, then.booking, context, fx)));
@@ -1230,6 +1223,14 @@ export async function classifyTransactions(books: Books, txs: BankTransaction[],
     log(`  ${tx.ref}  waits for the person (rule ${placed.rule.id})`);
     outcome.asked.push(asked);
     if (!then.booking && proposeAsked) { proposing.set(tx.ref, asked); toModel.push(tx); }
+  }
+  for (const { tx, collector } of collected.sort((a, b) => a.tx.date.localeCompare(b.tx.date))) {
+    const paidTo = contributionEntries(books, tx, context, fx, collector, payeeOf);
+    if (paidTo && 'refusal' in paidTo) { log(`  ${tx.ref}  payment to ${collector}: refused: ${paidTo.reason}`); outcome.failed.push({ ref: tx.ref, ...paidTo }); continue; }
+    if (!paidTo) { toModel.push(tx); continue; }
+    books.journalEntries.push(...paidTo.entries);
+    log(`  ${tx.ref}  → payment to ${collector}: ${paidTo.booking.share} of what the payslips withheld off ${paidTo.booking.account}${paidTo.booking.employer ? `, the rest on ${paidTo.booking.employer}` : ''}${paidTo.booking.commission ? `, ${paidTo.booking.commission.amount} commission on ${paidTo.booking.commission.account}` : ''}`);
+    outcome.classified.push(tx.ref);
   }
   afterWave?.();
   if (!ask) {
