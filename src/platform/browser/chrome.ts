@@ -50,9 +50,9 @@ export interface OpenSession {
 /**
  * Attaches to the session's Chrome, starting it when none runs. `url` is opened in a new window
  * when Chrome is started. `headless` only for tests: a run reads in a headed window, so the site
- * sees the same browser the person signed in with. `mockKeychain` only for tests too: the session
- * keeps its cookies outside the macOS Keychain, which a test's Chrome cannot be let into (Chrome
- * for Testing 156 waits for it before its first request, so every navigation hung).
+ * sees the same browser the person signed in with. `mockKeychain` only for tests too: Chrome
+ * encrypts the profile with a fixed key instead of one from the macOS Keychain (Chrome for Testing,
+ * seen on 156, waits on the Keychain before its first request, so every navigation hung).
  */
 export async function openSession(session: string, opts: { url?: string; headless?: boolean; mockKeychain?: boolean } = {}): Promise<OpenSession> {
   const dir = sessionDir(session);

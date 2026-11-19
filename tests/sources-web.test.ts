@@ -210,7 +210,7 @@ test('io.api reads within its allow list with the stored token, which the code n
   assert.deepEqual(await pull({ ws: noToken, appRoot: APP_ROOT, source: 'other', run: 'c1', mode: 'live', apiFetch: fakeApi().fetcher }), { outcome: 'missing-secret', channel: 'api', feeds: [] });
 });
 
-test('the browser driver blocks a navigation its guard refuses before the request leaves, reads, lists, clicks, refuses no submit itself, and downloads in the session', { skip: !browserPath && 'no Chromium browser installed' }, async () => {
+test('the browser driver blocks a navigation its guard refuses before the request leaves, reads, lists, clicks, refuses no submit itself, and downloads in the session', { skip: !browserPath && 'no Chromium browser installed', timeout: 60_000 }, async () => {
   const hits: string[] = [];
   const server = createServer((q, r) => {
     hits.push(`${q.method} ${q.url}`);
