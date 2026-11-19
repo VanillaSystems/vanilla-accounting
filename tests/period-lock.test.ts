@@ -105,6 +105,7 @@ const refused: Array<Call & { status: number }> = [
   { method: 'POST', path: '/api/payroll/payslips/2026-05-e1/close', body: { confirm: true }, status: 403 },
   { method: 'POST', path: '/api/payroll/payslips/2026-06-e1/reopen', status: 403 },
   { method: 'POST', path: '/api/payroll/month-lines', body: { employee: 'e1', month: '2026-05', wageType: 'bonus', amount: 100 }, status: 403 },
+  { method: 'POST', path: '/api/payroll/insurances/ak/settle', body: { year: '2026', total: 100, date: '2026-06-15' }, status: 403 },
   { method: 'PATCH', path: '/api/transactions/C1', body: { description: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/transactions/C1', body: { remarks: 'neu' }, status: 403 },
   { method: 'PATCH', path: '/api/transactions/C1', body: { noReceiptNeeded: true }, status: 403 },

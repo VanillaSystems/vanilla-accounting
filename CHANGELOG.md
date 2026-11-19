@@ -107,6 +107,11 @@ Two markers flag an entry you must read before you update:
   a missing account from the standard chart. The latest closed month can be reopened; an earlier one, or one
   in a closed period, is corrected by a Rückwirkende Korrektur that the next open month carries. A social
   security number is masked in everything sent to an AI model.
+- Payroll, Lohnzahlungen and the insurers (phase B0): the bank's line of a wage is matched by code (the
+  payout and the person's IBAN or name) and booked D 1091 / C bank with the payslip linked, so 1091 is 0 once
+  wages are paid. A payment to a fund or insurer clears its liability account (2271–2275) and is never
+  expensed a second time; each insurance shows what the payslips accrued, what was paid and what is open;
+  a final statement's difference is booked from its total.
 
 ### Fixed
 

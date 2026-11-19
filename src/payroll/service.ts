@@ -39,6 +39,9 @@ export function payrollContext(ws: Pick<Workspace, 'paths'>): PayrollContext {
   return { data: payrollData(), years: payrollYears(), store: loadPayroll(ws), history: historyOf(allPayslipEvents(ws)) };
 }
 
+/** Every payslip closed as it stands, in every year. */
+export const closedPayslips = (ws: Pick<Workspace, 'paths'>) => [...historyOf(allPayslipEvents(ws)).closed.values()];
+
 /** The account numbers of the workspace's chart. */
 export const chartNumbers = (ws: Workspace): Set<string> =>
   new Set((accountsOf(ws) as Array<{ number?: unknown }>).flatMap((a) => (a.number === undefined ? [] : [String(a.number)])));

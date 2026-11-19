@@ -124,3 +124,6 @@ export const payroll = (): Jurisdiction['payroll'] => loaded().source.payroll;
 
 /** The law's payroll figures by year (payroll/<year>.yaml). */
 export const payrollYears = (): Jurisdiction['payrollYears'] => loaded().source.payrollYears;
+
+/** The payroll's clearing account (Lohndurchlaufkonto): the payslips book the payout onto it, the bank payment clears it. */
+export const payrollClearing = (): string | undefined => { try { return loaded().source.payroll?.clearing; } catch { return undefined; } };

@@ -67,3 +67,15 @@ test('a Lohnart added to an open month, a correction on a closed one, «Alle abs
   assert.equal(reopen.status, 200);
   assert.equal(reopen.json.removed && (reopen.json.removed as string[]).length > 0, true);
 });
+
+test('Lohnzahlungen and the insurers: the month\'s rows with what is paid, the accounts\' balances, a final statement booked', async () => {
+  const pay = await api.send('GET', '/api/payroll/payments/2026-09');
+  const rows = pay.json.rows as Array<{ id: string; purpose: string; payout: number; paid?: unknown }>;
+  assert.deepEqual(rows.map((r) => [r.id, r.purpose, r.payout, !!r.paid]), [['2026-09-e1', 'Lohn 09/2026', 8910, false]]);
+  const ins = await api.send('GET', '/api/payroll/insurances?year=2026');
+  const ahv = (ins.json.rows as Array<{ kind: string; accrued: number; open: number }>).find((r) => r.kind === 'ahv')!;
+  assert.ok(ahv.accrued > 0 && ahv.open === ahv.accrued);
+  const settle = await api.send('POST', '/api/payroll/insurances/ak/settle', { year: '2026', total: ahv.accrued + 10, date: '2026-12-31' });
+  assert.equal(settle.status, 200);
+  assert.equal((settle.json as { amount: number }).amount, 10);
+});
