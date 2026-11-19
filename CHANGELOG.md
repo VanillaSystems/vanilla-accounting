@@ -343,6 +343,10 @@ Two markers flag an entry you must read before you update:
 - Verkauf: in the conversion dialog a position with nothing open shows 0 to take, and beside what
   is open what was taken already («0 · 10 geliefert»).
 
+- Löhne › Dokumente › Quellensteuer: a correction carried into a month is a row of its own in that
+  month's settlement list (and its CSV), naming the month it corrects with that month's code, wage and
+  rate as recomputed, its tax and its commission; it was merged into the person's row of the month
+  (under the month's own code and tax). The list still equals 2279's movements.
 - Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
   davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund
   (`payroll: { payments: liability }`), names the open payments it books first, and code then books

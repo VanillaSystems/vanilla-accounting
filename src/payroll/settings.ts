@@ -16,7 +16,7 @@ import { correctionOf, PayrollRefusal } from './close.js';
 import type {
   Absence, Child, Employment, PayrollEmployee, PayrollInsurance, PayrollLanguage, PayrollStore, PayslipClose, PayslipCorrection, PayslipEvent, PersonInsurances, TaxAtSource, WageTypeLayer,
 } from './model.js';
-import { payslipId } from './model.js';
+import { payslipId, type CorrectedTariff } from './model.js';
 import { firstDay, monthsBetween, nextMonth, round2 } from './money.js';
 import { inOpening, openingOf } from './opening.js';
 
@@ -559,7 +559,11 @@ export function removeWageType(store: PayrollStore, history: PayslipHistory, key
  * One Lohnart of a closed payslip that a change computes otherwise. `carry`: the Rückwirkende Korrektur
  * carries it as a line of its own; false: it follows from a wage difference carried with it (§22 decision 32).
  */
-export interface Difference { wageType: string; label: string; side: 'employee' | 'employer'; before: number; after: number; diff: number; carry: boolean }
+export interface Difference {
+  wageType: string; label: string; side: 'employee' | 'employer'; before: number; after: number; diff: number; carry: boolean;
+  /** The tax at source as the month computes now (its code, wage and rate): what its correction declares (§22 decision 120). */
+  tariff?: CorrectedTariff;
+}
 
 export interface Affected {
   payslip: string; employee: string; name: string; month: string; postingDate: string;
@@ -602,7 +606,14 @@ function differencesOf(ctx: Pick<PayrollContext, 'data' | 'store'>, before: Pick
   for (const k of new Set([...b.keys(), ...a.keys()])) {
     const x = b.get(k); const y = a.get(k);
     const diff = round2((y?.amount ?? 0) - (x?.amount ?? 0));
-    if (diff !== 0) out.push({ wageType: k.split('|')[0], label: (y ?? x)!.label, side: (y ?? x)!.side, before: x?.amount ?? 0, after: y?.amount ?? 0, diff });
+    if (diff !== 0) {
+      const wageType = k.split('|')[0];
+      // The tax's own line as computed now: the month it corrects, declared with its code, wage and rate.
+      const own = (after?.lines ?? []).filter((l) => l.wageType === wageType && !l.corrects && l.tariff && l.base !== undefined && l.rate !== undefined);
+      const tariff = own.length === 1 && types.get(wageType)?.computes !== 'commission'
+        ? { region: own[0].tariff!.region, code: own[0].tariff!.code, income: own[0].tariff!.income, wage: own[0].base!, rate: own[0].rate! } : undefined;
+      out.push({ wageType, label: (y ?? x)!.label, side: (y ?? x)!.side, before: x?.amount ?? 0, after: y?.amount ?? 0, diff, ...(tariff ? { tariff } : {}) });
+    }
   }
   const contribution = (d: { wageType: string }) => types.get(d.wageType)?.computes === 'contribution';
   const wage = out.some((d) => !contribution(d) && (types.get(d.wageType)?.bases.length ?? 0) > 0);
@@ -667,7 +678,7 @@ export function reopenOffer(ctx: PayrollContext, affected: readonly Affected[], 
 
 /** «Rückwirkende Korrektur»: one correction per carried difference of each affected payslip, carried to the person's next open month. */
 export function backdatedCorrections(ctx: PayrollContext, affected: readonly Affected[], id: () => string, now: string): PayslipCorrection[] {
-  return affected.flatMap((a) => a.differences.filter((d) => d.carry).map((d) => correctionOf(ctx, ctx.data, a.payslip, { wageType: d.wageType, amount: d.diff }, id(), now)));
+  return affected.flatMap((a) => a.differences.filter((d) => d.carry).map((d) => correctionOf(ctx, ctx.data, a.payslip, { wageType: d.wageType, amount: d.diff, ...(d.tariff ? { tariff: d.tariff } : {}) }, id(), now)));
 }
 
 /** «So lassen» on each affected payslip, for its history; it changes nothing closed. */

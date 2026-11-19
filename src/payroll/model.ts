@@ -224,10 +224,15 @@ export interface PayslipLine {
   text?: string;
   /**
    * A tax at source line (src/payroll/tax-at-source.ts): the region, the tariff code and the rate-determining
-   * income it was looked up with, the file's date and the first characters of its checksum.
+   * income it was looked up with, the file's date and the first characters of its checksum. On a carried
+   * correction of the tax: the month it corrects as computed when the correction was made (its taxable wage
+   * and rate too), which the settlement list declares beside the corrected month (§22 decision 120).
    */
-  tariff?: { region: string; code: string; income: number; created?: string; version?: string };
+  tariff?: { region: string; code: string; income: number; created?: string; version?: string; wage?: number; rate?: number };
 }
+
+/** The corrected month's tax as computed when a correction was made: what the settlement list declares for it. */
+export interface CorrectedTariff { region: string; code: string; income: number; wage: number; rate: number }
 
 /** A line whose input is missing: shown «unvollständig», left out of every figure (§6.2). */
 export interface MissingLine { wageType: string; label: string; missing: string; days?: { from: string; to: string } }
@@ -257,6 +262,8 @@ export type PayslipEvent =
   | {
     event: 'correction'; id: string; of: string; wageType: string; side: 'employee' | 'employer';
     amount: number; base?: number; rateDiff?: number; text?: string; at: string; by: 'person';
+    /** A correction of the tax at source: the corrected month's tax as computed now (its code, wage, rate). */
+    tariff?: CorrectedTariff;
   }
   /** «So lassen» (§19.3): a change dated back over this closed payslip was kept without a correction; history only. */
   | { event: 'keep'; id: string; at: string; by: 'person'; path: string; validFrom?: string };

@@ -366,6 +366,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       wageType: w.key, label: label(w), amount: c.amount, side: c.side, source: 'correction', corrects: c.of, correction: c.id,
       ...(c.base !== undefined ? { base: c.base } : {}), ...(c.rateDiff !== undefined ? { rate: c.rateDiff } : {}),
       ...(c.text ? { text: c.text } : {}), ...(of ? { days: { from: firstDay(of.month), to: lastDay(of.month) } } : {}),
+      ...(c.tariff ? { tariff: c.tariff } : {}),
     });
   }
 
@@ -417,7 +418,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
         // A payment after the exit (a Nachzahlung) takes the rate with the exit month's income (FAQ KS 45, Frage 16).
         ...(!employed ? { exitIncome: exitIncomeOf(history, e.id, month, w.key, typeof c.base === 'string' ? c.base : '') } : {}),
         tariffs: ctx.tariffs, insurances: store.insurances,
-        regionOf: (id) => history.closed.get(id)?.lines.find((l) => l.wageType === w.key && l.tariff)?.tariff?.region,
+        regionOf: (id) => history.closed.get(id)?.lines.find((l) => l.wageType === w.key && l.tariff && !l.corrects)?.tariff?.region,
         ...(commission ? { commission: { wageType: commission, label: label(commission) } } : {}),
       });
       // The commission prints after the employer's contributions, the tax in its place.

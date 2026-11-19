@@ -2111,6 +2111,24 @@ Taken while building the year-end checks (2026-11-19):
     named as «ohne Lohnabrechnung der App». An insurer shows, beside accrued, paid and open, what the final
     statement's comparison counts for those months (`settlementOf`'s `before`).
 
+Taken on the third persona walk's fixes, part b (2026-11-19):
+
+120. **A carried correction of the tax at source is a row of its own in the settlement list**, in the list of the
+    month whose payslip carried it, declared with the month it corrects: person, month corrected, code, the
+    corrected month's taxable wage, rate-determining income and rate as computed when the correction was made, the
+    tax (the difference) and its commission. The canton expects a correction declared with the next settlement,
+    naming the period it corrects (KS 45 Ziff. 9.4: the employer corrects his own settlement himself until 31 March
+    of the following year; BSV, Kreisschreiben über die Quellensteuer, Rz 1040: «Die Korrektur gegenüber der
+    Steuerbehörde hat unter einem entsprechenden Hinweis in der nächsten Abrechnung … zu erfolgen»; Swissdec's
+    ELM-QST reports corrections as records of the corrected period beside the month's own). The KS 45 text itself
+    could not be read (no reachable copy); Ziff. 9.4 is named by the canton SO's Wegleitung QST-Revision 6.4. The
+    correction event keeps the recomputed figures (`tariff`: region, code, income, wage, rate; payslips.jsonl is
+    append-only, the field is optional and an older app ignores it); a correction entered by hand has none, so its
+    row names the corrected month's code as declared and leaves wage and rate empty. The payslip's commission of a
+    canton is shared over its rows at its rate, the rounding left on the month's own row, so the rows add up to
+    the line booked on 2279 and the list still equals 2279's movements. The wage total counts the month's own rows
+    only (the corrected month declared its wage already). The CSV has one row per such row, `corrects` the month.
+
 ---
 
 ## Sources

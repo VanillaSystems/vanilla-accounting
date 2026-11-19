@@ -12,7 +12,7 @@ import { computePayslip, type PayrollContext, type PayslipDraft } from './comput
 import { bookingOf, type PayslipBooking } from './booking.js';
 import { latestClosed } from './history.js';
 import { firmWageTypes } from './catalogue.js';
-import type { PayslipClose, PayslipCorrection, PayslipEvent } from './model.js';
+import type { CorrectedTariff, PayslipClose, PayslipCorrection, PayslipEvent } from './model.js';
 import { payslipRef } from './model.js';
 import { inOpening, openingOf } from './opening.js';
 
@@ -160,7 +160,7 @@ export const reopenEventOf = (close: PayslipClose, now: string): PayslipEvent =>
  * A Rückwirkende Korrektur on a closed payslip (§6.5 step 1): a Lohnart and an amount, or a base and a
  * rate difference, on one side. It changes nothing closed; the person's next open month carries it.
  */
-export function correctionOf(ctx: PayrollContext, data: PayrollData, of: string, input: { wageType: string; amount?: number; base?: number; rateDiff?: number; text?: string }, id: string, now: string): PayslipCorrection {
+export function correctionOf(ctx: PayrollContext, data: PayrollData, of: string, input: { wageType: string; amount?: number; base?: number; rateDiff?: number; text?: string; tariff?: CorrectedTariff }, id: string, now: string): PayslipCorrection {
   const close = ctx.history.closed.get(of);
   if (!close) throw new PayrollRefusal('notClosed', `Die Lohnabrechnung ${of} ist nicht abgeschlossen: eine Änderung gehört in den offenen Monat.`);
   const w = firmWageTypes(data, ctx.store).get(input.wageType);
@@ -171,6 +171,6 @@ export function correctionOf(ctx: PayrollContext, data: PayrollData, of: string,
   return {
     event: 'correction', id, of, wageType: input.wageType, side, amount,
     ...(input.base !== undefined ? { base: input.base } : {}), ...(input.rateDiff !== undefined ? { rateDiff: input.rateDiff } : {}),
-    ...(input.text ? { text: input.text } : {}), at: now, by: 'person',
+    ...(input.text ? { text: input.text } : {}), ...(input.tariff ? { tariff: input.tariff } : {}), at: now, by: 'person',
   };
 }

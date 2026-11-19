@@ -7516,6 +7516,7 @@ export default {
     "payroll.tax.tax": "Imposta",
     "payroll.tax.commission": "Provvigione",
     "payroll.tax.corrects": "correzione {list}",
+    "payroll.tax.correctionRows": "Una correzione figura su una riga propria con il mese che corregge: tariffa, salario IF e aliquota di quel mese come calcolati ora, l’imposta è la differenza. È dichiarata con questo conteggio; il salario IF del totale conta solo il mese stesso.",
     "payroll.tax.total": "Totale",
     "payroll.tax.payable": "Da pagare: {currency} {amount} (imposta alla fonte meno provvigione, conto 2279)",
     "payroll.docs.taxAtSource": "Imposta alla fonte",
