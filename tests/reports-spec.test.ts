@@ -139,8 +139,8 @@ test('invoices: the issued ones of the period, their totals the invoices\' own; 
   assert.deepEqual(r.totals.map((t) => t.currency), ['CHF', 'EUR'], 'the EUR invoice apart, the credit note in CHF with its minus');
   for (const t of r.totals) {
     const own = issued.filter((i) => i.currency === t.currency);
-    assert.equal(cents(t.amount), own.reduce((n, i) => n + cents(invoiceTotals(i.lines).gross), 0), t.currency);
-    assert.equal(cents(t.tax), own.reduce((n, i) => n + cents(invoiceTotals(i.lines).vat), 0), t.currency);
+    assert.equal(cents(t.amount), own.reduce((n, i) => n + cents(invoiceTotals(i).gross), 0), t.currency);
+    assert.equal(cents(t.tax), own.reduce((n, i) => n + cents(invoiceTotals(i).vat), 0), t.currency);
   }
 });
 

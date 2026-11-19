@@ -67,13 +67,27 @@ export const BOOKS_SCHEMA = 10;
  * 4: `company.uid` may be absent (#452): the setup does not ask it; the VAT XML and an invoice with
  * VAT ask for it when they need it. An app of schema 3 would refuse such a manifest with «company.uid
  * must be a non-empty text» instead of saying the app is too old, so it must refuse by the number.
+ * 5: the settings of invoicing phase 1 (docs/specs/invoicing.md 4.3): `invoicing.units` (the firm's
+ * units with their words in de, fr, it, en), `invoicing.prices` (net or gross per kind),
+ * `invoicing.paymentTerms` with `defaultTerms`, `invoicing.writeOffAccount` ({ skonto, loss }) and
+ * `invoicing.shortfallLimit`. Absent means the defaults (src/workspace/manifest.ts readInvoicing), so
+ * the step changes nothing; an app of schema 4 would refuse these keys as it should, by the number,
+ * instead of dropping them on its next save of Firma › Rechnungslayout. Further phase-1 settings
+ * ride on this step until it is released.
  */
-export const WORKSPACE_SCHEMA = 4;
+export const WORKSPACE_SCHEMA = 5;
 /**
  * 2: a line may be priced with the VAT in it (`InvoiceLine.vatIncluded`, a credit note of «500 VAT
  * included»). An app of schema 1 would read that price as net and add the VAT to it, so it must refuse.
+ * 3: positions of a kind (`InvoiceLine.kind`: item, text, subtotal, discount, pagebreak; an item's
+ * `discount` percent) and `prices: 'net' | 'gross'` per document, which replaces the line flag
+ * `vatIncluded` (step 2, `pricesOfDocument`). An app of schema 2 would read a Rabatt or a text as a
+ * line without price and a gross document's lines as net, so it must refuse.
+ *    Also in 3 (unreleased, phase 1 of invoicing, so no step of their own): `InvoiceLine.activity`
+ *    (the net tax rate of a position on a firm with two), `payments[].source`, `allocations`,
+ *    `writeOffs` and `Issued.terms`. A file of schema 2 holds none: the step adds nothing for them.
  */
-export const INVOICES_SCHEMA = 2;
+export const INVOICES_SCHEMA = 3;
 
 /** Step n: schema n → n + 1. */
 export type Ladder<T> = Readonly<Record<number, (doc: T) => T>>;
@@ -113,6 +127,8 @@ export const MANIFEST_MIGRATIONS: Ladder<Document> = {
   2: (doc) => doc,
   // Every manifest before has its UID: nothing changes; the number makes an older app refuse one without it.
   3: (doc) => doc,
+  // No manifest has the phase-1 invoicing settings before; absent means the defaults. The number makes an older app refuse them.
+  4: (doc) => doc,
 };
 
 /** The manifest document named at the current schema: its `schema:` set where it stands (its comments with it), else added as the first key. */
@@ -128,7 +144,48 @@ export const manifestText = (doc: Document): string => doc.toString({ lineWidth:
 export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {
   // No line has `vatIncluded` before; the number makes an older app refuse the file.
   1: (doc) => doc,
+  // Every line is an item (no `kind`); each document names its prices, and a line keeps `vatIncluded` only where it
+  // differs from them; an issued document freezes the words its units printed with.
+  2: (doc) => ({ ...doc, invoices: Array.isArray(doc.invoices) ? doc.invoices.map((d) => unitsOfIssued(pricesOfDocument(d))) : doc.invoices }),
 };
+
+/** The words the units of schema 2 printed with (src/invoices/texts.ts at 0.6.0). */
+const UNITS_OF_SCHEMA_2: Record<string, Record<'de' | 'fr' | 'it' | 'en', string>> = {
+  h: { de: 'h', fr: 'h', it: 'h', en: 'h' },
+  day: { de: 'Tag', fr: 'jour', it: 'giorno', en: 'day' },
+  pcs: { de: 'Stk.', fr: 'pce', it: 'pz.', en: 'pcs' },
+  flat: { de: 'pauschal', fr: 'forfait', it: 'forfait', en: 'flat rate' },
+  km: { de: 'km', fr: 'km', it: 'km', en: 'km' },
+};
+
+/**
+ * Step 2 → 3 on an issued document: `units`, the words its units printed with, so a reminder prints
+ * them as the invoice did (the app's defaults since name the hour «Std.»).
+ */
+export function unitsOfIssued(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || (raw as { status?: unknown }).status !== 'issued') return raw;
+  const doc = raw as { lines?: Array<{ unit?: unknown }> };
+  const named = [...new Set((doc.lines ?? []).flatMap((l) => (typeof l.unit === 'string' && UNITS_OF_SCHEMA_2[l.unit] ? [l.unit] : [])))];
+  return named.length ? { ...doc, units: named.map((id) => ({ id, ...UNITS_OF_SCHEMA_2[id] })) } : raw;
+}
+
+/**
+ * Step 2 → 3 on one document: `prices: 'gross'` when every line at a rate above 0 has
+ * `vatIncluded` (a credit note «by amount»), else `net`; a line whose flag equals its document's
+ * prices drops it, one that differs keeps it as `true` or `false`, so every figure stays as issued.
+ */
+export function pricesOfDocument(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || !Array.isArray((raw as { lines?: unknown }).lines)) return raw;
+  const doc = raw as { lines: Array<Record<string, unknown>> };
+  const taxed = doc.lines.filter((l) => typeof l.vatRate === 'number' && l.vatRate > 0);
+  const gross = taxed.length > 0 && taxed.every((l) => l.vatIncluded === true);
+  const lines = doc.lines.map((l) => {
+    const { vatIncluded, ...rest } = l;
+    const own = vatIncluded === true;
+    return own === gross || !(typeof l.vatRate === 'number' && l.vatRate > 0) ? rest : { ...rest, vatIncluded: own };
+  });
+  return { ...doc, prices: gross ? 'gross' : 'net', lines };
+}
 
 /** A file written by a newer version of the app than this one. */
 export class SchemaTooNewError extends Error {}

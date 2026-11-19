@@ -8,11 +8,12 @@ import assert from 'node:assert/strict';
 import { isQRReferenceValid, isSCORReferenceValid, calculateQRReferenceChecksum } from 'swissqrbill/utils';
 import {
   allocate, cancel, creditNoteDraft, deleteDraft, issue, missingForIssue, nextNumber, openAmount, openOn, reminderDraft,
-  revenueSplit, status, totals, withPayment, InvoiceRuleError, creditable } from '../src/invoices/rules.js';
+  revenueSplit, status, totals, warningsForIssue, withPayment, InvoiceRuleError, creditable } from '../src/invoices/rules.js';
 import { isQrIban, parseReference, prettyReference, qrReference, referenceFor, scorReference } from '../src/providers/qr-bill/reference.js';
 import { PAGE, addressLines, assembleSheets, paginate, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
-import { DEFAULT_LAYOUT, type Customer, type Draft, type Invoice, type InvoiceLine, type Issued, type Sender } from '../src/invoices/model.js';
+import { DEFAULT_LAYOUT, type Customer, type Draft, type Invoice, type InvoiceLine, type Issued, type ItemLine, type Sender } from '../src/invoices/model.js';
 import './support/jurisdiction.js';
+import { POSITION_WORDS } from './support/sheet-words.js';
 
 const QR_IBAN = 'CH4431999123000889012';
 const sender: Sender = {
@@ -26,7 +27,7 @@ const customer: Customer = {
   language: 'de', paymentTermsDays: 30,
 };
 const env = (id: string) => ({ id, createdAt: '2026-10-01T09:00:00Z', origin: 'manual' as const, deleted: false });
-const line = (quantity: number, price: number, vatRate: InvoiceLine['vatRate'], text = 'Leistung'): InvoiceLine => ({ text, quantity, price, vatRate });
+const line = (quantity: number, price: number, vatRate: ItemLine['vatRate'], text = 'Leistung'): ItemLine => ({ text, quantity, price, vatRate });
 const draft = (lines: InvoiceLine[], over: Partial<Draft> = {}): Draft => ({
   ...env('in_d'), status: 'draft', kind: 'invoice', customerId: 'cu_1', date: '2026-10-05', currency: 'CHF', language: 'de', lines, comments: [], ...over,
 });
@@ -63,14 +64,14 @@ test('QR-IBAN needs QRR, a plain IBAN SCOR', () => {
 // ─── totals ──────────────────────────────────────────────────────────────────
 
 test('totals: net per line to the Rappen, VAT per rate on its net, no 5-Rappen rounding', () => {
-  const t = totals([line(1, 1800, 8.1), line(6, 95, 8.1), line(3, 33.35, 2.6)]);
+  const t = totals({ lines: [line(1, 1800, 8.1), line(6, 95, 8.1), line(3, 33.35, 2.6)] });
   assert.deepEqual(t.byRate, [
     { rate: 8.1, net: 2370, vat: 191.97, gross: 2561.97 },
     { rate: 2.6, net: 100.05, vat: 2.6, gross: 102.65 },
   ]);
   assert.deepEqual([t.net, t.vat, t.gross], [2470.05, 194.57, 2664.62]);
-  assert.equal(totals([line(1, 0.05, 8.1)]).byRate[0].vat, 0, '0.00405 rounds to 0.00');
-  assert.equal(totals([line(-2, 110, 8.1)]).gross, -237.82, 'a credit note is negative');
+  assert.equal(totals({ lines: [line(1, 0.05, 8.1)] }).byRate[0].vat, 0, '0.00405 rounds to 0.00');
+  assert.equal(totals({ lines: [line(-2, 110, 8.1)] }).gross, -237.82, 'a credit note is negative');
 });
 
 // ─── numbering ───────────────────────────────────────────────────────────────
@@ -89,14 +90,21 @@ test('numbers: the next of the invoice year, cancelled ones count, drafts never 
 
 // ─── issuing ─────────────────────────────────────────────────────────────────
 
-test('Art. 26 MWSTG: issue refuses an invoice that lacks what the law asks', () => {
+test('Art. 26 MWSTG: issue refuses an invoice that lacks what the law asks, and warns of a position without text or amount', () => {
   const ok = draft([line(1, 100, 8.1)]);
   assert.deepEqual(missingForIssue(ok, { customer, sender, invoices: [] }), []);
   const fields = (m: ReturnType<typeof missingForIssue>) => m.map((x) => x.field + (x.line === undefined ? '' : `#${x.line}`));
   assert.deepEqual(fields(missingForIssue(draft([line(0, 100, 8.1, ' ')]), {
     customer: { ...customer, address: { ...customer.address, postcode: '' } },
     sender: { ...sender, uid: '', address: { postcode: '8000', town: 'Zürich', country: 'CH' } }, invoices: [],
-  })), ['sender.address', 'sender.uid', 'customer.address', 'line.text#0', 'line.quantity#0']);
+  })), ['sender.address', 'sender.uid', 'customer.address', 'total']);
+  // Spec 4.11: «Eine Position ohne Text oder Preis» is a warning; issuing takes the person's «Trotzdem ausstellen».
+  const empty = draft([line(1, 100, 8.1), line(0, 100, 8.1, ' ')]);
+  assert.deepEqual(fields(warningsForIssue(empty)), ['line.text#1', 'line.price#1']);
+  assert.throws(() => issued(empty), (e: InvoiceRuleError) => e.code === 'unconfirmed' && e.missing?.length === 2);
+  const anyway = { ...issue(empty, { customer, sender, layout: DEFAULT_LAYOUT, invoices: [], now: '2026-10-05T10:00:00Z', confirmed: true }) };
+  assert.equal(anyway.number, '2026-001', 'issued as it is, with no mark of the warning');
+  assert.deepEqual(Object.keys(anyway).filter((k) => /confirm|force|override/i.test(k)), []);
   assert.deepEqual(fields(missingForIssue(draft([line(1, 100, 0)]), { customer, sender, invoices: [] })), ['exemption'], 'a line without VAT needs its reason');
   assert.deepEqual(fields(missingForIssue(draft([]), { customer: undefined, sender: { ...sender, payTo: undefined }, invoices: [] })), ['payTo', 'customer', 'lines']);
   assert.throws(() => issued(draft([line(1, 100, 0)])), (e: InvoiceRuleError) => e.code === 'incomplete' && e.missing?.[0].field === 'exemption');
@@ -131,8 +139,8 @@ test('a paid invoice is not cancelled: it gets a credit note for the full amount
   assert.equal(status(inv, [inv]), 'paid');
   assert.throws(() => cancel(inv, { date: '2026-10-11', reason: '' }), (e: InvoiceRuleError) => e.code === 'paid');
   const credit = creditNoteDraft(inv, { reason: 'Storno' }, env('in_c'), '2026-10-11');
-  assert.deepEqual([credit.kind, credit.creditFor, totals(credit.lines).gross], ['credit-note', inv.id, -108.1]);
-  assert.equal(credit.lines[0].text, 'Leistung (Storno)');
+  assert.deepEqual([credit.kind, credit.creditFor, totals(credit).gross], ['credit-note', inv.id, -108.1]);
+  assert.equal((credit.lines[0] as ItemLine).text, 'Leistung (Storno)');
 });
 
 test('credit notes: a part over the invoice rates, or at one rate; they reduce what is open; more than the invoice is refused', () => {
@@ -140,16 +148,16 @@ test('credit notes: a part over the invoice rates, or at one rate; they reduce w
   const all = [inv];
   const part = creditNoteDraft(inv, { amount: 100, reason: 'Rabatt' }, env('in_p'), '2026-10-12');
   assert.equal(part.lines.length, 2);
-  assert.equal(totals(part.lines).gross, -100, 'the parts make the amount exactly: each is priced with its VAT in it');
+  assert.equal(totals(part).gross, -100, 'the parts make the amount exactly: each is priced with its VAT in it');
   const one = creditNoteDraft(inv, { amount: 51.3, vatRate: 2.6, reason: '1 Sack' }, env('in_o'), '2026-10-12');
-  assert.deepEqual(one.lines.map((l) => [l.vatRate, l.quantity, l.price, l.vatIncluded]), [[2.6, 1, -51.3, true]], 'one line «1 × −51.30», VAT included');
-  assert.deepEqual([totals(one.lines).net, totals(one.lines).vat], [-50, -1.3]);
+  assert.deepEqual([one.prices, ...(one.lines as ItemLine[]).map((l) => [l.vatRate, l.quantity, l.price, l.vatIncluded])], ['gross', [2.6, 1, -51.3, undefined]], 'one line «1 × −51.30», the document priced with the VAT in it');
+  assert.deepEqual([totals(one).net, totals(one).vat], [-50, -1.3]);
   const credited: Issued = { ...issued(one, all), id: 'in_o' };
-  assert.equal(openAmount(inv, [inv, credited]), Math.round((totals(inv.lines).gross - 51.3) * 100) / 100);
-  assert.equal(openAmount(inv, [inv, credited], '2026-10-01'), totals(inv.lines).gross, 'a credit note written later does not count for an earlier payment');
+  assert.equal(openAmount(inv, [inv, credited]), Math.round((totals(inv).gross - 51.3) * 100) / 100);
+  assert.equal(openAmount(inv, [inv, credited], '2026-10-01'), totals(inv).gross, 'a credit note written later does not count for an earlier payment');
   // «Stornieren» after a partial credit proposes what is left to credit, not the whole invoice again (r8c-14).
-  assert.equal(creditable(inv, [inv]), totals(inv.lines).gross);
-  assert.equal(creditable(inv, [inv, credited]), Math.round((totals(inv.lines).gross - 51.3) * 100) / 100);
+  assert.equal(creditable(inv, [inv]), totals(inv).gross);
+  assert.equal(creditable(inv, [inv, credited]), Math.round((totals(inv).gross - 51.3) * 100) / 100);
   assert.equal(creditable(credited, [inv, credited]), 0, 'a credit note is not credited');
   const tooMuch = { ...creditNoteDraft(inv, { reason: '' }, env('in_t'), '2026-10-12') };
   assert.deepEqual(missingForIssue(tooMuch, { customer, sender, invoices: [inv, credited] }).map((m) => m.field), ['credit.exceeds']);
@@ -254,8 +262,8 @@ test('the sheet that carries the QR-bill has no footer; the others keep it', () 
   assert.match(pages[1], /class="foot bare"><span class="pno">Seite 2 von 2/, 'the page number stays');
 });
 
-test('a line priced with the VAT in it: the QR-bill asks for exactly that amount', () => {
-  const d: SheetData = { ...sheet(1), lines: [{ ...line(1, 500, 8.1, 'Workshop'), vatIncluded: true }] };
+test('a document priced with the VAT in it: the QR-bill asks for exactly that amount', () => {
+  const d: SheetData = { ...sheet(1), prices: 'gross', lines: [line(1, 500, 8.1, 'Workshop')] };
   const blocks = sheetBlocks(d);
   const html = assembleSheets(d, blocks, { pages: [blocks.map((_, i) => i)], qrOwnPage: false });
   const qr = html.slice(html.indexOf('class="qrb"'));
@@ -270,12 +278,12 @@ test('pagination: a table header never ends a page alone', () => {
 });
 
 test('the sheet on screen: a draft edited in place names each field; texts-only editing leaves the lines alone; a printed sheet has neither', () => {
-  const words = { newCustomer: 'Neuer Kunde', chooseCustomer: 'Kunde wählen', addLine: 'Position', removeLine: 'Position entfernen', intro: 'Text vor der Tabelle', closing: 'Text nach den Kosten', desc: 'Beschreibung', noExemption: 'Grund für 0 %', supplied: 'wie Datum' };
+  const words = { newCustomer: 'Neuer Kunde', chooseCustomer: 'Kunde wählen', addLine: 'Position', removeLine: 'Position entfernen', intro: 'Text vor der Tabelle', closing: 'Text nach den Kosten', desc: 'Beschreibung', noExemption: 'Grund für 0 %', supplied: 'wie Datum', ...POSITION_WORDS };
   const draft: SheetData = { ...sheet(2), number: undefined, reference: undefined, lines: [line(1, 10, 8.1, 'A'), line(2, 5, 0, 'B')] };
   const screen = { qrPlaceholder: 'QR-Zahlteil beim Ausstellen', edit: { scope: 'draft' as const, customers: [{ id: 'cu_1', name: 'Kunde AG' }], customerId: 'cu_1', words } };
   const edited = sheetBlocks({ ...draft, screen }).map((b) => b.html).join('');
   const keys = [...edited.matchAll(/data-ed="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(keys, ['date', 'supplied', 'dueDate', 'intro', 'l:0:text', 'l:0:quantity', 'l:0:unit', 'l:0:price', 'l:0:vatRate', 'l:1:text', 'l:1:quantity', 'l:1:unit', 'l:1:price', 'l:1:vatRate', 'exemption', 'closing']);
+  assert.deepEqual(keys, ['date', 'supplied', 'dueDate', 'intro', 'l:0:text', 'l:0:quantity', 'l:0:unit', 'l:0:price', 'l:0:discount', 'l:0:vatRate', 'l:1:text', 'l:1:quantity', 'l:1:unit', 'l:1:price', 'l:1:discount', 'l:1:vatRate', 'exemption', 'closing']);
   assert.match(edited, /data-ia="addline"/);
   assert.equal((edited.match(/data-ia="rmline"/g) ?? []).length, 2);
   const blocks = sheetBlocks({ ...draft, screen });

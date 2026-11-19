@@ -96,7 +96,7 @@ export function setCustomerTerms(ws: Pick<Workspace, 'paths'>, to: (c: Customer)
 /** A draft for a customer of the invoices, or for a new one added with it: the same draft «N» in Rechnungen writes. */
 function invoiceDraft(ws: Workspace, c: Extract<WorkspaceChange, { kind: 'invoiceDraft' }>): Applied {
   return checked(() => {
-    const { clear: _, ...draft } = parseDraftPatch(c.draft, loadInvoices(ws));
+    const { clear: _, ...draft } = parseDraftPatch(c.draft, loadInvoices(ws), ws.invoicing?.units);
     const fields = c.newCustomer ? parseCustomer({ language: 'de', ...c.newCustomer }, false) : undefined;
     const customer = fields ? createCustomer(ws, fields as CustomerFields) : liveCustomers(loadInvoices(ws)).find((x) => x.id === c.customer);
     if (!customer) throw new RequestError(400, 'Diesen Kunden gibt es nicht: einen neuen mit newCustomer anlegen.', { code: 'unknownCustomer' });

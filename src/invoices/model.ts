@@ -15,8 +15,38 @@ export type InvoiceCurrency = (typeof INVOICE_CURRENCIES)[number];
 /** A line's VAT rate in percent: one of the jurisdiction's (modules/ch/invoicing.yaml), 0 for an exempt supply. */
 export type VatRate = number;
 
-export const UNITS = ['h', 'day', 'pcs', 'flat', 'km'] as const;
-export type Unit = (typeof UNITS)[number];
+/** A unit a position is counted in: an id the firm's list names (`invoicing.units`), with its word in each document language. */
+export type Unit = string;
+export interface UnitDef extends Record<InvoiceLanguage, string> { id: Unit }
+
+/**
+ * The units a firm has while its settings list none. The ids h, day, pcs, flat and km are those of
+ * every line written before the list (invoices.json schema 2), so an old line keeps its meaning.
+ */
+export const DEFAULT_UNITS: readonly UnitDef[] = [
+  { id: 'h', de: 'Std.', fr: 'h', it: 'h', en: 'h' },
+  { id: 'day', de: 'Tag', fr: 'jour', it: 'giorno', en: 'day' },
+  { id: 'pcs', de: 'Stk.', fr: 'pce', it: 'pz.', en: 'pcs' },
+  { id: 'flat', de: 'pauschal', fr: 'forfait', it: 'forfait', en: 'flat rate' },
+  { id: 'km', de: 'km', fr: 'km', it: 'km', en: 'km' },
+  { id: 'm2', de: 'm²', fr: 'm²', it: 'm²', en: 'm²' },
+  { id: 'm', de: 'm', fr: 'm', it: 'm', en: 'm' },
+  { id: 'm3', de: 'm³', fr: 'm³', it: 'm³', en: 'm³' },
+  { id: 'l', de: 'l', fr: 'l', it: 'l', en: 'l' },
+  { id: 'kg', de: 'kg', fr: 'kg', it: 'kg', en: 'kg' },
+  { id: 'month', de: 'Mt.', fr: 'mois', it: 'mese', en: 'month' },
+];
+
+/** The word a unit prints as in `lang`: the firm's list, else the app's defaults, else its id (a unit removed from the list since). */
+export const unitWord = (units: readonly UnitDef[] | undefined, id: Unit, lang: InvoiceLanguage): string =>
+  (units ?? DEFAULT_UNITS).find((u) => u.id === id)?.[lang] ?? DEFAULT_UNITS.find((u) => u.id === id)?.[lang] ?? id;
+
+/**
+ * Whether a document's prices are net (VAT added on top) or gross (VAT included, derived from each
+ * rate's total). One choice per document; the firm sets the default per kind (`invoicing.prices`).
+ */
+export const PRICES = ['net', 'gross'] as const;
+export type Prices = (typeof PRICES)[number];
 
 /**
  * Why a line at 0 % carries no Swiss VAT: a service whose place of supply is abroad (Art. 8
@@ -58,18 +88,32 @@ export interface CustomerFields {
 }
 export interface Customer extends Envelope, CustomerFields {}
 
-export interface InvoiceLine {
+/**
+ * A position of a document (spec docs/specs/invoicing.md 4.4.3). Absent `kind` is an item: every
+ * line written before the kinds is one.
+ */
+export type InvoiceLine = ItemLine | TextLine | SubtotalLine | DiscountLine | PageBreakLine;
+export const LINE_KINDS = ['item', 'text', 'subtotal', 'discount', 'pagebreak'] as const;
+export type LineKind = (typeof LINE_KINDS)[number];
+
+/** A priced position (Standard): quantity × price, less its own discount. */
+export interface ItemLine {
+  kind?: 'item';
   text: string;
   quantity: number;
   unit?: Unit;
-  /** Unit price in the invoice's currency: net, or with the VAT in it when `vatIncluded`. */
+  /** Unit price in the invoice's currency, net or gross as the document's `prices` says. */
   price: number;
   vatRate: VatRate;
+  /** A discount on this position in percent, printed beside it; its amount is the line's less this share, to the Rappen. */
+  discount?: number;
   /**
-   * The price includes the VAT («500 VAT included»): the line stays at exactly that amount, its rate's
-   * VAT is derived from it (gross × rate / (100 + rate), to the Rappen) and its net is the rest.
+   * Only on a line whose pricing differs from its document's `prices`, as a line of schema 2 could
+   * (one line «500 VAT included» among net ones): true prices it gross, false net. A gross line
+   * stays at exactly its amount, its rate's VAT is derived from it (gross × rate / (100 + rate), to
+   * the Rappen) and its net is the rest. New lines never carry it.
    */
-  vatIncluded?: true;
+  vatIncluded?: boolean;
   /** The revenue account; absent: invoicing.revenueAccount of the workspace. */
   account?: string;
   /**
@@ -78,6 +122,24 @@ export interface InvoiceLine {
    */
   activity?: 1 | 2;
 }
+
+/** A text between positions: a title (bold) or plain; no amount. */
+export interface TextLine { kind: 'text'; text: string; style?: 'title' }
+
+/** Zwischentotal: prints the sum of the item positions since the last Zwischentotal or the start. A display, never in a total. */
+export interface SubtotalLine { kind: 'subtotal'; text: string }
+
+/**
+ * Rabatt on the total of the positions above it (after the Rabatte above it): a percent or an
+ * amount in the document's prices; a minus makes it a surcharge (Zuschlag). It is split over the
+ * rates and revenue accounts above it in proportion to their amounts (rules.ts `priced`).
+ */
+export interface DiscountLine { kind: 'discount'; text: string; percent?: number; amount?: number }
+
+/** Seitenumbruch: the next position starts a new sheet of the PDF, under the repeated table header. */
+export interface PageBreakLine { kind: 'pagebreak' }
+
+export const isItem = (l: InvoiceLine): l is ItemLine => l.kind === undefined || l.kind === 'item';
 
 export interface Comment extends Envelope {
   author: string;
@@ -103,6 +165,8 @@ export interface InvoiceContent {
   subject?: string;
   /** A credit note's lines carry negative prices (older ones negative quantities), so its totals are negative. */
   lines: InvoiceLine[];
+  /** Net or gross prices; absent: net. Every document of invoices.json schema 3 names it. */
+  prices?: Prices;
   /** The text above the table and below the totals; absent: the layout's default for the language. */
   intro?: string;
   closing?: string;
@@ -164,6 +228,8 @@ export interface Issued extends Envelope, InvoiceContent {
   customer: CustomerFields;
   sender: Sender;
   layout: InvoiceLayout;
+  /** The units its positions name, with their words as issued, so a reminder prints them as the invoice did; absent: the app's defaults. */
+  units?: UnitDef[];
   /** The PDF as issued, under the workspace, and its SHA-256. Never rendered again. */
   pdf: { file: string; sha256: string };
   cancelled?: { date: string; reason: string };
@@ -258,7 +324,39 @@ export interface InvoicingSettings {
   layout: InvoiceLayout;
   /** The texts above and below the table and of the e-mail that sends a document, per language; absent: the app's own (src/invoices/texts.ts). */
   texts: Partial<Record<InvoiceLanguage, InvoiceOwnTexts>>;
+  /** The units a position may be counted in; absent in the file: DEFAULT_UNITS. */
+  units: UnitDef[];
+  /** Whether a new document of a kind is priced net or gross; absent in the file: net. */
+  prices: Record<InvoiceContent['kind'], Prices>;
+  /** Named payment terms (phase 1, read only yet); absent in the file: one of `paymentTermsDays` days net. */
+  paymentTerms: PaymentTerms[];
+  /** The id of the terms a new document takes; absent: the first. */
+  defaultTerms?: string;
+  /** Where a Skonto and a loss are written off; absent: the jurisdiction's (modules/<j>/invoicing.yaml writeOff). */
+  writeOffAccount?: { skonto: string; loss: string };
+  /** A payment short by at most this much (the books' currency) may be closed as fees; absent in the file: 5. */
+  shortfallLimit: number;
 }
+
+/** Zahlungskondition: days to pay, an optional Skonto within fewer days, and a text for the paper. */
+export interface PaymentTerms {
+  id: string;
+  name: string;
+  days: number;
+  skonto?: { percent: number; days: number };
+  text?: string;
+}
+
+/** The name of the terms a firm has while it names none: `paymentTermsDays` days net, in each document language. */
+export const NET_TERMS: Record<InvoiceLanguage, (days: number) => string> = {
+  de: (d) => `${d} Tage netto`,
+  fr: (d) => `${d} jours net`,
+  it: (d) => `${d} giorni netto`,
+  en: (d) => `${d} days net`,
+};
+
+/** The shortfall a firm may close as fees while its settings name no limit. */
+export const DEFAULT_SHORTFALL_LIMIT = 5;
 
 /** `salutation`: a greeting line above the intro («Grüezi»); the app's own has none. */
 export const OWN_TEXTS = ['salutation', 'intro', 'closing', 'mailSubject', 'mailBody'] as const;

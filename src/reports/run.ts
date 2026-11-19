@@ -158,7 +158,7 @@ function invoiceRows(s: ReportSection, invoices: readonly Invoice[], period: Per
     if (f.currencies && !f.currencies.includes(i.currency)) return [];
     const text = [i.number, i.customer.name, i.subject].filter(Boolean).join(' · ');
     if (!textMatches(f, text)) return [];
-    const t = invoiceTotals(i.lines);
+    const t = invoiceTotals(i);
     return [{
       date: i.date, text, account: '', counterAccount: '', vatCode: '', amount: t.gross, net: t.net, tax: t.vat,
       currency: i.currency, receipt: '', counterparty: i.customer.name, link: { kind: 'invoice', id: i.number },

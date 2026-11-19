@@ -10,8 +10,8 @@ import { MANUAL_BANK, MONEY_ROLES, STATEMENT_KINDS, bankKind, parseIban, type Mo
 import { BUSINESS_PROFILES, LEGAL_FORMS, PRESET_NAMES, QUESTIONS, VAT_QUESTIONS, kindsOf, optionOf, type BusinessProfile, type GoodsKind, type LegalForm, type Preset, type SalesKind } from './setup.js';
 import { parseVatSetup } from './vat-setup.js';
 import {
-  DEFAULT_LAYOUT, INVOICE_CURRENCIES, INVOICE_FONTS, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, MAIL_SECURITY, OWN_TEXTS,
-  type Address, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type MailSecurity, type OutgoingMail,
+  DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, INVOICE_CURRENCIES, INVOICE_FONTS, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, MAIL_SECURITY, NET_TERMS, OWN_TEXTS, PRICES,
+  type Address, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type MailSecurity, type OutgoingMail, type PaymentTerms, type Prices, type UnitDef,
 } from '../invoices/model.js';
 import { isQrIban } from '../providers/qr-bill/reference.js';
 import { readDimensions, type Dimension } from '../books/tags.js';
@@ -188,6 +188,12 @@ function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: 
       texts[lang as InvoiceLanguage] = Object.fromEntries(OWN_TEXTS.filter((k) => t[k] !== undefined).map((k) => [k, String(t[k])]));
     }
   }
+  const terms = readTerms(raw.paymentTerms, days as number, fail);
+  if (raw.defaultTerms !== undefined && !terms.some((x) => x.id === raw.defaultTerms)) fail(`invoicing.defaultTerms "${String(raw.defaultTerms)}" must be the id of one of invoicing.paymentTerms`);
+  const limit = raw.shortfallLimit ?? DEFAULT_SHORTFALL_LIMIT;
+  if (typeof limit !== 'number' || !Number.isFinite(limit) || limit < 0) fail('invoicing.shortfallLimit must be an amount from 0');
+  const wo = raw.writeOffAccount;
+  if (wo !== undefined && !isMap(wo)) fail('invoicing.writeOffAccount must be { skonto, loss }');
   return {
     payTo,
     revenueAccount: account(raw.revenueAccount, 'invoicing.revenueAccount'),
@@ -203,8 +209,76 @@ function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: 
       show,
     },
     texts,
+    units: readUnits(raw.units, fail),
+    prices: readPrices(raw.prices, fail),
+    paymentTerms: terms,
+    ...(raw.defaultTerms === undefined ? {} : { defaultTerms: String(raw.defaultTerms) }),
+    ...(isMap(wo) ? { writeOffAccount: { skonto: account(wo.skonto, 'invoicing.writeOffAccount.skonto'), loss: account(wo.loss, 'invoicing.writeOffAccount.loss') } } : {}),
+    shortfallLimit: limit as number,
   };
 }
+
+/** The units a position may be counted in: each an id with its word in de, fr, it and en; absent: the app's (DEFAULT_UNITS). */
+function readUnits(raw: unknown, fail: (msg: string) => never): UnitDef[] {
+  if (raw === undefined) return DEFAULT_UNITS.map((u) => ({ ...u }));
+  if (!Array.isArray(raw) || raw.length === 0) return fail('invoicing.units must list units { id, de, fr, it, en }');
+  const seen = new Set<string>();
+  return raw.map((u, i) => {
+    const where = `invoicing.units[${i}]`;
+    if (!isMap(u)) fail(`${where} must be { id, de, fr, it, en }`);
+    const id = optText(u.id, `${where}.id`, fail)?.trim();
+    if (!id || !/^[a-z0-9][a-z0-9_-]{0,15}$/i.test(id)) fail(`${where}.id must be a short id (letters, digits, - or _)`);
+    if (seen.has(id!)) fail(`${where}.id "${id}" is listed twice`);
+    seen.add(id!);
+    const words = Object.fromEntries(INVOICE_LANGUAGES.map((l) => {
+      const w = optText(u[l], `${where}.${l}`, fail)?.trim();
+      if (!w) fail(`${where}.${l}: the unit's word in ${l} is missing`);
+      return [l, w!];
+    })) as Record<InvoiceLanguage, string>;
+    return { id: id!, ...words };
+  });
+}
+
+/** Net or gross prices per kind of document; absent: net for each. */
+function readPrices(raw: unknown, fail: (msg: string) => never): InvoicingSettings['prices'] {
+  const out: InvoicingSettings['prices'] = { invoice: 'net', 'credit-note': 'net' };
+  if (raw === undefined) return out;
+  if (!isMap(raw)) return fail('invoicing.prices must map a kind (invoice, credit-note) to net or gross');
+  for (const [kind, v] of Object.entries(raw)) {
+    if (!(kind in out) || !PRICES.includes(v as Prices)) fail(`invoicing.prices.${kind}: a kind (invoice, credit-note), ${PRICES.join(' or ')}`);
+    out[kind as keyof typeof out] = v as Prices;
+  }
+  return out;
+}
+
+/** Zahlungskonditionen by name; absent: one of `days` days net, id `net<days>`, named «30 Tage netto» (its words in each document language: NET_TERMS). */
+function readTerms(raw: unknown, days: number, fail: (msg: string) => never): PaymentTerms[] {
+  if (raw === undefined) return [{ id: `net${days}`, name: NET_TERMS.de(days), days }];
+  if (!Array.isArray(raw) || raw.length === 0) return fail('invoicing.paymentTerms must list terms { id, name, days, skonto?, text? }');
+  const seen = new Set<string>();
+  return raw.map((t, i): PaymentTerms => {
+    const where = `invoicing.paymentTerms[${i}]`;
+    if (!isMap(t)) fail(`${where} must be { id, name, days, skonto?, text? }`);
+    const id = optText(t.id, `${where}.id`, fail)?.trim();
+    if (!id) fail(`${where}.id is missing`);
+    if (seen.has(id!)) fail(`${where}.id "${id}" is listed twice`);
+    seen.add(id!);
+    const name = optText(t.name, `${where}.name`, fail)?.trim();
+    if (!name) fail(`${where}.name is missing`);
+    if (!Number.isInteger(t.days) || (t.days as number) < 0) fail(`${where}.days must be a whole number of days`);
+    let skonto: PaymentTerms['skonto'];
+    if (t.skonto !== undefined) {
+      const k = t.skonto;
+      if (!isMap(k) || typeof k.percent !== 'number' || !(k.percent > 0 && k.percent < 100) || !Number.isInteger(k.days) || (k.days as number) < 0 || (k.days as number) > (t.days as number)) {
+        fail(`${where}.skonto must be { percent (above 0, below 100), days (whole, at most ${String(t.days)}) }`);
+      }
+      skonto = { percent: (k as { percent: number }).percent, days: (k as { days: number }).days };
+    }
+    const text = optText(t.text, `${where}.text`, fail);
+    return { id: id!, name: name!, days: t.days as number, ...(skonto ? { skonto } : {}), ...(text ? { text } : {}) };
+  });
+}
+
 
 /** The profile block: every answer one the engine supports (src/workspace/setup.ts). */
 function readProfile(raw: unknown, fail: (msg: string) => never): WorkspaceProfile {

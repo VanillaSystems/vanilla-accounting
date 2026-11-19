@@ -159,7 +159,7 @@ test('r10c-3: «Lösen» undoes the link: the invoice is open again, the entries
 test('a hand-booked payment is not replaced by a confirmation: linked, its booking stays as the revenue (r9c-3)', () => {
   const inv = invoice('in_a', []);
   const book: InvoiceBook = { schema: 1, customers: [customer], invoices: [inv], sent: [] };
-  const b = books(fromCamt([credit('B1', '2026-08-04', totals(inv.lines).gross)]));
+  const b = books(fromCamt([credit('B1', '2026-08-04', totals(inv).gross)]));
   b.journalEntries.push({ id: 'm', transactionRef: 'B1', date: '2026-08-04', accountDebit: '1021', accountCredit: '3000', amount: 963.72, origin: 'manual' });
   const out = confirmPayment(b, book, inv.id, 'B1', ctx);
   assert.equal(out.paid[0].booked, false);

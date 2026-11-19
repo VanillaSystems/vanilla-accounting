@@ -14,8 +14,9 @@ import { payoutSales, salesDefaults } from '../../workspace/sells.js';
 import { WorkspaceError, WorkspaceRefusal } from '../../workspace/workspace.js';
 import { patchManifest, type BankPatch, type InvoicingPatch, type MailPatch, type ManifestPatch, type NewBank, type ProfilePatch } from '../../workspace/manifest-write.js';
 import { SALES_KINDS, salesKinds, type SalesKind } from '../../workspace/setup.js';
-import { writeAtomic } from '../../invoices/store.js';
-import { INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS } from '../../invoices/model.js';
+import { INVOICE_CURRENCIES, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, OWN_TEXTS, PRICES, isItem, type InvoiceLanguage, type UnitDef } from '../../invoices/model.js';
+import { loadInvoices, writeAtomic } from '../../invoices/store.js';
+import { liveInvoices } from '../../invoices/rules.js';
 import { accountName, removeAccount, setAccountName } from '../../workspace/accounts-write.js';
 import { standardAccounts } from '../../workspace/chart.js';
 import { readBankStatements } from '../../workspace/bank-statements.js';
@@ -228,8 +229,14 @@ function qrIbanOf(to: Record<string, unknown>, currency: string, confirm: unknow
 
 /** The layout's values are checked by the manifest's reader; here only their kinds. */
 function invoicingPatch(raw: unknown): InvoicingPatch {
-  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo', 'confirm']);
+  const b = patchBody(raw, ['setup', 'paymentTermsDays', 'layout', 'texts', 'payTo', 'confirm', 'units', 'prices']);
   const out: InvoicingPatch = {};
+  if (b.units !== undefined) out.units = b.units === null ? null : unitsPatch(b.units);
+  if (b.prices !== undefined) {
+    const p = patchBody(b.prices, ['invoice', 'credit-note']);
+    for (const [kind, v] of Object.entries(p)) if (v !== null && !PRICES.includes(v as never)) throw new RequestError(400, `prices.${kind}: net oder gross.`);
+    out.prices = p as NonNullable<InvoicingPatch['prices']>;
+  }
   if (b.payTo !== undefined) {
     const payTo = patchBody(b.payTo, INVOICE_CURRENCIES);
     out.payTo = Object.fromEntries(Object.entries(payTo).map(([currency, v]) => {
@@ -277,6 +284,32 @@ function invoicingPatch(raw: unknown): InvoicingPatch {
     }));
   }
   return out;
+}
+
+/**
+ * The firm's units as Firma › Rechnungslayout sends them: the whole list. A unit a draft still uses
+ * stays (an issued document keeps the words it was issued with): its removal is refused with the
+ * drafts that name it.
+ */
+function unitsPatch(raw: unknown): UnitDef[] {
+  if (!Array.isArray(raw) || raw.length === 0) throw new RequestError(400, 'units: eine Liste mit mindestens einer Einheit.');
+  const units = raw.map((u, i) => {
+    const f = patchBody(u, ['id', ...INVOICE_LANGUAGES]);
+    const id = stringField(f, 'id').trim();
+    if (!/^[a-z0-9][a-z0-9_-]{0,15}$/i.test(id)) throw new RequestError(400, `units[${i}].id: ein kurzes Kürzel (Buchstaben, Ziffern, - oder _).`, { code: 'unitId', params: { id } });
+    const words = Object.fromEntries(INVOICE_LANGUAGES.map((l) => {
+      const w = typeof f[l] === 'string' ? (f[l] as string).trim() : '';
+      if (!w) throw new RequestError(400, `units[${i}].${l}: das Wort der Einheit fehlt.`, { code: 'unitWord', params: { id, language: l } });
+      return [l, w];
+    })) as Record<InvoiceLanguage, string>;
+    return { id, ...words };
+  });
+  const twice = units.find((u, i) => units.findIndex((x) => x.id === u.id) !== i);
+  if (twice) throw new RequestError(400, `units: ${twice.id} steht zweimal.`, { code: 'unitTwice', params: { id: twice.id } });
+  const kept = new Set(units.map((u) => u.id));
+  const used = liveInvoices(loadInvoices(WS)).filter((i) => i.status === 'draft').flatMap((i) => i.lines.flatMap((l) => (isItem(l) && l.unit && !kept.has(l.unit) ? [l.unit] : [])));
+  if (used.length) throw new RequestError(409, `Die Einheit ${used[0]} steht in einem Entwurf: dort zuerst ändern.`, { code: 'unitInUse', params: { id: used[0] } });
+  return units;
 }
 
 /**

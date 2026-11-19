@@ -2,7 +2,7 @@
  * What the buttons of Rechnungen do: each call goes to the invoicing API, its refusal is shown
  * in the user's language (Art. 26 MWSTG gaps named one by one), and the records are read again.
  */
-import { issuedPdfUrl, sentPdfUrl, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
+import { isItem, issuedPdfUrl, sentPdfUrl, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
 import type { MailMessage } from '../../../invoices/mail.js';
 import { api, errorText, type CreditInput, type DraftChange } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
@@ -76,8 +76,8 @@ export async function deleteDraft(nav: Nav, draft: Draft): Promise<void> {
  * Issues the draft, shows it in a period that holds its date (F10): the period on screen, `current`,
  * when it does, and opens the send window with its PDF.
  */
-export async function issue(nav: Nav, draft: Draft, current: Period): Promise<Issued | undefined> {
-  const issued = await run(nav, api.issue(draft.id));
+export async function issue(nav: Nav, draft: Draft, current: Period, anyway = false): Promise<Issued | undefined> {
+  const issued = await run(nav, api.issue(draft.id, anyway));
   if (!issued) return undefined;
   await reloadInvoices();
   nav.go(invoiceAt(issued, current));
@@ -124,9 +124,9 @@ export async function send(nav: Nav, inv: Issued, email?: MailMessage): Promise<
 }
 
 export async function copyAsDraft(nav: Nav, inv: Issued): Promise<void> {
-  const { customerId, currency, language, subject, lines, intro, closing, exemption } = inv;
-  const lines2 = inv.kind === 'credit-note' ? lines.map((l) => ({ ...l, price: -l.price })) : lines;
-  const draft = await newDraft(nav, { id: customerId, name: inv.customer.name }, { currency, language, lines: lines2, ...(subject ? { subject } : {}), ...(intro ? { intro } : {}), ...(closing ? { closing } : {}), ...(exemption ? { exemption } : {}) });
+  const { customerId, currency, language, subject, lines, prices, intro, closing, exemption } = inv;
+  const lines2 = inv.kind === 'credit-note' ? lines.map((l) => (isItem(l) ? { ...l, price: -l.price } : l)) : lines;
+  const draft = await newDraft(nav, { id: customerId, name: inv.customer.name }, { currency, language, lines: lines2, ...(prices ? { prices } : {}), ...(subject ? { subject } : {}), ...(intro ? { intro } : {}), ...(closing ? { closing } : {}), ...(exemption ? { exemption } : {}) });
   if (draft) nav.toast(t('invoices.copied', { number: inv.number }));
 }
 

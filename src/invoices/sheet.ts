@@ -11,9 +11,9 @@
  * Pure strings, no Node module: the UI imports it as it is.
  */
 import { SwissQRBill } from 'swissqrbill/svg';
-import { UNITS, type Address, type CustomerFields, type Exemption, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type InvoiceLine, type Sender } from './model.js';
+import { DEFAULT_UNITS, isItem, unitWord, type Address, type CustomerFields, type Exemption, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type InvoiceLine, type Prices, type Sender, type UnitDef } from './model.js';
 import { isQrBillIban, prettyReference } from '../providers/qr-bill/reference.js';
-import { lineAmount, totals } from './rules.js';
+import { pricedGross, priced, totals } from './rules.js';
 import { TEXTS, formatAmount, formatDate, formatQuantity, type InvoiceTexts } from './texts.js';
 import { chargesVat, invoiceActivities, invoiceRates, invoicing } from '../engines/index.js';
 
@@ -33,6 +33,10 @@ export interface SheetData {
   customer: CustomerFields;
   sender: Omit<Sender, 'payTo'> & { payTo?: Sender['payTo'] };
   lines: InvoiceLine[];
+  /** Net or gross prices; absent: net. */
+  prices?: Prices;
+  /** The firm's units with their words; absent: the app's defaults. A unit no list names prints as its id. */
+  units?: readonly UnitDef[];
   exemption?: Exemption;
   /** A draft's greeting line above the intro (Firma › Rechnungslayout); an issued invoice has it in its intro. */
   salutation?: string;
@@ -66,12 +70,19 @@ export interface ScreenSheet {
     scope: 'draft' | 'texts';
     customers: Array<{ id: string; name: string }>;
     customerId?: string;
-    /** `activity`: «Tätigkeit», for a net rate the firm gave no label (the picker of a firm with two net rates). */
-    words: { newCustomer: string; chooseCustomer: string; addLine: string; removeLine: string; intro: string; closing: string; desc: string; noExemption: string; supplied: string; activity?: string };
+    words: {
+      newCustomer: string; chooseCustomer: string; addLine: string; removeLine: string; intro: string; closing: string; desc: string; noExemption: string; supplied: string;
+      /** `activity`: «Tätigkeit», for a net rate the firm gave no label (the picker of a firm with two net rates). */
+      activity?: string;
+      /** The other kinds of position (spec 4.4.3), a page break's marker on screen, and the handle that moves a position (drag, or Alt+↑/↓). */
+      addText: string; addSubtotal: string; addDiscount: string; addPageBreak: string; pageBreak: string; move: string;
+      title: string; plain: string; percent: string; amount: string; lineDiscount: string;
+    };
   };
 }
 
-export interface Block { html: string; head?: boolean; row?: boolean }
+/** `pagebreak`: the next block starts a new sheet (a Seitenumbruch position); a row after it repeats the table header. */
+export interface Block { html: string; head?: boolean; row?: boolean; pagebreak?: boolean }
 
 /** In millimetres, as the mockup lays the sheet out. */
 export const PAGE = { firstTop: 88, nextTop: 30, bottom: 297 - 14, footer: 11, qrBill: 105, cutLine: 5 } as const;
@@ -138,9 +149,11 @@ export function sheetBlocks(d: SheetData): Block[] {
   const ed = d.screen?.edit;
   const draft = ed?.scope === 'draft';
   const n = (x: number) => formatAmount(x, d.language);
-  const t = totals(d.lines);
+  const t = totals(d);
+  const amounts = priced(d).amounts;
+  const items = d.lines.filter(isItem);
   // A document without VAT (a firm not registered) prints no rate column, no VAT line and no net total: what an invoice shows, the firm owes. An issued document says so by its lines, a draft by the firm's setup.
-  const withVat = draft ? chargesVat() : d.lines.some((l) => l.vatRate > 0) || !!d.exemption;
+  const withVat = draft ? chargesVat() : items.some((l) => l.vatRate > 0) || !!d.exemption;
   const vatColumn = (show.vatColumn || draft) && withVat;
   const cols: Array<[string, string]> = [['d', L.desc], ...(show.quantity ? [['q', L.qty], ['p', L.price]] as Array<[string, string]> : []), ...(vatColumn ? [['v', L.vat]] as Array<[string, string]> : []), ['a', `${L.amount} ${d.currency}`]];
   const colgroup = `<colgroup>${cols.map(([k]) => `<col class="c${k}">`).join('')}</colgroup>`;
@@ -163,22 +176,56 @@ export function sheetBlocks(d: SheetData): Block[] {
   B.push({ html: `<table class="tb">${colgroup}<thead><tr>${cols.map(([k, x]) => `<th class="${k === 'd' ? '' : 'r'}">${esc(x)}</th>`).join('')}</tr></thead></table>`, head: true });
   // Which of its two net rates a line's revenue is booked at: the screen's choice, never on paper (#504).
   const activities = draft ? invoiceActivities().map((r, i): [string, string] => [String(i + 1), `${r.label ?? `${ed.words.activity ?? ''} ${i + 1}`.trim()} ${r.rate} %`]) : [];
+  const units = d.units ?? DEFAULT_UNITS;
+  const unit = (id: string | undefined) => (id ? unitWord(units, id, d.language) : '');
+  const row = (k: number, cls: string, cells: string) => `<table class="tb">${colgroup}<tbody><tr class="${cls}"${draft ? ` data-row="${k}"` : ''}>${cells}</tr></tbody></table>`;
+  // On screen, each position of a draft has a handle to move it (drag, or Alt+↑/↓) and a button to remove it.
+  const tools = (k: number) => (draft
+    ? `<button type="button" class="edmv scr" data-ia="move" data-k="${k}" draggable="true" title="${esc(ed.words.move)}" aria-label="${esc(ed.words.move)}">⠿</button>${d.lines.length > 1 || !isItem(d.lines[k]) ? `<button type="button" class="edx scr" data-ia="rmline" data-k="${k}" title="${esc(ed.words.removeLine)}" aria-label="${esc(ed.words.removeLine)}">×</button>` : ''}`
+    : '');
+  const span = cols.length;
+  const pct = (x: number) => `${formatQuantity(x)} %`;
   d.lines.forEach((l, k) => {
-    const unit = l.unit ? ` ${L.units[l.unit]}` : '';
-    const incl = !!l.vatIncluded && l.vatRate > 0;
+    if (l.kind === 'pagebreak') {
+      B.push({ pagebreak: true, html: draft ? row(k, 'pbreak scr', `<td colspan="${span}"><span>${esc(ed.words.pageBreak)}</span>${tools(k)}</td>`) : '' });
+      return;
+    }
+    if (l.kind === 'text') {
+      const style = draft ? ` ${pick(`l:${k}:style`, [['plain', ed.words.plain], ['title', ed.words.title]], l.style ?? 'plain')}` : '';
+      const text = draft ? editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked') : esc(l.text);
+      B.push({ row: true, html: row(k, `ltext${l.style === 'title' ? ' title' : ''}`, `<td colspan="${span}">${text}${style ? `<span class="edstyle scr">${style}</span>` : ''}${tools(k)}</td>`) });
+      return;
+    }
+    if (l.kind === 'subtotal') {
+      const label = draft ? editable(`l:${k}:text`, esc(l.text), ed.words.desc) : esc(l.text);
+      B.push({ row: true, html: row(k, 'lsub', `<td colspan="${span - 1}">${label}</td><td class="r">${n(amounts[k] ?? 0)}${tools(k)}</td>`) });
+      return;
+    }
+    if (l.kind === 'discount') {
+      const label = draft ? editable(`l:${k}:text`, esc(l.text), ed.words.desc) : esc(l.text);
+      const value = draft
+        ? `${editable(`l:${k}:discount`, l.percent !== undefined ? esc(formatQuantity(l.percent)) : l.amount !== undefined ? n(l.amount) : '', '0')} ${pick(`l:${k}:dmode`, [['percent', '%'], ['amount', d.currency]], l.amount !== undefined ? 'amount' : 'percent')}`
+        : l.percent !== undefined ? pct(l.percent) : '';
+      B.push({ row: true, html: row(k, 'ldisc', `<td colspan="${span - 1}">${label}${value ? ` <span class="dval">${value}</span>` : ''}</td><td class="r">${n(amounts[k] ?? 0)}${tools(k)}</td>`) });
+      return;
+    }
+    const incl = l.vatRate > 0 && pricedGross(l, d.prices);
+    const off = l.discount ? `<span class="loff">${esc(L.lineDiscount(pct(l.discount)))}</span>` : '';
     const cells = draft
       ? {
         text: editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked'),
-        qty: `${editable(`l:${k}:quantity`, esc(formatQuantity(l.quantity)))} ${pick(`l:${k}:unit`, [['', '–'], ...UNITS.map((u): [string, string] => [u, L.units[u]])], l.unit ?? '')}`,
-        price: editable(`l:${k}:price`, n(l.price)),
-        rate: pick(`l:${k}:vatRate`, invoiceRates().flatMap((r): Array<[string, string]> => [[String(r), `${r} %`], ...(r > 0 ? [[`incl:${r}`, `${r} % ${L.included}`] as [string, string]] : [])]), `${l.vatIncluded && l.vatRate > 0 ? 'incl:' : ''}${l.vatRate}`)
+        qty: `${editable(`l:${k}:quantity`, esc(formatQuantity(l.quantity)))} ${pick(`l:${k}:unit`, [['', '–'], ...[...units.map((u): [string, string] => [u.id, u[d.language]]), ...(l.unit && !units.some((u) => u.id === l.unit) ? [[l.unit, l.unit] as [string, string]] : [])]], l.unit ?? '')}`,
+        price: `${editable(`l:${k}:price`, n(l.price))}<span class="loff ed-off${l.discount ? ' on' : ''}">${esc(ed.words.lineDiscount)} ${editable(`l:${k}:discount`, l.discount ? esc(formatQuantity(l.discount)) : '', '0')} %</span>`,
+        rate: pick(`l:${k}:vatRate`, invoiceRates().map((r): [string, string] => [String(r), `${r} %${r > 0 && incl ? ` ${L.included}` : ''}`]), String(l.vatRate))
           + (activities.length && l.vatRate > 0 ? `<span class="edact scr">${pick(`l:${k}:activity`, activities, String(l.activity ?? 1))}</span>` : ''),
-        remove: d.lines.length > 1 ? `<button type="button" class="edx scr" data-ia="rmline" data-k="${k}" title="${esc(ed.words.removeLine)}" aria-label="${esc(ed.words.removeLine)}">×</button>` : '',
       }
-      : { text: `${esc(l.text)}${incl && !vatColumn ? ` (${l.vatRate} % ${L.included})` : ''}`, qty: esc(`${formatQuantity(l.quantity)}${unit}`), price: n(l.price), rate: `${l.vatRate} %${incl ? ` ${L.included}` : ''}`, remove: '' };
-    B.push({ row: true, html: `<table class="tb">${colgroup}<tbody><tr><td>${cells.text}</td>${show.quantity ? `<td class="r">${cells.qty}</td><td class="r">${cells.price}</td>` : ''}${vatColumn ? `<td class="r">${cells.rate}</td>` : ''}<td class="r">${n(lineAmount(l))}${cells.remove}</td></tr></tbody></table>` });
+      : { text: `${esc(l.text)}${incl && !vatColumn ? ` (${l.vatRate} % ${L.included})` : ''}${off && !show.quantity ? off : ''}`, qty: esc(`${formatQuantity(l.quantity)}${l.unit ? ` ${unit(l.unit)}` : ''}`), price: `${n(l.price)}${off}`, rate: `${l.vatRate} %${incl ? ` ${L.included}` : ''}` };
+    B.push({ row: true, html: row(k, 'litem', `<td>${cells.text}</td>${show.quantity ? `<td class="r">${cells.qty}</td><td class="r">${cells.price}</td>` : ''}${vatColumn ? `<td class="r">${cells.rate}</td>` : ''}<td class="r">${n(amounts[k] ?? 0)}${tools(k)}</td>`) });
   });
-  if (draft) B.push({ html: `<div class="edadd scr"><button type="button" data-ia="addline">＋ ${esc(ed.words.addLine)}</button></div>` });
+  if (draft) {
+    const add: Array<[string, string]> = [['addline', ed.words.addLine], ['addtext', ed.words.addText], ['addsubtotal', ed.words.addSubtotal], ['adddiscount', ed.words.addDiscount], ['addpagebreak', ed.words.addPageBreak]];
+    B.push({ html: `<div class="edadd scr">${add.map(([a, w]) => `<button type="button" data-ia="${a}">＋ ${esc(w)}</button>`).join('')}</div>` });
+  }
   const rates = t.byRate.filter((r) => r.rate > 0).map((r) => `<div><span>${esc(L.vatOn(String(r.rate), n(r.net)))}</span><span>${n(r.vat)}</span></div>`).join('');
   const due = d.due && (d.due.paidSoFar || d.due.fee) ? [
     d.due.paidSoFar ? `<div><span>${L.paidSoFar}</span><span>${n(-d.due.paidSoFar)}</span></div>` : '',
@@ -194,7 +241,7 @@ export function sheetBlocks(d: SheetData): Block[] {
     B.push({ html: `<div class="settle"><div><span>${esc(L.ofInvoice(c.number, formatDate(c.date, d.language)))}</span><span>${n(c.gross)}</span></div>${c.paid ? `<div><span>${L.paidOn(formatDate(c.paidDate ?? c.date, d.language))}</span><span>${n(-c.paid)}</span></div>` : ''}<div><span>${L.creditLine}</span><span>${n(-credit)}</span></div></div><p class="settled">${esc(settled)}</p>` });
   }
   // The reason for 0 % is a registered firm's: one that charges no VAT has none to give.
-  if (draft && withVat && d.lines.some((l) => l.vatRate === 0)) {
+  if (draft && withVat && items.some((l) => l.vatRate === 0)) {
     const options: Array<[string, string]> = [...(d.exemption ? [] : [['', ed.words.noExemption] as [string, string]]), ['abroad', L.exemption.abroad], ['export', L.exemption.export]];
     B.push({ html: `<p class="abroad">${pick('exemption', options, d.exemption ?? '')}</p>` });
   } else if (d.exemption) B.push({ html: `<p class="abroad">${esc(L.exemption[d.exemption])}</p>` });
@@ -204,24 +251,46 @@ export function sheetBlocks(d: SheetData): Block[] {
   return B;
 }
 
-/** Block heights in mm → the blocks of each sheet (indices; -1 is the repeated table header), and whether the QR-bill needs a sheet of its own. */
-export function paginate(blocks: ReadonlyArray<Pick<Block, 'head' | 'row'>>, mm: readonly number[], opts: { footer: boolean; qrBill: boolean }): { pages: number[][]; qrOwnPage: boolean } {
+/**
+ * Block heights in mm → the blocks of each sheet (indices; -1 is the repeated table header), and
+ * whether the QR-bill needs a sheet of its own. A page-break block ends its sheet; the next table
+ * row starts the next under the repeated header.
+ */
+export function paginate(blocks: ReadonlyArray<Pick<Block, 'head' | 'row' | 'pagebreak'>>, mm: readonly number[], opts: { footer: boolean; qrBill: boolean }): { pages: number[][]; qrOwnPage: boolean } {
   const foot = opts.footer ? PAGE.footer : 0;
   const limit = PAGE.bottom - foot;
   const headIndex = blocks.findIndex((b) => b.head);
   const headMm = headIndex >= 0 ? mm[headIndex] : 0;
   const pages: number[][] = [[]];
   let y: number = PAGE.firstTop;
+  let broken = false;
+  // A page break ends its sheet only after a table row on it: one as the first position, or a second in a row, leaves no blank sheet and no lonely header.
+  let rows = false;
   blocks.forEach((b, i) => {
     const keep = b.head ? mm[i + 1] ?? 0 : 0;
+    if (b.pagebreak) {
+      pages[pages.length - 1].push(i);
+      if (!rows) return;
+      pages.push([]);
+      y = PAGE.nextTop;
+      broken = true;
+      rows = false;
+      return;
+    }
     if (y + mm[i] + keep > limit && pages[pages.length - 1].length) {
       pages.push([]);
       y = PAGE.nextTop;
-      if (b.row) { pages[pages.length - 1].push(-1); y += headMm; }
+      broken = true;
+      rows = false;
     }
+    if (broken && b.row && headIndex >= 0 && i > headIndex) { pages[pages.length - 1].push(-1); y += headMm; }
+    broken = false;
+    if (b.row) rows = true;
     pages[pages.length - 1].push(i);
     y += mm[i];
   });
+  // A page break as the last position leaves no empty sheet behind.
+  if (pages.length > 1 && pages[pages.length - 1].length === 0) pages.pop();
   return { pages, qrOwnPage: opts.qrBill && y > 297 - PAGE.qrBill - PAGE.cutLine };
 }
 
@@ -236,7 +305,7 @@ export function assembleSheets(d: SheetData, blocks: Block[], pagination: { page
   const n = pages.length + (qrOwnPage ? 1 : 0);
   const title = `${esc(sheetTitle(d, L))} ${d.number ? esc(d.number) : `<span class="draftno">${L.draft}</span>`}`;
   const s = d.sender;
-  const withVat = d.screen?.edit?.scope === 'draft' || !d.number ? chargesVat() : d.lines.some((l) => l.vatRate > 0) || !!d.exemption;
+  const withVat = d.screen?.edit?.scope === 'draft' || !d.number ? chargesVat() : d.lines.some((l) => isItem(l) && l.vatRate > 0) || !!d.exemption;
   const uid = !s.uid ? '' : withVat ? `${esc(s.uid)} ${L.vatSuffix}` : esc(s.uid);
   const uidLabel = withVat ? L.vatNo : L.uidNo;
   const pageHead = (k: number) => `<div class="phead"><span>${esc(s.name)} · ${title}</span><span>${L.page(k, n)}</span></div>`;
@@ -279,7 +348,7 @@ export function qrBillData(d: SheetData, iban: string) {
   const party = (name: string, a: Address) => ({ name, address: a.street ?? '', ...(a.number ? { buildingNumber: a.number } : {}), zip: a.postcode, city: a.town, country: a.country });
   return {
     currency: d.currency,
-    amount: d.due ? d.due.open : totals(d.lines).gross,
+    amount: d.due ? d.due.open : totals(d).gross,
     reference: d.reference,
     message: `${TEXTS[d.language].invoice} ${d.number}`,
     creditor: { ...party(s.name, s.address), account: iban.replace(/\s+/g, '') },
@@ -354,6 +423,11 @@ html, body { margin: 0 }
 .a4 th { text-align: left; font-weight: 600; font-size: 7.5pt; color: #5b6270; border-bottom: .35mm solid var(--iva); padding: 1.2mm 1mm }
 .a4 td { padding: 1.8mm 1mm; border-bottom: .2mm solid #e3e6ec; vertical-align: top; overflow-wrap: anywhere }
 .a4 .r { text-align: right; white-space: nowrap }
+.a4 tr.ltext td { border-bottom: 0; padding-bottom: .6mm; white-space: pre-line }
+.a4 tr.ltext.title td { font-weight: 700; font-size: 10pt; padding-top: 3.5mm }
+.a4 tr.lsub td { font-weight: 600; border-top: .3mm solid #9aa1ad }
+.a4 tr.ldisc .dval { color: #5b6270 }
+.a4 .loff { display: block; font-size: 7.5pt; color: #5b6270 }
 .a4 .sum, .a4 .settle { margin: 3mm 0 0 auto; width: 78mm }
 .a4 .sum > div, .a4 .settle > div { display: flex; justify-content: space-between; gap: 4mm; padding: .8mm 1mm }
 .a4 .sum .tot { border-top: .4mm solid var(--iva); margin-top: 1mm; padding-top: 1.6mm; font-weight: 700; font-size: 10.5pt }

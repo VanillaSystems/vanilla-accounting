@@ -34,7 +34,7 @@ export interface EventOutcome {
   files: PaymentOutcome['files'];
 }
 
-const gross = (inv: Issued) => Math.abs(toRappen(totals(inv.lines).gross));
+const gross = (inv: Issued) => Math.abs(toRappen(totals(inv).gross));
 
 /** What a credit note still owed back at the end of `date`: its part beyond what its invoice owed then, less the refunds made by then. */
 function refundDueOn(cn: Issued, invoices: readonly Invoice[], date: string): number {
@@ -156,12 +156,12 @@ export function invoiceReceipt(books: Books, inv: Issued, ctx: Pick<PaymentConte
   const id = ctx.receiptId(pdf);
   if (books.receipts.some((r) => r.id === id)) return id;
   const filename = `${inv.date.replace(/-/g, '')}-${word.toLowerCase()}-${inv.number}.pdf`;
-  const t = totals(inv.lines);
+  const t = totals(inv);
   const receipt: Receipt = {
     id,
     filename,
     originalFilename: filename,
-    extractedText: [inv.sender.name, `${word} ${inv.number}`, inv.customer.name, ...inv.lines.map((l) => l.text), `Total ${inv.currency} ${t.gross.toFixed(2)}`].join('\n'),
+    extractedText: [inv.sender.name, `${word} ${inv.number}`, inv.customer.name, ...inv.lines.flatMap((l) => (l.kind === 'pagebreak' ? [] : [l.text])), `Total ${inv.currency} ${t.gross.toFixed(2)}`].join('\n'),
     extractionMethod: 'pdftotext',
     fileSize: pdf.length,
     indexedAt: ctx.indexedAt(at),

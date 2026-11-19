@@ -9,6 +9,11 @@ exemptions:
   abroad: "221"   # a service whose place of supply is abroad (Art. 8 MWSTG)
   export: "220"   # an export of goods (Art. 23 MWSTG)
 
+# Where the rest of an invoice is written off while the firm names no accounts of its own
+# (belege.workspace.yaml invoicing.writeOffAccount): a Skonto, Rabatt, fee or rounding on the
+# Erlösminderungen, a loss on the Verluste aus Forderungen of the KMU chart (accounts.yaml).
+writeOff: { skonto: "3800", loss: "3805" }
+
 # The countries of the VAT territory (Art. 3 MWSTG: Switzerland and Liechtenstein), by the first
 # two letters of an IBAN: a customer payment in CHF from such an IBAN is proposed as a domestic
 # sale at the normal rate, any other as an export (src/accounting/sales-without-vat.ts).

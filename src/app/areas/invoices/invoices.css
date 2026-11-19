@@ -119,6 +119,32 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .a4 .edadd { padding: 1.5mm 0 0; }
 .a4 .edadd button { font: inherit; font-size: 8.5pt; color: #5b6270; padding: .6mm 1.5mm; border-radius: .8mm; }
 .a4 .edadd button:hover { color: #141a26; background: #eef0f3; }
+.a4 .edadd { display: flex; flex-wrap: wrap; gap: 1mm; }
+/* a position's handle: dragged onto another row, or ↑/↓ while it has the focus */
+.a4 .edmv { position: absolute; left: -6mm; top: 1.2mm; width: 4.5mm; height: 4.5mm; line-height: 4.5mm; font-size: 8pt; color: #9aa1ad; border-radius: .8mm; cursor: grab; opacity: 0; }
+.a4 table.tb:hover .edmv, .a4 .edmv:focus-visible { opacity: 1; }
+.a4 .edmv:hover { color: #141a26; background: #eef0f3; }
+.a4 .edmv:focus-visible { outline: 1px solid var(--iva); }
+.a4 tr.dropat td { box-shadow: inset 0 .5mm 0 var(--iva); }
+.a4 tr.pbreak td { border-bottom: 0; padding: 1mm; text-align: center; color: #8a909c; font-size: 7.5pt; background: repeating-linear-gradient(90deg, #c7ccd4 0 2mm, transparent 2mm 4mm) center / 100% .2mm no-repeat; }
+.a4 tr.pbreak td span { background: #fff; padding: 0 2mm; }
+.a4 .edstyle { font-weight: 400; font-size: 7.5pt; color: #8a909c; }
+.a4 .ed-off { white-space: nowrap; }
+/* a position's own discount and a text's style show when set, on hover and while typed in; else they take no room */
+.a4 td:has(> .ed-off), .a4 td:has(> .edstyle) { position: relative; }
+.a4 .ed-off:not(.on), .a4 .edstyle { position: absolute; right: 1mm; top: calc(100% - 1.2mm); z-index: 2; background: #fff; padding: 0 .8mm; border-radius: .6mm; opacity: 0; pointer-events: none; }
+.a4 .edstyle { right: auto; left: 1mm; }
+.a4 table.tb:hover .ed-off, .a4 .ed-off:focus-within, .a4 table.tb:hover .edstyle, .a4 .edstyle:focus-within { opacity: 1; pointer-events: auto; box-shadow: 0 .3mm 1mm rgba(0,0,0,.12); }
+.a4 .ed-off.on { position: static; opacity: 1; }
+.a4 .dval select.edsel { text-align: left; field-sizing: content; }
+.ivsheet.editing .a4 .ed-off .ed:empty::before { content: '0'; }
+.lkunits .lkut { width: 100%; border-collapse: collapse; font-size: 12px; }
+.lkunits .lkut th { text-align: left; font-weight: 500; color: var(--muted); padding: 2px 4px; }
+.lkunits .lkut td { padding: 2px 4px; border-top: 1px solid var(--line); }
+.lkunits .lkut td:last-child { width: 1%; white-space: nowrap; text-align: right; }
+.lkunits .lkuadd { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.lkunits .lkuadd input { min-width: 0; box-sizing: border-box; font: 12px var(--font-sans); padding: 4px 8px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); }
+.lkunits .lkuadd .btn { grid-column: 1 / -1; justify-self: end; }
 .paper.sentpdf .pages { display: grid; gap: 18px; }
 .paper.sentpdf canvas { max-width: 100%; height: auto; box-shadow: 0 1px 3px rgba(0,0,0,.12), 0 8px 30px rgba(0,0,0,.08); }
 
@@ -225,3 +251,4 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .ivleft { margin: 8px 0; }
 .ivtake { display: grid; gap: 2px; margin: 0 0 8px; font-size: 13px; }
 .ivleft .l { display: block; }
+.ivsheet.editing .a4 .dval .ed { min-width: 2mm; }

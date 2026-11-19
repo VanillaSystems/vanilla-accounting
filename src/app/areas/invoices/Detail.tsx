@@ -5,9 +5,10 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
-import { type Draft, type Invoice, type Issued } from '../../../invoices/model.js';
+import { PRICES, isItem, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
+import { TEXTS } from '../../../invoices/texts.js';
 import { defaultTexts, senderFor } from '../../../invoices/documents.js';
-import { missingForIssue, openAmount, openFees, paidAmount, refundDue, reminderDraft, totals, type Missing } from '../../../invoices/rules.js';
+import { missingForIssue, openAmount, openFees, paidAmount, refundDue, reminderDraft, totals, warningsForIssue, type Missing } from '../../../invoices/rules.js';
 import { prettyReference } from '../../../providers/qr-bill/reference.js';
 import type { PaymentProposal } from '../../../invoices/payments.js';
 import { at } from '../receipts/view.js';
@@ -23,7 +24,7 @@ import { Paper } from '../receipts/Paper.js';
 import type { AreaProps } from '../index.js';
 import { useInvoices } from './data.js';
 import { byRouteId, customerOf, issuedLater, linkablePayments, routeId, rowState, wasSent, type RowState } from './model.js';
-import { fixFor, parseNumber, sheetEdit, type Fix } from './edit.js';
+import { fixFor, moveLine, parseNumber, repriced, sheetEdit, type Fix } from './edit.js';
 import { setUi, useUi, type Section } from './state.js';
 import { comment, confirmPayment, copyAsDraft, deleteDraft, firstLine, invoiceAt, issue, releasePayment, saveDraft, send, sendReminder } from './actions.js';
 import { contextOf, draftData, issuedData, reminderData } from './sheets.js';
@@ -72,7 +73,7 @@ function InvoiceDetail(props: DetailProps) {
   const today = localToday();
   const state = rowState(inv, d.invoices, today);
   const customer = customerOf(d, inv);
-  const t0 = totals(inv.lines);
+  const t0 = totals(inv);
   const reminder = inv.status === 'issued' && s.reminder?.invoiceId === inv.id ? s.reminder : null;
   const editing = canEdit && !s.preview && (inv.status === 'draft' || !!reminder);
 
@@ -91,13 +92,18 @@ function InvoiceDetail(props: DetailProps) {
     if (change) void saveDraft(nav, inv, change);
   }
 
-  function action(a: string, k: number): string | void {
+  function action(a: string, k: number, to?: number): string | void {
     if (inv.status !== 'draft') return;
     if (a === 'rmline') void saveDraft(nav, inv, { lines: inv.lines.filter((_, i) => i !== k) });
-    if (a === 'addline') {
-      const zero = inv.lines.length > 0 && inv.lines.every((l) => l.vatRate === 0);
-      void saveDraft(nav, inv, { lines: [...inv.lines, firstLine(zero)] });
-      return `l:${inv.lines.length}:text`;
+    if (a === 'move' && to !== undefined) {
+      const lines = moveLine(inv.lines, k, to);
+      if (lines) void saveDraft(nav, inv, { lines });
+      return lines ? `mv:${to}` : undefined;
+    }
+    const added = newPosition(a, inv);
+    if (added) {
+      void saveDraft(nav, inv, { lines: [...inv.lines, added] });
+      return added.kind === 'pagebreak' ? undefined : added.kind === 'discount' ? `l:${inv.lines.length}:discount` : `l:${inv.lines.length}:text`;
     }
   }
 
@@ -113,7 +119,7 @@ function InvoiceDetail(props: DetailProps) {
         {inv.status === 'issued' && inv.kind === 'invoice' && <span data-tip={t('invoices.dueTip')}>{t('invoices.due', { date: formatDate(inv.dueDate) })}</span>}
         {inv.status === 'issued' && inv.kind === 'invoice' && <span data-tip={t('invoices.referenceTip')}>{prettyReference(inv.reference)}</span>}
         {/* A firm not in the register charges no VAT: its invoice's head has no VAT line at all (#398). */}
-        {chargesVat() || t0.vat ? <span data-testid="invoice-head-vat">{t0.vat || inv.lines.some((l) => l.vatRate > 0) ? t('invoices.vatAmount', { amount: fmt(t0.vat) }) : t('invoices.vatZero')}</span> : null}
+        {chargesVat() || t0.vat ? <span data-testid="invoice-head-vat">{t0.vat || inv.lines.some((l) => isItem(l) && l.vatRate > 0) ? t('invoices.vatAmount', { amount: fmt(t0.vat) }) : t('invoices.vatZero')}</span> : null}
       </div>
       <Status {...props} state={state} reminder={!!reminder} />
       <Actions {...props} state={state} reminderLevel={reminder ? reminderDraft(inv, d.invoices, today).level : undefined} />
@@ -135,10 +141,23 @@ function InvoiceDetail(props: DetailProps) {
   );
 }
 
+/** The position an «＋» button of the sheet adds, its label in the document's language; undefined for another action. */
+function newPosition(a: string, inv: Draft): InvoiceLine | undefined {
+  const L = TEXTS[inv.language];
+  switch (a) {
+    case 'addline': { const items = inv.lines.filter(isItem); return firstLine(items.length > 0 && items.every((l) => l.vatRate === 0)); }
+    case 'addtext': return { kind: 'text', text: '', style: 'title' };
+    case 'addsubtotal': return { kind: 'subtotal', text: L.subtotal };
+    case 'adddiscount': return { kind: 'discount', text: L.discount, percent: 0 };
+    case 'addpagebreak': return { kind: 'pagebreak' };
+    default: return undefined;
+  }
+}
+
 /** An edit on the draft's sheet, saved; false: refused, the field goes back. */
 function draftChange({ d, ws, nav }: DetailProps, inv: Draft, key: string, value: string): DraftChange | false | undefined {
   const terms = d.customers.find((x) => x.id === inv.customerId)?.paymentTermsDays ?? ws.invoicing?.paymentTermsDays ?? 30;
-  const r = sheetEdit(inv, key, value, { customers: d.customers, defaultTexts: defaultTexts(contextOf(ws), inv.kind, inv.language, terms) });
+  const r = sheetEdit(inv, key, value, { customers: d.customers, defaultTexts: defaultTexts(contextOf(ws), inv.kind, inv.language, terms), units: ws.invoicing?.units });
   if (!r) return undefined;
   if ('change' in r) return r.change;
   if ('newCustomer' in r) { setUi({ dialog: { kind: 'customer', then: { draft: inv.id } } }); return false; }
@@ -249,7 +268,7 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
 }
 
 /** What the draft still lacks before it can be issued, each with the way to fix it. */
-function MissingList({ d, inv, nav, missing }: DetailProps & { inv: Draft; missing: Missing[] }) {
+function MissingList({ d, inv, nav, missing, warn }: DetailProps & { inv: Draft; missing: Missing[]; warn?: () => Promise<unknown> }) {
   const fix = (f: Fix) => {
     if ('company' in f) nav.go({ route: { area: 'company', section: f.company }, query: {} });
     else if ('customer' in f) { if (f.customer === 'edit') setUi({ dialog: { kind: 'customer', id: inv.customerId } }); else setUi({ focus: 'customer', preview: false }); }
@@ -259,7 +278,7 @@ function MissingList({ d, inv, nav, missing }: DetailProps & { inv: Draft; missi
   return (
     <div className="notice warn ivmissing" id="ivmissing" role="note">
       {I.dot}
-      <span>{t('invoices.missingHead')}{' '}
+      <span>{t(warn ? 'invoices.warnHead' : 'invoices.missingHead')}{' '}
         {missing.map((m, i) => {
           const f = fixFor(m);
           return (
@@ -269,7 +288,9 @@ function MissingList({ d, inv, nav, missing }: DetailProps & { inv: Draft; missi
             </span>
           );
         })}
+        {warn && <>{'. '}{t('invoices.warnRule')}</>}
       </span>
+      {warn && <AsyncButton type="button" className="btn ghost" data-act="issue-anyway" onClick={warn}>{t('invoices.issueAnyway')}</AsyncButton>}
     </div>
   );
 }
@@ -284,11 +305,12 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
   const preview = <button type="button" className="btn ghost" data-act="preview" aria-pressed={s.preview} onClick={() => setUi({ preview: !s.preview })}>{s.preview ? t('invoices.edit') : t('invoices.preview')}</button>;
   if (inv.status === 'draft') {
     const missing = missingForIssue(inv, { customer: d.customers.find((c) => c.id === inv.customerId), sender: senderFor(contextOf(ws), inv.currency), invoices: d.invoices });
+    const warnings = missing.length ? [] : warningsForIssue(inv);
     const tryIssue = () => {
-      if (missing.length) {
-        // Issuing would be refused: the person is taken to the first thing to fix.
+      if (missing.length || warnings.length) {
+        // Issuing would be refused or warned of: the person is taken to the first thing to fix.
         document.querySelector<HTMLButtonElement>('.ivmissing button')?.focus();
-        nav.toast(t('invoices.missing', { list: missing.map(missingText).join(', ') }));
+        nav.toast(missing.length ? t('invoices.missing', { list: missing.map(missingText).join(', ') }) : t('invoices.warnEmpty', { list: warnings.map(missingText).join(', ') }));
         return;
       }
       return issue(nav, inv, props.period);
@@ -299,6 +321,7 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
         <AsyncButton type="button" className="btn primary" data-act="issue" aria-describedby={missing.length ? 'ivmissing' : undefined} onClick={tryIssue}>{t(inv.kind === 'credit-note' ? 'invoices.issueCredit' : 'invoices.issue')}</AsyncButton>
         <AsyncButton type="button" className="btn ghost danger" data-act="delete" onClick={() => deleteDraft(nav, inv)}>{t('common.delete')}</AsyncButton>
         {missing.length > 0 && <MissingList {...props} inv={inv} missing={missing} />}
+        {warnings.length > 0 && <MissingList {...props} inv={inv} missing={warnings} warn={() => issue(nav, inv, props.period, true)} />}
       </div>
     );
   }
@@ -350,6 +373,13 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
             {(['CHF', 'EUR'] as const).map((c) => <AsyncButton key={c} type="button" role="radio" aria-checked={inv.currency === c} className={inv.currency === c ? 'on' : ''} disabled={!canEdit || !ws.invoicing?.payTo[c]} data-tip={ws.invoicing?.payTo[c] ? undefined : t('invoices.currencyNeedsPayTo', { currency: c })} onClick={() => saveDraft(nav, inv, { currency: c })}>{c}</AsyncButton>)}
           </span>
         </div>
+        {chargesVat() && (
+          <div className="lkr"><span>{t('invoices.prices')}</span>
+            <span className="seg2" role="radiogroup" aria-label={t('invoices.prices')}>
+              {PRICES.map((p) => <AsyncButton key={p} type="button" role="radio" data-prices={p} aria-checked={(inv.prices ?? 'net') === p} className={(inv.prices ?? 'net') === p ? 'on' : ''} disabled={!canEdit} onClick={() => saveDraft(nav, inv, { prices: p, lines: repriced(inv.lines) })}>{t(`invoices.prices.${p}`)}</AsyncButton>)}
+            </span>
+          </div>
+        )}
       </div>
       {/* A firm not registered issues invoices without VAT (#347): said as a fact, with its place. */}
       {!chargesVat() && <p className="m ivhint" data-testid="invoice-no-vat">{t('invoices.noVat')} · <button type="button" className="quiet2" onClick={() => nav.go({ route: { area: 'company', section: 'vat' }, query: {} })}>{t('invoices.toVat')}</button></p>}
@@ -473,7 +503,7 @@ function CustomerDetail({ d, route, nav, canEdit }: Props & { d: InvoiceList }) 
             <span className="mono">{i.status === 'issued' ? i.number : t('invoices.draft')}</span>
             <span>{i.subject ?? ''}</span>
             <span className="m">{t(`invoices.state.${rowState(i, d.invoices, today)}`)}</span>
-            <span className="r mono">{i.currency} {fmt(totals(i.lines).gross)}</span>
+            <span className="r mono">{i.currency} {fmt(totals(i).gross)}</span>
           </button>
         )) : <p className="m">{t('invoices.noInvoicesYet')}</p>}
       </div>

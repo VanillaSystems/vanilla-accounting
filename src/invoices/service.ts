@@ -11,7 +11,7 @@ import type { Workspace } from '../workspace/workspace.js';
 import { receiptFile, type Books } from '../books/store.js';
 import { defaultTexts, issuedIntro, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
 import {
-  INVOICE_CURRENCIES, INVOICE_LANGUAGES, UNITS, DEFAULT_LAYOUT,
+  INVOICE_CURRENCIES, INVOICE_LANGUAGES, DEFAULT_LAYOUT, DEFAULT_UNITS, LINE_KINDS, PRICES, isItem, type UnitDef,
   type Comment, type Customer, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent,
   type InvoiceLine, type Issued, type Reminder, type SentDocument, type SentKind,
 } from './model.js';
@@ -69,7 +69,7 @@ export function logoSrc(ws: Workspace, path: string | undefined): string | undef
 export function viewOf(book: InvoiceBook, inv: Invoice, today: string): InvoiceView {
   const invoices = liveInvoices(book);
   const customerName = inv.status === 'issued' ? inv.customer.name : book.customers.find((c) => c.id === inv.customerId)?.name ?? '';
-  return { ...inv, view: { status: status(inv, invoices), overdue: isOverdue(inv, invoices, today), totals: totals(inv.lines), open: openAmount(inv, invoices), customerName } };
+  return { ...inv, view: { status: status(inv, invoices), overdue: isOverdue(inv, invoices, today), totals: totals(inv), open: openAmount(inv, invoices), customerName } };
 }
 
 export function findInvoice(book: InvoiceBook, idOrNumber: string): Invoice | undefined {
@@ -82,33 +82,68 @@ const isText = (v: unknown): v is string => typeof v === 'string';
 const isDate = (v: unknown): v is string => isText(v) && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(Date.parse(v));
 const bad = (msg: string, missing?: Missing[]): never => { throw new InvoiceRuleError('incomplete', msg, missing); };
 
-function parseLines(v: unknown): InvoiceLine[] {
+/**
+ * The positions of a request, each of its kind (absent: an item). `units`: the unit ids a position
+ * may name, the firm's list and those the draft already holds (a unit removed from the list since).
+ */
+function parseLines(v: unknown, units: readonly string[]): InvoiceLine[] {
   if (!Array.isArray(v)) return bad('lines muss eine Liste sein.');
-  return v.map((raw, i) => {
+  return v.map((raw, i): InvoiceLine => {
     const l = (raw ?? {}) as Record<string, unknown>;
-    if (!isText(l.text)) bad(`Position ${i + 1}: text fehlt.`, [{ field: 'line.text', line: i }]);
-    if (typeof l.quantity !== 'number' || typeof l.price !== 'number') bad(`Position ${i + 1}: quantity und price sind Zahlen.`, [{ field: 'line.quantity', line: i }]);
-    if (!invoiceRates().includes(l.vatRate as number)) bad(`Position ${i + 1}: vatRate ist einer von ${invoiceRates().join(', ')}.`, [{ field: 'line.vatRate', line: i }]);
-    if (l.unit !== undefined && !UNITS.includes(l.unit as never)) bad(`Position ${i + 1}: unit ist eine von ${UNITS.join(', ')}.`);
-    if (l.account !== undefined && !/^\d{4}$/.test(String(l.account))) bad(`Position ${i + 1}: account ist ein Konto mit 4 Ziffern.`);
-    if (l.vatIncluded !== undefined && typeof l.vatIncluded !== 'boolean') bad(`Position ${i + 1}: vatIncluded ist true oder false.`);
+    const at = `Position ${i + 1}`;
+    const known = (keys: string[]) => { const extra = Object.keys(l).filter((k) => !['kind', ...keys].includes(k)); if (extra.length) bad(`${at}: unbekannte Felder ${extra.join(', ')}.`); };
+    const text = () => { if (!isText(l.text)) bad(`${at}: text fehlt.`, [{ field: 'line.text', line: i }]); return l.text as string; };
+    const num = (k: string) => { if (l[k] !== undefined && (typeof l[k] !== 'number' || !Number.isFinite(l[k]))) bad(`${at}: ${k} ist eine Zahl.`); return l[k] as number | undefined; };
+    switch (l.kind) {
+      case 'text':
+        known(['text', 'style']);
+        if (l.style !== undefined && l.style !== 'title' && l.style !== 'plain') bad(`${at}: style ist title oder plain.`);
+        return { kind: 'text', text: text(), ...(l.style === 'title' ? { style: 'title' as const } : {}) };
+      case 'subtotal':
+        known(['text']);
+        return { kind: 'subtotal', text: text() };
+      case 'pagebreak':
+        known([]);
+        return { kind: 'pagebreak' };
+      case 'discount': {
+        known(['text', 'percent', 'amount']);
+        const percent = num('percent'), amount = num('amount');
+        if (percent !== undefined && amount !== undefined) bad(`${at}: ein Rabatt hat percent oder amount, nicht beides.`, [{ field: 'line.discount', line: i }]);
+        return { kind: 'discount', text: text(), ...(percent !== undefined ? { percent } : {}), ...(amount !== undefined ? { amount } : {}) };
+      }
+      case undefined: case 'item': break;
+      default: return bad(`${at}: kind ist eine von ${LINE_KINDS.join(', ')}.`);
+    }
+    known(['text', 'quantity', 'unit', 'price', 'vatRate', 'discount', 'vatIncluded', 'account', 'activity']);
+    if (typeof l.quantity !== 'number' || typeof l.price !== 'number') bad(`${at}: quantity und price sind Zahlen.`, [{ field: 'line.quantity', line: i }]);
+    if (!invoiceRates().includes(l.vatRate as number)) bad(`${at}: vatRate ist einer von ${invoiceRates().join(', ')}.`, [{ field: 'line.vatRate', line: i }]);
+    if (l.unit !== undefined && !units.includes(l.unit as string)) bad(`${at}: unit ist eine von ${units.join(', ')}.`);
+    if (l.account !== undefined && !/^\d{4}$/.test(String(l.account))) bad(`${at}: account ist ein Konto mit 4 Ziffern.`);
+    if (l.vatIncluded !== undefined && typeof l.vatIncluded !== 'boolean') bad(`${at}: vatIncluded ist true oder false.`);
     // The activity of a firm with two approved net rates (#504): 2 books the second rate.
-    if (l.activity !== undefined && l.activity !== 1 && l.activity !== 2) bad(`Position ${i + 1}: activity ist 1 oder 2.`, [{ field: 'line.activity', line: i }]);
+    if (l.activity !== undefined && l.activity !== 1 && l.activity !== 2) bad(`${at}: activity ist 1 oder 2.`, [{ field: 'line.activity', line: i }]);
+    const discount = num('discount');
+    if (discount !== undefined && !(discount >= 0 && discount <= 100)) bad(`${at}: discount ist ein Prozentsatz von 0 bis 100.`, [{ field: 'line.discount', line: i }]);
     return {
-      text: l.text as string, quantity: l.quantity as number, price: l.price as number, vatRate: l.vatRate as InvoiceLine['vatRate'],
-      ...(l.unit !== undefined ? { unit: l.unit as InvoiceLine['unit'] } : {}), ...(l.account !== undefined ? { account: String(l.account) } : {}),
-      ...(l.vatIncluded === true && (l.vatRate as number) > 0 ? { vatIncluded: true as const } : {}),
+      text: text(), quantity: l.quantity as number, price: l.price as number, vatRate: l.vatRate as number,
+      ...(l.unit !== undefined ? { unit: l.unit as string } : {}), ...(l.account !== undefined ? { account: String(l.account) } : {}),
+      ...(discount ? { discount } : {}),
+      // Only a line of schema 2 that differs from its document keeps the flag (ItemLine.vatIncluded); at 0 % it changes nothing.
+      ...(typeof l.vatIncluded === 'boolean' && (l.vatRate as number) > 0 ? { vatIncluded: l.vatIncluded } : {}),
       // A 2 on a firm with one net rate (a draft from before it went back to one) is dropped, not refused: the line books the first and stays editable.
       ...(l.activity === 2 && invoiceActivities().length && (l.vatRate as number) > 0 ? { activity: 2 as const } : {}),
     };
   });
 }
 
-const DRAFT_FIELDS = ['customerId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'intro', 'closing', 'exemption', 'settlement'] as const;
+const DRAFT_FIELDS = ['customerId', 'date', 'supplied', 'dueDate', 'currency', 'language', 'subject', 'lines', 'prices', 'intro', 'closing', 'exemption', 'settlement'] as const;
 export type DraftPatch = Partial<Pick<InvoiceContent, (typeof DRAFT_FIELDS)[number]>>;
 
-/** A draft patch from a request body; `null` clears an optional field. */
-export function parseDraftPatch(body: unknown, book: InvoiceBook): DraftPatch & { clear: string[] } {
+/**
+ * A draft patch from a request body; `null` clears an optional field. A position's unit is one of
+ * `units` (the firm's list), one the draft `id` holds already, or one an issued document names.
+ */
+export function parseDraftPatch(body: unknown, book: InvoiceBook, units: readonly UnitDef[] = DEFAULT_UNITS, id?: string): DraftPatch & { clear: string[] } {
   if (!body || typeof body !== 'object' || Array.isArray(body)) return bad('JSON-Objekt erwartet.');
   const b = body as Record<string, unknown>;
   const unknown = Object.keys(b).filter((k) => !DRAFT_FIELDS.includes(k as never));
@@ -125,7 +160,13 @@ export function parseDraftPatch(body: unknown, book: InvoiceBook): DraftPatch & 
     }
     else if (k === 'currency') { if (!INVOICE_CURRENCIES.includes(v as never)) bad('currency ist CHF oder EUR.'); out.currency = v as InvoiceContent['currency']; }
     else if (k === 'language') { if (!INVOICE_LANGUAGES.includes(v as never)) bad(`language ist eine von ${INVOICE_LANGUAGES.join(', ')}.`); out.language = v as InvoiceContent['language']; }
-    else if (k === 'lines') out.lines = parseLines(v);
+    else if (k === 'lines') {
+      // A unit removed from the list since stays where a document names it: the draft itself, or an issued document copied («Als Entwurf kopieren»).
+      const named = (ls: readonly InvoiceLine[]) => ls.flatMap((l) => (isItem(l) && l.unit ? [l.unit] : []));
+      const held = [...named(findInvoice(book, id ?? '')?.lines ?? []), ...liveInvoices(book).flatMap((i) => (i.status === 'issued' ? named(i.lines) : []))];
+      out.lines = parseLines(v, [...units.map((u) => u.id), ...held]);
+    }
+    else if (k === 'prices') { if (!PRICES.includes(v as never)) bad(`prices ist ${PRICES.join(' oder ')}.`); out.prices = v as InvoiceContent['prices']; }
     else if (k === 'exemption') { if (v !== 'abroad' && v !== 'export') bad('exemption ist abroad oder export.'); out.exemption = v as 'abroad' | 'export'; }
     else if (k === 'settlement') { if (v !== 'refund' && v !== 'offset') bad('settlement ist refund oder offset.'); out.settlement = v as 'refund' | 'offset'; }
     else { if (!isText(v)) bad(`${k} ist ein Text.`); (out as Record<string, unknown>)[k] = v; }
@@ -202,6 +243,7 @@ export function createDraft(ws: Workspace, input: { customerId: string } & Draft
       currency: 'CHF',
       language: customer.language,
       lines: [],
+      prices: ws.invoicing?.prices.invoice ?? 'net',
       ...input,
       comments: [],
     };
@@ -239,7 +281,8 @@ export function missingOf(ws: Workspace, id: string): Missing[] {
 // ─── issuing and sending ───────────────────────────────────────────────────────
 
 /** Gives the draft its number, freezes it, prints its PDF once and stores it with its checksum. */
-export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; printer?: Printer } = {}): Promise<Issued> {
+/** `confirmed`: the person's «Trotzdem ausstellen» over the warnings of warningsForIssue (spec 4.11). */
+export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; printer?: Printer; confirmed?: boolean } = {}): Promise<Issued> {
   return serial(async () => {
     const now = opts.now ?? new Date().toISOString();
     const book = loadInvoices(ws);
@@ -249,7 +292,7 @@ export function issueInvoice(ws: Workspace, id: string, opts: { now?: string; pr
     const customer = liveCustomers(book).find((c) => c.id === draft.customerId);
     const texts = defaultTexts(ctx, draft.kind, draft.language, customer?.paymentTermsDays ?? 30);
     const frozen: Draft = { ...draft, intro: issuedIntro(texts.salutation, draft.intro ?? texts.intro), closing: draft.closing ?? texts.closing };
-    const issued = issue(frozen, { customer, sender: senderFor(ctx, draft.currency), layout: ctx.settings?.layout ?? DEFAULT_LAYOUT, invoices: liveInvoices(book), now });
+    const issued = issue(frozen, { customer, sender: senderFor(ctx, draft.currency), layout: ctx.settings?.layout ?? DEFAULT_LAYOUT, units: ctx.settings?.units, invoices: liveInvoices(book), now, confirmed: opts.confirmed });
     const printed = await (opts.printer ?? chromium).pdf(issuedSheet(book, issued as Issued, logoSrc(ws, issued.layout.logo)), now);
     return commit(ws, draft.id, draft, (fresh, at) => {
       if (nextNumberTaken(fresh, issued.number)) throw new InvoiceRuleError('changed', `Die Nummer ${issued.number} wurde inzwischen vergeben; bitte erneut ausstellen.`);

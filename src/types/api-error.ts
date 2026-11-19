@@ -306,6 +306,11 @@ export type ApiRefusal =
   | { code: 'notQrIban'; params: { iban: string } }
   /** A warning, not a refusal (#506): a QR-IBAN under another currency than CHF, kept with `confirm: 'qrIbanNotChf'` («Trotzdem speichern»). */
   | { code: 'qrIbanNotChf'; params: { currency: string } }
+  /** Firma › Rechnungslayout › Einheiten: an id that is no short code, a word missing in a language, an id twice, a unit a draft still uses. */
+  | { code: 'unitId'; params: { id: string } }
+  | { code: 'unitWord'; params: { id: string; language: string } }
+  | { code: 'unitTwice'; params: { id: string } }
+  | { code: 'unitInUse'; params: { id: string } }
   /** Firma › Bankkonten: a text that is no IBAN (length or check digits). */
   /** Firma › Bankkonten: the IBAN cleared is printed on invoices (invoicing.payTo); pick another account under Rechnungslayout first. */
   | { code: 'ibanOnInvoices'; params: { currency: string; account: string } }

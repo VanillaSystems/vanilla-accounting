@@ -36,7 +36,7 @@ export function invoicePayments(inv: DemoInvoicing): Payment[] {
       bank: s.paid.bank, date: s.paid.date, text: `Gutschrift ${customer.name}`,
       parts: [{
         counterparty: customer.name.toUpperCase(), reference: qrReference(number), text: `${TEXTS[customer.language].invoice} ${number}`,
-        legs: [{ account: '', amount: totals(s.lines).gross, text: '' }], invoice: number,
+        legs: [{ account: '', amount: totals(s).gross, text: '' }], invoice: number,
       }],
     }];
   });

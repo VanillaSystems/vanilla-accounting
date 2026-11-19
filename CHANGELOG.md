@@ -69,6 +69,30 @@ Two markers flag an entry you must read before you update:
   and exported as CSV. On 31.12. it matches the receivables to the cent: on the cash basis the
   year end's proposal, on the agreed basis what the invoices hold on the receivable account.
 - Verkauf › Versendet: every document sent, filtered by customer, kind and channel.
+- Rechnungen: positions of their own kind on the sheet: a text (as a title or plain), a
+  Zwischentotal (the sum of the positions since the last one), a Rabatt or Zuschlag on the total
+  (a percent or an amount, split over the VAT rates and revenue accounts above it to the Rappen,
+  so the VAT per rate and the booking stay exact; several may follow each other) and a
+  Seitenumbruch for the PDF. A position may carry its own discount in percent, printed beside it.
+  Positions move by their handle: dragged, or with ↑/↓ (Alt+↑/↓ in a field).
+- Rechnungen: prices incl. or excl. VAT per document, a switch in the draft's margin; Firma ›
+  Rechnungslayout sets the default for new invoices.
+- Firma › Rechnungslayout › Einheiten: the units a quantity is counted in, each with its word in
+  German, French, Italian and English. m², m, m³, l, kg and Mt. join Std., Tag, Stk., pauschal and
+  km; a firm adds its own and removes one no draft uses. An issued invoice keeps the words it was
+  issued with.
+- Rechnungen: a position without text or amount, and a Rabatt with nothing above it, no longer
+  stop the issue: the app says what would be printed and why it matters, and «Trotzdem
+  ausstellen» issues the invoice as it is.
+- Rechnungen: an invoice whose total is zero or less (a Rabatt above the total) is not issued: a
+  QR-bill carries no amount below zero; what is owed back goes on a Gutschrift.
+
+### Changed
+
+- The format of `invoices.json` (schema 3) and `belege.workspace.yaml` (schema 5): an older app
+  refuses them. Existing invoices keep every figure: a credit note «by amount» now reads as a
+  document priced incl. VAT, and a line that was priced otherwise than its document keeps its own
+  pricing.
 
 ### Fixed
 

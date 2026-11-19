@@ -2,7 +2,7 @@
  * The words printed on an invoice, in the invoice's language. These are document texts, not UI
  * texts: an invoice to a customer in Geneva is French whatever language the app speaks.
  */
-import type { Exemption, InvoiceLanguage, OWN_TEXTS, Unit } from './model.js';
+import { NET_TERMS, type Exemption, type InvoiceLanguage, type OWN_TEXTS } from './model.js';
 
 export interface InvoiceTexts {
   invoice: string; credit: string; draft: string; reminder: (level: number) => string;
@@ -20,7 +20,10 @@ export interface InvoiceTexts {
   stamp: string; cancelledOn: (date: string, reason: string) => string; cancelNotice: (no: string, date: string) => string;
   exemption: Record<Exemption, string>;
   page: (k: number, n: number) => string; cut: string; bank: string; vatNo: string; uidNo: string; payment: string; iban: string; reference: string;
-  units: Record<Unit, string>;
+  /** A position's own discount, beside its price («Rabatt 10 %»); the default labels of a new Zwischentotal and Rabatt. */
+  lineDiscount: (pct: string) => string; subtotal: string; discount: string;
+  /** The payment terms of a firm that names none: `paymentTermsDays` days net. */
+  netTerms: (days: number) => string;
 }
 
 export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
@@ -46,7 +49,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
       export: 'Ausfuhr, von der Steuer befreit (Art. 23 Abs. 2 Ziff. 1 MWSTG).',
     },
     page: (k, n) => `Seite ${k} von ${n}`, cut: 'Vor der Einzahlung abzutrennen', bank: 'Bank', vatNo: 'MWST-Nr.', uidNo: 'UID', payment: 'Zahlung', iban: 'IBAN', reference: 'Referenz',
-    units: { h: 'h', day: 'Tag', pcs: 'Stk.', flat: 'pauschal', km: 'km' },
+    lineDiscount: (p) => `Rabatt ${p}`, subtotal: 'Zwischentotal', discount: 'Rabatt', netTerms: NET_TERMS.de,
   },
   fr: {
     invoice: 'Facture', credit: 'Note de crédit', draft: 'Projet', reminder: (n) => (n === 1 ? '1er rappel' : `${n}e rappel`),
@@ -70,7 +73,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
       export: 'Exportation, exonérée de la TVA (art. 23, al. 2, ch. 1 LTVA).',
     },
     page: (k, n) => `Page ${k} sur ${n}`, cut: 'A détacher avant le versement', bank: 'Banque', vatNo: 'N° TVA', uidNo: 'IDE', payment: 'Paiement', iban: 'IBAN', reference: 'Référence',
-    units: { h: 'h', day: 'jour', pcs: 'pce', flat: 'forfait', km: 'km' },
+    lineDiscount: (p) => `Rabais ${p}`, subtotal: 'Sous-total', discount: 'Rabais', netTerms: NET_TERMS.fr,
   },
   it: {
     invoice: 'Fattura', credit: 'Nota di credito', draft: 'Bozza', reminder: (n) => `${n}° sollecito`,
@@ -94,7 +97,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
       export: 'Esportazione, esente dall’imposta (art. 23 cpv. 2 n. 1 LIVA).',
     },
     page: (k, n) => `Pagina ${k} di ${n}`, cut: 'Da staccare prima del versamento', bank: 'Banca', vatNo: 'N. IVA', uidNo: 'IDI', payment: 'Pagamento', iban: 'IBAN', reference: 'Riferimento',
-    units: { h: 'h', day: 'giorno', pcs: 'pz.', flat: 'forfait', km: 'km' },
+    lineDiscount: (p) => `Sconto ${p}`, subtotal: 'Subtotale', discount: 'Sconto', netTerms: NET_TERMS.it,
   },
   en: {
     invoice: 'Invoice', credit: 'Credit note', draft: 'Draft',
@@ -119,7 +122,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
       export: 'Export of goods, exempt from Swiss VAT (Art. 23 para. 2 no. 1 VAT Act).',
     },
     page: (k, n) => `Page ${k} of ${n}`, cut: 'Separate before paying in', bank: 'Bank', vatNo: 'VAT no.', uidNo: 'UID', payment: 'Payment', iban: 'IBAN', reference: 'Reference',
-    units: { h: 'h', day: 'day', pcs: 'pcs', flat: 'flat rate', km: 'km' },
+    lineDiscount: (p) => `Discount ${p}`, subtotal: 'Subtotal', discount: 'Discount', netTerms: NET_TERMS.en,
   },
 };
 

@@ -4,8 +4,7 @@
  * saves. Pure: the sheet reports, Detail.tsx saves or says why not.
  */
 import { parseSwissDate } from '../../../accounting/periods.js';
-import type { Customer, Draft } from '../../../invoices/model.js';
-import { UNITS, type Unit } from '../../../invoices/model.js';
+import { DEFAULT_UNITS, isItem, type Customer, type Draft, type InvoiceLine, type UnitDef } from '../../../invoices/model.js';
 import type { Missing } from '../../../invoices/rules.js';
 import { invoicing } from '../../../engines/index.js';
 import type { DraftChange } from '../../lib/api.js';
@@ -20,7 +19,7 @@ export const parseNumber = (s: string): number | null => {
   return s.trim() && Number.isFinite(n) ? n : null;
 };
 
-export function sheetEdit(inv: Draft, key: string, value: string, ctx: { customers: readonly Customer[]; defaultTexts: { intro: string; closing: string } }): SheetEdit {
+export function sheetEdit(inv: Draft, key: string, value: string, ctx: { customers: readonly Customer[]; defaultTexts: { intro: string; closing: string }; units?: readonly UnitDef[] }): SheetEdit {
   const changed = (change: DraftChange): SheetEdit => ({ change });
   if (key === 'intro' || key === 'closing') {
     const def = ctx.defaultTexts[key];
@@ -53,14 +52,44 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { custome
   if (!m) return undefined;
   const k = Number(m[1]);
   const field = m[2];
-  const lines = inv.lines.map((l) => ({ ...l }));
+  const lines = inv.lines.map((l) => ({ ...l })) as InvoiceLine[];
   const line = lines[k];
-  if (!line) return undefined;
+  if (!line || line.kind === 'pagebreak') return undefined;
   if (field === 'text') {
     if (value === line.text) return undefined;
-    const subject = !inv.subject || (k === 0 && inv.subject === line.text) ? { subject: k === 0 ? value : inv.subject ?? value } : {};
+    // The subject follows the first item's text while the person has not given it one of its own.
+    const first = inv.lines.findIndex(isItem);
+    const subject = isItem(line) && (!inv.subject || (k === first && inv.subject === line.text)) ? { subject: value } : {};
     line.text = value;
     return changed({ lines, ...subject });
+  }
+  if (line.kind === 'text') {
+    if (field !== 'style') return undefined;
+    const title = value === 'title';
+    if (title === (line.style === 'title')) return undefined;
+    if (title) line.style = 'title'; else delete line.style;
+    return changed({ lines });
+  }
+  if (line.kind === 'subtotal') return undefined;
+  if (line.kind === 'discount') {
+    // «3» is 3 % or 3 in the document's currency by the mode beside it; empty clears the value (the check before issue names it).
+    if (field === 'dmode') {
+      const amount = value === 'amount';
+      if (amount === (line.amount !== undefined)) return undefined;
+      const v = line.percent ?? line.amount;
+      delete line.percent; delete line.amount;
+      if (v !== undefined) line[amount ? 'amount' : 'percent'] = v;
+      else if (amount) line.amount = 0; else line.percent = 0;
+      return changed({ lines });
+    }
+    if (field !== 'discount') return undefined;
+    const n = value.trim() ? parseNumber(value.replace(/%\s*$/, '')) : null;
+    if (value.trim() && n === null) return { refused: 'number' };
+    const mode = line.amount !== undefined ? 'amount' : 'percent';
+    if ((n ?? undefined) === line[mode]) return undefined;
+    delete line.percent; delete line.amount;
+    if (n !== null) line[mode] = n;
+    return changed({ lines });
   }
   if (field === 'quantity' || field === 'price') {
     const n = parseNumber(value);
@@ -69,20 +98,25 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { custome
     line[field] = n;
     return changed({ lines });
   }
+  if (field === 'discount') {
+    const n = value.trim() ? parseNumber(value.replace(/%\s*$/, '')) : 0;
+    if (n === null || n < 0 || n > 100) return { refused: 'number' };
+    if (n === (line.discount ?? 0)) return undefined;
+    if (n) line.discount = n; else delete line.discount;
+    return changed({ lines });
+  }
   if (field === 'unit') {
     if (value === (line.unit ?? '')) return undefined;
-    if (value && !(UNITS as readonly string[]).includes(value)) return { refused: 'value' };
-    if (value) line.unit = value as Unit; else delete line.unit;
+    // A unit the firm's list names, or the one the line holds already (removed from the list since).
+    if (value && !(ctx.units ?? DEFAULT_UNITS).some((u) => u.id === value)) return { refused: 'value' };
+    if (value) line.unit = value; else delete line.unit;
     return changed({ lines });
   }
   if (field === 'vatRate') {
-    // «8.1» prices the line net, «incl:8.1» with the VAT in it (src/invoices/sheet.ts).
-    const included = value.startsWith('incl:');
-    const rate = Number(included ? value.slice(5) : value);
-    if (!invoicing().rates.includes(rate) || (included && rate === 0)) return { refused: 'value' };
-    if (rate === line.vatRate && included === !!line.vatIncluded) return undefined;
+    const rate = Number(value);
+    if (!invoicing().rates.includes(rate)) return { refused: 'value' };
+    if (rate === line.vatRate) return undefined;
     line.vatRate = rate;
-    if (included) line.vatIncluded = true; else delete line.vatIncluded;
     return changed({ lines });
   }
   if (field === 'activity') {
@@ -94,6 +128,19 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { custome
   }
   return undefined;
 }
+
+/** The positions with the one at `from` moved to `to` (drag, or Alt+↑/↓); undefined when nothing moves. */
+export function moveLine(lines: readonly InvoiceLine[], from: number, to: number): InvoiceLine[] | undefined {
+  if (from === to || from < 0 || to < 0 || from >= lines.length || to >= lines.length) return undefined;
+  const out = [...lines];
+  const [moved] = out.splice(from, 1);
+  out.splice(to, 0, moved);
+  return out;
+}
+
+/** The positions priced `prices` for the whole document: the legacy flag of a line goes (spec 4.4.3, prices per document). */
+export const repriced = (lines: readonly InvoiceLine[]): InvoiceLine[] =>
+  lines.map((l) => { if (!isItem(l) || l.vatIncluded === undefined) return l; const { vatIncluded: _, ...rest } = l; return rest; });
 
 /** Where a person fixes what an invoice still lacks: a part of Firma, the customer, or a field on the sheet. */
 export type Fix = { company: 'profile' | 'invoice-layout' } | { customer: 'edit' | 'choose' } | { field: string } | { addLine: true };
@@ -107,7 +154,9 @@ export function fixFor(m: Missing): Fix | undefined {
     case 'date': return { field: 'date' };
     case 'lines': return { addLine: true };
     case 'line.text': return { field: `l:${m.line ?? 0}:text` };
-    case 'line.quantity': return { field: `l:${m.line ?? 0}:quantity` };
+    case 'line.quantity': case 'line.price': return { field: `l:${m.line ?? 0}:${m.field === 'line.price' ? 'price' : 'quantity'}` };
+    case 'line.discount': return { field: `l:${m.line ?? 0}:discount` };
+    case 'line.discountBase': return { field: `l:${m.line ?? 0}:text` };
     case 'line.vatRate': return { field: `l:${m.line ?? 0}:vatRate` };
     case 'line.activity': return { field: `l:${m.line ?? 0}:activity` };
     case 'exemption': return { field: 'exemption' };
