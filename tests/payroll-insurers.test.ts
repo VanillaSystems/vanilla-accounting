@@ -32,7 +32,7 @@ function quarter() {
 test('the quarter\'s Akonto to the compensation fund clears 2271 only; 2271 then holds nothing for the quarter', () => {
   const { store, books } = quarter();
   books.transactions.push({ ref: 'AK-Q3', bank: 'Bank', date: '2026-10-10', amount: -3935.4, currency: 'CHF', direction: 'DBIT', description: 'Akonto Q3', counterparty: 'Ausgleichskasse Beispiel' });
-  const refs = bookInsurerPayments(books, ch.payroll!, store, open, () => undefined, () => '1020', id);
+  const refs = bookInsurerPayments(books, ch.payroll!, store, open, () => undefined, () => '1020', id, { currency: 'CHF' });
   assert.deepEqual(refs, ['AK-Q3']);
   const paid = books.journalEntries.find((e) => e.transactionRef === 'AK-Q3')!;
   assert.deepEqual([paid.accountDebit, paid.accountCredit, paid.amount], ['2271', '1020', 3935.4]);
@@ -43,7 +43,7 @@ test('the quarter\'s Akonto to the compensation fund clears 2271 only; 2271 then
 test('a payment to an insurer whose account no payslip accrued stays to the other booking paths (level A)', () => {
   const store = firm();
   const books = { transactions: [{ ref: 'AK', bank: 'Bank', date: '2026-10-10', amount: -500, currency: 'CHF', direction: 'DBIT' as const, description: 'Akonto', counterparty: 'Ausgleichskasse Beispiel' }], journalEntries: [] as JournalEntry[] };
-  assert.deepEqual(bookInsurerPayments(books, ch.payroll!, store, open, () => undefined, () => '1020', id), []);
+  assert.deepEqual(bookInsurerPayments(books, ch.payroll!, store, open, () => undefined, () => '1020', id, { currency: 'CHF' }), []);
 });
 
 test('the final statement\'s difference: on the employer\'s account against the liability, once', () => {
@@ -54,4 +54,18 @@ test('the final statement\'s difference: on the employer\'s account against the 
   assert.equal(settlementEntry(books, ch.payroll!, store, 'ak', '2026', 3950, '2027-01-20', id), undefined, 'once: it agrees now');
   const lower = settlementEntry(books, ch.payroll!, store, 'ak', '2026', 3900, '2027-01-25', id)!;
   assert.deepEqual([lower.accountDebit, lower.accountCredit, lower.amount], ['2271', '5700', 50], 'a lower total books back');
+});
+
+test('only payments out, and only after the payslips accrued: a January payment of last year\'s is booked, one before payroll ran here is not, a refund in is left alone', () => {
+  const { store, books } = quarter();
+  const pay = (ref: string, date: string, direction: 'DBIT' | 'CRDT' = 'DBIT') => ({ ref, bank: 'Bank', date, amount: direction === 'DBIT' ? -100 : 100, currency: 'CHF', direction, description: 'AHV', counterparty: 'Ausgleichskasse Beispiel' });
+  books.transactions.push(pay('JAN', '2027-01-15'), pay('EARLY', '2026-07-10'), pay('IN', '2026-11-02', 'CRDT'), { ...pay('EUR', '2026-11-03'), currency: 'EUR' });
+  assert.deepEqual(bookInsurerPayments(books, ch.payroll!, store, open, () => undefined, () => '1020', id, { currency: 'CHF' }), ['JAN']);
+});
+
+test('a final statement of an unknown insurance, with a negative total or for a year without payslips is refused with its reason', () => {
+  const { store, books } = quarter();
+  assert.throws(() => settlementEntry(books, ch.payroll!, store, 'nope', '2026', 1, '2027-01-20', id), /Keine Sozialversicherung/);
+  assert.throws(() => settlementEntry(books, ch.payroll!, store, 'ak', '2026', -1, '2027-01-20', id), (e: Error & { code?: string }) => e.code === 'badInput');
+  assert.throws(() => settlementEntry(books, ch.payroll!, store, 'ak', '2025', 100, '2026-01-20', id), (e: Error & { code?: string }) => e.code === 'nothingAccrued');
 });

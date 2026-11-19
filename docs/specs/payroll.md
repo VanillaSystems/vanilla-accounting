@@ -1598,9 +1598,11 @@ non-obvious decision is recorded here when it is taken.
     valid on the payday, or her first and last name in the bank's text), within two weeks before and a
     month after the payday; one line equal to all of a month's unpaid payouts pays each of them. Booked
     D 1091 / C bank in the intake before any rule or model, with the payslip's PDF linked as its proof.
-21. **A payment to a fund or insurer is booked against its liability account only when the closed
-    payslips accrued onto that account in the year**: a firm whose payroll runs elsewhere keeps level A's
-    booking (2270, 57xx).
+21. **A payment to a fund or insurer is booked against its liability account only when closed payslips
+    accrued onto that account before the payment's day** (a January payment of last year's too; one before
+    payroll ran here stays level A's booking, 2270/57xx), only a payment out (what an insurer pays in is
+    mostly a benefit), only in the books' currency, and never one a company rule decides. The same holds for
+    the wage match; `classify --force` leaves payroll's code bookings in place.
 22. **The final statement's (Schlussabrechnung) total is entered by the person** off the statement; code
     books its difference to what the payslips accrued (D 57xx / C 227x, or back), ref `LS-<year>-<insurance>`,
     once. Reading the total off the statement's PDF is for the AI on her drop, later.

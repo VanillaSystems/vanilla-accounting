@@ -13,11 +13,12 @@ import { round2, sum } from './money.js';
 
 type BooksLike = { transactions: readonly BankTransaction[]; journalEntries: readonly JournalEntry[]; mappings: readonly Mapping[] };
 
-/** The bank payment of a closed payslip: the payment its PDF is linked to, if a booking holds it. */
+/** The bank payment of a closed payslip: the payment its PDF is linked to, if a booking holds it (any booking: a person's of that line too). */
 export function paymentOf(books: BooksLike, close: Pick<PayslipClose, 'receiptId'>): BankTransaction | undefined {
   if (!close.receiptId) return undefined;
   const refs = new Set(books.mappings.filter((m) => m.receiptId === close.receiptId).map((m) => m.transactionRef));
-  return books.transactions.find((t) => refs.has(t.ref));
+  const held = new Set(books.journalEntries.filter((e) => refs.has(e.transactionRef)).map((e) => e.transactionRef));
+  return books.transactions.find((t) => held.has(t.ref));
 }
 
 const compact = (s: string | undefined) => (s ?? '').replace(/\s/g, '').toUpperCase();
@@ -44,17 +45,27 @@ function addDays(day: string, n: number): string {
 export interface WageMatch { tx: BankTransaction; payslips: PayslipClose[] }
 
 /** The open, unbooked payments out that pay closed payslips not paid yet, each with the payslips it pays. */
-export function wageMatches(books: BooksLike, closes: readonly PayslipClose[], lock: Pick<PeriodLock, 'isClosed'>): WageMatch[] {
+export interface MatchOptions {
+  /** The books' currency: a line in another is left to the other paths (it would need a rate of its day). */
+  currency: string;
+  /** A line a company rule decides stays the rule's (as the bank's fee row does). */
+  ruled?: (tx: BankTransaction) => boolean;
+  /** The firm's own IBANs: a line to one of them is a transfer, never a wage. */
+  own?: ReadonlySet<string>;
+}
+
+export function wageMatches(books: BooksLike, closes: readonly PayslipClose[], lock: Pick<PeriodLock, 'isClosed'>, opts: MatchOptions): WageMatch[] {
   const booked = new Set(books.journalEntries.map((e) => e.transactionRef));
   const unpaid = closes.filter((c) => c.payout > 0 && !paymentOf(books, c));
   const taken = new Set<string>();
   const out: WageMatch[] = [];
-  const candidates = books.transactions.filter((t) => t.direction === 'DBIT' && !booked.has(t.ref) && !lock.isClosed(t.date))
+  const candidates = books.transactions.filter((t) => t.direction === 'DBIT' && t.currency === opts.currency && !booked.has(t.ref) && !lock.isClosed(t.date)
+    && !opts.own?.has(compact(t.counterpartyIban)) && !opts.ruled?.(t))
     .sort((a, b) => a.date.localeCompare(b.date) || a.ref.localeCompare(b.ref));
   for (const tx of candidates) {
     const amount = round2(Math.abs(tx.amount));
     const one = unpaid.filter((c) => !taken.has(c.id) && c.payout === amount && nearPayday(tx, c) && names(tx, c))
-      .sort((a, b) => apart(a.payday, tx.date) - apart(b.payday, tx.date));
+      .sort((a, b) => apart(a.payday, tx.date) - apart(b.payday, tx.date) || a.month.localeCompare(b.month));
     if (one.length) {
       taken.add(one[0].id);
       out.push({ tx, payslips: [one[0]] });
@@ -79,11 +90,11 @@ export function wageMatches(books: BooksLike, closes: readonly PayslipClose[], l
 export function bookWagePayments(
   books: { transactions: BankTransaction[]; journalEntries: JournalEntry[]; mappings: Mapping[] },
   closes: readonly PayslipClose[], lock: Pick<PeriodLock, 'isClosed'>,
-  bankAccountOf: (tx: BankTransaction) => string, clearing: string, newId: () => string,
+  bankAccountOf: (tx: BankTransaction) => string | undefined, clearing: string, newId: () => string, opts: MatchOptions,
 ): string[] {
-  const matches = wageMatches(books, closes, lock);
+  const matches = wageMatches(books, closes, lock, opts).filter((m) => bankAccountOf(m.tx));
   for (const { tx, payslips } of matches) {
-    const bank = bankAccountOf(tx);
+    const bank = bankAccountOf(tx)!;
     for (const c of payslips) {
       const [y, m] = c.month.split('-');
       books.journalEntries.push({
