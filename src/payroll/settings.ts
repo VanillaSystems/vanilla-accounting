@@ -208,7 +208,19 @@ function allowanceValue(v: unknown, data: PayrollData, store: PayrollStore): { w
   // The Lohnarten of the kind a fund pays per child: their own allowance data, or the group the catalogue's are in.
   const allowanceGroups = new Set(data.wageTypes.filter((x) => x.allowance || x.once).map((x) => x.group));
   if (!w || !group || !allowanceGroups.has(w.group)) return bad(`${key} ist keine Familienzulage.`, 'wageType');
+  // The monthly history takes the monthly allowances; a one-off one (at the birth) is the child's `birth`.
+  if (w.once) return bad(`${key} wird einmal bezahlt: als Zulage bei der Geburt erfassen.`, 'wageType');
   return { wageType: key, amount: num(v.amount, 'Betrag', 0) };
+}
+
+/** A one-off allowance of a child (at the birth or the adoption): a Lohnart paid once, its amount and the month it is paid in. */
+function birthValue(v: unknown, data: PayrollData, store: PayrollStore): Child['birth'] {
+  if (!isObj(v)) return bad('Eine Zulage bei der Geburt.');
+  const key = str(v.wageType, 'Lohnart');
+  const w = firmWageTypes(data, store).get(key);
+  if (!w?.once) return bad(`${key} ist keine einmalige Familienzulage.`, 'wageType');
+  const month = typeof v.month === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(v.month) ? v.month : bad('Monat: JJJJ-MM.', 'month');
+  return { wageType: key, amount: num(v.amount, 'Betrag', 0), month };
 }
 
 function insurancesValue(v: unknown, store: PayrollStore, data: PayrollData): PersonInsurances {
@@ -393,6 +405,7 @@ export function addChild(store: PayrollStore, data: PayrollData, employee: strin
   const child: Child = {
     id, name: str(input.name, 'Name'), birthDate: day(input.birthDate, 'Geburtsdatum'),
     allowance: [{ validFrom, ...(validUntil ? { validUntil } : {}), value: allowanceValue({ wageType: input.wageType, amount: input.amount }, data, store), enteredAt: now }],
+    ...(isObj(input.birth) && input.birth.amount !== undefined && input.birth.amount !== '' ? { birth: birthValue(input.birth, data, store) } : {}),
   };
   e.children = [...(e.children ?? []), child];
   return child;
@@ -403,7 +416,7 @@ export function removeChild(store: PayrollStore, history: PayslipHistory, employ
   const e = employeeOf(store, employee);
   if (!(e.children ?? []).some((c) => c.id === child)) gone(`Kind ${child} gibt es nicht.`);
   const path = `employees/${employee}/children/${child}/allowance`;
-  if ([...history.closed.values()].some((c) => c.used.some((u) => u.path === path))) throw new PayrollRefusal('used', 'Eine abgeschlossene Lohnabrechnung hat für dieses Kind eine Zulage bezahlt: es bleibt, die Zulage endet mit einem Eintrag «gilt bis».');
+  if ([...history.closed.values()].some((c) => c.used.some((u) => u.path === path) || c.lines.some((l) => l.child === child && l.source === 'fak'))) throw new PayrollRefusal('used', 'Eine abgeschlossene Lohnabrechnung hat für dieses Kind eine Zulage bezahlt: es bleibt, die Zulage endet mit einem Eintrag «gilt bis».');
   e.children = (e.children ?? []).filter((c) => c.id !== child);
 }
 

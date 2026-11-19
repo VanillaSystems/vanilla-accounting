@@ -241,7 +241,9 @@ wageTypes:
   - { key: verpflegung, group: natural, label: { de: Verpflegung, fr: Repas, it: Vitto, en: Meals }, sign: "+", gross: true, cash: false, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "2.1", debit: "5000", credit: "5880" }
   - { key: wohnung, group: natural, label: { de: Unterkunft, fr: Logement, it: Alloggio, en: Housing }, sign: "+", gross: true, cash: false, bases: [ahv, alv, uvg, uvgz, ktg, qst], lohnausweis: "2.3", debit: "5000", credit: "5880" }
   # Ersatzleistungen (phase B1: with the Abwesenheiten)
-  - { key: taggeld-eo, group: ersatz, label: { de: EO-Entschädigung, fr: Allocation APG, it: Indennità IPG, en: EO allowance }, sign: "+", gross: true, bases: [ahv, alv, uvg, uvgz, ktg, bvg, qst], lohnausweis: "1", debit: "2271", credit: "1091" }
+  # The EO's allowance is AHV wage (AHVG Art. 19a) but no premium wage of the accident insurance (UVV Art. 115 Abs. 1;
+  # the insurers' wage declarations list EO allowances for military, civil service and maternity as premium-free).
+  - { key: taggeld-eo, group: ersatz, label: { de: EO-Entschädigung, fr: Allocation APG, it: Indennità IPG, en: EO allowance }, sign: "+", gross: true, bases: [ahv, alv, ktg, bvg, qst], lohnausweis: "1", debit: "2271", credit: "1091" }
   - { key: taggeld-uvg, group: ersatz, label: { de: UVG-Taggeld, fr: Indemnité journalière LAA, it: Indennità giornaliera LAINF, en: UVG daily allowance }, sign: "+", gross: true, bases: [qst], lohnausweis: "1", debit: "2273", credit: "1091" }
   - { key: taggeld-ktg, group: ersatz, label: { de: KTG-Taggeld, fr: Indemnité journalière maladie, it: Indennità giornaliera malattia, en: Sick pay allowance }, sign: "+", gross: true, bases: [qst], lohnausweis: "1", debit: "2274", credit: "1091" }
   # Abzüge (employee shares); their accounts are the insurance's liability account
@@ -323,6 +325,7 @@ documents:
   missing: { de: unvollständig, fr: incomplet, it: incompleto, en: incomplete }
   employer: { de: Arbeitgeberbeiträge (zur Information), fr: Cotisations de l'employeur (pour information), it: Contributi del datore di lavoro (per informazione), en: Employer contributions (for information) }
   mailBody: { de: "Guten Tag\n\nIm Anhang die Lohnabrechnung {month}. Das PDF ist mit Ihrem Passwort geschützt.\n\nFreundliche Grüsse\n{firm}", fr: "Bonjour\n\nVous trouverez ci-joint le décompte de salaire {month}. Le PDF est protégé par votre mot de passe.\n\nMeilleures salutations\n{firm}", it: "Buongiorno\n\nIn allegato il conteggio dello stipendio {month}. Il PDF è protetto dalla sua password.\n\nCordiali saluti\n{firm}", en: "Hello\n\nAttached is your payslip for {month}. The PDF is protected with your password.\n\nKind regards\n{firm}" }
+  holidaysMinimum: { de: "ohne Ferientage im Vertrag: gesetzliches Minimum {weeks} Wochen (OR Art. 329a)", fr: "sans jours de vacances au contrat : minimum légal {weeks} semaines (CO art. 329a)", it: "senza giorni di vacanza nel contratto: minimo legale {weeks} settimane (CO art. 329a)", en: "no holiday days in the contract: the legal minimum of {weeks} weeks (OR Art. 329a)" }
   holidays: { de: "Ferien: Saldo {balance} Tage (Anspruch bis Monatsende {earned}, bezogen {taken})", fr: "Vacances : solde {balance} jours (droit à la fin du mois {earned}, pris {taken})", it: "Vacanze: saldo {balance} giorni (diritto a fine mese {earned}, godute {taken})", en: "Holidays: balance {balance} days (earned by the month's end {earned}, taken {taken})" }
   # What a payslip and a Lohnausweis are computed from, said neutrally: the owner who runs the payroll himself
   # reads it as well as a fiduciary (docs/specs/payroll.md §22 decision 47). {year}: the year of the federal figures.

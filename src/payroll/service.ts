@@ -29,6 +29,7 @@ import { allPayslipEvents, appendPayslipEvents, loadPayroll, updatePayroll } fro
 import { encryptPdf, generatedPassword } from './pdf-encrypt.js';
 import { sendingAddress, type MailMessage } from '../invoices/mail.js';
 import type { PayrollEmployee, PayrollStore, PayslipClose, PayslipCorrection } from './model.js';
+import type { PaymentFileRecord } from './payment-file.js';
 
 /** A change to the books inside the caller's write door; `fn` is synchronous. */
 export type BooksWriter = <T>(fn: (books: Books) => T) => T;
@@ -167,7 +168,7 @@ export async function issueLohnausweis(ws: Workspace, employee: string, year: st
   if (!e) throw new PayrollRefusal('notFound', `Keine Person ${employee}.`);
   const types = firmWageTypes(ctx.data, ctx.store);
   const closes = [...ctx.history.closed.values()];
-  const data = lohnausweisOf(e, closes, types, ctx.data, year, e.language);
+  const data = lohnausweisOf(e, closes, types, ctx.data, year, e.language, [...new Set(ctx.store.monthLines.filter((l) => l.employee === employee && !l.removed).map((l) => l.month))]);
   // Ready once every payslip of the person's year is closed (§6.7); before, only after the warning, and the snapshot names the open months.
   // Without the person's social security number the form lacks its field C: said first, then the person decides (§18).
   if ((data.openMonths.length || !e.socialSecurityNumber) && !confirm) return { issued: false, openMonths: data.openMonths, ...(!e.socialSecurityNumber ? { noSocialSecurityNumber: true as const } : {}) };
@@ -303,4 +304,25 @@ export function setMailPassword(ws: Workspace, employee: string, given: string |
     e.mailPassword = password;
     return own !== undefined ? {} : { password };
   });
+}
+
+// ─── payment files ─────────────────────────────────────────────────────────────
+
+const paymentFilesLog = (ws: Pick<Workspace, 'paths'>, year: string) => join(yearPaths(ws.paths, year).payroll, 'payment-files.jsonl');
+/** Where a made file's bytes lie, by its record's id. */
+export const paymentFilePath = (ws: Pick<Workspace, 'paths'>, year: string, id: string) => join(yearPaths(ws.paths, year).payroll, 'payment-files', `${id}.xml`);
+
+/** The payment files made for months of `year`, oldest first. */
+export function paymentFilesMade(ws: Pick<Workspace, 'paths'>, year: string): PaymentFileRecord[] {
+  const f = paymentFilesLog(ws, year);
+  return existsSync(f) ? readFileSync(f, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as PaymentFileRecord) : [];
+}
+
+/** Keeps a made file: its bytes beside the log, its record appended. */
+export function keepPaymentFile(ws: Pick<Workspace, 'paths'>, record: PaymentFileRecord, xml: string): void {
+  const year = record.month.slice(0, 4);
+  const path = paymentFilePath(ws, year, record.id);
+  mkdirSync(join(yearPaths(ws.paths, year).payroll, 'payment-files'), { recursive: true });
+  writeAtomic(path, Buffer.from(xml, 'utf8'));
+  appendFileSync(paymentFilesLog(ws, year), JSON.stringify(record) + '\n');
 }

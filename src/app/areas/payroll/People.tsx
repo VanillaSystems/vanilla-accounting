@@ -16,13 +16,15 @@ import type { Nav } from '../index.js';
 import { payrollApi, reloadPayroll, type EmployeeDetail, type SettingsView } from './data.js';
 import { payslipAt } from './common.js';
 import { DatedField, Fields, numberOf, numText, useBackdated, type FieldDef, type Form, type ValueSpec } from './Dated.js';
-import { data, labelOf } from './words.js';
+import { data, labelOf, monthText } from './words.js';
 
 type Employee = EmployeeDetail['employee'];
 type Common = { today: string; defaultFrom: string; used: ReadonlySet<string>; canEdit: boolean; nav: Nav };
 
 /** The Lohnarten a fund pays per child: those the catalogue marks as allowances, and copies of them. */
-const allowanceTypes = (settings: SettingsView): Array<WageType & { used: boolean }> => settings.wageTypes.filter((w) => w.allowance || w.once);
+const allowanceTypes = (settings: SettingsView): Array<WageType & { used: boolean }> => settings.wageTypes.filter((w) => w.allowance);
+/** The one-off allowances (at the birth or the adoption): apart from the monthly history. */
+const birthTypes = (settings: SettingsView): Array<WageType & { used: boolean }> => settings.wageTypes.filter((w) => w.once);
 
 const allowanceSpec = (types: ReadonlyArray<WageType>): ValueSpec<{ wageType: string; amount: number }> => ({
   fields: [
@@ -42,7 +44,7 @@ export function Children({ e, settings, common }: { e: Employee; settings: Setti
   return (
     <div className="psub" data-testid="children">
       {!children.length ? <p className="m">{t('payroll.children.none')}</p> : children.map((c) => <ChildRow key={c.id} e={e} c={c} types={types} common={common} />)}
-      {common.canEdit ? <AddChild e={e} types={types} nav={common.nav} defaultFrom={common.defaultFrom} /> : null}
+      {common.canEdit ? <AddChild e={e} types={types} births={birthTypes(settings)} nav={common.nav} defaultFrom={common.defaultFrom} /> : null}
       <p className="m">{t('payroll.children.lead')}</p>
     </div>
   );
@@ -54,31 +56,45 @@ function ChildRow({ e, c, types, common }: { e: Employee; c: Child; types: Reado
   return (
     <div className="pchild">
       <DatedField label={`${c.name} · ${formatDate(c.birthDate)}`} path={`employees/${e.id}/children/${c.id}/allowance`} history={c.allowance} spec={allowanceSpec(types)} {...common} />
+      {c.birth ? <p className="m">{t('payroll.children.birth', { amount: fmt(c.birth.amount), month: monthText(c.birth.month) })}</p> : null}
       {common.canEdit && !paid ? <AsyncButton type="button" className="quiet2" onClick={() => card.send((how) => payrollApi.removeChild(e.id, c.id, how))}>{t('payroll.children.remove')}</AsyncButton> : null}
       {card.node}
     </div>
   );
 }
 
-function AddChild({ e, types, nav, defaultFrom }: { e: Employee; types: ReadonlyArray<WageType>; nav: Nav; defaultFrom: string }) {
+function AddChild({ e, types, births, nav, defaultFrom }: { e: Employee; types: ReadonlyArray<WageType>; births: ReadonlyArray<WageType>; nav: Nav; defaultFrom: string }) {
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState<Form>({ wageType: types[0]?.key ?? '', validFrom: defaultFrom });
+  const empty = (): Form => ({ wageType: types[0]?.key ?? '', validFrom: defaultFrom, birthType: births[0]?.key ?? '' });
+  const [f, setF] = useState<Form>(empty());
   const card = useBackdated(nav);
+  // A child born after the person's first open day: the allowance runs from the month of the birth (FamZG Art. 3), the
+  // birth allowance is paid in it; the form proposes both, the person keeps or changes them.
+  const set = (next: Form) => {
+    const born = next.birthDate && next.birthDate !== f.birthDate && next.birthDate.slice(0, 7) >= defaultFrom.slice(0, 7);
+    setF(born ? { ...next, validFrom: `${next.birthDate.slice(0, 7)}-01`, birthMonth: next.birthDate.slice(0, 7) } : next);
+  };
   const fields: FieldDef[] = [
     { k: 'name', label: t('payroll.field.childName') }, { k: 'birthDate', label: t('payroll.field.birthDate'), type: 'date' },
     ...allowanceSpec(types).fields,
-    { k: 'validFrom', label: t('payroll.dated.validFrom'), type: 'date' }, { k: 'validUntil', label: t('payroll.field.validUntil'), type: 'date', hint: t('payroll.children.untilHint') },
+    { k: 'validFrom', label: t('payroll.dated.validFrom'), type: 'date', hint: t('payroll.children.fromHint') }, { k: 'validUntil', label: t('payroll.field.validUntil'), type: 'date', hint: t('payroll.children.untilHint') },
+    ...(births.length ? [
+      { k: 'birthType', label: t('payroll.field.birthAllowance'), type: 'select' as const, options: births.map((w) => [w.key, labelOf(w.label, w.key)] as const) },
+      { k: 'birthAmount', label: t('payroll.field.birthAmount'), type: 'number' as const, hint: t('payroll.field.birthAmountHint') },
+      { k: 'birthMonth', label: t('payroll.field.birthMonth'), hint: t('payroll.afterExit.monthHint') },
+    ] : []),
   ];
   const save = async (ev: FormEvent) => {
     ev.preventDefault();
-    const body = { name: f.name, birthDate: f.birthDate, wageType: f.wageType, amount: numberOf(f.amount), validFrom: f.validFrom, ...(f.validUntil ? { validUntil: f.validUntil } : {}) };
-    await card.send((how) => payrollApi.addChild(e.id, body, how), () => { setOpen(false); setF({ wageType: types[0]?.key ?? '', validFrom: defaultFrom }); });
+    const birth = f.birthAmount?.trim() ? { birth: { wageType: f.birthType, amount: numberOf(f.birthAmount), month: f.birthMonth || f.birthDate?.slice(0, 7) } } : {};
+    const body = { name: f.name, birthDate: f.birthDate, wageType: f.wageType, amount: numberOf(f.amount), validFrom: f.validFrom, ...(f.validUntil ? { validUntil: f.validUntil } : {}), ...birth };
+    await card.send((how) => payrollApi.addChild(e.id, body, how), () => { setOpen(false); setF(empty()); });
   };
   if (!open) return <button type="button" className="btn ghost" onClick={() => setOpen(true)}>{t('payroll.children.add')}</button>;
   return (
     <>
       <AsyncForm className="form inline pform" onSubmit={save}>
-        <Fields fields={fields} f={f} set={setF} />
+        <Fields fields={fields} f={f} set={set} />
         <div className="acts"><AsyncButton type="submit" className="btn primary">{t('common.save')}</AsyncButton><button type="button" className="btn ghost" onClick={() => setOpen(false)}>{t('common.cancel')}</button></div>
       </AsyncForm>
       {card.node}
@@ -143,12 +159,19 @@ function AddAbsence({ e, nav }: { e: Employee; nav: Nav }) {
       { k: 'allowanceFrom', label: t('payroll.field.allowanceFrom'), type: 'date' as const, hint: t('payroll.field.allowanceFromHint') },
     ] : []),
   ];
-  const save = async (ev: FormEvent) => {
-    ev.preventDefault();
+  const [overlap, setOverlap] = useState<Absence[] | null>(null);
+  const send = async () => {
     const body: Record<string, unknown> = { kind: f.kind, from: f.from, to: f.to, incapacity: numberOf(f.incapacity) };
     if (k && !k.unpaid && !k.holiday) body.continuedPay = numberOf(f.continuedPay);
     if (k?.allowance && f.dailyAllowance) { body.dailyAllowance = numberOf(f.dailyAllowance); if (f.allowanceFrom) body.allowanceFrom = f.allowanceFrom; }
-    await card.send((how) => payrollApi.addAbsence(e.id, body, how), () => setOpen(false));
+    await card.send((how) => payrollApi.addAbsence(e.id, body, how), () => { setOpen(false); setOverlap(null); });
+  };
+  // An absence over days another holds already is said first (warn, then the person decides); a day's wage is taken off once.
+  const save = async (ev: FormEvent) => {
+    ev.preventDefault();
+    const over = (e.absences ?? []).filter((a) => a.from <= f.to && a.to >= f.from && !kindOf(a.kind)?.holiday === !k?.holiday);
+    if (over.length && !overlap) { setOverlap(over); return; }
+    await send();
   };
   if (!open) return <button type="button" className="btn ghost" onClick={() => setOpen(true)}>{t('payroll.absence.add')}</button>;
   return (
@@ -156,6 +179,14 @@ function AddAbsence({ e, nav }: { e: Employee; nav: Nav }) {
       <AsyncForm className="form inline pform" onSubmit={save}>
         <Fields fields={fields} f={f} set={setF} />
         <p className="m wide">{t('payroll.absence.noDiagnosis')}</p>
+        {overlap ? (
+          <div className="pcard warnpanel wide" role="alert" data-testid="absence-overlap">
+            <h4>{t('payroll.absence.overlapTitle')}</h4>
+            <ul>{overlap.map((a) => <li key={a.id}>{labelOf(kindOf(a.kind)?.label, a.kind)} {formatDate(a.from)}–{formatDate(a.to)}</li>)}</ul>
+            <p className="m">{t('payroll.absence.overlapRule')}</p>
+            <div className="acts"><AsyncButton type="button" className="btn primary" onClick={send}>{t('payroll.absence.overlapAnyway')}</AsyncButton><button type="button" className="btn ghost" onClick={() => setOverlap(null)}>{t('payroll.close.back')}</button></div>
+          </div>
+        ) : null}
         <div className="acts"><AsyncButton type="submit" className="btn primary">{t('common.save')}</AsyncButton><button type="button" className="btn ghost" onClick={() => setOpen(false)}>{t('common.cancel')}</button></div>
       </AsyncForm>
       {card.node}
@@ -172,7 +203,9 @@ export function AfterExit({ e, settings, nav }: { e: Employee; settings: Setting
   const [open, setOpen] = useState(false);
   const options = settings.wageTypes.filter((w) => !w.computes && (w.stage === 'gross' || w.stage === 'after') && !w.allowance && !w.once)
     .map((w) => [w.key, labelOf(w.label, w.key)] as const);
-  const [f, setF] = useState<Form>({ month: today.slice(0, 7), wageType: options.find(([k]) => k === 'bonus')?.[0] ?? options[0]?.[0] ?? '' });
+  // The first one-off payment the catalogue offers (its group of irregular payments), else the first Lohnart.
+  const oneOff = settings.wageTypes.find((w) => !w.computes && w.stage === 'gross' && w.group === data()?.wageTypes.find((x) => x.computes === 'thirteenth')?.group)?.key;
+  const [f, setF] = useState<Form>({ month: today.slice(0, 7), wageType: oneOff ?? options[0]?.[0] ?? '' });
   if (!exit || exit >= today || Number(exit.slice(0, 4)) < Number(today.slice(0, 4)) - 1) return null;
   const save = async (ev: FormEvent) => {
     ev.preventDefault();

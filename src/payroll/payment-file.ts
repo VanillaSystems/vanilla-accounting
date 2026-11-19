@@ -2,32 +2,46 @@
  * The payment file of a month's Lohnzahlungen (docs/specs/payroll.md §6.3, §21 decision 5): the payouts not paid
  * yet, each to the IBAN the payslip printed, from one of the firm's bank accounts in the books' currency, written
  * in the bank format of src/providers/pain001. The person uploads it in e-banking; «bezahlt» still comes only from
- * the bank statement (src/payroll/payments.ts). A payout without an IBAN, or paid already, is left out and named.
+ * the bank statement (src/payroll/payments.ts). A payout without an IBAN, to an IBAN for payment references only (IID
+ * 30000 to 31999) or an account abroad, or paid
+ * already, is left out and named. Each file made is kept with its record, so a second one is said before it is made.
  */
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { Address } from '../invoices/model.js';
-import { pain001 } from '../providers/pain001/xml.js';
+import { iidOf, isReferenceIban, pain001 } from '../providers/pain001/xml.js';
 import type { PayslipClose } from './model.js';
 import type { PaymentRow } from './payments.js';
 
+/** A payment file as it was made: when, from which account, for which payslips; its bytes lie beside it. */
+export interface PaymentFileRecord { id: string; month: string; at: string; account: string; payslips: string[]; total: number }
+
+export type LeftWhy = 'paid' | 'noIban' | 'referenceIban' | 'foreignIban';
+
 export interface PaymentFilePlan {
-  /** The firm's accounts a file may debit: bank accounts in the books' currency with an IBAN. */
+  /** The firm's accounts a file may debit: Swiss or Liechtenstein bank accounts in the books' currency with an IBAN, none for payment references only. */
   accounts: Array<{ account: string; label: string; iban: string }>;
   /** The payouts the file pays. */
   included: Array<{ id: string; name: string; amount: number }>;
   /** The payouts it leaves out, and why. */
-  left: Array<{ id: string; name: string; why: 'paid' | 'noIban' }>;
+  left: Array<{ id: string; name: string; why: LeftWhy }>;
   /** The day the bank is asked to pay: the payday, or today when the payday is past. */
   executionDate: string;
+  /** The files made so far for the month's payslips, newest last: a second upload pays twice. */
+  made: PaymentFileRecord[];
 }
 
-export function paymentFilePlan(rows: readonly PaymentRow[], bankAccounts: readonly LedgerBankAccount[], currency: string, today: string): PaymentFilePlan {
-  const accounts = bankAccounts.filter((a) => a.role === 'bank' && a.currency === currency && a.iban).map((a) => ({ account: a.account, label: a.label, iban: String(a.iban) }));
+const compact = (iban: string) => iban.replace(/\s/g, '').toUpperCase();
+
+export function paymentFilePlan(rows: readonly PaymentRow[], bankAccounts: readonly LedgerBankAccount[], currency: string, today: string, made: readonly PaymentFileRecord[] = []): PaymentFilePlan {
+  const accounts = bankAccounts.filter((a) => a.role === 'bank' && a.currency === currency && a.iban && iidOf(compact(String(a.iban))) && !isReferenceIban(String(a.iban)))
+    .map((a) => ({ account: a.account, label: a.label, iban: String(a.iban) }));
   const payable = rows.filter((r) => r.payout > 0);
-  const included = payable.filter((r) => !r.paid && r.iban).map((r) => ({ id: r.id, name: r.name, amount: r.payout }));
-  const left = payable.filter((r) => r.paid || !r.iban).map((r) => ({ id: r.id, name: r.name, why: r.paid ? 'paid' as const : 'noIban' as const }));
+  const why = (r: PaymentRow): LeftWhy | undefined => (r.paid ? 'paid' : !r.iban ? 'noIban' : isReferenceIban(r.iban) ? 'referenceIban' : !iidOf(compact(r.iban)) ? 'foreignIban' : undefined);
+  const included = payable.filter((r) => !why(r)).map((r) => ({ id: r.id, name: r.name, amount: r.payout }));
+  const left = payable.flatMap((r) => { const w = why(r); return w ? [{ id: r.id, name: r.name, why: w }] : []; });
   const payday = payable.map((r) => r.valueDate).sort()[0] ?? today;
-  return { accounts, included, left, executionDate: payday < today ? today : payday };
+  const ids = new Set(rows.map((r) => r.id));
+  return { accounts, included, left, executionDate: payday < today ? today : payday, made: made.filter((m) => m.payslips.some((p) => ids.has(p))) };
 }
 
 const painAddress = (a: Address | undefined) => (a?.town ? { ...(a.street ? { street: a.street } : {}), ...(a.number ? { number: a.number } : {}), postcode: a.postcode, town: a.town, country: a.country } : undefined);

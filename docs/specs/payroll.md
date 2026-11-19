@@ -1935,6 +1935,7 @@ After the independent review of A-2 (2026-11-19):
     average month so far over the months employed, and by the year's base so far. Once either passes the limit,
     the month charges its base and the months left out, once (`base#smallWageLimit` kept on each close as what was
     charged); the payslip says so («smallWageCaught»). The UVG premiums are owed from the first franc.
+    A payment after the exit in a later year is judged against the exit year's wage (review 2026-11-19), as its ceilings are.
 63. **An absence takes its days' wage off and pays what the employer continues beyond the insurer's daily
     allowance**, by kind as `payroll.yaml absences` names the Lohnarten: `loss` (Lohnausfall, every base), the
     insurer's daily allowance per calendar day from its decision and from the day it pays (`allowance`: KTG/UVG
@@ -1943,10 +1944,12 @@ After the independent review of A-2 (2026-11-19):
     a Lohnart counts the same. Lines that would cancel (paid on whole, no allowance) are left out and said as a
     fact. An hourly wage's absence pays what its hours entered say (a fact names the Lohnart). No diagnosis is
     kept (§11).
+    Absences over the same days take a day's wage off once (the later one only what the earlier left; the form says so first, a fact on the payslip); two kinds a fund pays in one month each top up only their own allowance. The EO's allowance is no premium wage of the accident insurance (UVV Art. 115; its Lohnart has no UVG bases).
 64. **A child's allowance is the fund's decision, dated, prorated to the days employed**; a birth allowance (`once`)
     is paid in the month its entry begins. The federal minimum and the age after which the allowance ends are
     checked as facts (`allowance.minimum`, `untilAge`), never applied: the fund decides. A child the app paid for is
     never removed; its allowance ends with an entry of 0.
+    The one-off allowance (at the birth) is the child's `birth`, apart from the monthly history, paid with the wage of its month; the monthly allowance runs from the month of the birth (FamZG Art. 3), which the form proposes.
 65. **«Nachzahlung» is a payslip of only the Lohnarten added for a month after the exit**: no monthly wage, no 13th,
     no BVG (the fund insured the employment, which ended), no family allowance. Offered on a person who left this or
     last year. In a later year its ALV and UVG ceilings are those of the exit year, less what that year used (the
@@ -1960,6 +1963,7 @@ After the independent review of A-2 (2026-11-19):
 68. **The first pillar's declaration names the persons exempt in part or whole** (`declarations.liable` in
     payroll.yaml): the AHV wage less what the liable contribution charged, with the reason (not yet liable by age, a
     pensioner's allowance, a small wage).
+    A person without a birth date or whose line was missing for another reason (no fund, a line «unvollständig») is named as such, never as a small wage: that one is read from the base each close kept as charged.
 69. **Payroll writes the payment file itself** (§21 decision 5): next has no payments channel. pain.001.001.09 in the
     Swiss Payment Standards' shape (src/providers/pain001/xml.ts): one debit on the payday (today when it is past),
     category purpose SALA, structured addresses, the debtor agent by the IID inside a Swiss or Liechtenstein IBAN. It
@@ -1967,6 +1971,7 @@ After the independent review of A-2 (2026-11-19):
     IBAN (chosen when there are several); the payouts left out are named. «bezahlt» still comes only from the bank
     statement. Checked against the schema's sequences, counts and lengths in a test; the XSD is not in the repo.
     When the invoicing work builds a payments channel, payroll hands its rows to it.
+    Review 2026-11-19: an IBAN for payment references only (IID 30000–31999) is never debited nor paid, a payout to one or to an account abroad is left out with its reason; the texts are mapped to the SPS character set (Latin letters with their accents kept, anything else «.»), ids lose a leading «/» and «//»; an empty name or purpose, a non-finite or sub-cent amount and a debtor abroad are refused; the creation time is local with its offset. Each file made is kept with its record (`payroll/payment-files.jsonl`, its bytes beside it): the rows say «Datei erstellt am …», and a second file for the same payslips is said first (uploading both pays twice), then made on «Trotzdem».
 70. **The simplified procedure (VAV, BGSA, §3i) is left out of B1.** It is a separate path, not a variant of a
     payslip: the fund collects AHV/IV/EO/ALV, FAK and a flat tax at source once a year on one statement, only for an
     Einzelfirma (not for a GmbH or AG, not for the owner's family) within two limits, and it replaces the
@@ -1974,8 +1979,9 @@ After the independent review of A-2 (2026-11-19):
     check, the annual statement and a persona to walk it (the coiffeur with a helper); no demo has one. A firm on it
     can run its payroll here with the ordinary insurances and settle with the fund by its statement.
 71. **demo-schreinerei runs payroll in the app from October**: Marco's January to September stay as booked by hand
-    (his opening), his child's allowance from October; Nina joins hourly on 1 October. The demo's bank account has no
-    IBAN, so its payment file says «kein Bankkonto mit IBAN» until one is entered (as a firm would see it).
+    (his opening), his child's allowance from October; Nina joins hourly on 1 October.
+    Its chart carries payroll's accounts (no warning on the first close) and its bank account its IBAN, so a walk can make the payment file.
+
 ---
 
 ## Sources

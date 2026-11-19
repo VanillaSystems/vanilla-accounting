@@ -7,7 +7,7 @@
  * it (src/payroll/close.ts). Code reads only the data's keys and flags: no insurance is named here.
  * Pure and browser-safe.
  */
-import { entriesWithin, entryOn, type Dated, type DatedEntry } from '../core/dated.js';
+import { entriesWithin, entryOn, nextDay, type Dated, type DatedEntry } from '../core/dated.js';
 import type { FederalFigure, PayrollData, PayrollYearData } from '../core/modules/schema.js';
 import { firmWageTypes, type WageType } from './catalogue.js';
 import { closedOf, type PayslipHistory } from './history.js';
@@ -244,7 +244,7 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       const share = once ? 1 : employedDays(e, s.from, s.to, month, settings.proration);
       if (share <= 0) continue;
       const amount = share === 1 ? round2(v.amount) : round(v.amount * share);
-      add({ wageType: w.key, label: label(w), amount, side: 'employee', source: 'fak', text: c.name, ...(share === 1 ? {} : { base: v.amount, rate: round2(share * 100), days: { from: s.from, to: s.to } }) });
+      add({ wageType: w.key, label: label(w), amount, side: 'employee', source: 'fak', text: c.name, child: c.id, ...(share === 1 ? {} : { base: v.amount, rate: round2(share * 100), days: { from: s.from, to: s.to } }) });
       const min = w.allowance?.minimum ? fig(w.allowance.minimum) : undefined;
       if (min && v.amount < min.value) fact('allowanceBelowMinimum', { name: c.name, amount: min.value });
       if (w.allowance?.untilAge !== undefined && /^\d{4}-\d{2}-\d{2}$/.test(c.birthDate)) {
@@ -252,6 +252,9 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
         if (from > ends) fact('allowanceAge', { name: c.name, age: w.allowance.untilAge, date: ends });
       }
     }
+    // A one-off allowance (at the birth or the adoption) apart from the monthly history: paid in its month.
+    const birth = c.birth && c.birth.month === month && employed ? types.get(c.birth.wageType) : undefined;
+    if (birth && c.birth) add({ wageType: birth.key, label: label(birth), amount: round2(c.birth.amount), side: 'employee', source: 'fak', text: c.name, child: c.id });
   }
 
   // 3. The Lohnarten added for the month.
@@ -280,14 +283,17 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       const weeks = holidayWeeks(hourlyJob, e, to, rules);
       const rate = round2(weeks / (rules.weeksPerYear - weeks) * 100);
       const base = round2(hoursWage + (settings.holidayBasis === 'wage-with-surcharge' ? publicAmount : 0));
-      add({ wageType: holidayType.key, label: label(holidayType), base, rate, amount: round(base * rate / 100), side: 'employee', source: hourlyJob.holidayDays === undefined ? 'holidays-minimum' : 'employment' });
+      const minimum = hourlyJob.holidayDays === undefined ? data.documents.holidaysMinimum : undefined;
+      add({ wageType: holidayType.key, label: label(holidayType), base, rate, amount: round(base * rate / 100), side: 'employee', source: minimum ? 'holidays-minimum' : 'employment', ...(minimum ? { text: (minimum[lang] ?? minimum.de).replace('{weeks}', String(weeks)) } : {}) });
     }
   }
 
   // 3c. Absences: the absent days' wage taken off, the insurer's daily allowance, the wage the employer continues beyond it.
   const kinds = data.absences ?? {};
   const byKind = new Map<string, { lost: number; continued: number; losses: PayslipLine[] }>();
-  for (const a of e.absences ?? []) {
+  /** The share of each day an absence has taken off already. */
+  const absentShare = new Map<string, number>();
+  for (const a of [...(e.absences ?? [])].sort((x, y) => x.from.localeCompare(y.from))) {
     const k = Object.hasOwn(kinds, a.kind) ? kinds[a.kind] : undefined;
     if (!k || k.holiday || !employed) continue;
     const aFrom = a.from > from ? a.from : from;
@@ -307,11 +313,20 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       // An hourly wage is paid by the hours entered: what an absence pays is entered too («Lohn bei Krankheit»).
       if (s.entry.value.kind !== 'monthly') { fact('absenceHourly', { kind: kindText }); continue; }
       const { days, of } = spanDays(f, t, month, settings.proration);
+      // A day's wage is taken off once: an absence over another takes only what the earlier left of the day.
+      let calendar = 0; let share = 0;
+      for (let d = f; d <= t; d = nextDay(d)) {
+        const eff = Math.max(0, Math.min(incapacity, 1 - (absentShare.get(d) ?? 0)));
+        absentShare.set(d, (absentShare.get(d) ?? 0) + eff);
+        calendar++; share += eff;
+      }
+      const factor = calendar ? share / calendar : 0;
+      if (factor + 1e-9 < incapacity) fact('absenceOverlap', { kind: kindText });
       const base = round2(s.entry.value.amount * (s.entry.value.pensum ?? 100) / 100);
-      const lost = round(base * days / of * incapacity);
+      const lost = round(base * days / of * factor);
       acc.lost = round2(acc.lost + lost);
       acc.continued = round2(acc.continued + lost * continued);
-      if (lossType && lost) acc.losses.push({ wageType: lossType.key, label: label(lossType), base, rate: round2(days / of * incapacity * 100), amount: lost, side: 'employee', source: 'absence', text: kindText, days: { from: f, to: t } });
+      if (lossType && lost) acc.losses.push({ wageType: lossType.key, label: label(lossType), base, rate: round2(days / of * factor * 100), amount: lost, side: 'employee', source: 'absence', text: kindText, days: { from: f, to: t } });
     }
     const allowanceType = k.allowance ? types.get(k.allowance) : undefined;
     if (allowanceType && a.dailyAllowance) {
@@ -328,8 +343,10 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
     const k = kinds[key];
     const kindText = k.label[lang] ?? k.label.de;
     const wageType = k.wage ? types.get(k.wage) : undefined;
-    // What the insurer pays for the kind this month, computed above or entered from its statement.
-    const allowance = k.allowance ? round2(sum(lines.filter((l) => l.wageType === k.allowance && !l.corrects).map((l) => l.amount))) : 0;
+    // What the insurer pays for the kind this month: computed above for it, or entered from its statement when no other
+    // kind of the month shares that Lohnart (two kinds paid by the same fund each count only their own).
+    const sharing = [...byKind.keys()].filter((x) => kinds[x].allowance === k.allowance).length;
+    const allowance = k.allowance ? round2(sum(lines.filter((l) => l.wageType === k.allowance && !l.corrects && (l.source === 'absence' ? l.text === kindText : sharing === 1)).map((l) => l.amount))) : 0;
     const topUp = round(Math.max(0, acc.continued - allowance));
     // The wage runs on whole and no insurer pays: the two lines would cancel, so the payslip says it instead.
     if (acc.lost && acc.lost === topUp && !allowance) { fact('absencePaid', { kind: kindText }); continue; }
@@ -429,10 +446,13 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
       const raw = (m: PayslipClose) => m.bases[c.base as string]?.month ?? 0;
       // What the earlier months charged: kept on each close; a close before this rule charged its whole base.
       const charged = (m: PayslipClose) => m.bases[key]?.month ?? raw(m);
-      const openingBase = opening?.bases[c.base] ?? 0;
-      const yearBase = round2(openingBase + sum(earlier.map(raw)) + base);
+      // A payment after the exit in a later year belongs to the year it was earned in (as its ceiling does, cumulative()).
+      const ref = referenceYear(e, year);
+      const refEarlier = ref === year ? earlier : closedOf(history, e.id).filter((x) => x.month.startsWith(ref) && !inOpening(e, x.month));
+      const openingBase = openingOf(e, ref)?.bases[c.base] ?? 0;
+      const yearBase = round2(openingBase + sum(refEarlier.map(raw)) + (ref === year ? 0 : sum(earlier.map(raw))) + base);
       // A monthly wage promises its year; an hourly one is judged by its average month so far over the months employed.
-      const promised = promisedYear(e, year, settings.proration) ?? expectedYear(e, year, earlier, yearBase, fraction, settings.proration);
+      const promised = promisedYear(e, ref, settings.proration) ?? expectedYear(e, ref, refEarlier, yearBase, ref === year ? fraction : 0, settings.proration);
       if (yearBase <= limit.value && promised <= limit.value) {
         fact('smallWage', { amount: limit.value });
         capped[key] = 0;
@@ -555,6 +575,13 @@ function promisedYear(e: PayrollEmployee, year: string, proration: string): numb
     }
   }
   return round2(total);
+}
+
+/** The year a payment of `year` counts in: `year`, or for a payment after the exit in a later year, the exit's. */
+export function referenceYear(e: Pick<PayrollEmployee, 'employment'>, year: string): string {
+  const inYear = entriesWithin(e.employment, `${year}-01-01`, `${year}-12-31`).some((s) => s.entry);
+  const last = [...e.employment].sort((a, b) => a.validFrom.localeCompare(b.validFrom)).at(-1);
+  return !inYear && last?.validUntil && last.validUntil < `${year}-01-01` ? last.validUntil.slice(0, 4) : year;
 }
 
 /** An hourly year's wage: the year's base so far by the months employed so far, over the months the Anstellungen hold this year. */
@@ -681,9 +708,7 @@ function solutionOf(firm: PayrollInsurance, person: PersonInsurances, kind: stri
 function cumulative(ctx: PayrollContext, e: PayrollEmployee, month: string, base: string, key: string, proration: string, yearly: number): { base: number; capped: number; ceiling: number } {
   const year = month.slice(0, 4);
   // A payment after the exit in a later year («Nachzahlung») counts against the ceiling of the employment's last year.
-  const inYear = entriesWithin(e.employment, `${year}-01-01`, `${year}-12-31`).some((s) => s.entry);
-  const last = [...e.employment].sort((a, b) => a.validFrom.localeCompare(b.validFrom)).at(-1);
-  const ref = !inYear && last?.validUntil && last.validUntil < `${year}-01-01` ? last.validUntil.slice(0, 4) : year;
+  const ref = referenceYear(e, year);
   const earlier = closedOf(ctx.history, e.id).filter((c) => ((ref !== year && c.month.startsWith(ref)) || (c.month < month && c.month.startsWith(year))) && !inOpening(e, c.month));
   const opening = openingOf(e, ref);
   const share = (m: string) => employedFraction(e, m, proration);

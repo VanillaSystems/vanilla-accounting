@@ -48,12 +48,17 @@ const OPENING_OTHER: Record<string, number> = { '1500': 24000, '1530': 18000, '2
 
 const ACCOUNTS: ReadonlyArray<readonly [string, string]> = [
   ['1020', 'Bank Raiffeisen'],
+  ['1091', 'Lohndurchlaufkonto'],
   ['1500', 'Maschinen und Apparate'],
   ['1530', 'Fahrzeuge'],
   ['2000', 'Verbindlichkeiten aus Lieferungen und Leistungen'],
   ['2200', 'Geschuldete MWST'],
   ['2201', 'Abrechnungskonto MWST'],
   ['2270', 'Sozialversicherungen und Vorsorgeeinrichtungen'],
+  ['2271', 'AHV/IV/EO/ALV (Ausgleichskasse)'],
+  ['2272', 'Familienausgleichskasse'],
+  ['2273', 'Unfallversicherung (UVG, UVGZ)'],
+  ['2275', 'Vorsorgeeinrichtung (BVG)'],
   ['2451', 'Kontokorrent Gesellschafter'],
   ['2800', 'Stammkapital'],
   ['2970', 'Gewinnvortrag'],
@@ -61,6 +66,8 @@ const ACCOUNTS: ReadonlyArray<readonly [string, string]> = [
   ['4000', 'Materialaufwand Holz und Beschläge'],
   ['5000', 'Lohnaufwand'],
   ['5700', 'AHV, IV, EO, ALV'],
+  ['5710', 'Familienausgleichskasse'],
+  ['5720', 'Vorsorgeeinrichtungen (BVG)'],
   ['5730', 'Unfallversicherung'],
   ['6000', 'Mietaufwand Werkstatt'],
   ['6100', 'Unterhalt und Reparaturen Maschinen'],
@@ -324,7 +331,8 @@ steps:
  * booked by hand (above), so they enter as his year's opening, which books nothing and feeds the ceilings and the
  * Lohnausweis; his child's allowance is paid with the wage from October. Nina joins on 1 October on an hourly wage
  * with the holiday surcharge 4/48 and no pension (below the entry threshold). October to December are drafts for
- * a person to close, so no figure of the books changes. Invented people and rates.
+ * a person to close, so no figure of the books changes; the chart carries payroll's accounts, so the first close
+ * adds none. Invented people and rates.
  */
 const AT = '2026-10-01T08:00:00.000Z';
 const from = <T>(validFrom: string, value: T) => [{ validFrom, enteredAt: AT, value }];
@@ -364,7 +372,7 @@ const PAYROLL: PayrollStore = {
       id: 'nina', language: 'de', birthDate: '1999-02-17', sex: 'f',
       name: from('2026-10-01', { first: 'Nina', last: 'Muster' }),
       address: from('2026-10-01', { street: 'Bachstrasse', number: '3', postcode: '9014', town: 'St. Gallen', country: 'CH' }),
-      bank: from('2026-10-01', { iban: 'CH4431999123000889012', holder: 'Nina Muster' }),
+      bank: from('2026-10-01', { iban: 'CH7609000000123456789', holder: 'Nina Muster' }),
       employment: from('2026-10-01', { kind: 'hourly' as const, amount: 26.5, holidayDays: 20 }),
       recurring: [],
       insurances: from('2026-10-01', { uvg: { insurance: 'uvg', code: 'A1' } }),

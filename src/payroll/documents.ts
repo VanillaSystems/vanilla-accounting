@@ -91,7 +91,11 @@ export interface LohnausweisData {
  * takes the amount withheld, every other the line signed by its Lohnart), the opening of a firm that
  * started mid-year added, the sums of the module's form computed.
  */
-export function lohnausweisOf(e: PayrollEmployee, closes: readonly PayslipClose[], types: ReadonlyMap<string, WageType>, data: PayrollData, year: string, lang: 'de' | 'fr' | 'it' | 'en' = 'de'): LohnausweisData {
+/**
+ * `pending`: the months of the year with Lohnarten added for the person but no closed payslip (a «Nachzahlung» draft
+ * after the exit): open like a month of employment, so the statement is not «bereit» before they close.
+ */
+export function lohnausweisOf(e: PayrollEmployee, closes: readonly PayslipClose[], types: ReadonlyMap<string, WageType>, data: PayrollData, year: string, lang: 'de' | 'fr' | 'it' | 'en' = 'de', pending: readonly string[] = []): LohnausweisData {
   const form = data.lohnausweis;
   const fields: Record<string, number> = {};
   const remarks = new Map<string, { label: string; amount: number }>();
@@ -135,7 +139,7 @@ export function lohnausweisOf(e: PayrollEmployee, closes: readonly PayslipClose[
     employee: e.id, year,
     ...(spans.length ? { from: spans[0].from, to: spans.at(-1)!.to } : {}),
     fields, remarks: [...remarks.values()].filter((r) => r.amount !== 0),
-    openMonths: [...employedMonths].filter((m) => !closedMonths.has(m)).sort(),
+    openMonths: [...new Set([...employedMonths, ...pending.filter((m) => m.startsWith(year))])].filter((m) => !closedMonths.has(m)).sort(),
     ...(unmapped.length ? { unmapped } : {}),
     ...(opening ? { opening: { through: opening.through, fields: opening.fields } } : {}),
   };
@@ -152,7 +156,7 @@ export interface DeclarationRow {
    * The first pillar's liable wage (payroll.yaml `declarations.liable`) where it is less than the AHV wage: the
    * person is exempt in part or whole, by age (not yet liable), as a pensioner (the allowance), or by a small wage.
    */
-  exempt?: { liable: number; amount: number; reason: 'age' | 'pensioner' | 'smallWage' };
+  exempt?: { liable: number; amount: number; reason: 'age' | 'pensioner' | 'smallWage' | 'other' };
 }
 
 /** The figures of the annual declarations per person: each base of the year as the closed payslips kept it. */
@@ -184,11 +188,21 @@ function exemptOf(e: PayrollEmployee, mine: readonly PayslipClose[], bases: Reco
   if (amount <= 0) return undefined;
   const c = law.data.contributions.find((x) => x.wageType === rule.contribution);
   const y = law.years?.[year];
-  const age = c?.liable ? y?.figures[c.liable] : undefined;
-  const from = age ? Number(e.birthDate.slice(0, 4)) + (Array.isArray(age) ? age[0] : age).value + 1 : undefined;
+  const age = c?.liable ? figureOn(y, c.liable, `${year}-01-01`) : undefined;
+  const born = /^\d{4}-\d{2}-\d{2}$/.test(e.birthDate ?? '') ? Number(e.birthDate.slice(0, 4)) : undefined;
+  const from = age && born !== undefined ? born + age.value + 1 : undefined;
   const reached = referenceAgeReached(e, y);
-  const reason = from !== undefined && Number(year) < from ? 'age' : reached && reached.slice(0, 4) <= year ? 'pensioner' : 'smallWage';
+  // A small wage leaves its trace on the closes (the base it charged, 0 while exempt); anything else is named as such.
+  const small = c?.smallWage ? mine.some((m) => m.bases[`${rule.base}#${c.smallWage}`]?.month === 0 && (m.bases[rule.base]?.month ?? 0) > 0) : false;
+  const reason = from !== undefined && Number(year) < from ? 'age' : reached && reached.slice(0, 4) <= year ? 'pensioner' : small ? 'smallWage' : 'other';
   return { liable, amount, reason };
+}
+
+/** The row of a federal figure valid on `day` (a later row replaces an earlier one from its day). */
+function figureOn(y: PayrollYearData | undefined, key: string, day: string): { value: number } | undefined {
+  const rows = y?.figures[key];
+  if (!rows) return undefined;
+  return (Array.isArray(rows) ? rows : [rows]).filter((r) => r.validFrom <= day).sort((a, b) => a.validFrom.localeCompare(b.validFrom)).at(-1);
 }
 
 // ─── the family allowances (FAK statement) ─────────────────────────────────────
@@ -230,7 +244,7 @@ export function familyAllowanceStatement(employees: readonly PayrollEmployee[], 
         const w = types.get(l.wageType);
         if (contributionTypes.has(l.wageType)) { contributions = round2(contributions + l.amount); continue; }
         if (!isAllowance(w)) continue;
-        const key = `${l.text ?? ''}|${l.wageType}`;
+        const key = `${l.child ?? l.text ?? ''}|${l.wageType}`;
         const row = byChild.get(key) ?? { child: l.text ?? '', wageType: l.wageType, label: w!.label[lang] ?? w!.label.de, months: Array(12).fill(0), total: 0 };
         row.months[i] = round2(row.months[i] + l.amount);
         row.total = round2(row.total + l.amount);
@@ -268,12 +282,11 @@ export interface PensionWageRow {
  */
 export function pensionWages(employees: readonly PayrollEmployee[], closes: readonly PayslipClose[], data: PayrollData, years: Readonly<Record<string, PayrollYearData>> | undefined, year: string): PensionWageRow[] {
   const kind = Object.entries(data.insurances).find(([, k]) => k.perPerson && k.requiredAbove);
-  const threshold = kind ? years?.[year]?.figures[kind[1].requiredAbove!.figure] : undefined;
-  const limit = threshold ? (Array.isArray(threshold) ? threshold[0] : threshold).value : undefined;
   return employees.flatMap((e): PensionWageRow[] => {
     const spans = entriesWithin(e.employment, `${year}-01-01`, `${year}-12-31`).filter((s) => s.entry);
     if (!spans.length) return [];
     const on = spans[0].from;
+    const limit = kind ? figureOn(years?.[year], kind[1].requiredAbove!.figure, on)?.value : undefined;
     const job = entryOn(e.employment, on)!.value;
     // Insured in the fund at any day of the year (a certificate may start after the 1 January).
     const insured = !!kind && entriesWithin(e.insurances, on, `${year}-12-31`).some((x) => !!(x.entry?.value as Record<string, unknown> | undefined)?.[kind[0]]);

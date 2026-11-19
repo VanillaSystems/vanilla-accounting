@@ -25,7 +25,7 @@ import { bankAccountFor } from '../../workspace/money-accounts.js';
 import { loadClassifyContext, mappedReceipts, payrollInsurerOfPayment, ruleOfPayment } from '../../booking/classify.js';
 import { paymentFileOf, paymentFilePlan } from '../../payroll/payment-file.js';
 import { businessOfPayment } from '../../intake/batch-payers.js';
-import { closedPayslips, issueLohnausweis, lohnausweisSnapshots, payslipMail, payslipsSent, sendPayslip, setMailPassword } from '../../payroll/service.js';
+import { closedPayslips, keepPaymentFile, paymentFilePath, paymentFilesMade, issueLohnausweis, lohnausweisSnapshots, payslipMail, payslipsSent, sendPayslip, setMailPassword } from '../../payroll/service.js';
 import { sendMail } from '../../invoices/mail.js';
 import { csv, declarationRows, familyAllowanceStatement, journalOf, lohnausweisOf, lohnkonto, pensionWages } from '../../payroll/documents.js';
 import { firmWageTypes } from '../../payroll/catalogue.js';
@@ -228,20 +228,41 @@ router.put('/api/payroll/months/:month/text', run((req, res) => {
 router.get('/api/payroll/payments/:month', run((req, res) => {
   const month = monthParam(req);
   const rows = paymentRows(readBooks(), closedPayslips(WS), month, payrollClearing() ?? '1091');
-  res.json({ month, rows, file: paymentFilePlan(rows, WS.bankAccounts, baseCurrency(), today()) });
+  res.json({ month, rows, file: paymentFilePlan(rows, WS.bankAccounts, baseCurrency(), today(), paymentFilesMade(WS, month.slice(0, 4))) });
 }));
 
-/** The payment file of the month's payouts not paid yet, debiting the firm's `account` (default: its first bank account with an IBAN). */
-router.get('/payroll/payments/:month/payment-file.xml', run((req, res) => {
+/**
+ * «Zahlungsdatei erstellen»: the month's payouts not paid yet, debiting the firm's `account`, kept with its record.
+ * A file made before for one of these payslips is said first (uploaded twice, it pays twice); `confirm` makes another.
+ */
+router.post('/api/payroll/payments/:month/payment-file', run((req, res) => {
   const month = monthParam(req);
+  const b = body(req);
   const closes = closedPayslips(WS);
   const rows = paymentRows(readBooks(), closes, month, payrollClearing() ?? '1091');
-  const plan = paymentFilePlan(rows, WS.bankAccounts, baseCurrency(), today());
+  const plan = paymentFilePlan(rows, WS.bankAccounts, baseCurrency(), today(), paymentFilesMade(WS, month.slice(0, 4)));
   if (!plan.accounts.length) throw new PayrollRefusal('badInput', 'Kein Bankkonto der Firma mit IBAN in der Buchwährung: unter Firma › Konten eine IBAN eintragen.', 'noAccount');
   if (!plan.included.length) throw new PayrollRefusal('notFound', 'Keine offene Lohnzahlung mit IBAN in diesem Monat.');
-  const account = typeof req.query.account === 'string' ? req.query.account : plan.accounts[0].account;
-  const xml = paymentFileOf(plan, rows, closes, { name: WS.company.name, ...(WS.company.address ? { address: WS.company.address } : {}) }, account, baseCurrency(), new Date().toISOString());
-  res.set('Cache-Control', 'no-store').type('application/xml; charset=utf-8').attachment(`lohnzahlungen-${month}.xml`).send(xml);
+  const ids = new Set(plan.included.map((p) => p.id));
+  const earlier = plan.made.filter((m) => m.payslips.some((p) => ids.has(p)));
+  if (earlier.length && b.confirm !== true) return void res.json({ made: false, earlier });
+  const account = typeof b.account === 'string' && plan.accounts.some((a) => a.account === b.account) ? b.account : plan.accounts[0].account;
+  const now = new Date().toISOString();
+  const xml = paymentFileOf(plan, rows, closes, { name: WS.company.name, ...(WS.company.address ? { address: WS.company.address } : {}) }, account, baseCurrency(), now);
+  const id = /<MsgId>([^<]+)<\/MsgId>/.exec(xml)![1];
+  const record = { id, month, at: now, account, payslips: [...ids], total: Math.round(plan.included.reduce((s, p) => s + p.amount * 100, 0)) / 100 };
+  keepPaymentFile(WS, record, xml);
+  res.json({ made: true, record, url: `/payroll/payments/${month}/payment-files/${id}.xml` });
+}));
+
+/** A payment file as it was made, its bytes unchanged. */
+router.get('/payroll/payments/:month/payment-files/:file', run((req, res) => {
+  const month = monthParam(req);
+  const m = /^([A-Za-z0-9-]+)\.xml$/.exec(String(req.params.file));
+  const record = m && paymentFilesMade(WS, month.slice(0, 4)).find((r) => r.id === m[1] && r.month === month);
+  const path = record && paymentFilePath(WS, month.slice(0, 4), record.id);
+  if (!record || !path || !existsSync(path)) throw new PayrollRefusal('notFound', 'Keine solche Zahlungsdatei.');
+  res.set('Cache-Control', 'no-store').type('application/xml; charset=utf-8').attachment(`lohnzahlungen-${month}-${record.id}.xml`).send(readFileSync(path));
 }));
 
 /** Per insurance: what the payslips accrued, what was paid, what is open, from the books. */
@@ -398,7 +419,7 @@ router.get('/api/payroll/documents/:year', run((req, res) => {
   const canton = valueOn(ctx.store.company.canton, `${year}-12-31`);
   res.json({
     year,
-    people: ctx.store.employees.filter((e) => inYear(e, closes, year)).map((e) => ({ employee: e.id, name: nameOf(e, `${year}-12-31`), lohnausweis: lohnausweisOf(e, closes, types, ctx.data, year, e.language) })),
+    people: ctx.store.employees.filter((e) => inYear(e, closes, year)).map((e) => ({ employee: e.id, name: nameOf(e, `${year}-12-31`), lohnausweis: lohnausweisOf(e, closes, types, ctx.data, year, e.language, pendingMonths(ctx.store, e.id)) })),
     issued: lohnausweisSnapshots(WS, year).map(({ data: _, ...s }) => s),
     declarations: declarationRows(ctx.store.employees, closes, year, { data: ctx.data, years: ctx.years }),
     lohnkonto: lohnkonto(closes, types, year, 'de', ctx.store.employees),
@@ -437,6 +458,10 @@ router.get('/payroll/documents/:year/lohnausweis/:file', run((req, res) => {
   res.type('application/pdf').send(bytes);
 }));
 
+/** The months with Lohnarten added for the person and not closed (a «Nachzahlung» draft). */
+const pendingMonths = (store: { monthLines: ReadonlyArray<{ employee: string; month: string; removed?: boolean }> }, employee: string): string[] =>
+  [...new Set(store.monthLines.filter((l) => l.employee === employee && !l.removed).map((l) => l.month))];
+
 /** A person the year's documents are for: employed in it, or with a closed payslip of it (a payment after the exit). */
 const inYear = (e: PayrollEmployee, closes: readonly PayslipClose[], year: string) =>
   closes.some((c) => c.employee === e.id && c.month.startsWith(year)) || entriesWithin(e.employment, `${year}-01-01`, `${year}-12-31`).some((s) => s.entry);
@@ -455,7 +480,7 @@ router.get('/payroll/documents/:year/lohnausweis.csv', run((req, res) => {
   const closes = [...ctx.history.closed.values()];
   const fields = (ctx.data.lohnausweis?.fields ?? []).filter((f) => !f.remark).map((f) => f.key);
   const rows = ctx.store.employees.filter((e) => inYear(e, closes, year)).map((e) => {
-    const l = lohnausweisOf(e, closes, types, ctx.data, year, e.language);
+    const l = lohnausweisOf(e, closes, types, ctx.data, year, e.language, pendingMonths(ctx.store, e.id));
     return [e.id, nameOf(e, `${year}-12-31`), e.socialSecurityNumber, year, l.from, l.to, ...fields.map((k) => l.fields[k] ?? 0), l.remarks.map((r) => `${r.label} ${r.amount.toFixed(2)}`).join(', ')];
   });
   sendCsv(res, `lohnausweis-${year}.csv`, csv([['id', 'name', 'ssn', 'year', 'from', 'to', ...fields, '15'], ...rows]), true);

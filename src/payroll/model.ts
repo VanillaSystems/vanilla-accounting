@@ -156,6 +156,8 @@ export interface Child {
   name: string;
   birthDate: string;
   allowance: Dated<{ wageType: string; amount: number }>;
+  /** A one-off allowance the fund decided (at the birth or the adoption): paid with the wage of `month` (YYYY-MM). */
+  birth?: { wageType: string; amount: number; month: string };
 }
 
 /**
@@ -215,6 +217,8 @@ export interface PayslipLine {
   days?: { from: string; to: string };
   /** The payslip a correction line corrects. */
   corrects?: string;
+  /** A family allowance's child (its id): the statement sums per child, whatever her name. */
+  child?: string;
   /** The correction event the line carries: once carried by a standing close, it is in no other draft. */
   correction?: string;
   text?: string;

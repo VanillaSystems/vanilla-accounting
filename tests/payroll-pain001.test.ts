@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { XMLParser } from 'fast-xml-parser';
-import { pain001, PainError, iidOf } from '../src/providers/pain001/xml.js';
+import { pain001, PainError, iidOf, localTime } from '../src/providers/pain001/xml.js';
 import { paymentFilePlan, paymentFileOf } from '../src/payroll/payment-file.js';
 import type { PaymentRow } from '../src/payroll/payments.js';
 import type { PayslipClose } from '../src/payroll/model.js';
@@ -15,7 +15,7 @@ import type { PayslipClose } from '../src/payroll/model.js';
 const IBAN = (s: string) => s.replace(/\s/g, '');
 const FIRM_IBAN = ['CH93', '0076', '2011', '6238', '5295', '7'].join('');
 const A = IBAN('CH56 0483 5012 3456 7800 9');
-const B = IBAN('CH44 3199 9123 0008 8901 2');
+const B = IBAN('CH76 0900 0000 1234 5678 9');
 
 type Node = Record<string, unknown>;
 const ordered = new XMLParser({ preserveOrder: true, ignoreAttributes: false });
@@ -52,7 +52,7 @@ test('the counts, sums, category and agent are what a bank checks', () => {
   assert.equal(doc.GrpHdr.NbOfTxs, '2');
   assert.equal(doc.GrpHdr.CtrlSum, '5886.55', '4,210.35 + 1,676.20, two decimals');
   assert.equal(doc.PmtInf.CtrlSum, doc.GrpHdr.CtrlSum);
-  assert.equal(doc.GrpHdr.CreDtTm, '2026-09-24T10:15:00');
+  assert.equal(doc.GrpHdr.CreDtTm, localTime('2026-09-24T10:15:00.000Z'), 'local time with its offset');
   assert.equal(doc.PmtInf.PmtTpInf.CtgyPurp.Cd, 'SALA', 'salaries: the bank shows one debit without the single payments');
   assert.equal(doc.PmtInf.DbtrAcct.Id.IBAN, FIRM_IBAN);
   assert.deepEqual(doc.PmtInf.DbtrAgt.FinInstnId.ClrSysMmbId, { ClrSysId: { Cd: 'CHBCC' }, MmbId: '00762' }, 'the IID inside the IBAN');

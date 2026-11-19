@@ -171,18 +171,19 @@ test('B1 golden case: a child allowance is paid with the wage and books D 2272 /
     employment: [dated('2026-01-01', monthly(5000))],
     children: [
       { id: 'k1', name: 'Lea', birthDate: '2019-02-11', allowance: [dated('2026-01-01', { wageType: 'kinderzulage', amount: 215 })] },
-      { id: 'k2', name: 'Tim', birthDate: '2026-09-03', allowance: [dated('2026-09-01', { wageType: 'geburtszulage', amount: 1500 }, undefined, '2026-09-30'), dated('2026-10-01', { wageType: 'kinderzulage', amount: 215 })] },
+      // Born in September: the child allowance from the month of the birth (FamZG Art. 3), the birth allowance once, apart.
+      { id: 'k2', name: 'Tim', birthDate: '2026-09-03', allowance: [dated('2026-09-01', { wageType: 'kinderzulage', amount: 215 })], birth: { wageType: 'geburtszulage', amount: 1500, month: '2026-09' } },
     ],
   });
   const store = firm([e]);
   const sep = computePayslip(ctxOf(store), 'c1', '2026-09')!;
-  assert.deepEqual(sep.lines.filter((l) => l.source === 'fak').map((l) => [l.wageType, l.amount, l.text]), [['kinderzulage', 215, 'Lea'], ['geburtszulage', 1500, 'Tim']]);
+  assert.deepEqual(sep.lines.filter((l) => l.source === 'fak').map((l) => [l.wageType, l.amount, l.text]), [['kinderzulage', 215, 'Lea'], ['kinderzulage', 215, 'Tim'], ['geburtszulage', 1500, 'Tim']]);
   assert.equal(line(sep, 'ahv-an')[0].base, 5000, 'no AHV on a family allowance');
-  assert.equal(sep.payout, Math.round((sep.net + 1715) * 100) / 100, 'paid out with the net');
+  assert.equal(sep.payout, Math.round((sep.net + 1930) * 100) / 100, 'paid out with the net');
   const b = bookingOf(sep, ch.payroll!, store);
-  assert.deepEqual(b.postings.filter((p) => p.debit === '2272').map((p) => [p.wageType, p.credit, p.amount]), [['kinderzulage', '1091', 215], ['geburtszulage', '1091', 1500]]);
+  assert.deepEqual(b.postings.filter((p) => p.debit === '2272').map((p) => [p.wageType, p.credit, p.amount]), [['kinderzulage', '1091', 430], ['geburtszulage', '1091', 1500]]);
   const oct = computePayslip(ctxOf(store), 'c1', '2026-10')!;
-  assert.deepEqual(oct.lines.filter((l) => l.source === 'fak').map((l) => [l.wageType, l.amount]), [['kinderzulage', 215], ['kinderzulage', 215]], 'the birth allowance once; the new child\'s from October');
+  assert.deepEqual(oct.lines.filter((l) => l.source === 'fak').map((l) => [l.wageType, l.amount]), [['kinderzulage', 215], ['kinderzulage', 215]], 'the birth allowance once; the child allowances go on');
   const low = computePayslip(ctxOf(firm([staff('c2', { employment: [dated('2026-01-01', monthly(5000))], children: [{ id: 'k', name: 'Ada', birthDate: '2010-01-05', allowance: [dated('2026-01-01', { wageType: 'kinderzulage', amount: 200 })] }] })])), 'c2', '2026-03')!;
   assert.ok(facts(low).includes('allowanceBelowMinimum'), '200 is below the federal minimum of 215');
   assert.ok(facts(low).includes('allowanceAge'), 'Ada turned 16 in January 2026: the child allowance ends by the fund\'s decision');

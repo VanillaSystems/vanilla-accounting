@@ -4,6 +4,10 @@
     "name": "Bank Raiffeisen"
   },
   {
+    "number": "1091",
+    "name": "Lohndurchlaufkonto"
+  },
+  {
     "number": "1500",
     "name": "Maschinen und Apparate"
   },
@@ -26,6 +30,22 @@
   {
     "number": "2270",
     "name": "Sozialversicherungen und Vorsorgeeinrichtungen"
+  },
+  {
+    "number": "2271",
+    "name": "AHV/IV/EO/ALV (Ausgleichskasse)"
+  },
+  {
+    "number": "2272",
+    "name": "Familienausgleichskasse"
+  },
+  {
+    "number": "2273",
+    "name": "Unfallversicherung (UVG, UVGZ)"
+  },
+  {
+    "number": "2275",
+    "name": "Vorsorgeeinrichtung (BVG)"
   },
   {
     "number": "2451",
@@ -54,6 +74,14 @@
   {
     "number": "5700",
     "name": "AHV, IV, EO, ALV"
+  },
+  {
+    "number": "5710",
+    "name": "Familienausgleichskasse"
+  },
+  {
+    "number": "5720",
+    "name": "Vorsorgeeinrichtungen (BVG)"
   },
   {
     "number": "5730",
