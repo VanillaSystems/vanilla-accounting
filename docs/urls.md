@@ -47,8 +47,10 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/close` and `/close/<step>` | year-end close and one of its steps |
 | `/company/<section>` | `profile`, `vat`, `banks`, `invoice-layout`, `mail`, `sources`, `rules`, `accounts`, `dimensions`, `periods`, `opening`, `display` |
 | `/company/rules?payment=<ref>` | the form of a new rule, started from that payment (`&by=text`: with the payment's lasting words instead of its payer) |
-| `/invoices` | Rechnungen; `?status=open\|overdue\|draft\|paid` |
-| `/invoices/<number>` | an issued invoice or credit note, e.g. `/invoices/2026-006` |
+| `/invoices` | Verkauf › Rechnungen; `?status=draft\|open\|overdue\|partly-paid\|paid\|cancelled\|unsent` (`unsent`: «Nicht gesendet») |
+| `/invoices/<number>` | an issued invoice or credit note, e.g. `/invoices/2026-006`; a credit note opens in Gutschriften (`/invoices/credit-notes/<number>`) |
+| `/invoices/credit-notes` and `/invoices/credit-notes/<number>` | Gutschriften and one open over the table; `?status=draft\|open\|partly\|settled\|unsent` |
+| `/invoices/open-items` and `/invoices/open-items/<number>` | Offene Posten on today, or on `?date=2026-12-31`, and one invoice open over it |
 | `/invoices/draft-<id>` | a draft (it has no number until it is issued) |
 | `/invoices/<number>.pdf` | the invoice as PDF, exactly as issued (app only) |
 | `/invoices/new?customer=<id>` | a new draft for that customer (app only) |
@@ -68,6 +70,7 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `period` | every list with periods | `2026`, `2026-Q3`, `2026-09` or `2026-07-01_2026-09-30`; left out when it is the period of the newest data (the filing period of the newest payment, receipt or entry, `dataPeriod`; for Rechnungen also its newest issued invoice; for MWST the oldest return not filed, `booksOpenPeriod`), which a page shows without one |
 | `f` | receipts, journal | a filter chip `<field>_<value>`, repeated, one per chip (#211, `src/app/shell/chips.ts`): `?f=partner_fedex&f=partner_amazon&f=over_100`. Chips of different fields all hold (AND), chips of one field are alternatives (OR); a bound (`over`, `under`, `amount`, `from`, `to`) or a yes/no field takes one value. Belege: `partner` (a knowledge file's id), `state` (`linked`, `open`, `noDate`, `needsYou`, `unreadable`, `notReceipt`, `quarantine`), `month` (`2026-08`), `from`, `to` (`2026-08-01`), `over`, `under`, `amount` (a number), `currency`, `rate` (the rate the receipt shows, `8.1`, or `none`), `kind`, `linked` (`yes`, `no`). Buchungen: `account`, `rate` (the code's rate, or `none` without a code), `partner`, the same dates and amounts, `currency`, `who` (`classify`, `rule`, `code`, `manual`, `assistant`, `invoice`, `year-close`, `other`), `receipt` (`yes`, `no`, `missing`), `corrects` (`yes`, `no`). The old `?filter=zugeordnet\|offen\|ohneDatum` of Belege redirects to `f=state_linked\|open\|noDate`. |
 | `status` | invoices, receipts/bills | as above |
+| `date` | invoices › open-items | the reference date of Offene Posten, `2026-12-31`; left out for today |
 | `vat` | journal | VAT code filter |
 | `q` | every list | search text (also the filter's «Text enthält»: it stays the search, not a chip) |
 

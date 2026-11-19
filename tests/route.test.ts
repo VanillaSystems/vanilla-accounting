@@ -52,6 +52,12 @@ const CANONICAL = [
   '/invoices/customers/c-17',
   '/invoices/sent',
   '/invoices/sent/d-42',
+  '/invoices/credit-notes',
+  '/invoices/credit-notes/2026-004?status=settled',
+  '/invoices/open-items?date=2026-12-31',
+  '/invoices/open-items/2026-003',
+  '/invoices?status=unsent',
+  '/invoices?status=partly-paid',
   '/invoices/new?customer=cu_17',
   '/company/rules?payment=2026-08-12-a1',
   '/journal?period=2026-07-01_2026-09-30',
@@ -102,6 +108,8 @@ test('the routes the paths name', () => {
   assert.deepEqual(route('/company/banks'), { area: 'company', section: 'banks' });
   assert.deepEqual(route('/invoices/2026-006'), { area: 'invoices', view: 'list', id: '2026-006' });
   assert.deepEqual(route('/invoices/sent/d-42'), { area: 'invoices', view: 'sent', id: 'd-42' });
+  assert.deepEqual(route('/invoices/credit-notes/2026-004'), { area: 'invoices', view: 'credit-notes', id: '2026-004' });
+  assert.deepEqual(route('/invoices/open-items'), { area: 'invoices', view: 'open-items' });
   assert.deepEqual(route('/automation'), { area: 'automation', view: 'home' });
   assert.deepEqual(route('/automation/runs'), { area: 'automation', view: 'runs' });
   assert.deepEqual(route('/automation/workflows'), { area: 'automation', view: 'workflow', tab: 'graph' });
@@ -143,6 +151,7 @@ test('other spellings redirect to the canonical path', () => {
   assert.equal(to('/nowhere/at/all'), '/receipts');
   assert.equal(to('/journal?q=x&vat=I81'), '/journal?vat=I81&q=x');
   assert.equal(to('/journal?period=2026-Q9'), '/journal');
+  assert.equal(to('/invoices/open-items?date=2026-13-45'), '/invoices/open-items', 'a reference date that is no day');
   assert.equal(to('/invoices?status=whatever'), '/invoices');
   assert.equal(to('/receipts?filter=linked'), '/receipts?f=state_linked');
   assert.equal(to('/receipts?filter=unlinked'), '/receipts?f=state_open');

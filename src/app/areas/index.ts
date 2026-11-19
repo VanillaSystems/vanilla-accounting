@@ -80,6 +80,12 @@ export interface Area<R extends Route = Route> {
   title(route: R, books: Index): string | undefined;
   /** Wider list column (journal, reports). */
   wide?: boolean;
+  /**
+   * Layout A (docs/specs/invoicing.md 4.8, the one exception to the list + detail rule): on a route this
+   * answers for, the list is a table across the whole width and the detail opens as a panel over its right
+   * part while `open`; Esc or «×» goes to `close`. Undefined: the route has the list and detail columns.
+   */
+  table?(route: R): { open: boolean; close: R } | undefined;
   /** A route whose page takes the whole width: the list shows it, there is no detail column. */
   fullPage?(route: R): boolean;
   /** Pages without a period (company, codes): no period in the top bar or the heading. */

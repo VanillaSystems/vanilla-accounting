@@ -212,7 +212,14 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
     },
     showDockKeys: setDockKeys,
     add: () => { if (!area.add || !canEdit) return false; runAdd(); return true; },
-    areaKeys: (e) => area.keys?.(e, propsRef.current) ?? false,
+    // Esc closes a table's panel once the area had its say (a dialog of its own closes first).
+    areaKeys: (e) => {
+      if (area.keys?.(e, propsRef.current)) return true;
+      const tb = e.key === 'Escape' ? area.table?.(propsRef.current.route) : undefined;
+      if (!tb?.open) return false;
+      nav.select(tb.close);
+      return true;
+    },
     toggleTheme,
     toggleLegend: () => setLegend(!legend),
     exportOpen: () => openExport(),
@@ -337,6 +344,7 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
 
   const List = area.List;
   const Detail = area.Detail;
+  const table = area.table?.(loc.route);
   const mainStyle = (listWidth ? { '--lw': `${listWidth}px` } : {}) as CSSProperties;
 
   return (
@@ -345,7 +353,18 @@ function Workbench({ language, onLanguage, books, refresh }: ShellProps & { book
       {!readonly && copy ? <DurchsichtBar d={copy} onClose={copy.back ? closeCopy : undefined} /> : null}
       <a className="skip" href="#list">{t('shell.skip')}</a>
       <FxProvider index={books}>
-        {Detail && !area.fullPage?.(loc.route) ? (
+        {Detail && table ? (
+          // Layout A (docs/specs/invoicing.md 4.8): the table across the width, the object as a panel over its right part.
+          <main className="tabled" data-area={loc.route.area} data-panel={table.open ? 'open' : 'shut'}>
+            <section className="list" id="list" aria-label={area.label()}><List {...props} /></section>
+            {table.open && (
+              <section className="detail panel" aria-live="polite">
+                <button type="button" className="panelx" aria-label={t('shell.closePanel')} data-tip={t('shell.closePanelTip')} onClick={() => nav.select(table.close)}>×</button>
+                <Detail {...props} />
+              </section>
+            )}
+          </main>
+        ) : Detail && !area.fullPage?.(loc.route) ? (
           <main data-area={loc.route.area} data-phone={phoneColumn} style={mainStyle}>
             <section className="list" id="list" ref={listRef} aria-label={area.label()} onClickCapture={(e) => { if ((e.target as HTMLElement).closest?.('.row')) setPhoneColumn('detail'); }}><List {...props} /></section>
             <section className="detail" aria-live="polite">

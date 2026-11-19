@@ -16,7 +16,8 @@ import { customerChange, routeId } from './model.js';
 import { filing, invoiceRates, invoicing } from '../../../engines/index.js';
 import { desktop } from '../../desktop/bridge.js';
 
-export const invoicePath = (inv: Invoice) => ({ area: 'invoices' as const, view: 'list' as const, id: routeId(inv) });
+/** A document's place: a Rechnung in Rechnungen, a Gutschrift in Gutschriften (/invoices/<number> opens either). */
+export const invoicePath = (inv: Invoice) => ({ area: 'invoices' as const, view: inv.kind === 'credit-note' ? 'credit-notes' as const : 'list' as const, id: routeId(inv) });
 
 /** An invoice's link in a period that holds its date (a draft shows in every period). */
 export const invoiceAt = (inv: Invoice, current?: Period): Location =>
@@ -93,7 +94,14 @@ async function savePdf(href: string, name: string): Promise<boolean> {
   return true;
 }
 
-function download(href: string, name: string): void {
+/** A text made here (a CSV of a table) saved as a file by its download. */
+export function saveText(text: string, name: string, type = 'text/csv;charset=utf-8'): void {
+  const url = URL.createObjectURL(new Blob([text], { type }));
+  download(url, name);
+  setTimeout(() => URL.revokeObjectURL(url), 8000);
+}
+
+export function download(href: string, name: string): void {
   const a = Object.assign(document.createElement('a'), { href, download: name });
   document.body.append(a);
   a.click();

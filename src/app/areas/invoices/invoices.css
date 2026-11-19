@@ -1,15 +1,76 @@
-/* Rechnungen: the mockup's CSS. The A4 sheet itself is src/invoices/sheet.ts SHEET_CSS, the same as the PDF's. */
-.row.inv { grid-template-columns: 88px minmax(0, 1fr) auto; }
-.row.inv .draftno, .a4 .draftno { font-family: var(--font-sans); color: var(--muted); font-style: italic; }
-.row.inv.st-paid .t, .row.inv.st-credit .t { color: var(--ink-2); }
-.row.inv.st-cancelled .t, .row.inv.st-cancelled .a { color: var(--faint); }
-.row.inv.st-cancelled .a { text-decoration: line-through; }
+/* Verkauf: the mockup's CSS. The A4 sheet itself is src/invoices/sheet.ts SHEET_CSS, the same as the PDF's. */
+.ivt .draftno, .a4 .draftno { font-family: var(--font-sans); color: var(--muted); font-style: italic; }
 .row.cust { grid-template-columns: minmax(0, 1fr) auto; }
-.row.sentrow { grid-template-columns: 64px minmax(0, 1fr) auto; }
-[data-area="invoices"] .counts { flex-wrap: wrap; row-gap: 6px; }
-.vresult.static { cursor: default; }
-.vresult b small { font: 500 12px var(--font-mono); color: var(--muted); margin-right: 6px; }
-.rgap { margin: -8px 0 16px; }
+
+/* the tables (layout A, docs/specs/invoicing.md 4.8) */
+.ivtable .counts { flex-wrap: wrap; row-gap: 6px; }
+.ivtabs { display: flex; flex-wrap: wrap; gap: 4px; margin: -8px 0 12px; }
+.ivtabs button { display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 10px; border-radius: 8px; color: var(--muted); font-size: 13px; white-space: nowrap; }
+.ivtabs button:hover { background: var(--hover); color: var(--ink); }
+.ivtabs button.on { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.ivtabs .n { font-size: 12px; }
+.ivtabs small { font-size: 11px; color: var(--muted); font-weight: 400; }
+.ivtabs button.apart { margin-left: 15px; position: relative; }
+.ivtabs button.apart::before { content: ''; position: absolute; left: -9px; top: 6px; bottom: 6px; width: 1px; background: var(--line-2); }
+.ivfacts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; font-size: 13px; color: var(--ink-2); margin: 0 0 12px; }
+.ivfacts .warn { color: var(--warn); }
+.ivfacts > .quiet2:first-of-type { margin-left: auto; }
+.ivfacts select { margin-left: 6px; font: 12.5px var(--font-sans); padding: 3px 6px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); max-width: 200px; }
+.ivfacts input[type=date] { margin-left: 6px; font: 12.5px var(--font-sans); padding: 3px 6px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); }
+.ivbulk { position: sticky; top: 0; z-index: 3; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; margin: 0 0 10px; border-radius: 10px; background: var(--accent-soft); font-size: 13px; }
+.ivbulk b { margin-right: 6px; }
+.ivscroll { overflow-x: auto; margin: 0 -8px; padding: 0 8px; }
+table.ivt { width: 100%; border-collapse: collapse; font-size: 13px; }
+.ivt th { font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); text-align: left; padding: 8px; white-space: nowrap; border-bottom: 1px solid var(--line); }
+.ivt th button { color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; }
+.ivt th button.on, .ivt th button:hover { color: var(--ink); }
+.ivt th.num, .ivt td.num { text-align: right; }
+.ivt td { padding: 9px 8px; border-bottom: 1px solid var(--line); vertical-align: top; white-space: nowrap; }
+.ivt .mono { font-variant-numeric: tabular-nums; }
+.ivt td.c-contact { white-space: normal; min-width: 150px; }
+.ivt .tt small { display: block; color: var(--muted); font-size: 12px; }
+.ivt tr.trow { cursor: pointer; outline-offset: -2px; }
+.ivt tr.trow:hover td { background: var(--hover); }
+.ivt tr.trow.sel td { background: var(--accent-soft); }
+.ivt tr.gone td { color: var(--faint); }
+.ivt .tick { width: 22px; padding-right: 0; }
+.ivt .more { width: 30px; padding: 4px 0; text-align: right; }
+.ivmore { width: 26px; height: 26px; border-radius: 6px; color: var(--muted); font-size: 15px; }
+.ivmore:hover { background: var(--bg); color: var(--ink); }
+.ivt tfoot td { font-weight: 600; border-bottom: 0; border-top: 1px solid var(--line-2); }
+.ivt .late { color: var(--warn); }
+.ivt .c { color: var(--muted); margin-right: 4px; font-size: 11px; }
+.ivchip { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 12px; background: var(--hover); color: var(--ink-2); border: 1px solid transparent; }
+.ivchip.st-open, .ivchip.st-partly-paid, .ivchip.st-partly { background: var(--accent-soft); color: var(--ink); }
+.ivchip.st-overdue { background: var(--warn-soft); color: var(--warn); }
+.ivchip.st-paid, .ivchip.st-settled { background: var(--pos-soft); color: var(--pos); }
+.ivchip.st-cancelled { color: var(--faint); }
+.ivchip.unsent { border: 1px dashed var(--warn); }
+.ivsentc small { display: block; color: var(--muted); font-size: 11.5px; }
+.ivpager { color: var(--muted); font-size: 12.5px; margin: 12px 0; }
+/* a table's document open: the panel covers its right part, so the table keeps its first columns readable */
+main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
+
+/* Offene Posten: grouped by contact, printable as the Debitorenliste */
+.opt tr.grp td { padding-top: 16px; border-bottom: 0; cursor: default; }
+.opt tr.sub td { color: var(--ink-2); font-weight: 600; border-bottom: 1px solid var(--line-2); }
+.ivprinthead { display: none; }
+@media print {
+  @page { size: A4; margin: 14mm 12mm; }
+  body:has(.oplist) * { visibility: hidden; }
+  body:has(.oplist) .oplist, body:has(.oplist) .oplist * { visibility: visible; }
+  body:has(.oplist) :is(main, .list) { height: auto !important; overflow: visible !important; margin: 0 !important; padding: 0 !important; }
+  body:has(.oplist) .oplist { position: absolute; left: 0; top: 0; width: 100%; color: #000; background: #fff; font-size: 9.5pt; }
+  .oplist .noprint, .oplist .lhead, body:has(.oplist) .detail.panel { display: none !important; }
+  .oplist .ivprinthead { display: flex; gap: 16px; align-items: baseline; margin: 0 0 4mm; font-size: 10pt; }
+  .oplist .ivprinthead b { font-size: 13pt; }
+  .oplist .ivscroll { overflow: visible; margin: 0; padding: 0; }
+  .oplist .ivt { font-size: 9pt; }
+  .oplist .ivt th { color: #555; border-color: #999; }
+  .oplist .ivt td { border-color: #ccc; padding: 1.4mm 1.5mm; background: none !important; }
+  .oplist .ivt tr { break-inside: avoid; }
+  .oplist .ivt thead { display: table-header-group; }
+}
 
 .ivacts { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
 .ivacts .dl.inline { margin-left: auto; }
@@ -75,13 +136,6 @@
 @container (max-width: 560px) { .lkpage { grid-template-columns: minmax(0, 1fr); } }
 .lkprevw { position: sticky; top: 0; }
 .ivhint { font-size: 12px; margin: 6px 0 0; }
-.ivsent { display: grid; gap: 2px; }
-.sdoc { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; text-align: left; padding: 6px 8px; border-radius: 7px; font-size: 12.5px; }
-.sdoc:hover { background: var(--hover); }
-.sdoc .mono { color: var(--date); font-size: 11.5px; }
-.sdoc small { display: block; color: var(--muted); font-size: 11.5px; }
-.sdoc .m { font-size: 11.5px; opacity: 0; }
-.sdoc:hover .m { opacity: 1; }
 .ivnotes { display: grid; gap: 10px; }
 .ivnote .nh { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
 .ivnote .nh .mono { color: var(--date); font-size: 11px; }
@@ -139,6 +193,17 @@
 .invsetup .btn { justify-self: start; }
 .invsetup input.wide { width: 100%; }
 
-/* Offen: a second currency beside the CHF sum (r8c-9). */
-.vresult b .also { font-size: 16px; color: var(--muted); margin-left: 6px; }
-.row.inv .a small.m { font-size: 11px; }
+/* above the sheet: sent when and to whom, or not yet (docs/specs/invoicing.md 4.8) */
+.ivfact { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 13px; color: var(--ink-2); }
+.ivfact.unsent { color: var(--warn); }
+.ivfact .btn { margin-left: 4px; }
+/* the margin's Versand: every send of the document, its reminders and notices */
+.ivsends { display: grid; gap: 14px; }
+.ivsend .h { display: grid; gap: 1px; font-size: 12.5px; }
+.ivsend .h .mono { color: var(--date); font-size: 11.5px; }
+.ivsend .kv { margin: 4px 0 2px; font-size: 12px; }
+.ivsend .wrap { white-space: normal; word-break: break-all; }
+.ivsend .lkfoot { margin-top: 2px; }
+.ivleft { margin: 8px 0; }
+.ivtake { display: grid; gap: 2px; margin: 0 0 8px; font-size: 13px; }
+.ivleft .l { display: block; }

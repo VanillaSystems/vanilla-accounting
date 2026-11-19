@@ -1014,6 +1014,35 @@ listed here and updated with phase 2's build:
     «Nicht gesendet», the send history on the detail and the «Versendet» list, all from the sent log,
     never set by hand; built in phase 1.
 
+### Decisions in the build (2026-11-19)
+
+23. **The age of an open item counts from the invoice date.** The market leader's notes capture its
+    open-items list only as a download at a key date, with no age basis. Counted from the invoice date,
+    the four bands (0–30, 31–60, 61–90, > 90 days) hold every open item, the not yet due ones too; the
+    days past the due date stand in a column of their own. Offene Posten takes its reference date as
+    `?date=` (default today) and sums `openOn`, the year end's own figure.
+24. **Überfällig overlaps.** An overdue Rechnung is in the tab Überfällig and in Offen or Teilbezahlt;
+    its chip reads «Überfällig · N Tage» with the sent mark.
+25. **A Gutschrift's status is one function**, `creditNoteStatus` in `src/invoices/lists.ts`: Offen while
+    something of it is still to pay back or set off, Teilweise once part went back, Abgerechnet when
+    nothing is left. A note marked «set off» stays Offen until its rest is applied (slice C widens the
+    function with allocations).
+26. **«Nicht gesendet»** holds the issued documents whose own entry the sent log lacks, cancelled ones
+    left out (nothing to send); a paid Rechnung never sent stays in it.
+27. **Totals.** A tab's total and the totals row sum Brutto (and Offen) per currency; a cancelled
+    document counts only in Storniert.
+28. **Bulk actions.** «Senden» sends each ticked issued document by e-mail through the send route, at
+    most 25 per run; «PDF» saves at most 20 PDFs per run and records no send. A document that goes out
+    by hand is recorded by its own «Senden › PDF herunterladen» (the download is its entry); there is
+    no «als gesendet markieren».
+29. **Routes.** A Gutschrift opens under `/invoices/credit-notes/<number>`; `/invoices/<number>` of a
+    credit note leads there. An invoice opened from Offene Posten stays there
+    (`/invoices/open-items/<number>`).
+30. **Layout A is an area option**, `table(route)` in `src/app/areas/index.ts`. Rechnungen, Gutschriften,
+    Offene Posten and Versendet are tables; Kunden stays list + detail until Kontakte (phase 2). A row
+    of Versendet opens the PDF as sent; its document column links the document.
+31. **Sorting is a viewer's preference**, kept in the browser per table, not in the link.
+
 ---
 
 ## 8. Changes from the concept of 2026-11-15 (owner, 2026-11-19)

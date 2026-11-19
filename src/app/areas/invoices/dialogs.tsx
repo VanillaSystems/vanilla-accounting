@@ -24,15 +24,20 @@ import type { MailStatus } from '../../../types/api-error.js';
 import { cancel, creditNote, newDraftFor, saveCustomer, saveDraft, send, sendReminder } from './actions.js';
 import { COUNTRIES, addressRule, countryName, countryOf, languageFor, numberFirst, vatRule } from './address.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
+import { BulkDialogs } from './bulk.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
 
 export function Dialogs(props: Props) {
   const s = useUi();
   const load = useInvoices();
-  if (!s.dialog || load.state !== 'ready' || !props.canEdit) return null;
+  if (!s.dialog || load.state !== 'ready') return null;
   const d = load.data;
-  const inv = byRouteId(d.invoices, props.route.view === 'list' ? props.route.id : undefined);
+  // Saving PDFs writes nothing: it works where nothing may be changed too.
+  if (s.dialog.kind === 'bulk-pdf') return <BulkDialogs d={d} nav={props.nav} ids={s.dialog.ids} kind="bulk-pdf" />;
+  if (!props.canEdit) return null;
+  if (s.dialog.kind === 'bulk-send') return <BulkDialogs d={d} nav={props.nav} ids={s.dialog.ids} kind="bulk-send" />;
+  const inv = byRouteId(d.invoices, props.route.view === 'customers' || props.route.view === 'sent' ? undefined : props.route.id);
   switch (s.dialog.kind) {
     case 'new': return <NewInvoice {...props} customers={d.customers} />;
     case 'customer': return <CustomerDialog {...props} customer={d.customers.find((c) => c.id === (s.dialog as { id?: string }).id)} />;
@@ -43,9 +48,9 @@ export function Dialogs(props: Props) {
   }
 }
 
-const close = () => setUi({ dialog: null });
+export const close = () => setUi({ dialog: null });
 
-function Frame({ label, title, children, foot, className = '' }: { label: string; title: ReactNode; children: ReactNode; foot?: ReactNode; className?: string }) {
+export function Frame({ label, title, children, foot, className = '' }: { label: string; title: ReactNode; children: ReactNode; foot?: ReactNode; className?: string }) {
   return (
     <>
       <div className="scrim" style={{ background: 'color-mix(in srgb, var(--bg) 45%, transparent)' }} onClick={close} />
