@@ -21,6 +21,7 @@ import { automation } from './automation/automation.js';
 import { changes } from './changes/changes.js';
 import { partners } from './partners/partners.js';
 import { knowledge } from './knowledge/knowledge.js';
+import { payroll } from './payroll/payroll.js';
 import { ICONS } from './icons.js';
 import type { SelectKind } from '../selection/model.js';
 
@@ -116,10 +117,11 @@ export const AREAS: Registry = {
   changes,
   partners,
   knowledge,
+  payroll,
 };
 
 /** The dock's order; a divider stands before the last group. */
-export const DOCK: AreaId[][] = [['receipts', 'invoices', 'bank', 'journal', 'vat', 'reports', 'close'], ['automation', 'partners', 'knowledge', 'changes', 'company']];
+export const DOCK: AreaId[][] = [['receipts', 'invoices', 'payroll', 'bank', 'journal', 'vat', 'reports', 'close'], ['automation', 'partners', 'knowledge', 'changes', 'company']];
 
 /** The area of a route, typed for its own route: the registry pairs them, a lookup cannot show it to the compiler. */
 export const areaOf = <R extends Route>(route: R) => AREAS[route.area] as unknown as Area<R>;

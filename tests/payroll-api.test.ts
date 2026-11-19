@@ -97,3 +97,54 @@ test('Dokumente: the year\'s figures, a Lohnausweis issued and its PDF, the tabl
   const journal = await (await api.fetch('/payroll/documents/journal/2026-09.csv')).text();
   assert.ok(journal.includes('LR-2026-09-e1'));
 });
+
+test('Per Mail senden: the recipient and the copy shown before, the password set but never read back', async () => {
+  const before = await api.send('GET', '/api/payroll/payslips/2026-09-e1/mail');
+  assert.equal(before.status, 200);
+  assert.equal(before.json.password, false);
+  assert.equal(before.json.to, undefined, 'no address of her own yet');
+  const refused = await api.send('POST', '/api/payroll/payslips/2026-09-e1/send');
+  assert.equal(refused.status, 409);
+  assert.deepEqual([refused.json.code, (refused.json.params as { why: string }).why], ['payroll', 'noEmail']);
+  const open = await api.send('GET', '/api/payroll/payslips/2026-11-e1/mail');
+  assert.equal((open.json.params as { why: string }).why, 'notClosed');
+  const generated = await api.send('POST', '/api/payroll/employees/e1/mail-password', {});
+  const password = generated.json.password as string;
+  assert.equal(password.length, 12);
+  await api.send('POST', '/api/payroll/entries', { path: 'employees/e1/email', validFrom: '2026-01-01', value: 'mila@beispiel.example' });
+  const after = await api.send('GET', '/api/payroll/payslips/2026-09-e1/mail');
+  assert.deepEqual([after.json.to, after.json.password, after.json.sent], ['mila@beispiel.example', true, []]);
+  const person = await api.send('GET', '/api/payroll/employees/e1?year=2026');
+  assert.equal((person.json.employee as { hasMailPassword: boolean }).hasMailPassword, true);
+  for (const url of ['/api/payroll/employees/e1?year=2026', '/api/payroll?year=2026', '/api/payroll/settings', '/api/payroll/payslips/2026-09-e1']) {
+    assert.ok(!JSON.stringify((await api.send('GET', url)).json).includes(password), `${url} never carries the password`);
+  }
+});
+
+test('Änderungen shows payroll.json without the payslip password and with the number masked', async () => {
+  const { draftDir } = await import('../src/saving/changes.js');
+  const { redactPayroll } = await import('../src/payroll/redact.js');
+  const { mkdirSync, readFileSync, writeFileSync } = await import('node:fs');
+  const { join, relative } = await import('node:path');
+  await api.send('POST', '/api/payroll/employees/e2/mail-password', { password: 'Sonne-und-Mond-7' });
+  const text = readFileSync(api.ws.paths.payroll, 'utf8');
+  assert.ok(text.includes('Sonne-und-Mond-7') && text.includes('756.1234.5678.97'), 'the file keeps both (owner decision 4)');
+  const path = relative(api.ws.paths.root, api.ws.paths.payroll);
+  mkdirSync(draftDir(api.ws), { recursive: true });
+  writeFileSync(join(draftDir(api.ws), path), text.replace('Nora', 'Norah'));
+  const diff = await api.send('GET', `/api/changes/diff?source=draft&path=${encodeURIComponent(path)}`);
+  assert.equal(diff.status, 200);
+  const shown = JSON.stringify(diff.json);
+  assert.ok(!shown.includes('Sonne-und-Mond-7') && !shown.includes('1234.5678'), 'neither the password nor the number in full');
+  assert.ok(shown.includes('756.****.****.97') && shown.includes('••••••') && shown.includes('Norah'));
+  assert.equal(redactPayroll('{"mailPassword": "a\\"b", "socialSecurityNumber":"756.1234.5678.97"}'), '{"mailPassword": "••••••", "socialSecurityNumber":"756.****.****.97"}');
+});
+
+test('a refused password says why, and one with a space at either end is refused, never cut', async () => {
+  const spaced = await api.send('POST', '/api/payroll/employees/e2/mail-password', { password: ' Sonne-und-Mond-8' });
+  assert.deepEqual([spaced.status, spaced.json.params], [400, { why: 'badPassword', field: 'spaces' }]);
+  const short = await api.send('POST', '/api/payroll/employees/e2/mail-password', { password: 'kurz' });
+  assert.deepEqual(short.json.params, { why: 'badPassword', field: 'short' });
+  const lock = await api.fetch('/payroll/documents/2026/lohnausweis.csv');
+  assert.equal(lock.headers.get('cache-control'), 'no-store', 'the table with the number in full is never cached');
+});

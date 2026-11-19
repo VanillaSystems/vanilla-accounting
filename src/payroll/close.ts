@@ -30,8 +30,12 @@ export interface ClosePlan {
   warnings: CloseWarning[];
 }
 
+/** Why a payroll action does not apply; the settings add a malformed input, an entry a closed payslip used, a number that is none, a duplicate. */
+export type PayrollRefusalCode = 'notFound' | 'alreadyClosed' | 'notClosed' | 'notLatest' | 'unknownWageType' | 'badAmount' | 'badInput' | 'unknownInsurance' | 'noExpenseAccount' | 'nothingAccrued' | 'noEmail' | 'noPassword' | 'badPassword' | 'used' | 'socialSecurityNumber' | 'iban' | 'exists' | 'gone' | 'closedPeriod';
+
 export class PayrollRefusal extends Error {
-  constructor(readonly code: 'notFound' | 'alreadyClosed' | 'notClosed' | 'notLatest' | 'unknownWageType' | 'badAmount' | 'badInput' | 'unknownInsurance' | 'noExpenseAccount' | 'nothingAccrued' | 'noEmail' | 'noPassword' | 'badPassword', message: string) { super(message); }
+  /** `field`: the input it is about, a key of the UI's `payroll.field.*` words. */
+  constructor(readonly code: PayrollRefusalCode, message: string, readonly field?: string) { super(message); }
 }
 
 /** The plan of closing `employee`'s `month`: the draft, the entries it books, what to say first. */

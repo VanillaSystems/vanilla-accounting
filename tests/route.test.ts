@@ -195,3 +195,27 @@ test('old /<lang>/<period>/<tab> links redirect to what they named', () => {
     assert.ok(!isRedirect(parse(now)), `${now} is canonical`);
   }
 });
+
+test('Löhne: every tab of §12.1 by its path, and its spellings', () => {
+  const route = (url: string) => {
+    const p = parse(url);
+    assert.ok(!isRedirect(p), `${url} redirected to ${isRedirect(p) && formatLocation(p.redirect)}`);
+    assert.equal(formatLocation(p), url);
+    return p.route;
+  };
+  assert.deepEqual(route('/payroll'), { area: 'payroll', view: 'overview' });
+  assert.deepEqual(route('/payroll/2026-09/p1a2b3c'), { area: 'payroll', view: 'payslips', month: '2026-09', employee: 'p1a2b3c' });
+  assert.deepEqual(route('/payroll/payments'), { area: 'payroll', view: 'payments' });
+  assert.deepEqual(route('/payroll/payments/2026-09'), { area: 'payroll', view: 'payments', month: '2026-09' });
+  assert.deepEqual(route('/payroll/payments/2026-09/p1a2b3c'), { area: 'payroll', view: 'payments', month: '2026-09', employee: 'p1a2b3c' });
+  assert.deepEqual(route('/payroll/payments/2026-09/insurances/ak'), { area: 'payroll', view: 'payments', month: '2026-09', insurance: 'ak' });
+  assert.deepEqual(route('/payroll/employees/p1a2b3c'), { area: 'payroll', view: 'employees', id: 'p1a2b3c' });
+  assert.deepEqual(route('/payroll/documents'), { area: 'payroll', view: 'documents' });
+  assert.deepEqual(route('/payroll/documents/2026'), { area: 'payroll', view: 'documents', year: '2026' });
+  assert.deepEqual(route('/payroll/documents/2026/lohnkonto'), { area: 'payroll', view: 'documents', year: '2026', doc: 'lohnkonto' });
+  assert.deepEqual(route('/payroll/documents/2026/p1a2b3c'), { area: 'payroll', view: 'documents', year: '2026', doc: 'p1a2b3c' });
+  assert.deepEqual(route('/payroll/settings/insurances'), { area: 'payroll', view: 'settings', section: 'insurances' });
+  const to = (url: string) => { const p = parse(url); assert.ok(isRedirect(p), `${url} should redirect`); return formatLocation(p.redirect); };
+  assert.equal(to('/payroll/payments/september'), '/payroll/payments');
+  assert.equal(to('/payroll/documents/26/lohnkonto'), '/payroll/documents');
+});

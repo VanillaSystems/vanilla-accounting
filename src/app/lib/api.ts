@@ -26,7 +26,7 @@ import type { PaymentRefusal } from '../../workflows/history.js';
 import type { MailMessage } from '../../invoices/mail.js';
 import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
-import { t, tData } from '../i18n/index.js';
+import { isKey, t, tData } from '../i18n/index.js';
 import { fmt, formatDate } from './utils.js';
 import { bookingWaitsText } from './booking-waits.js';
 import { agreedBasis, baseCurrency, vatSetup } from '../../engines/index.js';
@@ -226,7 +226,13 @@ export function errorText(e: unknown): string {
     case 'hasEntries': return t('error.hasEntries');
     case 'notByReceipt': return t('error.notByReceipt');
     case 'withheldNone': return t('error.withheldNone');
-    case 'payroll': return t(`error.payroll.${b.params.why}`);
+    case 'payroll': {
+      // A refusal with a reason of its own (a password too short, …) says that reason.
+      if (b.params.field && isKey(`error.payroll.${b.params.why}.${b.params.field}`)) return t(`error.payroll.${b.params.why}.${b.params.field}` as 'error.payroll.badPassword');
+      // The field it is about, in the person's words, after the reason.
+      const field = b.params.field && isKey(`payroll.field.${b.params.field}`) ? tData(`payroll.field.${b.params.field}`) : '';
+      return field ? `${t(`error.payroll.${b.params.why}`)} (${field})` : t(`error.payroll.${b.params.why}`);
+    }
     case 'decidedByHand': return t('error.decidedByHand');
     case 'changedSince': return t('error.changedSince');
     case 'undoGone': return t('error.undoGone');

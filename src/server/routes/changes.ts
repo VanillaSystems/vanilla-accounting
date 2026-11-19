@@ -9,6 +9,7 @@
 import { Router } from 'express';
 import { RequestError, WS } from '../books.js';
 import { fileDiff, saveDetail } from '../../saving/changes.js';
+import { isPayrollStore, redactPayroll } from '../../payroll/redact.js';
 import { openSaving } from '../../saving/saving.js';
 import type { ChangesView, FileChange, SavingCommand, SavingResult } from '../../saving/model.js';
 import { loadWorkflows } from '../../workflows/load.js';
@@ -67,5 +68,6 @@ router.get('/api/changes/diff', async (req, res) => {
   if (!source || !path || path.includes('..')) throw new RequestError(400, 'source und path erwartet.');
   const diff = await fileDiff(WS, source, path);
   if (!diff) throw new RequestError(404, `${path} gibt es dort nicht.`);
-  res.json(diff);
+  // The payslip password and the social security number never reach the page from payroll.json (§22 decision 37).
+  res.json(isPayrollStore(path) ? { ...diff, before: redactPayroll(diff.before), after: redactPayroll(diff.after) } : diff);
 });

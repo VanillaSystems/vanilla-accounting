@@ -119,6 +119,31 @@ Two markers flag an entry you must read before you update:
 - Payroll, payslips by mail (phase B0): a closed payslip goes to the person's own address as a PDF locked
   with her password (never the AHV number; the date of birth only after a warning; or one the app makes and
   shows once), with a blind copy to the firm's sender; every mail is logged.
+- Payroll, the Löhne area (phase B0, dock G L): Übersicht (the year's months, closed or open, and what
+  is missing), Lohnabrechnungen (the month's people, «Alle abschliessen», one payslip with its lines by
+  Lohnart group, «+ Arbeitgeber», what a line «unvollständig» lacks, «Lohnart hinzufügen», the entries
+  closing books, «Abschliessen» with its warnings in the page, «Korrektur erfassen», «Wieder öffnen» on the
+  latest month, the PDF and the history), Mitarbeitende («Person hinzufügen» with every section at once;
+  each value with «ab», planned values, «Verlauf» and «Ändern» with «gilt ab»; the AHV number masked,
+  in full only after «anzeigen») and Einstellungen (Stammdaten, Sozialversicherungen with their dated
+  rates, Lohnarten, Konten with «Konto anlegen»). A change dated before a closed month first shows which
+  payslips it would change and by how much; «Rückwirkende Korrektur» carries each difference into the next
+  open month, «So lassen» keeps the closed payslip, which then says what differs. A rate outside its usual
+  range is said, never refused. An AHV number is checked by its check digit. Works without the AI.
+- Payroll, the Löhne area's Lohnzahlungen and Dokumente tabs (phase B0): Lohnzahlungen lists a month's
+  payouts (person, IBAN, amount, purpose «Lohn MM/YYYY», value date), each «bezahlt» with its bank line and
+  entries once the statement brought it, and per insurer of the year what the payslips accrued, what was
+  paid, what is open, with the final statement (Schlussabrechnung) whose total the person enters and whose
+  difference the app books. Dokumente shows per year each person's Lohnausweis by the form's fields, the
+  months still open (a warning, then «Trotzdem erstellen»), «Lohnausweis erstellen», later «ersetzen» or
+  «korrigieren», every issue with its PDF, the canton's wish for a copy to the tax office as a fact; the
+  Lohnkonto, the annual declarations' figures and the Lohnbuchungen, each with its CSV. A closed payslip
+  has «Per Mail senden» (the recipient and the copy shown first, a refusal said in the page, every mail
+  sent listed), a month «Alle per Mail senden»; a person's page sets or generates her payslip password,
+  shown once, and warns before one that holds her date of birth. «Alle per Mail senden» leaves out what was
+  sent already (unless asked) and names what cannot go and why. No page shows a password once set, and
+  Änderungen shows payroll.json with the password hidden and the AHV number masked; on a Durchsicht copy
+  sending and passwords stay the firm's. Works without the AI.
 
 ### Fixed
 

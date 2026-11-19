@@ -30,6 +30,7 @@ export function checkPayroll(j: Jurisdiction): ModuleProblem[] {
   for (const [k, l] of Object.entries(p.documents ?? {})) labels(F, `documents.${k}`, l);
   if (!p.documents) add(F, 'documents', 'missing');
   try { new RegExp(p.socialSecurityNumber?.pattern ?? ''); if (!p.socialSecurityNumber?.pattern) add(F, 'socialSecurityNumber.pattern', 'missing'); } catch { add(F, 'socialSecurityNumber.pattern', 'not a regular expression'); }
+  if (p.socialSecurityNumber?.checkDigit !== undefined && p.socialSecurityNumber.checkDigit !== 'ean13') add(F, 'socialSecurityNumber.checkDigit', `"${String(p.socialSecurityNumber.checkDigit)}" is not ean13`);
   for (const [k, ins] of Object.entries(p.insurances)) {
     labels(F, `insurances.${k}.label`, ins.label);
     labels(F, `insurances.${k}.fund`, ins.fund);

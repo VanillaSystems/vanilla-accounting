@@ -107,8 +107,8 @@ export type ApiRefusal =
   | { code: 'notByReceipt' }
   /** «Arbeitnehmeranteil abziehen» on a payment that has no employees' share open (#476). */
   | { code: 'withheldNone' }
-  /** A payroll action that does not apply (src/payroll/close.ts PayrollRefusal): the payslip is gone, closed already, not closed, not the latest closed month, the Lohnart unknown, the amount missing. */
-  | { code: 'payroll'; params: { why: 'notFound' | 'alreadyClosed' | 'notClosed' | 'notLatest' | 'unknownWageType' | 'badAmount' | 'badInput' | 'unknownInsurance' | 'noExpenseAccount' | 'nothingAccrued' | 'noEmail' | 'noPassword' | 'badPassword' } }
+  /** A payroll action that does not apply (src/payroll/close.ts PayrollRefusal): the payslip is gone, closed already, not closed, not the latest closed month, the Lohnart unknown, the amount missing; a setting malformed, an entry a closed payslip used, a social security number or IBAN that is none, a solution that exists (src/payroll/settings.ts). */
+  | { code: 'payroll'; params: { why: 'notFound' | 'alreadyClosed' | 'notClosed' | 'notLatest' | 'unknownWageType' | 'badAmount' | 'badInput' | 'unknownInsurance' | 'noExpenseAccount' | 'nothingAccrued' | 'noEmail' | 'noPassword' | 'badPassword' | 'used' | 'socialSecurityNumber' | 'iban' | 'exists' | 'gone' | 'closedPeriod'; field?: string } }
   | { code: 'decidedByHand' }
   | { code: 'changedSince' }
   | { code: 'undoGone' }

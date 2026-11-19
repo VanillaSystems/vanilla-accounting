@@ -27,7 +27,7 @@ import { payslipPdf } from './pdf.js';
 import { allPayslipEvents, appendPayslipEvents, loadPayroll, updatePayroll } from './store.js';
 import { encryptPdf, generatedPassword } from './pdf-encrypt.js';
 import { sendingAddress, type MailMessage } from '../invoices/mail.js';
-import type { PayrollEmployee, PayslipCorrection } from './model.js';
+import type { PayrollEmployee, PayrollStore, PayslipClose, PayslipCorrection } from './model.js';
 
 /** A change to the books inside the caller's write door; `fn` is synchronous. */
 export type BooksWriter = <T>(fn: (books: Books) => T) => T;
@@ -232,6 +232,24 @@ export function passwordCheck(e: PayrollEmployee, password: string): { refused?:
   return {};
 }
 
+/** Her address as it is now (a resend goes where she reads her mail today), else the payday's. */
+const recipientOf = (e: PayrollEmployee | undefined, close: PayslipClose, now: string): string | undefined => e && (valueOn(e.email, now.slice(0, 10)) ?? valueOn(e.email, close.payday));
+/** The copy goes to the firm's sender, else to the mailbox it sends from: there is always one (§6.2 step 8). */
+const copyOf = (ws: Workspace, store: PayrollStore): string | undefined => store.company.sender?.copyTo || sendingAddress(ws);
+
+/** What a send would do, shown before it: the recipient, the copy, whether a password is set, the mails sent so far. */
+export interface PayslipMail { to?: string; copyTo?: string; password: boolean; sent: PayslipSent[] }
+
+export function payslipMail(ws: Workspace, id: string, now = new Date().toISOString()): PayslipMail {
+  const ctx = payrollContext(ws);
+  const close = ctx.history.closed.get(id);
+  if (!close) throw new PayrollRefusal('notClosed', `Die Lohnabrechnung ${id} ist nicht abgeschlossen.`);
+  const e = ctx.store.employees.find((x) => x.id === close.employee);
+  const to = recipientOf(e, close, now);
+  const copyTo = copyOf(ws, ctx.store);
+  return { ...(to ? { to } : {}), ...(copyTo ? { copyTo } : {}), password: !!e?.mailPassword, sent: payslipsSent(ws, close.month.slice(0, 4)).filter((s) => s.payslip === id) };
+}
+
 /**
  * Sends a closed payslip to the person's own address as a PDF locked with her password, the copy to the
  * firm's sender; every mail is logged. Without an address or a password nothing is sent.
@@ -241,11 +259,10 @@ export async function sendPayslip(ws: Workspace, id: string, send: (message: Mai
   const close = ctx.history.closed.get(id);
   if (!close) throw new PayrollRefusal('notClosed', `Die Lohnabrechnung ${id} ist nicht abgeschlossen.`);
   const e = ctx.store.employees.find((x) => x.id === close.employee);
-  // Her address as it is now (a resend goes where she reads her mail today), else the payday's.
-  const to = e && (valueOn(e.email, now.slice(0, 10)) ?? valueOn(e.email, close.payday));
+  const to = recipientOf(e, close, now);
   if (!e || !to) throw new PayrollRefusal('noEmail', 'Für diese Person ist keine eigene E-Mail-Adresse erfasst.');
   if (!e.mailPassword) throw new PayrollRefusal('noPassword', 'Für diese Person ist kein Passwort für die Lohnabrechnungen gesetzt.');
-  if (passwordCheck(e, e.mailPassword).refused) throw new PayrollRefusal('badPassword', 'Das Passwort dieser Person geht nicht mehr (etwa die AHV-Nummer, seit sie erfasst ist): ein neues setzen.');
+  if (passwordCheck(e, e.mailPassword).refused) throw new PayrollRefusal('badPassword', 'Das Passwort dieser Person geht nicht mehr (etwa die AHV-Nummer, seit sie erfasst ist): ein neues setzen.', 'stale');
   const books = loadBooks(ws);
   const receipt = books.receipts.find((r) => r.id === close.receiptId);
   const path = receipt && receiptFile(ws, books, receipt);
@@ -254,8 +271,7 @@ export async function sendPayslip(ws: Workspace, id: string, send: (message: Mai
   const month = new Intl.DateTimeFormat(`${lang}-CH`, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${close.month}-01T00:00:00Z`));
   const words = (k: keyof PayrollData['documents']) => ctx.data.documents[k][lang] ?? ctx.data.documents[k].de;
   const locked = await encryptPdf(readFileSync(path), e.mailPassword);
-  // The copy goes to the firm's sender, else to the mailbox it sends from: there is always one (§6.2 step 8).
-  const copyTo = ctx.store.company.sender?.copyTo || sendingAddress(ws);
+  const copyTo = copyOf(ws, ctx.store);
   const out = await send({ to, subject: `${words('payslip')} ${month}`, body: words('mailBody').replace('{month}', () => month).replace('{firm}', () => ws.company.name), ...(copyTo ? { bcc: copyTo } : {}) },
     { filename: `${words('payslip')}-${close.month}.pdf`.replace(/\s+/g, '-'), content: locked });
   const sent: PayslipSent = { payslip: id, to: out.to, ...(copyTo ? { copyTo } : {}), at: now, messageId: out.messageId };
@@ -270,11 +286,14 @@ export function setMailPassword(ws: Workspace, employee: string, given: string |
   return updatePayroll(ws, (s) => {
     const e = s.employees.find((x) => x.id === employee);
     if (!e) throw new PayrollRefusal('notFound', `Keine Person ${employee}.`);
-    const password = given?.trim() || generatedPassword();
+    // Hers exactly as typed: a space at either end is refused, never cut off without a word (she would not know the one that opens).
+    const own = given === undefined || given === '' ? undefined : given;
+    if (own !== undefined && own !== own.trim()) throw new PayrollRefusal('badPassword', 'Das Passwort beginnt oder endet mit einem Leerzeichen.', 'spaces');
+    const password = own ?? generatedPassword();
     const check = passwordCheck(e, password);
-    if (check.refused) throw new PayrollRefusal('badPassword', { short: 'Das Passwort hat mindestens 8 Zeichen.', long: 'Das Passwort hat höchstens 32 Zeichen.', characters: 'Das Passwort hat nur Buchstaben ohne Akzente, Zahlen und Satzzeichen.', socialSecurityNumber: 'Die AHV-Nummer ist nie ein Passwort.' }[check.refused]);
+    if (check.refused) throw new PayrollRefusal('badPassword', { short: 'Das Passwort hat mindestens 8 Zeichen.', long: 'Das Passwort hat höchstens 32 Zeichen.', characters: 'Das Passwort hat nur Buchstaben ohne Akzente, Zahlen und Satzzeichen.', socialSecurityNumber: 'Die AHV-Nummer ist nie ein Passwort.' }[check.refused], check.refused);
     if (check.warn && !confirm) return { warn: check.warn };
     e.mailPassword = password;
-    return given?.trim() ? {} : { password };
+    return own !== undefined ? {} : { password };
   });
 }

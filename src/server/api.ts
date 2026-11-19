@@ -41,6 +41,7 @@ import { router as handover } from './routes/handover.js';
 import { router as share } from './routes/share.js';
 import { router as entryTemplates } from './routes/entry-templates.js';
 import { router as payroll } from './routes/payroll.js';
+import { router as payrollSettings } from './routes/payroll-settings.js';
 import { markerOf } from '../handover/durchsicht.js';
 import { aiSetup } from './ai-setup.js';
 import { NoClaudeError } from '../llm/providers/claude-cli.js';
@@ -96,6 +97,9 @@ const SHARER_ONLY: Array<[string, RegExp, string]> = [
   // Invoices and customers are issued and sent by the firm; mailboxes and collectors are its own (a copy reads no mail).
   ['*', /^\/api\/(invoices|customers)(\/|$)/, 'invoices'],
   ['*', /^\/api\/(sources|mail)(\/|$)/, 'sources'],
+  // A payslip goes to the person from the firm's mailbox, locked with the password the firm gave her: the firm's (§22 decision 38).
+  ['POST', /^\/api\/payroll\/payslips\/[^/]+\/send$/, 'payroll'],
+  ['POST', /^\/api\/payroll\/employees\/[^/]+\/mail-password$/, 'payroll'],
 ];
 /** The workflows that file, seal or close: the sharer's. */
 const SHARER_WORKFLOWS: ReadonlySet<string> = new Set(['vat-filing', 'year-close', 'quarter-close']);
@@ -115,7 +119,7 @@ app.get('/api/status', (_req, res) => {
   res.json({ ok: true, readonly: READONLY, ...(aiOff() ? { aiOff: true } : {}) } satisfies ApiStatus);
 });
 
-app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, payouts, questions, reports, batch, vatAdjustments, handover, share, entryTemplates, payroll);
+app.use(files, scan, receipts, transactions, mappings, pairing, journal, config, classify, yearClose, invoices, statements, exportBundle, mail, ai, aiSetup, terminal, automation, changes, assistant, drop, quarantine, sourcesRoute, twins, rules, payouts, questions, reports, batch, vatAdjustments, handover, share, entryTemplates, payroll, payrollSettings);
 app.use(knowledge);
 app.use(onboarding);
 

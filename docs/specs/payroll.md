@@ -1623,6 +1623,72 @@ non-obvious decision is recorded here when it is taken.
     password lives in `payroll.json` beside her other data (owner decision 4: plain, in the workspace; the AI
     sidebar never reads the file); a generated one is shown once. The copy to the sender goes as a blind copy
     of the same mail; every mail is a line in `payroll/sent.jsonl`.
+26. **Löhne is always in the dock**, not only when the setup's `employees` answer says so (§12.1): a
+    firm whose setup predates the question (the demos) has no other way in, and the shell's dock has no
+    entry that shows by data. The Übersicht's empty state says what to do first («Sozialversicherungen
+    erfassen», «Person hinzufügen»). The question may come back once Firma › Löhne exists.
+27. **A change is compared with each closed payslip computed twice** (§19.3): as if open, once with the
+    values before the change and once with them after. Comparing with the close itself would also show
+    what changed for another reason (an earlier «So lassen», a close after a warning); this way the card
+    names only the change's own difference, Lohnart by Lohnart and side. Each payslip is computed against
+    the months closed before it, as they stand.
+28. **«Rückwirkende Korrektur» records one correction per carried Lohnart** (and so per side, since a
+    Lohnart has one; which are carried: decision 32), with no text; the payslip carrying it prints
+    «Korrektur <Monat>». «Wieder öffnen» on the card: decision 34.
+29. **«So lassen» is a fact computed on every read, and an event in the history**: a closed payslip's view
+    computes what it would be today, less the corrections entered on it since its close, and says it as a
+    fact (`drift`), so a later correction makes it go away by itself. The choice itself is appended to
+    payslips.jsonl as `{ event: 'keep', id, at, by, path, validFrom }` on each payslip it concerned (§19.3:
+    each choice is recorded in the payslip's history); the event changes nothing closed or carried.
+30. **One write path for every dated value**: `POST /api/payroll/entries { path, validFrom, value }` with
+    the same paths a close's `used` names (`employees/<id>/employment`, `…/recurring/<Lohnart>`,
+    `company/rounding`, `insurances/<id>/solutions/<code>/rates`), so «zurücknehmen» checks `used`
+    directly. A recurring Lohnart ends with an entry of amount 0 from a day; an exit is the Anstellung's
+    entry again with `validUntil`.
+31. **An IBAN that fails its check digits is refused**, unlike a rate outside its range (a warning, §18):
+    it is a typing error, not a rule the person may set aside, and a payout to it cannot work.
+32. **A Rückwirkende Korrektur charges each difference once** (review, 2026-11-19). A correction line counts
+    for the bases of the month that carries it, like any line: a wage paid later owes its contributions in
+    the month it is paid. So when a backdated change makes a wage line differ (a raise: Monatslohn +1'000),
+    only the wage lines are carried, and the carrying month computes AHV, ALV, BVG and the rest on them;
+    carrying the contributions' differences too would charge them twice. Only a change that leaves every
+    wage line as it was (a rate, a certificate, a new insurance) carries the contributions' differences
+    themselves. The card names every difference and marks those that follow from the wage. The carrying
+    month computes with its own rates and ceilings; a raise across a rate change is therefore not exact to
+    the old month's rate, the market's way for a Nachzahlung.
+33. **A closed period offers only the correction, enforced**: an affected payslip whose posting date lies on
+    or before `closedThrough` is marked on the card (`closedPeriod`), the card offers no «So lassen» and no
+    «Wieder öffnen», and the API refuses `backdated: 'keep'` for it (403, `closedPeriod`).
+34. **«Wieder öffnen» from the card reopens first, then saves**: the change then touches no closed payslip and
+    is saved alone; a refused reopening saves nothing.
+35. **The insurers' balances live in Lohnzahlungen**, below the month's payouts, as rows of the same list
+    (`/payroll/payments/<yyyy-mm>/insurances/<id>`, the year of the month shown): both are what the firm
+    pays out of the payslips, and §12.1 names no other tab for §6.4's page. The final statement's form sits
+    on the insurer's detail; a second total books only its difference to the first (the ref stays
+    `LS-<year>-<insurance>`), the same total books nothing.
+36. **Dokumente lists each person's Lohnausweis by her id and the firm's documents by a slug**
+    (`lohnkonto`, `declarations`, `journal`; `/payroll/documents/<year>/<doc>`). The Lohnkonto shows only
+    the months with a figure; the CSVs keep all twelve. The declarations' table has one column per person
+    and one row per base, so a capped base («bis Höchstbetrag») reads beside its uncapped one.
+37. **No page of the app shows a payslip password once it is set, nor the social security number in full
+    outside «anzeigen»**: the person page reads only whether one is set (`hasMailPassword`); a generated
+    one is shown once, in the answer that set it; Änderungen shows payroll.json with the password as
+    «••••••» and the number masked as the lists show it (src/payroll/redact.ts). The file itself keeps both
+    in plain text (owner decision 4), so an export, a hand-over and a share link carry payroll.json whole,
+    password and number included; the AI sidebar never reads it (decision 11). The Lohnausweis and
+    declarations CSVs carry the number in full and are served with `Cache-Control: no-store`. A password is
+    taken exactly as typed: a space at either end is refused with its reason, never cut off.
+38. **Sending payslips and setting their passwords are the firm's, refused on a Durchsicht copy**
+    (`SHARER_ONLY`, action `payroll`): the mail goes from the firm's mailbox to its people with the passwords
+    the firm gave them. The page hides «Per Mail senden», «Alle per Mail senden» and the password's controls
+    there and says who sends. The final statement and the Lohnausweis stay open to the fiduciary: both are
+    bookings or documents a fiduciary prepares for the firm, and the return carries them back.
+39. **Before a send the payslip reads its recipient, the copy and the mails sent so far** from `GET
+    /api/payroll/payslips/<id>/mail`; without a sender and a mailbox the page says that no copy goes, and
+    «Per Mail senden» shows only once there are an address and a password. «Alle per Mail senden» lists
+    every closed payslip first: those without an address or a password as «nicht gesendet: …», those sent
+    already with their day, left out unless «Auch die schon gesendeten nochmals senden» is ticked; the
+    button counts and sends only the rest, one mail each, and names each refusal beside its person.
 
 ---
 
