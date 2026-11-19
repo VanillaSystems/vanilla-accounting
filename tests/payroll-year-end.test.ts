@@ -17,7 +17,7 @@ import { lohnausweisOf } from '../src/payroll/documents.js';
 import { insurerRows } from '../src/payroll/insurers.js';
 import type { PayslipClose } from '../src/payroll/model.js';
 import { payrollYearEnd, wageCheck, type PayrollYearEndInput } from '../src/payroll/year-end.js';
-import { insurerState, payrollStates, statementState } from '../src/app/areas/close/payroll-state.js';
+import { insurerState, payrollStates, statementState, taxState } from '../src/app/areas/close/payroll-state.js';
 import { settlementsOf } from '../src/accounting/year-close.js';
 import { ch, closedThrough, dated, firm, owner } from './support/payroll.js';
 
@@ -296,7 +296,8 @@ test('the statement check counts the payslips the Lohnausweis counts: a month re
   assert.ok(closes.some((c) => c.month === '2026-02') && s.gross < closes.filter((c) => c.month >= '2026-04').reduce((a, c) => a + c.gross, 0) + 30000 + 1, 'the opening month\'s stray close is in neither');
 });
 
-test('B1 and B2 on the year-end: a child allowance and a person taxed at source leave every check at 0, and 2279 is open by the settlement lists\' amount', async () => {
+/** A year of the owner with a child and a person taxed at source, each month closed, booked and paid out; every insurer paid, the tax at source not. */
+async function taxedYear(opts: { office: boolean }) {
   const { readFileSync } = await import('node:fs');
   const { join } = await import('node:path');
   const { parseTariffFile } = await import('../src/providers/tax-at-source/tariff-file.js');
@@ -314,7 +315,7 @@ test('B1 and B2 on the year-end: a child allowance and a person taxed at source 
     taxAtSource: [dated('2026-01-01', { subject: true, canton: 'ZH', code: 'A0' })],
   });
   const store = firm([parent, taxed]);
-  store.insurances.push({ id: 'qZH', kind: 'qst', name: 'Steuerverwaltung ZH', solutions: [{ code: 'ZH', rates: [dated('2026-01-01', { provision: 2 })] }], validFrom: '2026-01-01' });
+  if (opts.office) store.insurances.push({ id: 'qZH', kind: 'qst', name: 'Steuerverwaltung ZH', solutions: [{ code: 'ZH', rates: [dated('2026-01-01', { provision: 2 })] }], validFrom: '2026-01-01' });
   const events: PayslipClose[] = [];
   for (let m = 1; m <= 12; m++) for (const who of ['e1', 'q1']) {
     const d = computePayslip({ ...ctxOf(store, events), tariffs }, who, `2026-${String(m).padStart(2, '0')}`)!;
@@ -336,15 +337,38 @@ test('B1 and B2 on the year-end: a child allowance and a person taxed at source 
     if (r.kind === 'qst' || !r.open) continue;
     journalEntries.push({ id: id(), transactionRef: `INS-${r.id}`, date: '2026-12-20', accountDebit: r.account, accountCredit: '1020', amount: r.open, by: { kind: 'code', check: 'payroll' } });
   }
-  const p = payrollYearEnd({ year: '2026', books: { journalEntries, transactions, mappings }, closes: events, employees: store.employees, data: ch.payroll!, store, issued: [], isDebitNormal: (a) => chart().isDebitNormal(a), wageAccount: '5000' });
+  const input: PayrollYearEndInput = { year: '2026', books: { journalEntries, transactions, mappings }, closes: events, employees: store.employees, data: ch.payroll!, store, issued: [], isDebitNormal: (a) => chart().isDebitNormal(a), wageAccount: '5000' };
+  const lists = settlementLists(events, '2026', ch.payroll!, firmWageTypes(ch.payroll!, store), store);
+  return { input, journalEntries, payable: Math.round(lists.reduce((s, l) => s + l.totals.payable, 0) * 100) / 100 };
+}
+
+test('B1 and B2 on the year-end: a child allowance and a person taxed at source leave every check at 0, and 2279 is open by the settlement lists\' amount', async () => {
+  const { input, payable } = await taxedYear({ office: true });
+  const p = payrollYearEnd(input);
   assert.deepEqual([p.clearing!.difference, p.clearing!.unpaid], [0, []]);
   assert.deepEqual(p.wages!.persons.map((x) => [x.employee, x.difference]).sort(), [['e1', 0], ['q1', 0]]);
   assert.deepEqual(p.statements.map((s) => [s.employee, s.difference, s.unmapped]).sort(), [['e1', 0, []], ['q1', 0, []]]);
-  const lists = settlementLists(events, '2026', ch.payroll!, firmWageTypes(ch.payroll!, store), store);
-  const payable = Math.round(lists.reduce((s, l) => s + l.totals.payable, 0) * 100) / 100;
-  const qst = p.insurers.find((i) => i.insurances.some((x) => x.kind === 'qst'))!;
-  assert.equal(qst.account, '2279');
-  assert.equal(qst.open, payable, '2279 holds what the settlement lists say is to pay the canton');
-  assert.equal(insurerState(qst), 'ok', 'no final statement is asked of the tax at source');
-  for (const i of p.insurers.filter((x) => x !== qst)) assert.equal(i.open, 0, i.account);
+  const [qst] = p.taxAtSource;
+  assert.deepEqual([qst.account, qst.insurances.map((i) => i.name), qst.lists.length], ['2279', ['Steuerverwaltung ZH'], 12]);
+  assert.deepEqual([qst.payable, qst.paid, qst.expected, qst.balance, qst.difference], [payable, 0, payable, payable, 0], '2279 holds what the settlement lists say is to pay the canton');
+  assert.equal(taxState(qst), 'ok', 'no final statement is asked of the tax at source');
+  assert.ok(!p.insurers.some((i) => i.account === '2279'), 'one fact for 2279, the lists\' check');
+  for (const i of p.insurers) assert.equal(i.open, 0, i.account);
+});
+
+test('2279 without a «Quellensteuer» insurance: still checked against the settlement lists; a payment and a booking by hand (§22 decision 122)', async () => {
+  const { input, journalEntries, payable } = await taxedYear({ office: false });
+  const p = payrollYearEnd(input);
+  assert.equal(p.taxAtSource.length, 1, 'a payslip of the year withheld the tax: 2279 is checked though no tax office is entered');
+  assert.deepEqual([p.taxAtSource[0].account, p.taxAtSource[0].insurances, p.taxAtSource[0].expected, p.taxAtSource[0].difference], ['2279', [], payable, 0]);
+  assert.ok(payrollStates(p).length > 0 && !payrollStates(p).includes('warn'));
+  // The first eleven lists paid in December; a tax of 50 booked by hand on 2279: the difference, named.
+  const paid = Math.round((payable - p.taxAtSource[0].lists.at(-1)!.payable) * 100) / 100;
+  journalEntries.push({ id: id(), transactionRef: 'QST-PAY', date: '2026-12-15', accountDebit: '2279', accountCredit: '1020', amount: paid, by: { kind: 'person', at: '2026-12-15T00:00:00Z' } });
+  journalEntries.push({ id: id(), transactionRef: 'M2026-001', date: '2026-12-31', accountDebit: '5000', accountCredit: '2279', amount: 50, by: { kind: 'person', at: '2026-12-31T00:00:00Z' } });
+  const q = payrollYearEnd(input).taxAtSource[0];
+  assert.deepEqual([q.paid, q.expected, q.difference, taxState(q)], [paid, p.taxAtSource[0].lists.at(-1)!.payable, 50, 'warn']);
+  // 2279 moved, no tax withheld this year: still checked.
+  const none = payrollYearEnd({ ...input, closes: [] }).taxAtSource;
+  assert.deepEqual(none.map((x) => [x.account, x.payable]), [['2279', 0]]);
 });

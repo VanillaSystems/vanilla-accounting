@@ -352,6 +352,6 @@ export function payrollYearEndOf(ws: Workspace, year: string, books: Books = loa
     withheldPayees: new Set(issues?.withheldPayees ?? []), withheldShares: issues?.withheldShares ?? {},
     ...(businessOf ? { businessOf } : {}), currency: baseCurrency(),
   });
-  const something = out.clearing || out.insurers.length || out.wages || out.statements.length || out.withheld;
+  const something = out.clearing || out.insurers.length || out.taxAtSource.length || out.wages || out.statements.length || out.withheld;
   return something ? out : undefined;
 }

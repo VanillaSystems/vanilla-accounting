@@ -350,6 +350,9 @@ Two markers flag an entry you must read before you update:
 - Löhne: the Bezugsprovision on the tax at source is rounded to 5 Rappen, as the tax is (it was
   rounded to the Rappen). **⚠ figures** for a payslip with tax at source closed from now on; closed
   payslips stay as they are.
+- Abschluss › Prüfen › Löhne: the tax at source's account (2279) is checked against what the year's
+  settlement lists leave to pay, also when no «Quellensteuer» insurance is entered (it was missing
+  then): carried, to pay, paid, open, and a difference named with the account's ledger.
 - Löhne: an Akonto to a fund or insurer the payslips do not cover yet no longer asks «ab dem Lohnstart /
   davor» every quarter: «Immer so» on «ab dem Lohnstart» keeps it in the company's file of the fund
   (`payroll: { payments: liability }`), names the open payments it books first, and code then books

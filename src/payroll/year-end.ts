@@ -5,7 +5,8 @@
  * the gross lines of the payslips that book onto it, per person and month; each person's statement of
  * the year (its gross field against her gross, and whether one is issued and still agrees); and, for
  * wages booked from payslips made elsewhere (level A), the deductions account explained by what the
- * wages withheld and what was paid to the funds. Every figure is computed from the books and the closed
+ * wages withheld and what was paid to the funds; the tax at source's account against what the settlement
+ * lists leave to pay. Every figure is computed from the books and the closed
  * payslips as they are now. Pure, browser-safe.
  */
 import type { BankTransaction, JournalEntry, Mapping, Receipt } from '../types/index.js';
@@ -15,7 +16,8 @@ import { unclearedContributions } from '../booking/withheld.js';
 import { bookingOf } from './booking.js';
 import { firmWageTypes } from './catalogue.js';
 import { countedCloses, lohnausweisOf, type LohnausweisData } from './documents.js';
-import { insurerRows, settlementOf, type InsurerRow } from './insurers.js';
+import { accountOfInsurance, insurerRows, settlementOf, type InsurerRow } from './insurers.js';
+import { settlementsOf } from './settlement.js';
 import { openingOf } from './opening.js';
 import { valueOn } from '../core/dated.js';
 import { paidFor, paymentOf } from './payments.js';
@@ -137,10 +139,32 @@ export interface WithheldCheck {
   uncleared: Array<{ ref: string; date: string; open: number }>;
 }
 
+/**
+ * The tax at source's account at 31.12. (§22 decision 122): what it carried into the year, what the year's settlement lists
+ * leave to pay (the tax less the commission, as the closed payslips booked it), what was paid to the canton (its debits under
+ * no payslip's ref), and the balance against carried + lists − paid. Whether or not the firm entered the canton's tax office.
+ */
+export interface TaxAtSourceCheck {
+  account: string;
+  /** The firm's tax offices on the account (a Quellensteuer insurance per canton), where it entered any. */
+  insurances: Array<{ id: string; name: string }>;
+  carried: number;
+  /** Each settlement list of the year on the account: its month, canton and what it leaves to pay. */
+  lists: Array<{ month: string; region: string; payable: number }>;
+  payable: number;
+  paid: number;
+  /** carried + payable − paid: what the account should hold. */
+  expected: number;
+  balance: number;
+  /** balance − expected: a payslip's entry changed, or a booking by hand on the account. */
+  difference: number;
+}
+
 export interface PayrollYearEnd {
   year: string;
   clearing?: ClearingCheck;
   insurers: InsurerCheck[];
+  taxAtSource: TaxAtSourceCheck[];
   wages?: WageCheck;
   statements: StatementCheck[];
   withheld?: WithheldCheck;
@@ -374,6 +398,43 @@ export function withheldCheck(input: Pick<PayrollYearEndInput, 'year' | 'books' 
   return { account, opening, withheld: round2(withheld), paid: round2(paid), other: round2(other), balance: round2(opening + withheld - paid + other), uncleared };
 }
 
+/**
+ * The tax at source's accounts of the year: each account a settlement list of the year books on, or a tariff kind's
+ * account that carried or moved; checked against the lists whatever insurances the firm entered.
+ */
+export function taxAtSourceChecks(input: Pick<PayrollYearEndInput, 'year' | 'books' | 'closes' | 'data' | 'store' | 'isDebitNormal'>): TaxAtSourceCheck[] {
+  const { year, books, data } = input;
+  const kinds = Object.entries(data.insurances).filter(([, k]) => k.tariff).map(([k]) => k);
+  if (!kinds.length) return [];
+  const types = firmWageTypes(data, input.store);
+  const lists = settlementsOf(input.closes, year, data, types, input.store);
+  const ownAccount = (id?: string) => {
+    const i = id ? input.store.insurances.find((x) => x.id === id) : undefined;
+    return i ? accountOfInsurance(data, i) : data.insurances[kinds[0]]?.account;
+  };
+  const accounts = new Set<string>();
+  for (const k of kinds) if (data.insurances[k].account) accounts.add(data.insurances[k].account!);
+  for (const i of input.store.insurances) if (kinds.includes(i.kind)) { const a = accountOfInsurance(data, i); if (a) accounts.add(a); }
+  const refs = new Set(input.closes.map((c) => payslipRef(c.month, c.employee)));
+  const end = yearEnd(year);
+  return [...accounts].flatMap((account): TaxAtSourceCheck[] => {
+    const mine = lists.filter((l) => ownAccount(l.insurer?.id) === account).map((l) => ({ month: l.month, region: l.region, payable: l.totals.payable }));
+    const on = books.journalEntries.filter((e) => e.date >= `${year}-01-01` && e.date <= end && (e.accountDebit === account || e.accountCredit === account));
+    const opening = books.config?.openingBalances?.[year]?.[account];
+    const carried = opening !== undefined ? round2(input.isDebitNormal(account) ? -opening : opening)
+      : creditOn({ ...books, journalEntries: books.journalEntries.filter((e) => e.date < `${year}-01-01`) }, account, year, end, input.isDebitNormal);
+    if (!mine.length && !on.length && !carried) return [];
+    // Paid: each entry under no payslip's ref that takes off the account (a payment to the canton, by the bank or by
+    // hand). One that adds to it (a tax booked by hand) is no list's: it shows as the difference.
+    const paid = round2(on.filter((e) => !refs.has(e.transactionRef)).reduce((s, e) => s + Math.max(0, (e.accountDebit === account ? chfAmount(e) : 0) - (e.accountCredit === account ? chfAmount(e) : 0)), 0));
+    const payable = round2(mine.reduce((s, l) => s + l.payable, 0));
+    const balance = creditOn(books, account, year, end, input.isDebitNormal);
+    const expected = round2(carried + payable - paid);
+    const insurances = input.store.insurances.filter((i) => kinds.includes(i.kind) && accountOfInsurance(data, i) === account).map((i) => ({ id: i.id, name: i.name }));
+    return [{ account, insurances, carried, lists: mine, payable, paid, expected, balance, difference: round2(balance - expected) }];
+  });
+}
+
 /** The opening of the year over every person: its last month and the gross it holds (the form's gross fields), else none. */
 function openingWages(input: Pick<PayrollYearEndInput, 'year' | 'employees' | 'data'>): { through: string; gross: number } | undefined {
   const parts = (input.data.lohnausweis?.fields ?? []).find((f) => f.sum && !f.sum.minus?.length)?.sum?.plus ?? [];
@@ -389,11 +450,16 @@ export function payrollYearEnd(input: PayrollYearEndInput): PayrollYearEnd {
   const opening = openingWages(input);
   const rows = input.wageAccount ? [...payslipWageRows(input.closes, input.data, input.store, year, input.wageAccount, input.books.journalEntries), ...(input.external ?? [])] : [];
   const clearing = hasPayslips || input.closes.some((c) => c.postingDate <= yearEnd(year)) ? clearingCheck(input) : undefined;
-  const insurers = insurerChecks(input).filter((i) => i.accrued !== 0 || i.paid !== 0 || i.carried !== 0 || i.settlement.length);
+  const taxAtSource = taxAtSourceChecks(input);
+  // An account the tax at source's check reads is not an insurer's fact too: the lists say what it owes, no final statement.
+  const taxed = new Set(taxAtSource.map((x) => x.account));
+  const tariffKind = (kind: string) => !!input.data.insurances[kind]?.tariff;
+  const insurers = insurerChecks(input).filter((i) => i.accrued !== 0 || i.paid !== 0 || i.carried !== 0 || i.settlement.length)
+    .filter((i) => !(taxed.has(i.account) && i.insurances.every((x) => tariffKind(x.kind))));
   return {
     year,
     ...(clearing && (hasPayslips || clearing.balance !== 0 || clearing.unpaid.length) ? { clearing } : {}),
-    insurers,
+    insurers, taxAtSource,
     ...(input.wageAccount && (rows.length || opening) ? { wages: wageCheck(input.books, input.wageAccount, year, rows, opening) } : {}),
     statements: statementChecks(input),
     ...(() => { const w = withheldCheck(input); return w ? { withheld: w } : {}; })(),

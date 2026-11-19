@@ -2137,6 +2137,15 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     invoice is what counts: where it computes the commission on the settlement's total and rounds otherwise, a few
     Rappen stay on 2279, which the year-end's tax-at-source check names (decision 122). The settlement list's row
     shares are cents of the payslip's line, which is rounded.
+122. **The tax at source's account is checked at the year end whenever a payslip of the year withheld the tax, or
+    the account carried or moved**, whether or not the firm entered the canton's tax office as an insurance (the
+    walk had none, and 2279 was missing from the checks). One fact per account (the tariff kind's, 2279, and the
+    account of each canton's own insurance): what it carried into the year, what the year's settlement lists leave
+    to pay (`settlementsOf`, the tax less the commission, the lists on the account of the canton's insurance or else
+    on the kind's), what was paid (each entry under no payslip's ref that takes off the account), and open =
+    carried + lists − paid against the balance at 31.12. A difference (a payslip's entry changed, a tax booked by
+    hand) is a hint with the account's ledger; open at 31.12. is the next settlement's, a fact. The insurer's fact of
+    decision 102 is not shown for such an account, so it is one fact, with links to the settlement lists.
 
 ---
 

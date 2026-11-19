@@ -1,6 +1,7 @@
 /**
  * The payroll's checks of the year-end (docs/specs/payroll.md §6.7, §10.2 A7) on the Abschluss page: the
- * clearing account against the payouts not paid by 31.12., each insurer's account, the wage account per
+ * clearing account against the payouts not paid by 31.12., each insurer's account, the tax at source's
+ * account against the settlement lists, the wage account per
  * person, each person's statement of the year and, for wages from other programs' payslips, the
  * deductions account. Facts with links to where each is seen or booked; nothing here blocks the close.
  */
@@ -18,7 +19,7 @@ import { Go } from '../vat/links.js';
 import { at } from '../receipts/view.js';
 import { documentAt, paymentAt, payslipAt } from '../payroll/common.js';
 import { monthText } from '../payroll/words.js';
-import { clearingState, insurerState, statementState, wagesState, withheldState, type PayrollState } from './payroll-state.js';
+import { clearingState, insurerState, statementState, taxState, wagesState, withheldState, type PayrollState } from './payroll-state.js';
 
 const signed = (n: number) => `${n > 0 ? '+' : ''}${fmt(n)}`;
 
@@ -62,6 +63,18 @@ export function PayrollChecks({ d, nav }: { d: YearCloseView; nav: Nav }) {
             </Fact>
           );
         })}
+        {(p.taxAtSource ?? []).map((x) => (
+          <Fact key={`tax-${x.account}`} id={`tax-${x.account}`} state={taxState(x)} title={<>{acc(x.account)} · {x.insurances.length ? x.insurances.map((i) => i.name).join(', ') : t('close.payroll.taxTitle')}</>}>
+            <span>{x.carried ? `${t('close.payroll.carried', { amount: fmt(x.carried) })} · ` : ''}{t('close.payroll.taxFigures', { year, payable: fmt(x.payable), paid: fmt(x.paid), expected: fmt(x.expected) })}</span>
+            <span>{x.difference
+              ? t('close.payroll.taxDiffers', { balance: fmt(x.balance), expected: fmt(x.expected), difference: signed(x.difference) })
+              : t('close.payroll.taxAgrees', { balance: fmt(x.balance) })}</span>
+            <span className="chklinks">
+              {link(documentAt(year, 'tax-at-source'), t('close.payroll.taxLists'), 'lists')}
+              {x.difference !== 0 && link(ledger(x.account), t('close.payroll.ledger', { account: x.account }), 'ledger')}
+            </span>
+          </Fact>
+        ))}
         {p.wages && <Wages p={p} acc={acc} link={link} ledger={ledger} />}
         {p.statements.map((s) => {
           const state = statementState(s);
