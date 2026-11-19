@@ -47,6 +47,9 @@ const collectsOfText = (text: string): string[] => {
 export function withCollects(text: string, kinds: readonly string[], id: string, create?: { name: string; payee?: string; iban?: string }, path = `${id}.yaml`): string {
   const eol = eolOf(text);
   assertMap(text, path);
+  // An anchor, an alias or a tag on `collects:` would be lost or broken by a line written in its place.
+  const node = parseDocument(text).get('collects', true) as { anchor?: string; tag?: string } | undefined;
+  if (node && typeof node === 'object' && (node.anchor || node.tag) || /^collects\s*:\s*[&*!]/m.test(text)) throw new PayrollRefusal('badInput', `${path}: «collects:» trägt einen Anker oder Typ: von Hand richten.`);
   const head = create
     ? [`id: ${JSON.stringify(id)}`, `name: ${JSON.stringify(create.name)}`, 'match:', ...(create.payee ? [`  payee: [${JSON.stringify(create.payee)}]`] : []), ...(create.iban ? [`  iban: [${JSON.stringify(create.iban)}]`] : [])].join(eol) + eol
     : `id: ${JSON.stringify(id)}${eol}`;

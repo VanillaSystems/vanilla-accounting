@@ -71,7 +71,7 @@ test('decision 110: the text writer sets `collects:` and nothing else, in place 
   assert.equal(withCollects('id: pk\ncollects:\n  - pension\n\nname: X\n', ['tax'], 'pk'), 'id: pk\ncollects: [tax]\n\nname: X\n');
   assert.equal(withCollects('id: pk\ncollects : [pension]\n', ['tax'], 'pk'), 'id: pk\ncollects: [tax]\n');
   assert.equal(withCollects('id: pk\nname: X', ['tax'], 'pk'), 'id: pk\nname: X\ncollects: [tax]\n');
-  for (const shape of ['id: pk\n"collects": [pension]\n', '---\nid: pk\n...\n']) assert.throws(() => withCollects(shape, ['tax'], 'pk'), (e: unknown) => e instanceof PayrollRefusal && e.code === 'badInput', JSON.stringify(shape));
+  for (const shape of ['id: pk\n"collects": [pension]\n', '---\nid: pk\n...\n', 'id: pk\ncollects: &a [pension]\nother: *a\n', 'id: pk\ncollects: !!seq [pension]\n']) assert.throws(() => withCollects(shape, ['tax'], 'pk'), (e: unknown) => e instanceof PayrollRefusal && e.code === 'badInput', JSON.stringify(shape));
   assert.throws(() => withCollects('id: [', ['pension'], 'pk'), /kein gültiges YAML/);
 });
 
@@ -159,7 +159,7 @@ test('decision 110 on the real API: a collector\'s payment needs no receipt of i
 });
 
 /** A firm whose one person's payslips of `months` are read, and the pension fund's payment `amount` on 10.07., the fund collecting. */
-async function oneFund(months: Array<(typeof MONTHS)[number] | ['10', 'Oktober']>, amount: number) {
+async function oneFund(months: ReadonlyArray<readonly [string, string]>, amount: number) {
   const p = PEOPLE[0];
   const wages = months.map(([m, month]) => pay(`LW-${m}`, `2026-${m}-25`, p.net, p.name, `Lohn ${month} 2026`));
   const ws = firm('Teegarten Wyss GmbH', [...wages, pay('PK', '2026-07-10', amount, 'Pensionskasse Zentral', 'Beiträge Q3 2026')], { 'knowledge/suppliers/pensionskasse-zentral.yaml': 'id: pensionskasse-zentral\nname: Pensionskasse Zentral\nmatch:\n  payee: ["Pensionskasse Zentral"]\ncollects: [pension]\n' });
@@ -177,4 +177,7 @@ test('decision 109, review of walk 3: of the runs that fit, a whole quarter; mon
   // Half and half, booked before September's payslip: two months fit, September may still come: nothing proposed, the months named.
   const b = await oneFund([MONTHS[0], MONTHS[1]], 1195.2);
   assert.deepEqual([b.takes, b.account, b.collector?.months, b.collector?.unsure], [0, '5720', ['2026-07', '2026-08'], true]);
+  // August to October: two and three months both fit, neither is a quarter: unsure, the longest run named.
+  const c = await oneFund([['08', 'August'], ['09', 'September'], ['10', 'Oktober']], 1195.2);
+  assert.deepEqual([c.takes, c.collector?.months, c.collector?.unsure], [0, ['2026-08', '2026-09', '2026-10'], true]);
 });

@@ -34,7 +34,8 @@ import { fileReceipts, paymentContext } from '../invoices/service.js';
 import { stemOf, type Ask, type IntakeNote, type StepRun } from './pipeline.js';
 import { putInQuarantine } from './quarantine.js';
 import { documentKind } from './document-kind.js';
-import { namesSetupFirst } from '../payroll/setup-documents.js';
+import { isSetupText, setupFileName } from '../payroll/setup-documents.js';
+import { keepLookedAtForSetup, lookedAtForSetup } from '../payroll/setup-store.js';
 import { askKind, asksModel, kindOfModel, MODEL_RULE, MODEL_TEXT, NOT_A_RECEIPT, visionVerdict, type ModelKind } from './unclear.js';
 import { statementFacts } from '../books/statement-facts.js';
 import { documents, payroll } from '../engines/index.js';
@@ -199,7 +200,7 @@ interface Extracted { text: string; method: Receipt['extractionMethod']; fileSiz
  */
 function setupDocument(text: string): boolean {
   const data = payroll();
-  return !!data?.setupDocuments && namesSetupFirst(text, data, documents());
+  return !!data?.setupDocuments && isSetupText(text, data, documents());
 }
 
 /**
@@ -302,7 +303,9 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   let waitingForModel = 0;
   await Promise.all(toExtract.map((f) => pool(async () => {
     // Only a file new to the books may be set aside by its reading: one a person declared a receipt is only read again.
-    const out = await extractTextFast(f.filepath, ask, log, !known.has(f.id));
+    // A picture named as a fund's document (a pension certificate's photo) is not read by a model's vision: it waits for the person (§22 decision 108).
+    const data = payroll();
+    const out = await extractTextFast(f.filepath, data && setupFileName(f.filename, data) ? undefined : ask, log, !known.has(f.id));
     if (out.vision === 'none') waitingForModel++;
     extracted.set(f.id, { text: out.text, method: out.method, fileSize: statSync(f.filepath).size, ...(out.verdict ? { verdict: out.verdict } : {}) });
     progress(extracted.size, toExtract.length);
@@ -347,17 +350,22 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
 
   // Everything read from disk is read again here, in the one synchronous change: a file deleted
   // or a statement uploaded while the texts were read is not undone.
+  const looked = lookedAtForSetup(ws);
+  // The receipts this run looked at, kept once the books took the change (the change may be made twice: decided by `looked` alone).
+  const lookedNow = new Set<string>();
   const outcome = books.update((index) => {
     const now = readTransactions(ws);
     const stillUnmatched = unmatchedOf(now);
     if (stillUnmatched.length) throw new Error(`Kontoauszug ohne Bankkonto: ${stillUnmatched.join('; ')}`);
     const byId = new Map(index.receipts.map((r) => [r.id, r]));
-    // A fund's or insurer's document read before code told them apart (walk 3): kinded so once, unless a person gave it a kind, a
-    // payment is linked to it or it lies in a closed period; from then on no model reads it (§22 decision 108).
+    // A fund's or insurer's document read before code told them apart (walk 3): kinded so once per receipt (the ids looked at
+    // are kept in data/, so a person's later choice is never undone by a run), unless a person gave it a kind, the model took
+    // it for an invoice whose date and amount were read, or it lies in a closed period. A link stays as it is (§22 decision 108).
     const lock = periodLock(index);
-    const linkedIds = new Set(index.mappings.map((m) => m.receiptId));
     const setupKindAgain = (r: Receipt): Pick<Receipt, 'kind' | 'kindBy' | 'kindRule'> | Record<string, never> => {
-      if (isSetupDocument(r) || r.kindBy === 'human' || (r.kind && r.kind !== 'invoice') || linkedIds.has(r.id) || r.filedPayment || (r.date && lock.isClosed(r.date))) return {};
+      if (looked.has(r.id)) return {};
+      lookedNow.add(r.id);
+      if (isSetupDocument(r) || r.kindBy === 'human' || (r.kind && r.kind !== 'invoice') || (r.kind === 'invoice' && r.date && r.amount != null) || (r.date && lock.isClosed(r.date))) return {};
       if (!setupDocument(r.extractedText ?? '')) return {};
       log(`  ${r.filename}: a fund's or insurer's document, no receipt of a payment: no model reads it from now on`);
       return { kind: 'supporting', kindBy: 'rule', kindRule: SETUP_DOCUMENT_RULE };
@@ -531,6 +539,7 @@ export const readStep: StepRun = async ({ ws, books, ask, progress, log, later, 
   if (readFailed.length) notes.push({ code: 'failed', count: readFailed.length, detail: `${readFailed[0].file}: ${readFailed[0].error}` });
   if (sameBytes.length) notes.push({ code: 'sameBytes', files: sameBytes });
   if (rewritten.length) notes.push({ code: 'rewritten', files: rewritten });
+  if (lookedNow.size) keepLookedAtForSetup(ws, new Set([...looked, ...lookedNow]));
   return { notes };
 };
 

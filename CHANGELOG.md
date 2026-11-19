@@ -422,9 +422,15 @@ Two markers flag an entry you must read before you update:
 - Belege: a fund's or insurer's document dropped with the receipts (a Beitragsverfügung, a policy,
   a pension certificate) no longer waits as a receipt «Datum, Betrag fehlt»: it is a document
   without a payment, says so in Belege and in the drop, and links to its card in Löhne ›
-  Einstellungen › Sozialversicherungen. No AI reads it while it is filed. On a pension
-  certificate's card, contributions typed without the person are refused with «Person wählen»
-  instead of being left out.
+  Einstellungen › Sozialversicherungen. It is told apart from the fund's bill by its title
+  (Police, Verfügung, Vorsorgeausweis, Certificat, …) and by saying nothing about paying. On a
+  pension certificate's card, contributions typed without the person are refused with «Person
+  wählen» instead of being left out.
+- AI: no prompt names a person of the payroll, whatever a document was taken for: their names
+  (given back in the answer), social security numbers, what follows «Versicherte Person:», birth
+  dates and, where a person is named, wages are masked before any model call and in the sidebar,
+  which also may not read a fund's documents. A photo named as a fund's document is not read by
+  the AI.
 - Löhne: the entry fact of a new person («Eintritt am …: Anmeldung bei …») no longer names the
   pension fund for a person without occupational pension (below the entry threshold, or a firm
   without a pension fund).

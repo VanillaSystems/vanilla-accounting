@@ -333,13 +333,11 @@ router.post('/api/payroll/insurances/:id/settle', run((req, res) => {
 
 // ─── the insurers' payments: which need no receipt, «Immer so» (§22 decisions 45, 126) ──────
 
-let collectorMemo: { key: string; refs: Set<string> } | undefined;
-
 /**
  * The open payments whose proof is not a receipt of their own, never «kein Beleg»: to one of the firm's payroll insurers
  * while payroll runs here (the payslips prove them), or to a business whose file says it collects wage deductions
  * (`collects`, §22 decision 110: the payslips prove what it clears, as src/booking/receipt-wait.ts receiptFree says).
- * Read with every load of the books: the payments routed to collectors are kept for the same payments, links and files.
+ * Read with every load of the books: the payments are routed only when some business collects, each open payment out once.
  */
 router.get('/api/payroll/insurer-payments', run((_req, res) => {
   // The knowledge and payroll.json only, not the classifier's whole context.
@@ -351,9 +349,7 @@ router.get('/api/payroll/insurer-payments', run((_req, res) => {
   const lock = periodLock(books);
   const currency = baseCurrency();
   const open = books.transactions.filter((tx) => tx.direction === 'DBIT' && !lock.isClosed(tx.date));
-  const key = JSON.stringify([WS.paths.root, open.map((t) => t.ref), books.mappings.map((m) => `${m.transactionRef}:${m.receiptId}`), counterparties.map((c) => [c.id, c.match, c.collects])]);
-  if (collectorMemo?.key !== key) collectorMemo = { key, refs: new Set(collectors.size ? open.filter((tx) => collectors.has(businessOfPayment(tx, mappedReceipts(books, tx), counterparties) ?? '')).map((tx) => tx.ref) : []) };
-  const toCollector = collectorMemo.refs;
+  const toCollector = new Set(collectors.size ? open.filter((tx) => collectors.has(businessOfPayment(tx, mappedReceipts(books, tx), counterparties) ?? '')).map((tx) => tx.ref) : []);
   const context = { payrollInsurer: insurerOf, counterparties };
   res.json({ refs: open.filter((tx) => toCollector.has(tx.ref) || (!!insurerOf && tx.currency === currency && !!payrollInsurerOfPayment(books, tx, context))).map((tx) => tx.ref) });
 }));

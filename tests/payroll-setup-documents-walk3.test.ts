@@ -101,4 +101,29 @@ test('review of walk 3: a certificate read before code told such documents apart
   const r = loadBooks(ws).receipts.find((x) => (x.extractedText ?? '').includes('Vorsorgeausweis'))!;
   assert.deepEqual([r.kind, r.kindRule], ['supporting', SETUP_DOCUMENT_RULE]);
   assert.ok(prompts.every((p) => !p.includes('Mila') && !p.includes("92'000")), 'no model reads it');
+  // Once per receipt: taken back to no kind, the next run leaves it so.
+  const again = loadBooks(ws);
+  update(again, moduleActor('test'), (b) => { for (const x of b.receipts) { delete x.kind; delete x.kindBy; delete x.kindRule; } });
+  saveBooks(ws, again);
+  await run(ws);
+  assert.equal(loadBooks(ws).receipts.find((x) => x.id === r.id)!.kind, undefined, 'looked at once, never again');
+});
+
+test('second review of walk 3: a linked certificate is kinded too (its link stays); a model\'s invoice with its date and amount read is left as it is', async () => {
+  const ws = firm('Teegarten Wyss GmbH', [pay('P1', '2026-07-23', 600, 'Vorsorgestiftung Beispiel', 'Beitrag Juli')]);
+  await drop(ws, [['a.pdf', textPdf([...CERT.slice(0, 1), 'Vorsorgeausweis per 1.7.2026', ...CERT.slice(2)])], ['b.pdf', textPdf([...CERT.slice(0, 1), 'Vorsorgeausweis per 2.7.2026', ...CERT.slice(2), 'Kopie'])]]);
+  await run(ws);
+  const books = loadBooks(ws);
+  const [a, b] = ['1.7.2026', '2.7.2026'].map((d) => books.receipts.find((x) => (x.extractedText ?? '').includes(`per ${d}`))!.id);
+  update(books, PERSON, (x) => {
+    for (const r of x.receipts) { delete r.kind; delete r.kindBy; delete r.kindRule; }
+    x.mappings.push({ transactionRef: 'P1', receiptId: a, rule: 'manual' } as never);
+    Object.assign(x.receipts.find((r) => r.id === b)!, { kind: 'invoice', kindBy: 'model', date: '2026-07-02', amount: 600, currency: 'CHF' });
+  });
+  saveBooks(ws, books);
+  await run(ws);
+  const after = loadBooks(ws);
+  assert.equal(after.receipts.find((x) => x.id === a)!.kindRule, SETUP_DOCUMENT_RULE);
+  assert.ok(after.mappings.some((m) => m.receiptId === a && m.transactionRef === 'P1'), 'the link stays');
+  assert.equal(after.receipts.find((x) => x.id === b)!.kind, 'invoice', 'the model\'s invoice stays');
 });

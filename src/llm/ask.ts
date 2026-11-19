@@ -9,7 +9,7 @@
  * the provider, so `npm run llm-usage` reports measured cost, not estimates.
  */
 
-import { maskForModel } from './mask.js';
+import { maskForModel, unmaskFromModel } from './mask.js';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { openWorkspace } from '../workspace/workspace.js';
@@ -117,7 +117,7 @@ async function askOne(prompt: string, opts: AskOptions, provider: Provider, mode
     model = answer.model ?? model;
     row(true, usage);
     opts.answered?.({ provider: provider.id, model });
-    return text;
+    return unmaskFromModel(text);
   } catch (e) {
     row(false, e instanceof CallFailed ? e.usage : NO_USAGE);
     throw e;

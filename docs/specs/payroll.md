@@ -2246,12 +2246,21 @@ After the third persona walk (2026-11-19):
      drop say what it is and link to its card in Löhne › Einstellungen › Sozialversicherungen; the card lists only such
      texts (a fund's bill that names a certificate below its title is a receipt, no card). A document read before stays
      as it was read. Contributions typed on a pension certificate's card without the person they are hers are refused
-     (`badInput`, field `person`: «Person wählen …»), never dropped. After the review: a text that says bill anywhere is
-     never such a document, whatever comes first (a receipt title in its first lines, a compound one too, never one of
-     `notCompound`; a due date or payment slip word; a total's word as a word of its own before an amount): an insurer's
-     «Kollektiv-Krankentaggeldversicherung … Prämienrechnung … Zahlbar bis» is a receipt. Such a document linked to a
-     payment by hand is left out of the booking's prompt (`classifyInput`, as a payslip). A document read before is kinded
-     so once by the read step, unless a person gave it a kind, a payment is linked to it or its day is closed.
+     (`badInput`, field `person`: «Person wählen …»), never dropped. After the second review (a corpus of 27 realistic texts in German, French and Italian,
+     tests/payroll-setup-corpus.test.ts): a text is such a document by its title, not by word signals: one of its first
+     five lines names a document of payroll.yaml `setupDocuments.titles` (Police, Verfügung, Vorsorgeausweis, Certificat,
+     Décision, …) and is no reference line («Police Nr. 44.555»), the text names a kind, and nothing says bill: no title
+     of `bills` (Prämienabrechnung, Décompte de primes, Conteggio dei premi, …) or of documents.yaml `receipt.title` in its
+     first lines as a whole word («Altersgutschrift» is none), no payment slip word, no line of `payable` («Zu
+     bezahlender Betrag», «zahlbar bis», «Montant à régler», «Da pagare entro», «Konto belastet», …) with a date or an
+     amount. A product name or a total says nothing either way. A picture named as such a document is not read by a
+     model's vision. Privacy does not hang on the kind: src/llm/mask.ts masks, in every prompt and system text
+     (src/llm/ask.ts) and in the sidebar's, the full names of the people of payroll.json (given back in the answer), a
+     social security number, what follows a person's label («Versicherte Person:»), a date beside a birth date's word and,
+     once a person is named, an amount beside a wage's word, line by line and never across a quote (a prompt's JSON keys
+     and numbers are its own); the sidebar is denied the receipt files of such documents. A document read before is
+     kinded so once per receipt (the ids looked at kept in data/setup-documents-looked.json), linked or not, unless a
+     person gave it a kind, the model took it for an invoice whose date and amount were read, or its day is closed.
 109. **A collector's payment is proposed for the months it pays, also ahead of them** (src/booking/withheld.ts
      `collectorProposal`): for a business whose file collects kinds owed on 2270 (not the withholding tax), the hand form
      proposes the employees' share of a whole run of the oldest months its payslips withheld that no earlier payment
@@ -2282,7 +2291,7 @@ After the third persona walk (2026-11-19):
      written (as decision 59's): a file shaped otherwise is refused (`badInput`). Without a click in this view, the
      payment's «Rückgängig» takes back only the kinds the payment names. The offer says its payments then wait for no
      receipt; the routes read the knowledge, not the classifier's context, and the list of payments to collectors is
-     kept per books and knowledge.
+     read on every load of the books (no cache).
 
 ---
 

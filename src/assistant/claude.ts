@@ -16,6 +16,8 @@
  * (docs/0.4.0/saving.md).
  */
 import { maskForModel } from '../llm/mask.js';
+import { loadBooks } from '../books/store.js';
+import { isSetupDocument } from '../booking/payslip.js';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { join } from 'node:path';
@@ -182,9 +184,17 @@ export const NEVER_DRAFTED = ['data/draft/master-data/accounts.json'];
  */
 export const NEVER_READ = ['**/payroll.json', '**/transactional-data/*/payroll/**', '**/transactional-data/*/receipts/*-lohnabrechnung-*'];
 
-export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: string | undefined, repository: string, owner: string, map = '', term?: number): string[] {
+/**
+ * The receipt files of a fund's or insurer's documents (§22 decision 108: a pension certificate names a person and her
+ * insured wage), denied to the sidebar beside NEVER_READ, by their names in the receipts' folders.
+ */
+export function setupDocumentFiles(ws: Pick<Workspace, 'paths' | 'company' | 'bankAccounts'>): string[] {
+  try { return loadBooks(ws as Workspace).receipts.filter(isSetupDocument).map((r) => `**/transactional-data/*/receipts/${r.filename}`); } catch { return []; }
+}
+
+export function assistantArgs(send: Pick<AssistantSend, 'language'>, session: string | undefined, repository: string, owner: string, map = '', term?: number, neverRead: readonly string[] = []): string[] {
   const writes = draftPatterns().flatMap((p) => [`Edit(${p})`, `Write(${p})`]);
-  const never = [...NEVER_DRAFTED.flatMap((p) => [`Edit(${p})`, `Write(${p})`]), ...NEVER_READ.map((p) => `Read(${p})`)];
+  const never = [...NEVER_DRAFTED.flatMap((p) => [`Edit(${p})`, `Write(${p})`]), ...[...NEVER_READ, ...neverRead].map((p) => `Read(${p})`)];
   return [
     '-p',
     '--model', sidebarModel(),
@@ -304,7 +314,7 @@ export function callClaude(call: AssistantCall): Promise<void> {
   return new Promise((resolve) => {
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = spawnClaude(assistantArgs(call.send, call.session, call.ws.paths.repository, ownerAccount(call.ws), call.map, call.ws.invoicing?.paymentTermsDays), { cwd: root, env: { VANILLA_WORKSPACE: root } });
+      child = spawnClaude(assistantArgs(call.send, call.session, call.ws.paths.repository, ownerAccount(call.ws), call.map, call.ws.invoicing?.paymentTermsDays, setupDocumentFiles(call.ws)), { cwd: root, env: { VANILLA_WORKSPACE: root } });
     } catch (e) {
       call.onEvent({ type: 'error', message: (e as Error).message });
       return resolve();
