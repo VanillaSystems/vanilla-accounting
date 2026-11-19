@@ -335,7 +335,12 @@ setupDocuments:
 # `regions`: each canton with the model it applies (ESTV KS 45 Ziff. 3; Kanton Aargau, «Info
 # Quellensteuerverfahren 2021», Ziff. 3): the monthly model in 21 cantons, the annual model in FR, GE, TI,
 # VD, VS. The app computes the monthly model; a person of a canton on the annual model gets the line
-# «unvollständig» (§22 decision 93).
+# «unvollständig» (§22 decision 93). `codeNotes`: what a payslip's tax line and the person's form say beside a
+# tariff code that matches `codes` (a pattern on the code the file is read with). The codes L to Q are those of
+# a cross-border commuter resident in Germany: the flat 4.5 % (DBA CH-DE Art. 15a Abs. 1) only while the
+# employer holds her certificate of residence of the German tax office (Ansässigkeitsbescheinigung, form Gre-1;
+# its renewal Gre-2); without it the ordinary tariff applies (DBA CH-DE Art. 15a Abs. 3; ESTV, Merkblatt
+# Grenzgänger Deutschland) (§22 decision 123).
 taxAtSource:
   file:
     url: "https://www.estv2.admin.ch/qst/{year}/loehne/tar{yy}{canton}.zip"
@@ -346,6 +351,13 @@ taxAtSource:
   aperiodic: ["3", "4", "5"]
   partMonth: 30
   provision: { electronic: PEL, paper: PPA }
+  codeNotes:
+    - codes: "^[L-Q]"
+      text:
+        de: "Grenzgängertarif 4.5 % nur mit gültiger Ansässigkeitsbescheinigung (Formular Gre-1, Verlängerung Gre-2); ohne sie gilt der ordentliche Tarif"
+        fr: "Barème frontalier 4.5 % seulement avec une attestation de résidence valable (formulaire Gre-1, prolongation Gre-2) ; sans elle, le barème ordinaire s’applique"
+        it: "Tariffa per frontalieri 4.5 % solo con un certificato di residenza valido (modulo Gre-1, proroga Gre-2); senza, si applica la tariffa ordinaria"
+        en: "Cross-border rate 4.5 % only with a valid certificate of residence (form Gre-1, renewal Gre-2); without it the ordinary tariff applies"
   source: "DBG Art. 83-88, QStV (SR 642.118.2), ESTV Kreisschreiben Nr. 45; FAQ KS 45 der Arbeitsgruppe Quellensteuern (2026)"
   regions:
     AG: { model: monthly }

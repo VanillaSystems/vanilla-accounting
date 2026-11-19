@@ -2146,6 +2146,14 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     carried + lists − paid against the balance at 31.12. A difference (a payslip's entry changed, a tax booked by
     hand) is a hint with the account's ledger; open at 31.12. is the next settlement's, a fact. The insurer's fact of
     decision 102 is not shown for such an account, so it is one fact, with links to the settlement lists.
+123. **A tariff code whose rate depends on a certificate says so, as data** (`taxAtSource.codeNotes`: a pattern on
+    the code and its words in the four languages). The codes L to Q (a cross-border commuter resident in Germany)
+    take the flat 4.5 % only while the employer holds the German tax office's certificate of residence
+    (Ansässigkeitsbescheinigung, form Gre-1; its renewal Gre-2); without it the ordinary tariff applies (DBA CH-DE
+    Art. 15a Abs. 1 and 3). The words follow the tax line's source on the payslip's page and in its PDF (in the
+    person's language there), and the person's tax-at-source entry on her form. The app does not ask for the
+    certificate nor switch the code: the person changes the code, dated back where it was wrong (a Rückwirkende
+    Korrektur carries the difference, decision 120).
 
 ---
 

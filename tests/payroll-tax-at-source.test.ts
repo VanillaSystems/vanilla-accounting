@@ -22,7 +22,7 @@ import { settlementsOf } from '../src/payroll/settlement.js';
 import { firmWageTypes } from '../src/payroll/catalogue.js';
 import type { TaxAtSource } from '../src/payroll/model.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
-import { amountOf, closeOf, ctxOf, dated, firm, line, owner } from './support/payroll.js';
+import { amountOf, ch, closeOf, ctxOf, dated, firm, line, owner } from './support/payroll.js';
 
 const FIX = join(APP_ROOT, 'tests/fixtures/qst');
 const text = (kt: string) => readFileSync(join(FIX, `tar26${kt}-excerpt.txt`), 'latin1');
@@ -451,4 +451,22 @@ test('a correction entered by hand: its own row with the corrected month\'s code
   const row = april.rows.find((r) => r.corrects === '2026-03')!;
   assert.deepEqual([row.code, row.wage, row.rate, row.tax], ['A0N', undefined, undefined, 50]);
   assert.equal(april.rows.length, 2);
+});
+
+import { lineSource, sourceText } from '../src/payroll/sources.js';
+
+test('an L code\'s tax line says the 4.5 % depends on the certificate of residence (Gre-1/Gre-2), in the payslip\'s language; A0 and the commission say nothing (§22 decision 123)', () => {
+  const data = ctxOf(firm()).data;
+  const textOf = (code: string, wageType: string, lang: 'de' | 'fr' | 'it' | 'en') => {
+    const d = draft(7000, { subject: true, canton: 'ZH', code });
+    const [l] = line(d, wageType);
+    const s = lineSource(l, d, data, ch.payrollYears, []);
+    return s && sourceText(s, data.documents, lang);
+  };
+  assert.equal(textOf('L0', 'quellensteuer', 'de'), 'Tarif ZH 2026 vom 08.12.2025 · L0N · satzbestimmend 7\'000.00 · Grenzgängertarif 4.5 % nur mit gültiger Ansässigkeitsbescheinigung (Formular Gre-1, Verlängerung Gre-2); ohne sie gilt der ordentliche Tarif');
+  assert.match(textOf('M2', 'quellensteuer', 'fr')!, /attestation de résidence valable \(formulaire Gre-1, prolongation Gre-2\) ; sans elle, le barème ordinaire s’applique$/);
+  assert.match(textOf('L0', 'quellensteuer', 'it')!, /certificato di residenza.*Gre-1.*tariffa ordinaria$/);
+  assert.match(textOf('L0', 'quellensteuer', 'en')!, /certificate of residence \(form Gre-1, renewal Gre-2\); without it the ordinary tariff applies$/);
+  assert.doesNotMatch(textOf('A0', 'quellensteuer', 'de')!, /Gre-1/);
+  assert.doesNotMatch(textOf('L0', 'bezugsprovision', 'de')!, /Gre-1/, 'the commission names only its file');
 });
