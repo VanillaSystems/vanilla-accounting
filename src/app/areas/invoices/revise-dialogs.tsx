@@ -6,7 +6,7 @@
  */
 import { useEffect, useState } from 'react';
 import { isItem, type Issued, type SentDocument } from '../../../invoices/model.js';
-import { sendsOf } from '../../../invoices/lists.js';
+import { channelOf, sendsOf } from '../../../invoices/lists.js';
 import { lineAmounts, totals } from '../../../invoices/rules.js';
 import type { AccountChangePlan } from '../../../invoices/revise.js';
 import { eventRef } from '../../../books/refs.js';
@@ -37,7 +37,7 @@ export function BackToDraftDialog(props: Props & { inv: Issued }) {
  * issued (spec 4.4.2). The dialog names each send and the ways on, Gutschrift and Storno.
  */
 function BackRefused({ inv, sends }: { inv: Issued; sends: SentDocument[] }) {
-  const list = sends.map((x) => `${formatDate(x.sentAt.slice(0, 10))} · ${x.to === 'download' ? t('sales.channel.download') : x.to}`).join(', ');
+  const list = sends.map((x) => `${formatDate(x.sentAt.slice(0, 10))} · ${channelOf(x) === 'download' ? t('sales.channel.download') : x.to}`).join(', ');
   return (
     <Frame label={t('invoices.backTitle', { number: inv.number })} title={`${inv.customer.name} · ${inv.currency} ${fmt(totals(inv).gross)}`}
       foot={<>

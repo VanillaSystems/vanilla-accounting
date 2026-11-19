@@ -310,7 +310,7 @@ function StatementDetail(props: Props & { b: Bank; s: Statement }) {
         </aside>
       </div>
       {ui.overlay === 'quick' && src && <Quick src={src} file={s.file!.filename} mark={mark} />}
-      {edit ? <AllocateHost books={props.books} nav={nav} /> : null}
+      {canEdit ? <AllocateHost books={props.books} nav={nav} /> : null}
     </div>
   );
 }
@@ -369,7 +369,8 @@ function PayBar(props: Props & { b: Bank; tx?: BankTransaction; closed: boolean;
       {edit && entry && tx.direction === 'DBIT' ? <WithheldOnPayment books={props.books} tx={tx} nav={nav} /> : null}
       {edit && receipts.length > 1 ? <GroupedOffer key={`go-${tx.ref}`} payment={tx.ref} onRules={() => nav.go({ route: { area: 'company', section: 'rules' }, query: {} })} /> : null}
       <Note key={tx.ref} tx={tx} nav={nav} edit={edit} />
-      {edit && tx.direction === 'CRDT' ? <LinkInvoice key={`li-${tx.ref}`} tx={tx} nav={nav} /> : null}
+      {/* Per payment, not per statement: a statement may straddle the locked line. Held or filed, no document may take it (the API refuses it too). */}
+      {canEdit && tx.direction === 'CRDT' && !(b.closedThrough && tx.date <= b.closedThrough) && !bookedInFiled(tx) && !reconciliationOf(props.books, tx.ref) ? <LinkInvoice key={`li-${tx.ref}`} tx={tx} nav={nav} /> : null}
       {' '}<button type="button" className="x" aria-label={t('bank.clear')} onClick={onClear}>×</button>
       <Parts tx={tx} />
     </>

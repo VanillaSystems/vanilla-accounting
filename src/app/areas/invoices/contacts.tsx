@@ -226,7 +226,7 @@ export function ContactPanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
             {docs.length ? docs.map((i) => (
               <button key={i.id} type="button" className="fr" onClick={() => nav.go(invoiceAt(i))}>
                 <span className="mono">{i.status === 'issued' ? i.number : t('invoices.draft')}</span>
-                <span>{i.subject ?? ''}</span>
+                <span data-tip={i.subject || undefined}>{i.subject ?? ''}</span>
                 <span className="m">{t(`invoices.state.${rowState(i, d.invoices, today)}`)}</span>
                 <span className="r mono">{i.currency} {fmt(totals(i).gross)}</span>
               </button>

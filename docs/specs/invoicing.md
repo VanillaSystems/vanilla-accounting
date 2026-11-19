@@ -1512,14 +1512,19 @@ listed here and updated with phase 2's build:
     (`unknownArticle`).
 
 96. **Ausziffern where the money is seen (slice H).** The bank's page of an incoming payment no
-    document holds offers «Ausziffern» beside «Rechnung zuordnen»; a contact with open Rechnungen
-    offers «Zahlung ausziffern», which picks one of the open periods' incoming payments not yet
-    allocated first. Both open the one dialog of Verkauf. Its contact is the one it was opened from,
-    else code's proposal: the contact whose invoice number the text names, else the one contact alone
-    whose earlier invoices were paid from the payment's IBAN (an IBAN that paid two contacts, a shared
-    account, proposes no one), else the one whose every name word the text names. The dialog says how
-    it was found; the person picks any other contact with open Rechnungen, or all of them, which shows
-    every open item and proposes only those the text names.
+    document holds offers «Ausziffern» beside «Rechnung zuordnen», decided per payment (its date after
+    the locked line), not per statement; a contact with open Rechnungen offers «Zahlung ausziffern»,
+    which picks one of the open periods' incoming payments not yet allocated first. Both open the one
+    dialog of Verkauf. Its contact is the one it was opened from, else code's proposal: the contact
+    whose invoice number the text names; else, by the IBAN, the one contact whose issued invoices were
+    ever paid from it, if it has something open (an IBAN that paid two contacts, a shared account,
+    proposes no one, whatever is open); else the one whose every name word the text names. An IBAN and
+    a name that point to two contacts propose no one; the dialog names both. It says how a contact was
+    found; the person picks any other contact with open Rechnungen, or all of them, which shows every
+    open item and proposes only those the text names. A payment a waiting reconciliation holds or one
+    booked in a filed period already is offered neither «Rechnung zuordnen» nor «Ausziffern», and the
+    API refuses both for it (`held`, `filedTwin`), as code's matching skips it. A proposal that cannot
+    be read closes the dialog and says why.
 97. **«PDF herunterladen» asks once per download (slice H).** The market leader keeps a download and
     a «mark as sent» apart: its PDF is a view, and sending outside the app is a click of its own.
     Ours has no such click (4.8): the download is the entry. So on the detail of an issued Rechnung or

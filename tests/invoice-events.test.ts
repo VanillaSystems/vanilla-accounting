@@ -17,7 +17,7 @@ import { APP_ROOT } from '../src/workspace/workspace.js';
 import { EFFECTIVE_QUARTERLY, NOT_REGISTERED, type VatSetup } from '../src/workspace/vat-setup.js';
 import { bookInvoiceEvents } from '../src/invoices/events.js';
 import {
-  allocatePayment, allocationProposal, matchPayments, recordHandPayment, releasePayment, removeHandPayment, removeWriteOff, writeOffRest, PaymentError, type PaymentContext,
+  allocatePayment, allocationProposal, confirmPayment, matchPayments, recordHandPayment, releasePayment, removeHandPayment, removeWriteOff, writeOffRest, PaymentError, type PaymentContext,
 } from '../src/invoices/payments.js';
 import { creditNoteStatus } from '../src/invoices/lists.js';
 import { cancel, figures, issue, openAmount, skontoOf, status, totals, InvoiceRuleError } from '../src/invoices/rules.js';
@@ -287,13 +287,62 @@ test('Ausziffern proposes the contact by the IBAN that paid its invoices before,
   assert.deepEqual([picked.customerId, picked.by, picked.items.map((i) => [i.number, i.proposed])], ['cu_1', 'given', [['2026-001', 300]]], 'the person picked another contact');
   const all = allocationProposal(b, book, 'P1', '');
   assert.deepEqual([all.customerId, all.items.length], [undefined, 2], 'all contacts: every open item');
+});
 
-  // An IBAN that paid two contacts (a shared account) proposes no one by it.
-  const b2 = books([...b.transactions.map((t) => ({ ...t })), paying('P4', '2026-08-07', totals(now(book, 'a')).gross, { counterparty: 'M. HUBER', counterpartyIban: iban, description: 'x' })]);
-  b2.journalEntries = b.journalEntries;
-  allocatePayment(b2, book, 'P4', [{ invoiceId: 'a', amount: totals(now(book, 'a')).gross }], ctx);
+test('a shared IBAN proposes no one, even when only one of its payers has something open; an IBAN and a name that point apart propose no one and name both', () => {
+  setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+  const book = newBook();
+  const garage: Customer = { ...customer, id: 'cu_2', name: 'Muster Garage GmbH' };
+  book.contacts.push(asContact(garage));
+  const issuedFor = (d: Draft, c: Customer) => {
+    const inv = { ...issue(d, { customer: c, sender, layout: DEFAULT_LAYOUT, invoices: book.invoices, now: `${d.date}T10:00:00Z` }), pdf: { file: `invoices/${d.id}.pdf`, sha256: d.id } };
+    book.invoices.push(inv);
+    return inv;
+  };
+  issued(book, draft('a', '2026-07-01', [line(1000, 8.1)]));
+  issuedFor(draft('g1', '2026-07-02', [line(100, 8.1)], { customerId: 'cu_2' }), garage);
+  issuedFor(draft('g2', '2026-07-03', [line(200, 8.1)], { customerId: 'cu_2' }), garage);
+  const shared = 'CH6580808000000000099';
+  const b = books([
+    paying('P0', '2026-08-01', totals(now(book, 'g1')).gross, { counterparty: 'FAMILIE HUBER', counterpartyIban: shared, description: 'Zahlung' }),
+    paying('P4', '2026-08-02', totals(now(book, 'a')).gross, { counterparty: 'FAMILIE HUBER', counterpartyIban: shared, description: 'Zahlung' }),
+    paying('P1', '2026-08-04', 100, { counterparty: 'FAMILIE HUBER', counterpartyIban: shared, description: 'Zahlung' }),
+    paying('P5', '2026-08-05', 100, { counterparty: 'BEISPIEL BISTRO AG', counterpartyIban: shared, description: 'Zahlung' }),
+  ]);
+  allocatePayment(b, book, 'P0', [{ invoiceId: 'g1', amount: totals(now(book, 'g1')).gross }], ctx);
+  allocatePayment(b, book, 'P4', [{ invoiceId: 'a', amount: totals(now(book, 'a')).gross }], ctx);
+  // The bistro paid all it owes, the garage still owes g2: the IBAN paid both, so it proposes neither.
+  const p = allocationProposal(b, book, 'P1');
+  assert.deepEqual([p.customerId, p.by, p.hints], [undefined, undefined, []], 'shared: no proposal by IBAN');
   issued(book, draft('a2', '2026-07-09', [line(50, 8.1)]));
-  assert.equal(allocationProposal(b2, book, 'P1').by, undefined, 'paid both: no proposal by IBAN');
+  const q = allocationProposal(b, book, 'P5');
+  assert.deepEqual([q.customerId, q.by], ['cu_1', 'name'], 'a shared IBAN leaves the name to decide');
+
+  // The garage's own IBAN on a payment that names the bistro: they point apart, nobody is proposed and both are named.
+  const own = 'CH6580808000000000098';
+  b.transactions.push(
+    paying('P7', '2026-08-06', totals(now(book, 'g2')).gross, { counterparty: 'GARAGE', counterpartyIban: own, description: 'Zahlung' }),
+    paying('P8', '2026-08-07', 100, { counterparty: 'BEISPIEL BISTRO AG', counterpartyIban: own, description: 'Zahlung' }),
+  );
+  allocatePayment(b, book, 'P7', [{ invoiceId: 'g2', amount: totals(now(book, 'g2')).gross }], ctx);
+  issuedFor(draft('g3', '2026-07-10', [line(80, 8.1)], { customerId: 'cu_2' }), garage);
+  const r = allocationProposal(b, book, 'P8');
+  assert.deepEqual([r.customerId, r.items.every((i) => i.proposed === 0)], [undefined, true], 'no one proposed, nothing allocated by code');
+  assert.deepEqual(r.hints.map((h) => [h.by, h.id, h.name]), [['iban', 'cu_2', 'Muster Garage GmbH'], ['name', 'cu_1', 'Beispiel Bistro AG']]);
+});
+
+test('a payment a waiting reconciliation holds, or one booked in a filed period, is refused by Ausziffern and by a person\'s link', () => {
+  setJurisdiction(ch, EFFECTIVE_QUARTERLY);
+  const book = newBook();
+  issued(book, draft('a', '2026-07-01', [line(1000, 8.1)]));
+  const b = books([paying('H1', '2026-08-04', 500), paying('F1', '2026-08-05', 500, { waitsForPerson: { since: '2026-08-06', why: 'filedTwin', read: 'F1-pdf' } })]);
+  const holding: PaymentContext = { ...ctx, held: () => new Set(['H1']) };
+  const refused = (code: string) => (e: unknown) => e instanceof PaymentError && e.code === code;
+  assert.throws(() => allocatePayment(b, book, 'H1', [{ invoiceId: 'a', amount: 500 }], holding), refused('held'));
+  assert.throws(() => confirmPayment(b, book, 'a', 'H1', holding), refused('held'));
+  assert.throws(() => allocatePayment(b, book, 'F1', [{ invoiceId: 'a', amount: 500 }], ctx), refused('filedTwin'));
+  assert.throws(() => confirmPayment(b, book, 'a', 'F1', ctx), refused('filedTwin'));
+  assert.deepEqual([b.journalEntries.length, now(book, 'a').payments.length], [0, 0], 'nothing booked, nothing allocated');
 });
 
 test('Ausziffern refuses a surplus (it stays unallocated in phase 1), more than a Rechnung has open, and a payment allocated already', () => {

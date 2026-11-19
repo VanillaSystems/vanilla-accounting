@@ -22,6 +22,8 @@ import { allocate, handPayment, writeOff } from './actions.js';
 import { invoicesNow } from './data.js';
 import { parseNumber } from './edit.js';
 import { Frame, close } from './frame.js';
+import { heldByReconciliation } from '../../../books/reconcile.js';
+import { bookedInFiled } from '../../../books/twins.js';
 import { useUi } from './state.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
@@ -125,7 +127,9 @@ function PickPayment({ books, onPick }: AllocateProps & { onPick(ref: string): v
   const closed = books.config?.closedThrough ?? '';
   const loaded = invoicesNow();
   const allocated = new Set((loaded?.invoices ?? []).flatMap((i) => (i.status === 'issued' ? i.payments.map((p) => p.transactionRef) : [])));
-  const open = books.transactions.filter((x) => x.direction === 'CRDT' && x.date > closed && !allocated.has(x.ref) && x.amount > 0).sort((a, b) => b.date.localeCompare(a.date));
+  const held = heldByReconciliation(books);
+  // What the server would refuse is not offered: a payment a waiting reconciliation holds, or one booked in a filed period already.
+  const open = books.transactions.filter((x) => x.direction === 'CRDT' && x.date > closed && !allocated.has(x.ref) && x.amount > 0 && !held.has(x.ref) && !bookedInFiled(x)).sort((a, b) => b.date.localeCompare(a.date));
   const [pick, setPick] = useState('');
   return (
     <Frame label={t('invoices.allocTitle')} title={t('invoices.allocPickTitle')}
@@ -156,7 +160,13 @@ function AllocateRows({ nav, transactionRef, customerId }: AllocateProps) {
       setData(r);
       setAmounts(Object.fromEntries(r.items.map((i) => [i.invoiceId, i.proposed ? fmt(i.proposed) : ''])));
       setRests({});
-    }, (e) => { if (live) { setData('failed'); nav.toast(errorText(e)); } });
+    }, (e) => {
+      // Nothing to show: the dialog closes and says why (a payment held by a reconciliation, gone, …).
+      if (!live) return;
+      setData('failed');
+      close();
+      nav.toast(t('invoices.allocFailed', { why: errorText(e) }));
+    });
     return () => { live = false; };
   }, [transactionRef, who]);
   if (!data || data === 'failed') return null;
@@ -221,6 +231,7 @@ function ContactPick({ data, onPick }: { data: AllocationView; onPick(id: string
           {[...given, ...data.customers].map((c) => <option key={c.id} value={c.id}>{c.n ? t('invoices.allocContactOpen', { name: c.name, n: c.n, amount: `${data.transaction.currency} ${fmt(c.open)}` }) : c.name}</option>)}
         </select>
         {data.by && data.by !== 'given' && <small className="m" data-testid="alloc-by">{t(`invoices.allocBy.${data.by}`)}</small>}
+        {data.hints.length === 2 && <small className="m" data-testid="alloc-hints">{t('invoices.allocHints', { iban: data.hints.find((h) => h.by === 'iban')!.name, name: data.hints.find((h) => h.by === 'name')!.name })}</small>}
       </span>
     </label>
   );

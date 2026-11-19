@@ -3,6 +3,8 @@
  * status filters, what is open, and the link of each record. Computed with src/invoices/rules.ts,
  * the rules the API and the PDF use.
  */
+import { heldByReconciliation } from '../../../books/reconcile.js';
+import { bookedInFiled } from '../../../books/twins.js';
 import { isItem, type Contact, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type Issued, type SentDocument } from '../../../invoices/model.js';
 import { billingAddress, documentsOf, recipientOf } from '../../../invoices/contacts.js';
 import type { DraftChange } from '../../lib/api.js';
@@ -139,10 +141,12 @@ export function linkableInvoices(invoices: readonly Invoice[], tx: Pick<BankTran
  * its currency, not allocated to any document yet, the newest first. The proposals the API makes
  * are a subset; this lets a person pick any other, a prepayment before the invoice's date included.
  */
-export function linkablePayments(books: Pick<Index, 'transactions' | 'config'>, invoices: readonly Invoice[], inv: Issued): BankTransaction[] {
+export function linkablePayments(books: Pick<Index, 'transactions' | 'config' | 'reconciliations'>, invoices: readonly Invoice[], inv: Issued): BankTransaction[] {
   const closed = books.config?.closedThrough ?? '';
   const allocated = allocatedRefs(invoices);
+  // Held by a waiting reconciliation or booked in a filed period: no document may take it (refuseHeld, src/invoices/payments.ts).
+  const held = heldByReconciliation(books);
   return books.transactions
-    .filter((t) => t.direction === 'CRDT' && t.currency === inv.currency && t.date > closed && !allocated.has(t.ref) && t.amount > 0)
+    .filter((t) => t.direction === 'CRDT' && t.currency === inv.currency && t.date > closed && !allocated.has(t.ref) && t.amount > 0 && !held.has(t.ref) && !bookedInFiled(t))
     .sort((a, b) => b.date.localeCompare(a.date));
 }

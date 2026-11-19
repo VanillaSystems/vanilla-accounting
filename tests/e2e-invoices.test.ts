@@ -6,7 +6,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { click, clickText, noBrowser, openApp, waitText } from './support/e2e.js';
 import { DEMO_ROOT, demoInvoices, writeIndex } from './support/workspace.js';
@@ -50,10 +51,18 @@ test('a draft is issued with its stored PDF and sent; a part is credited; a prop
     // «PDF herunterladen» of a Rechnung never sent asks whether the download is its sending (decision 97).
     await click(page, '.isend [data-act=later]');
     await page.waitForFunction(() => !document.querySelector('.isend'));
+    // What the button saves, as the browser saves it: the stored PDF, byte for byte.
+    const saved = mkdtempSync(join(tmpdir(), 'e2e-download-'));
+    const cdp = await page.createCDPSession();
+    await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: saved });
     await click(page, '.detail [data-act=download-pdf]');
     await page.waitForSelector('[data-testid=download-ask]');
     await click(page, '[data-act=view-only]');
     await page.waitForFunction(() => !document.querySelector('[data-testid=download-ask]'));
+    const file = join(saved, `${NEXT}.pdf`);
+    for (let k = 0; k < 100 && !existsSync(file); k++) await new Promise((r) => setTimeout(r, 100));
+    assert.equal(sha(readFileSync(file)), issued.pdf!.sha256, '«Nur ansehen» saved the stored PDF');
+    rmSync(saved, { recursive: true, force: true });
     assert.deepEqual((await invoice(DRAFT)).sent ?? [], [], '«Nur ansehen» records nothing');
     await click(page, '.detail [data-act=download-pdf]');
     await click(page, '[data-act=record-download]');
@@ -83,6 +92,7 @@ test('a draft is issued with its stored PDF and sent; a part is credited; a prop
     const creditDraft = async () => (await (await api.send('GET', '/api/invoices')).json.invoices as InvoiceView[]).find((i) => i.kind === 'credit-note' && i.status === 'draft')!;
     assert.equal((await creditDraft()).view.totals.gross, -50, 'the part credited is the amount asked, VAT included (F04)');
     // Typed at once after the click: the select-all the click schedules must not eat the minus.
+    await page.waitForSelector('[data-ed="l:0:price"]');
     await page.click('[data-ed="l:0:price"]');
     await page.keyboard.type('-40');
     await page.keyboard.press('Tab');
