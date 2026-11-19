@@ -227,6 +227,8 @@ export interface YearEndData {
 /** invoicing.yaml: the rates an invoice line offers, and a 0 % line's deduction box by exemption. */
 export interface InvoicingData {
   rates: number[];
+  /** The percent of an Artikel's VAT kind by the supply's day, newest first (`none` is 0 %). */
+  rateKinds: Record<'normal' | 'reduced' | 'accommodation', Array<{ rate: number; from: string }>>;
   exemptions: Record<'abroad' | 'export', BoxId>;
   /** The accounts the rest of an invoice is written off on while the firm names none: Skonto and the like, and a loss. */
   writeOff?: { skonto: string; loss: string };

@@ -21,7 +21,8 @@ const emit = () => listeners.forEach((l) => l());
 export function reloadInvoices(): Promise<void> {
   const merge = edits.read();
   pending = api.invoices().then(
-    (data) => { load = { state: 'ready', data: load.state === 'ready' ? { ...data, invoices: merge(data.invoices, load.data.invoices) } : data }; emit(); },
+    // A file of the audit export written before Artikel has none.
+    (raw) => { const data = { ...raw, articles: raw.articles ?? [] }; load = { state: 'ready', data: load.state === 'ready' ? { ...data, invoices: merge(data.invoices, load.data.invoices) } : data }; emit(); },
     () => { if (load.state !== 'ready') { load = { state: 'failed' }; emit(); } },
   );
   return pending;

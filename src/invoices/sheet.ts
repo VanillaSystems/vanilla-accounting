@@ -13,7 +13,7 @@
 import { SwissQRBill } from 'swissqrbill/svg';
 import { DEFAULT_UNITS, isItem, unitWord, type Address, type DocumentKind, type CustomerFields, type Exemption, type InvoiceCurrency, type InvoiceLanguage, type InvoiceLayout, type InvoiceLine, type Prices, type Sender, type UnitDef } from './model.js';
 import { isQrBillIban, prettyReference } from '../providers/qr-bill/reference.js';
-import { optionsOf, pricedGross, priced, totals } from './rules.js';
+import { optionsOf, pricedGross, priced, revenueVatCode, totals } from './rules.js';
 import { TEXTS, formatAmount, formatDate, formatQuantity, kindTitle, type InvoiceTexts } from './texts.js';
 import { chargesVat, invoiceActivities, invoiceRates, invoicing } from '../engines/index.js';
 
@@ -88,7 +88,11 @@ export interface ScreenSheet {
       title: string; plain: string; percent: string; amount: string; lineDiscount: string;
       /** An Angebot's or Auftrag's position: an ordinary one, or an option (spec 4.4.1). */
       position?: string; option?: string;
+      /** «＋ Artikel» (the picker), «＋ Gruppe», a group's title placeholder, the revenue account of a position on screen and an Artikel's code. */
+      addArticle?: string; addGroup?: string; group?: string; account?: string; code?: string;
     };
+    /** The revenue account a position without its own books on (the contact's, else the settings'): the account field's placeholder. */
+    revenueAccount?: string;
   };
 }
 
@@ -153,6 +157,11 @@ export function sheetTitle(d: SheetData, L: InvoiceTexts = TEXTS[d.language]): s
   return d.reminderLevel ? `${L.reminder(d.reminderLevel)} · ${base}` : base;
 }
 
+/** The code a position's revenue books with, shown on a draft's screen; none where the jurisdiction has none for it (a firm not registered). */
+function codeOf(rate: number, exemption: Exemption | undefined, activity: 1 | 2 | undefined): string | undefined {
+  try { return revenueVatCode(rate, exemption, activity ?? 1); } catch { return undefined; }
+}
+
 /** The blocks of the sheet's flowing part, in reading order; each table row is a block so a long table breaks between rows. */
 export function sheetBlocks(d: SheetData): Block[] {
   const L = TEXTS[d.language];
@@ -214,6 +223,12 @@ export function sheetBlocks(d: SheetData): Block[] {
       B.push({ row: true, html: row(k, `ltext${l.style === 'title' ? ' title' : ''}`, `<td colspan="${span}">${text}${style ? `<span class="edstyle scr">${style}</span>` : ''}${tools(k)}</td>`) });
       return;
     }
+    if (l.kind === 'group') {
+      // A Gruppe: its title and the sum of its sub-positions (a Lieferschein: the title alone).
+      const title = draft ? editable(`l:${k}:text`, esc(l.text), ed.words.group ?? ed.words.desc) : esc(l.text);
+      B.push({ row: true, html: row(k, 'lgroup', priceless ? `<td colspan="${span}">${title}${tools(k)}</td>` : `<td colspan="${span - 1}">${title}</td><td class="r">${n(amounts[k] ?? 0)}${tools(k)}</td>`) });
+      return;
+    }
     if (l.kind === 'subtotal' && priceless) return;
     if (l.kind === 'subtotal') {
       const label = draft ? editable(`l:${k}:text`, esc(l.text), ed.words.desc) : esc(l.text);
@@ -230,12 +245,16 @@ export function sheetBlocks(d: SheetData): Block[] {
       return;
     }
     const incl = l.vatRate > 0 && pricedGross(l, d.prices);
+    // An Artikel position prints its code before its text where the layout shows codes; a draft's is editable.
+    const code = draft ? (l.kind === 'article' ? `<span class="lcode">${editable(`l:${k}:code`, esc(l.code ?? ''), ed.words.code ?? '')}</span> ` : '')
+      : show.articleCode && l.code ? `<span class="lcode">${esc(l.code)}</span> ` : '';
+    const sub = l.inGroup ? ' lingrp' : '';
     const off = l.discount ? `<span class="loff">${esc(L.lineDiscount(pct(l.discount)))}</span>` : '';
     const opt = l.optional && options ? `<span class="lopt">${esc(L.option)}</span> ` : '';
     const optPick = draft && options ? `<span class="edstyle scr">${pick(`l:${k}:optional`, [['no', ed.words.position ?? ''], ['yes', ed.words.option ?? L.option]], l.optional ? 'yes' : 'no')}</span>` : '';
     if (priceless) {
       const qty = draft ? `${editable(`l:${k}:quantity`, esc(formatQuantity(l.quantity)))} ${esc(unit(l.unit))}` : esc(`${formatQuantity(l.quantity)}${l.unit ? ` ${unit(l.unit)}` : ''}`);
-      B.push({ row: true, html: row(k, 'litem', `<td>${draft ? editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked') : esc(l.text)}</td><td class="r">${qty}${tools(k)}</td>`) });
+      B.push({ row: true, html: row(k, `litem${sub}`, `<td>${code}${draft ? editable(`l:${k}:text`, esc(l.text), ed.words.desc, 'blocked') : esc(l.text)}</td><td class="r">${qty}${tools(k)}</td>`) });
       return;
     }
     const cells = draft
@@ -247,12 +266,18 @@ export function sheetBlocks(d: SheetData): Block[] {
           + (activities.length && l.vatRate > 0 ? `<span class="edact scr">${pick(`l:${k}:activity`, activities, String(l.activity ?? 1))}</span>` : ''),
       }
       : { text: `${opt}${esc(l.text)}${incl && !vatColumn ? ` (${l.vatRate} % ${L.included})` : ''}${off && !show.quantity ? off : ''}`, qty: esc(`${formatQuantity(l.quantity)}${l.unit ? ` ${unit(l.unit)}` : ''}`), price: `${n(l.price)}${off}`, rate: `${l.vatRate} %${incl ? ` ${L.included}` : ''}` };
-    if (draft) cells.text = `${opt}${cells.text}${optPick}`;
-    B.push({ row: true, html: row(k, `litem${l.optional && options ? ' lopt-row' : ''}`, `<td>${cells.text}</td>${show.quantity ? `<td class="r">${cells.qty}</td><td class="r">${cells.price}</td>` : ''}${vatColumn ? `<td class="r">${cells.rate}</td>` : ''}<td class="r">${n(amounts[k] ?? 0)}${tools(k)}</td>`) });
+    // On screen, the revenue account it books on (editable, empty: the contact's or the settings') and the code that follows from its rate (spec 4.4.3).
+    const vatCode = draft ? codeOf(l.vatRate, d.exemption, l.activity) : undefined;
+    const account = draft ? `<span class="edacc scr">${esc(ed.words.account ?? '')} ${editable(`l:${k}:account`, esc(l.account ?? ''), ed.revenueAccount ?? '')}${vatCode ? ` · <span class="mono">${esc(vatCode)}</span>` : ''}</span>` : '';
+    if (draft) cells.text = `${opt}${code}${cells.text}${optPick}${account}`;
+    else cells.text = `${code}${cells.text}`;
+    B.push({ row: true, html: row(k, `litem${sub}${l.optional && options ? ' lopt-row' : ''}`, `<td>${cells.text}</td>${show.quantity ? `<td class="r">${cells.qty}</td><td class="r">${cells.price}</td>` : ''}${vatColumn ? `<td class="r">${cells.rate}</td>` : ''}<td class="r">${n(amounts[k] ?? 0)}${tools(k)}</td>`) });
   });
   if (draft) {
-    const add: Array<[string, string]> = priceless ? [['addline', ed.words.addLine], ['addtext', ed.words.addText], ['addpagebreak', ed.words.addPageBreak]]
-      : [['addline', ed.words.addLine], ['addtext', ed.words.addText], ['addsubtotal', ed.words.addSubtotal], ['adddiscount', ed.words.addDiscount], ['addpagebreak', ed.words.addPageBreak]];
+    const article: Array<[string, string]> = ed.words.addArticle ? [['addarticle', ed.words.addArticle]] : [];
+    const group: Array<[string, string]> = ed.words.addGroup ? [['addgroup', ed.words.addGroup]] : [];
+    const add: Array<[string, string]> = priceless ? [['addline', ed.words.addLine], ...article, ['addtext', ed.words.addText], ...group, ['addpagebreak', ed.words.addPageBreak]]
+      : [['addline', ed.words.addLine], ...article, ['addtext', ed.words.addText], ...group, ['addsubtotal', ed.words.addSubtotal], ['adddiscount', ed.words.addDiscount], ['addpagebreak', ed.words.addPageBreak]];
     B.push({ html: `<div class="edadd scr">${add.map(([a, w]) => `<button type="button" data-ia="${a}">＋ ${esc(w)}</button>`).join('')}</div>` });
   }
   const rates = t.byRate.filter((r) => r.rate > 0).map((r) => `<div><span>${esc(L.vatOn(String(r.rate), n(r.net)))}</span><span>${n(r.vat)}</span></div>`).join('');

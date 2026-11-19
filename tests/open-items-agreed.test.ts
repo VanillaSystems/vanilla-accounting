@@ -49,7 +49,7 @@ const onReceivable = (entries: JournalEntry[], refs: readonly string[], date: st
 
 test('agreed basis: Offene Posten on 31.12. equals what each app invoice holds on the receivable, its event less its payments and credit notes up to that day', () => {
   setJurisdiction(loadJurisdiction(APP_ROOT, 'ch').jurisdiction, AGREED);
-  const book: InvoiceBook = { schema: 2, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 2, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   const a = issued(book, draft('a', '2026-11-02', 1000)); // 1081, unpaid
   const b = issued(book, draft('b', '2026-11-20', 2000)); // 2162: 1000 paid in December, the rest in January
   const c = issued(book, draft('c', '2026-12-01', 500)); // 540.50, a credit note of 108.10 in December

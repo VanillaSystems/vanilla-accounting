@@ -80,6 +80,11 @@ export function checkJurisdiction(j: Jurisdiction): ModuleProblem[] {
   for (const rate of j.invoicing.rates) {
     if (rate !== 0 && !named.some(([, m]) => m.revenue && m.rate === rate)) add('invoicing.yaml', 'rates', `no code in tax-codes.yaml books a sale at ${rate} %`);
   }
+  for (const kind of ['normal', 'reduced', 'accommodation'] as const) {
+    const list = j.invoicing.rateKinds?.[kind];
+    if (!Array.isArray(list) || !list.length) { add('invoicing.yaml', `rateKinds.${kind}`, 'a list of { rate, from }'); continue; }
+    for (const r of list) if (!j.invoicing.rates.includes(r.rate) || !/^\d{4}-\d{2}-\d{2}$/.test(String(r.from))) add('invoicing.yaml', `rateKinds.${kind}`, `${r.rate} from ${r.from}: a rate of rates with a day JJJJ-MM-TT`);
+  }
   for (const [why, box] of Object.entries(j.invoicing.exemptions)) {
     if (!named.some(([, m]) => m.deduction === box)) add('invoicing.yaml', `exemptions.${why}`, `no code in tax-codes.yaml deducts its turnover in Ziffer ${box}`);
   }

@@ -9,7 +9,7 @@ import type {
   Comment, CustomerFields, Draft, Envelope, Exemption, Invoice, InvoiceBook, InvoiceContent, InvoiceLayout,
   InvoiceLine, InvoicingSettings, Issued, IssuedTerms, ItemLine, PaymentAllocation, PaymentTerms, Prices, Reminder, ReplacedPdf, Sender, SentDocument, UnitDef, VatRate, WriteOff,
 } from './model.js';
-import { isBooked, isItem, type DocumentKind } from './model.js';
+import { groupMembers, isBooked, isItem, type DocumentKind } from './model.js';
 import { LEGACY_NUMBERING, nextNumberFor, type Numbering } from './numbering.js';
 import { docRef } from '../books/refs.js';
 import { chargesVat, invoiceActivities, invoiceRates, invoicing, vat, vatSetup } from '../engines/index.js';
@@ -72,7 +72,8 @@ export function apportion(total: number, weights: readonly number[]): number[] {
  * splits it over the groups of that total (splitKey) in proportion, to the Rappen, so the rates,
  * the VAT and the gross add up exactly; a minus percent or amount is a surcharge. On a credit note
  * (negative positions) a Rabatt reduces the credit the same way. A Zwischentotal prints the item
- * positions since the last one or the start; a text and a page break have no amount.
+ * positions since the last one or the start; a Gruppe the sum of its sub-positions, which are parts
+ * as any position (so a Rabatt below takes them in); a text and a page break have no amount.
  */
 export function priced(doc: Priced): { parts: Part[]; amounts: Array<number | undefined> } {
   const parts: Part[] = [];
@@ -102,6 +103,11 @@ export function priced(doc: Priced): { parts: Part[]; amounts: Array<number | un
       : apportion(-toRappen(l.amount ?? 0) * (Math.sign(sum) || 1), base.map((p) => p.rappen));
     base.forEach((p, k) => { if (shares[k]) parts.push({ ...p, rappen: shares[k] }); });
     return fromRappen(shares.reduce((s, x) => s + x, 0));
+  });
+  // A Gruppe prints the sum of its sub-positions (options left out); they are in the parts once, as any position.
+  doc.lines.forEach((l, k) => {
+    if (l.kind !== 'group') return;
+    amounts[k] = fromRappen(groupMembers(doc.lines, k).reduce((s, i) => { const m = doc.lines[i]; return s + (isItem(m) && !m.optional ? toRappen(amounts[i] ?? 0) : 0); }, 0));
   });
   return { parts, amounts };
 }
@@ -408,6 +414,7 @@ export class InvoiceRuleError extends Error {
 /**
  * Kontakte: `numberTaken` a customer number another contact holds, `archived` an archived contact picked,
  * `contactGone` a contact that is not there.
+ * Artikel: `codeTaken` a code another Artikel holds, `articleGone` an Artikel that is not there (an archived one is `archived`).
  * `unconfirmed`: issuing warns (warningsForIssue) and the request did not carry the person's «Trotzdem ausstellen».
  * «Zurück zum Entwurf» (backToDraftRefusal): `sent` the document went out (MWSTG Art. 27 Abs. 2), `settled`
  * something was received, credited or written off, `applied` a credit note a payment of its invoice took,
@@ -423,7 +430,8 @@ export class InvoiceRuleError extends Error {
 export type InvoiceRefusal = 'numberTaken' | 'archived' | 'contactGone' | 'incomplete' | 'unconfirmed' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid' | 'aboveOpen' | 'surplus' | 'beforeInvoice'
   | 'sent' | 'settled' | 'applied' | 'closed' | 'numbered' | 'account' | 'credited'
   | 'refTaken' | 'numberFormat' | 'convert' | 'nothingTicked' | 'expired' | 'declined' | 'overOpen' | 'sentVersion' | 'orderDelivered' | 'orderInvoiced' | 'notReopenable' | 'notQuote'
-  | 'referenceTaken' | 'deliveryFromOrder' | 'orderDrafts' | 'sourceCancelled';
+  | 'referenceTaken' | 'deliveryFromOrder' | 'orderDrafts' | 'sourceCancelled'
+  | 'codeTaken' | 'articleGone';
 
 /** A kind's name in the German messages of a refusal (the UI words its own, src/app/i18n). */
 export const KIND_WORD: Record<DocumentKind, string> = { quote: 'Angebot', 'sales-order': 'Auftrag', 'delivery-note': 'Lieferschein', invoice: 'Rechnung', 'credit-note': 'Gutschrift' };

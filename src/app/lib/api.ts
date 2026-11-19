@@ -34,7 +34,7 @@ import { agreedBasis, baseCurrency, vatSetup } from '../../engines/index.js';
 import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
 import type { ImportChoice, ImportMapping, ImportPreview } from '../../invoices/contact-import.js';
-import type { Comment, Contact, ContactFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, WriteOff, WriteOffReason } from '../../invoices/model.js';
+import type { Article, ArticleFields, Comment, Contact, ContactFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, WriteOff, WriteOffReason } from '../../invoices/model.js';
 import type { AllocationItem, AllocationPart, PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch } from '../../invoices/service.js';
 import type { InvoiceRefusal, Missing } from '../../invoices/rules.js';
@@ -386,6 +386,7 @@ export function errorText(e: unknown): string {
     case 'unitWord': return t('error.unitWord', { id: b.params.id, language: b.params.language.toUpperCase() });
     case 'ibanOnInvoices': return t('error.ibanOnInvoices', b.params);
     case 'unknownCustomer': return t('error.unknownCustomer');
+    case 'unknownArticle': return t('error.unknownArticle');
     case 'amountZero': return t('error.amountZero');
     case 'noAccount': return t('error.noAccount');
     case 'sameAccount': return t('error.sameAccount', b.params);
@@ -480,7 +481,7 @@ export type { JournalEntryInput };
 export type ManualTransactionInput = { date: string; description: string; amount: number; currency?: string; direction?: 'DBIT' | 'CRDT'; account?: string; role?: MoneyRole; label?: string };
 export type YearEndEntryInput = Pick<JournalEntry, 'date' | 'accountDebit' | 'accountCredit' | 'amount' | 'description'> & { vatCode?: string; template?: string };
 export type YearCloseView = YearClose & { opening?: Opening; payroll?: PayrollYearEnd; payrollError?: string };
-export interface InvoiceList { today: string; invoices: Invoice[]; contacts: Contact[]; sent: SentDocument[] }
+export interface InvoiceList { today: string; invoices: Invoice[]; contacts: Contact[]; articles: Article[]; sent: SentDocument[] }
 /** A contact with its business file (named, or proposed by code) and the customers' business files a person may pick. */
 export interface ContactDetail {
   contact: Contact;

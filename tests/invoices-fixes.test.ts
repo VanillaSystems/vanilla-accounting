@@ -82,7 +82,7 @@ test('the Save dialog: cancelled, nothing written and nothing to record; saved, 
 
 test('an invoice of an earlier period still open is listed in the current one, and counted as open', () => {
   const book = invoiceBookOf(JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as Record<string, unknown>, 'invoices.json');
-  const d = { today: '2026-12-01', invoices: book.invoices, contacts: book.contacts, sent: book.sent };
+  const d = { today: '2026-12-01', invoices: book.invoices, contacts: book.contacts, articles: [], sent: book.sent };
   const q4 = docRows(d, 'invoice', parsePeriod('2026-Q4', '2026-12-01')!, undefined, '2026-12-01');
   const earlier = q4.filter((r) => r.inv.date < '2026-10-01');
   assert.ok(earlier.length > 0, 'the demo has open invoices dated before Q4');
@@ -131,7 +131,7 @@ test('«CHF 500 inkl. MWST» stays 500.00: the VAT is derived from the gross, th
   assert.deepEqual(sheetEdit(d, 'l:0:vatRate', '2.6', ctx), { change: { lines: [{ ...cn.lines[0], vatRate: 2.6 }] } });
   assert.equal(sheetEdit(d, 'l:0:vatRate', '8.1', ctx), undefined);
   assert.deepEqual(sheetEdit(draft(), 'l:0:vatRate', 'incl:8.1', ctx), { refused: 'value' }, 'no rate «incl.» per line any more');
-  const book: InvoiceBook = { schema: 3, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 3, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   assert.deepEqual(parseDraftPatch({ lines: cn.lines, prices: 'gross' }, book), { clear: [], lines: cn.lines, prices: 'gross' }, 'the API keeps the document priced with its VAT in it');
 });
 

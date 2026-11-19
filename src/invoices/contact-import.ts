@@ -1,17 +1,18 @@
 /**
  * Contacts from a table (spec 4.4.5, 4.7: the switch from another tool). The app reads any CSV with
  * a mapping of its columns to the contact's fields; code proposes the mapping from the header, the
- * person may change it. A preview names each row's problems and the rows that look like a contact
- * already there (same name or same UID) or like an earlier row: those are proposed as the same
- * contact and not imported again unless the person says `new`. Pure; src/invoices/service.ts
- * addContacts saves what it returns.
+ * person may change it (table-import.ts, shared with the Artikel import). A preview names each row's
+ * problems and the rows that look like a contact already there (same name or same UID) or like an
+ * earlier row: those are proposed as the same contact and not imported again unless the person says
+ * `new`. Pure; src/invoices/service.ts addContacts saves what it returns.
  */
-import { csvLines } from '../core/files.js';
 import { countryOf } from '../core/countries.js';
 import { vatIdError } from '../workspace/uid.js';
 import { INVOICE_LANGUAGES, type Contact, type ContactFields, type InvoiceLanguage } from './model.js';
 import { languageFor } from './contacts.js';
-import { InvoiceRuleError } from './rules.js';
+import { normWord as norm, proposeColumns, readTable, type ImportChoice, type Mapping } from './table-import.js';
+
+export { IMPORT_LIMIT, type ImportChoice } from './table-import.js';
 
 /** The fields a column may fill. */
 export const IMPORT_FIELDS = [
@@ -20,10 +21,7 @@ export const IMPORT_FIELDS = [
 ] as const;
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 /** Field → the column's header text, as the person mapped it. */
-export type ImportMapping = Partial<Record<ImportField, string>>;
-
-/** The most rows one import reads; the preview names those it leaves out. */
-export const IMPORT_LIMIT = 2000;
+export type ImportMapping = Mapping<ImportField>;
 
 /**
  * What is wrong with a row. `name`, `uid`: the row is not imported. The others are imported all the
@@ -34,9 +32,6 @@ export const IMPORT_LIMIT = 2000;
 export const IMPORT_PROBLEMS = ['name', 'uid', 'address', 'country', 'language', 'email', 'personEmail', 'paymentDays', 'number'] as const;
 export type ImportProblem = (typeof IMPORT_PROBLEMS)[number];
 const BLOCKING: readonly ImportProblem[] = ['name', 'uid'];
-
-/** `new`: imported; `same`: the contact it matches stands, not imported again; `skip`: left out. */
-export type ImportChoice = 'new' | 'same' | 'skip';
 
 export interface ImportRow {
   /** The line of the file the row starts on, the header's being 1 (empty lines and lines inside a quoted cell count). */
@@ -82,19 +77,8 @@ const HEADERS: Record<ImportField, string[]> = {
   notes: ['notizen', 'bemerkungen', 'notes', 'remarks', 'note', 'remarques', 'osservazioni'],
 };
 
-const norm = (s: string) => s.toLowerCase().normalize('NFC').replace(/[\s_\-:./()]+/g, '');
-
 /** The mapping code proposes for a header: each field to the first column whose header names it. */
-export function proposeMapping(header: readonly string[]): ImportMapping {
-  const out: ImportMapping = {};
-  const used = new Set<string>();
-  for (const f of IMPORT_FIELDS) {
-    const words = HEADERS[f].map(norm);
-    const col = header.find((h) => !used.has(h) && words.includes(norm(h)));
-    if (col) { out[f] = col; used.add(col); }
-  }
-  return out;
-}
+export const proposeMapping = (header: readonly string[]): ImportMapping => proposeColumns(header, IMPORT_FIELDS, HEADERS);
 
 const LANGUAGE_WORDS: Record<string, InvoiceLanguage> = {
   de: 'de', deutsch: 'de', german: 'de', allemand: 'de', tedesco: 'de',
@@ -171,12 +155,7 @@ const uidKey = (s: string | undefined) => (s && /^CHE/i.test(s) ? s.replace(/\D/
 
 /** Pure. The rows of `csv` read with `mapping` (absent: the proposed one), each with its problems, its duplicate and its choice. */
 export function previewContactImport(csv: string, mapping: ImportMapping | undefined, existing: readonly Contact[]): ImportPreview {
-  const [first, ...all] = csvLines(csv);
-  const cols = (first?.cells ?? []).map((h) => h.trim());
-  const map = mapping ?? proposeMapping(cols);
-  const unknown = Object.entries(map).filter(([f, col]) => !IMPORT_FIELDS.includes(f as ImportField) || (col !== undefined && !cols.includes(col)));
-  if (unknown.length) throw new InvoiceRuleError('incomplete', `Die Zuordnung nennt, was die Tabelle nicht hat: ${unknown.map(([f, c]) => `${f} → ${c}`).join(', ')}.`);
-  const data = all.slice(0, IMPORT_LIMIT);
+  const table = readTable(csv, mapping, IMPORT_FIELDS, HEADERS);
   const byName = new Map<string, { contactId: string; name: string } | { line: number; name: string }>();
   const byUid = new Map<string, { contactId: string; name: string } | { line: number; name: string }>();
   for (const c of existing) {
@@ -184,8 +163,7 @@ export function previewContactImport(csv: string, mapping: ImportMapping | undef
     const u = uidKey(c.vatId);
     if (u) byUid.set(u, { contactId: c.id, name: c.name });
   }
-  const rows = data.map(({ cells: r, line }): ImportRow => {
-    const cell = (f: ImportField) => { const col = map[f]; const at = col === undefined ? -1 : cols.indexOf(col); return at < 0 ? '' : (r[at] ?? '').trim(); };
+  const rows = table.rows.map(({ cell, line }): ImportRow => {
     const { contact, problems } = rowContact(cell);
     if (!contact || problems.some((p) => BLOCKING.includes(p))) return { line, ...(contact ? { contact } : {}), problems, choice: 'skip' };
     const u = uidKey(contact.vatId);
@@ -198,7 +176,7 @@ export function previewContactImport(csv: string, mapping: ImportMapping | undef
     }
     return { line, contact, problems, ...(same ? { same } : {}), choice: same ? 'same' : 'new' };
   });
-  return { header: cols, mapping: map, rows, leftOut: Math.max(0, all.length - IMPORT_LIMIT) };
+  return { header: table.header, mapping: table.mapping, rows, leftOut: table.leftOut };
 }
 
 /** Pure. The contacts to add: each row the preview reads, as the person's choice for its line says (else the proposed one). */

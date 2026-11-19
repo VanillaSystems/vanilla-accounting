@@ -120,7 +120,7 @@ export async function recordChanges(ws: Ws): Promise<RecordChange[]> {
   const out: RecordChange[] = [];
 
   const invPath = ws.paths.invoices;
-  const empty: InvoiceBook = { schema: 1, contacts: [], invoices: [], sent: [] };
+  const empty: InvoiceBook = { schema: 1, contacts: [], invoices: [], articles: [], sent: [] };
   // Both brought to today's schema: the saved one may be older (customers before contacts).
   const now = invoiceBookOf(parseJson<Record<string, unknown>>(read(invPath), { ...empty }), invPath);
   const saved = invoiceBookOf(parseJson<Record<string, unknown>>(await savedText(invPath), { ...empty }), invPath);

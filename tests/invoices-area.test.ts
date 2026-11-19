@@ -28,7 +28,7 @@ import { invoiceBookOf } from '../src/invoices/store.js';
 
 const TODAY = '2026-10-20';
 const book = invoiceBookOf(JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as Record<string, unknown>, 'invoices.json');
-const d = { today: TODAY, invoices: book.invoices, contacts: book.contacts, sent: book.sent };
+const d = { today: TODAY, invoices: book.invoices, contacts: book.contacts, articles: [], sent: book.sent };
 const year = parsePeriod('2026', TODAY)!;
 const no = (r: { id: string }) => r.id.startsWith('draft-') ? 'draft' : r.id;
 
@@ -87,7 +87,7 @@ test('P1.11: eight issued Rechnungen, five sent by mail, one downloaded, two not
     ...invs.slice(0, 5).map((inv, i) => sentDoc(`m${i}`, inv, { sentAt: `2026-10-1${i}T09:0${i}:00Z`, to: `k${i}@kunde.example` })),
     sentDoc('dl', invs[5], { sentAt: '2026-10-16T14:00:00Z', to: 'download', channel: 'download', messageId: undefined }),
   ];
-  const fx = { today: '2026-10-20', invoices: invs, contacts: [], sent };
+  const fx = { today: '2026-10-20', invoices: invs, contacts: [], articles: [], sent };
   const rows = docRows(fx, 'invoice', parsePeriod('2026-Q4', '2026-10-20')!, undefined, '2026-10-20');
   const unsent = tabCounts(rows, 'invoice').find((c) => c.tab === 'unsent')!;
   assert.deepEqual([unsent.n, unsent.sums], [2, [{ currency: 'CHF', gross: 1500, open: 1500 }]], '700 + 800');
@@ -144,7 +144,7 @@ test('P1.10 on harder cases: a part paid before and the rest after 31.12., a Gut
   const cn = issued('n', '2026-003', { kind: 'credit-note', creditFor: 'b', date: '2026-12-15', lines: [{ text: 'Gutschrift', quantity: 1, price: -200, vatRate: 0 }] });
   const late = issued('c', '2026-004', { date: '2026-12-20', cancelled: { date: '2027-01-03', reason: 'x' } });
   const next = issued('e', '2027-001', { date: '2027-01-02' });
-  saveInvoices(ws, { schema: 2, contacts: [], invoices: [a, b, cn, late, next], sent: [] });
+  saveInvoices(ws, { schema: 2, contacts: [], invoices: [a, b, cn, late, next], articles: [], sent: [] });
   const proposal = receivablesOf(ws, '2026', ratesOf(), loadBooks(ws));
   const items = openItems([a, b, cn, late, next], '2026-12-31');
   assert.deepEqual(items.map((x) => [x.inv.number, x.open]), [['2026-001', 834.55], ['2026-002', 800], ['2026-004', 1000]]);

@@ -4,7 +4,7 @@
  * saves. Pure: the sheet reports, Detail.tsx saves or says why not.
  */
 import { parseSwissDate } from '../../../accounting/periods.js';
-import { DEFAULT_UNITS, isItem, type Contact, type Draft, type InvoiceLine, type UnitDef } from '../../../invoices/model.js';
+import { DEFAULT_UNITS, isItem, withGroups, type Contact, type Draft, type InvoiceLine, type UnitDef } from '../../../invoices/model.js';
 import type { Missing } from '../../../invoices/rules.js';
 import { invoicing } from '../../../engines/index.js';
 import type { DraftChange } from '../../lib/api.js';
@@ -70,7 +70,7 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { contact
     if (title) line.style = 'title'; else delete line.style;
     return changed({ lines });
   }
-  if (line.kind === 'subtotal') return undefined;
+  if (line.kind === 'subtotal' || line.kind === 'group') return undefined;
   if (line.kind === 'discount') {
     // «3» is 3 % or 3 in the document's currency by the mode beside it; empty clears the value (the check before issue names it).
     if (field === 'dmode') {
@@ -126,6 +126,21 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { contact
     if (on) line.optional = true; else delete line.optional;
     return changed({ lines });
   }
+  if (field === 'code') {
+    // An Artikel position's code, as printed: the person's own once changed.
+    const v = value.trim();
+    if (v === (line.code ?? '')) return undefined;
+    if (v) line.code = v; else delete line.code;
+    return changed({ lines });
+  }
+  if (field === 'account') {
+    // The revenue account of the position (spec 4.4.3 «Account and code by code»): four digits, empty for the contact's or the settings'.
+    const v = value.trim();
+    if (v && !/^\d{4}$/.test(v)) return { refused: 'value' };
+    if (v === (line.account ?? '')) return undefined;
+    if (v) line.account = v; else delete line.account;
+    return changed({ lines });
+  }
   if (field === 'activity') {
     // The net rate of a firm with two (#504): 1 is the default and not kept.
     if (value !== '1' && value !== '2') return { refused: 'value' };
@@ -136,13 +151,25 @@ export function sheetEdit(inv: Draft, key: string, value: string, ctx: { contact
   return undefined;
 }
 
-/** The positions with the one at `from` moved to `to` (drag, or Alt+↑/↓); undefined when nothing moves. */
+/**
+ * The positions with the one at `from` moved to `to` (drag, or Alt+↑/↓); undefined when nothing
+ * moves. A Gruppe moves with its sub-positions. A priced position joins the group it lands in (right
+ * below its title, or between two of its sub-positions) and leaves the one it is moved out of.
+ */
 export function moveLine(lines: readonly InvoiceLine[], from: number, to: number): InvoiceLine[] | undefined {
   if (from === to || from < 0 || to < 0 || from >= lines.length || to >= lines.length) return undefined;
   const out = [...lines];
-  const [moved] = out.splice(from, 1);
-  out.splice(to, 0, moved);
-  return out;
+  const size = lines[from].kind === 'group' ? 1 + lines.slice(from + 1).findIndex((l) => !(isItem(l) && l.inGroup)) : 1;
+  const block = out.splice(from, size > 0 ? size : lines.length - from);
+  const at = Math.min(to > from ? to - block.length + 1 : to, out.length);
+  if (block.length === 1 && isItem(block[0])) {
+    const { inGroup: _, ...rest } = block[0];
+    const above = out[at - 1], below = out[at];
+    const joins = above?.kind === 'group' || (!!above && isItem(above) && !!above.inGroup && !!below && isItem(below) && !!below.inGroup);
+    block[0] = joins ? { ...rest, inGroup: true } : rest;
+  }
+  out.splice(at, 0, ...block);
+  return withGroups(out);
 }
 
 /**
@@ -157,7 +184,11 @@ export function insertLine(lines: readonly InvoiceLine[], added: InvoiceLine, af
   const untouched = lines.length === 1 && isItem(first) && !first.price && (!first.text.trim() || first.text === newLine);
   if (after < 0 && untouched) return { lines: [added], at: 0 };
   const at = after >= 0 && after < lines.length ? after + 1 : lines.length;
-  return { lines: [...lines.slice(0, at), added, ...lines.slice(at)], at };
+  // A priced position added in a Gruppe (after its title or one of its sub-positions) is one of its sub-positions.
+  const here = lines[at - 1];
+  const joins = isItem(added) && !!here && (here.kind === 'group' || (isItem(here) && !!here.inGroup));
+  const put = joins ? { ...added, inGroup: true as const } : added;
+  return { lines: withGroups([...lines.slice(0, at), put, ...lines.slice(at)]), at };
 }
 
 /** The positions priced `prices` for the whole document: the legacy flag of a line goes (spec 4.4.3, prices per document). */

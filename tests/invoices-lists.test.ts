@@ -85,6 +85,6 @@ test('a Rechnung closed by a loss reads «Ausgebucht» and stands in «Bezahlt»
   const fee = issued('b', '2026-002', { lines: [{ text: 'x', quantity: 1, price: 403.5, vatRate: 0 }], payments: [pay], writeOffs: [{ id: 'wo-1', date: '2026-09-22', amount: 3.5, reason: 'fee', by: 'person' }] });
   assert.equal(invoiceStatus(loss, [loss]), 'written-off');
   assert.equal(invoiceStatus(fee, [fee]), 'paid');
-  const rows = docRows({ today: '2026-11-20', invoices: [loss, fee], contacts: [], sent: [] }, 'invoice', parsePeriod('2026', '2026-11-20')!, undefined, '2026-11-20');
+  const rows = docRows({ today: '2026-11-20', invoices: [loss, fee], contacts: [], articles: [], sent: [] }, 'invoice', parsePeriod('2026', '2026-11-20')!, undefined, '2026-11-20');
   assert.deepEqual(rows.filter((r) => inTab(r, 'paid')).map((r) => [r.id, r.status]), [['2026-001', 'written-off'], ['2026-002', 'paid']]);
 });

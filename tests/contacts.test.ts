@@ -305,7 +305,7 @@ test('the import reads a Windows-1252 file as written, counts the file\'s lines 
 test('a payment matches a person by name without the salutation; a refund that only says «Frau» matches no one', () => {
   const lea = { name: 'Frau Lea Frei', address: { postcode: '9500', town: 'Wil', country: 'CH' }, language: 'de' as const, paymentTermsDays: 30 };
   const inv = issued('in_a', '2026-010', { customer: lea, lines: [{ text: 'Beratung', quantity: 1, price: 1000, vatRate: 0 }], prices: 'net', date: '2026-10-01' });
-  const book = { schema: INVOICES_SCHEMA, contacts: [], invoices: [inv], sent: [] } as InvoiceBook;
+  const book = { schema: INVOICES_SCHEMA, contacts: [], invoices: [inv], articles: [], sent: [] } as InvoiceBook;
   const tx = (ref: string, direction: 'CRDT' | 'DBIT', counterparty: string, date = '2026-10-20') => ({ ref, date, amount: 1000, currency: 'CHF', direction, description: 'Zahlung', counterparty, account: '1020' });
   const books = { transactions: [tx('T1', 'CRDT', 'LEA FREI')], journalEntries: [], receipts: [], mappings: [], bankStatements: [], config: {} } as unknown as Parameters<typeof paymentProposals>[0];
   assert.deepEqual(paymentProposals(books, book).map((x) => [x.transactionRef, x.nameMatches]), [['T1', true]]);

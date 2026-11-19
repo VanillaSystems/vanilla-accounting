@@ -47,7 +47,7 @@ const ctx: PaymentContext = {
 };
 const acc = (): AccountContext => ({ revenueAccount: '3200', isRevenue: (a) => chart().typeOf(a) === 'revenue', base: 'CHF' });
 
-const newBook = (): InvoiceBook => ({ schema: 3, contacts: [asContact(customer)], invoices: [], sent: [] });
+const newBook = (): InvoiceBook => ({ schema: 3, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] });
 const books = (transactions: BankTransaction[] = [], closedThrough = '2026-06-30'): Books => ({ receipts: [], transactions, mappings: [], bankStatements: [], journalEntries: [], config: { closedThrough } });
 const draft = (id: string, date: string, lines: Draft['lines'], over: Partial<Draft> = {}): Draft => ({
   id, createdAt: `${date}T08:00:00Z`, origin: 'manual', deleted: false, status: 'draft', kind: 'invoice', customerId: 'cu_1', date, currency: 'CHF', language: 'de', comments: [], lines, ...over,

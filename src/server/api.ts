@@ -60,6 +60,7 @@ const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
   sent: 409, settled: 409, applied: 409, closed: 403, numbered: 409, account: 400, credited: 409,
   refTaken: 409, numberFormat: 400, convert: 400, nothingTicked: 400, expired: 409, declined: 409, overOpen: 409, sentVersion: 409, orderDelivered: 409, orderInvoiced: 409, notReopenable: 409, notQuote: 409,
   referenceTaken: 409, deliveryFromOrder: 400, orderDrafts: 409, sourceCancelled: 409,
+  codeTaken: 409, articleGone: 404,
 };
 
 // From the network only the phone's paths answer (src/server/phone.ts), the API ones only with the
@@ -74,6 +75,7 @@ app.use(phoneGate);
 /** A contacts table of IMPORT_LIMIT rows, sent as text inside JSON: room for wide rows, said when hit. */
 const IMPORT_BODY = '8mb';
 app.use('/api/contacts/import', express.json({ limit: IMPORT_BODY }));
+app.use('/api/articles/import', express.json({ limit: IMPORT_BODY }));
 app.use(express.json());
 
 // Read-only mode (READONLY=1): block all mutations so an auditor can navigate the
@@ -138,7 +140,7 @@ app.use((err: unknown, req: express.Request, res: express.Response, _next: expre
   if (tariffUploadRefusal(err, req, res)) return;
   // Any other body over its limit: the limit is told, never a bare 413.
   if ((err as { type?: string }).type === 'entity.too.large') {
-    if (req.path.startsWith('/api/contacts/import')) { res.status(413).json({ error: `Die Tabelle ist grösser als 8 MB: höchstens 8 MB und ${IMPORT_LIMIT} Zeilen pro Import.`, code: 'importTooLarge', params: { limit: '8 MB', rows: IMPORT_LIMIT } } satisfies ApiErrorBody); return; }
+    if (req.path.startsWith('/api/contacts/import') || req.path.startsWith('/api/articles/import')) { res.status(413).json({ error: `Die Tabelle ist grösser als 8 MB: höchstens 8 MB und ${IMPORT_LIMIT} Zeilen pro Import.`, code: 'importTooLarge', params: { limit: '8 MB', rows: IMPORT_LIMIT } } satisfies ApiErrorBody); return; }
     const limit = `${Math.round(((err as { limit?: number }).limit ?? 102400) / 1024)} kB`;
     res.status(413).json({ error: `Die Anfrage ist grösser als ${limit}: höchstens ${limit} auf einmal.`, code: 'bodyTooLarge', params: { limit } } satisfies ApiErrorBody); return;
   }

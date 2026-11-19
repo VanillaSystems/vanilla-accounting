@@ -39,7 +39,7 @@ const ctx: PaymentContext = {
 /** One invoice of 1000 net at 8.1 % (1081), paid by the read movement `P` before the bank's file came with `B` for `bankAmount`. */
 function paidByRead(setup: VatSetup, bankAmount: number) {
   setJurisdiction(ch, setup);
-  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], sent: [] };
+  const book: InvoiceBook = { schema: 1, contacts: [asContact(customer)], invoices: [], articles: [], sent: [] };
   const inv = { ...issue({ id: 'i1', createdAt: '2026-10-01T08:00:00Z', origin: 'manual', deleted: false, status: 'draft', kind: 'invoice', customerId: 'cu_1', date: '2026-10-01', currency: 'CHF', language: 'de', comments: [], lines: [{ text: 'Beratung', quantity: 1, unit: 'flat', price: 1000, vatRate: 8.1 }] }, { customer, sender, layout: DEFAULT_LAYOUT, invoices: [], now: '2026-10-01T10:00:00Z' }), pdf: { file: 'invoices/i1.pdf', sha256: 'i1' } } as Issued;
   book.invoices.push(inv);
   const tx = (ref: string, date: string, amount: number, o: Partial<BankTransaction> = {}): BankTransaction =>
