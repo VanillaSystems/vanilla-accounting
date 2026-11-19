@@ -216,7 +216,7 @@ test('the payment term and the invoice texts change at once: for every customer 
   const was = terms();
   const made = await s.answer([{ kind: 'invoicing', set: { paymentTermsDays: 10, texts: { de: { intro: 'Grüezi mitenand' }, fr: { closing: null } } } }]);
   assert.equal(made.refused, undefined, made.refused?.message);
-  assert.equal(made.made[0].note?.customers, 7, 'the demo\'s seven customers of 30 days; the hotel has 20');
+  assert.equal(made.made[0].note?.customers, 8, 'the demo\'s eight contacts of 30 days (the café chain among them); the hotel has 20');
   assert.match(s.manifest(), /paymentTermsDays: 10/);
   assert.match(s.manifest(), /intro: Grüezi mitenand/);
   assert.doesNotMatch(s.manifest(), /Payable dans les/);

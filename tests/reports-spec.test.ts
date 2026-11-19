@@ -136,7 +136,8 @@ test('payments are summed per currency, never EUR into CHF; a with-receipt filte
 
 test('invoices: the issued ones of the period, their totals the invoices\' own; drafts and October\'s left out', () => {
   const r = run({ title: 'Rechnungen', period: '2026-Q3', sections: [{ source: 'invoices', group: 'counterparty' }] });
-  const issued = invoices.filter((i) => i.status === 'issued' && i.date <= Q3.to && i.date >= Q3.from);
+  // Rechnungen and Gutschriften only: an Angebot, Auftrag or Lieferschein is no booked document.
+  const issued = invoices.filter((i) => i.status === 'issued' && (i.kind === 'invoice' || i.kind === 'credit-note') && i.date <= Q3.to && i.date >= Q3.from);
   assert.equal(r.count, issued.length);
   assert.deepEqual(r.totals.map((t) => t.currency), ['CHF', 'EUR'], 'the EUR invoice apart, the credit note in CHF with its minus');
   for (const t of r.totals) {
