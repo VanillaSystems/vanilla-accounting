@@ -14,8 +14,10 @@ import { startApi } from './support/api-server.js';
 import { testIban } from './support/iban.js';
 import { APP_FOLDER, APP_ROOT } from '../src/workspace/workspace.js';
 import type { Index } from '../src/types/index.js';
+import { salonWithoutIban } from './support/workspace.js';
 
-const COIFFEUR = join(APP_ROOT, 'demo-coiffeur', APP_FOLDER);
+/** The hair salon's manifest without IBANs and invoicing (tests/support/workspace.ts). */
+const COIFFEUR = salonWithoutIban();
 /** Made-up IBANs with valid check digits: the coiffeur demo's account and another one. */
 const SALON = 'CH8180808000000000004';
 const OTHER = testIban('80808000000000005');

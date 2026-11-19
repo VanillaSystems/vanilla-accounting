@@ -5,8 +5,8 @@
 {"account":"1021","bank":"Raiffeisen","currency":"CHF","date":"2026-05-31","amount":55101.23,"source":"pdf","sourceFile":"Kontoauszug 01.05.2026 - 31.05.2026 - CH6580808000000000001 - 2026-05-31.pdf"}
 {"account":"1021","bank":"Raiffeisen","currency":"CHF","date":"2026-06-30","amount":63846.48,"source":"pdf","sourceFile":"Kontoauszug 01.06.2026 - 30.06.2026 - CH6580808000000000001 - 2026-06-30.pdf"}
 {"account":"1021","bank":"Raiffeisen","currency":"CHF","date":"2026-07-31","amount":71100.2,"source":"pdf","sourceFile":"Kontoauszug 01.07.2026 - 31.07.2026 - CH6580808000000000001 - 2026-07-31.pdf"}
-{"account":"1021","bank":"Raiffeisen","currency":"CHF","date":"2026-08-31","amount":80223.36,"source":"pdf","sourceFile":"Kontoauszug 01.08.2026 - 31.08.2026 - CH6580808000000000001 - 2026-08-31.pdf"}
-{"account":"1021","bank":"Raiffeisen","currency":"CHF","date":"2026-09-30","amount":88252.44,"source":"pdf","sourceFile":"Kontoauszug 01.09.2026 - 30.09.2026 - CH6580808000000000001 - 2026-09-30.pdf"}
+{"account":"1021","bank":"Raiffeisen","currency":"CHF","date":"2026-08-31","amount":82019.31,"source":"pdf","sourceFile":"Kontoauszug 01.08.2026 - 31.08.2026 - CH6580808000000000001 - 2026-08-31.pdf"}
+{"account":"1021","bank":"Raiffeisen","currency":"CHF","date":"2026-09-30","amount":94514.43,"source":"pdf","sourceFile":"Kontoauszug 01.09.2026 - 30.09.2026 - CH6580808000000000001 - 2026-09-30.pdf"}
 {"account":"1023","bank":"Wise","currency":"EUR","date":"2026-01-31","amount":3961,"source":"pdf","sourceFile":"statement_10000001_EUR_2026-01-01_2026-01-31.pdf"}
 {"account":"1023","bank":"Wise","currency":"EUR","date":"2026-02-28","amount":2682,"source":"pdf","sourceFile":"statement_10000001_EUR_2026-02-01_2026-02-28.pdf"}
 {"account":"1023","bank":"Wise","currency":"EUR","date":"2026-03-31","amount":2643,"source":"pdf","sourceFile":"statement_10000001_EUR_2026-03-01_2026-03-31.pdf"}

@@ -6,7 +6,7 @@
 import './support/jurisdiction.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendFileSync, copyFileSync, cpSync, mkdirSync } from 'node:fs';
+import { appendFileSync, copyFileSync, cpSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Index } from '../src/types/index.js';
 import type { CommandResult, RunDetail } from '../src/workflows/model.js';
@@ -16,8 +16,15 @@ import { DEMO_ROOT } from './support/workspace.js';
 
 const STUB = join(process.cwd(), 'tests/support/stub-bin');
 const SEPT = '20260910-gruenkaffee-muster-rechnung-2026-09.pdf';
+/** The payment the September invoice is linked to in the demo (its ref follows the demo's other payments). */
+const PAID = (() => {
+  const dir = join(DEMO_ROOT, 'transactional-data/2026/books');
+  const lines = (f: string) => readFileSync(join(dir, f), 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l) as Record<string, string>);
+  const id = lines('receipts.jsonl').find((r) => r.filename === SEPT)!.id;
+  return lines('mappings.jsonl').find((m) => m.receiptId === id)!.transactionRef;
+})();
 // The model reads the copy as what it is: the September invoice, paid by the payment its original pays.
-const ANSWER = { suggestedFilename: '20260910-gruenkaffee-kopie.pdf', date: '2026-09-10', description: 'Grünkaffee Muster', amount: 2888.3, currency: 'CHF', confidence: 0.95, matchedTransactionRefs: ['90000000060'] };
+const ANSWER = { suggestedFilename: '20260910-gruenkaffee-kopie.pdf', date: '2026-09-10', description: 'Grünkaffee Muster', amount: 2888.3, currency: 'CHF', confidence: 0.95, matchedTransactionRefs: [PAID] };
 
 test('a copy read by the run gets no link and no booking; Belege shows it as a possible duplicate of the original', async () => {
   const api = await startApi('demo', { PATH: `${STUB}:${process.env.PATH}`, CLAUDE_STUB_ANSWER: JSON.stringify(ANSWER) });
@@ -38,7 +45,7 @@ test('a copy read by the run gets no link and no booking; Belege shows it as a p
     const original = books.receipts.find((r) => r.filename === SEPT)!;
     assert.ok(copy, 'read, named and archived');
     assert.deepEqual(books.mappings.filter((m) => m.receiptId === copy.id), [], 'no second link');
-    assert.deepEqual(books.mappings.filter((m) => m.transactionRef === '90000000060').map((m) => m.receiptId), [original.id], 'the payment keeps its one receipt');
+    assert.deepEqual(books.mappings.filter((m) => m.transactionRef === PAID).map((m) => m.receiptId), [original.id], 'the payment keeps its one receipt');
     assert.deepEqual(ledgerOf(books, '2026-07-01').byId.get(copy.id)?.twin, { of: original.id, why: 'same-text', relation: 'duplicate' });
   } finally {
     await api.stop();

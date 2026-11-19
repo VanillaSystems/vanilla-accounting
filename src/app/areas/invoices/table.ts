@@ -81,6 +81,8 @@ export function inTab(r: DocRow, tab: Tab | undefined): boolean {
   if (!tab || tab === 'all') return true;
   if (tab === 'unsent') return r.unsent;
   if (tab === 'overdue') return r.overdue > 0;
+  // Ausgebucht is closed: it stands with Bezahlt (decision 56).
+  if (tab === 'paid') return r.status === 'paid' || r.status === 'written-off';
   return r.status === tab;
 }
 
@@ -129,7 +131,7 @@ export type SortKey = (typeof SORT_KEYS)[number];
 export interface Sort { key: SortKey; dir: 1 | -1 }
 export const DEFAULT_SORT: Sort = { key: 'date', dir: -1 };
 
-const STATUS_ORDER = ['draft', 'open', 'partly-paid', 'partly', 'paid', 'settled', 'cancelled'];
+const STATUS_ORDER = ['draft', 'open', 'partly-paid', 'partly', 'paid', 'written-off', 'settled', 'cancelled'];
 const text = (a: string, b: string) => a.localeCompare(b, 'de', { numeric: true, sensitivity: 'base' });
 
 function compare(a: DocRow, b: DocRow, key: SortKey): number {

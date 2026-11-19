@@ -25,6 +25,16 @@ Two markers flag an entry you must read before you update:
   filed quarter a reclassification without a VAT code is booked in the open period
   (`RE-<number>-kk-<k>`, `GS-<number>-kk-<k>`, a new ref pattern, no books format change). The
   invoice's credit notes follow it. The dialog shows what will be booked before it is.
+- The demos show every state of a sales invoice. The coffee roaster (`demo/`) has invoices paid
+  with Skonto, partly paid, short by the customer's bank fee and written off as fees, paid in cash
+  at the door, entered by hand and confirmed by the bank statement, one payment for two invoices, a
+  credit note applied to its invoice, an overdue one with its first reminder, a cancelled one, two
+  not sent yet and a draft with titles, subtotals and a discount; named payment terms, one with
+  Skonto, and a cash box. The consultant invoices from July by the hour, one client in EUR abroad;
+  the joinery invoices with prices including VAT, a discount and a position of its second net rate;
+  the hair salon writes one invoice without VAT for a wedding. **⚠ figures** (the demos only): the
+  coffee roaster's Q3 and Q4, the joinery's H2 and the hair salon's Q2 gain these sales; no filed
+  period changes.
 - Buchungen › Neue Buchung von Hand: «+ Zeile» makes it a Sammelbuchung, one account against
   several lines (for example Haben 1020 against Soll 6500 and 6570). The last line holds the rest of
   the total until you type there, and ↵ books only once the lines add up. The lines are booked
@@ -224,6 +234,18 @@ Two markers flag an entry you must read before you update:
   period's status.
 - Löhne: a payslip paid, reopened and closed again with another payout now says what stays open on the
   Lohndurchlaufkonto (on the payslip and in Lohnzahlungen) instead of leaving the difference unnamed.
+- Verkauf: a Rechnung closed with a loss written off reads «Ausgebucht» (in the tab «Bezahlt»), not
+  «Bezahlt»; its write-offs show as their own figure «ausgebucht» beside «gutgeschrieben».
+- Verkauf › Offene Posten: the age bands count the days past due (nicht fällig, 1–30, 31–60, 61–90,
+  > 90 days), as the column «Tage überfällig» beside them does.
+- A draft's «＋ Text», «＋ Position» and the other add buttons put the new position after the one you
+  are in; a new draft starts with a title instead of its empty first item.
+- A cancelled invoice's PDF is no longer paired to its payment again after «Trotzdem stornieren».
+- A receipt's total of 1’000 or more printed by the app (a paid invoice filed as its payment's receipt)
+  was read without its thousands. The Skonto line of an invoice now reads «Sie überweisen CHF …», so
+  it is no longer taken for the invoice's total.
+- Verkauf: a payment entered by hand into the cash box no longer reads «noch von keinem Kontoauszug
+  bestätigt» on its invoice (no statement ever shows the cash box); it says the money is in the cash box.
 - Buchungen: an entry that books only the tax (a code such as `M81-2` or `-I81-2`, one side
   empty) said «keine Gegenbuchung» on its empty side, which read as an error. The detail now
   shows the VAT account the Bilanz and the reports fill in there, marked «aus dem MWST-Code», and

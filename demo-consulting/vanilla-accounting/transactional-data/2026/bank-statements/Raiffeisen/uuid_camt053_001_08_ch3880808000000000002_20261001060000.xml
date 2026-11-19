@@ -84,32 +84,13 @@
         <AddtlNtryInf>Zahlung Muster Sammelstiftung BVG</AddtlNtryInf>
       </Ntry>
       <Ntry>
-        <Amt Ccy="CHF">6486.00</Amt>
-        <CdtDbtInd>CRDT</CdtDbtInd>
-        <RvslInd>false</RvslInd>
-        <Sts><Cd>BOOK</Cd></Sts>
-        <BookgDt><Dt>2026-07-20</Dt></BookgDt>
-        <ValDt><Dt>2026-07-20</Dt></ValDt>
-        <AcctSvcrRef>90000000054</AcctSvcrRef>
-        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
-        <NtryDtls>
-          <TxDtls>
-            <Amt Ccy="CHF">6486.00</Amt>
-            <RltdPties><Dbtr><Pty><Nm>BEISPIEL TREUHAND AG</Nm></Pty></Dbtr></RltdPties>
-            <RmtInf><Ustrd>Rechnung 2026-071</Ustrd></RmtInf>
-            <AddtlTxInf>Rechnung 2026-071</AddtlTxInf>
-          </TxDtls>
-        </NtryDtls>
-        <AddtlNtryInf>Gutschrift Beispiel Treuhand AG</AddtlNtryInf>
-      </Ntry>
-      <Ntry>
         <Amt Ccy="CHF">90.95</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <RvslInd>false</RvslInd>
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-07-20</Dt></BookgDt>
         <ValDt><Dt>2026-07-20</Dt></ValDt>
-        <AcctSvcrRef>90000000055</AcctSvcrRef>
+        <AcctSvcrRef>90000000054</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -120,6 +101,25 @@
           </TxDtls>
         </NtryDtls>
         <AddtlNtryInf>eBill Muster Telecom AG</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
+        <Amt Ccy="CHF">6486.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-07-20</Dt></BookgDt>
+        <ValDt><Dt>2026-07-20</Dt></ValDt>
+        <AcctSvcrRef>90000000055</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">6486.00</Amt>
+            <RltdPties><Dbtr><Pty><Nm>BEISPIEL TREUHAND AG</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000020260010</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-001</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Beispiel Treuhand AG</AddtlNtryInf>
       </Ntry>
       <Ntry>
         <Amt Ccy="CHF">7812.10</Amt>
@@ -265,8 +265,8 @@
           <TxDtls>
             <Amt Ccy="CHF">6486.00</Amt>
             <RltdPties><Dbtr><Pty><Nm>BEISPIEL TREUHAND AG</Nm></Pty></Dbtr></RltdPties>
-            <RmtInf><Ustrd>Rechnung 2026-081</Ustrd></RmtInf>
-            <AddtlTxInf>Rechnung 2026-081</AddtlTxInf>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000020260036</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-003</AddtlTxInf>
           </TxDtls>
         </NtryDtls>
         <AddtlNtryInf>Gutschrift Beispiel Treuhand AG</AddtlNtryInf>
@@ -397,8 +397,8 @@
           <TxDtls>
             <Amt Ccy="CHF">6486.00</Amt>
             <RltdPties><Dbtr><Pty><Nm>BEISPIEL TREUHAND AG</Nm></Pty></Dbtr></RltdPties>
-            <RmtInf><Ustrd>Rechnung 2026-091</Ustrd></RmtInf>
-            <AddtlTxInf>Rechnung 2026-091</AddtlTxInf>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000020260044</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-004</AddtlTxInf>
           </TxDtls>
         </NtryDtls>
         <AddtlNtryInf>Gutschrift Beispiel Treuhand AG</AddtlNtryInf>

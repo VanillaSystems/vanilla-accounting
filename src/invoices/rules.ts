@@ -157,14 +157,14 @@ const writtenOff = (inv: Issued, asOf?: string): number => (inv.writeOffs ?? [])
 
 /**
  * The four figures of an issued invoice (spec 4.8): its amount, what was received, what was
- * credited (its credit notes and write-offs) and what is open, each with its sources. `open` is
- * `amount − received − credited` exactly and may be below zero: money beyond the invoice (a
+ * credited (its credit notes), written off (Ausbuchungen: Skonto, Rabatt, Verlust, Spesen, Rundung; decision 56) and what is open, each with its sources. `open` is
+ * `amount − received − credited − writtenOff` exactly and may be below zero: money beyond the invoice (a
  * Kundenguthaben, phase 4); openAmount is never below zero. Payments count without their reminder
  * fees. A cancelled invoice is no claim: every figure but its amount is what its records say, and
  * `open` is what openAmount says, 0.
  */
 export interface Figures {
-  amount: number; received: number; credited: number; open: number;
+  amount: number; received: number; credited: number; writtenOff: number; open: number;
   payments: PaymentAllocation[];
   creditNotes: Array<{ id: string; number: string; date: string; amount: number }>;
   writeOffs: WriteOff[];
@@ -173,9 +173,10 @@ export function figures(inv: Issued, invoices: readonly Invoice[]): Figures {
   const amount = toRappen(totals(inv).gross);
   const received = toRappen(paidAmount(inv));
   const notes = inv.kind === 'invoice' ? creditNotesOf(inv, invoices).map((c) => ({ id: c.id, number: c.number, date: c.date, amount: -totals(c).gross })) : [];
-  const credited = notes.reduce((s, c) => s + toRappen(c.amount), 0) + writtenOff(inv);
+  const credited = notes.reduce((s, c) => s + toRappen(c.amount), 0);
+  const off = writtenOff(inv);
   return {
-    amount: fromRappen(amount), received: fromRappen(received), credited: fromRappen(credited), open: fromRappen(amount - received - credited),
+    amount: fromRappen(amount), received: fromRappen(received), credited: fromRappen(credited), writtenOff: fromRappen(off), open: fromRappen(amount - received - credited - off),
     payments: inv.payments, creditNotes: notes, writeOffs: inv.writeOffs ?? [],
   };
 }
@@ -844,3 +845,12 @@ export const withoutPayment = (inv: Issued, transactionRef: string): Issued => (
 /** The book without deleted records. */
 export const liveInvoices = (book: InvoiceBook): Invoice[] => live(book.invoices);
 export const liveCustomers = (book: InvoiceBook): Customer[] => live(book.customers);
+
+/**
+ * The receipts that are a cancelled document's own PDF, by receipt id (the first 16 hex digits of the
+ * PDF's SHA-256, as the invoice is filed as its payment's receipt, src/invoices/events.ts): a
+ * cancelled invoice is paid by nothing, so its PDF is never proposed or paired to a payment (P1.12).
+ */
+export function cancelledReceiptIds(book: Pick<InvoiceBook, 'invoices'>): Set<string> {
+  return new Set(liveInvoices(book as InvoiceBook).flatMap((i) => (i.status === 'issued' && i.cancelled && i.pdf ? [i.pdf.sha256.slice(0, 16)] : [])));
+}

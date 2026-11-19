@@ -245,7 +245,8 @@ test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defa
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const path = workspaceAt(dir).paths.manifest;
   const current = readFileSync(path, 'utf8');
-  const old = current.replace(/^schema: 5\n/m, 'schema: 4\n');
+  // A manifest of 4 knows none of the fields 5 brought: the demo's named payment terms come off.
+  const old = current.replace(/^schema: 5\n/m, 'schema: 4\n').replace(/^ {2}paymentTerms:\n(?: {4}- .*\n)*/m, '').replace(/^ {2}defaultTerms: .*\n/m, '');
   writeFileSync(path, old);
   const inv = readManifest(path).invoicing!;
   assert.deepEqual(inv.units.map((u) => u.id), ['h', 'day', 'pcs', 'flat', 'km', 'm2', 'm', 'm3', 'l', 'kg', 'month'], 'the default units, the old ids first');
@@ -256,9 +257,9 @@ test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defa
   assert.equal(inv.writeOffAccount, undefined, 'absent: the jurisdiction\'s accounts');
   const { done } = await upgradeWorkspace(workspaceAt(dir));
   assert.deepEqual(done.filter((d) => d.file === path).map((d) => [d.from, d.to]), [[4, 5]]);
-  assert.equal(readFileSync(path, 'utf8'), current, 'only the number changed');
+  assert.equal(readFileSync(path, 'utf8'), old.replace(/^schema: 4\n/m, 'schema: 5\n'), 'only the number changed');
 
-  const own = current.replace(/^invoicing:\n/m, [
+  const own = old.replace(/^schema: 4\n/m, 'schema: 5\n').replace(/^invoicing:\n/m, [
     'invoicing:',
     '  units: [{ id: m2, de: m², fr: m², it: m², en: m² }, { id: pal, de: Palette, fr: palette, it: paletta, en: pallet }]',
     '  prices: { invoice: gross }',
@@ -280,7 +281,7 @@ test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defa
     ['  paymentTerms: [{ id: x, name: X, days: 10, skonto: { percent: 2, days: 20 } }]', /paymentTerms\[0\]\.skonto/],
     ['  defaultTerms: none', /defaultTerms "none"/],
   ] as const) {
-    writeFileSync(path, current.replace(/^invoicing:\n/m, `invoicing:\n${bad}\n`));
+    writeFileSync(path, old.replace(/^schema: 4\n/m, 'schema: 5\n').replace(/^invoicing:\n/m, `invoicing:\n${bad}\n`));
     assert.throws(() => readManifest(path), (e: Error) => msg.test(e.message), msg.source);
   }
   assert.throws(() => climb(parseDocument(current), 5, 4, MANIFEST_MIGRATIONS, path, (d) => d.clone()), (e: Error) => e instanceof SchemaTooNewError);

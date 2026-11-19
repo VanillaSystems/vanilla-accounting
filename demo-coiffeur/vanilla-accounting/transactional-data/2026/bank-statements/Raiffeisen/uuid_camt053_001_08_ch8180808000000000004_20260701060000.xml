@@ -23,7 +23,7 @@
       </Bal>
       <Bal>
         <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
-        <Amt Ccy="CHF">7253.85</Amt>
+        <Amt Ccy="CHF">7938.85</Amt>
         <CdtDbtInd>CRDT</CdtDbtInd>
         <Dt><Dt>2026-06-30</Dt></Dt>
       </Bal>
@@ -450,13 +450,32 @@
         <AddtlNtryInf>SumUp Auszahlung</AddtlNtryInf>
       </Ntry>
       <Ntry>
+        <Amt Ccy="CHF">685.00</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-06-24</Dt></BookgDt>
+        <ValDt><Dt>2026-06-24</Dt></ValDt>
+        <AcctSvcrRef>90000000051</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">685.00</Amt>
+            <RltdPties><Dbtr><Pty><Nm>LENA MUSTER</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000020260010</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-001</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Lena Muster</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
         <Amt Ccy="CHF">2500.00</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <RvslInd>false</RvslInd>
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-06-26</Dt></BookgDt>
         <ValDt><Dt>2026-06-26</Dt></ValDt>
-        <AcctSvcrRef>90000000051</AcctSvcrRef>
+        <AcctSvcrRef>90000000052</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -474,7 +493,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-06-29</Dt></BookgDt>
         <ValDt><Dt>2026-06-29</Dt></ValDt>
-        <AcctSvcrRef>90000000052</AcctSvcrRef>
+        <AcctSvcrRef>90000000053</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -492,7 +511,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-06-30</Dt></BookgDt>
         <ValDt><Dt>2026-06-30</Dt></ValDt>
-        <AcctSvcrRef>90000000053</AcctSvcrRef>
+        <AcctSvcrRef>90000000054</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -510,7 +529,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-06-30</Dt></BookgDt>
         <ValDt><Dt>2026-06-30</Dt></ValDt>
-        <AcctSvcrRef>90000000054</AcctSvcrRef>
+        <AcctSvcrRef>90000000055</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>

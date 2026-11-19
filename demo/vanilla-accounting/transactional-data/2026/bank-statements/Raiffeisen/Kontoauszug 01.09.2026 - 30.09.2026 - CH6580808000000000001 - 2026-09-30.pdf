@@ -12,7 +12,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
 endobj
 5 0 obj
-<< /Length 755 >>
+<< /Length 1151 >>
 stream
 BT
 /F1 10 Tf
@@ -23,14 +23,19 @@ T* (Kontoauszug 01.09.2026 - 30.09.2026) Tj
 T* (Muster Kaffee GmbH, Musterstrasse 1, 8000 Zürich) Tj
 T* (IBAN CH6580808000000000001, Währung CHF) Tj
 T* () Tj
-T* (Anfangssaldo 01.09.2026: 80’223.36) Tj
-T* (07.09.2026 | Gutschrift Shopify Payments | 904.98 | Ref. 90000000056) Tj
-T* (14.09.2026 | Debitkarte Coop Pronto Musterdorf | -79.25 | Ref. 90000000057) Tj
-T* (21.09.2026 | Zahlung Post CH AG | -217.75 | Ref. 90000000058) Tj
-T* (28.09.2026 | Gutschrift Muster Payments AG | 12’724.40 | Ref. 90000000059) Tj
-T* (30.09.2026 | Sammelzahlung | -5’288.30 | Ref. 90000000060) Tj
-T* (30.09.2026 | Kontoführungsgebühren | -15.00 | Ref. 90000000061) Tj
-T* (Schlusssaldo 30.09.2026: 88’252.44) Tj
+T* (Anfangssaldo 01.09.2026: 82’019.31) Tj
+T* (07.09.2026 | Gutschrift Shopify Payments | 904.98 | Ref. 90000000057) Tj
+T* (10.09.2026 | Gutschrift Muster Catering AG | 3’180.00 | Ref. 90000000058) Tj
+T* (14.09.2026 | Debitkarte Coop Pronto Musterdorf | -79.25 | Ref. 90000000059) Tj
+T* (14.09.2026 | Gutschrift Beispiel Bistro AG | 283.78 | Ref. 90000000060) Tj
+T* (18.09.2026 | Gutschrift Café Exemple Sàrl | 297.54 | Ref. 90000000061) Tj
+T* (21.09.2026 | Zahlung Post CH AG | -217.75 | Ref. 90000000062) Tj
+T* (21.09.2026 | Gutschrift Muster Hotel GmbH | 400.00 | Ref. 90000000063) Tj
+T* (28.09.2026 | Gutschrift Muster Payments AG | 12’724.40 | Ref. 90000000064) Tj
+T* (29.09.2026 | Gutschrift Beispiel Kantine AG | 304.72 | Ref. 90000000065) Tj
+T* (30.09.2026 | Sammelzahlung | -5’288.30 | Ref. 90000000066) Tj
+T* (30.09.2026 | Kontoführungsgebühren | -15.00 | Ref. 90000000067) Tj
+T* (Schlusssaldo 30.09.2026: 94’514.43) Tj
 ET
 endstream
 endobj
@@ -45,5 +50,5 @@ xref
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-1143
+1540
 %%EOF

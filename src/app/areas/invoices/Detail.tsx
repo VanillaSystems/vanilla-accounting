@@ -12,6 +12,7 @@ import { TEXTS } from '../../../invoices/texts.js';
 import { defaultTexts, draftDays, senderFor } from '../../../invoices/documents.js';
 import { backToDraftRefusal, missingForIssue, openAmount, openFees, paidAmount, refundDue, reminderDraft, shortfallOf, skontoOffer, totals, warningsForIssue, type Missing } from '../../../invoices/rules.js';
 import { prettyReference } from '../../../providers/qr-bill/reference.js';
+import { closedByLoss } from '../../../invoices/lists.js';
 import type { PaymentProposal } from '../../../invoices/payments.js';
 import { at } from '../receipts/view.js';
 import type { CompanyInfo } from '../../../books/company.js';
@@ -28,7 +29,7 @@ import { Paper } from '../receipts/Paper.js';
 import type { AreaProps } from '../index.js';
 import { useInvoices } from './data.js';
 import { byRouteId, customerOf, issuedLater, linkablePayments, routeId, rowState, wasSent, type RowState } from './model.js';
-import { fixFor, moveLine, parseNumber, repriced, sheetEdit, type Fix } from './edit.js';
+import { fixFor, insertLine, moveLine, parseNumber, repriced, sheetEdit, type Fix } from './edit.js';
 import { setUi, useUi, type Section } from './state.js';
 import { comment, confirmPayment, copyAsDraft, deleteDraft, firstLine, invoiceAt, issue, saveDraft, send, sendReminder, writeOff } from './actions.js';
 import { contextOf, draftData, issuedData, reminderData } from './sheets.js';
@@ -107,8 +108,10 @@ function InvoiceDetail(props: DetailProps) {
     }
     const added = newPosition(a, inv);
     if (added) {
-      void saveDraft(nav, inv, { lines: [...inv.lines, added] });
-      return added.kind === 'pagebreak' ? undefined : added.kind === 'discount' ? `l:${inv.lines.length}:discount` : `l:${inv.lines.length}:text`;
+      // After the position the person is in (k), else at the end; an untouched first item gives way.
+      const { lines, at } = insertLine(inv.lines, added, k, t('invoices.newLine'));
+      void saveDraft(nav, inv, { lines });
+      return added.kind === 'pagebreak' ? undefined : added.kind === 'discount' ? `l:${at}:discount` : `l:${at}:text`;
     }
   }
 
@@ -236,7 +239,8 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
     const last = inv.payments.at(-1);
     // A reminder fee not paid with the invoice stays named: open until it comes or is waived (r8c-15).
     const fee = openFees(inv);
-    line = <span className="linked">{I.check}{last ? t('invoices.paidOn', { date: formatDate(last.date), amount: `${inv.currency} ${fmt(paidAmount(inv))}` })
+    const loss = inv.status === 'issued' && closedByLoss(inv) ? inv.writeOffs!.filter((w) => w.reason === 'loss') : [];
+    line = loss.length ? <span className="linked">{I.check}{t('invoices.writtenOffOn', { date: formatDate(loss.at(-1)!.date), what: (inv.writeOffs ?? []).map((w) => `${t(`invoices.reason.${w.reason}`)} ${inv.currency} ${fmt(w.amount)}`).join(', ') })}</span> : <span className="linked">{I.check}{last ? t('invoices.paidOn', { date: formatDate(last.date), amount: `${inv.currency} ${fmt(paidAmount(inv))}` })
       : inv.writeOffs?.length && !d.invoices.some((c) => c.status === 'issued' && c.kind === 'credit-note' && c.creditFor === inv.id && !c.cancelled) ? t('invoices.settledByWriteOff', { what: inv.writeOffs.map((w) => `${t(`invoices.reason.${w.reason}`)} ${inv.currency} ${fmt(w.amount)}`).join(', ') })
       : t('invoices.settledByCredit')}{fee > 0 ? ` · ${t('invoices.feeOpen', { amount: `${inv.currency} ${fmt(fee)}` })}` : ''}</span>;
   } else {

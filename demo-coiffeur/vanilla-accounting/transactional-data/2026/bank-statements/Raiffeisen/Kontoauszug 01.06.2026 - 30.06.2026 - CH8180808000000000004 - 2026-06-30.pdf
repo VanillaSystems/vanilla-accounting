@@ -12,7 +12,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
 endobj
 5 0 obj
-<< /Length 1088 >>
+<< /Length 1160 >>
 stream
 BT
 /F1 10 Tf
@@ -31,11 +31,12 @@ T* (12.06.2026 | Zahlung Stadtwerk Beispiel | -232.60 | Ref. 90000000047) Tj
 T* (15.06.2026 | Bareinzahlung | 1’291.45 | Ref. 90000000048) Tj
 T* (18.06.2026 | eBill Muster Telecom AG | -59.00 | Ref. 90000000049) Tj
 T* (22.06.2026 | SumUp Auszahlung | 1’082.50 | Ref. 90000000050) Tj
-T* (26.06.2026 | Privatbezug Bella Beispiel | -2’500.00 | Ref. 90000000051) Tj
-T* (29.06.2026 | TWINT Gutschrift | 565.30 | Ref. 90000000052) Tj
-T* (30.06.2026 | Bareinzahlung | 1’705.60 | Ref. 90000000053) Tj
-T* (30.06.2026 | Kontoführungsgebühren | -8.00 | Ref. 90000000054) Tj
-T* (Schlusssaldo 30.06.2026: 7’253.85) Tj
+T* (24.06.2026 | Gutschrift Lena Muster | 685.00 | Ref. 90000000051) Tj
+T* (26.06.2026 | Privatbezug Bella Beispiel | -2’500.00 | Ref. 90000000052) Tj
+T* (29.06.2026 | TWINT Gutschrift | 565.30 | Ref. 90000000053) Tj
+T* (30.06.2026 | Bareinzahlung | 1’705.60 | Ref. 90000000054) Tj
+T* (30.06.2026 | Kontoführungsgebühren | -8.00 | Ref. 90000000055) Tj
+T* (Schlusssaldo 30.06.2026: 7’938.85) Tj
 ET
 endstream
 endobj
@@ -50,5 +51,5 @@ xref
 trailer
 << /Size 6 /Root 1 0 R >>
 startxref
-1477
+1549
 %%EOF

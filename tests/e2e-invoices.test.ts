@@ -9,12 +9,19 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { click, clickText, noBrowser, openApp, waitText } from './support/e2e.js';
-import { writeIndex } from './support/workspace.js';
+import { DEMO_ROOT, demoInvoices, writeIndex } from './support/workspace.js';
+import type { InvoiceBook, Issued } from '../src/invoices/model.js';
 
-/** The demo's draft for Muster Hotel GmbH; the next number is 2026-008. */
-const DRAFT = 'in_8rkN6yKIRdjB';
-/** The demo's overdue invoice 2026-003 of Beispiel Bistro AG, nothing paid. */
-const OPEN = 'in_glJAMD-ee_Jz';
+// Found in the demo as generated (tools/demo/kaffee-invoices.ts), not by id: the ids follow the generator's seed.
+const demo = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as InvoiceBook;
+const numbered = demo.invoices.filter((i): i is Issued => i.status === 'issued');
+/** The demo's draft for Muster Hotel GmbH; it is issued as the next number. */
+const DRAFT = demoInvoices().draftOf('Muster Hotel GmbH');
+const NEXT = demoInvoices().next(1);
+const CREDIT = demoInvoices().next(2);
+/** The demo's overdue invoice of Beispiel Bistro AG with its 1. Mahnung, nothing paid. */
+const overdue = numbered.find((i) => i.customer.name === 'Beispiel Bistro AG' && (i.reminders?.length ?? 0) > 0 && i.payments.length === 0)!;
+const OPEN = overdue.id;
 
 interface InvoiceView { id: string; number?: string; kind: string; status: string; pdf?: { file: string; sha256: string }; payments: Array<{ transactionRef: string; amount: number }>; sent?: Array<{ channel: string }>; view: { open: number; totals: { gross: number } } }
 
@@ -28,12 +35,12 @@ test('a draft is issued with its stored PDF and sent; a part is credited; a prop
     await click(page, '[data-act=issue]');
     // «Ausstellen» puts the document to take away in front of the person: the stored PDF, to save or send.
     await page.waitForSelector('.isend.withpdf .isendpdf canvas.pg');
-    assert.equal(await page.$eval('.isend .ihd .lbl', (e) => e.textContent), 'Rechnung 2026-008 ausgestellt');
-    await page.waitForFunction(() => location.pathname === '/invoices/2026-008');
+    assert.equal(await page.$eval('.isend .ihd .lbl', (e) => e.textContent), `Rechnung ${NEXT} ausgestellt`);
+    await page.waitForFunction((n) => location.pathname === `/invoices/${n}`, {}, NEXT);
     const issued = await invoice(DRAFT);
     assert.equal(issued.status, 'issued');
-    assert.equal(issued.number, '2026-008');
-    assert.equal(issued.pdf?.file, 'transactional-data/2026/invoices/2026-008.pdf');
+    assert.equal(issued.number, NEXT);
+    assert.equal(issued.pdf?.file, `transactional-data/2026/invoices/${NEXT}.pdf`);
     const stored = readFileSync(join(api.root, issued.pdf!.file));
     assert.equal(stored.subarray(0, 5).toString(), '%PDF-');
     assert.equal(sha(stored), issued.pdf!.sha256, 'the stored PDF is the one its SHA-256 names');
@@ -42,7 +49,7 @@ test('a draft is issued with its stored PDF and sent; a part is credited; a prop
     assert.equal(sha(served), issued.pdf!.sha256, 'the download link serves the stored PDF');
 
     await click(page, '.isend [data-act=download]');
-    await waitText(page, 'Rechnung 2026-008 als gesendet erfasst');
+    await waitText(page, `Rechnung ${NEXT} als gesendet erfasst`);
     assert.deepEqual((await invoice(DRAFT)).sent?.map((s) => s.channel), ['download']);
     await click(page, '[data-act=send]');
     await page.waitForSelector('.isend.withpdf .isendpdf canvas.pg');
@@ -67,23 +74,23 @@ test('a draft is issued with its stored PDF and sent; a part is credited; a prop
     assert.equal((await creditDraft()).view.totals.gross, -40, 'the corrected price keeps its minus and its VAT included');
     await click(page, '[data-act=issue]');
     await page.waitForSelector('.isend.withpdf .isendpdf canvas.pg');
-    assert.equal(await page.$eval('.isend .ihd .lbl', (e) => e.textContent), 'Gutschrift 2026-009 ausgestellt');
+    assert.equal(await page.$eval('.isend .ihd .lbl', (e) => e.textContent), `Gutschrift ${CREDIT} ausgestellt`);
     await click(page, '.isend [data-act=later]');
     await page.waitForFunction(() => !document.querySelector('.isend'));
     const list = (await api.send('GET', '/api/invoices')).json;
-    const credit = (list.invoices as InvoiceView[]).find((i) => i.number === '2026-009')!;
+    const credit = (list.invoices as InvoiceView[]).find((i) => i.number === CREDIT)!;
     assert.ok(!(list.sent as Array<{ invoiceId: string }>).some((d) => d.invoiceId === credit.id), '«Später» records nothing as sent');
     assert.equal(credit.kind, 'credit-note');
     assert.equal(credit.status, 'issued');
     assert.match(readFileSync(join(api.root, credit.pdf!.file)).subarray(0, 5).toString(), /%PDF-/);
     assert.equal((await invoice(DRAFT)).view.open, Math.round((issued.view.totals.gross - 40) * 100) / 100, 'the credit note lowers what is open');
 
-    // A payment of 2026-003's open amount from its customer, without a reference: the invoice proposes it.
+    // A payment of the overdue invoice's open amount from its customer, without a reference: the invoice proposes it.
     const due = (await invoice(OPEN)).view.open;
     const books = app.books();
     books.transactions.push({ ref: 'E2E-PAY-1', bank: 'Raiffeisen', date: '2026-10-20', amount: due, currency: 'CHF', direction: 'CRDT', description: 'Zahlung Beispiel Bistro AG', counterparty: 'Beispiel Bistro AG' });
     writeIndex(api.ws, books);
-    await app.open('/invoices/2026-003?period=2026');
+    await app.open(`/invoices/${overdue.number}?period=2026`);
     await clickText(page, 'Zahlung bestätigen');
     await page.waitForSelector('[data-testid=linked-payment]');
     assert.deepEqual((await invoice(OPEN)).payments.map((p) => [p.transactionRef, p.amount]), [['E2E-PAY-1', due]]);

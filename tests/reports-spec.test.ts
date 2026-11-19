@@ -109,8 +109,10 @@ test('sales on 3xxx count on their normal side: positive, a refund against them;
   assert.equal(cents(r.totals[0].amount), tb.reduce((n, x) => n + cents(x.creditTotal - x.debitTotal), 0));
   assert.ok(r.totals[0].amount > 0);
   let tax = 0;
-  for (const e of books.journalEntries.filter((x) => x.date >= Q3.from && x.date <= Q3.to && x.accountCredit >= '3000' && x.accountCredit <= '3999')) {
-    tax += cents(Math.abs(vat().vatLine(e)?.tax ?? 0));
+  const sales = (a: string) => a >= '3000' && a <= '3999';
+  // A refund against the sales (a Gutschrift applied to its Rechnung books 3300 / bank with the minus code) lowers the tax.
+  for (const e of books.journalEntries.filter((x) => x.date >= Q3.from && x.date <= Q3.to && (sales(x.accountCredit) || sales(x.accountDebit)))) {
+    tax += (sales(e.accountCredit) ? 1 : -1) * cents(Math.abs(vat().vatLine(e)?.tax ?? 0));
   }
   assert.equal(cents(r.totals[0].tax), tax);
   assert.equal(cents(r.totals[0].net), cents(r.totals[0].amount) - tax);

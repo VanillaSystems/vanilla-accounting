@@ -10,12 +10,18 @@ bankAccounts:
   - { bank: Raiffeisen, currency: CHF, account: "1021", label: Bank Raiffeisen, statements: camt053, iban: CH6580808000000000001, role: bank }
   - { bank: Wise, currency: EUR, account: "1023", label: Wise EUR, statements: wise, iban: BE29967000000164, role: bank }
   - { bank: manual, currency: CHF, account: "2451", label: Kontokorrent Anna Muster, role: owner }
+  - { bank: Kasse, currency: CHF, account: "1000", label: Kasse, role: cash }
 invoicing:
   payTo:
     CHF: { account: "1021", qrIban: CH44 3199 9123 0008 8901 2 }
     EUR: { account: "1023" }
   revenueAccount: "3300"
   paymentTermsDays: 30
+  paymentTerms:
+    - { id: net30, name: "30 Tage netto", days: 30 }
+    - { id: net20, name: "20 Tage netto", days: 20 }
+    - { id: skonto2, name: "10 Tage 2 %, 30 Tage netto", days: 30, skonto: { percent: 2, days: 10 }, text: "Zahlbar innert 10 Tagen mit 2 % Skonto oder innert 30 Tagen netto." }
+  defaultTerms: net30
   layout: { logo: logos/logo.svg, accent: "#5a3a22" }
   texts:
     de: { closing: "Zahlbar innert {days} Tagen.\nFreundliche Grüsse, Anna Muster" }

@@ -23,7 +23,7 @@
       </Bal>
       <Bal>
         <Tp><CdOrPrtry><Cd>CLBD</Cd></CdOrPrtry></Tp>
-        <Amt Ccy="CHF">20976.69</Amt>
+        <Amt Ccy="CHF">7982.57</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <Dt><Dt>2026-09-30</Dt></Dt>
       </Bal>
@@ -381,13 +381,32 @@
         <AddtlNtryInf>Debitkarte EXAMPLE TOOLS INC PORTLAND</AddtlNtryInf>
       </Ntry>
       <Ntry>
+        <Amt Ccy="CHF">12994.12</Amt>
+        <CdtDbtInd>CRDT</CdtDbtInd>
+        <RvslInd>false</RvslInd>
+        <Sts><Cd>BOOK</Cd></Sts>
+        <BookgDt><Dt>2026-09-11</Dt></BookgDt>
+        <ValDt><Dt>2026-09-11</Dt></ValDt>
+        <AcctSvcrRef>90000000072</AcctSvcrRef>
+        <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
+        <NtryDtls>
+          <TxDtls>
+            <Amt Ccy="CHF">12994.12</Amt>
+            <RltdPties><Dbtr><Pty><Nm>FAMILIE HUBER-BEISPIEL</Nm></Pty></Dbtr></RltdPties>
+            <RmtInf><Strd><CdtrRefInf><Ref>000000000000000000020260010</Ref></CdtrRefInf></Strd></RmtInf>
+            <AddtlTxInf>Rechnung 2026-001</AddtlTxInf>
+          </TxDtls>
+        </NtryDtls>
+        <AddtlNtryInf>Gutschrift Familie Huber-Beispiel</AddtlNtryInf>
+      </Ntry>
+      <Ntry>
         <Amt Ccy="CHF">287.85</Amt>
         <CdtDbtInd>DBIT</CdtDbtInd>
         <RvslInd>false</RvslInd>
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-14</Dt></BookgDt>
         <ValDt><Dt>2026-09-14</Dt></ValDt>
-        <AcctSvcrRef>90000000072</AcctSvcrRef>
+        <AcctSvcrRef>90000000073</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -405,7 +424,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-15</Dt></BookgDt>
         <ValDt><Dt>2026-09-15</Dt></ValDt>
-        <AcctSvcrRef>90000000073</AcctSvcrRef>
+        <AcctSvcrRef>90000000074</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -424,7 +443,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-18</Dt></BookgDt>
         <ValDt><Dt>2026-09-18</Dt></ValDt>
-        <AcctSvcrRef>90000000074</AcctSvcrRef>
+        <AcctSvcrRef>90000000075</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -443,7 +462,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-22</Dt></BookgDt>
         <ValDt><Dt>2026-09-22</Dt></ValDt>
-        <AcctSvcrRef>90000000075</AcctSvcrRef>
+        <AcctSvcrRef>90000000076</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>RCDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -462,7 +481,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-25</Dt></BookgDt>
         <ValDt><Dt>2026-09-25</Dt></ValDt>
-        <AcctSvcrRef>90000000076</AcctSvcrRef>
+        <AcctSvcrRef>90000000077</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -481,7 +500,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-28</Dt></BookgDt>
         <ValDt><Dt>2026-09-28</Dt></ValDt>
-        <AcctSvcrRef>90000000077</AcctSvcrRef>
+        <AcctSvcrRef>90000000078</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>
@@ -500,7 +519,7 @@
         <Sts><Cd>BOOK</Cd></Sts>
         <BookgDt><Dt>2026-09-30</Dt></BookgDt>
         <ValDt><Dt>2026-09-30</Dt></ValDt>
-        <AcctSvcrRef>90000000078</AcctSvcrRef>
+        <AcctSvcrRef>90000000079</AcctSvcrRef>
         <BkTxCd><Domn><Cd>PMNT</Cd><Fmly><Cd>ICDT</Cd><SubFmlyCd>DMCT</SubFmlyCd></Fmly></Domn></BkTxCd>
         <NtryDtls>
           <TxDtls>

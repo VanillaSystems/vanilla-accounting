@@ -1,5 +1,5 @@
 {
- "note": "The bank and manual transaction refs of the books frozen on 2026-10-16.",
+ "note": "The bank and manual transaction refs of the books frozen on 2026-11-19.",
  "refs": [
   "90000000001",
   "90000000002",
@@ -80,6 +80,7 @@
   "90000000077",
   "90000000078",
   "90000000079",
-  "90000000080"
+  "90000000080",
+  "90000000081"
  ]
 }

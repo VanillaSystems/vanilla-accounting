@@ -5,7 +5,7 @@
  * tools/demo/generate.ts, so they cannot disagree.
  */
 import type { CorrectionCase, QuarterKey, ReceiptKind, VatRateGroup } from '../../src/types/index.js';
-import type { Address, CustomerFields, Exemption, InvoiceCurrency, InvoiceLine, VatRate } from '../../src/invoices/model.js';
+import type { Address, CustomerFields, Exemption, InvoiceCurrency, InvoiceLine, Prices, VatRate, WriteOffReason } from '../../src/invoices/model.js';
 import type { VatSetup } from '../../src/workspace/vat-setup.js';
 
 export const YEAR = '2026';
@@ -46,7 +46,16 @@ export interface Leg { account: string; amount: number; vatCode?: string; text: 
  * invoice names its number: its legs only give the amount, the invoice matcher books it
  * (src/invoices/payments.ts), with the invoice PDF as its receipt.
  */
-export interface Part { counterparty: string; reference?: string; text: string; legs: Leg[]; doc?: Doc; noReceipt?: string; invoice?: string }
+export interface Part {
+  counterparty: string; reference?: string; text: string; legs: Leg[]; doc?: Doc; noReceipt?: string; invoice?: string;
+  /**
+   * A payment of the demo's invoices that no reference ties to one: the person settles it in the
+   * app after the import (tools/demo/invoices.ts settle): `hand`, the statement row that confirms a
+   * Zahlungseingang she entered by hand before; `allocate`, one payment she ausziffert over several
+   * invoices. `step` is the key of that invoicing step. Its legs only give the amount.
+   */
+  settles?: { kind: 'hand' | 'allocate'; step: string };
+}
 
 /**
  * Paid by the owner privately (Auslagen): a manual transaction booked on the owner's current
@@ -84,6 +93,10 @@ export interface Scenario {
  */
 export interface DemoInvoicing {
   address: Address;
+  /** The CHF account has a QR-IBAN: a CHF invoice carries a QR reference, else a creditor reference (SCOR). */
+  qrr: boolean;
+  /** The cash box (role cash) a Zahlungseingang by hand may land on. */
+  cash?: { account: string; label: string };
   /** The invoicing block of belege.workspace.yaml, as YAML. */
   manifest: string;
   logo?: { file: string; svg: string };
@@ -91,14 +104,32 @@ export interface DemoInvoicing {
   steps: InvoiceStep[];
 }
 
-interface Drafted { key: string; customer: string; at: string; date: string; subject: string; lines: InvoiceLine[]; currency?: InvoiceCurrency; exemption?: Exemption }
+interface Drafted {
+  key: string; customer: string; at: string; date: string; subject: string; lines: InvoiceLine[]; currency?: InvoiceCurrency; exemption?: Exemption;
+  prices?: Prices; termsId?: string; supplied?: { from: string; to?: string };
+}
+/** How an issued document went out: by e-mail (the default), downloaded to be sent another way, or not yet. */
+export type DemoSend = 'email' | 'download' | 'none';
 export type InvoiceStep =
-  | ({ do: 'issue'; paid?: { date: string; bank: string } } & Drafted)
+  /** `paid`: the customer pays by the invoice's reference, `amount` (absent: all of it) arrives on `date`. */
+  | ({ do: 'issue'; send?: DemoSend; paid?: { date: string; bank: string; amount?: number } } & Drafted)
   | ({ do: 'draft' } & Drafted)
-  | { do: 'credit'; key: string; of: string; at: string; amount?: number; vatRate?: VatRate; reason: string; settlement?: 'refund' | 'offset' }
+  | { do: 'credit'; key: string; of: string; at: string; amount?: number; vatRate?: VatRate; reason: string; settlement?: 'refund' | 'offset'; send?: DemoSend }
   | { do: 'remind'; of: string; at: string; fee?: number }
   | { do: 'cancel'; of: string; at: string; reason: string }
-  | { do: 'comment'; of: string; at: string; text: string };
+  | { do: 'comment'; of: string; at: string; text: string }
+  /**
+   * What the person does in the app once the statements are imported, played on the books after
+   * the import (tools/demo/invoices.ts settle), each on its own day:
+   * `hand`: a Zahlungseingang entered by hand on `account` (a bank or the cash box); with
+   * `statement`, the bank's row arrives later and confirms it, one booking.
+   * `allocate`: one payment without a reference (on `bank`, `date`, its text) ausgeziffert over
+   * several invoices, each part's rest left open or written off.
+   * `write-off`: «Rest ausbuchen» of what an invoice has open.
+   */
+  | { do: 'hand'; key: string; of: string; at: string; account: string; amount?: number; statement?: { date: string; bank: string } }
+  | { do: 'allocate'; key: string; at: string; bank: string; payer: string; text: string; parts: Array<{ of: string; amount: number; rest?: WriteOffReason }> }
+  | { do: 'write-off'; of: string; at: string; reason: WriteOffReason; note?: string };
 
 /** One demo workspace: who the company is, its chart and banks, and its year as a Scenario. */
 export interface Demo {

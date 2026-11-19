@@ -215,11 +215,11 @@ test('the payment term and the invoice texts change at once: for every customer 
   const was = terms();
   const made = await s.answer([{ kind: 'invoicing', set: { paymentTermsDays: 10, texts: { de: { intro: 'Grüezi mitenand' }, fr: { closing: null } } } }]);
   assert.equal(made.refused, undefined, made.refused?.message);
-  assert.equal(made.made[0].note?.customers, 3);
+  assert.equal(made.made[0].note?.customers, 7, 'the demo\'s seven customers of 30 days; the hotel has 20');
   assert.match(s.manifest(), /paymentTermsDays: 10/);
   assert.match(s.manifest(), /intro: Grüezi mitenand/);
   assert.doesNotMatch(s.manifest(), /Payable dans les/);
-  assert.deepEqual(terms(), { ...was, 'Beispiel Bistro AG': 10, 'Café Exemple Sàrl': 10, 'Kaffeehaus Beispiel GmbH': 10 }, 'the customer with a term of their own keeps it');
+  assert.deepEqual(terms(), Object.fromEntries(Object.entries(was).map(([name, days]) => [name, days === 30 ? 10 : days])), 'the customer with a term of their own (the hotel, 20 days) keeps it');
   const info = (await s.send('GET', '/api/workspace')).json as { invoicing?: { paymentTermsDays: number; texts: Record<string, Record<string, string>> } };
   assert.equal(info.invoicing?.paymentTermsDays, 10, 'the server reads the new settings at once');
   assert.equal(info.invoicing?.texts.de.intro, 'Grüezi mitenand');

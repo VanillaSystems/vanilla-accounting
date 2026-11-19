@@ -6,7 +6,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Invoice } from '../src/invoices/model.js';
-import { AGE_BANDS, ageBand, channelOf, creditNoteStatus, creditRest, csvOf, daysBetween, openItemGroups, openItems, sentFacts, unsent, wasSent } from '../src/invoices/lists.js';
+import { AGE_BANDS, ageBand, channelOf, creditNoteStatus, creditRest, csvOf, daysBetween, invoiceStatus, openItemGroups, openItems, sentFacts, unsent, wasSent } from '../src/invoices/lists.js';
+import { docRows, inTab } from '../src/app/areas/invoices/table.js';
+import { parsePeriod } from '../src/accounting/periods.js';
 import { issued, sentDoc } from './support/invoice-fixtures.js';
 import './support/jurisdiction.js';
 
@@ -49,7 +51,7 @@ test('a Gutschrift: Offen while something is still to pay back, Teilweise once p
   assert.equal(creditNoteStatus({ ...cn, cancelled: { date: '2026-10-05', reason: 'x' } }, [inv, cn]), 'cancelled');
 });
 
-test('open items on a reference date: what openOn leaves, the age from the invoice date in its band, the days past due, subtotals per contact and currency', () => {
+test('open items on a reference date: what openOn leaves, the days past due and their band, subtotals per contact and currency', () => {
   const a = issued('a', '2026-001', { date: '2026-09-01', dueDate: '2026-10-01' });
   const b = issued('b', '2026-002', { date: '2026-11-15', dueDate: '2026-12-15', payments: [{ transactionRef: 'T', date: '2026-12-20', amount: 400, by: 'reference' }] });
   const c = issued('c', '2026-003', { date: '2026-06-01', dueDate: '2026-07-01', customerId: 'c2', customer: { ...a.customer, name: 'Alpha GmbH' }, currency: 'EUR' });
@@ -58,20 +60,31 @@ test('open items on a reference date: what openOn leaves, the age from the invoi
   assert.deepEqual(items.map((x) => [x.inv.number, x.open, x.age, x.band, x.overdue]), [
     ['2026-003', 1000, 213, '90+', 183],
     ['2026-001', 1000, 121, '90+', 91],
-    ['2026-002', 600, 46, '31-60', 16],
+    ['2026-002', 600, 46, '1-30', 16],
   ]);
   assert.deepEqual(openItems([a, b], '2026-12-10').map((x) => [x.inv.number, x.open, x.overdue]), [['2026-001', 1000, 70], ['2026-002', 1000, 0]], 'before the payment, before its due date');
   const { groups, totals } = openItemGroups(items);
   assert.deepEqual(groups.map((g) => [g.name, g.currency, g.total]), [['Alpha GmbH', 'EUR', 1000], ['Kunde AG', 'CHF', 1600]]);
   assert.deepEqual(totals, [
-    { currency: 'CHF', total: 1600, count: 2, bands: { '0-30': 0, '31-60': 600, '61-90': 0, '90+': 1000 } },
-    { currency: 'EUR', total: 1000, count: 1, bands: { '0-30': 0, '31-60': 0, '61-90': 0, '90+': 1000 } },
+    { currency: 'CHF', total: 1600, count: 2, bands: { 'not-due': 0, '1-30': 600, '31-60': 0, '61-90': 0, '90+': 1000 } },
+    { currency: 'EUR', total: 1000, count: 1, bands: { 'not-due': 0, '1-30': 0, '31-60': 0, '61-90': 0, '90+': 1000 } },
   ]);
-  assert.deepEqual([0, 30, 31, 60, 61, 90, 91].map(ageBand), ['0-30', '0-30', '31-60', '31-60', '61-90', '61-90', '90+']);
-  assert.equal(AGE_BANDS.length, 4);
+  assert.deepEqual(openItems([a, b], '2026-12-10').map((x) => x.band), ['61-90', 'not-due'], 'by the days past due: 70, and one not yet due');
+  assert.deepEqual([0, 1, 30, 31, 60, 61, 90, 91].map(ageBand), ['not-due', '1-30', '1-30', '31-60', '31-60', '61-90', '61-90', '90+']);
+  assert.equal(AGE_BANDS.length, 5);
   assert.equal(daysBetween('2026-03-28', '2026-03-30'), 2, 'across the switch to summer time');
 });
 
 test('CSV as the app exports it: BOM, semicolons, CRLF, two decimals, a field with a semicolon quoted', () => {
   assert.equal(csvOf(['Nr.', 'Kontakt', 'Offen'], [['2026-001', 'Muster; Söhne "AG"', 1234.5]]), '﻿Nr.;Kontakt;Offen\r\n2026-001;"Muster; Söhne ""AG""";1234.50\r\n');
+});
+
+test('a Rechnung closed by a loss reads «Ausgebucht» and stands in «Bezahlt»; one closed by a small Spesen rest stays «Bezahlt» (decision 56)', () => {
+  const pay = { transactionRef: 'T', date: '2026-09-21', amount: 400, by: 'reference' as const };
+  const loss = issued('a', '2026-001', { lines: [{ text: 'x', quantity: 1, price: 500, vatRate: 0 }], payments: [pay], writeOffs: [{ id: 'wo-1', date: '2026-11-19', amount: 100, reason: 'loss', by: 'person' }] });
+  const fee = issued('b', '2026-002', { lines: [{ text: 'x', quantity: 1, price: 403.5, vatRate: 0 }], payments: [pay], writeOffs: [{ id: 'wo-1', date: '2026-09-22', amount: 3.5, reason: 'fee', by: 'person' }] });
+  assert.equal(invoiceStatus(loss, [loss]), 'written-off');
+  assert.equal(invoiceStatus(fee, [fee]), 'paid');
+  const rows = docRows({ today: '2026-11-20', invoices: [loss, fee], customers: [], sent: [] }, 'invoice', parsePeriod('2026', '2026-11-20')!, undefined, '2026-11-20');
+  assert.deepEqual(rows.filter((r) => inTab(r, 'paid')).map((r) => [r.id, r.status]), [['2026-001', 'written-off'], ['2026-002', 'paid']]);
 });

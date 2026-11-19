@@ -15,6 +15,8 @@ import {
   YEAR, bankDay, chf, invoicesFor, isoDate, lastDay, MONTHS, mulberry32, pad, qrReference, r2,
   type Company, type Demo, type ManualEntry, type Payment, type Scenario, type StatementBank, type Vendor,
 } from './kit.js';
+import { SCHREINEREI_INVOICING } from './schreinerei-invoices.js';
+import { invoicePayments } from './invoices.js';
 
 const COMPANY: Company = {
   name: 'Schreinerei Beispiel GmbH',
@@ -23,8 +25,15 @@ const COMPANY: Company = {
   address: ['Werkstrasse 12', '9000 St. Gallen'],
 };
 
-/** The rate the ESTV approved (invented): 4.5 % on the gross turnover of the joinery, with its activity code. */
-const VAT: VatSetup = { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei', activityId: '99901' }] };
+/**
+ * The rates the ESTV approved (invented): 4.5 % on the gross turnover of the joinery, and 2.1 % on
+ * the appliances it buys in and resells with its kitchens, each with its activity code. Until
+ * August only the joinery's sales were booked, all at the first rate.
+ */
+const VAT: VatSetup = {
+  registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly',
+  rates: [{ rate: 4.5, label: 'Schreinerei', activityId: '99901' }, { rate: 2.1, label: 'Handel Einbaugeräte', activityId: '99902' }],
+};
 
 const BANKS: Record<'raiffeisen', StatementBank> = {
   raiffeisen: {
@@ -255,6 +264,9 @@ function scenario(seed: number): Scenario {
     source: 'receipts/20260603-schreinerei-beispiel-rechnung-2026-061.pdf',
   }];
 
+  // From August the joinery invoices in the app, paid by QR reference (schreinerei-invoices.ts).
+  payments.push(...invoicePayments(SCHREINEREI_INVOICING));
+
   return {
     payments,
     manual,
@@ -319,5 +331,6 @@ export const schreinerei: Demo = {
   vendors: VENDORS,
   knowledge: KNOWLEDGE,
   scenario,
+  invoicing: SCHREINEREI_INVOICING,
 };
 
