@@ -26,7 +26,7 @@ import { PayrollRefusal, applyClose, applyReopen, assertReopenable, closeEventOf
 import { payslipPdf } from './pdf.js';
 import { allPayslipEvents, appendPayslipEvents, loadPayroll, updatePayroll } from './store.js';
 import { encryptPdf, generatedPassword } from './pdf-encrypt.js';
-import type { MailMessage } from '../invoices/mail.js';
+import { sendingAddress, type MailMessage } from '../invoices/mail.js';
 import type { PayrollEmployee, PayslipCorrection } from './model.js';
 
 /** A change to the books inside the caller's write door; `fn` is synchronous. */
@@ -215,12 +215,20 @@ const digits = (s: string | undefined) => (s ?? '').replace(/\D/g, '');
  * Why a password may not lock a payslip, or a warning to show first: the social security number never
  * (AHVG Art. 153c: it is for social insurance only), the date of birth only after a warning (others know it).
  */
-export function passwordCheck(e: PayrollEmployee, password: string): { refused?: 'short' | 'socialSecurityNumber'; warn?: 'birthDate' } {
+export function passwordCheck(e: PayrollEmployee, password: string): { refused?: 'short' | 'long' | 'characters' | 'socialSecurityNumber'; warn?: 'birthDate' } {
   if (password.length < 8) return { refused: 'short' };
+  // A PDF password counts its first 32 bytes, and readers differ on any character outside printable ASCII.
+  if (password.length > 32) return { refused: 'long' };
+  if (!/^[\x20-\x7e]+$/.test(password)) return { refused: 'characters' };
   const ssn = digits(e.socialSecurityNumber);
-  if (ssn && (digits(password).includes(ssn.slice(3)) || digits(password) === ssn)) return { refused: 'socialSecurityNumber' };
+  // Its last eight digits are the person's own: any of them in a row is part of the number.
+  if (ssn && digits(password).includes(ssn.slice(-8))) return { refused: 'socialSecurityNumber' };
   const [y, m, d] = (e.birthDate ?? '').split('-');
-  if (y && [`${d}${m}${y}`, `${y}${m}${d}`, `${d}${m}${y.slice(2)}`].some((b) => digits(password).includes(b))) return { warn: 'birthDate' };
+  if (y) {
+    const dd = String(Number(d)); const mm = String(Number(m));
+    const forms = [`${d}${m}${y}`, `${y}${m}${d}`, `${d}${m}${y.slice(2)}`, `${y.slice(2)}${m}${d}`, `${dd}${mm}${y}`, `${dd}${mm}${y.slice(2)}`];
+    if (forms.some((b) => digits(password).includes(b))) return { warn: 'birthDate' };
+  }
   return {};
 }
 
@@ -233,9 +241,11 @@ export async function sendPayslip(ws: Workspace, id: string, send: (message: Mai
   const close = ctx.history.closed.get(id);
   if (!close) throw new PayrollRefusal('notClosed', `Die Lohnabrechnung ${id} ist nicht abgeschlossen.`);
   const e = ctx.store.employees.find((x) => x.id === close.employee);
-  const to = e && valueOn(e.email, close.payday);
+  // Her address as it is now (a resend goes where she reads her mail today), else the payday's.
+  const to = e && (valueOn(e.email, now.slice(0, 10)) ?? valueOn(e.email, close.payday));
   if (!e || !to) throw new PayrollRefusal('noEmail', 'Für diese Person ist keine eigene E-Mail-Adresse erfasst.');
-  if (!e.mailPassword || passwordCheck(e, e.mailPassword).refused) throw new PayrollRefusal('noPassword', 'Für diese Person ist kein Passwort für die Lohnabrechnungen gesetzt.');
+  if (!e.mailPassword) throw new PayrollRefusal('noPassword', 'Für diese Person ist kein Passwort für die Lohnabrechnungen gesetzt.');
+  if (passwordCheck(e, e.mailPassword).refused) throw new PayrollRefusal('badPassword', 'Das Passwort dieser Person geht nicht mehr (etwa die AHV-Nummer, seit sie erfasst ist): ein neues setzen.');
   const books = loadBooks(ws);
   const receipt = books.receipts.find((r) => r.id === close.receiptId);
   const path = receipt && receiptFile(ws, books, receipt);
@@ -244,8 +254,9 @@ export async function sendPayslip(ws: Workspace, id: string, send: (message: Mai
   const month = new Intl.DateTimeFormat(`${lang}-CH`, { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${close.month}-01T00:00:00Z`));
   const words = (k: keyof PayrollData['documents']) => ctx.data.documents[k][lang] ?? ctx.data.documents[k].de;
   const locked = await encryptPdf(readFileSync(path), e.mailPassword);
-  const copyTo = ctx.store.company.sender?.copyTo;
-  const out = await send({ to, subject: `${words('payslip')} ${month}`, body: words('mailBody').replace('{month}', month).replace('{firm}', ws.company.name), ...(copyTo ? { bcc: copyTo } : {}) },
+  // The copy goes to the firm's sender, else to the mailbox it sends from: there is always one (§6.2 step 8).
+  const copyTo = ctx.store.company.sender?.copyTo || sendingAddress(ws);
+  const out = await send({ to, subject: `${words('payslip')} ${month}`, body: words('mailBody').replace('{month}', () => month).replace('{firm}', () => ws.company.name), ...(copyTo ? { bcc: copyTo } : {}) },
     { filename: `${words('payslip')}-${close.month}.pdf`.replace(/\s+/g, '-'), content: locked });
   const sent: PayslipSent = { payslip: id, to: out.to, ...(copyTo ? { copyTo } : {}), at: now, messageId: out.messageId };
   const dir = yearPaths(ws.paths, close.month.slice(0, 4)).payroll;
@@ -261,7 +272,7 @@ export function setMailPassword(ws: Workspace, employee: string, given: string |
     if (!e) throw new PayrollRefusal('notFound', `Keine Person ${employee}.`);
     const password = given?.trim() || generatedPassword();
     const check = passwordCheck(e, password);
-    if (check.refused) throw new PayrollRefusal('badPassword', check.refused === 'short' ? 'Das Passwort hat mindestens 8 Zeichen.' : 'Die AHV-Nummer ist nie ein Passwort.');
+    if (check.refused) throw new PayrollRefusal('badPassword', { short: 'Das Passwort hat mindestens 8 Zeichen.', long: 'Das Passwort hat höchstens 32 Zeichen.', characters: 'Das Passwort hat nur Buchstaben ohne Akzente, Zahlen und Satzzeichen.', socialSecurityNumber: 'Die AHV-Nummer ist nie ein Passwort.' }[check.refused]);
     if (check.warn && !confirm) return { warn: check.warn };
     e.mailPassword = password;
     return given?.trim() ? {} : { password };

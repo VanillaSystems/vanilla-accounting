@@ -10,7 +10,7 @@ import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFNumber, PDFRa
 
 /** The padding string of the standard security handler (ISO 32000-1, 7.6.3.3). */
 const PAD = Buffer.from('28BF4E5E4E758A4164004E56FFFA01082E2E00B6D0683E802F0CA9FE6453697A', 'hex');
-const P = -4; // print and copy allowed: a payslip is the person's own document
+const P = -4; // every permission: a payslip is the person's own document; the password only keeps others out
 
 function rc4(key: Buffer, data: Buffer): Buffer {
   const s = Array.from({ length: 256 }, (_, i) => i);
@@ -104,7 +104,11 @@ export async function encryptPdf(pdf: Uint8Array, password: string, seed?: Buffe
 }
 
 /** A password to give a person once: twelve letters and digits without look-alikes. */
-export function generatedPassword(bytes = randomBytes(12)): string {
+export function generatedPassword(length = 12): string {
   const alphabet = 'abcdefghjkmnpqrstuvwxyzACDEFGHJKLMNPQRSTUVWXYZ23456789';
-  return [...bytes].map((b) => alphabet[b % alphabet.length]).join('');
+  // Bytes at or above the largest multiple of the alphabet's length are drawn again: every letter equally likely.
+  const limit = 256 - (256 % alphabet.length);
+  let out = '';
+  while (out.length < length) for (const b of randomBytes(length)) if (b < limit && out.length < length) out += alphabet[b % alphabet.length];
+  return out;
 }

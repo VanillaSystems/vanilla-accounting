@@ -63,3 +63,24 @@ test('the mail goes to the person\'s own address with the copy to the sender, th
   assert.throws(() => pdftotext(file));
   assert.deepEqual(payslipsSent(ws, '2026').map((s) => [s.payslip, s.to, s.copyTo]), [[sent.payslip, 'mila@beispiel.example', 'lohn@firma.example']]);
 });
+
+test('a password outside printable ASCII or longer than 32 is refused; part of the AHV number too; a short birth date warns', () => {
+  const e = owner({ socialSecurityNumber: SSN, birthDate: '1980-05-02' });
+  assert.equal(passwordCheck(e, 'Grüezi-Zürich').refused, 'characters');
+  assert.equal(passwordCheck(e, 'x'.repeat(33)).refused, 'long');
+  assert.equal(passwordCheck(e, 'ab-12345678-cd').refused, undefined);
+  assert.equal(passwordCheck(e, `ab${['3456', '7897'].join('')}cd`).refused, 'socialSecurityNumber');
+  assert.equal(passwordCheck(e, 'geb2.5.1980x').warn, 'birthDate');
+});
+
+test('without a sender set, the copy goes to the mailbox the firm sends from', async () => {
+  const ws = tempWorkspace('payroll-mail-');
+  writeIndex(ws, { journalEntries: [], config: {} });
+  savePayroll(ws, firm([owner({ email: [dated('2026-01-01', 'mila@beispiel.example')], mailPassword: 'Sonne-und-Mond' })]));
+  const write: BooksWriter = <T>(fn: (b: Books) => T) => updateSaved(ws, PERSON, fn);
+  await closePayslip(ws, write, 'e1', '2026-09', { confirm: true });
+  const sending = { ...ws, outgoingMail: { host: 'smtp.example', port: 587, security: 'starttls' as const, fromAddress: 'lohn@firma.example' } } as typeof ws;
+  let bcc: string | undefined;
+  await sendPayslip(sending, '2026-09-e1', async (m) => { bcc = m.bcc; return { to: m.to, messageId: '<2@x>' }; });
+  assert.equal(bcc, 'lohn@firma.example');
+});
