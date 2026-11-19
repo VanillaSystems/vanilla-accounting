@@ -539,3 +539,15 @@ test('an exact half of 5 Rappen is rounded up (FAQ KS 45 no. 5 «kaufmännisch»
   const [l] = line(draft(6505, { subject: true, canton: 'ZH', code: 'L0' }), 'quellensteuer');
   assert.deepEqual([l.base, l.rate, l.amount], [6505, 4.5, 292.75]);
 });
+
+import { lohnausweisOf } from '../src/payroll/documents.js';
+
+test('the Lohnausweis\'s field 12 is the tax withheld, before the commission the employer keeps (KS 45 Ziff. 9.1)', () => {
+  const store = firm([subject(6500, { subject: true, canton: 'ZH', code: 'A0' })]);
+  const ev: PayslipEvent[] = [];
+  for (const m of ['2026-01', '2026-02', '2026-03']) ev.push(closeOf(computePayslip({ ...ctxOf(store, ev), tariffs }, 'q1', m)!));
+  const closes = ev as ReturnType<typeof closeOf>[];
+  assert.ok(closes.every((c) => line(c as never, 'bezugsprovision')[0]?.amount === 9.45), 'each month keeps a commission of 9.45');
+  const la = lohnausweisOf(store.employees[0], closes, firmWageTypes(ctxOf(store).data, store), ctxOf(store).data, '2026');
+  assert.equal(la.fields['12'], 1420, '3 × 473.20 = 1,419.60, in whole francs; not less the 28.35 of commission');
+});

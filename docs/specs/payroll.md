@@ -1998,9 +1998,9 @@ Taken while building B2, the Quellensteuer (2026-11-19):
      fetched and read whole (24'978 to 98'923 records each).
 92. **The Bezugsprovision is a payslip line of the employer** (Lohnart `bezugsprovision`, `computes:
      commission`): the canton's rate on the month's tax at source, carried corrections included, booked D 2279 /
-     C 5890 «Bezugsprovision Quellensteuer» (new payroll account, Personalaufwand). As income it is a credit; it
-     sits in the personnel expense because OR 959b knows no other operating income line and the commission pays
-     for the payroll work; a firm re-accounts the Lohnart if its fiduciary wants 3xxx or 7xxx. The rate is the
+     C 5890 «Bezugsprovision Quellensteuer» (new payroll account, Personalaufwand): a reduction of the personnel
+     expense, not income (KS 45 Ziff. 9.1; decision 127); a firm re-accounts the Lohnart if its fiduciary wants
+     another account. The rate is the
      firm's solution for the canton (a Quellensteuer insurance whose solution code is the canton, rate
      `provision`: a paper settlement, a canton's own rule), else the file's electronic rate (`PEL`); rounded to
      5 Rappen as the tax (decision 121; until then to the Rappen). It lowers «Total Arbeitgeber». The line always names its canton (also with the firm's rate, and on a month
@@ -2185,6 +2185,15 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     oder abzurunden» in steps of 5 Rappen, which is half up; its example 466.725 → 466.70 contradicts that. The app
     keeps half up (466.725 → 466.75, 292.725 → 292.75): the rule's words over its example. A canton that rounds as the
     example does differs by 5 Rappen on such a month; the year-end check of decision 122 shows it on 2279.
+127. **The Bezugsprovision reduces the personnel expense; it stays on 5890, and field 12 is the tax before it.** KS 45
+    Ziff. 9.1 treats the commission as a reduction of expense, not as income: booked D 2279 / C 5890, a credit on
+    an expense account of `personalaufwand`. The chart (modules/ch/accounts.yaml) has no 57xx account that fits:
+    5700–5740 are the social insurances by fund (AHV/IV/EO/ALV, FAK, BVG, UVG, KTG), and the tax at source is
+    none; one secondary source (WEKA) shows it under social-security costs, which is no reason to mix it into
+    5700. So 5890 «Bezugsprovision Quellensteuer» stays. That the commission carries no VAT is not confirmed by a
+    source read here (it is treated as no turnover, no code on the line); a firm that learns otherwise changes the
+    Lohnart. The Lohnausweis's field 12 (Quellensteuerabzug) sums the tax lines as withheld, before the commission
+    the employer keeps (the commission is an employer line of its own and enters no field; test).
 
 ---
 
