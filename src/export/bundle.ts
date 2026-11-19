@@ -112,7 +112,10 @@ function reportHtml(id: TableId, tb: Table, title: string, meta: string, footer:
   tb.rows.forEach((r, j) => {
     const style = tb.styles[j];
     if (style === 'total' && lead) {
-      body += `<tr class="tot"><td colspan="${cols.length - 1}">${esc(String(r[0]))}</td>${td(r[r.length - 1], cols.length - 1)}</tr>`;
+      // The label spans the row up to its trailing amounts: the figure, and the prior year's beside it (#568).
+      let tail = 1;
+      while (tail < cols.length - 1 && isMoney(cols.length - 1 - tail)) tail++;
+      body += `<tr class="tot"><td colspan="${cols.length - tail}">${esc(String(r[0]))}</td>${r.slice(r.length - tail).map((v, i) => td(v, cols.length - tail + i)).join('')}</tr>`;
       group = undefined;
       return;
     }

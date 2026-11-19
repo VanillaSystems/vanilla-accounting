@@ -67,22 +67,26 @@ export function tableOf(id: Exclude<ItemId, 'receipts' | 'statements' | 'filings
   const accName = (a: string) => (a === NO_ACCOUNT ? t('reports.noAccount') : c.names[a] ?? a);
   switch (id) {
     case 'income': case 'balance': {
-      const out = table([t('export.colGroup'), t('col.account'), t('col.name'), t('col.amount')], [3]);
       const view = reportView(id, c.books, c.period, c.names, false);
+      // The prior year's column (#568): its figures, or a head that says there are none and empty cells.
+      const shown = view.prior && 'source' in view.prior;
+      const head = [t('export.colGroup'), t('col.account'), t('col.name'), t('col.amount'), ...(view.prior ? [t(shown ? 'reports.priorCol' : 'reports.priorNoneCol')] : [])];
+      const out = table(head, view.prior ? [3, 4] : [3]);
+      const py = (n: number | undefined): Cell[] => (view.prior ? [shown ? n ?? 0 : ''] : []);
       let side = '';
       for (const b of view.blocks) {
         if (b.kind === 'head') { side = t(b.title === 'assets' ? 'balance.assets' : 'balance.liabilities'); continue; }
-        if (b.kind === 'sum') { out.rows.push([t(REPORT_SUM[b.title]), '', '', b.value]); out.styles.push('total'); continue; }
+        if (b.kind === 'sum') { out.rows.push([t(REPORT_SUM[b.title]), '', '', b.value, ...py(b.prior)]); out.styles.push('total'); continue; }
         const group = [side, c.words.accountingName(b.title)].filter(Boolean).join(' · ');
-        for (const r of b.rows) { out.rows.push([group, r.account, accName(r.account), r.value]); out.styles.push(undefined); }
-        if (b.plain) { out.rows.push([group, '', c.words.accountingName(b.plain.name), b.plain.value]); out.styles.push(undefined); }
-        if (b.total != null) { out.rows.push([`${t('common.total')} ${c.words.accountingName(b.title)}`, '', '', b.total]); out.styles.push('total'); }
+        for (const r of b.rows) { out.rows.push([group, r.account, accName(r.account), r.value, ...py(r.prior)]); out.styles.push(undefined); }
+        if (b.plain) { out.rows.push([group, '', c.words.accountingName(b.plain.name), b.plain.value, ...py(b.plain.prior)]); out.styles.push(undefined); }
+        if (b.total != null) { out.rows.push([`${t('common.total')} ${c.words.accountingName(b.title)}`, '', '', b.total, ...py(b.priorTotal)]); out.styles.push('total'); }
       }
       if (view.vat?.shown === 'net') out.note = t('reports.vatMetaNet', { account: view.vat.account });
       if (view.vat?.shown === 'gross') {
         const { figures } = view.vat;
         const vars = { net: fmt2(figures.net), parts: vatParts(figures).map((x) => t(x.key, { amount: fmt2(x.amount) })).join(', ') };
-        out.rows.push([t(id === 'income' ? 'reports.vatRowIncome' : 'reports.vatRowBalance', vars), '', '', figures.net]);
+        out.rows.push([t(id === 'income' ? 'reports.vatRowIncome' : 'reports.vatRowBalance', vars), '', '', figures.net, ...py(undefined).map(() => '')]);
         out.styles.push('open');
         out.note = t(id === 'income' ? 'reports.vatMetaIncome' : 'reports.vatMetaBalance', vars);
       }

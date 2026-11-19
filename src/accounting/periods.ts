@@ -39,6 +39,8 @@ const iso = (y: number, m: number, d: number): IsoDate => new Date(Date.UTC(y, m
 const parts = (date: IsoDate) => date.split('-').map(Number) as [number, number, number];
 export const addDays = (date: IsoDate, n: number): IsoDate => { const [y, m, d] = parts(date); return iso(y, m, d + n); };
 const lastOfMonth = (y: number, m: number) => iso(y, m + 1, 0);
+/** The same day a year earlier; 29 February becomes 28 February. */
+export const yearBefore = (date: IsoDate): IsoDate => { const [y, m, d] = parts(date); return iso(y - 1, m, Math.min(d, parts(lastOfMonth(y - 1, m))[2])); };
 const quarterOf = (m: number) => Math.ceil(m / 3);
 
 /** A real calendar day (2026-02-29 is not). */

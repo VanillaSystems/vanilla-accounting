@@ -10,7 +10,7 @@ import {
   isDerived, sourceEntryId, statementPostings, statementVatAccount,
   type AccountLedgerRow, type IncomeStatementSection, type Postings,
 } from '../../../accounting/index.js';
-import type { Period } from '../../../accounting/periods.js';
+import { booksFirstDay, yearBefore, type Period } from '../../../accounting/periods.js';
 import { computeBalances } from '../../../accounting/ledger.js';
 import { differenceCauses, type DifferenceCause } from '../../../accounting/year-close.js';
 import { vatInFigures, type VatInFigures } from '../../../accounting/vat-in-figures.js';
@@ -33,13 +33,27 @@ export interface AccountRow {
   open?: number;
   debit?: number;
   credit?: number;
+  /** Bilanz and Erfolgsrechnung with prior-year figures (`ReportView.prior` has `source`): the prior year's. */
+  prior?: number;
 }
 
 export type Block =
   | { kind: 'head'; title: string }
   /** `title` is the app's German section name (accountingName translates it) or a class digit. */
-  | { kind: 'group'; title: string; rows: AccountRow[]; total?: number; plain?: { name: string; value: number } }
-  | { kind: 'sum'; title: SumTitle; value: number; strong?: boolean };
+  | { kind: 'group'; title: string; rows: AccountRow[]; total?: number; priorTotal?: number; plain?: { name: string; value: number; prior?: number } }
+  | { kind: 'sum'; title: SumTitle; value: number; prior?: number; strong?: boolean };
+
+/**
+ * The prior year beside the Bilanz and the Erfolgsrechnung (OR 958d Abs. 2 in Switzerland): the
+ * Bilanz of the last day of the year before, the Erfolgsrechnung of the same days a year earlier.
+ * `books`: read from the books, which reach back to it (`since`: they begin only then, inside the
+ * prior period); `opening`: the Bilanz from the opening balances of the shown year, all there is
+ * of a year kept elsewhere. Without either the figures are `missing`, never zeros: `noBooks` (the
+ * books begin on `first`, or hold nothing dated), `overlap` (a period over a year long, or all).
+ */
+export type Prior =
+  | { from: string; to: string; source: 'books' | 'opening'; since?: string }
+  | { from: string; to: string; missing: 'noBooks' | 'overlap'; first?: string };
 
 export type SumTitle = 'grossProfit' | 'operatingResult' | 'netResult' | 'totalAssets' | 'totalLiabilities';
 
@@ -65,6 +79,8 @@ export interface ReportView {
   asOf?: string;
   gap?: { value: number; liabilities: number; causes: DifferenceCause[] };
   balanced?: boolean;
+  /** Bilanz and Erfolgsrechnung: where the prior-year figures come from, or why there are none. */
+  prior?: Prior;
 }
 
 /** An account of the Bilanz (1xxx, 2xxx) or of the Erfolgsrechnung (3xxx–8xxx); 9xxx and none only in the Saldobilanz. */
@@ -74,47 +90,31 @@ const entriesOf = (books: Index) => books.journalEntries ?? [];
 /** What the reports read: the journal, net of VAT where the jurisdiction says so; `names` is the chart. */
 export const reportPostings = (books: Index, names: Record<string, string>): Postings => statementPostings(entriesOf(books), Object.keys(names));
 
-export function reportView(report: Report, books: Index, period: Period, names: Record<string, string>, all: boolean): ReportView {
+export function reportView(report: Report, books: Index, period: Period, names: Record<string, string>, all: boolean, withPrior = true): ReportView {
   const entries = entriesOf(books);
   const postings = reportPostings(books, names);
   const chartAccounts = Object.keys(names);
-  const keep = (r: AccountRow) => all || r.value !== 0 || !!r.open || !!r.debit || !!r.credit;
-  if (report === 'income') {
-    const s = computeIncomeStatement(postings, period.from, period.to, names);
-    const group = (sec: IncomeStatementSection): Block => ({ kind: 'group', title: sec.title, rows: sec.rows.map((r) => ({ account: r.account, value: r.amount })).filter(keep), total: sec.total });
-    return {
-      blocks: [
-        group(s.revenue), group(s.costOfGoods), { kind: 'sum', title: 'grossProfit', value: s.grossProfit },
-        group(s.operatingExpenses), { kind: 'sum', title: 'operatingResult', value: s.operatingResult },
-        group(s.otherIncome), group(s.otherExpenses), { kind: 'sum', title: 'netResult', value: s.netResult, strong: true },
-      ],
-      headline: { label: 'result', value: s.netResult },
-      vat: vatNote(entries, period.from, period.to, chartAccounts),
-    };
-  }
-  if (report === 'balance') {
+  const keep = (r: AccountRow) => all || r.value !== 0 || !!r.prior || !!r.open || !!r.debit || !!r.credit;
+  if (report === 'income' || report === 'balance') {
+    const prior = withPrior ? priorOf(report, books, period) : undefined;
+    const view = report === 'income' ? incomeView(postings, period.from, period.to, names) : balanceView(books, postings, period.to, names);
+    const before = prior && 'source' in prior ? priorView(report, books, postings, prior, names) : undefined;
+    const blocks = (before ? besidePrior(view.blocks, before.blocks) : view.blocks)
+      .map((b) => (b.kind === 'group' ? { ...b, rows: b.rows.filter(keep) } : b));
+    if (report === 'income') {
+      return { blocks, headline: { label: 'result', value: view.result }, vat: vatNote(entries, period.from, period.to, chartAccounts), ...(prior && { prior }) };
+    }
     const year = period.to.slice(0, 4);
-    const b = computeBalanceSheet(postings, period.to, books.config?.openingBalances?.[year] ?? {}, names);
-    const groups = (secs: typeof b.assets): Block[] => secs.map((sec) => {
-      const result = sec.rows.find((r) => r.account === '');
-      return {
-        kind: 'group', title: sec.title, total: sec.total,
-        rows: sec.rows.filter((r) => r.account !== '').map((r) => ({ account: r.account, value: r.balance })).filter(keep),
-        ...(result && { plain: { name: result.name, value: result.balance } }),
-      };
-    });
-    const opening = books.config?.openingBalances?.[year] ?? {};
+    const opening = openingOfYear(books, year);
     const booked = postings.filter((e) => e.date >= `${year}-01-01` && e.date <= period.to);
     const balances = Object.fromEntries(computeBalances(booked, `${year}-01-01`, period.to, opening, chart().isDebitNormal).map((r) => [r.account, r.balance]));
     return {
-      blocks: [
-        { kind: 'head', title: 'assets' }, ...groups(b.assets), { kind: 'sum', title: 'totalAssets', value: b.totalAssets, strong: true },
-        { kind: 'head', title: 'liabilities' }, ...groups(b.liabilities), { kind: 'sum', title: 'totalLiabilities', value: b.totalLiabilities, strong: true },
-      ],
-      headline: { label: 'balanceTotal', value: b.totalAssets },
+      blocks,
+      headline: { label: 'balanceTotal', value: view.result },
       vat: vatNote(entries, `${year}-01-01`, period.to, chartAccounts),
       asOf: period.to,
-      gap: b.isBalanced ? undefined : { value: round(b.totalAssets - b.totalLiabilities), liabilities: b.totalLiabilities, causes: differenceCauses(opening, booked, balances, chartAccounts) },
+      gap: view.balanced ? undefined : { value: round(view.result - view.liabilities), liabilities: view.liabilities, causes: differenceCauses(opening, booked, balances, chartAccounts) },
+      ...(prior && { prior }),
     };
   }
   const opening = openingOf(books, postings, period.from);
@@ -130,6 +130,91 @@ export function reportView(report: Report, books: Index, period: Period, names: 
     headline: tb.isBalanced ? { label: 'balanced', value: tb.totalDebits } : { label: 'difference', value: round(tb.totalDebits - tb.totalCredits) },
     balanced: tb.isBalanced,
   };
+}
+
+/** The opening balances the books hold for `year`. */
+const openingOfYear = (books: Index, year: string): Record<string, number> => books.config?.openingBalances?.[year] ?? {};
+
+/** The Erfolgsrechnung of `from`..`to` as blocks with every account; `result` the net result. */
+function incomeView(postings: Postings, from: string, to: string, names: Record<string, string>) {
+  const s = computeIncomeStatement(postings, from, to, names);
+  const group = (sec: IncomeStatementSection): Block => ({ kind: 'group', title: sec.title, rows: sec.rows.map((r) => ({ account: r.account, value: r.amount })), total: sec.total });
+  const blocks: Block[] = [
+    group(s.revenue), group(s.costOfGoods), { kind: 'sum', title: 'grossProfit', value: s.grossProfit },
+    group(s.operatingExpenses), { kind: 'sum', title: 'operatingResult', value: s.operatingResult },
+    group(s.otherIncome), group(s.otherExpenses), { kind: 'sum', title: 'netResult', value: s.netResult, strong: true },
+  ];
+  return { blocks, result: s.netResult, liabilities: 0, balanced: true };
+}
+
+/** The Bilanz at `asOf` as blocks with every account, from the books' opening of its year or `opening`; `result` the total assets. */
+function balanceView(books: Index, postings: Postings, asOf: string, names: Record<string, string>, opening = openingOfYear(books, asOf.slice(0, 4))) {
+  const b = computeBalanceSheet(postings, asOf, opening, names);
+  const groups = (secs: typeof b.assets): Block[] => secs.map((sec) => {
+    const result = sec.rows.find((r) => r.account === '');
+    return {
+      kind: 'group', title: sec.title, total: sec.total,
+      rows: sec.rows.filter((r) => r.account !== '').map((r) => ({ account: r.account, value: r.balance })),
+      ...(result && { plain: { name: result.name, value: result.balance } }),
+    };
+  });
+  const blocks: Block[] = [
+    { kind: 'head', title: 'assets' }, ...groups(b.assets), { kind: 'sum', title: 'totalAssets', value: b.totalAssets, strong: true },
+    { kind: 'head', title: 'liabilities' }, ...groups(b.liabilities), { kind: 'sum', title: 'totalLiabilities', value: b.totalLiabilities, strong: true },
+  ];
+  return { blocks, result: b.totalAssets, liabilities: b.totalLiabilities, balanced: b.isBalanced };
+}
+
+/** The day the books begin: 1 January of their first year with opening balances, else their first dated day. */
+function booksStart(books: Index): string | undefined {
+  const year = Object.keys(books.config?.openingBalances ?? {}).sort()[0];
+  return year ? `${year}-01-01` : booksFirstDay({ ...books, transactions: books.transactions ?? [] });
+}
+
+/**
+ * Where the prior-year figures of a Bilanz or an Erfolgsrechnung of `period` come from (Prior).
+ * The books hold the prior period when they begin on or before its last day.
+ */
+export function priorOf(report: 'income' | 'balance', books: Index, period: Period): Prior {
+  const first = booksStart(books);
+  if (report === 'balance') {
+    const year = Number(period.to.slice(0, 4)) - 1;
+    const from = `${year}-01-01`, to = `${year}-12-31`;
+    if (period.kind === 'all') return { from, to, missing: 'overlap' };
+    if (first && first <= to) return { from, to, source: 'books' };
+    if (Object.values(openingOfYear(books, String(year + 1))).some((v) => v !== 0)) return { from, to, source: 'opening' };
+    return { from, to, missing: 'noBooks', ...(first && { first }) };
+  }
+  const from = yearBefore(period.from), to = yearBefore(period.to);
+  if (period.kind === 'all' || to >= period.from) return { from, to, missing: 'overlap' };
+  if (first && first <= to) return { from, to, source: 'books', ...(first > from && { since: first }) };
+  return { from, to, missing: 'noBooks', ...(first && { first }) };
+}
+
+/** The prior year's report: from the books, or the Bilanz the opening balances of the year after it make. */
+function priorView(report: 'income' | 'balance', books: Index, postings: Postings, prior: Extract<Prior, { source: unknown }>, names: Record<string, string>) {
+  if (report === 'income') return incomeView(postings, prior.from, prior.to, names);
+  if (prior.source === 'books') return balanceView(books, postings, prior.to, names);
+  const nextYear = String(Number(prior.to.slice(0, 4)) + 1);
+  return balanceView(books, [] as unknown as Postings, prior.to, names, openingOfYear(books, nextYear));
+}
+
+/** The blocks with each figure of the same blocks of the prior year beside it (same accounts, groups and sums). */
+function besidePrior(blocks: Block[], prior: Block[]): Block[] {
+  const groups = new Map(prior.flatMap((b) => (b.kind === 'group' ? [[b.title, b] as const] : [])));
+  const sums = new Map(prior.flatMap((b) => (b.kind === 'sum' ? [[b.title, b.value] as const] : [])));
+  return blocks.map((b): Block => {
+    if (b.kind === 'sum') return { ...b, prior: sums.get(b.title) ?? 0 };
+    if (b.kind !== 'group') return b;
+    const p = groups.get(b.title);
+    const byAccount = new Map(p?.rows.map((r) => [r.account, r.value]));
+    return {
+      ...b,
+      rows: b.rows.map((r) => ({ ...r, prior: byAccount.get(r.account) ?? 0 })),
+      priorTotal: p?.total ?? 0,
+      ...((b.plain || p?.plain) && { plain: { name: (b.plain ?? p!.plain)!.name, value: b.plain?.value ?? 0, prior: p?.plain?.value ?? 0 } }),
+    };
+  });
 }
 
 const round = (n: number) => Math.round(n * 100) / 100;
@@ -154,7 +239,7 @@ export function incomeColumns(books: Index, period: Period, names: Record<string
   const declared = by.values.map((v) => v.value).filter((v) => used.has(v));
   const others = [...used].filter((v) => v && !declared.includes(v)).sort((a, b) => a.localeCompare(b));
   const values = [...declared, ...others, ...(used.has('') ? [''] : [])];
-  return values.map((value) => ({ value, view: reportView('income', { ...books, journalEntries: entriesOf(books).filter((e) => valueOf(e, by) === value) }, period, names, true) }));
+  return values.map((value) => ({ value, view: reportView('income', { ...books, journalEntries: entriesOf(books).filter((e) => valueOf(e, by) === value) }, period, names, true, false) }));
 }
 
 /** The accounts a search finds: number and name contain every word. */

@@ -14,6 +14,15 @@ Two markers flag an entry you must read before you update:
 
 ## [Unreleased]
 
+### Added
+
+- Bilanz & ER: the Bilanz and the Erfolgsrechnung show the prior year beside each figure, as the
+  Swiss Code of Obligations asks of the annual accounts (OR 958d Abs. 2): the Bilanz of 31.12. of
+  the year before, the Erfolgsrechnung of the same days a year earlier. The figures come from the
+  books when they reach back that far, else the Bilanz from the year's opening balances; without
+  either the column stays empty and a line says why (never zeros), with «Eröffnung erfassen». The
+  export (CSV, Excel, PDF) carries the same column. Presentation only: no figure changes (#568).
+
 ### Fixed
 
 - Mac: a downloaded `.vanillashare` file showed as coloured pixel noise in Chrome's download list.
