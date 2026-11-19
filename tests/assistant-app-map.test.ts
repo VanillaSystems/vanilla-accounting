@@ -92,3 +92,8 @@ test('Verkauf names «Zurück zum Entwurf» with when it is offered, and «Konte
   assert.match(sales, /a sent one stays issued and is corrected by a credit note or a Storno/);
   assert.match(sales, /«Konten ändern».*never an amount, rate or code.*RE-<number>-kk-<k> without a VAT code in the open period/);
 });
+
+test('the map tells the AI the Teilrechnungen of invoicing phase 3: the plan, the Schlussrechnung, «Akontos abziehen», the retention and its Zahlungsaufforderung', () => {
+  const map = appMap('de');
+  for (const words of ['Teilrechnungsplan', '«Schlussrechnung erstellen»', '«Akontos abziehen»', '«Rückbehalt»', '«Zahlungsaufforderung»', '«Trotzdem ändern»']) assert.ok(map.includes(words), words);
+});

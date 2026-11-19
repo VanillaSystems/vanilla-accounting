@@ -61,6 +61,8 @@ const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
   refTaken: 409, numberFormat: 400, convert: 400, nothingTicked: 400, expired: 409, declined: 409, overOpen: 409, sentVersion: 409, orderDelivered: 409, orderInvoiced: 409, notReopenable: 409, notQuote: 409,
   referenceTaken: 409, deliveryFromOrder: 400, orderDrafts: 409, sourceCancelled: 409,
   codeTaken: 409, articleGone: 404, noReminderDraft: 409, levelChanged: 409, recordFailed: 502,
+  stages: 400, stagesSum: 400, stageInvoiced: 409, stagesInvoiced: 409, finalExists: 409, partialDrafts: 409, notFinal: 409, noRetention: 409,
+  notOrder: 400, deducted: 409, deduction: 409, retentionNotDue: 409,
 };
 
 // From the network only the phone's paths answer (src/server/phone.ts), the API ones only with the

@@ -7,7 +7,7 @@
 import { reminderTitle } from './texts.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import type { Invoice, Issued, SentDocument, SentKind } from './model.js';
-import { creditBeyond, creditable, openOn, paidAmount, refundDue, status, totals } from './rules.js';
+import { creditBeyond, creditable, dueFor, openOn, paidAmount, refundDue, status, totals } from './rules.js';
 import { accepted, madeFrom, positions } from './chain.js';
 import { baseCurrency } from '../engines/index.js';
 
@@ -122,7 +122,8 @@ export type OrderListStatus = 'draft' | 'open' | 'partly' | 'done' | 'cancelled'
 /**
  * The one place an Auftrag's status is decided, from the documents made from it: Erledigt once every
  * position (options left out) is invoiced in full and, where a Lieferschein exists, delivered in full;
- * Teilweise once something of it is delivered or invoiced; else Offen. Storniert with its Storno.
+ * Teilweise once something of it is delivered or invoiced, a Teilrechnung of its plan included (it
+ * invoices no quantity: its Schlussrechnung takes every position, decision 111); else Offen. Storniert with its Storno.
  */
 export function orderStatus(o: Invoice, docs: readonly Invoice[]): OrderListStatus {
   if (o.status === 'draft') return 'draft';
@@ -130,7 +131,8 @@ export function orderStatus(o: Invoice, docs: readonly Invoice[]): OrderListStat
   const ps = positions(o, docs).filter((p) => !p.item.optional);
   const delivers = ps.some((p) => p.delivered > 0);
   if (ps.length && ps.every((p) => p.invoiced >= p.item.quantity && (!delivers || p.delivered >= p.item.quantity))) return 'done';
-  return ps.some((p) => p.delivered > 0 || p.invoiced > 0) ? 'partly' : 'open';
+  const akonto = madeFrom(o, docs).some((d) => d.status === 'issued' && !d.cancelled && d.kind === 'invoice' && d.role === 'partial');
+  return akonto || ps.some((p) => p.delivered > 0 || p.invoiced > 0) ? 'partly' : 'open';
 }
 
 /** A Lieferschein's status (4.4.2): issued is ausgeführt. */
@@ -190,6 +192,8 @@ export interface OpenItem {
   band: AgeBand;
   /** Days past the due date; 0 while not yet due. */
   overdue: number;
+  /** The day what is open is due: the due date, or a retention's day once no more than it is open (spec 4.4.9). */
+  due: string;
 }
 
 /** Every Rechnung with something open on `date`, oldest first. */
@@ -198,8 +202,10 @@ export function openItems(invoices: readonly Invoice[], date: string): OpenItem[
     .filter((i): i is Issued => i.status === 'issued' && i.kind === 'invoice' && !i.deleted)
     .map((inv) => {
       const age = Math.max(0, daysBetween(inv.date, date));
-      const overdue = Math.max(0, daysBetween(inv.dueDate, date));
-      return { inv, open: openOn(inv, invoices, date), age, band: ageBand(overdue), overdue };
+      const open = openOn(inv, invoices, date);
+      const due = dueFor(inv, open);
+      const overdue = Math.max(0, daysBetween(due, date));
+      return { inv, open, age, band: ageBand(overdue), overdue, due };
     })
     .filter((x) => x.open > 0)
     .sort((a, b) => a.inv.date.localeCompare(b.inv.date) || a.inv.number.localeCompare(b.inv.number));

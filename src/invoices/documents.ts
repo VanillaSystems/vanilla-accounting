@@ -5,9 +5,9 @@
  */
 import type { Company } from '../workspace/workspace.js';
 import { DEFAULT_LAYOUT, type CustomerFields, type Draft, type Invoice, type InvoiceBook, type InvoiceContent, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type Issued, type Reminder, type Sender } from './model.js';
-import { addDays, openAmount, openCharges, paidAmount, skontoOffer, termsFor, totals } from './rules.js';
+import { addDays, instalmentDue, openAmount, openCharges, paidAmount, retentionOf, skontoOffer, termsFor, totals } from './rules.js';
 import type { SheetData } from './sheet.js';
-import { TEXTS, formatDate, kindTitle, reminderTitle } from './texts.js';
+import { TEXTS, formatAmount, formatDate, kindTitle, reminderTitle } from './texts.js';
 import { recipientOf } from './contacts.js';
 
 export interface InvoicingContext { company: Company; settings: InvoicingSettings | undefined }
@@ -51,7 +51,7 @@ function creditInfo(book: InvoiceBook, c: InvoiceContent): SheetData['credit'] {
   return { number: target.number, date: target.date, gross: totals(target).gross, paid: paidAmount(target), ...(last ? { paidDate: last.date } : {}), ...(c.settlement ? { settlement: c.settlement } : {}) };
 }
 
-export type MailDocument = { kind: 'invoice' } | { kind: 'reminder'; level: number; title?: string } | { kind: 'cancellation' };
+export type MailDocument = { kind: 'invoice' } | { kind: 'reminder'; level: number; title?: string } | { kind: 'cancellation' } | { kind: 'instalment' };
 
 /**
  * The subject and text of the e-mail that sends a document: the language's own texts
@@ -60,8 +60,9 @@ export type MailDocument = { kind: 'invoice' } | { kind: 'reminder'; level: numb
 export function mailText(settings: InvoicingSettings | undefined, inv: Issued, doc: MailDocument, company: string): { subject: string; body: string } {
   const L = TEXTS[inv.language];
   const own = settings?.texts[inv.language];
-  const what = `${kindTitle(L, inv.kind, inv.printAs)} ${inv.number}`;
+  const what = `${kindTitle(L, inv.kind, inv.printAs, inv.role)} ${inv.number}`;
   const document = doc.kind === 'reminder' ? `${doc.title ?? L.reminder(doc.level)} · ${what}`
+    : doc.kind === 'instalment' ? `${L.instalment} · ${what}`
     : doc.kind === 'cancellation' ? L.cancelNotice(inv.number, formatDate(inv.date, inv.language))
     : what;
   const fill = (s: string) => s.replaceAll('{document}', document).replaceAll('{company}', company);
@@ -112,11 +113,13 @@ export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draf
   };
 }
 
-/** What the paper names of an Angebot or Auftrag: its print variant, its last day, the customer's order reference. */
-const kindFacts = (d: InvoiceContent): Pick<SheetData, 'printAs' | 'validUntil' | 'ordered'> => ({
+/** What the paper names of a document's kind: an Auftrag's print variant, an Angebot's last day, the customer's order reference, a Teil- or Schlussrechnung and its retention. */
+const kindFacts = (d: InvoiceContent): Pick<SheetData, 'printAs' | 'validUntil' | 'ordered' | 'role' | 'retention'> => ({
   ...(d.kind === 'sales-order' && d.printAs ? { printAs: d.printAs } : {}),
   ...(d.kind === 'quote' && d.validUntil ? { validUntil: d.validUntil } : {}),
   ...(d.ordered ? { ordered: d.ordered } : {}),
+  ...(d.kind === 'invoice' && d.role ? { role: d.role } : {}),
+  ...(d.kind === 'invoice' && d.schedule?.retention ? { retention: { ...d.schedule.retention, amount: retentionOf(d) } } : {}),
 });
 
 /** An issued invoice or credit note as it was issued; `cancelled` shows the stamp (the cancellation notice). */
@@ -161,14 +164,48 @@ export function reminderSheet(book: InvoiceBook, inv: Issued, reminder: Reminder
   const charges = openCharges(withThis);
   const gross = totals(inv).gross;
   const interest = charges.interest && reminder.interest ? { amount: charges.interest, rate: reminder.interest.rate, from: reminder.interest.from, days: reminder.interest.days } : undefined;
+  // Before the retention's day a reminder asks for what is due now (open less the retention), its fees and interest on top, and names the retention.
+  const r = inv.schedule?.retention;
+  const held = r && r.until > reminder.date && open > retentionOf(inv) ? retentionOf(inv) : 0;
+  const { retention: _r, ...sheet } = issuedSheet(book, inv, logoSrc);
   return {
-    ...issuedSheet(book, inv, logoSrc),
+    ...(held ? sheet : issuedSheet(book, inv, logoSrc)),
     reminderTitle: reminderTitle(reminder, inv.language),
     date: reminder.date,
     dueDate: reminder.dueDate,
     intro: reminder.intro,
     closing: reminder.closing,
-    due: { paidSoFar: Math.round((gross - open) * 100) / 100, fee: charges.fee, ...(interest ? { interest } : {}), open: Math.round((open + charges.fee + charges.interest) * 100) / 100 },
+    due: {
+      paidSoFar: Math.round((gross - open) * 100) / 100, fee: charges.fee, ...(interest ? { interest } : {}),
+      ...(held && r ? { held: { amount: held, until: r.until, percent: r.percent } } : {}),
+      open: Math.round((open - held + charges.fee + charges.interest) * 100) / 100,
+    },
+  };
+}
+
+/** The days a Zahlungsaufforderung gives to pay, as a reminder does. */
+export const INSTALMENT_DAYS = 10;
+
+/**
+ * A Zahlungsaufforderung (spec 4.4.9): the Rechnung's lines and reference, what is paid and what is
+ * still open (the retention), its own date, due date and texts; its payment part asks for what is open.
+ */
+export function instalmentSheet(book: InvoiceBook, inv: Issued, at: { date: string; intro?: string; closing?: string }, logoSrc?: string): SheetData {
+  const L = TEXTS[inv.language];
+  const open = openAmount(inv, book.invoices);
+  const gross = totals(inv).gross;
+  // The retention, or what is open when less; what else is open is named, not asked here (a reminder asks it).
+  const due = instalmentDue(inv, book.invoices, at.date) ?? { amount: Math.min(open, retentionOf(inv)), more: Math.max(0, Math.round((open - retentionOf(inv)) * 100) / 100) };
+  const { retention: _r, ...sheet } = issuedSheet(book, inv, logoSrc);
+  const more = due.more > 0 ? ` ${L.instalmentMore(`${inv.currency} ${formatAmount(due.more, inv.language)}`)}` : '';
+  return {
+    ...sheet,
+    instalment: true,
+    date: at.date,
+    dueDate: addDays(at.date, INSTALMENT_DAYS),
+    intro: at.intro ?? L.instalmentIntro(inv.number, formatDate(inv.date, inv.language), formatDate(inv.schedule?.retention?.until ?? inv.dueDate, inv.language)) + more,
+    closing: at.closing ?? L.instalmentClosing,
+    due: { paidSoFar: Math.round((gross - open) * 100) / 100, fee: 0, open: due.amount, ...(due.more > 0 ? { notAsked: due.more } : {}) },
   };
 }
 

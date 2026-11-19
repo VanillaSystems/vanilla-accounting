@@ -15,6 +15,7 @@ import {
   addArticles, createArticle, liveArticles, removeArticle, updateArticle,
   addComment, answerQuote, backToDraft, cancelInvoice, changeAccounts, convertDocument, createContact, addContacts, createCreditNote, createDraft, createReminderDraft, deleteReminderDraft, planDunningRun, previewReminder, runDunning, updateReminderDraft, fileReceipts, findInvoice, issueInvoice, issuedPdf,
   missingOf, parseDraftPatch, paymentContext, previewHtml, recordSend, removeContact, removeDraft, reopenDocument, replacedPdf, sendReminder, sentPdf, updateContact, updateDraft, viewOf,
+  addDeductions, createStageInvoice, parseStages, sendInstalment, setStages,
 } from '../../invoices/service.js';
 import { liveContacts, payerIbans, proposeBusiness } from '../../invoices/contacts.js';
 import { importContacts, previewContactImport, type ImportChoice } from '../../invoices/contact-import.js';
@@ -236,8 +237,10 @@ router.post('/api/invoices', (req, res) => {
   res.json(createDraft(WS, { ...patch, customerId: patch.customerId }));
 });
 
+/** `confirm: 'stagesInvoiced'`: «Trotzdem ändern» over a changed total of an Auftrag whose Teilrechnungen are issued (spec 4.11). */
 router.patch('/api/invoices/:id', (req, res) => {
-  res.json(updateDraft(WS, req.params.id, parseDraftPatch(req.body, loadInvoices(WS), WS.invoicing?.units, req.params.id, WS.invoicing?.paymentTerms)));
+  const { confirm, ...patch } = body(req);
+  res.json(updateDraft(WS, req.params.id, parseDraftPatch(patch, loadInvoices(WS), WS.invoicing?.units, req.params.id, WS.invoicing?.paymentTerms), confirms({ confirm })));
 });
 
 router.delete('/api/invoices/:id', (req, res) => {
@@ -386,6 +389,36 @@ router.post('/api/invoices/dunning/run', async (req, res) => {
   const date = optText(b, 'date') ?? today();
   if (!Array.isArray(b.ids) || !b.ids.every((x) => typeof x === 'string')) throw new RequestError(400, 'ids: die Rechnungen, die gemahnt werden.');
   res.json(await runDunning(WS, { date, ids: b.ids as string[] }));
+});
+
+// ─── phase 3: Teilrechnungsplan, Schlussrechnung, Rückbehalt (invoices.json only, never the books) ───
+
+/** The Teilrechnungsplan of an Auftrag: `{ stages: [{ label, percent? | amount?, date? }] }`; an empty list removes it. */
+router.put('/api/invoices/:id/stages', (req, res) => {
+  res.json(setStages(WS, req.params.id, parseStages(body(req).stages)));
+});
+
+/**
+ * The Rechnung of a stage: `{ stage: <index> }` a Teilrechnung draft (the last stage the Schlussrechnung),
+ * `{ stage: 'final' }` «Schlussrechnung erstellen»; `confirm: 'partialDrafts'` over a Teilrechnung still a draft.
+ */
+router.post('/api/invoices/:id/stage-invoice', (req, res) => {
+  const b = body(req);
+  if (b.stage !== 'final' && !Number.isInteger(b.stage)) throw new RequestError(400, 'stage ist die Nummer einer Stufe (ab 0) oder final.');
+  res.json(createStageInvoice(WS, req.params.id, b.stage as number | 'final', confirms(b)));
+});
+
+/** «Akontos abziehen» on a Schlussrechnung draft: `{ ids: [<Teilrechnung id>] }`. */
+router.post('/api/invoices/:id/deductions', (req, res) => {
+  const b = body(req);
+  if (!Array.isArray(b.ids) || !b.ids.every((x) => typeof x === 'string')) throw new RequestError(400, 'ids ist eine Liste von Teilrechnungen.');
+  res.json(addDeductions(WS, req.params.id, b.ids as string[]));
+});
+
+/** «Zahlungsaufforderung» of a retention: `{ date?, intro?, closing?, to?, email? }`; recorded as sent, nothing booked. */
+router.post('/api/invoices/:id/instalment', async (req, res) => {
+  const b = body(req);
+  res.json(await sendInstalment(WS, req.params.id, { date: optText(b, 'date'), intro: optText(b, 'intro'), closing: optText(b, 'closing'), to: optText(b, 'to') }, { deliver: delivery(b) }));
 });
 
 router.post('/api/invoices/:id/comments', (req, res) => {

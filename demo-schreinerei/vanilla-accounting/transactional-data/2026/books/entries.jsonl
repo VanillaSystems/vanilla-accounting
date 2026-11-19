@@ -22,8 +22,6 @@
 {"id":"433dc50baf570482","transactionRef":"M2026-006","date":"2026-06-25","accountDebit":"5000","accountCredit":"2270","amount":396.8,"description":"Lohn Juni 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV), Marco Beispiel"}
 {"id":"4516305e8009d720","transactionRef":"90000000067","date":"2026-08-25","accountDebit":"5000","accountCredit":"1020","amount":5803.2,"description":"Lohn August 2026 netto, Marco Beispiel"}
 {"id":"46a79516892745b1","transactionRef":"90000000073","date":"2026-09-14","accountDebit":"6200","accountCredit":"1020","amount":287.85,"description":"Garage Beispiel, Diesel Lieferwagen September 2026"}
-{"id":"4937bcd71bd36c39","transactionRef":"90000000072","date":"2026-09-11","accountDebit":"1020","accountCredit":"3400","amount":4248.6,"vatCode":"F2","description":"Rechnung 2026-001 Familie Huber-Beispiel","origin":"invoice"}
-{"id":"4bd25cb3ac9e4886","transactionRef":"90000000072","date":"2026-09-11","accountDebit":"1020","accountCredit":"3400","amount":8745.52,"vatCode":"F1","description":"Rechnung 2026-001 Familie Huber-Beispiel","origin":"invoice"}
 {"id":"4be8575d9926d3db","transactionRef":"90000000057","date":"2026-07-20","accountDebit":"6510","accountCredit":"1020","amount":92.75,"description":"Muster Telecom, Telefon und Internet Juli 2026"}
 {"id":"4cefe3d6364871ca","transactionRef":"90000000023","date":"2026-03-23","accountDebit":"1020","accountCredit":"3400","amount":3064.5,"vatCode":"F1","description":"Beispiel Immobilien, Unterhalt März 2026"}
 {"id":"50b1ad8f01b8cf2f","transactionRef":"M2026-008","date":"2026-08-25","accountDebit":"5000","accountCredit":"2270","amount":396.8,"description":"Lohn August 2026 Abzüge Arbeitnehmer (AHV/IV/EO, ALV), Marco Beispiel"}
@@ -32,8 +30,10 @@
 {"id":"635f0b815578c5f4","transactionRef":"90000000012","date":"2026-02-12","accountDebit":"4000","accountCredit":"1020","amount":1420,"description":"Muster Beschläge, Beschläge und Schubladensysteme Küche Muster"}
 {"id":"6647c7006f9e53aa","transactionRef":"M2026-011","date":"2026-07-10","accountDebit":"3400","accountCredit":"3400","amount":3480,"vatCode":"F1","description":"Korrekturbuchung zu Buchung 13ce8ebaa2feed1d (H1): Beispiel Immobilien Rechnung 2026-061 ist Inlandumsatz zum Saldosteuersatz (F1)","corrects":"2026-H1"}
 {"id":"6c1d0331543f4975","transactionRef":"90000000066","date":"2026-08-24","accountDebit":"1020","accountCredit":"3400","amount":2513.65,"vatCode":"F1","description":"Beispiel Immobilien, Unterhalt August 2026"}
+{"id":"6c65df509e5d7908","transactionRef":"90000000080","date":"2026-09-30","accountDebit":"1020","accountCredit":"3400","amount":7389,"vatCode":"F1","description":"Rechnung 2026-003 Familie Keller-Muster","origin":"invoice"}
 {"id":"6d385a56041c9217","transactionRef":"90000000014","date":"2026-02-18","accountDebit":"6510","accountCredit":"1020","amount":87.95,"description":"Muster Telecom, Telefon und Internet Februar 2026"}
 {"id":"71e67566b374f0f2","transactionRef":"90000000025","date":"2026-03-26","accountDebit":"5700","accountCredit":"1020","amount":1413.6,"description":"Ausgleichskasse, Beiträge Arbeitgeber Q1 2026"}
+{"id":"722e227236a5c674","transactionRef":"90000000072","date":"2026-09-11","accountDebit":"1020","accountCredit":"3400","amount":4248.6,"vatCode":"F2","description":"Rechnung 2026-001 Familie Huber-Beispiel","origin":"invoice"}
 {"id":"735bda20ff7593b7","transactionRef":"90000000005","date":"2026-01-19","accountDebit":"6510","accountCredit":"1020","amount":85.7,"description":"Muster Telecom, Telefon und Internet Januar 2026"}
 {"id":"738c01da7cc7001c","transactionRef":"90000000055","date":"2026-07-13","accountDebit":"6570","accountCredit":"1020","amount":29,"vatCode":"B81-1","description":"Example Tools, CAD-Abo Juli 2026 (Bezugsteuer)"}
 {"id":"73e73f5d28c34372","transactionRef":"90000000064","date":"2026-08-14","accountDebit":"1020","accountCredit":"3400","amount":6800,"vatCode":"V0","description":"Möbelhaus Beispiel, Tische (Ausfuhr)"}
@@ -56,6 +56,7 @@
 {"id":"a4f51b563f758893","transactionRef":"90000000026","date":"2026-03-31","accountDebit":"6940","accountCredit":"1020","amount":15,"description":"Raiffeisen, Kontoführung Q1"}
 {"id":"a91520075efdd675","transactionRef":"90000000011","date":"2026-02-11","accountDebit":"6570","accountCredit":"1020","amount":29,"vatCode":"B81-1","description":"Example Tools, CAD-Abo Februar 2026 (Bezugsteuer)"}
 {"id":"ab182932d537f7ff","transactionRef":"90000000044","date":"2026-06-01","accountDebit":"6000","accountCredit":"1020","amount":2300,"description":"Beispiel Liegenschaften, Miete Werkstatt Juni 2026"}
+{"id":"accef7ef4f77517d","transactionRef":"90000000072","date":"2026-09-11","accountDebit":"1020","accountCredit":"3400","amount":8745.52,"vatCode":"F1","description":"Rechnung 2026-001 Familie Huber-Beispiel","origin":"invoice"}
 {"id":"aee3a9aa151a75a6","transactionRef":"90000000065","date":"2026-08-18","accountDebit":"6510","accountCredit":"1020","amount":86.2,"description":"Muster Telecom, Telefon und Internet August 2026"}
 {"id":"aef1a9e8719e3c1c","transactionRef":"90000000032","date":"2026-04-20","accountDebit":"6510","accountCredit":"1020","amount":78.45,"description":"Muster Telecom, Telefon und Internet April 2026"}
 {"id":"b7993a933f2b6101","transactionRef":"90000000021","date":"2026-03-16","accountDebit":"1020","accountCredit":"3400","amount":12400,"vatCode":"F1","description":"Familie Muster, Küche"}

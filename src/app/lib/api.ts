@@ -35,7 +35,7 @@ import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
 import type { ImportChoice, ImportMapping, ImportPreview } from '../../invoices/contact-import.js';
 import type { ArticleImportPreview, ArticleMapping } from '../../invoices/article-import.js';
-import type { Article, ArticleFields, Comment, Contact, ContactFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, WriteOff, WriteOffReason } from '../../invoices/model.js';
+import type { Article, ArticleFields, Comment, Contact, ContactFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, Stage, WriteOff, WriteOffReason } from '../../invoices/model.js';
 import type { AllocationPart, AllocationView, PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch, ReminderPatch, RunOutcome } from '../../invoices/service.js';
 import type { RunPlan } from '../../invoices/dunning.js';
@@ -829,7 +829,16 @@ export const api = {
   previewArticleImport: (csv: string, mapping?: ArticleMapping) => request<ArticleImportPreview>('POST', '/api/articles/import/preview', { csv, ...(mapping ? { mapping } : {}) }),
   importArticles: (csv: string, mapping: ArticleMapping, choices: Record<string, ImportChoice>) => request<{ created: number; skipped: number; ids: string[] }>('POST', '/api/articles/import', { csv, mapping, choices }),
   createDraft: (input: DraftChange & { customerId: string }) => request<Draft>('POST', '/api/invoices', input),
-  patchDraft: (id: string, patch: DraftChange) => request<Draft>('PATCH', `/api/invoices/${id}`, patch),
+  /** `confirm`: «Trotzdem ändern» over a changed total of an Auftrag whose Teilrechnungen are issued (`stagesInvoiced`). */
+  patchDraft: (id: string, patch: DraftChange, confirm?: string[]) => request<Draft>('PATCH', `/api/invoices/${id}`, confirm?.length ? { ...patch, confirm } : patch),
+  /** The Teilrechnungsplan of an Auftrag (spec 4.4.9); an empty list removes it. */
+  setStages: (id: string, stages: Stage[]) => request<Invoice>('PUT', `/api/invoices/${id}/stages`, { stages }),
+  /** The Rechnung of a stage (the last one the Schlussrechnung), or `final`: «Schlussrechnung erstellen». */
+  stageInvoice: (id: string, stage: number | 'final', confirm?: string[]) => request<Draft>('POST', `/api/invoices/${id}/stage-invoice`, { stage, ...(confirm?.length ? { confirm } : {}) }),
+  /** «Akontos abziehen» on a Schlussrechnung draft. */
+  deductions: (id: string, ids: string[]) => request<Draft>('POST', `/api/invoices/${id}/deductions`, { ids }),
+  /** «Zahlungsaufforderung» of a retention: downloaded (`to: 'download'`) or by e-mail. */
+  sendInstalment: (id: string, input: { to?: string; email?: MailMessage }) => request<SentDocument>('POST', `/api/invoices/${id}/instalment`, input),
   deleteDraft: (id: string) => request<{ ok: true }>('DELETE', `/api/invoices/${id}`),
   /** `anyway`: the person's «Trotzdem ausstellen» over a position without text or amount (spec 4.11). */
   issue: (id: string, anyway = false, confirm: readonly string[] = []) => {

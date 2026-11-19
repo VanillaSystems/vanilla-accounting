@@ -12,7 +12,7 @@
 import { roundCHF } from '../accounting/rappen.js';
 import { baseCurrency, invoicing } from '../engines/index.js';
 import type { Contact, DunningLevel, DunningSettings, Invoice, InvoiceBook, InvoiceLanguage, InvoicingSettings, Issued, Reminder, ReminderInterest } from './model.js';
-import { InvoiceRuleError, addDays, creditNotesOf, openAmount, openCharges, openOn } from './rules.js';
+import { dueFor, InvoiceRuleError, addDays, creditNotesOf, openAmount, openCharges, openOn } from './rules.js';
 import { TEXTS, formatDate, reminderTitle } from './texts.js';
 import { daysBetween, wasSent } from './lists.js';
 import { DEFAULT_DUNNING, LEGACY_DUNNING, readDunning } from '../workspace/dunning.js';
@@ -147,7 +147,9 @@ export interface RunPlan { date: string; items: RunItem[]; leftOut: LeftOut[]; l
 
 /** An invoice overdue on `date`: open, and what came last (the invoice, or its last Mahnung) fell due before it. */
 export const overdueOn = (inv: Invoice, invoices: readonly Invoice[], date: string): boolean =>
-  inv.status === 'issued' && inv.kind === 'invoice' && !inv.cancelled && inv.date <= date && openAmount(inv, invoices) > 0 && dueBase(inv) < date;
+  inv.status === 'issued' && inv.kind === 'invoice' && !inv.cancelled && inv.date <= date && openAmount(inv, invoices) > 0 && dueBase(inv) < date
+  // A retention held back is not reminded before its day (spec 4.4.9): the rest paid, what is open falls due then.
+  && dueFor(inv, openAmount(inv, invoices)) < date;
 
 const commentWithin = (inv: Issued, date: string): string | undefined => {
   const from = addDays(date, -COMMENT_DAYS);

@@ -418,3 +418,29 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .lkdunning { border-top: 1px solid var(--line); padding-top: 12px; }
 .idlg.idunning .ibody .lkr input[name=date] { width: auto; justify-self: start; }
 .idunning .ibody a { color: var(--accent); }
+/* Teilrechnungsplan (spec 4.4.9): the margin's stages, the plan dialog, a draft's deductions and retention. */
+.ivplan { font-size: 13px; }
+.ivplan ol { list-style: none; margin: 0 0 8px; padding: 0; }
+.ivplan li { padding: 5px 0; border-bottom: 1px solid var(--line); }
+.ivplan li:last-child { border-bottom: 0; }
+.ivplan .ph { display: flex; justify-content: space-between; gap: 8px; }
+.ivplan .pd { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+.idlg.iplan { width: min(720px, 96vw); top: 8vh; }
+.iplan .ibody { max-height: 64vh; overflow: auto; }
+.ivstages { margin: 4px 0 8px; }
+.ivstages tr.gone td { color: var(--faint); }
+.ivstages input, .ivstages select { font: inherit; padding: 3px 6px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--bg); color: var(--ink); }
+.ivstages td:first-child input { width: 100%; min-width: 140px; }
+.ivstages input.ivqty { width: 88px; text-align: right; font-family: var(--font-mono); }
+.ivstages input:disabled, .ivstages select:disabled { opacity: .5; }
+.ivdeduct { display: grid; gap: 4px; padding: 4px 0 8px; font-size: 13px; }
+.ivdeduct .tickline { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+.ivret { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.ivret input.mono { width: 56px; text-align: right; }
+.ivret input[type="date"] { width: 132px; }
+@media (max-width: 600px) {
+  .ivstages th:nth-child(4), .ivstages td:nth-child(4) { display: none; }
+  .ivstages td:first-child input { min-width: 0; }
+  .ivstages input.ivqty { width: 64px; }
+  .ivstages th, .ivstages td { padding-left: 4px; padding-right: 4px; }
+}

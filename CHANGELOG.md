@@ -79,6 +79,21 @@ Two markers flag an entry you must read before you update:
   below it and the bookings count each sub-position once. A conversion takes a group with the
   sub-positions ticked of it.
 - The AI's invoice draft can name an Artikel by its code or name.
+- Verkauf: Teilrechnungen, Akonto and Schlussrechnung. An Auftrag holds a Teilrechnungsplan
+  («30 % bei Auftrag, 40 % nach Rohbau, Rest»), each stage with a text and a planned day; the dialog
+  says what is missing or too much. Each stage makes a Teilrechnung «Akonto n gemäss Auftrag AU-…»;
+  the last one, or «Schlussrechnung erstellen», the Schlussrechnung with every position of the
+  Auftrag less what each Teilrechnung invoiced, at the VAT it charged, so its payment slip asks for
+  the rest. A Rechnung draft can be marked Teil- or Schlussrechnung, and «Akontos abziehen» finds the
+  contact's Teilrechnungen. Changing the total of an Auftrag whose Teilrechnungen are issued asks
+  «Trotzdem ändern». invoices.json moves to schema 5.
+- Verkauf: Rückbehalt. A Rechnung holds back a percent until a day («Rückbehalt 5 % bis
+  30.06.2027»): its payment slip asks for the rest, the list says «Rückbehalt fällig seit …» on that
+  day, and «Zahlungsaufforderung» sends a notice with its own payment slip and the same reference.
+- The Schreinerei demo has a staircase with a Teilrechnungsplan: a paid Akonto, an open one and the
+  Schlussrechnung with a Rückbehalt. **⚠ figures** of its open half year: the Akonto paid on 30.09.
+  adds its amount to H2 (Ziffer 200 and 323, and the tax at the net rate); its golden books are frozen
+  again. No figure of a filed period changes.
 
 - Verkauf › Weitere › «Zurück zum Entwurf»: a Rechnung or Gutschrift issued by mistake and never
   sent goes back to draft and keeps its number; its PDF stays in the Verlauf, marked as replaced. On

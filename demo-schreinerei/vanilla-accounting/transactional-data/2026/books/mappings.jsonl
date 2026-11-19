@@ -54,3 +54,4 @@
 {"transactionRef":"90000000075","receiptId":"6dede20384295c4d"}
 {"transactionRef":"90000000076","receiptId":"cac700eb36fde570"}
 {"transactionRef":"90000000078","receiptId":"7ea17787bbc2426a"}
+{"transactionRef":"90000000080","receiptId":"189df2b674392fc0","by":"rule","rule":"invoice-reference"}

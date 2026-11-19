@@ -2,7 +2,7 @@
  * The words printed on an invoice, in the invoice's language. These are document texts, not UI
  * texts: an invoice to a customer in Geneva is French whatever language the app speaks.
  */
-import { NET_TERMS, type DocumentKind, type Exemption, type InvoiceLanguage, type OWN_TEXTS, type Reminder } from './model.js';
+import { NET_TERMS, type DocumentKind, type Exemption, type InvoiceLanguage, type InvoiceRole, type OWN_TEXTS, type Reminder } from './model.js';
 
 export interface InvoiceTexts {
   invoice: string; credit: string; draft: string; reminder: (level: number) => string;
@@ -38,6 +38,14 @@ export interface InvoiceTexts {
   /** The texts above and below the table of an Angebot, an Auftrag and a Lieferschein. */
   kindIntro: { quote: string; 'sales-order': string; 'delivery-note': string; proforma: string };
   kindClosing: { quote: string; 'sales-order': string; 'delivery-note': string; proforma: string };
+  /** Teil- and Schlussrechnung (spec 4.4.9): the titles, a stage's position, a deduction, the retention and its instalment notice. */
+  partial: string; final: string;
+  akonto: (n: number, order: string) => string;
+  lessPartial: (no: string, date: string) => string;
+  retention: (pct: string, until: string) => string; payNow: string;
+  instalment: string; instalmentIntro: (no: string, date: string, until: string) => string; instalmentClosing: string;
+  /** Beside a Zahlungsaufforderung: what else of the Rechnung is open, and its line «not asked here». */
+  instalmentMore: (amount: string) => string; notAsked: string;
 }
 
 export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
@@ -69,6 +77,10 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     option: 'Option', optionsLeftOut: (n, a) => `Nicht im Total: ${n === 1 ? 'eine Option' : `${n} Optionen`} über ${a}.`, validUntil: 'gültig bis', yourOrder: 'Ihre Bestellung',
     kindIntro: { quote: 'Gerne unterbreiten wir Ihnen folgendes Angebot:', 'sales-order': 'Vielen Dank für Ihren Auftrag. Wir bestätigen Ihnen:', 'delivery-note': 'Wir liefern Ihnen:', proforma: 'Für die folgenden Leistungen stellen wir Ihnen diese Proformarechnung aus:' },
     kindClosing: { quote: 'Wir freuen uns auf Ihren Auftrag.\nFreundliche Grüsse', 'sales-order': 'Freundliche Grüsse', 'delivery-note': 'Ware erhalten:\n\n\nDatum, Unterschrift', proforma: 'Freundliche Grüsse' },
+    partial: 'Teilrechnung', final: 'Schlussrechnung',
+    akonto: (n, o) => `Akonto ${n} gemäss Auftrag ${o}`, lessPartial: (no, d) => `abzüglich Teilrechnung ${no} vom ${d}`,
+    retention: (p, d) => `Rückbehalt ${p} % bis ${d}`, payNow: 'Zu zahlen',
+    instalment: 'Zahlungsaufforderung', instalmentIntro: (no, d, u) => `Der Rückbehalt unserer Rechnung ${no} vom ${d} ist am ${u} fällig geworden. Bitte überweisen Sie den offenen Betrag innert 10 Tagen.`, instalmentClosing: 'Freundliche Grüsse', instalmentMore: (a) => `Ausserdem sind aus der Rechnung noch ${a} offen; dafür folgt eine Mahnung.`, notAsked: 'übriger offener Betrag, hier nicht verlangt',
   },
   fr: {
     invoice: 'Facture', credit: 'Note de crédit', draft: 'Projet', reminder: (n) => (n === 1 ? '1er rappel' : `${n}e rappel`),
@@ -98,6 +110,10 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     option: 'Option', optionsLeftOut: (n, a) => `Hors total : ${n === 1 ? 'une option' : `${n} options`} pour ${a}.`, validUntil: 'valable jusqu’au', yourOrder: 'Votre commande',
     kindIntro: { quote: 'Nous avons le plaisir de vous soumettre l’offre suivante :', 'sales-order': 'Nous vous remercions de votre commande et vous confirmons :', 'delivery-note': 'Nous vous livrons :', proforma: 'Pour les prestations suivantes, nous vous adressons cette facture proforma :' },
     kindClosing: { quote: 'Dans l’attente de votre commande.\nMeilleures salutations', 'sales-order': 'Meilleures salutations', 'delivery-note': 'Marchandise reçue :\n\n\nDate, signature', proforma: 'Meilleures salutations' },
+    partial: 'Facture partielle', final: 'Facture finale',
+    akonto: (n, o) => `Acompte ${n} selon la commande ${o}`, lessPartial: (no, d) => `moins la facture partielle ${no} du ${d}`,
+    retention: (p, d) => `Retenue de garantie ${p} % jusqu’au ${d}`, payNow: 'À payer',
+    instalment: 'Demande de paiement', instalmentIntro: (no, d, u) => `La retenue de garantie de notre facture ${no} du ${d} est échue depuis le ${u}. Nous vous prions de régler le montant ouvert dans les 10 jours.`, instalmentClosing: 'Meilleures salutations', instalmentMore: (a) => `En outre, ${a} de la facture restent ouverts ; un rappel suivra.`, notAsked: 'autre montant ouvert, non demandé ici',
   },
   it: {
     invoice: 'Fattura', credit: 'Nota di credito', draft: 'Bozza', reminder: (n) => `${n}° sollecito`,
@@ -127,6 +143,10 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     option: 'Opzione', optionsLeftOut: (n, a) => `Escluso dal totale: ${n === 1 ? 'un’opzione' : `${n} opzioni`} per ${a}.`, validUntil: 'valida fino al', yourOrder: 'Vostro ordine',
     kindIntro: { quote: 'Siamo lieti di sottoporvi la seguente offerta:', 'sales-order': 'Vi ringraziamo per l’ordine e vi confermiamo:', 'delivery-note': 'Vi consegniamo:', proforma: 'Per le seguenti prestazioni vi inviamo questa fattura proforma:' },
     kindClosing: { quote: 'In attesa del vostro ordine.\nCordiali saluti', 'sales-order': 'Cordiali saluti', 'delivery-note': 'Merce ricevuta:\n\n\nData, firma', proforma: 'Cordiali saluti' },
+    partial: 'Fattura parziale', final: 'Fattura finale',
+    akonto: (n, o) => `Acconto ${n} secondo l’ordine ${o}`, lessPartial: (no, d) => `dedotta la fattura parziale ${no} del ${d}`,
+    retention: (p, d) => `Trattenuta di garanzia ${p} % fino al ${d}`, payNow: 'Da pagare',
+    instalment: 'Richiesta di pagamento', instalmentIntro: (no, d, u) => `La trattenuta di garanzia della nostra fattura ${no} del ${d} è scaduta il ${u}. Vi preghiamo di versare l’importo aperto entro 10 giorni.`, instalmentClosing: 'Cordiali saluti', instalmentMore: (a) => `Inoltre della fattura restano aperti ${a}; seguirà un sollecito.`, notAsked: 'altro importo aperto, non richiesto qui',
   },
   en: {
     invoice: 'Invoice', credit: 'Credit note', draft: 'Draft',
@@ -157,17 +177,21 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     option: 'Option', optionsLeftOut: (n, a) => `Not in the total: ${n === 1 ? 'one option' : `${n} options`} of ${a}.`, validUntil: 'valid until', yourOrder: 'Your order',
     kindIntro: { quote: 'We are pleased to offer you the following:', 'sales-order': 'Thank you for your order. We confirm:', 'delivery-note': 'We deliver:', proforma: 'For the following supplies we issue this pro forma invoice:' },
     kindClosing: { quote: 'We look forward to your order.\nKind regards', 'sales-order': 'Kind regards', 'delivery-note': 'Goods received:\n\n\nDate, signature', proforma: 'Kind regards' },
+    partial: 'Partial invoice', final: 'Final invoice',
+    akonto: (n, o) => `Payment on account ${n} as per order ${o}`, lessPartial: (no, d) => `less partial invoice ${no} of ${d}`,
+    retention: (p, d) => `Retention ${p} % until ${d}`, payNow: 'To pay',
+    instalment: 'Payment request', instalmentIntro: (no, d, u) => `The retention of our invoice ${no} of ${d} fell due on ${u}. Please transfer the amount due within 10 days.`, instalmentClosing: 'Kind regards', instalmentMore: (a) => `In addition, ${a} of the invoice remain open; a reminder will follow.`, notAsked: 'other amount open, not asked here',
   },
 };
 
 /** The title a document prints under: its kind's, an Auftrag's print variant, a Rechnung's or Gutschrift's. */
-export function kindTitle(L: InvoiceTexts, kind: DocumentKind, printAs?: 'confirmation' | 'proforma'): string {
+export function kindTitle(L: InvoiceTexts, kind: DocumentKind, printAs?: 'confirmation' | 'proforma', role?: InvoiceRole): string {
   switch (kind) {
     case 'quote': return L.quote;
     case 'sales-order': return printAs === 'proforma' ? L.proforma : L.confirmation;
     case 'delivery-note': return L.deliveryNote;
     case 'credit-note': return L.credit;
-    case 'invoice': return L.invoice;
+    case 'invoice': return role === 'partial' ? L.partial : role === 'final' ? L.final : L.invoice;
   }
 }
 

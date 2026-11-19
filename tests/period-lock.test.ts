@@ -371,6 +371,30 @@ for (const call of allowed) {
   });
 }
 
+test('phase 3 (spec 4.4.9): a Schlussrechnung deducting a Teilrechnung of the filed quarter writes invoices.json only, the books stay byte for byte', async () => {
+  const file = join(api.root, 'invoices.json');
+  const original = readFileSync(file, 'utf8');
+  const doc = JSON.parse(original) as InvoiceBook;
+  doc.invoices = doc.invoices.map((i) => (i.id === 'in_p' ? { ...i, role: 'partial' as const } : i));
+  doc.contacts = [...(doc.contacts ?? []), { id: 'cu_p', createdAt: '2026-06-01T08:00:00Z', origin: 'manual', deleted: false, type: 'firm', name: 'Beispiel Bistro AG', persons: [], addresses: [{ id: 'a-1', postcode: '3000', town: 'Bern', country: 'CH', billing: true }], language: 'de', emails: [] }];
+  writeFileSync(file, JSON.stringify(doc));
+  const before = JSON.stringify(booksOnDisk(api.ws));
+  try {
+    const made = await send({ method: 'POST', path: '/api/invoices', body: { customerId: 'cu_p', date: '2026-08-10', role: 'final', lines: [{ text: 'Rest', quantity: 1, price: 400, vatRate: 8.1 }] } });
+    assert.equal(made.status, 200, made.error);
+    const id = made.json.id as string;
+    const deducted = await send({ method: 'POST', path: `/api/invoices/${id}/deductions`, body: { ids: ['in_p'] } });
+    assert.equal(deducted.status, 200, deducted.error);
+    assert.deepEqual((deducted.json.lines as Array<{ deducts?: string; price: number }>).map((l) => [l.deducts, l.price]), [[undefined, 400], ['in_p', -100]]);
+    // A retention asked for on a Rechnung without one: refused, nothing written.
+    const instalment = await send({ method: 'POST', path: '/api/invoices/in_p/instalment', body: { to: 'download' } });
+    assert.equal(instalment.status, 409, instalment.error);
+    assert.ok(JSON.stringify(booksOnDisk(api.ws)) === before, 'the books are byte-identical');
+  } finally {
+    writeFileSync(file, original);
+  }
+});
+
 test('a VAT adjustment of the open quarter is not moved into the filed one (403), and is taken out', async () => {
   const before = JSON.stringify(booksOnDisk(api.ws));
   const moved = await send({ method: 'PUT', path: '/api/vat-adjustments/2026-Q3-1', body: { ...ADJ, period: '2026-Q2' } });

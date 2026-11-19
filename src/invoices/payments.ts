@@ -21,8 +21,8 @@ import type { FxResolver } from '../accounting/fx-rates.js';
 import type { LedgerBankAccount } from '../workspace/workspace.js';
 import type { Invoice, InvoiceBook, Issued, PaymentAllocation, WriteOff, WriteOffReason } from './model.js';
 import { parseReference } from '../providers/qr-bill/reference.js';
-import {
-  InvoiceRuleError, type PaymentRefusal, allocate, cashRevenue, liveInvoices, namesNumber, openAmount, openFees, refundDue, revenueSplit, skontoOf, withPayment, withWriteOff, withoutPayment, withoutWriteOff, writeOffAccounts,
+import { retentionOf,
+  InvoiceRuleError, type PaymentRefusal, allocate, cashRevenue, liveInvoices, revenueLines, namesNumber, openAmount, openFees, refundDue, revenueSplit, skontoOf, withPayment, withWriteOff, withoutPayment, withoutWriteOff, writeOffAccounts,
 } from './rules.js';
 import { TEXTS } from './texts.js';
 import { idSource } from './store.js';
@@ -84,7 +84,9 @@ const dueOf = (inv: Issued, book: InvoiceBook): number[] => {
   const invoices = liveInvoices(book);
   if (inv.kind === 'credit-note') return [refundDue(inv, invoices)];
   const open = openAmount(inv, invoices);
-  return [open, r2(open + openFees(inv))];
+  // A retention held back (spec 4.4.9): the QR-bill asked for the rest, so a payment of the rest is the Rechnung's.
+  const held = retentionOf(inv);
+  return [open, r2(open + openFees(inv)), ...(held > 0 && open > held ? [r2(open - held)] : [])];
 };
 
 /** The texts of a transaction's parts (one part when it is a single payment) and their amounts. */
@@ -214,7 +216,7 @@ export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: P
       booked: (refund ? -1 : 1) * heldFor(books, inv, a.amount), fxDifference: ctx.openItems.fxDifference,
     }).map(({ fx: diff, ...l }) => stamp({ ...l, description: diff ? `Kursdifferenz ${text}` : text })), ...fee]
     // An invoice's payment books its share of the invoice and, with the minus codes, of the credit notes applied to it (Verrechnung).
-    : [...(refund ? revenueSplit(inv, a.amount, ctx.revenueAccount).map((l) => ({ ...l, minus: true as const })) : cashRevenue(inv, invoices, a, ctx.revenueAccount)).map((l) => stamp({
+    : [...(refund ? revenueLines(inv, a.amount, ctx.revenueAccount).map((l) => ({ ...l, minus: l.minus ? undefined : (true as const) })) : cashRevenue(inv, invoices, a, ctx.revenueAccount)).map((l) => stamp({
       accountDebit: l.minus ? l.account : bank,
       accountCredit: l.minus ? bank : l.account,
       amount: l.amount,

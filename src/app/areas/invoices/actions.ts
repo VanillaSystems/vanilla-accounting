@@ -2,7 +2,7 @@
  * What the buttons of Rechnungen do: each call goes to the invoicing API, its refusal is shown
  * in the user's language (Art. 26 MWSTG gaps named one by one), and the records are read again.
  */
-import { isItem, issuedPdfUrl, sentPdfUrl, type Contact, type DocumentKind, type Draft, type Invoice, type InvoiceLine, type Issued, type WriteOff, type WriteOffReason } from '../../../invoices/model.js';
+import { isItem, issuedPdfUrl, sentPdfUrl, type Contact, type DocumentKind, type Draft, type Invoice, type InvoiceLine, type Issued, type Stage, type WriteOff, type WriteOffReason } from '../../../invoices/model.js';
 import type { AllocationPart } from '../../../invoices/payments.js';
 import type { MailMessage } from '../../../invoices/mail.js';
 import type { ReminderPatch } from '../../../invoices/service.js';
@@ -60,15 +60,70 @@ export const newDraftFor = (nav: Nav, c: Pick<Contact, 'id' | 'name' | 'language
 
 const draftSaves = inOrder();
 
-/** A draft changed on the sheet: shown at once, saved behind it, one save after the other; only the last answer is shown. */
+/**
+ * A draft changed on the sheet: shown at once, saved behind it, one save after the other; only the last answer is shown.
+ * A changed total of an Auftrag whose Teilrechnungen are issued asks first («Trotzdem ändern», spec 4.11).
+ */
 export async function saveDraft(nav: Nav, draft: Draft, patch: DraftChange): Promise<void> {
   const local = { ...draft } as Draft & Record<string, unknown>;
   for (const [k, v] of Object.entries(patch)) { if (v === null) delete local[k]; else local[k] = v; }
   put({ invoice: local });
-  const { result: saved, latest } = await edits.saving(draft.id, draftSaves(draft.id, () => run(nav, api.patchDraft(draft.id, patch))));
+  let warned = false;
+  const call = () => api.patchDraft(draft.id, patch).catch((e: unknown) => {
+    const code = (e as { body?: { invoiceRefusal?: string } }).body?.invoiceRefusal;
+    if (code !== 'stagesInvoiced') throw e;
+    warned = true;
+    setUi({ dialog: { kind: 'warn', title: t('sales.plan.changeTitle'), text: errorText(e), anyway: t('sales.anyway.stagesInvoiced'), run: async () => {
+      const saved = await run(nav, api.patchDraft(draft.id, patch, ['stagesInvoiced']));
+      if (saved) { setUi({ dialog: null }); put({ invoice: saved }); }
+    } } });
+    return undefined;
+  });
+  const { result: saved, latest } = await edits.saving(draft.id, draftSaves(draft.id, () => run(nav, call())));
   if (!latest) return;
   if (saved) put({ invoice: saved });
+  else if (warned) put({ invoice: draft });
   else void reloadInvoices();
+}
+
+/** The Teilrechnungsplan saved (spec 4.4.9); what is missing or too much is the API's to name. */
+export async function savePlan(nav: Nav, inv: Invoice, stages: Stage[]): Promise<boolean> {
+  const done = await run(nav, api.setStages(inv.id, stages));
+  if (!done) return false;
+  put({ invoice: done });
+  await reloadInvoices();
+  nav.toast(t(stages.length ? 'sales.plan.saved' : 'sales.plan.removed', { number: inv.number ?? '' }));
+  return true;
+}
+
+/** The Rechnung of a stage of the plan, or «Schlussrechnung erstellen» (`final`): the new draft opens; a Teilrechnung still a draft asks first. */
+export function stageInvoice(nav: Nav, inv: Issued, stage: number | 'final'): Promise<Draft | undefined> {
+  return withWarnings(nav, t('sales.plan.finalCreate'), (confirm) => api.stageInvoice(inv.id, stage, confirm), async (draft) => {
+    setUi({ dialog: null });
+    put({ invoice: draft });
+    await reloadInvoices();
+    nav.select(invoicePath(draft));
+    nav.toast(t(draft.role === 'final' ? 'sales.plan.finalMade' : 'sales.plan.partialMade', { number: inv.number }));
+  });
+}
+
+/** «Akontos abziehen»: the picked Teilrechnungen deducted at the end of the Schlussrechnung draft. */
+export async function addDeductions(nav: Nav, draft: Draft, ids: string[]): Promise<boolean> {
+  const done = await run(nav, api.deductions(draft.id, ids));
+  if (!done) return false;
+  put({ invoice: done });
+  nav.toast(t('sales.plan.deducted', { n: ids.length }));
+  return true;
+}
+
+/** «Zahlungsaufforderung» of a retention, by e-mail or saved as a download; recorded in the sent log. */
+export async function sendInstalment(nav: Nav, inv: Issued, email?: MailMessage): Promise<boolean> {
+  const doc = await run(nav, api.sendInstalment(inv.id, email ? { email } : { to: 'download' }));
+  if (!doc) return false;
+  if (!email) download(sentPdfUrl(doc.id), `${doc.title}.pdf`);
+  await reloadInvoices();
+  nav.toast(email ? t('sales.instalment.mailed', { number: inv.number, to: doc.to }) : t('sales.instalment.saved', { number: inv.number }));
+  return true;
 }
 
 /** Deletes the draft; its table stays in view with nothing open (layout A selects nothing by itself). */
@@ -163,7 +218,8 @@ export async function changeAccounts(nav: Nav, inv: Issued, input: AccountsInput
 export async function copyAsDraft(nav: Nav, inv: Issued): Promise<void> {
   const { customerId, currency, language, subject, lines, prices, intro, closing, exemption, ordered, printAs } = inv;
   // A copy stands alone: its positions name no position of a source.
-  const lines2 = lines.map((l) => { if (!isItem(l)) return l; const { ofLine: _f, ...rest } = l; return inv.kind === 'credit-note' ? { ...rest, price: -l.price } : rest; });
+  // A deduction belongs to the Schlussrechnung it was checked on: a copy takes the work, not the Akontos (nor the role).
+  const lines2 = lines.filter((l) => !(isItem(l) && l.deducts)).map((l) => { if (!isItem(l)) return l; const { ofLine: _f, ...rest } = l; return inv.kind === 'credit-note' ? { ...rest, price: -l.price } : rest; });
   const kind = inv.kind === 'credit-note' ? undefined : inv.kind;
   const draft = await newDraft(nav, { id: customerId, name: inv.customer.name }, {
     ...(kind && kind !== 'invoice' ? { kind } : {}), currency, language, lines: lines2, ...(prices ? { prices } : {}), ...(subject ? { subject } : {}), ...(intro ? { intro } : {}), ...(closing ? { closing } : {}), ...(exemption ? { exemption } : {}),
@@ -173,7 +229,7 @@ export async function copyAsDraft(nav: Nav, inv: Issued): Promise<void> {
 }
 
 /** The warnings of spec 4.11 a phase-2 action may meet: each opens «Trotzdem …» instead of a toast. */
-const WARNINGS = ['expired', 'declined', 'overOpen', 'sentVersion', 'orderDelivered', 'orderDrafts', 'sourceCancelled'] as const;
+const WARNINGS = ['expired', 'declined', 'overOpen', 'sentVersion', 'orderDelivered', 'orderDrafts', 'sourceCancelled', 'stagesInvoiced', 'partialDrafts'] as const;
 type Warning = (typeof WARNINGS)[number];
 
 /**
