@@ -1267,6 +1267,10 @@ listed here and updated with phase 2's build:
 47. **Golden master re-frozen.** The four demos' frozen books (`tests/golden/<demo>/books.json`) are
     frozen again from today's demos, the entries of the old freeze in their old order, so that every
     file of a filed period stays byte for byte except the 333 row above.
+48. **The Skonto line says «Sie überweisen», not «zu zahlen».** «zu zahlen» is a total word of the
+    receipt reader (modules/ch/documents.yaml), so a paid invoice filed as its payment's receipt read
+    as the Skonto amount, not its total. The reader also takes ʼ (U+02BC, how the PDF reader gives the
+    printed ’) as a thousands mark: «3ʼ800.00» read as 800.00 before.
 
 ---
 

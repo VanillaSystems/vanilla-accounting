@@ -52,7 +52,7 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     },
     page: (k, n) => `Seite ${k} von ${n}`, cut: 'Vor der Einzahlung abzutrennen', bank: 'Bank', vatNo: 'MWST-Nr.', uidNo: 'UID', payment: 'Zahlung', iban: 'IBAN', reference: 'Referenz',
     lineDiscount: (p) => `Rabatt ${p}`, subtotal: 'Zwischentotal', discount: 'Rabatt', netTerms: NET_TERMS.de,
-    skontoLine: (p, d, a, x) => `Bei Zahlung bis ${d} ${p} % Skonto (${a}): zu zahlen ${x}.`,
+    skontoLine: (p, d, a, x) => `Bei Zahlung bis ${d} ${p} % Skonto (${a}): Sie überweisen ${x}.`,
   },
   fr: {
     invoice: 'Facture', credit: 'Note de crédit', draft: 'Projet', reminder: (n) => (n === 1 ? '1er rappel' : `${n}e rappel`),

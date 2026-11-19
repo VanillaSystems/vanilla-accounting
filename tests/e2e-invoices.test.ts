@@ -9,18 +9,16 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { click, clickText, noBrowser, openApp, waitText } from './support/e2e.js';
-import { DEMO_ROOT, writeIndex } from './support/workspace.js';
+import { DEMO_ROOT, demoInvoices, writeIndex } from './support/workspace.js';
 import type { InvoiceBook, Issued } from '../src/invoices/model.js';
 
 // Found in the demo as generated (tools/demo/kaffee-invoices.ts), not by id: the ids follow the generator's seed.
 const demo = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as InvoiceBook;
-const nameOf = (customerId: string) => demo.customers.find((c) => c.id === customerId)?.name;
 const numbered = demo.invoices.filter((i): i is Issued => i.status === 'issued');
-const after = (n: number) => `2026-${String(Math.max(...numbered.map((i) => Number(i.number.slice(5)))) + n).padStart(3, '0')}`;
 /** The demo's draft for Muster Hotel GmbH; it is issued as the next number. */
-const DRAFT = demo.invoices.find((i) => i.status === 'draft' && nameOf(i.customerId) === 'Muster Hotel GmbH')!.id;
-const NEXT = after(1);
-const CREDIT = after(2);
+const DRAFT = demoInvoices().draftOf('Muster Hotel GmbH');
+const NEXT = demoInvoices().next(1);
+const CREDIT = demoInvoices().next(2);
 /** The demo's overdue invoice of Beispiel Bistro AG with its 1. Mahnung, nothing paid. */
 const overdue = numbered.find((i) => i.customer.name === 'Beispiel Bistro AG' && (i.reminders?.length ?? 0) > 0 && i.payments.length === 0)!;
 const OPEN = overdue.id;

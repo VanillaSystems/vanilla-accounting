@@ -44,7 +44,7 @@ test('Rechnungen: each status from facts, Überfällig with its days beside Offe
   assert.deepEqual(tabCounts(rows, 'invoice').find((c) => c.tab === 'overdue')!.sums, [{ currency: 'CHF', gross: 1674.43, open: 1274.43 }], '2026-006 whole, 2026-007 less its CHF 400 paid');
   assert.deepEqual(tabCounts(rows, 'invoice').find((c) => c.tab === 'unsent')!.sums, [{ currency: 'CHF', gross: 1400, open: 1400 }], '2026-017 and 2026-018');
   assert.deepEqual(tabCounts(rows, 'invoice').find((c) => c.tab === 'cancelled')!.sums, [{ currency: 'CHF', gross: 406.3, open: 0 }], 'Storniert sums what it holds');
-  assert.equal(tabCounts(rows, 'invoice').find((c) => c.tab === 'all')!.sums[0].gross, 13472.56, 'a cancelled invoice is left out of Alle\'s total');
+  assert.equal(tabCounts(rows, 'invoice').find((c) => c.tab === 'all')!.sums[0].gross, 13303.31, 'a cancelled invoice is left out of Alle\'s total');
   assert.deepEqual(factsOf(rows), [{ currency: 'CHF', open: 3639.62, overdue: 1274.43 }, { currency: 'EUR', open: 865, overdue: 0 }]);
   const r3 = rows.find((r) => r.id === '2026-006')!;
   assert.deepEqual([r3.level, r3.sent.reminder?.level, r3.sent.last?.kind], [1, 1, 'invoice'], 'its Mahnstufe and the last Mahnung sent');

@@ -71,7 +71,7 @@ export interface TextFacts {
 
 const RATES = [8.1, 2.6, 3.8];
 const DATE = /(?<!\d)(\d{1,2})\.(\d{1,2})\.(20\d{2})(?!\d)/g;
-const MONEY = /(?<![\d.,'’])(?:\d{1,3}(?:[.'’ ]\d{3})+|\d+)[.,]\d{2}(?![\d%])/g;
+const MONEY = /(?<![\d.,'’ʼ])(?:\d{1,3}(?:[.'’ʼ ]\d{3})+|\d+)[.,]\d{2}(?![\d%])/g;
 const UID_VAT = /CHE[-\s]*(\d{3})[.\s]*(\d{3})[.\s]*(\d{3})\s*(?:MWST|TVA|IVA|VAT)/;
 const NOT_TOTAL = /exkl|excl|netto|zwischen|sub/i;
 const CURRENCY = /\bCHF\b|\bFr\.|\bEUR\b|€|\bUSD\b|US\$/g;
@@ -95,7 +95,7 @@ export function vatIdIn(text: string): string | undefined {
   return uid ? `CHE-${uid[1]}.${uid[2]}.${uid[3]}` : undefined;
 }
 
-const money = (s: string) => Number(s.replace(/[’' ]/g, '').replace(/[.,](\d{2})$/, '#$1').replace(/[.,]/g, '').replace('#', '.'));
+const money = (s: string) => Number(s.replace(/[’'ʼ ]/g, '').replace(/[.,](\d{2})$/, '#$1').replace(/[.,]/g, '').replace('#', '.'));
 /** The money values a text states, in order: each standing alone, never a piece of a date, a UID or a longer number. */
 export const amounts = (line: string) => [...line.replace(DATE, ' ').matchAll(MONEY)].map((m) => money(m[0]));
 const near = (a: number, b: number, eps: number) => Math.abs(a - b) <= eps + 1e-9;
@@ -149,7 +149,7 @@ function inclusive(lines: string[], all: number[]): VatRateGroup | undefined {
 function statedGroups(text: string, lines: string[], all: number[], total: number | undefined): VatRateGroup[] | undefined {
   const groups: VatRateGroup[] = [];
   for (const line of lines) {
-    const m = /(?:MWST|MwSt|TVA|IVA|VAT)\s*(\d+[.,]\d)\s*%[^\n\d]{0,30}?(?:auf|on|sur|su)\s*(?:CHF\s*)?(\d[\d'’.,]*\d)/i.exec(line);
+    const m = /(?:MWST|MwSt|TVA|IVA|VAT)\s*(\d+[.,]\d)\s*%[^\n\d]{0,30}?(?:auf|on|sur|su)\s*(?:CHF\s*)?(\d[\d'’ʼ.,]*\d)/i.exec(line);
     if (!m) continue;
     const rate = Number(m[1].replace(',', '.'));
     const base = amounts(m[2])[0];
@@ -231,7 +231,7 @@ function labelledTotal(text: string, lines: string[], words: DocumentsData): { a
   const inline = labels.filter(onLine).at(-1) ?? lines.filter(totalLabel(words, true)).filter(onLine).at(-1);
   if (inline) return { amount: amounts(inline).at(-1)!, line: inline };
   // The VAT a total holds may stand below it («Total CHF» then «darin MWST 8.1%»): one such amount per such label.
-  const ownVat = (l: string) => amounts(l.replace(/(?:auf|on|sur|su)\s*(?:CHF\s*)?\d[\d'’.,]*\d/gi, ' ')).length > 0;
+  const ownVat = (l: string) => amounts(l.replace(/(?:auf|on|sur|su)\s*(?:CHF\s*)?\d[\d'’ʼ.,]*\d/gi, ' ')).length > 0;
   const within = lines.filter((l) => /inkl|incl|darin|davon|inclus|enthalten/i.test(l) && /MWST|MwSt|TVA|IVA|VAT/.test(l) && !ownVat(l)).length;
   const values = lines.filter(isValueLine);
   const value = (l: string) => amounts(l)[0];

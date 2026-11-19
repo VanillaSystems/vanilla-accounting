@@ -234,6 +234,9 @@ Two markers flag an entry you must read before you update:
   period's status.
 - Löhne: a payslip paid, reopened and closed again with another payout now says what stays open on the
   Lohndurchlaufkonto (on the payslip and in Lohnzahlungen) instead of leaving the difference unnamed.
+- A receipt's total of 1’000 or more printed by the app (a paid invoice filed as its payment's receipt)
+  was read without its thousands, «3ʼ800.00» as 800.00. The Skonto line of an invoice now reads
+  «Sie überweisen CHF …», so it is no longer taken for the invoice's total.
 - Verkauf: a payment entered by hand into the cash box no longer reads «noch von keinem Kontoauszug
   bestätigt» on its invoice (no statement ever shows the cash box); it says the money is in the cash box.
 - Buchungen: an entry that books only the tax (a code such as `M81-2` or `-I81-2`, one side

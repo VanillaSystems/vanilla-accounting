@@ -39,6 +39,20 @@ export function salonWithoutIban(): string {
   return dir;
 }
 
+/**
+ * The demo's invoices as generated (tools/demo/kaffee-invoices.ts), found by their facts, not their
+ * ids: the ids follow the generator's seed and move whenever the demo gains a document.
+ */
+export function demoInvoices(): { draftOf(customer: string): string; next(n?: number): string } {
+  const book = JSON.parse(readFileSync(join(DEMO_ROOT, 'invoices.json'), 'utf8')) as { customers: Array<{ id: string; name: string }>; invoices: Array<{ id: string; status: string; customerId: string; number?: string }> };
+  const name = (id: string) => book.customers.find((c) => c.id === id)?.name;
+  const last = Math.max(...book.invoices.filter((i) => i.status === 'issued').map((i) => Number(i.number!.slice(5))));
+  return {
+    draftOf: (customer) => book.invoices.find((i) => i.status === 'draft' && name(i.customerId) === customer)!.id,
+    next: (n = 1) => `2026-${String(last + n).padStart(3, '0')}`,
+  };
+}
+
 /** Writes `index` (books.json's content before ADR 0013) as the workspace's books, by year. */
 export const writeIndex = (ws: Pick<Workspace, 'paths'>, index: object): void =>
   writeBooks(ws.paths, { receipts: [], transactions: [], mappings: [], bankStatements: [], ...index } as Index);

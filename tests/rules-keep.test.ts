@@ -174,6 +174,9 @@ test('Firma › Regeln over the API: every rule of the workspace in plain words,
   }
 });
 
+/** The demo's money accounts: the bank, the Wise EUR account and the cash box. */
+const MONEY = ['1021', '1023', '1000'];
+
 const RECHNUNG = `      - id: rechnung-it
         when: { text: "Rechnung" }
         then: { account: "6570", vat: I81 }
@@ -192,7 +195,7 @@ test('the card shows what a drafted rule would do: the payments of the open year
   const first = expected[0];
   const swiss = books.mappings.some((m) => { const r = books.receipts.find((x) => x.id === m.receiptId); return m.transactionRef === first.ref && !!r && isPurchaseDocument(r) && r.hasSwissVat; });
   assert.deepEqual(p.examples[0].would, { kind: 'book', lines: [{ account: '6570', vat: `${first.direction === 'CRDT' ? '-' : ''}${swiss ? 'I81' : 'I0'}`, amount: first.amount }] });
-  assert.deepEqual(p.examples[0].now.map((l) => l.account).sort(), books.journalEntries.filter((e) => e.transactionRef === first.ref).map((e) => (e.accountDebit === '1021' ? e.accountCredit : e.accountDebit)).sort());
+  assert.deepEqual(p.examples[0].now.map((l) => l.account).sort(), books.journalEntries.filter((e) => e.transactionRef === first.ref).map((e) => (MONEY.includes(e.accountDebit) ? e.accountCredit : e.accountDebit)).sort());
 });
 
 test('a rule resting on a single word is kept only once the person confirms it on its card; «Speichern» refuses it (wishes3-2)', async () => {

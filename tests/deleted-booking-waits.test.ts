@@ -33,7 +33,7 @@ function openBooked(): { ref: string; entry: JournalEntry } {
   const b = books();
   const closed = b.config.closedThrough ?? '';
   const one = b.journalEntries.filter((e) => e.origin !== 'manual' && e.date > closed && b.journalEntries.filter((x) => x.transactionRef === e.transactionRef).length === 1);
-  const entry = one.find((e) => b.transactions.some((t) => t.ref === e.transactionRef && t.bank !== 'manual'))!;
+  const entry = one.find((e) => b.transactions.some((t) => t.ref === e.transactionRef && t.bank !== 'manual' && t.source !== 'manual'))!;
   return { ref: entry.transactionRef, entry };
 }
 async function inboxRun(): Promise<RunDetail> {

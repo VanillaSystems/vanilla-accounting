@@ -626,7 +626,7 @@
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-004.pdf",
-        "sha256": "48c3ce0817db9accf2d65b72335a9e839776d1089511142a026f7ca627352df3"
+        "sha256": "dfbb1ea676c3ea256232d95932e40496aea1279261a6293fa19c401ceb2657a1"
       },
       "writeOffs": [
         {
@@ -1952,11 +1952,6 @@
       "language": "de",
       "lines": [
         {
-          "kind": "text",
-          "text": "Schulung",
-          "style": "title"
-        },
-        {
           "text": "Barista-Schulung Latte Art, Gruppe bis 6 Personen",
           "quantity": 1,
           "unit": "day",
@@ -1971,45 +1966,11 @@
           "price": 45,
           "vatRate": 8.1,
           "account": "3600"
-        },
-        {
-          "kind": "subtotal",
-          "text": "Total Schulung"
-        },
-        {
-          "kind": "text",
-          "text": "Zubehör",
-          "style": "title"
-        },
-        {
-          "text": "Milchkännchen 600 ml, Edelstahl",
-          "quantity": 6,
-          "unit": "pcs",
-          "price": 24,
-          "vatRate": 8.1,
-          "account": "3600"
-        },
-        {
-          "text": "Tamper 58 mm",
-          "quantity": 2,
-          "unit": "pcs",
-          "price": 39,
-          "vatRate": 8.1,
-          "account": "3600"
-        },
-        {
-          "kind": "subtotal",
-          "text": "Total Zubehör"
-        },
-        {
-          "kind": "discount",
-          "text": "Rabatt Stammkunde",
-          "percent": 5
         }
       ],
       "prices": "net",
       "customerId": "cu_2KIQYfUMHYIT",
-      "subject": "Barista-Schulung und Zubehör Oktober",
+      "subject": "Barista-Schulung Oktober",
       "comments": []
     },
     {
@@ -2024,17 +1985,48 @@
       "language": "fr",
       "lines": [
         {
+          "kind": "text",
+          "text": "Café en grains",
+          "style": "title"
+        },
+        {
           "text": "Mélange espresso maison, grains 1 kg",
           "quantity": 20,
           "unit": "pcs",
           "price": 29,
           "vatRate": 2.6
+        },
+        {
+          "kind": "subtotal",
+          "text": "Sous-total café"
+        },
+        {
+          "kind": "text",
+          "text": "Accessoires",
+          "style": "title"
+        },
+        {
+          "text": "Pichet à lait 600 ml, inox",
+          "quantity": 2,
+          "unit": "pcs",
+          "price": 24,
+          "vatRate": 8.1,
+          "account": "3600"
+        },
+        {
+          "kind": "subtotal",
+          "text": "Sous-total accessoires"
+        },
+        {
+          "kind": "discount",
+          "text": "Rabais client fidèle",
+          "percent": 5
         }
       ],
       "prices": "net",
       "termsId": "net30",
       "customerId": "cu_MVknjIERgg_T",
-      "subject": "Mélange maison octobre",
+      "subject": "Mélange maison et accessoires octobre",
       "comments": []
     },
     {
@@ -2240,7 +2232,7 @@
       "comments": [],
       "pdf": {
         "file": "transactional-data/2026/invoices/2026-018.pdf",
-        "sha256": "5fa7a143580131fdf0ff15f60ac5b288f626a4dec5099092a8c8f10b7862c6fa"
+        "sha256": "5a5178d93de74899c447c026e558bab741de3bacd55b12b511d8df7293c0095e"
       }
     }
   ],
@@ -2299,7 +2291,7 @@
       "kind": "invoice",
       "title": "Rechnung 2026-004",
       "file": "transactional-data/2026/invoices/2026-004.pdf",
-      "sha256": "48c3ce0817db9accf2d65b72335a9e839776d1089511142a026f7ca627352df3",
+      "sha256": "dfbb1ea676c3ea256232d95932e40496aea1279261a6293fa19c401ceb2657a1",
       "sentAt": "2026-08-03T08:40:00.000Z",
       "to": "hallo@kaffeebar-beispiel.example",
       "channel": "email",
