@@ -79,13 +79,19 @@ export function customerOpen(d: InvoiceList, id: string): number {
 }
 
 /** The sent documents, newest first, searched by title, contact and recipient, and filtered by contact, kind and channel. */
+/** The contact a sent document went to: its document's, or a Kontoauszug's own. */
+export function sentContact(d: InvoiceList, doc: SentDocument): Contact | undefined {
+  const id = doc.contactId ?? d.invoices.find((i) => i.id === doc.invoiceId)?.customerId;
+  return id ? d.contacts.find((c) => c.id === id) : undefined;
+}
+
 export function sentRows(d: InvoiceList, q: string | undefined, filter: { customer?: string; kind?: string; channel?: string } = {}): SentDocument[] {
   const needle = q?.trim().toLowerCase();
   const invOf = (doc: SentDocument) => d.invoices.find((i) => i.id === doc.invoiceId);
-  const name = (doc: SentDocument) => { const inv = invOf(doc); return inv ? customerOf(d, inv)?.name ?? '' : ''; };
+  const name = (doc: SentDocument) => { const inv = invOf(doc); return inv ? customerOf(d, inv)?.name ?? '' : sentContact(d, doc)?.name ?? ''; };
   return [...d.sent]
     .filter((doc) => !doc.deleted)
-    .filter((doc) => (!filter.customer || invOf(doc)?.customerId === filter.customer) && (!filter.kind || doc.kind === filter.kind) && (!filter.channel || channelOf(doc) === filter.channel))
+    .filter((doc) => (!filter.customer || sentContact(d, doc)?.id === filter.customer) && (!filter.kind || doc.kind === filter.kind) && (!filter.channel || channelOf(doc) === filter.channel))
     .sort((a, b) => b.sentAt.localeCompare(a.sentAt))
     .filter((doc) => !needle || [doc.title, name(doc), doc.to].join(' ').toLowerCase().includes(needle));
 }

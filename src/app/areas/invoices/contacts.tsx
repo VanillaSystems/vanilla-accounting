@@ -142,11 +142,13 @@ export function ContactPanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
         <span>{termsText(c, ws)}</span>
       </div>
       {c.archived && <p className="cnote" data-testid="contact-archived">{t('contacts.archivedNote')}</p>}
+      {!canEdit && <div className="ivacts"><button type="button" className="btn ghost" data-act="statement" onClick={() => setUi({ dialog: { kind: 'statement', contactId: c.id } })}>{t('statement.open')}</button></div>}
       {canEdit && (
         <div className="ivacts">
           {!c.archived && <AsyncButton type="button" className="btn primary" data-act="new-invoice" onClick={() => newDraftFor(nav, c)}>{t('invoices.new')}</AsyncButton>}
           {open.length > 0 && <button type="button" className="btn ghost" data-act="allocate-contact" data-tip={t('contacts.allocateTip')} onClick={() => setUi({ dialog: { kind: 'allocate', transactionRef: '', customerId: c.id } })}>{t('contacts.allocate')}</button>}
           <button type="button" className="btn ghost" data-act="edit-contact" onClick={() => setUi({ dialog: { kind: 'contact', id: c.id } })}>{t('contacts.edit')}</button>
+          <button type="button" className="btn ghost" data-act="statement" data-tip={t('statement.openTip')} onClick={() => setUi({ dialog: { kind: 'statement', contactId: c.id } })}>{t('statement.open')}</button>
           {c.archived
             ? <AsyncButton type="button" className="btn ghost" data-act="restore-contact" onClick={() => restoreContact(nav, c)}>{t('contacts.restore')}</AsyncButton>
             : <AsyncButton type="button" className="btn ghost danger" data-act="remove-contact" data-tip={t(docs.length ? 'contacts.archiveTip' : 'contacts.deleteTip')} onClick={() => removeContact(nav, c)}>{t(docs.length ? 'contacts.archive' : 'common.delete')}</AsyncButton>}

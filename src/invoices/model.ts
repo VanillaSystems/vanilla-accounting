@@ -432,6 +432,9 @@ export interface InvoiceContent {
   attachments?: Attachment[];
 }
 
+/** At most this many own attachments per document, and this many bytes per file (src/invoices/attachments.ts); each named when hit. */
+export const ATTACHMENT_LIMIT = { count: 10, bytes: 10 * 1024 * 1024 } as const;
+
 /** A PDF that goes with a document: the name it is sent under, the file under the workspace, its SHA-256. */
 export interface Attachment { name: string; file: string; sha256: string }
 

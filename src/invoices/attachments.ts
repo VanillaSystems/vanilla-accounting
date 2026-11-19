@@ -8,12 +8,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import type { Workspace } from '../workspace/workspace.js';
-import type { Attachment } from './model.js';
+import { ATTACHMENT_LIMIT, type Attachment } from './model.js';
 import { InvoiceRuleError } from './rules.js';
 import { readPdf, sha256, storePdf } from './store.js';
 
-/** At most this many own attachments per document, and this many bytes per file; each named when hit. */
-export const ATTACHMENT_LIMIT = { count: 10, bytes: 10 * 1024 * 1024 } as const;
+export { ATTACHMENT_LIMIT } from './model.js';
 
 const FILE = /^transactional-data\/\d{4}\/invoices\/files\/[0-9a-f]{12}-[^/\\]+\.pdf$/;
 

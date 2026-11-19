@@ -30,6 +30,7 @@ import { AsyncButton } from '../../shell/AsyncButton.js';
 import { PaymentTermsSection } from './PaymentTerms.js';
 import { NumberingSection } from './Numbering.js';
 import { DunningSection } from './DunningSection.js';
+import { TemplateBar, TemplateTexts } from './Templates.js';
 
 const LANGS: InvoiceLanguage[] = ['de', 'fr', 'it', 'en'];
 const ACCENTS: Array<[string, 'black' | 'blue' | 'green' | 'bordeaux' | 'ochre']> = [['#141a26', 'black'], ['#1d4ed8', 'blue'], ['#0f766e', 'green'], ['#9f1239', 'bordeaux'], ['#b45309', 'ochre']];
@@ -40,14 +41,18 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
   const settings = ws.invoicing;
   const [lang, setLang] = useState<InvoiceLanguage>('de');
   const [guide, setGuide] = usePersistedFlag('invoices.windowGuide', true);
-  const [local, setLocal] = useState<InvoiceLayout | undefined>(settings?.layout);
+  // The Vorlage edited (Firma › Vorlagen); its layout as the editor shows it while a change is on its way.
+  const [tplId, setTplId] = useState<string>();
+  const [local, setLocal] = useState<Record<string, InvoiceLayout>>({});
   const load = useInvoices();
-  if (!settings || !local) return <InvoicingSetup ws={ws} nav={nav} canEdit={canEdit} onDone={(l) => setLocal(l)} />;
-  const layout = local;
+  if (!settings) return <InvoicingSetup ws={ws} nav={nav} canEdit={canEdit} onDone={() => setLocal({})} />;
+  const tpl = settings.templates.find((x) => x.id === tplId) ?? settings.templates[0];
+  const layout = local[tpl.id] ?? tpl.layout;
+  const setLayoutOf = (l: InvoiceLayout | undefined) => setLocal((m) => { const { [tpl.id]: _, ...rest } = m; return l ? { ...rest, [tpl.id]: l } : rest; });
 
   async function patch(change: InvoicingPatch, next?: InvoiceLayout) {
-    if (next) setLocal(next);
-    try { await api.patchWorkspace({ invoicing: change }); reloadWorkspace(); } catch (e) { setLocal(settings!.layout); nav.toast(errorText(e)); }
+    if (next) setLayoutOf(next);
+    try { await api.patchWorkspace({ invoicing: { ...change, ...(change.layout ? { template: tpl.id } : {}) } }); reloadWorkspace(); } catch (e) { setLayoutOf(undefined); nav.toast(errorText(e)); }
   }
   const setLayout = <K extends keyof InvoiceLayout>(key: K, value: InvoiceLayout[K]) => patch({ layout: { [key]: value } }, { ...layout, [key]: value });
   const setShow = (k: LayoutElement, on: boolean) => void patch({ layout: { show: { [k]: on } } }, { ...layout, show: { ...layout.show, [k]: on } });
@@ -55,8 +60,8 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
   async function upload(file: File) {
     if (file.size > 1.5e6) { nav.toast(t('invoiceLayout.logoTooBig')); return; }
     try {
-      const info = await api.uploadLogo(file, file.type);
-      setLocal(info.invoicing?.layout);
+      const info = await api.uploadLogo(file, file.type, tpl.id);
+      setLayoutOf(info.invoicing?.templates.find((x) => x.id === tpl.id)?.layout);
       reloadWorkspace();
       nav.toast(t('invoiceLayout.logoSet', { name: file.name }));
     } catch (e) { nav.toast(errorText(e)); }
@@ -85,6 +90,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
   return (
     <div className="lkpage">
       <div>
+        <TemplateBar ws={ws} nav={nav} canEdit={canEdit} picked={tpl} onPick={(id) => setTplId(id)} />
         <div className="lkf">
           <div className="lkr"><span>{t('invoiceLayout.language')}</span>{seg(lang, LANGS.map((l): [InvoiceLanguage, string] => [l, l.toUpperCase()]), setLang, t('invoiceLayout.language'))}</div>
           <label className="lkr"><span>{t('invoiceLayout.days')}</span>
@@ -134,6 +140,7 @@ export function InvoiceLayoutSection({ ws, nav, canEdit }: { ws: CompanyInfo; na
           <label className="lkr top"><span>{t('invoiceLayout.mailBody')}</span><textarea name="mailBody" rows={6} defaultValue={texts.mailBody} disabled={!canEdit} onBlur={(e) => saveText('mailBody', e.target.value)} /></label>
         </div>
         <DunningSection ws={ws} nav={nav} canEdit={canEdit} />
+        <TemplateTexts nav={nav} canEdit={canEdit} tpl={tpl} lang={lang} />
         <p className="m src-note">{t('invoiceLayout.note')}</p>
       </div>
       <div className="lkprevw">
