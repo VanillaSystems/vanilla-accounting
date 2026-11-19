@@ -43,6 +43,15 @@ Two markers flag an entry you must read before you update:
   due date by hand («Fällig am»), which wins. No payment files and no bank connection.
 - Books schema 10: a receipt keeps the due date a person set (`dueDate`). `npm run update` writes
   it by itself; no record changes, and an older app refuses the books.
+- Abschluss › Prüfungen: the turnover reconciliation (Umsatzabstimmung, MWSTV Art. 128). Per VAT
+  period it sets the turnover of the revenue accounts against Ziffer 200 as filed and as the books
+  declare it today, and names each difference with its entries and the period it belongs to:
+  revenue without a code that declares turnover, turnover off a revenue account (a fixed asset
+  sold), a correction booked in one period for another, the year-end's own entries, and the
+  Korrekturabrechnung against the filed return. A fact, never a blocker: a difference is
+  corrected in the open period with `corrects`, never in a filed one. `npm run year:close --
+  <year> --dry-run` prints it too. A firm not
+  registered for VAT has nothing to reconcile (#569).
 
 ### Fixed
 

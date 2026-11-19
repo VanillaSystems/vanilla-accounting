@@ -27,6 +27,7 @@ import { chart, filing, setup, vat, vatSetup, baseCurrency, yearEnd as yearEndDa
 import type { TaxCodeInfo } from '../engines/tax-codes.js';
 import { bookedInFiled, bookedWithBase } from '../books/twins.js';
 import type { ReturnFigures } from '../engines/return.js';
+import { turnoverReconciliation, type TurnoverReconciliation } from './turnover.js';
 
 export type Books = Pick<Index, 'transactions' | 'bankStatements' | 'statementBalances' | 'reconciliations'> & {
   journalEntries: JournalEntry[];
@@ -646,6 +647,8 @@ export interface YearClose {
   checks: Check[];
   revaluations: Revaluation[];
   vat: VatCheck;
+  /** The turnover the revenue accounts hold against the turnover the returns declare, each difference named (#569); absent for a firm that files no return. Never a blocker. */
+  turnover?: TurnoverReconciliation;
   /** `state` as marked, or 'done' when an entry of the year's 31.12. books on the template's accounts (`booked`: those entries); `stale` while their figure is not today's (r10c-1). */
   templates: Array<EntryTemplate & { state?: TemplateState; booked?: BookedEntry[]; stale?: StaleFigure }>;
   receivables: Receivables;
@@ -843,6 +846,7 @@ export function yearClose(input: YearCloseInput): YearClose {
     checks,
     revaluations: reval,
     vat: vatCheck(books, year, input.filed, accounts),
+    ...(vatSetup().registered && { turnover: turnoverReconciliation(books.journalEntries, quartersOf(year), input.filed, new Set(templates.flatMap((t) => (t.booked ?? []).map((b) => b.id)))) }),
     templates,
     receivables,
     ledger,
