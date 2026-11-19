@@ -530,3 +530,12 @@ test('a correction entered by hand books, takes its commission and is listed in 
   assert.deepEqual(owedOn([oct, nov], store), { '2279': payable('ZH'), '2278': payable('BE') });
   assert.equal(payable('BE'), 804.35, 'BE\'s own November only');
 });
+
+test('an exact half of 5 Rappen is rounded up (FAQ KS 45 no. 5 «kaufmännisch»; its own example rounds 466.725 down, §22 decision 126)', () => {
+  assert.equal(roundStep(466.725, 0.05), 466.75);
+  assert.equal(roundStep(10.075, 0.05), 10.1);
+  assert.equal(roundStep(10.025, 0.05), 10.05);
+  // 6,505 × 4.5 % = 292.725 on the flat L0 tariff: 292.75.
+  const [l] = line(draft(6505, { subject: true, canton: 'ZH', code: 'L0' }), 'quellensteuer');
+  assert.deepEqual([l.base, l.rate, l.amount], [6505, 4.5, 292.75]);
+});

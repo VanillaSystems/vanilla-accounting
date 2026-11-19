@@ -1942,7 +1942,7 @@ After the independent review of A-2 (2026-11-19):
     a Lohnart counts the same. Lines that would cancel (paid on whole, no allowance) are left out and said as a
     fact. An hourly wage's absence pays what its hours entered say (a fact names the Lohnart). No diagnosis is
     kept (§11).
-    Absences over the same days take a day's wage off once (the later one only what the earlier left; the form says so first, a fact on the payslip); two kinds a fund pays in one month each top up only their own allowance. The EO's allowance is no premium wage of the accident insurance (UVV Art. 115; its Lohnart has no UVG bases).
+    Absences over the same days take a day's wage off once (the later one only what the earlier left; the form says so first, a fact on the payslip); two kinds a fund pays in one month each top up only their own allowance. The EO's allowance is no premium wage of the accident insurance (UVV Art. 115 Abs. 1 lit. d, decision 125; its Lohnart has no UVG bases).
 83. **A child's allowance is the fund's decision, dated, prorated to the days employed**; a birth allowance (`once`)
     is paid in the month its entry begins. The federal minimum and the age after which the allowance ends are
     checked as facts (`allowance.minimum`, `untilAge`), never applied: the fund decides. A child the app paid for is
@@ -2179,6 +2179,12 @@ Taken on the third persona walk's fixes, part b (2026-11-19):
     continued pay has as UVG wage the full wage less the allowance. The supplementary accident insurance (UVGZ)
     follows the insurer's terms (AVB), not the law: the shipped bases are the usual case and stay data, which a firm
     changes on the Lohnart (Einstellungen › Lohnarten).
+126. **The tax at source is rounded half up to 5 Rappen, though the FAQ's own example rounds a half down.** The
+    cantons' FAQ to KS 45 (ESTV, 2022, no. 5,
+    https://www.estv.admin.ch/dam/de/sd-web/a7vG5hlZeAdW/dbst-ks-2022-1-045-d-faq-de.pdf) says «kaufmännisch auf-
+    oder abzurunden» in steps of 5 Rappen, which is half up; its example 466.725 → 466.70 contradicts that. The app
+    keeps half up (466.725 → 466.75, 292.725 → 292.75): the rule's words over its example. A canton that rounds as the
+    example does differs by 5 Rappen on such a month; the year-end check of decision 122 shows it on 2279.
 
 ---
 
