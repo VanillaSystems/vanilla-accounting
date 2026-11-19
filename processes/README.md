@@ -399,6 +399,52 @@ the liability whatever the file says. Remove the section (or «Rückgängig» on
 Löhne › Lohnzahlungen) to be asked again; what was booked stays booked (src/knowledge/payroll-way.ts,
 docs/specs/payroll.md §22 decision 126).
 
+## A business that collects wage deductions
+
+A payslip withholds the employees' share of the social insurances and, for some people, the
+withholding tax; the employer pays it on to the fund, the pension fund, the insurer or the canton.
+The app knows which business collects which deductions by its file's `collects:` list, the kinds of
+setup.yaml `wages.withholds` (`ausgleichskasse`, `pension`, `accident`, `sickness`, `tax`): a
+contract the company's file states, never a fund's name in the app (docs/specs/payroll.md §10.2 A4,
+A5). The compensation fund (`processes/authorities/ausgleichskasse.yaml`) collects its kind by its id.
+
+```yaml
+# knowledge/authorities/pensionskasse-beispiel.yaml: the company's file
+id: pensionskasse-beispiel
+name: Pensionskasse Beispiel
+match:
+  payee: ["Pensionskasse Beispiel"]
+collects: [pension]
+```
+
+```yaml
+# knowledge/authorities/quellensteuer-zug.yaml: the canton, for the withholding tax only
+id: quellensteuer-zug
+name: Quellensteuer Kanton Zug
+match:
+  tx: ["Quellensteuer"]
+collects: [tax]
+```
+
+What follows from it (src/booking/withheld.ts, src/booking/classify.ts):
+
+- A payment to it needs no receipt (as the compensation fund's); its bill still pairs.
+- Where every wage that put something on the kind's account has its payslips linked and they read,
+  code knows the part a payment clears (`fundShare`): the model is told it and code books exactly
+  that; without a model code books the payment itself, the share on the account and the rest on the
+  payee's earlier contribution account or `wages.employer`.
+- The withholding tax is owed on its own account (`wages.withholdsTo`, 2279): its collector's
+  payment is booked by code with or without a model, a shortfall of at most `wages.commission`'s
+  percent as the collection commission.
+- A file that names no kind of the jurisdiction is refused when the knowledge loads. Name the tax
+  office's file for the withholding tax only by what tells its payments apart (`tx`): the same office
+  is paid the firm's own direct taxes too.
+- A payment to one of the firm's insurers while its payroll runs in the app is payroll's
+  (§22 decision 45), whatever the file says.
+
+The person adds `collects:` by hand in the file, or the AI drafts the fund's file with her on its
+knowledge card, as for any business.
+
 ## The contract
 
 `npm run check-processes` enforces rules 1–3 and the graph's wiring, and prints
