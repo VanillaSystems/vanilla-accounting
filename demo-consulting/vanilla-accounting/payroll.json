@@ -1,0 +1,237 @@
+{
+  "schema": 1,
+  "company": {
+    "canton": [
+      {
+        "validFrom": "2026-01-01",
+        "enteredAt": "2026-10-01T08:00:00.000Z",
+        "value": "BE"
+      }
+    ],
+    "payday": [
+      {
+        "validFrom": "2026-01-01",
+        "enteredAt": "2026-10-01T08:00:00.000Z",
+        "value": 25
+      }
+    ],
+    "postingDate": [
+      {
+        "validFrom": "2026-01-01",
+        "enteredAt": "2026-10-01T08:00:00.000Z",
+        "value": "month-end"
+      }
+    ],
+    "rounding": [
+      {
+        "validFrom": "2026-01-01",
+        "enteredAt": "2026-10-01T08:00:00.000Z",
+        "value": 0.05
+      }
+    ],
+    "proration": [
+      {
+        "validFrom": "2026-01-01",
+        "enteredAt": "2026-10-01T08:00:00.000Z",
+        "value": "calendar-days"
+      }
+    ],
+    "thirteenth": [
+      {
+        "validFrom": "2026-01-01",
+        "enteredAt": "2026-10-01T08:00:00.000Z",
+        "value": "twelfth"
+      }
+    ],
+    "sender": {
+      "copyTo": "buchhaltung@muster-consulting.example"
+    },
+    "contact": {
+      "name": "Lukas Beispiel",
+      "phone": "031 000 00 00"
+    }
+  },
+  "insurances": [
+    {
+      "id": "ak",
+      "kind": "ahv",
+      "business": "ausgleichskasse",
+      "name": "Ausgleichskasse Muster",
+      "memberNumber": "100.4711",
+      "solutions": [
+        {
+          "code": "A",
+          "rates": [
+            {
+              "validFrom": "2026-01-01",
+              "enteredAt": "2026-10-01T08:00:00.000Z",
+              "value": {
+                "adminCost": 1.9
+              }
+            }
+          ]
+        }
+      ],
+      "validFrom": "2026-01-01"
+    },
+    {
+      "id": "fak",
+      "kind": "fak",
+      "name": "Familienausgleichskasse Muster",
+      "solutions": [
+        {
+          "code": "A",
+          "rates": [
+            {
+              "validFrom": "2026-01-01",
+              "enteredAt": "2026-10-01T08:00:00.000Z",
+              "value": {
+                "employer": 1
+              }
+            }
+          ]
+        }
+      ],
+      "validFrom": "2026-01-01"
+    },
+    {
+      "id": "uvg",
+      "kind": "uvg",
+      "name": "Muster Unfallversicherung AG",
+      "contractNumber": "UV-2026-88",
+      "solutions": [
+        {
+          "code": "A1",
+          "rates": [
+            {
+              "validFrom": "2026-01-01",
+              "enteredAt": "2026-10-01T08:00:00.000Z",
+              "value": {
+                "bu": 0.07,
+                "nbu": 0.95,
+                "nbuEmployerShare": 0
+              }
+            }
+          ]
+        }
+      ],
+      "validFrom": "2026-01-01"
+    },
+    {
+      "id": "pk",
+      "kind": "bvg",
+      "name": "Muster Sammelstiftung BVG",
+      "contractNumber": "BVG-55-2026",
+      "solutions": [
+        {
+          "code": "K",
+          "rates": []
+        }
+      ],
+      "validFrom": "2026-01-01"
+    }
+  ],
+  "wageTypes": [],
+  "employees": [
+    {
+      "id": "lukas",
+      "isOwner": true,
+      "language": "de",
+      "birthDate": "1984-03-09",
+      "sex": "m",
+      "name": [
+        {
+          "validFrom": "2026-01-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "first": "Lukas",
+            "last": "Beispiel"
+          }
+        }
+      ],
+      "email": [
+        {
+          "validFrom": "2026-01-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": "lukas@muster-consulting.example"
+        }
+      ],
+      "address": [
+        {
+          "validFrom": "2026-01-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "street": "Beispielgasse",
+            "number": "8",
+            "postcode": "3011",
+            "town": "Bern",
+            "country": "CH"
+          }
+        }
+      ],
+      "bank": [
+        {
+          "validFrom": "2026-01-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "iban": "CH1180808000000000003",
+            "holder": "Lukas Beispiel"
+          }
+        }
+      ],
+      "employment": [
+        {
+          "validFrom": "2026-01-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "kind": "monthly",
+            "amount": 8600,
+            "pensum": 100,
+            "hoursPerWeek": 42,
+            "holidayDays": 25
+          }
+        }
+      ],
+      "recurring": [],
+      "insurances": [
+        {
+          "validFrom": "2026-01-01",
+          "enteredAt": "2026-10-01T08:00:00.000Z",
+          "value": {
+            "bvg": {
+              "insurance": "pk",
+              "solution": "K",
+              "employee": 237.5,
+              "employer": 237.5
+            },
+            "uvg": {
+              "insurance": "uvg",
+              "code": "A1"
+            }
+          }
+        }
+      ],
+      "opening": {
+        "2026": {
+          "months": 9,
+          "bases": {
+            "ahv": 77400,
+            "alv": 77400,
+            "uvg": 77400,
+            "uvgz": 77400,
+            "ktg": 77400,
+            "bvg": 77400,
+            "qst": 77400,
+            "thirteenth": 77400
+          },
+          "fields": {
+            "1": 77400,
+            "9": 4953.6,
+            "10.1": 2137.5
+          }
+        }
+      }
+    }
+  ],
+  "monthLines": []
+}

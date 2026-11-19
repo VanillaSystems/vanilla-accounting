@@ -144,6 +144,9 @@ Two markers flag an entry you must read before you update:
   sent already (unless asked) and names what cannot go and why. No page shows a password once set, and
   Änderungen shows payroll.json with the password hidden and the AHV number masked; on a Durchsicht copy
   sending and passwords stay the firm's. Works without the AI.
+- Demo Muster Consulting: the owner's payroll runs in the Löhne area from October (January to
+  September are its opening), so October to December can be closed, paid and documented.
+
 
 ### Fixed
 

@@ -125,7 +125,11 @@ export interface Demo {
   knowledge: Record<string, string>;
   scenario(seed: number): Scenario;
   invoicing?: DemoInvoicing;
+  /** payroll.json: the firm's payroll in the app (docs/specs/payroll.md), for a demo that runs it. */
+  payroll?: PayrollStore;
 }
+
+import type { PayrollStore } from '../../src/payroll/model.js';
 
 // ─── numbers and dates ──────────────────────────────────────────────────────
 
