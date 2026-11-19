@@ -21,6 +21,7 @@ import { I } from '../receipts/icons.js';
 import { at } from '../receipts/view.js';
 import { Kbd } from '../receipts/commands.js';
 import { NO_VAT } from '../codes/model.js';
+import { statementVatAccountOrNone, vatSplitOf } from '../../../accounting/statement-postings.js';
 import { codeLabel, codeText } from '../codes/names.js';
 import { codesUi, setCodesUi } from '../codes/state.js';
 import { byMonth, firstRowTakesOver, rowsOf, JOURNAL_FILTERS, JOURNAL_ORIGINS, type EntryView, type JournalFilter } from './model.js';
@@ -48,6 +49,7 @@ function List(props: Props) {
   const j = journalFor(books);
   const acName = getAccountMap();
   const partners = usePartnerIndex();
+  const vatAccount = useMemo(() => statementVatAccountOrNone(Object.keys(acName)), [acName]);
   const fields = useMemo(() => journalFields((n) => acName[n] ?? '', partners, chipWords), [acName, partners]);
   const chips = useMemo(() => knownChips(query.chips ?? [], fields), [query.chips, fields]);
   const setChips = (next: Chip[]) => nav.setQuery({ chips: next.length ? next : undefined });
@@ -127,7 +129,7 @@ function List(props: Props) {
                   <span className="cap vh" aria-hidden="true">{shut ? '' : t('journal.field.vatCode')}</span>
                   <span className="mono n">{xs.length}</span>
                 </button>
-                {!shut && xs.map((v) => { const row = <Row key={v.e.id} v={v} prev={prev} sel={!picked && v.e.id === route.id} picked={pickedIds.has(v.e.id)} acName={acName} toast={nav.toast} onClick={(e) => clickRow(e, 'entry', v.e.id, route.id, select, nav.toast)} />; prev = v; return row; })}
+                {!shut && xs.map((v) => { const row = <Row key={v.e.id} v={v} prev={prev} sel={!picked && v.e.id === route.id} picked={pickedIds.has(v.e.id)} acName={acName} vatAccount={vatAccount} toast={nav.toast} onClick={(e) => clickRow(e, 'entry', v.e.id, route.id, select, nav.toast)} />; prev = v; return row; })}
               </Fragment>
             );
           })}
@@ -140,15 +142,17 @@ function List(props: Props) {
 
 const BARS = <svg className="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h10M4 18h6" /></svg>;
 
-function Row({ v, prev, sel, picked, acName, toast, onClick }: { v: EntryView; prev?: EntryView; sel: boolean; picked: boolean; acName: Record<string, string>; toast(msg: string): void; onClick(e: React.MouseEvent): void }) {
+function Row({ v, prev, sel, picked, acName, vatAccount, toast, onClick }: { v: EntryView; prev?: EntryView; sel: boolean; picked: boolean; acName: Record<string, string>; vatAccount: string | null; toast(msg: string): void; onClick(e: React.MouseEvent): void }) {
   const { e } = v;
   const same = prev?.e.date === e.date;
   const cont = prev?.e.transactionRef === e.transactionRef;
   const side = (n: string, which: 'dr' | 'cr') => {
     const label = which === 'dr' ? t('journal.field.accountDebit') : t('journal.field.accountCredit');
-    return n
-      ? <span className={`mono ${which}`} data-tip={`${label} ${n} ${acName[n] ?? ''}`}>{n}</span>
-      : <span className={`mono ${which} none`} data-tip={t('journal.noCounterSide', { side: label })}>·</span>;
+    if (n) return <span className={`mono ${which}`} data-tip={`${label} ${n} ${acName[n] ?? ''}`}>{n}</span>;
+    // An empty side a code whose amount is the tax itself leaves: the statements fill in the VAT account (as the detail says).
+    const split = e.vatCode ? vatSplitOf(e, vatAccount) : null;
+    const filled = split?.kind === 'tax' && split.fills === (which === 'dr' ? 'debit' : 'credit');
+    return <span className={`mono ${which} none`} data-tip={filled ? t('journal.vatSide', { side: label, account: `${split.account} ${acName[split.account] ?? ''}`.trim() }) : t('journal.noCounterSide', { side: label })}>·</span>;
   };
   return (
     <div className={`row${sel ? ' sel' : ''}${picked ? ' picked' : ''}${cont ? ' cont' : ''}`} role="option" aria-selected={sel || picked} tabIndex={sel ? 0 : -1} data-id={e.id} onClick={onClick}>
