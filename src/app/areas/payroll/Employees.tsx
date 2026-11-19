@@ -342,6 +342,8 @@ function Exit({ e, nav }: { e: EmployeeDetail['employee']; nav: Nav }) {
   if (!current) return null;
   const save = async (ev: FormEvent) => {
     ev.preventDefault();
+    // Without a last day there is no exit: nothing is saved (an entry without its end would only repeat the current one).
+    if (!f.until) { nav.toast(t('payroll.employee.exitDateMissing')); return; }
     await card.send((how) => payrollApi.addEntry({ path: `employees/${e.id}/employment`, validFrom: current.validFrom, validUntil: f.until, value: { ...current.value, ...(f.reason.trim() ? { exitReason: f.reason.trim() } : {}) } }, how), () => setOpen(false));
   };
   return (

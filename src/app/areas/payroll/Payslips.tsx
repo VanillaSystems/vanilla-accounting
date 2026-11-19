@@ -501,6 +501,7 @@ function History({ v, types }: { v: Payslip; types: Map<string, WageType> }) {
           <li key={i} className="m">
             {e.event === 'close' ? t('payroll.history.close', when(e.closedAt))
               : e.event === 'reopen' ? t('payroll.history.reopen', when(e.at))
+              : e.event === 'keep' ? t('payroll.history.keep', { ...when(e.at), from: e.validFrom ? formatDate(e.validFrom) : '–' })
               : t('payroll.history.correction', { at: when(e.at).at, wageType: labelOf(types.get(e.wageType)?.label, e.wageType), amount: fmt(e.amount) })}
           </li>
         ))}

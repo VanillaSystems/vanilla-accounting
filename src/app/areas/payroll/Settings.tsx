@@ -165,7 +165,7 @@ function InsuranceCard({ i, v, nav, canEdit }: { i: PayrollInsurance; v: Setting
     { k: 'validUntil', label: t('payroll.insurances.validUntil'), type: 'date' },
   ];
   const begin = () => { setF({ name: i.name, memberNumber: i.memberNumber ?? '', contractNumber: i.contractNumber ?? '', customerNumber: i.customerNumber ?? '', account: i.account ?? '', validUntil: i.validUntil ?? '' }); setEdit(true); };
-  const save = async (e: FormEvent) => { e.preventDefault(); await card.send(() => payrollApi.patchInsurance(i.id, f), () => setEdit(false)); };
+  const save = async (e: FormEvent) => { e.preventDefault(); await card.send((how) => payrollApi.patchInsurance(i.id, f, how), () => setEdit(false)); };
   const keys = Object.keys(def?.rates ?? {});
   const addSolution = async (e: FormEvent) => {
     e.preventDefault();
@@ -248,6 +248,7 @@ function WageTypes({ v, nav, canEdit }: Props & { v: SettingsView }) {
   const d = data();
   const [edit, setEdit] = useState<{ key: string; copy: boolean } | null>(null);
   const [f, setF] = useState<Form>({});
+  const card = useBackdated(nav);
   const begin = (key: string, copy: boolean) => {
     const w = v.wageTypes.find((x) => x.key === key)!;
     setF({ label: copy ? '' : labelOf(w.label), debit: copy ? '' : typeof w.debit === 'string' ? w.debit : '', credit: copy ? '' : typeof w.credit === 'string' ? w.credit : '', lohnausweis: copy ? '' : w.lohnausweis ?? '' });
@@ -258,13 +259,10 @@ function WageTypes({ v, nav, canEdit }: Props & { v: SettingsView }) {
     if (!edit) return;
     const label = f.label.trim() ? { [lang()]: f.label.trim(), ...(edit.copy ? { de: f.label.trim() } : {}) } : undefined;
     const body = { label, debit: f.debit, credit: f.credit, lohnausweis: f.lohnausweis };
-    try {
-      if (edit.copy) await payrollApi.copyWageType({ copyOf: edit.key, ...body });
-      else await payrollApi.setWageType(edit.key, body);
-      setEdit(null); nav.toast(t('payroll.saved')); await reloadPayroll();
-    } catch (x) { nav.toast(errorText(x)); }
+    const copy = edit.copy; const key = edit.key;
+    await card.send((how) => (copy ? payrollApi.copyWageType({ copyOf: key, ...body }, how) : payrollApi.setWageType(key, body, how)), () => setEdit(null));
   };
-  const remove = async (key: string) => { try { await payrollApi.removeWageType(key); nav.toast(t('payroll.saved')); await reloadPayroll(); } catch (x) { nav.toast(errorText(x)); } };
+  const remove = (key: string) => card.send((how) => payrollApi.removeWageType(key, how));
   const fields: FieldDef[] = [
     { k: 'label', label: t('payroll.wageTypes.label'), wide: true },
     { k: 'debit', label: t('payroll.booking.debit'), mono: true }, { k: 'credit', label: t('payroll.booking.credit'), mono: true },
@@ -273,6 +271,7 @@ function WageTypes({ v, nav, canEdit }: Props & { v: SettingsView }) {
   return (
     <>
       <p className="lead">{t('payroll.wageTypes.lead')}</p>
+      {card.node}
       <div className="ftab pwt">
         <div className="fh"><span>{t('payroll.wageTypes.label')}</span><span>{t('payroll.wageTypes.field')}</span><span>{t('payroll.booking.debit')}</span><span>{t('payroll.booking.credit')}</span><span /></div>
         {d?.groups.map((g) => {

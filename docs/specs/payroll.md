@@ -1632,12 +1632,14 @@ non-obvious decision is recorded here when it is taken.
     what changed for another reason (an earlier «So lassen», a close after a warning); this way the card
     names only the change's own difference, Lohnart by Lohnart and side. Each payslip is computed against
     the months closed before it, as they stand.
-28. **«Rückwirkende Korrektur» records one correction per differing Lohnart** (and so per side, since a
-    Lohnart has one), with no text; the payslip carrying it prints «Korrektur <Monat>». «Wieder öffnen» on
-    the card saves the entry («So lassen») and then reopens the month, the existing route.
-29. **«So lassen» leaves no mark**: a closed payslip's view computes on every read what it would be today,
-    less the corrections entered on it since its close, and says it as a fact (`drift`). Nothing is stored
-    for it, so a later correction makes the fact go away by itself.
+28. **«Rückwirkende Korrektur» records one correction per carried Lohnart** (and so per side, since a
+    Lohnart has one; which are carried: decision 32), with no text; the payslip carrying it prints
+    «Korrektur <Monat>». «Wieder öffnen» on the card: decision 34.
+29. **«So lassen» is a fact computed on every read, and an event in the history**: a closed payslip's view
+    computes what it would be today, less the corrections entered on it since its close, and says it as a
+    fact (`drift`), so a later correction makes it go away by itself. The choice itself is appended to
+    payslips.jsonl as `{ event: 'keep', id, at, by, path, validFrom }` on each payslip it concerned (§19.3:
+    each choice is recorded in the payslip's history); the event changes nothing closed or carried.
 30. **One write path for every dated value**: `POST /api/payroll/entries { path, validFrom, value }` with
     the same paths a close's `used` names (`employees/<id>/employment`, `…/recurring/<Lohnart>`,
     `company/rounding`, `insurances/<id>/solutions/<code>/rates`), so «zurücknehmen» checks `used`
@@ -1645,6 +1647,20 @@ non-obvious decision is recorded here when it is taken.
     entry again with `validUntil`.
 31. **An IBAN that fails its check digits is refused**, unlike a rate outside its range (a warning, §18):
     it is a typing error, not a rule the person may set aside, and a payout to it cannot work.
+32. **A Rückwirkende Korrektur charges each difference once** (review, 2026-11-19). A correction line counts
+    for the bases of the month that carries it, like any line: a wage paid later owes its contributions in
+    the month it is paid. So when a backdated change makes a wage line differ (a raise: Monatslohn +1'000),
+    only the wage lines are carried, and the carrying month computes AHV, ALV, BVG and the rest on them;
+    carrying the contributions' differences too would charge them twice. Only a change that leaves every
+    wage line as it was (a rate, a certificate, a new insurance) carries the contributions' differences
+    themselves. The card names every difference and marks those that follow from the wage. The carrying
+    month computes with its own rates and ceilings; a raise across a rate change is therefore not exact to
+    the old month's rate, the market's way for a Nachzahlung.
+33. **A closed period offers only the correction, enforced**: an affected payslip whose posting date lies on
+    or before `closedThrough` is marked on the card (`closedPeriod`), the card offers no «So lassen» and no
+    «Wieder öffnen», and the API refuses `backdated: 'keep'` for it (403, `closedPeriod`).
+34. **«Wieder öffnen» from the card reopens first, then saves**: the change then touches no closed payslip and
+    is saved alone; a refused reopening saves nothing.
 
 ---
 

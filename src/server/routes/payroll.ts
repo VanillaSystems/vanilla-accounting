@@ -9,6 +9,7 @@ import { Router, type Request, type Response, type NextFunction } from 'express'
 import { existsSync, readFileSync } from 'node:fs';
 import { WS, readBooks, updateBooksWithEffects, RequestError } from '../books.js';
 import { ClosedPeriodError, periodLock, receiptFile, type Books } from '../../books/store.js';
+import { CatalogueError } from '../../payroll/catalogue.js';
 import { PayrollRefusal, planClose } from '../../payroll/close.js';
 import { addCorrection, chartNumbers, closePayslip, payrollContext, reopenPayslip, type BooksWriter } from '../../payroll/service.js';
 import { monthView, payslipView, employeeRows, yearStrip } from '../../payroll/views.js';
@@ -57,9 +58,11 @@ function assertMonthOpen(month: string): void {
 /** An async route's error goes to the API's error handler. */
 const run = (fn: (req: Request, res: Response) => Promise<void> | void) => (req: Request, res: Response, next: NextFunction) => {
   Promise.resolve().then(() => fn(req, res)).catch((e) => {
+    // A layer of Lohnarten that names one no more there (a copy of a removed copy) refuses, never fails the page.
+    if (e instanceof CatalogueError) e = new PayrollRefusal('used', e.message);
     if (e instanceof PayrollRefusal) {
-      const status = e.code === 'notFound' || e.code === 'unknownInsurance' ? 404 : e.code === 'badAmount' || e.code === 'unknownWageType' || e.code === 'badInput' || e.code === 'badPassword' ? 400 : 409;
-      res.status(status).json({ error: e.message, code: 'payroll', params: { why: e.code } } satisfies ApiErrorBody);
+      const status = e.code === 'notFound' || e.code === 'unknownInsurance' || e.code === 'gone' ? 404 : e.code === 'badAmount' || e.code === 'unknownWageType' || e.code === 'badInput' || e.code === 'badPassword' ? 400 : 409;
+      res.status(status).json({ error: e.message, code: 'payroll', params: { why: e.code, ...(e.field ? { field: e.field } : {}) } } satisfies ApiErrorBody);
     } else next(e);
   });
 };
