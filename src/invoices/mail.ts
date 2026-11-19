@@ -21,6 +21,8 @@ export interface MailMessage {
   to: string;
   subject: string;
   body: string;
+  /** A copy to the sender, unseen by the recipient (a payslip's proof of dispatch). */
+  bcc?: string;
 }
 
 const EMAIL = /^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$/;
@@ -28,7 +30,9 @@ const EMAIL = /^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$/;
 export function checkMessage(m: MailMessage): MailMessage {
   const to = m.to.trim();
   if (!EMAIL.test(to)) throw new MailError('recipient', `Keine E-Mail-Adresse: ${to || '(leer)'}`, to || '–');
-  return { to, subject: m.subject.trim(), body: m.body };
+  const bcc = m.bcc?.trim();
+  if (bcc && !EMAIL.test(bcc)) throw new MailError('recipient', `Keine E-Mail-Adresse: ${bcc}`, bcc);
+  return { to, subject: m.subject.trim(), body: m.body, ...(bcc ? { bcc } : {}) };
 }
 
 async function transport(ws: Workspace): Promise<{ settings: OutgoingMail; send: nodemailer.Transporter }> {
@@ -58,6 +62,7 @@ export async function sendMail(ws: Workspace, message: MailMessage, pdf: { filen
       from: settings.fromName ? { name: settings.fromName, address: settings.fromAddress } : settings.fromAddress,
       ...(settings.replyTo ? { replyTo: settings.replyTo } : {}),
       to: m.to,
+      ...(m.bcc ? { bcc: m.bcc } : {}),
       subject: m.subject,
       text: m.body,
       attachments: [{ filename: pdf.filename, content: pdf.content, contentType: 'application/pdf' }],

@@ -66,6 +66,9 @@ Two markers flag an entry you must read before you update:
   its field, as a PDF of Form 11 and as a table; a later one replaces or corrects it and both stay. The
   Lohnkonto per person and for the firm, the declarations' figures (AHV and ALV wages, the insured wages)
   and the month's Lohnbuchungen as CSV.
+- Payroll, payslips by mail (phase B0): a closed payslip goes to the person's own address as a PDF locked
+  with her password (never the AHV number; the date of birth only after a warning; or one the app makes and
+  shows once), with a blind copy to the firm's sender; every mail is logged.
 
 ### Fixed
 

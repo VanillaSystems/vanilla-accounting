@@ -447,7 +447,7 @@ export interface PayrollData {
   /** How a social security number looks (a regular expression) and what stands for it in a text sent to a model. */
   socialSecurityNumber: { pattern: string; masked: string };
   /** The words of the payroll's documents, in each language. */
-  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer', Labels>;
+  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody', Labels>;
 }
 
 /** One figure of the law: its value from a day, with its source. */

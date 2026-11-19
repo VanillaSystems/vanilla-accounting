@@ -14,7 +14,8 @@ import { addCorrection, chartNumbers, closePayslip, payrollContext, reopenPaysli
 import { monthView, payslipView, employeeRows, yearStrip } from '../../payroll/views.js';
 import { paymentRows } from '../../payroll/payments.js';
 import { insurerRows, settlementEntry } from '../../payroll/insurers.js';
-import { closedPayslips, issueLohnausweis, lohnausweisSnapshots } from '../../payroll/service.js';
+import { closedPayslips, issueLohnausweis, lohnausweisSnapshots, payslipsSent, sendPayslip, setMailPassword } from '../../payroll/service.js';
+import { sendMail } from '../../invoices/mail.js';
 import { csv, declarationRows, journalOf, lohnausweisOf, lohnkonto } from '../../payroll/documents.js';
 import { firmWageTypes } from '../../payroll/catalogue.js';
 import { nameOf } from '../../payroll/views.js';
@@ -56,7 +57,7 @@ function assertMonthOpen(month: string): void {
 const run = (fn: (req: Request, res: Response) => Promise<void> | void) => (req: Request, res: Response, next: NextFunction) => {
   Promise.resolve().then(() => fn(req, res)).catch((e) => {
     if (e instanceof PayrollRefusal) {
-      const status = e.code === 'notFound' || e.code === 'unknownInsurance' ? 404 : e.code === 'badAmount' || e.code === 'unknownWageType' || e.code === 'badInput' ? 400 : 409;
+      const status = e.code === 'notFound' || e.code === 'unknownInsurance' ? 404 : e.code === 'badAmount' || e.code === 'unknownWageType' || e.code === 'badInput' || e.code === 'badPassword' ? 400 : 409;
       res.status(status).json({ error: e.message, code: 'payroll', params: { why: e.code } } satisfies ApiErrorBody);
     } else next(e);
   });
@@ -329,4 +330,22 @@ router.get('/payroll/documents/journal/:month', run((req, res) => {
   if (!m) throw new PayrollRefusal('badInput', 'JJJJ-MM.csv');
   const entries = journalOf(readBooks().journalEntries, m[1]);
   sendCsv(res, `lohnbuchungen-${m[1]}.csv`, csv([['date', 'ref', 'debit', 'credit', 'amount', 'text'], ...entries.map((e) => [e.date, e.transactionRef, e.accountDebit, e.accountCredit, e.amount, e.description])]));
+}));
+
+// ─── payslips by mail ──────────────────────────────────────────────────────────
+
+/** Sends a closed payslip to the person's own address, locked with her password; the copy to the sender. */
+router.post('/api/payroll/payslips/:id/send', run(async (req, res) => {
+  idParts(String(req.params.id));
+  res.json(await sendPayslip(WS, String(req.params.id), (m, pdf) => sendMail(WS, m, pdf)));
+}));
+
+/** Sets the person's payslip password; without one given, a generated one is returned once. The date of birth warns first. */
+router.post('/api/payroll/employees/:id/mail-password', run((req, res) => {
+  const b = body(req);
+  res.json(setMailPassword(WS, String(req.params.id), typeof b.password === 'string' ? b.password : undefined, b.confirm === true));
+}));
+
+router.get('/api/payroll/sent/:year', run((req, res) => {
+  res.json({ year: yearParam(req), sent: payslipsSent(WS, yearParam(req)) });
 }));

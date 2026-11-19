@@ -113,6 +113,8 @@ export interface PayrollEmployee {
   language: PayrollLanguage;
   /** The social insurance number; masked in lists, never to a model, never a password or a file name. */
   socialSecurityNumber?: string;
+  /** The password a payslip sent by mail is locked with: set by the employer or generated; never the social security number. */
+  mailPassword?: string;
   birthDate: string;
   sex?: 'f' | 'm';
   nationality?: string;
