@@ -11,7 +11,7 @@ import { invoiceActivities, invoiceRates, setJurisdiction, vat } from '../src/en
 import { creditNoteDraft, issue, missingForIssue, revenueSplit, revenueVatCode } from '../src/invoices/rules.js';
 import { assembleSheets, paginate, sheetBlocks, type SheetData } from '../src/invoices/sheet.js';
 import { DEFAULT_LAYOUT } from '../src/invoices/model.js';
-import type { Draft, InvoiceBook, InvoiceLine, Issued, Sender } from '../src/invoices/model.js';
+import type { Draft, InvoiceBook, InvoiceLine, Issued, ItemLine, Sender } from '../src/invoices/model.js';
 import { matchPayments, type PaymentContext } from '../src/invoices/payments.js';
 import { bookInvoiceEvents } from '../src/invoices/events.js';
 import { parseDraftPatch } from '../src/invoices/service.js';
@@ -19,6 +19,7 @@ import { InvoiceRuleError } from '../src/invoices/rules.js';
 import { sheetEdit } from '../src/app/areas/invoices/edit.js';
 import type { Books } from '../src/books/store.js';
 import type { JournalEntry } from '../src/types/index.js';
+import { POSITION_WORDS } from './support/sheet-words.js';
 import { APP_ROOT } from '../src/workspace/workspace.js';
 import { EFFECTIVE_QUARTERLY, NOT_REGISTERED, type VatSetup } from '../src/workspace/vat-setup.js';
 
@@ -35,11 +36,11 @@ const customer = {
   name: 'Beispiel Bistro AG', address: { street: 'Seeweg', number: '12', postcode: '3000', town: 'Bern', country: 'CH' },
   language: 'de' as const, paymentTermsDays: 30,
 };
-const line = (price: number, vatRate: InvoiceLine['vatRate']): InvoiceLine => ({ text: 'Haarschnitt', quantity: 1, price, vatRate });
+const line = (price: number, vatRate: ItemLine['vatRate']): ItemLine => ({ text: 'Haarschnitt', quantity: 1, price, vatRate });
 const draft = (lines: InvoiceLine[], over: Partial<Draft> = {}): Draft => ({
   id: 'in_d', createdAt: '2026-10-01T09:00:00Z', origin: 'manual', deleted: false, status: 'draft', kind: 'invoice', customerId: 'cu_1', date: '2026-10-05', currency: 'CHF', language: 'de', lines, comments: [], ...over,
 });
-const WORDS = { newCustomer: '+', chooseCustomer: 'Kunde', addLine: '+', removeLine: '×', intro: 'Einleitung', closing: 'Schluss', desc: 'Text', noExemption: 'Grund für 0 % wählen …', supplied: 'Leistung' };
+const WORDS = { newCustomer: '+', chooseCustomer: 'Kunde', addLine: '+', removeLine: '×', intro: 'Einleitung', closing: 'Schluss', desc: 'Text', noExemption: 'Grund für 0 % wählen …', supplied: 'Leistung', ...POSITION_WORDS };
 const html = (lines: InvoiceLine[], draft = false): string => {
   const d: SheetData = {
     kind: 'invoice', language: 'de', ...(draft ? {} : { number: '2026-001' }), date: '2026-10-05', dueDate: '2026-11-04', currency: 'CHF', customer, sender, lines, intro: '', closing: 'Danke', layout: DEFAULT_LAYOUT,
@@ -95,7 +96,7 @@ test('a firm without a UID (#452): the sheet prints no UID label and no empty UI
 
 const TWO_RATES: VatSetup = { registered: true, method: 'net-rate', reporting: 'received', period: 'half-yearly', rates: [{ rate: 4.5, label: 'Schreinerei', activityId: '99901' }, { rate: 6.2, label: 'Handel', activityId: '99902' }] };
 const TWO_AGREED: VatSetup = { ...TWO_RATES, reporting: 'agreed' } as VatSetup;
-const work = (price: number, activity?: 1 | 2): InvoiceLine => ({ text: 'Schreinerarbeit', quantity: 1, price, vatRate: 8.1, ...(activity ? { activity } : {}) });
+const work = (price: number, activity?: 1 | 2): ItemLine => ({ text: 'Schreinerarbeit', quantity: 1, price, vatRate: 8.1, ...(activity ? { activity } : {}) });
 const payCtx: PaymentContext = {
   bankAccounts: [{ bank: 'Raiffeisen', currency: 'CHF', account: '1020', label: 'Bank', role: 'bank' }],
   revenueAccount: '3400', openItems: { receivable: '1100', payable: '2000', fxDifference: '6960' }, fx: { daily: () => undefined },
@@ -146,7 +147,7 @@ test('two net rates on the agreed basis: the invoice\'s event books F1 and F2 on
   assert.deepEqual(boxesOf(b.journalEntries, '2026-H2'), { 200: 1621.5, 299: 1621.5, 323: 1081, 333: 540.5, 399: 82.16, 500: 82.16 });
   // A part of the total credited: it splits over both activities by their share, each back at its own code.
   const cn = issuedTwo(book, { ...creditNoteDraft(inv, { amount: 162.15, reason: 'Kulanz' }, { id: 'c1', createdAt: '2026-10-10T08:00:00Z', origin: 'manual', deleted: false }, '2026-10-10') } as Draft);
-  assert.deepEqual(cn.lines.map((l) => [l.price, l.activity ?? 1]), [[-108.1, 1], [-54.05, 2]]);
+  assert.deepEqual((cn.lines as ItemLine[]).map((l) => [l.price, l.activity ?? 1]), [[-108.1, 1], [-54.05, 2]]);
   bookInvoiceEvents(b, book, payCtx);
   assert.deepEqual(coded(b.journalEntries).slice(2), [['2026-10-10', '3400', '1100', 108.1, '-F1'], ['2026-10-10', '3400', '1100', 54.05, '-F2']]);
 });
@@ -155,16 +156,16 @@ test('the activity is checked where a draft comes in: 1 or 2; a 2 on a firm with
   const book: InvoiceBook = { schema: 2, customers: [customer], invoices: [], sent: [] } as InvoiceBook;
   const refusal = (body: unknown) => { try { parseDraftPatch(body, book); } catch (e) { return [(e as InvoiceRuleError).code, (e as InvoiceRuleError).missing?.[0]?.field]; } return undefined; };
   setJurisdiction(ch, TWO_RATES);
-  assert.deepEqual(parseDraftPatch({ lines: [work(10, 2), work(10, 1)] }, book).lines!.map((l) => l.activity), [2, undefined], 'the first is the default and not kept');
+  assert.deepEqual((parseDraftPatch({ lines: [work(10, 2), work(10, 1)] }, book).lines! as ItemLine[]).map((l) => l.activity), [2, undefined], 'the first is the default and not kept');
   assert.deepEqual(refusal({ lines: [{ ...work(10), activity: 3 }] }), ['incomplete', 'line.activity']);
-  assert.equal(parseDraftPatch({ lines: [{ ...work(10, 2), vatRate: 0 }] }, book).lines![0].activity, undefined, 'a line at 0 % has no activity');
+  assert.equal((parseDraftPatch({ lines: [{ ...work(10, 2), vatRate: 0 }] }, book).lines![0] as ItemLine).activity, undefined, 'a line at 0 % has no activity');
   setJurisdiction(ch, NET_RATE);
   // The draft kept a 2 from when the firm had two rates: the next save of any field drops it.
   const stale = draft([work(10, 2), work(20)]);
   assert.deepEqual(missingForIssue(stale, { customer, sender, invoices: [] }), [], 'it can be issued');
-  assert.deepEqual(parseDraftPatch({ lines: stale.lines.map((l, k) => (k === 1 ? { ...l, price: 25 } : l)) }, book).lines!.map((l) => [l.price, l.activity]), [[10, undefined], [25, undefined]]);
+  assert.deepEqual((parseDraftPatch({ lines: stale.lines.map((l, k) => (k === 1 ? { ...l, price: 25 } : l)) }, book).lines! as ItemLine[]).map((l) => [l.price, l.activity]), [[10, undefined], [25, undefined]]);
   setJurisdiction(ch, EFFECTIVE_QUARTERLY);
-  assert.equal(parseDraftPatch({ lines: [work(10, 2)] }, book).lines![0].activity, undefined);
+  assert.equal((parseDraftPatch({ lines: [work(10, 2)] }, book).lines![0] as ItemLine).activity, undefined);
 });
 
 test('a payment read in after the firm went back to one net rate, for an invoice issued with a second activity: booked at the first, never a stop of the import', () => {
@@ -185,10 +186,10 @@ test('a credit note for part of the total: on a firm with one rate one line per 
   const book: InvoiceBook = { schema: 2, customers: [customer], invoices: [], sent: [] } as InvoiceBook;
   const inv = issuedTwo(book, draft([work(1000, 1), { ...work(500, 2), text: 'Beschläge' }, { ...work(100), vatRate: 0 }], { exemption: 'abroad' }));
   const env = { id: 'c1', createdAt: '2026-10-10T08:00:00Z', origin: 'manual' as const, deleted: false };
-  const two = creditNoteDraft(inv, { amount: 172.15, reason: 'Kulanz' }, env, '2026-10-10').lines;
+  const two = creditNoteDraft(inv, { amount: 172.15, reason: 'Kulanz' }, env, '2026-10-10').lines as ItemLine[];
   assert.deepEqual(two.map((l) => [l.text, l.vatRate, l.activity ?? 1]), [['Kulanz (8.1 %, Schreinerarbeit)', 8.1, 1], ['Kulanz (8.1 %, Beschläge)', 8.1, 2], ['Kulanz (0 %)', 0, 1]]);
   setJurisdiction(ch, NET_RATE);
-  const one = creditNoteDraft(inv, { amount: 172.15, reason: 'Kulanz' }, env, '2026-10-10').lines;
+  const one = creditNoteDraft(inv, { amount: 172.15, reason: 'Kulanz' }, env, '2026-10-10').lines as ItemLine[];
   assert.deepEqual(one.map((l) => [l.text, l.vatRate, l.activity]), [['Kulanz (8.1 %)', 8.1, undefined], ['Kulanz (0 %)', 0, undefined]], 'the same code: one line per rate');
 });
 

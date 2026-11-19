@@ -82,6 +82,8 @@ export function checkJurisdiction(j: Jurisdiction): ModuleProblem[] {
   for (const [why, box] of Object.entries(j.invoicing.exemptions)) {
     if (!named.some(([, m]) => m.deduction === box)) add('invoicing.yaml', `exemptions.${why}`, `no code in tax-codes.yaml deducts its turnover in Ziffer ${box}`);
   }
+  const wo = j.invoicing.writeOff;
+  if (wo !== undefined) for (const k of ['skonto', 'loss'] as const) if (!/^\d{3,6}$/.test(String(wo[k]))) add('invoicing.yaml', `writeOff.${k}`, 'an account number');
   if (!Array.isArray(j.invoicing.territory) || !j.invoicing.territory.length || !j.invoicing.territory.every((c) => /^[A-Z]{2}$/.test(String(c)))) add('invoicing.yaml', 'territory', 'a list of two-letter country codes');
   if (!Array.isArray(j.invoicing.placeAbroad) || !j.invoicing.placeAbroad.every((w) => typeof w === 'string' && w.trim())) add('invoicing.yaml', 'placeAbroad', 'a list of words');
   for (const s of INCOME_SECTIONS) if (!j.statements.income[s]) add('statements.yaml', `income.${s}`, 'missing');

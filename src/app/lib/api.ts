@@ -363,6 +363,8 @@ export function errorText(e: unknown): string {
     case 'payToAccount': return t('error.payToAccount', b.params);
     case 'notQrIban': return t('error.notQrIban', b.params);
     case 'qrIbanNotChf': return t('error.qrIbanNotChf', b.params);
+    case 'unitId': case 'unitTwice': case 'unitInUse': return t(`error.${b.code}`, { id: b.params.id });
+    case 'unitWord': return t('error.unitWord', { id: b.params.id, language: b.params.language.toUpperCase() });
     case 'ibanOnInvoices': return t('error.ibanOnInvoices', b.params);
     case 'unknownCustomer': return t('error.unknownCustomer');
     case 'amountZero': return t('error.amountZero');
@@ -776,7 +778,8 @@ export const api = {
   createDraft: (input: DraftChange & { customerId: string }) => request<Draft>('POST', '/api/invoices', input),
   patchDraft: (id: string, patch: DraftChange) => request<Draft>('PATCH', `/api/invoices/${id}`, patch),
   deleteDraft: (id: string) => request<{ ok: true }>('DELETE', `/api/invoices/${id}`),
-  issue: (id: string) => request<Issued>('POST', `/api/invoices/${id}/issue`),
+  /** `anyway`: the person's «Trotzdem ausstellen» over a position without text or amount (spec 4.11). */
+  issue: (id: string, anyway = false) => request<Issued>('POST', `/api/invoices/${id}/issue`, anyway ? { confirm: 'unconfirmed' } : undefined),
   /** With `email` the PDF goes out through the company's mailbox; without, the send is recorded as a download to `to`. */
   recordSend: (id: string, send: { to?: string; email?: MailMessage }) => request<SentDocument>('POST', `/api/invoices/${id}/send`, send),
   mailStatus: () => request<MailStatus>('GET', '/api/mail'),

@@ -42,7 +42,7 @@ function creditInfo(book: InvoiceBook, c: InvoiceContent): SheetData['credit'] {
   const target = book.invoices.find((i) => i.id === c.creditFor);
   if (!target || target.status !== 'issued') return undefined;
   const last = target.payments.at(-1);
-  return { number: target.number, date: target.date, gross: totals(target.lines).gross, paid: paidAmount(target), ...(last ? { paidDate: last.date } : {}), ...(c.settlement ? { settlement: c.settlement } : {}) };
+  return { number: target.number, date: target.date, gross: totals(target).gross, paid: paidAmount(target), ...(last ? { paidDate: last.date } : {}), ...(c.settlement ? { settlement: c.settlement } : {}) };
 }
 
 export type MailDocument = { kind: 'invoice' } | { kind: 'reminder'; level: number } | { kind: 'cancellation' };
@@ -75,6 +75,8 @@ export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draf
     customer: customer ?? { name: '', address: { postcode: '', town: '', country: 'CH' }, language: draft.language, paymentTermsDays: terms },
     sender: senderFor(ctx, draft.currency),
     lines: draft.lines,
+    ...(draft.prices ? { prices: draft.prices } : {}),
+    ...(ctx.settings ? { units: ctx.settings.units } : {}),
     ...(draft.exemption ? { exemption: draft.exemption } : {}),
     ...(texts.salutation ? { salutation: texts.salutation } : {}),
     intro: draft.intro ?? texts.intro,
@@ -98,6 +100,8 @@ export function issuedSheet(book: InvoiceBook, inv: Issued, logoSrc?: string): S
     customer: inv.customer,
     sender: inv.sender,
     lines: inv.lines,
+    ...(inv.prices ? { prices: inv.prices } : {}),
+    ...(inv.units ? { units: inv.units } : {}),
     ...(inv.exemption ? { exemption: inv.exemption } : {}),
     intro: inv.intro ?? '',
     closing: inv.closing ?? '',
@@ -114,7 +118,7 @@ export function reminderSheet(book: InvoiceBook, inv: Issued, reminder: Omit<Rem
   const withThis = inv.reminders.some((r) => r.level === reminder.level && r.date === reminder.date) ? inv : { ...inv, reminders: [...inv.reminders, { ...reminder, documentId: '' }] };
   const open = openAmount(withThis, book.invoices);
   const fee = openFees(withThis);
-  const gross = totals(inv.lines).gross;
+  const gross = totals(inv).gross;
   return {
     ...issuedSheet(book, inv, logoSrc),
     reminderLevel: reminder.level,

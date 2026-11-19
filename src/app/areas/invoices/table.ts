@@ -64,7 +64,7 @@ export function docRows(d: InvoiceList, kind: DocKind, period: Period, q: string
       const due = inv.status === 'issued' && kind === 'invoice' && isOverdue(inv, d.invoices, today) ? daysBetween(inv.dueDate, today) : 0;
       return {
         inv, id: routeId(inv), customer: customerOf(d, inv)?.name ?? '', status, overdue: due, unsent: unsent(inv, d.sent),
-        sent: sentFacts(d.sent, inv), gross: totals(inv.lines).gross, open,
+        sent: sentFacts(d.sent, inv), gross: totals(inv).gross, open,
         level: inv.status === 'issued' ? inv.reminders.reduce((m, r) => Math.max(m, r.level), 0) : 0,
         ...(target ? { target } : {}),
       };

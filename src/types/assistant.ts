@@ -17,7 +17,8 @@ type InvoiceLanguage = 'de' | 'fr' | 'it' | 'en';
 type OwnText = 'salutation' | 'intro' | 'closing' | 'mailSubject' | 'mailBody';
 
 /** An invoice line as an answer gives it; the invoices' own reader checks it (src/invoices/service.ts parseDraftPatch). */
-export interface DraftLine { text: string; quantity: number; unit?: string; price: number; vatRate: number }
+/** An item, or a position of another kind (`kind`: text, subtotal, discount, pagebreak) with only its own fields. */
+export interface DraftLine { kind?: string; text?: string; quantity?: number; unit?: string; price?: number; vatRate?: number; discount?: number; percent?: number; amount?: number; style?: string }
 
 /** What the person is looking at, referred to and never copied: the server reads it when the message is sent. */
 export type ContextRef =

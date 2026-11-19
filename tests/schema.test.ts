@@ -211,21 +211,22 @@ test('books schema 10 (#571): books of schema 9 load with their seals whole and 
   assert.throws(() => climb<Record<string, unknown>>({}, 10, 9, BOOKS_MIGRATIONS, 'ledger.json', clone), (e: Error) => e instanceof SchemaTooNewError);
 });
 
-test('manifest schema 4 (#452): a manifest of schema 3 loads with its UID, npm run update writes 4 and changes nothing else; one of 4 without a UID loads; an app of schema 3 refuses a manifest of 4', async () => {
-  assert.equal(WORKSPACE_SCHEMA, 4);
+test('manifest schema 4 (#452): a manifest of schema 3 loads with its UID, npm run update writes the current schema and changes nothing else; one without a UID loads; an app of schema 3 refuses a manifest of 4', async () => {
+  assert.ok(WORKSPACE_SCHEMA >= 4);
   const dir = mkdtempSync(join(tmpdir(), 'manifest-4-'));
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const path = workspaceAt(dir).paths.manifest;
   const current = readFileSync(path, 'utf8');
-  assert.match(current, /^schema: 4\n/m);
-  const old = current.replace(/^schema: 4\n/m, 'schema: 3\n');
+  const stamp = new RegExp(`^schema: ${WORKSPACE_SCHEMA}\n`, 'm');
+  assert.match(current, stamp);
+  const old = current.replace(stamp, 'schema: 3\n');
   writeFileSync(path, old);
 
   assert.equal(readManifest(path).company.uid, 'CHE-123.456.789');
   const ws = workspaceAt(dir);
   const { done } = await upgradeWorkspace(ws);
   const step = done.find((d) => d.file === path);
-  assert.deepEqual(step && { from: step.from, to: step.to }, { from: 3, to: 4 });
+  assert.deepEqual(step && { from: step.from, to: step.to }, { from: 3, to: WORKSPACE_SCHEMA });
   assert.equal(readFileSync(step!.backup, 'utf8'), old);
   assert.equal(readFileSync(path, 'utf8'), current, 'only the number changed');
 
@@ -236,6 +237,53 @@ test('manifest schema 4 (#452): a manifest of schema 3 loads with its UID, npm r
   assert.equal(loaded.company.name.length > 0, true);
 
   assert.throws(() => climb(parseDocument(current), 4, 3, MANIFEST_MIGRATIONS, path, (d) => d.clone()), (e: Error) => e instanceof SchemaTooNewError);
+});
+
+test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defaults, npm run update writes only the number; the settings parse typed; an app of schema 4 refuses one of 5', async () => {
+  assert.equal(WORKSPACE_SCHEMA, 5);
+  const dir = mkdtempSync(join(tmpdir(), 'manifest-5-'));
+  cpSync(DEMO_ROOT, dir, { recursive: true });
+  const path = workspaceAt(dir).paths.manifest;
+  const current = readFileSync(path, 'utf8');
+  const old = current.replace(/^schema: 5\n/m, 'schema: 4\n');
+  writeFileSync(path, old);
+  const inv = readManifest(path).invoicing!;
+  assert.deepEqual(inv.units.map((u) => u.id), ['h', 'day', 'pcs', 'flat', 'km', 'm2', 'm', 'm3', 'l', 'kg', 'month'], 'the default units, the old ids first');
+  assert.deepEqual(inv.units.find((u) => u.id === 'm2'), { id: 'm2', de: 'm²', fr: 'm²', it: 'm²', en: 'm²' });
+  assert.deepEqual(inv.prices, { invoice: 'net', 'credit-note': 'net' });
+  assert.deepEqual(inv.paymentTerms, [{ id: `net${inv.paymentTermsDays}`, name: `${inv.paymentTermsDays} Tage netto`, days: inv.paymentTermsDays }]);
+  assert.equal(inv.shortfallLimit, 5);
+  assert.equal(inv.writeOffAccount, undefined, 'absent: the jurisdiction\'s accounts');
+  const { done } = await upgradeWorkspace(workspaceAt(dir));
+  assert.deepEqual(done.filter((d) => d.file === path).map((d) => [d.from, d.to]), [[4, 5]]);
+  assert.equal(readFileSync(path, 'utf8'), current, 'only the number changed');
+
+  const own = current.replace(/^invoicing:\n/m, [
+    'invoicing:',
+    '  units: [{ id: m2, de: m², fr: m², it: m², en: m² }, { id: pal, de: Palette, fr: palette, it: paletta, en: pallet }]',
+    '  prices: { invoice: gross }',
+    '  paymentTerms: [{ id: skonto, name: "10 Tage 2 %, 30 Tage netto", days: 30, skonto: { percent: 2, days: 10 } }]',
+    '  defaultTerms: skonto',
+    '  writeOffAccount: { skonto: "3800", loss: "3805" }',
+    '  shortfallLimit: 10',
+    '',
+  ].join('\n'));
+  writeFileSync(path, own);
+  const set = readManifest(path).invoicing!;
+  assert.deepEqual(set.units.map((u) => u.en), ['m²', 'pallet']);
+  assert.deepEqual(set.prices, { invoice: 'gross', 'credit-note': 'net' });
+  assert.deepEqual(set.paymentTerms, [{ id: 'skonto', name: '10 Tage 2 %, 30 Tage netto', days: 30, skonto: { percent: 2, days: 10 } }]);
+  assert.deepEqual([set.defaultTerms, set.writeOffAccount, set.shortfallLimit], ['skonto', { skonto: '3800', loss: '3805' }, 10]);
+  for (const [bad, msg] of [
+    ['  units: [{ id: m2, de: m² }]', /invoicing\.units\[0\]\.fr/],
+    ['  prices: { invoice: brutto }', /invoicing\.prices\.invoice/],
+    ['  paymentTerms: [{ id: x, name: X, days: 10, skonto: { percent: 2, days: 20 } }]', /paymentTerms\[0\]\.skonto/],
+    ['  defaultTerms: none', /defaultTerms "none"/],
+  ] as const) {
+    writeFileSync(path, current.replace(/^invoicing:\n/m, `invoicing:\n${bad}\n`));
+    assert.throws(() => readManifest(path), (e: Error) => msg.test(e.message), msg.source);
+  }
+  assert.throws(() => climb(parseDocument(current), 5, 4, MANIFEST_MIGRATIONS, path, (d) => d.clone()), (e: Error) => e instanceof SchemaTooNewError);
 });
 
 function booksFiles(dir: string): string[] {

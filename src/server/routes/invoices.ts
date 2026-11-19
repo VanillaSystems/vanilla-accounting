@@ -123,13 +123,13 @@ router.patch('/api/customers/:id', (req, res) => {
 });
 
 router.post('/api/invoices', (req, res) => {
-  const { clear: _, ...patch } = parseDraftPatch(req.body, loadInvoices(WS));
+  const { clear: _, ...patch } = parseDraftPatch(req.body, loadInvoices(WS), WS.invoicing?.units);
   if (!patch.customerId) throw new RequestError(400, 'customerId fehlt.');
   res.json(createDraft(WS, { ...patch, customerId: patch.customerId }));
 });
 
 router.patch('/api/invoices/:id', (req, res) => {
-  res.json(updateDraft(WS, req.params.id, parseDraftPatch(req.body, loadInvoices(WS))));
+  res.json(updateDraft(WS, req.params.id, parseDraftPatch(req.body, loadInvoices(WS), WS.invoicing?.units, req.params.id)));
 });
 
 router.delete('/api/invoices/:id', (req, res) => {
@@ -148,8 +148,9 @@ function bookEvents(books: Books): EventOutcome | undefined {
   return out;
 }
 
+/** `{ confirm: 'unconfirmed' }`: the person's «Trotzdem ausstellen» over a position without text or amount (spec 4.11). */
 router.post('/api/invoices/:id/issue', async (req, res) => {
-  const issued = await issueInvoice(WS, req.params.id);
+  const issued = await issueInvoice(WS, req.params.id, { confirmed: (req.body as { confirm?: unknown } | undefined)?.confirm === 'unconfirmed' });
   if (agreedBasis()) updateBooksWithEffects(bookEvents);
   res.json(issued);
 });

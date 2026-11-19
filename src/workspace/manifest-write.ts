@@ -9,7 +9,7 @@ import type { StatementKind } from './banks.js';
 import { readFileSync } from 'node:fs';
 import { isMap, isSeq, parseDocument, type Document, type YAMLMap } from 'yaml';
 import { writeAtomic } from '../invoices/store.js';
-import type { Address, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail, PayToPatch } from '../invoices/model.js';
+import type { Address, InvoiceContent, InvoiceCurrency, InvoiceLanguage, InvoiceLayout, LayoutElement, OWN_TEXTS, OutgoingMail, PayToPatch, Prices, UnitDef } from '../invoices/model.js';
 import { parseIban, roleBefore, type MoneyRole } from './banks.js';
 import { parseManifest, type Manifest } from './manifest.js';
 import { vatSetupYaml, type VatSetup } from './vat-setup.js';
@@ -61,6 +61,10 @@ export interface InvoicingPatch {
   payTo?: Partial<Record<InvoiceCurrency, PayToPatch | null>>;
   layout?: Partial<Omit<InvoiceLayout, 'logo' | 'show'>> & { logo?: string | null; show?: Partial<Record<LayoutElement, boolean>> };
   texts?: Partial<Record<InvoiceLanguage, Partial<Record<(typeof OWN_TEXTS)[number], string | null>>>>;
+  /** The firm's units, the whole list written as one block; null removes it (the app's defaults again). */
+  units?: UnitDef[] | null;
+  /** Net or gross prices for a new document of a kind; null: net again. */
+  prices?: Partial<Record<InvoiceContent['kind'], Prices | null>>;
 }
 
 /** Firma › E-Mail: the outgoing mailbox, field by field; null removes a field, `outgoingMail: null` the block. */
@@ -187,6 +191,11 @@ export function patchManifestText(text: string, patch: ManifestPatch, path: stri
     for (const [lang, texts] of Object.entries(inv.texts ?? {})) {
       for (const [key, value] of Object.entries(texts)) set(doc, ['invoicing', 'texts', lang, key], value);
     }
+    // One line per unit, `{ id: m2, de: m², … }`.
+    if (inv.units === null) doc.deleteIn(['invoicing', 'units']);
+    else if (inv.units) doc.setIn(['invoicing', 'units'], doc.createNode(inv.units.map((u) => { const n = doc.createNode(u) as YAMLMap; n.flow = true; return n; })));
+    for (const [kind, value] of Object.entries(inv.prices ?? {})) set(doc, ['invoicing', 'prices', kind], value);
+    if (isMap(doc.getIn(['invoicing', 'prices'])) && (doc.getIn(['invoicing', 'prices']) as YAMLMap).items.length === 0) doc.deleteIn(['invoicing', 'prices']);
   }
   if (patch.sells) {
     if (!isMap(doc.get('profile'))) throw new WorkspaceError(`${path} has no profile: what the firm sells is kept in it (npm run init writes one)`);

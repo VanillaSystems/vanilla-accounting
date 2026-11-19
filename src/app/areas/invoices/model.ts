@@ -3,7 +3,7 @@
  * status filters, what is open, and the link of each record. Computed with src/invoices/rules.ts,
  * the rules the API and the PDF use.
  */
-import type { Customer, Draft, Invoice, InvoiceBook, Issued, SentDocument } from '../../../invoices/model.js';
+import { isItem, type Customer, type Draft, type Invoice, type InvoiceBook, type Issued, type SentDocument } from '../../../invoices/model.js';
 import type { DraftChange } from '../../lib/api.js';
 import { isOverdue, namesNumber, openAmount } from '../../../invoices/rules.js';
 import { channelOf } from '../../../invoices/lists.js';
@@ -78,9 +78,10 @@ export function customerRows(d: InvoiceList, q: string | undefined): Customer[] 
  */
 export function customerChange(inv: Pick<Draft, 'lines' | 'currency'>, c: { id: string; language: Draft['language']; address: { country: string } }): DraftChange {
   const abroad = c.address.country !== 'CH' && c.address.country !== 'LI';
-  if (abroad) return { customerId: c.id, language: c.language, lines: inv.lines.map((l) => ({ ...l, vatRate: 0 })), exemption: 'abroad', ...(['DE', 'FR', 'IT', 'AT'].includes(c.address.country) ? { currency: 'EUR' } : {}) };
-  const allZero = inv.lines.length > 0 && inv.lines.every((l) => l.vatRate === 0);
-  return { customerId: c.id, language: c.language, ...(allZero && chargesVat() ? { lines: inv.lines.map((l) => ({ ...l, vatRate: invoiceRates()[0] })), exemption: null, currency: 'CHF' } : {}) };
+  if (abroad) return { customerId: c.id, language: c.language, lines: inv.lines.map((l) => (isItem(l) ? { ...l, vatRate: 0 } : l)), exemption: 'abroad', ...(['DE', 'FR', 'IT', 'AT'].includes(c.address.country) ? { currency: 'EUR' } : {}) };
+  const items = inv.lines.filter(isItem);
+  const allZero = items.length > 0 && items.every((l) => l.vatRate === 0);
+  return { customerId: c.id, language: c.language, ...(allZero && chargesVat() ? { lines: inv.lines.map((l) => (isItem(l) ? { ...l, vatRate: invoiceRates()[0] } : l)), exemption: null, currency: 'CHF' } : {}) };
 }
 
 /** A payment is linked to a document once an allocation names its ref. */

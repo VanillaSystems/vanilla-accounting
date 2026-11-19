@@ -20,6 +20,8 @@ const logo = (path: string | undefined) => (path ? api.logoUrl(path) : undefined
 export const editWords = (): NonNullable<ScreenSheet['edit']>['words'] => ({
   newCustomer: t('invoices.newCustomer'), chooseCustomer: t('invoices.chooseCustomer'), addLine: t('invoices.addLine'), removeLine: t('invoices.removeLine'),
   intro: t('invoices.introPlaceholder'), closing: t('invoices.closingPlaceholder'), desc: t('invoices.descPlaceholder'), noExemption: t('invoices.noExemption'), supplied: t('invoices.suppliedPlaceholder'), activity: t('invoices.activity'),
+  addText: t('invoices.addText'), addSubtotal: t('invoices.addSubtotal'), addDiscount: t('invoices.addDiscount'), addPageBreak: t('invoices.addPageBreak'), pageBreak: t('invoices.pageBreak'),
+  move: t('invoices.moveLine'), title: t('invoices.textTitle'), plain: t('invoices.textPlain'), percent: t('invoices.discountPercent'), amount: t('invoices.discountAmount'), lineDiscount: t('invoices.lineDiscount'),
 });
 
 export function screenOf(d: InvoiceList, scope: 'draft' | 'texts' | undefined, customerId?: string, windowGuide?: string): ScreenSheet {

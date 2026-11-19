@@ -103,7 +103,7 @@ test('agreed basis: invoices are VAT events on their dates, payments settle the 
   assert.deepEqual(figures(b.journalEntries, '2026-Q4'), { 200: -1081, 299: -1081, 303: -1081, 399: -81, 510: 81 });
   assert.deepEqual(figures(b.journalEntries, '2026-Q3'), { 200: 4723.5, 221: 940, 289: 940, 299: 3783.5, 303: 3783.5, 399: 283.5, 500: 283.5 }, 'Q3 stays as it was');
   assert.equal(balance(b.journalEntries, '1100'), 1081, 'what is still open is INV1 alone');
-  assert.equal(totals(inv1.lines).gross, 1081);
+  assert.equal(totals(inv1).gross, 1081);
 });
 
 test('agreed basis: a payment\'s coded line takes its document\'s date and the open item; a filed period of the year is corrected, an earlier year stays on the payment', () => {

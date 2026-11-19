@@ -135,7 +135,7 @@ function describe({ change: c, undo, note }: MadeChange, books: Index): { text: 
     case 'account': return { text: t(c.name === null ? 'assistant.c.accountGone' : 'assistant.c.account', { number: c.number, name: c.name ?? '' }), go: { area: 'company', section: 'accounts' } };
     case 'invoicing': return { text: t('assistant.c.invoicing', { what: invoicingWhat(c.set, note?.customers, undo?.kind === 'invoicing' ? undo.set : undefined) }), go: { area: 'company', section: 'invoice-layout' } };
     case 'invoiceDraft': {
-      const net = (c.draft.lines ?? []).reduce((sum, l) => sum + l.quantity * l.price, 0);
+      const net = (c.draft.lines ?? []).reduce((sum, l) => sum + (!l.kind || l.kind === 'item' ? (l.quantity ?? 0) * (l.price ?? 0) * (1 - (l.discount ?? 0) / 100) : 0), 0);
       const text = t('assistant.c.invoiceDraft', { customer: note?.draft?.customer ?? c.newCustomer?.name ?? '', n: c.draft.lines?.length ?? 0, net: fmt(net) });
       return { text, ...(note?.draft ? { go: { area: 'invoices', view: 'list', id: `draft-${note.draft.id}` } as Route } : {}) };
     }

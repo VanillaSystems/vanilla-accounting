@@ -274,7 +274,7 @@ function SendDialog({ inv, nav, reminder, issued }: Props & { inv: Issued; remin
     </>
   );
   return (
-    <Frame label={label} title={`${inv.customer.name} · ${inv.currency} ${fmt(totals(inv.lines).gross)}`} foot={foot} className={`isend${reminder ? '' : ' withpdf'}`}>
+    <Frame label={label} title={`${inv.customer.name} · ${inv.currency} ${fmt(totals(inv).gross)}`} foot={foot} className={`isend${reminder ? '' : ' withpdf'}`}>
       <div className="ibody lkf">
         {!reminder && <div className="isendpdf paper real"><Paper src={issuedPdfUrl(inv.number)} maxWidth={560} whole /></div>}
         {issued && <p className="m ivhint">{t('invoices.issuedNext')}</p>}
@@ -291,7 +291,7 @@ function CancelDialog({ inv, nav }: Props & { inv: Issued }) {
   const [notify, setNotify] = useState(true);
   const mail = useMail(inv, { kind: 'cancellation' });
   const [m, setM] = useState<MailMessage>();
-  const gross = totals(inv.lines).gross;
+  const gross = totals(inv).gross;
   const title = `${inv.customer.name} · ${inv.currency} ${fmt(gross)}`;
   const label = t('invoices.cancelTitle', { number: inv.number });
   if (inv.payments.length) {
@@ -317,7 +317,7 @@ function CancelDialog({ inv, nav }: Props & { inv: Issued }) {
 
 /** A credit note: the whole invoice or a part, and what happens with money already paid. */
 function CreditDialog({ inv, invoices, nav }: Props & { inv: Issued; invoices: Invoice[] }) {
-  const gross = totals(inv.lines).gross;
+  const gross = totals(inv).gross;
   const paid = paidAmount(inv);
   const open = openAmount(inv, invoices);
   // After an earlier credit note «alles» is what is left to credit, not the whole invoice again (r8c-14).

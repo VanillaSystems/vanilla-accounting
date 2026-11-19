@@ -7,8 +7,9 @@ import { fromRappen, roundCHF, toRappen } from '../accounting/rappen.js';
 import { TEXTS, formatDate } from './texts.js';
 import type {
   Comment, Customer, CustomerFields, Draft, Envelope, Exemption, Invoice, InvoiceBook, InvoiceContent, InvoiceLayout,
-  InvoiceLine, Issued, PaymentAllocation, Reminder, Sender, VatRate,
+  InvoiceLine, InvoicingSettings, Issued, ItemLine, PaymentAllocation, Prices, Reminder, Sender, UnitDef, VatRate,
 } from './model.js';
+import { isItem } from './model.js';
 import { chargesVat, invoiceActivities, invoiceRates, invoicing, vat, vatSetup } from '../engines/index.js';
 import { parseReference, referenceFor } from '../providers/qr-bill/reference.js';
 import type { BankTransaction } from '../types/index.js';
@@ -18,20 +19,92 @@ import type { BankTransaction } from '../types/index.js';
 export interface RateTotal { rate: VatRate; net: number; vat: number; gross: number }
 export interface Totals { byRate: RateTotal[]; net: number; vat: number; gross: number }
 
-export const lineAmount = (l: Pick<InvoiceLine, 'quantity' | 'price'>): number => roundCHF(l.quantity * l.price);
+/** What a document's totals are computed from: its positions and whether their prices are net or gross. */
+export type Priced = { readonly lines: readonly InvoiceLine[]; readonly prices?: Prices };
+
+/** An item position's amount: quantity × price to the Rappen, less its discount (to the Rappen). */
+export function lineAmount(l: Pick<ItemLine, 'quantity' | 'price' | 'discount'>): number {
+  const base = toRappen(l.quantity * l.price);
+  return fromRappen(l.discount ? base - toRappen(fromRappen(base) * l.discount / 100) : base);
+}
+
+/** Whether an item position's price has the VAT in it: its own legacy flag, else its document's prices. */
+export const pricedGross = (l: ItemLine, prices: Prices | undefined): boolean => l.vatIncluded ?? prices === 'gross';
 
 /**
- * Each line to the Rappen; per rate, the VAT on the net of its net-priced lines plus the VAT in the
- * total of its lines priced with the VAT in it, each to the Rappen, so such a line keeps its amount
- * exactly. No 5-Rappen rounding: a QR-bill is paid by transfer to the Rappen, and the books carry no
- * rounding line.
+ * A priced part of a document, in Rappen: an item position, or a Rabatt's share of one group of the
+ * positions above it. `line` is the item position whose rate, account and pricing the part carries.
  */
-export function totals(lines: readonly InvoiceLine[]): Totals {
+export interface Part { line: ItemLine; gross: boolean; rappen: number }
+
+/**
+ * The attributes a Rabatt is split by and the revenue is grouped by: rate, pricing, account and the
+ * net-rate activity (a part per group of them). A new attribute of a position that books apart joins here.
+ */
+const splitKey = (p: Part): string => `${p.line.vatRate}|${p.gross}|${p.line.account ?? ''}|${p.line.activity ?? 1}`;
+
+/** `total` (Rappen) over `weights` in proportion, by largest remainder: the parts add up to `total` exactly. */
+export function apportion(total: number, weights: readonly number[]): number[] {
+  const sum = weights.reduce((a, b) => a + b, 0);
+  if (sum === 0) return weights.map(() => 0);
+  const raw = weights.map((w) => (total * w) / sum);
+  const out = raw.map((x) => Math.trunc(x));
+  let left = total - out.reduce((a, b) => a + b, 0);
+  const order = raw.map((x, i) => [Math.abs(x - out[i]), i] as const).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+  const step = Math.sign(left);
+  for (let k = 0; left !== 0; k++) { out[order[k % order.length][1]] += step; left -= step; }
+  return out;
+}
+
+/**
+ * The document's parts and each position's printed amount. An item is one part. A Rabatt takes its
+ * percent of (or its amount off) the running total above it, the earlier Rabatte included, and
+ * splits it over the groups of that total (splitKey) in proportion, to the Rappen, so the rates,
+ * the VAT and the gross add up exactly; a minus percent or amount is a surcharge. On a credit note
+ * (negative positions) a Rabatt reduces the credit the same way. A Zwischentotal prints the item
+ * positions since the last one or the start; a text and a page break have no amount.
+ */
+export function priced(doc: Priced): { parts: Part[]; amounts: Array<number | undefined> } {
+  const parts: Part[] = [];
+  let since = 0;
+  const amounts = doc.lines.map((l): number | undefined => {
+    if (isItem(l)) {
+      const rappen = toRappen(lineAmount(l));
+      parts.push({ line: l, gross: l.vatRate > 0 && pricedGross(l, doc.prices), rappen });
+      since += rappen;
+      return fromRappen(rappen);
+    }
+    if (l.kind === 'subtotal') { const sum = since; since = 0; return fromRappen(sum); }
+    if (l.kind !== 'discount') return undefined;
+    const groups = new Map<string, Part>();
+    for (const p of parts) {
+      const g = groups.get(splitKey(p));
+      groups.set(splitKey(p), { ...(g ?? p), rappen: (g?.rappen ?? 0) + p.rappen });
+    }
+    const base = [...groups.values()];
+    const sum = base.reduce((s, p) => s + p.rappen, 0);
+    const total = l.percent !== undefined ? -toRappen(fromRappen(sum) * l.percent / 100) : -toRappen(l.amount ?? 0) * Math.sign(sum);
+    const shares = apportion(total, base.map((p) => p.rappen));
+    base.forEach((p, k) => { if (shares[k]) parts.push({ ...p, rappen: shares[k] }); });
+    return fromRappen(shares.reduce((s, x) => s + x, 0));
+  });
+  return { parts, amounts };
+}
+
+/** Each position's printed amount, by index: an item's, a Rabatt's, a Zwischentotal's; undefined for a text or a page break. */
+export const lineAmounts = (doc: Priced): Array<number | undefined> => priced(doc).amounts;
+
+/**
+ * Per rate, the VAT on the net of its net-priced parts plus the VAT in the total of its parts priced
+ * with the VAT in it, each to the Rappen, so such a part keeps its amount exactly. No 5-Rappen
+ * rounding: a QR-bill is paid by transfer to the Rappen, and the books carry no rounding line.
+ */
+function totalsOf(parts: readonly Part[]): Totals {
   const by = new Map<VatRate, { net: number; incl: number }>();
-  for (const l of lines) {
-    const g = by.get(l.vatRate) ?? { net: 0, incl: 0 };
-    g[l.vatIncluded ? 'incl' : 'net'] += toRappen(lineAmount(l));
-    by.set(l.vatRate, g);
+  for (const p of parts) {
+    const g = by.get(p.line.vatRate) ?? { net: 0, incl: 0 };
+    g[p.gross ? 'incl' : 'net'] += p.rappen;
+    by.set(p.line.vatRate, g);
   }
   const byRate = [...by].sort(([a], [b]) => b - a).map(([rate, { net, incl }]) => {
     const onNet = toRappen(fromRappen(net) * rate / 100);
@@ -41,6 +114,9 @@ export function totals(lines: readonly InvoiceLine[]): Totals {
   const sum = (k: 'net' | 'vat' | 'gross') => fromRappen(byRate.reduce((s, r) => s + toRappen(r[k]), 0));
   return { byRate, net: sum('net'), vat: sum('vat'), gross: sum('gross') };
 }
+
+/** A document's totals per rate and in all: its items and Rabatte, each to the Rappen (totalsOf). */
+export const totals = (doc: Priced): Totals => totalsOf(priced(doc).parts);
 
 // ─── status ──────────────────────────────────────────────────────────────────
 
@@ -61,8 +137,8 @@ export const paidAmount = (inv: Issued): number => fromRappen(inv.payments.reduc
  */
 export function openAmount(inv: Invoice, invoices: readonly Invoice[], asOf?: string): number {
   if (inv.status !== 'issued' || inv.kind === 'credit-note' || inv.cancelled) return 0;
-  const credited = creditNotesOf(inv, invoices, asOf).reduce((s, c) => s - toRappen(totals(c.lines).gross), 0);
-  return fromRappen(Math.max(0, toRappen(totals(inv.lines).gross) - toRappen(paidAmount(inv)) - credited));
+  const credited = creditNotesOf(inv, invoices, asOf).reduce((s, c) => s - toRappen(totals(c).gross), 0);
+  return fromRappen(Math.max(0, toRappen(totals(inv).gross) - toRappen(paidAmount(inv)) - credited));
 }
 
 /**
@@ -72,15 +148,15 @@ export function openAmount(inv: Invoice, invoices: readonly Invoice[], asOf?: st
 /** What a credit note may still take off an invoice: its total less the credit notes issued before (r8c-14); 0 for a draft, a credit note or a cancelled invoice. */
 export function creditable(inv: Invoice, invoices: readonly Invoice[]): number {
   if (inv.status !== 'issued' || inv.kind === 'credit-note' || inv.cancelled) return 0;
-  const credited = creditNotesOf(inv, invoices).reduce((s, c) => s - toRappen(totals(c.lines).gross), 0);
-  return fromRappen(Math.max(0, toRappen(totals(inv.lines).gross) - credited));
+  const credited = creditNotesOf(inv, invoices).reduce((s, c) => s - toRappen(totals(c).gross), 0);
+  return fromRappen(Math.max(0, toRappen(totals(inv).gross) - credited));
 }
 
 export function openOn(inv: Invoice, invoices: readonly Invoice[], date: string): number {
   if (inv.status !== 'issued' || inv.kind === 'credit-note' || inv.date > date || (inv.cancelled && inv.cancelled.date <= date)) return 0;
-  const credited = creditNotesOf(inv, invoices, date).reduce((s, c) => s - toRappen(totals(c.lines).gross), 0);
+  const credited = creditNotesOf(inv, invoices, date).reduce((s, c) => s - toRappen(totals(c).gross), 0);
   const paid = inv.payments.filter((p) => p.date <= date).reduce((s, p) => s + toRappen(p.amount), 0);
-  return fromRappen(Math.max(0, toRappen(totals(inv.lines).gross) - paid - credited));
+  return fromRappen(Math.max(0, toRappen(totals(inv).gross) - paid - credited));
 }
 
 /**
@@ -93,8 +169,8 @@ export function refundDue(cn: Invoice, invoices: readonly Invoice[]): number {
   const target = live(invoices).find((i) => i.id === cn.creditFor);
   if (!target || target.status !== 'issued') return 0;
   const earlier = creditNotesOf(target, invoices).filter((c) => c.id !== cn.id && (c.date < cn.date || (c.date === cn.date && c.issuedAt < cn.issuedAt)));
-  const owed = toRappen(totals(target.lines).gross) - toRappen(paidAmount(target)) + earlier.reduce((s, c) => s + toRappen(totals(c.lines).gross), 0);
-  const back = Math.max(0, -toRappen(totals(cn.lines).gross) - Math.max(0, owed));
+  const owed = toRappen(totals(target).gross) - toRappen(paidAmount(target)) + earlier.reduce((s, c) => s + toRappen(totals(c).gross), 0);
+  const back = Math.max(0, -toRappen(totals(cn).gross) - Math.max(0, owed));
   return fromRappen(Math.max(0, back - toRappen(paidAmount(cn))));
 }
 
@@ -180,7 +256,7 @@ export interface Missing { field: MissingField; line?: number }
 export type MissingField =
   | 'sender.name' | 'sender.address' | 'sender.uid' | 'payTo'
   | 'customer' | 'customer.name' | 'customer.address'
-  | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.vatRate' | 'line.activity' | 'exemption'
+  | 'date' | 'lines' | 'line.text' | 'line.quantity' | 'line.price' | 'line.vatRate' | 'line.activity' | 'line.discount' | 'line.discountBase' | 'exemption'
   | 'credit.invoice' | 'credit.sign' | 'credit.exceeds';
 
 const hasAddress = (a: { postcode?: string; town?: string; country?: string } | undefined) => !!(a?.postcode?.trim() && a.town?.trim() && a.country?.trim());
@@ -207,31 +283,56 @@ export function missingForIssue(draft: InvoiceContent, ctx: {
     if (!hasAddress(customer.address)) out.push({ field: 'customer.address' });
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(draft.date)) out.push({ field: 'date' });
-  if (draft.lines.length === 0) out.push({ field: 'lines' });
+  const items = draft.lines.filter(isItem);
+  if (items.length === 0) out.push({ field: 'lines' });
   draft.lines.forEach((l, line) => {
-    if (!l.text.trim()) out.push({ field: 'line.text', line });
-    if (!Number.isFinite(l.quantity) || l.quantity === 0 || !Number.isFinite(l.price)) out.push({ field: 'line.quantity', line });
+    if (l.kind === 'discount') {
+      const value = l.percent ?? l.amount;
+      if (value === undefined || !Number.isFinite(value) || value === 0 || (l.percent !== undefined && l.amount !== undefined)) out.push({ field: 'line.discount', line });
+      return;
+    }
+    if (!isItem(l)) return;
+    if (!Number.isFinite(l.quantity) || !Number.isFinite(l.price) || (l.discount !== undefined && !Number.isFinite(l.discount))) out.push({ field: 'line.quantity', line });
     if (!invoiceRates().includes(l.vatRate)) out.push({ field: 'line.vatRate', line });
   });
   // A firm not registered charges no VAT: a line at 0 % needs no reason.
-  if (chargesVat() && draft.lines.some((l) => l.vatRate === 0) && !draft.exemption) out.push({ field: 'exemption' });
+  if (chargesVat() && items.some((l) => l.vatRate === 0) && !draft.exemption) out.push({ field: 'exemption' });
   if (draft.kind === 'credit-note') {
     const target = ctx.invoices.find((i) => i.id === draft.creditFor && !i.deleted);
     if (!target || target.status !== 'issued' || target.kind !== 'invoice' || target.cancelled) out.push({ field: 'credit.invoice' });
-    const gross = totals(draft.lines).gross;
+    const gross = totals(draft).gross;
     if (gross >= 0) out.push({ field: 'credit.sign' });
     else if (target?.status === 'issued') {
-      const already = creditNotesOf(target, ctx.invoices).reduce((s, c) => s - toRappen(totals(c.lines).gross), 0);
-      if (-toRappen(gross) + already > toRappen(totals(target.lines).gross)) out.push({ field: 'credit.exceeds' });
+      const already = creditNotesOf(target, ctx.invoices).reduce((s, c) => s - toRappen(totals(c).gross), 0);
+      if (-toRappen(gross) + already > toRappen(totals(target).gross)) out.push({ field: 'credit.exceeds' });
     }
   }
   return out;
 }
 
+/**
+ * What issuing warns of and the person may issue with all the same («Trotzdem ausstellen», spec
+ * 4.11): an item position without a text (Art. 26 Abs. 2 lit. d MWSTG), or without an amount (lit.
+ * e: it prints as 0.00), and a Rabatt with nothing above it to take off.
+ */
+export function warningsForIssue(draft: Pick<InvoiceContent, 'lines' | 'prices'>): Missing[] {
+  const amounts = priced(draft).amounts;
+  return draft.lines.flatMap((l, line): Missing[] => {
+    // A Rabatt with its value that takes nothing: no position above it.
+    if (l.kind === 'discount') return (l.percent || l.amount) && amounts[line] === 0 ? [{ field: 'line.discountBase', line }] : [];
+    if (!isItem(l)) return [];
+    return [
+      ...(!l.text.trim() ? [{ field: 'line.text' as const, line }] : []),
+      ...(l.quantity === 0 || l.price === 0 ? [{ field: 'line.price' as const, line }] : []),
+    ];
+  });
+}
+
 export class InvoiceRuleError extends Error {
   constructor(readonly code: InvoiceRefusal, message: string, readonly missing?: Missing[]) { super(message); }
 }
-export type InvoiceRefusal = 'incomplete' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid';
+/** `unconfirmed`: issuing warns (warningsForIssue) and the request did not carry the person's «Trotzdem ausstellen». */
+export type InvoiceRefusal = 'incomplete' | 'unconfirmed' | 'notDraft' | 'notIssued' | 'cancelled' | 'paid' | 'creditNote' | 'nothingOpen' | 'notFound' | 'changed' | 'uid';
 
 /**
  * The draft as an issued invoice: its number (the next of the year), its due date, its payment
@@ -240,15 +341,24 @@ export type InvoiceRefusal = 'incomplete' | 'notDraft' | 'notIssued' | 'cancelle
  */
 export function issue(draft: Draft, ctx: {
   customer: Customer | undefined; sender: Sender | Omit<Sender, 'payTo'>; layout: InvoiceLayout; invoices: readonly Invoice[]; now: string;
+  /** The firm's units; those the positions name are frozen with the document. */
+  units?: readonly UnitDef[];
+  /** The person's «Trotzdem ausstellen» over what warningsForIssue names. */
+  confirmed?: boolean;
 }): Omit<Issued, 'pdf'> {
   if (draft.status !== 'draft' || draft.deleted) throw new InvoiceRuleError('notDraft', 'Nur ein Entwurf kann ausgestellt werden.');
   const missing = missingForIssue(draft, { ...ctx, sender: ctx.sender });
+  const where = (ms: Missing[]) => ms.map((m) => m.field + (m.line === undefined ? '' : ` (Position ${m.line + 1})`)).join(', ');
   if (missing.length || !ctx.customer || !('payTo' in ctx.sender)) {
-    throw new InvoiceRuleError('incomplete', `Für eine MWST-konforme Rechnung fehlt: ${missing.map((m) => m.field + (m.line === undefined ? '' : ` (Position ${m.line + 1})`)).join(', ')}.`, missing);
+    throw new InvoiceRuleError('incomplete', `Für eine MWST-konforme Rechnung fehlt: ${where(missing)}.`, missing);
   }
+  const warnings = warningsForIssue(draft);
+  if (warnings.length && !ctx.confirmed) throw new InvoiceRuleError('unconfirmed', `Eine Position ohne Text oder Betrag: ${where(warnings)}. Sie wird so gedruckt; nur mit «Trotzdem ausstellen».`, warnings);
   const { comments, status: _, ...content } = draft;
   const number = nextNumber(ctx.invoices, draft.date);
   const { id: _id, createdAt: _c, origin: _o, deleted: _d, ...customer } = ctx.customer;
+  const named = new Set(draft.lines.flatMap((l) => (isItem(l) && l.unit ? [l.unit] : [])));
+  const units = (ctx.units ?? []).filter((u) => named.has(u.id));
   return {
     ...content,
     status: 'issued',
@@ -259,6 +369,7 @@ export function issue(draft: Draft, ctx: {
     customer,
     sender: ctx.sender,
     layout: ctx.layout,
+    ...(units.length ? { units: units.map((u) => ({ ...u })) } : {}),
     payments: [],
     reminders: [],
     comments,
@@ -298,12 +409,16 @@ export interface CreditRequest {
 export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Envelope, date: string): Draft {
   if (inv.status !== 'issued' || inv.kind !== 'invoice') throw new InvoiceRuleError('notIssued', 'Eine Gutschrift bezieht sich auf eine ausgestellte Rechnung.');
   if (inv.cancelled) throw new InvoiceRuleError('cancelled', `Rechnung ${inv.number} ist storniert.`);
-  const t = totals(inv.lines);
+  const t = totals(inv);
   const reason = req.reason.trim();
   let lines: InvoiceLine[];
+  // The whole invoice: every position as it stood, the items' prices negated; a Rabatt then reduces the credit as it reduced the invoice.
+  let prices = inv.prices;
   if (req.amount === undefined) {
-    lines = inv.lines.map((l) => ({ ...l, text: reason ? `${l.text} (${reason})` : l.text, price: -l.price }));
+    lines = inv.lines.map((l) => (isItem(l) ? { ...l, text: reason ? `${l.text} (${reason})` : l.text, price: -l.price } : { ...l }));
   } else {
+    // A part of the total: gross amounts per rate, so the document is priced gross.
+    prices = 'gross';
     const gross = toRappen(req.amount);
     if (gross <= 0 || gross > toRappen(t.gross)) throw new InvoiceRuleError('incomplete', 'Der Betrag einer Gutschrift liegt zwischen 0 und dem Total der Rechnung.');
     const text = reason || `${TEXTS[inv.language].credit} ${inv.number}`;
@@ -312,15 +427,17 @@ export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Enve
     // A rate whose lines belong to both activities of a firm with two net rates is credited in both, by their
     // share (#504), each line named by the first position of its activity; on any other firm, and at 0 %, one line per rate.
     const split = invoiceActivities().length > 0;
-    const parts = rates.flatMap((r) => [...groupBy(inv.lines.filter((l) => l.vatRate === r.rate), (l) => (split && r.rate > 0 ? l.activity ?? 1 : 1))]
-      .map(([activity, ls], _i, all) => ({ rate: r.rate, activity, account: ls[0].account, gross: totals(ls).gross, of: all.length > 1 ? ls[0].text : undefined })));
+    // By the invoice's parts, so a Rabatt lowers each activity's share as it lowered the invoice.
+    const priceds = priced(inv).parts;
+    const parts = rates.flatMap((r) => [...groupBy(priceds.filter((p) => p.line.vatRate === r.rate), (p) => (split && r.rate > 0 ? p.line.activity ?? 1 : 1))]
+      .map(([activity, ps], _i, all) => ({ rate: r.rate, activity, account: ps[0].line.account, gross: totalsOf(ps).gross, of: all.length > 1 ? ps[0].line.text : undefined })));
     const base = parts.reduce((s, r) => s + toRappen(r.gross), 0);
     let left = gross;
     lines = parts.map((r, k) => {
       const share = k === parts.length - 1 ? left : Math.round(gross * toRappen(r.gross) / base);
       left -= share;
       const named = [rates.length > 1 ? `${r.rate} %` : '', r.of ?? ''].filter(Boolean).join(', ');
-      return { text: named ? `${text} (${named})` : text, quantity: 1, price: -fromRappen(share), vatRate: r.rate, ...(r.rate > 0 ? { vatIncluded: true as const } : {}), ...(r.account ? { account: r.account } : {}), ...(r.activity === 2 ? { activity: 2 as const } : {}) };
+      return { text: named ? `${text} (${named})` : text, quantity: 1, price: -fromRappen(share), vatRate: r.rate, ...(r.account ? { account: r.account } : {}), ...(r.activity === 2 ? { activity: 2 as const } : {}) };
     }).filter((l) => l.price !== 0);
   }
   return {
@@ -333,6 +450,7 @@ export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Enve
     language: inv.language,
     subject: `${TEXTS[inv.language].forInvoice} ${inv.number}`,
     lines,
+    ...(prices ? { prices } : {}),
     ...(inv.exemption ? { exemption: inv.exemption } : {}),
     creditFor: inv.id,
     ...(req.settlement ? { settlement: req.settlement } : {}),
@@ -394,17 +512,18 @@ export function revenueVatCode(rate: VatRate, exemption: Exemption | undefined, 
 
 /**
  * The revenue a payment of `amount` books, split like the invoice's total over its accounts and
- * rates, so a part payment books the same mix as the whole. The parts add up to `amount` exactly.
+ * rates, so a part payment books the same mix as the whole; a Rabatt lowers each rate and account by
+ * its share (`priced`). The parts add up to `amount` exactly.
  */
-export function revenueSplit(inv: Pick<InvoiceContent, 'lines' | 'exemption'>, amount: number, revenueAccount: string): Array<{ account: string; vatCode: string | undefined; amount: number }> {
+export function revenueSplit(inv: Pick<InvoiceContent, 'lines' | 'exemption' | 'prices'>, amount: number, revenueAccount: string): Array<{ account: string; vatCode: string | undefined; amount: number }> {
   const groups = new Map<string, { account: string; rate: VatRate; activity: 1 | 2; gross: number }>();
-  for (const [rate, lines] of groupBy(inv.lines, (l) => l.vatRate)) {
-    const rt = totals(lines);
-    for (const [key, ls] of groupBy(lines, (l) => `${l.account ?? revenueAccount} ${l.activity ?? 1}`)) {
+  for (const [rate, parts] of groupBy(priced(inv).parts, (p) => p.line.vatRate)) {
+    const rt = totalsOf(parts);
+    for (const [key, ps] of groupBy(parts, (p) => `${p.line.account ?? revenueAccount} ${p.line.activity ?? 1}`)) {
       // the rate's VAT goes to its accounts and activities by their share of its net
-      const net = toRappen(totals(ls).net);
+      const net = toRappen(totalsOf(ps).net);
       const share = toRappen(rt.net) === 0 ? 0 : Math.round(toRappen(rt.vat) * net / toRappen(rt.net));
-      groups.set(`${key} ${rate}`, { account: ls[0].account ?? revenueAccount, rate, activity: ls[0].activity ?? 1, gross: net + share });
+      groups.set(`${key} ${rate}`, { account: ps[0].line.account ?? revenueAccount, rate, activity: ps[0].line.activity ?? 1, gross: net + share });
     }
   }
   const all = [...groups.values()];
@@ -422,6 +541,11 @@ function groupBy<T, K>(xs: readonly T[], key: (x: T) => K): Map<K, T[]> {
   const out = new Map<K, T[]>();
   for (const x of xs) out.set(key(x), [...(out.get(key(x)) ?? []), x]);
   return out;
+}
+
+/** Where the rest of an invoice is written off: the firm's accounts, else the jurisdiction's (modules/<j>/invoicing.yaml writeOff). */
+export function writeOffAccounts(settings: Pick<InvoicingSettings, 'writeOffAccount'> | undefined): { skonto: string; loss: string } | undefined {
+  return settings?.writeOffAccount ?? invoicing().writeOff;
 }
 
 /** Records a payment on an invoice once: the same transaction is never counted twice. */
