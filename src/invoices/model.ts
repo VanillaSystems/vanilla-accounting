@@ -182,6 +182,31 @@ export interface InvoiceContent {
 export interface Draft extends Envelope, InvoiceContent {
   status: 'draft';
   comments: Comment[];
+  /**
+   * The number an issued document kept when it went back to draft («Zurück zum Entwurf», spec
+   * 4.4.2): issued again, it takes this number, never a new one, and no other document takes it.
+   */
+  number?: string;
+  /** The PDFs it was issued with before it went back to draft, oldest first. */
+  replaced?: ReplacedPdf[];
+}
+
+/**
+ * A PDF a document was issued with and that was replaced: it went back to draft before it was ever
+ * sent. The file stays under its replaced name (invoices/<number>.replaced-<k>.pdf), byte for byte.
+ */
+export interface ReplacedPdf { file: string; sha256: string; issuedAt: string; replacedAt: string }
+
+/**
+ * «Konten ändern» on an issued invoice (spec 4.4.2): the revenue accounts of positions changed,
+ * never an amount, a rate or a code. `refs` are the bookings it changed in an open period, `reclass`
+ * the ref of the reclassification it booked in the open period for bookings of a filed one.
+ */
+export interface AccountChange {
+  at: string;
+  lines: Array<{ line: number; from: string; to: string }>;
+  refs: string[];
+  reclass?: string;
 }
 
 /** The company as an issued invoice names it, frozen at issue. */
@@ -274,6 +299,10 @@ export interface Issued extends Envelope, InvoiceContent {
   terms?: IssuedTerms;
   reminders: Reminder[];
   comments: Comment[];
+  /** The PDFs it was issued with before it last went back to draft (Draft.replaced), oldest first. */
+  replaced?: ReplacedPdf[];
+  /** Its «Konten ändern», oldest first. */
+  accountChanges?: AccountChange[];
 }
 
 export type Invoice = Draft | Issued;
@@ -304,6 +333,8 @@ export interface SentDocument extends Envelope {
  */
 export const issuedPdfUrl = (number: string) => `/invoices/${encodeURIComponent(number)}.pdf`;
 export const sentPdfUrl = (id: string) => `/invoices/sent/${encodeURIComponent(id)}.pdf`;
+/** A PDF the document was issued with and that was replaced, `k` from 1 (Draft.replaced). */
+export const replacedPdfUrl = (id: string, k: number) => `/api/invoices/${encodeURIComponent(id)}/replaced/${k}.pdf`;
 
 /** invoices.json. */
 export interface InvoiceBook {

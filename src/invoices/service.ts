@@ -4,9 +4,9 @@
  * print a PDF are asynchronous; they run one at a time in this process, so a number is never
  * given twice and nothing saves over another change.
  */
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { parseUid } from '../workspace/uid.js';
-import { extname, join } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
 import type { Workspace } from '../workspace/workspace.js';
 import { receiptFile, type Books } from '../books/store.js';
 import { defaultTexts, draftDays, issuedIntro, issuedSheet, reminderSheet, senderFor, sheetOf, type InvoicingContext } from './documents.js';
@@ -17,9 +17,9 @@ import {
 } from './model.js';
 import { renderHtml, renderPdf, type Rendered } from './pdf.js';
 import {
-  InvoiceRuleError, assertCreditWithinOpen, cancel, creditNoteDraft, deleteDraft, figures, isOverdue, issue, liveCustomers, liveInvoices, missingForIssue,
+  InvoiceRuleError, asDraft, assertCreditWithinOpen, backToDraftRefusal, cancel, creditNoteDraft, deleteDraft, figures, isOverdue, issue, liveCustomers, liveInvoices, missingForIssue,
   openAmount, reminderDraft, shortfallOf, skontoOffer, status, totals, writeOffAccounts,
-  type CreditRequest, type Figures, type InvoiceStatus, type Missing, type Totals,
+  type CreditRequest, type Figures, type InvoiceRefusal, type InvoiceStatus, type Missing, type Totals,
 } from './rules.js';
 import type { SheetData } from './sheet.js';
 import { loadInvoices, newEnvelope, readPdf, sha256, storePdf, updateInvoices, writeAtomic } from './store.js';
@@ -404,6 +404,62 @@ async function printOwnDocument(ws: Workspace, inv: Issued, kind: SentKind, shee
     throw e;
   }
   return { ...env, invoiceId: inv.id, kind, title, ...pdf, sentAt: now, ...recipient(inv, to, delivered) };
+}
+
+// ─── back to draft (spec 4.4.2) ────────────────────────────────────────────────
+
+const BACK_REFUSED: Partial<Record<InvoiceRefusal, (n: string) => string>> = {
+  notIssued: () => 'Ein Entwurf ist schon ein Entwurf.',
+  sent: (n) => `${n} ist gesendet oder heruntergeladen: der Kunde hat sie, sie bleibt ausgestellt (MWSTG Art. 27 Abs. 2). Eine Gutschrift oder ein Storno korrigiert sie.`,
+  cancelled: (n) => `${n} ist storniert.`,
+  settled: (n) => `Auf ${n} ist etwas eingegangen, gutgeschrieben oder ausgebucht: sie bleibt ausgestellt.`,
+  applied: (n) => `${n} ist mit einer Zahlung ihrer Rechnung verrechnet: sie bleibt ausgestellt.`,
+};
+
+/**
+ * «Zurück zum Entwurf» (spec 4.4.2, P2.7): an issued document never sent, with nothing received,
+ * credited or written off, becomes a draft again and keeps its number (Draft.number). Its PDF stays,
+ * renamed to invoices/<number>.replaced-<k>.pdf and named in `replaced`; issuing it again prints a new
+ * one under the number. `books` takes its VAT event off the books first (the route, through the
+ * write door: src/invoices/revise.ts takeBackEvent) and returns the receipt files that went with it,
+ * removed here once the document is a draft. Refused with the rule's code (backToDraftRefusal).
+ */
+export function backToDraft(ws: Workspace, id: string, opts: { now?: string; books?: (inv: Issued) => string[] } = {}): Promise<Draft> {
+  return serial(() => {
+    const now = opts.now ?? new Date().toISOString();
+    const book = loadInvoices(ws);
+    const inv = findInvoice(book, id) ?? notFound('Rechnung');
+    const refusal = backToDraftRefusal(inv, liveInvoices(book), book.sent);
+    if (refusal || inv.status !== 'issued') throw new InvoiceRuleError(refusal ?? 'notIssued', (BACK_REFUSED[refusal ?? 'notIssued'] ?? (() => ''))(inv.status === 'issued' ? inv.number : ''));
+    const k = (inv.replaced?.length ?? 0) + 1;
+    const file = join(dirname(inv.pdf.file), `${basename(inv.pdf.file, '.pdf')}.replaced-${k}.pdf`);
+    if (existsSync(join(ws.paths.root, file))) throw new InvoiceRuleError('changed', `${file} gibt es schon; bitte neu laden.`);
+    const removed = opts.books?.(inv) ?? [];
+    renameSync(join(ws.paths.root, inv.pdf.file), join(ws.paths.root, file));
+    const ctx = invoicingContext(ws);
+    const customer = liveCustomers(book).find((c) => c.id === inv.customerId);
+    const { salutation } = defaultTexts(ctx, inv.kind, inv.language, draftDays(ctx, inv, customer));
+    let draft: Draft;
+    try {
+      draft = commit(ws, inv.id, inv, (fresh, at) => {
+        const d = asDraft(inv, { file, sha256: inv.pdf.sha256, issuedAt: inv.issuedAt, replacedAt: now }, salutation);
+        fresh.invoices[at] = d;
+        return d;
+      });
+    } catch (e) {
+      renameSync(join(ws.paths.root, file), join(ws.paths.root, inv.pdf.file));
+      throw e;
+    }
+    for (const f of removed) rmSync(f, { force: true });
+    return draft;
+  });
+}
+
+/** A PDF the document was issued with before it went back to draft, `k` from 1, checked against its checksum. */
+export function replacedPdf(ws: Workspace, id: string, k: number): Buffer {
+  const inv = findInvoice(loadInvoices(ws), id) ?? notFound('Rechnung');
+  const r = inv.replaced?.[k - 1] ?? notFound('PDF');
+  return readPdf(ws, r);
 }
 
 // ─── cancelling, crediting, reminding, commenting ─────────────────────────────

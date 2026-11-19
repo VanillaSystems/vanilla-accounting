@@ -27,6 +27,7 @@ import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 import { BulkDialogs } from './bulk.js';
 import { Frame, close } from './frame.js';
 import { AllocateDialog, HandPaymentDialog, WriteOffDialog } from './money-dialogs.js';
+import { AccountsDialog, BackToDraftDialog } from './revise-dialogs.js';
 
 type Props = AreaProps<RouteOf<'invoices'>>;
 
@@ -49,6 +50,8 @@ export function Dialogs(props: Props) {
     case 'handPayment': return inv?.status === 'issued' ? <HandPaymentDialog {...props} inv={inv} invoices={d.invoices} /> : null;
     case 'writeOff': return inv?.status === 'issued' ? <WriteOffDialog {...props} inv={inv} invoices={d.invoices} reason={s.dialog.reason} amount={s.dialog.amount} /> : null;
     case 'allocate': return <AllocateDialog {...props} transactionRef={s.dialog.transactionRef} customerId={s.dialog.customerId} />;
+    case 'backToDraft': return inv?.status === 'issued' ? <BackToDraftDialog {...props} inv={inv} /> : null;
+    case 'accounts': return inv?.status === 'issued' ? <AccountsDialog {...props} inv={inv} /> : null;
     default: return null;
   }
 }

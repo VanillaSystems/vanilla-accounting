@@ -1197,6 +1197,36 @@ listed here and updated with phase 2's build:
     its statuses draft, open, partly, settled, cancelled); slice C widened it: Teilweise also when part
     of the note is applied to its invoice while a rest waits to go back. The four figures share
     `.ivtop` with D's sent line above the status and the actions.
+44. **Back to draft: what «sent» means (slice F2).** The way back is refused once the sent log holds
+    any document of it (an e-mail, the send dialog's download, a reminder). The plain «PDF
+    herunterladen» link records nothing, so the dialog says that the sent log shows no sending and
+    that a PDF passed on another way is better corrected by Gutschrift or Storno. Also refused: a
+    Rechnung with a payment, a write-off or an issued Gutschrift; a cancelled one; a Gutschrift that a
+    payment of its Rechnung dated on or after it took (on the cash basis that payment's booking carries
+    the credit's minus lines).
+45. **The replaced PDF (slice F2).** The file keeps its bytes and moves to
+    `invoices/<number>.replaced-<k>.pdf` beside the number's file, which issuing again needs (storePdf
+    never replaces a file). The record names it in `replaced: [{ file, sha256, issuedAt, replacedAt }]`
+    (on the draft and, after issuing again, on the issued document); Verlauf shows it with a link
+    (`/api/invoices/<id>/replaced/<k>.pdf`). The draft keeps its number in `Draft.number`; the next
+    number skips it, issuing takes it again with its reference, and such a draft is not deleted (code
+    `numbered`): it is issued again and cancelled, so the series has no gap. The intro loses the
+    greeting issuing put above it; a due date the terms gave is dropped.
+46. **Back to draft on the books (slice F2).** The `RE-`/`GS-` entries go with every link on that ref,
+    and the sales record the PDF became goes with its file when nothing else holds it (named with
+    `release`, #405): issuing again books a new receipt under the same file name. On the cash basis the
+    books hold nothing of an unpaid document, so nothing is booked or taken back.
+47. **Konten ändern, code by code (slice F2).** For each booking of the invoice (its event, its
+    payments booked from it), the revenue of each VAT code is spread over the accounts the positions
+    now name, in proportion to how the invoice splits it, to the cent; so no code's total moves. A
+    booking of an open period changes in place (its ids kept where the lines are as many). For one of
+    a filed period one reclassification `RE-<n>-kk-<k>` (src/books/refs.ts `reclassRef`) moves the
+    revenue in the books' currency without a VAT code, dated today or the day the person picks in the
+    open period. A payment a person booked herself is named and kept. The position records the new
+    account and `accountChanges` the change (Verlauf); the PDF stays. Refused on a Gutschrift (its own
+    positions carry its accounts) and a cancelled Rechnung (its Storno reverses the event as booked).
+    In a foreign currency a split into more lines may move the converted total of a code by a cent,
+    since each line converts on its own.
 
 ---
 

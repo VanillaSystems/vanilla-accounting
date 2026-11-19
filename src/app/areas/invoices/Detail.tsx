@@ -5,10 +5,12 @@
  */
 import { useEffect, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
-import { PRICES, isItem, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
+import { PRICES, isItem, replacedPdfUrl, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
+import { eventRef } from '../../../books/refs.js';
+import { lockedThrough } from '../../../books/lock-line.js';
 import { TEXTS } from '../../../invoices/texts.js';
 import { defaultTexts, draftDays, senderFor } from '../../../invoices/documents.js';
-import { missingForIssue, openAmount, openFees, paidAmount, refundDue, reminderDraft, shortfallOf, skontoOffer, totals, warningsForIssue, type Missing } from '../../../invoices/rules.js';
+import { backToDraftRefusal, missingForIssue, openAmount, openFees, paidAmount, refundDue, reminderDraft, shortfallOf, skontoOffer, totals, warningsForIssue, type Missing } from '../../../invoices/rules.js';
 import { prettyReference } from '../../../providers/qr-bill/reference.js';
 import type { PaymentProposal } from '../../../invoices/payments.js';
 import { at } from '../receipts/view.js';
@@ -117,7 +119,7 @@ function InvoiceDetail(props: DetailProps) {
         <div className="amount"><small>{inv.currency}</small>{fmt(t0.gross)}</div>
       </div>
       <div className="facts">
-        <span>{inv.status === 'issued' ? (inv.kind === 'credit-note' ? t('invoices.creditNo', { number: inv.number }) : t('invoices.no', { number: inv.number })) : t('invoices.draftNoNumber')}</span>
+        <span>{inv.status === 'issued' ? (inv.kind === 'credit-note' ? t('invoices.creditNo', { number: inv.number }) : t('invoices.no', { number: inv.number })) : inv.number ? t('invoices.draftKeeps', { number: inv.number }) : t('invoices.draftNoNumber')}</span>
         <span data-tip={t('invoices.dateTip')}>{formatDate(inv.date)}</span>
         {inv.status === 'issued' && inv.kind === 'invoice' && <span data-tip={t('invoices.dueTip')}>{t('invoices.due', { date: formatDate(inv.dueDate) })}</span>}
         {inv.status === 'issued' && inv.kind === 'invoice' && <span data-tip={t('invoices.referenceTip')}>{prettyReference(inv.reference)}</span>}
@@ -199,7 +201,7 @@ function Status({ d, ws, inv, state, reminder, nav, canEdit, books }: DetailProp
     const later = issuedLater(d.invoices, inv);
     return (
       <div className="status">
-        <span className="notice">{t(inv.kind === 'credit-note' ? 'invoices.creditDraftStatus' : 'invoices.draftStatus')}</span>
+        <span className="notice">{inv.number ? t('invoices.draftNumberedStatus', { number: inv.number }) : t(inv.kind === 'credit-note' ? 'invoices.creditDraftStatus' : 'invoices.draftStatus')}</span>
         {later && <div className="notice warn" role="note">{I.dot}<span>{t('invoices.dateBeforeLast', { number: later.number, date: formatDate(later.date) })}</span></div>}
       </div>
     );
@@ -349,7 +351,8 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
       <div className="ivacts">
         {preview}
         <AsyncButton type="button" className="btn primary" data-act="issue" aria-describedby={missing.length ? 'ivmissing' : undefined} onClick={tryIssue}>{t(inv.kind === 'credit-note' ? 'invoices.issueCredit' : 'invoices.issue')}</AsyncButton>
-        <AsyncButton type="button" className="btn ghost danger" data-act="delete" onClick={() => deleteDraft(nav, inv)}>{t('common.delete')}</AsyncButton>
+        {/* A draft back from issue keeps its number: it is issued again and cancelled, never deleted (the series stays without a gap). */}
+        {!inv.number && <AsyncButton type="button" className="btn ghost danger" data-act="delete" onClick={() => deleteDraft(nav, inv)}>{t('common.delete')}</AsyncButton>}
         {missing.length > 0 && <MissingList {...props} inv={inv} missing={missing} />}
         {warnings.length > 0 && <MissingList {...props} inv={inv} missing={warnings} warn={() => issue(nav, inv, props.period, true)} />}
       </div>
@@ -382,6 +385,9 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
     ...(open || state === 'paid' ? [{ act: 'credit', label: t('invoices.credit'), run: () => setUi({ dialog: { kind: 'credit' } }) }] : []),
     ...(open || state === 'paid' ? [{ act: 'cancel', label: t('invoices.cancel'), run: () => setUi({ dialog: { kind: 'cancel' } }) }] : []),
     ...(state !== 'credit' ? [{ act: 'copy', label: t('invoices.copy'), run: () => { void copyAsDraft(nav, inv); } }] : []),
+    // Spec 4.4.2: only while never sent, nothing settled, and its booking (the agreed basis) in an open period; once sent, Gutschrift and Storno are the ways on.
+    ...(mayGoBack(props, inv) ? [{ act: 'back-to-draft', label: t('invoices.backToDraft'), run: () => setUi({ dialog: { kind: 'backToDraft' } }) }] : []),
+    ...(inv.kind === 'invoice' && !inv.cancelled ? [{ act: 'accounts', label: t('invoices.accounts'), run: () => setUi({ dialog: { kind: 'accounts' } }) }] : []),
   ];
   return (
     <div className="ivacts">
@@ -390,6 +396,14 @@ function Actions(props: DetailProps & { state: RowState; reminderLevel?: number 
       {dl}
     </div>
   );
+}
+
+/** «Zurück zum Entwurf» is offered: the rules allow it, and its booking of the issue (the agreed basis) lies after the locked line. */
+function mayGoBack({ d, books }: DetailProps, inv: Issued): boolean {
+  if (backToDraftRefusal(inv, d.invoices, d.sent)) return false;
+  const line = lockedThrough(books.config);
+  const ref = eventRef(inv, 'issue');
+  return !line || !books.journalEntries?.some((e) => e.transactionRef === ref && e.date <= line);
 }
 
 /** «Weitere ▾»: the actions of the state beside the main row. */
@@ -515,7 +529,12 @@ function Comments({ inv, nav, canEdit }: DetailProps) {
 }
 
 function Log({ d, inv }: DetailProps) {
-  const rows: Array<[string, string]> = [[inv.createdAt.slice(0, 10), t('invoices.log.created')]];
+  const rows: Array<[string, ReactNode]> = [[inv.createdAt.slice(0, 10), t('invoices.log.created')]];
+  // Each PDF it was issued with before it went back to draft stays, marked as replaced (spec 4.4.2).
+  (inv.replaced ?? []).forEach((r, k) => {
+    rows.push([r.issuedAt.slice(0, 10), t('invoices.log.issued', { number: inv.number ?? '' })]);
+    rows.push([r.replacedAt.slice(0, 10), <>{t('invoices.log.replaced')} · <a className="golink" href={replacedPdfUrl(inv.id, k + 1)} target="_blank" rel="noreferrer" data-act="replaced-pdf">{t('invoices.replacedPdf', { date: formatDate(r.issuedAt.slice(0, 10)) })}</a></>]);
+  });
   if (inv.status === 'issued') {
     rows.push([inv.issuedAt.slice(0, 10), t('invoices.log.issued', { number: inv.number })]);
     for (const x of d.sent.filter((y) => y.invoiceId === inv.id)) rows.push([x.sentAt.slice(0, 10), t('invoices.log.sent', { title: x.title })]);
@@ -523,6 +542,7 @@ function Log({ d, inv }: DetailProps) {
     for (const p of inv.payments) rows.push([p.date, t(inv.kind === 'credit-note' ? 'invoices.log.refunded' : p.source === 'hand' ? 'invoices.log.paidHand' : how[p.by], { amount: `${inv.currency} ${fmt(p.amount)}` })]);
     for (const w of inv.writeOffs ?? []) rows.push([w.date, t('invoices.log.writtenOff', { reason: t(`invoices.reason.${w.reason}`), amount: `${inv.currency} ${fmt(w.amount)}` })]);
     if (inv.cancelled) rows.push([inv.cancelled.date, t('invoices.log.cancelled')]);
+    for (const c of inv.accountChanges ?? []) rows.push([c.at.slice(0, 10), t('invoices.log.accounts', { list: c.lines.map((l) => t('invoices.accountsPos', { n: l.line + 1, from: l.from, to: l.to })).join(', ') })]);
   }
   rows.sort((a, b) => a[0].localeCompare(b[0]));
   return (

@@ -16,6 +16,15 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- Verkauf › Weitere › «Zurück zum Entwurf»: a Rechnung or Gutschrift issued by mistake and never
+  sent goes back to draft and keeps its number; its PDF stays in the Verlauf, marked as replaced. On
+  the agreed basis its booking is taken back and booked again when it is issued again. Once sent,
+  the action is not offered: a Gutschrift or a Storno corrects it.
+- Verkauf › Weitere › «Konten ändern»: the revenue account of a Rechnung's positions changes, never
+  an amount, a rate or a code. Its bookings of an open period change account; for a booking of a
+  filed quarter a reclassification without a VAT code is booked in the open period
+  (`RE-<number>-kk-<k>`, a new ref pattern, no books format change). The dialog shows what will be
+  booked before it is.
 - Buchungen › Neue Buchung von Hand: «+ Zeile» makes it a Sammelbuchung, one account against
   several lines (for example Haben 1020 against Soll 6500 and 6570). The last line holds the rest of
   the total until you type there, and ↵ books only once the lines add up. The lines are booked

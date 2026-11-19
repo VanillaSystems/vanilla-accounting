@@ -24,6 +24,9 @@ export type Dialog =
   | { kind: 'allocate'; transactionRef: string; customerId?: string }
   | { kind: 'credit' }
   | { kind: 'delete' }
+  /** «Zurück zum Entwurf» of an unsent document, and «Konten ändern» of an issued invoice (spec 4.4.2). */
+  | { kind: 'backToDraft' }
+  | { kind: 'accounts' }
   /**
    * Sending the invoice with its PDF shown, or the reminder written on the sheet, by e-mail or as a download.
    * `issued`: opened by «Ausstellen» itself, so the document to take away is in front of the person at once.
