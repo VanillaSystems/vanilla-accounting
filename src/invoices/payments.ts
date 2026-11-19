@@ -37,6 +37,8 @@ export interface PaymentContext {
   bankAccounts: readonly LedgerBankAccount[];
   revenueAccount: string;
   feeAccount?: string;
+  /** Where paid default interest is booked (a financial income account); absent: feeAccount, else revenueAccount. */
+  interestAccount?: string;
   /** Where an open item lives on the agreed basis (src/accounting/tax-point.ts): the receivable of an invoice with its event. */
   openItems: OpenItemAccounts;
   fx: Pick<FxResolver, 'daily'>;
@@ -141,7 +143,7 @@ export function matchPayments(books: Books, book: InvoiceBook, ctx: PaymentConte
       const split = settle(inv, book, h.amount, tx.date);
       if (split.surplus > 0) { ask(h, 'surplus'); bookable = false; continue; }
       const skonto = inv.kind === 'invoice' ? skontoOf(inv, liveInvoices(book), split.amount, tx.date) : undefined;
-      const a: PaymentAllocation = { transactionRef: tx.ref, date: tx.date, amount: split.amount, ...(split.fee ? { fee: split.fee } : {}), by: h.by };
+      const a: PaymentAllocation = { transactionRef: tx.ref, date: tx.date, amount: split.amount, ...(split.fee ? { fee: split.fee } : {}), ...(split.interest ? { interest: split.interest } : {}), by: h.by };
       replace(book, withPayment(inv, a));
       // A Skonto within the printed days: the rest is written off by code, with the payment (spec 4.4.6).
       if (skonto !== undefined) writeOffRest(books, book, inv.id, { date: tx.date, amount: skonto, reason: 'skonto', by: 'code', transactionRef: tx.ref }, ctx, out);
@@ -170,10 +172,10 @@ export function matchPayments(books: Books, book: InvoiceBook, ctx: PaymentConte
 }
 
 /** How a payment of `amount` settles a document: an invoice's open amount and fees, a credit note's refund. */
-function settle(inv: Issued, book: InvoiceBook, amount: number, date: string): { amount: number; fee: number; surplus: number } {
+function settle(inv: Issued, book: InvoiceBook, amount: number, date: string): { amount: number; fee: number; interest: number; surplus: number } {
   if (inv.kind === 'invoice') return allocate(inv, liveInvoices(book), amount, date);
   const due = refundDue(inv, liveInvoices(book));
-  return { amount: Math.min(amount, due), fee: 0, surplus: r2(Math.max(0, amount - due)) };
+  return { amount: Math.min(amount, due), fee: 0, interest: 0, surplus: r2(Math.max(0, amount - due)) };
 }
 
 const current = (book: InvoiceBook, id: string) => book.invoices.find((i) => i.id === id) as Issued;
@@ -189,7 +191,7 @@ function replace(book: InvoiceBook, inv: Issued): void {
  * payment only settles the receivable, at the payment's rate, the exchange difference to the
  * Kursdifferenzen account; a prepayment before the invoice's date books its revenue itself, and the
  * event comes off to be booked again for the rest (prepaidEvent). A paid reminder fee is revenue
- * without VAT either way.
+ * without VAT either way, paid default interest a financial income without VAT.
  */
 export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: PaymentAllocation, ctx: PaymentContext, out: Pick<PaymentOutcome, 'files'>, invoices: readonly Invoice[] = [inv]): JournalEntry[] {
   dropEvent(books, prepaidEvent(books, tx, inv));
@@ -201,7 +203,11 @@ export function bookPayment(books: Books, tx: BankTransaction, inv: Issued, a: P
   const text = `${word} ${inv.number} ${inv.customer.name}`;
   const fx = rate !== undefined ? { exchangeCurrency: tx.currency, exchangeRate: rate } : {};
   const stamp = (l: Omit<JournalEntry, 'id' | 'transactionRef' | 'date' | 'origin'>): JournalEntry => ({ id: idSource.bytes(8).toString('hex'), transactionRef: tx.ref, date: tx.date, ...l, origin: 'invoice' });
-  const fee = a.fee ? [stamp({ accountDebit: bank, accountCredit: ctx.feeAccount ?? ctx.revenueAccount, amount: a.fee, description: `${text}, ${TEXTS.de.fee}`, ...fx })] : [];
+  // A Mahnung's fee and default interest, paid with it: revenue without a code, on either basis (no consideration for a supply).
+  const fee = [
+    ...(a.fee ? [stamp({ accountDebit: bank, accountCredit: ctx.feeAccount ?? ctx.revenueAccount, amount: a.fee, description: `${text}, ${TEXTS.de.fee}`, ...fx })] : []),
+    ...(a.interest ? [stamp({ accountDebit: bank, accountCredit: ctx.interestAccount ?? ctx.feeAccount ?? ctx.revenueAccount, amount: a.interest, description: `${text}, ${TEXTS.de.interestWord}`, ...fx })] : []),
+  ];
   const entries: JournalEntry[] = hasEvent(books, inv)
     ? [...settlementLines({
       account: ctx.openItems.receivable, bank, amount: refund ? -a.amount : a.amount, currency: tx.currency, rate,
@@ -368,7 +374,7 @@ export function confirmPayment(books: Books, book: InvoiceBook, invoiceId: strin
   }
   const split = settle(inv, book, tx.amount, tx.date);
   if (split.surplus > 0) throw new PaymentError('surplus', `Die Zahlung ist ${tx.currency} ${split.surplus.toFixed(2)} höher als offen.`);
-  const a: PaymentAllocation = { transactionRef: tx.ref, date: tx.date, amount: split.amount, ...(split.fee ? { fee: split.fee } : {}), by: 'confirmed' };
+  const a: PaymentAllocation = { transactionRef: tx.ref, date: tx.date, amount: split.amount, ...(split.fee ? { fee: split.fee } : {}), ...(split.interest ? { interest: split.interest } : {}), by: 'confirmed' };
   replace(book, withPayment(inv, a));
   dropEvent(books, prepaid);
   if (keep) attachInvoice(books, tx, inv, ctx, out);
@@ -507,7 +513,7 @@ export function recordHandPayment(books: Books, book: InvoiceBook, invoiceId: st
     description: `${TEXTS.de.invoice} ${inv.number} ${inv.customer.name}`,
   };
   books.transactions.push(transaction);
-  const allocation: PaymentAllocation = { transactionRef: ref, date: req.date, amount: split.amount, ...(split.fee ? { fee: split.fee } : {}), by: 'confirmed', source: 'hand' };
+  const allocation: PaymentAllocation = { transactionRef: ref, date: req.date, amount: split.amount, ...(split.fee ? { fee: split.fee } : {}), ...(split.interest ? { interest: split.interest } : {}), by: 'confirmed', source: 'hand' };
   replace(book, withPayment(inv, allocation));
   const out: Pick<PaymentOutcome, 'files'> = { files: [] };
   bookPayment(books, transaction, current(book, inv.id), allocation, ctx, out, liveInvoices(book));

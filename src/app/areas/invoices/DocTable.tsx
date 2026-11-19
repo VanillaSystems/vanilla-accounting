@@ -8,7 +8,8 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { localToday } from '../../../accounting/periods.js';
 import type { Issued } from '../../../invoices/model.js';
 import { csvOf } from '../../../invoices/lists.js';
-import { reminderDraft } from '../../../invoices/rules.js';
+import { levelTitle, nextLevel, DEFAULT_DUNNING } from '../../../invoices/dunning.js';
+import { useWorkspace } from '../../hooks/use-workspace.js';
 import { CONVERSIONS } from '../../../invoices/chain.js';
 import type { RouteOf } from '../../shell/route.js';
 import { ListHead } from '../../shell/ListHead.js';
@@ -21,7 +22,7 @@ import { t } from '../../i18n/index.js';
 import { baseCurrency } from '../../../engines/index.js';
 import type { AreaProps } from '../index.js';
 import { byRouteId } from './model.js';
-import { copyAsDraft, invoiceAt, saveText } from './actions.js';
+import { copyAsDraft, invoiceAt, remind, saveText } from './actions.js';
 import { listed, setUi, toggleTick, useUi } from './state.js';
 import {
   PAGE_SIZE, docRows, factsOf, groupOf, inTab, kindOfView, sortRows, sumsOf, tabCounts, tabOf,
@@ -91,7 +92,8 @@ function columns(kind: DocKind, go: (loc: ReturnType<typeof invoiceAt>) => void)
     { key: 'currency', label: t('sales.col.currency'), cell: (r) => <span className="mono">{r.inv.currency}</span>, csv: (r) => r.inv.currency },
     gross,
     { key: 'open', label: t('sales.col.open'), num: true, cell: (r) => (r.open ? money(r, r.open) : '–'), csv: (r) => r.open },
-    { key: 'level', label: t('sales.col.level'), cell: (r) => (r.level ? t('sales.levelN', { level: r.level }) : '–'), csv: (r) => r.level || '' },
+    // The Mahnstufe by its name, as the last Mahnung printed it; one written and not sent yet beside it.
+    { key: 'level', label: t('sales.col.level'), cell: (r) => (r.levelTitle || r.reminderDraft ? <span data-testid="level-cell">{r.levelTitle ?? ''}{r.reminderDraft ? <small className="m">{r.levelTitle ? ' · ' : ''}{t('sales.levelDraft', { title: r.reminderDraft })}</small> : null}</span> : '–'), csv: (r) => r.levelTitle ?? '' },
   ];
 }
 
@@ -149,11 +151,12 @@ export function DocTable(props: Props & { d: InvoiceList; view: DocView }) {
         </div>
       </ListHead>
       <Tabs {...props} kind={kind} tab={tab} rows={all} />
-      <FactLine rows={all} kind={kind} onExport={() => exportCsv()} />
+      <FactLine rows={all} kind={kind} onExport={() => exportCsv()} {...(props.canEdit && kind === 'invoice' ? { onDunning: () => setUi({ dialog: { kind: 'dunning' } }) } : {})} />
       {ticked.length > 0 && (
         <div className="ivbulk" role="toolbar" aria-label={t('sales.bulk.label')} data-testid="bulk-bar">
           <b>{t('sales.bulk.ticked', { n: ticked.length })}</b>
           {props.canEdit && <button type="button" className="btn primary" data-act="bulk-send" onClick={() => setUi({ dialog: { kind: 'bulk-send', ids: ticked.map((r) => r.inv.id) } })}>{t('invoices.send')}</button>}
+          {props.canEdit && kind === 'invoice' && <button type="button" className="btn ghost" data-act="bulk-remind" onClick={() => setUi({ dialog: { kind: 'dunning', ids: ticked.map((r) => r.inv.id) } })}>{t('dunning.bulk')}</button>}
           <button type="button" className="btn ghost" data-act="bulk-pdf" onClick={() => setUi({ dialog: { kind: 'bulk-pdf', ids: ticked.map((r) => r.inv.id) } })}>{t('sales.bulk.pdf')}</button>
           <button type="button" className="btn ghost" data-act="bulk-csv" onClick={() => exportCsv(ticked)}>{t('sales.exportCsv')}</button>
           <button type="button" className="quiet2" onClick={() => setUi({ ticked: new Set() })}>{t('sales.bulk.clear')}</button>
@@ -240,7 +243,7 @@ function Tabs({ nav, kind, tab, rows }: Props & { kind: DocKind; tab: Tab; rows:
 }
 
 /** One line of facts above the table: what is open and what of it is overdue, per currency. */
-function FactLine({ rows, kind, onExport }: { rows: DocRow[]; kind: DocKind; onExport(): void }) {
+function FactLine({ rows, kind, onExport, onDunning }: { rows: DocRow[]; kind: DocKind; onExport(): void; onDunning?(): void }) {
   // An Angebot, Auftrag or Lieferschein asks for no money: the line names what waits, by count.
   if (kind !== 'invoice' && kind !== 'credit-note') {
     const waiting = rows.filter((r) => r.status === 'open' || r.status === 'partly').length;
@@ -258,20 +261,23 @@ function FactLine({ rows, kind, onExport }: { rows: DocRow[]; kind: DocKind; onE
     <p className="ivfacts" data-testid="facts-line">
       <span>{facts.length ? t(kind === 'invoice' ? 'sales.facts.open' : 'sales.facts.refund', { amount: open }) : t(kind === 'invoice' ? 'sales.facts.nothingOpen' : 'sales.facts.nothingRefund')}</span>
       {overdue && <span className="warn">{t('sales.facts.overdue', { amount: overdue })}</span>}
+      {/* The Mahnlauf is an action, not a place: a dialog over the table. */}
+      {onDunning && <button type="button" className="quiet2" data-act="dunning" onClick={onDunning}>{t('dunning.open')}</button>}
       <button type="button" className="quiet2" data-act="csv" onClick={onExport}>{t('sales.exportCsv')}</button>
     </p>
   );
 }
 
 /** «⋯» on a row: Öffnen, PDF, Senden, Mahnen, Als Entwurf kopieren, as far as the document allows. */
-function RowMenu({ r, at, view, nav, canEdit, d, onClose }: Props & { d: InvoiceList; r: DocRow; at: DOMRect; view: DocView; onClose(): void }) {
+function RowMenu({ r, at, view, nav, canEdit, onClose }: Props & { d: InvoiceList; r: DocRow; at: DOMRect; view: DocView; onClose(): void }) {
   const inv = r.inv;
+  const dunning = useWorkspace()?.invoicing?.dunning ?? DEFAULT_DUNNING;
   const go = () => nav.select({ area: 'invoices', view, id: r.id });
   const items: MenuItem[] = [{ label: t('sales.menu.open'), run: go }];
   if (inv.status === 'issued') {
     items.push({ label: t('sales.bulk.pdf'), run: () => { const a = Object.assign(document.createElement('a'), { href: sources.invoicePdf(inv.number), download: `${inv.number}.pdf` }); document.body.append(a); a.click(); a.remove(); } });
     if (canEdit && !inv.cancelled) items.push({ label: r.sent.sent ? t('invoices.resend') : t('invoices.send'), run: () => { go(); setUi({ dialog: { kind: 'send' } }); } });
-    if (canEdit && inv.kind === 'invoice' && !inv.cancelled && r.open > 0) items.push({ label: t('invoices.remind', { level: reminderDraft(inv, d.invoices, localToday()).level }), run: () => { go(); setUi({ reminder: { invoiceId: inv.id }, preview: false, dialog: null }); } });
+    if (canEdit && inv.kind === 'invoice' && !inv.cancelled && r.open > 0) items.push({ label: t('invoices.remind', { title: levelTitle(nextLevel(inv, dunning).def, inv.language) }), run: () => { go(); void remind(nav, inv); } });
     if (canEdit && !inv.cancelled) for (const to of CONVERSIONS[inv.kind] ?? []) items.push({ label: t(`sales.convert.${to}` as 'sales.convert.invoice'), run: () => { go(); setUi({ dialog: { kind: 'convert', to } }); } });
     // A Lieferschein comes only from an Auftrag: it is not copied into a draft of its own.
     if (canEdit && inv.kind !== 'credit-note' && inv.kind !== 'delivery-note') items.push({ label: t('invoices.copy'), run: () => { void copyAsDraft(nav, inv as Issued); } });

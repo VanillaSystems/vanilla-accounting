@@ -4,6 +4,7 @@
  * document belongs to, and the open items on a reference date with their age. Pure functions over
  * invoices.json, built on the rules of rules.ts; nothing here is set by a click.
  */
+import { reminderTitle } from './texts.js';
 import { fromRappen, toRappen } from '../accounting/rappen.js';
 import type { Invoice, Issued, SentDocument, SentKind } from './model.js';
 import { creditBeyond, creditable, openOn, paidAmount, refundDue, status, totals } from './rules.js';
@@ -38,8 +39,8 @@ export interface SentFacts {
   last?: SentDocument;
   /** Every entry of the log for it, reminders and notices included, oldest first. */
   all: SentDocument[];
-  /** The last Mahnung that went out: its level and day. */
-  reminder?: { level: number; date: string };
+  /** The last Mahnung that went out: its level, title and day. */
+  reminder?: { level: number; title: string; date: string };
 }
 
 export function sentFacts(sent: readonly SentDocument[], inv: Invoice): SentFacts {
@@ -47,12 +48,12 @@ export function sentFacts(sent: readonly SentDocument[], inv: Invoice): SentFact
   const own = all.filter((x) => OWN_KINDS.includes(x.kind));
   const reminders = inv.status === 'issued' ? inv.reminders : [];
   const lastReminder = all.filter((x) => x.kind === 'reminder').at(-1);
-  const level = lastReminder && reminders.find((r) => r.documentId === lastReminder.id)?.level;
+  const r = lastReminder && reminders.find((x) => x.documentId === lastReminder.id);
   return {
     sent: own.length > 0,
     ...(own.length ? { last: own.at(-1) } : {}),
     all,
-    ...(lastReminder && level ? { reminder: { level, date: lastReminder.sentAt.slice(0, 10) } } : {}),
+    ...(lastReminder && r && inv.status === 'issued' ? { reminder: { level: r.level, title: reminderTitle(r, inv.language), date: lastReminder.sentAt.slice(0, 10) } } : {}),
   };
 }
 

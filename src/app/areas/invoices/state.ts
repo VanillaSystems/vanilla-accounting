@@ -47,7 +47,9 @@ export type Dialog =
    */
   /** «PDF herunterladen» of a Rechnung or Gutschrift never sent: «Ja, festhalten» records the download as its sending, «Nur ansehen» saves it only. */
   | { kind: 'download' }
-  | { kind: 'send'; reminder?: Omit<ReminderEdit, 'invoiceId'> & { level: number }; issued?: true }
+  | { kind: 'send'; reminder?: { level: number; title: string }; issued?: true }
+  /** The Mahnlauf (spec 4.4.7): every overdue Rechnung on a reference date, or the ticked ones (`ids`). */
+  | { kind: 'dunning'; ids?: string[] }
   /** The ticked documents (their ids), sent by e-mail one by one, or their PDFs downloaded. */
   | { kind: 'bulk-send'; ids: string[] }
   | { kind: 'bulk-pdf'; ids: string[] };
@@ -58,13 +60,9 @@ export type Sorted = DocView;
 /** Versendet's filters: a contact (its id), a kind of document, a channel; absent: all. */
 export interface SentFilter { customer?: string; kind?: string; channel?: string }
 
-/** A reminder written on the sheet before it is sent: for this invoice, with these texts and fee. */
-export interface ReminderEdit { invoiceId: string; fee?: number; intro?: string; closing?: string }
-
 interface State {
   dialog: Dialog | null;
   preview: boolean;
-  reminder: ReminderEdit | null;
   open: Record<Section, boolean>;
   sort: Record<Sorted, Sort>;
   /** The documents ticked in the table shown (their ids); another view or tab starts with none. */
@@ -81,7 +79,6 @@ function read<T>(key: string, fallback: T): T {
 let state: State = {
   dialog: null,
   preview: false,
-  reminder: null,
   open: { draft: true, look: false, chain: true, customer: false, money: true, sent: true, comments: true, log: false, ...read<Partial<Record<Section, boolean>>>('invoices.open', {}) },
   sort: { ...(Object.fromEntries(DOC_VIEWS.map((v) => [v, DEFAULT_SORT])) as Record<Sorted, Sort>), ...read<Partial<Record<Sorted, Sort>>>('invoices.sort', {}) },
   ticked: new Set(),

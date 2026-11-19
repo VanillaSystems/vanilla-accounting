@@ -26,7 +26,7 @@ test('the sent log of a document: its last send and channel, every entry, the la
   assert.equal(f.last?.id, 's2', 'the later of the two sends of the document itself');
   assert.equal(channelOf(f.last!), 'download');
   assert.deepEqual(f.all.map((x) => x.id), ['s1', 's2', 'r1', 'r2'], 'oldest first, only this document\'s');
-  assert.deepEqual(f.reminder, { level: 2, date: '2026-11-18' });
+  assert.deepEqual(f.reminder, { level: 2, title: '2. Mahnung', date: '2026-11-18' });
   assert.equal(wasSent([log[2]], inv), false, 'a Mahnung is not the invoice');
   assert.equal(channelOf({ to: 'download' }), 'download', 'an entry from before the channel was recorded: `to` tells');
   assert.equal(channelOf({ to: 'x@y.example' }), 'email');

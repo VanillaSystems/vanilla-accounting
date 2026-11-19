@@ -4,14 +4,12 @@
  * from its invoice. The UI adds what only a screen has (src/invoices/sheet.ts ScreenSheet).
  */
 import { draftSheet, issuedSheet, reminderSheet, type InvoicingContext } from '../../../invoices/documents.js';
-import type { Draft, Invoice, Issued } from '../../../invoices/model.js';
-import { reminderDraft } from '../../../invoices/rules.js';
+import type { Draft, Invoice, Issued, Reminder } from '../../../invoices/model.js';
 import type { ScreenSheet, SheetData } from '../../../invoices/sheet.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import { api, type InvoiceList } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
 import { bookOf, customerOf, pickerContacts } from './model.js';
-import type { ReminderEdit } from './state.js';
 
 export const contextOf = (ws: CompanyInfo): InvoicingContext => ({ company: ws.company, settings: ws.invoicing });
 
@@ -45,9 +43,7 @@ export function issuedData(d: InvoiceList, inv: Issued): SheetData {
   return { ...issuedSheet(bookOf(d), inv, logo(inv.layout.logo)), screen: screenOf(d, undefined) };
 }
 
-/** The next reminder of `inv` as it will be printed, with what the person changed. */
-export function reminderData(d: InvoiceList, inv: Issued, edit: ReminderEdit, today: string, editing: boolean): SheetData {
-  const drafted = reminderDraft(inv, d.invoices, today, edit.fee);
-  const r = { ...drafted, ...(edit.intro !== undefined ? { intro: edit.intro } : {}), ...(edit.closing !== undefined ? { closing: edit.closing } : {}) };
+/** A Mahnung of `inv` as it will be printed (the draft as written) or was sent. */
+export function reminderData(d: InvoiceList, inv: Issued, r: Reminder, editing: boolean): SheetData {
   return { ...reminderSheet(bookOf(d), inv, r, logo(inv.layout.logo)), screen: screenOf(d, editing ? 'texts' : undefined) };
 }

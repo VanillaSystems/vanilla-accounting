@@ -267,11 +267,26 @@ export function paymentsNamingOpen(transactions: readonly BankTransaction[], inv
 
 export const namesNumber = (text: string, number: string): boolean => new RegExp(`(?<![0-9])${number.replace(/[^0-9A-Za-z]/g, (c) => `\\${c}`)}(?![0-9])`).test(text);
 
-/** Reminder fees not paid yet. */
+/**
+ * What the sent Mahnungen charge beyond the invoice: their fees added up, and the default interest of
+ * the last that charged any (it counts from the due date, so it replaces the earlier). A draft charges nothing.
+ */
+export function chargesOf(inv: Issued): { fee: number; interest: number } {
+  const sent = inv.reminders.filter((r) => r.documentId);
+  return { fee: fromRappen(sent.reduce((s, r) => s + toRappen(r.fee ?? 0), 0)), interest: sent.filter((r) => r.interest).at(-1)?.interest?.amount ?? 0 };
+}
+
+/** What of the Mahnungen's fees and interest is not paid yet. */
+export function openCharges(inv: Issued): { fee: number; interest: number } {
+  const c = chargesOf(inv);
+  const paid = (k: 'fee' | 'interest') => inv.payments.reduce((s, p) => s + toRappen(p[k] ?? 0), 0);
+  return { fee: fromRappen(Math.max(0, toRappen(c.fee) - paid('fee'))), interest: fromRappen(Math.max(0, toRappen(c.interest) - paid('interest'))) };
+}
+
+/** Reminder fees and default interest not paid yet. */
 export function openFees(inv: Issued): number {
-  const charged = inv.reminders.reduce((s, r) => s + toRappen(r.fee ?? 0), 0);
-  const paid = inv.payments.reduce((s, p) => s + toRappen(p.fee ?? 0), 0);
-  return fromRappen(Math.max(0, charged - paid));
+  const o = openCharges(inv);
+  return fromRappen(toRappen(o.fee) + toRappen(o.interest));
 }
 
 export function status(inv: Invoice, invoices: readonly Invoice[]): InvoiceStatus {
@@ -434,7 +449,7 @@ export type InvoiceRefusal = 'numberTaken' | 'archived' | 'contactGone' | 'incom
   | 'sent' | 'settled' | 'applied' | 'closed' | 'numbered' | 'account' | 'credited'
   | 'refTaken' | 'numberFormat' | 'convert' | 'nothingTicked' | 'expired' | 'declined' | 'overOpen' | 'sentVersion' | 'orderDelivered' | 'orderInvoiced' | 'notReopenable' | 'notQuote'
   | 'referenceTaken' | 'deliveryFromOrder' | 'orderDrafts' | 'sourceCancelled'
-  | 'codeTaken' | 'articleGone';
+  | 'codeTaken' | 'articleGone' | 'noReminderDraft';
 
 /** A kind's name in the German messages of a refusal (the UI words its own, src/app/i18n). */
 export const KIND_WORD: Record<DocumentKind, string> = { quote: 'Angebot', 'sales-order': 'Auftrag', 'delivery-note': 'Lieferschein', invoice: 'Rechnung', 'credit-note': 'Gutschrift' };
@@ -674,43 +689,20 @@ export function creditNoteDraft(inv: Invoice, req: CreditRequest, envelope: Enve
   };
 }
 
-// ─── reminders ───────────────────────────────────────────────────────────────
-
-export const REMINDER_DAYS = 10;
-export const MAX_REMINDER_LEVEL = 3;
-
-/** The next reminder of an open invoice, drafted in the invoice's language: level, due date and texts the user may change before sending. */
-export function reminderDraft(inv: Invoice, invoices: readonly Invoice[], date: string, fee?: number): Omit<Reminder, 'documentId'> {
-  if (inv.status !== 'issued') throw new InvoiceRuleError('notIssued', 'Nur eine ausgestellte Rechnung wird gemahnt.');
-  if (inv.kind === 'credit-note') throw new InvoiceRuleError('creditNote', 'Eine Gutschrift wird nicht gemahnt.');
-  if (inv.cancelled) throw new InvoiceRuleError('cancelled', `Rechnung ${inv.number} ist storniert.`);
-  if (openAmount(inv, invoices) === 0) throw new InvoiceRuleError('nothingOpen', `Rechnung ${inv.number} ist bezahlt.`);
-  const level = Math.min(MAX_REMINDER_LEVEL, (inv.reminders.at(-1)?.level ?? 0) + 1);
-  const L = TEXTS[inv.language];
-  const d = (iso: string) => formatDate(iso, inv.language);
-  const previous = inv.reminders.filter((r) => r.level < level).at(-1);
-  return {
-    level,
-    date,
-    dueDate: addDays(date, REMINDER_DAYS),
-    ...(fee ? { fee: roundCHF(fee) } : {}),
-    intro: L.reminderIntro(level, inv.number, d(inv.date), d(inv.dueDate), previous && d(previous.date)),
-    closing: L.reminderClosing,
-  };
-}
-
 // ─── payments ────────────────────────────────────────────────────────────────
 
 /**
  * How a payment of `amount` (the invoice's currency) on `date` settles an invoice: first what is open, then
- * unpaid reminder fees. `surplus` is money beyond both: a question for a person, never booked.
+ * unpaid reminder fees, then default interest. `surplus` is money beyond both: a question for a person, never booked.
  */
-export function allocate(inv: Issued, invoices: readonly Invoice[], amount: number, date?: string): { amount: number; fee: number; surplus: number } {
+export function allocate(inv: Issued, invoices: readonly Invoice[], amount: number, date?: string): { amount: number; fee: number; interest: number; surplus: number } {
   const pay = toRappen(amount);
   const open = toRappen(openAmount(inv, invoices, date));
+  const charges = openCharges(inv);
   const toInvoice = Math.min(pay, open);
-  const fee = Math.min(pay - toInvoice, toRappen(openFees(inv)));
-  return { amount: fromRappen(toInvoice), fee: fromRappen(fee), surplus: fromRappen(pay - toInvoice - fee) };
+  const fee = Math.min(pay - toInvoice, toRappen(charges.fee));
+  const interest = Math.min(pay - toInvoice - fee, toRappen(charges.interest));
+  return { amount: fromRappen(toInvoice), fee: fromRappen(fee), interest: fromRappen(interest), surplus: fromRappen(pay - toInvoice - fee - interest) };
 }
 
 /**

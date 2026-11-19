@@ -13,6 +13,8 @@ import {
   type CreditListStatus, type CreditTab, type DeliveryListStatus, type InvoiceListStatus, type InvoiceTab, type OrderListStatus, type QuoteListStatus, type SentFacts,
 } from '../../../invoices/lists.js';
 import { doneShare } from '../../../invoices/chain.js';
+import { reminderDraftOf, sentReminders } from '../../../invoices/dunning.js';
+import { reminderTitle } from '../../../invoices/texts.js';
 import type { InvoiceList } from '../../lib/api.js';
 import type { InvoiceView } from '../../shell/route.js';
 import { baseCurrency } from '../../../engines/index.js';
@@ -47,11 +49,22 @@ export interface DocRow {
   open: number;
   /** The Mahnstufe reached (the last Mahnung's level); 0 without one. */
   level: number;
+  /** Its name as the last Mahnung printed it, and whether the next is written and not sent yet. */
+  levelTitle?: string;
+  reminderDraft?: string;
   /** A Gutschrift's Rechnung, a Lieferschein's Auftrag. */
   target?: Issued;
   /** An Auftrag: the share of its value delivered and invoiced, 0 to 1 (chain.ts doneShare). */
   delivered?: number;
   invoiced?: number;
+}
+
+/** The Mahnstufe a row shows: the last Mahnung sent, and one written but not sent. */
+function levelOf(inv: Invoice): Pick<DocRow, 'level' | 'levelTitle' | 'reminderDraft'> {
+  if (inv.status !== 'issued') return { level: 0 };
+  const last = sentReminders(inv).at(-1);
+  const draft = reminderDraftOf(inv);
+  return { level: last?.level ?? 0, ...(last ? { levelTitle: reminderTitle(last, inv.language) } : {}), ...(draft ? { reminderDraft: reminderTitle(draft, inv.language) } : {}) };
 }
 
 /** A document's status in the list of its kind: the one function of lists.ts each kind has. */
@@ -86,7 +99,7 @@ export function docRows(d: InvoiceList, kind: DocKind, period: Period, q: string
       return {
         inv, id: routeId(inv), customer: customerOf(d, inv)?.name ?? '', status, overdue: due, unsent: unsent(inv, d.sent),
         sent: sentFacts(d.sent, inv), gross: totals(inv).gross, open,
-        level: inv.status === 'issued' ? inv.reminders.reduce((m, r) => Math.max(m, r.level), 0) : 0,
+        ...levelOf(inv),
         ...(target ? { target } : {}),
         ...(kind === 'sales-order' && inv.status === 'issued' ? { delivered: doneShare(inv, d.invoices, 'delivered'), invoiced: doneShare(inv, d.invoices, 'invoiced') } : {}),
       };

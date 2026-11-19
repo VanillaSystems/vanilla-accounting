@@ -7,7 +7,8 @@
  * docs/specs/invoicing.md 4.10, phase 1): paid with Skonto, partly paid, short by the bank's fee
  * and written off as Spesen, paid in cash at the door, entered by hand and confirmed by the
  * statement, one payment ausgeziffert over two invoices, a credit note applied to its invoice, an
- * overdue one with its first reminder, one cancelled, two not sent yet, two drafts.
+ * overdue one with a Zahlungserinnerung, a 1. and a 2. Mahnung with a fee, one cancelled, two not sent
+ * yet, two drafts.
  */
 import type { InvoiceLine, Prices } from '../../src/invoices/model.js';
 import { totals } from '../../src/invoices/rules.js';
@@ -58,6 +59,27 @@ export const KAFFEE_INVOICING: DemoInvoicing = {
   texts:
     de: { closing: "Zahlbar innert {days} Tagen.\\nFreundliche Grüsse, Anna Muster" }
     fr: { closing: "Payable dans les {days} jours.\\nMeilleures salutations, Anna Muster" }
+  dunning:
+    levels:
+      - name: Zahlungserinnerung
+        days: 10
+        texts:
+          fr: { title: Rappel de paiement }
+          it: { title: Promemoria di pagamento }
+          en: { title: Payment reminder }
+      - name: 1. Mahnung
+        days: 10
+        texts:
+          fr: { title: 1er rappel }
+          it: { title: 1° sollecito }
+          en: { title: First reminder }
+      - name: 2. Mahnung
+        days: 10
+        fee: 20
+        texts:
+          fr: { title: 2e rappel }
+          it: { title: 2° sollecito }
+          en: { title: Second reminder }
 `,
   logo: { file: 'logos/logo.svg', svg: LOGO },
   // The coffee roaster's price list (spec 4.3 Artikel): goods at the reduced rate, a machine and a course at the normal rate.
@@ -181,6 +203,9 @@ export const KAFFEE_INVOICING: DemoInvoicing = {
       lines: [{ text: 'Hausmischung Espresso, Bohnen', quantity: 30, unit: 'kg', price: 27, vatRate: 2.6 }] },
     { do: 'issue', key: 'u', customer: 'bar', at: '2026-10-14T16:45:00.000Z', date: '2026-10-14', subject: 'Nachbestellung Oktober', prices: 'gross', termsId: 'skonto2', send: 'none',
       lines: [{ text: 'Hausmischung Espresso, Bohnen', quantity: 20, unit: 'kg', price: 29.5, vatRate: 2.6 }] },
+    // The promise was not kept: the 1. Mahnung, then the 2. Mahnung with its level's fee (spec 4.4.7).
+    { do: 'remind', of: 'c', at: '2026-11-02T08:30:00.000Z' },
+    { do: 'remind', of: 'c', at: '2026-11-16T08:30:00.000Z' },
   ],
   // Phase 2 (spec 5 «Phase 2», P2.1 to P2.8): Angebote, an Auftrag with two Lieferscheine and its Rechnung, a café chain, a Rechnung from the Artikel.
   sales: {

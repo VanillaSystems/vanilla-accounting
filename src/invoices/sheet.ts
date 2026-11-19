@@ -30,8 +30,8 @@ export interface SheetData {
   language: InvoiceLanguage;
   /** Absent on a draft: the title says "Entwurf" and no QR-bill is printed. */
   number?: string;
-  /** A reminder's level: the title becomes "1. Mahnung · Rechnung …". */
-  reminderLevel?: number;
+  /** A reminder's title (its level's): the sheet's title becomes "1. Mahnung · Rechnung …". */
+  reminderTitle?: string;
   date: string;
   /** The day or period of the supply when it is not the invoice date. */
   supplied?: { from: string; to?: string };
@@ -54,7 +54,7 @@ export interface SheetData {
   logoSrc?: string;
   reference?: string;
   /** What the QR-bill asks for when it is not the total: an open rest, a reminder with its fee. */
-  due?: { paidSoFar: number; fee: number; open: number };
+  due?: { paidSoFar: number; fee: number; open: number; interest?: { amount: number; rate: number; from: string; days: number } };
   /** A credit note: the invoice it credits and what happens with the money. */
   credit?: { number: string; date: string; gross: number; paid: number; paidDate?: string; settlement?: 'refund' | 'offset' };
   cancelled?: { date: string; reason: string };
@@ -154,7 +154,7 @@ const prettyIban = (iban: string) => iban.replace(/\s+/g, '').replace(/(.{4})(?!
 
 export function sheetTitle(d: SheetData, L: InvoiceTexts = TEXTS[d.language]): string {
   const base = kindTitle(L, d.kind, d.printAs);
-  return d.reminderLevel ? `${L.reminder(d.reminderLevel)} · ${base}` : base;
+  return d.reminderTitle ? `${d.reminderTitle} · ${base}` : base;
 }
 
 /** The code a position's revenue books with, shown on a draft's screen; none where the jurisdiction has none for it (a firm not registered). */
@@ -281,9 +281,11 @@ export function sheetBlocks(d: SheetData): Block[] {
     B.push({ html: `<div class="edadd scr">${add.map(([a, w]) => `<button type="button" data-ia="${a}">＋ ${esc(w)}</button>`).join('')}</div>` });
   }
   const rates = t.byRate.filter((r) => r.rate > 0).map((r) => `<div><span>${esc(L.vatOn(String(r.rate), n(r.net)))}</span><span>${n(r.vat)}</span></div>`).join('');
-  const due = d.due && (d.due.paidSoFar || d.due.fee) ? [
+  const due = d.due && (d.due.paidSoFar || d.due.fee || d.due.interest) ? [
     d.due.paidSoFar ? `<div><span>${L.paidSoFar}</span><span>${n(-d.due.paidSoFar)}</span></div>` : '',
     d.due.fee ? `<div><span>${L.fee}</span><span>${n(d.due.fee)}</span></div>` : '',
+    // Default interest, a position without VAT: what is owed for paying late, not for a supply.
+    d.due.interest ? `<div><span>${esc(L.interest(String(d.due.interest.rate), formatDate(d.due.interest.from, d.language), d.due.interest.days))}</span><span>${n(d.due.interest.amount)}</span></div>` : '',
     `<div class="tot"><span>${L.openNow} ${d.currency}</span><span>${n(d.due.open)}</span></div>`,
   ].join('') : '';
   const net = withVat ? `<div><span>${L.net}</span><span>${n(t.net)}</span></div>` : '';

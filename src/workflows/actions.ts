@@ -25,6 +25,7 @@ import { entriesWithoutTheirReceipts } from '../accounting/classify-force.js';
 import { FILING_ACTIONS } from './filing.js';
 import { YEAR_END_ACTIONS } from './year-end.js';
 import { COLLECT_ACTIONS } from './collect.js';
+import { DUNNING_ACTIONS } from './dunning.js';
 import { madeBetween, madeEntry, type Took } from './summary.js';
 import type { Arrival, ItemRef } from './model.js';
 import { ASK_WORKFLOW, CLOSED_REASON } from './held.js';
@@ -308,6 +309,7 @@ export const ACTIONS: Record<string, Action> = {
   ...FILING_ACTIONS,
   ...YEAR_END_ACTIONS,
   ...COLLECT_ACTIONS,
+  ...DUNNING_ACTIONS,
   // The inbox, one run per arrival (src/intake/): every step takes up only what is still to do.
   'intake.read': { outcomes: ['ok'], emits: BATCH_EMITS, effects: ['books.write'], run: batch(readStep, inboxFiles) },
   'intake.extract-vat': { outcomes: ['ok'], emits: BATCH_EMITS, effects: ['books.write'], ai: true, run: batch(vatStep(), (b) => { const todo = new Set(vatCandidates(b, false, true)); return receiptsWhere((r) => todo.has(r))(b); }) },

@@ -39,7 +39,7 @@ export function SentCell({ facts }: { facts: SentFacts }) {
   return (
     <span className="ivsentc" data-testid="sent-cell" data-tip={tip}>
       {facts.last ? <span>{formatDate(facts.last.sentAt.slice(0, 10))} · {channelText(facts.last)}</span> : <span className="m">{t('sales.notSentShort')}</span>}
-      {facts.reminder && <small>{t('sales.lastReminder', { level: facts.reminder.level, date: dayMonth(facts.reminder.date) })}</small>}
+      {facts.reminder && <small>{t('sales.lastReminder', { title: facts.reminder.title, date: dayMonth(facts.reminder.date) })}</small>}
     </span>
   );
 }
