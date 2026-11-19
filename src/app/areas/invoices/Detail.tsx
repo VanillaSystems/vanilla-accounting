@@ -153,7 +153,7 @@ function InvoiceDetail(props: DetailProps) {
           <Sheet data={data} editing={editing} onEdit={edit} onAction={action} focus={editing ? s.focus : undefined} onFocused={() => setUi({ focus: undefined })} />
         </div>
         <aside className="margin" aria-label={t('invoices.details')}>
-          {inv.status === 'draft' ? <DraftSec {...props} inv={inv} /> : <Sec k="look" label={t('invoices.sec.look')} val={`${t(`invoices.lang.${inv.language}`)} · ${inv.layout.font}`}><p className="m">{t('invoices.lookFrozen')}</p></Sec>}
+          {inv.status === 'draft' ? <DraftSec {...props} inv={inv} /> : <Sec k="look" label={t('invoices.sec.look')} val={`${t(`invoices.lang.${inv.language}`)} · ${inv.layout.font}`}><p className="m">{t(inv.kind === 'quote' || inv.kind === 'sales-order' ? 'invoices.lookFrozenDoc' : inv.kind === 'delivery-note' ? 'invoices.lookFrozenDelivery' : 'invoices.lookFrozen')}</p></Sec>}
           {reminder && inv.status === 'issued' && <ReminderSec {...props} inv={inv} />}
           <ChainSec {...props} />
           <CustomerSec {...props} />
@@ -340,7 +340,7 @@ function MissingList({ d, inv, nav, missing, warn }: DetailProps & { inv: Draft;
             </span>
           );
         })}
-        {warn && <>{'. '}{t('invoices.warnRule')}</>}
+        {warn && <>{'. '}{t(inv.kind === 'invoice' || inv.kind === 'credit-note' ? 'invoices.warnRule' : 'invoices.warnRuleDoc')}</>}
       </span>
       {warn && <AsyncButton type="button" className="btn ghost" data-act="issue-anyway" onClick={warn}>{t('invoices.issueAnyway')}</AsyncButton>}
     </div>

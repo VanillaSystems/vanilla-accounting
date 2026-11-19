@@ -196,14 +196,15 @@ async function withWarnings<T>(nav: Nav, title: string, call: (confirmed: Warnin
 }
 
 /** «Auftrag erstellen», «Lieferschein erstellen», «Rechnung erstellen»: the new draft opens; nothing ticked is said by the API. */
-export function convert(nav: Nav, inv: Issued, to: DocumentKind, lines: Array<{ line: number; quantity: number }>): Promise<Draft | undefined> {
+/** `confirmed`: the warnings the dialog showed beside its button, which the person's click confirms. */
+export function convert(nav: Nav, inv: Issued, to: DocumentKind, lines: Array<{ line: number; quantity: number }>, confirmed: readonly Warning[] = []): Promise<Draft | undefined> {
   return withWarnings(nav, t(`sales.convert.${to}` as 'sales.convert.invoice'), (confirm) => api.convert(inv.id, { to, lines, ...(confirm.length ? { confirm } : {}) }), async (draft) => {
     setUi({ dialog: null });
     put({ invoice: draft });
     await reloadInvoices();
     nav.select(invoicePath(draft));
     nav.toast(t('sales.converted', { number: inv.number }));
-  });
+  }, [...confirmed]);
 }
 
 /** «Angenommen» or «Abgelehnt» on an Angebot, the person's click; null takes it back. */

@@ -25,7 +25,7 @@ export function ConvertDialog({ inv, to, invoices, nav }: Props & { inv: Issued;
   const ws = useWorkspace();
   const rows = offered(inv, to, invoices);
   const [ticked, setTicked] = useState<Record<number, boolean>>(() => Object.fromEntries(rows.map((r) => [r.line, r.ticked])));
-  const [qty, setQty] = useState<Record<number, string>>(() => Object.fromEntries(rows.map((r) => [r.line, formatQuantity(r.open > 0 ? r.open : r.item.quantity)])));
+  const [qty, setQty] = useState<Record<number, string>>(() => Object.fromEntries(rows.map((r) => [r.line, formatQuantity(r.open)])));
   const picks = rows.filter((r) => ticked[r.line]).map((r) => ({ line: r.line, quantity: parseNumber(qty[r.line] ?? '') ?? 0 }));
   const warnings = convertWarnings(inv, to, picks, invoices, localToday());
   const behind = groupsLeftBehind(inv, picks);
@@ -34,10 +34,12 @@ export function ConvertDialog({ inv, to, invoices, nav }: Props & { inv: Issued;
   const total = tickedTotal(inv, picks);
   const all = rows.length > 0 && rows.every((r) => ticked[r.line]);
   const label = t(`sales.convert.${to}` as 'sales.convert.invoice');
+  // The warnings the dialog shows are confirmed by its own button («Trotzdem erstellen»), not asked a second time.
+  const shown = [...new Set(warnings.map((w) => w.code))];
   return (
     <Frame className="iconvert" label={label} title={`${inv.number} · ${inv.customer.name}`} foot={<>
       <button type="button" className="btn ghost" onClick={close}>{t('common.cancel')}</button>
-      <AsyncButton type="button" className="btn primary" data-act="convert-ok" onClick={() => convert(nav, inv, to, picks)}>{label}</AsyncButton>
+      <AsyncButton type="button" className="btn primary" data-act="convert-ok" onClick={() => convert(nav, inv, to, picks, shown)}>{shown.length ? t(`sales.anyway.${shown[0]}`) : label}</AsyncButton>
     </>}>
       <div className="ibody">
         {warnings.filter((w) => w.code !== 'overOpen').map((w) => (
@@ -63,7 +65,8 @@ export function ConvertDialog({ inv, to, invoices, nav }: Props & { inv: Issued;
                   <td className="tick"><input type="checkbox" aria-label={t('sales.bulk.tick', { what: r.item.text })} checked={!!ticked[r.line]} onChange={() => setTicked({ ...ticked, [r.line]: !ticked[r.line] })} /></td>
                   <td className="c-contact">{r.item.optional && <span className="ivopt">{t('invoices.option')}</span>} {r.item.text}</td>
                   <td className="num mono">{formatQuantity(r.item.quantity)} {unit(r.item.unit)}</td>
-                  <td className="num mono">{formatQuantity(r.open)}</td>
+                  {/* What the documents of this purpose took already, as a fact beside what is open. */}
+                  <td className="num mono">{formatQuantity(r.open)}{r.item.quantity - r.open > 0 && <span className="ivdone" data-testid="convert-done"> · {t(`sales.convertDone.${to}` as 'sales.convertDone.invoice', { n: formatQuantity(r.item.quantity - r.open) })}</span>}</td>
                   <td className="num"><input className={`mono ivqty${over ? ' over' : ''}`} inputMode="decimal" aria-label={t('sales.col.take')} value={qty[r.line] ?? ''} disabled={!ticked[r.line]} onChange={(e) => setQty({ ...qty, [r.line]: e.target.value })} /></td>
                   {priced && <td className="num mono">{fmt(Math.round(n * r.item.price * 100) / 100)}</td>}
                 </tr>

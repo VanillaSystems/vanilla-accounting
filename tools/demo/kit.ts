@@ -5,7 +5,7 @@
  * tools/demo/generate.ts, so they cannot disagree.
  */
 import type { CorrectionCase, QuarterKey, ReceiptKind, VatRateGroup } from '../../src/types/index.js';
-import type { Address, ArticleFields, CustomerFields, Exemption, InvoiceCurrency, InvoiceLine, Prices, VatRate, WriteOffReason } from '../../src/invoices/model.js';
+import type { Address, ArticleFields, ContactFields, CustomerFields, DocumentKind, Exemption, InvoiceCurrency, InvoiceLine, Prices, VatRate, WriteOffReason } from '../../src/invoices/model.js';
 import type { VatSetup } from '../../src/workspace/vat-setup.js';
 
 export const YEAR = '2026';
@@ -101,10 +101,32 @@ export interface DemoInvoicing {
   manifest: string;
   logo?: { file: string; svg: string };
   customers: Record<string, CustomerFields>;
-  /** Artikel the firm sells (invoices.json articles), made before the documents; none of them is named by a document of the demo, so no figure depends on them. */
+  /** Artikel the firm sells (invoices.json articles), made after the documents of `steps`, which name none of them; a Rechnung of `sales` may. */
   articles?: ArticleFields[];
   steps: InvoiceStep[];
+  /**
+   * Phase 2 of invoicing (spec 5 «Phase 2»): contacts of the new shape and the chain Angebot →
+   * Auftrag → Lieferschein → Rechnung, played after the Artikel from a seed of their own, so every
+   * record and entry made before keeps its id. A Rechnung here continues the firm's series.
+   */
+  sales?: { contacts?: Record<string, ContactFields>; steps: SalesStep[] };
 }
+
+/**
+ * A step of phase 2. `customer` names a key of `customers` or of `sales.contacts`; `person` and
+ * `address` the contact person's and the address's id there. A position `{ article, quantity }`
+ * is the Artikel position «＋ Artikel» makes from the Artikel with that code.
+ * `issue` makes a document of `kind` and issues it (only drafts it with `draft`); `convert` makes
+ * the draft of `to` from the document `of` with the ticked positions (`lines`: the source's
+ * position index and quantity) and issues it unless `draft`; `answer`: the customer's answer to an
+ * Angebot, the person's click.
+ */
+export type SalesLine = InvoiceLine | { article: string; quantity: number };
+interface Addressed { person?: string; address?: string }
+export type SalesStep =
+  | ({ do: 'issue'; key: string; kind: DocumentKind; customer: string; at: string; date: string; subject: string; lines: SalesLine[]; validUntil?: string; prices?: Prices; ordered?: string; send?: DemoSend; draft?: boolean } & Addressed)
+  | ({ do: 'convert'; key: string; of: string; to: DocumentKind; at: string; lines: Array<{ line: number; quantity: number }>; confirm?: string[]; send?: DemoSend; draft?: boolean } & Addressed)
+  | { do: 'answer'; of: string; at: string; answer: 'accepted' | 'declined' };
 
 interface Drafted {
   key: string; customer: string; at: string; date: string; subject: string; lines: InvoiceLine[]; currency?: InvoiceCurrency; exemption?: Exemption;

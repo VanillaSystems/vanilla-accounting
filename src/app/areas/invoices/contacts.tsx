@@ -21,6 +21,7 @@ import { language, t } from '../../i18n/index.js';
 import { baseCurrency } from '../../../engines/index.js';
 import type { AreaProps } from '../index.js';
 import { CONTACT_TABS, contactRows, customerChange, rowState, type ContactTab } from './model.js';
+import { groupOf, statusOfKind } from './table.js';
 import { listed, setUi, useUi } from './state.js';
 import { invoiceAt, newDraftFor, removeContact, restoreContact, saveContact, saveDraft } from './actions.js';
 import { invoicesNow, reloadInvoices } from './data.js';
@@ -227,8 +228,8 @@ export function ContactPanel({ d, route, nav, canEdit }: Props & { d: InvoiceLis
               <button key={i.id} type="button" className="fr" onClick={() => nav.go(invoiceAt(i))}>
                 <span className="mono">{i.status === 'issued' ? i.number : t('invoices.draft')}</span>
                 <span data-tip={i.subject || undefined}>{i.subject ?? ''}</span>
-                <span className="m">{t(`invoices.state.${rowState(i, d.invoices, today)}`)}</span>
-                <span className="r mono">{i.currency} {fmt(totals(i).gross)}</span>
+                <span className="m">{t(`sales.status.${groupOf(i.kind)}.${statusOfKind(i, d.invoices, today)}` as 'sales.status.invoice.open')}</span>
+                <span className="r mono">{i.kind === 'delivery-note' ? '' : `${i.currency} ${fmt(totals(i).gross)}`}</span>
               </button>
             )) : <p className="m">{t('invoices.noInvoicesYet')}</p>}
           </div>

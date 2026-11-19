@@ -182,4 +182,44 @@ export const KAFFEE_INVOICING: DemoInvoicing = {
     { do: 'issue', key: 'u', customer: 'bar', at: '2026-10-14T16:45:00.000Z', date: '2026-10-14', subject: 'Nachbestellung Oktober', prices: 'gross', termsId: 'skonto2', send: 'none',
       lines: [{ text: 'Hausmischung Espresso, Bohnen', quantity: 20, unit: 'kg', price: 29.5, vatRate: 2.6 }] },
   ],
+  // Phase 2 (spec 5 «Phase 2», P2.1 to P2.8): Angebote, an Auftrag with two Lieferscheine and its Rechnung, a café chain, a Rechnung from the Artikel.
+  sales: {
+    contacts: {
+      chain: {
+        type: 'firm', name: 'Beispiel Cafés AG', language: 'de', emails: ['info@beispiel-cafes.example'], paymentDays: 30,
+        persons: [
+          { id: 'p-1', name: 'Laura Beispiel', role: 'Einkauf', email: 'einkauf@beispiel-cafes.example' },
+          { id: 'p-2', name: 'Marco Muster', role: 'Buchhaltung', email: 'buchhaltung@beispiel-cafes.example' },
+        ],
+        addresses: [
+          { id: 'a-1', label: 'Hauptsitz', street: 'Löwenstrasse', number: '20', postcode: '8001', town: 'Zürich', country: 'CH', billing: true },
+          { id: 'a-2', label: 'Filiale Bern', attn: 'Filiale Bern', street: 'Marktgasse', number: '5', postcode: '3011', town: 'Bern', country: 'CH', delivery: true },
+          { id: 'a-3', label: 'Filiale Basel', attn: 'Filiale Basel', street: 'Freie Strasse', number: '30', postcode: '4051', town: 'Basel', country: 'CH', delivery: true },
+        ],
+      },
+    },
+    steps: [
+      // The chain's Angebot, accepted by phone; its Auftrag delivered to two branches (6 and 4 of 10 boxes) and invoiced to the head office.
+      { do: 'issue', key: 'an-chain', kind: 'quote', customer: 'chain', person: 'p-1', at: '2026-10-15T09:00:00.000Z', date: '2026-10-15', validUntil: '2026-11-14', subject: 'Hausmischung für zwei Filialen',
+        lines: [{ text: 'Hausmischung Espresso, Karton à 6 × 1 kg', quantity: 10, unit: 'pcs', price: 162, vatRate: 2.6 }] },
+      { do: 'answer', of: 'an-chain', at: '2026-10-19T08:30:00.000Z', answer: 'accepted' },
+      { do: 'convert', key: 'au-chain', of: 'an-chain', to: 'sales-order', person: 'p-1', at: '2026-10-19T08:45:00.000Z', lines: [{ line: 0, quantity: 10 }] },
+      { do: 'convert', key: 'ls-bern', of: 'au-chain', to: 'delivery-note', address: 'a-2', at: '2026-10-22T07:15:00.000Z', lines: [{ line: 0, quantity: 6 }], send: 'download' },
+      { do: 'convert', key: 'ls-basel', of: 'au-chain', to: 'delivery-note', address: 'a-3', at: '2026-10-29T07:20:00.000Z', lines: [{ line: 0, quantity: 4 }], send: 'download' },
+      { do: 'convert', key: 're-chain', of: 'au-chain', to: 'invoice', person: 'p-2', at: '2026-10-30T10:00:00.000Z', lines: [{ line: 0, quantity: 10 }] },
+      // An Angebot that has run out without an answer (P2.8 converts it).
+      { do: 'issue', key: 'an-bistro', kind: 'quote', customer: 'bistro', at: '2026-09-01T10:30:00.000Z', date: '2026-09-01', validUntil: '2026-09-30', subject: 'Espresso-Mischung Crema, Herbst',
+        lines: [{ text: 'Espresso-Mischung Crema, Bohnen 1 kg', quantity: 25, unit: 'pcs', price: 32, vatRate: 2.6 }] },
+      // An open Angebot with two optional positions (P2.3 takes one of them).
+      { do: 'issue', key: 'an-hotel', kind: 'quote', customer: 'hotel', at: '2026-11-02T14:00:00.000Z', date: '2026-11-02', validUntil: '2026-12-31', subject: 'Filterkaffee Winter mit Schulung',
+        lines: [
+          { text: 'Filterkaffee Guji, Bohnen 500 g', quantity: 48, unit: 'pcs', price: 16.5, vatRate: 2.6 },
+          { text: 'Barista-Schulung Latte Art, halber Tag', quantity: 1, unit: 'flat', price: 380, vatRate: 8.1, account: '3600', optional: true },
+          { text: 'Milchkännchen 600 ml, Inox', quantity: 6, unit: 'pcs', price: 24, vatRate: 8.1, account: '3600', optional: true },
+        ] },
+      // Wholesale from the Artikel list (P2.4).
+      { do: 'issue', key: 're-articles', kind: 'invoice', customer: 'kantine', at: '2026-11-05T09:40:00.000Z', date: '2026-11-05', subject: 'Grosshandel November',
+        lines: [{ article: 'HM-1', quantity: 30 }, { article: 'ES-1', quantity: 20 }, { article: 'DC-1', quantity: 12 }, { article: 'MU-7', quantity: 1 }] },
+    ],
+  },
 };
