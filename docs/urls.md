@@ -60,6 +60,11 @@ app uses real paths (`/invoices/2026-006`) with the server answering every path 
 | `/knowledge/<topic>` | one page of Arbeitsweise, by its file's name (`knowledge/company/<topic>.md`); a topic is never named `gaps` or `app` |
 | `/automation` | Automatisierung's home: the shown period's receipts from collected to filed, what waits for you, what runs; `?period=` another filing period |
 | `/automation/runs` and `/automation/runs/<run-id>` | Läufe, the latest runs, and one run |
+| `/payroll` | Löhne › Übersicht: the year strip and the Lohnlauf of this month; `?period=2026-09` another month, `?period=2026` another year |
+| `/payroll/<yyyy-mm>` and `/payroll/<yyyy-mm>/<employeeId>` | Lohnabrechnungen: a month's Lohnlauf, and one payslip, e.g. `/payroll/2026-09/p1a2b3c`; `/payroll/payslips` is this month's |
+| `/payroll/payslips/<yyyy-mm>-<employeeId>.pdf` | a closed payslip's PDF, exactly as filed in Belege (app only) |
+| `/payroll/employees` and `/payroll/employees/<id>` | Mitarbeitende and one person; `/payroll/employees/new` the form of a new one (app only) |
+| `/payroll/settings/<section>` | Einstellungen: `company` (Stammdaten), `insurances`, `wage-types`, `accounts` |
 
 ## Query parameters
 

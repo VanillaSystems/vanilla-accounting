@@ -179,7 +179,7 @@ function SlipView({ v, types, nav, canEdit }: Props & { v: Payslip; types: Map<s
   return (
     <div className="detail-in payslip" data-for={v.id}>
       <div className="head">
-        <h2 className="who"><Go nav={nav} loc={employeeAt(v.employee)} className="plain">{s.person.name}</Go><small>{t('payroll.slip.title', { month: monthText(v.month) })}</small></h2>
+        <h2 className="who"><Go nav={nav} loc={employeeAt(v.employee)} className="golink plain">{s.person.name}</Go><small>{t('payroll.slip.title', { month: monthText(v.month) })}</small></h2>
         <div className="amount"><small>{baseCurrency()}</small>{fmt(s.payout)}</div>
       </div>
       <div className="facts">
@@ -199,7 +199,7 @@ function SlipView({ v, types, nav, canEdit }: Props & { v: Payslip; types: Map<s
       <Booking v={v} />
       {canEdit ? (closed ? <ClosedActions v={v} types={types} nav={nav} /> : <CloseAction v={v} nav={nav} />) : null}
       <Corrections v={v} nav={nav} types={types} />
-      <History v={v} />
+      <History v={v} types={types} />
     </div>
   );
 }
@@ -269,7 +269,7 @@ function LineRow({ l, w }: { l: PayslipLine; w?: WageType }) {
   const minus = w?.sign === '-' && w.side !== 'employer';
   const calc = l.quantity !== undefined && l.rate !== undefined && l.base === undefined ? `${fmt(l.quantity).replace(/\.00$/, '')} × ${fmt(l.rate)}`
     : l.base !== undefined && l.rate !== undefined ? `${fmt(l.base)} × ${pct(l.rate)}`
-    : l.base !== undefined ? fmt(l.base) : '';
+    : '';
   const notes = [
     l.corrects ? t('payroll.line.correction', { month: monthText(l.corrects.slice(0, 7)) }) : '',
     l.days ? `${formatDate(l.days.from)}–${formatDate(l.days.to)}` : '',
@@ -485,7 +485,13 @@ function Corrections({ v, nav, types }: { v: Payslip; nav: Nav; types: Map<strin
   );
 }
 
-function History({ v }: { v: Payslip }) {
+/** «19.11.2026, 10:03» in the viewer's time. */
+const when = (iso: string): { at: string; time: string } => {
+  const d = new Date(iso);
+  return { at: formatDate(iso.slice(0, 10)), time: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` };
+};
+
+function History({ v, types }: { v: Payslip; types: Map<string, WageType> }) {
   if (!v.history.length) return null;
   return (
     <details className="psec phist">
@@ -493,9 +499,9 @@ function History({ v }: { v: Payslip }) {
       <ul className="plain">
         {v.history.map((e, i) => (
           <li key={i} className="m">
-            {e.event === 'close' ? t('payroll.history.close', { at: formatDate(e.closedAt.slice(0, 10)), time: e.closedAt.slice(11, 16) })
-              : e.event === 'reopen' ? t('payroll.history.reopen', { at: formatDate(e.at.slice(0, 10)), time: e.at.slice(11, 16) })
-              : t('payroll.history.correction', { at: formatDate(e.at.slice(0, 10)), wageType: e.wageType, amount: fmt(e.amount) })}
+            {e.event === 'close' ? t('payroll.history.close', when(e.closedAt))
+              : e.event === 'reopen' ? t('payroll.history.reopen', when(e.at))
+              : t('payroll.history.correction', { at: when(e.at).at, wageType: labelOf(types.get(e.wageType)?.label, e.wageType), amount: fmt(e.amount) })}
           </li>
         ))}
       </ul>
