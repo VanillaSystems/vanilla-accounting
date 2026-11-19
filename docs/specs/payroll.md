@@ -2251,7 +2251,7 @@ After the third persona walk (2026-11-19):
      `collectorProposal`): for a business whose file collects kinds owed on 2270 (not the withholding tax), the hand form
      proposes the employees' share of a whole run of the oldest months its payslips withheld that no earlier payment
      cleared, counting the wages of the whole year, not only those up to the payment's day: the webshop's pension fund
-     bill paid on 10.07. for Q3 clears July to September (597.60). Of the runs the payment can be (twice to three times
+     bill paid on 10.07. for Q3 clears July to September, the BVG share of three months. Of the runs the payment can be (twice to three times
      their share), the one whose share is nearest half of it; the rest on the payee's earlier contribution account, else
      the kind's (5720). It stays a proposal booked by her click: code does not book a payment ahead of its months
      (decision 72). The same share is what «Arbeitnehmeranteil abziehen» asks of a payment booked whole on 5720 where

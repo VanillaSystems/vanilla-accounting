@@ -27,7 +27,7 @@ const DECISION = ['Ausgleichskasse Beispiel', 'Bahnhofstrasse 1, 6300 Zug', 'Bei
 const POLICY = ['Unfallversicherung Beispiel AG', 'UVG-Police 2026', 'Policennummer: UV-55.123', 'Berufsunfall BU 0.120 %', 'Nichtberufsunfall NBU 1.350 %', 'Prämie pro Jahr CHF 1\'770.00'];
 const CERT = ['Vorsorgestiftung Beispiel', 'Vorsorgeausweis per 1.1.2026', 'Vertragsnummer: V-77', 'Versicherte Person: Mila Beispiel', 'Geburtsdatum 12.05.1980', "Versicherter Lohn CHF 92'000.00", 'Beitrag Arbeitnehmer pro Monat 300.00', 'Beitrag Arbeitgeber pro Monat 300.00'];
 // The fund's bill names the certificate further down: its title comes first, so it stays a receipt.
-const BILL = ['Vorsorgestiftung Beispiel', 'Beitragsrechnung Q3 2026 PK-26-3-1180', 'Datum: 01.07.2026', 'Teegarten Wyss GmbH', 'Beiträge gemäss Vorsorgeausweis 2026', "Total CHF 1'800.00", 'Zahlbar bis 31.07.2026', 'IBAN CH93 0076 2011 6238 5295 7'];
+const BILL = ['Vorsorgestiftung Beispiel', 'Beitragsrechnung Q3 2026 PK-26-3-1180', 'Datum: 01.07.2026', 'Teegarten Wyss GmbH', 'Beiträge gemäss Vorsorgeausweis 2026', "Total CHF 1'800.00", 'Zahlbar bis 31.07.2026'];
 
 test('walk 3 / decision 108: a fund\'s decision, a policy, a pension certificate are documents without a payment, cards in Löhne; never in a prompt; the fund\'s bill stays a receipt', async () => {
   const prompts: string[] = [];
