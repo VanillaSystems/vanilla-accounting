@@ -14,7 +14,7 @@ import { chfAmount } from '../accounting/ledger.js';
 import { unclearedContributions } from '../booking/withheld.js';
 import { bookingOf } from './booking.js';
 import { firmWageTypes } from './catalogue.js';
-import { lohnausweisOf, type LohnausweisData } from './documents.js';
+import { countedCloses, lohnausweisOf, type LohnausweisData } from './documents.js';
 import { insurerRows, settlementOf, type InsurerRow } from './insurers.js';
 import { openingOf } from './opening.js';
 import { valueOn } from '../core/dated.js';
@@ -317,9 +317,9 @@ export function statementChecks(input: Pick<PayrollYearEndInput, 'year' | 'close
   if (!grossField?.sum) return [];
   const parts = grossField.sum.plus;
   const types = firmWageTypes(data, input.store);
-  const closes = input.closes.filter((c) => c.month.startsWith(year));
   return input.employees.flatMap((e): StatementCheck[] => {
-    const mine = closes.filter((c) => c.employee === e.id);
+    // The very payslips the Lohnausweis counts (none of a month her opening holds), so the check and the form agree on the set.
+    const mine = countedCloses(e, input.closes, year);
     const opening = e.opening?.[year];
     if (!mine.length && !opening) return [];
     const la = lohnausweisOf(e, input.closes, types, data, year, e.language);

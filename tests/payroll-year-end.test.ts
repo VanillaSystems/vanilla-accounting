@@ -276,3 +276,22 @@ test('a person\'s change of a payslip\'s entry, as the app records it (no accoun
   const p = payrollYearEnd(b.input()).wages!.persons[0];
   assert.deepEqual([p.difference, p.months.map((m) => [m.month, m.difference])], [-10, [['2026-08', -10]]]);
 });
+
+test('the statement check counts the payslips the Lohnausweis counts: a month reopened and closed again once, a month of the opening never', async () => {
+  const { historyOf } = await import('../src/payroll/history.js');
+  const { computePayslip } = await import('../src/payroll/compute.js');
+  const { closeOf, ctxOf, owner: own } = await import('./support/payroll.js');
+  const store = firm([own({ opening: { '2026': { through: '2026-03', months: 3, fields: { '1': 30000 } } } })]);
+  const events = closedThrough(store, '2026-13') as PayslipClose[];
+  // A close of an opening month (written before the opening was): the Lohnausweis leaves it out, so must the check.
+  const stray = { ...events.find((c) => c.month === '2026-04')!, id: '2026-02-e1', month: '2026-02', postingDate: '2026-02-28' };
+  // November reopened, a bonus added, closed again: only the second close stands.
+  const nov = events.find((c) => c.month === '2026-11')!;
+  store.monthLines = [{ id: 'b', employee: 'e1', month: '2026-11', wageType: 'bonus', amount: 1000, enteredAt: '2026-11-20T00:00:00Z' }];
+  const again = closeOf(computePayslip(ctxOf(store, [...events, stray, { event: 'reopen', id: nov.id, at: '2026-11-21T00:00:00Z', by: 'person' }]), 'e1', '2026-11')!);
+  const closes = [...historyOf([...events, stray, { event: 'reopen', id: nov.id, at: '2026-11-21T00:00:00Z', by: 'person' }, again]).closed.values()];
+  const s = payrollYearEnd({ year: '2026', books: { journalEntries: [], transactions: [], mappings: [] }, closes, employees: store.employees, data: ch.payroll!, store, issued: [], isDebitNormal: (a) => chart().isDebitNormal(a) }).statements[0];
+  assert.deepEqual([s.difference, s.unmapped], [0, []]);
+  assert.equal(s.today, Math.round(s.gross), 'the form and the check sum the same payslips');
+  assert.ok(closes.some((c) => c.month === '2026-02') && s.gross < closes.filter((c) => c.month >= '2026-04').reduce((a, c) => a + c.gross, 0) + 30000 + 1, 'the opening month\'s stray close is in neither');
+});
