@@ -221,7 +221,7 @@ export function NewEntry(props: Props) {
   /** A template picked: the form starts again from it, on the date it holds now. */
   function pickTemplate(id: string) {
     const x = templates.find((y) => y.id === id);
-    if (!x) return;
+    if (!x) { if (s.overlay?.kind === 'new') setUi({ overlay: { ...s.overlay, template: undefined } }); return; }
     startFrom(books, x, typed().draft.date);
     setRound(round + 1);
     setErr('');
@@ -237,7 +237,7 @@ export function NewEntry(props: Props) {
       ...(x.amount && { amount: x.amount }), ...(x.vatCode && { vatCode: x.vatCode }), ...(x.description?.trim() && { description: x.description.trim() }), ...(x.tags && { tags: x.tags }),
       ...(sp && { split: { side: sp.side, lines: sp.lines.map((l) => ({ account: l.account, ...(l.amount !== undefined && !l.auto && { amount: l.amount }), ...(l.vatCode && { vatCode: l.vatCode }), ...(l.description?.trim() && { description: l.description.trim() }) })) } }),
     });
-    if (!kept) return;
+    if (!kept || ui().overlay?.kind !== 'new') return;
     setNaming(false);
     setUi({ overlay: { ...ui().overlay!, draft: x, ...(sp && { split: sp }), template: kept.id } as typeof s.overlay });
     setRound(round + 1);
@@ -333,7 +333,8 @@ export function NewEntry(props: Props) {
 
   function onKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); }
-    else if (e.key === 'Enter' && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); book(); }
+    // ↵ on a button or the template list does that control's own thing, never books.
+    else if (e.key === 'Enter' && !e.defaultPrevented && !['BUTTON', 'SELECT'].includes((e.target as HTMLElement).tagName)) { e.preventDefault(); e.stopPropagation(); book(); }
   }
 
   /** A short date («6.12.», «6.12.26») is shown whole once the field is left, so she sees the day it is. */
@@ -380,7 +381,7 @@ export function NewEntry(props: Props) {
           )}
         </div>
         <AsyncForm key={round} ref={form} className="form" autoComplete="off" onKeyDown={onKeyDown} onInput={onInput} onSubmit={(e) => { e.preventDefault(); return book(); }}>
-          {!filed && templates.length > 0 && (
+          {!filed && !tx && !s.overlay.correcting && templates.length > 0 && (
             <div className="jtpl">
               <label>{t('journal.template.pick')}
                 <select name="template" value={template?.id ?? ''} onChange={(e) => pickTemplate(e.target.value)}>
@@ -388,7 +389,7 @@ export function NewEntry(props: Props) {
                   {templates.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
                 </select>
               </label>
-              {template ? <button type="button" className="golink" data-act="delete-template" onClick={() => { void dropTemplate(nav, template); setUi({ overlay: { ...s.overlay!, template: undefined } as typeof s.overlay }); }}>{t('journal.template.delete')}</button> : null}
+              {template ? <button type="button" className="golink" data-act="delete-template" onClick={async () => { if (await dropTemplate(nav, template) && ui().overlay?.kind === 'new') setUi({ overlay: { ...ui().overlay!, template: undefined } as typeof s.overlay }); }}>{t('journal.template.delete')}</button> : null}
             </div>
           )}
           {!filed && <PaymentField books={books} picked={tx} amount={d.amount} onPick={pickPayment} />}

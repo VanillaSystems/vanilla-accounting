@@ -15,7 +15,7 @@
 import { useId, useMemo, useRef, useState } from 'react';
 import { addAccount, addableAccounts, getAccounts, hintsOf, type Account } from '../../lib/accounts.js';
 import { firstPick, rankAccounts, type AccountContext } from '../../lib/account-filter.js';
-import { chart } from '../../../engines/index.js';
+import { baseCurrency, chart } from '../../../engines/index.js';
 import type { AccountType } from '../../../core/modules/schema.js';
 import { api, errorText } from '../../lib/api.js';
 import { t } from '../../i18n/index.js';
@@ -102,7 +102,7 @@ export function AccountField({ name, label, defaultValue, readOnly, onPick, offe
 
   // Each account of the books with its balance on the entry's day, under the field and in the list (#567).
   const balanceOf = (n: string) => (balances ? fmt(balances.get(n) ?? 0) : undefined);
-  const held0 = name0 && balanceOf(value);
+  const held0 = name0 && balances ? `${baseCurrency()} ${balanceOf(value)}` : undefined;
   const shown = name0 && held0 ? t('journal.accountBalance', { name: name0, balance: held0 }) : name0 ?? (offered && value === offered.number ? t('combobox.offered', { name: offered.name }) : value ? t('journal.noSuchAccount') : t('journal.noAccount'));
   return (
     <label className="acf">

@@ -199,14 +199,15 @@ export const journal: Area<RouteOf<'journal'>> = {
   legend,
   wide: true,
   title: (r, books) => { const v = r.id ? journalFor(books).byId.get(r.id) : undefined; return v && v.title; },
-  // Each named template starts the hand form (#567); listed before the entries.
-  palette: ({ books, nav, period, canEdit }) => [...(canEdit ? templatesNow().map((x) => ({
-    label: t('journal.template.palette', { name: x.name }), side: t('journal.template.paletteSide'), run: () => startFrom(books, x),
-  })) : []), ...[...journalFor(books).views].sort((a, b) => b.e.date.localeCompare(a.e.date)).map((v) => ({
+  // Each named template starts the hand form (#567), listed after the entries.
+  palette: ({ books, nav, period, canEdit }) => [...[...journalFor(books).views].sort((a, b) => b.e.date.localeCompare(a.e.date)).map((v) => ({
     label: v.sub ? `${v.title} · ${v.sub}` : v.title,
     side: `${formatDate(v.e.date)}  ${v.e.exchangeCurrency && v.e.exchangeCurrency !== baseCurrency() ? `${v.e.exchangeCurrency} ` : ''}${fmt(v.e.amount)}`,
     run: () => nav.go(at({ area: 'journal', id: v.e.id }, v.e.date, period)),
-  }))],
+  })), ...(canEdit ? templatesNow().map((x) => ({
+    // The form lives in Buchungen: from another area it goes there first.
+    label: t('journal.template.palette', { name: x.name }), side: t('journal.template.paletteSide'), run: () => { nav.go({ route: { area: 'journal' }, query: period ? { period } : {} }); startFrom(books, x); },
+  })) : [])],
   keys(e, p) {
     if (ui().overlay || codesUi().histogram) {
       if (e.key !== 'Escape') return false;

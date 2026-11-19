@@ -53,7 +53,8 @@ function write(ws: Pick<Workspace, 'paths'>, templates: readonly EntryTemplate[]
 
 /** The template a save of `t` replaces: the same id, or the same name (the same name means the same template). */
 export const replacedBy = (all: readonly EntryTemplate[], t: { id?: string; name: string }): EntryTemplate | undefined =>
-  all.find((x) => (t.id && x.id === t.id) || x.name.trim().toLowerCase() === t.name.trim().toLowerCase());
+  // By id first: an undo puts its own template back, never one that took its name meanwhile.
+  (t.id ? all.find((x) => x.id === t.id) : undefined) ?? all.find((x) => x.name.trim().toLowerCase() === t.name.trim().toLowerCase());
 
 /**
  * Keeps a template, new or in place of the one it replaces. Refused (undefined) when its name is

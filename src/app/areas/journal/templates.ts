@@ -59,14 +59,16 @@ export async function keepTemplate(nav: Nav, x: Omit<EntryTemplate, 'id'>): Prom
 }
 
 /** Removes a template; the undo keeps it again under its id. */
-export async function dropTemplate(nav: Nav, x: EntryTemplate): Promise<void> {
+export async function dropTemplate(nav: Nav, x: EntryTemplate): Promise<boolean> {
   try {
     await api.deleteEntryTemplate(x.id);
     await loadTemplates(true);
     nav.toast(t('journal.template.deleted', { name: x.name }), () => {
       api.saveEntryTemplate(x).then(() => loadTemplates(true), (e) => nav.toast(errorText(e)));
     });
+    return true;
   } catch (e) {
     nav.toast(errorText(e));
+    return false;
   }
 }
