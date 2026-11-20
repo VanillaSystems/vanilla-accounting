@@ -291,6 +291,19 @@ Two markers flag an entry you must read before you update:
 
 ### Changed
 
+- The first screen puts the demo first: «Demo öffnen» (a made-up company to try things out) beside
+  «Neue Buchhaltung erstellen»; «Bestehende Buchhaltung öffnen» and «Von einem anderen Programm
+  wechseln» stand apart under «Du hast schon eine Buchhaltung?».
+- The Mac app opens the AI sidebar on its first launch (not in a narrow window). Once you close or
+  open it, the app keeps your choice.
+- The demo's card and its line along the bottom close with their own button, and go by themselves
+  once you move to another area. A «Demo» chip in the top bar stays, with the way back to the start
+  page or your own books.
+- «Handy koppeln» is now «Belege vom Handy», in Belege and in Firma: it says what it is for (pair the
+  phone once, then photograph receipts and they land in Belege) and the two steps. The iPhone app is
+  called «Vanilla Scanner» for now. Until it is in the App Store the dialog shows no store link: the
+  code opens the scan page in the phone's browser, which works without an app. «Kopieren» now copies
+  where the clipboard refuses too, and says so.
 - The format of `invoices.json` (schema 3) and `belege.workspace.yaml` (schema 5): an older app
   refuses them. Existing invoices keep every figure: a credit note «by amount» now reads as a
   document priced incl. VAT, and a line that was priced otherwise than its document keeps its own
@@ -358,6 +371,12 @@ Two markers flag an entry you must read before you update:
 
 ### Fixed
 
+- The app showed one AI as ready and the AI sidebar asked another. With Claude Code installed but
+  not signed in and Codex signed in, the first screen said «Codex ist bereit» while the sidebar
+  answered «Claude Code ist nicht angemeldet». The first screen, the sidebar, the app's steps and
+  Firma › KI now ask the AI programs in one order: the one chosen in Firma › KI, else one that is
+  signed in before one that is only installed. Codex counts as signed in only where the app's own
+  runs can use its sign-in.
 - Verkauf: converting an expired or declined Angebot, or taking more than is open, asks once: the
   dialog names the warning and its button reads «Trotzdem erstellen» (it asked a second time with
   the same words).

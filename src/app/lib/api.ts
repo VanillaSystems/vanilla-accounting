@@ -807,7 +807,7 @@ export const api = {
     renewPhone: () => request<PhoneInfo>('POST', '/api/desktop/phone', { renew: true }),
   },
   /** «Handy koppeln», step 1: where the receipt app is downloaded, and its QR code. */
-  phoneApp: () => request<{ url: string; qr: string }>('GET', '/api/phone/app'),
+  phoneApp: () => request<{ url?: string; qr?: string }>('GET', '/api/phone/app'),
   /** `invoicing.confirm`: the person's «Trotzdem speichern» on a warning of that code (a QR-IBAN outside CHF, #506). */
   patchWorkspace: (patch: Omit<ManifestPatch, 'invoicing'> & { invoicing?: InvoicingPatch & { confirm?: 'qrIbanNotChf' } }) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
   removeAccount: (number: string) => request<Ok>('DELETE', `/api/accounts/${number}`),

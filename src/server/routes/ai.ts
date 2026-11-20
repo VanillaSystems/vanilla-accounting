@@ -4,7 +4,7 @@
  */
 import { Router } from 'express';
 import { resolve } from '../../llm/resolve.js';
-import { keyedStates, keyName, subscriptions } from '../../llm/providers/index.js';
+import { activeSubscriptions, keyedStates, keyName, SUBSCRIPTIONS } from '../../llm/providers/index.js';
 import { keepKey, KeyNotKept } from '../../llm/key-store.js';
 import { claudeCli } from '../../llm/providers/claude-cli.js';
 import { KEYED, type KeyedId } from '../../llm/providers/keyed.js';
@@ -26,10 +26,10 @@ async function view({ recheck = false } = {}): Promise<AiView> {
   const catalog = codexSignedIn ? await refreshCodexModels({ force: recheck }) : undefined;
   const states = await keyedStates();
   const settings = readSettings();
-  const usable: [Provider, ...Provider[]] = [...subscriptions(settings.cli), ...states.flatMap((s) => (s.provider ? [s.provider] : []))];
+  const usable: [Provider, ...Provider[]] = [...(await activeSubscriptions(settings.cli)), ...states.flatMap((s) => (s.provider ? [s.provider] : []))];
   const models = (p: Provider) => p.models.map((m) => ({ id: m.id, can: m.can }));
   const providers: AiProviderView[] = [
-    { id: 'claude-cli', billing: 'subscription', state: claudeReady ? 'ready' : 'missing', models: models(claudeCli) },
+    { id: 'claude-cli', billing: 'subscription', state: claudeReady ? 'ready' : SUBSCRIPTIONS.claude.found() ? 'signedOut' : 'missing', models: models(claudeCli) },
     {
       id: 'codex-cli', billing: 'subscription', state: codexSignedIn ? 'ready' : codexSignedIn === false ? 'signedOut' : 'missing', models: models(codexCli),
       ...(codexSignedIn ? { tiers: tierModels(codexUsable(catalog)?.map((m) => m.slug)), ...(catalog ? { checkedAt: catalog.at } : {}) } : {}),

@@ -74,20 +74,49 @@ export function subscriptions(preferred: TerminalCli | undefined): [Provider, ..
   return found.length ? [found[0], ...found.slice(1)] : [claudeCli];
 }
 
-const CLI_TTL = 3000;
-let cliSeen: { found: string; at: number; answers: boolean } | undefined;
+const CLI_TTL = 30_000;
+const seen = new Map<TerminalCli, { found: string; at: number; answers: boolean }>();
+const foundKey = () => [process.env.CLAUDE_BIN, process.env.CODEX_BIN, knownPath()].join('|');
 
-/** Whether a subscription answers here (found and signed in); asked again after a few seconds, or after forgetCli(). */
-async function subscriptionAnswers(subs: readonly Provider[]): Promise<boolean> {
-  const found = [...subs.map((p) => p.id), process.env.CLAUDE_BIN, process.env.CODEX_BIN, knownPath()].join('|');
-  if (cliSeen && cliSeen.found === found && Date.now() - cliSeen.at < CLI_TTL) return cliSeen.answers;
-  const answers = (await Promise.all(subs.map((p) => p.ready(8000).catch(() => false)))).some(Boolean);
-  cliSeen = { found, at: Date.now(), answers };
+/** Whether one CLI answers here (found and signed in); asked again after half a minute, or after forgetCli(). */
+async function signedIn(cli: TerminalCli): Promise<boolean> {
+  const kept = seen.get(cli);
+  const found = foundKey();
+  if (kept && kept.found === found && Date.now() - kept.at < CLI_TTL) return kept.answers;
+  const answers = await SUBSCRIPTIONS[cli].provider.ready(8000).catch(() => false);
+  seen.set(cli, { found, at: Date.now(), answers });
   return answers;
 }
 
+/** What a look of the setup (src/server/ai-setup.ts) found just now: kept, so the next call asks no CLI again. */
+export function noteSignedIn(cli: TerminalCli, answers: boolean): void {
+  seen.set(cli, { found: foundKey(), at: Date.now(), answers });
+}
+
 /** After the setup looked or changed something: the next call asks the CLIs again. */
-export const forgetCli = (): void => { cliSeen = undefined; };
+export const forgetCli = (): void => { seen.clear(); };
+
+const cliOf = (p: Provider): TerminalCli => (p.id === 'codex-cli' ? 'codex' : 'claude');
+
+/**
+ * The one order every part of the app asks the subscriptions in: the first screen's «bereit», the KI
+ * column, the app's steps and Firma › KI. The CLI chosen in Firma › KI comes first when it is found
+ * (her choice holds, and a call to it says when it is signed out); without a choice, a CLI that is
+ * signed in comes before one that is only installed, Claude Code before Codex among equals. A CLI on
+ * the PATH that is not signed in never takes the place of one that is.
+ */
+export async function activeSubscriptions(preferred: TerminalCli | undefined = readSettings().cli): Promise<[Provider, ...Provider[]]> {
+  const found = subscriptions(preferred);
+  if (found.length < 2 || (preferred && found[0] === SUBSCRIPTIONS[preferred].provider)) return found;
+  const ready = await Promise.all(found.map((p) => signedIn(cliOf(p))));
+  const sorted = [...found.filter((_, i) => ready[i]), ...found.filter((_, i) => !ready[i])];
+  return [sorted[0], ...sorted.slice(1)];
+}
+
+/** Whether a subscription answers here (found and signed in). */
+async function subscriptionAnswers(subs: readonly Provider[]): Promise<boolean> {
+  return (await Promise.all(subs.map((p) => signedIn(cliOf(p))))).some(Boolean);
+}
 
 /** A key whose provider writes text (Anthropic, OpenAI), not one that answers typed questions only (Jev). */
 const writes = (p: Provider) => p.models.some((m) => m.can.includes('json'));
@@ -101,7 +130,7 @@ export async function usableProviders(): Promise<[Provider, ...Provider[]]> {
   // Codex's model per tier is the account's (issue #180): read again when the kept list is stale.
   if (SUBSCRIPTIONS.codex.found()) await refreshCodexModels().catch(() => undefined);
   const keyed = (await keyedStates()).flatMap((s) => (s.provider ? [s.provider] : []));
-  const subs = subscriptions(readSettings().cli);
+  const subs = await activeSubscriptions();
   const general = keyed.filter(writes);
   if (general.length && !(await subscriptionAnswers(subs))) return [general[0], ...general.slice(1), ...subs, ...keyed.filter((p) => !writes(p))];
   return [...subs, ...keyed];

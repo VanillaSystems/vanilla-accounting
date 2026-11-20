@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path';
 import { openWorkspace } from '../workspace/workspace.js';
 import { AiRefused, CallFailed, NO_USAGE, type Provider, type ProviderId, type Usage } from './provider.js';
 import { claudeCli, NoClaudeError } from './providers/claude-cli.js';
-import { subscriptions, usableProviders } from './providers/index.js';
+import { activeSubscriptions, usableProviders } from './providers/index.js';
 import { defaultFor, otherSubscription, resolve, unserved, type Resolved } from './resolve.js';
 import { readSettings } from './settings.js';
 import { aiOff, gate } from './off.js';
@@ -67,10 +67,13 @@ export const resolveStep = async (step: StepId): Promise<Resolved> => resolve(st
 /** The AI sidebar's model on Claude Code. */
 export const sidebarModel = (): string => resolve('sidebar', readSettings(), [claudeCli]).model;
 
-/** Who runs the KI column here: an agent with a session and tools is a subscription's CLI, Claude Code or Codex, never a key. */
-export function sidebarAgent(): Resolved {
+/**
+ * Who runs the KI column here: an agent with a session and tools is a subscription's CLI, Claude Code
+ * or Codex, never a key; in the order of activeSubscriptions, the same the setup shows as «bereit».
+ */
+export async function sidebarAgent(): Promise<Resolved> {
   const settings = readSettings();
-  return resolve('sidebar', settings, subscriptions(settings.cli));
+  return resolve('sidebar', settings, await activeSubscriptions(settings.cli));
 }
 
 /** Resolves with the model's text answer; rejects with the provider's reason (NoClaudeError names the step). */

@@ -16,6 +16,7 @@ import { KEPT_CONVERSATION, KEPT_PURPOSE, afterSend, askAboutThread, leavesSetup
 import { attachmentRefusal, attachmentType, showsAsImage, type Attachment, type AttachmentType } from '../../types/attachment.js';
 import { CHAT_TAKES, leftOut, type Dropped } from '../lib/folder-drop.js';
 import { sidebarFit, sidebarWidths } from '../shell/look.js';
+import { desktop } from '../desktop/bridge.js';
 
 export interface AssistantState extends Thread {
   /** The conversations list instead of a conversation. */
@@ -30,9 +31,23 @@ export interface AssistantState extends Thread {
 }
 
 /** A file in the composer: `preview` an object URL of an image the browser shows. */
+/** Set once the sidebar was opened or closed in this browser: no first-launch default after that. */
+const DECIDED = 'assistant.decided';
+
 export interface ComposerFile { key: string; name: string; type: AttachmentType; preview?: string; attachment?: Attachment }
 
-let state: AssistantState = { open: stored('assistant.open') === '1', listing: false, turns: [], extra: [], files: [], pageOff: false, sending: false, ...startThread(stored) };
+/**
+ * Open on the Mac app's first launch (the owner, 20.11.2026): the sidebar is where she asks in her own words, so a
+ * new viewer finds it open, except in a narrow window, where it would cover the one column. The browser (npm start,
+ * the public demo without an AI) keeps it closed until asked. Her own click decides from
+ * then on, kept in this browser: '1' open, '0' closed (before, closed was no value at all).
+ */
+const openAtStart = (): boolean => {
+  const kept = stored('assistant.open');
+  if (kept !== null) return kept === '1';
+  return !!desktop && stored(DECIDED) === null && typeof innerWidth === 'number' && innerWidth >= 900;
+};
+let state: AssistantState = { open: openAtStart(), listing: false, turns: [], extra: [], files: [], pageOff: false, sending: false, ...startThread(stored) };
 const listeners = new Set<() => void>();
 let stop: AbortController | undefined;
 
@@ -42,7 +57,7 @@ const setup = { over: false, wanted: false };
 function set(patch: Partial<AssistantState>): void {
   state = { ...state, ...patch };
   if ('purpose' in patch && state.purpose !== 'onboarding') setup.wanted = false;
-  if ('open' in patch) remember('assistant.open', state.open ? '1' : null);
+  if ('open' in patch) { remember('assistant.open', state.open ? '1' : '0'); remember(DECIDED, '1'); }
   if ('open' in patch || 'purpose' in patch) refit();
   if ('conversation' in patch) remember(KEPT_CONVERSATION, state.conversation ?? null);
   if ('conversation' in patch || 'purpose' in patch) remember(KEPT_PURPOSE, state.conversation ? null : state.purpose ?? null);

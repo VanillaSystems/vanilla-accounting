@@ -19,6 +19,8 @@ import { closeInflow, openInflow, switchPhone, useInflow, type InflowDialog } fr
 import { askSetup, W } from './InflowStrip.js';
 import { intakeAdd } from './intake.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
+import { copyText } from '../../lib/copy.js';
+import { PHONE_APP_NAME } from '../../../platform/phone-app.js';
 
 /** The search a forwarding filter starts from: the words receipts carry, in the four languages. */
 const FILTER_QUERY = 'rechnung OR invoice OR facture OR fattura OR beleg OR quittung OR receipt';
@@ -27,7 +29,7 @@ export function InflowDialogs(props: AreaProps) {
   const { dialog } = useInflow();
   if (!dialog || !props.canEdit) return null;
   switch (dialog.kind) {
-    case 'pair': return <Pair step={dialog.step} />;
+    case 'pair': return <Pair step={dialog.step} nav={props.nav} />;
     case 'add': return <AddWay {...props} />;
     case 'all': return <AllWays {...props} />;
     case 'forward': return <Forward nav={props.nav} address={dialog.address} host={dialog.host} />;
@@ -61,29 +63,39 @@ function Steps({ on }: { on: 1 | 2 }) {
   return <div className="steps2"><span className={on === 1 ? 'on' : ''}>{t('inflow.pair.step1')}</span><span className={on === 2 ? 'on' : ''}>{t('inflow.pair.step2')}</span></div>;
 }
 
-/** «Handy koppeln»: the receipt app first, then the pairing code, which needs the Mac app's phone access switched on. */
-function Pair({ step }: { step: 'install' | 'pair' }) {
+/**
+ * «Belege vom Handy»: what it is for, then, while the receipt app has a download link, the app first
+ * and the pairing code second (which needs the Mac app's phone access switched on). Without a link
+ * (src/platform/phone-app.ts) only the code: it opens the scan page in the phone's browser, which works today.
+ */
+function Pair({ step, nav }: { step: 'install' | 'pair'; nav: Nav }) {
+  const [app, setApp] = useState<{ url?: string; qr?: string }>();
+  useEffect(() => { api.phoneApp().then(setApp, () => setApp({})); }, []);
+  const store = app?.url && app.qr ? { url: app.url, qr: app.qr } : undefined;
   return (
     <Frame title={t('inflow.pair')}>
-      <Steps on={step === 'install' ? 1 : 2} />
-      {step === 'install' ? <Install /> : <PairCode />}
+      <p className="hint" data-testid="pair-what">{t('inflow.pair.what')}</p>
+      {store ? <Steps on={step === 'install' ? 1 : 2} /> : null}
+      {!app ? <div className="qr"><span className="spin" /></div> : store && step === 'install' ? <Install app={store} nav={nav} /> : <PairCode withApp={!!store} />}
     </Frame>
   );
 }
 
-function Install() {
-  const [app, setApp] = useState<{ url: string; qr: string }>();
+function Install({ app, nav }: { app: { url: string; qr: string }; nav: Nav }) {
   const [copied, setCopied] = useState(false);
-  useEffect(() => { api.phoneApp().then(setApp, () => undefined); }, []);
-  const copy = () => { if (app) void navigator.clipboard?.writeText(app.url).then(() => setCopied(true), () => undefined); };
+  const copy = async () => {
+    const ok = await copyText(app.url);
+    setCopied(ok);
+    nav.toast(ok ? t('inflow.pair.copiedToast') : t('inflow.pair.copyFailed', { url: app.url }));
+  };
   return (
     <>
       <div className="pair">
-        {app ? <Qr svg={app.qr} label={app.url} /> : <div className="qr" />}
+        <Qr svg={app.qr} label={app.url} />
         <div className="form">
-          <p><b>{t('inflow.pair.scanStore')}</b> {t('inflow.pair.opensStore')}</p>
+          <p><b>{t('inflow.pair.scanStore')}</b> {t('inflow.pair.opensStore', { app: PHONE_APP_NAME })}</p>
           <p className="hint">{t('inflow.pair.orBrowser')}</p>
-          {app ? <div className="url"><code>{app.url.replace(/^https:\/\//, '')}</code><button data-busy-exempt="a copy to the clipboard; the label says Kopiert" type="button" className="aiact" onClick={copy}>{t(copied ? 'inflow.pair.copied' : 'inflow.pair.copy')}</button></div> : null}
+          <div className="url"><code>{app.url.replace(/^https:\/\//, '')}</code><button data-busy-exempt="a copy to the clipboard; the label says Kopiert" type="button" className="aiact" data-testid="pair-copy" onClick={() => void copy()}>{t(copied ? 'inflow.pair.copied' : 'inflow.pair.copy')}</button></div>
           <p className="hint">{t('inflow.pair.free')}</p>
         </div>
       </div>
@@ -95,12 +107,12 @@ function Install() {
   );
 }
 
-function PairCode() {
+function PairCode({ withApp }: { withApp: boolean }) {
   const { phone } = useInflow();
   const [error, setError] = useState<string>();
   // Clicking «Koppeln» is the person's wish to pair: the access opens, as «Einschalten» in Firma › Handy.
   useEffect(() => { if (desktop && !phone?.on) switchPhone(true).catch((e) => setError(errorText(e))); }, []);
-  const back = <button type="button" className="aiact back" onClick={() => openInflow({ kind: 'pair', step: 'install' })}>{t('inflow.pair.back')}</button>;
+  const back = withApp ? <button type="button" className="aiact back" onClick={() => openInflow({ kind: 'pair', step: 'install' })}>{t('inflow.pair.back')}</button> : <button type="button" className="aiact back" onClick={closeInflow}>{t('inflow.pair.later')}</button>;
   if (!desktop) {
     return (
       <>
@@ -116,7 +128,7 @@ function PairCode() {
       <div className="pair">
         {phone?.qr ? <Qr svg={phone.qr} label={phone.url ?? ''} /> : <div className="qr"><span className="spin" /></div>}
         <ol>
-          <li><b>{t('inflow.pair.openApp')}</b><div>{t('phone.scan')}</div></li>
+          <li><b>{t('inflow.pair.openApp')}</b><div>{t(withApp ? 'phone.scan' : 'phone.scanBrowser', { app: PHONE_APP_NAME })}</div></li>
           <li><b>{t('inflow.pair.allow')}</b><div>{t('phone.firewall')}</div></li>
         </ol>
       </div>
