@@ -193,8 +193,11 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .ftab.cinv .fr { grid-template-columns: 88px minmax(0, 1fr) 110px 140px; }
 
 /* dialogs */
-.idlg { width: min(520px, 94vw); top: 12vh; }
-.idlg.withpdf { width: min(640px, 94vw); top: 5vh; }
+.idlg { --top: 12vh; width: min(520px, 94vw); top: var(--top); max-height: calc(100vh / var(--z, 1) - var(--top) - 3vh); display: flex; flex-direction: column; }
+/* The foot stays on screen at any zoom: the body scrolls, never the buttons. */
+.idlg > * { flex-shrink: 0; }
+.idlg > .ibody, .idlg > .iopts { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.idlg.withpdf { width: min(640px, 94vw); --top: 5vh; }
 .idlg .isendpdf.paper.real { max-height: 52vh; overflow: auto; padding: 6px 0 10px; margin-bottom: 10px; border-bottom: 1px solid var(--line); }
 .idlg .ihd { padding: 16px 20px 12px; border-bottom: 1px solid var(--line); }
 .idlg .ihd .lbl { display: block; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); margin-bottom: 2px; }
@@ -215,7 +218,7 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .idlg .isum > div { display: flex; justify-content: space-between; }
 .idlg .isum .tot { font-weight: 600; border-top: 1px solid var(--line); padding-top: 6px; margin-top: 3px; }
 .idlg .ift { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px 16px; border-top: 1px solid var(--line); }
-.cdlg { width: min(560px, 94vw); top: 8vh; background: var(--bg); }
+.cdlg { width: min(560px, 94vw); --top: 8vh; background: var(--bg); }
 .cdlg .ift { align-items: center; }
 .cform { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; }
 .cform .cf { grid-column: span 4; min-width: 0; display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
@@ -313,7 +316,7 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .iaccounts .iwhat li { margin: 3px 0; }
 @media (max-width: 560px) { .iaccounts .iacc .fr { grid-template-columns: minmax(0, 1fr) auto; } .iaccounts .iacc .fr select { grid-column: 1 / -1; } }
 /* Phase 2: the conversion dialog, the Belegkette, options (docs/specs/invoicing.md 4.4.1). */
-.idlg.iconvert { width: min(760px, 96vw); top: 8vh; }
+.idlg.iconvert { width: min(760px, 96vw); --top: 8vh; }
 .iconvert .ibody { max-height: 64vh; overflow: auto; }
 .ivconv { margin: 4px 0 10px; }
 .ivconv tr.gone td { color: var(--faint); }
@@ -356,7 +359,7 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .cpanel .caddr { display: grid; gap: 1px; }
 .cpanel .cpick { display: grid; gap: 4px; }
 .cpanel .cpick select, .cdlg.contact select, .cimport select { font: 12.5px var(--font-sans); padding: 4px 6px; border: 1px solid var(--line-2); border-radius: 7px; background: var(--bg); color: var(--ink); max-width: 100%; }
-.cdlg.contact { width: min(640px, 94vw); top: 5vh; }
+.cdlg.contact { width: min(640px, 94vw); --top: 5vh; }
 .cdlg.contact .ibody { max-height: 72vh; overflow: auto; }
 .cform .cfh { grid-column: span 4; margin: 10px 0 0; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
 .cform .cgroup { grid-column: span 4; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 12px; margin: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; min-width: 0; }
@@ -390,7 +393,7 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .allocwrap { overflow-x: auto; }
 
 /* the Mahnlauf: a wide dialog, its list scrolls inside it */
-.idlg.idunning { --w: min(1040px, 100vw - 32px); width: var(--w); top: 6vh; }
+.idlg.idunning { --w: min(1040px, 100vw - 32px); width: var(--w); --top: 6vh; }
 .idunning .ivdunwrap { max-height: 52vh; overflow: auto; margin: 8px 0 10px; border-top: 1px solid var(--line); }
 .idunning .ivdun { width: 100%; border-collapse: collapse; font-size: 12.5px; }
 .idunning .ivdun th { position: sticky; top: 0; background: var(--bg); text-align: left; font-weight: 500; color: var(--muted); padding: 6px 6px; white-space: nowrap; }
@@ -425,7 +428,7 @@ main.tabled[data-panel="open"] .ivt td.c-contact { min-width: 120px; }
 .ivplan li:last-child { border-bottom: 0; }
 .ivplan .ph { display: flex; justify-content: space-between; gap: 8px; }
 .ivplan .pd { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
-.idlg.iplan { width: min(720px, 96vw); top: 8vh; }
+.idlg.iplan { width: min(720px, 96vw); --top: 8vh; }
 .iplan .ibody { max-height: 64vh; overflow: auto; }
 .ivstages { margin: 4px 0 8px; }
 .ivstages tr.gone td { color: var(--faint); }
