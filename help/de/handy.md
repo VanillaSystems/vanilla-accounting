@@ -1,25 +1,24 @@
 ---
-title: Handy koppeln
+title: Belege vom Handy
 summary: Kassenzettel mit dem Handy fotografieren, und das Foto landet in den Belegen. Einmal koppeln, dann im selben WLAN.
 section: start
 order: 3
 ---
-Mit dem Handy fotografierst du einen Kassenzettel, und das Foto landet im Eingang der offenen Buchhaltung. Dort liest die App es wie jeden anderen Beleg. Das geht mit der App «Belege» auf dem iPhone oder mit der Scan-Seite im Browser des Handys.
+Mit dem Handy fotografierst du einen Kassenzettel, und das Foto landet im Eingang der offenen Buchhaltung. Dort liest die App es wie jeden anderen Beleg. Das geht mit der Scan-Seite im Browser des Handys, ohne App. Die iPhone-App «Vanilla Scanner» (Arbeitsname) ist noch nicht im App Store.
 
 ## Koppeln
 
 Das Handy koppelst du einmal, mit einem Code, den der Mac zeigt. Handy und Mac müssen im selben WLAN sein.
 
-1. In Belege «Handy koppeln», oder unter Firma › Handy.
-2. **1 · App laden.** Scann den Code mit der Kamera deines iPhones. Er öffnet die App im App Store. Ohne iPhone gehst du gleich weiter: im 2. Schritt öffnet der Code die Scan-Seite im Browser des Handys.
-3. **2 · Koppeln.** In der App «Belege» auf ⚙ › «Mit Mac koppeln» tippen und den Code scannen. Mit der Kamera gescannt, öffnet derselbe Code die Scan-Seite, schon gekoppelt.
-4. macOS fragt, ob «Vanilla Accounting» eingehende Verbindungen annehmen darf: «Erlauben». Ohne das erreicht das Handy den Mac nicht.
+1. In Belege «Belege vom Handy», oder unter Firma › Belege vom Handy, dann «Code zeigen».
+2. Den Code mit der Kamera des Handys scannen. Er öffnet die Scan-Seite im Browser des Handys, schon gekoppelt.
+3. macOS fragt, ob «Vanilla Accounting» eingehende Verbindungen annehmen darf: «Erlauben». Ohne das erreicht das Handy den Mac nicht.
 
 Danach ist der Handy-Zugang an. In Belege steht beim Handy, ob es Belege annimmt.
 
 ## Fotografieren
 
-In der App «Belege» oder auf der Scan-Seite: «Foto aufnehmen». Hat ein Beleg mehrere Seiten, nimmst du mit «Weitere Seite» die nächste auf. «Hochladen» schickt alle Seiten als ein PDF an den Mac.
+Auf der Scan-Seite: «Foto aufnehmen». Hat ein Beleg mehrere Seiten, nimmst du mit «Weitere Seite» die nächste auf. «Hochladen» schickt alle Seiten als ein PDF an den Mac.
 
 Steht auf einem Kassenzettel kein Datum, nimmt die App den Tag, an dem das Handy ihn aufgenommen hat. Der Beleg sagt das, und du kannst das Datum dort ändern.
 
@@ -32,7 +31,7 @@ Steht auf einem Kassenzettel kein Datum, nimmt die App den Tag, an dem das Handy
 
 ## Was du entscheidest
 
-Unter Firma › Handy:
+Unter Firma › Belege vom Handy:
 
 - **Einschalten** und **Ausschalten.** Der Zugang ist aus, bis du ihn einschaltest. Ausgeschaltet erreicht kein Handy den Mac. Der Code bleibt gültig: gekoppelte Handys kommen wieder durch, sobald er wieder an ist.
 - **Neuen Code erstellen.** Danach kommt kein bisher gekoppeltes Handy mehr durch, bis es den neuen Code scannt. Das ist der Weg, wenn ein Handy verloren ging.
