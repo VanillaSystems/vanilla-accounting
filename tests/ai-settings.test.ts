@@ -22,6 +22,8 @@ before(async () => {
   dir = mkdtempSync(join(tmpdir(), 'ai-settings-'));
   api = await startApi('tests/fixtures/classify-index.json', {
     VANILLA_SECRETS_FILE: join(dir, 'secrets.json'), VANILLA_AI_SETTINGS: join(dir, 'ai.json'), VANILLA_ANTHROPIC_URL: stub.url, VANILLA_OPENAI_URL: stub.url, VANILLA_JEV_URL: stub.url,
+    // No Claude Code here, whatever the developer's PATH holds.
+    CLAUDE_BIN: join(dir, 'no-such-claude'),
   });
 });
 after(async () => {
@@ -99,11 +101,13 @@ test('with Codex signed in, «Die App fragt» chooses it for the steps and the t
   const own = mkdtempSync(join(tmpdir(), 'ai-settings-codex-'));
   const codex = await startApi('tests/fixtures/classify-index.json', {
     VANILLA_SECRETS_FILE: join(own, 'secrets.json'), VANILLA_AI_SETTINGS: join(own, 'ai.json'), CODEX_BIN: join(process.cwd(), 'tests/support/stub-bin/codex'),
+    // Claude Code installed but not signed in, as on the tester's Mac (#619).
+    CLAUDE_BIN: join(process.cwd(), 'tests/support/stub-bin/claude'), CLAUDE_STUB_SIGNED_OUT: '1',
   });
   t.after(() => codex.stop());
   const before = (await codex.send('GET', '/api/ai')).json as unknown as AiView;
-  assert.deepEqual(before.providers.slice(0, 2).map((p) => [p.id, p.state]), [['claude-cli', 'missing'], ['codex-cli', 'ready']]);
-  assert.equal(before.steps.find((s) => s.id === 'classify')!.standard.provider, 'claude-cli', 'Claude Code first while nothing is chosen');
+  assert.deepEqual(before.providers.slice(0, 2).map((p) => [p.id, p.state]), [['claude-cli', 'signedOut'], ['codex-cli', 'ready']]);
+  assert.equal(before.steps.find((s) => s.id === 'classify')!.standard.provider, 'codex-cli', 'nothing chosen: the CLI signed in before one only installed');
   const chosen = await codex.send('PUT', '/api/ai/cli', { cli: 'codex' });
   assert.equal(chosen.status, 200, String(chosen.json.error));
   const v = chosen.json as unknown as AiView;

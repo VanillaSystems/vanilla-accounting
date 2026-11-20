@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path';
 import { openWorkspace } from '../workspace/workspace.js';
 import { AiRefused, CallFailed, NO_USAGE, type Provider, type ProviderId, type Usage } from './provider.js';
 import { claudeCli, NoClaudeError } from './providers/claude-cli.js';
-import { activeSubscriptions, cliOf, signedIn, usableProviders } from './providers/index.js';
+import { activeSubscriptions, usableProviders } from './providers/index.js';
 import { defaultFor, otherSubscription, resolve, unserved, type Resolved } from './resolve.js';
 import { readSettings } from './settings.js';
 import { aiOff, gate } from './off.js';
@@ -137,6 +137,6 @@ export async function modelReady(timeoutMs?: number): Promise<boolean> {
   const providers = await usableProviders();
   const settings = readSettings();
   const used = new Set(STEP_IDS.filter((s) => s !== 'sidebar').map((s) => resolve(s, settings, providers).provider));
-  for (const p of used) if (await (p.billing === 'subscription' ? signedIn(cliOf(p)) : p.ready(timeoutMs))) return true;
+  for (const p of used) if (await p.ready(timeoutMs)) return true;
   return false;
 }
