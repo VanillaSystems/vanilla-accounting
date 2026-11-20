@@ -9,24 +9,40 @@
       "type": "firm",
       "name": "Beispiel Bistro AG",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Seeweg",
-          "number": "12",
-          "postcode": "3000",
-          "town": "Bern",
-          "country": "CH",
-          "billing": true
-        }
-      ],
       "language": "de",
       "emails": [
         "buchhaltung@bistro.example"
       ],
       "vatId": "CHE-987.654.320 MWST",
-      "paymentDays": 30,
-      "number": "K-00001"
+      "number": "K-00001",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Seeweg",
+              "number": "12",
+              "postcode": "3000",
+              "town": "Bern",
+              "country": "CH",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     },
     {
       "id": "cu_2KIQYfUMHYIT",
@@ -36,24 +52,40 @@
       "type": "firm",
       "name": "Muster Hotel GmbH",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Pilatusstrasse",
-          "number": "9",
-          "postcode": "6003",
-          "town": "Luzern",
-          "country": "CH",
-          "attn": "Küche, z. H. Herr Beispiel",
-          "billing": true
-        }
-      ],
       "language": "de",
       "emails": [
         "kueche@musterhotel.example"
       ],
-      "paymentDays": 20,
-      "number": "K-00002"
+      "number": "K-00002",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Pilatusstrasse",
+              "number": "9",
+              "postcode": "6003",
+              "town": "Luzern",
+              "country": "CH",
+              "attn": "Küche, z. H. Herr Beispiel",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 20
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     },
     {
       "id": "cu_MVknjIERgg_T",
@@ -63,24 +95,40 @@
       "type": "firm",
       "name": "Café Exemple Sàrl",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Rue du Marché",
-          "number": "12",
-          "postcode": "1204",
-          "town": "Genève",
-          "country": "CH",
-          "billing": true
-        }
-      ],
       "language": "fr",
       "emails": [
         "compta@cafe-exemple.example"
       ],
       "vatId": "CHE-111.222.334 TVA",
-      "paymentDays": 30,
-      "number": "K-00005"
+      "number": "K-00005",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Rue du Marché",
+              "number": "12",
+              "postcode": "1204",
+              "town": "Genève",
+              "country": "CH",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     },
     {
       "id": "cu_xeA65pqbdX_h",
@@ -90,24 +138,40 @@
       "type": "firm",
       "name": "Kaffeehaus Beispiel GmbH",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Lindenstrasse",
-          "number": "7",
-          "postcode": "80331",
-          "town": "München",
-          "country": "DE",
-          "billing": true
-        }
-      ],
       "language": "de",
       "emails": [
         "einkauf@kaffeehaus-beispiel.example"
       ],
       "vatId": "DE999999999",
-      "paymentDays": 30,
-      "number": "K-00007"
+      "number": "K-00007",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Lindenstrasse",
+              "number": "7",
+              "postcode": "80331",
+              "town": "München",
+              "country": "DE",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     },
     {
       "id": "cu_VWzEXhFm3hTa",
@@ -117,23 +181,39 @@
       "type": "firm",
       "name": "Muster Catering AG",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Industriestrasse",
-          "number": "40",
-          "postcode": "8400",
-          "town": "Winterthur",
-          "country": "CH",
-          "billing": true
-        }
-      ],
       "language": "de",
       "emails": [
         "kreditoren@muster-catering.example"
       ],
-      "paymentDays": 30,
-      "number": "K-00003"
+      "number": "K-00003",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Industriestrasse",
+              "number": "40",
+              "postcode": "8400",
+              "town": "Winterthur",
+              "country": "CH",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     },
     {
       "id": "cu_R-O8clcjxMXw",
@@ -143,23 +223,39 @@
       "type": "firm",
       "name": "Kaffeebar Beispiel GmbH",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Bahnhofplatz",
-          "number": "3",
-          "postcode": "9000",
-          "town": "St. Gallen",
-          "country": "CH",
-          "billing": true
-        }
-      ],
       "language": "de",
       "emails": [
         "hallo@kaffeebar-beispiel.example"
       ],
-      "paymentDays": 30,
-      "number": "K-00004"
+      "number": "K-00004",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Bahnhofplatz",
+              "number": "3",
+              "postcode": "9000",
+              "town": "St. Gallen",
+              "country": "CH",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     },
     {
       "id": "cu_S9Jcs6yeSIZJ",
@@ -169,23 +265,39 @@
       "type": "firm",
       "name": "Beispiel Kantine AG",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Werkstrasse",
-          "number": "8",
-          "postcode": "5000",
-          "town": "Aarau",
-          "country": "CH",
-          "billing": true
-        }
-      ],
       "language": "de",
       "emails": [
         "einkauf@beispiel-kantine.example"
       ],
-      "paymentDays": 30,
-      "number": "K-00006"
+      "number": "K-00006",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Werkstrasse",
+              "number": "8",
+              "postcode": "5000",
+              "town": "Aarau",
+              "country": "CH",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     },
     {
       "id": "cu_N7zXG9NsOQo6",
@@ -195,21 +307,37 @@
       "type": "firm",
       "name": "Bäckerei Muster",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Dorfstrasse",
-          "number": "21",
-          "postcode": "8610",
-          "town": "Uster",
-          "country": "CH",
-          "billing": true
-        }
-      ],
       "language": "de",
       "emails": [],
-      "paymentDays": 30,
-      "number": "K-00008"
+      "number": "K-00008",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Dorfstrasse",
+              "number": "21",
+              "postcode": "8610",
+              "town": "Uster",
+              "country": "CH",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     },
     {
       "id": "cu_sZxm_ABGqQ09",
@@ -222,7 +350,6 @@
       "emails": [
         "info@beispiel-cafes.example"
       ],
-      "paymentDays": 30,
       "persons": [
         {
           "id": "p-1",
@@ -237,41 +364,58 @@
           "email": "buchhaltung@beispiel-cafes.example"
         }
       ],
+      "number": "K-00009",
       "addresses": [
         {
-          "id": "a-1",
-          "label": "Hauptsitz",
-          "street": "Löwenstrasse",
-          "number": "20",
-          "postcode": "8001",
-          "town": "Zürich",
-          "country": "CH",
-          "billing": true
-        },
-        {
-          "id": "a-2",
-          "label": "Filiale Bern",
-          "attn": "Filiale Bern",
-          "street": "Marktgasse",
-          "number": "5",
-          "postcode": "3011",
-          "town": "Bern",
-          "country": "CH",
-          "delivery": true
-        },
-        {
-          "id": "a-3",
-          "label": "Filiale Basel",
-          "attn": "Filiale Basel",
-          "street": "Freie Strasse",
-          "number": "30",
-          "postcode": "4051",
-          "town": "Basel",
-          "country": "CH",
-          "delivery": true
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "label": "Hauptsitz",
+              "street": "Löwenstrasse",
+              "number": "20",
+              "postcode": "8001",
+              "town": "Zürich",
+              "country": "CH",
+              "billing": true
+            },
+            {
+              "id": "a-2",
+              "label": "Filiale Bern",
+              "attn": "Filiale Bern",
+              "street": "Marktgasse",
+              "number": "5",
+              "postcode": "3011",
+              "town": "Bern",
+              "country": "CH",
+              "delivery": true
+            },
+            {
+              "id": "a-3",
+              "label": "Filiale Basel",
+              "attn": "Filiale Basel",
+              "street": "Freie Strasse",
+              "number": "30",
+              "postcode": "4051",
+              "town": "Basel",
+              "country": "CH",
+              "delivery": true
+            }
+          ]
         }
       ],
-      "number": "K-00009"
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     }
   ],
   "articles": [
@@ -284,9 +428,15 @@
       "type": "goods",
       "name": "Hausmischung 1 kg",
       "unit": "kg",
-      "price": 28,
       "vatKind": "reduced",
-      "group": "Kaffee"
+      "group": "Kaffee",
+      "price": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": 28
+        }
+      ]
     },
     {
       "id": "ar_cYtU_kNE1Kr_",
@@ -297,9 +447,15 @@
       "type": "goods",
       "name": "Espresso Bohnen 1 kg",
       "unit": "kg",
-      "price": 32,
       "vatKind": "reduced",
-      "group": "Kaffee"
+      "group": "Kaffee",
+      "price": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": 32
+        }
+      ]
     },
     {
       "id": "ar_-9b0YbPYk3Xt",
@@ -310,9 +466,15 @@
       "type": "goods",
       "name": "Entkoffeiniert 500 g",
       "unit": "pcs",
-      "price": 16.5,
       "vatKind": "reduced",
-      "group": "Kaffee"
+      "group": "Kaffee",
+      "price": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": 16.5
+        }
+      ]
     },
     {
       "id": "ar_WVGMGw-CDpbp",
@@ -323,10 +485,16 @@
       "type": "goods",
       "name": "Kaffeemühle Modell 7",
       "unit": "pcs",
-      "price": 349,
       "prices": "gross",
       "vatKind": "normal",
-      "group": "Zubehör"
+      "group": "Zubehör",
+      "price": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": 349
+        }
+      ]
     },
     {
       "id": "ar_8gD15o1ZN4JQ",
@@ -338,9 +506,15 @@
       "name": "Barista-Kurs",
       "text": "Barista-Kurs, halber Tag",
       "unit": "flat",
-      "price": 180,
       "vatKind": "normal",
-      "group": "Kurse"
+      "group": "Kurse",
+      "price": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": 180
+        }
+      ]
     },
     {
       "id": "ar_UgTbcdPCsWCx",
@@ -351,10 +525,16 @@
       "type": "service",
       "name": "Maschinenservice",
       "unit": "h",
-      "price": 95,
       "vatKind": "normal",
       "account": "3400",
-      "group": "Service"
+      "group": "Service",
+      "price": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": 95
+        }
+      ]
     }
   ],
   "invoices": [

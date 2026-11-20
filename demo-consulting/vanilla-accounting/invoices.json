@@ -9,24 +9,40 @@
       "type": "firm",
       "name": "Beispiel Treuhand AG",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Seestrasse",
-          "number": "40",
-          "postcode": "8002",
-          "town": "Zürich",
-          "country": "CH",
-          "billing": true
-        }
-      ],
       "language": "de",
       "emails": [
         "kreditoren@beispiel-treuhand.example"
       ],
       "vatId": "CHE-318.642.975 MWST",
-      "paymentDays": 30,
-      "number": "K-00001"
+      "number": "K-00001",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Seestrasse",
+              "number": "40",
+              "postcode": "8002",
+              "town": "Zürich",
+              "country": "CH",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     },
     {
       "id": "cu_2KIQYfUMHYIT",
@@ -36,25 +52,41 @@
       "type": "firm",
       "name": "Muster Maschinenbau GmbH",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Beispielstrasse",
-          "number": "3",
-          "postcode": "80331",
-          "town": "München",
-          "country": "DE",
-          "attn": "Einkauf",
-          "billing": true
-        }
-      ],
       "language": "de",
       "emails": [
         "einkauf@muster-maschinenbau.example"
       ],
       "vatId": "DE999999998",
-      "paymentDays": 30,
-      "number": "K-00002"
+      "number": "K-00002",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Beispielstrasse",
+              "number": "3",
+              "postcode": "80331",
+              "town": "München",
+              "country": "DE",
+              "attn": "Einkauf",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     }
   ],
   "articles": [],

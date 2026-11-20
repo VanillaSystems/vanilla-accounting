@@ -9,23 +9,39 @@
       "type": "firm",
       "name": "Lena Muster",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Rosenweg",
-          "number": "5",
-          "postcode": "8404",
-          "town": "Winterthur",
-          "country": "CH",
-          "billing": true
-        }
-      ],
       "language": "de",
       "emails": [
         "lena.muster@mail.example"
       ],
-      "paymentDays": 20,
-      "number": "K-00001"
+      "number": "K-00001",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Rosenweg",
+              "number": "5",
+              "postcode": "8404",
+              "town": "Winterthur",
+              "country": "CH",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 20
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     }
   ],
   "articles": [],

@@ -20,7 +20,7 @@ import { parseUid } from './uid.js';
 import { goodsOf, profileOf, type SalesKind } from './setup.js';
 import { dimensionYaml, type Dimension } from '../books/tags.js';
 import { valueOn } from '../core/dated.js';
-import { historyOf, withEntry } from '../core/dated.js';
+import { fromStart, historyOf, withEntry } from '../core/dated.js';
 
 /** A text field set, or removed with null; absent: unchanged. */
 type Edit<T> = T | null | undefined;
@@ -270,7 +270,9 @@ function jsonAt(doc: Document, path: string[]): unknown {
  * as `- { validFrom, enteredAt, value }` with a one-line value where it is a mapping.
  */
 function addDated(doc: Document, path: string[], value: unknown, validFrom: string, enteredAt: string): void {
-  const next = withEntry(historyOf(jsonAt(doc, path)), value, validFrom, enteredAt);
+  const h = historyOf(jsonAt(doc, path));
+  // A value set for the first time holds from the start, as a new contact's or Artikel's does (spec 4.12).
+  const next = h.length ? withEntry(h, value, validFrom, enteredAt) : fromStart(value);
   const seq = doc.createNode(next.map((e) => {
     const n = doc.createNode(e) as YAMLMap;
     const v = n.get('value', true);

@@ -69,7 +69,7 @@ const shift = (iso: string, days: number) => new Date(Date.parse(`${iso}T12:00:0
 function workspace(book: Omit<InvoiceBook, 'schema' | 'articles'>, dunning: DunningSettings = DEFAULT_DUNNING, mail = true): Workspace {
   const ws = tempWorkspace('dunning-');
   const device = dunning.levels.some((l) => l.auto) && !dunning.device ? { device: thisDevice(ws) } : {};
-  patchManifest(ws.paths.manifest, { invoicing: { dunning: { ...dunning, ...device } } });
+  patchManifest(ws.paths.manifest, { invoicing: { dunning: { ...dunning, ...device }, validFrom: '2026-01-01' } });
   const opened = workspaceAt(ws.paths.root);
   const sent = book.sent.length ? book.sent : book.invoices.map((i) => sentDoc(`sd_${i.id}`, i));
   saveInvoices(opened, { schema: INVOICES_SCHEMA, articles: [], ...book, sent });
@@ -419,9 +419,9 @@ test('a round that ran nowhere (read-only, a copy, another computer) never touch
 test('automatic reminders run only on the computer they were switched on; another computer and none send nothing', async () => {
   const ws = workspace({ contacts: [contact('k1')], invoices: [fixture('in_a', 'RE-1', { customerId: 'k1', dueDate: '2026-11-01' })], sent: [] }, { ...auto(1), device: { id: 'other', name: 'Laptop' } });
   assert.equal((await autoReminders(ws, { today: '2026-11-10', printer, mail: mailbox().mail })).skipped, 'otherDevice');
-  patchManifest(ws.paths.manifest, { invoicing: { dunning: auto(1) } });
+  patchManifest(ws.paths.manifest, { invoicing: { dunning: auto(1), validFrom: '2026-01-01' } });
   assert.equal((await autoReminders(workspaceAt(ws.paths.root), { today: '2026-11-10', printer, mail: mailbox().mail })).skipped, 'noDevice');
-  patchManifest(ws.paths.manifest, { invoicing: { dunning: { ...auto(1), device: thisDevice(ws) } } });
+  patchManifest(ws.paths.manifest, { invoicing: { dunning: { ...auto(1), device: thisDevice(ws) }, validFrom: '2026-01-01' } });
   const here = { ...workspaceAt(ws.paths.root), outgoingMail: { host: 'smtp.example', port: 587, security: 'starttls' as const, fromAddress: 'r@f.example' } };
   assert.equal((await autoReminders(here, { today: '2026-11-10', printer, mail: mailbox().mail })).sent.length, 1);
 });

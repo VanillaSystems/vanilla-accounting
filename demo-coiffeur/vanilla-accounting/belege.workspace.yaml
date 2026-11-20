@@ -12,7 +12,12 @@ bankAccounts:
   - { bank: manual, currency: CHF, account: "2850", label: Privat Bella Beispiel, role: owner }
 invoicing:
   payTo:
-    CHF: { account: "1020", qrIban: CH12 3080 8000 0000 0000 4 }
+    CHF:
+      - validFrom: 1900-01-01
+        enteredAt: 1900-01-01T00:00:00.000Z
+        value:
+          account: "1020"
+          qrIban: CH12 3080 8000 0000 0000 4
   revenueAccount: "3400"
   paymentTermsDays: 20
   numbering:
@@ -21,22 +26,34 @@ invoicing:
   texts:
     de: { closing: "Zahlbar innert {days} Tagen. Herzlichen Dank und alles Gute!\nBella Beispiel" }
   dunning:
-    levels:
-      - name: 1. Mahnung
-        days: 10
-        texts:
-          fr: { title: 1er rappel }
-          it: { title: 1° sollecito }
-          en: { title: Payment reminder }
-      - name: 2. Mahnung
-        days: 10
-        texts:
-          fr: { title: 2e rappel }
-          it: { title: 2° sollecito }
-          en: { title: Second reminder }
-      - name: 3. Mahnung
-        days: 10
-        texts:
-          fr: { title: 3e rappel }
-          it: { title: 3° sollecito }
-          en: { title: Final reminder }
+    - validFrom: 1900-01-01
+      enteredAt: 1900-01-01T00:00:00.000Z
+      value:
+        levels:
+          - name: 1. Mahnung
+            days: 10
+            texts:
+              fr:
+                title: 1er rappel
+              it:
+                title: 1° sollecito
+              en:
+                title: Payment reminder
+          - name: 2. Mahnung
+            days: 10
+            texts:
+              fr:
+                title: 2e rappel
+              it:
+                title: 2° sollecito
+              en:
+                title: Second reminder
+          - name: 3. Mahnung
+            days: 10
+            texts:
+              fr:
+                title: 3e rappel
+              it:
+                title: 3° sollecito
+              en:
+                title: Final reminder

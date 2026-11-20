@@ -14,6 +14,7 @@ import { join } from 'node:path';
 import { isMap, parseDocument, type YAMLMap } from 'yaml';
 import './support/jurisdiction.js';
 import { tempWorkspace } from './support/workspace.js';
+import { plainManifest } from './support/dated.js';
 import { APP_FOLDER, APP_ROOT, MANIFEST_FILE, workspaceAt, type Workspace } from '../src/workspace/workspace.js';
 import { INVOICES_MIGRATIONS, MANIFEST_MIGRATIONS, manifestText } from '../src/workspace/schema.js';
 import { parseManifest } from '../src/workspace/manifest.js';
@@ -31,25 +32,6 @@ import type { WorkspaceChange } from '../src/types/assistant.js';
 import { changesOf } from '../src/assistant/changes.js';
 
 const DEMOS = ['demo', 'demo-consulting', 'demo-coiffeur', 'demo-schreinerei'];
-/**
- * A demo manifest as it was before the histories (schema 6): each dated field of `invoicing:` that holds
- * one entry from the start written back as its plain value, the shape the step reads.
- */
-function plainManifest(text: string): string {
-  const doc = parseDocument(text);
-  const inv = doc.get('invoicing') as YAMLMap | undefined;
-  if (!isMap(inv)) return text;
-  const plain = (n: unknown) => {
-    const v = (n as { toJSON?: () => unknown })?.toJSON?.();
-    return Array.isArray(v) && v.length === 1 && v[0].validFrom === SINCE_START ? v[0].value : undefined;
-  };
-  const payTo = inv.get('payTo');
-  if (isMap(payTo)) for (const p of payTo.items) { const v = plain(p.value); if (v !== undefined) p.value = doc.createNode(v); }
-  for (const key of ['paymentTerms', 'writeOffAccount', 'feeAccount']) { const v = plain(inv.get(key, true)); if (v !== undefined) inv.set(key, doc.createNode(v)); }
-  doc.set('schema', 6);
-  return manifestText(doc);
-}
-
 /** A demo file as the last generator before the histories wrote it (invoices.json schema 4, manifest schema 6): the fixture of the steps. */
 const before4 = (demo: string, file: string): string => readFileSync(join(APP_ROOT, 'tests', 'fixtures', 'dated', demo, file), 'utf8');
 const printer: Printer = { pdf: async (d) => ({ html: '', pages: 1, pdf: Buffer.from(`%PDF-1.4 ${d.number ?? ''} ${d.sender.payTo?.iban ?? ''}`) }), html: async () => ({ html: '', pages: 1 }) };

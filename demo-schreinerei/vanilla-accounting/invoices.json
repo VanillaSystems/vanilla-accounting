@@ -9,23 +9,39 @@
       "type": "firm",
       "name": "Familie Huber-Beispiel",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Obere Gasse",
-          "number": "17",
-          "postcode": "9008",
-          "town": "St. Gallen",
-          "country": "CH",
-          "billing": true
-        }
-      ],
       "language": "de",
       "emails": [
         "huber-beispiel@mail.example"
       ],
-      "paymentDays": 30,
-      "number": "K-00001"
+      "number": "K-00001",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Obere Gasse",
+              "number": "17",
+              "postcode": "9008",
+              "town": "St. Gallen",
+              "country": "CH",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     },
     {
       "id": "cu_2KIQYfUMHYIT",
@@ -35,23 +51,39 @@
       "type": "firm",
       "name": "Familie Keller-Muster",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Rosenbergstrasse",
-          "number": "41",
-          "postcode": "9000",
-          "town": "St. Gallen",
-          "country": "CH",
-          "billing": true
-        }
-      ],
       "language": "de",
       "emails": [
         "keller-muster@mail.example"
       ],
-      "paymentDays": 30,
-      "number": "K-00003"
+      "number": "K-00003",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Rosenbergstrasse",
+              "number": "41",
+              "postcode": "9000",
+              "town": "St. Gallen",
+              "country": "CH",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     },
     {
       "id": "cu_MVknjIERgg_T",
@@ -61,25 +93,41 @@
       "type": "firm",
       "name": "Muster Wohnbau AG",
       "persons": [],
-      "addresses": [
-        {
-          "id": "a-1",
-          "street": "Rorschacher Strasse",
-          "number": "150",
-          "postcode": "9006",
-          "town": "St. Gallen",
-          "country": "CH",
-          "attn": "Bauleitung, z. H. Frau Muster",
-          "billing": true
-        }
-      ],
       "language": "de",
       "emails": [
         "rechnungen@muster-wohnbau.example"
       ],
       "vatId": "CHE-579.135.791 MWST",
-      "paymentDays": 30,
-      "number": "K-00002"
+      "number": "K-00002",
+      "addresses": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Rorschacher Strasse",
+              "number": "150",
+              "postcode": "9006",
+              "town": "St. Gallen",
+              "country": "CH",
+              "attn": "Bauleitung, z. H. Frau Muster",
+              "billing": true
+            }
+          ]
+        }
+      ],
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     },
     {
       "id": "cu_sZxm_ABGqQ09",
@@ -92,20 +140,36 @@
       "emails": [
         "beispiel-rossi@mail.example"
       ],
-      "paymentDays": 30,
       "persons": [],
+      "number": "K-00004",
       "addresses": [
         {
-          "id": "a-1",
-          "street": "Bühlstrasse",
-          "number": "4",
-          "postcode": "9010",
-          "town": "St. Gallen",
-          "country": "CH",
-          "billing": true
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": [
+            {
+              "id": "a-1",
+              "street": "Bühlstrasse",
+              "number": "4",
+              "postcode": "9010",
+              "town": "St. Gallen",
+              "country": "CH",
+              "billing": true
+            }
+          ]
         }
       ],
-      "number": "K-00004"
+      "terms": [
+        {
+          "validFrom": "1900-01-01",
+          "enteredAt": "1900-01-01T00:00:00.000Z",
+          "value": {
+            "paymentDays": 30
+          }
+        }
+      ],
+      "discount": [],
+      "revenueAccount": []
     }
   ],
   "articles": [],

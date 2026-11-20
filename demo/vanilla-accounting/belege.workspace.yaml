@@ -13,14 +13,36 @@ bankAccounts:
   - { bank: Kasse, currency: CHF, account: "1000", label: Kasse, role: cash }
 invoicing:
   payTo:
-    CHF: { account: "1021", qrIban: CH44 3199 9123 0008 8901 2 }
-    EUR: { account: "1023" }
+    CHF:
+      - validFrom: 1900-01-01
+        enteredAt: 1900-01-01T00:00:00.000Z
+        value:
+          account: "1021"
+          qrIban: CH44 3199 9123 0008 8901 2
+    EUR:
+      - validFrom: 1900-01-01
+        enteredAt: 1900-01-01T00:00:00.000Z
+        value:
+          account: "1023"
   revenueAccount: "3300"
   paymentTermsDays: 30
   paymentTerms:
-    - { id: net30, name: "30 Tage netto", days: 30 }
-    - { id: net20, name: "20 Tage netto", days: 20 }
-    - { id: skonto2, name: "10 Tage 2 %, 30 Tage netto", days: 30, skonto: { percent: 2, days: 10 }, text: "Zahlbar innert 10 Tagen mit 2 % Skonto oder innert 30 Tagen netto." }
+    - validFrom: 1900-01-01
+      enteredAt: 1900-01-01T00:00:00.000Z
+      value:
+        - id: net30
+          name: 30 Tage netto
+          days: 30
+        - id: net20
+          name: 20 Tage netto
+          days: 20
+        - id: skonto2
+          name: 10 Tage 2 %, 30 Tage netto
+          days: 30
+          skonto:
+            percent: 2
+            days: 10
+          text: Zahlbar innert 10 Tagen mit 2 % Skonto oder innert 30 Tagen netto.
   defaultTerms: net30
   numbering:
     invoice: { format: "{JJJJ}-{NNN}", restartYearly: true }
@@ -30,23 +52,35 @@ invoicing:
     de: { closing: "Zahlbar innert {days} Tagen.\nFreundliche Grüsse, Anna Muster" }
     fr: { closing: "Payable dans les {days} jours.\nMeilleures salutations, Anna Muster" }
   dunning:
-    levels:
-      - name: Zahlungserinnerung
-        days: 10
-        texts:
-          fr: { title: Rappel de paiement }
-          it: { title: Promemoria di pagamento }
-          en: { title: Payment reminder }
-      - name: 1. Mahnung
-        days: 10
-        texts:
-          fr: { title: 1er rappel }
-          it: { title: 1° sollecito }
-          en: { title: First reminder }
-      - name: 2. Mahnung
-        days: 10
-        fee: 20
-        texts:
-          fr: { title: 2e rappel }
-          it: { title: 2° sollecito }
-          en: { title: Second reminder }
+    - validFrom: 1900-01-01
+      enteredAt: 1900-01-01T00:00:00.000Z
+      value:
+        levels:
+          - name: Zahlungserinnerung
+            days: 10
+            texts:
+              fr:
+                title: Rappel de paiement
+              it:
+                title: Promemoria di pagamento
+              en:
+                title: Payment reminder
+          - name: 1. Mahnung
+            days: 10
+            texts:
+              fr:
+                title: 1er rappel
+              it:
+                title: 1° sollecito
+              en:
+                title: First reminder
+          - name: 2. Mahnung
+            days: 10
+            fee: 20
+            texts:
+              fr:
+                title: 2e rappel
+              it:
+                title: 2° sollecito
+              en:
+                title: Second reminder

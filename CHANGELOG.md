@@ -16,6 +16,14 @@ Two markers flag an entry you must read before you update:
 
 ### Added
 
+- Verkauf: values that change over time. An Artikel's price, a contact's addresses, payment terms,
+  discount and revenue account, the account customers pay to per currency, the Briefkopf, the
+  Konditionen and the Mahnstufen change from a day on («Gilt ab»), shown with «ab TT.MM.JJJJ», a
+  planned value and «Verlauf». Every document reads the value of its own date; an issued one keeps
+  what it printed. A change dated before issued documents names them first and offers «Nachbelastung
+  als Entwurf» (a price), «Zahlungsaufforderung mit neuer IBAN» (a new account) or «So lassen». A draft
+  names a position whose Artikel costs otherwise on its date. The assistant changes such a value from
+  a day on as well.
 - Mahnwesen: the Mahnstufen are a list in Firma › Rechnungslayout › Mahnwesen (name, days to pay,
   a fee, texts and e-mail per language, an automatic reminder «N Tage nach Fälligkeit»), with default
   interest off unless switched on. A new firm starts with «Zahlungserinnerung», «1. Mahnung» and

@@ -16,6 +16,7 @@ import { readManifest } from '../src/workspace/manifest.js';
 import { parseDocument } from 'yaml';
 import { workspaceAt } from '../src/workspace/workspace.js';
 import { DEMO_ROOT, tempWorkspace, writeIndex } from './support/workspace.js';
+import { plainManifest } from './support/dated.js';
 
 const FIXTURE = join(process.cwd(), 'tests/fixtures/period-lock-index.json');
 
@@ -221,7 +222,8 @@ test('manifest schema 4 (#452): a manifest of schema 3 loads with its UID, npm r
   const current = readFileSync(path, 'utf8');
   const stamp = new RegExp(`^schema: ${WORKSPACE_SCHEMA}\n`, 'm');
   assert.match(current, stamp);
-  const old = current.replace(stamp, 'schema: 3\n');
+  // The demo as a manifest of 3 had it: plain invoicing values, no histories.
+  const old = beforeSeven(current).replace(/^schema: 6\n/m, 'schema: 3\n');
   writeFileSync(path, old);
 
   assert.equal(readManifest(path).company.uid, 'CHE-123.456.789');
@@ -230,7 +232,7 @@ test('manifest schema 4 (#452): a manifest of schema 3 loads with its UID, npm r
   const step = done.find((d) => d.file === path);
   assert.deepEqual(step && { from: step.from, to: step.to }, { from: 3, to: WORKSPACE_SCHEMA });
   assert.equal(readFileSync(step!.backup, 'utf8'), old);
-  assert.equal(readFileSync(path, 'utf8'), withHistories(current), 'only the number changed (and the step 6 → 7 dated the invoicing settings)');
+  assert.equal(readFileSync(path, 'utf8'), stepSix(old.replace(/^schema: 3\n/m, `schema: ${WORKSPACE_SCHEMA}\n`)), 'only the number changed (and the step 6 → 7 kept the Mahnungen of before and dated the invoicing settings)');
 
   writeFileSync(path, current.replace(/^ {2}uid: .*\n/m, ''));
   assert.doesNotMatch(readFileSync(path, 'utf8'), /uid:/);
@@ -248,7 +250,8 @@ test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defa
   const path = workspaceAt(dir).paths.manifest;
   const current = readFileSync(path, 'utf8');
   // A manifest of 4 knows none of the fields 5 brought: the demo's named payment terms come off.
-  const old = current.replace(new RegExp(`^schema: ${WORKSPACE_SCHEMA}\n`, 'm'), 'schema: 4\n').replace(/^ {2}paymentTerms:\n(?: {4}- .*\n)*/m, '').replace(/^ {2}defaultTerms: .*\n/m, '');
+  const old = beforeSeven(current).replace(/^schema: 6\n/m, 'schema: 4\n').replace(/^ {2}paymentTerms:\n(?: {4}.*\n)*/m, '').replace(/^ {2}defaultTerms: .*\n/m, '');
+  assert.doesNotMatch(old, /paymentTerms:|validFrom/);
   writeFileSync(path, old);
   const inv = readManifest(path).invoicing!;
   assert.deepEqual(inv.units.map((u) => u.id), ['h', 'day', 'pcs', 'flat', 'km', 'm2', 'm', 'm3', 'l', 'kg', 'month'], 'the default units, the old ids first');
@@ -260,7 +263,7 @@ test('manifest schema 5 (invoicing phase 1): a manifest of 4 loads with the defa
   assert.equal(invoicingOn(inv, today).writeOffAccount, undefined, 'absent: the jurisdiction\'s accounts');
   const { done } = await upgradeWorkspace(workspaceAt(dir));
   assert.deepEqual(done.filter((d) => d.file === path).map((d) => [d.from, d.to]), [[4, WORKSPACE_SCHEMA]]);
-  assert.equal(readFileSync(path, 'utf8'), withHistories(old.replace(/^schema: 4\n/m, `schema: ${WORKSPACE_SCHEMA}\n`)), 'only the number changed (and the step 6 → 7 dated the invoicing settings)');
+  assert.equal(readFileSync(path, 'utf8'), stepSix(old.replace(/^schema: 4\n/m, `schema: ${WORKSPACE_SCHEMA}\n`)), 'only the number changed (and the step 6 → 7 kept the Mahnungen of before and dated the invoicing settings)');
 
   const own = old.replace(/^schema: 4\n/m, 'schema: 5\n').replace(/^invoicing:\n/m, [
     'invoicing:',
@@ -339,8 +342,9 @@ test('manifest schema 7 (dated invoicing settings): a manifest of 6 reads as bef
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const path = workspaceAt(dir).paths.manifest;
   const current = readFileSync(path, 'utf8');
-  // The demo as a manifest of 6 wrote it: plain values, and a write-off account of its own.
-  const old = current.replace(/^schema: \d+\n/m, 'schema: 6\n').replace(/^invoicing:\n/m, 'invoicing:\n  writeOffAccount: { skonto: "3800", loss: "3805" }\n');
+  // The demo as a manifest of 6 wrote it: plain values, no Mahnwesen, and a write-off account of its own.
+  const old = beforeSeven(current).replace(/^invoicing:\n/m, 'invoicing:\n  writeOffAccount: { skonto: "3800", loss: "3805" }\n');
+  assert.doesNotMatch(old, /validFrom/);
   writeFileSync(path, old);
   const days = ['2020-01-01', '2026-06-30', new Date().toISOString().slice(0, 10)];
   const before = readManifest(path).invoicing!;
@@ -357,7 +361,9 @@ test('manifest schema 7 (dated invoicing settings): a manifest of 6 reads as bef
   }
   assert.deepEqual(inv.paymentTerms, [{ ...start, value: was.paymentTerms }]);
   assert.deepEqual(inv.writeOffAccount, [{ ...start, value: { skonto: '3800', loss: '3805' } }]);
-  const { payTo: _p, paymentTerms: _t, writeOffAccount: _w, ...rest } = inv;
+  assert.equal(was.dunning, undefined);
+  assert.deepEqual(inv.dunning, [{ ...start, value: { levels: LEGACY_DUNNING.levels.map((l) => ({ name: l.name, days: l.days, texts: l.texts })) } }], 'the Mahnungen of before, one entry from the start');
+  const { payTo: _p, paymentTerms: _t, writeOffAccount: _w, dunning: _d, ...rest } = inv;
   const { payTo: _p0, paymentTerms: _t0, writeOffAccount: _w0, ...restWas } = was;
   assert.deepEqual(rest, restWas, 'nothing else of invoicing changes');
   const after = readManifest(path).invoicing!;
@@ -367,8 +373,17 @@ test('manifest schema 7 (dated invoicing settings): a manifest of 6 reads as bef
   assert.throws(() => climb(parseDocument(written), 7, 6, MANIFEST_MIGRATIONS, path, (d) => d.clone()), (e: Error) => e instanceof SchemaTooNewError);
 });
 
-/** `text` with what the step 6 → 7 makes of it: each plain payTo, terms and account of `invoicing:` one entry from the start. */
+/** `text` with each plain payTo, terms, account and Mahnwesen of `invoicing:` one entry from the start. */
 const withHistories = (text: string): string => manifestText(datedInvoicing(parseDocument(text)));
+/** `text` with what the step 6 → 7 makes of it: the Mahnungen of before where it has none, then the histories. */
+const stepSix = (text: string): string => manifestText(MANIFEST_MIGRATIONS[6]!(parseDocument(text)));
+const noDunning = (text: string) => text.replace(/^ {2}dunning:\n( {4}.*\n)+/m, '');
+/** The demo manifest as a manifest of 6 had it: plain invoicing values and no Mahnwesen (which came with 7). */
+const beforeSeven = (text: string): string => {
+  const old = noDunning(plainManifest(text));
+  assert.doesNotMatch(old, /validFrom|dunning/);
+  return old;
+};
 
 function booksFiles(dir: string): string[] {
   return readdirSync(dir, { recursive: true, encoding: 'utf8' }).filter((f) => /books\/.*\.jsonl$/.test(f)).map((f) => join(dir, f)).sort();
@@ -380,9 +395,8 @@ test('manifest schema 7 (invoicing phase 3, Mahnwesen): a manifest of 6 with inv
   cpSync(DEMO_ROOT, dir, { recursive: true });
   const path = workspaceAt(dir).paths.manifest;
   const current = readFileSync(path, 'utf8');
-  const noDunning = (text: string) => text.replace(/^ {2}dunning:\n( {4}.*\n)+/m, '');
   // The demo as a manifest of 6 had it: no dunning.
-  const old = noDunning(current.replace(new RegExp(`^schema: ${WORKSPACE_SCHEMA}\n`, 'm'), 'schema: 6\n'));
+  const old = beforeSeven(current);
   assert.doesNotMatch(old, /dunning/);
   writeFileSync(path, old);
   const legacy = readManifest(path).invoicing!.dunning;

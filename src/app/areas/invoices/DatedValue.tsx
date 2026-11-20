@@ -32,7 +32,7 @@ export function DatedCardView({ card, onChoose, onCancel }: { card: DatedCard; o
         {card.affected.map((a) => (
           <li key={a.id}>
             <b>{a.number}</b> <span className="m">{formatDate(a.date)} · {a.customer}{a.open !== undefined ? ` · ${t('dated.card.open', { amount: fmt(a.open) })}` : ''}</span>
-            {a.lines?.map((l) => <div key={l.line} className="m">{t('dated.card.line', { text: l.text, quantity: fmt(l.quantity), price: fmt(l.price), now: fmt(l.now) })}</div>)}
+            {a.lines?.map((l) => <div key={l.line} className="m">{t('dated.card.line', { text: l.text, quantity: String(l.quantity), price: fmt(l.price), now: fmt(l.now) })}</div>)}
             {a.printed !== undefined ? <div className="m">{t('dated.card.printed', { printed: a.printed, now: a.now ?? '' })}</div> : null}
           </li>
         ))}

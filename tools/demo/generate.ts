@@ -25,7 +25,8 @@ import { assignUniqueRefs, readCamt, transactionsOf } from '../../src/providers/
 import { bankKind, roleBefore } from '../../src/workspace/banks.js';
 import { loadFxResolver } from '../../src/accounting/fx-rates.js';
 import { sealOf } from '../../src/books/seal.js';
-import { BOOKS_SCHEMA, WORKSPACE_SCHEMA } from '../../src/workspace/schema.js';
+import { BOOKS_SCHEMA, WORKSPACE_SCHEMA, datedInvoicing, manifestText } from '../../src/workspace/schema.js';
+import { parseDocument } from 'yaml';
 import { writeBooks } from '../../src/books/store.js';
 import { BOOK_FILES, splitByYear, toJsonl } from '../../src/books/years.js';
 import { APP_FOLDER, workspacePaths } from '../../src/workspace/workspace.js';
@@ -224,7 +225,12 @@ function filedReturn(demo: Demo, books: Index): string {
   }
 }
 
+/** The demo's manifest as the app writes it: its dated invoicing settings as histories from the start (spec 4.12), as the step 6 → 7 writes them. */
 function manifest(demo: Demo): string {
+  return manifestText(datedInvoicing(parseDocument(plainManifest(demo))));
+}
+
+function plainManifest(demo: Demo): string {
   const { company } = demo;
   const inv = demo.invoicing;
   // An invoice prints the IBAN of the account it is paid to, so a demo that invoices names its IBANs.

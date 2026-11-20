@@ -588,3 +588,21 @@ html.phone .activity .it .cnt { position: absolute; top: -6px; right: -10px; min
 .chipempty p { max-width: 42ch; }
 .chipempty .fexits { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 18px; }
 .chipempty .fexits .btn { max-width: 100%; height: auto; min-height: 32px; padding-top: 6px; padding-bottom: 6px; white-space: normal; text-align: left; }
+
+/* A dated value of Verkauf and Firma (src/app/areas/invoices/DatedValue.tsx, spec 4.12): label, the value with «ab», planned, «Verlauf». */
+.dval { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: 4px 16px; padding: 8px 0; font-size: 13.5px; }
+.dval.trail { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 0; grid-template-columns: none; font-size: 12.5px; }
+.dval .dlabel { color: var(--muted); }
+.dval .dbody { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.dval .dnow, .dval .dplanned { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.dval .from { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.dval .dplanned .from { color: var(--accent); }
+.dval .dhist summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.dval .dhist ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 3px; font-size: 12.5px; }
+.dval .dform { margin-top: 6px; }
+.dcard { margin-top: 8px; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--warn) 45%, transparent); border-radius: 8px; background: var(--warn-soft); font-size: 13px; }
+.dcard h4 { margin: 0 0 6px; color: var(--warn); font-size: 13.5px; }
+.dcard ul { margin: 0 0 6px; padding-left: 18px; display: grid; gap: 4px; }
+.dcard .m { color: var(--muted); }
+.dcard .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+@container (max-width: 560px) { .dval { grid-template-columns: minmax(0, 1fr); } }
