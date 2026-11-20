@@ -48,6 +48,8 @@ import { keptToOpening } from '../../onboarding/opening-claim.js';
 import { wordsIn } from '../../export/texts.js';
 
 import { BATCH_MAX } from '../../types/batch.js';
+import { payrollContext } from '../../payroll/service.js';
+import { PayslipWishError, resolveWish, type WishTarget } from '../../payroll/wish.js';
 
 export const router = Router();
 
@@ -213,11 +215,26 @@ async function exported(c: Extract<ActionChange, { kind: 'export' }>, language: 
   return { note: { file: { name, path } } };
 }
 
+/**
+ * The payslip a wish names, found by code (src/payroll/wish.ts); a wish that names none refuses the answer
+ * in the person's own words. Nothing is written: the draft is computed whenever Löhne shows it, and a close
+ * is her click on the card.
+ */
+function payslipTarget(c: Extract<ActionChange, { kind: 'payslip' }>): WishTarget {
+  try {
+    return resolveWish(payrollContext(WS), c, localToday());
+  } catch (e) {
+    if (e instanceof PayslipWishError) throw new RefusedChanges(e.message, { code: 'payslipWish', params: { why: e.why, ...(e.said ? { said: e.said } : {}) } });
+    throw e;
+  }
+}
+
 /** What the app runs for an answer, once its changes are made: nothing to undo, a failure is said on its card. */
 async function run(c: ActionChange, language: string): Promise<Pick<MadeChange, 'note'>> {
   try {
     if (c.kind === 'export') return await exported(c, language);
     if (c.kind === 'report') return { note: { report: previewOf(runSpec(c.spec, c.period)) } };
+    if (c.kind === 'payslip') return { note: { payslip: payslipTarget(c) } };
     // The card is the browser's, drawn from the books as they stand when it is shown: nothing to run.
     if (c.kind === 'openPeriod') return {};
     await bookAgain('assistant');
@@ -241,6 +258,7 @@ const apply: ApplyChanges = async (answered, earlier, language, { conversation, 
   for (const c of changes) {
     const r = c.kind === 'report' ? factsRefusal(c.spec) : undefined;
     if (r) { const e = refused(r); throw new RefusedChanges(e.message, e.refusal); }
+    if (c.kind === 'payslip') payslipTarget(c);
   }
   const outside: Array<Omit<MadeChange, 'id'>> = [];
   let after = () => {};

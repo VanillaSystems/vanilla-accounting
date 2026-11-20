@@ -12,6 +12,9 @@ import type { Conversation, Turn } from '../types/assistant.js';
 import { draftDir } from '../saving/changes.js';
 import { ruleChanges, ruleKey, rulesOf, settledDrafts } from '../saving/settled-drafts.js';
 import { wordsIn } from '../export/texts.js';
+import { payrollContext } from '../payroll/service.js';
+import { wishState } from '../payroll/wish.js';
+import type { PayrollContext } from '../payroll/compute.js';
 
 type AiTurn = Extract<Turn, { role: 'ai' }>;
 type Drafted = NonNullable<AiTurn['drafted']>[number];
@@ -77,6 +80,21 @@ const heldWords = (t: T) => ({
 
 const CHANGE = { added: 'adds', changed: 'changes', removed: 'removes' } as const;
 
+/**
+ * A payslip wish's state now (docs/specs/payroll.md §22 decision 132): closed or a draft, how many lines are
+ * incomplete and how many facts stand beside it; the person as the model named her. No name of payroll.json,
+ * no figure: the card under that answer shows the payslip.
+ */
+function payslipWords(ctx: PayrollContext | undefined, t: T, said: string | undefined, target: { month: string; employee?: string }): string {
+  const s = ctx ? wishState(ctx, target) : undefined;
+  if (!s) return `the payroll could not be read now: say nothing about the payslip of ${target.month}; the card under that answer shows it.`;
+  if (s.kind === 'month') return `the payslips of ${target.month}: ${s.closed} of ${s.of} closed now (closing is the person's «${t('payroll.closeAll')}» on the card or in ${t('area.payroll')}).`;
+  const who = said ? `«${said}»` : 'the person';
+  if (s.status === 'gone') return `the payslip of ${who} for ${target.month} is no longer there (her employment changed): read nothing into it, the person sees it in ${t('area.payroll')}.`;
+  if (s.status === 'closed') return `the payslip of ${who} for ${target.month} is CLOSED now: the person closed it.`;
+  return `the payslip of ${who} for ${target.month} is a draft, not closed: ${s.incomplete} lines incomplete, ${s.facts} facts beside it; only the person closes it, with «${t('payroll.close')}» on the card or in ${t('area.payroll')}. The figures are hers, never yours to state.`;
+}
+
 /** The note, or '' when no earlier answer proposed anything. */
 export function proposalsNote(ws: Pick<Workspace, 'paths'>, c: Pick<Conversation, 'turns'>, language = 'de'): string {
   const { t } = wordsIn(language);
@@ -84,6 +102,11 @@ export function proposalsNote(ws: Pick<Workspace, 'paths'>, c: Pick<Conversation
   const settled = settledDrafts(ws);
   const answers = c.turns.flatMap((turn, i) => (turn.role === 'ai' ? [{ turn, i }] : []));
   const lines: string[] = [];
+  let ctx: PayrollContext | undefined | null = null;
+  const payroll = () => {
+    if (ctx === null) { try { ctx = payrollContext(ws); } catch { ctx = undefined; } }
+    return ctx;
+  };
   answers.forEach(({ turn }, k) => {
     const n = k + 1;
     const drafted = turn.drafted;
@@ -97,6 +120,9 @@ export function proposalsNote(ws: Pick<Workspace, 'paths'>, c: Pick<Conversation
       for (const path of ruleDraftsOf(turn)) lines.push(`- Your answer ${n}: the rules you drafted in ${path} are UNKNOWN to the app now: read ${path} before you say anything about them.`);
     }
     if (turn.held) lines.push(`- Your answer ${n}: its changes to the books were ${held[turn.held.status]}`);
+    for (const m of turn.changes ?? []) {
+      if (m.change.kind === 'payslip' && m.note?.payslip) lines.push(`- Your answer ${n}: ${payslipWords(payroll(), t, m.change.person, m.note.payslip)}`);
+    }
     const undone = (turn.changes ?? []).filter((m) => m.undone).length;
     if (undone) lines.push(`- Your answer ${n}: the person took back ${undone} of the changes it made («${t('assistant.undo')}»); they are not in the books.`);
   });

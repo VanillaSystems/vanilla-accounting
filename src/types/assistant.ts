@@ -138,12 +138,18 @@ export type ActionChange =
   | { kind: 'export'; preset: string; period?: string }
   | { kind: 'bookAgain' }
   | { kind: 'report'; spec: ReportSpec; period?: string }
-  | { kind: 'openPeriod' };
+  | { kind: 'openPeriod' }
+  /**
+   * A payslip wish (src/payroll/wish.ts, docs/specs/payroll.md §22 decision 130): the person as the person
+   * named her, a month; `close`: she wants it closed, which only her click on the card does. Without
+   * `person`, the month's payslips.
+   */
+  | { kind: 'payslip'; person?: string; month?: string; close?: boolean };
 
 export type Change = BookChange | WorkspaceChange | ActionChange;
 
 const BOOK_KINDS = new Set<string>(['receipt', 'link', 'unlink', 'entry', 'newEntry', 'deleteEntry', 'receiptKind', 'privatePayment', 'deletePayment'] satisfies Array<BookChange['kind']>);
-const ACTION_KINDS = new Set<string>(['export', 'bookAgain', 'report', 'openPeriod'] satisfies Array<ActionChange['kind']>);
+const ACTION_KINDS = new Set<string>(['export', 'bookAgain', 'report', 'openPeriod', 'payslip'] satisfies Array<ActionChange['kind']>);
 export const isBookChange = (c: Change): c is BookChange => BOOK_KINDS.has(c.kind);
 export const isActionChange = (c: Change): c is ActionChange => ACTION_KINDS.has(c.kind);
 export const isWorkspaceChange = (c: Change): c is WorkspaceChange => !isBookChange(c) && !isActionChange(c);
@@ -166,6 +172,8 @@ export interface ChangeNote {
   source?: { id: string; label?: { en: string } & Record<string, string>; replaced?: boolean };
   /** A report's run for its card: its first rows, and the totals of all of them (src/reports/run.ts previewOf). */
   report?: ReportResult;
+  /** The payslip (or month, without `employee`) code found for a payslip wish; the card reads its state from Löhne. */
+  payslip?: { month: string; employee?: string; close: boolean };
 }
 
 /**

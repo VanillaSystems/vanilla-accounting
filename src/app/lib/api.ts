@@ -400,6 +400,7 @@ export function errorText(e: unknown): string {
     case 'sinceNotOpen': return t('error.sinceNotOpen', { since: formatDate(b.params.since), from: formatDate(b.params.from) });
     case 'clearingTaken': return t('error.clearingTaken', b.params);
     case 'rule': { const k = refusalKey(b.params.refusal); return t(k.key, k.vars as never); }
+    case 'payslipWish': return t(`error.payslipWish.${b.params.why}` as 'error.payslipWish.person', { said: b.params.said ?? '' });
     case 'report': return t('error.report', { why: refusalText(b.params.refusal, (k, v) => t(k, v as never)) });
     case 'noDescription': return t('error.noDescription');
     case 'templateName': return t('error.templateName');

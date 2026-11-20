@@ -29,6 +29,7 @@ import { withoutChanges } from '../../assistant/changes.js';
 import { markdownBlocks, type Span } from '../assistant/markdown.js';
 import type { Location, Route } from './route.js';
 import { OpenPeriodCard } from '../assistant/OpenPeriodCard.js';
+import { PayslipCard } from '../assistant/PayslipCard.js';
 import { PRESETS } from '../../export/model.js';
 import { postDownload } from '../areas/export/state.js';
 import { ReportView } from '../areas/reports/custom/ReportView.js';
@@ -182,6 +183,7 @@ function Changes({ changes, books, onGo, onGoTo }: { changes: MadeChange[]; book
         if (c.change.kind === 'report' && c.note?.report) return <li key={c.id} className="aireport"><ReportCard result={c.note.report} period={c.change.period} onGo={onGo} /></li>;
         // Where the open period stands: the app's card, drawn from the books as they are now (#342).
         if (c.change.kind === 'openPeriod') return <li key={c.id} className="aimailbox"><OpenPeriodCard books={books} onGo={onGoTo} /></li>;
+        if (c.change.kind === 'payslip' && c.note?.payslip) return <li key={c.id} className="aimailbox"><PayslipCard {...c.note.payslip} onGo={onGoTo} /></li>;
         const d = described(c, books);
         const mailbox = c.change.kind === 'mailbox' && c.note?.mailbox && !c.undone ? { id: c.note.mailbox.id, address: c.change.address, host: c.change.host } : undefined;
         const source = c.change.kind === 'source' && c.note?.source && !c.undone ? c.note.source.id : undefined;

@@ -201,6 +201,8 @@ export type ApiRefusal =
   | { code: 'unknownAccount'; params: { account: string } }
   /** A report spec the app cannot run (src/reports/spec.ts): from the sidebar, the form or a saved file. */
   | { code: 'report'; params: { refusal: ReportRefusal } }
+  /** A payslip wish of the sidebar that names no payslip (src/payroll/wish.ts): no payroll, nobody of that name, several, no payslip that month; `said`: the person's own words. */
+  | { code: 'payslipWish'; params: { why: 'none' | 'person' | 'ambiguous' | 'month'; said?: string } }
   | { code: 'oneSided'; params: { account: string } }
   /** The same account on both sides without a VAT code books nothing (src/server/edits.ts assertTwoSides); a VAT-only correction may (M81-2 shapes). */
   | { code: 'sameAccount'; params: { account: string } }

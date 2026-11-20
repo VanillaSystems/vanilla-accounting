@@ -35,6 +35,7 @@ import { setupSpecialist } from '../onboarding/prompt.js';
 import { TEXTS } from '../invoices/texts.js';
 import { DEFAULT_UNITS } from '../invoices/model.js';
 import type { AssistantEvent, AssistantSend } from '../types/assistant.js';
+import { localToday } from '../accounting/periods.js';
 
 /** The packaged app's files Claude reads (AGENTS.md, workflows/) lie beside its archive, unpacked (electron-builder asarUnpack). */
 export const APP_FILES = APP_ROOT.replace(/app\.asar(?=$|\/)/, 'app.asar.unpacked');
@@ -105,6 +106,19 @@ function collectionSetup(t: T): string {
   ].join(' ');
 }
 
+/**
+ * A payslip wish (docs/specs/payroll.md §22 decisions 130–134): the model passes on the person as the person
+ * named her and a month; code finds the payslip, and the card under the answer shows it with its link into
+ * Löhne, what is open and, for a close, the person's «Abschliessen». The model never sees a name, wage or
+ * number of the payroll, so it states none.
+ */
+export function payslipWishes(t: T, today = localToday()): string {
+  return [
+    `Payroll (${t('area.payroll')}): you never read its files and know none of its people, wages, deductions or social security numbers. A wish to make, show or open a person's payslip of a month, in any language («mach d Lohnabrechnig für Marco», «Lohnabrechnung Oktober für Nina», «fais la fiche de salaire de Luca», «busta paga di Gianni», «Marco's payslip for October»), is {"kind":"payslip","person":"<the person exactly as the person named them>","month":"YYYY-MM"} in your block; leave "month" out when none is named, and the app takes that person's first payslip not closed. A month named without a year is the latest such month not after today (today is ${today}). A wish to close one («schliess sie ab», «clôture …») adds "close": true; a wish for a whole month («schliess den November ab», «Löhne Oktober») leaves "person" out.`,
+    `The app finds the person and the payslip and shows it on a card under your answer: the link into ${t('area.payroll')}, the lines still incomplete and the facts. Closing is the person's own click «${t('payroll.close')}» (a month: «${t('payroll.closeAll')}») on that card or in ${t('area.payroll')}, never yours: never say a payslip is closed or booked, say that the card shows it and, for a close, that she closes it there after checking it. Never state a wage, an amount, a deduction, a count or what is incomplete: you know none of them, the card says it. A later message tells you the payslip's state as the app reads it then. When the app says it found nobody of that name, or several, say so and that ${t('area.payroll')} lists the people; never guess another name.`,
+  ].join(' ');
+}
+
 export function assistantSystem(language: string, owner: string, map: string, term = DEFAULT_TERM): string {
   const { t } = wordsIn(language);
   return [
@@ -154,6 +168,7 @@ export function assistantSystem(language: string, owner: string, map: string, te
     'A period\'s code form (2026-Q3, 2026-H1) belongs in change blocks and links only; in your words say a period as the app shows it («Q3 2026», «1. Semester 2026»).',
     `"report" makes a report the person asks for in words («alle Spesen im Q3 nach Konto», «was kam in EUR rein»): {"kind":"report","spec":{"title":"Spesen nach Konto","period":"2026-Q3","sections":[{"source":"entries","filter":{"accounts":["6000-6999"]},"group":"account","columns":["date","text","account","vatCode","net","tax","amount"]}],"comment":"Im Zeitraum {period}: {count} Buchungen, zusammen {total}."}}. You write only what the report shows; the app runs the spec on the books, fills every figure and shows it on a card under your answer with «PDF», «CSV» and «${t('custom.save')}» (saved, it is listed under ${t('area.reports')} › ${t('custom.tab')} and runs for any period). "period": a year 2026, a half 2026-H1, a quarter 2026-Q3, a month 2026-09, a range 2026-01-01..2026-03-31, or last-quarter, last-month, ytd, last-year. A section's "source": "entries" (bookings; every filter, grouping and column), "payments" (filters accounts (the accounts their bookings use), text, receipt, currencies; no VAT columns), "receipts" or "invoices" (filters text and currencies; grouped by none, month, quarter or counterparty). "filter": "accounts" (numbers or ranges of the chart: "6510", "6000-6999"), "vatCodes", "text" (a part of the text or the other party's name), "origins" (classify: the app; manual: a person; invoice; year-close; other), "receipt" ("with" or "without"), "currencies". "group": none, month, quarter, account, counterparty, vatCode. "columns": date, text, account, counterAccount, vatCode, amount, net, tax, currency, receipt. With an account filter a booking counts on the account's normal side, a refund against it.`,
     'A report\'s figures are the app\'s alone. Never write a figure in the "comment": a number there is a placeholder the app fills ({total}, {net}, {tax}, {count}, {period}, {from}, {to}, {title}, and per section {section1.total}, {section1.count}, …), and the app refuses a comment with a digit. In your answer never state an amount, a count or any other figure of the report, not even an estimate or one you read in the books: the app withdraws an answer that states a figure its run did not produce. Say what the report shows and that it is on the card.',
+    payslipWishes(t),
     collectionSetup(t),
     setupSpecialist(t),
     'A conversation with a purpose (the message says «This conversation\'s purpose: …»; a button started it) stays on that purpose: never bring up open tasks, questions, payments, receipts or anything else that does not belong to it unless the person asks, not even one short mention at the end.',

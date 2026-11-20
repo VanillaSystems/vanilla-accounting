@@ -149,6 +149,24 @@ function invoiceDraft(c: Record<string, unknown>): Change {
   return { kind: 'invoiceDraft', ...(customer ? { customer } : { newCustomer: { ...newCustomer, name: str(newCustomer!.name, 'newCustomer.name') } }), draft: { ...draft, lines } };
 }
 
+const PAYSLIP_FIELDS = new Set(['kind', 'person', 'month', 'close']);
+const PERSON_MAX = 80;
+
+/**
+ * A payslip wish: the person in the person's words, a month, whether to close. Nothing else: an amount, a
+ * line or a wage is no part of it (the model knows none), and a field beside these is refused.
+ */
+function payslipWish(c: Record<string, unknown>): Change {
+  const extra = Object.keys(c).filter((k) => !PAYSLIP_FIELDS.has(k));
+  if (extra.length) throw new ChangesError(`payslip: nur person, month und close, nicht ${extra.join(', ')}`);
+  const person = c.person === undefined || c.person === null ? undefined : str(c.person, 'person');
+  if (person && person.length > PERSON_MAX) throw new ChangesError(`person: höchstens ${PERSON_MAX} Zeichen`);
+  const month = c.month === undefined || c.month === null ? undefined : str(c.month, 'month');
+  if (month && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new ChangesError('month muss JJJJ-MM sein');
+  if (c.close !== undefined && typeof c.close !== 'boolean') throw new ChangesError('close: true oder false');
+  return { kind: 'payslip', ...(person ? { person } : {}), ...(month ? { month } : {}), ...(c.close === true ? { close: true } : {}) };
+}
+
 function change(v: unknown): Change {
   const c = obj(v, 'change');
   switch (c.kind) {
@@ -180,6 +198,7 @@ function change(v: unknown): Change {
       return { kind: 'export', preset, ...(typeof c.period === 'string' && c.period.trim() ? { period: c.period.trim() } : {}) };
     }
     case 'bookAgain': return { kind: 'bookAgain' };
+    case 'payslip': return payslipWish(c);
     case 'openPeriod': return { kind: 'openPeriod' };
     case 'report': {
       const p = parseSpec(c.spec);
