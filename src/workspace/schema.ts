@@ -215,7 +215,9 @@ export const MANIFEST_MIGRATIONS: Ladder<Document> = {
   // An invoicing section keeps the three Mahnungen of before (absent would mean a new firm's levels).
   6: (doc) => {
     const inv = doc.get('invoicing');
-    if (!isMap(inv) || inv.has('dunning')) return doc;
+    if (!isMap(inv)) return doc;
+    // A manifest that names its Mahnwesen keeps it; every invoicing section gets its histories (slice L).
+    if (inv.has('dunning')) return datedInvoicing(doc);
     const levels = doc.createNode(LEGACY_DUNNING.levels.map((l) => ({ name: l.name, days: l.days, ...(l.texts ? { texts: l.texts } : {}) }))) as YAMLSeq;
     for (const item of levels.items) for (const texts of [(item as YAMLMap).get('texts')]) if (isMap(texts)) for (const p of texts.items) (p.value as YAMLMap).flow = true;
     inv.set('dunning', doc.createNode({ levels }));

@@ -13,7 +13,7 @@ and the providers.
 | provider | 17 | 13 |
 | split | 181 | 26 |
 | infrastructure | 85 | 4 |
-| workflow | 32 | 1 |
+| workflow | 32 | 0 |
 | view | 441 | 54 |
 
 Layers are assigned by path prefix, most specific first:
@@ -156,12 +156,6 @@ Layers are assigned by path prefix, most specific first:
 | `src/llm/prompts.ts` | CHF 9, MWST 21, camt.053 2, Rappen 1 |
 | `src/publish/leak-guard.ts` | camt.053 1 |
 | `src/reconcile/vat-consistency.ts` | MWST 5 |
-
-## workflow
-
-| File | Swiss specifics (lines) |
-|---|---|
-| `src/assistant/claude.ts` | CHF 1, QR-bill 1 |
 
 ## view
 
