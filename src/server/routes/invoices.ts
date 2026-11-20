@@ -5,7 +5,7 @@
  * assertOpen), and on the agreed basis issuing and cancelling, which book the document's VAT event
  * (src/invoices/events.ts) on its date, or on the first open day when its period is locked.
  */
-import { Router, type Request } from 'express';
+import express, { Router, type Request } from 'express';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { WS, assertOpen, readBooks, receiptPath, refDates, updateBooksWithEffects, RequestError } from '../books.js';
@@ -14,6 +14,7 @@ import { InvoiceRuleError, liveDocuments, liveInvoices, type CreditRequest } fro
 import {
   addArticles, createArticle, liveArticles, removeArticle, updateArticle,
   addComment, answerQuote, backToDraft, cancelInvoice, changeAccounts, convertDocument, createContact, addContacts, createCreditNote, createDraft, createReminderDraft, deleteReminderDraft, planDunningRun, previewReminder, runDunning, updateReminderDraft, fileReceipts, findInvoice, issueInvoice, issuedPdf,
+  contactStatement, sendStatement, statementPdf,
   missingOf, parseDraftPatch, paymentContext, previewHtml, recordSend, removeContact, removeDraft, reopenDocument, replacedPdf, sendReminder, sentPdf, updateContact, updateDraft, viewOf,
   addDeductions, createStageInvoice, parseStages, sendInstalment, setStages,
 } from '../../invoices/service.js';
@@ -42,9 +43,10 @@ import { periodLock } from '../../books/store.js';
 import type { Books } from '../../books/store.js';
 import { recordReplaced, takeReplaced } from '../link-history.js';
 import { bookAgain } from './automation.js';
-import { checkMessage, sendMail } from '../../invoices/mail.js';
+import { checkMessage, sendMail, sendingAddress } from '../../invoices/mail.js';
 import { thisDevice } from '../../workspace/device.js';
 import type { Deliver } from '../../invoices/service.js';
+import { ATTACHMENT_LIMIT, storeAttachment } from '../../invoices/attachments.js';
 
 export const router = Router();
 
@@ -145,11 +147,36 @@ router.get('/api/contacts/:id', (req, res) => {
 /** A logo an invoice is laid out with: the layout's, or one an issued invoice froze; no other file. */
 router.get('/api/invoice-logo', (req, res) => {
   const path = String(req.query.path ?? '');
-  const known = new Set([WS.invoicing?.layout.logo, ...loadInvoices(WS).invoices.map((i) => (i.status === 'issued' ? i.layout.logo : undefined))]);
+  const known = new Set([...(WS.invoicing?.templates ?? []).map((t) => t.layout.logo), ...loadInvoices(WS).invoices.map((i) => (i.status === 'issued' ? i.layout.logo : undefined))]);
   const type = { svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg' }[path.split('.').pop()?.toLowerCase() ?? ''];
   const file = join(WS.paths.root, path);
   if (!path || !known.has(path) || !type || !existsSync(file)) throw new RequestError(404, 'Logo nicht gefunden.');
   res.type(type).send(readFileSync(file));
+});
+
+/**
+ * A PDF that goes with documents (spec 4.4.11): a letterhead, a Vorlage's fixed attachment, a
+ * document's own (a Rapport). `?name=` the file's name. Stored once under invoices/files/ by its
+ * checksum (src/invoices/attachments.ts), never replaced; the answer is what a Vorlage or a draft
+ * then names. Nothing of the books changes.
+ */
+router.post('/api/invoices/files', express.raw({ type: 'application/pdf', limit: `${ATTACHMENT_LIMIT.bytes + 1024}b` }), (req, res) => {
+  if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw new RequestError(400, 'Ein PDF erwartet (Content-Type application/pdf).');
+  res.json(storeAttachment(WS, String(req.query.name ?? 'Anhang.pdf'), req.body, today()));
+});
+
+/** A stored attachment or letterhead, by its path: only one a Vorlage, a document or the sent log names. */
+router.get('/api/invoices/files', (req, res) => {
+  const path = String(req.query.file ?? '');
+  const book = loadInvoices(WS);
+  const named = new Set<string>([
+    ...(WS.invoicing?.templates ?? []).flatMap((t) => [t.letterhead, t.attachment?.file]),
+    ...book.invoices.flatMap((i) => [...(i.attachments ?? []).map((a) => a.file), ...(i.status === 'issued' && i.letterhead ? [i.letterhead.file] : [])]),
+    ...book.sent.flatMap((d) => (d.attachments ?? []).map((a) => a.file)),
+  ].filter((x): x is string => !!x));
+  const file = join(WS.paths.root, path);
+  if (!named.has(path) || !existsSync(file)) throw new RequestError(404, 'Datei nicht gefunden.');
+  res.type('application/pdf').send(readFileSync(file));
 });
 
 /** The PDF exactly as issued (an invoice or credit note), or a sent reminder or notice exactly as sent. */
@@ -171,6 +198,31 @@ router.get('/invoices/sent/:file', (req, res, next) => {
 });
 
 // ─── contacts and drafts ───────────────────────────────────────────────────────
+
+/** The Kontoauszug of a contact (spec 4.4.5): `?from=&to=` (default: this year up to today), per currency. Reads only. */
+const period = (q: Record<string, unknown>) => {
+  const to = typeof q.to === 'string' && q.to ? q.to : today();
+  return { from: typeof q.from === 'string' && q.from ? q.from : `${to.slice(0, 4)}-01-01`, to };
+};
+router.get('/api/contacts/:id/statement', (req, res) => {
+  const { from, to } = period(req.query);
+  res.json(contactStatement(WS, req.params.id, from, to));
+});
+
+/** The Kontoauszug as PDF, to look at: printed now, stored nowhere, recorded nowhere. */
+router.get('/api/contacts/:id/statement.pdf', async (req, res) => {
+  const { from, to } = period(req.query);
+  const made = await statementPdf(WS, req.params.id, from, to, new Date().toISOString());
+  res.type('application/pdf').setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(made.title)}.pdf"`);
+  res.send(made.pdf);
+});
+
+/** Sends the Kontoauszug (`email`, as a document's send) or records its download; the sent log keeps it as kind `statement`. */
+router.post('/api/contacts/:id/statement', async (req, res) => {
+  const b = body(req);
+  const { from, to } = period(b);
+  res.json(await sendStatement(WS, req.params.id, { from, to, recipient: optText(b, 'recipient') }, { deliver: delivery(b) }));
+});
 
 router.post('/api/contacts', (req, res) => {
   res.json(createContact(WS, req.body));
@@ -232,7 +284,7 @@ router.post('/api/articles/import', (req, res) => {
 });
 
 router.post('/api/invoices', (req, res) => {
-  const { clear: _, ...patch } = parseDraftPatch(req.body, loadInvoices(WS), WS.invoicing?.units, undefined, WS.invoicing?.paymentTerms);
+  const { clear: _, ...patch } = parseDraftPatch(req.body, loadInvoices(WS), WS.invoicing?.units, undefined, WS.invoicing?.paymentTerms, WS.invoicing?.templates);
   if (!patch.customerId) throw new RequestError(400, 'customerId fehlt.');
   res.json(createDraft(WS, { ...patch, customerId: patch.customerId }));
 });
@@ -240,7 +292,7 @@ router.post('/api/invoices', (req, res) => {
 /** `confirm: 'stagesInvoiced'`: «Trotzdem ändern» over a changed total of an Auftrag whose Teilrechnungen are issued (spec 4.11). */
 router.patch('/api/invoices/:id', (req, res) => {
   const { confirm, ...patch } = body(req);
-  res.json(updateDraft(WS, req.params.id, parseDraftPatch(patch, loadInvoices(WS), WS.invoicing?.units, req.params.id, WS.invoicing?.paymentTerms), confirms({ confirm })));
+  res.json(updateDraft(WS, req.params.id, parseDraftPatch(patch, loadInvoices(WS), WS.invoicing?.units, req.params.id, WS.invoicing?.paymentTerms, WS.invoicing?.templates), confirms({ confirm })));
 });
 
 router.delete('/api/invoices/:id', (req, res) => {
@@ -270,14 +322,27 @@ router.post('/api/invoices/:id/issue', async (req, res) => {
   res.json(issued);
 });
 
-/** `email: { to, subject, body }` sends it through the company's mailbox; without, it is recorded as downloaded. */
+/**
+ * `email: { to, cc?, copy?, subject, body }` sends it through the company's mailbox (spec 4.4.11):
+ * `to` and `cc` one address or several (a list, or separated by commas); `copy: true` a blind copy to
+ * the firm's own address. Without `email`, it is recorded as downloaded.
+ */
 function delivery(b: Record<string, unknown>): Deliver | undefined {
   if (b.email === undefined) return undefined;
   const e = b.email;
-  if (!e || typeof e !== 'object' || Array.isArray(e)) throw new RequestError(400, 'email: { to, subject, body } erwartet.');
+  if (!e || typeof e !== 'object' || Array.isArray(e)) throw new RequestError(400, 'email: { to, cc?, copy?, subject, body } erwartet.');
   const m = e as Record<string, unknown>;
-  const message = checkMessage({ to: optText(m, 'to') ?? '', subject: optText(m, 'subject') ?? '', body: optText(m, 'body') ?? '' });
-  return ({ filename, pdf }) => sendMail(WS, message, { filename, content: pdf });
+  const list = (k: string): string => {
+    const v = m[k];
+    if (v === undefined) return '';
+    if (typeof v === 'string') return v;
+    if (Array.isArray(v) && v.every((x) => typeof x === 'string')) return v.join(', ');
+    throw new RequestError(400, `${k}: eine Adresse oder eine Liste von Adressen.`);
+  };
+  if (m.copy !== undefined && typeof m.copy !== 'boolean') throw new RequestError(400, 'copy ist true oder false.');
+  const own = m.copy === true ? sendingAddress(WS) : undefined;
+  const message = checkMessage({ to: list('to'), cc: list('cc'), ...(own ? { bcc: own } : {}), subject: optText(m, 'subject') ?? '', body: optText(m, 'body') ?? '' });
+  return ({ filename, pdf, attachments }) => sendMail(WS, message, { filename, content: pdf }, attachments);
 }
 
 router.post('/api/invoices/:id/send', async (req, res) => {

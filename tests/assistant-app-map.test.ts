@@ -42,6 +42,9 @@ test('the places the sidebar denied in the wishes test are in its prompt, with w
   const prompt = assistantSystem('de', '2451 Kontokorrent', appMap('de'));
   assert.ok(prompt.includes(appMap('de')));
   assert.match(prompt, /- Verkauf: .*Angebote, Aufträge, Lieferscheine, Rechnungen, Gutschriften, Offene Posten, Kontakte, Artikel and Versendet.*«Auftrag erstellen».*Belegkette.*«Nicht gesendet».*\(Senden\).*N writes a new draft \(contact, then its contact person.* You: invoiceDraft\./);
+  // Slice K: the Kontoauszug, a draft's Vorlage and attachments, several recipients; the Vorlagen in Firma.
+  assert.match(prompt, /«Kontoauszug».*what Offene Posten names for it.*picks its Vorlage.*a Rapport, at most 10.*several recipients, copies/);
+  assert.match(prompt, /as Vorlagen: several named ones.*a letterhead PDF.*a fixed attachment.*curly braces: person, number, dueDate, total/);
   assert.match(prompt, /Kontakte is a table .*customer number \(K-00001.*archived, never deleted.*«Importieren» reads contacts from a CSV with a column mapping/);
   assert.match(prompt, /«＋ Artikel» \(a search by code or name.*«＋ Gruppe».*Artikel is a table of the products and services.*archived, one no document names is deleted.*«Importieren» reads Artikel from a CSV/);
   assert.match(prompt, /Firma › Rechnungslayout: .*payment term in days.*text above and below the table.* You: invoicing\./);

@@ -121,7 +121,7 @@ function writeInvoices(ws: Workspace, out: string, day: string): string[] {
   // The PDFs it was issued with before it went back to draft: the record of what was once issued under the number.
   for (const inv of issued) (inv.replaced ?? []).forEach((r, k) => copyPdf(EXPORT_FILES.replacedPdf(inv, k + 1), r, `invoice ${inv.number} replaced ${k + 1}`));
   for (const doc of sent) copyPdf(EXPORT_FILES.sentPdf(doc.id), doc, `sent document ${doc.id}`);
-  const logos = new Set([ws.invoicing?.layout.logo, ...issued.map((i) => i.layout.logo)]);
+  const logos = new Set([...(ws.invoicing?.templates ?? []).map((t) => t.layout.logo), ...issued.map((i) => i.layout.logo)]);
   for (const logo of logos) {
     if (!logo) continue;
     const src = resolve(ws.paths.root, logo);

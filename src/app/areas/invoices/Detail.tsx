@@ -8,7 +8,8 @@ import { localToday } from '../../../accounting/periods.js';
 import { PRICES, isBooked, isItem, type Draft, type Invoice, type InvoiceLine, type Issued } from '../../../invoices/model.js';
 import { eventRef } from '../../../books/refs.js';
 import { lockedThrough } from '../../../books/lock-line.js';
-import { TEXTS } from '../../../invoices/texts.js';
+import { TEXTS, kindTitle } from '../../../invoices/texts.js';
+import { fixedAttachment, templateOf } from '../../../invoices/templates.js';
 import { defaultTexts, draftDays, senderFor } from '../../../invoices/documents.js';
 import { backToDraftRefusal, dueFor, instalmentDue, missingForIssue, openAmount, openFees, paidAmount, refundDue, retentionDue, retentionOf, shortfallOf, skontoOffer, totals, warningsForIssue, type Missing } from '../../../invoices/rules.js';
 import { DEFAULT_DUNNING, levelTitle, nextLevel, reminderDraftOf, reminderTitle, sentReminders } from '../../../invoices/dunning.js';
@@ -21,17 +22,17 @@ import { at } from '../receipts/view.js';
 import type { CompanyInfo } from '../../../books/company.js';
 import type { RouteOf } from '../../shell/route.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
-import { api, missingText, sources, type DraftChange, type InvoiceList } from '../../lib/api.js';
+import { api, errorText, missingText, sources, type DraftChange, type InvoiceList } from '../../lib/api.js';
 import { fmt, formatDate } from '../../lib/utils.js';
 import { language, t } from '../../i18n/index.js';
 import { baseCurrency, chargesVat } from '../../../engines/index.js';
-import { DEFAULT_SHORTFALL_LIMIT } from '../../../invoices/model.js';
+import { ATTACHMENT_LIMIT, DEFAULT_SHORTFALL_LIMIT } from '../../../invoices/model.js';
 import { FourFigures, MoneyRows } from './Figures.js';
 import { I } from '../receipts/icons.js';
 import { Paper } from '../receipts/Paper.js';
 import type { AreaProps } from '../index.js';
 import { useInvoices } from './data.js';
-import { byRouteId, contactOf, customerOf, issuedLater, linkablePayments, routeId, rowState, wasSent, type RowState } from './model.js';
+import { byRouteId, contactOf, customerOf, sentContact, issuedLater, linkablePayments, routeId, rowState, wasSent, type RowState } from './model.js';
 import { CONVERSIONS, chainOf, doneShare } from '../../../invoices/chain.js';
 import { groupOf, statusOfKind } from './table.js';
 import { fixFor, insertLine, moveLine, parseNumber, repriced, sheetEdit, type Fix } from './edit.js';
@@ -539,8 +540,10 @@ function MoreMenu({ items }: { items: MenuItem[] }) {
 function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
   const customer = customerOf(d, inv, ws.invoicing);
   const terms = contactDays(contactOf(d, inv), ws.invoicing);
-  const def = defaultTexts(contextOf(ws), inv.kind, inv.language, draftDays(contextOf(ws), inv, customer), inv.printAs);
+  const def = defaultTexts(contextOf(ws), inv.kind, inv.language, draftDays(contextOf(ws), inv, customer), inv.printAs, inv.templateId);
   const own = (inv.intro !== undefined && inv.intro !== def.intro) || (inv.closing !== undefined && inv.closing !== def.closing);
+  const templates = ws.invoicing?.templates ?? [];
+  const tpl = templateOf(ws.invoicing, inv);
   return (
     <Sec k="draft" label={inv.kind === 'credit-note' ? t('invoices.sec.credit') : inv.kind === 'invoice' ? t('invoices.sec.draft') : t(`invoices.docKind.${inv.kind}`)} val={`${t(`invoices.lang.${inv.language}`)} · ${inv.currency}`}>
       <div className="lkf">
@@ -554,6 +557,17 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
             {(['CHF', 'EUR'] as const).map((c) => <AsyncButton key={c} type="button" role="radio" aria-checked={inv.currency === c} className={inv.currency === c ? 'on' : ''} disabled={!canEdit || !ws.invoicing?.payTo[c]} data-tip={ws.invoicing?.payTo[c] ? undefined : t('invoices.currencyNeedsPayTo', { currency: c })} onClick={() => saveDraft(nav, inv, { currency: c })}>{c}</AsyncButton>)}
           </span>
         </div>
+        {templates.length > 1 && (
+          <label className="lkr"><span>{t('templates.pick')}</span>
+            <select data-testid="draft-template" value={tpl.id} disabled={!canEdit} onChange={(e) => saveDraft(nav, inv, { templateId: e.target.value, intro: null, closing: null, title: null })}>
+              {templates.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select>
+          </label>
+        )}
+        <label className="lkr"><span>{t('templates.text.title')}</span>
+          <input key={`${inv.id}-${tpl.id}`} data-testid="draft-title" defaultValue={inv.title ?? ''} placeholder={def.title ?? kindTitle(TEXTS[inv.language], inv.kind, inv.printAs)} disabled={!canEdit} onBlur={(e) => { const v = e.target.value.trim(); if (v !== (inv.title ?? '')) void saveDraft(nav, inv, { title: v || null }); }} />
+        </label>
+        <DraftAttachments nav={nav} inv={inv} canEdit={canEdit} fixed={fixedAttachment(tpl, inv.kind)} />
         {inv.kind === 'invoice' && (ws.invoicing?.paymentTerms.length ?? 0) > 0 && (
           <label className="lkr"><span>{t('invoices.terms')}</span>
             <select data-testid="draft-terms" value={inv.termsId ?? ''} disabled={!canEdit} onChange={(e) => saveDraft(nav, inv, { termsId: e.target.value || null, dueDate: null })}>
@@ -588,6 +602,42 @@ function DraftSec({ d, ws, inv, nav, canEdit }: DetailProps & { inv: Draft }) {
       {own && <p className="m ivhint">{t('invoices.ownTexts')}{canEdit && <> · <AsyncButton type="button" className="quiet2" data-act="reset-texts" onClick={() => saveDraft(nav, inv, { intro: null, closing: null })}>{t('invoices.resetTexts')}</AsyncButton></>}</p>}
       <p className="lkfoot"><button type="button" className="quiet2" onClick={() => nav.go({ route: { area: 'company', section: 'invoice-layout' }, query: {} })}>{t('invoices.toLayout')}</button></p>
     </Sec>
+  );
+}
+
+/**
+ * The PDFs a draft sends with it (spec 4.4.11): its Vorlage's fixed attachment, named, and its own (a
+ * Rapport), each added as a PDF and stored once; at most ATTACHMENT_LIMIT.count of its own, the
+ * limit named when hit.
+ */
+function DraftAttachments({ nav, inv, canEdit, fixed }: { nav: DetailProps['nav']; inv: Draft; canEdit: boolean; fixed?: { name: string; file: string } }) {
+  const own = inv.attachments ?? [];
+  async function add(files: File[]) {
+    const room = ATTACHMENT_LIMIT.count - own.length;
+    const take = files.slice(0, Math.max(0, room));
+    const left = files.slice(take.length);
+    if (left.length) nav.toast(t('templates.attachLimit', { limit: ATTACHMENT_LIMIT.count, left: left.map((f) => f.name).join(', ') }));
+    const added = [];
+    for (const f of take) {
+      if (f.type !== 'application/pdf') { nav.toast(t('templates.pdfOnly', { name: f.name })); continue; }
+      try { added.push(await api.uploadInvoiceFile(f, f.name)); } catch (e) { nav.toast(errorText(e)); }
+    }
+    if (added.length) await saveDraft(nav, inv, { attachments: [...own, ...added] });
+  }
+  return (
+    <div className="lkr top"><span>{t('templates.attachments')}</span>
+      <span className="attlist" data-testid="draft-attachments">
+        {fixed && <span className="att"><a className="golink" href={api.invoiceFileUrl(fixed.file)} target="_blank" rel="noreferrer">{fixed.name}</a><span className="m">{t('templates.fromTemplate')}</span></span>}
+        {own.map((a, k) => (
+          <span key={a.file + k} className="att" data-attachment={a.name}>
+            <a className="golink" href={api.invoiceFileUrl(a.file)} target="_blank" rel="noreferrer">{a.name}</a>
+            {canEdit && <AsyncButton type="button" className="quiet2" aria-label={t('templates.attachRemove', { name: a.name })} onClick={() => saveDraft(nav, inv, { attachments: own.length > 1 ? own.filter((_, j) => j !== k) : null })}>×</AsyncButton>}
+          </span>
+        ))}
+        {!fixed && !own.length && <span className="m">{t('templates.noAttachments')}</span>}
+        {canEdit && <label className="quiet2">{t('templates.attach')}<input type="file" accept="application/pdf" multiple onChange={(e) => { const fs = [...(e.target.files ?? [])]; e.target.value = ''; if (fs.length) void add(fs); }} /></label>}
+      </span>
+    </div>
   );
 }
 
@@ -735,15 +785,23 @@ function SentDetail({ d, route, nav }: Props & { d: InvoiceList }) {
   const src = sources.sentPdf(doc.id);
   return (
     <div className="detail-in" data-for={doc.id}>
-      <div className="head"><h2 className="who">{doc.title}<small>{inv ? customerOf(d, inv)?.name : ''}</small></h2></div>
+      <div className="head"><h2 className="who">{doc.title}<small>{inv ? customerOf(d, inv)?.name : sentContact(d, doc)?.name ?? ''}</small></h2></div>
       <div className="facts">
         <span>{t(`invoices.docKind.${doc.kind}`)}</span>
         <span>{t('invoices.sentAt', { date: formatDate(doc.sentAt.slice(0, 10)), time: new Date(doc.sentAt).toTimeString().slice(0, 5) })}</span>
         <span>{doc.to === 'download' ? t('invoices.toDownload') : t('invoices.to', { to: doc.to })}</span>
+        {doc.cc?.length ? <span data-testid="sent-cc">{t('invoices.sentCc', { cc: doc.cc.join(', ') })}</span> : null}
+        {doc.bcc?.length ? <span>{t('invoices.sentBcc', { bcc: doc.bcc.join(', ') })}</span> : null}
         <span className="mono" data-tip={t('invoices.shaTip')}>{t('invoices.sha', { sha: doc.sha256.slice(0, 12) })}</span>
       </div>
+      {doc.attachments?.length ? (
+        <div className="facts" data-testid="sent-attachments">
+          {doc.attachments.map((a) => <span key={a.file}><a className="golink" href={api.invoiceFileUrl(a.file)} target="_blank" rel="noreferrer">{a.name}</a> <span className="mono m" data-tip={t('sales.shaFull', { sha: a.sha256 })}>{a.sha256.slice(0, 12)}…</span></span>)}
+        </div>
+      ) : null}
       <div className="ivacts">
         {inv && <button type="button" className="btn ghost" onClick={() => nav.go(invoiceAt(inv))}>{t('invoices.toInvoice', { number: routeId(inv) })}</button>}
+        {!inv && sentContact(d, doc) && <button type="button" className="btn ghost" data-act="to-contact" onClick={() => nav.go({ route: { area: 'invoices', view: 'contacts', id: sentContact(d, doc)!.id }, query: {} })}>{t('invoices.toContact', { name: sentContact(d, doc)!.name })}</button>}
         <a className="dl inline" href={src} download={`${doc.title}.pdf`}>{I.dl}<span>{t('invoices.download')}</span></a>
       </div>
       <div className="body">

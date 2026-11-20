@@ -17,12 +17,13 @@ import { invoicesNow, useInvoices } from './data.js';
 import { byRouteId, townOf } from './model.js';
 import { setUi, useUi } from './state.js';
 import { DunningDialog } from './dunning.js';
-import { api } from '../../lib/api.js';
+import { api, errorText, type SendMail } from '../../lib/api.js';
 import { useWorkspace } from '../../hooks/use-workspace.js';
 import { mailText, type MailDocument } from '../../../invoices/documents.js';
-import type { MailMessage } from '../../../invoices/mail.js';
+import type { Statement } from '../../../invoices/statement.js';
+import { TEXTS as STATEMENT_TEXTS } from '../../../invoices/texts.js';
 import type { MailStatus } from '../../../types/api-error.js';
-import { cancel, cancelDocument, creditNote, newDraftFor, savePdf, send, sendInstalment, sendReminder } from './actions.js';
+import { cancel, cancelDocument, creditNote, newDraftFor, savePdf, send, sendInstalment, sendReminder, sendStatement } from './actions.js';
 import { PlanDialog } from './plan.js';
 import { AsyncButton, AsyncForm } from '../../shell/AsyncButton.js';
 import { ContactDialog, ImportDialog } from './contacts.js';
@@ -42,6 +43,8 @@ export function Dialogs(props: Props) {
   const d = load.data;
   // Saving PDFs writes nothing: it works where nothing may be changed too.
   if (s.dialog.kind === 'bulk-pdf') return <BulkDialogs d={d} nav={props.nav} ids={s.dialog.ids} kind="bulk-pdf" />;
+  // A Kontoauszug is looked at where nothing may be changed too; only sending it writes the sent log.
+  if (s.dialog.kind === 'statement') { const c = d.contacts.find((x) => x.id === (s.dialog as { contactId: string }).contactId); return c ? <StatementDialog {...props} contact={c} /> : null; }
   if (!props.canEdit) return null;
   if (s.dialog.kind === 'bulk-send') return <BulkDialogs d={d} nav={props.nav} ids={s.dialog.ids} kind="bulk-send" />;
   if (s.dialog.kind === 'dunning') return <DunningDialog d={d} nav={props.nav} {...(s.dialog.ids ? { ids: s.dialog.ids } : {})} />;
@@ -118,16 +121,38 @@ function PickCustomer({ contacts, nav, doc }: Props & { contacts: Contact[]; doc
 }
 
 /** The company's mailbox, as far as a send needs to know: can it send, and what does the e-mail say by default. */
-function useMail(inv: Issued, doc: MailDocument): { ready: boolean; status?: MailStatus; defaults: MailMessage } {
+function useMail(inv: Issued, doc: MailDocument): MailState {
   const ws = useWorkspace();
-  const [status, setStatus] = useState<MailStatus>();
-  useEffect(() => { api.mailStatus().then(setStatus, () => setStatus(undefined)); }, []);
+  const status = useMailStatus();
+  const load = useInvoices();
+  const contact = load.state === 'ready' ? load.data.contacts.find((c) => c.id === inv.customerId) : undefined;
   const text = mailText(ws?.invoicing, inv, doc, ws?.company.name ?? '');
-  return { ready: !!status?.configured && status.password !== 'missing', status, defaults: { to: inv.customer.email ?? '', ...text } };
+  return { ready: !!status?.configured && status.password !== 'missing', status, defaults: { to: inv.customer.email ?? '', ...text }, proposals: proposalsOf(contact), own: ws?.outgoingMail?.fromAddress };
 }
 
-/** Recipient, subject and text of the e-mail, editable; or why the app cannot send e-mail yet. */
-function MailFields({ mail, value, onChange, nav }: { mail: ReturnType<typeof useMail>; value: MailMessage; onChange(m: MailMessage): void; nav: Props['nav'] }) {
+interface MailState { ready: boolean; status?: MailStatus; defaults: SendMail; proposals: Array<{ name: string; email: string }>; own?: string }
+
+function useMailStatus(): MailStatus | undefined {
+  const [status, setStatus] = useState<MailStatus>();
+  useEffect(() => { api.mailStatus().then(setStatus, () => setStatus(undefined)); }, []);
+  return status;
+}
+
+/** The addresses a contact offers (spec 4.4.11): its e-mails and its contact persons', each once. */
+export function proposalsOf(c: Contact | undefined): Array<{ name: string; email: string }> {
+  if (!c) return [];
+  const all = [...c.emails.map((email) => ({ name: c.name, email })), ...c.persons.flatMap((p) => (p.email ? [{ name: p.name, email: p.email }] : []))];
+  return all.filter((x, i) => all.findIndex((y) => y.email.toLowerCase() === x.email.toLowerCase()) === i);
+}
+
+const listed = (field: string | undefined) => (field ?? '').split(/[,;]/).map((x) => x.trim().toLowerCase()).filter(Boolean);
+const addTo = (field: string | undefined, email: string) => [...(field ?? '').split(/[,;]/).map((x) => x.trim()).filter(Boolean), email].join(', ');
+
+/**
+ * Recipients (several, separated by commas), copies, a copy to the firm's own address, subject and
+ * text of the e-mail, editable, the contact's addresses offered; or why the app cannot send e-mail yet.
+ */
+function MailFields({ mail, value, onChange, nav }: { mail: MailState; value: SendMail; onChange(m: SendMail): void; nav: Props['nav'] }) {
   if (!mail.status) return null;
   if (!mail.ready) {
     return (
@@ -139,7 +164,23 @@ function MailFields({ mail, value, onChange, nav }: { mail: ReturnType<typeof us
   }
   return (
     <>
-      <label className="lkr"><span>{t('invoices.mailTo')}</span><input name="to" type="email" value={value.to} placeholder={t('customer.emailPh')} onChange={(e) => onChange({ ...value, to: e.target.value })} /></label>
+      <label className="lkr"><span>{t('invoices.mailTo')}</span><input name="to" type="text" inputMode="email" value={value.to} placeholder={t('customer.emailPh')} onChange={(e) => onChange({ ...value, to: e.target.value })} /></label>
+      <label className="lkr"><span>{t('invoices.mailCc')}</span><input name="cc" type="text" inputMode="email" value={value.cc ?? ''} placeholder={t('invoices.mailCcPh')} onChange={(e) => onChange({ ...value, cc: e.target.value })} /></label>
+      {(() => {
+        const taken = new Set([...listed(value.to), ...listed(value.cc)]);
+        const free = mail.proposals.filter((p) => !taken.has(p.email.toLowerCase()));
+        return free.length > 0 && (
+          <div className="lkr"><span /><span className="rcpts" data-testid="mail-proposals">
+            {free.map((p) => (
+              <span key={p.email}>
+                <button type="button" data-propose={p.email} data-tip={t('invoices.mailAddTo')} onClick={() => onChange({ ...value, to: addTo(value.to, p.email) })}>{p.name} · {p.email}</button>
+                <button type="button" data-propose-cc={p.email} aria-label={t('invoices.mailAddCcOf', { email: p.email })} onClick={() => onChange({ ...value, cc: addTo(value.cc, p.email) })}>{t('invoices.mailCcShort')}</button>
+              </span>
+            ))}
+          </span></div>
+        );
+      })()}
+      {mail.own && <label className="lkr"><span /><span className="lkchk"><input type="checkbox" name="copy" checked={!!value.copy} onChange={(e) => onChange({ ...value, copy: e.target.checked })} /> {t('invoices.mailCopy', { address: mail.own })}</span></label>}
       <label className="lkr"><span>{t('invoices.mailSubject')}</span><input name="subject" value={value.subject} onChange={(e) => onChange({ ...value, subject: e.target.value })} /></label>
       <label className="lkr top"><span>{t('invoices.mailBody')}</span><textarea name="body" rows={6} value={value.body} onChange={(e) => onChange({ ...value, body: e.target.value })} /></label>
     </>
@@ -152,10 +193,10 @@ function MailFields({ mail, value, onChange, nav }: { mail: ReturnType<typeof us
  */
 function SendDialog({ inv, nav, reminder, issued, instalment }: Props & { inv: Issued; reminder?: { level: number; title: string }; issued?: true; instalment?: true }) {
   const mail = useMail(inv, reminder ? { kind: 'reminder', level: reminder.level, title: reminder.title } : instalment ? { kind: 'instalment' } : { kind: 'invoice' });
-  const [m, setM] = useState<MailMessage>();
+  const [m, setM] = useState<SendMail>();
   const [busy, setBusy] = useState(false);
   const value = m ?? mail.defaults;
-  const go = async (email?: MailMessage) => {
+  const go = async (email?: SendMail) => {
     setBusy(true);
     const ok = reminder ? await sendReminder(nav, inv, email) : instalment ? await sendInstalment(nav, inv, email) : await send(nav, inv, email);
     setBusy(false);
@@ -185,7 +226,8 @@ function SendDialog({ inv, nav, reminder, issued, instalment }: Props & { inv: I
         {instalment && <p className="m ivhint" data-testid="instalment-hint">{t('sales.instalment.hint', { amount: `${inv.currency} ${fmt(instalmentDue(inv, invoicesNow()?.invoices ?? [], localToday())?.amount ?? 0)}` })}</p>}
         {issued && <p className="m ivhint">{t('invoices.issuedNext')}</p>}
         <MailFields mail={mail} value={value} onChange={setM} nav={nav} />
-        <p className="m ivhint">{t('invoices.mailAttached', { file: reminder ? t('invoices.reminderFile', { title: reminder.title }) : instalment ? t('sales.instalment.file') : `${inv.number}.pdf` })}</p>
+        <p className="m ivhint">{t('invoices.mailAttached', { file: reminder ? t('invoices.reminderFile', { title: reminder.title }) : instalment ? t('sales.instalment.file') : [`${inv.number}.pdf`, ...(inv.attachments ?? []).map((a) => a.name)].join(', ') })}</p>
+        {!reminder && !instalment && !!inv.attachments?.length && <p className="m ivhint" data-testid="send-attachments">{t('invoices.mailAttachmentsDownload')}</p>}
       </div>
     </Frame>
   );
@@ -219,7 +261,7 @@ function CancelDialog({ inv, nav }: Props & { inv: Issued }) {
   const [date, setDate] = useState(localToday());
   const [notify, setNotify] = useState(true);
   const mail = useMail(inv, { kind: 'cancellation' });
-  const [m, setM] = useState<MailMessage>();
+  const [m, setM] = useState<SendMail>();
   const gross = totals(inv).gross;
   const title = `${inv.customer.name} · ${inv.currency} ${fmt(gross)}`;
   const label = t('invoices.cancelTitle', { number: inv.number });
@@ -309,6 +351,75 @@ function CreditDialog({ inv, invoices, nav }: Props & { inv: Issued; invoices: I
           <div className="tot"><span>{back > 0 ? (settlement === 'refund' ? t('invoices.refundTotal') : t('invoices.offsetTotal')) : t('invoices.stillOpen')}</span><span className="mono">{inv.currency} {fmt(back > 0 ? back : Math.round((open - credit) * 100) / 100)}</span></div>
         </div>
         {credit > max && <p className="warnline">{I.dot}{t('invoices.creditTooHigh', { max: `${inv.currency} ${fmt(max)}` })}</p>}
+      </div>
+    </Frame>
+  );
+}
+
+/**
+ * Der Kontoauszug of a contact (spec 4.4.5, P3.7): a period (this year up to today by default), per
+ * currency the balance before, each Rechnung, Gutschrift, payment, write-off and Storno with the
+ * balance after it, and the items open at its end, which are what Offene Posten lists for the
+ * contact. «PDF ansehen» opens it; it goes by e-mail or is saved, and the sent log keeps it.
+ */
+function StatementDialog({ contact, nav, canEdit }: Props & { contact: Contact }) {
+  const ws = useWorkspace();
+  const today = localToday();
+  const [from, setFrom] = useState(`${today.slice(0, 4)}-01-01`);
+  const [to, setTo] = useState(today);
+  const [s, setS] = useState<Statement>();
+  const [err, setErr] = useState<string>();
+  const [busy, setBusy] = useState(false);
+  const status = useMailStatus();
+  const ready = !!status?.configured && status.password !== 'missing';
+  const L = STATEMENT_TEXTS[contact.language].statement;
+  const fill = (x: string) => x.replaceAll('{company}', ws?.company.name ?? '');
+  const defaults: SendMail = { to: contact.emails[0] ?? '', subject: fill(L.mailSubject), body: fill(L.mailBody) };
+  const [m, setM] = useState<SendMail>();
+  const mail: MailState = { ready, status, defaults, proposals: proposalsOf(contact), own: ws?.outgoingMail?.fromAddress };
+  useEffect(() => {
+    let live = true;
+    if (!from || !to || to < from) { setS(undefined); return; }
+    api.contactStatement(contact.id, from, to).then((x) => { if (live) { setS(x); setErr(undefined); } }, (e) => { if (live) setErr(errorText(e)); });
+    return () => { live = false; };
+  }, [contact.id, from, to]);
+  const go = async (email?: SendMail) => { setBusy(true); const ok = await sendStatement(nav, contact.id, { from, to }, email); setBusy(false); if (ok) close(); };
+  const value = m ?? defaults;
+  const foot = (
+    <>
+      <button type="button" className="btn ghost" onClick={close}>{t('common.close')}</button>
+      <a className="btn ghost" href={api.statementPdfUrl(contact.id, from, to)} target="_blank" rel="noreferrer" data-act="statement-pdf">{t('statement.viewPdf')}</a>
+      {canEdit && <AsyncButton type="button" className={`btn ${ready ? 'ghost' : 'primary'}`} data-act="statement-download" disabled={busy || !s} onClick={() => go()}>{t('invoices.downloadInstead')}</AsyncButton>}
+      {canEdit && ready && <AsyncButton type="button" className="btn primary" data-act="statement-mail" disabled={busy || !s || !value.to.trim()} onClick={() => go(value)}>{busy ? t('invoices.mailing') : t('invoices.mailSend')}</AsyncButton>}
+    </>
+  );
+  return (
+    <Frame label={t('statement.title', { name: contact.name })} title={contact.name} foot={foot} className="isend">
+      <div className="ibody lkf" data-testid="statement">
+        <div className="lkr"><span>{t('statement.period')}</span>
+          <span className="iin"><input type="date" aria-label={t('statement.from')} value={from} onChange={(e) => setFrom(e.target.value)} /> – <input type="date" aria-label={t('statement.to')} value={to} onChange={(e) => setTo(e.target.value)} /></span>
+        </div>
+        {err && <p className="warnline" role="alert">{err}</p>}
+        {s && !s.sections.length && <p className="m">{t('statement.empty')}</p>}
+        {s?.sections.map((sec) => (
+          <div key={sec.currency} className="stmtwrap" data-currency={sec.currency}>
+            <table className="stmt">
+              <thead><tr><th>{t('statement.date')}</th><th>{t('statement.doc')}</th><th>{t('statement.text')}</th><th className="r">{t('statement.debit')}</th><th className="r">{t('statement.credit')}</th><th className="r">{t('statement.balance', { currency: sec.currency })}</th></tr></thead>
+              <tbody>
+                <tr className="sum"><td colSpan={5}>{t('statement.opening', { date: formatDate(s.from) })}</td><td className="r">{fmt(sec.opening)}</td></tr>
+                {sec.rows.map((r, k) => (
+                  <tr key={k} data-row={r.kind}>
+                    <td>{formatDate(r.date)}</td><td className="mono">{r.number}</td><td>{t(`statement.row.${r.kind}`, { of: r.of ?? '' })}{r.reason ? ` · ${t(`invoices.reason.${r.reason}`)}` : ''}{r.beyond ? <span className="m"> · {t('statement.beyond', { amount: fmt(r.beyond) })}</span> : null}</td>
+                    <td className="r">{r.debit ? fmt(r.debit) : ''}</td><td className="r">{r.credit ? fmt(r.credit) : ''}</td><td className="r">{fmt(r.balance)}</td>
+                  </tr>
+                ))}
+                <tr className="sum" data-testid="statement-closing"><td colSpan={5}>{t('statement.closing', { date: formatDate(s.to) })}</td><td className="r">{sec.currency} {fmt(sec.closing)}</td></tr>
+              </tbody>
+            </table>
+            <p className="m ivhint">{t('statement.openNote', { n: sec.open.length, date: formatDate(s.to) })}</p>
+          </div>
+        ))}
+        {canEdit && <MailFields mail={mail} value={value} onChange={setM} nav={nav} />}
       </div>
     </Frame>
   );

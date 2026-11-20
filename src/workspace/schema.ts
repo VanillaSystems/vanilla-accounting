@@ -99,6 +99,13 @@ export const BOOKS_SCHEMA = 11;
  * automatic, no interest (src/invoices/dunning.ts LEGACY_DUNNING). No Mahnung sent changes. An app of schema 6
  * would mahn by its three fixed levels and drop the list on its next save, so it must refuse. Further phase-3
  * settings ride on this step until it is released.
+ *    Also in 7 (slice K, Vorlagen): `invoicing.templates`, `[{ id, name, layout, letterhead?, texts?,
+ *    attachment? }]` (letterhead and attachment PDFs under invoices/files/; texts per kind and language:
+ *    title, intro, closing, mailSubject, mailBody), and `invoicing.templateFor` (the Vorlage per kind). A
+ *    manifest without `templates` has one Vorlage «Standard» of its `invoicing.layout` (manifest.ts
+ *    readInvoicing): the step adds nothing for them; Firma › Vorlagen turns the one layout into the list on
+ *    its first change of the list. An app of schema 6 would lay every document out with `invoicing.layout`,
+ *    which a list no longer holds, so it must refuse.
  */
 export const WORKSPACE_SCHEMA = 7;
 /**
@@ -137,6 +144,11 @@ export const WORKSPACE_SCHEMA = 7;
  *    (`retention`); sent-log kinds `instalment` and `statement`. A file of schema 4 holds none: the
  *    step adds nothing. An app of schema 4 would read a deduction as a position with its own VAT and
  *    ask the whole of a Rechnung with a retention, so it must refuse.
+ *    Also in 5 (slice K, Vorlagen): a document's `templateId`, `title` and `attachments` (`{ name, file,
+ *    sha256 }`, PDFs under invoices/files/), an issued one's `letterhead`; a sent document's `cc`, `bcc`,
+ *    `attachments` (each checksum as sent), a Kontoauszug's (`statement`) `contactId` and `period`. A file
+ *    of schema 4 holds none: the step adds nothing. An app of schema 4 would send a document without its
+ *    attachments and print it without its Vorlage, so it must refuse.
  */
 export const INVOICES_SCHEMA = 5;
 /** 1: payroll.json starts with dated histories (docs/specs/domain-model.md §5.7), so it needs no step yet. */
@@ -229,7 +241,7 @@ export const INVOICES_MIGRATIONS: Ladder<Record<string, unknown>> = {
   // No document is of a phase-2 kind before: nothing to add for them. Each customer becomes a firm contact; the documents stay byte for byte.
   3: (doc) => contactsOfCustomers(doc),
   // No Mahnung is a draft and none names a title, interest or how it went before; no document has a role, a deduction, a plan
-  // or a retention: nothing to add. The number makes an older app refuse the file.
+  // or a retention, a Vorlage, a title or attachments: nothing to add. The number makes an older app refuse the file.
   4: (doc) => doc,
 };
 

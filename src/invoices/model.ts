@@ -86,6 +86,8 @@ export interface CustomerFields {
   name: string;
   /** z. Hd., Abteilung: the line under the name. */
   attn?: string;
+  /** The contact person's name, the {person} of a Vorlage's texts; absent: none picked. */
+  person?: string;
   address: Address;
   language: InvoiceLanguage;
   /** CHE-…-MWST in Switzerland, the VAT number of an EU customer. */
@@ -418,7 +420,23 @@ export interface InvoiceContent {
   stages?: Stage[];
   /** A Rechnung's retention. */
   schedule?: Schedule;
+  /** The Vorlage it is laid out with (`invoicing.templates[].id`); absent: its kind's default (`invoicing.templateFor`). */
+  templateId?: string;
+  /** The title printed above the positions; absent: its Vorlage's for the kind and language, else the kind's word («Rechnung»). */
+  title?: string;
+  /**
+   * Further PDFs that go with it when it is sent (a Rapport), each stored once under invoices/files/
+   * (src/invoices/attachments.ts). An issued document also keeps its Vorlage's fixed attachment here,
+   * frozen at issue, first.
+   */
+  attachments?: Attachment[];
 }
+
+/** At most this many own attachments per document, and this many bytes per file (src/invoices/attachments.ts); each named when hit. */
+export const ATTACHMENT_LIMIT = { count: 10, bytes: 10 * 1024 * 1024 } as const;
+
+/** A PDF that goes with a document: the name it is sent under, the file under the workspace, its SHA-256. */
+export interface Attachment { name: string; file: string; sha256: string }
 
 export interface Draft extends Envelope, InvoiceContent {
   status: 'draft';
@@ -545,6 +563,8 @@ export interface Issued extends Envelope, InvoiceContent {
   customer: CustomerFields;
   sender: Sender;
   layout: InvoiceLayout;
+  /** The letterhead its Vorlage printed it on, frozen: a reminder prints on the same paper. */
+  letterhead?: { file: string; sha256: string };
   /** The units its positions name, with their words as issued, so a reminder prints them as the invoice did; absent: the app's defaults. */
   units?: UnitDef[];
   /** The PDF as issued, under the workspace, and its SHA-256. Never rendered again. */
@@ -568,7 +588,7 @@ export type Invoice = Draft | Issued;
 /**
  * `quote`, `sales-order`, `delivery-note`: the document itself going out, as `invoice` and
  * `credit-note` are; `instalment` a Zahlungsaufforderung of a retention due (spec 4.4.9), `statement`
- * a contact's Kontoauszug (4.4.5).
+ * a contact's Kontoauszug (4.4.5): its `invoiceId` empty, `contactId` and `period` name what it covers.
  */
 export const SENT_KINDS = ['invoice', 'resend', 'reminder', 'credit-note', 'cancellation', 'quote', 'sales-order', 'delivery-note', 'instalment', 'statement'] as const;
 export type SentKind = (typeof SENT_KINDS)[number];
@@ -588,6 +608,15 @@ export interface SentDocument extends Envelope {
   channel?: 'email' | 'download';
   /** The Message-ID of the e-mail, as the company's mail server took it. */
   messageId?: string;
+  /** Copies (CC) of the e-mail; `to` lists every recipient, comma-separated. */
+  cc?: string[];
+  /** Blind copies, the firm's own address among them («Kopie an mich»). */
+  bcc?: string[];
+  /** The further PDFs that went with it (a Vorlage's fixed attachment, a Rapport), each with its checksum as sent. */
+  attachments?: Attachment[];
+  /** A Kontoauszug (`statement`): the contact it went to, and the period it covers. */
+  contactId?: string;
+  period?: { from: string; to: string };
 }
 
 /**
@@ -640,6 +669,30 @@ export const DEFAULT_LAYOUT: InvoiceLayout = {
   show: Object.fromEntries(LAYOUT_ELEMENTS.map((k) => [k, true])) as Record<LayoutElement, boolean>,
 };
 
+/** The texts of a Vorlage for one kind in one language: the title, the texts above and below the positions, the e-mail. */
+export const TEMPLATE_TEXTS = ['title', 'intro', 'closing', 'mailSubject', 'mailBody'] as const;
+export type TemplateTextKey = (typeof TEMPLATE_TEXTS)[number];
+export type TemplateTexts = Partial<Record<TemplateTextKey, string>>;
+
+/**
+ * A Vorlage (spec 4.4.11): a named layout with an optional letterhead PDF printed as each sheet's
+ * background, texts per kind and language, and a fixed attachment (the firm's terms) that goes with
+ * every document of the kinds it names (absent `kinds`: every kind). Not dated (spec 4.12): an
+ * issued document keeps the layout, texts and attachment it was issued with.
+ */
+export interface InvoiceTemplate {
+  id: string;
+  name: string;
+  layout: InvoiceLayout;
+  /** A PDF under the workspace (invoices/files/…): its first page is the background of every sheet. */
+  letterhead?: string;
+  texts?: Partial<Record<DocumentKind, Partial<Record<InvoiceLanguage, TemplateTexts>>>>;
+  attachment?: { name: string; file: string; kinds?: DocumentKind[] };
+}
+
+/** The id of the Vorlage a manifest without `templates` has: its `invoicing.layout`. */
+export const STANDARD_TEMPLATE = 'standard';
+
 /**
  * A change to where customers pay in one currency (Firma › Rechnungslayout › Zahlungskonten): the
  * ledger account, and the QR-IBAN its bank gave for it (null takes it out; absent: kept while the
@@ -655,7 +708,12 @@ export interface InvoicingSettings {
   /** Where paid reminder fees are booked; absent: revenueAccount. */
   feeAccount?: string;
   paymentTermsDays: number;
+  /** The layout of the first Vorlage («Standard»): what every place that knows one layout reads. */
   layout: InvoiceLayout;
+  /** The Vorlagen, at least one; a manifest without `templates` has one, «Standard», of `invoicing.layout`. */
+  templates: InvoiceTemplate[];
+  /** The Vorlage a new document of a kind takes; a kind it names not takes the first. */
+  templateFor: Partial<Record<DocumentKind, string>>;
   /** The texts above and below the table and of the e-mail that sends a document, per language; absent: the app's own (src/invoices/texts.ts). */
   texts: Partial<Record<InvoiceLanguage, InvoiceOwnTexts>>;
   /** The units a position may be counted in; absent in the file: DEFAULT_UNITS. */

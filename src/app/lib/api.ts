@@ -24,6 +24,7 @@ import type { VatSetup } from '../../workspace/vat-setup.js';
 import type { ApiErrorBody, ApiStatus, MailStatus } from '../../types/api-error.js';
 import type { PaymentRefusal } from '../../workflows/history.js';
 import type { MailMessage } from '../../invoices/mail.js';
+import type { Statement } from '../../invoices/statement.js';
 import type { ReceiptType } from '../../types/upload.js';
 import type { Opening, TemplateState, YearClose } from '../../accounting/year-close.js';
 import type { PayrollYearEnd } from '../../payroll/year-end.js';
@@ -35,7 +36,7 @@ import { normalRate } from '../../accounting/sales-without-vat.js';
 import { API_SOURCES, EXPORT_SOURCES } from '../../audit/sources.js';
 import type { ImportChoice, ImportMapping, ImportPreview } from '../../invoices/contact-import.js';
 import type { ArticleImportPreview, ArticleMapping } from '../../invoices/article-import.js';
-import type { Article, ArticleFields, Comment, Contact, ContactFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, Stage, WriteOff, WriteOffReason } from '../../invoices/model.js';
+import type { Attachment as DocAttachment, Article, ArticleFields, Comment, Contact, ContactFields, DocumentKind, Draft, Invoice, Issued, Reminder, SentDocument, Stage, WriteOff, WriteOffReason } from '../../invoices/model.js';
 import type { AllocationPart, AllocationView, PaymentProposal } from '../../invoices/payments.js';
 import type { DraftPatch, ReminderPatch, RunOutcome } from '../../invoices/service.js';
 import type { RunPlan } from '../../invoices/dunning.js';
@@ -496,6 +497,8 @@ export interface ContactDetail {
 export type ContactInput = { [K in keyof ContactFields]?: ContactFields[K] | null };
 /** An Artikel as a request writes it: its fields, null clearing an optional one. */
 export type ArticleInput = { [K in keyof ArticleFields]?: ArticleFields[K] | null };
+/** An e-mail as the send dialogs write it: `copy` a blind copy to the firm's own address. */
+export type SendMail = MailMessage & { copy?: boolean };
 export type DraftChange = { [K in keyof DraftPatch]?: DraftPatch[K] | null };
 export interface CreditInput { reason: string; amount?: number; settlement?: 'refund' | 'offset' }
 export type ReminderInput = ReminderPatch & { to?: string; email?: MailMessage };
@@ -812,7 +815,11 @@ export const api = {
   patchWorkspace: (patch: Omit<ManifestPatch, 'invoicing'> & { invoicing?: InvoicingPatch & { confirm?: 'qrIbanNotChf' } }) => request<CompanyInfo>('PATCH', '/api/workspace', patch),
   removeAccount: (number: string) => request<Ok>('DELETE', `/api/accounts/${number}`),
   setAccountName: (number: string, name: string) => request<{ number: string; name: string; added: boolean }>('PUT', `/api/accounts/${number}`, { name }),
-  uploadLogo: (file: Blob, type: string) => upload<CompanyInfo>('/api/workspace/logo', file, type),
+  /** `template`: the Vorlage whose logo it is (Firma › Vorlagen); absent: the first. */
+  uploadLogo: (file: Blob, type: string, template?: string) => upload<CompanyInfo>(`/api/workspace/logo${template ? `?template=${encodeURIComponent(template)}` : ''}`, file, type),
+  /** A PDF that goes with documents (a letterhead, a Vorlage's attachment, a Rapport): stored once, its place and checksum back. */
+  uploadInvoiceFile: (file: Blob, name: string) => upload<DocAttachment>(`/api/invoices/files?name=${encodeURIComponent(name)}`, file, 'application/pdf'),
+  invoiceFileUrl: (file: string) => `/api/invoices/files?file=${encodeURIComponent(file)}`,
   assistantDetach: (id: string) => request<{ ok: true }>('DELETE', `/api/assistant/attachments/${encodeURIComponent(id)}`),
   assistantExportUrl: (file: string) => `/api/assistant/exports/${encodeURIComponent(file)}`,
   assistantAttachmentUrl: (conversation: string, id: string) => `/api/assistant/${encodeURIComponent(conversation)}/attachments/${encodeURIComponent(id)}`,
@@ -849,7 +856,11 @@ export const api = {
     return request<Issued>('POST', `/api/invoices/${id}/issue`, all.length ? { confirm: all } : undefined);
   },
   /** With `email` the PDF goes out through the company's mailbox; without, the send is recorded as a download to `to`. */
-  recordSend: (id: string, send: { to?: string; email?: MailMessage }) => request<SentDocument>('POST', `/api/invoices/${id}/send`, send),
+  recordSend: (id: string, send: { to?: string; email?: SendMail }) => request<SentDocument>('POST', `/api/invoices/${id}/send`, send),
+  /** The Kontoauszug of a contact (spec 4.4.5): the rows and balance per currency; its PDF to look at; sending it (or recording its download). */
+  contactStatement: (id: string, from: string, to: string) => request<Statement>('GET', `/api/contacts/${encodeURIComponent(id)}/statement?from=${from}&to=${to}`),
+  statementPdfUrl: (id: string, from: string, to: string) => `/api/contacts/${encodeURIComponent(id)}/statement.pdf?from=${from}&to=${to}`,
+  sendStatement: (id: string, send: { from: string; to: string; recipient?: string; email?: SendMail }) => request<SentDocument>('POST', `/api/contacts/${encodeURIComponent(id)}/statement`, send),
   mailStatus: () => request<MailStatus>('GET', '/api/mail'),
   saveMailPassword: (password: string) => request<{ ok: true }>('PUT', '/api/mail/password', { password }),
   verifyMail: () => request<{ ok: true }>('POST', '/api/mail/verify'),

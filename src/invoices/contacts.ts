@@ -69,6 +69,7 @@ export function recipientOf(c: Contact | undefined, doc: Pick<InvoiceContent, 'p
   return {
     name: printedName(c),
     ...(attn ? { attn } : {}),
+    ...(person ? { person: person.name } : {}),
     address,
     language: c.language,
     ...(c.vatId ? { vatId: c.vatId } : {}),

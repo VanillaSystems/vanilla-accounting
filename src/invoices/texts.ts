@@ -46,6 +46,14 @@ export interface InvoiceTexts {
   instalment: string; instalmentIntro: (no: string, date: string, until: string) => string; instalmentClosing: string;
   /** Beside a Zahlungsaufforderung: what else of the Rechnung is open, and its line «not asked here». */
   instalmentMore: (amount: string) => string; notAsked: string;
+  /** The Kontoauszug of a contact (spec 4.4.5): its title, period, columns, rows and the open items at its end. */
+  statement: {
+    title: string; period: (from: string, to: string) => string; opening: (date: string) => string; closing: (date: string) => string;
+    cols: { date: string; doc: string; text: string; debit: string; credit: string; balance: string };
+    invoice: string; credit: (no: string) => string; payment: string; cancelled: string; writeOff: Record<'skonto' | 'discount' | 'loss' | 'fee' | 'rounding', string>;
+    beyond: (amount: string) => string; openItems: (date: string) => string; due: string; gross: string; open: string; none: string;
+    mailSubject: string; mailBody: string;
+  };
 }
 
 export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
@@ -81,6 +89,14 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     akonto: (n, o) => `Akonto ${n} gemäss Auftrag ${o}`, lessPartial: (no, d) => `abzüglich Teilrechnung ${no} vom ${d}`,
     retention: (p, d) => `Rückbehalt ${p} % bis ${d}`, payNow: 'Zu zahlen',
     instalment: 'Zahlungsaufforderung', instalmentIntro: (no, d, u) => `Der Rückbehalt unserer Rechnung ${no} vom ${d} ist am ${u} fällig geworden. Bitte überweisen Sie den offenen Betrag innert 10 Tagen.`, instalmentClosing: 'Freundliche Grüsse', instalmentMore: (a) => `Ausserdem sind aus der Rechnung noch ${a} offen; dafür folgt eine Mahnung.`, notAsked: 'übriger offener Betrag, hier nicht verlangt',
+    statement: {
+      title: 'Kontoauszug', period: (f, t) => `vom ${f} bis ${t}`, opening: (d) => `Saldo am ${d}`, closing: (d) => `Saldo am ${d}`,
+      cols: { date: 'Datum', doc: 'Beleg', text: 'Text', debit: 'Belastung', credit: 'Gutschrift', balance: 'Saldo' },
+      invoice: 'Rechnung', credit: (no) => `Gutschrift zu Rechnung ${no}`, payment: 'Zahlung', cancelled: 'Storniert',
+      writeOff: { skonto: 'Skonto', discount: 'Rabatt', loss: 'Verlust', fee: 'Spesen', rounding: 'Rundung' },
+      beyond: (a) => `darüber hinaus ${a}`, openItems: (d) => `Offene Posten am ${d}`, due: 'fällig', gross: 'Betrag', open: 'offen', none: 'Keine offenen Posten.',
+      mailSubject: 'Kontoauszug · {company}', mailBody: 'Guten Tag\n\nIm Anhang finden Sie Ihren Kontoauszug.\n\nFreundliche Grüsse\n{company}',
+    },
   },
   fr: {
     invoice: 'Facture', credit: 'Note de crédit', draft: 'Projet', reminder: (n) => (n === 1 ? '1er rappel' : `${n}e rappel`),
@@ -114,6 +130,14 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     akonto: (n, o) => `Acompte ${n} selon la commande ${o}`, lessPartial: (no, d) => `moins la facture partielle ${no} du ${d}`,
     retention: (p, d) => `Retenue de garantie ${p} % jusqu’au ${d}`, payNow: 'À payer',
     instalment: 'Demande de paiement', instalmentIntro: (no, d, u) => `La retenue de garantie de notre facture ${no} du ${d} est échue depuis le ${u}. Nous vous prions de régler le montant ouvert dans les 10 jours.`, instalmentClosing: 'Meilleures salutations', instalmentMore: (a) => `En outre, ${a} de la facture restent ouverts ; un rappel suivra.`, notAsked: 'autre montant ouvert, non demandé ici',
+    statement: {
+      title: 'Relevé de compte', period: (f, t) => `du ${f} au ${t}`, opening: (d) => `Solde au ${d}`, closing: (d) => `Solde au ${d}`,
+      cols: { date: 'Date', doc: 'Pièce', text: 'Texte', debit: 'Débit', credit: 'Crédit', balance: 'Solde' },
+      invoice: 'Facture', credit: (no) => `Note de crédit pour la facture ${no}`, payment: 'Paiement', cancelled: 'Annulée',
+      writeOff: { skonto: 'Escompte', discount: 'Rabais', loss: 'Perte', fee: 'Frais', rounding: 'Arrondi' },
+      beyond: (a) => `en plus ${a}`, openItems: (d) => `Postes ouverts au ${d}`, due: 'échéance', gross: 'Montant', open: 'ouvert', none: 'Aucun poste ouvert.',
+      mailSubject: 'Relevé de compte · {company}', mailBody: 'Bonjour\n\nVous trouverez en annexe votre relevé de compte.\n\nMeilleures salutations\n{company}',
+    },
   },
   it: {
     invoice: 'Fattura', credit: 'Nota di credito', draft: 'Bozza', reminder: (n) => `${n}° sollecito`,
@@ -147,6 +171,14 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     akonto: (n, o) => `Acconto ${n} secondo l’ordine ${o}`, lessPartial: (no, d) => `dedotta la fattura parziale ${no} del ${d}`,
     retention: (p, d) => `Trattenuta di garanzia ${p} % fino al ${d}`, payNow: 'Da pagare',
     instalment: 'Richiesta di pagamento', instalmentIntro: (no, d, u) => `La trattenuta di garanzia della nostra fattura ${no} del ${d} è scaduta il ${u}. Vi preghiamo di versare l’importo aperto entro 10 giorni.`, instalmentClosing: 'Cordiali saluti', instalmentMore: (a) => `Inoltre della fattura restano aperti ${a}; seguirà un sollecito.`, notAsked: 'altro importo aperto, non richiesto qui',
+    statement: {
+      title: 'Estratto conto', period: (f, t) => `dal ${f} al ${t}`, opening: (d) => `Saldo al ${d}`, closing: (d) => `Saldo al ${d}`,
+      cols: { date: 'Data', doc: 'Documento', text: 'Testo', debit: 'Addebito', credit: 'Accredito', balance: 'Saldo' },
+      invoice: 'Fattura', credit: (no) => `Nota di credito per la fattura ${no}`, payment: 'Pagamento', cancelled: 'Annullata',
+      writeOff: { skonto: 'Sconto', discount: 'Ribasso', loss: 'Perdita', fee: 'Spese', rounding: 'Arrotondamento' },
+      beyond: (a) => `in più ${a}`, openItems: (d) => `Posizioni aperte al ${d}`, due: 'scadenza', gross: 'Importo', open: 'aperto', none: 'Nessuna posizione aperta.',
+      mailSubject: 'Estratto conto · {company}', mailBody: 'Buongiorno\n\nIn allegato trova il suo estratto conto.\n\nCordiali saluti\n{company}',
+    },
   },
   en: {
     invoice: 'Invoice', credit: 'Credit note', draft: 'Draft',
@@ -181,6 +213,14 @@ export const TEXTS: Record<InvoiceLanguage, InvoiceTexts> = {
     akonto: (n, o) => `Payment on account ${n} as per order ${o}`, lessPartial: (no, d) => `less partial invoice ${no} of ${d}`,
     retention: (p, d) => `Retention ${p} % until ${d}`, payNow: 'To pay',
     instalment: 'Payment request', instalmentIntro: (no, d, u) => `The retention of our invoice ${no} of ${d} fell due on ${u}. Please transfer the amount due within 10 days.`, instalmentClosing: 'Kind regards', instalmentMore: (a) => `In addition, ${a} of the invoice remain open; a reminder will follow.`, notAsked: 'other amount open, not asked here',
+    statement: {
+      title: 'Account statement', period: (f, t) => `from ${f} to ${t}`, opening: (d) => `Balance on ${d}`, closing: (d) => `Balance on ${d}`,
+      cols: { date: 'Date', doc: 'Document', text: 'Text', debit: 'Debit', credit: 'Credit', balance: 'Balance' },
+      invoice: 'Invoice', credit: (no) => `Credit note for invoice ${no}`, payment: 'Payment', cancelled: 'Cancelled',
+      writeOff: { skonto: 'Cash discount', discount: 'Discount', loss: 'Loss', fee: 'Charges', rounding: 'Rounding' },
+      beyond: (a) => `beyond that ${a}`, openItems: (d) => `Open items on ${d}`, due: 'due', gross: 'Amount', open: 'open', none: 'No open items.',
+      mailSubject: 'Account statement · {company}', mailBody: 'Hello\n\nPlease find attached your account statement.\n\nKind regards\n{company}',
+    },
   },
 };
 

@@ -4,7 +4,7 @@
  */
 import { isItem, issuedPdfUrl, sentPdfUrl, type Contact, type DocumentKind, type Draft, type Invoice, type InvoiceLine, type Issued, type Stage, type WriteOff, type WriteOffReason } from '../../../invoices/model.js';
 import type { AllocationPart } from '../../../invoices/payments.js';
-import type { MailMessage } from '../../../invoices/mail.js';
+import type { SendMail as MailMessage } from '../../lib/api.js';
 import type { ReminderPatch } from '../../../invoices/service.js';
 import { reminderTitle } from '../../../invoices/texts.js';
 import { api, errorText, type AccountsInput, type ContactInput, type CreditInput, type DraftChange } from '../../lib/api.js';
@@ -447,5 +447,18 @@ export async function allocate(nav: Nav, ref: string, parts: AllocationPart[]): 
   if (!out) return false;
   await booked(nav);
   nav.toast(t('invoices.allocated', { n: out.paid.length }));
+  return true;
+}
+
+/**
+ * The Kontoauszug of a contact goes out by e-mail, or is saved here first and recorded as
+ * downloaded (spec 4.4.5); the sent log keeps it as kind `statement`. A failed e-mail records nothing.
+ */
+export async function sendStatement(nav: Nav, contactId: string, period: { from: string; to: string }, email?: MailMessage): Promise<boolean> {
+  if (!email && !(await run(nav, saveFile(api.statementPdfUrl(contactId, period.from, period.to), `${t('statement.file')}.pdf`)))) return false;
+  const doc = await run(nav, api.sendStatement(contactId, { ...period, ...(email ? { email } : { recipient: 'download' }) }));
+  if (!doc) return false;
+  await reloadInvoices();
+  nav.toast(email ? t('statement.mailed', { to: doc.to }) : t('statement.saved'));
   return true;
 }

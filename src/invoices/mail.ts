@@ -16,23 +16,33 @@ export class MailError extends Error {
   constructor(readonly code: MailRefusal, message: string, readonly detail?: string) { super(message); }
 }
 
-/** What the person wrote in the send dialog. */
+/** What the person wrote in the send dialog: `to`, `cc` and `bcc` each one address or several, separated by commas or semicolons. */
 export interface MailMessage {
   to: string;
   subject: string;
   body: string;
-  /** A copy to the sender, unseen by the recipient (a payslip's proof of dispatch). */
+  /** Copies, seen by every recipient (spec 4.4.11: the contact's other persons). */
+  cc?: string;
+  /** Copies unseen by the recipients: the sender's own («Kopie an mich», a payslip's proof of dispatch). */
   bcc?: string;
 }
 
 const EMAIL = /^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$/;
 
+/** The addresses of a field: split at commas and semicolons, each checked; the first wrong one is refused by name. */
+export function addressesOf(field: string | undefined): string[] {
+  const list = (field ?? '').split(/[,;]/).map((x) => x.trim()).filter(Boolean);
+  const bad = list.find((x) => !EMAIL.test(x));
+  if (bad) throw new MailError('recipient', `Keine E-Mail-Adresse: ${bad}`, bad);
+  return [...new Map(list.map((x) => [x.toLowerCase(), x])).values()];
+}
+
 export function checkMessage(m: MailMessage): MailMessage {
-  const to = m.to.trim();
-  if (!EMAIL.test(to)) throw new MailError('recipient', `Keine E-Mail-Adresse: ${to || '(leer)'}`, to || '–');
-  const bcc = m.bcc?.trim();
-  if (bcc && !EMAIL.test(bcc)) throw new MailError('recipient', `Keine E-Mail-Adresse: ${bcc}`, bcc);
-  return { to, subject: m.subject.trim(), body: m.body, ...(bcc ? { bcc } : {}) };
+  const to = addressesOf(m.to);
+  if (!to.length) throw new MailError('recipient', 'Keine E-Mail-Adresse: (leer)', '–');
+  const cc = addressesOf(m.cc);
+  const bcc = addressesOf(m.bcc);
+  return { to: to.join(', '), subject: m.subject.trim(), body: m.body, ...(cc.length ? { cc: cc.join(', ') } : {}), ...(bcc.length ? { bcc: bcc.join(', ') } : {}) };
 }
 
 async function transport(ws: Workspace): Promise<{ settings: OutgoingMail; send: nodemailer.Transporter }> {
@@ -53,24 +63,32 @@ async function transport(ws: Workspace): Promise<{ settings: OutgoingMail; send:
   return { settings, send };
 }
 
-/** Sends `message` with the PDF attached; resolves with the Message-ID once the server took it. */
-export async function sendMail(ws: Workspace, message: MailMessage, pdf: { filename: string; content: Buffer }): Promise<{ to: string; messageId: string }> {
+/**
+ * Sends `message` with the PDF attached, and `more` after it (a Vorlage's fixed attachment, a
+ * Rapport), each byte for byte; resolves with the Message-ID once the server took it for every
+ * recipient. A copy alone accepted is no delivery.
+ */
+export async function sendMail(ws: Workspace, message: MailMessage, pdf: { filename: string; content: Buffer }, more: ReadonlyArray<{ filename: string; content: Buffer }> = []): Promise<{ to: string; messageId: string; cc?: string[]; bcc?: string[] }> {
   const m = checkMessage(message);
+  const to = addressesOf(m.to);
+  const cc = addressesOf(m.cc);
+  const bcc = addressesOf(m.bcc);
   const { settings, send } = await transport(ws);
   try {
     const info = await send.sendMail({
       from: settings.fromName ? { name: settings.fromName, address: settings.fromAddress } : settings.fromAddress,
       ...(settings.replyTo ? { replyTo: settings.replyTo } : {}),
-      to: m.to,
-      ...(m.bcc ? { bcc: m.bcc } : {}),
+      to,
+      ...(cc.length ? { cc } : {}),
+      ...(bcc.length ? { bcc } : {}),
       subject: m.subject,
       text: m.body,
-      attachments: [{ filename: pdf.filename, content: pdf.content, contentType: 'application/pdf' }],
+      attachments: [pdf, ...more].map((a) => ({ filename: a.filename, content: a.content, contentType: 'application/pdf' })),
     });
-    // The recipient herself must be accepted: a copy alone accepted is no delivery.
-    const took = (info.accepted as Array<string | { address: string }>).map((a) => (typeof a === 'string' ? a : a.address).toLowerCase());
-    if (!took.includes(m.to.toLowerCase())) throw new Error(`abgelehnt: ${info.rejected.join(', ') || m.to}`);
-    return { to: m.to, messageId: info.messageId };
+    const took = new Set((info.accepted as Array<string | { address: string }>).map((a) => (typeof a === 'string' ? a : a.address).toLowerCase()));
+    const refused = to.filter((x) => !took.has(x.toLowerCase()));
+    if (refused.length) throw new Error(`abgelehnt: ${refused.join(', ')}`);
+    return { to: to.join(', '), messageId: info.messageId, ...(cc.length ? { cc } : {}), ...(bcc.length ? { bcc } : {}) };
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);
     throw new MailError('failed', `E-Mail nicht gesendet: ${why}`, why);

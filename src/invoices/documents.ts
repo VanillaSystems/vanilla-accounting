@@ -9,6 +9,7 @@ import { addDays, instalmentDue, openAmount, openCharges, paidAmount, retentionO
 import type { SheetData } from './sheet.js';
 import { TEXTS, formatAmount, formatDate, kindTitle, reminderTitle } from './texts.js';
 import { recipientOf } from './contacts.js';
+import { fillPlaceholders, templateOf, templateText, type PlaceholderValues } from './templates.js';
 
 export interface InvoicingContext { company: Company; settings: InvoicingSettings | undefined }
 
@@ -25,11 +26,22 @@ export function senderFor(ctx: InvoicingContext, currency: InvoiceCurrency): Omi
 }
 
 /**
- * The texts above and below the table: the workspace's own for the language, else the app's.
- * `{days}` is the payment term. `salutation`: the greeting line above the intro of an invoice, a
- * setting of its own so a greeting never replaces the intro; none unless the workspace sets one.
+ * The texts above and below the table and the title: the Vorlage's for the kind and language
+ * (Firma › Vorlagen), else the workspace's own of the language (an invoice's), else the app's.
+ * `{days}` is the payment term; the other placeholders are filled when the document is issued
+ * (src/invoices/templates.ts fillPlaceholders). `salutation`: the greeting line above the intro of
+ * an invoice, a setting of its own so a greeting never replaces the intro; none unless the
+ * workspace sets one. `title`: absent where the Vorlage names none (the kind's word prints).
  */
-export function defaultTexts(ctx: InvoicingContext, kind: InvoiceContent['kind'], lang: InvoiceLanguage, days: number, printAs?: InvoiceContent['printAs']): { salutation: string; intro: string; closing: string } {
+export function defaultTexts(ctx: InvoicingContext, kind: InvoiceContent['kind'], lang: InvoiceLanguage, days: number, printAs?: InvoiceContent['printAs'], templateId?: string): { salutation: string; intro: string; closing: string; title?: string } {
+  const base = builtInDefaults(ctx, kind, lang, days, printAs);
+  const tpl = templateOf(ctx.settings, { kind, templateId });
+  const own = (k: 'title' | 'intro' | 'closing') => templateText(tpl, kind, lang, k);
+  const title = own('title');
+  return { ...base, intro: own('intro') ?? base.intro, closing: (own('closing') ?? base.closing).replaceAll('{days}', String(days)), ...(title ? { title } : {}) };
+}
+
+function builtInDefaults(ctx: InvoicingContext, kind: InvoiceContent['kind'], lang: InvoiceLanguage, days: number, printAs?: InvoiceContent['printAs']): { salutation: string; intro: string; closing: string } {
   const L = TEXTS[lang];
   if (kind === 'credit-note') return { salutation: '', intro: '', closing: L.creditClosing };
   // An Angebot, Auftrag and Lieferschein speak of themselves; the firm's own texts are those of its invoices.
@@ -39,6 +51,17 @@ export function defaultTexts(ctx: InvoicingContext, kind: InvoiceContent['kind']
   }
   const own = ctx.settings?.texts[lang];
   return { salutation: own?.salutation ?? '', intro: own?.intro ?? L.intro, closing: (own?.closing ?? L.closing(days)).replaceAll('{days}', String(days)) };
+}
+
+/** What a Vorlage's placeholders stand for on an issued document (or a draft, where its number and due date may be unknown). */
+export function placeholderValues(doc: Pick<InvoiceContent, 'lines' | 'prices' | 'currency'> & { number?: string; dueDate?: string; customer?: CustomerFields }, company?: string, person?: string): PlaceholderValues {
+  return {
+    person: person ?? doc.customer?.person ?? doc.customer?.name,
+    ...(doc.number ? { number: doc.number } : {}),
+    ...(doc.dueDate ? { dueDate: doc.dueDate } : {}),
+    total: { amount: totals(doc).gross, currency: doc.currency },
+    ...(company ? { company } : {}),
+  };
 }
 
 /** The intro an invoice is issued with: the greeting line, then the intro. */
@@ -54,21 +77,26 @@ function creditInfo(book: InvoiceBook, c: InvoiceContent): SheetData['credit'] {
 export type MailDocument = { kind: 'invoice' } | { kind: 'reminder'; level: number; title?: string } | { kind: 'cancellation' } | { kind: 'instalment' };
 
 /**
- * The subject and text of the e-mail that sends a document: the language's own texts
- * (Firma › Rechnungslayout), else the app's, with {document} and {company} filled in.
+ * The subject and text of the e-mail that sends a document: its Vorlage's for the kind and
+ * language (Firma › Vorlagen), else the language's own texts (Firma › Rechnungslayout), else the
+ * app's, with {document}, {company} and the Vorlage's placeholders filled in.
  */
 export function mailText(settings: InvoicingSettings | undefined, inv: Issued, doc: MailDocument, company: string): { subject: string; body: string } {
   const L = TEXTS[inv.language];
   const own = settings?.texts[inv.language];
-  const what = `${kindTitle(L, inv.kind, inv.printAs, inv.role)} ${inv.number}`;
+  const what = `${inv.title ?? kindTitle(L, inv.kind, inv.printAs, inv.role)} ${inv.number}`;
   const document = doc.kind === 'reminder' ? `${doc.title ?? L.reminder(doc.level)} · ${what}`
     : doc.kind === 'instalment' ? `${L.instalment} · ${what}`
     : doc.kind === 'cancellation' ? L.cancelNotice(inv.number, formatDate(inv.date, inv.language))
     : what;
-  const fill = (s: string) => s.replaceAll('{document}', document).replaceAll('{company}', company);
-  // A Mahnstufe's own mail texts come first (Firma › Rechnungslayout › Mahnwesen).
+  const values = { ...placeholderValues(inv, company), document, company };
+  const fill = (s: string) => fillPlaceholders(s, values, inv.language);
+  // A Mahnstufe's own mail texts come first (Firma › Rechnungslayout › Mahnwesen), with the same placeholders.
   const level = doc.kind === 'reminder' ? settings?.dunning?.levels[doc.level - 1]?.texts?.[inv.language] : undefined;
-  return { subject: fill(level?.mailSubject || (own?.mailSubject ?? L.mailSubject)), body: fill(level?.mailBody || (own?.mailBody ?? L.mailBody)) };
+  // The document's own mail is its Vorlage's (Firma › Vorlagen); a Mahnung and a notice speak of themselves.
+  const tpl = doc.kind === 'invoice' ? templateOf(settings, inv) : undefined;
+  const mine = (k: 'mailSubject' | 'mailBody') => level?.[k] || (tpl ? templateText(tpl, inv.kind, inv.language, k) : undefined);
+  return { subject: fill(mine('mailSubject') ?? own?.mailSubject ?? L.mailSubject), body: fill(mine('mailBody') ?? own?.mailBody ?? L.mailBody) };
 }
 
 /** The days a draft gives to pay: those of the terms it picks, else the customer's, else the firm's. */
@@ -87,7 +115,9 @@ function termsOnPaper(inv: Pick<Issued, 'date' | 'terms' | 'lines' | 'prices' | 
 /** `customer`: the recipient as the draft prints it now (src/invoices/contacts.ts recipientOf). */
 export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draft, customer: CustomerFields | undefined, logoSrc?: string): SheetData {
   const terms = draftDays(ctx, draft, customer);
-  const texts = defaultTexts(ctx, draft.kind, draft.language, terms, draft.printAs);
+  const texts = defaultTexts(ctx, draft.kind, draft.language, terms, draft.printAs, draft.templateId);
+  const tpl = templateOf(ctx.settings, draft);
+  const title = draft.title ?? texts.title;
   const picked = ctx.settings?.paymentTerms.some((x) => x.id === draft.termsId) ? termsFor(draft, ctx.settings?.paymentTerms, terms) : undefined;
   return {
     kind: draft.kind,
@@ -106,7 +136,9 @@ export function draftSheet(ctx: InvoicingContext, book: InvoiceBook, draft: Draf
     ...(texts.salutation ? { salutation: texts.salutation } : {}),
     intro: draft.intro ?? texts.intro,
     closing: draft.closing ?? texts.closing,
-    layout: ctx.settings?.layout ?? DEFAULT_LAYOUT,
+    ...(title ? { title } : {}),
+    layout: ctx.settings ? tpl.layout : DEFAULT_LAYOUT,
+    ...(tpl.letterhead ? { letterhead: tpl.letterhead } : {}),
     ...(logoSrc ? { logoSrc } : {}),
     ...(draft.kind === 'credit-note' ? { credit: creditInfo(book, draft) } : {}),
     ...(picked ? { terms: termsOnPaper({ ...draft, terms: picked }) } : {}),
@@ -141,7 +173,9 @@ export function issuedSheet(book: InvoiceBook, inv: Issued, logoSrc?: string): S
     ...(inv.exemption ? { exemption: inv.exemption } : {}),
     intro: inv.intro ?? '',
     closing: inv.closing ?? '',
+    ...(inv.title ? { title: inv.title } : {}),
     layout: inv.layout,
+    ...(inv.letterhead ? { letterhead: inv.letterhead.file } : {}),
     ...(logoSrc ? { logoSrc } : {}),
     reference: inv.reference,
     ...(inv.kind === 'credit-note' ? { credit: creditInfo(book, inv) } : {}),

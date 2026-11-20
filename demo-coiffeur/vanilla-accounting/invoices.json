@@ -83,6 +83,7 @@
       },
       "intro": "Vielen Dank für Ihren Auftrag. Wir stellen Ihnen folgende Leistungen in Rechnung:",
       "closing": "Zahlbar innert 20 Tagen. Herzlichen Dank und alles Gute!\nBella Beispiel",
+      "templateId": "standard",
       "status": "issued",
       "number": "2026-001",
       "issuedAt": "2026-06-08T18:00:00.000Z",

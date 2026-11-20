@@ -54,7 +54,9 @@ export type Dialog =
   | { kind: 'plan' }
   /** The ticked documents (their ids), sent by e-mail one by one, or their PDFs downloaded. */
   | { kind: 'bulk-send'; ids: string[] }
-  | { kind: 'bulk-pdf'; ids: string[] };
+  | { kind: 'bulk-pdf'; ids: string[] }
+  /** The Kontoauszug of a contact (spec 4.4.5): its period, its rows, the PDF, sending it. */
+  | { kind: 'statement'; contactId: string };
 
 /** The tables that sort: one per kind of document. */
 export type Sorted = DocView;

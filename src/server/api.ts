@@ -63,6 +63,7 @@ const INVOICE_STATUS: Record<InvoiceRefusal, number> = {
   codeTaken: 409, articleGone: 404, noReminderDraft: 409, levelChanged: 409, recordFailed: 502,
   stages: 400, stagesSum: 400, stageInvoiced: 409, stagesInvoiced: 409, finalExists: 409, partialDrafts: 409, notFinal: 409, noRetention: 409,
   notOrder: 400, deducted: 409, deduction: 409, retentionNotDue: 409,
+  attachmentTooLarge: 413, attachmentNotPdf: 400, attachmentGone: 409, attachmentLimit: 400, templateGone: 409,
 };
 
 // From the network only the phone's paths answer (src/server/phone.ts), the API ones only with the

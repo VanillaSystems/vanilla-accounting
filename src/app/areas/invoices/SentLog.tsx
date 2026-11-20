@@ -12,7 +12,7 @@ import type { InvoiceList } from '../../lib/api.js';
 import { formatDate } from '../../lib/utils.js';
 import { t } from '../../i18n/index.js';
 import type { AreaProps } from '../index.js';
-import { customerOf, sentRows } from './model.js';
+import { customerOf, sentContact, sentRows } from './model.js';
 import { invoiceAt } from './actions.js';
 import { listed, setUi, useUi } from './state.js';
 import { channelText, recipientOf, rowTab, timeOf } from './Sent.js';
@@ -26,7 +26,7 @@ export function SentLog(props: Props & { d: InvoiceList }) {
   const f = s.sentFilter;
   const rows = sentRows(d, query.q, f);
   listed.ids = rows.map((x) => x.id);
-  const contacts = [...new Map(d.sent.flatMap((x) => { const inv = d.invoices.find((i) => i.id === x.invoiceId); return inv ? [[inv.customerId, customerOf(d, inv)?.name ?? ''] as const] : []; })).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const contacts = [...new Map(d.sent.flatMap((x) => { const inv = d.invoices.find((i) => i.id === x.invoiceId); const c = sentContact(d, x); return inv ? [[inv.customerId, customerOf(d, inv)?.name ?? ''] as const] : c ? [[c.id, c.name] as const] : []; })).entries()].sort((a, b) => a[1].localeCompare(b[1]));
   const set = (patch: Partial<typeof f>) => setUi({ sentFilter: { ...f, ...patch } });
 
   return (
@@ -72,13 +72,17 @@ export function SentLog(props: Props & { d: InvoiceList }) {
               {rows.map((doc, i) => {
                 const sel = doc.id === route.id;
                 const inv = d.invoices.find((i) => i.id === doc.invoiceId);
+                // A Kontoauszug is of a contact: its row links there.
+                const contact = !inv ? sentContact(d, doc) : undefined;
+                const contactAt = contact && { route: { area: 'invoices' as const, view: 'contacts' as const, id: contact.id }, query: {} };
                 return (
                   <tr key={doc.id} className={`trow${sel ? ' sel' : ''}`} data-id={doc.id} data-channel={channelOf(doc)} aria-selected={sel} tabIndex={rowTab(sel, i, rows.some((x) => x.id === route.id))}
                     onClick={() => nav.select({ area: 'invoices', view: 'sent', id: doc.id })} onKeyDown={(e) => { if (e.key === 'Enter' && e.target === e.currentTarget) nav.select({ area: 'invoices', view: 'sent', id: doc.id }); }}>
                     <td className="mono">{formatDate(doc.sentAt.slice(0, 10))} {timeOf(doc.sentAt)}</td>
-                    <td>{inv ? <a className="golink" href={hrefOf(invoiceAt(inv))} data-act="to-document" onClick={(e) => { e.stopPropagation(); if (e.metaKey || e.ctrlKey) return; e.preventDefault(); nav.go(invoiceAt(inv)); }}>{doc.title}</a> : doc.title}</td>
+                    <td>{inv ? <a className="golink" href={hrefOf(invoiceAt(inv))} data-act="to-document" onClick={(e) => { e.stopPropagation(); if (e.metaKey || e.ctrlKey) return; e.preventDefault(); nav.go(invoiceAt(inv)); }}>{doc.title}</a>
+                      : contactAt ? <a className="golink" href={hrefOf(contactAt)} data-act="to-contact" onClick={(e) => { e.stopPropagation(); if (e.metaKey || e.ctrlKey) return; e.preventDefault(); nav.go(contactAt); }}>{doc.title}</a> : doc.title}{doc.attachments?.length ? <span className="m"> · {t('invoices.withAttachments', { n: doc.attachments.length })}</span> : null}</td>
                     <td>{t(`invoices.docKind.${doc.kind}`)}</td>
-                    <td>{inv ? customerOf(d, inv)?.name : ''}</td>
+                    <td>{inv ? customerOf(d, inv)?.name : contact?.name ?? ''}</td>
                     <td className="tt">{recipientOf(doc)}</td>
                     <td>{channelText(doc)}</td>
                     <td className="mono" data-tip={t('sales.shaFull', { sha: doc.sha256 })}>{doc.sha256.slice(0, 12)}…</td>

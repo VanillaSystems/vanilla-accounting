@@ -11,6 +11,7 @@ import { BUSINESS_PROFILES, LEGAL_FORMS, PRESET_NAMES, QUESTIONS, VAT_QUESTIONS,
 import { parseVatSetup } from './vat-setup.js';
 import {
   DEFAULT_LAYOUT, DEFAULT_SHORTFALL_LIMIT, DEFAULT_UNITS, DOCUMENT_KINDS, INVOICE_CURRENCIES, INVOICE_FONTS, INVOICE_LANGUAGES, LAYOUT_ELEMENTS, MAIL_SECURITY, NET_TERMS, OWN_TEXTS, PRICES,
+  STANDARD_TEMPLATE, TEMPLATE_TEXTS, type InvoiceLayout, type InvoiceTemplate, type TemplateTexts,
   type Address, type DocumentKind, type InvoiceCurrency, type InvoiceLanguage, type InvoicingSettings, type MailSecurity, type OutgoingMail, type PaymentTerms, type Prices, type UnitDef,
 } from '../invoices/model.js';
 import { isQrIban, referenceTooLong } from '../providers/qr-bill/reference.js';
@@ -168,19 +169,7 @@ function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: 
   const days = raw.paymentTermsDays ?? 30;
   if (!Number.isInteger(days) || (days as number) < 0) fail('invoicing.paymentTermsDays must be a whole number of days');
 
-  const l = raw.layout === undefined ? {} : isMap(raw.layout) ? raw.layout : fail('invoicing.layout must be a mapping');
-  const pick = <T extends string>(v: unknown, allowed: readonly T[], fallback: T, where: string): T =>
-    v === undefined ? fallback : allowed.includes(v as T) ? (v as T) : fail(`invoicing.layout.${where} must be one of ${allowed.join(', ')}`);
-  const show = { ...DEFAULT_LAYOUT.show };
-  if (l.show !== undefined) {
-    if (!isMap(l.show)) fail('invoicing.layout.show must map elements to true or false');
-    for (const [k, v] of Object.entries(l.show as Record<string, unknown>)) {
-      if (!LAYOUT_ELEMENTS.includes(k as never) || typeof v !== 'boolean') fail(`invoicing.layout.show.${k}: one of ${LAYOUT_ELEMENTS.join(', ')}, true or false`);
-      show[k as keyof typeof show] = v as boolean;
-    }
-  }
-  const accent = l.accent === undefined ? DEFAULT_LAYOUT.accent : String(l.accent);
-  if (!/^#[0-9a-f]{6}$/i.test(accent)) fail('invoicing.layout.accent must be a colour like #141a26');
+  const layout = readLayout(raw.layout, 'invoicing.layout', fail);
   const texts: InvoicingSettings['texts'] = {};
   if (raw.texts !== undefined) {
     if (!isMap(raw.texts)) fail('invoicing.texts must map a language to { intro, closing, mailSubject, mailBody }');
@@ -190,6 +179,9 @@ function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: 
       texts[lang as InvoiceLanguage] = Object.fromEntries(OWN_TEXTS.filter((k) => t[k] !== undefined).map((k) => [k, String(t[k])]));
     }
   }
+  if (raw.templates !== undefined && raw.layout !== undefined) fail('invoicing: with templates, each Vorlage has its layout; invoicing.layout must go');
+  const templates = raw.templates === undefined ? [{ id: STANDARD_TEMPLATE, name: 'Standard', layout }] : readTemplates(raw.templates, fail);
+  const templateFor = readTemplateFor(raw.templateFor, templates, fail);
   const terms = readTerms(raw.paymentTerms, days as number, fail);
   if (raw.defaultTerms !== undefined && !terms.some((x) => x.id === raw.defaultTerms)) fail(`invoicing.defaultTerms "${String(raw.defaultTerms)}" must be the id of one of invoicing.paymentTerms`);
   const limit = raw.shortfallLimit ?? DEFAULT_SHORTFALL_LIMIT;
@@ -201,15 +193,9 @@ function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: 
     revenueAccount: account(raw.revenueAccount, 'invoicing.revenueAccount'),
     ...(raw.feeAccount === undefined ? {} : { feeAccount: account(raw.feeAccount, 'invoicing.feeAccount') }),
     paymentTermsDays: days as number,
-    layout: {
-      font: pick(l.font, INVOICE_FONTS, DEFAULT_LAYOUT.font, 'font'),
-      accent,
-      window: pick(l.window, ['left', 'right'] as const, DEFAULT_LAYOUT.window, 'window'),
-      ...(l.logo === undefined ? {} : { logo: String(l.logo) }),
-      logoPosition: pick(l.logoPosition, ['left', 'center', 'right'] as const, DEFAULT_LAYOUT.logoPosition, 'logoPosition'),
-      logoSize: pick(l.logoSize, ['s', 'm', 'l'] as const, DEFAULT_LAYOUT.logoSize, 'logoSize'),
-      show,
-    },
+    layout: templates[0].layout,
+    templates,
+    templateFor,
     texts,
     units: readUnits(raw.units, fail),
     prices: readPrices(raw.prices, fail),
@@ -220,6 +206,99 @@ function readInvoicing(raw: unknown, accounts: LedgerBankAccount[], fail: (msg: 
     shortfallLimit: limit as number,
     dunning: readDunning(raw.dunning, fail),
   };
+}
+
+/** A layout (`invoicing.layout`, or a Vorlage's): every field optional, the app's default where absent. */
+function readLayout(raw: unknown, where: string, fail: (msg: string) => never): InvoiceLayout {
+  const l = raw === undefined ? {} : isMap(raw) ? raw : fail(`${where} must be a mapping`);
+  const pick = <T extends string>(v: unknown, allowed: readonly T[], fallback: T, key: string): T =>
+    v === undefined ? fallback : allowed.includes(v as T) ? (v as T) : fail(`${where}.${key} must be one of ${allowed.join(', ')}`);
+  const show = { ...DEFAULT_LAYOUT.show };
+  if (l.show !== undefined) {
+    if (!isMap(l.show)) fail(`${where}.show must map elements to true or false`);
+    for (const [k, v] of Object.entries(l.show as Record<string, unknown>)) {
+      if (!LAYOUT_ELEMENTS.includes(k as never) || typeof v !== 'boolean') fail(`${where}.show.${k}: one of ${LAYOUT_ELEMENTS.join(', ')}, true or false`);
+      show[k as keyof typeof show] = v as boolean;
+    }
+  }
+  const accent = l.accent === undefined ? DEFAULT_LAYOUT.accent : String(l.accent);
+  if (!/^#[0-9a-f]{6}$/i.test(accent)) fail(`${where}.accent must be a colour like #141a26`);
+  return {
+    font: pick(l.font, INVOICE_FONTS, DEFAULT_LAYOUT.font, 'font'),
+    accent,
+    window: pick(l.window, ['left', 'right'] as const, DEFAULT_LAYOUT.window, 'window'),
+    ...(l.logo === undefined ? {} : { logo: String(l.logo) }),
+    logoPosition: pick(l.logoPosition, ['left', 'center', 'right'] as const, DEFAULT_LAYOUT.logoPosition, 'logoPosition'),
+    logoSize: pick(l.logoSize, ['s', 'm', 'l'] as const, DEFAULT_LAYOUT.logoSize, 'logoSize'),
+    show,
+  };
+}
+
+/** A file a Vorlage names: a PDF path under the workspace, never outside it. */
+function readFile(v: unknown, where: string, fail: (msg: string) => never): string {
+  const f = typeof v === 'string' ? v.trim() : '';
+  if (!f || f.startsWith('/') || f.split(/[\\/]/).includes('..') || !/\.pdf$/i.test(f)) fail(`${where} must be a PDF path under the workspace`);
+  return f;
+}
+
+/** The Vorlagen (spec 4.4.11): `[{ id, name, layout, letterhead?, texts?, attachment? }]`, ids unique. */
+function readTemplates(raw: unknown, fail: (msg: string) => never): InvoiceTemplate[] {
+  if (!Array.isArray(raw) || raw.length === 0) return fail('invoicing.templates must list Vorlagen { id, name, layout }');
+  const seen = new Set<string>();
+  return raw.map((t, i): InvoiceTemplate => {
+    const where = `invoicing.templates[${i}]`;
+    if (!isMap(t)) fail(`${where} must be { id, name, layout, letterhead?, texts?, attachment? }`);
+    const id = optText(t.id, `${where}.id`, fail)?.trim();
+    if (!id || !/^[a-z0-9][a-z0-9_-]{0,31}$/i.test(id)) fail(`${where}.id must be a short id (letters, digits, - or _)`);
+    if (seen.has(id!)) fail(`${where}.id "${id}" is listed twice`);
+    seen.add(id!);
+    const name = optText(t.name, `${where}.name`, fail)?.trim();
+    if (!name) fail(`${where}.name is missing`);
+    const texts: NonNullable<InvoiceTemplate['texts']> = {};
+    if (t.texts !== undefined) {
+      if (!isMap(t.texts)) fail(`${where}.texts must map a kind to languages`);
+      for (const [kind, byLang] of Object.entries(t.texts as Record<string, unknown>)) {
+        if (!DOCUMENT_KINDS.includes(kind as DocumentKind) || !isMap(byLang)) fail(`${where}.texts.${kind}: a kind (${DOCUMENT_KINDS.join(', ')}) mapping languages to texts`);
+        const out: Partial<Record<InvoiceLanguage, TemplateTexts>> = {};
+        for (const [lang, v] of Object.entries(byLang as Record<string, unknown>)) {
+          if (!INVOICE_LANGUAGES.includes(lang as InvoiceLanguage) || !isMap(v)) fail(`${where}.texts.${kind}.${lang}: one of ${INVOICE_LANGUAGES.join(', ')}, with ${TEMPLATE_TEXTS.join(', ')}`);
+          const x = v as Record<string, unknown>;
+          for (const k of Object.keys(x)) if (!TEMPLATE_TEXTS.includes(k as never)) fail(`${where}.texts.${kind}.${lang}.${k}: one of ${TEMPLATE_TEXTS.join(', ')}`);
+          out[lang as InvoiceLanguage] = Object.fromEntries(TEMPLATE_TEXTS.filter((k) => x[k] !== undefined).map((k) => [k, String(x[k])]));
+        }
+        texts[kind as DocumentKind] = out;
+      }
+    }
+    let attachment: InvoiceTemplate['attachment'];
+    if (t.attachment !== undefined) {
+      const a = t.attachment;
+      if (!isMap(a)) fail(`${where}.attachment must be { name, file, kinds? }`);
+      const an = optText((a as Record<string, unknown>).name, `${where}.attachment.name`, fail)?.trim();
+      if (!an) fail(`${where}.attachment.name is missing`);
+      const kinds = (a as Record<string, unknown>).kinds;
+      if (kinds !== undefined && (!Array.isArray(kinds) || !kinds.every((k) => DOCUMENT_KINDS.includes(k as DocumentKind)))) fail(`${where}.attachment.kinds: a list of ${DOCUMENT_KINDS.join(', ')}`);
+      attachment = { name: an!, file: readFile((a as Record<string, unknown>).file, `${where}.attachment.file`, fail), ...(kinds ? { kinds: kinds as DocumentKind[] } : {}) };
+    }
+    return {
+      id: id!, name: name!, layout: readLayout(t.layout, `${where}.layout`, fail),
+      ...(t.letterhead === undefined ? {} : { letterhead: readFile(t.letterhead, `${where}.letterhead`, fail) }),
+      ...(Object.keys(texts).length ? { texts } : {}),
+      ...(attachment ? { attachment } : {}),
+    };
+  });
+}
+
+/** The Vorlage per kind: `{ invoice: regie }`, each an id of `templates`; a kind it names not takes the first. */
+function readTemplateFor(raw: unknown, templates: readonly InvoiceTemplate[], fail: (msg: string) => never): Partial<Record<DocumentKind, string>> {
+  if (raw === undefined) return {};
+  if (!isMap(raw)) return fail(`invoicing.templateFor must map a kind (${DOCUMENT_KINDS.join(', ')}) to a Vorlage's id`);
+  const out: Partial<Record<DocumentKind, string>> = {};
+  for (const [kind, id] of Object.entries(raw)) {
+    if (!DOCUMENT_KINDS.includes(kind as DocumentKind)) fail(`invoicing.templateFor.${kind}: a kind (${DOCUMENT_KINDS.join(', ')})`);
+    if (!templates.some((t) => t.id === id)) fail(`invoicing.templateFor.${kind} "${String(id)}" must be the id of one of invoicing.templates`);
+    out[kind as DocumentKind] = String(id);
+  }
+  return out;
 }
 
 /** The units a position may be counted in: each an id with its word in de, fr, it and en; absent: the app's (DEFAULT_UNITS). */
