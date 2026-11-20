@@ -5912,6 +5912,7 @@ export const messages = {
   'inflow.phoneText': 'Kassenzettel mit dem Handy fotografieren. Das Foto landet von selbst hier.',
   'inflow.pair': 'Belege vom Handy',
   'inflow.pair.what': 'Fotografier Quittungen mit dem Handy: sie landen von selbst hier unter Belege. Dafür koppelst du das Handy einmal mit diesem Mac: den Code scannen, danach nur noch fotografieren.',
+  'inflow.pair.show': 'Code zeigen',
   'inflow.autoText': 'Die App holt Rechnungen selbst aus deinen Mails und von anderen Orten.',
   'inflow.withAi': 'Mit KI einrichten',
   'inflow.byHand': 'von Hand',

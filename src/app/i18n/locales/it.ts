@@ -5914,6 +5914,7 @@ export default {
     'inflow.phoneText': 'Fotografa gli scontrini con il telefono. La foto arriva qui da sola.',
     'inflow.pair': 'Giustificativi dal telefono',
     'inflow.pair.what': 'Fotografa gli scontrini con il telefono: arrivano da soli qui in Giustificativi. Per questo accoppi il telefono una volta con questo Mac: scansiona il codice, poi basta fotografare.',
+    'inflow.pair.show': 'Mostra il codice',
     'inflow.autoText': 'L’app recupera da sé le fatture dalle tue e-mail e da altri posti.',
     'inflow.withAi': 'Configurare con l’IA',
     'inflow.byHand': 'a mano',

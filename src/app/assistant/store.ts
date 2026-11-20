@@ -31,21 +31,22 @@ export interface AssistantState extends Thread {
 }
 
 /** A file in the composer: `preview` an object URL of an image the browser shows. */
-/** Set once the sidebar was opened or closed in this browser: no first-launch default after that. */
-const DECIDED = 'assistant.decided';
-
 export interface ComposerFile { key: string; name: string; type: AttachmentType; preview?: string; attachment?: Attachment }
 
 /**
  * Open on the Mac app's first launch (the owner, 20.11.2026): the sidebar is where she asks in her own words, so a
- * new viewer finds it open, except in a narrow window, where it would cover the one column. The browser (npm start,
- * the public demo without an AI) keeps it closed until asked. Her own click decides from
- * then on, kept in this browser: '1' open, '0' closed (before, closed was no value at all).
+ * new viewer finds it open, unless the window is too narrow to keep it beside the page (sidebarFit: it would lie over
+ * the page). The browser (npm start, the public demo without an AI) keeps it closed until asked. Her own click decides
+ * from then on, kept in this browser: '1' open, '0' closed. Before, closed was kept as no value, so a Mac app that
+ * had it closed opens it once more after the update.
  */
 const openAtStart = (): boolean => {
   const kept = stored('assistant.open');
   if (kept !== null) return kept === '1';
-  return !!desktop && stored(DECIDED) === null && typeof innerWidth === 'number' && innerWidth >= 900;
+  if (!desktop || typeof innerWidth !== 'number') return false;
+  const width = innerWidth / (Number(document.documentElement.style.zoom) || 1);
+  const dock = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--abw')) || 52;
+  return !sidebarFit(width - dock, sidebarWidths(width, false)).over;
 };
 let state: AssistantState = { open: openAtStart(), listing: false, turns: [], extra: [], files: [], pageOff: false, sending: false, ...startThread(stored) };
 const listeners = new Set<() => void>();
@@ -57,7 +58,7 @@ const setup = { over: false, wanted: false };
 function set(patch: Partial<AssistantState>): void {
   state = { ...state, ...patch };
   if ('purpose' in patch && state.purpose !== 'onboarding') setup.wanted = false;
-  if ('open' in patch) { remember('assistant.open', state.open ? '1' : '0'); remember(DECIDED, '1'); }
+  if ('open' in patch) remember('assistant.open', state.open ? '1' : '0');
   if ('open' in patch || 'purpose' in patch) refit();
   if ('conversation' in patch) remember(KEPT_CONVERSATION, state.conversation ?? null);
   if ('conversation' in patch || 'purpose' in patch) remember(KEPT_PURPOSE, state.conversation ? null : state.purpose ?? null);

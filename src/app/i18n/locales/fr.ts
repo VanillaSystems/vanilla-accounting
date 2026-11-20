@@ -5914,6 +5914,7 @@ export default {
     'inflow.phoneText': 'Photographier les tickets avec le téléphone. La photo arrive ici d’elle-même.',
     'inflow.pair': 'Justificatifs depuis le téléphone',
     'inflow.pair.what': 'Photographie les tickets avec ton téléphone : ils arrivent d’eux-mêmes ici, dans Justificatifs. Pour cela tu couples une fois le téléphone avec ce Mac : scanner le code, ensuite seulement photographier.',
+    'inflow.pair.show': 'Afficher le code',
     'inflow.autoText': 'L’app récupère elle-même les factures dans tes e-mails et ailleurs.',
     'inflow.withAi': 'Configurer avec l’IA',
     'inflow.byHand': 'à la main',

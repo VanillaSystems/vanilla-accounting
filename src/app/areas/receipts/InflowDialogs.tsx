@@ -1,6 +1,6 @@
 /**
- * The dialogs of the ways in (docs/0.4.0/mockups/receipt-inflow): «Handy koppeln» in two steps (the
- * app, then the Mac app's pairing code of Firma › Handy), «Weg hinzufügen» by hand (the address,
+ * The dialogs of the ways in (docs/0.4.0/mockups/receipt-inflow): «Belege vom Handy» in two steps (the
+ * app, then the Mac app's pairing code of Firma › Belege vom Handy), «Weg hinzufügen» by hand (the address,
  * where its mail is read, a proposal among what the app can do today), the forwarding steps, and
  * «Alle Wege», where what comes later is shown faded. A mailbox ends in Firma › Quellen's form,
  * filled in; a password never goes anywhere else.
@@ -76,7 +76,15 @@ function Pair({ step, nav }: { step: 'install' | 'pair'; nav: Nav }) {
     <Frame title={t('inflow.pair')}>
       <p className="hint" data-testid="pair-what">{t('inflow.pair.what')}</p>
       {store ? <Steps on={step === 'install' ? 1 : 2} /> : null}
-      {!app ? <div className="qr"><span className="spin" /></div> : store && step === 'install' ? <Install app={store} nav={nav} /> : <PairCode withApp={!!store} />}
+      {!app ? <div className="qr"><span className="spin" /></div> : store && step === 'install' ? <Install app={store} nav={nav} />
+        : store || step === 'pair' ? <PairCode withApp={!!store} />
+          : (
+            // Without the app, the code switches the phone access on (and macOS may ask about it): only once she asks for it.
+            <div className="acts">
+              <button type="button" className="aiact" onClick={closeInflow}>{t('inflow.pair.later')}</button>
+              <button type="button" className="aiact primary" data-testid="pair-show" onClick={() => openInflow({ kind: 'pair', step: 'pair' })}>{t('inflow.pair.show')}</button>
+            </div>
+          )}
     </Frame>
   );
 }
@@ -110,7 +118,7 @@ function Install({ app, nav }: { app: { url: string; qr: string }; nav: Nav }) {
 function PairCode({ withApp }: { withApp: boolean }) {
   const { phone } = useInflow();
   const [error, setError] = useState<string>();
-  // Clicking «Koppeln» is the person's wish to pair: the access opens, as «Einschalten» in Firma › Handy.
+  // Clicking «Koppeln» is the person's wish to pair: the access opens, as «Einschalten» in Firma › Belege vom Handy.
   useEffect(() => { if (desktop && !phone?.on) switchPhone(true).catch((e) => setError(errorText(e))); }, []);
   const back = withApp ? <button type="button" className="aiact back" onClick={() => openInflow({ kind: 'pair', step: 'install' })}>{t('inflow.pair.back')}</button> : <button type="button" className="aiact back" onClick={closeInflow}>{t('inflow.pair.later')}</button>;
   if (!desktop) {

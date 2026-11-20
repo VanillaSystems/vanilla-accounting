@@ -10,4 +10,8 @@ export const PHONE_APP_NAME = 'Vanilla Scanner';
 /** The App Store page, once the app is published (docs/releasing.md, «The iPhone app's download link»); absent until then. */
 export const PHONE_APP_STORE_URL: string | undefined = undefined;
 
-export const phoneAppUrl = (): string | undefined => (typeof process === 'undefined' ? undefined : process.env.VANILLA_PHONE_APP_URL) || PHONE_APP_STORE_URL;
+/** The link offered, https only: another value is no link. */
+export const phoneAppUrl = (): string | undefined => {
+  const url = (typeof process === 'undefined' ? undefined : process.env.VANILLA_PHONE_APP_URL) || PHONE_APP_STORE_URL;
+  return url && /^https:\/\/[^\s"'<>]+$/.test(url) ? url : undefined;
+};

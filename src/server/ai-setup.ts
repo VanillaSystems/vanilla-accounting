@@ -13,7 +13,6 @@ import { isRateLimitSignal } from '../llm/adaptive-pool.js';
 import { claudeCli } from '../llm/providers/claude-cli.js';
 import { codexCli } from '../llm/providers/codex-cli.js';
 import { forgetCli, keyOf, noteSignedIn } from '../llm/providers/index.js';
-import { codexHome } from '../llm/providers/codex-home.js';
 import { KEYED, keyedProvider } from '../llm/providers/keyed.js';
 import { readSettings, writeCli, writeNoAi } from '../llm/settings.js';
 import { aiOff } from '../llm/off.js';
@@ -26,10 +25,11 @@ import { secrets } from '../secrets/secrets.js';
 import type { ApiErrorBody } from '../types/api-error.js';
 
 export async function setupView(): Promise<AiSetupView> {
-  // Codex is looked at in the app's own CODEX_HOME, where its calls run: a sign-in the app's runs cannot use is not «angemeldet».
-  const clis = await probeAll(undefined, { codex: { CODEX_HOME: codexHome() } });
+  const clis = await probeAll();
   forgetCli();
-  for (const { cli, probe } of clis) noteSignedIn(cli, probe.found === 'signedIn');
+  // Claude Code's look is the one its calls take. Codex's card looks in the person's own home, and «bereit» needs the
+  // test call, which runs in the app's CODEX_HOME; the order asks that home itself (codexCli.ready, src/llm/providers/index.ts).
+  for (const { cli, probe } of clis) if (cli === 'claude') noteSignedIn(cli, probe.found === 'signedIn');
   const settings = readSettings();
   const sidebar = await sidebarAgent();
   return {

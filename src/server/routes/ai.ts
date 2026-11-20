@@ -4,7 +4,7 @@
  */
 import { Router } from 'express';
 import { resolve } from '../../llm/resolve.js';
-import { activeSubscriptions, keyedStates, keyName, SUBSCRIPTIONS } from '../../llm/providers/index.js';
+import { activeSubscriptions, keyedStates, keyName, noteSignedIn, SUBSCRIPTIONS } from '../../llm/providers/index.js';
 import { keepKey, KeyNotKept } from '../../llm/key-store.js';
 import { claudeCli } from '../../llm/providers/claude-cli.js';
 import { KEYED, type KeyedId } from '../../llm/providers/keyed.js';
@@ -23,6 +23,9 @@ export const router = Router();
 
 async function view({ recheck = false } = {}): Promise<AiView> {
   const [claudeReady, codexSignedIn] = await Promise.all([claudeCli.ready(), codexStatus()]);
+  // What this look found is what the order below takes: the page never shows one CLI signed out while the steps resolve to it.
+  noteSignedIn('claude', claudeReady);
+  noteSignedIn('codex', codexSignedIn === true);
   const catalog = codexSignedIn ? await refreshCodexModels({ force: recheck }) : undefined;
   const states = await keyedStates();
   const settings = readSettings();

@@ -17,11 +17,11 @@ export function PhoneSection({ nav }: { nav: Nav }) {
   const [busy, setBusy] = useState(false);
   const [renewing, setRenewing] = useState(false);
   /** Whether the receipt app has a download link (src/platform/phone-app.ts): without one, the code pairs the phone's browser. */
-  const [withApp, setWithApp] = useState(false);
+  const [withApp, setWithApp] = useState<boolean>();
   useEffect(() => { if (desktop) api.desktop.phone().then(setInfo, (e) => nav.toast(errorText(e))); }, []);
-  useEffect(() => { api.phoneApp().then((a) => setWithApp(!!a.url), () => undefined); }, []);
+  useEffect(() => { api.phoneApp().then((a) => setWithApp(!!a.url), () => setWithApp(false)); }, []);
   if (!desktop) return <p className="m">{t('phone.notDesktop')}</p>;
-  if (!info) return <p className="m">{t('changes.loading')}</p>;
+  if (!info || withApp === undefined) return <p className="m">{t('changes.loading')}</p>;
 
   const act = async (call: () => Promise<PhoneInfo>, done?: string) => {
     setBusy(true);

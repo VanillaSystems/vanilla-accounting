@@ -5914,6 +5914,7 @@ export default {
     'inflow.phoneText': 'Photograph till receipts with your phone. The photo lands here by itself.',
     'inflow.pair': 'Receipts from your phone',
     'inflow.pair.what': 'Photograph receipts with your phone: they land here in Receipts by themselves. For that you pair the phone with this Mac once: scan the code, then just take photos.',
+    'inflow.pair.show': 'Show the code',
     'inflow.autoText': 'The app fetches invoices from your mail and other places by itself.',
     'inflow.withAi': 'Set up with AI',
     'inflow.byHand': 'by hand',

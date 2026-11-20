@@ -286,7 +286,12 @@ test('one order for the setup, the KI column and the steps: a Claude Code that i
     assert.equal(view.sidebar, 'codex', 'what the first screen calls «bereit» is what the KI column runs on');
     settings({ cli: 'claude' });
     forgetCli();
-    assert.equal((await sidebarAgent()).provider.id, 'claude-cli', 'her choice in Firma › KI holds, and its call says it is signed out');
+    assert.equal((await sidebarAgent()).provider.id, 'codex-cli', 'a chosen CLI that is signed out yields to the one that answers');
+    assert.equal((await setupView()).sidebar, 'codex');
+    settings({ cli: 'codex' });
+    delete process.env.CLAUDE_STUB_SIGNED_OUT;
+    forgetCli();
+    assert.equal((await sidebarAgent()).provider.id, 'codex-cli', 'both signed in: the CLI chosen in Firma › KI first');
     settings({});
     delete process.env.CLAUDE_STUB_SIGNED_OUT;
     forgetCli();

@@ -58,8 +58,8 @@ export const knownPath = (): string => [process.env.PATH, lastLogin].filter(Bool
 interface Ran { code: number | null; stdout: string; stderr: string; timedOut: boolean }
 
 /** Runs a CLI briefly from an empty folder, its own folder on the PATH (an npm-installed CLI finds its node). */
-function runCli(bin: string, args: readonly string[], timeoutMs: number, extra: NodeJS.ProcessEnv = {}): Promise<Ran> {
-  const env = { ...process.env, ...extra, PATH: [dirname(bin), process.env.PATH, lastLogin].filter(Boolean).join(delimiter) };
+function runCli(bin: string, args: readonly string[], timeoutMs: number): Promise<Ran> {
+  const env = { ...process.env, PATH: [dirname(bin), process.env.PATH, lastLogin].filter(Boolean).join(delimiter) };
   return new Promise((done) => {
     const child = execFile(bin, args, { cwd: tmpdir(), env, timeout: timeoutMs, encoding: 'utf8' }, (err, stdout, stderr) => {
       const e = err as (NodeJS.ErrnoException & { code?: unknown; killed?: boolean }) | null;
@@ -101,23 +101,23 @@ export function parseCodexStatus(said: string, code: number | null): { loggedIn:
   return { loggedIn: true };
 }
 
-/** One look at one CLI: found, answering, signed in. `timeoutMs` for each command it runs; `env`: what the sign-in is asked with (Codex: the app's CODEX_HOME). */
-export async function probeCli(cli: TerminalCli, look: Look = {}, timeoutMs = 10_000, env: NodeJS.ProcessEnv = {}): Promise<CliProbe> {
+/** One look at one CLI: found, answering, signed in. `timeoutMs` for each command it runs. */
+export async function probeCli(cli: TerminalCli, look: Look = {}, timeoutMs = 10_000): Promise<CliProbe> {
   const bin = locate(cli, look);
   if (!bin) return { found: 'none', looked: placesOf(cli, look).map(dirname) };
   const v = await runCli(bin, ['--version'], Math.min(timeoutMs, 8000));
   if (v.code !== 0) return { found: 'silent', bin };
   const version = versionOf(v.stdout);
-  const s = await runCli(bin, AI_CLIS[cli].status, timeoutMs, env);
+  const s = await runCli(bin, AI_CLIS[cli].status, timeoutMs);
   if (s.timedOut || s.code === null) return { found: 'signedOut', bin, version };
   const { loggedIn, method, plan } = cli === 'claude' ? parseClaudeStatus(s.stdout, s.code) : parseCodexStatus(`${s.stdout}\n${s.stderr}`, s.code);
   return loggedIn ? { found: 'signedIn', bin, version, ...(method ? { method } : {}), ...(plan ? { plan } : {}) } : { found: 'signedOut', bin, version };
 }
 
 /** Every CLI, looked for with the login shell's PATH as it is now. */
-export async function probeAll(home?: string, envOf: Partial<Record<TerminalCli, NodeJS.ProcessEnv>> = {}): Promise<Array<{ cli: TerminalCli; probe: CliProbe }>> {
+export async function probeAll(home?: string): Promise<Array<{ cli: TerminalCli; probe: CliProbe }>> {
   const path = await freshLoginPath();
-  return Promise.all((Object.keys(AI_CLIS) as TerminalCli[]).map(async (cli) => ({ cli, probe: await probeCli(cli, { path, ...(home ? { home } : {}) }, 10_000, envOf[cli]) })));
+  return Promise.all((Object.keys(AI_CLIS) as TerminalCli[]).map(async (cli) => ({ cli, probe: await probeCli(cli, { path, ...(home ? { home } : {}) }) })));
 }
 
 /**
