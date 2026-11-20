@@ -450,7 +450,19 @@ export function computePayslip(ctx: PayrollContext, employeeId: string, month: s
         // The working days she worked abroad this month (§22 decision 121); her address says whether she lives in the country.
         ...(store.taxDays?.[payslipId(month, e.id)] ? { abroad: store.taxDays[payslipId(month, e.id)], resident: read(`employees/${e.id}/address`, e.address, to)?.country?.toUpperCase() === (data.taxAtSource?.abroad?.country ?? '') } : {}),
         // A payment after the exit (a Nachzahlung) takes the rate with the exit month's income (FAQ KS 45, Frage 16).
-        ...(!employed ? { exitIncome: exitIncomeOf(history, e.id, month, w.key, typeof c.base === 'string' ? c.base : '') } : {}),
+        ...(!employed ? { exitIncome: exitIncomeOf(history, e.id, month, w.key, typeof c.base === 'string' ? c.base : ''), afterExit: true } : {}),
+        // The annual model (§22 decision 122): the year's closed months with the region each was taxed in, settled in
+        // December or the month she leaves.
+        year: earlier.map((m) => {
+          const own = m.lines.find((l) => l.wageType === w.key && !l.corrects && !l.tariff?.yearEnd && l.tariff);
+          const then = entryOn(e.taxAtSource ?? [], lastDay(m.month))?.value;
+          return {
+            id: m.id, month: m.month, lines: m.lines, days: employedFraction(e, m.month, settings.proration) * (data.taxAtSource?.partMonth ?? 30),
+            region: own?.tariff?.region ?? (then?.subject ? then.canton?.trim().toUpperCase() : undefined),
+            base: own?.base ?? (typeof c.base === 'string' ? m.bases[c.base]?.month ?? 0 : 0),
+          };
+        }),
+        yearEnd: month.endsWith('-12') || leaves, opening: !!opening,
         tariffs: ctx.tariffs, insurances: store.insurances,
         regionOf: (id) => history.closed.get(id)?.lines.find((l) => l.wageType === w.key && l.tariff && !l.corrects)?.tariff?.region,
         ...(commission ? { commission: { wageType: commission, label: label(commission) } } : {}),

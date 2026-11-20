@@ -209,9 +209,9 @@ test('without the canton\'s file the line is «unvollständig: Tarif ZH 2026 nic
   assert.ok(d.missing.some((m) => m.wageType === 'quellensteuer' && m.missing === 'tariff:ZH:2026'));
 });
 
-test('a canton on the annual model, a missing code, an unknown code: each «unvollständig» with its reason', () => {
+test('a canton on the annual model without its file, a missing code, an unknown code: each «unvollständig» with its reason', () => {
   const missing = (tax: TaxAtSource) => draft(6500, tax).missing.find((m) => m.wageType === 'quellensteuer')?.missing;
-  assert.equal(missing({ subject: true, canton: 'GE', code: 'A0' }), 'annualModel:GE');
+  assert.equal(missing({ subject: true, canton: 'GE', code: 'A0' }), 'tariff:GE:2026', 'the annual model is computed (§22 decision 122): GE needs its file');
   assert.equal(missing({ subject: true, canton: 'ZH' }), 'taxCode');
   assert.equal(missing({ subject: true, code: 'A0' }), 'taxRegion');
   assert.equal(missing({ subject: true, canton: 'ZH', code: 'X0' }), 'taxCodeUnknown:X0N');

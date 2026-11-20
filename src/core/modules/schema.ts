@@ -532,7 +532,7 @@ export interface PayrollData {
    */
   setupDocuments?: { kinds: Record<string, string[]>; numbers: Partial<Record<'memberNumber' | 'contractNumber', string[]>>; rates: Record<string, Record<string, string[]>>; toModel?: string[]; notToModel: string[] };
   /** The words of the payroll's documents, in each language. */
-  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate' | 'holidays' | 'holidaysMinimum' | 'sourceTariff' | 'sourceTariffUnits' | 'sourceTariffAbroad', Labels>;
+  documents: Record<'payslip' | 'base' | 'rate' | 'amount' | 'payTo' | 'payday' | 'socialSecurityNumber' | 'correction' | 'missing' | 'employer' | 'disclaimer' | 'mailBody' | 'sourceFederal' | 'sourceSolution' | 'sourceCertificate' | 'holidays' | 'holidaysMinimum' | 'sourceTariff' | 'sourceTariffUnits' | 'sourceTariffAbroad' | 'sourceTariffAnnual' | 'sourceTariffYearEnd', Labels>;
   /** The tax at source by tariff files (payroll.yaml `taxAtSource`); absent: the jurisdiction has none. */
   taxAtSource?: TaxAtSourceData;
 }

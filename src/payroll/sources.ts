@@ -20,6 +20,9 @@ export type LineSource =
     units?: { paid: number; quantity: number; per: number; label: Labels };
     /** Days worked abroad: the Swiss working days of the month's, and the whole wage. */
     abroad?: { swiss: number; total: number; wage: number };
+    /** The annual model: the month's income the year's was looked up as; the year's settlement. */
+    annual?: { monthly: number };
+    yearEnd?: { months: number; owed: number; withheld: number };
   };
 
 /** The head of a figure's source: its articles, before the first explanation or the publication in brackets. */
@@ -55,7 +58,7 @@ export function lineSource(
     const note = tax ? codeNoteOf(data, t.code) ?? codeRuleOf(data, t.code)?.text : undefined;
     const unit = t.units ? data.taxAtSource?.notMonthly?.units.find((u) => u.key === t.units!.key) : undefined;
     const units = t.units && unit ? { paid: t.units.paid, quantity: t.units.quantity, per: t.units.per, label: unit.label } : undefined;
-    return { kind: 'tariff', region: t.region, year: key.split(':')[1] ?? slip.month.slice(0, 4), created: t.created!, code: t.code, income: t.income, ...(tax ? {} : { fileOnly: true }), ...(note ? { note } : {}), ...(units ? { units } : {}), ...(t.abroad ? { abroad: { swiss: t.abroad.total - t.abroad.days, total: t.abroad.total, wage: t.abroad.wage } } : {}) };
+    return { kind: 'tariff', region: t.region, year: key.split(':')[1] ?? slip.month.slice(0, 4), created: t.created!, code: t.code, income: t.income, ...(tax ? {} : { fileOnly: true }), ...(note ? { note } : {}), ...(units ? { units } : {}), ...(t.abroad ? { abroad: { swiss: t.abroad.total - t.abroad.days, total: t.abroad.total, wage: t.abroad.wage } } : {}), ...(t.annual ? { annual: { monthly: t.annual.monthly } } : {}), ...(t.yearEnd ? { yearEnd: t.yearEnd } : {}) };
   }
   if (kind === 'federal') {
     // The row the payslip read (a figure may change inside the year; a payment after the exit reads its earned year's), else the latest.
@@ -83,7 +86,7 @@ const day = (d: string) => `${d.slice(8, 10)}.${d.slice(5, 7)}.${d.slice(0, 4)}`
 const amount = (x: number) => new Intl.NumberFormat('de-CH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(x);
 const units = (x: number) => new Intl.NumberFormat('de-CH', { maximumFractionDigits: 3 }).format(x);
 
-export function sourceText(s: LineSource, documents: Pick<PayrollData['documents'], 'sourceFederal' | 'sourceSolution' | 'sourceCertificate'> & Partial<Pick<PayrollData['documents'], 'sourceTariff' | 'sourceTariffUnits' | 'sourceTariffAbroad'>>, lang: keyof Labels): string {
+export function sourceText(s: LineSource, documents: Pick<PayrollData['documents'], 'sourceFederal' | 'sourceSolution' | 'sourceCertificate'> & Partial<Pick<PayrollData['documents'], 'sourceTariff' | 'sourceTariffUnits' | 'sourceTariffAbroad' | 'sourceTariffAnnual' | 'sourceTariffYearEnd'>>, lang: keyof Labels): string {
   const w = (l: Labels) => l[lang] ?? l.de;
   switch (s.kind) {
     case 'federal': return `${w(documents.sourceFederal).replace('{year}', s.year)} · ${w(s.cite)}`;
@@ -92,6 +95,8 @@ export function sourceText(s: LineSource, documents: Pick<PayrollData['documents
     case 'tariff': return (documents.sourceTariff
       ? (s.fileOnly ? w(documents.sourceTariff).split(' · ')[0] : w(documents.sourceTariff)).replace('{region}', s.region).replace('{year}', s.year).replace('{date}', day(s.created)).replace('{code}', s.code).replace('{income}', amount(s.income))
       : `${s.region} ${s.year} ${s.code}`)
+      + (s.annual && documents.sourceTariffAnnual ? ` · ${w(documents.sourceTariffAnnual).replace('{monthly}', amount(s.annual.monthly))}` : '')
+      + (s.yearEnd && documents.sourceTariffYearEnd ? ` · ${w(documents.sourceTariffYearEnd).replace('{months}', String(s.yearEnd.months)).replace('{owed}', amount(s.yearEnd.owed)).replace('{withheld}', amount(s.yearEnd.withheld))}` : '')
       + (s.units && documents.sourceTariffUnits ? ` · ${w(documents.sourceTariffUnits).replace('{paid}', amount(s.units.paid)).replace('{quantity}', units(s.units.quantity)).replace('{per}', units(s.units.per)).replace(/\{unit\}/g, w(s.units.label))}` : '')
       + (s.abroad && documents.sourceTariffAbroad ? ` · ${w(documents.sourceTariffAbroad).replace('{swiss}', units(s.abroad.swiss)).replace('{total}', units(s.abroad.total)).replace('{wage}', amount(s.abroad.wage))}` : '')
       + (s.note ? ` · ${w(s.note)}` : '');

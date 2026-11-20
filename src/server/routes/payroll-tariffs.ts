@@ -121,7 +121,7 @@ router.get('/payroll/documents/:year/tax-at-source.csv', run((req, res) => {
     const e = person(r.employee);
     // A correction row names the municipality of the month it corrects.
     const tax = valueOn(e?.taxAtSource, `${r.corrects ?? s.month}-28`);
-    return [s.month, s.region, r.employee, r.name, e?.socialSecurityNumber, e?.birthDate, tax?.municipality, r.code, r.wage, r.income, r.rate, r.tax, r.commission, r.corrects ?? ''];
+    return [s.month, s.region, r.employee, r.name, e?.socialSecurityNumber, e?.birthDate, tax?.municipality, r.code, r.wage, r.income, r.rate, r.tax, r.commission, r.corrects ?? (r.yearEnd ? `year ${year}` : '')];
   }));
   const totals = lists.map((s) => [s.month, s.region, '', 'Total', '', '', '', '', s.totals.wage, undefined, undefined, s.totals.tax, s.totals.commission, `payable ${s.totals.payable.toFixed(2)}`]);
   const name = `quellensteuer-${year}${month ? `-${month.slice(5)}` : ''}${region ? `-${region.toLowerCase()}` : ''}.csv`;

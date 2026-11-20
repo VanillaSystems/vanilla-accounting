@@ -151,8 +151,7 @@ Two markers flag an entry you must read before you update:
   (Bezugsprovision) is an employer line D 2279 / C 5890 (new account «Bezugsprovision Quellensteuer»).
   Dokumente › Quellensteuer lists the settlement per canton and month (persons, wage, tariff, tax,
   commission, amount to pay) with its CSV. A new or corrected tariff file never changes a closed
-  payslip: the card offers the Rückwirkende Korrektur first. Cantons on the annual model (FR, GE, TI, VD,
-  VS) get the line «unvollständig» for now.
+  payslip: the card offers the Rückwirkende Korrektur first.
 - Löhne › Quellensteuer: a wage not paid monthly (hourly or daily, paid weekly or by the timesheets
   handed in) takes its rate from the average rate × 180 hours (21.667 days), as the Federal Tax
   Administration's circular no. 45 prescribes: tick «Lohn nicht monatlich» on the person's tax-at-source
@@ -166,6 +165,11 @@ Two markers flag an entry you must read before you update:
   abroad (of 20 a month) take their share off the taxable wage, while the whole wage sets the rate;
   the tax line says «15 von 20 Arbeitstagen in der Schweiz (ganzer Lohn …)». A bonus is taxed whole,
   and the payslip says so; a person living in the country gets a fact that only a treaty frees those days.
+- Löhne › Quellensteuer: the annual model of FR, GE, TI, VD and VS is computed. Each month's tax is the month's
+  wage × the rate of the year's rate-determining income (the year so far over its days × 360, plus its
+  bonuses), and December or the exit month settles the year: every month at the year's rate less what was
+  withheld, as a line «Jahresausgleich» and a row of its own in the settlement list. A payment after the exit
+  in those cantons, and the settlement of a year with an opening, stay «unvollständig».
 - Abschluss › Prüfen: a section «Löhne» with the payroll's year-end checks as facts (never a block):
   1091 at 31.12. against the payouts not paid by then, each named; each insurer's account with what
   the payslips accrued, what was paid and what is open, and «Schlussabrechnung erfassen» while no

@@ -236,3 +236,104 @@ test('another number of working days, all of them abroad, and a resident: each a
   assert.equal(line(resident, 'quellensteuer')[0].base, 6000, 'warn, don\'t block: taken off as entered');
   assert.ok(resident.facts.some((f) => f.key === 'abroadResident'), 'but said: a resident is taxed on them unless a treaty says otherwise');
 });
+
+// ─── 4. The annual model (KS 45 Ziff. 7; canton GE, Directives 2026 Ziff. 4) ──
+
+/**
+ * The GE excerpt (tar26ge.txt of 25.10.2025): the A0N brackets of 4'900 to 10'100 and the B0N brackets of 4'900 to
+ * 6'100 (the files' brackets are monthly incomes, format Ziff. 4.3), the commission and the median records, unchanged.
+ */
+const GE: LoadedTariff = loaded('ge');
+const annualTariffs = (region: string, year: string) => (region === 'GE' && year === '2026' ? GE : tariffs(region, year));
+
+/** Closes a GE person's months of 2026 in order and returns each month's tax lines and the closes. */
+async function yearOf(p: PayrollEmployee, more: { thirty?: boolean; lines?: MonthLine[] } = {}) {
+  const { closeOf } = await import('./support/payroll.js');
+  const store = firm([p]);
+  if (more.thirty) store.company.proration = [dated('2026-01-01', 'thirty-days' as const)];
+  store.monthLines = more.lines ?? [];
+  const events: ReturnType<typeof closeOf>[] = [];
+  const months: Record<string, { lines: ReturnType<typeof line>; facts: Array<{ key: string; vars?: Record<string, string | number> }>; missing: string[] }> = {};
+  for (let m = 1; m <= 12; m++) {
+    const month = `2026-${String(m).padStart(2, '0')}`;
+    const d = computePayslip({ ...ctxOf(store, events), tariffs: annualTariffs }, p.id, month);
+    if (!d) continue;
+    months[month] = { lines: line(d, 'quellensteuer'), facts: d.facts, missing: d.missing.filter((x) => x.wageType === 'quellensteuer').map((x) => x.missing) };
+    events.push(closeOf(d));
+  }
+  return { months, events, store };
+}
+const geSubject = (employment: PayrollEmployee['employment'], tax: PayrollEmployee['taxAtSource'] = [dated('2026-01-01', { subject: true, canton: 'GE', code: 'A0' })]) =>
+  owner({ id: 'y1', isOwner: false, employment, insurances: [dated('2026-01-01', { uvg: { insurance: 'uvg', code: 'A1' } })], taxAtSource: tax });
+const job = (from: string, amount: number, until?: string, more = {}) => dated(from, { kind: 'monthly' as const, amount, pensum: 100, ...more }, undefined, until);
+const total = (months: Awaited<ReturnType<typeof yearOf>>['months']) => Math.round(Object.values(months).flatMap((m) => m.lines).reduce((s, l) => s + l.amount, 0) * 100) / 100;
+
+test('KS 45 Ziff. 7.3.4 (GE Directives 4.2.11 Exemple 2): employed 16 Jan–10 Feb and 21 Feb–18 Mar, the year\'s income each month, settled at the exit', async () => {
+  // January 15 days 5'000, February 20 days 6'000, March 18 days 3'000 and a bonus of 2'000, as the circular's example.
+  const p = geSubject([job('2026-01-16', 10000, '2026-02-10'), job('2026-02-21', 8000, '2026-02-28'), job('2026-03-01', 5000, '2026-03-18')]);
+  const { months, events, store } = await yearOf(p, { thirty: true, lines: [{ id: 'b', employee: 'y1', month: '2026-03', wageType: 'bonus', amount: 2000, enteredAt: '2026-03-01T00:00:00Z' }] });
+  const own = (m: string) => months[m].lines.find((l) => !l.tariff?.yearEnd)!;
+  // The year's rate-determining income as the circular computes it, looked up as its twelfth in GE's monthly brackets.
+  assert.deepEqual([own('2026-01').tariff?.income, own('2026-01').tariff?.annual?.monthly, own('2026-01').rate, own('2026-01').amount], [120000, 10000, 15.56, 778], '5000 / 15 × 360');
+  assert.deepEqual([own('2026-02').tariff?.income, own('2026-02').rate, own('2026-02').amount], [113142.86, 14.84, 890.4], '(5000 + 6000) / 35 × 360');
+  assert.deepEqual([own('2026-03').tariff?.income, own('2026-03').rate, own('2026-03').amount], [97094.34, 13, 650], '14000 / 53 × 360 + 2000');
+  // At the exit: January and February at the year's 13.00 % (1'430.00) less what they withheld (1'668.40).
+  const settle = months['2026-03'].lines.find((l) => l.tariff?.yearEnd)!;
+  assert.deepEqual([settle.base, settle.rate, settle.amount, settle.tariff?.yearEnd], [11000, 13, -238.4, { months: 2, owed: 1430, withheld: 1668.4 }]);
+  assert.equal(total(months), 2080, 'the year: 16000 × 13.00 %, as the circular\'s 16000 × its rate');
+  assert.deepEqual(months['2026-03'].facts.find((f) => f.key === 'annualSettled')?.vars, { year: '2026', months: 3, owed: 2080, withheld: 2318.4 });
+  // The settlement list of March: her month's row and the year's settlement as a row of its own; the wage total is March's own.
+  const { settlementsOf } = await import('../src/payroll/settlement.js');
+  const { firmWageTypes } = await import('../src/payroll/catalogue.js');
+  const march = settlementsOf(events, '2026', ch.payroll!, firmWageTypes(ch.payroll!, store), store).find((s) => s.month === '2026-03')!;
+  assert.deepEqual(march.rows.map((r) => [r.yearEnd ?? false, r.wage, r.tax]), [[false, 5000, 650], [true, 11000, -238.4]]);
+  assert.deepEqual([march.totals.wage, march.totals.tax], [5000, 411.6]);
+  const src = lineSource(settle, { month: '2026-03', used: [] }, ch.payroll!, ch.payrollYears, [])!;
+  assert.match(sourceText(src, ch.payroll!.documents, 'de'), /satzbestimmend 97'094\.34 · Jahresmodell: 8'091\.20 im Monat · Jahresausgleich über 2 Monate: geschuldet 1'430\.00, abgezogen 1'668\.40$/);
+});
+
+test('KS 45 Ziff. 7.3.1 Beispiel 4: a raise in May and November; December settles the year at the rate of 72\'000', async () => {
+  const { months } = await yearOf(geSubject([job('2026-01-01', 5000), job('2026-05-01', 6000), job('2026-11-01', 8000)]));
+  const own = (m: string) => months[m].lines.find((l) => !l.tariff?.yearEnd)!;
+  assert.deepEqual([own('2026-01').tariff?.income, own('2026-01').rate], [60000, 7.62], '5000 × 12 in January (GE A0N 5\'000–5\'049: 7.62 %)');
+  assert.equal(own('2026-05').tariff?.income, 62400, 'the year so far over its days: (4 × 5000 + 6000) / 150 × 360');
+  assert.deepEqual([own('2026-12').tariff?.income, own('2026-12').rate], [72000, 9.87], 'GE A0N 6\'000–6\'049: 9.87 %');
+  assert.equal(total(months), 7106.4, 'the year: 72000 × 9.87 %');
+  assert.equal(months['2026-12'].lines.length, 2, 'December: its own tax and the settlement');
+});
+
+test('GE Directives 4.2.2: a 13th paid half in June and December counts when paid; December brings the year to 65\'000 × its rate', async () => {
+  const { months } = await yearOf(geSubject([job('2026-01-01', 5000, undefined, { thirteenth: { months: [6, 12] } })]));
+  assert.equal(months['2026-01'].lines[0].tariff?.income, 60000, 'January: the 13th not yet paid (KS 45 Ziff. 7.1, the realisation principle Swissdec software follows)');
+  assert.equal(months['2026-06'].lines[0].tariff?.income, 65000, 'June: (25000 + 5000 + 2500) / 180 × 360');
+  assert.equal(total(months), 5583.5, 'the year: 65000 × 8.59 % (GE A0N 5\'400–5\'449)');
+});
+
+test('a tariff code changed in June (B0): each month at its own code, all at the year\'s income (KS 45 Ziff. 7.4; TI, VS)', async () => {
+  const p = geSubject([job('2026-01-01', 5000, undefined, { thirteenth: { months: [12] } })], [dated('2026-01-01', { subject: true, canton: 'GE', code: 'A0' }), dated('2026-06-01', { subject: true, canton: 'GE', code: 'B0' })]);
+  const { months } = await yearOf(p);
+  const settle = months['2026-12'].lines.find((l) => l.tariff?.yearEnd)!;
+  // January to May: 25'000 at A0N 8.59 %, June to November: 30'000 at B0N 0.78 %, both at the year's 5'416.67 a month.
+  assert.deepEqual(settle.tariff?.yearEnd, { months: 11, owed: 2381.5, withheld: 1956 });
+  assert.equal(total(months), 2459.5, '2381.50 + December 10000 × 0.78 %');
+});
+
+test('the annual model\'s gaps say so: a payment after the exit, a year with an opening, the commission on the settlement', async () => {
+  const p = geSubject([job('2026-01-01', 6000, '2026-04-30')]);
+  const store = firm([p]);
+  store.monthLines = [{ id: 'n', employee: 'y1', month: '2026-06', wageType: 'bonus', amount: 1000, enteredAt: '2026-06-01T00:00:00Z' }];
+  const { closeOf } = await import('./support/payroll.js');
+  const events: ReturnType<typeof closeOf>[] = [];
+  let april;
+  for (const m of ['2026-01', '2026-02', '2026-03', '2026-04']) { april = computePayslip({ ...ctxOf(store, events), tariffs: annualTariffs }, 'y1', m)!; events.push(closeOf(april)); }
+  // April, her exit, settles the year: at a constant wage nothing differs, so no settlement line, but the fact says so.
+  assert.equal(april!.lines.filter((l) => l.tariff?.yearEnd).length, 0);
+  assert.equal(april!.facts.find((f) => f.key === 'annualSettled')?.vars?.months, 4);
+  const june = computePayslip({ ...ctxOf(store, events), tariffs: annualTariffs }, 'y1', '2026-06')!;
+  assert.ok(june.missing.some((m) => m.missing === 'annualAfterExit:GE'));
+  const opened = geSubject([job('2026-01-01', 6000)]);
+  opened.opening = { 2026: { through: '2026-05', bases: { qst: 30000 } } };
+  const d = computePayslip({ ...ctxOf(firm([opened])), tariffs: annualTariffs }, 'y1', '2026-12')!;
+  assert.ok(d.missing.some((m) => m.missing === 'annualOpening:GE'), 'the year cannot be settled without the opening\'s months');
+  assert.equal(line(d, 'quellensteuer').filter((l) => !l.tariff?.yearEnd).length, 1, 'the month\'s own tax still withheld');
+});

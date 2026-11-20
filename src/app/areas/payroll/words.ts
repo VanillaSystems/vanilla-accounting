@@ -40,7 +40,7 @@ const kindOfWageType = (wageType: string): string | undefined => data()?.contrib
 export function factText(f: PayslipFact): string {
   const v = f.vars ?? {};
   const vars: Record<string, string | number> = {};
-  for (const [k, x] of Object.entries(v)) vars[k] = k === 'date' ? formatDate(String(x)) : k === 'month' ? monthText(String(x)) : k === 'amount' || k === 'yearly' || k === 'caught' ? fmt(Number(x)) : k === 'days' ? Number(x).toLocaleString('de-CH', { maximumFractionDigits: 2 }) : k === 'kind' ? kindLabel(String(x)) : x;
+  for (const [k, x] of Object.entries(v)) vars[k] = k === 'date' ? formatDate(String(x)) : k === 'month' ? monthText(String(x)) : k === 'amount' || k === 'yearly' || k === 'caught' || k === 'owed' || k === 'withheld' ? fmt(Number(x)) : k === 'days' ? Number(x).toLocaleString('de-CH', { maximumFractionDigits: 2 }) : k === 'kind' ? kindLabel(String(x)) : x;
   return tWith(`payroll.fact.${f.key}`, vars);
 }
 
@@ -68,7 +68,8 @@ export function missingText(code: string, wageType: string, w?: Pick<WageTypeDef
   // The tax at source: a tariff file not loaded, a canton on the annual model, a code the file lacks (src/payroll/tax-at-source.ts).
   const [head, a, b] = code.split(':');
   if (head === 'tariff') return t('payroll.missing.tariff', { region: a, year: b });
-  if (head === 'annualModel') return t('payroll.missing.annualModel', { region: a });
+  if (head === 'annualAfterExit') return t('payroll.missing.annualAfterExit', { region: a });
+  if (head === 'annualOpening') return t('payroll.missing.annualOpening', { region: a });
   if (head === 'taxRegionUnknown') return t('payroll.missing.taxRegionUnknown', { region: a });
   if (head === 'taxCodeUnknown') return t('payroll.missing.taxCodeUnknown', { code: a });
   if (head === 'taxCodeRefused') return t('payroll.missing.taxCodeRefused', { code: a, why: labelOf(codeRuleOf(data() ?? {}, a)?.text) });

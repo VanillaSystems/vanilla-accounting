@@ -241,6 +241,10 @@ export interface PayslipLine {
     units?: { key: string; paid: number; quantity: number; per: number };
     /** Days worked abroad: the month's working days, those abroad, and the whole taxable wage the Swiss share was taken of. */
     abroad?: { days: number; total: number; wage: number };
+    /** The annual model: `income` is the year's; the month's income it was looked up with, and the months of the year it counts. */
+    annual?: { monthly: number; months: number };
+    /** The annual model's settlement of the year (December or the exit): the earlier months, what they owe at the year's rate, what they withheld. */
+    yearEnd?: { months: number; owed: number; withheld: number };
   };
 }
 

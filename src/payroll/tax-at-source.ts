@@ -24,7 +24,13 @@ export interface LoadedTariff { region: string; year: string; file: TariffFile; 
 export type TariffSource = (region: string, year: string) => LoadedTariff | undefined;
 
 /** Where a tax line comes from: the file, the code and the rate-determining income it was looked up with. */
-export interface TariffUse { region: string; code: string; income: number; created?: string; version?: string; units?: UnitsUse; abroad?: { days: number; total: number; wage: number } }
+export interface TariffUse {
+  region: string; code: string; income: number; created?: string; version?: string; units?: UnitsUse; abroad?: { days: number; total: number; wage: number };
+  /** The annual model: `income` is the year's; the month's it was looked up with, and the months of the year it counts. */
+  annual?: { monthly: number; months: number };
+  /** The year's settlement: the earlier months it settles, what they owe at the year's rate, what they withheld. */
+  yearEnd?: { months: number; owed: number; withheld: number };
+}
 
 export interface TaxAtSourceInput {
   data: PayrollData;
@@ -48,6 +54,17 @@ export interface TaxAtSourceInput {
   abroad?: { abroad: number; total?: number };
   /** Her address on the month's last day is in the jurisdiction's own country: days abroad are taken off only where a treaty says so. */
   resident?: boolean;
+  /**
+   * The annual model (§22 decision 122): her closed months of the year before this one (not the opening's), each with
+   * its lines as closed, its days employed scaled to `partMonth` and the region she was taxed in.
+   */
+  year?: ReadonlyArray<{ id: string; month: string; lines: readonly PayslipLine[]; days: number; region?: string; base: number }>;
+  /** The month the year's tax is settled in: December, or the employment ends in it. */
+  yearEnd?: boolean;
+  /** The year has an opening (months paid before the app): their wages are not in `year`. */
+  opening?: boolean;
+  /** Not employed in the month (a payment after the exit). */
+  afterExit?: boolean;
   tariffs?: TariffSource;
   insurances: readonly PayrollInsurance[];
   /** The region of a closed payslip's tax, for a correction carried from it. */
@@ -102,7 +119,7 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
     if (!region) return miss('taxRegion');
     const model = t.regions[region]?.model;
     if (!model) return miss(`taxRegionUnknown:${region}`);
-    if (model !== 'monthly') return miss(`annualModel:${region}`);
+    if (model === 'annual' && input.afterExit) return miss(`annualAfterExit:${region}`);
     const code = tariffCode(person.code, person.church);
     if (!code) return miss('taxCode');
     // A code the payslip does not compute (the simplified procedure, an insurer's replacement income), or reports at 0 % (§22 decision 120).
@@ -114,23 +131,23 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
 
     // The month's taxable wage: its periodic part, of which what the firm prorated to the days employed (a line with
     // its days: the monthly wage, a recurring Lohnart), and its aperiodic part (a carried correction is aperiodic).
-    let prorated = 0; let periodic = 0; let aperiodic = 0;
-    for (const l of lines) {
-      const w = types.get(l.wageType);
-      if (!w || w.side === 'employer' || !w.bases.includes(baseKey(data, input.wageType.key))) continue;
-      const signed = w.sign === '-' ? -l.amount : l.amount;
-      if (l.corrects || t.aperiodic.includes(w.lohnausweis ?? '')) aperiodic += signed;
-      else if (l.days) prorated += signed;
-      else periodic += signed;
-    }
+    const qst = baseKey(data, input.wageType.key);
+    const { prorated, periodic, aperiodic } = splitOf(t, types, lines, qst);
     const base = round2(prorated + periodic + aperiodic);
     if (base <= 0) return undefined;
 
     // A wage not paid monthly: its average rate per unit worked, times the units of a month (§22 decision 119).
-    const units = person.notMonthly ? unitIncome(t, types, lines, baseKey(data, input.wageType.key)) : undefined;
+    const units = person.notMonthly ? unitIncome(t, types, lines, qst) : undefined;
     if (units === 'mixed') return miss('notMonthlyMixed');
     let income: number;
-    if (units) income = units.income;
+    // The annual model: the year's rate-determining income, looked up as a month's (the files' brackets are monthly).
+    const months = model === 'annual' ? (input.year ?? []).filter((m) => m.region === region) : [];
+    let annual: ReturnType<typeof annualIncome> | undefined;
+    if (model === 'annual') {
+      annual = annualIncome(t, types, qst, months, { lines, days: input.days }, person, input.pensum, loaded.file.median);
+      if (annual === 'mixed') return miss('notMonthlyMixed');
+      income = annual.monthly;
+    } else if (units) income = units.income;
     else {
       // The rate-determining income (KS 45 Ziff. 6): what the firm prorated in a part month back to a whole month;
       // what is paid as worked (hours, a month's line) counts as paid (§22 decision 94); other employments to their whole.
@@ -176,9 +193,39 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
     if (!bracket) return miss(`taxCodeUnknown:${code}`);
     let amount = roundStep(taxable * bracket.rate / 100, t.rounding);
     if (amount < bracket.minimum) amount = bracket.minimum;
-    if (amount === 0 && !rule?.report) return undefined;
-    const tariff: TariffUse = { region, code: file, income, created: loaded.file.created, version: loaded.sha256.slice(0, 12), ...(units ? { units: units.used } : {}), ...(abroad ? { abroad } : {}) };
-    out.lines.push({ wageType: input.wageType.key, label: input.label, base: taxable, rate: bracket.rate, amount, side: 'employee', source: `tariff:${region}:${year}`, tariff });
+    const used = annual && annual !== 'mixed' ? annual : undefined;
+    const tariff: TariffUse = {
+      region, code: file, income: used ? used.annual : income, created: loaded.file.created, version: loaded.sha256.slice(0, 12),
+      ...(units && !used ? { units: units.used } : {}), ...(used?.units ? { units: used.units } : {}), ...(abroad ? { abroad } : {}),
+      ...(used ? { annual: { monthly: used.monthly, months: months.length + 1 } } : {}),
+    };
+    if (amount !== 0 || rule?.report) out.lines.push({ wageType: input.wageType.key, label: input.label, base: taxable, rate: bracket.rate, amount, side: 'employee', source: `tariff:${region}:${year}`, tariff });
+
+    // The year's tax settled in December or the exit month (KS 45 Ziff. 7.2, 7.3.1): every month of the year in the
+    // region at the rate of the year's income, less what was withheld; the difference is a line of this month.
+    if (!used || !input.yearEnd) return undefined;
+    if (input.opening) return miss(`annualOpening:${region}`);
+    const ids = new Set(months.map((m) => m.id));
+    let due = 0; let earlier = 0;
+    for (const m of months) {
+      const own = m.lines.find((l) => isTax(l) && !l.corrects && !l.tariff?.yearEnd && l.tariff);
+      const c = own?.tariff?.code ?? file;
+      const r = bracketOf(loaded.file, c, used.monthly, to)?.rate ?? bracket.rate;
+      due += m.base * r / 100;
+      earlier += m.base;
+    }
+    // Withheld: every tax line of those months (their own, a settlement, a correction they carried for a month of the
+    // year), and the corrections this month carries for one of them.
+    const ofYear = (l: PayslipLine) => isTax(l) && (l.tariff?.region ?? (l.corrects ? input.regionOf(l.corrects) : region)) === region && (!l.corrects || ids.has(l.corrects));
+    const withheld = round2(months.reduce((s, m) => s + m.lines.filter(ofYear).reduce((x, l) => x + l.amount, 0), 0) + lines.filter((l) => l.corrects && ofYear(l)).reduce((x, l) => x + l.amount, 0));
+    const owed = roundStep(due, t.rounding);
+    const settle = round2(owed - withheld);
+    out.facts.push({ key: 'annualSettled', vars: { year, months: months.length + 1, owed: round2(owed + amount), withheld: round2(withheld + amount) } });
+    if (settle === 0 || !months.length) return undefined;
+    out.lines.push({
+      wageType: input.wageType.key, label: input.label, base: round2(earlier), rate: bracket.rate, amount: settle, side: 'employee', source: `tariff:${region}:${year}`,
+      tariff: { ...tariff, units: undefined, abroad: undefined, yearEnd: { months: months.length, owed, withheld } },
+    });
     return undefined;
   });
   tax();
@@ -210,6 +257,62 @@ export function taxAtSourceLines(input: TaxAtSourceInput): TaxAtSourceResult {
     });
   }
   return out;
+}
+
+/** A month's lines that count for the tax's base, by kind: prorated to the days employed, other periodic, aperiodic. */
+function splitOf(t: TaxAtSourceData, types: ReadonlyMap<string, WageType>, lines: readonly PayslipLine[], base: string) {
+  let prorated = 0; let periodic = 0; let aperiodic = 0;
+  for (const l of lines) {
+    const w = types.get(l.wageType);
+    if (!w || w.side === 'employer' || !w.bases.includes(base)) continue;
+    const signed = w.sign === '-' ? -l.amount : l.amount;
+    if (l.corrects || t.aperiodic.includes(w.lohnausweis ?? '')) aperiodic += signed;
+    else if (l.days) prorated += signed;
+    else periodic += signed;
+  }
+  return { prorated, periodic, aperiodic };
+}
+
+/**
+ * The annual model's rate-determining income (KS 45 Ziff. 7.3; §22 decision 122): the year's periodic wage so far over
+ * its days employed (30 a month) times 360, her other employments to their whole, plus the year's aperiodic payments;
+ * a wage not paid monthly by its average rate × 12 months' units. `monthly` is the twelfth the files' monthly brackets
+ * are read with.
+ */
+function annualIncome(
+  t: TaxAtSourceData, types: ReadonlyMap<string, WageType>, qst: string,
+  months: ReadonlyArray<{ lines: readonly PayslipLine[]; days: number }>, now: { lines: readonly PayslipLine[]; days: number },
+  person: TaxAtSource, pensum: number | undefined, median: number | undefined,
+): { annual: number; monthly: number; units?: UnitsUse } | 'mixed' {
+  const all = [...months, now];
+  if (person.notMonthly) {
+    const year = all.flatMap((m) => m.lines);
+    const u = unitIncome(t, types, year, qst);
+    if (u === 'mixed') return 'mixed';
+    if (u) {
+      const perYear = round2(u.used.paid / u.used.quantity * u.used.per * 12 + (u.income - u.used.paid / u.used.quantity * u.used.per));
+      return { annual: perYear, monthly: round2(perYear / 12), units: { ...u.used, per: round2(u.used.per * 12) } };
+    }
+  }
+  let periodic = 0; let aperiodic = 0; let days = 0;
+  for (const m of all) {
+    const s = splitOf(t, types, m.lines, qst);
+    periodic += s.prorated + s.periodic;
+    aperiodic += s.aperiodic;
+    days += m.days;
+  }
+  const year = t.partMonth * 12;
+  let income = days > 0 ? periodic / days * year : 0;
+  const other = person.otherEmployment;
+  if (other !== undefined) {
+    if (typeof other === 'object' && typeof other.income === 'number') income += other.income * 12;
+    else if (pensum && pensum > 0) {
+      const whole = other === 'unknown' ? 100 : pensum + (typeof other === 'object' ? other.pensum ?? 0 : 0);
+      if (other === 'unknown' ? pensum < 100 : true) income = income * whole / pensum;
+    } else if (median !== undefined) income = Math.max(income, median * 12);
+  }
+  const annual = round2(income + aperiodic);
+  return { annual, monthly: round2(annual / 12) };
 }
 
 /** How a wage not paid monthly was extrapolated: what was paid on the units worked, how many, and to how many a month. */

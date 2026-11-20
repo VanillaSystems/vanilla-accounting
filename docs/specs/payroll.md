@@ -2008,8 +2008,8 @@ Taken while building B2, the Quellensteuer (2026-11-19):
      list reads it. A correction never carries it: the month that carries the tax's
      correction takes it again, so it is charged once. The canton grants it only for a timely settlement; the
      app does not know the payment's date and books it with the payslip.
-93. **The monthly model only.** FR, GE, TI, VD and VS apply the annual model (KS 45 Ziff. 3); a person whose
-     canton is one of them gets the line «unvollständig: <Kanton> rechnet nach dem Jahresmodell». The regions
+93. **The monthly model only** (superseded by decision 122: the annual model is computed). FR, GE, TI, VD and VS apply the annual model (KS 45 Ziff. 3); a person whose
+     canton is one of them got the line «unvollständig: <Kanton> rechnet nach dem Jahresmodell». The regions
      and their model are data (`payroll.yaml taxAtSource.regions`).
 94. **The rate-determining income** (KS 45 Ziff. 6, FAQ KS 45 of the cantons' working group, 2026): the
      month's lines that count for the QST base, split by their Lohnausweis field into periodic and aperiodic
@@ -2318,6 +2318,61 @@ publishes as «FAQ_KS45 2026.pdf» is the working group's FAQ of 26.9.2022, word
     (Gre-3, decision 120). As data: `taxAtSource.abroad` (20 working days, the country of residents). Tests:
     tests/payroll-tax-at-source-cases.test.ts (Beispiele 1–2 of Ziff. 6.7 and FAQ Frage 1 with the ZH rates of 2026),
     tests/payroll-days-abroad-api.test.ts (the input, its refusals, the close).
+122. **The annual model is computed: the year's income sets each month's rate, and December or the exit settles the
+    year** (KS 45 Ziff. 7.2, 7.3, 7.4, 8.3–8.4; FAQ Frage 6, 15; the cantons' own guidance: GE, «Directives 2026
+    concernant l'imposition à la source», Ziff. 4.1–4.2, on ge.ch (Impôt à la source › directives); VD,
+    «Barèmes et instructions 2026», Ziff. 5.2.6, 5.3.4, 5.5,
+    https://www.vd.ch/fileadmin/user_upload/organisation/dfin/aci/fichiers_pdf/21034-10_Employeurs_2026.pdf; TI,
+    «Direttiva cantonale» of 1.1.2026, Ziff. 2.4, 2.4.2,
+    https://www4.ti.ch/fileadmin/DFE/DC/DOC-IF/Direttive/Direttiva_UIF__vers._1.0_del_01.01.2026_.pdf; FR,
+    «Instructions impôt à la source» valid from 1.1.2025 (no 2026 edition found), Ziff. 4.1–4.3, on fr.ch (Impôt à la source › Débiteurs d'une prestation imposable);
+    VS, «Directives sur l'impôt à la source 2025» (no 2026 edition found), Ziff. 5, 17, 27,
+    listed on https://www.vs.ch/web/scc/baremes-source).
+    The canton documents of VD, TI, FR and VS were read by a research agent for this decision, GE and the circular by hand.
+    - **The tax of a month is that month's taxable wage × the rate of the year's rate-determining income** (KS 45 Ziff.
+      7.2, its four steps). The year's income is the year's periodic wage so far (the closed months in the same canton
+      and this one) over the days employed (30 a month, the firm's proration) × 360, plus the year's aperiodic payments
+      (Ziff. 7.3.1, 7.3.4: «nur die periodischen Gehaltsbestandteile … umgerechnet»). That reproduces the circular's
+      example of Ziff. 7.3.4 exactly (its three annual incomes for January to March, to the cent) and the GE Directives' 4.2.9
+      to 4.2.11. Other employments are converted as in the monthly model (Ziff. 7.3.2; a known income × 12, the median
+      × 12); a wage not paid monthly takes the year's average rate × 2'160 hours or 260 days (Ziff. 7.3.3, GE 4.2.7–4.2.8).
+    - **The files' brackets are monthly, so the year's income is looked up as its twelfth.** The record format says of
+      every canton's file «Es handelt sich bei allen Tarifen immer um das monatliche Einkommen» (Ziff. 4.3); VS says
+      it in words (Directives 2025 Ziff. 27, Exemple 1: the annual income «: 12 mois = Ø … mensuel moyen» and the rate of that); VD prints each
+      bracket per year and per month side by side (an annual bracket is 12 × the monthly one); TI's own tables are on
+      annual incomes, which the ESTV file gives as monthly ones. The line keeps the year's income (`income`, which the
+      settlement list and the canton's form ask for, GE 4.1.2: «le montant déterminant pour le taux doit être renseigné
+      … pour chaque mois») and the twelfth it was looked up with (`tariff.annual`); the page says «satzbestimmend
+      <the year's> · Jahresmodell: <its twelfth> im Monat».
+    - **Corrections are made once, in December or the month the employment ends** (KS 45 Ziff. 7.2: «Alternativ … steht es
+      dem Arbeitgeber offen, die erforderlichen Korrekturen … erst am Ende des Kalenderjahres (Dezember) bzw. am Ende des
+      Arbeitsverhältnisses vorzunehmen»; GE 4.1.2, VD 5.5, TI 2.4.2 «conguaglio», VS 17). Between, each month's rate
+      follows the year so far, so a raise or a bonus moves the rate from its month on, and earlier months are not
+      corrected then. The settlement: every earlier closed month of the year in the canton, its taxable wage at the
+      year's rate under the code it was taxed with (a code change counts from the month after it, Ziff. 7.4; TI's and VS's
+      examples apply each period's code at the year's income), rounded as the tax, less everything withheld for those
+      months (their tax lines and the corrections carried for them); the difference is a tax line of its own
+      («Jahresausgleich», `tariff.yearEnd`: months, owed, withheld), with the commission on it, and a row of its own in
+      the settlement list (its wage is not counted again in the month's total). A fact always says the year was settled
+      and what it owes. Tests reproduce the year's totals: the year's wage × the rate of its twelfth (Ziff. 7.3.1 Beispiel 4, a
+      raise in May and November; GE 4.2.2, the 13th in June and December).
+    - **The 13th counts when it is paid** (KS 45 Ziff. 7.1: Swissdec-certified software follows the «Realisationsprinzip»,
+      approved by the tax authorities), not «from January if known» (the option of Ziff. 7.3.1, GE 4.2.2, VD 5.5, FR's
+      example, TI's examples): the rate is lower until the 13th is paid and December settles the difference. The year's
+      tax is the same either way; the months between differ. Chosen because the app's 13th is computed when paid and the
+      realisation needs no guess; a canton that expects the 13th from January sees higher months there.
+    - **A canton change** counts only the months taxed in the canton (Ziff. 8.3–8.4: «wie bei einem unterjährigen Ein-
+      bzw. Austritt»): months of another canton are not in the year's income nor settled there.
+    - **Left «unvollständig»**: a payment after the exit (a Nachzahlung) in an annual canton (FAQ Frage 15: the exit
+      year's periodic income annualised plus the year's aperiodic and the payment, in the exit year or the next; VD 5.3.5
+      and FR 4.2.6 differ in detail) says «… rechnet nach dem Jahresmodell: eine Zahlung nach dem Austritt …»; the
+      settlement of a year with an opening (months paid before the app, whose tax the app does not hold) says
+      «Jahresausgleich … die Monate der Eröffnung fehlen», while the month's own tax is still withheld. Not built: the
+      settlement when the person moves out of an annual canton during the year (Ziff. 8.2, 8.4 show none at the move), a
+      canton's own deadline for its annual statement (TI: 31 January), FR's practice (its instructions name no
+      settlement step; the SCC checks the year afterwards, Ziff. 6.6).
+    Tests: tests/payroll-tax-at-source-cases.test.ts (GE excerpt tar26ge-excerpt.txt; the examples named above, the code
+    change, the gaps); the settlement list's year-end row and its CSV mark (`corrects` = «year 2026»).
 
 ---
 

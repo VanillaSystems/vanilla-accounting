@@ -463,6 +463,9 @@ documents:
   # A wage not paid monthly (taxAtSource.notMonthly): what was paid on the units worked, extrapolated to a month's units.
   # Days worked abroad (taxAtSource.abroad): the Swiss working days of the month, and the whole wage the share was taken of.
   sourceTariffAbroad: { de: "{swiss} von {total} Arbeitstagen in der Schweiz (ganzer Lohn {wage})", fr: "{swiss} jours de travail en Suisse sur {total} (salaire entier {wage})", it: "{swiss} giorni lavorativi in Svizzera su {total} (salario intero {wage})", en: "{swiss} of {total} working days in Switzerland (whole wage {wage})" }
+  # The annual model (FR, GE, TI, VD, VS): the year's rate-determining income above, looked up as the month's; the year's settlement.
+  sourceTariffAnnual: { de: "Jahresmodell: {monthly} im Monat", fr: "modèle annuel : {monthly} par mois", it: "modello annuale: {monthly} al mese", en: "annual model: {monthly} a month" }
+  sourceTariffYearEnd: { de: "Jahresausgleich über {months} Monate: geschuldet {owed}, abgezogen {withheld}", fr: "décompte annuel sur {months} mois : dû {owed}, retenu {withheld}", it: "conguaglio su {months} mesi: dovuto {owed}, trattenuto {withheld}", en: "year's settlement over {months} months: owed {owed}, withheld {withheld}" }
   sourceTariffUnits: { de: "{paid} für {quantity} {unit}, auf {per} {unit} hochgerechnet", fr: "{paid} pour {quantity} {unit}, extrapolé à {per} {unit}", it: "{paid} per {quantity} {unit}, estrapolato a {per} {unit}", en: "{paid} for {quantity} {unit}, extrapolated to {per} {unit}" }
 
 # The Lohnausweis (Form 11, ESTV/SSK Wegleitung 2026): its numbered fields in print order, each with its

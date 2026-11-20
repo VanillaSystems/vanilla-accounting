@@ -19,6 +19,8 @@ export interface SettlementRow {
    * with the month it corrects (§22 decision 111). Absent: the month's own tax.
    */
   corrects?: string;
+  /** The annual model's settlement of the year (§22 decision 122): the year's earlier months at the year's rate, less what they withheld. */
+  yearEnd?: boolean;
   /** The taxable wage: of the month, or of the corrected month as computed when the correction was made (absent: not known). */
   wage?: number;
   code?: string; income?: number; rate?: number;
@@ -50,7 +52,7 @@ export function settlementsOf(closes: readonly PayslipClose[], year: string, dat
   // Each closed payslip's own tax line: its region, and what a correction of it without its own figures declares.
   const ownOf = new Map<string, PayslipLine>();
   const monthOf = new Map(closes.map((c) => [c.id, c.month]));
-  for (const c of closes) for (const l of c.lines) if (keys.tax.has(l.wageType) && l.tariff && !l.corrects) ownOf.set(c.id, l);
+  for (const c of closes) for (const l of c.lines) if (keys.tax.has(l.wageType) && l.tariff && !l.corrects && !l.tariff.yearEnd) ownOf.set(c.id, l);
   const lists = new Map<string, Settlement>();
   for (const c of [...closes].filter((x) => x.month.startsWith(year)).sort((a, b) => a.month.localeCompare(b.month) || a.person.name.localeCompare(b.person.name))) {
     // The rows of this payslip per region: the month's own tax, and one per month a carried correction corrects.
@@ -65,11 +67,12 @@ export function settlementsOf(closes: readonly PayslipClose[], year: string, dat
         commission.set(region, { amount: round2((had?.amount ?? 0) + l.amount), ...(l.rate !== undefined ? { rate: l.rate } : had?.rate !== undefined ? { rate: had.rate } : {}) });
         continue;
       }
-      const corrected = l.corrects ? monthOf.get(l.corrects) ?? l.corrects.slice(0, 7) : '';
+      const corrected = l.corrects ? monthOf.get(l.corrects) ?? l.corrects.slice(0, 7) : l.tariff?.yearEnd ? 'yearEnd' : '';
       const byMonth = rows.get(region) ?? new Map<string, SettlementRow>();
-      const row = byMonth.get(corrected) ?? { payslip: c.id, employee: c.employee, name: c.person.name, ...(corrected ? { corrects: corrected } : {}), tax: 0, commission: 0 };
+      const row = byMonth.get(corrected) ?? { payslip: c.id, employee: c.employee, name: c.person.name, ...(l.corrects ? { corrects: corrected } : {}), ...(l.tariff?.yearEnd ? { yearEnd: true } : {}), tax: 0, commission: 0 };
       row.tax = round2(row.tax + l.amount);
-      if (!l.corrects) Object.assign(row, { wage: l.base ?? 0, code: l.tariff?.code, income: l.tariff?.income, rate: l.rate });
+      if (l.tariff?.yearEnd) Object.assign(row, { wage: l.base ?? 0, code: l.tariff.code, income: l.tariff.income, rate: l.rate });
+      else if (!l.corrects) Object.assign(row, { wage: l.base ?? 0, code: l.tariff?.code, income: l.tariff?.income, rate: l.rate });
       else if (l.tariff?.wage !== undefined) Object.assign(row, { wage: l.tariff.wage, code: l.tariff.code, income: l.tariff.income, rate: l.tariff.rate });
       else if (row.code === undefined) {
         // A correction entered by hand: the corrected month's code as it declared it; its wage and rate are not known.
@@ -85,7 +88,7 @@ export function settlementsOf(closes: readonly PayslipClose[], year: string, dat
       shareCommission(list, commission.get(region));
       // A row that nets to nothing (a correction taken back in the same month) is not declared; nor a list left empty.
       // A month's own row at 0 % (a code the canton lists without tax, §22 decision 120) is declared with its wage.
-      const kept = list.filter((r) => r.tax !== 0 || r.commission !== 0 || (!r.corrects && !!r.wage && r.code !== undefined));
+      const kept = list.filter((r) => r.tax !== 0 || r.commission !== 0 || (!r.corrects && !r.yearEnd && !!r.wage && r.code !== undefined));
       if (!kept.length) continue;
       const k = `${c.month}|${region}`;
       const s = lists.get(k) ?? { region, month: c.month, rows: [], totals: { wage: 0, tax: 0, commission: 0, payable: 0 }, files: [] };
@@ -101,7 +104,7 @@ export function settlementsOf(closes: readonly PayslipClose[], year: string, dat
     const firm = regionSolutionOf(store.insurances, data, s.region, firstDay(s.month), lastDay(s.month))?.insurance;
     return {
       // The wage total is the month's own: a correction's wage is the corrected month's, declared there already.
-      ...s, totals: { wage: sum(s.rows.filter((r) => !r.corrects).map((r) => r.wage ?? 0)), tax, commission, payable: round2(tax - commission) },
+      ...s, totals: { wage: sum(s.rows.filter((r) => !r.corrects && !r.yearEnd).map((r) => r.wage ?? 0)), tax, commission, payable: round2(tax - commission) },
       ...(firm ? { insurer: { id: firm.id, name: firm.name, ...(firm.customerNumber ? { customerNumber: firm.customerNumber } : {}) } } : {}),
     };
   }).sort((a, b) => a.month.localeCompare(b.month) || a.region.localeCompare(b.region));
@@ -117,6 +120,6 @@ function shareCommission(rows: SettlementRow[], commission: { amount: number; ra
   for (const r of rows) r.commission = commission.rate !== undefined ? round2(r.tax * commission.rate / 100) : taxed ? round2(commission.amount * r.tax / taxed) : 0;
   const rest = round2(commission.amount - sum(rows.map((r) => r.commission)));
   if (rest === 0) return;
-  const target = rows.find((r) => !r.corrects) ?? [...rows].sort((a, b) => Math.abs(b.tax) - Math.abs(a.tax))[0];
+  const target = rows.find((r) => !r.corrects && !r.yearEnd) ?? [...rows].sort((a, b) => Math.abs(b.tax) - Math.abs(a.tax))[0];
   target.commission = round2(target.commission + rest);
 }
