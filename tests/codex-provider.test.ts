@@ -57,8 +57,8 @@ before(async () => {
   writeFileSync(join(process.env.CODEX_HOME, 'auth.json'), '{"stub":"sign-in"}');
   writeFileSync(join(process.env.CODEX_HOME, 'AGENTS.md'), 'CANARY: the person\'s own instructions');
   process.env.VANILLA_CODEX_HOME = join(dir, 'app-codex');
-  // A claude whose plan limit is reached, as Claude Code prints it.
-  writeFileSync(join(dir, 'claude-limit'), `#!/bin/sh\n[ "$1" = --version ] && exit 0\ncat >/dev/null\necho '{"type":"result","is_error":true,"result":"You\\u0027ve hit your limit · resets 6pm (Europe/Zurich)"}'\nexit 1\n`);
+  // A claude whose plan limit is reached, as Claude Code prints it: signed in, as one at its limit is.
+  writeFileSync(join(dir, 'claude-limit'), `#!/bin/sh\n[ "$1" = --version ] && exit 0\n[ "$1" = auth ] && { echo '{"loggedIn":true}'; exit 0; }\ncat >/dev/null\necho '{"type":"result","is_error":true,"result":"You\\u0027ve hit your limit · resets 6pm (Europe/Zurich)"}'\nexit 1\n`);
   chmodSync(join(dir, 'claude-limit'), 0o755);
 });
 after(() => stub.stop());
@@ -270,4 +270,35 @@ test('the other is asked only for a CLI\'s refusal, and only when it serves the 
   assert.ok((await ask('{}', { step: 'classify' })).length, 'Claude Code answers for Codex at its limit');
   process.env.CODEX_STUB_MODE = 'act';
   await assert.rejects(ask('{}', { step: 'classify', timeoutMs: 20_000 }), /wanted to act/, 'a run that broke the rules is no reason to ask the other');
+});
+
+test('one order for the setup, the KI column and the steps: a Claude Code that is installed but signed out never stands before a signed-in Codex', async () => {
+  const { sidebarAgent } = await import('../src/llm/ask.js');
+  const { setupView } = await import('../src/server/ai-setup.js');
+  both();
+  process.env.CLAUDE_STUB_SIGNED_OUT = '1';
+  try {
+    forgetCli();
+    assert.equal((await sidebarAgent()).provider.id, 'codex-cli', 'the KI column asks the CLI that is signed in');
+    assert.equal((await resolveStep('classify')).provider.id, 'codex-cli');
+    const view = await setupView();
+    assert.deepEqual(view.clis.map((c) => [c.cli, c.probe.found]), [['claude', 'signedOut'], ['codex', 'signedIn']]);
+    assert.equal(view.sidebar, 'codex', 'what the first screen calls «bereit» is what the KI column runs on');
+    settings({ cli: 'claude' });
+    forgetCli();
+    assert.equal((await sidebarAgent()).provider.id, 'codex-cli', 'a chosen CLI that is signed out yields to the one that answers');
+    assert.equal((await setupView()).sidebar, 'codex');
+    settings({ cli: 'codex' });
+    delete process.env.CLAUDE_STUB_SIGNED_OUT;
+    forgetCli();
+    assert.equal((await sidebarAgent()).provider.id, 'codex-cli', 'both signed in: the CLI chosen in Firma › KI first');
+    settings({});
+    delete process.env.CLAUDE_STUB_SIGNED_OUT;
+    forgetCli();
+    assert.equal((await sidebarAgent()).provider.id, 'claude-cli', 'both signed in: Claude Code first, as before');
+    assert.equal((await setupView()).sidebar, 'claude');
+  } finally {
+    delete process.env.CLAUDE_STUB_SIGNED_OUT;
+    forgetCli();
+  }
 });

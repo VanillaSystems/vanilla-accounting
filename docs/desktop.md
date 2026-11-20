@@ -76,7 +76,7 @@ Other questions of macOS, and when they come:
 - Automation of Mail («… möchte Mail steuern»): only for a source that reads the Mac's Mail app,
   at its «Prüfen» or its runs. Its «Prüfen» says before the first click that macOS will ask.
 - Incoming connections (the firewall, when it is on): only when the phone is switched on in
-  Firma › Handy, which says so (`phone.firewall`). A phone switched on before starts listening
+  Firma › Belege vom Handy, which says so (`phone.firewall`). A phone switched on before starts listening
   again only once books are open, never before the first window.
 - The keychain (`safeStorage`): read when a stored password or key is used. An unsigned build is
   a new app to the keychain after each update, so macOS may ask for it again then; a build signed
@@ -90,11 +90,11 @@ do, and holds the asynchronous ones as macOS does while it asks.
 
 The receipt app on the iPhone (`ios/`) and the scan page (`/scan`) send photos into the open
 books' inbox, where the background run reads them like a drop. The phone pairs once, by scanning
-a QR code the Mac shows in Firma › Handy.
+a QR code the Mac shows in Firma › Belege vom Handy.
 
 **Security model.** The books API listens on 127.0.0.1 only, behind its host guard, as before;
 nothing of it is on the network. The phone gets its own listener, and only while a person has
-switched it on in Firma › Handy (off by default, and off again with one click):
+switched it on in Firma › Belege vom Handy (off by default, and off again with one click):
 
 | | |
 |---|---|

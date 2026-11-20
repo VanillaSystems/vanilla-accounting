@@ -10,7 +10,7 @@ import { capturedStem } from '../../intake/captured.js';
 import { fileHeaders } from '../../core/files.js';
 import { smallerPdf } from '../../parsers/smaller.js';
 import { INTAKE, engine } from './automation.js';
-import { APP_STORE_URL } from '../phone.js';
+import { phoneAppUrl } from '../../platform/phone-app.js';
 import { qrSvg } from '../../desktop/qr.js';
 
 export const router = Router();
@@ -22,9 +22,10 @@ router.get('/scan', (_req, res) => {
   res.send(readFileSync(join(APP_ROOT, 'src', 'server', 'scan.html'), 'utf8'));
 });
 
-/** «Handy koppeln», step 1: the receipt app's download link and its QR code (paper colours, as a scanner expects). */
+/** «Belege vom Handy», step 1: the receipt app's download link and its QR code (paper colours, as a scanner expects); `{}` while the app has none. */
 router.get('/api/phone/app', (_req, res) => {
-  res.json({ url: APP_STORE_URL, qr: qrSvg(APP_STORE_URL) });
+  const url = phoneAppUrl();
+  res.json(url ? { url, qr: qrSvg(url) } : {});
 });
 
 router.get('/scan/manifest.json', (_req, res) => {

@@ -12,7 +12,7 @@ import { keepKey, KeyNotKept } from '../llm/key-store.js';
 import { isRateLimitSignal } from '../llm/adaptive-pool.js';
 import { claudeCli } from '../llm/providers/claude-cli.js';
 import { codexCli } from '../llm/providers/codex-cli.js';
-import { forgetCli, keyOf } from '../llm/providers/index.js';
+import { forgetCli, keyOf, noteSignedIn } from '../llm/providers/index.js';
 import { KEYED, keyedProvider } from '../llm/providers/keyed.js';
 import { readSettings, writeCli, writeNoAi } from '../llm/settings.js';
 import { aiOff } from '../llm/off.js';
@@ -27,7 +27,11 @@ import type { ApiErrorBody } from '../types/api-error.js';
 export async function setupView(): Promise<AiSetupView> {
   const clis = await probeAll();
   forgetCli();
+  // Claude Code's look is the one its calls take. Codex's card looks in the person's own home, and «bereit» needs the
+  // test call, which runs in the app's CODEX_HOME; the order asks that home itself (codexCli.ready, src/llm/providers/index.ts).
+  for (const { cli, probe } of clis) if (cli === 'claude') noteSignedIn(cli, probe.found === 'signedIn');
   const settings = readSettings();
+  const sidebar = await sidebarAgent();
   return {
     clis,
     keys: await Promise.all(SETUP_KEYS.map(async (id) => ({ id, set: !!(await keyOf(id)) }))),
@@ -36,7 +40,7 @@ export async function setupView(): Promise<AiSetupView> {
     off: settings.off === true,
     askOther: settings.askOther === true,
     ...(settings.cli ? { preferred: settings.cli } : {}),
-    sidebar: sidebarAgent().provider.id === 'codex-cli' ? 'codex' : 'claude',
+    sidebar: sidebar.provider.id === 'codex-cli' ? 'codex' : 'claude',
     opens: process.platform === 'darwin',
     available: await modelReady(8000),
   };

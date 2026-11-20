@@ -232,7 +232,7 @@
           body:    blob,
         });
 
-        if (res.status === 401) throw new Error('Nicht gekoppelt: den Code am Mac (Firma › Handy) mit der Kamera scannen.');
+        if (res.status === 401) throw new Error('Nicht gekoppelt: den Code am Mac (Firma › Belege vom Handy) mit der Kamera scannen.');
         if (!res.ok) throw new Error(await res.text());
         const { filename } = await res.json();
 

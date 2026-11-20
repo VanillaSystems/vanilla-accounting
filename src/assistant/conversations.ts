@@ -184,8 +184,8 @@ export function noAnswerWhy(said: string, cli: 'claude' | 'codex'): AiRefusal | 
  * The KI column's agent on this computer sends the message: Claude Code or Codex (Firma › KI). A
  * session continues only with the agent it was started with; after a switch the next message starts a new one.
  */
-function callAgent(c: Conversation, call: Omit<AssistantCall, 'session'>): Promise<void> {
-  const { provider, model } = sidebarAgent();
+async function callAgent(c: Conversation, call: Omit<AssistantCall, 'session'>): Promise<void> {
+  const { provider, model } = await sidebarAgent();
   const agent = provider.id === 'codex-cli' ? 'codex-cli' : 'claude-cli';
   if ((c.agent ?? 'claude-cli') !== agent) c.session = undefined;
   c.agent = agent;

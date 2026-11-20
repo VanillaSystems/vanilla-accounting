@@ -146,7 +146,7 @@ export interface DesktopInfo {
 /** GET /api/desktop/folders: booksHome read, at the step that needs it (macOS may ask first). `locked`: its own rights refuse the app. */
 export interface HomeFolders { folders: string[]; access: HomeAccess | 'locked' }
 
-/** GET and POST /api/desktop/phone: the phone's way in (Firma › Handy). */
+/** GET and POST /api/desktop/phone: the phone's way in (Firma › Belege vom Handy). */
 export interface PhoneInfo {
   on: boolean;
   /** This Mac's addresses a phone can reach, best first; empty when it is on no network. */

@@ -71,7 +71,9 @@ export function FirstRun({ info, create, onSetup, onForm, onLeave }: { info: Des
   const setUp = () => setStage('ai');
 
   const looked = !!view && FIRST_RUN_CLIS.every((c) => ai.cards[c]);
-  const readyCli = cli && card?.kind === 'ready' ? cli : FIRST_RUN_CLIS.find((c) => ai.cards[c]?.kind === 'ready');
+  // «bereit» names the CLI the app asks (view.sidebar, src/llm/providers/index.ts activeSubscriptions): the KI column then answers with the one shown here.
+  const sidebarCli = view?.sidebar && ai.cards[view.sidebar]?.kind === 'ready' ? view.sidebar : undefined;
+  const readyCli = sidebarCli ?? (cli && card?.kind === 'ready' ? cli : FIRST_RUN_CLIS.find((c) => ai.cards[c]?.kind === 'ready'));
   const readyCard = readyCli ? ai.cards[readyCli] : undefined;
   /** A key that serves the app's steps: saved just now, or kept on this Mac before. */
   const keyId = keyReady ?? (view?.available && !readyCli ? view.keys.find((k) => k.set)?.id : undefined);
@@ -217,8 +219,8 @@ export function FirstRun({ info, create, onSetup, onForm, onLeave }: { info: Des
 }
 
 /**
- * What the person wants, in plain choices: new books, books this app made, books from another
- * program (new books; the setup then asks for the old program and says what the move needs: nothing
+ * What the person wants, in plain choices: the demo or new books first, then, under «Du hast schon
+ * eine Buchhaltung?», books this app made or books from another program (new books; the setup then asks for the old program and says what the move needs: nothing
  * is imported yet, and the answer says so),
  * or the demo first. `ai`: whether an AI answers on this Mac; undefined while the look still runs:
  * «new books» then waits for it, says so, and offers the form as the way on without waiting; the
@@ -311,12 +313,18 @@ function FolderStep({ info, ai, ask, create: chosenNew, foot, onSetup, onForm }:
   return (
     <div className="obstep" data-step="folder">
       {ask ? <Ai><p>{t('aiSetup.folder.ask')}</p></Ai> : null}
+      {/* Two ways to start side by side, the demo first (a tester told to «load the demo» did not find it fourth); books she has already below, apart. */}
       <Answers>
-        <AsyncButton type="button" className="btn primary" data-answer="create" disabled={busy || waiting} onClick={() => create()}>{t('aiSetup.folder.create')}<small>{t('aiSetup.folder.createHint')}</small></AsyncButton>
-        {desktop ? <AsyncButton type="button" className="btn" data-answer="open" disabled={busy} onClick={() => open()}>{t('aiSetup.folder.open')}<small>{t('aiSetup.folder.openHint')}</small></AsyncButton> : null}
-        <button type="button" className="btn" data-answer="switch" disabled={busy} onClick={() => setSwitching(true)}>{t('aiSetup.folder.switch')}<small>{t('aiSetup.folder.switchHint')}</small></button>
         <AsyncButton type="button" className="btn" data-answer="demo" disabled={busy} onClick={() => demo()}>{t('aiSetup.folder.demo')}<small>{t('aiSetup.folder.demoHint')}</small></AsyncButton>
+        <AsyncButton type="button" className="btn primary" data-answer="create" disabled={busy || waiting} onClick={() => create()}>{t('aiSetup.folder.create')}<small>{t('aiSetup.folder.createHint')}</small></AsyncButton>
       </Answers>
+      <div className="obind obhave">
+        <p className="m">{t('aiSetup.folder.have')}</p>
+        <div className="qacts" role="group">
+          {desktop ? <AsyncButton type="button" className="btn" data-answer="open" disabled={busy} onClick={() => open()}>{t('aiSetup.folder.open')}<small>{t('aiSetup.folder.openHint')}</small></AsyncButton> : null}
+          <button type="button" className="btn" data-answer="switch" disabled={busy} onClick={() => setSwitching(true)}>{t('aiSetup.folder.switch')}<small>{t('aiSetup.folder.switchHint')}</small></button>
+        </div>
+      </div>
       {switching ? (
         <>
           <Me text={t('aiSetup.folder.switch')} />

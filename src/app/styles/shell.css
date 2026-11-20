@@ -354,6 +354,10 @@ main.full { display: flex; flex-direction: column; }
 .demointro ul { padding-left: 18px; }
 .demointro a { color: var(--accent); }
 .demointro .btn { justify-self: start; margin-top: 4px; }
+.demointro .demox { position: absolute; top: 8px; right: 10px; width: 24px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; cursor: pointer; }
+.demointro .demox:hover { background: var(--hover); color: var(--ink); }
+.demobar .linkbtn { pointer-events: auto; font-size: 12px; color: var(--muted); }
+.chip.demochip { color: var(--accent); font-weight: 600; text-decoration: none; }
 /* A phone-wide window: the bottom nav (56px, .activity) lies along the bottom edge; the line and the card stand above it. */
 html.phone .demobar { left: 0; right: 0; bottom: 56px; }
 html.phone .demointro { left: 16px; bottom: 100px; width: calc(100vw - 32px); }

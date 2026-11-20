@@ -227,8 +227,9 @@ The release run prepares everything up to these steps; each one is the owner's.
 
 Open items that must be done before `1.0.0` ships. Remove an item when it is done.
 
-- [ ] **The iPhone app's download link.** Publish the receipt app (`ios/`, «Vanilla Belege») in
-  the App Store, or on TestFlight for a start, and put its real link where the desktop app pairs
-  a phone: the first step of «Handy koppeln», a QR code plus the written link, with «Ich habe die
-  App schon» to skip to the pairing code. The mockup
+- [ ] **The iPhone app's download link and name.** Publish the receipt app (`ios/`, shown as
+  «Vanilla Scanner» until its name is chosen: `PHONE_APP_NAME` in src/platform/phone-app.ts) in
+  the App Store, or on TestFlight for a start, and set `PHONE_APP_STORE_URL` there: «Belege vom
+  Handy» then shows a QR code plus the written link as its first step, with «Ich habe die App
+  schon» to skip to the pairing code. Until then it shows only the pairing code. The mockup
   (`docs/0.4.0/mockups/receipt-inflow/prototype.html`) shows an example link that does not work.

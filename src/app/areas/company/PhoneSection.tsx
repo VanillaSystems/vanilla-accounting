@@ -1,5 +1,5 @@
 /**
- * Firma › Handy (docs/desktop.md, «Receipts from the phone»): the desktop app's phone access,
+ * Firma › Belege vom Handy (docs/desktop.md, «Receipts from the phone»): the desktop app's phone access,
  * off until switched on here. On, it shows the QR code a phone pairs with (the scan page's
  * address and the token) and the Mac's addresses; a new code locks out every phone paired so far.
  */
@@ -10,14 +10,18 @@ import { desktop } from '../../desktop/bridge.js';
 import type { PhoneInfo } from '../../../types/desktop.js';
 import type { Nav } from '../index.js';
 import { AsyncButton } from '../../shell/AsyncButton.js';
+import { PHONE_APP_NAME } from '../../../platform/phone-app.js';
 
 export function PhoneSection({ nav }: { nav: Nav }) {
   const [info, setInfo] = useState<PhoneInfo>();
   const [busy, setBusy] = useState(false);
   const [renewing, setRenewing] = useState(false);
+  /** Whether the receipt app has a download link (src/platform/phone-app.ts): without one, the code pairs the phone's browser. */
+  const [withApp, setWithApp] = useState<boolean>();
   useEffect(() => { if (desktop) api.desktop.phone().then(setInfo, (e) => nav.toast(errorText(e))); }, []);
+  useEffect(() => { api.phoneApp().then((a) => setWithApp(!!a.url), () => setWithApp(false)); }, []);
   if (!desktop) return <p className="m">{t('phone.notDesktop')}</p>;
-  if (!info) return <p className="m">{t('changes.loading')}</p>;
+  if (!info || withApp === undefined) return <p className="m">{t('changes.loading')}</p>;
 
   const act = async (call: () => Promise<PhoneInfo>, done?: string) => {
     setBusy(true);
@@ -34,6 +38,7 @@ export function PhoneSection({ nav }: { nav: Nav }) {
   return (
     <div className="phone">
       <p>{t('phone.intro')}</p>
+      <ol className="phonehow"><li>{t('phone.how1')}</li><li>{t('phone.how2')}</li></ol>
       <dl className="kv2 wide">
         <dt>{t('phone.state')}</dt>
         <dd>
@@ -50,7 +55,7 @@ export function PhoneSection({ nav }: { nav: Nav }) {
           {/* The SVG is the server's own (src/desktop/qr.ts), dark modules on white like paper. */}
           <div className="phoneqr" role="img" aria-label={info.url} dangerouslySetInnerHTML={{ __html: info.qr }} />
           <div>
-            <p>{t('phone.scan')}</p>
+            <p>{t(withApp ? 'phone.scan' : 'phone.scanBrowser', { app: PHONE_APP_NAME })}</p>
             <p className="m">{t('phone.firewall')}</p>
           </div>
         </div>

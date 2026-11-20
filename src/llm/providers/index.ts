@@ -74,20 +74,62 @@ export function subscriptions(preferred: TerminalCli | undefined): [Provider, ..
   return found.length ? [found[0], ...found.slice(1)] : [claudeCli];
 }
 
-const CLI_TTL = 3000;
-let cliSeen: { found: string; at: number; answers: boolean } | undefined;
+const CLI_TTL = 30_000;
+const seen = new Map<TerminalCli, { found: string; at: number; answers: boolean }>();
+const asking = new Map<TerminalCli, Promise<boolean>>();
+const foundKey = () => [process.env.CLAUDE_BIN, process.env.CODEX_BIN, knownPath()].join('|');
 
-/** Whether a subscription answers here (found and signed in); asked again after a few seconds, or after forgetCli(). */
-async function subscriptionAnswers(subs: readonly Provider[]): Promise<boolean> {
-  const found = [...subs.map((p) => p.id), process.env.CLAUDE_BIN, process.env.CODEX_BIN, knownPath()].join('|');
-  if (cliSeen && cliSeen.found === found && Date.now() - cliSeen.at < CLI_TTL) return cliSeen.answers;
-  const answers = (await Promise.all(subs.map((p) => p.ready(8000).catch(() => false)))).some(Boolean);
-  cliSeen = { found, at: Date.now(), answers };
-  return answers;
+/**
+ * Whether one CLI answers here (found and signed in), asked again after half a minute or after
+ * forgetCli(); callers at the same time share one look. A look that says no after a yes is not
+ * taken until the setup looks again (forgetCli): a slow `claude auth status` on a busy Mac must not
+ * move the steps and the KI column to the other CLI and back, and a CLI that is really signed out
+ * says so on its next call, with the way to sign in.
+ */
+export async function signedIn(cli: TerminalCli): Promise<boolean> {
+  const kept = seen.get(cli);
+  const found = foundKey();
+  if (kept && kept.found === found && Date.now() - kept.at < CLI_TTL) return kept.answers;
+  const running = asking.get(cli);
+  if (running) return running;
+  const look = SUBSCRIPTIONS[cli].provider.ready(8000).catch(() => false).then((answers) => {
+    const now = answers || (kept?.found === found && kept.answers);
+    seen.set(cli, { found, at: Date.now(), answers: now });
+    return now;
+  }).finally(() => asking.delete(cli));
+  asking.set(cli, look);
+  return look;
+}
+
+/** What a look of the setup or Firma › KI found just now: kept, so the next call asks no CLI again. */
+export function noteSignedIn(cli: TerminalCli, answers: boolean): void {
+  seen.set(cli, { found: foundKey(), at: Date.now(), answers });
 }
 
 /** After the setup looked or changed something: the next call asks the CLIs again. */
-export const forgetCli = (): void => { cliSeen = undefined; };
+export const forgetCli = (): void => { seen.clear(); };
+
+export const cliOf = (p: Provider): TerminalCli => (p.id === 'codex-cli' ? 'codex' : 'claude');
+
+/**
+ * The one order every part of the app asks the subscriptions in: the first screen's «bereit», the KI
+ * column, the app's steps and Firma › KI. A CLI that is signed in comes before one that is only
+ * installed: a CLI on the PATH that is not signed in never takes the place of one that is. Among
+ * equals the CLI chosen in Firma › KI comes first, else Claude Code. A chosen CLI that is signed out
+ * while the other answers yields until it is signed in again (it could not answer anyway).
+ */
+export async function activeSubscriptions(preferred: TerminalCli | undefined = readSettings().cli): Promise<[Provider, ...Provider[]]> {
+  const found = subscriptions(preferred);
+  if (found.length < 2) return found;
+  const ready = await Promise.all(found.map((p) => signedIn(cliOf(p))));
+  const sorted = [...found.filter((_, i) => ready[i]), ...found.filter((_, i) => !ready[i])];
+  return [sorted[0], ...sorted.slice(1)];
+}
+
+/** Whether a subscription answers here (found and signed in). */
+async function subscriptionAnswers(subs: readonly Provider[]): Promise<boolean> {
+  return (await Promise.all(subs.map((p) => signedIn(cliOf(p))))).some(Boolean);
+}
 
 /** A key whose provider writes text (Anthropic, OpenAI), not one that answers typed questions only (Jev). */
 const writes = (p: Provider) => p.models.some((m) => m.can.includes('json'));
@@ -101,7 +143,7 @@ export async function usableProviders(): Promise<[Provider, ...Provider[]]> {
   // Codex's model per tier is the account's (issue #180): read again when the kept list is stale.
   if (SUBSCRIPTIONS.codex.found()) await refreshCodexModels().catch(() => undefined);
   const keyed = (await keyedStates()).flatMap((s) => (s.provider ? [s.provider] : []));
-  const subs = subscriptions(readSettings().cli);
+  const subs = await activeSubscriptions();
   const general = keyed.filter(writes);
   if (general.length && !(await subscriptionAnswers(subs))) return [general[0], ...general.slice(1), ...subs, ...keyed.filter((p) => !writes(p))];
   return [...subs, ...keyed];

@@ -1,5 +1,5 @@
 /**
- * What the ways in of Belege keep beside the URL: the open dialog («Handy koppeln», «Weg
+ * What the ways in of Belege keep beside the URL: the open dialog («Belege vom Handy», «Weg
  * hinzufügen», «Alle Wege», the forwarding steps) and the Mac app's phone access, read once and
  * again after each switch, so the strip and the dialog show the same state.
  */
@@ -31,7 +31,7 @@ export async function loadPhone(): Promise<void> {
   try { set({ phone: await api.desktop.phone(), phoneError: undefined }); } catch (e) { set({ phoneError: (e as Error).message }); }
 }
 
-/** Switches the access on or off, as Firma › Handy does; the answer carries the pairing code while on. */
+/** Switches the access on or off, as Firma › Belege vom Handy does; the answer carries the pairing code while on. */
 export async function switchPhone(on: boolean): Promise<PhoneInfo> {
   const phone = await api.desktop.setPhone(on);
   set({ phone });

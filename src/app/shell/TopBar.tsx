@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { t } from '../i18n/index.js';
 import { ZOOM_STEPS } from './prefs.js';
 import { ICONS } from '../areas/icons.js';
@@ -8,6 +9,8 @@ import '../handover/handover.css';
 
 interface Props {
   company?: string;
+  /** In a demo: its chip beside the company (src/app/shell/Demo.tsx DemoChip). */
+  demo?: ReactNode;
   /** The period chip's text; absent on pages without a period. */
   period?: string;
   zoom: number;
@@ -34,6 +37,7 @@ export function TopBar(p: Props & { hold?: boolean }) {
           <b style={{ fontWeight: 600 }}>{p.company}</b>{p.version ? <span className="vers">{t('version.short', { n: p.version.n })}</span> : null}
         </span>
       )}
+      {p.demo}
       <span className="sep" />
       <button type="button" className="chip" onClick={p.onSearch}>⌕ {t('shell.search')} <span className="k">⌘K</span></button>
       {p.period && <button type="button" className="chip mono" data-tip={t('period.choose')} onClick={(e) => p.onPeriod(e.currentTarget)}>{p.period} ▾</button>}

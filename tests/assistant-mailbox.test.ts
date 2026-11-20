@@ -111,7 +111,7 @@ test('the channels come most preferred first (API, the mailbox\'s server, the ma
 test('the map names collection\'s places in the person\'s language and lets the AI connect a mailbox', () => {
   const de = appMap('de');
   assert.match(de, /Firma › Quellen/);
-  assert.match(de, /Firma › Handy/);
+  assert.match(de, /Firma › Belege vom Handy/);
   assert.match(de, /«Postfach verbinden»/);
   assert.match(de, /a mailbox is fetched daily: Automatisierung checks every hour/);
   assert.match(de, /You: mailbox, source\./);
